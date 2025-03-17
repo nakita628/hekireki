@@ -1,3 +1,4 @@
+// #!/usr/bin/env node
 import type { GeneratorOptions } from "@prisma/generator-helper";
 import { generatorHandler } from "@prisma/generator-helper";
 import { generateZod } from "./generator/generate-zod";

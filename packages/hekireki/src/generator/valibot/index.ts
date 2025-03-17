@@ -1,3 +1,4 @@
+// #!/usr/bin/env node
 import type { GeneratorOptions } from "@prisma/generator-helper";
 import { generatorHandler } from "@prisma/generator-helper";
 import { generateValibot } from "./generator/generate-valibot";
