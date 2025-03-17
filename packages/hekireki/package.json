@@ -1,0 +1,56 @@
+{
+	"name": "hekireki",
+	"version": "0.0.1",
+	"license": "MIT",
+	"description": "Prisma generator that creates Zod and Valibot schemas with Mermaid ER diagrams from your Prisma schema.",
+	"keywords": [
+		"prisma",
+		"zod",
+		"valibot",
+		"mermaid"
+	],
+	"homepage": "https://github.com/nakita628/hekireki",
+	"publishConfig": {
+		"access": "public"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/nakita628/hekireki.git"
+	},
+	"bugs": {
+		"url": "https://github.com/nakita628/hekireki/issues"
+	},
+	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"files": [
+		"dist"
+	],
+	"bin": {
+		"hekireki-zod": "dist/generator/zod/index.js",
+		"hekireki-valibot": "dist/generator/valibot/index.js",
+		"hekireki-mermaid-er": "dist/generator/mermaid/index.js"
+	},
+	"scripts": {
+		"generate": "prisma generate",
+		"deps": "rm -rf node_modules && pnpm install",
+		"build": "tsc",
+		"typecheck": "tsc --noEmit",
+		"test": "vitest run",
+		"coverage": "vitest run --coverage",
+		"release": "npm pkg fix && npm publish"
+	},
+	"devDependencies": {
+		"@types/node": "^22.13.10",
+		"@vitest/coverage-v8": "^3.0.8",
+		"prisma": "^6.5.0",
+		"@prisma/client": "6.5.0",
+		"tsx": "^4.19.3",
+		"valibot": "1.0.0-rc.3",
+		"vitest": "^3.0.8",
+		"zod": "^3.24.2"
+	},
+	"dependencies": {
+		"@prisma/generator-helper": "^6.5.0",
+		"prettier": "^3.5.3"
+	}
+}
