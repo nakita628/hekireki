@@ -1,0 +1,43 @@
+name: Test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened] 
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      - name: Install Dependencies
+        run: pnpm -F hekireki deps
+
+      - name: Lint
+        run: pnpm lint
+      
+      - name: Typecheck
+        run: pnpm -F hekireki typecheck
+
+      - name: Build
+        run: pnpm -F hekireki build
+
+      - name: Link
+        run: cd packages/hekireki && pnpm link .
+
+      - name: Generate
+        run: pnpm -F hekireki generate
+
+      - name: Run Coverage
+        run: pnpm -F hekireki coverage
