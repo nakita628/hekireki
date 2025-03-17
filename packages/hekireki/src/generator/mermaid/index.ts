@@ -1,4 +1,4 @@
-// #!/usr/bin/env node
+#!/usr/bin/env node
 import type { GeneratorOptions } from "@prisma/generator-helper";
 import type { RelationType } from "./type";
 
