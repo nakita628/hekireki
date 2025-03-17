@@ -1,6 +1,6 @@
 # Hekireki
 
-[Hekireki](https://github.com/nakita628/hekireki) is a tool that generates validation schemas for Zod and Valibot, as well as ER diagrams, from [Prisma](https://www.prisma.io/) schemas annotated with comments.
+[Hekireki](https://www.npmjs.com/package/hekireki) is a tool that generates validation schemas for Zod and Valibot, as well as ER diagrams, from [Prisma](https://www.prisma.io/) schemas annotated with comments.
 
 ## Features
 
