@@ -129,7 +129,7 @@ model Like {
 
 ## Generate
 
-### Zod
+## Zod
 
 ```ts
 import { z } from 'zod'
