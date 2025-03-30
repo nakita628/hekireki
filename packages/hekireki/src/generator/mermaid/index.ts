@@ -18,46 +18,37 @@ const DEFAULT_CONFIG: Config = {
 
 export const CARDINALITY_MAP: Record<RelationType, string> = {
 	// Required Relationships
-	// Both sides required (one-to-one)
 	"one-to-one": "||--||", // 1 --- 1
+	"one-to-many": "||--|{", // 1 --- 0..*
+	"many-to-one": "}|--||", // * --- 1
+	"many-to-many": "}|--|{", // * --- *
 
-	// One side singular, the other multiple
-	"one-to-many": "||--o{", // 1 --- * (also known as one-to-zero-many)
-	"many-to-one": "}o--||", // * --- 1
-
-	// Both sides multiple (many-to-many)
-	"many-to-many": "}o--o{", // * --- *
-
-	// One side required, one side optional (0..1)
 	"one-to-zero-one": "||--o|", // 1 --- 0..1
 	"zero-one-to-one": "o|--||", // 0..1 --- 1
-
-	// Both sides optional singular (0..1 on both sides)
 	"zero-to-one": "o|--o|", // 0..1 --- 0..1
-	"zero-to-zero-one": "o|--o|", // Alias for zero-to-one
+	"zero-to-zero-one": "o|--o|", // alias of zero-to-one
 
-	// One side optional singular, the other multiple
-	"zero-to-many": "o|--o{", // 0 --- *
+	"zero-to-many": "o|--o{", // 0..1 --- 0..*
 	"zero-one-to-many": "o|--o{", // 0..1 --- *
-	"many-to-zero-one": "}o--o|", // * --- 0..1
+	"many-to-zero-one": "}|--o|", // * --- 0..1
 
-	// Optional Relationships (using dotted lines)
-	"one-to-one-optional": "||..||", // 1..1
-	"one-to-many-optional": "||..o{", // 1..*
-	"many-to-one-optional": "}o..||", // *..1
-	"many-to-many-optional": "}o..o{", // *..*
+	// Optional Relationships (dotted)
+	"one-to-one-optional": "||..||", // 1 --- 1 optional
+	"one-to-many-optional": "||..o{", // 1 --- 0..* optional
+	"many-to-one-optional": "}|..||", // * --- 1 optional
+	"many-to-many-optional": "}|..o{", // * --- 0..* optional
 
-	"one-to-zero-one-optional": "||..o|", // 1..0..1
-	"zero-one-to-one-optional": "o|..||", // 0..1..1
-	"zero-to-one-optional": "o|..o|", // 0..1 (both sides optional singular)
-	"zero-to-many-optional": "o|..o{", // 0..* (optional multiple)
-	"zero-one-to-many-optional": "o|..o{", // 0..1 --- * (optional)
-	"many-to-zero-one-optional": "}o..o|", // *..0..1
+	"one-to-zero-one-optional": "||..o|", // 1 --- 0..1 optional
+	"zero-one-to-one-optional": "o|..||", // 0..1 --- 1 optional
+	"zero-to-one-optional": "o|..o|", // 0..1 --- 0..1 optional
+	"zero-to-many-optional": "o|..o{", // 0..1 --- 0..* optional
+	"zero-one-to-many-optional": "o|..o{", // 0..1 --- * optional
+	"many-to-zero-one-optional": "}|..o|", // * --- 0..1 optional
 
 	// Nuanced Patterns (Aliases)
-	"many-to-zero-many": "}o..o{", // * --- 0..* (equivalent to many-to-many-optional)
-	"zero-many-to-many": "o{..}o", // 0..* --- * (left side optional multiple, right side required multiple)
-	"zero-many-to-zero-many": "o{..o{", // both sides optional multiple
+	"many-to-zero-many": "}|..o{", // * --- 0..* (many-to-many optional variant)
+	"zero-many-to-many": "o{--|{", // 0..* --- * (left optional many to required many)
+	"zero-many-to-zero-many": "o{--o{", // 0..* --- 0..* (both sides optional many)
 };
 
 // ER diagram header

@@ -4,9 +4,8 @@ import type { Model } from "../type";
 
 /**
  * extract relations from model
- * @function extractRelations
- * @param model
- * @returns
+ * @param { Model } model
+ * @returns { readonly string[] }
  */
 export function extractRelations(model: Model): readonly string[] {
 	const relations: string[] = [];

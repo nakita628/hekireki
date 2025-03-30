@@ -3,9 +3,8 @@ import type { Relation } from "../type";
 
 /**
  * generate relation line
- * @function generateRelationLine
- * @param relation
- * @returns string
+ * @param { Relation } relation
+ * @returns { string } relation line
  */
 export function generateRelationLine(relation: Relation): string {
 	const cardinality = CARDINALITY_MAP[relation.type];
