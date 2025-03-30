@@ -14,7 +14,7 @@ const generateRelationLineTestCases: {
 			toField: "userId",
 			type: "one-to-many",
 		},
-		expected: '    User ||--o{ Post : "(id) - (userId)"',
+		expected: '    User ||--|{ Post : "(id) - (userId)"',
 	},
 ];
 

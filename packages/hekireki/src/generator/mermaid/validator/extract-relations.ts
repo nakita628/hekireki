@@ -11,7 +11,7 @@ import type { Model } from "../type";
 export function extractRelations(model: Model): readonly string[] {
 	const relations: string[] = [];
 
-	// @r annotation
+	// @relation annotation
 	if (model.documentation) {
 		const annotationRelations = model.documentation
 			.split("\n")

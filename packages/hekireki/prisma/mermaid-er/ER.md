@@ -1,8 +1,8 @@
 ```mermaid
 erDiagram
-    User ||--o{ Post : "(id) - (userId)"
-    Post ||--o{ Like : "(id) - (postId)"
-    User ||--o{ Like : "(id) - (userId)"
+    User ||--|{ Post : "(id) - (userId)"
+    Post ||--|{ Like : "(id) - (postId)"
+    User ||--|{ Like : "(id) - (userId)"
     User {
         String id "Unique identifier for the user."
         String username "Username of the user."
