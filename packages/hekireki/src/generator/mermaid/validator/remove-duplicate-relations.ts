@@ -1,8 +1,7 @@
 /**
  * remove duplicate relations
- * @function removeDuplicateRelations
- * @param relations
- * @returns
+ * @param { readonly string[] } relations
+ * @returns { readonly string[] }
  */
 export function removeDuplicateRelations(
 	relations: readonly string[],

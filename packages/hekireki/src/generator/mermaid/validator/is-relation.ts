@@ -27,6 +27,11 @@ const VALID_RELATIONS = new Set<string>([
 	"zero-many-to-zero-many",
 ]);
 
+/**
+ * check if the value is a valid relation
+ * @param { unknown } value
+ * @returns { boolean }
+ */
 export function isRelation(value: unknown): value is RelationType {
 	return typeof value === "string" && VALID_RELATIONS.has(value);
 }
