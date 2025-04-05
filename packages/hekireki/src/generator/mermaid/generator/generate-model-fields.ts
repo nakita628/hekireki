@@ -5,9 +5,8 @@ const VALIBOT_ANNOTATION = "@v.";
 
 /**
  * generate model fields
- * @function generateModelFields
- * @param model
- * @returns
+ * @param { DMMF.Model } model
+ * @returns { string[] }
  */
 export function generateModelFields(model: DMMF.Model): string[] {
 	return model.fields
