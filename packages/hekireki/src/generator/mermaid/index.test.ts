@@ -16,9 +16,9 @@ describe('mermaid', () => {
 
     const expected = `\`\`\`mermaid
 erDiagram
-    User ||--|{ Post : "(id) - (userId)"
-    Post ||--|{ Like : "(id) - (postId)"
-    User ||--|{ Like : "(id) - (userId)"
+    User ||--}| Post : "(id) - (userId)"
+    Post ||--}| Like : "(id) - (postId)"
+    User ||--}| Like : "(id) - (userId)"
     User {
         String id "Unique identifier for the user."
         String username "Username of the user."
