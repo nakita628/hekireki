@@ -1,13 +1,13 @@
 import { isRelationship } from '../validator/is-relationship'
 
-const RELATION_SHIPS = {
+const RELATIONSHIPS = {
   'zero-one': '|o',
   one: '||',
   'zero-many': '}o',
   many: '}|',
 } as const
 
-export type Relationship = keyof typeof RELATION_SHIPS
+export type Relationship = keyof typeof RELATIONSHIPS
 
 /**
  * Builds a relationship line for mermaid from a string.
@@ -33,8 +33,8 @@ export function buildRelationLine(input: string): string {
     throw new Error(`Invalid relationship string: ${input}`)
   }
 
-  const fromSymbol = RELATION_SHIPS[from]
-  const toSymbol = RELATION_SHIPS[to]
+  const fromSymbol = RELATIONSHIPS[from]
+  const toSymbol = RELATIONSHIPS[to]
 
   if (!(fromSymbol && toSymbol)) {
     throw new Error(`Invalid relationship string: ${input}`)
