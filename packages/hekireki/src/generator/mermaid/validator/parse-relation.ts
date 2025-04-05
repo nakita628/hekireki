@@ -1,5 +1,4 @@
-import type { Relation } from "../type";
-import { isRelation } from "./is-relation";
+import type { Relation } from '../type'
 
 /**
  * parse relation
@@ -8,25 +7,20 @@ import { isRelation } from "./is-relation";
  * @returns
  */
 export function parseRelation(line: string): Relation | null {
-	const relationRegex =
-		/^@relation\s+(\w+)\.(\w+)\s+(\w+)\.(\w+)\s+(\w+-to-\w+)$/;
-	const match = line.trim().match(relationRegex);
+  const relationRegex = /^@relation\s+(\w+)\.(\w+)\s+(\w+)\.(\w+)\s+(\w+-to-\w+)$/
+  const match = line.trim().match(relationRegex)
 
-	if (!match) {
-		return null;
-	}
+  if (!match) {
+    return null
+  }
 
-	const [, fromModel, fromField, toModel, toField, relationType] = match;
+  const [, fromModel, fromField, toModel, toField, relationType] = match
 
-	if (!isRelation(relationType)) {
-		return null;
-	}
-
-	return {
-		fromModel,
-		fromField,
-		toModel,
-		toField,
-		type: relationType,
-	};
+  return {
+    fromModel,
+    fromField,
+    toModel,
+    toField,
+    type: relationType,
+  }
 }

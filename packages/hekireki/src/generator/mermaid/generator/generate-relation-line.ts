@@ -1,5 +1,5 @@
-import { CARDINALITY_MAP } from "..";
-import type { Relation } from "../type";
+import type { Relation } from '../type'
+import { buildRelationLine } from '../relationship/build-relation-line'
 
 /**
  * generate relation line
@@ -7,10 +7,11 @@ import type { Relation } from "../type";
  * @returns { string } relation line
  */
 export function generateRelationLine(relation: Relation): string {
-	const cardinality = CARDINALITY_MAP[relation.type];
-	if (!cardinality) {
-		throw new Error(`Unknown relation type: ${relation.type}`);
-	}
+  const cardinality = buildRelationLine(relation.type)
 
-	return `    ${relation.fromModel} ${cardinality} ${relation.toModel} : "(${relation.fromField}) - (${relation.toField})"`;
+  if (!cardinality) {
+    throw new Error(`Unknown relation type: ${relation.type}`)
+  }
+
+  return `    ${relation.fromModel} ${cardinality} ${relation.toModel} : "(${relation.fromField}) - (${relation.toField})"`
 }

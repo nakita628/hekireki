@@ -1,18 +1,18 @@
 {
-	"name": "hekireki-monorepo",
-	"private": "true",
-	"license": "MIT",
-	"scripts": {
-		"deps": "rm -rf node_modules && pnpm install",
-		"build": "pnpm -F hekireki build",
-		"fmt": "pnpm biome format --write ./",
-		"lint": "pnpm biome lint",
-		"typecheck": "pnpm -F hekireki typecheck",
-		"test": "pnpm -F hekireki test",
-		"coverage": "pnpm -F hekireki coverage",
-		"release": "pnpm -F hekireki release"
-	},
-	"devDependencies": {
-		"@biomejs/biome": "^1.9.4"
-	}
+  "name": "hekireki-monorepo",
+  "private": "true",
+  "license": "MIT",
+  "scripts": {
+    "deps": "rm -rf node_modules && pnpm install",
+    "build": "pnpm -F hekireki build",
+    "fmt": "pnpm biome format --write ./",
+    "lint": "pnpm biome lint",
+    "typecheck": "pnpm -F hekireki typecheck",
+    "test": "pnpm -F hekireki test",
+    "coverage": "pnpm -F hekireki coverage",
+    "release": "pnpm -F hekireki release"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4"
+  }
 }

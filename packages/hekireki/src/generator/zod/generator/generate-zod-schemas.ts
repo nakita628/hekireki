@@ -1,6 +1,6 @@
-import type { Config } from "..";
-import { generateZodProperties } from "./generate-zod-properties";
-import { generateZodSchema } from "./generate-zod-schema";
+import type { Config } from '..'
+import { generateZodProperties } from './generate-zod-properties'
+import { generateZodSchema } from './generate-zod-schema'
 
 /**
  * Generate Zod schemas
@@ -9,23 +9,23 @@ import { generateZodSchema } from "./generate-zod-schema";
  * @returns The generated Zod schemas
  */
 export function generateZodSchemas(
-	modelFields: {
-		documentation: string;
-		modelName: string;
-		fieldName: string;
-		validation: string | null;
-		comment: string[];
-	}[],
-	config: Config,
+  modelFields: {
+    documentation: string
+    modelName: string
+    fieldName: string
+    validation: string | null
+    comment: string[]
+  }[],
+  config: Config,
 ) {
-	const modelName = modelFields[0].modelName;
-	const modelDoc = modelFields[0].documentation || "";
+  const modelName = modelFields[0].modelName
+  const modelDoc = modelFields[0].documentation || ''
 
-	const fields = generateZodProperties(modelFields, config);
+  const fields = generateZodProperties(modelFields, config)
 
-	if (!(modelDoc || !config?.comment)) {
-		return generateZodSchema(modelName, fields, config);
-	}
+  if (!(modelDoc || !config?.comment)) {
+    return generateZodSchema(modelName, fields, config)
+  }
 
-	return `${generateZodSchema(modelName, fields, config)}`;
+  return `${generateZodSchema(modelName, fields, config)}`
 }

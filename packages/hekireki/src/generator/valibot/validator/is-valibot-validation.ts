@@ -5,7 +5,7 @@
  * @returns string | null
  */
 export function isValibotValidation(documentation?: string): string | null {
-	if (!documentation) return null;
-	const match = documentation.match(/@v\.(.+?)(?:\n|$)/);
-	return match ? match[1].trim() : null;
+  if (!documentation) return null
+  const match = documentation.match(/@v\.(.+?)(?:\n|$)/)
+  return match ? match[1].trim() : null
 }

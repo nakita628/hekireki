@@ -1,4 +1,4 @@
-import { decapitalize } from "../text/decapitalize";
+import { decapitalize } from '../text/decapitalize'
 
 /**
  * Generates a camelCase schema name from a given schema name.
@@ -7,6 +7,6 @@ import { decapitalize } from "../text/decapitalize";
  * @returns The camelCase schema name.
  */
 export function getCamelCaseSchemaNameHelper(schemaName: string): string {
-	const decapitalizedSchemaName = decapitalize(schemaName);
-	return `${decapitalizedSchemaName}Schema`;
+  const decapitalizedSchemaName = decapitalize(schemaName)
+  return `${decapitalizedSchemaName}Schema`
 }

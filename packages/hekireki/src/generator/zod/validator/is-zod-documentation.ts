@@ -1,4 +1,4 @@
-const VALIDATION_PATTERNS = ["@z."] as const;
+const VALIDATION_PATTERNS = ['@z.'] as const
 
 /**
  * Is Zod documentation
@@ -6,13 +6,11 @@ const VALIDATION_PATTERNS = ["@z."] as const;
  * @returns The Zod documentation
  */
 export function isZodDocumentValidation(documentation?: string): string[] {
-	if (!documentation) return [];
+  if (!documentation) return []
 
-	return documentation
-		.split("\n")
-		.filter(
-			(line) => !VALIDATION_PATTERNS.some((pattern) => line.includes(pattern)),
-		)
-		.map((line) => line.trim())
-		.filter(Boolean);
+  return documentation
+    .split('\n')
+    .filter((line) => !VALIDATION_PATTERNS.some((pattern) => line.includes(pattern)))
+    .map((line) => line.trim())
+    .filter(Boolean)
 }

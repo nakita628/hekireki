@@ -1,20 +1,20 @@
-import { describe, it, expect } from "vitest";
-import { exec } from "node:child_process";
-import { promisify } from "node:util";
-import fs from "node:fs";
-const execAsync = promisify(exec);
+import { describe, it, expect } from 'vitest'
+import { exec } from 'node:child_process'
+import { promisify } from 'node:util'
+import fs from 'node:fs'
+const execAsync = promisify(exec)
 
-describe("prisma generate", () => {
-	it("should successfully generate zod schemas", async () => {
-		const { stderr } = await execAsync("npx prisma generate");
-		// Not Error
-		expect(stderr).toBeFalsy();
+describe('prisma generate', () => {
+  it('should successfully generate zod schemas', async () => {
+    const { stderr } = await execAsync('npx prisma generate')
+    // Not Error
+    expect(stderr).toBeFalsy()
 
-		const result = fs.readFileSync("./prisma/valibot/index.ts", {
-			encoding: "utf-8",
-		});
+    const result = fs.readFileSync('./prisma/valibot/index.ts', {
+      encoding: 'utf-8',
+    })
 
-		const expected = `import * as v from 'valibot'
+    const expected = `import * as v from 'valibot'
 
 export const UserSchema = v.object({
   /**
@@ -90,8 +90,8 @@ export const LikeSchema = v.object({
 })
 
 export type Like = v.InferInput<typeof LikeSchema>
-`;
+`
 
-		expect(result).toBe(expected);
-	});
-});
+    expect(result).toBe(expected)
+  })
+})

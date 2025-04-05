@@ -1,6 +1,6 @@
-import type { Config } from "..";
-import { getVariableNameHelper } from "../../../common/helper/get-variable-name-helper";
-import { getVariableSchemaNameHelper } from "../../../common/helper/get-variable-schema-name-helper";
+import type { Config } from '..'
+import { getVariableNameHelper } from '../../../common/helper/get-variable-name-helper'
+import { getVariableSchemaNameHelper } from '../../../common/helper/get-variable-schema-name-helper'
 
 /**
  * Generate the infer input type for the model
@@ -9,7 +9,7 @@ import { getVariableSchemaNameHelper } from "../../../common/helper/get-variable
  * @returns The generated infer input type
  */
 export function generateValibotInferInput(modelName: string, config: Config) {
-	const typeName = getVariableNameHelper(modelName, config);
-	const schemaName = getVariableSchemaNameHelper(modelName, config);
-	return `export type ${typeName} = v.InferInput<typeof ${schemaName}>`;
+  const typeName = getVariableNameHelper(modelName, config)
+  const schemaName = getVariableSchemaNameHelper(modelName, config)
+  return `export type ${typeName} = v.InferInput<typeof ${schemaName}>`
 }

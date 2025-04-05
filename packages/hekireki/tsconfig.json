@@ -1,16 +1,16 @@
 {
-	"compilerOptions": {
-		"target": "ES2022",
-		"declaration": true,
-		"outDir": "./dist",
-		"esModuleInterop": true,
-		"forceConsistentCasingInFileNames": true,
-		"strict": true,
-		"skipLibCheck": true,
-		"module": "NodeNext",
-		"moduleResolution": "NodeNext"
-	},
-	"types": ["node", "vitest/globals"],
-	"include": ["src/**/*"],
-	"exclude": ["**/src/**/*.test.ts", "**/src/data/**/*.ts"]
+  "compilerOptions": {
+    "target": "ES2022",
+    "declaration": true,
+    "outDir": "./dist",
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext"
+  },
+  "types": ["node", "vitest/globals"],
+  "include": ["src/**/*"],
+  "exclude": ["**/src/**/*.test.ts", "**/src/data/**/*.ts"]
 }
