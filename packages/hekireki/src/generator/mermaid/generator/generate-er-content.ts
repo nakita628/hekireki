@@ -6,9 +6,8 @@ import { removeDuplicateRelations } from "../validator/remove-duplicate-relation
 
 /**
  * generate ER content
- * @function generateERContent
- * @param models
- * @returns ER content
+ * @param { readonly Model[] } models - models
+ * @returns { ERContent } - ER content
  */
 export function generateERContent(models: readonly Model[]): ERContent {
 	// extract all relations
