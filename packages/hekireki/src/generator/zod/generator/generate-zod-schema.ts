@@ -1,5 +1,5 @@
-import type { Config } from "..";
-import { getVariableSchemaNameHelper } from "../../../common/helper/get-variable-schema-name-helper";
+import type { Config } from '..'
+import { getVariableSchemaNameHelper } from '../../../common/helper/get-variable-schema-name-helper'
 
 /**
  * Generate Zod schema
@@ -8,11 +8,7 @@ import { getVariableSchemaNameHelper } from "../../../common/helper/get-variable
  * @param config - The configuration for the generator
  * @returns The generated Zod schema
  */
-export function generateZodSchema(
-	modelName: string,
-	fields: string,
-	config: Config,
-) {
-	const schemaName = getVariableSchemaNameHelper(modelName, config);
-	return `export const ${schemaName} = z.object({\n${fields}\n})`;
+export function generateZodSchema(modelName: string, fields: string, config: Config) {
+  const schemaName = getVariableSchemaNameHelper(modelName, config)
+  return `export const ${schemaName} = z.object({\n${fields}\n})`
 }

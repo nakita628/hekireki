@@ -1,4 +1,4 @@
-import type { GroupedFields, ValidField } from "../type";
+import type { GroupedFields, ValidField } from '../type'
 
 /**
  * Groups valid fields by model name.
@@ -7,11 +7,11 @@ import type { GroupedFields, ValidField } from "../type";
  * @returns The grouped fields.
  */
 export function groupByModelHelper(validFields: ValidField[]): GroupedFields {
-	return validFields.reduce<GroupedFields>((acc, field) => {
-		if (!acc[field.modelName]) {
-			acc[field.modelName] = [];
-		}
-		acc[field.modelName].push(field);
-		return acc;
-	}, {});
+  return validFields.reduce<GroupedFields>((acc, field) => {
+    if (!acc[field.modelName]) {
+      acc[field.modelName] = []
+    }
+    acc[field.modelName].push(field)
+    return acc
+  }, {})
 }

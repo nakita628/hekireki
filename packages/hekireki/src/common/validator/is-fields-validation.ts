@@ -1,5 +1,5 @@
-import type { ReadonlyDeep } from "@prisma/generator-helper";
-import type { ValidField } from "../type";
+import type { ReadonlyDeep } from '@prisma/generator-helper'
+import type { ValidField } from '../type'
 
 /**
  * Is fields validation
@@ -7,15 +7,13 @@ import type { ValidField } from "../type";
  * @returns The fields validation
  */
 export function isFieldsValidation(
-	modelFields: {
-		documentation: ReadonlyDeep<string | undefined>;
-		modelName: string;
-		fieldName: string;
-		comment: string[];
-		validation: string | null;
-	}[][],
+  modelFields: {
+    documentation: ReadonlyDeep<string | undefined>
+    modelName: string
+    fieldName: string
+    comment: string[]
+    validation: string | null
+  }[][],
 ) {
-	return modelFields
-		.flat()
-		.filter((field): field is ValidField => field.validation !== null);
+  return modelFields.flat().filter((field): field is ValidField => field.validation !== null)
 }

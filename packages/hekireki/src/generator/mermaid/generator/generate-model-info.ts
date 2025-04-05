@@ -1,5 +1,5 @@
-import { generateModelFields } from "./generate-model-fields";
-import type { Model } from "../type";
+import { generateModelFields } from './generate-model-fields'
+import type { Model } from '../type'
 
 /**
  * generate model info
@@ -8,9 +8,5 @@ import type { Model } from "../type";
  * @returns
  */
 export function generateModelInfo(model: Model): readonly string[] {
-	return [
-		`    ${model.name} {`,
-		...generateModelFields(model),
-		"    }",
-	] as const;
+  return [`    ${model.name} {`, ...generateModelFields(model), '    }'] as const
 }

@@ -16,5 +16,5 @@
  * - Commonly used for generating type names and class names
  */
 export function capitalize(str: string): string {
-	return `${str.charAt(0).toUpperCase()}${str.slice(1)}`;
+  return `${str.charAt(0).toUpperCase()}${str.slice(1)}`
 }

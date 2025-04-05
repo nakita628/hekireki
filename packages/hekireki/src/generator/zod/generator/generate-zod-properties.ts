@@ -1,4 +1,4 @@
-import type { Config } from "..";
+import type { Config } from '..'
 
 /**
  * Generate Zod properties
@@ -7,36 +7,30 @@ import type { Config } from "..";
  * @returns The generated Zod properties
  */
 export function generateZodProperties(
-	modelFields: {
-		documentation: string;
-		modelName: string;
-		fieldName: string;
-		validation: string | null;
-		comment: string[];
-	}[],
-	config?: Config,
+  modelFields: {
+    documentation: string
+    modelName: string
+    fieldName: string
+    validation: string | null
+    comment: string[]
+  }[],
+  config?: Config,
 ): string {
-	const fields = modelFields
-		.filter((field) => field.validation)
-		.map((field) => {
-			// @relation, @v, @z exclude
-			const cleanDoc = field.comment
-				.filter(
-					(line) =>
-						!(
-							line.includes("@relation") ||
-							line.includes("@v") ||
-							line.includes("@z")
-						),
-				)
-				.join("\n")
-				.trim();
+  const fields = modelFields
+    .filter((field) => field.validation)
+    .map((field) => {
+      // @relation, @v, @z exclude
+      const cleanDoc = field.comment
+        .filter(
+          (line) => !(line.includes('@relation') || line.includes('@v') || line.includes('@z')),
+        )
+        .join('\n')
+        .trim()
 
-			const docComment =
-				config?.comment && cleanDoc ? `  /**\n   * ${cleanDoc}\n   */\n` : "";
+      const docComment = config?.comment && cleanDoc ? `  /**\n   * ${cleanDoc}\n   */\n` : ''
 
-			return `${docComment}  ${field.fieldName}: z.${field.validation}`;
-		})
-		.join(",\n");
-	return fields;
+      return `${docComment}  ${field.fieldName}: z.${field.validation}`
+    })
+    .join(',\n')
+  return fields
 }

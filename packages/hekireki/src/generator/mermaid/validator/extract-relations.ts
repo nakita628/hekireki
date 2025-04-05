@@ -1,6 +1,6 @@
-import { generateRelationLine } from "../generator/generate-relation-line";
-import { parseRelation } from "./parse-relation";
-import type { Model } from "../type";
+import { generateRelationLine } from '../generator/generate-relation-line'
+import { parseRelation } from './parse-relation'
+import type { Model } from '../type'
 
 /**
  * extract relations from model
@@ -8,19 +8,19 @@ import type { Model } from "../type";
  * @returns { readonly string[] }
  */
 export function extractRelations(model: Model): readonly string[] {
-	const relations: string[] = [];
+  const relations: string[] = []
 
-	// @relation annotation
-	if (model.documentation) {
-		const annotationRelations = model.documentation
-			.split("\n")
-			.map((line: string) => {
-				const relation = parseRelation(line);
-				return relation ? generateRelationLine(relation) : null;
-			})
-			.filter((line): line is string => line !== null);
+  // @relation annotation
+  if (model.documentation) {
+    const annotationRelations = model.documentation
+      .split('\n')
+      .map((line: string) => {
+        const relation = parseRelation(line)
+        return relation ? generateRelationLine(relation) : null
+      })
+      .filter((line): line is string => line !== null)
 
-		relations.push(...annotationRelations);
-	}
-	return relations;
+    relations.push(...annotationRelations)
+  }
+  return relations
 }

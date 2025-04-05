@@ -1,6 +1,6 @@
-import type { Config } from "../../generator/zod";
-import { capitalize } from "../text/capitalize";
-import { decapitalize } from "../text/decapitalize";
+import type { Config } from '../../generator/zod'
+import { capitalize } from '../text/capitalize'
+import { decapitalize } from '../text/decapitalize'
 
 /**
  * Generates a variable name based on the given name and configuration.
@@ -10,7 +10,5 @@ import { decapitalize } from "../text/decapitalize";
  * @returns The variable name.
  */
 export function getVariableNameHelper(name: string, config: Config): string {
-	return config.typeName === "camelCase"
-		? decapitalize(name)
-		: capitalize(name);
+  return config.typeName === 'camelCase' ? decapitalize(name) : capitalize(name)
 }

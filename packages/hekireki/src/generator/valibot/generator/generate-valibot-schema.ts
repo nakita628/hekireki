@@ -1,5 +1,5 @@
-import type { Config } from "..";
-import { getVariableSchemaNameHelper } from "../../../common/helper/get-variable-schema-name-helper";
+import type { Config } from '..'
+import { getVariableSchemaNameHelper } from '../../../common/helper/get-variable-schema-name-helper'
 
 /**
  * Generate Valibot schema
@@ -8,11 +8,7 @@ import { getVariableSchemaNameHelper } from "../../../common/helper/get-variable
  * @param config - The configuration for the generator
  * @returns The generated Valibot schema
  */
-export function generateValibotSchema(
-	modelName: string,
-	fields: string,
-	config: Config,
-) {
-	const schemaName = getVariableSchemaNameHelper(modelName, config);
-	return `export const ${schemaName} = v.object({\n${fields}\n})`;
+export function generateValibotSchema(modelName: string, fields: string, config: Config) {
+  const schemaName = getVariableSchemaNameHelper(modelName, config)
+  return `export const ${schemaName} = v.object({\n${fields}\n})`
 }

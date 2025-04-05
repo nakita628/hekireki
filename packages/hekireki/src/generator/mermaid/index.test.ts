@@ -1,20 +1,20 @@
-import { describe, it, expect, vi } from "vitest";
-import { exec } from "node:child_process";
-import { promisify } from "node:util";
-import fs from "node:fs";
-const execAsync = promisify(exec);
+import { describe, it, expect, vi } from 'vitest'
+import { exec } from 'node:child_process'
+import { promisify } from 'node:util'
+import fs from 'node:fs'
+const execAsync = promisify(exec)
 
-describe("mermaid", () => {
-	it("should generate mermaid file", async () => {
-		const { stderr } = await execAsync("npx prisma generate");
-		// Not Error
-		expect(stderr).toBeFalsy();
+describe('mermaid', () => {
+  it('should generate mermaid file', async () => {
+    const { stderr } = await execAsync('npx prisma generate')
+    // Not Error
+    expect(stderr).toBeFalsy()
 
-		const result = fs.readFileSync("./prisma/mermaid-er/ER.md", {
-			encoding: "utf-8",
-		});
+    const result = fs.readFileSync('./prisma/mermaid-er/ER.md', {
+      encoding: 'utf-8',
+    })
 
-		const expected = `\`\`\`mermaid
+    const expected = `\`\`\`mermaid
 erDiagram
     User ||--|{ Post : "(id) - (userId)"
     Post ||--|{ Like : "(id) - (postId)"
@@ -40,8 +40,8 @@ erDiagram
         String userId "ID of the user who liked the post."
         DateTime createdAt "Timestamp when the like was created."
     }
-\`\`\``;
+\`\`\``
 
-		expect(result).toBe(expected);
-	});
-});
+    expect(result).toBe(expected)
+  })
+})
