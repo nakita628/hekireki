@@ -1,5 +1,5 @@
 import type { Relation } from '../type'
-import { buildRelationLine } from '../relationship'
+import { buildRelationLine } from '../relationship/build-relation-line'
 
 /**
  * generate relation line

@@ -9,7 +9,7 @@ const extractRelationsTestCases: {
 }[] = [
   {
     model: testPostModel,
-    expected: ['    User ||--|{ Post : "(id) - (userId)"'],
+    expected: ['    User ||--}| Post : "(id) - (userId)"'],
   },
 ]
 
