@@ -16,7 +16,6 @@ export function extractRelations(model: Model): readonly string[] {
 			.split("\n")
 			.map((line: string) => {
 				const relation = parseRelation(line);
-
 				return relation ? generateRelationLine(relation) : null;
 			})
 			.filter((line): line is string => line !== null);
