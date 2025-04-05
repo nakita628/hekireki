@@ -1,6 +1,6 @@
 {
   "name": "hekireki",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "license": "MIT",
   "description": "Hekireki is a tool that generates validation schemas for Zod and Valibot, as well as ER diagrams, from Prisma schemas annotated with comments.",
   "keywords": ["prisma", "zod", "valibot", "mermaid"],
