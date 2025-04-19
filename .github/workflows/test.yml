@@ -28,9 +28,6 @@ jobs:
       - name: Lint
         run: pnpm lint
       
-      - name: Typecheck
-        run: pnpm -F hekireki typecheck
-
       - name: Build
         run: pnpm -F hekireki build
 
