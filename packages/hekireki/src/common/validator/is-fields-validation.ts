@@ -1,4 +1,3 @@
-// import type { ReadonlyDeep } from '@prisma/generator-helper'
 import type { ValidField } from '../type'
 
 /**
@@ -8,9 +7,7 @@ import type { ValidField } from '../type'
  */
 export function isFieldsValidation(
   modelFields: {
-    // documentation: ReadonlyDeep<string | undefined>
-    // biome-ignore lint:
-    documentation: any
+    documentation: string | undefined
     modelName: string
     fieldName: string
     comment: string[]
