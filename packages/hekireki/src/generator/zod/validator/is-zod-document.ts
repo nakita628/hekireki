@@ -5,7 +5,7 @@ const VALIDATION_PATTERNS = ['@z.'] as const
  * @param documentation - The documentation of the field
  * @returns The Zod documentation
  */
-export function isZodDocumentValidation(documentation?: string): string[] {
+export function isZodDocument(documentation?: string): string[] {
   if (!documentation) return []
 
   return documentation

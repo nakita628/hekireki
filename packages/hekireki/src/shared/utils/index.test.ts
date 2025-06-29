@@ -1,7 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  capitalize,
-} from '.'
+import { capitalize } from '.'
 
 // Test run
 // pnpm vitest run ./src/shared/utils/index.test.ts

@@ -1,6 +1,6 @@
 const VALIDATION_PATTERNS = ['@v.'] as const
 
-export function isValibotDocumentValidation(documentation?: string): string[] {
+export function isValibotDocument(documentation?: string): string[] {
   if (!documentation) return []
 
   return documentation

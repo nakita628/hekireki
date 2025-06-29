@@ -24,7 +24,7 @@ export function schemas(
   const fields = properties(modelFields, config)
 
   if (!(modelDoc || !config?.comment)) {
-    return schema(modelName, fields,)
+    return schema(modelName, fields)
   }
 
   return `${schema(modelName, fields)}`

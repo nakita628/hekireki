@@ -1,15 +1,14 @@
-import type { Config } from '..'
-import { generateValibotProperties } from './generate-valibot-properties'
-import { generateValibotSchema } from './generate-valibot-schema'
+import type { Config } from '../index.js'
+import { generateValibotProperties } from './properties.js'
+import { schema } from './schema.js'
 
 /**
  * generate valibot schemas
- * @function generateValibotSchemas
  * @param modelFields
  * @param config
  * @returns
  */
-export function generateValibotSchemas(
+export function schemas(
   modelFields: {
     documentation: string
     modelName: string
@@ -25,8 +24,8 @@ export function generateValibotSchemas(
   const fields = generateValibotProperties(modelFields, config)
 
   if (!(modelDoc || !config?.comment)) {
-    return generateValibotSchema(modelName, fields, config)
+    return schema(modelName, fields)
   }
 
-  return `${generateValibotSchema(modelName, fields, config)}`
+  return `${schema(modelName, fields)}`
 }

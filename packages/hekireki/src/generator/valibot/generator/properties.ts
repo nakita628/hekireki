@@ -1,6 +1,6 @@
-import type { Config } from '..'
+import type { Config } from '../index.js'
 
-export function generateValibotProperties(
+export function properties(
   modelFields: {
     documentation: string
     modelName: string

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { generateValibot } from './generate-valibot'
+import { generateValibot } from './valibot'
 import type { Model } from '../../../common/type'
 import type { Config } from '..'
 

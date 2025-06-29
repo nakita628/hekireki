@@ -1,11 +1,14 @@
-import type { Config } from '..'
-import type { Model } from '../../../common/type'
-import { isValibotDocumentValidation } from '../validator/is-valibot-documentation'
-import { isValibotValidation } from '../validator/is-valibot-validation'
-import { isFieldsValidation } from '../../../common/validator/is-fields-validation'
-import { groupByModelHelper } from '../../../common/helper/group-by-model-helper'
-import { generateValibotSchemas } from './generate-valibot-schemas'
-import { generateValibotInferInput } from './generate-valibot-infer-input'
+import type { Config } from '../index.js'
+
+import { isValibotDocumentValidation } from '../validator/is-valibot-document.js'
+import { isValibotValidation } from '../validator/is-valibot.js'
+
+import { schemas } from './schemas.js'
+
+import type { Model } from '../../mermaid-er/type/index.js'
+import { groupByModel } from '../../../shared/helper/group-by-model.js'
+import { isFields } from '../../../shared/validator/is-fields.js'
+import { inferInput } from './infer-input.js'
 const VALIBOT_IMPORT = `import * as v from 'valibot'\n` as const
 
 /**
@@ -14,7 +17,7 @@ const VALIBOT_IMPORT = `import * as v from 'valibot'\n` as const
  * @param config - The configuration for the generator
  * @returns The generated Valibot schemas and types
  */
-export function generateValibot(models: readonly Model[], config: Config) {
+export function valibot(models: readonly Model[], config: Config) {
   const modelInfos = models.map((model) => {
     return {
       documentation: model.documentation ?? '',
@@ -35,15 +38,14 @@ export function generateValibot(models: readonly Model[], config: Config) {
   })
 
   // null exclude
-  const validFields = isFieldsValidation(modelFields)
+  const validFields = isFields(modelFields)
   // group by model
-  const groupedByModel = groupByModelHelper(validFields)
+  const groupedByModel = groupByModel(validFields)
 
   const valibots = Object.values(groupedByModel).map((fields) => {
     return {
-      generateValibotSchema: generateValibotSchemas(fields, config),
-      generateValibotInfer:
-        config.type === 'true' ? generateValibotInferInput(fields[0].modelName, config) : '',
+      generateValibotSchema: schemas(fields, config),
+      generateValibotInfer: config.type === 'true' ? inferInput(fields[0].modelName, config) : '',
     }
   })
 

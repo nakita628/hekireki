@@ -1,6 +1,4 @@
-import { isZodDocumentValidation } from '../validator/is-zod-documentation.js'
-import { isZodValidation } from '../validator/is-zod-validation.js'
-
+import { isZod, isZodDocument } from '../validator/index.js'
 import type { Config } from '../index.js'
 import type { Model } from '../../../shared/types.js'
 import { isFields } from '../../../shared/validator/is-fields.js'
@@ -30,8 +28,8 @@ export function zod(models: readonly Model[], config: Config): string {
       documentation: model.documentation,
       modelName: model.name,
       fieldName: field.name,
-      comment: isZodDocumentValidation(field.documentation),
-      validation: isZodValidation(field.documentation),
+      comment: isZodDocument(field.documentation),
+      validation: isZod(field.documentation),
     }))
     return fields
   })
