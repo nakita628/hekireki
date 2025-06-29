@@ -1,6 +1,6 @@
 import * as v from 'valibot'
 
-export const UserSchema = v.object({
+export const User = v.object({
   /**
    * Unique identifier for the user.
    */
@@ -29,7 +29,7 @@ export const UserSchema = v.object({
 
 export type User = v.InferInput<typeof UserSchema>
 
-export const PostSchema = v.object({
+export const Post = v.object({
   /**
    * Unique identifier for the post.
    */
@@ -54,7 +54,7 @@ export const PostSchema = v.object({
 
 export type Post = v.InferInput<typeof PostSchema>
 
-export const LikeSchema = v.object({
+export const Like = v.object({
   /**
    * Unique identifier for the like.
    */

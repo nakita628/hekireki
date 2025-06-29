@@ -413,7 +413,7 @@ describe('erContent', () => {
           '@relation Post.id Like.postId one-to-many\n@relation User.id Like.userId one-to-many',
       },
     ] as Model[])
-    const expected =[
+    const expected = [
       '```mermaid',
       'erDiagram',
       '    User ||--}| Post : "(id) - (userId)"',

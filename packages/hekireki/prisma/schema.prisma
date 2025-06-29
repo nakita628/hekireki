@@ -25,7 +25,7 @@ generator Hekireki-Valibot {
 
 model User {
   /// Unique identifier for the user.
-  /// @z.string().uuid()
+  /// @z.uuid()
   /// @v.pipe(v.string(), v.uuid())
   id String @id @default(uuid())
   /// Username of the user.
@@ -55,11 +55,11 @@ model User {
 /// @relation User.id Post.userId one-to-many
 model Post {
   /// Unique identifier for the post.
-  /// @z.string().uuid()
+  /// @z.uuid()
   /// @v.pipe(v.string(), v.uuid())
   id String @id @default(uuid())
   /// ID of the user who created the post.
-  /// @z.string().uuid()
+  /// @z.uuid()
   /// @v.pipe(v.string(), v.uuid())
   userId String
   /// Content of the post.
@@ -83,15 +83,15 @@ model Post {
 /// @relation User.id Like.userId one-to-many
 model Like {
   /// Unique identifier for the like.
-  /// @z.string().uuid()
+  /// @z.uuid()
   /// @v.pipe(v.string(), v.uuid())
   id String
   /// ID of the post that is liked.
-  /// @z.string().uuid()
+  /// @z.uuid()
   /// @v.pipe(v.string(), v.uuid())
   postId String
   /// ID of the user who liked the post.
-  /// @z.string().uuid()
+  /// @z.uuid()
   /// @v.pipe(v.string(), v.uuid())
   userId String
   /// Timestamp when the like was created.

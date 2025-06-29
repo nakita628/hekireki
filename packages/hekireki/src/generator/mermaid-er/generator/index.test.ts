@@ -1,10 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  erContent,
-  modelInfo,
-  modelFields,
-  relationLine,
-} from '.'
+import { erContent, modelInfo, modelFields, relationLine } from '.'
 
 // Test run
 // pnpm vitest run ./src/generator/mermaid-er/generator/index.test.ts

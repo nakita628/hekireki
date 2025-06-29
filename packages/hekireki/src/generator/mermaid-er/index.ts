@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import type { GeneratorOptions } from '@prisma/generator-helper'
-import { output} from './output/index.js'
-import { generatorHandler } from '@prisma/generator-helper'
+import { output } from './output/index.js'
 import { erContent } from './generator/er-content.js'
-
+import pkg from '@prisma/generator-helper'
+const { generatorHandler } = pkg
 
 export type Config = {
   output?: string

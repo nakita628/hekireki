@@ -1,5 +1,4 @@
-import type { Model } from "../shared/types.js";
-
+import type { Model } from '../shared/types.js'
 
 export const testModel: Model[] = [
   {

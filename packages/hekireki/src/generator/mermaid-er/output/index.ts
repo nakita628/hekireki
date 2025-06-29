@@ -1,4 +1,3 @@
-
 import type { Config } from '../index.js'
 import type { ERContent } from '../types.js'
 import fs from 'node:fs'

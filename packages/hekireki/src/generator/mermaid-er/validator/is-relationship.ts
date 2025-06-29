@@ -1,4 +1,4 @@
-import type { Relationship } from "../relationship/build-relation-line.js";
+import type { Relationship } from '../relationship/build-relation-line.js'
 
 /**
  * isRelationship

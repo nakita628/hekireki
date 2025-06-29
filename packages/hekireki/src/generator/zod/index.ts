@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 import type { GeneratorOptions } from '@prisma/generator-helper'
-import { generatorHandler } from '@prisma/generator-helper'
-
 import { format } from 'prettier'
 import fs from 'node:fs'
 import { zod } from './generator/zod.js'
+import pkg from '@prisma/generator-helper'
+const { generatorHandler } = pkg
 
 export type Config = {
   output?: string

@@ -1,10 +1,10 @@
 import { z } from 'zod'
 
-export const UserSchema = z.object({
+export const User = z.object({
   /**
    * Unique identifier for the user.
    */
-  id: z.string().uuid(),
+  id: z.uuid(),
   /**
    * Username of the user.
    */
@@ -29,15 +29,15 @@ export const UserSchema = z.object({
 
 export type User = z.infer<typeof UserSchema>
 
-export const PostSchema = z.object({
+export const Post = z.object({
   /**
    * Unique identifier for the post.
    */
-  id: z.string().uuid(),
+  id: z.uuid(),
   /**
    * ID of the user who created the post.
    */
-  userId: z.string().uuid(),
+  userId: z.uuid(),
   /**
    * Content of the post.
    */
@@ -54,19 +54,19 @@ export const PostSchema = z.object({
 
 export type Post = z.infer<typeof PostSchema>
 
-export const LikeSchema = z.object({
+export const Like = z.object({
   /**
    * Unique identifier for the like.
    */
-  id: z.string().uuid(),
+  id: z.uuid(),
   /**
    * ID of the post that is liked.
    */
-  postId: z.string().uuid(),
+  postId: z.uuid(),
   /**
    * ID of the user who liked the post.
    */
-  userId: z.string().uuid(),
+  userId: z.uuid(),
   /**
    * Timestamp when the like was created.
    */

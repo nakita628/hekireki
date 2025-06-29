@@ -1,4 +1,4 @@
-import type { Model } from "../shared/types.js"
+import type { Model } from '../shared/types.js'
 
 export const testUserModel: Model = {
   name: 'User',
