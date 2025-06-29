@@ -1,6 +1,9 @@
-import type { Model } from '../shared/types.js'
+import { describe, expect, it } from 'vitest'
+import { generateValibot } from './valibot'
+import type { Model } from '../../../common/type'
+import type { Config } from '..'
 
-export const testModel: Model[] = [
+const modelData: Model[] = [
   {
     name: 'User',
     dbName: null,
@@ -402,3 +405,99 @@ export const testModel: Model[] = [
       '@relation Post.id Like.postId one-to-many\n@relation User.id Like.userId one-to-many',
   },
 ] as Model[]
+
+const generateValibotTestCases: {
+  models: Model[]
+  config: Config
+  expected: string
+}[] = [
+  {
+    models: modelData,
+    config: {
+      schemaName: 'PascalCase',
+      typeName: 'PascalCase',
+      comment: true,
+    },
+    expected: `import * as v from 'valibot'
+
+
+export const UserSchema = v.object({
+  /**
+   * Unique identifier for the user.
+   */
+  id: v.pipe(v.string(), v.uuid()),
+  /**
+   * Username of the user.
+   */
+  username: v.pipe(v.string(), v.minLength(3)),
+  /**
+   * Email address of the user.
+   */
+  email: v.pipe(v.string(), v.email()),
+  /**
+   * Password for the user.
+   */
+  password: v.pipe(v.string(), v.minLength(8), v.maxLength(100)),
+  /**
+   * Timestamp when the user was created.
+   */
+  createdAt: v.date(),
+  /**
+   * Timestamp when the user was last updated.
+   */
+  updatedAt: v.date()
+})
+
+export const PostSchema = v.object({
+  /**
+   * Unique identifier for the post.
+   */
+  id: v.pipe(v.string(), v.uuid()),
+  /**
+   * ID of the user who created the post.
+   */
+  userId: v.pipe(v.string(), v.uuid()),
+  /**
+   * Content of the post.
+   */
+  content: v.pipe(v.string(), v.maxLength(500)),
+  /**
+   * Timestamp when the post was created.
+   */
+  createdAt: v.date(),
+  /**
+   * Timestamp when the post was last updated.
+   */
+  updatedAt: v.date()
+})
+
+export const LikeSchema = v.object({
+  /**
+   * Unique identifier for the like.
+   */
+  id: v.pipe(v.string(), v.uuid()),
+  /**
+   * ID of the post that is liked.
+   */
+  postId: v.pipe(v.string(), v.uuid()),
+  /**
+   * ID of the user who liked the post.
+   */
+  userId: v.pipe(v.string(), v.uuid()),
+  /**
+   * Timestamp when the like was created.
+   */
+  createdAt: v.date()
+})`,
+  },
+]
+
+describe('isValibotDocumentValidation', () => {
+  it.concurrent.each(generateValibotTestCases)(
+    'generateValibot($models, $config) -> $expected',
+    ({ models, config, expected }) => {
+      const result = generateValibot(models, config)
+      expect(result).toEqual(expected)
+    },
+  )
+})

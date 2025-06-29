@@ -1,4 +1,4 @@
-import { isRelationship } from '../validator/is-relationship'
+import { isRelationship } from '../validator/is-relationship.js'
 
 const RELATIONSHIPS = {
   'zero-one': '|o',
@@ -9,14 +9,8 @@ const RELATIONSHIPS = {
 
 export type Relationship = keyof typeof RELATIONSHIPS
 
-/**
- * Builds a relationship line for mermaid from a string.
- * @param { string } input
- * @returns { string }
- */
 export function buildRelationLine(input: string): string {
   const parts = input.split('-to-')
-
   if (parts.length !== 2) {
     throw new Error(`Invalid input format: ${input}`)
   }
@@ -29,16 +23,15 @@ export function buildRelationLine(input: string): string {
   const to = toRaw
   const isOptional = optionalFlag === 'optional'
 
-  if (!(isRelationship(from) && isRelationship(to))) {
-    throw new Error(`Invalid relationship string: ${input}`)
+  if (!isRelationship(from)) {
+    throw new Error(`Invalid relationship: ${from}`)
+  }
+  if (!isRelationship(to)) {
+    throw new Error(`Invalid relationship: ${to}`)
   }
 
   const fromSymbol = RELATIONSHIPS[from]
   const toSymbol = RELATIONSHIPS[to]
-
-  if (!(fromSymbol && toSymbol)) {
-    throw new Error(`Invalid relationship string: ${input}`)
-  }
 
   const connector = isOptional ? '..' : '--'
 

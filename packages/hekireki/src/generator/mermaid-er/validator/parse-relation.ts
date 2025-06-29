@@ -1,4 +1,4 @@
-import type { Relation } from '../type'
+import type { Relation } from '../types.js'
 
 /**
  * parse relation

@@ -1,6 +1,9 @@
-import type { Model } from '../shared/types.js'
+import { describe, expect, it } from 'vitest'
+import { zod } from './zod'
+import type { Config } from '..'
+import { Model } from '../../../shared/types'
 
-export const testModel: Model[] = [
+const modelData: Model[] = [
   {
     name: 'User',
     dbName: null,
@@ -402,3 +405,106 @@ export const testModel: Model[] = [
       '@relation Post.id Like.postId one-to-many\n@relation User.id Like.userId one-to-many',
   },
 ] as Model[]
+
+const generateZodTestCases: {
+  models: Model[]
+  config: Config
+  expected: string
+}[] = [
+  {
+    models: modelData,
+    config: {
+      schemaName: 'PascalCase',
+      typeName: 'PascalCase',
+      type: 'true',
+      comment: true,
+    },
+    expected: `import { z } from 'zod'
+
+
+export const UserSchema = z.object({
+  /**
+   * Unique identifier for the user.
+   */
+  id: z.string().uuid(),
+  /**
+   * Username of the user.
+   */
+  username: z.string().min(3),
+  /**
+   * Email address of the user.
+   */
+  email: z.string().email(),
+  /**
+   * Password for the user.
+   */
+  password: z.string().min(8).max(100),
+  /**
+   * Timestamp when the user was created.
+   */
+  createdAt: z.date(),
+  /**
+   * Timestamp when the user was last updated.
+   */
+  updatedAt: z.date()
+})
+
+export type User = z.infer<typeof UserSchema>
+
+export const PostSchema = z.object({
+  /**
+   * Unique identifier for the post.
+   */
+  id: z.string().uuid(),
+  /**
+   * ID of the user who created the post.
+   */
+  userId: z.string().uuid(),
+  /**
+   * Content of the post.
+   */
+  content: z.string().max(500),
+  /**
+   * Timestamp when the post was created.
+   */
+  createdAt: z.date(),
+  /**
+   * Timestamp when the post was last updated.
+   */
+  updatedAt: z.date()
+})
+
+export type Post = z.infer<typeof PostSchema>
+
+export const LikeSchema = z.object({
+  /**
+   * Unique identifier for the like.
+   */
+  id: z.string().uuid(),
+  /**
+   * ID of the post that is liked.
+   */
+  postId: z.string().uuid(),
+  /**
+   * ID of the user who liked the post.
+   */
+  userId: z.string().uuid(),
+  /**
+   * Timestamp when the like was created.
+   */
+  createdAt: z.date()
+})
+
+export type Like = z.infer<typeof LikeSchema>`,
+  },
+]
+
+describe('generateZod', () => {
+  it.each(generateZodTestCases)(
+    'generateZod($models, $config) -> $expected',
+    ({ models, config, expected }) => {
+      const result = zod(models, config)
+      expect(result).toBe(expected)
+    },
+  )
+})
