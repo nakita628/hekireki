@@ -1,5 +1,3 @@
-import type { Config } from '../index.js'
-
 /**
  * Generate Zod schema
  * @param modelName - The name of the model

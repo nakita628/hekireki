@@ -1,4 +1,3 @@
-import type { Config } from '../index.js'
 import { properties } from './properties.js'
 import { schema } from './schema.js'
 
@@ -16,14 +15,14 @@ export function schemas(
     validation: string | null
     comment: string[]
   }[],
-  config: Config,
+  comment: boolean,
 ) {
   const modelName = modelFields[0].modelName
   const modelDoc = modelFields[0].documentation || ''
 
-  const fields = properties(modelFields, config)
+  const fields = properties(modelFields, comment)
 
-  if (!(modelDoc || !config?.comment)) {
+  if (!(modelDoc || !comment)) {
     return schema(modelName, fields)
   }
 

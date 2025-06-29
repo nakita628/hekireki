@@ -1,5 +1,4 @@
 import type { ERContent, Model } from '../types.js'
-import { ER_FOOTER, ER_HEADER } from '../index.js'
 import { modelInfo } from '../generator/index.js'
 import { extractRelations, removeDuplicateRelations } from '../validator/index.js'
 
@@ -8,6 +7,13 @@ import { extractRelations, removeDuplicateRelations } from '../validator/index.j
  * @param { readonly Model[] } models - models
  * @returns { ERContent } - ER content
  */
+
+// ER diagram header
+const ER_HEADER = ['```mermaid', 'erDiagram'] as const
+
+// ER diagram footer
+const ER_FOOTER = ['```'] as const
+
 export function erContent(models: readonly Model[]): ERContent {
   // extract all relations
   const allRelations = models.flatMap(extractRelations)

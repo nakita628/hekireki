@@ -1,4 +1,3 @@
-import type { Config } from '../index.js'
 import type { Model } from '../../mermaid-er/types.js'
 import { isValibot } from '../validator/is-valibot.js'
 import { schemas } from './schemas.js'
@@ -12,10 +11,11 @@ const VALIBOT_IMPORT = `import * as v from 'valibot'\n` as const
 /**
  * Generate Valibot schemas and types
  * @param models - The models to generate the Valibot schemas and types for
- * @param config - The configuration for the generator
+ * @param type - Whether to generate types
+ * @param comment - Whether to include comments in the generated code
  * @returns The generated Valibot schemas and types
  */
-export function valibot(models: readonly Model[], config: Config) {
+export function valibot(models: readonly Model[], type: boolean, comment: boolean) {
   const modelInfos = models.map((model) => {
     return {
       documentation: model.documentation ?? '',
@@ -42,8 +42,8 @@ export function valibot(models: readonly Model[], config: Config) {
 
   const valibots = Object.values(groupedByModel).map((fields) => {
     return {
-      generateValibotSchema: schemas(fields, config),
-      generateValibotInfer: config.type === 'true' ? inferInput(fields[0].modelName, config) : '',
+      generateValibotSchema: schemas(fields, comment),
+      generateValibotInfer: type ? inferInput(fields[0].modelName) : '',
     }
   })
 

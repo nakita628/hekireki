@@ -1,4 +1,3 @@
-import type { Config } from '../index.js'
 import type { ERContent } from '../types.js'
 import fs from 'node:fs'
 
@@ -7,8 +6,8 @@ import fs from 'node:fs'
  * @param content - The ER content
  * @param config - The configuration
  */
-export function output(content: ERContent, config: Config): void {
-  const outputDir = config.output
+export function output(content: ERContent, output: string, file: string | string[]): void {
+  const outputDir = output
   if (!outputDir) {
     throw new Error('output is required')
   }
@@ -16,8 +15,8 @@ export function output(content: ERContent, config: Config): void {
     fs.mkdirSync(outputDir, { recursive: true })
   }
 
-  const file = config.file ?? 'ER.md'
+  const fileName = file ?? 'ER.md'
 
-  const filePath = `${outputDir}/${file}`
+  const filePath = `${outputDir}/${fileName}`
   fs.writeFileSync(filePath, content.join('\n'), { encoding: 'utf-8' })
 }

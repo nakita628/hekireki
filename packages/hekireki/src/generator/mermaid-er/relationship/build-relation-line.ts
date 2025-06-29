@@ -1,3 +1,5 @@
+import { isRelationship } from '../validator/is-relationship.js'
+
 const RELATIONSHIPS = {
   'zero-one': '|o',
   one: '||',
@@ -6,10 +8,6 @@ const RELATIONSHIPS = {
 } as const
 
 export type Relationship = keyof typeof RELATIONSHIPS
-
-function isRelationship(value: string): value is Relationship {
-  return value in RELATIONSHIPS
-}
 
 export function buildRelationLine(input: string): string {
   const parts = input.split('-to-')

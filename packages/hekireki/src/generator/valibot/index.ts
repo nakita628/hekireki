@@ -6,50 +6,28 @@ import { valibot } from './generator/valibot.js'
 import pkg from '@prisma/generator-helper'
 const { generatorHandler } = pkg
 
-export type Config = {
-  output?: string
-  file?: string | string[]
-  schemaName?: 'PascalCase' | 'camelCase' | string | string[]
-  typeName?: 'PascalCase' | 'camelCase' | string | string[]
-  type?: boolean | string | string[]
-  comment?: boolean | string | string[]
-}
-
-const DEFAULT_CONFIG: Config = {
-  output: './valibot',
-  file: 'index.ts',
-  schemaName: 'PascalCase',
-  typeName: 'PascalCase',
-  type: false,
-  comment: false,
-} as const
-
 export async function main(options: GeneratorOptions): Promise<void> {
-  const config: Config = {
-    output: options.generator.output?.value ?? DEFAULT_CONFIG.output,
-    file: options.generator.config?.file ?? DEFAULT_CONFIG.file,
-    schemaName: options.generator.config?.schemaName ?? DEFAULT_CONFIG.schemaName,
-    typeName: options.generator.config?.typeName ?? DEFAULT_CONFIG.typeName,
-    type: options.generator.config?.type ?? DEFAULT_CONFIG.type,
-    comment: options.generator.config?.comment === 'true',
-  }
+  const output = options.generator.output?.value ?? './valibot'
+  const fileName = options.generator.config?.file ?? 'index.ts'
 
-  const content = valibot(options.dmmf.datamodel.models, config)
+  const content = valibot(
+    options.dmmf.datamodel.models,
+    options.generator.config?.type === 'true' ? true : false,
+    options.generator.config?.comment === 'true' ? true : false,
+  )
   const code = await format(content, {
     parser: 'typescript',
     printWidth: 100,
     singleQuote: true,
     semi: false,
   })
-  if (!config.output) {
-    throw new Error('output is required')
-  }
-  if (!fs.existsSync(config.output)) {
-    fs.mkdirSync(config.output, { recursive: true })
+
+  if (!fs.existsSync(output)) {
+    fs.mkdirSync(output, { recursive: true })
   }
 
-  const file = config.file ?? 'index.ts'
-  const filePath = `${config.output}/${file}`
+  const file = fileName ?? 'index.ts'
+  const filePath = `${output}/${file}`
   fs.writeFileSync(filePath, code)
 }
 generatorHandler({

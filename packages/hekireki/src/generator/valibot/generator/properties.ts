@@ -1,5 +1,3 @@
-import type { Config } from '../index.js'
-
 export function properties(
   modelFields: {
     documentation: string
@@ -8,7 +6,7 @@ export function properties(
     validation: string | null
     comment: string[]
   }[],
-  config?: Config,
+  comment: boolean,
 ): string {
   const fields = modelFields
     .filter((field) => field.validation)
@@ -21,7 +19,7 @@ export function properties(
         .join('\n')
         .trim()
 
-      const docComment = config?.comment && cleanDoc ? `  /**\n   * ${cleanDoc}\n   */\n` : ''
+      const docComment = comment && cleanDoc ? `  /**\n   * ${cleanDoc}\n   */\n` : ''
 
       return `${docComment}  ${field.fieldName}: v.${field.validation}`
     })
