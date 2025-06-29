@@ -12,8 +12,10 @@ export type ValidField = Required<Field>
 
 export type GroupedFields = Record<string, Field[]>
 
+export type Model = Readonly<DMMF.Model>
+
 export type ModelInfo = {
   documentation: string
   name: string
-  fields: unknown
+  fields: Model['fields']
 }

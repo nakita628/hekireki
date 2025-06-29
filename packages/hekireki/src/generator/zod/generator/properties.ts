@@ -1,4 +1,4 @@
-import type { Config } from '..'
+import type { Config } from '../index.js'
 
 /**
  * Generate Zod properties
@@ -6,7 +6,7 @@ import type { Config } from '..'
  * @param config - The configuration for the generator
  * @returns The generated Zod properties
  */
-export function generateZodProperties(
+export function properties(
   modelFields: {
     documentation: string
     modelName: string

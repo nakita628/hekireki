@@ -1,12 +1,12 @@
-import { isZodDocumentValidation } from '../validator/is-zod-documentation'
-import { isZodValidation } from '../validator/is-zod-validation'
+import { isZodDocumentValidation } from '../validator/is-zod-documentation.js'
+import { isZodValidation } from '../validator/is-zod-validation.js'
 
-import type { Config } from '..'
-import type { Model } from '../../../common/type'
-import { isFieldsValidation } from '../../../common/validator/is-fields-validation'
-import { groupByModelHelper } from '../../../common/helper/group-by-model-helper'
-import { generateZodSchemas } from './generate-zod-schemas'
-import { generateZodInfer } from './generate-zod-infer'
+import type { Config } from '../index.js'
+import type { Model } from '../../../shared/types.js'
+import { isFields } from '../../../shared/validator/is-fields.js'
+import { groupByModel } from '../../../shared/helper/group-by-model.js'
+import { infer } from './infer.js'
+import { schemas } from './schemas.js'
 
 const ZOD_IMPORT = `import { z } from 'zod'\n` as const
 
@@ -16,7 +16,7 @@ const ZOD_IMPORT = `import { z } from 'zod'\n` as const
  * @param config - The configuration for the generator
  * @returns The generated Zod schemas and types
  */
-export function generateZod(models: readonly Model[], config: Config): string {
+export function zod(models: readonly Model[], config: Config): string {
   const modelInfos = models.map((model) => {
     return {
       documentation: model.documentation ?? '',
@@ -37,15 +37,15 @@ export function generateZod(models: readonly Model[], config: Config): string {
   })
 
   // null exclude
-  const validFields = isFieldsValidation(modelFields)
+  const validFields = isFields(modelFields)
 
   // group by model
-  const groupedByModel = groupByModelHelper(validFields)
+  const groupedByModel = groupByModel(validFields)
 
   const zods = Object.values(groupedByModel).map((fields) => {
     return {
-      generateZodSchema: generateZodSchemas(fields, config),
-      generateZodInfer: config.type === 'true' ? generateZodInfer(fields[0].modelName, config) : '',
+      generateZodSchema: schemas(fields, config),
+      generateZodInfer: config.type === 'true' ? infer(fields[0].modelName) : '',
     }
   })
 

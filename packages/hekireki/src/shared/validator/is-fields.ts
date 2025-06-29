@@ -1,11 +1,11 @@
-import type { ValidField } from '../type'
+import type { ValidField } from '../types.js'
 
 /**
  * Is fields validation
  * @param modelFields - The model fields
  * @returns The fields validation
  */
-export function isFieldsValidation(
+export function isFields(
   modelFields: {
     documentation: string | undefined
     modelName: string

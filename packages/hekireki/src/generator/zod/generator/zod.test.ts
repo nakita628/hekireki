@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { generateZod } from './generate-zod'
-import type { Model } from '../../../common/type'
+import { zod } from './zod'
 import type { Config } from '..'
+import { Model } from '../../../shared/types'
 
 const modelData: Model[] = [
   {
@@ -507,7 +507,7 @@ describe('generateZod', () => {
   it.each(generateZodTestCases)(
     'generateZod($models, $config) -> $expected',
     ({ models, config, expected }) => {
-      const result = generateZod(models, config)
+      const result = zod(models, config)
       expect(result).toBe(expected)
     },
   )

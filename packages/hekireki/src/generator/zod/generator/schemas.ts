@@ -1,6 +1,6 @@
-import type { Config } from '..'
-import { generateZodProperties } from './generate-zod-properties'
-import { generateZodSchema } from './generate-zod-schema'
+import type { Config } from '../index.js'
+import { properties } from './properties.js'
+import { schema } from './schema.js'
 
 /**
  * Generate Zod schemas
@@ -8,7 +8,7 @@ import { generateZodSchema } from './generate-zod-schema'
  * @param config - The configuration for the generator
  * @returns The generated Zod schemas
  */
-export function generateZodSchemas(
+export function schemas(
   modelFields: {
     documentation: string
     modelName: string
@@ -21,11 +21,11 @@ export function generateZodSchemas(
   const modelName = modelFields[0].modelName
   const modelDoc = modelFields[0].documentation || ''
 
-  const fields = generateZodProperties(modelFields, config)
+  const fields = properties(modelFields, config)
 
   if (!(modelDoc || !config?.comment)) {
-    return generateZodSchema(modelName, fields, config)
+    return schema(modelName, fields,)
   }
 
-  return `${generateZodSchema(modelName, fields, config)}`
+  return `${schema(modelName, fields)}`
 }

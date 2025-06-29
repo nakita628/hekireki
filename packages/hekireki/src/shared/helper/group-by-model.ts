@@ -1,4 +1,4 @@
-import type { GroupedFields, ValidField } from '../type'
+import type { GroupedFields, ValidField } from '../types.js'
 
 /**
  * Groups valid fields by model name.
@@ -6,7 +6,7 @@ import type { GroupedFields, ValidField } from '../type'
  * @param validFields - The array of valid fields.
  * @returns The grouped fields.
  */
-export function groupByModelHelper(validFields: ValidField[]): GroupedFields {
+export function groupByModel(validFields: ValidField[]): GroupedFields {
   return validFields.reduce<GroupedFields>((acc, field) => {
     if (!acc[field.modelName]) {
       acc[field.modelName] = []

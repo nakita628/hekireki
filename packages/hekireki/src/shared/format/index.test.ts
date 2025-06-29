@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatCode } from './index'
+import { formatCode } from '.'
 
 const formatCodeTestCases = [
   {

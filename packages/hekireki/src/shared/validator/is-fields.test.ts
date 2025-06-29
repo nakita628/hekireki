@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isFieldsValidation } from './is-fields-validation'
+import { isFieldsValidation } from './is-fields'
 
 const isZodFieldsValidationTestCases = [
   {
