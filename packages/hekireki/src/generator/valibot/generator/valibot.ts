@@ -1,14 +1,12 @@
 import type { Config } from '../index.js'
-
-import { isValibotDocumentValidation } from '../validator/is-valibot-document.js'
-import { isValibotValidation } from '../validator/is-valibot.js'
-
+import type { Model } from '../../mermaid-er/types.js'
+import { isValibot } from '../validator/is-valibot.js'
 import { schemas } from './schemas.js'
-
-import type { Model } from '../../mermaid-er/type/index.js'
 import { groupByModel } from '../../../shared/helper/group-by-model.js'
 import { isFields } from '../../../shared/validator/is-fields.js'
 import { inferInput } from './infer-input.js'
+import { isValibotDocument } from '../validator/is-valibot-document.js'
+
 const VALIBOT_IMPORT = `import * as v from 'valibot'\n` as const
 
 /**
@@ -31,8 +29,8 @@ export function valibot(models: readonly Model[], config: Config) {
       documentation: model.documentation,
       modelName: model.name,
       fieldName: field.name,
-      comment: isValibotDocumentValidation(field.documentation),
-      validation: isValibotValidation(field.documentation),
+      comment: isValibotDocument(field.documentation),
+      validation: isValibot(field.documentation),
     }))
     return fields
   })

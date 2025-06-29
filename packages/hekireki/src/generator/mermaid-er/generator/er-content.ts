@@ -9,6 +9,9 @@ import { extractRelations, removeDuplicateRelations } from '../validator/index.j
  * @returns { ERContent } - ER content
  */
 export function erContent(models: readonly Model[]): ERContent {
+  console.log('--- ER Content ---')
+  console.log(models)
+  console.log('--- ER Content End ---')
   // extract all relations
   const allRelations = models.flatMap(extractRelations)
   // remove duplicate relations

@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import type { GeneratorOptions } from '@prisma/generator-helper'
 import { generatorHandler } from '@prisma/generator-helper'
-import { generateZod } from './generator/zod'
+
 import { format } from 'prettier'
 import fs from 'node:fs'
+import { zod } from './generator/zod.js'
 
 export type Config = {
   output?: string
@@ -33,7 +34,7 @@ export async function main(options: GeneratorOptions): Promise<void> {
     comment: options.generator.config?.comment === 'true',
   }
 
-  const content = generateZod(options.dmmf.datamodel.models, config)
+  const content = zod(options.dmmf.datamodel.models, config)
   const code = await format(content, {
     parser: 'typescript',
     printWidth: 100,
