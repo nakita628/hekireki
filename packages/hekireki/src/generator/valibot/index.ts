@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import type { GeneratorOptions } from '@prisma/generator-helper'
 import { generatorHandler } from '@prisma/generator-helper'
-import { generateValibot } from './generator/valibot'
+
 import { format } from 'prettier'
 import fs from 'node:fs'
+import { valibot } from './generator/valibot.js'
 
 export type Config = {
   output?: string
@@ -33,7 +34,7 @@ export async function main(options: GeneratorOptions): Promise<void> {
     comment: options.generator.config?.comment === 'true',
   }
 
-  const content = generateValibot(options.dmmf.datamodel.models, config)
+  const content = valibot(options.dmmf.datamodel.models, config)
   const code = await format(content, {
     parser: 'typescript',
     printWidth: 100,

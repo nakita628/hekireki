@@ -1,5 +1,6 @@
-import type { Config } from '..'
-import type { ERContent } from '../type'
+
+import type { Config } from '../index.js'
+import type { ERContent } from '../types.js'
 import fs from 'node:fs'
 
 /**
@@ -7,7 +8,7 @@ import fs from 'node:fs'
  * @param content - The ER content
  * @param config - The configuration
  */
-export function OutputFile(content: ERContent, config: Config): void {
+export function output(content: ERContent, config: Config): void {
   const outputDir = config.output
   if (!outputDir) {
     throw new Error('output is required')

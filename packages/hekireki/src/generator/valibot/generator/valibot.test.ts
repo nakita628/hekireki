@@ -26,8 +26,7 @@ const modelData: Model[] = [
         },
         isGenerated: false,
         isUpdatedAt: false,
-        documentation:
-          'Unique identifier for the user.\n@z.string().uuid()\n@v.pipe(v.string(), v.uuid())',
+        documentation: 'Unique identifier for the user.\n@z.uuid()\n@v.pipe(v.string(), v.uuid())',
       },
       {
         name: 'username',
@@ -169,8 +168,7 @@ const modelData: Model[] = [
         },
         isGenerated: false,
         isUpdatedAt: false,
-        documentation:
-          'Unique identifier for the post.\n@z.string().uuid()\n@v.pipe(v.string(), v.uuid())',
+        documentation: 'Unique identifier for the post.\n@z.uuid()\n@v.pipe(v.string(), v.uuid())',
       },
       {
         name: 'userId',
@@ -186,7 +184,7 @@ const modelData: Model[] = [
         isGenerated: false,
         isUpdatedAt: false,
         documentation:
-          'ID of the user who created the post.\n@z.string().uuid()\n@v.pipe(v.string(), v.uuid())',
+          'ID of the user who created the post.\n@z.uuid()\n@v.pipe(v.string(), v.uuid())',
       },
       {
         name: 'content',
@@ -303,8 +301,7 @@ const modelData: Model[] = [
         nativeType: null,
         isGenerated: false,
         isUpdatedAt: false,
-        documentation:
-          'Unique identifier for the like.\n@z.string().uuid()\n@v.pipe(v.string(), v.uuid())',
+        documentation: 'Unique identifier for the like.\n@z.uuid()\n@v.pipe(v.string(), v.uuid())',
       },
       {
         name: 'postId',
@@ -319,8 +316,7 @@ const modelData: Model[] = [
         nativeType: null,
         isGenerated: false,
         isUpdatedAt: false,
-        documentation:
-          'ID of the post that is liked.\n@z.string().uuid()\n@v.pipe(v.string(), v.uuid())',
+        documentation: 'ID of the post that is liked.\n@z.uuid()\n@v.pipe(v.string(), v.uuid())',
       },
       {
         name: 'userId',
@@ -336,7 +332,7 @@ const modelData: Model[] = [
         isGenerated: false,
         isUpdatedAt: false,
         documentation:
-          'ID of the user who liked the post.\n@z.string().uuid()\n@v.pipe(v.string(), v.uuid())',
+          'ID of the user who liked the post.\n@z.uuid()\n@v.pipe(v.string(), v.uuid())',
       },
       {
         name: 'createdAt',

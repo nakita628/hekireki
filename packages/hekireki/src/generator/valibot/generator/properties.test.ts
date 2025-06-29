@@ -19,7 +19,7 @@ const generateValibotPropertiesTestCases: {
         documentation: '',
         modelName: 'User',
         fieldName: 'id',
-        comment: ['Unique identifier for the user.', '@z.string().uuid()'],
+        comment: ['Unique identifier for the user.', '@z.uuid()'],
         validation: 'pipe(v.string(), v.uuid())',
       },
       {

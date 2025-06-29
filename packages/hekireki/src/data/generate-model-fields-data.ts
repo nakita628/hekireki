@@ -22,8 +22,7 @@ export const testUserModel: Model = {
       },
       isGenerated: false,
       isUpdatedAt: false,
-      documentation:
-        'Unique identifier for the user.\n@z.string().uuid()\n@v.pipe(v.string(), v.uuid())',
+      documentation: 'Unique identifier for the user.\n@z.uuid()\n@v.pipe(v.string(), v.uuid())',
     },
     {
       name: 'username',
@@ -166,8 +165,7 @@ export const testPostModel: Model = {
       },
       isGenerated: false,
       isUpdatedAt: false,
-      documentation:
-        'Unique identifier for the post.\n@z.string().uuid()\n@v.pipe(v.string(), v.uuid())',
+      documentation: 'Unique identifier for the post.\n@z.uuid()\n@v.pipe(v.string(), v.uuid())',
     },
     {
       name: 'userId',
@@ -183,7 +181,7 @@ export const testPostModel: Model = {
       isGenerated: false,
       isUpdatedAt: false,
       documentation:
-        'ID of the user who created the post.\n@z.string().uuid()\n@v.pipe(v.string(), v.uuid())',
+        'ID of the user who created the post.\n@z.uuid()\n@v.pipe(v.string(), v.uuid())',
     },
     {
       name: 'content',

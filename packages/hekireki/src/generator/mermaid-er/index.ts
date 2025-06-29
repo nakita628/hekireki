@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import type { GeneratorOptions } from '@prisma/generator-helper'
-import { OutputFile } from './output'
+import { output} from './output/index.js'
 import { generatorHandler } from '@prisma/generator-helper'
-import { generateERContent } from './generator/generate-er-content'
+import { erContent } from './generator/er-content.js'
+
 
 export type Config = {
   output?: string
@@ -29,13 +30,13 @@ export async function main(options: GeneratorOptions): Promise<void> {
 
   const models = options.dmmf.datamodel.models
 
-  const content = generateERContent(models)
+  const content = erContent(models)
 
   if (!config.output) {
     throw new Error('output is required')
   }
 
-  OutputFile(content, config)
+  output(content, config)
 }
 
 // prisma generator handler

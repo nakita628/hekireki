@@ -8,7 +8,7 @@ const VALIBOT_ANNOTATION = '@v.'
  * @param { DMMF.Model } model
  * @returns { string[] }
  */
-export function generateModelFields(model: DMMF.Model): string[] {
+export function modelFields(model: DMMF.Model): string[] {
   return model.fields
     .map((field) => {
       if (field.relationName) {
