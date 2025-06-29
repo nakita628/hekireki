@@ -1,6 +1,6 @@
-import { z } from 'zod'
+import { z } from 'zod/v4'
 
-export const User = z.object({
+export const UserSchema = z.object({
   /**
    * Unique identifier for the user.
    */
@@ -29,7 +29,7 @@ export const User = z.object({
 
 export type User = z.infer<typeof UserSchema>
 
-export const Post = z.object({
+export const PostSchema = z.object({
   /**
    * Unique identifier for the post.
    */
@@ -54,7 +54,7 @@ export const Post = z.object({
 
 export type Post = z.infer<typeof PostSchema>
 
-export const Like = z.object({
+export const LikeSchema = z.object({
   /**
    * Unique identifier for the like.
    */

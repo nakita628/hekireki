@@ -8,6 +8,5 @@ import type { Config } from '../index.js'
  * @returns The generated Zod schema
  */
 export function schema(modelName: string, fields: string) {
-  const schemaName = modelName
-  return `export const ${schemaName} = z.object({\n${fields}\n})`
+  return `export const ${modelName}Schema = z.object({\n${fields}\n})`
 }

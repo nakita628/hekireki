@@ -6,7 +6,7 @@ import { groupByModel } from '../../../shared/helper/group-by-model.js'
 import { infer } from './infer.js'
 import { schemas } from './schemas.js'
 
-const ZOD_IMPORT = `import { z } from 'zod'\n` as const
+const ZOD_IMPORT = `import { z } from 'zod/v4'\n` as const
 
 /**
  * Generate Zod schemas and types
