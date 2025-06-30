@@ -24,83 +24,36 @@ generator Hekireki-Valibot {
 }
 
 model User {
-  /// Unique identifier for the user.
+  /// Primary key
   /// @z.uuid()
   /// @v.pipe(v.string(), v.uuid())
-  id String @id @default(uuid())
-  /// Username of the user.
-  /// @z.string().min(3)
-  /// @v.pipe(v.string(), v.minLength(3))
-  username String
-  /// Email address of the user.
-  /// @z.string().email()
-  /// @v.pipe(v.string(), v.email())
-  email String
-  /// Password for the user.
-  /// @z.string().min(8).max(100)
-  /// @v.pipe(v.string(), v.minLength(8), v.maxLength(100))
-  password String
-  /// Timestamp when the user was created.
-  /// @z.date()
-  /// @v.date()
-  createdAt DateTime
-  /// Timestamp when the user was last updated.
-  /// @z.date()
-  /// @v.date()
-  updatedAt DateTime
+  id    String  @id @default(uuid())
+  /// Display name
+  /// @z.string().min(1).max(50)
+  /// @v.pipe(v.string(), v.minLength(1), v.maxLength(50))
+  name  String
+  /// One-to-many relation to Post
   posts Post[]
-  likes Like[]
 }
 
 /// @relation User.id Post.userId one-to-many
 model Post {
-  /// Unique identifier for the post.
+  /// Primary key
   /// @z.uuid()
   /// @v.pipe(v.string(), v.uuid())
-  id String @id @default(uuid())
-  /// ID of the user who created the post.
-  /// @z.uuid()
-  /// @v.pipe(v.string(), v.uuid())
-  userId String
-  /// Content of the post.
-  /// @z.string().max(500)
-  /// @v.pipe(v.string(), v.maxLength(500))
+  id      String  @id @default(uuid())
+  /// Article title
+  /// @z.string().min(1).max(100)
+  /// @v.pipe(v.string(), v.minLength(1), v.maxLength(100))
+  title   String
+  /// Body content (no length limit)
+  /// @z.string()
+  /// @v.string()
   content String
-  /// Timestamp when the post was created.
-  /// @z.date()
-  /// @v.date()
-  createdAt DateTime @default(now())
-  /// Timestamp when the post was last updated.
-  /// @z.date()
-  /// @v.date()
-  updatedAt DateTime @default(now()) @updatedAt
-  /// Relation with the User model.
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  likes Like[]
-}
-
-/// @relation Post.id Like.postId one-to-many
-/// @relation User.id Like.userId one-to-many
-model Like {
-  /// Unique identifier for the like.
+  /// Foreign key referencing User.id
   /// @z.uuid()
   /// @v.pipe(v.string(), v.uuid())
-  id String
-  /// ID of the post that is liked.
-  /// @z.uuid()
-  /// @v.pipe(v.string(), v.uuid())
-  postId String
-  /// ID of the user who liked the post.
-  /// @z.uuid()
-  /// @v.pipe(v.string(), v.uuid())
-  userId String
-  /// Timestamp when the like was created.
-  /// @z.date()
-  /// @v.date()
-  createdAt DateTime @default(now())
-  /// Relation with the Post model.
-  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
-  /// Relation with the User model.
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  @@unique([userId, postId])
+  userId  String
+  /// Prisma relation definition
+  user    User     @relation(fields: [userId], references: [id])
 }
