@@ -35,7 +35,6 @@ describe('schema', () => {
       `  id: v.pipe(v.string(), v.uuid()),
   name: v.pipe(v.string(), v.minLength(1), v.maxLength(50))`,
     )
-    console.log(result)
     const expected = `export const UserSchema = v.object({
   id: v.pipe(v.string(), v.uuid()),
   name: v.pipe(v.string(), v.minLength(1), v.maxLength(50))

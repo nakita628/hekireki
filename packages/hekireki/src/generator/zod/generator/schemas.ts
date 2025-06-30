@@ -18,15 +18,7 @@ export function schemas(
 ) {
   const modelName = modelFields[0].modelName
   const modelDoc = modelFields[0].documentation || ''
-
   const fields = properties(modelFields, comment)
-
-  console.log(modelName)
-
-  console.log('----')
-  console.log(fields)
-  console.log('----')
-
   if (!(modelDoc || !comment)) {
     return schema(modelName, fields)
   }

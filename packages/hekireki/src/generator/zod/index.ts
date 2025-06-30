@@ -10,10 +10,6 @@ export async function main(options: GeneratorOptions): Promise<void> {
   const output = options.generator.output?.value ?? './zod'
   const fileName = options.generator.config?.file ?? 'index.ts'
 
-  // console.log('--- Hekireki-Zod Generator ---')
-  // console.log(JSON.stringify(options.dmmf.datamodel.models, null, 2))
-  // console.log('--- Hekireki-Zod Generator ---')
-
   const content = zod(
     options.dmmf.datamodel.models,
     options.generator.config?.type === 'true' ? true : false,

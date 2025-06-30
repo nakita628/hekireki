@@ -1,98 +1,262 @@
-import { describe, it, expect, vi } from 'vitest'
+import { afterEach, describe, it, expect } from 'vitest'
 import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
 import fs from 'node:fs'
-const execAsync = promisify(exec)
 
-describe('prisma generate', () => {
-  it('should successfully generate zod schemas', async () => {
-    // TODO confirmation
-    // const { stderr } = await execAsync('npx prisma generate')
-    // Not Error
-    // expect(stderr).toBeFalsy()
+// Test run
+// pnpm vitest run ./src/generator/zod/index.test.ts
 
+describe('prisma generate', async () => {
+  afterEach(() => {
+    // Clean up generated files
+    // fs.rmSync('./prisma/schema.prisma', { force: true })
+    fs.rmSync('./prisma/zod', { recursive: true, force: true })
+  })
+  it('prisma generate zod comment true', async () => {
+    const prisma = `generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator Hekireki-Zod {
+  provider = "hekireki-zod"
+  type     = true
+  comment  = true
+}
+
+model User {
+  /// Primary key
+  /// @z.uuid()
+  /// @v.pipe(v.string(), v.uuid())
+  id    String  @id @default(uuid())
+  /// Display name
+  /// @z.string().min(1).max(50)
+  /// @v.pipe(v.string(), v.minLength(1), v.maxLength(50))
+  name  String
+  /// One-to-many relation to Post
+  posts Post[]
+}
+
+/// @relation User.id Post.userId one-to-many
+model Post {
+  /// Primary key
+  /// @z.uuid()
+  /// @v.pipe(v.string(), v.uuid())
+  id      String  @id @default(uuid())
+  /// Article title
+  /// @z.string().min(1).max(100)
+  /// @v.pipe(v.string(), v.minLength(1), v.maxLength(100))
+  title   String
+  /// Body content (no length limit)
+  /// @z.string()
+  /// @v.string()
+  content String
+  /// Foreign key referencing User.id
+  /// @z.uuid()
+  /// @v.pipe(v.string(), v.uuid())
+  userId  String
+  /// Prisma relation definition
+  user    User     @relation(fields: [userId], references: [id])
+}`
+
+    fs.mkdirSync('./prisma', { recursive: true })
+    fs.writeFileSync('./prisma/schema.prisma', prisma, { encoding: 'utf-8' })
+    await promisify(exec)('npx prisma generate')
     const result = fs.readFileSync('./prisma/zod/index.ts', {
       encoding: 'utf-8',
     })
-
-    const expected = `import { z } from 'zod'
+    const expected = `import { z } from 'zod/v4'
 
 export const UserSchema = z.object({
   /**
-   * Unique identifier for the user.
+   * Primary key
    */
-  id: z.string().uuid(),
+  id: z.uuid(),
   /**
-   * Username of the user.
+   * Display name
    */
-  username: z.string().min(3),
-  /**
-   * Email address of the user.
-   */
-  email: z.string().email(),
-  /**
-   * Password for the user.
-   */
-  password: z.string().min(8).max(100),
-  /**
-   * Timestamp when the user was created.
-   */
-  createdAt: z.date(),
-  /**
-   * Timestamp when the user was last updated.
-   */
-  updatedAt: z.date(),
+  name: z.string().min(1).max(50),
 })
 
 export type User = z.infer<typeof UserSchema>
 
 export const PostSchema = z.object({
   /**
-   * Unique identifier for the post.
+   * Primary key
    */
-  id: z.string().uuid(),
+  id: z.uuid(),
   /**
-   * ID of the user who created the post.
+   * Article title
    */
-  userId: z.string().uuid(),
+  title: z.string().min(1).max(100),
   /**
-   * Content of the post.
+   * Body content (no length limit)
    */
-  content: z.string().max(500),
+  content: z.string(),
   /**
-   * Timestamp when the post was created.
+   * Foreign key referencing User.id
    */
-  createdAt: z.date(),
-  /**
-   * Timestamp when the post was last updated.
-   */
-  updatedAt: z.date(),
+  userId: z.uuid(),
 })
 
 export type Post = z.infer<typeof PostSchema>
+`
+    expect(result).toBe(expected)
+  })
 
-export const LikeSchema = z.object({
-  /**
-   * Unique identifier for the like.
-   */
-  id: z.string().uuid(),
-  /**
-   * ID of the post that is liked.
-   */
-  postId: z.string().uuid(),
-  /**
-   * ID of the user who liked the post.
-   */
-  userId: z.string().uuid(),
-  /**
-   * Timestamp when the like was created.
-   */
-  createdAt: z.date(),
+  it('prisma generate zod comment false', async () => {
+    const prisma = `generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator Hekireki-Zod {
+  provider = "hekireki-zod"
+  type     = true
+  comment  = false
+}
+
+model User {
+  /// Primary key
+  /// @z.uuid()
+  /// @v.pipe(v.string(), v.uuid())
+  id    String  @id @default(uuid())
+  /// Display name
+  /// @z.string().min(1).max(50)
+  /// @v.pipe(v.string(), v.minLength(1), v.maxLength(50))
+  name  String
+  /// One-to-many relation to Post
+  posts Post[]
+}
+
+/// @relation User.id Post.userId one-to-many
+model Post {
+  /// Primary key
+  /// @z.uuid()
+  /// @v.pipe(v.string(), v.uuid())
+  id      String  @id @default(uuid())
+  /// Article title
+  /// @z.string().min(1).max(100)
+  /// @v.pipe(v.string(), v.minLength(1), v.maxLength(100))
+  title   String
+  /// Body content (no length limit)
+  /// @z.string()
+  /// @v.string()
+  content String
+  /// Foreign key referencing User.id
+  /// @z.uuid()
+  /// @v.pipe(v.string(), v.uuid())
+  userId  String
+  /// Prisma relation definition
+  user    User     @relation(fields: [userId], references: [id])
+}`
+    fs.mkdirSync('./prisma', { recursive: true })
+    fs.writeFileSync('./prisma/schema.prisma', prisma, { encoding: 'utf-8' })
+    await promisify(exec)('npx prisma generate')
+    const result = fs.readFileSync('./prisma/zod/index.ts', {
+      encoding: 'utf-8',
+    })
+    const expected = `import { z } from 'zod/v4'
+
+export const UserSchema = z.object({
+  id: z.uuid(),
+  name: z.string().min(1).max(50),
 })
 
-export type Like = z.infer<typeof LikeSchema>
-`
+export type User = z.infer<typeof UserSchema>
 
+export const PostSchema = z.object({
+  id: z.uuid(),
+  title: z.string().min(1).max(100),
+  content: z.string(),
+  userId: z.uuid(),
+})
+
+export type Post = z.infer<typeof PostSchema>
+`
+    expect(result).toBe(expected)
+  })
+  it('prisma generate zod comment delete', async () => {
+    const prisma = `generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator Hekireki-Zod {
+  provider = "hekireki-zod"
+  type     = true
+}
+
+model User {
+  /// Primary key
+  /// @z.uuid()
+  /// @v.pipe(v.string(), v.uuid())
+  id    String  @id @default(uuid())
+  /// Display name
+  /// @z.string().min(1).max(50)
+  /// @v.pipe(v.string(), v.minLength(1), v.maxLength(50))
+  name  String
+  /// One-to-many relation to Post
+  posts Post[]
+}
+
+/// @relation User.id Post.userId one-to-many
+model Post {
+  /// Primary key
+  /// @z.uuid()
+  /// @v.pipe(v.string(), v.uuid())
+  id      String  @id @default(uuid())
+  /// Article title
+  /// @z.string().min(1).max(100)
+  /// @v.pipe(v.string(), v.minLength(1), v.maxLength(100))
+  title   String
+  /// Body content (no length limit)
+  /// @z.string()
+  /// @v.string()
+  content String
+  /// Foreign key referencing User.id
+  /// @z.uuid()
+  /// @v.pipe(v.string(), v.uuid())
+  userId  String
+  /// Prisma relation definition
+  user    User     @relation(fields: [userId], references: [id])
+}`
+    fs.mkdirSync('./prisma', { recursive: true })
+    fs.writeFileSync('./prisma/schema.prisma', prisma, { encoding: 'utf-8' })
+    await promisify(exec)('npx prisma generate')
+    const result = fs.readFileSync('./prisma/zod/index.ts', {
+      encoding: 'utf-8',
+    })
+    const expected = `import { z } from 'zod/v4'
+
+export const UserSchema = z.object({
+  id: z.uuid(),
+  name: z.string().min(1).max(50),
+})
+
+export type User = z.infer<typeof UserSchema>
+
+export const PostSchema = z.object({
+  id: z.uuid(),
+  title: z.string().min(1).max(100),
+  content: z.string(),
+  userId: z.uuid(),
+})
+
+export type Post = z.infer<typeof PostSchema>
+`
     expect(result).toBe(expected)
   })
 })

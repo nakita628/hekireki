@@ -7,10 +7,6 @@ const { generatorHandler } = pkg
 
 // main function
 export async function main(options: GeneratorOptions): Promise<void> {
-  // console.log('---')
-  // console.log(JSON.stringify(options.dmmf.datamodel.models[0].fields, null, 2))
-
-  // console.log('---')
   output(
     erContent(options.dmmf.datamodel.models),
     options.generator.output?.value ?? './mermaid-er',
