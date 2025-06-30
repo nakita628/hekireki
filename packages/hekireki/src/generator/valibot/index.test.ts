@@ -1,4 +1,4 @@
-import { beforeEach, afterEach, describe, it, expect } from 'vitest'
+import { beforeEach, afterEach, afterAll, describe, it, expect } from 'vitest'
 import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
 import fs from 'node:fs'
@@ -6,16 +6,16 @@ import fs from 'node:fs'
 // Test run
 // pnpm vitest run ./src/generator/valibot/index.test.ts
 
-describe('prisma generate', async () => {
-  beforeEach(() => {
-    // Ensure the prisma directory exists
-    fs.mkdirSync('./prisma', { recursive: true })
-  })
+describe('prisma generate', () => {
   afterEach(() => {
     // Clean up generated files
-    fs.rmSync('./prisma/schema.prisma', { force: true })
-    fs.rmSync('./prisma/valibot', { recursive: true, force: true })
-    fs.rmSync('./prisma/valibot2', { recursive: true, force: true })
+    fs.rmSync('./prisma-valibot/schema.prisma', { force: true })
+    fs.rmSync('./prisma-valibot/valibot', { recursive: true, force: true })
+    fs.rmSync('./prisma-valibot/valibot2', { recursive: true, force: true })
+  })
+  afterAll(() => {
+    // Clean up the directory itself
+    fs.rmSync('./prisma-valibot', { recursive: true, force: true })
   })
   it('hekireki-valibot', async () => {
     const prisma = `generator client {
@@ -43,10 +43,10 @@ model User {
 }
 `
 
-    fs.mkdirSync('./prisma', { recursive: true })
-    fs.writeFileSync('./prisma/schema.prisma', prisma, { encoding: 'utf-8' })
-    await promisify(exec)('npx prisma generate')
-    const result = fs.readFileSync('./prisma/valibot/index.ts', {
+    fs.mkdirSync('./prisma-valibot', { recursive: true })
+    fs.writeFileSync('./prisma-valibot/schema.prisma', prisma, { encoding: 'utf-8' })
+    await promisify(exec)('npx prisma generate --schema=./prisma-valibot/schema.prisma')
+    const result = fs.readFileSync('./prisma-valibot/valibot/index.ts', {
       encoding: 'utf-8',
     })
     const expected = `import * as v from 'valibot'
