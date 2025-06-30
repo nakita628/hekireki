@@ -1,4 +1,4 @@
-import { afterEach, describe, it, expect } from 'vitest'
+import { beforeEach, afterEach, describe, it, expect } from 'vitest'
 import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
 import fs from 'node:fs'
@@ -7,6 +7,10 @@ import fs from 'node:fs'
 // pnpm vitest run ./src/generator/valibot/index.test.ts
 
 describe('prisma generate', async () => {
+  beforeEach(() => {
+    // Ensure the prisma directory exists
+    fs.mkdirSync('./prisma', { recursive: true })
+  })
   afterEach(() => {
     // Clean up generated files
     fs.rmSync('./prisma/schema.prisma', { force: true })

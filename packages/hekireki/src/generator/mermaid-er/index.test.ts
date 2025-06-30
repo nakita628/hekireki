@@ -1,4 +1,4 @@
-import { afterEach, describe, it, expect } from 'vitest'
+import { beforeEach, afterEach, describe, it, expect } from 'vitest'
 import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
 import fs from 'node:fs'
@@ -7,11 +7,17 @@ import fs from 'node:fs'
 // pnpm vitest run ./src/generator/mermaid-er/index.test.ts
 
 describe('prisma generate', async () => {
+  beforeEach(() => {
+    // Ensure the prisma directory exists
+    fs.mkdirSync('./prisma', { recursive: true })
+  })
+  
   afterEach(() => {
     // Clean up generated files
     fs.rmSync('./prisma/schema.prisma', { force: true })
     fs.rmSync('./prisma/mermaid-er', { recursive: true, force: true })
     fs.rmSync('./prisma/mermaid-er2', { recursive: true, force: true })
+    fs.mkdirSync('./prisma', { recursive: true })
   })
   it('hekireki-mermaid-er', async () => {
     const prisma = `generator client {
@@ -63,7 +69,6 @@ model Post {
 }
 `
 
-    fs.mkdirSync('./prisma', { recursive: true })
     fs.writeFileSync('./prisma/schema.prisma', prisma, { encoding: 'utf-8' })
     await promisify(exec)('npx prisma generate')
     const result = fs.readFileSync('./prisma/mermaid-er/ER.md', {
