@@ -11,7 +11,7 @@ describe('prisma generate', async () => {
     // Ensure the prisma directory exists
     fs.mkdirSync('./prisma', { recursive: true })
   })
-  
+
   afterEach(() => {
     // Clean up generated files
     fs.rmSync('./prisma/schema.prisma', { force: true })
