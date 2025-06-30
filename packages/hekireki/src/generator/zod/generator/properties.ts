@@ -1,5 +1,3 @@
-import type { Config } from '../index.js'
-
 /**
  * Generate Zod properties
  * @param modelFields - The fields of the model

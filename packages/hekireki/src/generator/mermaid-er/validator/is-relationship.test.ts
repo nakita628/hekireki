@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { isRelationship } from './is-relationship'
 
+// Test run
+// pnpm vitest run ./src/generator/mermaid-er/validator/is-relationship.test.ts
+
 const isRelationshipTestCases = [
   { input: 'zero-one', expected: true },
   { input: 'one', expected: true },

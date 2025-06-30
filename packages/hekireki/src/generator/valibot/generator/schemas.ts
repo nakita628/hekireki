@@ -1,4 +1,3 @@
-import type { Config } from '../index.js'
 import { properties } from './properties.js'
 import { schema } from './schema.js'
 
