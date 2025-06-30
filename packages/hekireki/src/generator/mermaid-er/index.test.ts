@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll } from 'vitest'
+import { afterEach, describe, it, expect } from 'vitest'
 import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
 import fs from 'node:fs'
@@ -6,8 +6,14 @@ import fs from 'node:fs'
 // Test run
 // pnpm vitest run ./src/generator/mermaid-er/index.test.ts
 
-describe('mermaid', () => {
-  beforeAll(async () => {
+describe('prisma generate', async () => {
+  afterEach(() => {
+    // Clean up generated files
+    fs.rmSync('./prisma/schema.prisma', { force: true })
+    fs.rmSync('./prisma/mermaid-er', { recursive: true, force: true })
+    fs.rmSync('./prisma/mermaid-er2', { recursive: true, force: true })
+  })
+  it('hekireki-mermaid-er', async () => {
     const prisma = `generator client {
   provider = "prisma-client-js"
 }
@@ -19,28 +25,13 @@ datasource db {
 
 generator Hekireki-ER {
   provider = "hekireki-mermaid-er"
-  output  = "./tmp-mermaid-er"
-}
-
-generator Hekireki-Zod {
-  provider = "hekireki-zod"
-  output  = "./tmp-zod"
-  type     = true
-  comment  = true
-}
-
-generator Hekireki-Valibot {
-  provider = "hekireki-valibot"
-  type     = true
-  output  = "./tmp-valibot"
-  comment  = true
 }
 
 model User {
   /// Primary key
   /// @z.uuid()
   /// @v.pipe(v.string(), v.uuid())
-  id    String  @id @default(uuid())
+  id    String @id @default(uuid())
   /// Display name
   /// @z.string().min(1).max(50)
   /// @v.pipe(v.string(), v.minLength(1), v.maxLength(50))
@@ -54,7 +45,7 @@ model Post {
   /// Primary key
   /// @z.uuid()
   /// @v.pipe(v.string(), v.uuid())
-  id      String  @id @default(uuid())
+  id      String @id @default(uuid())
   /// Article title
   /// @z.string().min(1).max(100)
   /// @v.pipe(v.string(), v.minLength(1), v.maxLength(100))
@@ -68,24 +59,16 @@ model Post {
   /// @v.pipe(v.string(), v.uuid())
   userId  String
   /// Prisma relation definition
-  user    User     @relation(fields: [userId], references: [id])
-}`
+  user    User   @relation(fields: [userId], references: [id])
+}
+`
 
-    fs.mkdirSync('./tmp-prisma', { recursive: true })
-    fs.writeFileSync('./tmp-prisma/schema.prisma', prisma, { encoding: 'utf-8' })
-
-    // Run prisma generate
-  })
-  it('should generate mermaid file', async () => {
-    // TODO confirmation
-    // const { stderr } = await execAsync('npx prisma generate')
-    // Not Error
-    // expect(stderr).toBeFalsy()
-
+    fs.mkdirSync('./prisma', { recursive: true })
+    fs.writeFileSync('./prisma/schema.prisma', prisma, { encoding: 'utf-8' })
+    await promisify(exec)('npx prisma generate')
     const result = fs.readFileSync('./prisma/mermaid-er/ER.md', {
       encoding: 'utf-8',
     })
-
     const expected = `\`\`\`mermaid
 erDiagram
     User ||--}| Post : "(id) - (userId)"
