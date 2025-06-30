@@ -1,34 +1,16 @@
 import * as v from 'valibot'
 
-export const User = v.object({
-  /**
-   * Primary key
-   */
+export const UserSchema = v.object({
   id: v.pipe(v.string(), v.uuid()),
-  /**
-   * Display name
-   */
   name: v.pipe(v.string(), v.minLength(1), v.maxLength(50)),
 })
 
 export type User = v.InferInput<typeof UserSchema>
 
-export const Post = v.object({
-  /**
-   * Primary key
-   */
+export const PostSchema = v.object({
   id: v.pipe(v.string(), v.uuid()),
-  /**
-   * Article title
-   */
   title: v.pipe(v.string(), v.minLength(1), v.maxLength(100)),
-  /**
-   * Body content (no length limit)
-   */
   content: v.string(),
-  /**
-   * Foreign key referencing User.id
-   */
   userId: v.pipe(v.string(), v.uuid()),
 })
 

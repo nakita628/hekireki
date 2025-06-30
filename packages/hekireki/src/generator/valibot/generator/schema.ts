@@ -5,5 +5,5 @@
  * @returns The generated Valibot schema
  */
 export function schema(modelName: string, fields: string) {
-  return `export const ${modelName} = v.object({\n${fields}\n})`
+  return `export const ${modelName}Schema = v.object({\n${fields}\n})`
 }

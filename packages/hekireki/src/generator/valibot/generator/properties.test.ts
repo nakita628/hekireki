@@ -1,101 +1,64 @@
 import { describe, expect, it } from 'vitest'
-import { generateValibotProperties } from './generate-valibot-properties'
-import type { Config } from '..'
+import { properties } from '.'
 
-const generateValibotPropertiesTestCases: {
-  modelFields: {
-    documentation: string
-    modelName: string
-    fieldName: string
-    validation: string | null
-    comment: string[]
-  }[]
-  config?: Config
-  expected: string
-}[] = [
-  {
-    modelFields: [
-      {
-        documentation: '',
-        modelName: 'User',
-        fieldName: 'id',
-        comment: ['Unique identifier for the user.', '@z.uuid()'],
-        validation: 'pipe(v.string(), v.uuid())',
-      },
-      {
-        documentation: '',
-        modelName: 'User',
-        fieldName: 'username',
-        comment: ['Username of the user.', '@z.string().min(3)'],
-        validation: 'pipe(v.string(), v.minLength(3))',
-      },
-      {
-        documentation: '',
-        modelName: 'User',
-        fieldName: 'email',
-        comment: ['Email address of the user.', '@z.string().email()'],
-        validation: 'pipe(v.string(), v.email())',
-      },
-      {
-        documentation: '',
-        modelName: 'User',
-        fieldName: 'password',
-        comment: ['Password for the user.', '@z.string().min(8).max(100)'],
-        validation: 'pipe(v.string(), v.minLength(8), v.maxLength(100))',
-      },
-      {
-        documentation: '',
-        modelName: 'User',
-        fieldName: 'createdAt',
-        comment: ['Timestamp when the user was created.', '@z.date()'],
-        validation: 'date()',
-      },
-      {
-        documentation: '',
-        modelName: 'User',
-        fieldName: 'updatedAt',
-        comment: ['Timestamp when the user was last updated.', '@z.date()'],
-        validation: 'date()',
-      },
-    ],
-    config: {
-      schemaName: 'PascalCase',
-      typeName: 'PascalCase',
-      comment: true,
-    },
-    expected: `  /**
-   * Unique identifier for the user.
+// Test run
+// pnpm vitest run ./src/generator/valibot/generator/properties.test.ts
+
+describe('properties', () => {
+  it.concurrent('properties comment true', () => {
+    const result = properties(
+      [
+        {
+          documentation: '',
+          modelName: 'User',
+          fieldName: 'id',
+          comment: ['Primary key', '@z.uuid()'],
+          validation: 'pipe(v.string(), v.uuid())',
+        },
+        {
+          documentation: '',
+          modelName: 'User',
+          fieldName: 'name',
+          comment: ['Display name', '@z.string().min(1).max(50)'],
+          validation: 'pipe(v.string(), v.minLength(1), v.maxLength(50))',
+        },
+      ],
+      true,
+    )
+    const expected = `  /**
+   * Primary key
    */
   id: v.pipe(v.string(), v.uuid()),
   /**
-   * Username of the user.
+   * Display name
    */
-  username: v.pipe(v.string(), v.minLength(3)),
-  /**
-   * Email address of the user.
-   */
-  email: v.pipe(v.string(), v.email()),
-  /**
-   * Password for the user.
-   */
-  password: v.pipe(v.string(), v.minLength(8), v.maxLength(100)),
-  /**
-   * Timestamp when the user was created.
-   */
-  createdAt: v.date(),
-  /**
-   * Timestamp when the user was last updated.
-   */
-  updatedAt: v.date()`,
-  },
-]
+  name: v.pipe(v.string(), v.minLength(1), v.maxLength(50))`
 
-describe('generateValibotProperties', () => {
-  it.each(generateValibotPropertiesTestCases)(
-    'generateValibotProperties($modelFields, $config) -> $expected',
-    ({ modelFields, config, expected }) => {
-      const result = generateValibotProperties(modelFields, config)
-      expect(result).toBe(expected)
-    },
-  )
+    expect(result).toBe(expected)
+  })
+
+  it.concurrent('properties comment false', () => {
+    const result = properties(
+      [
+        {
+          documentation: '',
+          modelName: 'User',
+          fieldName: 'id',
+          comment: ['Primary key', '@z.uuid()'],
+          validation: 'pipe(v.string(), v.uuid())',
+        },
+        {
+          documentation: '',
+          modelName: 'User',
+          fieldName: 'name',
+          comment: ['Display name', '@z.string().min(1).max(50)'],
+          validation: 'pipe(v.string(), v.minLength(1), v.maxLength(50))',
+        },
+      ],
+      false,
+    )
+    const expected = `  id: v.pipe(v.string(), v.uuid()),
+  name: v.pipe(v.string(), v.minLength(1), v.maxLength(50))`
+    expect(result).toBe(expected)
+  })
 })
