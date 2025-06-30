@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { properties } from './properties.js'
+import { properties } from '.'
 
 // Test run
 // pnpm vitest run ./src/generator/zod/generator/properties.test.ts

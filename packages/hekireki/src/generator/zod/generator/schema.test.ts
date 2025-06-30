@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { schema } from './schema.js'
+import { schema } from '.'
 
 // Test run
 // pnpm vitest run ./src/generator/zod/generator/schema.test.ts

@@ -1,5 +1,5 @@
-import { describe, expect, it, test } from 'vitest'
-import { zod } from './zod.js'
+import { describe, expect, it } from 'vitest'
+import { zod } from '.'
 import { Model } from '../../../shared/types.js'
 
 // Test run

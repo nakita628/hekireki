@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { infer } from './infer.js'
+import { infer } from '.'
 
 // Test run
 // pnpm vitest run ./src/generator/zod/generator/infer.test.ts

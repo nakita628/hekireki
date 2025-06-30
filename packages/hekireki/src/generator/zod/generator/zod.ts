@@ -2,8 +2,7 @@ import type { Model } from '../../../shared/types.js'
 import { isZod, isZodDocument } from '../validator/index.js'
 import { isFields } from '../../../shared/validator/is-fields.js'
 import { groupByModel } from '../../../shared/helper/group-by-model.js'
-import { infer } from './infer.js'
-import { schemas } from './schemas.js'
+import { infer, schemas } from './index.js'
 
 const ZOD_IMPORT = `import { z } from 'zod/v4'\n` as const
 
