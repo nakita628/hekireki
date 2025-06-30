@@ -12,8 +12,8 @@ export async function main(options: GeneratorOptions): Promise<void> {
 
   const content = valibot(
     options.dmmf.datamodel.models,
-    options.generator.config?.type === 'true' ? true : false,
-    options.generator.config?.comment === 'true' ? true : false,
+    options.generator.config?.type === 'true',
+    options.generator.config?.comment === 'true',
   )
   const code = await format(content, {
     parser: 'typescript',

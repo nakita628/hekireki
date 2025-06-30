@@ -7,7 +7,7 @@ import { inferInput } from '.'
 describe('inferInput', () => {
   it.concurrent('inferInput test', () => {
     const result = inferInput('User')
-    const expected = `export type User = v.InferInput<typeof UserSchema>`
+    const expected = 'export type User = v.InferInput<typeof UserSchema>'
     expect(result).toBe(expected)
   })
 })

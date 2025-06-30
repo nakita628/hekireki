@@ -42,7 +42,7 @@ model User {
 
     fs.mkdirSync('./prisma-zod', { recursive: true })
     fs.writeFileSync('./prisma-zod/schema.prisma', prisma, { encoding: 'utf-8' })
-    await promisify(exec)(`npx prisma generate --schema=./prisma-zod/schema.prisma`)
+    await promisify(exec)('npx prisma generate --schema=./prisma-zod/schema.prisma')
     const result = fs.readFileSync('./prisma-zod/zod/index.ts', {
       encoding: 'utf-8',
     })

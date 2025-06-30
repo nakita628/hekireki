@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { zod } from '.'
-import { Model } from '../../../shared/types.js'
+import type { Model } from '../../../shared/types.js'
 
 // Test run
 // pnpm vitest run ./src/generator/zod/generator/zod.test.ts
