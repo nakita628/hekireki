@@ -1,57 +1,65 @@
 import { describe, expect, it } from 'vitest'
-import { generateZodSchema } from './generate-zod-schema'
-import type { Config } from '..'
+import { schema } from './schema.js'
 
-const generateZodSchemaTestCases: {
-  modelName: string
-  fields: string
-  config: Config
-  expected: string
-}[] = [
-  {
-    modelName: 'User',
-    fields: 'name: z.string()',
-    config: {
-      schemaName: 'PascalCase',
-      typeName: 'camelCase',
-      comment: false,
-    },
-    expected: `export const UserSchema = z.object({
-name: z.string()
-})`,
-  },
-  {
-    modelName: 'Profile',
-    fields: 'name: z.string()',
-    config: {
-      schemaName: 'PascalCase',
-      typeName: 'camelCase',
-      comment: false,
-    },
-    expected: `export const ProfileSchema = z.object({
-name: z.string()
-})`,
-  },
-  {
-    modelName: 'Post',
-    fields: 'title: z.string()',
-    config: {
-      schemaName: 'PascalCase',
-      typeName: 'PascalCase',
-      comment: false,
-    },
-    expected: `export const PostSchema = z.object({
-title: z.string()
-})`,
-  },
-]
+// Test run
+// pnpm vitest run ./src/generator/zod/generator/schema.test.ts
 
-describe('generateZodSchema', () => {
-  it.each(generateZodSchemaTestCases)(
-    'generateZodSchema($modelName, $fields, $config) -> $expected',
-    ({ modelName, fields, config, expected }) => {
-      const result = generateZodSchema(modelName, fields, config)
-      expect(result).toBe(expected)
-    },
-  )
+describe('schema', () => {
+  it.concurrent('schema comment true', () => {
+    const result = schema(
+      'Post',
+      `  /**
+   * Primary key
+   */
+  id: z.uuid(),
+  /**
+   * Article title
+   */
+  title: z.string().min(1).max(100),
+  /**
+   * Body content (no length limit)
+   */
+  content: z.string(),
+  /**
+   * Foreign key referencing User.id
+   */
+  userId: z.uuid()`,
+    )
+    const expected = `export const PostSchema = z.object({
+  /**
+   * Primary key
+   */
+  id: z.uuid(),
+  /**
+   * Article title
+   */
+  title: z.string().min(1).max(100),
+  /**
+   * Body content (no length limit)
+   */
+  content: z.string(),
+  /**
+   * Foreign key referencing User.id
+   */
+  userId: z.uuid()
+})`
+    expect(result).toBe(expected)
+  })
+
+  it.concurrent('schema comment false', () => {
+    const result = schema(
+      'Post',
+      `  id: z.uuid(),
+  title: z.string().min(1).max(100),
+  content: z.string(),
+  userId: z.uuid()`,
+    )
+    const expected = `export const PostSchema = z.object({
+  id: z.uuid(),
+  title: z.string().min(1).max(100),
+  content: z.string(),
+  userId: z.uuid()
+})`
+    expect(result).toBe(expected)
+  })
 })

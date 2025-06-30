@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest'
-import { zod } from './zod'
-import type { Config } from '..'
-import { Model } from '../../../shared/types'
+import { describe, expect, it, test } from 'vitest'
+import { zod } from './zod.js'
+import { Model } from '../../../shared/types.js'
 
-const modelData: Model[] = [
+// Test run
+// pnpm vitest run ./src/generator/zod/generator/zod.test.ts
+
+const testModels: Model[] = [
   {
     name: 'User',
     dbName: null,
@@ -26,10 +28,10 @@ const modelData: Model[] = [
         },
         isGenerated: false,
         isUpdatedAt: false,
-        documentation: 'Unique identifier for the user.\n@z.uuid()\n@v.pipe(v.string(), v.uuid())',
+        documentation: 'Primary key\n@z.uuid()\n@v.pipe(v.string(), v.uuid())',
       },
       {
-        name: 'username',
+        name: 'name',
         kind: 'scalar',
         isList: false,
         isRequired: true,
@@ -42,69 +44,7 @@ const modelData: Model[] = [
         isGenerated: false,
         isUpdatedAt: false,
         documentation:
-          'Username of the user.\n@z.string().min(3)\n@v.pipe(v.string(), v.minLength(3))',
-      },
-      {
-        name: 'email',
-        kind: 'scalar',
-        isList: false,
-        isRequired: true,
-        isUnique: false,
-        isId: false,
-        isReadOnly: false,
-        hasDefaultValue: false,
-        type: 'String',
-        nativeType: null,
-        isGenerated: false,
-        isUpdatedAt: false,
-        documentation:
-          'Email address of the user.\n@z.string().email()\n@v.pipe(v.string(), v.email())',
-      },
-      {
-        name: 'password',
-        kind: 'scalar',
-        isList: false,
-        isRequired: true,
-        isUnique: false,
-        isId: false,
-        isReadOnly: false,
-        hasDefaultValue: false,
-        type: 'String',
-        nativeType: null,
-        isGenerated: false,
-        isUpdatedAt: false,
-        documentation:
-          'Password for the user.\n@z.string().min(8).max(100)\n@v.pipe(v.string(), v.minLength(8), v.maxLength(100))',
-      },
-      {
-        name: 'createdAt',
-        kind: 'scalar',
-        isList: false,
-        isRequired: true,
-        isUnique: false,
-        isId: false,
-        isReadOnly: false,
-        hasDefaultValue: false,
-        type: 'DateTime',
-        nativeType: null,
-        isGenerated: false,
-        isUpdatedAt: false,
-        documentation: 'Timestamp when the user was created.\n@z.date()\n@v.date()',
-      },
-      {
-        name: 'updatedAt',
-        kind: 'scalar',
-        isList: false,
-        isRequired: true,
-        isUnique: false,
-        isId: false,
-        isReadOnly: false,
-        hasDefaultValue: false,
-        type: 'DateTime',
-        nativeType: null,
-        isGenerated: false,
-        isUpdatedAt: false,
-        documentation: 'Timestamp when the user was last updated.\n@z.date()\n@v.date()',
+          'Display name\n@z.string().min(1).max(50)\n@v.pipe(v.string(), v.minLength(1), v.maxLength(50))',
       },
       {
         name: 'posts',
@@ -122,23 +62,7 @@ const modelData: Model[] = [
         relationToFields: [],
         isGenerated: false,
         isUpdatedAt: false,
-      },
-      {
-        name: 'likes',
-        kind: 'object',
-        isList: true,
-        isRequired: true,
-        isUnique: false,
-        isId: false,
-        isReadOnly: false,
-        hasDefaultValue: false,
-        type: 'Like',
-        nativeType: null,
-        relationName: 'LikeToUser',
-        relationFromFields: [],
-        relationToFields: [],
-        isGenerated: false,
-        isUpdatedAt: false,
+        documentation: 'One-to-many relation to Post',
       },
     ],
     primaryKey: null,
@@ -168,23 +92,23 @@ const modelData: Model[] = [
         },
         isGenerated: false,
         isUpdatedAt: false,
-        documentation: 'Unique identifier for the post.\n@z.uuid()\n@v.pipe(v.string(), v.uuid())',
+        documentation: 'Primary key\n@z.uuid()\n@v.pipe(v.string(), v.uuid())',
       },
       {
-        name: 'userId',
+        name: 'title',
         kind: 'scalar',
         isList: false,
         isRequired: true,
         isUnique: false,
         isId: false,
-        isReadOnly: true,
+        isReadOnly: false,
         hasDefaultValue: false,
         type: 'String',
         nativeType: null,
         isGenerated: false,
         isUpdatedAt: false,
         documentation:
-          'ID of the user who created the post.\n@z.uuid()\n@v.pipe(v.string(), v.uuid())',
+          'Article title\n@z.string().min(1).max(100)\n@v.pipe(v.string(), v.minLength(1), v.maxLength(100))',
       },
       {
         name: 'content',
@@ -199,46 +123,22 @@ const modelData: Model[] = [
         nativeType: null,
         isGenerated: false,
         isUpdatedAt: false,
-        documentation:
-          'Content of the post.\n@z.string().max(500)\n@v.pipe(v.string(), v.maxLength(500))',
+        documentation: 'Body content (no length limit)\n@z.string()\n@v.string()',
       },
       {
-        name: 'createdAt',
+        name: 'userId',
         kind: 'scalar',
         isList: false,
         isRequired: true,
         isUnique: false,
         isId: false,
-        isReadOnly: false,
-        hasDefaultValue: true,
-        type: 'DateTime',
+        isReadOnly: true,
+        hasDefaultValue: false,
+        type: 'String',
         nativeType: null,
-        default: {
-          name: 'now',
-          args: [],
-        },
         isGenerated: false,
         isUpdatedAt: false,
-        documentation: 'Timestamp when the post was created.\n@z.date()\n@v.date()',
-      },
-      {
-        name: 'updatedAt',
-        kind: 'scalar',
-        isList: false,
-        isRequired: true,
-        isUnique: false,
-        isId: false,
-        isReadOnly: false,
-        hasDefaultValue: true,
-        type: 'DateTime',
-        nativeType: null,
-        default: {
-          name: 'now',
-          args: [],
-        },
-        isGenerated: false,
-        isUpdatedAt: true,
-        documentation: 'Timestamp when the post was last updated.\n@z.date()\n@v.date()',
+        documentation: 'Foreign key referencing User.id\n@z.uuid()\n@v.pipe(v.string(), v.uuid())',
       },
       {
         name: 'user',
@@ -254,27 +154,9 @@ const modelData: Model[] = [
         relationName: 'PostToUser',
         relationFromFields: ['userId'],
         relationToFields: ['id'],
-        relationOnDelete: 'Cascade',
         isGenerated: false,
         isUpdatedAt: false,
-        documentation: 'Relation with the User model.',
-      },
-      {
-        name: 'likes',
-        kind: 'object',
-        isList: true,
-        isRequired: true,
-        isUnique: false,
-        isId: false,
-        isReadOnly: false,
-        hasDefaultValue: false,
-        type: 'Like',
-        nativeType: null,
-        relationName: 'LikeToPost',
-        relationFromFields: [],
-        relationToFields: [],
-        isGenerated: false,
-        isUpdatedAt: false,
+        documentation: 'Prisma relation definition',
       },
     ],
     primaryKey: null,
@@ -283,228 +165,47 @@ const modelData: Model[] = [
     isGenerated: false,
     documentation: '@relation User.id Post.userId one-to-many',
   },
-  {
-    name: 'Like',
-    dbName: null,
-    schema: null,
-    fields: [
-      {
-        name: 'id',
-        kind: 'scalar',
-        isList: false,
-        isRequired: true,
-        isUnique: false,
-        isId: false,
-        isReadOnly: false,
-        hasDefaultValue: false,
-        type: 'String',
-        nativeType: null,
-        isGenerated: false,
-        isUpdatedAt: false,
-        documentation: 'Unique identifier for the like.\n@z.uuid()\n@v.pipe(v.string(), v.uuid())',
-      },
-      {
-        name: 'postId',
-        kind: 'scalar',
-        isList: false,
-        isRequired: true,
-        isUnique: false,
-        isId: false,
-        isReadOnly: true,
-        hasDefaultValue: false,
-        type: 'String',
-        nativeType: null,
-        isGenerated: false,
-        isUpdatedAt: false,
-        documentation: 'ID of the post that is liked.\n@z.uuid()\n@v.pipe(v.string(), v.uuid())',
-      },
-      {
-        name: 'userId',
-        kind: 'scalar',
-        isList: false,
-        isRequired: true,
-        isUnique: false,
-        isId: false,
-        isReadOnly: true,
-        hasDefaultValue: false,
-        type: 'String',
-        nativeType: null,
-        isGenerated: false,
-        isUpdatedAt: false,
-        documentation:
-          'ID of the user who liked the post.\n@z.uuid()\n@v.pipe(v.string(), v.uuid())',
-      },
-      {
-        name: 'createdAt',
-        kind: 'scalar',
-        isList: false,
-        isRequired: true,
-        isUnique: false,
-        isId: false,
-        isReadOnly: false,
-        hasDefaultValue: true,
-        type: 'DateTime',
-        nativeType: null,
-        default: {
-          name: 'now',
-          args: [],
-        },
-        isGenerated: false,
-        isUpdatedAt: false,
-        documentation: 'Timestamp when the like was created.\n@z.date()\n@v.date()',
-      },
-      {
-        name: 'post',
-        kind: 'object',
-        isList: false,
-        isRequired: true,
-        isUnique: false,
-        isId: false,
-        isReadOnly: false,
-        hasDefaultValue: false,
-        type: 'Post',
-        nativeType: null,
-        relationName: 'LikeToPost',
-        relationFromFields: ['postId'],
-        relationToFields: ['id'],
-        relationOnDelete: 'Cascade',
-        isGenerated: false,
-        isUpdatedAt: false,
-        documentation: 'Relation with the Post model.',
-      },
-      {
-        name: 'user',
-        kind: 'object',
-        isList: false,
-        isRequired: true,
-        isUnique: false,
-        isId: false,
-        isReadOnly: false,
-        hasDefaultValue: false,
-        type: 'User',
-        nativeType: null,
-        relationName: 'LikeToUser',
-        relationFromFields: ['userId'],
-        relationToFields: ['id'],
-        relationOnDelete: 'Cascade',
-        isGenerated: false,
-        isUpdatedAt: false,
-        documentation: 'Relation with the User model.',
-      },
-    ],
-    primaryKey: null,
-    uniqueFields: [['userId', 'postId']],
-    uniqueIndexes: [
-      {
-        name: null,
-        fields: ['userId', 'postId'],
-      },
-    ],
-    isGenerated: false,
-    documentation:
-      '@relation Post.id Like.postId one-to-many\n@relation User.id Like.userId one-to-many',
-  },
-] as Model[]
+]
 
-const generateZodTestCases: {
-  models: Model[]
-  config: Config
-  expected: string
-}[] = [
-  {
-    models: modelData,
-    config: {
-      schemaName: 'PascalCase',
-      typeName: 'PascalCase',
-      type: 'true',
-      comment: true,
-    },
-    expected: `import { z } from 'zod'
+describe('zod', () => {
+  it.concurrent('zod type true comment true', () => {
+    const result = zod(testModels, true, true)
+    const expected = `import { z } from 'zod/v4'
 
 
 export const UserSchema = z.object({
   /**
-   * Unique identifier for the user.
+   * Primary key
    */
-  id: z.string().uuid(),
+  id: z.uuid(),
   /**
-   * Username of the user.
+   * Display name
    */
-  username: z.string().min(3),
-  /**
-   * Email address of the user.
-   */
-  email: z.string().email(),
-  /**
-   * Password for the user.
-   */
-  password: z.string().min(8).max(100),
-  /**
-   * Timestamp when the user was created.
-   */
-  createdAt: z.date(),
-  /**
-   * Timestamp when the user was last updated.
-   */
-  updatedAt: z.date()
+  name: z.string().min(1).max(50)
 })
 
 export type User = z.infer<typeof UserSchema>
 
 export const PostSchema = z.object({
   /**
-   * Unique identifier for the post.
+   * Primary key
    */
-  id: z.string().uuid(),
+  id: z.uuid(),
   /**
-   * ID of the user who created the post.
+   * Article title
    */
-  userId: z.string().uuid(),
+  title: z.string().min(1).max(100),
   /**
-   * Content of the post.
+   * Body content (no length limit)
    */
-  content: z.string().max(500),
+  content: z.string(),
   /**
-   * Timestamp when the post was created.
+   * Foreign key referencing User.id
    */
-  createdAt: z.date(),
-  /**
-   * Timestamp when the post was last updated.
-   */
-  updatedAt: z.date()
+  userId: z.uuid()
 })
 
-export type Post = z.infer<typeof PostSchema>
-
-export const LikeSchema = z.object({
-  /**
-   * Unique identifier for the like.
-   */
-  id: z.string().uuid(),
-  /**
-   * ID of the post that is liked.
-   */
-  postId: z.string().uuid(),
-  /**
-   * ID of the user who liked the post.
-   */
-  userId: z.string().uuid(),
-  /**
-   * Timestamp when the like was created.
-   */
-  createdAt: z.date()
-})
-
-export type Like = z.infer<typeof LikeSchema>`,
-  },
-]
-
-describe('generateZod', () => {
-  it.each(generateZodTestCases)(
-    'generateZod($models, $config) -> $expected',
-    ({ models, config, expected }) => {
-      const result = zod(models, config)
-      expect(result).toBe(expected)
-    },
-  )
+export type Post = z.infer<typeof PostSchema>`
+    expect(result).toBe(expected)
+  })
 })

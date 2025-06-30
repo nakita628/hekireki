@@ -1,106 +1,66 @@
 import { describe, expect, it } from 'vitest'
-import { generateZodSchemas } from './generate-zod-schemas'
-import type { Config } from '..'
+import { schemas } from './schemas'
 
-const generateZodSchemasTestCases: {
-  modelFields: {
-    modelName: string
-    fieldName: string
-    validation: string | null
-    documentation: string
-    comment: string[]
-  }[]
-  config: Config
-  expected: string
-}[] = [
-  {
-    modelFields: [
-      {
-        documentation: '',
-        modelName: 'User',
-        fieldName: 'id',
-        comment: ['Unique identifier for the user.', '@v.pipe(v.string(), v.uuid())'],
-        validation: 'string().uuid()',
-      },
-      {
-        documentation: '',
-        modelName: 'User',
-        fieldName: 'username',
-        comment: ['Username of the user.', '@v.pipe(v.string(), v.minLength(3))'],
-        validation: 'string().min(3)',
-      },
-      {
-        documentation: '',
-        modelName: 'User',
-        fieldName: 'email',
-        comment: ['Email address of the user.', '@v.pipe(v.string(), v.email())'],
-        validation: 'string().email()',
-      },
-      {
-        documentation: '',
-        modelName: 'User',
-        fieldName: 'password',
-        comment: [
-          'Password for the user.',
-          '@v.pipe(v.string(), v.minLength(8), v.maxLength(100))',
-        ],
-        validation: 'string().min(8).max(100)',
-      },
-      {
-        documentation: '',
-        modelName: 'User',
-        fieldName: 'createdAt',
-        comment: ['Timestamp when the user was created.', '@v.date()'],
-        validation: 'date()',
-      },
-      {
-        documentation: '',
-        modelName: 'User',
-        fieldName: 'updatedAt',
-        comment: ['Timestamp when the user was last updated.', '@v.date()'],
-        validation: 'date()',
-      },
-    ],
-    config: {
-      schemaName: 'PascalCase',
-      typeName: 'PascalCase',
-      comment: true,
-    },
-    expected: `export const UserSchema = z.object({
-  /**
-   * Unique identifier for the user.
-   */
-  id: z.string().uuid(),
-  /**
-   * Username of the user.
-   */
-  username: z.string().min(3),
-  /**
-   * Email address of the user.
-   */
-  email: z.string().email(),
-  /**
-   * Password for the user.
-   */
-  password: z.string().min(8).max(100),
-  /**
-   * Timestamp when the user was created.
-   */
-  createdAt: z.date(),
-  /**
-   * Timestamp when the user was last updated.
-   */
-  updatedAt: z.date()
-})`,
-  },
-]
+// Test run
+// pnpm vitest run ./src/generator/zod/generator/schemas.test.ts
 
-describe('generateZodSchemas', () => {
-  it.concurrent.each(generateZodSchemasTestCases)(
-    'generateZodSchemas($modelFields, $config) -> $expected',
-    ({ modelFields, config, expected }) => {
-      const result = generateZodSchemas(modelFields, config)
-      expect(result).toBe(expected)
-    },
-  )
+describe('schemas', () => {
+  it.concurrent('schemas comment true', () => {
+    const result = schemas(
+      [
+        {
+          documentation: '',
+          modelName: 'User',
+          fieldName: 'id',
+          comment: ['Primary key', '@v.pipe(v.string(), v.uuid())'],
+          validation: 'uuid()',
+        },
+        {
+          documentation: '',
+          modelName: 'User',
+          fieldName: 'name',
+          comment: ['Display name', '@v.pipe(v.string(), v.minLength(1), v.maxLength(50))'],
+          validation: 'string().min(1).max(50)',
+        },
+      ],
+      true,
+    )
+    const expected = `export const UserSchema = z.object({
+  /**
+   * Primary key
+   */
+  id: z.uuid(),
+  /**
+   * Display name
+   */
+  name: z.string().min(1).max(50)
+})`
+    expect(result).toBe(expected)
+  })
+  it.concurrent('schemas comment false', () => {
+    const result = schemas(
+      [
+        {
+          documentation: '',
+          modelName: 'User',
+          fieldName: 'id',
+          comment: ['Primary key', '@v.pipe(v.string(), v.uuid())'],
+          validation: 'uuid()',
+        },
+        {
+          documentation: '',
+          modelName: 'User',
+          fieldName: 'name',
+          comment: ['Display name', '@v.pipe(v.string(), v.minLength(1), v.maxLength(50))'],
+          validation: 'string().min(1).max(50)',
+        },
+      ],
+      false,
+    )
+    const expected = `export const UserSchema = z.object({
+  id: z.uuid(),
+  name: z.string().min(1).max(50)
+})`
+    expect(result).toBe(expected)
+  })
 })
