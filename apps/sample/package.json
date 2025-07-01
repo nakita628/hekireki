@@ -6,9 +6,11 @@
   },
   "dependencies": {
     "@prisma/client": "6.10.1",
-    "prisma": "^6.10.1"
+    "prisma": "^6.10.1",
+    "valibot": "1.1.0",
+    "zod": "^3.25.67"
   },
   "devDependencies": {
-    "hekireki": "^0.1.0"
+    "hekireki": "^0.2.0"
   }
 }
