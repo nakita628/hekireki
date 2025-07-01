@@ -1,11 +1,10 @@
-
 generator client {
     provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+    provider = "sqlite"
+    url      = env("DATABASE_URL")
 }
 
 generator Hekireki-ER {
@@ -14,17 +13,10 @@ generator Hekireki-ER {
 
 generator Hekireki-Zod {
     provider = "hekireki-zod"
-    type     = true
-    comment  = false
-    zod     = "v4-mini"
-    output = "./zod"
-    file   = "test.ts"
 }
 
 generator Hekireki-Valibot {
     provider = "hekireki-valibot"
-    type     = true
-    comment  = false
 }
 
 model User {
