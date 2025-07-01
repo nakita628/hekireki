@@ -13,10 +13,14 @@ generator Hekireki-ER {
 
 generator Hekireki-Zod {
     provider = "hekireki-zod"
+    type     = true
+    comment  = true
 }
 
 generator Hekireki-Valibot {
     provider = "hekireki-valibot"
+    type     = true
+    comment  = true
 }
 
 model User {
