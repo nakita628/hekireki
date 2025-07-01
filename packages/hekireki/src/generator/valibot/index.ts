@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import type { GeneratorOptions } from '@prisma/generator-helper'
-import { format } from 'prettier'
 import fs from 'node:fs'
 import { valibot } from './generator/valibot.js'
 import pkg from '@prisma/generator-helper'
+import { fmt } from '../../shared/format/index.js'
 const { generatorHandler } = pkg
 
 export async function main(options: GeneratorOptions): Promise<void> {
@@ -15,12 +15,7 @@ export async function main(options: GeneratorOptions): Promise<void> {
     options.generator.config?.type === 'true',
     options.generator.config?.comment === 'true',
   )
-  const code = await format(content, {
-    parser: 'typescript',
-    printWidth: 100,
-    singleQuote: true,
-    semi: false,
-  })
+  const code = await fmt(content)
 
   if (!fs.existsSync(output)) {
     fs.mkdirSync(output, { recursive: true })

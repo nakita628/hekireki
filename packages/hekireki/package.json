@@ -27,7 +27,7 @@
   "scripts": {
     "generate": "prisma generate",
     "deps": "rm -rf node_modules && pnpm install",
-    "build": "tsc",
+    "build": "rm -rf ./dist/* && tsc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "coverage": "vitest run --coverage",

@@ -4,7 +4,9 @@ import { isFields } from '../../../shared/validator/is-fields.js'
 import { groupByModel } from '../../../shared/helper/group-by-model.js'
 import { infer, schemas } from './index.js'
 
-const ZOD_IMPORT = `import { z } from 'zod/v4'\n` as const
+const ZODV4_IMPORT = `import { z } from 'zod/v4'\n` as const
+const ZODV4_MINI_IMPORT = `import { z } from 'zod/v4-mini'\n` as const
+const ZOD_OPENAPI_HONO_IMPORT = `import { z } from '@hono/zod-openapi'\n` as const
 
 /**
  * Generate Zod schemas and types
@@ -13,7 +15,12 @@ const ZOD_IMPORT = `import { z } from 'zod/v4'\n` as const
  * @param comment - Whether to include comments in the generated code
  * @returns The generated Zod schemas and types
  */
-export function zod(models: readonly Model[], type: boolean, comment: boolean): string {
+export function zod(
+  models: readonly Model[],
+  type: boolean,
+  comment: boolean,
+  zodVersion?: string | string[],
+): string {
   const modelInfos = models.map((model) => {
     return {
       documentation: model.documentation ?? '',
@@ -46,8 +53,15 @@ export function zod(models: readonly Model[], type: boolean, comment: boolean): 
     }
   })
 
+  const importStatement =
+    zodVersion === 'v4-mini'
+      ? ZODV4_MINI_IMPORT
+      : zodVersion === '@hono/zod-openapi'
+        ? ZOD_OPENAPI_HONO_IMPORT
+        : ZODV4_IMPORT
+
   return [
-    ZOD_IMPORT,
+    importStatement,
     '',
     zods
       .flatMap(({ generateZodSchema, generateZodInfer }) =>

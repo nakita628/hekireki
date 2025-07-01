@@ -1,6 +1,6 @@
 import { format } from 'prettier'
 
-export async function formatCode(code: string) {
+export async function fmt(code: string) {
   return await format(code, {
     parser: 'typescript',
     printWidth: 100,
