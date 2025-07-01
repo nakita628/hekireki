@@ -14,6 +14,11 @@ generator Hekireki-ER {
 
 generator Hekireki-Zod {
     provider = "hekireki-zod"
+    type     = true
+    comment  = false
+    zod     = "v4-mini"
+    output = "./zod"
+    file   = "test.ts"
 }
 
 generator Hekireki-Valibot {

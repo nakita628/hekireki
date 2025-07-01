@@ -1,4 +1,4 @@
-import { beforeEach, afterEach, afterAll, describe, it, expect } from 'vitest'
+import { afterEach, afterAll, describe, it, expect } from 'vitest'
 import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
 import fs from 'node:fs'
