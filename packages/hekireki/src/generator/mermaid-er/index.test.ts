@@ -91,7 +91,7 @@ erDiagram
     expect(result).toBe(expected)
   })
 
-    it('hekireki-mermaid-er output mermaid-er-test file test.md', async () => {
+  it('hekireki-mermaid-er output mermaid-er-test file test.md', async () => {
     const prisma = `generator client {
   provider = "prisma-client-js"
 }
