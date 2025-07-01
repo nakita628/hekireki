@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import type { GeneratorOptions } from '@prisma/generator-helper'
 import { valibot } from './generator/valibot.js'
-import fsp from 'fs/promises'
+import fsp from 'node:fs/promises'
 import pkg from '@prisma/generator-helper'
 import { fmt } from '../../shared/format/index.js'
 const { generatorHandler } = pkg
