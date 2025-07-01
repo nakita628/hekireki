@@ -190,6 +190,7 @@ erDiagram
 | `file`       | `string`  | `index.ts`                          | File Name                                        |
 | `type`       | `boolean` | `false`                             | Generate TypeScript types                        |
 | `comment`    | `boolean` | `false`                             | Include schema documentation                     |
+| `zodVersion` | `string`  | `'v4'`                              | Zod import version (`'v4-mini'`, `'@hono/zod-openapi'`, or default `'v4'`) |
 
 ### Valibot Generator Options
 
