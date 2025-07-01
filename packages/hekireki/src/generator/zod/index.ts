@@ -1,55 +1,24 @@
 #!/usr/bin/env node
 import type { GeneratorOptions } from '@prisma/generator-helper'
-import { generatorHandler } from '@prisma/generator-helper'
-import { generateZod } from './generator/generate-zod'
-import { format } from 'prettier'
-import fs from 'node:fs'
-
-export type Config = {
-  output?: string
-  file?: string | string[]
-  schemaName?: 'PascalCase' | 'camelCase' | string | string[]
-  typeName?: 'PascalCase' | 'camelCase' | string | string[]
-  type?: boolean | string | string[]
-  comment?: boolean | string | string[]
-}
-
-const DEFAULT_CONFIG: Config = {
-  output: './zod',
-  file: 'index.ts',
-  schemaName: 'PascalCase',
-  typeName: 'PascalCase',
-  type: false,
-  comment: false,
-} as const
+import { zod } from './generator/zod.js'
+import fsp from 'node:fs/promises'
+import pkg from '@prisma/generator-helper'
+import { fmt } from '../../shared/format/index.js'
+const { generatorHandler } = pkg
 
 export async function main(options: GeneratorOptions): Promise<void> {
-  const config: Config = {
-    output: options.generator.output?.value ?? DEFAULT_CONFIG.output,
-    file: options.generator.config?.file ?? DEFAULT_CONFIG.file,
-    schemaName: options.generator.config?.schemaName ?? DEFAULT_CONFIG.schemaName,
-    typeName: options.generator.config?.typeName ?? DEFAULT_CONFIG.typeName,
-    type: options.generator.config?.type ?? DEFAULT_CONFIG.type,
-    comment: options.generator.config?.comment === 'true',
-  }
-
-  const content = generateZod(options.dmmf.datamodel.models, config)
-  const code = await format(content, {
-    parser: 'typescript',
-    printWidth: 100,
-    singleQuote: true,
-    semi: false,
-  })
-  if (!config.output) {
-    throw new Error('output is required')
-  }
-  if (!fs.existsSync(config.output)) {
-    fs.mkdirSync(config.output, { recursive: true })
-  }
-
-  const file = config.file ?? 'index.ts'
-  const filePath = `${config.output}/${file}`
-  fs.writeFileSync(filePath, code)
+  const output = options.generator.output?.value ?? './zod'
+  const file = options.generator.config?.file ?? 'index.ts'
+  const zodVersion = options.generator.config?.zod ?? 'v4'
+  const content = zod(
+    options.dmmf.datamodel.models,
+    options.generator.config?.type === 'true',
+    options.generator.config?.comment === 'true',
+    zodVersion,
+  )
+  const code = await fmt(content)
+  await fsp.mkdir(output, { recursive: true })
+  await fsp.writeFile(`${output}/${file}`, code, { encoding: 'utf-8' })
 }
 generatorHandler({
   onManifest() {

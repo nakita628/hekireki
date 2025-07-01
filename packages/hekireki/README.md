@@ -20,110 +20,65 @@ Prepare `schema.prisma`:
 
 ```prisma
 generator client {
-  provider = "prisma-client-js"
+    provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+    provider = "sqlite"
+    url      = env("DATABASE_URL")
 }
 
 generator Hekireki-ER {
-  provider = "hekireki-mermaid-er"
+    provider = "hekireki-mermaid-er"
 }
 
 generator Hekireki-Zod {
-  provider = "hekireki-zod"
-  type     = true
-  comment  = true
+    provider = "hekireki-zod"
+    type     = true
+    comment  = false
 }
 
 generator Hekireki-Valibot {
-  provider = "hekireki-valibot"
-  type     = true
-  comment  = true
+    provider = "hekireki-valibot"
+    type     = true
+    comment  = false
 }
 
 model User {
-  /// Unique identifier for the user.
-  /// @z.string().uuid()
-  /// @v.pipe(v.string(), v.uuid())
-  id String @id @default(uuid())
-  /// Username of the user.
-  /// @z.string().min(3)
-  /// @v.pipe(v.string(), v.minLength(3))
-  username String
-  /// Email address of the user.
-  /// @z.string().email()
-  /// @v.pipe(v.string(), v.email())
-  email String
-  /// Password for the user.
-  /// @z.string().min(8).max(100)
-  /// @v.pipe(v.string(), v.minLength(8), v.maxLength(100))
-  password String
-  /// Timestamp when the user was created.
-  /// @z.date()
-  /// @v.date()
-  createdAt DateTime
-  /// Timestamp when the user was last updated.
-  /// @z.date()
-  /// @v.date()
-  updatedAt DateTime
-  posts Post[]
-  likes Like[]
+    /// Primary key
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    id    String @id @default(uuid())
+    /// Display name
+    /// @z.string().min(1).max(50)
+    /// @v.pipe(v.string(), v.minLength(1), v.maxLength(50))
+    name  String
+    /// One-to-many relation to Post
+    posts Post[]
 }
 
 /// @relation User.id Post.userId one-to-many
 model Post {
-  /// Unique identifier for the post.
-  /// @z.string().uuid()
-  /// @v.pipe(v.string(), v.uuid())
-  id String @id @default(uuid())
-  /// ID of the user who created the post.
-  /// @z.string().uuid()
-  /// @v.pipe(v.string(), v.uuid())
-  userId String
-  /// Content of the post.
-  /// @z.string().max(500)
-  /// @v.pipe(v.string(), v.maxLength(500))
-  content String
-  /// Timestamp when the post was created.
-  /// @z.date()
-  /// @v.date()
-  createdAt DateTime @default(now())
-  /// Timestamp when the post was last updated.
-  /// @z.date()
-  /// @v.date()
-  updatedAt DateTime @default(now()) @updatedAt
-  /// Relation with the User model.
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  likes Like[]
-}
+    /// Primary key
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    id String @id @default(uuid())
 
-/// @relation Post.id Like.postId one-to-many
-/// @relation User.id Like.userId one-to-many
-model Like {
-  /// Unique identifier for the like.
-  /// @z.string().uuid()
-  /// @v.pipe(v.string(), v.uuid())
-  id String
-  /// ID of the post that is liked.
-  /// @z.string().uuid()
-  /// @v.pipe(v.string(), v.uuid())
-  postId String
-  /// ID of the user who liked the post.
-  /// @z.string().uuid()
-  /// @v.pipe(v.string(), v.uuid())
-  userId String
-  /// Timestamp when the like was created.
-  /// @z.date()
-  /// @v.date()
-  createdAt DateTime @default(now())
-  /// Relation with the Post model.
-  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
-  /// Relation with the User model.
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  @@unique([userId, postId])
+    /// Article title
+    /// @z.string().min(1).max(100)
+    /// @v.pipe(v.string(), v.minLength(1), v.maxLength(100))
+    title String
+
+    /// Body content (no length limit)
+    /// @z.string()
+    /// @v.string()
+    content String
+    /// Foreign key referencing User.id
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    userId  String
+    /// Prisma relation definition
+    user    User   @relation(fields: [userId], references: [id])
 }
 ```
 
@@ -132,82 +87,41 @@ model Like {
 ## Zod
 
 ```ts
-import { z } from 'zod'
+import { z } from 'zod/v4'
 
 export const UserSchema = z.object({
   /**
-   * Unique identifier for the user.
+   * Primary key
    */
-  id: z.string().uuid(),
+  id: z.uuid(),
   /**
-   * Username of the user.
+   * Display name
    */
-  username: z.string().min(3),
-  /**
-   * Email address of the user.
-   */
-  email: z.string().email(),
-  /**
-   * Password for the user.
-   */
-  password: z.string().min(8).max(100),
-  /**
-   * Timestamp when the user was created.
-   */
-  createdAt: z.date(),
-  /**
-   * Timestamp when the user was last updated.
-   */
-  updatedAt: z.date(),
+  name: z.string().min(1).max(50),
 })
 
 export type User = z.infer<typeof UserSchema>
 
 export const PostSchema = z.object({
   /**
-   * Unique identifier for the post.
+   * Primary key
    */
-  id: z.string().uuid(),
+  id: z.uuid(),
   /**
-   * ID of the user who created the post.
+   * Article title
    */
-  userId: z.string().uuid(),
+  title: z.string().min(1).max(100),
   /**
-   * Content of the post.
+   * Body content (no length limit)
    */
-  content: z.string().max(500),
+  content: z.string(),
   /**
-   * Timestamp when the post was created.
+   * Foreign key referencing User.id
    */
-  createdAt: z.date(),
-  /**
-   * Timestamp when the post was last updated.
-   */
-  updatedAt: z.date(),
+  userId: z.uuid(),
 })
 
 export type Post = z.infer<typeof PostSchema>
-
-export const LikeSchema = z.object({
-  /**
-   * Unique identifier for the like.
-   */
-  id: z.string().uuid(),
-  /**
-   * ID of the post that is liked.
-   */
-  postId: z.string().uuid(),
-  /**
-   * ID of the user who liked the post.
-   */
-  userId: z.string().uuid(),
-  /**
-   * Timestamp when the like was created.
-   */
-  createdAt: z.date(),
-})
-
-export type Like = z.infer<typeof LikeSchema>
 ```
 
 ## Valibot
@@ -216,78 +130,37 @@ import * as v from 'valibot'
 
 export const UserSchema = v.object({
   /**
-   * Unique identifier for the user.
+   * Primary key
    */
   id: v.pipe(v.string(), v.uuid()),
   /**
-   * Username of the user.
+   * Display name
    */
-  username: v.pipe(v.string(), v.minLength(3)),
-  /**
-   * Email address of the user.
-   */
-  email: v.pipe(v.string(), v.email()),
-  /**
-   * Password for the user.
-   */
-  password: v.pipe(v.string(), v.minLength(8), v.maxLength(100)),
-  /**
-   * Timestamp when the user was created.
-   */
-  createdAt: v.date(),
-  /**
-   * Timestamp when the user was last updated.
-   */
-  updatedAt: v.date(),
+  name: v.pipe(v.string(), v.minLength(1), v.maxLength(50)),
 })
 
 export type User = v.InferInput<typeof UserSchema>
 
 export const PostSchema = v.object({
   /**
-   * Unique identifier for the post.
+   * Primary key
    */
   id: v.pipe(v.string(), v.uuid()),
   /**
-   * ID of the user who created the post.
+   * Article title
+   */
+  title: v.pipe(v.string(), v.minLength(1), v.maxLength(100)),
+  /**
+   * Body content (no length limit)
+   */
+  content: v.string(),
+  /**
+   * Foreign key referencing User.id
    */
   userId: v.pipe(v.string(), v.uuid()),
-  /**
-   * Content of the post.
-   */
-  content: v.pipe(v.string(), v.maxLength(500)),
-  /**
-   * Timestamp when the post was created.
-   */
-  createdAt: v.date(),
-  /**
-   * Timestamp when the post was last updated.
-   */
-  updatedAt: v.date(),
 })
 
 export type Post = v.InferInput<typeof PostSchema>
-
-export const LikeSchema = v.object({
-  /**
-   * Unique identifier for the like.
-   */
-  id: v.pipe(v.string(), v.uuid()),
-  /**
-   * ID of the post that is liked.
-   */
-  postId: v.pipe(v.string(), v.uuid()),
-  /**
-   * ID of the user who liked the post.
-   */
-  userId: v.pipe(v.string(), v.uuid()),
-  /**
-   * Timestamp when the like was created.
-   */
-  createdAt: v.date(),
-})
-
-export type Like = v.InferInput<typeof LikeSchema>
 ```
 
 ## Mermaid
@@ -295,28 +168,15 @@ export type Like = v.InferInput<typeof LikeSchema>
 ```mermaid
 erDiagram
     User ||--}| Post : "(id) - (userId)"
-    Post ||--}| Like : "(id) - (postId)"
-    User ||--}| Like : "(id) - (userId)"
     User {
-        String id "Unique identifier for the user."
-        String username "Username of the user."
-        String email "Email address of the user."
-        String password "Password for the user."
-        DateTime createdAt "Timestamp when the user was created."
-        DateTime updatedAt "Timestamp when the user was last updated."
+        String id "Primary key"
+        String name "Display name"
     }
     Post {
-        String id "Unique identifier for the post."
-        String userId "ID of the user who created the post."
-        String content "Content of the post."
-        DateTime createdAt "Timestamp when the post was created."
-        DateTime updatedAt "Timestamp when the post was last updated."
-    }
-    Like {
-        String id "Unique identifier for the like."
-        String postId "ID of the post that is liked."
-        String userId "ID of the user who liked the post."
-        DateTime createdAt "Timestamp when the like was created."
+        String id "Primary key"
+        String title "Article title"
+        String content "Body content (no length limit)"
+        String userId "Foreign key referencing User.id"
     }
 ```
 
@@ -328,19 +188,16 @@ erDiagram
 |--------------|-----------|-------------------------------------|--------------------------------------------------|
 | `output`     | `string`  | `./zod`                             | Output directory                                 |
 | `file`       | `string`  | `index.ts`                          | File Name                                        |
-| `schemaName` | `"PascalCase"` \| `"camelCase"` | `"PascalCase"`| Naming convention for generated schema variables |
-| `typeName`   | `"PascalCase"` \| `"camelCase"` | `"PascalCase"`| Naming convention for generated type definitions |
 | `type`       | `boolean` | `false`                             | Generate TypeScript types                        |
 | `comment`    | `boolean` | `false`                             | Include schema documentation                     |
+| `zodVersion` | `string`  | `'v4'`                              | Zod import version (`'v4-mini'`, `'@hono/zod-openapi'`, or default `'v4'`) |
 
 ### Valibot Generator Options
 
 | Option       | Type      | Default                             | Description                                      |
 |--------------|-----------|-------------------------------------|--------------------------------------------------|
-| `output`     | `string`  | `./valibot`                          | Output directory                                 |
+| `output`     | `string`  | `./valibot`                         | Output directory                                 |
 | `file`       | `string`  | `index.ts`                          | File Name                                        |
-| `schemaName` | `"PascalCase"` \| `"camelCase"` | `"PascalCase"`| Naming convention for generated schema variables |
-| `typeName`   | `"PascalCase"` \| `"camelCase"` | `"PascalCase"`| Naming convention for generated type definitions |
 | `type`       | `boolean` | `false`                             | Generate TypeScript types                        |
 | `comment`    | `boolean` | `false`                             | Include schema documentation                     |
 

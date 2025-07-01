@@ -1,6 +1,6 @@
-import { generateRelationLine } from '../generator/generate-relation-line'
-import { parseRelation } from './parse-relation'
-import type { Model } from '../type'
+import { relationLine } from '../generator/relation-line.js'
+import { parseRelation } from './index.js'
+import type { Model } from '../types.js'
 
 /**
  * extract relations from model
@@ -16,7 +16,7 @@ export function extractRelations(model: Model): readonly string[] {
       .split('\n')
       .map((line: string) => {
         const relation = parseRelation(line)
-        return relation ? generateRelationLine(relation) : null
+        return relation ? relationLine(relation) : null
       })
       .filter((line): line is string => line !== null)
 
