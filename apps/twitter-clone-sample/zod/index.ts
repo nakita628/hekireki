@@ -30,7 +30,6 @@ export const FollowSchema = z.object({
   id: z.uuid(),
   followerId: z.string().uuid(),
   followingId: z.string().uuid(),
-  createdAt: z.date(),
 })
 
 export type Follow = z.infer<typeof FollowSchema>

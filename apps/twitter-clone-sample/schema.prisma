@@ -116,7 +116,7 @@ model Follow {
   /// @z.string().uuid()
   followingId String
   /// Timestamp when the follow relationship was created
-  /// @z.date()
+  /// z.iso.datetime()
   createdAt   DateTime @default(now())
   // Relationships
   /// User who created the follow relationship (the follower)

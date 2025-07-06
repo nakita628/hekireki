@@ -34,7 +34,8 @@ z.iso.datetime()"
         String id "Unique identifier for the follow relationship"
         String followerId "ID of the user who is following"
         String followingId "ID of the user being followed"
-        DateTime createdAt "Timestamp when the follow relationship was created"
+        DateTime createdAt "Timestamp when the follow relationship was created
+z.iso.datetime()"
     }
     Like {
         String id "Unique identifier for the like"
