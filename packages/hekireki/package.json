@@ -22,7 +22,8 @@
   "bin": {
     "hekireki-zod": "dist/generator/zod/index.js",
     "hekireki-valibot": "dist/generator/valibot/index.js",
-    "hekireki-mermaid-er": "dist/generator/mermaid-er/index.js"
+    "hekireki-mermaid-er": "dist/generator/mermaid-er/index.js",
+    "hekireki-ecto": "dist/generator/ecto/index.js"
   },
   "scripts": {
     "generate": "prisma generate",
