@@ -1,72 +1,133 @@
 import type { DMMF } from '@prisma/generator-helper'
-import { writeFile, mkdir } from 'fs/promises'
-import { existsSync } from 'fs'
+import fsp from 'node:fs/promises'
 import { join } from 'path'
-import { decapitalize } from '../../../shared/utils/decapitalize.js'
+import { snakeCase } from '../../../shared/utils/index.js'
+import { prismaTypeToEctoType } from '../utils/prisma-type-to-ecto-type.js'
 
-function getPrimaryKeyType(field: DMMF.Field): string {
-  const fieldDefault = field.default
-  if (
-    fieldDefault &&
-    typeof fieldDefault === 'object' &&
-    'name' in fieldDefault &&
-    fieldDefault.name === 'uuid'
-  ) {
-    return ':binary_id'
+function getPrimaryKeyType(field: DMMF.Field): ':id' | ':binary_id' {
+  return field.default &&
+    typeof field.default === 'object' &&
+    'name' in field.default &&
+    field.default.name === 'uuid'
+    ? ':binary_id'
+    : ':id'
+}
+
+function generateRelations(
+  model: DMMF.Model,
+  allModels: DMMF.Model[],
+  app: string,
+  pkType: ':id' | ':binary_id',
+): string[] {
+  const lines: string[] = []
+
+  for (const field of model.fields) {
+    if (field.relationName && field.relationFromFields?.length) {
+      lines.push(
+        `belongs_to :${field.name}, ${app}.${field.type}, foreign_key: :${field.relationFromFields[0]}${
+          pkType === ':binary_id' ? ', type: :binary_id' : ''
+        }`,
+      )
+    }
   }
-  return ':id'
+
+  for (const otherModel of allModels) {
+    for (const f of otherModel.fields) {
+      if (
+        f.type === model.name &&
+        f.relationName &&
+        f.relationFromFields?.length &&
+        f.name !== model.name
+      ) {
+        lines.push(
+          `has_many :${snakeCase(otherModel.name)}, ${app}.${otherModel.name}, foreign_key: :${f.relationFromFields[0]}`,
+        )
+      }
+    }
+  }
+
+  return lines
 }
 
-function convertToEctoType(type: string): 'integer' | 'string' | 'boolean' | 'naive_datetime' {
-  if (type === 'Int') return 'integer'
-  if (type === 'String') return 'string'
-  if (type === 'Boolean') return 'boolean'
-  if (type === 'DateTime') return 'naive_datetime'
-  return 'string'
+function makeMutable(models: readonly DMMF.Model[]): DMMF.Model[] {
+  return models.map((m) => ({
+    ...m,
+    fields: m.fields?.map((f) => ({ ...f })) ?? [],
+  }))
 }
 
-export function generateEctoSchemas(models: readonly DMMF.Model[], app: string | string[]): string {
-  return models
+export function ectoSchemas(models: readonly DMMF.Model[], app: string | string[]): string {
+  const mutableModels = makeMutable(models)
+
+  return mutableModels
     .map((model) => {
-      const primaryKeyField = model.fields.find((f) => f.isId)
-      const regularFields = model.fields.filter((f) => !f.isId)
+      const idFields = model.fields.filter((f) => f.isId)
+      const isCompositePK = model.primaryKey && model.primaryKey.fields.length > 1
 
-      if (!primaryKeyField) {
-        throw new Error(`Model ${model.name} must have a primary key field`)
+      if (!idFields.length && !isCompositePK) {
+        console.warn(`⚠️ Model ${model.name} skipped: no primary key`)
+        return ''
       }
 
-      const pkType = getPrimaryKeyType(primaryKeyField)
+      const pkField = idFields[0] // for non-composite use
+      const pkType = pkField ? getPrimaryKeyType(pkField) : ':id'
 
-      return `defmodule ${app}.${model.name} do
-  use Ecto.Schema
+      const relationFieldNames = model.fields
+        .filter((f) => f.relationName && f.relationFromFields?.length)
+        .flatMap((f) => f.relationFromFields ?? [])
 
-  @primary_key {:${primaryKeyField.name}, ${pkType}, autogenerate: true}
-  schema "${model.name}" do
-    ${regularFields.map((field) =>
-      `field(:${field.name}, :${convertToEctoType(field.type)})`
-    ).join('\n    ')}
-  end
-end
-`
+      const excludedFieldNames = ['inserted_at', 'updated_at', ...relationFieldNames]
+
+      const fields = model.fields.filter(
+        (f) => !f.isId && !f.relationName && !excludedFieldNames.includes(f.name),
+      )
+
+      const hasInsertedAt = model.fields.some((f) => f.name === 'inserted_at')
+      const hasUpdatedAt = model.fields.some((f) => f.name === 'updated_at')
+
+      const relationLines = generateRelations(model, mutableModels, String(app), pkType)
+
+      const lines = [
+        `defmodule ${app}.${model.name} do`,
+        `  use Ecto.Schema`,
+        ``,
+        isCompositePK
+          ? `  @primary_key false`
+          : pkType === ':id'
+            ? `  @primary_key {:${pkField.name}, :id, autogenerate: true}`
+            : `  @primary_key {:${pkField.name}, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id`,
+        ``,
+        `  schema "${snakeCase(model.name)}" do`,
+        ...fields.map((f) => `    field :${f.name}, :${prismaTypeToEctoType(f.type)}`),
+        ...(hasInsertedAt ? [`    field :inserted_at, :utc_datetime`] : []),
+        ...(hasUpdatedAt ? [`    field :updated_at, :utc_datetime`] : []),
+        ...(relationLines.length > 0 ? [''] : []),
+        ...relationLines.map((l) => `    ${l}`),
+        `  end`,
+        `end`,
+      ]
+
+      return lines.join('\n')
     })
+    .filter(Boolean)
     .join('\n\n')
 }
-
 
 export async function writeEctoSchemasToFiles(
   models: readonly DMMF.Model[],
   app: string | string[],
-  outDir: string
+  outDir: string,
 ) {
-  if (!existsSync(outDir)) {
-    await mkdir(outDir, { recursive: true })
-  }
+  const mutableModels = makeMutable(models)
 
-  for (const model of models) {
-    const schemaCode = generateEctoSchemas([model], app)
-    const fileName = `${model.name}.ex`
-    const filePath = join(outDir, decapitalize(fileName))
-    await writeFile(filePath, schemaCode, 'utf8')
+  await fsp.mkdir(outDir, { recursive: true })
+
+  for (const model of mutableModels) {
+    const code = ectoSchemas([model], app)
+    if (!code.trim()) continue
+
+    const filePath = join(outDir, snakeCase(`${model.name}.ex`))
+    await fsp.writeFile(filePath, code, 'utf8')
     console.log(`✅ wrote ${filePath}`)
   }
 }
