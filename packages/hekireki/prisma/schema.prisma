@@ -7,55 +7,183 @@ datasource db {
     url      = env("DATABASE_URL")
 }
 
-generator Hekireki-ER {
-    provider = "hekireki-mermaid-er"
-}
-
-generator Hekireki-Zod {
-    provider = "hekireki-zod"
-    type     = true
-    comment  = true
-}
-
-generator Hekireki-Valibot {
-    provider = "hekireki-valibot"
-    type     = true
-    comment  = true
+generator Hekireki-Ecto {
+    provider = "hekireki-ecto"
 }
 
 model User {
-    /// Primary key
-    /// @z.uuid()
-    /// @v.pipe(v.string(), v.uuid())
-    id    String @id @default(uuid())
-    /// Display name
-    /// @z.string().min(1).max(50)
-    /// @v.pipe(v.string(), v.minLength(1), v.maxLength(50))
-    name  String
-    /// One-to-many relation to Post
-    posts Post[]
+  /// Unique identifier for the user
+  /// @z.uuid()
+  id               String         @id @default(uuid())
+  /// User's display name
+  /// @z.string()
+  name             String
+  /// Unique username for the user
+  /// @z.string()
+  username         String         @unique
+  /// User's biography or profile description
+  /// @z.string().optional().default("")
+  bio              String?        @default("")
+  /// User's unique email address
+  /// @z.email()
+  email            String         @unique
+  /// Timestamp of email verification
+  /// @z.date().nullable()
+  emailVerified    DateTime?
+  /// URL of user's image
+  /// @z.url().nullable()
+  image            String?
+  /// URL of user's cover image
+  /// @z.url().nullable()
+  coverImage       String?
+  /// URL of user's profile image
+  /// @z.url().nullable()
+  profileImage     String?
+  /// Hashed password for security
+  /// @z.string()
+  hashedPassword   String?
+  /// Timestamp when the user was created
+  /// @z.iso.datetime()
+  createdAt        DateTime       @default(now())
+  /// Timestamp when the user was last updated
+  /// @z.iso.datetime()
+  updatedAt        DateTime       @updatedAt
+  /// Flag indicating if user has unread notifications
+  /// @z.boolean().default(false)
+  hasNotification Boolean?       @default(false)
+  /// Posts created by the user
+  posts            Post[]
+  /// Comments created by the user
+  comments         Comment[]
+  /// Notifications received by the user
+  notifications    Notification[]
+  /// Followers of the user
+  followers        Follow[]       @relation("Follower")
+  /// Users the user is following
+  following        Follow[]       @relation("Following")
+  /// Likes created by the user
+  likes            Like[]
 }
 
-/// @relation User.id Post.userId one-to-many
 model Post {
-    /// Primary key
-    /// @z.uuid()
-    /// @v.pipe(v.string(), v.uuid())
-    id String @id @default(uuid())
+  /// Unique identifier for the post
+  /// @z.uuid()
+  id        String    @id @default(uuid())
+  /// Content of the post
+  /// @z.string().min(1).max(1000)
+  body      String
+  /// Timestamp when the post was created
+  /// z.iso.datetime()
+  createdAt DateTime  @default(now())
+  /// Timestamp when the post was last updated
+  /// z.iso.datetime()
+  updatedAt DateTime  @updatedAt
+  /// ID of the user who created the post
+  /// @z.uuid()
+  userId    String
+  /// User who created the post
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Comments on the post
+  comments  Comment[]
+  /// Likes on the post
+  likes     Like[]
+}
 
-    /// Article title
-    /// @z.string().min(1).max(100)
-    /// @v.pipe(v.string(), v.minLength(1), v.maxLength(100))
-    title String
+model Follow {
+  /// Unique identifier for the follow relationship
+  /// @z.uuid()
+  id          String   @id @default(uuid())
+  /// ID of the user who is following
+  /// @z.string().uuid()
+  followerId  String
+  /// ID of the user being followed
+  /// @z.string().uuid()
+  followingId String
+  /// Timestamp when the follow relationship was created
+  /// z.iso.datetime()
+  createdAt   DateTime @default(now())
+  // Relationships
+  /// User who created the follow relationship (the follower)
+  follower    User     @relation("Following", fields: [followerId], references: [id], onDelete: Cascade) // User who is following
+  /// User being followed
+  following   User     @relation("Follower", fields: [followingId], references: [id], onDelete: Cascade) // User being followed
 
-    /// Body content (no length limit)
-    /// @z.string()
-    /// @v.string()
-    content String
-    /// Foreign key referencing User.id
-    /// @z.uuid()
-    /// @v.pipe(v.string(), v.uuid())
-    userId  String
-    /// Prisma relation definition
-    user    User   @relation(fields: [userId], references: [id])
+  // Constraints
+  @@unique([followerId, followingId]) // Ensures a user can't follow another user multiple times
+  @@index([followerId]) // Index for better query performance
+  @@index([followingId]) // Index for better query performance
+}
+
+model Like {
+  /// Unique identifier for the like
+  /// @z.uuid()
+  id        String   @id @default(uuid())
+  /// ID of the user who liked the post
+  /// @z.uuid()
+  userId    String
+  /// ID of the post that was liked
+  /// @z.uuid()
+  postId    String
+  /// Timestamp when the like was created
+  /// @z.iso.datetime()
+  createdAt DateTime @default(now())
+  // Relationships
+  /// User who liked the post
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade) // Reference to the user who liked
+  /// Post that was liked
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade) // Reference to the liked post
+  // Constraints
+  @@unique([userId, postId]) // Ensures a user can't like the same post multiple times
+  @@index([userId]) // Index for better query performance
+  @@index([postId]) // Index for better query performance
+}
+
+model Comment {
+  /// Unique identifier for the comment
+  /// @z.uuid()
+  id        String   @id @default(uuid())
+  /// Content of the comment
+  /// @z.string()
+  body      String
+  /// Timestamp when the comment was created
+  /// @z.iso.datetime()
+  createdAt DateTime @default(now())
+  /// Timestamp when the comment was last updated
+  /// @z.iso.datetime()
+  updatedAt DateTime @updatedAt
+  /// ID of the user who created the comment
+  /// @z.uuid()
+  userId    String
+  /// ID of the post this comment belongs to
+  /// @z.uuid()
+  postId    String
+  // Relationships
+  /// User who created the comment
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade) // Reference to the comment's author
+  /// Post that was commented on
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade) // Reference to the commented post
+
+  // Indexes for better query performance
+  @@index([userId])
+  @@index([postId])
+}
+
+model Notification {
+  /// Unique identifier for the notification
+  /// @z.uuid()
+  id        String   @id @default(uuid())
+  /// Content of the notification message
+  /// @z.string()
+  body      String
+  /// ID of the user who receives the notification
+  /// @z.uuid()
+  userId    String
+  /// Timestamp when the notification was created
+  /// @z.iso.datetime()
+  createdAt DateTime @default(now())
+  // Relationships
+  /// User who receives the notification
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade) // Reference to the notification recipient
+  // Index for better query performance
+  @@index([userId])
 }
