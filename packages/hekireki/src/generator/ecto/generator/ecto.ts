@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 import fsp from 'node:fs/promises'
-import { join } from 'path'
+import { join } from 'node:path'
 import { snakeCase } from '../../../shared/utils/index.js'
 import { prismaTypeToEctoType } from '../utils/prisma-type-to-ecto-type.js'
 
@@ -24,7 +24,7 @@ export function ectoSchemas(models: readonly DMMF.Model[], app: string | string[
       const idFields = model.fields.filter((f) => f.isId)
       const isCompositePK = model.primaryKey && model.primaryKey.fields.length > 1
 
-      if (!idFields.length && !isCompositePK) {
+      if (!(idFields.length || isCompositePK)) {
         return ''
       }
 
@@ -34,7 +34,7 @@ export function ectoSchemas(models: readonly DMMF.Model[], app: string | string[
       const excludedFieldNames = ['inserted_at', 'updated_at']
 
       const fields = model.fields.filter(
-        (f) => !f.relationName && !excludedFieldNames.includes(f.name),
+        (f) => !(f.relationName || excludedFieldNames.includes(f.name)),
       )
 
       const hasInsertedAt = model.fields.some((f) => f.name === 'inserted_at')
@@ -42,18 +42,18 @@ export function ectoSchemas(models: readonly DMMF.Model[], app: string | string[
 
       const lines = [
         `defmodule ${app}.${model.name} do`,
-        `  use Ecto.Schema`,
-        `  @primary_key false`,
+        '  use Ecto.Schema',
+        '  @primary_key false',
         `  schema "${snakeCase(model.name)}" do`,
         ...fields.map((f) => {
           const type = f.isId ? pkType : prismaTypeToEctoType(f.type)
           const primary = f.isId && !isCompositePK ? ', primary_key: true' : ''
           return `    field :${f.name}, :${type}${primary}`
         }),
-        ...(hasInsertedAt ? [`    field :inserted_at, :utc_datetime`] : []),
-        ...(hasUpdatedAt ? [`    field :updated_at, :utc_datetime`] : []),
-        `  end`,
-        `end`,
+        ...(hasInsertedAt ? ['    field :inserted_at, :utc_datetime'] : []),
+        ...(hasUpdatedAt ? ['    field :updated_at, :utc_datetime'] : []),
+        '  end',
+        'end',
       ]
 
       return lines.join('\n')
@@ -75,7 +75,7 @@ export async function writeEctoSchemasToFiles(
     const code = ectoSchemas([model], app)
     if (!code.trim()) continue
 
-    const filePath = join(outDir, snakeCase(`${model.name}.ex`))
+    const filePath = join(outDir, `${snakeCase(model.name)}.ex`)
     await fsp.writeFile(filePath, code, 'utf8')
     console.log(`✅ wrote ${filePath}`)
   }

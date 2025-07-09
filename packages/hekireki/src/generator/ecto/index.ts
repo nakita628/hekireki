@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import type { GeneratorOptions } from '@prisma/generator-helper'
-import fsp from 'node:fs/promises'
 import pkg from '@prisma/generator-helper'
 import { writeEctoSchemasToFiles } from './generator/ecto.js'
 
