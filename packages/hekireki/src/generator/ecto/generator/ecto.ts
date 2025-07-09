@@ -50,8 +50,8 @@ export function ectoSchemas(models: readonly DMMF.Model[], app: string | string[
           const primary = f.isId && !isCompositePK ? ', primary_key: true' : ''
           return `    field(:${f.name}, :${type}${primary})`
         }),
-        ...(hasInsertedAt ? ['    field :inserted_at, :utc_datetime'] : []),
-        ...(hasUpdatedAt ? ['    field :updated_at, :utc_datetime'] : []),
+        ...(hasInsertedAt ? ['    field(:inserted_at, :utc_datetime)'] : []),
+        ...(hasUpdatedAt ? ['    field(:updated_at, :utc_datetime)'] : []),
         '  end',
         'end',
       ]
