@@ -20,6 +20,12 @@ generator Hekireki-Zod {
   type = true
 }
 
+generator Hekireki-Ecto {
+  provider = "hekireki-ecto"
+  output = "schema"
+  app = "DBSchema"
+}
+
 
 /// @relation User.id Post.userId one-to-many
 /// @relation User.id Comment.userId one-to-many

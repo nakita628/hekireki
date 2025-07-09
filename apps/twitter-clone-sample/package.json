@@ -11,6 +11,6 @@
     "zod": "^3.25.67"
   },
   "devDependencies": {
-    "hekireki": "^0.2.0"
+    "hekireki": "^0.2.2"
   }
 }
