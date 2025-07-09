@@ -25,8 +25,8 @@ generator Hekireki-Valibot {
 
 generator Hekireki-Ecto {
     provider = "hekireki-ecto"
-    type     = true
-    comment  = true
+    output = "schema"
+    app = "DBSchema"
 }
 
 model User {

@@ -48,7 +48,7 @@ export function ectoSchemas(models: readonly DMMF.Model[], app: string | string[
         ...fields.map((f) => {
           const type = f.isId ? pkType : prismaTypeToEctoType(f.type)
           const primary = f.isId && !isCompositePK ? ', primary_key: true' : ''
-          return `    field :${f.name}, :${type}${primary}`
+          return `    field(:${f.name}, :${type}${primary})`
         }),
         ...(hasInsertedAt ? ['    field :inserted_at, :utc_datetime'] : []),
         ...(hasUpdatedAt ? ['    field :updated_at, :utc_datetime'] : []),

@@ -48,33 +48,33 @@ model Post {
     fs.mkdirSync('./prisma-ecto', { recursive: true })
     fs.writeFileSync('./prisma-ecto/schema.prisma', prisma, { encoding: 'utf-8' })
     await promisify(exec)('npx prisma generate --schema=./prisma-ecto/schema.prisma')
-    const usersResult = fs.readFileSync('./prisma-ecto/ecto/users.ex', {
+    const usersResult = fs.readFileSync('./prisma-ecto/ecto/user.ex', {
       encoding: 'utf-8',
     })
 
     const usersExpected = `defmodule MyApp.User do
   use Ecto.Schema
   @primary_key false
-  schema "users" do
-    field :id, :binary_id, primary_key: true
-    field :name, :string
+  schema "user" do
+    field(:id, :binary_id, primary_key: true)
+    field(:name, :string)
   end
 end`
 
     expect(usersResult).toBe(usersExpected)
 
-    const postsresult = fs.readFileSync('./prisma-ecto/ecto/posts.ex', {
+    const postsresult = fs.readFileSync('./prisma-ecto/ecto/post.ex', {
       encoding: 'utf-8',
     })
 
     const postsExpected = `defmodule MyApp.Post do
   use Ecto.Schema
   @primary_key false
-  schema "posts" do
-    field :id, :binary_id, primary_key: true
-    field :title, :string
-    field :content, :string
-    field :userId, :string
+  schema "post" do
+    field(:id, :binary_id, primary_key: true)
+    field(:title, :string)
+    field(:content, :string)
+    field(:userId, :string)
   end
 end`
 

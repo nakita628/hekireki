@@ -6,21 +6,21 @@ import { snakeCase } from '.'
 
 describe('snakeCase', () => {
   it('converts PascalCase to snake_case and pluralizes', () => {
-    expect(snakeCase('TodoTag')).toBe('todo_tags')
-    expect(snakeCase('User')).toBe('users')
-    expect(snakeCase('Category')).toBe('categorys')
+    expect(snakeCase('TodoTag')).toBe('todo_tag')
+    expect(snakeCase('User')).toBe('user')
+    expect(snakeCase('Category')).toBe('category')
   })
 
   it('converts camelCase to snake_case and pluralizes', () => {
-    expect(snakeCase('todoTag')).toBe('todo_tags')
-    expect(snakeCase('userProfile')).toBe('user_profiles')
+    expect(snakeCase('todoTag')).toBe('todo_tag')
+    expect(snakeCase('userProfile')).toBe('user_profile')
   })
 
   it('handles single lowercase word', () => {
-    expect(snakeCase('tag')).toBe('tags')
+    expect(snakeCase('tag')).toBe('tag')
   })
 
   it('handles empty string', () => {
-    expect(snakeCase('')).toBe('s')
+    expect(snakeCase('')).toBe('')
   })
 })

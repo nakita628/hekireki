@@ -7,6 +7,8 @@
 - 💎 Automatically generates [Zod](https://zod.dev/) schemas from your Prisma schema
 - 🤖 Automatically generates [Valibot](https://valibot.dev/) schemas from your Prisma schema
 - 📊 Creates [Mermaid](https://mermaid.js.org/) ER diagrams
+- 🧪 Generates [Ecto](https://hexdocs.pm/ecto/Ecto.Schema.html) schemas for Elixir projects
+  ⚠️ Foreign key constraints are **not** included — manage relationships in your application logic
 
 ## Installation
 
@@ -35,13 +37,19 @@ generator Hekireki-ER {
 generator Hekireki-Zod {
     provider = "hekireki-zod"
     type     = true
-    comment  = false
+    comment  = true
 }
 
 generator Hekireki-Valibot {
     provider = "hekireki-valibot"
     type     = true
-    comment  = false
+    comment  = true
+}
+
+generator Hekireki-Ecto {
+    provider = "hekireki-ecto"
+    output = "schema"
+    app = "DBSchema"
 }
 
 model User {
@@ -63,12 +71,10 @@ model Post {
     /// @z.uuid()
     /// @v.pipe(v.string(), v.uuid())
     id String @id @default(uuid())
-
     /// Article title
     /// @z.string().min(1).max(100)
     /// @v.pipe(v.string(), v.minLength(1), v.maxLength(100))
     title String
-
     /// Body content (no length limit)
     /// @z.string()
     /// @v.string()
@@ -180,6 +186,32 @@ erDiagram
     }
 ```
 
+## Ecto
+
+```elixir
+defmodule DBSchema.User do
+  use Ecto.Schema
+  @primary_key false
+  schema "user" do
+    field(:id, :binary_id, primary_key: true)
+    field(:name, :string)
+  end
+end
+```
+
+```elixir
+defmodule DBSchema.Post do
+  use Ecto.Schema
+  @primary_key false
+  schema "post" do
+    field(:id, :binary_id, primary_key: true)
+    field(:title, :string)
+    field(:content, :string)
+    field(:userId, :string)
+  end
+end
+```
+
 ## Configuration
 
 ### Zod Generator Options
@@ -207,6 +239,13 @@ erDiagram
 |--------------|-----------|-------------------------------------|--------------------------------------------------|
 | `output`     | `string`  | `./mermaid-er`                      | Output directory                                 |
 | `file`       | `string`  | `ER.md`                             | File Name                                        |
+
+### Ecto Generator Options
+
+| Option       | Type      | Default                             | Description                                      |
+|--------------|-----------|-------------------------------------|--------------------------------------------------|
+| `output`     | `string`  | `./ecto`                            | Output directory                                 |
+| `app`        | `string`  | `MyApp`                             | App Name                                        |
 
 ⚠️ WARNING: Potential Breaking Changes Without Notice
 

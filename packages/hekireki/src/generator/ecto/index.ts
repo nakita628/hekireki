@@ -7,7 +7,6 @@ const { generatorHandler } = pkg
 
 export async function main(options: GeneratorOptions): Promise<void> {
   const output = options.generator.output?.value ?? './ecto'
-  const file = options.generator.config?.file ?? 'index.ex'
   const app = options.generator.config?.app ?? 'MyApp'
 
   await writeEctoSchemasToFiles(options.dmmf.datamodel.models, app, output)
