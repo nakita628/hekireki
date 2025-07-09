@@ -7,84 +7,59 @@ datasource db {
     url      = env("DATABASE_URL")
 }
 
+generator Hekireki-ER {
+    provider = "hekireki-mermaid-er"
+}
+
+generator Hekireki-Zod {
+    provider = "hekireki-zod"
+    type     = true
+    comment  = true
+}
+
+generator Hekireki-Valibot {
+    provider = "hekireki-valibot"
+    type     = true
+    comment  = true
+}
+
 generator Hekireki-Ecto {
     provider = "hekireki-ecto"
+    type     = true
+    comment  = true
 }
 
 model User {
-  id          String   @id @default(uuid())
-  name        String
-  email       String   @unique
-  inserted_at DateTime @default(now()) @map("inserted_at")
-  updated_at  DateTime @updatedAt @map("updated_at")
-
-  // リレーション
-  todos      Todo[]
-  categories Category[]
-
-  @@map("users")
+    /// Primary key
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    id    String @id @default(uuid())
+    /// Display name
+    /// @z.string().min(1).max(50)
+    /// @v.pipe(v.string(), v.minLength(1), v.maxLength(50))
+    name  String
+    /// One-to-many relation to Post
+    posts Post[]
 }
 
-model Category {
-  id          String   @id @default(uuid())
-  name        String
-  color       String   @default("#3B82F6")
-  description String?
-  user_id     String   @map("user_id")
-  inserted_at DateTime @default(now()) @map("inserted_at")
-  updated_at  DateTime @updatedAt @map("updated_at")
-
-  // リレーション
-  user  User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  todos Todo[]
-
-  @@unique([user_id, name])
-  @@map("categories")
-}
-
-model Tag {
-  id          String   @id @default(uuid())
-  name        String   @unique
-  color       String   @default("#10B981")
-  inserted_at DateTime @default(now()) @map("inserted_at")
-  updated_at  DateTime @updatedAt @map("updated_at")
-
-  // リレーション（多対多）
-  todos TodoTag[]
-
-  @@map("tags")
-}
-
-model Todo {
-  id             String    @id @default(uuid())
-  title          String
-  description    String?
-  completed      Boolean   @default(false)
-  priority       Int       @default(1)
-  due_date       DateTime? @map("due_date")
-  user_id        String    @map("user_id")
-  category_id    String?   @map("category_id")
-  parent_todo_id String?   @map("parent_todo_id")
-  inserted_at    DateTime  @default(now()) @map("inserted_at")
-  updated_at     DateTime  @updatedAt @map("updated_at")
-
-  // リレーション
-  user        User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  category    Category? @relation(fields: [category_id], references: [id], onDelete: SetNull)
-  parent_todo Todo?     @relation("TodoSubTodos", fields: [parent_todo_id], references: [id], onDelete: Cascade)
-  sub_todos   Todo[]    @relation("TodoSubTodos")
-  tags        TodoTag[]
-}
-
-model TodoTag {
-  todo_id     String   @map("todo_id")
-  tag_id      String   @map("tag_id")
-  inserted_at DateTime @default(now()) @map("inserted_at")
-
-  // リレーション
-  todo Todo @relation(fields: [todo_id], references: [id], onDelete: Cascade)
-  tag  Tag  @relation(fields: [tag_id], references: [id], onDelete: Cascade)
-
-  @@id([todo_id, tag_id])
-  @@map("todo_tags")
+/// @relation User.id Post.userId one-to-many
+model Post {
+    /// Primary key
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    id String @id @default(uuid())
+    /// Article title
+    /// @z.string().min(1).max(100)
+    /// @v.pipe(v.string(), v.minLength(1), v.maxLength(100))
+    title String
+    /// Body content (no length limit)
+    /// @z.string()
+    /// @v.string()
+    content String
+    /// Foreign key referencing User.id
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    userId  String
+    /// Prisma relation definition
+    user    User   @relation(fields: [userId], references: [id])
 }

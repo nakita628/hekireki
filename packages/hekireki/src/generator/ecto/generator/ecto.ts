@@ -4,49 +4,9 @@ import { join } from 'path'
 import { snakeCase } from '../../../shared/utils/index.js'
 import { prismaTypeToEctoType } from '../utils/prisma-type-to-ecto-type.js'
 
-function getPrimaryKeyType(field: DMMF.Field): ':id' | ':binary_id' {
-  return field.default &&
-    typeof field.default === 'object' &&
-    'name' in field.default &&
-    field.default.name === 'uuid'
-    ? ':binary_id'
-    : ':id'
-}
-
-function generateRelations(
-  model: DMMF.Model,
-  allModels: DMMF.Model[],
-  app: string,
-  pkType: ':id' | ':binary_id',
-): string[] {
-  const lines: string[] = []
-
-  for (const field of model.fields) {
-    if (field.relationName && field.relationFromFields?.length) {
-      lines.push(
-        `belongs_to :${field.name}, ${app}.${field.type}, foreign_key: :${field.relationFromFields[0]}${
-          pkType === ':binary_id' ? ', type: :binary_id' : ''
-        }`,
-      )
-    }
-  }
-
-  for (const otherModel of allModels) {
-    for (const f of otherModel.fields) {
-      if (
-        f.type === model.name &&
-        f.relationName &&
-        f.relationFromFields?.length &&
-        f.name !== model.name
-      ) {
-        lines.push(
-          `has_many :${snakeCase(otherModel.name)}, ${app}.${otherModel.name}, foreign_key: :${f.relationFromFields[0]}`,
-        )
-      }
-    }
-  }
-
-  return lines
+function getPrimaryKeyType(field: DMMF.Field): 'id' | 'binary_id' {
+  const def = field.default
+  return def && typeof def === 'object' && 'name' in def && def.name === 'uuid' ? 'binary_id' : 'id'
 }
 
 function makeMutable(models: readonly DMMF.Model[]): DMMF.Model[] {
@@ -65,44 +25,33 @@ export function ectoSchemas(models: readonly DMMF.Model[], app: string | string[
       const isCompositePK = model.primaryKey && model.primaryKey.fields.length > 1
 
       if (!idFields.length && !isCompositePK) {
-        console.warn(`⚠️ Model ${model.name} skipped: no primary key`)
         return ''
       }
 
-      const pkField = idFields[0] // for non-composite use
+      const pkField = idFields[0]
       const pkType = pkField ? getPrimaryKeyType(pkField) : ':id'
 
-      const relationFieldNames = model.fields
-        .filter((f) => f.relationName && f.relationFromFields?.length)
-        .flatMap((f) => f.relationFromFields ?? [])
-
-      const excludedFieldNames = ['inserted_at', 'updated_at', ...relationFieldNames]
+      const excludedFieldNames = ['inserted_at', 'updated_at']
 
       const fields = model.fields.filter(
-        (f) => !f.isId && !f.relationName && !excludedFieldNames.includes(f.name),
+        (f) => !f.relationName && !excludedFieldNames.includes(f.name),
       )
 
       const hasInsertedAt = model.fields.some((f) => f.name === 'inserted_at')
       const hasUpdatedAt = model.fields.some((f) => f.name === 'updated_at')
 
-      const relationLines = generateRelations(model, mutableModels, String(app), pkType)
-
       const lines = [
         `defmodule ${app}.${model.name} do`,
         `  use Ecto.Schema`,
-        ``,
-        isCompositePK
-          ? `  @primary_key false`
-          : pkType === ':id'
-            ? `  @primary_key {:${pkField.name}, :id, autogenerate: true}`
-            : `  @primary_key {:${pkField.name}, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id`,
-        ``,
+        `  @primary_key false`,
         `  schema "${snakeCase(model.name)}" do`,
-        ...fields.map((f) => `    field :${f.name}, :${prismaTypeToEctoType(f.type)}`),
+        ...fields.map((f) => {
+          const type = f.isId ? pkType : prismaTypeToEctoType(f.type)
+          const primary = f.isId && !isCompositePK ? ', primary_key: true' : ''
+          return `    field :${f.name}, :${type}${primary}`
+        }),
         ...(hasInsertedAt ? [`    field :inserted_at, :utc_datetime`] : []),
         ...(hasUpdatedAt ? [`    field :updated_at, :utc_datetime`] : []),
-        ...(relationLines.length > 0 ? [''] : []),
-        ...relationLines.map((l) => `    ${l}`),
         `  end`,
         `end`,
       ]

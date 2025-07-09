@@ -6,7 +6,7 @@ import { snakeCase } from '.'
 
 describe('snakeCase', () => {
   it('converts PascalCase to snake_case and pluralizes', () => {
-    expect(snakeCase('TodoTag')).toBe('todo_tags') 
+    expect(snakeCase('TodoTag')).toBe('todo_tags')
     expect(snakeCase('User')).toBe('users')
     expect(snakeCase('Category')).toBe('categorys')
   })

@@ -23,6 +23,10 @@ generator Hekireki-Valibot {
     comment  = true
 }
 
+generator Hekireki-Ecto {
+    provider = "hekireki-ecto"
+}
+
 model User {
     /// Primary key
     /// @z.uuid()
@@ -42,12 +46,10 @@ model Post {
     /// @z.uuid()
     /// @v.pipe(v.string(), v.uuid())
     id String @id @default(uuid())
-
     /// Article title
     /// @z.string().min(1).max(100)
     /// @v.pipe(v.string(), v.minLength(1), v.maxLength(100))
     title String
-
     /// Body content (no length limit)
     /// @z.string()
     /// @v.string()
