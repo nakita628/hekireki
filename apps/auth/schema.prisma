@@ -1,0 +1,166 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator Hekireki-Zod {
+  provider = "hekireki-zod"
+  type     = true
+  comment  = true
+}
+
+generator Hekireki-ER {
+  provider = "hekireki-mermaid-er"
+}
+
+enum UserRole {
+  ADMIN
+  USER
+}
+
+/// @relation User.id TwoFactorConfirmation.userId one-to-one
+/// @relation User.id Account.userId one-to-many
+model User {
+  /// Unique user ID
+  /// @z.cuid()
+  id                    String                 @id @default(cuid())
+  /// Display name
+  /// @z.string().min(1).max(50)
+  name                  String?
+  /// Email address
+  /// @z.email()
+  email                 String?                @unique
+  /// Date when the email was verified
+  /// @z.iso.date()
+  emailVerified         DateTime?
+  /// Profile image URL
+  /// @z.url()
+  image                 String?
+  /// Hashed password
+  /// @z.string().min(8)
+  password              String?
+  /// Role of the user (ADMIN or USER)
+  role                  UserRole               @default(USER)
+  /// Linked accounts
+  accounts              Account[]
+  /// Whether 2FA is enabled
+  /// @z.boolean()
+  isTwoFactorEnabled    Boolean?               @default(false)
+  /// 2FA confirmation
+  twoFactorConfirmation TwoFactorConfirmation?
+}
+
+/// @relation User.id Account.userId many-to-one
+model Account {
+  /// Unique account ID
+  /// @z.cuid()
+  id                String  @id @default(cuid())
+  /// Reference to the user ID
+  /// @z.string()
+  userId            String
+  /// Type of account (e.g., oauth, email)
+  /// @z.string()
+  type              String
+  /// Name of the provider (e.g., google, github)
+  /// @z.string()
+  provider          String
+  /// Provider-specific account ID
+  /// @z.string()
+  providerAccountId String
+  /// Refresh token
+  /// @z.string()
+  refresh_token     String?
+  /// Access token
+  /// @z.string()
+  access_token      String?
+  /// Expiration time (UNIX timestamp)
+  /// @z.int()
+  expires_at        Int?
+  /// Token type (e.g., Bearer)
+  /// @z.string().optional()
+  token_type        String?
+  /// OAuth scope
+  /// @z.string().optional()
+  scope             String?
+  /// ID token
+  /// @z.string().optional()
+  id_token          String?
+  /// Session state
+  /// @z.string().optional()
+  session_state     String?
+  /// Belongs to user
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+/// Email verification token
+model VerificationToken {
+  /// Token ID
+  /// @z.cuid()
+  id      String   @id @default(cuid())
+  /// Email address
+  /// @z.email()
+  email   String
+  /// Token string
+  /// @z.string()
+  token   String   @unique
+  /// Expiry time
+  /// @z.iso.date()
+  expires DateTime
+
+  @@unique([email, token])
+}
+
+/// Password reset token
+model PasswordResetToken {
+  /// Token ID
+  /// @z.cuid()
+  id      String   @id @default(cuid())
+  /// Email address
+  /// @z.email()
+  email   String
+  /// Token string
+  /// @z.string()
+  token   String   @unique
+  /// Expiry time
+  /// @z.iso.date()
+  expires DateTime
+
+  @@unique([email, token])
+}
+
+model TwoFactorToken {
+  /// Token ID
+  /// @z.cuid()
+  id      String   @id @default(cuid())
+  /// Email address
+  /// @z.email()
+  email   String
+  /// Token string
+  /// @z.string()
+  token   String   @unique
+  /// Expiry time
+  /// @z.iso.date()
+  expires DateTime
+
+  @@unique([email, token])
+}
+
+/// @relation User.id TwoFactorConfirmation.userId one-to-one
+model TwoFactorConfirmation {
+  /// Confirmation ID
+  /// @z.uuid()
+  id     String @id @default(cuid())
+  /// Reference to user
+  /// @z.string()
+  userId String
+  /// The user who confirmed 2FA
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId])
+}
