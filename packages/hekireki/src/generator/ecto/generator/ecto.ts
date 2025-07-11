@@ -8,7 +8,9 @@ import { prismaTypeToEctoType } from '../utils/prisma-type-to-ecto-type.js'
 /** UUID PK → :binary_id / otherwise :string */
 function getPrimaryKeyType(field: DMMF.Field): 'string' | 'binary_id' {
   const def = field.default
-  return def && typeof def === 'object' && 'name' in def && def.name === 'uuid' ? 'binary_id' : 'string'
+  return def && typeof def === 'object' && 'name' in def && def.name === 'uuid'
+    ? 'binary_id'
+    : 'string'
 }
 
 /** Convert readonly models to mutable copies */
