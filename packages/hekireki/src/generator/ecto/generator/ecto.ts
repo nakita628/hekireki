@@ -5,10 +5,10 @@ import { snakeCase } from '../../../shared/utils/index.js'
 import { prismaTypeToEctoType } from '../utils/prisma-type-to-ecto-type.js'
 
 /* ───────── Utilities ────────────────────────── */
-/** UUID PK → :binary_id / otherwise :id */
-function getPrimaryKeyType(field: DMMF.Field): 'id' | 'binary_id' {
+/** UUID PK → :binary_id / otherwise :string */
+function getPrimaryKeyType(field: DMMF.Field): 'string' | 'binary_id' {
   const def = field.default
-  return def && typeof def === 'object' && 'name' in def && def.name === 'uuid' ? 'binary_id' : 'id'
+  return def && typeof def === 'object' && 'name' in def && def.name === 'uuid' ? 'binary_id' : 'string'
 }
 
 /** Convert readonly models to mutable copies */
