@@ -4,83 +4,71 @@ import { join } from 'node:path'
 import { snakeCase } from '../../../shared/utils/index.js'
 import { prismaTypeToEctoType } from '../utils/prisma-type-to-ecto-type.js'
 
-/* ───────── Utilities ────────────────────────── */
-/** UUID PK → :binary_id / otherwise :string */
-function getPrimaryKeyType(field: DMMF.Field): 'string' | 'binary_id' {
-  const def = field.default
-  return def && typeof def === 'object' && 'name' in def && def.name === 'uuid'
-    ? 'binary_id'
-    : 'string'
+function getPrimaryKeyConfig(field: DMMF.Field): {
+  line: string
+  typeSpec: string
+  omitIdFieldInSchema: boolean
+} {
+  if (
+    field.type === 'String' &&
+    field.default &&
+    typeof field.default === 'object' &&
+    'name' in field.default &&
+    field.default.name === 'uuid'
+  ) {
+    return {
+      line: '@primary_key {:id, :binary_id, autogenerate: true}',
+      typeSpec: 'Ecto.UUID.t()',
+      omitIdFieldInSchema: true,
+    }
+  }
+
+  return {
+    line: '@primary_key false',
+    typeSpec: 'String.t()',
+    omitIdFieldInSchema: false,
+  }
 }
 
-/** Convert readonly models to mutable copies */
-function makeMutable(models: readonly DMMF.Model[]): DMMF.Model[] {
-  return models.map((m) => ({
-    ...m,
-    fields: m.fields?.map((f) => ({ ...f })) ?? [],
-  }))
-}
-
-/* ───────── Main generator ───────────────────── */
 export function ectoSchemas(models: readonly DMMF.Model[], app: string | string[]): string {
-  const mutableModels = makeMutable(models)
-
-  /** Timestamp column aliases (snake_case & camelCase) */
-  const insertedAliases = ['inserted_at', 'created_at', 'createdAt']
-  const updatedAliases = ['updated_at', 'modified_at', 'updatedAt', 'modifiedAt']
-
-  return mutableModels
+  return models
     .map((model) => {
-      /* ── Primary-key handling ─────────────────── */
-      const idFields = model.fields.filter((f) => f.isId)
-      const isCompositePK = model.primaryKey && model.primaryKey.fields.length > 1
-      if (!(idFields.length || isCompositePK)) return ''
+      const idField = model.fields.find((f) => f.isId)
+      if (!idField) return ''
 
-      const pkField = idFields[0]
-      const pkType = pkField ? getPrimaryKeyType(pkField) : 'id'
+      const pk = getPrimaryKeyConfig(idField)
+      const fields = model.fields.filter(
+        (f) => !(f.relationName || (f.isId && pk.omitIdFieldInSchema)),
+      )
 
-      /* ── Timestamp field detection ────────────── */
-      const insertedField = model.fields.find((f) => insertedAliases.includes(f.name))
-      const updatedField = model.fields.find((f) => updatedAliases.includes(f.name))
-
-      /** Columns removed from explicit `field/3` declarations */
-      const excludedNames = [
-        ...(insertedField ? [insertedField.name] : []),
-        ...(updatedField ? [updatedField.name] : []),
+      const typeSpecFields = [
+        `id: ${pk.typeSpec}`,
+        ...fields.map((f) => `${f.name}: ${ectoTypeToTypespec(prismaTypeToEctoType(f.type))}`),
+      ]
+      const typeSpecLines = [
+        '  @type t :: %__MODULE__{',
+        ...typeSpecFields.map((line, i) => {
+          const isLast = i === typeSpecFields.length - 1
+          return `          ${line}${isLast ? '' : ','}`
+        }),
+        '        }',
       ]
 
-      /* ── Plain fields (no relations / no timestamps) ─ */
-      const fields = model.fields.filter((f) => !(f.relationName || excludedNames.includes(f.name)))
+      const schemaFields = fields.map((f) => {
+        const type = prismaTypeToEctoType(f.type)
+        return `    field(:${f.name}, :${type})`
+      })
 
-      /* ── Build timestamps() line (const-only) ─────── */
-      const timestampsLine = (() => {
-        if (!(insertedField || updatedField)) return ''
-
-        const hasCustom =
-          (insertedField && insertedField.name !== 'inserted_at') ||
-          (updatedField && updatedField.name !== 'updated_at')
-
-        if (!hasCustom) return '    timestamps()' // both defaults → short form
-
-        // Always include both keys when custom names are involved
-        const insertedName = insertedField ? insertedField.name : 'inserted_at'
-        const updatedName = updatedField ? updatedField.name : 'updated_at'
-
-        return `    timestamps(inserted_at: :${insertedName}, updated_at: :${updatedName})`
-      })()
-
-      /* ── Assemble final module code ───────────── */
       const lines = [
         `defmodule ${app}.${model.name} do`,
         '  use Ecto.Schema',
-        '  @primary_key false',
+        '',
+        `  ${pk.line}`,
+        '',
+        ...typeSpecLines,
+        '',
         `  schema "${snakeCase(model.name)}" do`,
-        ...fields.map((f) => {
-          const type = f.isId ? pkType : prismaTypeToEctoType(f.type)
-          const primary = f.isId && !isCompositePK ? ', primary_key: true' : ''
-          return `    field(:${f.name}, :${type}${primary})`
-        }),
-        ...(timestampsLine ? [timestampsLine] : []),
+        ...schemaFields,
         '  end',
         'end',
       ]
@@ -91,16 +79,35 @@ export function ectoSchemas(models: readonly DMMF.Model[], app: string | string[
     .join('\n\n')
 }
 
-/* ───────── File writer ───────────────────────── */
+function ectoTypeToTypespec(type: string): string {
+  switch (type) {
+    case 'string':
+      return 'String.t()'
+    case 'integer':
+      return 'integer()'
+    case 'float':
+      return 'float()'
+    case 'boolean':
+      return 'boolean()'
+    case 'binary_id':
+      return 'Ecto.UUID.t()'
+    case 'naive_datetime':
+      return 'NaiveDateTime.t()'
+    case 'utc_datetime':
+      return 'DateTime.t()'
+    default:
+      return 'term()'
+  }
+}
+
 export async function writeEctoSchemasToFiles(
   models: readonly DMMF.Model[],
   app: string | string[],
   outDir: string,
 ) {
-  const mutableModels = makeMutable(models)
   await fsp.mkdir(outDir, { recursive: true })
 
-  for (const model of mutableModels) {
+  for (const model of models) {
     const code = ectoSchemas([model], app)
     if (!code.trim()) continue
 
