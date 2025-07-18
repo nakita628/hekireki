@@ -17,7 +17,7 @@ function getPrimaryKeyConfig(field: DMMF.Field): {
     field.default.name === 'uuid'
   ) {
     return {
-      line: `@primary_key {:id, :binary_id, autogenerate: true}`,
+      line: '@primary_key {:id, :binary_id, autogenerate: true}',
       typeSpec: 'Ecto.UUID.t()',
       omitIdFieldInSchema: true,
     }
@@ -38,7 +38,7 @@ export function ectoSchemas(models: readonly DMMF.Model[], app: string | string[
 
       const pk = getPrimaryKeyConfig(idField)
       const fields = model.fields.filter(
-        (f) => !f.relationName && (!f.isId || !pk.omitIdFieldInSchema),
+        (f) => !(f.relationName || (f.isId && pk.omitIdFieldInSchema)),
       )
 
       const typeSpecFields = [
