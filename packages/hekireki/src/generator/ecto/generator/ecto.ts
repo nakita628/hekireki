@@ -42,14 +42,22 @@ function getFieldDefaultOption(field: DMMF.Field): string | null {
 
 function ectoTypeToTypespec(type: string): string {
   switch (type) {
-    case 'string': return 'String.t()'
-    case 'integer': return 'integer()'
-    case 'float': return 'float()'
-    case 'boolean': return 'boolean()'
-    case 'binary_id': return 'Ecto.UUID.t()'
-    case 'naive_datetime': return 'NaiveDateTime.t()'
-    case 'utc_datetime': return 'DateTime.t()'
-    default: return 'term()'
+    case 'string':
+      return 'String.t()'
+    case 'integer':
+      return 'integer()'
+    case 'float':
+      return 'float()'
+    case 'boolean':
+      return 'boolean()'
+    case 'binary_id':
+      return 'Ecto.UUID.t()'
+    case 'naive_datetime':
+      return 'NaiveDateTime.t()'
+    case 'utc_datetime':
+      return 'DateTime.t()'
+    default:
+      return 'term()'
   }
 }
 
@@ -88,11 +96,7 @@ export function ectoSchemas(models: readonly DMMF.Model[], app: string | string[
 
       const schemaFieldsRaw = fields.filter(
         (f) =>
-          !(
-            f.relationName ||
-            (f.isId && pk.omitIdFieldInSchema) ||
-            timestampsExclude.has(f.name)
-          ),
+          !(f.relationName || (f.isId && pk.omitIdFieldInSchema) || timestampsExclude.has(f.name)),
       )
 
       const typeSpecFields = [
