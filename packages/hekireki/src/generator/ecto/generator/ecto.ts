@@ -37,29 +37,19 @@ function getFieldDefaultOption(field: DMMF.Field): string | null {
   if (def === undefined || def === null) return null
   if (typeof def === 'string') return `default: "${def}"`
   if (typeof def === 'number' || typeof def === 'boolean') return `default: ${def}`
-  if (typeof def === 'object' && 'name' in def) return null
-
   return null
 }
 
 function ectoTypeToTypespec(type: string): string {
   switch (type) {
-    case 'string':
-      return 'String.t()'
-    case 'integer':
-      return 'integer()'
-    case 'float':
-      return 'float()'
-    case 'boolean':
-      return 'boolean()'
-    case 'binary_id':
-      return 'Ecto.UUID.t()'
-    case 'naive_datetime':
-      return 'NaiveDateTime.t()'
-    case 'utc_datetime':
-      return 'DateTime.t()'
-    default:
-      return 'term()'
+    case 'string': return 'String.t()'
+    case 'integer': return 'integer()'
+    case 'float': return 'float()'
+    case 'boolean': return 'boolean()'
+    case 'binary_id': return 'Ecto.UUID.t()'
+    case 'naive_datetime': return 'NaiveDateTime.t()'
+    case 'utc_datetime': return 'DateTime.t()'
+    default: return 'term()'
   }
 }
 
@@ -76,18 +66,12 @@ function buildTimestampsLine(fields: DMMF.Field[]): { line: string | null; exclu
 
   if (!(inserted || updated)) return { line: null, exclude }
 
-  const defaultInserted = inserted?.name === 'inserted_at'
-  const defaultUpdated = updated?.name === 'updated_at'
-
-  if (defaultInserted && defaultUpdated) {
+  if (inserted?.name === 'inserted_at' && updated?.name === 'updated_at') {
     return { line: '    timestamps()', exclude }
   }
 
-  const insertedName = inserted?.name ?? 'inserted_at'
-  const updatedName = updated?.name ?? 'updated_at'
-
   return {
-    line: `    timestamps(inserted_at: :${insertedName}, updated_at: :${updatedName})`,
+    line: `    timestamps(inserted_at: :${inserted?.name ?? 'inserted_at'}, updated_at: :${updated?.name ?? 'updated_at'})`,
     exclude,
   }
 }
@@ -104,7 +88,11 @@ export function ectoSchemas(models: readonly DMMF.Model[], app: string | string[
 
       const schemaFieldsRaw = fields.filter(
         (f) =>
-          !f.relationName && !(f.isId && pk.omitIdFieldInSchema) && !timestampsExclude.has(f.name),
+          !(
+            f.relationName ||
+            (f.isId && pk.omitIdFieldInSchema) ||
+            timestampsExclude.has(f.name)
+          ),
       )
 
       const typeSpecFields = [
@@ -152,7 +140,6 @@ export function ectoSchemas(models: readonly DMMF.Model[], app: string | string[
     .join('\n\n')
 }
 
-/* ───────── File writer ───────────────────────── */
 export async function writeEctoSchemasToFiles(
   models: readonly DMMF.Model[],
   app: string | string[],
