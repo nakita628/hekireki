@@ -4,11 +4,13 @@ import { join } from 'node:path'
 import { snakeCase } from '../../../shared/utils/index.js'
 import { prismaTypeToEctoType } from '../utils/prisma-type-to-ecto-type.js'
 
-function getPrimaryKeyConfig(field: DMMF.Field): {
+type PrimaryKeyConfig = {
   line: string
   typeSpec: string
   omitIdFieldInSchema: boolean
-} {
+}
+
+function getPrimaryKeyConfig(field: DMMF.Field): PrimaryKeyConfig {
   if (
     field.type === 'String' &&
     field.default &&
@@ -30,6 +32,50 @@ function getPrimaryKeyConfig(field: DMMF.Field): {
   }
 }
 
+function getFieldDefaultOption(field: DMMF.Field): string | null {
+  const def = field.default
+  if (def === undefined || def === null) return null
+  if (typeof def === 'string') return `default: "${def}"`
+  if (typeof def === 'number' || typeof def === 'boolean') return `default: ${def}`
+  return null
+}
+
+function ectoTypeToTypespec(type: string): string {
+  switch (type) {
+    case 'string': return 'String.t()'
+    case 'integer': return 'integer()'
+    case 'float': return 'float()'
+    case 'boolean': return 'boolean()'
+    case 'binary_id': return 'Ecto.UUID.t()'
+    case 'naive_datetime': return 'NaiveDateTime.t()'
+    case 'utc_datetime': return 'DateTime.t()'
+    default: return 'term()'
+  }
+}
+
+function buildTimestampsLine(fields: DMMF.Field[]): { line: string | null; exclude: Set<string> } {
+  const insertedAliases = ['inserted_at', 'created_at', 'createdAt']
+  const updatedAliases = ['updated_at', 'modified_at', 'updatedAt', 'modifiedAt']
+
+  const inserted = fields.find((f) => insertedAliases.includes(f.name))
+  const updated = fields.find((f) => updatedAliases.includes(f.name))
+
+  const exclude = new Set<string>()
+  if (inserted) exclude.add(inserted.name)
+  if (updated) exclude.add(updated.name)
+
+  if (!(inserted || updated)) return { line: null, exclude }
+
+  if (inserted?.name === 'inserted_at' && updated?.name === 'updated_at') {
+    return { line: '    timestamps()', exclude }
+  }
+
+  return {
+    line: `    timestamps(inserted_at: :${inserted?.name ?? 'inserted_at'}, updated_at: :${updated?.name ?? 'updated_at'})`,
+    exclude,
+  }
+}
+
 export function ectoSchemas(models: readonly DMMF.Model[], app: string | string[]): string {
   return models
     .map((model) => {
@@ -37,14 +83,25 @@ export function ectoSchemas(models: readonly DMMF.Model[], app: string | string[
       if (!idField) return ''
 
       const pk = getPrimaryKeyConfig(idField)
-      const fields = model.fields.filter(
-        (f) => !(f.relationName || (f.isId && pk.omitIdFieldInSchema)),
+      const fields = model.fields.map((f) => ({ ...f }))
+      const { line: timestampsLine, exclude: timestampsExclude } = buildTimestampsLine(fields)
+
+      const schemaFieldsRaw = fields.filter(
+        (f) =>
+          !(
+            f.relationName ||
+            (f.isId && pk.omitIdFieldInSchema) ||
+            timestampsExclude.has(f.name)
+          ),
       )
 
       const typeSpecFields = [
         `id: ${pk.typeSpec}`,
-        ...fields.map((f) => `${f.name}: ${ectoTypeToTypespec(prismaTypeToEctoType(f.type))}`),
+        ...schemaFieldsRaw.map(
+          (f) => `${f.name}: ${ectoTypeToTypespec(prismaTypeToEctoType(f.type))}`,
+        ),
       ]
+
       const typeSpecLines = [
         '  @type t :: %__MODULE__{',
         ...typeSpecFields.map((line, i) => {
@@ -54,9 +111,12 @@ export function ectoSchemas(models: readonly DMMF.Model[], app: string | string[
         '        }',
       ]
 
-      const schemaFields = fields.map((f) => {
-        const type = prismaTypeToEctoType(f.type)
-        return `    field(:${f.name}, :${type})`
+      const schemaFields = schemaFieldsRaw.map((f) => {
+        const type = f.isId ? 'binary_id' : prismaTypeToEctoType(f.type)
+        const primary = f.isId && !pk.omitIdFieldInSchema ? ', primary_key: true' : ''
+        const defaultOpt = getFieldDefaultOption(f)
+        const defaultClause = defaultOpt ? `, ${defaultOpt}` : ''
+        return `    field(:${f.name}, :${type}${primary}${defaultClause})`
       })
 
       const lines = [
@@ -69,6 +129,7 @@ export function ectoSchemas(models: readonly DMMF.Model[], app: string | string[
         '',
         `  schema "${snakeCase(model.name)}" do`,
         ...schemaFields,
+        ...(timestampsLine ? [timestampsLine] : []),
         '  end',
         'end',
       ]
@@ -77,27 +138,6 @@ export function ectoSchemas(models: readonly DMMF.Model[], app: string | string[
     })
     .filter(Boolean)
     .join('\n\n')
-}
-
-function ectoTypeToTypespec(type: string): string {
-  switch (type) {
-    case 'string':
-      return 'String.t()'
-    case 'integer':
-      return 'integer()'
-    case 'float':
-      return 'float()'
-    case 'boolean':
-      return 'boolean()'
-    case 'binary_id':
-      return 'Ecto.UUID.t()'
-    case 'naive_datetime':
-      return 'NaiveDateTime.t()'
-    case 'utc_datetime':
-      return 'DateTime.t()'
-    default:
-      return 'term()'
-  }
 }
 
 export async function writeEctoSchemasToFiles(
