@@ -8,8 +8,6 @@ export type Field = {
   validation: string | null
 }
 
-export type ValidField = Required<Field>
-
 export type GroupedFields = Record<string, Field[]>
 
 export type Model = Readonly<DMMF.Model>

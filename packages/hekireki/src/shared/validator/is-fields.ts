@@ -1,9 +1,8 @@
-import type { ValidField } from '../types.js'
-
 /**
- * Is fields validation
- * @param modelFields - The model fields
- * @returns The fields validation
+ * Extract fields with validation from a nested array of model fields.
+ *
+ * @param modelFields - A nested array of model field definitions.
+ * @returns A flat array of fields that include a non-null `validation` property.
  */
 export function isFields(
   modelFields: {
@@ -14,5 +13,15 @@ export function isFields(
     validation: string | null
   }[][],
 ) {
-  return modelFields.flat().filter((field): field is ValidField => field.validation !== null)
+  return modelFields.flat().filter(
+    (
+      field,
+    ): field is Required<{
+      documentation: string
+      modelName: string
+      fieldName: string
+      comment: string[]
+      validation: string | null
+    }> => field.validation !== null,
+  )
 }

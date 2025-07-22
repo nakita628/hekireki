@@ -1,12 +1,6 @@
-import type { ERContent, Model } from '../types.js'
+import type { DMMF } from '@prisma/generator-helper'
 import { modelInfo } from '../generator/index.js'
 import { extractRelations, removeDuplicateRelations } from '../validator/index.js'
-
-/**
- * generate ER content
- * @param { readonly Model[] } models - models
- * @returns { ERContent } - ER content
- */
 
 // ER diagram header
 const ER_HEADER = ['```mermaid', 'erDiagram'] as const
@@ -14,7 +8,13 @@ const ER_HEADER = ['```mermaid', 'erDiagram'] as const
 // ER diagram footer
 const ER_FOOTER = ['```'] as const
 
-export function erContent(models: readonly Model[]): ERContent {
+/**
+ * Generate Mermaid ER diagram content from Prisma models.
+ *
+ * @param models - The list of Prisma DMMF models.
+ * @returns An array of Mermaid ER diagram lines.
+ */
+export function erContent(models: readonly DMMF.Model[]): readonly string[] {
   // extract all relations
   const allRelations = models.flatMap(extractRelations)
   // remove duplicate relations
