@@ -1,4 +1,4 @@
-import { isRelationship } from '../validator/is-relationship.js'
+import { isRelationship } from '../validator/index.js'
 
 const RELATIONSHIPS = {
   'zero-one': '|o',
@@ -7,8 +7,14 @@ const RELATIONSHIPS = {
   many: '}|',
 } as const
 
-export type Relationship = keyof typeof RELATIONSHIPS
-
+/**
+ * Generate a Mermaid ER diagram relation connector from a custom relationship string.
+ *
+ * @param input - A relationship string like `"one-to-many"` or `"zero-one-to-one-optional"`.
+ * @returns The Mermaid connector string (e.g., `"||--}|"` or `"|o..}o"`).
+ *
+ * @throws If the input format is invalid or contains unknown relationship types.
+ */
 export function buildRelationLine(input: string): string {
   const parts = input.split('-to-')
   if (parts.length !== 2) {

@@ -1,12 +1,18 @@
-import type { Relation } from '../types.js'
 import { buildRelationLine } from '../relationship/build-relation-line.js'
 
 /**
- * generate relation line
- * @param { Relation } relation
- * @returns { string } relation line
+ * Generate a Mermaid ER diagram relation line from a relation definition.
+ *
+ * @param relation - The relation definition including model and field names.
+ * @returns A string representing the relation line in Mermaid ER syntax.
  */
-export function relationLine(relation: Relation): string {
+export function relationLine(relation: {
+  fromModel: string
+  toModel: string
+  fromField: string
+  toField: string
+  type: string
+}): string {
   const cardinality = buildRelationLine(relation.type)
 
   if (!cardinality) {

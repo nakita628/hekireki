@@ -1,0 +1,16 @@
+{
+  "name": "Hekireki",
+  "entryPoints": ["packages/**/*.ts"],
+  "out": "./docs/typedoc/",
+  "exclude": [
+    "**/prisma/**",
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/*.test.ts",
+    "**/*.d.ts",
+    "**/test/**",
+    "**/tests/**",
+    "**/coverage/**",
+  ],
+  "skipErrorChecking": true,
+}

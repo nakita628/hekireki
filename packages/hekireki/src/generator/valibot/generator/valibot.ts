@@ -1,10 +1,8 @@
-import type { Model } from '../../mermaid-er/types.js'
-import { isValibot } from '../validator/is-valibot.js'
+import type { DMMF } from '@prisma/generator-helper'
 import { schemas } from './schemas.js'
-import { groupByModel } from '../../../shared/helper/group-by-model.js'
-import { isFields } from '../../../shared/validator/is-fields.js'
 import { inferInput } from './infer-input.js'
-import { isValibotDocument } from '../validator/is-valibot-document.js'
+import { groupByModel, isFields } from '../../../shared/utils/index.js'
+import { isValibot, isValibotDocument } from '../validator/index.js'
 
 const VALIBOT_IMPORT = `import * as v from 'valibot'\n` as const
 
@@ -15,7 +13,7 @@ const VALIBOT_IMPORT = `import * as v from 'valibot'\n` as const
  * @param comment - Whether to include comments in the generated code
  * @returns The generated Valibot schemas and types
  */
-export function valibot(models: readonly Model[], type: boolean, comment: boolean) {
+export function valibot(models: readonly Readonly<DMMF.Model>[], type: boolean, comment: boolean) {
   const modelInfos = models.map((model) => {
     return {
       documentation: model.documentation ?? '',

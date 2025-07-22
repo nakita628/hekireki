@@ -4,9 +4,10 @@ const ZOD_ANNOTATION = '@z.'
 const VALIBOT_ANNOTATION = '@v.'
 
 /**
- * generate model fields
- * @param { DMMF.Model } model
- * @returns { string[] }
+ * Generate Mermaid ER field lines from a Prisma model.
+ *
+ * @param model - A Prisma DMMF model definition.
+ * @returns An array of strings representing each field in Mermaid ER syntax, excluding relation fields and annotations.
  */
 export function modelFields(model: DMMF.Model): string[] {
   return model.fields

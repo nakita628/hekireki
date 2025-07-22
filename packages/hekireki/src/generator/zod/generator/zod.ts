@@ -1,8 +1,7 @@
-import type { Model } from '../../../shared/types.js'
+import type { DMMF } from '@prisma/generator-helper'
 import { isZod, isZodDocument } from '../validator/index.js'
-import { isFields } from '../../../shared/validator/is-fields.js'
-import { groupByModel } from '../../../shared/helper/group-by-model.js'
 import { infer, schemas } from './index.js'
+import { groupByModel, isFields } from '../../../shared/utils/index.js'
 
 const ZODV4_IMPORT = `import { z } from 'zod/v4'\n` as const
 const ZODV4_MINI_IMPORT = `import { z } from 'zod/v4-mini'\n` as const
@@ -16,7 +15,7 @@ const ZOD_OPENAPI_HONO_IMPORT = `import { z } from '@hono/zod-openapi'\n` as con
  * @returns The generated Zod schemas and types
  */
 export function zod(
-  models: readonly Model[],
+  models: readonly Readonly<DMMF.Model>[],
   type: boolean,
   comment: boolean,
   zodVersion?: string | string[],
