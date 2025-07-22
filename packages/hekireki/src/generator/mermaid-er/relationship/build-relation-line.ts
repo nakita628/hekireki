@@ -1,4 +1,4 @@
-import { isRelationship } from '../validator/is-relationship.js'
+import { isRelationship } from '../validator/index.js'
 
 const RELATIONSHIPS = {
   'zero-one': '|o',
