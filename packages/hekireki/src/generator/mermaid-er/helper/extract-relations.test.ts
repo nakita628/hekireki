@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { extractRelations } from './extract-relations'
 
 // Test run
-// pnpm vitest run ./src/generator/mermaid-er/validator/extract-relations.test.ts
+// pnpm vitest run ./src/generator/mermaid-er/helper/extract-relations.test.ts
 
 describe('extractRelations', () => {
   it.concurrent('extractRelations Test', () => {

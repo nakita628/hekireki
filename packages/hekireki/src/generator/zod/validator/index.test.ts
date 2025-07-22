@@ -4,11 +4,25 @@ import { isZodDocument, isZod } from '.'
 // Test run
 // pnpm vitest run ./src/generator/zod/validator/index.test.ts
 
-describe('validator barrel file exports', () => {
-  it('should export isZod', () => {
-    expect(typeof isZod).toBe('function')
+describe('validator', () => {
+  // isZodDocument
+  describe('isZodDocument', () => {
+    it.concurrent('isZodDocument Test', () => {
+      const result = isZodDocument(`Unique identifier for the user
+    @z.uuid()
+    @v.pipe(v.string(), v.uuid())`)
+      const expected = ['Unique identifier for the user', '@v.pipe(v.string(), v.uuid())']
+      expect(result).toStrictEqual(expected)
+    })
   })
-  it('should export isZodDocument', () => {
-    expect(typeof isZodDocument).toBe('function')
+
+  // isZod
+  describe('isZod', () => {
+    it.concurrent('isZod Test', () => {
+      const result = isZod(`Unique identifier for the user
+@z.uuid()
+@v.pipe(v.string(), v.uuid())`)
+      expect(result).toBe('uuid()')
+    })
   })
 })

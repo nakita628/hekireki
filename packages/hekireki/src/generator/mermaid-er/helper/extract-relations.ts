@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 import { relationLine } from '../generator/relation-line.js'
-import { parseRelation } from './index.js'
+import { parseRelation } from '../validator/index.js'
 
 /**
  * Extract Mermaid ER diagram relation lines from a Prisma model.
