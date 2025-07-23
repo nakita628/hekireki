@@ -5,15 +5,14 @@
   "scripts": {
     "deps": "rm -rf node_modules && pnpm install",
     "build": "pnpm -F hekireki build",
-    "fmt": "pnpm biome format --write ./",
-    "lint": "pnpm biome lint",
+    "check": "pnpm biome check --write ./",
     "typecheck": "pnpm -F hekireki typecheck",
     "test": "pnpm -F hekireki test",
     "coverage": "pnpm -F hekireki coverage",
     "release": "pnpm -F hekireki release"
   },
   "devDependencies": {
-    "@biomejs/biome": "^1.9.4",
+    "@biomejs/biome": "^2.1.2",
     "typedoc": "^0.28.7"
   }
 }

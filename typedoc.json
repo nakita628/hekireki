@@ -1,7 +1,7 @@
 {
   "name": "Hekireki",
   "entryPoints": ["packages/**/*.ts"],
-  "out": "./docs/typedoc/",
+  "out": "./docs/",
   "exclude": [
     "**/prisma/**",
     "**/node_modules/**",
