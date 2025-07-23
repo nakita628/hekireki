@@ -1,11 +1,11 @@
+import type { DMMF } from '@prisma/generator-helper'
 import { describe, expect, it } from 'vitest'
 import { zod } from '.'
-import type { Model } from '../../../shared/types.js'
 
 // Test run
 // pnpm vitest run ./src/generator/zod/generator/zod.test.ts
 
-const testModels: Model[] = [
+const testModels: DMMF.Model[] = [
   {
     name: 'User',
     dbName: null,
@@ -170,8 +170,7 @@ const testModels: Model[] = [
 describe('zod', () => {
   it.concurrent('zod type true comment true', () => {
     const result = zod(testModels, true, true)
-    const expected = `import { z } from 'zod/v4'
-
+    const expected = `import * as z from 'zod'
 
 export const UserSchema = z.object({
   /**

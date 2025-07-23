@@ -1,7 +1,7 @@
-import { afterEach, afterAll, describe, it, expect } from 'vitest'
 import { exec } from 'node:child_process'
-import { promisify } from 'node:util'
 import fs from 'node:fs'
+import { promisify } from 'node:util'
+import { afterAll, afterEach, describe, expect, it } from 'vitest'
 
 // Test run
 // pnpm vitest run ./src/generator/zod/index.test.ts
@@ -46,7 +46,7 @@ model User {
     const result = fs.readFileSync('./prisma-zod/zod/index.ts', {
       encoding: 'utf-8',
     })
-    const expected = `import { z } from 'zod/v4'
+    const expected = `import * as z from 'zod'
 
 export const UserSchema = z.object({
   id: z.uuid(),
@@ -85,7 +85,7 @@ model User {
     const result = fs.readFileSync('./prisma-zod/zod/index.ts', {
       encoding: 'utf-8',
     })
-    const expected = `import { z } from 'zod/v4'
+    const expected = `import * as z from 'zod'
 
 export const UserSchema = z.object({
   /**
@@ -131,7 +131,7 @@ model User {
     const result = fs.readFileSync('./prisma-zod/zod/index.ts', {
       encoding: 'utf-8',
     })
-    const expected = `import { z } from 'zod/v4'
+    const expected = `import * as z from 'zod'
 
 export const UserSchema = z.object({
   id: z.uuid(),
@@ -173,7 +173,7 @@ model User {
     const result = fs.readFileSync('./prisma-zod/zod-test/test.ts', {
       encoding: 'utf-8',
     })
-    const expected = `import { z } from 'zod/v4'
+    const expected = `import * as z from 'zod'
 
 export const UserSchema = z.object({
   id: z.uuid(),
@@ -196,7 +196,7 @@ datasource db {
 generator Hekireki-Zod {
     provider = "hekireki-zod"
     type     = true
-    zod      = "v4-mini"
+    zod      = "mini"
 }
 
 model User {
@@ -215,7 +215,7 @@ model User {
     const result = fs.readFileSync('./prisma-zod/zod/index.ts', {
       encoding: 'utf-8',
     })
-    const expected = `import { z } from 'zod/v4-mini'
+    const expected = `import * as z from 'zod/mini'
 
 export const UserSchema = z.object({
   id: z.string(),

@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { capitalize, snakeCase, groupByModel, isFields } from '.'
+import { describe, expect, it } from 'vitest'
+import { capitalize, groupByModel, isFields, snakeCase } from '.'
 
 // Test run
 // pnpm vitest run ./src/shared/utils/index.test.ts
@@ -19,8 +19,8 @@ describe('utils', () => {
     })
   })
 
+  // snakeCase
   describe('snakeCase', () => {
-    // snakeCase
     it('converts PascalCase to snake_case and pluralizes', () => {
       expect(snakeCase('TodoTag')).toBe('todo_tag')
       expect(snakeCase('User')).toBe('user')

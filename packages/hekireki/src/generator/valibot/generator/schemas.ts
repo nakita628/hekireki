@@ -1,4 +1,4 @@
-import { properties } from './properties.js'
+import { properties } from '../utils/index.js'
 import { schema } from './schema.js'
 
 /**
@@ -19,12 +19,9 @@ export function schemas(
 ) {
   const modelName = modelFields[0].modelName
   const modelDoc = modelFields[0].documentation || ''
-
   const fields = properties(modelFields, comment)
-
   if (!(modelDoc || !comment)) {
     return schema(modelName, fields)
   }
-
   return `${schema(modelName, fields)}`
 }

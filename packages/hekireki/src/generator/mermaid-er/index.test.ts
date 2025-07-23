@@ -1,7 +1,7 @@
-import { beforeEach, afterEach, afterAll, describe, it, expect } from 'vitest'
 import { exec } from 'node:child_process'
-import { promisify } from 'node:util'
 import fs from 'node:fs'
+import { promisify } from 'node:util'
+import { afterAll, afterEach, describe, expect, it } from 'vitest'
 
 // Test run
 // pnpm vitest run ./src/generator/mermaid-er/index.test.ts

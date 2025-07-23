@@ -1,5 +1,5 @@
-import { modelFields } from './index.js'
 import type { DMMF } from '@prisma/generator-helper'
+import { modelFields } from './index.js'
 
 /**
  * Generate Mermaid ER diagram model block from a Prisma model.

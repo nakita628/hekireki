@@ -1,18 +1,10 @@
-import { describe, it, expect } from 'vitest'
-import { inferInput, properties, schema, schemas, valibot } from '.'
+import { describe, expect, it } from 'vitest'
+import { schema, schemas, valibot } from '.'
 
 // Test run
 // pnpm vitest run ./src/generator/valibot/generator/index.test.ts
 
 describe('valibot generator exports', () => {
-  it('should export inferInput', () => {
-    expect(typeof inferInput).toBe('function')
-  })
-
-  it('should export properties', () => {
-    expect(typeof properties).toBe('function')
-  })
-
   it('should export schema', () => {
     expect(typeof schema).toBe('function')
   })

@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 import { relationLine } from '../generator/relation-line.js'
-import { parseRelation } from '../validator/index.js'
+import { parseRelation } from '../utils/index.js'
 
 /**
  * Extract Mermaid ER diagram relation lines from a Prisma model.
@@ -10,8 +10,6 @@ import { parseRelation } from '../validator/index.js'
  */
 export function extractRelations(model: DMMF.Model): readonly string[] {
   const relations: string[] = []
-
-  // @relation annotation
   if (model.documentation) {
     const annotationRelations = model.documentation
       .split('\n')

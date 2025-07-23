@@ -1,10 +1,16 @@
 {
   "name": "hekireki",
   "type": "module",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "license": "MIT",
   "description": "Hekireki is a tool that generates validation schemas for Zod and Valibot, as well as ER diagrams, from Prisma schemas annotated with comments.",
-  "keywords": ["prisma", "zod", "valibot", "mermaid", "ecto"],
+  "keywords": [
+    "prisma",
+    "zod",
+    "valibot",
+    "mermaid",
+    "ecto"
+  ],
   "homepage": "https://github.com/nakita628/hekireki",
   "publishConfig": {
     "access": "public"
@@ -18,7 +24,9 @@
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "bin": {
     "hekireki-zod": "dist/generator/zod/index.js",
     "hekireki-valibot": "dist/generator/valibot/index.js",
@@ -34,6 +42,10 @@
     "coverage": "vitest run --coverage",
     "release": "npm pkg fix && pnpm build && npm publish"
   },
+  "dependencies": {
+    "@prisma/generator-helper": "^6.10.1",
+    "prettier": "^3.6.2"
+  },
   "devDependencies": {
     "@prisma/client": "^6.10.1",
     "@types/node": "^22.15.34",
@@ -42,10 +54,6 @@
     "tsx": "^4.20.3",
     "valibot": "1.1.0",
     "vitest": "^3.2.4",
-    "zod": "^3.25.76"
-  },
-  "dependencies": {
-    "@prisma/generator-helper": "^6.10.1",
-    "prettier": "^3.6.2"
+    "zod": "^4.0.5"
   }
 }

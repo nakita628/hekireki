@@ -1,13 +1,19 @@
 {
-  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
-  "files": { "ignoreUnknown": true },
-  "organizeImports": {
-    "enabled": true
+  "$schema": "https://biomejs.dev/schemas/2.1.2/schema.json",
+  "files": {
+    "ignoreUnknown": true,
+    "includes": [
+      "**/*.ts",
+      "**/*.json",
+      "!**/.pnpm-store/**",
+      "!**/*.d.ts",
+      "!**/node_modules/**",
+      "!**/dist/**",
+      "!**/*.js"
+    ]
   },
   "formatter": {
     "enabled": true,
-    "ignore": ["**/node_modules/**"],
-    "include": ["**/*.ts", "**/*.json"],
     "indentStyle": "space",
     "indentWidth": 2,
     "lineWidth": 100
@@ -28,13 +34,11 @@
   },
   "linter": {
     "enabled": true,
-    "ignore": ["**/node_modules/**", "**/dist/**", "**/coverage/**", "**/docs/**", "**/website/**"],
     "rules": {
       "complexity": {
         "noBannedTypes": "warn",
         "noExtraBooleanCast": "error",
         "noForEach": "warn",
-        "noMultipleSpacesInRegularExpressionLiterals": "error",
         "noStaticOnlyClass": "error",
         "noUselessConstructor": "error",
         "noUselessRename": "error",
@@ -47,17 +51,17 @@
         "noDelete": "error"
       },
       "style": {
-        "noArguments": "error",
         "noNegationElse": "warn",
         "noNonNullAssertion": "warn",
         "noParameterAssign": "error",
         "noUnusedTemplateLiteral": "error",
-        "noVar": "error",
         "useConst": "error",
         "useExponentiationOperator": "error",
         "useNamingConvention": "off",
-        "useShorthandArrayType": "error",
         "useTemplate": "error"
+      },
+      "correctness": {
+        "noUnusedVariables": "off"
       }
     }
   }

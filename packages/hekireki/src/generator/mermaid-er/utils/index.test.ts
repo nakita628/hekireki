@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   excludeManyToOneRelations,
   isRelationship,
@@ -7,9 +7,9 @@ import {
 } from '.'
 
 // Test run
-// pnpm vitest run ./src/generator/mermaid-er/validator/index.test.ts
+// pnpm vitest run ./src/generator/mermaid-er/utils/index.test.ts
 
-describe('validator', () => {
+describe('utils', () => {
   // excludeManyToOneRelations
   describe('excludeManyToOneRelations', () => {
     it.concurrent('excludeManyToOneRelations 1', () => {

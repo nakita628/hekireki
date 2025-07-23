@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-import type { GeneratorOptions } from '@prisma/generator-helper'
-import { erContent } from './generator/er-content.js'
 import fsp from 'node:fs/promises'
+import type { GeneratorOptions } from '@prisma/generator-helper'
 import pkg from '@prisma/generator-helper'
+import { erContent } from './generator/er-content.js'
+
 const { generatorHandler } = pkg
 
 export async function main(options: GeneratorOptions): Promise<void> {
