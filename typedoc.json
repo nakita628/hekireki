@@ -10,7 +10,7 @@
     "**/*.d.ts",
     "**/test/**",
     "**/tests/**",
-    "**/coverage/**",
+    "**/coverage/**"
   ],
-  "skipErrorChecking": true,
+  "skipErrorChecking": true
 }

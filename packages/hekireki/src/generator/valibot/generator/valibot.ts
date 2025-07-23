@@ -1,8 +1,8 @@
 import type { DMMF } from '@prisma/generator-helper'
-import { schemas } from './schemas.js'
-import { inferInput } from './infer-input.js'
 import { groupByModel, isFields } from '../../../shared/utils/index.js'
 import { isValibot, isValibotDocument } from '../validator/index.js'
+import { inferInput } from './infer-input.js'
+import { schemas } from './schemas.js'
 
 const VALIBOT_IMPORT = `import * as v from 'valibot'\n` as const
 

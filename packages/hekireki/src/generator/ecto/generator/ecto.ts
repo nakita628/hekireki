@@ -1,6 +1,6 @@
-import type { DMMF } from '@prisma/generator-helper'
 import fsp from 'node:fs/promises'
 import { join } from 'node:path'
+import type { DMMF } from '@prisma/generator-helper'
 import { snakeCase } from '../../../shared/utils/index.js'
 import { prismaTypeToEctoType } from '../utils/prisma-type-to-ecto-type.js'
 

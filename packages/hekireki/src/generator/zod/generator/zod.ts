@@ -1,11 +1,11 @@
 import type { DMMF } from '@prisma/generator-helper'
+import { groupByModel, isFields } from '../../../shared/utils/index.js'
 import { isZod, isZodDocument } from '../validator/index.js'
 import { infer, schemas } from './index.js'
-import { groupByModel, isFields } from '../../../shared/utils/index.js'
 
-const ZODV4_IMPORT = `import { z } from 'zod/v4'\n` as const
-const ZODV4_MINI_IMPORT = `import { z } from 'zod/v4-mini'\n` as const
-const ZOD_OPENAPI_HONO_IMPORT = `import { z } from '@hono/zod-openapi'\n` as const
+const ZODV4_IMPORT = `import * as z from 'zod'` as const
+const ZODV4_MINI_IMPORT = `import * as z from 'zod/mini'` as const
+const ZOD_OPENAPI_HONO_IMPORT = `import { z } from '@hono/zod-openapi'` as const
 
 /**
  * Generate Zod schemas and types
@@ -39,13 +39,7 @@ export function zod(
     return fields
   })
 
-  // null exclude
-  const validFields = isFields(modelFields)
-
-  // group by model
-  const groupedByModel = groupByModel(validFields)
-
-  const zods = Object.values(groupedByModel).map((fields) => {
+  const zods = Object.values(groupByModel(isFields(modelFields))).map((fields) => {
     return {
       generateZodSchema: schemas(fields, comment),
       generateZodInfer: type ? infer(fields[0].modelName) : '',
@@ -53,7 +47,7 @@ export function zod(
   })
 
   const importStatement =
-    zodVersion === 'v4-mini'
+    zodVersion === 'mini'
       ? ZODV4_MINI_IMPORT
       : zodVersion === '@hono/zod-openapi'
         ? ZOD_OPENAPI_HONO_IMPORT

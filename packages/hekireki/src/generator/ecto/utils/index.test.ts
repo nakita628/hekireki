@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { prismaTypeToEctoType } from './prisma-type-to-ecto-type.js'
 
 // Test run

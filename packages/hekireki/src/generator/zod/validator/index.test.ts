@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { isZodDocument, isZod } from '.'
+import { describe, expect, it } from 'vitest'
+import { isZod, isZodDocument } from '.'
 
 // Test run
 // pnpm vitest run ./src/generator/zod/validator/index.test.ts

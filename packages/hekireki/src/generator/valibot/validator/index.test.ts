@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { isValibotDocument, isValibot } from '.'
+import { describe, expect, it } from 'vitest'
+import { isValibot, isValibotDocument } from '.'
 
 // Test run
 // pnpm vitest run ./src/generator/valibot/validator/index.test.ts

@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-import type { GeneratorOptions } from '@prisma/generator-helper'
-import { zod } from './generator/zod.js'
 import fsp from 'node:fs/promises'
+import type { GeneratorOptions } from '@prisma/generator-helper'
 import pkg from '@prisma/generator-helper'
 import { fmt } from '../../shared/format/index.js'
+import { zod } from './generator/zod.js'
+
 const { generatorHandler } = pkg
 
 export async function main(options: GeneratorOptions): Promise<void> {
