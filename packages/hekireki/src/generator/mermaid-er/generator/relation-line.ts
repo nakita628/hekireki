@@ -1,4 +1,4 @@
-import { buildRelationLine } from '../relationship/build-relation-line.js'
+import { buildRelationLine } from '../helper/build-relation-line.js'
 
 /**
  * Generate a Mermaid ER diagram relation line from a relation definition.

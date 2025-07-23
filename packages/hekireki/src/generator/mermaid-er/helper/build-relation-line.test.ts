@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { buildRelationLine } from './build-relation-line'
 
 // Test run
-// pnpm vitest run ./src/generator/mermaid-er/relationship/build-relation-line.test.ts
+// pnpm vitest run ./src/generator/mermaid-er/helper/build-relation-line.test.ts
 
 const buildRelationLineTestCases = [
   { input: 'zero-one-to-zero-one', expected: '|o--|o' },

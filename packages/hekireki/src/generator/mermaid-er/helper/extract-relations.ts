@@ -10,8 +10,6 @@ import { parseRelation } from '../utils/index.js'
  */
 export function extractRelations(model: DMMF.Model): readonly string[] {
   const relations: string[] = []
-
-  // @relation annotation
   if (model.documentation) {
     const annotationRelations = model.documentation
       .split('\n')
