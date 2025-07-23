@@ -174,7 +174,6 @@ describe('valibot', () => {
     )
     const expected = `import * as v from 'valibot'
 
-
 export const UserSchema = v.object({
   /**
    * Primary key
@@ -378,7 +377,6 @@ export type Post = v.InferInput<typeof PostSchema>`
       false,
     )
     const expected = `import * as v from 'valibot'
-
 
 export const UserSchema = v.object({
   id: v.pipe(v.string(), v.uuid()),

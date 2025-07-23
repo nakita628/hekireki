@@ -1,10 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 import { groupByModel, isFields } from '../../../shared/utils/index.js'
-import { isValibot, isValibotDocument } from '../validator/index.js'
-import { inferInput } from './infer-input.js'
+import { inferInput, isValibot, isValibotDocument } from '../utils/index.js'
 import { schemas } from './schemas.js'
-
-const VALIBOT_IMPORT = `import * as v from 'valibot'\n` as const
 
 /**
  * Generate Valibot schemas and types
@@ -33,12 +30,7 @@ export function valibot(models: readonly Readonly<DMMF.Model>[], type: boolean, 
     return fields
   })
 
-  // null exclude
-  const validFields = isFields(modelFields)
-  // group by model
-  const groupedByModel = groupByModel(validFields)
-
-  const valibots = Object.values(groupedByModel).map((fields) => {
+  const valibots = Object.values(groupByModel(isFields(modelFields))).map((fields) => {
     return {
       generateValibotSchema: schemas(fields, comment),
       generateValibotInfer: type ? inferInput(fields[0].modelName) : '',
@@ -46,7 +38,7 @@ export function valibot(models: readonly Readonly<DMMF.Model>[], type: boolean, 
   })
 
   return [
-    VALIBOT_IMPORT,
+    `import * as v from 'valibot'`,
     '',
     valibots
       .flatMap(({ generateValibotSchema, generateValibotInfer }) =>

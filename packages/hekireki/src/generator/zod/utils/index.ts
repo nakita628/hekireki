@@ -1,26 +1,22 @@
 /**
- * Generate Zod infer
+ * Generates a `z.infer` type for the specified model.
  *
- * @param modelName - The name of the model
- * @param config - The configuration for the generator
- * @returns The generated Zod infer
+ * @param modelName - The name of the model.
+ * @returns The generated TypeScript type definition line using Zod.
  */
 export function infer(modelName: string) {
   return `export type ${modelName} = z.infer<typeof ${modelName}Schema>`
 }
 
 /**
- * Generate Zod properties
+ * Generates Zod property definitions from model fields.
  *
- * @param modelFields - The fields of the model
- * @param config - The configuration for the generator
- * @returns The generated Zod properties
- */
-/**
- * Generate Zod properties
- * @param modelFields - The fields of the model
- * @param config - The configuration for the generator
- * @returns The generated Zod properties
+ * Filters out fields without validation, removes documentation lines
+ * that include @relation, @v, or @z, and optionally includes doc comments.
+ *
+ * @param modelFields - The list of model fields with documentation and validation info.
+ * @param comment - Whether to include JSDoc comments for each field.
+ * @returns A string containing formatted Zod property definitions.
  */
 export function properties(
   modelFields: {
