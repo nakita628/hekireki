@@ -19,8 +19,8 @@ describe('utils', () => {
     })
   })
 
+  // snakeCase
   describe('snakeCase', () => {
-    // snakeCase
     it('converts PascalCase to snake_case and pluralizes', () => {
       expect(snakeCase('TodoTag')).toBe('todo_tag')
       expect(snakeCase('User')).toBe('user')
