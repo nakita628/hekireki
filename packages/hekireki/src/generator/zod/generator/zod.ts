@@ -36,9 +36,41 @@ export function zod(
   })
 
   const zods = Object.values(groupByModel(isFields(modelFields))).map((fields) => {
+    const modelName = fields[0].modelName
+    const hasRelations = models.some((model) => 
+      model.fields.some((field) => 
+        field.kind === 'object' && 
+        (field.type === modelName || field.relationToFields?.includes('id'))
+      )
+    )
+    const schema = schemas(fields, comment)
+    const inferred = type ? infer(modelName) : ''
+    
+    // Only generate relations schema if the model has relations
+    if (hasRelations) {
+      const relatedModels = models.map((model) => ({
+        name: model.name,
+        fields: model.fields.filter((f) => f.kind === 'object' && f.type === modelName)
+      })).filter((m) => m.fields.length > 0)
+
+      const relationsSchema = `export const ${modelName}RelationsSchema = z.object({ 
+  ...${modelName}Schema.shape,
+  ${relatedModels.map((rm) => 
+    rm.fields.map((f) => `${f.name}: ${f.isList ? 'z.array(' : ''}${f.type}Schema${f.isList ? ')' : ''}`).join(',\n  ')
+  ).join(',\n  ')}
+})`
+      
+      const relationsType = type ? `\n\nexport type ${modelName}Relations = z.infer<typeof ${modelName}RelationsSchema>` : ''
+      
+      return {
+        generateZodSchema: schema + '\n\n' + relationsSchema,
+        generateZodInfer: inferred + relationsType
+      }
+    }
+    
     return {
-      generateZodSchema: schemas(fields, comment),
-      generateZodInfer: type ? infer(fields[0].modelName) : '',
+      generateZodSchema: schema,
+      generateZodInfer: inferred
     }
   })
 

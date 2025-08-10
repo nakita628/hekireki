@@ -31,9 +31,41 @@ export function valibot(models: readonly Readonly<DMMF.Model>[], type: boolean, 
   })
 
   const valibots = Object.values(groupByModel(isFields(modelFields))).map((fields) => {
+    const modelName = fields[0].modelName
+    const hasRelations = models.some((model) => 
+      model.fields.some((field) => 
+        field.kind === 'object' && 
+        (field.type === modelName || field.relationToFields?.includes('id'))
+      )
+    )
+    const schema = schemas(fields, comment)
+    const inferred = type ? inferInput(modelName) : ''
+    
+    // Only generate relations schema if the model has relations
+    if (hasRelations) {
+      const relatedModels = models.map((model) => ({
+        name: model.name,
+        fields: model.fields.filter((f) => f.kind === 'object' && f.type === modelName)
+      })).filter((m) => m.fields.length > 0)
+
+      const relationsSchema = `export const ${modelName}RelationsSchema = v.object({ 
+  ...${modelName}Schema.entries,
+  ${relatedModels.map((rm) => 
+    rm.fields.map((f) => `${f.name}: ${f.isList ? 'v.array(' : ''}${f.type}Schema${f.isList ? ')' : ''}`).join(',\n  ')
+  ).join(',\n  ')}
+})`
+      
+      const relationsType = type ? `\n\nexport type ${modelName}Relations = v.InferInput<typeof ${modelName}RelationsSchema>` : ''
+      
+      return {
+        generateValibotSchema: schema + '\n\n' + relationsSchema,
+        generateValibotInfer: inferred + relationsType
+      }
+    }
+    
     return {
-      generateValibotSchema: schemas(fields, comment),
-      generateValibotInfer: type ? inferInput(fields[0].modelName) : '',
+      generateValibotSchema: schema,
+      generateValibotInfer: inferred
     }
   })
 

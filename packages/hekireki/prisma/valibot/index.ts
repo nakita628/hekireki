@@ -11,7 +11,14 @@ export const UserSchema = v.object({
   name: v.pipe(v.string(), v.minLength(1), v.maxLength(50)),
 })
 
+export const UserRelationsSchema = v.object({
+  ...UserSchema.entries,
+  user: UserSchema,
+})
+
 export type User = v.InferInput<typeof UserSchema>
+
+export type UserRelations = v.InferInput<typeof UserRelationsSchema>
 
 export const PostSchema = v.object({
   /**
@@ -32,4 +39,11 @@ export const PostSchema = v.object({
   userId: v.pipe(v.string(), v.uuid()),
 })
 
+export const PostRelationsSchema = v.object({
+  ...PostSchema.entries,
+  posts: v.array(PostSchema),
+})
+
 export type Post = v.InferInput<typeof PostSchema>
+
+export type PostRelations = v.InferInput<typeof PostRelationsSchema>
