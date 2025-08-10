@@ -3,7 +3,7 @@
   "private": "true",
   "license": "MIT",
   "scripts": {
-    "deps": "rm -rf node_modules && pnpm install",
+    "deps": "mkdir -p /tmp/pnpm-store && pnpm config set store-dir /tmp/pnpm-store &&rm -rf node_modules && rm -rf pnpm-lock.yaml && rm -rf ~/.pnpm-store && pnpm store prune && pnpm install --no-prefer-frozen-lockfile",
     "build": "pnpm -F hekireki build",
     "check": "pnpm biome check --write ./",
     "typecheck": "pnpm -F hekireki typecheck",
@@ -12,7 +12,7 @@
     "release": "pnpm -F hekireki release"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.1.2",
+    "@biomejs/biome": "^2.1.4",
     "typedoc": "^0.28.7"
   }
 }
