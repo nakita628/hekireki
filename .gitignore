@@ -5,3 +5,4 @@ dist
 coverage
 copilot-instructions.md
 docs
+.DS_Store
