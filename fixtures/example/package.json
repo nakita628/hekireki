@@ -5,9 +5,10 @@
     "generate": "prisma generate"
   },
   "dependencies": {
-    "@prisma/client": "6.10.1",
-    "prisma": "^6.10.1",
+    "@prisma/client": "6.14.0",
+    "hekireki": "workspace:^",
+    "prisma": "^6.14.0",
     "valibot": "1.1.0",
-    "zod": "^3.25.67"
+    "zod": "^4.1.3"
   }
 }
