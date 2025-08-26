@@ -42,12 +42,15 @@ export function buildZodModel(model: DMMF.Model): string {
     .filter((f) => f.kind !== 'object')
     .map((f) => `${jsdoc(f.documentation)}  ${f.name}: ${zPrim(f)},`)
     .join('\n')
-  
+
   const modelAnno = extractAnno(model.documentation ?? '', '@z.')
-  const objectDef = modelAnno === 'strictObject' ? `z.strictObject({\n${fields}\n})` : 
-                   modelAnno === 'looseObject' ? `z.looseObject({\n${fields}\n})` : 
-                   `z.object({\n${fields}\n})`
-  
+  const objectDef =
+    modelAnno === 'strictObject'
+      ? `z.strictObject({\n${fields}\n})`
+      : modelAnno === 'looseObject'
+        ? `z.looseObject({\n${fields}\n})`
+        : `z.object({\n${fields}\n})`
+
   return `export const ${model.name}Schema = ${objectDef}\n\nexport type ${model.name} = z.infer<typeof ${model.name}Schema>`
 }
 
@@ -62,13 +65,16 @@ export function buildZodRelations(
       (r) => `${r.key}: ${r.isMany ? `z.array(${r.targetModel}Schema)` : `${r.targetModel}Schema`}`,
     )
     .join(', ')
-  
+
   // モデルレベルのアノテーションをチェック
   const modelAnno = extractAnno(model.documentation ?? '', '@z.')
-  const objectDef = modelAnno === 'strictObject' ? `z.strictObject({ ${base}, ${rels} })` : 
-                   modelAnno === 'looseObject' ? `z.looseObject({ ${base}, ${rels} })` : 
-                   `z.object({ ${base}, ${rels} })`
-  
+  const objectDef =
+    modelAnno === 'strictObject'
+      ? `z.strictObject({ ${base}, ${rels} })`
+      : modelAnno === 'looseObject'
+        ? `z.looseObject({ ${base}, ${rels} })`
+        : `z.object({ ${base}, ${rels} })`
+
   return `export const ${model.name}RelationsSchema = ${objectDef}\n\nexport type ${model.name}Relations = z.infer<typeof ${model.name}RelationsSchema>`
 }
 

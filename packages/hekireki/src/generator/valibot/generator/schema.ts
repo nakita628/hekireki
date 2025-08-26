@@ -2,7 +2,7 @@ import type { DMMF } from '@prisma/generator-helper'
 
 const vPrim = (f: DMMF.Field): string => {
   const anno = extractAnno(f.documentation ?? '', '@v.')
-  if (anno) return wrapV(anno, f)
+  if (anno) return wrapV(`v.${anno}`, f)
   const base =
     f.type === 'String'
       ? 'v.string()'
@@ -34,7 +34,16 @@ export function buildValibotModel(model: DMMF.Model): string {
     .filter((f) => f.kind !== 'object')
     .map((f) => `${jsdoc(f.documentation)}  ${f.name}: ${vPrim(f)},`)
     .join('\n')
-  return `export const ${model.name}Schema = v.object({\n${fields}\n})\n\nexport type ${model.name} = v.InferInput<typeof ${model.name}Schema>`
+
+  const modelAnno = extractAnno(model.documentation ?? '', '@v.')
+  const objectDef =
+    modelAnno === 'strictObject'
+      ? `v.strictObject({\n${fields}\n})`
+      : modelAnno === 'looseObject'
+        ? `v.looseObject({\n${fields}\n})`
+        : `v.object({\n${fields}\n})`
+
+  return `export const ${model.name}Schema = ${objectDef}\n\nexport type ${model.name} = v.InferInput<typeof ${model.name}Schema>`
 }
 
 export function buildValibotRelations(
@@ -48,7 +57,16 @@ export function buildValibotRelations(
       (r) => `${r.key}: ${r.isMany ? `v.array(${r.targetModel}Schema)` : `${r.targetModel}Schema`}`,
     )
     .join(', ')
-  return `export const ${model.name}RelationsSchema = v.object({ ${base}, ${rels} })\n\nexport type ${model.name}Relations = v.InferInput<typeof ${model.name}RelationsSchema>`
+
+  const modelAnno = extractAnno(model.documentation ?? '', '@v.')
+  const objectDef =
+    modelAnno === 'strictObject'
+      ? `v.strictObject({ ${base}, ${rels} })`
+      : modelAnno === 'looseObject'
+        ? `v.looseObject({ ${base}, ${rels} })`
+        : `v.object({ ${base}, ${rels} })`
+
+  return `export const ${model.name}RelationsSchema = ${objectDef}\n\nexport type ${model.name}Relations = v.InferInput<typeof ${model.name}RelationsSchema>`
 }
 
 export const extractAnno = (doc: string, tag: '@z.' | '@v.'): string | null => {
