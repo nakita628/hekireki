@@ -3,7 +3,7 @@ import type { DMMF } from '@prisma/generator-helper'
 const zPrim = (f: DMMF.Field): string => {
   // コメント注釈があれば優先
   const anno = extractAnno(f.documentation ?? '', '@z.')
-  if (anno) return wrapCardinality(anno, f)
+  if (anno) return wrapCardinality(`z.${anno}`, f)
   // 既定マッピング
   const base =
     f.type === 'String'
@@ -42,7 +42,13 @@ export function buildZodModel(model: DMMF.Model): string {
     .filter((f) => f.kind !== 'object')
     .map((f) => `${jsdoc(f.documentation)}  ${f.name}: ${zPrim(f)},`)
     .join('\n')
-  return `export const ${model.name}Schema = z.object({\n${fields}\n})\n\nexport type ${model.name} = z.infer<typeof ${model.name}Schema>`
+  
+  const modelAnno = extractAnno(model.documentation ?? '', '@z.')
+  const objectDef = modelAnno === 'strictObject' ? `z.strictObject({\n${fields}\n})` : 
+                   modelAnno === 'looseObject' ? `z.looseObject({\n${fields}\n})` : 
+                   `z.object({\n${fields}\n})`
+  
+  return `export const ${model.name}Schema = ${objectDef}\n\nexport type ${model.name} = z.infer<typeof ${model.name}Schema>`
 }
 
 export function buildZodRelations(
@@ -56,7 +62,14 @@ export function buildZodRelations(
       (r) => `${r.key}: ${r.isMany ? `z.array(${r.targetModel}Schema)` : `${r.targetModel}Schema`}`,
     )
     .join(', ')
-  return `export const ${model.name}RelationsSchema = z.object({ ${base}, ${rels} })\n\nexport type ${model.name}Relations = z.infer<typeof ${model.name}RelationsSchema>`
+  
+  // モデルレベルのアノテーションをチェック
+  const modelAnno = extractAnno(model.documentation ?? '', '@z.')
+  const objectDef = modelAnno === 'strictObject' ? `z.strictObject({ ${base}, ${rels} })` : 
+                   modelAnno === 'looseObject' ? `z.looseObject({ ${base}, ${rels} })` : 
+                   `z.object({ ${base}, ${rels} })`
+  
+  return `export const ${model.name}RelationsSchema = ${objectDef}\n\nexport type ${model.name}Relations = z.infer<typeof ${model.name}RelationsSchema>`
 }
 
 export const extractAnno = (doc: string, tag: '@z.' | '@v.'): string | null => {
@@ -64,7 +77,7 @@ export const extractAnno = (doc: string, tag: '@z.' | '@v.'): string | null => {
     .split('\n')
     .map((s) => s.trim())
     .find((l) => l.startsWith(tag))
-  return line ? line.slice(1) : null
+  return line ? line.slice(tag.length) : null
 }
 
 /**

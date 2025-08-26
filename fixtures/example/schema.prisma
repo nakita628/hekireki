@@ -29,6 +29,7 @@ generator Hekireki-Ecto {
     app = "DBSchema"
 }
 
+/// @v.strictObject
 model User {
     /// Primary key
     /// @z.uuid()
@@ -43,6 +44,7 @@ model User {
 }
 
 /// @relation User.id Post.userId one-to-many
+/// @v.looseObject
 model Post {
     /// Primary key
     /// @z.uuid()

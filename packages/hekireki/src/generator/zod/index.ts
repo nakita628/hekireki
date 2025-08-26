@@ -1,26 +1,26 @@
 #!/usr/bin/env node
 import fsp from 'node:fs/promises'
 import path from 'node:path'
-
+import type { GeneratorOptions } from '@prisma/generator-helper'
 import pkg from '@prisma/generator-helper'
-import { collectRelationProps } from './generator/relations.js'
 import { buildZodModel, buildZodRelations } from './generator/schema.js'
+import { collectRelationProps } from './generator/relations.js'
 
 const { generatorHandler } = pkg
 
 const fileHeader = `import * as z from 'zod'\n`
 
-const emit = async (outDir: string, dmmf: any) => {
+const emit = async (outDir: string, dmmf: GeneratorOptions['dmmf']) => {
   const models = dmmf.datamodel.models
   const relIndex = collectRelationProps(models)
   const relByModel = Object.groupBy(relIndex, (r) => r.model) as Record<string, typeof relIndex>
 
   // 基本スキーマを先に生成
-  const baseSchemas = models.map((m: any) => buildZodModel(m)).join('\n\n')
+  const baseSchemas = models.map((m) => buildZodModel(m)).join('\n\n')
 
   // リレーションスキーマを後に生成
   const relationSchemas = models
-    .map((m: any) => {
+    .map((m) => {
       const relProps = (relByModel[m.name] ?? []).map(({ key, targetModel, isMany }) => ({
         key,
         targetModel,
@@ -37,8 +37,8 @@ const emit = async (outDir: string, dmmf: any) => {
   await fsp.writeFile(path.join(outDir, 'index.ts'), code, 'utf8')
 }
 
-export const onGenerate = (options: { dmmf: any; output?: { value: string } }) =>
-  emit(options.output?.value ?? './zod', options.dmmf)
+export const onGenerate = (options: GeneratorOptions) =>
+  emit(options.generator.output?.value ?? './zod', options.dmmf)
 
 generatorHandler({
   onManifest() {
