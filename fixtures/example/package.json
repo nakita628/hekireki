@@ -1,5 +1,5 @@
 {
-  "name": "@apps/sample",
+  "name": "@fixtures/example",
   "type": "module",
   "scripts": {
     "generate": "prisma generate"
@@ -9,8 +9,5 @@
     "prisma": "^6.10.1",
     "valibot": "1.1.0",
     "zod": "^3.25.67"
-  },
-  "devDependencies": {
-    "hekireki": "^0.2.2"
   }
 }

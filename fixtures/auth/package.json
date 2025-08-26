@@ -1,6 +1,7 @@
 {
-  "name": "@apps/auth",
+  "name": "@fixtures/auth",
   "type": "module",
+  "private": true,
   "scripts": {
     "generate": "prisma generate"
   },
@@ -8,8 +9,5 @@
     "@prisma/client": "6.10.1",
     "prisma": "^6.10.1",
     "zod": "^3.25.67"
-  },
-  "devDependencies": {
-    "hekireki": "^0.2.1"
   }
 }

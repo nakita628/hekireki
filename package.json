@@ -14,5 +14,8 @@
   "devDependencies": {
     "@biomejs/biome": "^2.1.2",
     "typedoc": "^0.28.7"
+  },
+  "dependencies": {
+    "hekireki": "link:packages/hekireki"
   }
 }

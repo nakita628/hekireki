@@ -1,3 +1,5 @@
 packages:
-  - 'apps/*'
-  - 'packages/*'
+  - apps/*
+  - packages/*
+overrides:
+  hekireki: link:packages/hekireki
