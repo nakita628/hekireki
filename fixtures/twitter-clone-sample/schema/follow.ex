@@ -1,10 +1,17 @@
 defmodule DBSchema.Follow do
   use Ecto.Schema
-  @primary_key false
+
+  @primary_key {:id, :binary_id, autogenerate: true}
+
+  @type t :: %__MODULE__{
+          id: Ecto.UUID.t(),
+          followerId: String.t(),
+          followingId: String.t()
+        }
+
   schema "follow" do
-    field(:id, :binary_id, primary_key: true)
     field(:followerId, :string)
     field(:followingId, :string)
-    field(:createdAt, :utc_datetime)
+    timestamps(inserted_at: :createdAt, updated_at: :updated_at)
   end
 end
