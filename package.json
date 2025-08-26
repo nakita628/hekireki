@@ -12,7 +12,7 @@
     "release": "pnpm -F hekireki release"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.1.2",
+    "@biomejs/biome": "^2.2.2",
     "typedoc": "^0.28.7"
   },
   "dependencies": {
