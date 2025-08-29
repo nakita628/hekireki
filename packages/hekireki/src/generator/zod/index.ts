@@ -10,30 +10,39 @@ const { generatorHandler } = pkg
 
 const fileHeader = `import * as z from 'zod'\n`
 
-const emit = async (outDir: string, dmmf: GeneratorOptions['dmmf'], enableRelation: boolean) => {
+const buildCode = (dmmf: GeneratorOptions['dmmf'], enableRelation: boolean): string => {
   const models = dmmf.datamodel.models
   const relIndex = collectRelationProps(models)
   const relByModel = Object.groupBy(relIndex, (r) => r.model)
 
-  const baseSchemas = models.map((m) => buildZodModel(m)).join('\n\n')
+  const baseSchemas = models.map((model) => buildZodModel(model)).join('\n\n')
 
-  const relationSchemas = !enableRelation
-    ? ''
-    : models
-    .map((m) => {
-      const relProps = (relByModel[m.name] ?? []).map(({ key, targetModel, isMany }) => ({
-        key,
-        targetModel,
-        isMany,
-      }))
-      return buildZodRelations(m, relProps)
-    })
-    .filter(Boolean)
-    .join('\n\n')
+  const relationSchemas = enableRelation
+    ? models
+        .map((model) =>
+          buildZodRelations(
+            model,
+            (relByModel[model.name] ?? []).map(({ key, targetModel, isMany }) => ({
+              key,
+              targetModel,
+              isMany,
+            })),
+          ),
+        )
+        .filter((code): code is string => Boolean(code))
+        .join('\n\n')
+    : ''
 
   const body = relationSchemas ? `${baseSchemas}\n\n${relationSchemas}` : baseSchemas
-  const code = `${fileHeader}\n${body}\n`
+  return `${fileHeader}\n${body}\n`
+}
 
+const emit = async (
+  outDir: string,
+  dmmf: GeneratorOptions['dmmf'],
+  enableRelation: boolean,
+): Promise<void> => {
+  const code = buildCode(dmmf, enableRelation)
   await fsp.mkdir(outDir, { recursive: true })
   await fsp.writeFile(path.join(outDir, 'index.ts'), code, 'utf8')
 }
