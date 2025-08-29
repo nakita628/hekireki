@@ -37,7 +37,7 @@ const jsdoc = (doc?: string): string => {
   return lines.length ? `/**\n * ${lines.join('\n * ')}\n */\n` : ''
 }
 
-export function buildZodModel(model: DMMF.Model): string {
+export function buildZodModel(model: DMMF.Model): Readonly<string> {
   const fields = model.fields
     .filter((f) => f.kind !== 'object')
     .map((f) => `${jsdoc(f.documentation)}  ${f.name}: ${zPrim(f)},`)

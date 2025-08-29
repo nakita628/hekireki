@@ -74,7 +74,7 @@ export const extractAnno = (doc: string, tag: '@z.' | '@v.'): string | null => {
     .split('\n')
     .map((s) => s.trim())
     .find((l) => l.startsWith(tag))
-  return line ? line.slice(tag.length) : null // 先頭の '@z.' または '@v.' を落とす
+  return line ? line.slice(tag.length) : null
 }
 
 /**

@@ -3,7 +3,7 @@ import fsp from 'node:fs/promises'
 import path from 'node:path'
 import type { GeneratorOptions } from '@prisma/generator-helper'
 import pkg from '@prisma/generator-helper'
-import { collectRelationProps } from './generator/relations.js'
+import { collectRelationProps } from '../../shared/helper/relations.js'
 import { buildValibotModel, buildValibotRelations } from './generator/schema.js'
 
 const { generatorHandler } = pkg
@@ -13,7 +13,7 @@ const fileHeader = `import * as v from 'valibot'\n`
 const emit = async (outDir: string, dmmf: GeneratorOptions['dmmf']) => {
   const models = dmmf.datamodel.models
   const relIndex = collectRelationProps(models)
-  const relByModel = Object.groupBy(relIndex, (r) => r.model) as Record<string, typeof relIndex>
+  const relByModel = Object.groupBy(relIndex, (r) => r.model)
 
   // 基本スキーマを先に生成
   const baseSchemas = models.map((m) => buildValibotModel(m)).join('\n\n')
