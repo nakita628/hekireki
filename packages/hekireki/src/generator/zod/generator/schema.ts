@@ -22,6 +22,7 @@ export function buildZodModel(model: DMMF.Model): Readonly<string> {
 export function buildZodRelations(
   model: DMMF.Model,
   relProps: readonly { key: string; targetModel: string; isMany: boolean }[],
+  options?: Readonly<{ includeType?: boolean }>,
 ): string | null {
   if (relProps.length === 0) return null
   const base = `...${model.name}Schema.shape`
@@ -33,7 +34,10 @@ export function buildZodRelations(
 
   const objectDef = buildZodObject(`${base}, ${rels}`, model.documentation)
 
-  return `export const ${model.name}RelationsSchema = ${objectDef}\n\nexport type ${model.name}Relations = z.infer<typeof ${model.name}RelationsSchema>`
+  const typeLine = options?.includeType
+    ? `\n\nexport type ${model.name}Relations = z.infer<typeof ${model.name}RelationsSchema>`
+    : ''
+  return `export const ${model.name}RelationsSchema = ${objectDef}${typeLine}`
 }
 
 // moved to utils

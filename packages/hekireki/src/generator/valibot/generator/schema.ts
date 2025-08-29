@@ -33,6 +33,7 @@ export function buildValibotModel(model: DMMF.Model): string {
 export function buildValibotRelations(
   model: DMMF.Model,
   relProps: readonly { key: string; targetModel: string; isMany: boolean }[],
+  options?: Readonly<{ includeType?: boolean }>,
 ): string | null {
   if (relProps.length === 0) return null
   const base = `...${model.name}Schema.entries`
@@ -50,7 +51,10 @@ export function buildValibotRelations(
         ? `v.looseObject({ ${base}, ${rels} })`
         : `v.object({ ${base}, ${rels} })`
 
-  return `export const ${model.name}RelationsSchema = ${objectDef}\n\nexport type ${model.name}Relations = v.InferInput<typeof ${model.name}RelationsSchema>`
+  const typeLine = options?.includeType
+    ? `\n\nexport type ${model.name}Relations = v.InferInput<typeof ${model.name}RelationsSchema>`
+    : ''
+  return `export const ${model.name}RelationsSchema = ${objectDef}${typeLine}`
 }
 
 // extractAnno provided by utils
