@@ -4,6 +4,7 @@ import path from 'node:path'
 import type { GeneratorOptions } from '@prisma/generator-helper'
 import pkg from '@prisma/generator-helper'
 import { collectRelationProps } from '../../shared/helper/relations.js'
+import { fmt } from '../../shared/format/index.js'
 import { buildZodModel, buildZodRelations } from './generator/schema.js'
 
 const { generatorHandler } = pkg
@@ -42,7 +43,7 @@ const emit = async (
   dmmf: GeneratorOptions['dmmf'],
   enableRelation: boolean,
 ): Promise<void> => {
-  const code = buildCode(dmmf, enableRelation)
+  const code = await fmt(buildCode(dmmf, enableRelation))
   await fsp.mkdir(outDir, { recursive: true })
   await fsp.writeFile(path.join(outDir, 'index.ts'), code, 'utf8')
 }
