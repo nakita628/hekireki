@@ -76,3 +76,19 @@ export function isValibot(documentation?: string): string | null {
   const match = documentation.match(/@v\.(.+?)(?:\n|$)/)
   return match ? match[1].trim() : null
 }
+
+export const extractAnno = (doc: string, tag: '@z.' | '@v.'): string | null => {
+  const line = doc
+    .split('\n')
+    .map((s) => s.trim())
+    .find((l) => l.startsWith(tag))
+  return line ? line.slice(tag.length) : null
+}
+
+export const jsdoc = (doc?: string): string => {
+  const lines = (doc ?? '')
+    .split('\n')
+    .map((s) => s.trim())
+    .filter((l) => l && !l.startsWith('@z.') && !l.startsWith('@v.'))
+  return lines.length ? `/**\n * ${lines.join('\n * ')}\n */\n` : ''
+}

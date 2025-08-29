@@ -1,3 +1,5 @@
+import type { DMMF } from '@prisma/generator-helper'
+import { extractAnno } from '../../../shared/utils/index.js'
 /**
  * Generates a `z.infer` type for the specified model.
  *
@@ -73,4 +75,20 @@ export function isZod(documentation?: string): string | null {
   if (!documentation) return null
   const match = documentation.match(/@z\.(.+?)(?:\n|$)/)
   return match ? match[1].trim() : null
+}
+
+export { extractAnno, jsdoc } from '../../../shared/utils/index.js'
+
+export const wrapCardinality = (expr: string, field: DMMF.Field): string => {
+  const withList = field.isList ? `z.array(${expr})` : expr
+  return field.isRequired ? withList : `${withList}.optional()`
+}
+
+export const buildZodObject = (inner: string, documentation?: string): string => {
+  const anno = extractAnno(documentation ?? '', '@z.')
+  return anno === 'strictObject'
+    ? `z.strictObject({\n${inner}\n})`
+    : anno === 'looseObject'
+      ? `z.looseObject({\n${inner}\n})`
+      : `z.object({\n${inner}\n})`
 }

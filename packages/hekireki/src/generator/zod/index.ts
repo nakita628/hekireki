@@ -3,8 +3,8 @@ import fsp from 'node:fs/promises'
 import path from 'node:path'
 import type { GeneratorOptions } from '@prisma/generator-helper'
 import pkg from '@prisma/generator-helper'
-import { collectRelationProps } from '../../shared/helper/relations.js'
 import { fmt } from '../../shared/format/index.js'
+import { collectRelationProps } from '../../shared/helper/relations.js'
 import { buildZodModel, buildZodRelations } from './generator/schema.js'
 
 const { generatorHandler } = pkg
