@@ -1,10 +1,8 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 const zPrim = (f: DMMF.Field): string => {
-  // コメント注釈があれば優先
   const anno = extractAnno(f.documentation ?? '', '@z.')
   if (anno) return wrapCardinality(`z.${anno}`, f)
-  // 既定マッピング
   const base =
     f.type === 'String'
       ? f.isId ||
@@ -66,7 +64,6 @@ export function buildZodRelations(
     )
     .join(', ')
 
-  // モデルレベルのアノテーションをチェック
   const modelAnno = extractAnno(model.documentation ?? '', '@z.')
   const objectDef =
     modelAnno === 'strictObject'

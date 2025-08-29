@@ -10,14 +10,16 @@ const { generatorHandler } = pkg
 
 const fileHeader = `import * as z from 'zod'\n`
 
-const emit = async (outDir: string, dmmf: GeneratorOptions['dmmf']) => {
+const emit = async (outDir: string, dmmf: GeneratorOptions['dmmf'], enableRelation: boolean) => {
   const models = dmmf.datamodel.models
   const relIndex = collectRelationProps(models)
   const relByModel = Object.groupBy(relIndex, (r) => r.model)
 
   const baseSchemas = models.map((m) => buildZodModel(m)).join('\n\n')
 
-  const relationSchemas = models
+  const relationSchemas = !enableRelation
+    ? ''
+    : models
     .map((m) => {
       const relProps = (relByModel[m.name] ?? []).map(({ key, targetModel, isMany }) => ({
         key,
@@ -37,7 +39,11 @@ const emit = async (outDir: string, dmmf: GeneratorOptions['dmmf']) => {
 }
 
 export const onGenerate = (options: GeneratorOptions) =>
-  emit(options.generator.output?.value ?? './zod', options.dmmf)
+  emit(
+    options.generator.output?.value ?? './zod',
+    options.dmmf,
+    options.generator.config?.relation === 'true',
+  )
 
 generatorHandler({
   onManifest() {

@@ -15,12 +15,14 @@ generator Hekireki-Zod {
     provider = "hekireki-zod"
     type     = true
     comment  = true
+    relation = false
 }
 
 generator Hekireki-Valibot {
     provider = "hekireki-valibot"
     type     = true
     comment  = true
+    relation = false
 }
 
 generator Hekireki-Ecto {

@@ -10,7 +10,7 @@ const { generatorHandler } = pkg
 
 const fileHeader = `import * as v from 'valibot'\n`
 
-const emit = async (outDir: string, dmmf: GeneratorOptions['dmmf']) => {
+const emit = async (outDir: string, dmmf: GeneratorOptions['dmmf'], enableRelation: boolean) => {
   const models = dmmf.datamodel.models
   const relIndex = collectRelationProps(models)
   const relByModel = Object.groupBy(relIndex, (r) => r.model)
@@ -19,7 +19,9 @@ const emit = async (outDir: string, dmmf: GeneratorOptions['dmmf']) => {
   const baseSchemas = models.map((m) => buildValibotModel(m)).join('\n\n')
 
   // リレーションスキーマを後に生成
-  const relationSchemas = models
+  const relationSchemas = !enableRelation
+    ? ''
+    : models
     .map((m) => {
       const relProps = (relByModel[m.name] ?? []).map(({ key, targetModel, isMany }) => ({
         key,
@@ -38,7 +40,11 @@ const emit = async (outDir: string, dmmf: GeneratorOptions['dmmf']) => {
 }
 
 export const onGenerate = (options: GeneratorOptions) =>
-  emit(options.generator.output?.value ?? './valibot', options.dmmf)
+  emit(
+    options.generator.output?.value ?? './valibot',
+    options.dmmf,
+    options.generator.config?.relation === 'true',
+  )
 
 generatorHandler({
   onManifest() {
