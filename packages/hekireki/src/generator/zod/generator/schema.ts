@@ -28,11 +28,11 @@ export function buildZodRelations(
   const base = `...${model.name}Schema.shape`
   const rels = relProps
     .map(
-      (r) => `${r.key}: ${r.isMany ? `z.array(${r.targetModel}Schema)` : `${r.targetModel}Schema`}`,
+      (r) => `${r.key}:${r.isMany ? `z.array(${r.targetModel}Schema)` : `${r.targetModel}Schema`}`,
     )
-    .join(', ')
+    .join(',')
 
-  const objectDef = buildZodObject(`${base}, ${rels}`, model.documentation)
+  const objectDef = buildZodObject(`${base},${rels}`, model.documentation)
 
   const typeLine = options?.includeType
     ? `\n\nexport type ${model.name}Relations = z.infer<typeof ${model.name}RelationsSchema>`

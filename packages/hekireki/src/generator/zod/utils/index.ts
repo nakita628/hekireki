@@ -87,8 +87,8 @@ export const wrapCardinality = (expr: string, field: DMMF.Field): string => {
 export const buildZodObject = (inner: string, documentation?: string): string => {
   const anno = extractAnno(documentation ?? '', '@z.')
   return anno === 'strictObject'
-    ? `z.strictObject({\n${inner}\n})`
+    ? `z.strictObject({${inner}})`
     : anno === 'looseObject'
-      ? `z.looseObject({\n${inner}\n})`
-      : `z.object({\n${inner}\n})`
+      ? `z.looseObject({${inner}})`
+      : `z.object({${inner}})`
 }
