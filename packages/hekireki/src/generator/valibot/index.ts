@@ -13,7 +13,13 @@ const { generatorHandler } = pkg
 const buildRelationsOnly = (dmmf: GeneratorOptions['dmmf'], includeType: boolean): string => {
   const models = dmmf.datamodel.models
   const relIndex = collectRelationProps(models)
-  const relByModel = Object.groupBy(relIndex, (r) => r.model)
+  const relByModel = relIndex.reduce<
+    Record<string, Array<{ model: string; key: string; targetModel: string; isMany: boolean }>>
+  >((acc, r) => {
+    if (!acc[r.model]) acc[r.model] = []
+    acc[r.model].push(r)
+    return acc
+  }, {})
   return models
     .map((model) =>
       buildValibotRelations(
