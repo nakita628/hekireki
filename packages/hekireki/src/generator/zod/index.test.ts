@@ -1039,209 +1039,208 @@ export const PostSchema = v.object({
     expect(result).toBe(expected)
   })
 
-//   it('hekireki-valibot comment true relation true', async () => {
-//     const prisma = `generator client {
-//     provider = "prisma-client-js"
-// }
+  it('hekireki-valibot comment true relation true', async () => {
+    const prisma = `generator client {
+    provider = "prisma-client-js"
+}
 
-// datasource db {
-//     provider = "sqlite"
-//     url      = env("DATABASE_URL")
-// }
+datasource db {
+    provider = "sqlite"
+    url      = env("DATABASE_URL")
+}
 
-// generator Hekireki-Valibot {
-//     provider = "hekireki-valibot"
-//     comment  = true
-//     relation = true
-// }
+generator Hekireki-Valibot {
+    provider = "hekireki-valibot"
+    comment  = true
+    relation = true
+}
 
-// model User {
-//     /// Primary key
-//     /// @z.uuid()
-//     /// @v.pipe(v.string(), v.uuid())
-//     id    String @id @default(uuid())
-//     /// Display name
-//     /// @z.string().min(1).max(50)
-//     /// @v.pipe(v.string(), v.minLength(1), v.maxLength(50))
-//     name  String
-//     /// One-to-many relation to Post
-//     posts Post[]
-// }
+model User {
+    /// Primary key
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    id    String @id @default(uuid())
+    /// Display name
+    /// @z.string().min(1).max(50)
+    /// @v.pipe(v.string(), v.minLength(1), v.maxLength(50))
+    name  String
+    /// One-to-many relation to Post
+    posts Post[]
+}
 
-// /// @relation User.id Post.userId one-to-many
-// model Post {
-//     /// Primary key
-//     /// @z.uuid()
-//     /// @v.pipe(v.string(), v.uuid())
-//     id String @id @default(uuid())
-//     /// Article title
-//     /// @z.string().min(1).max(100)
-//     /// @v.pipe(v.string(), v.minLength(1), v.maxLength(100))
-//     title String
-//     /// Body content (no length limit)
-//     /// @z.string()
-//     /// @v.string()
-//     content String
-//     /// Foreign key referencing User.id
-//     /// @z.uuid()
-//     /// @v.pipe(v.string(), v.uuid())
-//     userId  String
-//     /// Prisma relation definition
-//     user    User   @relation(fields: [userId], references: [id])
-// }
-// `
+/// @relation User.id Post.userId one-to-many
+model Post {
+    /// Primary key
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    id String @id @default(uuid())
+    /// Article title
+    /// @z.string().min(1).max(100)
+    /// @v.pipe(v.string(), v.minLength(1), v.maxLength(100))
+    title String
+    /// Body content (no length limit)
+    /// @z.string()
+    /// @v.string()
+    content String
+    /// Foreign key referencing User.id
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    userId  String
+    /// Prisma relation definition
+    user    User   @relation(fields: [userId], references: [id])
+}
+`
 
-//     fs.mkdirSync('./prisma', { recursive: true })
-//     fs.writeFileSync('./prisma/schema.prisma', prisma, { encoding: 'utf-8' })
-//     await command()
-//     const result = fs.readFileSync('./prisma/valibot/index.ts', {
-//       encoding: 'utf-8',
-//     })
+    fs.mkdirSync('./prisma', { recursive: true })
+    fs.writeFileSync('./prisma/schema.prisma', prisma, { encoding: 'utf-8' })
+    await command()
+    const result = fs.readFileSync('./prisma/valibot/index.ts', {
+      encoding: 'utf-8',
+    })
 
-//     const expected = `import * as v from 'valibot'
+    const expected = `import * as v from 'valibot'
 
-// export const UserSchema = v.object({
-//   /**
-//    * Primary key
-//    */
-//   id: v.pipe(v.string(), v.uuid()),
-//   /**
-//    * Display name
-//    */
-//   name: v.pipe(v.string(), v.minLength(1), v.maxLength(50)),
-// })
+export const UserSchema = v.object({
+  /**
+   * Primary key
+   */
+  id: v.pipe(v.string(), v.uuid()),
+  /**
+   * Display name
+   */
+  name: v.pipe(v.string(), v.minLength(1), v.maxLength(50)),
+})
 
-// export const PostSchema = v.object({
-//   /**
-//    * Primary key
-//    */
-//   id: v.pipe(v.string(), v.uuid()),
-//   /**
-//    * Article title
-//    */
-//   title: v.pipe(v.string(), v.minLength(1), v.maxLength(100)),
-//   /**
-//    * Body content (no length limit)
-//    */
-//   content: v.string(),
-//   /**
-//    * Foreign key referencing User.id
-//    */
-//   userId: v.pipe(v.string(), v.uuid()),
-// })
-// `
-//     expect(result).toBe(expected)
-//   })
+export const PostSchema = v.object({
+  /**
+   * Primary key
+   */
+  id: v.pipe(v.string(), v.uuid()),
+  /**
+   * Article title
+   */
+  title: v.pipe(v.string(), v.minLength(1), v.maxLength(100)),
+  /**
+   * Body content (no length limit)
+   */
+  content: v.string(),
+  /**
+   * Foreign key referencing User.id
+   */
+  userId: v.pipe(v.string(), v.uuid()),
+})
 
-//   it('hekireki-zod type true comment true relation true', async () => {
-//     const prisma = `generator client {
-//     provider = "prisma-client-js"
-// }
+export const UserRelationsSchema = v.object({ ...UserSchema.entries, posts: v.array(PostSchema) })
 
-// datasource db {
-//     provider = "sqlite"
-//     url      = env("DATABASE_URL")
-// }
+export const PostRelationsSchema = v.object({ ...PostSchema.entries, user: UserSchema })
+`
+    expect(result).toBe(expected)
+  })
 
-// generator Hekireki-Zod {
-//     provider = "hekireki-zod"
-//     type     = true
-//     comment  = true
-//     relation = true
-// }
+  it('hekireki-zod type true comment true relation true', async () => {
+    const prisma = `generator client {
+    provider = "prisma-client-js"
+}
 
-// model User {
-//     /// Primary key
-//     /// @z.uuid()
-//     /// @v.pipe(v.string(), v.uuid())
-//     id    String @id @default(uuid())
-//     /// Display name
-//     /// @z.string().min(1).max(50)
-//     /// @v.pipe(v.string(), v.minLength(1), v.maxLength(50))
-//     name  String
-//     /// One-to-many relation to Post
-//     posts Post[]
-// }
+datasource db {
+    provider = "sqlite"
+    url      = env("DATABASE_URL")
+}
 
-// /// @relation User.id Post.userId one-to-many
-// model Post {
-//     /// Primary key
-//     /// @z.uuid()
-//     /// @v.pipe(v.string(), v.uuid())
-//     id String @id @default(uuid())
-//     /// Article title
-//     /// @z.string().min(1).max(100)
-//     /// @v.pipe(v.string(), v.minLength(1), v.maxLength(100))
-//     title String
-//     /// Body content (no length limit)
-//     /// @z.string()
-//     /// @v.string()
-//     content String
-//     /// Foreign key referencing User.id
-//     /// @z.uuid()
-//     /// @v.pipe(v.string(), v.uuid())
-//     userId  String
-//     /// Prisma relation definition
-//     user    User   @relation(fields: [userId], references: [id])
-// }
-// `
+generator Hekireki-Valibot {
+    provider = "hekireki-valibot"
+    type     = true
+    comment  = true
+    relation = true
+}
 
-//     fs.mkdirSync('./prisma', { recursive: true })
-//     fs.writeFileSync('./prisma/schema.prisma', prisma, { encoding: 'utf-8' })
-//     await command()
-//     const result = fs.readFileSync('./prisma/zod/index.ts', {
-//       encoding: 'utf-8',
-//     })
-//     const expected = `import * as z from 'zod'
+model User {
+    /// Primary key
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    id    String @id @default(uuid())
+    /// Display name
+    /// @z.string().min(1).max(50)
+    /// @v.pipe(v.string(), v.minLength(1), v.maxLength(50))
+    name  String
+    /// One-to-many relation to Post
+    posts Post[]
+}
 
-// export const UserSchema = z.object({
-//   /**
-//    * Primary key
-//    */
-//   id: z.uuid(),
-//   /**
-//    * Display name
-//    */
-//   name: z.string().min(1).max(50),
-// })
+/// @relation User.id Post.userId one-to-many
+model Post {
+    /// Primary key
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    id String @id @default(uuid())
+    /// Article title
+    /// @z.string().min(1).max(100)
+    /// @v.pipe(v.string(), v.minLength(1), v.maxLength(100))
+    title String
+    /// Body content (no length limit)
+    /// @z.string()
+    /// @v.string()
+    content String
+    /// Foreign key referencing User.id
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    userId  String
+    /// Prisma relation definition
+    user    User   @relation(fields: [userId], references: [id])
+}
+`
 
-// export type User = z.infer<typeof UserSchema>
+    fs.mkdirSync('./prisma', { recursive: true })
+    fs.writeFileSync('./prisma/schema.prisma', prisma, { encoding: 'utf-8' })
+    await command()
+    const result = fs.readFileSync('./prisma/valibot/index.ts', {
+      encoding: 'utf-8',
+    })
 
-// export const PostSchema = z.object({
-//   /**
-//    * Primary key
-//    */
-//   id: z.uuid(),
-//   /**
-//    * Article title
-//    */
-//   title: z.string().min(1).max(100),
-//   /**
-//    * Body content (no length limit)
-//    */
-//   content: z.string(),
-//   /**
-//    * Foreign key referencing User.id
-//    */
-//   userId: z.uuid(),
-// })
+    const expected = `import * as v from 'valibot'
 
-// export type Post = z.infer<typeof PostSchema>
+export const UserSchema = v.object({
+  /**
+   * Primary key
+   */
+  id: v.pipe(v.string(), v.uuid()),
+  /**
+   * Display name
+   */
+  name: v.pipe(v.string(), v.minLength(1), v.maxLength(50)),
+})
 
-// export const UserRelationsSchema = z.object({
-//   ...UserSchema.shape,
-//   posts: z.array(PostSchema),
-// })
+export type User = v.InferInput<typeof UserSchema>
 
-// export type UserRelations = z.infer<typeof UserRelationsSchema>
+export const PostSchema = v.object({
+  /**
+   * Primary key
+   */
+  id: v.pipe(v.string(), v.uuid()),
+  /**
+   * Article title
+   */
+  title: v.pipe(v.string(), v.minLength(1), v.maxLength(100)),
+  /**
+   * Body content (no length limit)
+   */
+  content: v.string(),
+  /**
+   * Foreign key referencing User.id
+   */
+  userId: v.pipe(v.string(), v.uuid()),
+})
 
-// export const PostRelationsSchema = z.object({
-//   ...PostSchema.shape,
-//   user: UserSchema,
-// })
+export type Post = v.InferInput<typeof PostSchema>
 
-// export type PostRelations = z.infer<typeof PostRelationsSchema>
-// `
-//     expect(result).toBe(expected)
-//   })
+export const UserRelationsSchema = v.object({ ...UserSchema.entries, posts: v.array(PostSchema) })
+
+export type UserRelations = v.InferInput<typeof UserRelationsSchema>
+
+export const PostRelationsSchema = v.object({ ...PostSchema.entries, user: UserSchema })
+
+export type PostRelations = v.InferInput<typeof PostRelationsSchema>
+`
+    expect(result).toBe(expected)
+  })
 })
