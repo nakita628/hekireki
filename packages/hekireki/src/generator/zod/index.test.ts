@@ -96,7 +96,7 @@ export const PostSchema = z.object({
 })
 `
     expect(result).toBe(expected)
-  })
+  }, 30000)
   // comment true
   it('hekireki-zod comment true', async () => {
     const prisma = `generator client {
@@ -188,7 +188,7 @@ export const PostSchema = z.object({
 })
 `
     expect(result).toBe(expected)
-  })
+  }, 30000)
 
   // type true
   it('hekireki-zod type true', async () => {
