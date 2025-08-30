@@ -1,6 +1,8 @@
 # Hekireki
 
-![img](https://raw.githubusercontent.com/nakita628/hekireki/refs/heads/main/assets/img/hekireki.png)
+<p align="center">
+  <img src="https://raw.githubusercontent.com/nakita628/hekireki/refs/heads/main/assets/img/hekireki.png"/>
+</p>
 
 **[Hekireki](https://www.npmjs.com/package/hekireki)** is a tool that generates validation schemas for Zod and Valibot, as well as ER diagrams, from [Prisma](https://www.prisma.io/) schemas annotated with comments.
 
