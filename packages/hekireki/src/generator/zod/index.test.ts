@@ -545,7 +545,7 @@ model Post {
     const result = fs.readFileSync('./prisma/zod/index.ts', {
       encoding: 'utf-8',
     })
-    
+
     const expected = `import * as z from 'zod'
 
 export const UserSchema = z.object({
