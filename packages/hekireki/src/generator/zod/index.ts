@@ -16,10 +16,16 @@ const buildRelationsOnly = (dmmf: GeneratorOptions['dmmf'], includeType: boolean
   const relByModel = Object.groupBy(relIndex, (r) => r.model)
   const blocks = models
     .map((model) => {
-      const relProps = (relByModel[model.name] ?? []).map(({ key, targetModel, isMany }) => ({ key, targetModel, isMany }))
+      const relProps = (relByModel[model.name] ?? []).map(({ key, targetModel, isMany }) => ({
+        key,
+        targetModel,
+        isMany,
+      }))
       if (relProps.length === 0) return ''
       const schema = buildZodRelations(model, relProps)
-      const typeLine = includeType ? `\n\nexport type ${model.name}Relations = z.infer<typeof ${model.name}RelationsSchema>` : ''
+      const typeLine = includeType
+        ? `\n\nexport type ${model.name}Relations = z.infer<typeof ${model.name}RelationsSchema>`
+        : ''
       return `${schema}${typeLine}`
     })
     .filter(Boolean)
@@ -27,7 +33,7 @@ const buildRelationsOnly = (dmmf: GeneratorOptions['dmmf'], includeType: boolean
 }
 
 const getString = (v: string | string[] | undefined, fallback?: string): string | undefined =>
-  typeof v === 'string' ? v : Array.isArray(v) ? v[0] ?? fallback : fallback
+  typeof v === 'string' ? v : Array.isArray(v) ? (v[0] ?? fallback) : fallback
 
 const getBool = (v: unknown, fallback = false): boolean =>
   v === true || v === 'true' || (Array.isArray(v) && v[0] === 'true') ? true : fallback
@@ -52,7 +58,9 @@ const emit = async (options: GeneratorOptions, enableRelation: boolean): Promise
 export const onGenerate = (options: GeneratorOptions) =>
   emit(
     options,
-    (options.generator.config?.relation === 'true' || (Array.isArray(options.generator.config?.relation) && options.generator.config?.relation[0] === 'true')),
+    options.generator.config?.relation === 'true' ||
+      (Array.isArray(options.generator.config?.relation) &&
+        options.generator.config?.relation[0] === 'true'),
   )
 
 generatorHandler({
