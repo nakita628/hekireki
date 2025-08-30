@@ -37,8 +37,5 @@ jobs:
       - name: Link
         run: cd packages/hekireki && pnpm link .
 
-      - name: Generate
-        run: pnpm -F hekireki generate
-
       - name: Run Coverage
         run: pnpm -F hekireki coverage
