@@ -56,12 +56,9 @@ const emit = async (options: GeneratorOptions, enableRelation: boolean): Promise
 export const onGenerate = (options: GeneratorOptions) =>
   emit(
     options,
-    (options.generator.config?.relation === 'true' ||
+    options.generator.config?.relation === 'true' ||
       (Array.isArray(options.generator.config?.relation) &&
-        options.generator.config?.relation[0] === 'true')) &&
-      (options.generator.config?.type === 'true' ||
-        (Array.isArray(options.generator.config?.type) &&
-          options.generator.config?.type[0] === 'true')),
+        options.generator.config?.relation[0] === 'true'),
   )
 
 generatorHandler({

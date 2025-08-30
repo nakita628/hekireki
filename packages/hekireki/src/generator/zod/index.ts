@@ -48,7 +48,10 @@ const emit = async (options: GeneratorOptions, enableRelation: boolean): Promise
     getBool(options.generator.config?.comment),
     zodVersion,
   )
-  const relations = enableRelation ? buildRelationsOnly(options.dmmf, true) : ''
+  // Respect the `type` flag when generating relation schemas
+  const relations = enableRelation
+    ? buildRelationsOnly(options.dmmf, getBool(options.generator.config?.type))
+    : ''
   const full = [base, relations].filter(Boolean).join('\n\n')
   const code = await fmt(full)
   await fsp.mkdir(outDir, { recursive: true })
