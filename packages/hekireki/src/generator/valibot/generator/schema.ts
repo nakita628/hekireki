@@ -39,17 +39,17 @@ export function buildValibotRelations(
   const base = `...${model.name}Schema.entries`
   const rels = relProps
     .map(
-      (r) => `${r.key}: ${r.isMany ? `v.array(${r.targetModel}Schema)` : `${r.targetModel}Schema`}`,
+      (r) => `${r.key}:${r.isMany ? `v.array(${r.targetModel}Schema)` : `${r.targetModel}Schema`}`,
     )
-    .join(', ')
+    .join(',')
 
   const modelAnno = extractAnno(model.documentation ?? '', '@v.')
   const objectDef =
     modelAnno === 'strictObject'
-      ? `v.strictObject({ ${base}, ${rels} })`
+      ? `v.strictObject({${base},${rels}})`
       : modelAnno === 'looseObject'
-        ? `v.looseObject({ ${base}, ${rels} })`
-        : `v.object({ ${base}, ${rels} })`
+        ? `v.looseObject({${base},${rels}})`
+        : `v.object({${base},${rels}})`
 
   const typeLine = options?.includeType
     ? `\n\nexport type ${model.name}Relations = v.InferInput<typeof ${model.name}RelationsSchema>`
