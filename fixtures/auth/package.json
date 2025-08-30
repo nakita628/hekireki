@@ -1,0 +1,14 @@
+{
+  "name": "@fixtures/auth",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "generate": "prisma generate"
+  },
+  "dependencies": {
+    "@prisma/client": "6.14.0",
+    "hekireki": "workspace:^",
+    "prisma": "^6.14.0",
+    "zod": "^4.1.3"
+  }
+}

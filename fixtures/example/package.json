@@ -1,0 +1,14 @@
+{
+  "name": "@fixtures/example",
+  "type": "module",
+  "scripts": {
+    "generate": "prisma generate"
+  },
+  "dependencies": {
+    "@prisma/client": "6.15.0",
+    "hekireki": "workspace:^",
+    "prisma": "^6.15.0",
+    "valibot": "1.1.0",
+    "zod": "^4.1.3"
+  }
+}

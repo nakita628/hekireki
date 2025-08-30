@@ -1,5 +1,7 @@
 # Hekireki
 
+![img](https://raw.githubusercontent.com/nakita628/hekireki/refs/heads/main/assets/img/hekireki.png)
+
 **[Hekireki](https://www.npmjs.com/package/hekireki)** is a tool that generates validation schemas for Zod and Valibot, as well as ER diagrams, from [Prisma](https://www.prisma.io/) schemas annotated with comments.
 
 ## Features
@@ -38,12 +40,14 @@ generator Hekireki-Zod {
     provider = "hekireki-zod"
     type     = true
     comment  = true
+    relation = true
 }
 
 generator Hekireki-Valibot {
     provider = "hekireki-valibot"
     type     = true
     comment  = true
+    relation = true
 }
 
 generator Hekireki-Ecto {
@@ -128,6 +132,20 @@ export const PostSchema = z.object({
 })
 
 export type Post = z.infer<typeof PostSchema>
+
+export const UserRelationsSchema = z.object({
+  ...UserSchema.shape,
+  posts: z.array(PostSchema),
+})
+
+export type UserRelations = z.infer<typeof UserRelationsSchema>
+
+export const PostRelationsSchema = z.object({
+  ...PostSchema.shape,
+  user: UserSchema,
+})
+
+export type PostRelations = z.infer<typeof PostRelationsSchema>
 ```
 
 ## Valibot
@@ -167,6 +185,14 @@ export const PostSchema = v.object({
 })
 
 export type Post = v.InferInput<typeof PostSchema>
+
+export const UserRelationsSchema = v.object({ ...UserSchema.entries, posts: v.array(PostSchema) })
+
+export type UserRelations = v.InferInput<typeof UserRelationsSchema>
+
+export const PostRelationsSchema = v.object({ ...PostSchema.entries, user: UserSchema })
+
+export type PostRelations = v.InferInput<typeof PostRelationsSchema>
 ```
 
 ## Mermaid
@@ -237,6 +263,7 @@ end
 | `type`       | `boolean` | `false`                             | Generate TypeScript types                        |
 | `comment`    | `boolean` | `false`                             | Include schema documentation                     |
 | `zod`        | `string`  | `'v4'`                              | Zod import version (`'mini'`, `'@hono/zod-openapi'`, or default `'v4'`) |
+| `relation`   | `boolean` | `false`                             | Generate relation schemas                        |
 
 ### Valibot Generator Options
 
@@ -246,6 +273,7 @@ end
 | `file`       | `string`  | `index.ts`                          | File Name                                        |
 | `type`       | `boolean` | `false`                             | Generate TypeScript types                        |
 | `comment`    | `boolean` | `false`                             | Include schema documentation                     |
+| `relation`   | `boolean` | `false`                             | Generate relation schemas                        |
 
 ### Mermaid ER Generator Options
 

@@ -1,0 +1,14 @@
+{
+  "name": "@fixtures/twitter-clone-sample",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "generate": "prisma generate"
+  },
+  "dependencies": {
+    "@prisma/client": "6.10.1",
+    "prisma": "^6.10.1",
+    "valibot": "1.1.0",
+    "zod": "^4.1.3"
+  }
+}
