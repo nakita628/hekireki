@@ -9,17 +9,15 @@ import { parseRelation } from '../utils/index.js'
  * @returns An array of Mermaid ER diagram relation lines based on `@relation` annotations.
  */
 export function extractRelations(model: DMMF.Model): readonly string[] {
-  const relations: string[] = []
-  if (model.documentation) {
-    const annotationRelations = model.documentation
-      .split('\n')
-      .map((line: string) => {
-        const relation = parseRelation(line)
-        return relation ? relationLine(relation) : null
-      })
-      .filter((line): line is string => line !== null)
-
-    relations.push(...annotationRelations)
+  if (!model.documentation) {
+    return []
   }
-  return relations
+
+  return model.documentation
+    .split('\n')
+    .map((line: string) => {
+      const relation = parseRelation(line)
+      return relation ? relationLine(relation) : null
+    })
+    .filter((line): line is string => line !== null)
 }

@@ -50,11 +50,11 @@ const buildRelationLineTestCases = [
 ]
 
 describe('buildRelationLine', () => {
-  it.each(buildRelationLineTestCases)(
-    'should return $expected for input $input',
-    ({ input, expected }) => {
-      const result = buildRelationLine(input)
-      expect(result).toBe(expected)
-    },
-  )
+  it.each(buildRelationLineTestCases)('should return $expected for input $input', ({
+    input,
+    expected,
+  }) => {
+    const result = buildRelationLine(input)
+    expect(result).toBe(expected)
+  })
 })

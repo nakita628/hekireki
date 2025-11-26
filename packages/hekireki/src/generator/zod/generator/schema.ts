@@ -1,5 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
-import { buildZodObject, extractAnno, jsdoc, wrapCardinality } from '../utils/index.js'
+import { extractAnno, jsdoc } from '../../../shared/utils/index.js'
+import { buildZodObject, wrapCardinality } from '../utils/index.js'
 
 const zPrim = (f: DMMF.Field): string => {
   const anno = extractAnno(f.documentation ?? '', '@z.')
@@ -8,7 +9,9 @@ const zPrim = (f: DMMF.Field): string => {
 
 // moved to utils
 
-export function buildZodModel(model: DMMF.Model): Readonly<string> {
+export function buildZodModel(
+  model: DMMF.Model,
+): `export const ${string}Schema = ${string}\n\nexport type ${string} = z.infer<typeof ${string}Schema>` {
   const fields = model.fields
     .filter((f) => f.kind !== 'object')
     .map((f) => `${jsdoc(f.documentation)}  ${f.name}: ${zPrim(f)},`)
@@ -21,8 +24,12 @@ export function buildZodModel(model: DMMF.Model): Readonly<string> {
 
 export function buildZodRelations(
   model: DMMF.Model,
-  relProps: readonly { key: string; targetModel: string; isMany: boolean }[],
-  options?: Readonly<{ includeType?: boolean }>,
+  relProps: readonly {
+    readonly key: string
+    readonly targetModel: string
+    readonly isMany: boolean
+  }[],
+  options?: { readonly includeType?: boolean },
 ): string | null {
   if (relProps.length === 0) return null
   const base = `...${model.name}Schema.shape`
@@ -49,6 +56,9 @@ export function buildZodRelations(
  * @param config - The configuration for the generator
  * @returns The generated Zod schema
  */
-export function schema(modelName: string, fields: string) {
+export function schema(
+  modelName: string,
+  fields: string,
+): `export const ${string}Schema = z.object({\n${string}\n})` {
   return `export const ${modelName}Schema = z.object({\n${fields}\n})`
 }

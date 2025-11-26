@@ -25,11 +25,11 @@ export function isRelationship(key: string): key is 'zero-one' | 'one' | 'zero-m
  * @returns An object containing relation details if the line is valid, otherwise `null`.
  */
 export function parseRelation(line: string): {
-  fromModel: string
-  fromField: string
-  toModel: string
-  toField: string
-  type: string
+  readonly fromModel: string
+  readonly fromField: string
+  readonly toModel: string
+  readonly toField: string
+  readonly type: string
 } | null {
   const relationRegex = /^@relation\s+(\w+)\.(\w+)\s+(\w+)\.(\w+)\s+(\w+-to-\w+)$/
   const match = line.trim().match(relationRegex)

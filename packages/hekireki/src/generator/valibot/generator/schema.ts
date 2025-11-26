@@ -32,8 +32,12 @@ export function buildValibotModel(model: DMMF.Model): string {
 
 export function buildValibotRelations(
   model: DMMF.Model,
-  relProps: readonly { key: string; targetModel: string; isMany: boolean }[],
-  options?: Readonly<{ includeType?: boolean }>,
+  relProps: readonly {
+    readonly key: string
+    readonly targetModel: string
+    readonly isMany: boolean
+  }[],
+  options?: { readonly includeType?: boolean },
 ): string | null {
   if (relProps.length === 0) return null
   const base = `...${model.name}Schema.entries`

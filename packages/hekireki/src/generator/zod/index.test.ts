@@ -30,7 +30,6 @@ describe('prisma generate zod', () => {
   
   datasource db {
       provider = "sqlite"
-      url      = env("DATABASE_URL")
   }
   
   generator Hekireki-Zod {
@@ -105,7 +104,6 @@ export const PostSchema = z.object({
   
   datasource db {
       provider = "sqlite"
-      url      = env("DATABASE_URL")
   }
   
   generator Hekireki-Zod {
@@ -198,7 +196,6 @@ export const PostSchema = z.object({
   
   datasource db {
       provider = "sqlite"
-      url      = env("DATABASE_URL")
   }
   
   generator Hekireki-Zod {
@@ -276,7 +273,6 @@ export type Post = z.infer<typeof PostSchema>
   
   datasource db {
       provider = "sqlite"
-      url      = env("DATABASE_URL")
   }
   
   generator Hekireki-Zod {
@@ -350,7 +346,6 @@ export const PostSchema = z.object({
   
   datasource db {
       provider = "sqlite"
-      url      = env("DATABASE_URL")
   }
   
   generator Hekireki-Zod {
@@ -420,7 +415,6 @@ export const PostSchema = z.object({
   
   datasource db {
       provider = "sqlite"
-      url      = env("DATABASE_URL")
   }
   
   generator Hekireki-Zod {
@@ -494,7 +488,6 @@ export const PostSchema = z.object({
 
 datasource db {
     provider = "sqlite"
-    url      = env("DATABASE_URL")
 }
 
 generator Hekireki-Zod {
@@ -583,7 +576,7 @@ export const UserRelationsSchema = z.object({ ...UserSchema.shape, posts: z.arra
 export const PostRelationsSchema = z.object({ ...PostSchema.shape, user: UserSchema })
 `
     expect(result).toBe(expected)
-  })
+  }, 30000)
 
   it('hekireki-zod type true comment true relation true', async () => {
     const prisma = `generator client {
@@ -592,7 +585,6 @@ export const PostRelationsSchema = z.object({ ...PostSchema.shape, user: UserSch
 
 datasource db {
     provider = "sqlite"
-    url      = env("DATABASE_URL")
 }
 
 generator Hekireki-Zod {
@@ -714,7 +706,6 @@ describe('prisma generate valibot', () => {
   
   datasource db {
       provider = "sqlite"
-      url      = env("DATABASE_URL")
   }
   
   generator Hekireki-Valibot {
@@ -789,7 +780,6 @@ export const PostSchema = v.object({
   
   datasource db {
       provider = "sqlite"
-      url      = env("DATABASE_URL")
   }
   
   generator Hekireki-Valibot {
@@ -883,7 +873,6 @@ export const PostSchema = v.object({
   
   datasource db {
       provider = "sqlite"
-      url      = env("DATABASE_URL")
   }
   
   generator Hekireki-Valibot {
@@ -961,7 +950,6 @@ export type Post = v.InferInput<typeof PostSchema>
   
   datasource db {
       provider = "sqlite"
-      url      = env("DATABASE_URL")
   }
   
   generator Hekireki-Valibot {
@@ -1036,7 +1024,6 @@ export const PostSchema = v.object({
 
 datasource db {
     provider = "sqlite"
-    url      = env("DATABASE_URL")
 }
 
 generator Hekireki-Valibot {
@@ -1134,7 +1121,6 @@ export const PostRelationsSchema = v.object({ ...PostSchema.entries, user: UserS
 
 datasource db {
     provider = "sqlite"
-    url      = env("DATABASE_URL")
 }
 
 generator Hekireki-Valibot {
