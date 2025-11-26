@@ -1,28 +1,23 @@
+import { schemaFromFields } from '../../../shared/utils/index.js'
 import { properties } from '../utils/index.js'
 import { schema } from './schema.js'
 
 /**
- * Generate Zod schemas
+ * Creates Zod schemas from model fields.
+ *
  * @param modelFields - The fields of the model
- * @param config - The configuration for the generator
+ * @param comment - Whether to include comments in the generated code
  * @returns The generated Zod schemas
  */
 export function schemas(
-  modelFields: {
+  modelFields: readonly {
     readonly documentation: string
     readonly modelName: string
     readonly fieldName: string
     readonly validation: string | null
-    readonly comment: string[]
+    readonly comment: readonly string[]
   }[],
   comment: boolean,
-) {
-  const modelName = modelFields[0].modelName
-  const modelDoc = modelFields[0].documentation || ''
-  const fields = properties(modelFields, comment)
-  if (!(modelDoc || !comment)) {
-    return schema(modelName, fields)
-  }
-
-  return `${schema(modelName, fields)}`
+): string {
+  return schemaFromFields(modelFields, comment, schema, properties)
 }
