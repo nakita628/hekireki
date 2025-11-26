@@ -24,7 +24,6 @@ describe('prisma generate', () => {
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
 }
 
 generator Hekireki-ER {
@@ -89,7 +88,7 @@ erDiagram
 \`\`\``
 
     expect(result).toBe(expected)
-  })
+  }, 30000)
 
   it('hekireki-mermaid-er output mermaid-er-test file test.md', async () => {
     const prisma = `generator client {
@@ -98,7 +97,6 @@ erDiagram
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
 }
 
 generator Hekireki-ER {

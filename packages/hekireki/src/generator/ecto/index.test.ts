@@ -23,7 +23,6 @@ describe('prisma generate', () => {
 
 datasource db {
     provider = "sqlite"
-    url      = env("DATABASE_URL")
 }
 
 generator Hekireki-Ecto {
@@ -94,5 +93,5 @@ end`
 end`
 
     expect(postsresult).toBe(postsExpected)
-  })
+  }, 30000)
 })

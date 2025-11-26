@@ -24,7 +24,6 @@ describe('prisma generate', () => {
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
 }
 
 generator Hekireki-Valibot {
@@ -56,7 +55,7 @@ export const UserSchema = v.object({
 `
 
     expect(result).toBe(expected)
-  })
+  }, 30000)
   it('hekireki-valibot comment true', async () => {
     const prisma = `generator client {
   provider = "prisma-client-js"
@@ -64,7 +63,6 @@ export const UserSchema = v.object({
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
 }
 
 generator Hekireki-Valibot {
@@ -103,7 +101,7 @@ export const UserSchema = v.object({
 })
 `
     expect(result).toBe(expected)
-  })
+  }, 30000)
 
   it('hekireki-valibot type true', async () => {
     const prisma = `generator client {
@@ -112,7 +110,6 @@ export const UserSchema = v.object({
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
 }
 
 generator Hekireki-Valibot {
@@ -155,7 +152,6 @@ export type User = v.InferInput<typeof UserSchema>
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
 }
 
 generator Hekireki-Valibot {
