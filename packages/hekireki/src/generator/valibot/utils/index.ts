@@ -1,11 +1,4 @@
-import {
-  properties as buildProperties,
-  extractAnno,
-  extractValidation,
-  inferTypeValibot,
-  jsdoc,
-  parseDocExcluding,
-} from '../../../shared/utils/index.js'
+import { extractAnno, jsdoc } from '../../../shared/utils/index.js'
 
 /**
  * Creates `v.InferInput` type for the specified model.
@@ -16,7 +9,7 @@ import {
 export function inferInput(
   modelName: string,
 ): `export type ${string} = v.InferInput<typeof ${string}Schema>` {
-  return inferTypeValibot(modelName)
+  return `export type ${modelName} = v.InferInput<typeof ${modelName}Schema>`
 }
 
 /**
@@ -36,7 +29,22 @@ export function properties(
   }[],
   comment: boolean,
 ): string {
-  return buildProperties(modelFields, comment, 'v')
+  const fields = modelFields
+    .filter((field) => field.validation)
+    .map((field) => {
+      const cleanDoc = field.comment
+        .filter(
+          (line) => !(line.includes('@relation') || line.includes('@v') || line.includes('@z')),
+        )
+        .join('\n')
+        .trim()
+
+      const docComment = comment && cleanDoc ? `  /**\n   * ${cleanDoc}\n   */\n` : ''
+
+      return `${docComment}  ${field.fieldName}: v.${field.validation}`
+    })
+    .join(',\n')
+  return fields
 }
 
 /**
@@ -46,7 +54,12 @@ export function properties(
  * @returns An array of non-Valibot documentation lines.
  */
 export function isValibotDocument(documentation?: string): readonly string[] {
-  return parseDocExcluding(documentation, '@v.')
+  return (
+    documentation
+      ?.split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line && !line.includes('@v.')) ?? []
+  )
 }
 
 /**
@@ -56,7 +69,9 @@ export function isValibotDocument(documentation?: string): readonly string[] {
  * @returns The Valibot expression without "@v." prefix, or null if not found.
  */
 export function isValibot(documentation?: string): string | null {
-  return extractValidation(documentation, '@v.')
+  if (!documentation) return null
+  const match = documentation.match(/@v\.(.+?)(?:\n|$)/)
+  return match ? match[1].trim() : null
 }
 
 export { extractAnno, jsdoc }

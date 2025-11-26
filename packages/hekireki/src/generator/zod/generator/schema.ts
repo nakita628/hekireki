@@ -1,5 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
-import { buildZodObject, extractAnno, jsdoc, wrapCardinality } from '../utils/index.js'
+import { extractAnno, jsdoc } from '../../../shared/utils/index.js'
+import { buildZodObject, wrapCardinality } from '../utils/index.js'
 
 const zPrim = (f: DMMF.Field): string => {
   const anno = extractAnno(f.documentation ?? '', '@z.')

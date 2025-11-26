@@ -1,12 +1,5 @@
 import type { DMMF } from '@prisma/generator-helper'
-import {
-  properties as buildProperties,
-  extractAnno,
-  extractValidation,
-  inferTypeZod,
-  jsdoc,
-  parseDocExcluding,
-} from '../../../shared/utils/index.js'
+import { extractAnno } from '../../../shared/utils/index.js'
 
 /**
  * Creates `z.infer` type for the specified model.
@@ -17,7 +10,7 @@ import {
 export function infer(
   modelName: string,
 ): `export type ${string} = z.infer<typeof ${string}Schema>` {
-  return inferTypeZod(modelName)
+  return `export type ${modelName} = z.infer<typeof ${modelName}Schema>`
 }
 
 /**
@@ -37,7 +30,22 @@ export function properties(
   }[],
   comment: boolean,
 ): string {
-  return buildProperties(modelFields, comment, 'z')
+  const fields = modelFields
+    .filter((field) => field.validation)
+    .map((field) => {
+      const cleanDoc = field.comment
+        .filter(
+          (line) => !(line.includes('@relation') || line.includes('@v') || line.includes('@z')),
+        )
+        .join('\n')
+        .trim()
+
+      const docComment = comment && cleanDoc ? `  /**\n   * ${cleanDoc}\n   */\n` : ''
+
+      return `${docComment}  ${field.fieldName}: z.${field.validation}`
+    })
+    .join(',\n')
+  return fields
 }
 
 /**
@@ -47,7 +55,12 @@ export function properties(
  * @returns An array of non-Zod documentation lines.
  */
 export function isZodDocument(documentation?: string): readonly string[] {
-  return parseDocExcluding(documentation, '@z.')
+  return (
+    documentation
+      ?.split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line && !line.includes('@z.')) ?? []
+  )
 }
 
 /**
@@ -57,10 +70,10 @@ export function isZodDocument(documentation?: string): readonly string[] {
  * @returns The Zod validation string without the "@z." prefix, or null if not found.
  */
 export function isZod(documentation?: string): string | null {
-  return extractValidation(documentation, '@z.')
+  if (!documentation) return null
+  const match = documentation.match(/@z\.(.+?)(?:\n|$)/)
+  return match ? match[1].trim() : null
 }
-
-export { extractAnno, jsdoc }
 
 /**
  * Wraps expression with array/optional based on field cardinality.
