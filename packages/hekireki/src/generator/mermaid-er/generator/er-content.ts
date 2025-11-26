@@ -1,7 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
-import { modelInfo } from '../generator/index.js'
 import { extractRelations } from '../helper/extract-relations.js'
 import { removeDuplicateRelations } from '../utils/index.js'
+import { modelInfo } from './model-info.js'
 
 // ER diagram header
 const ER_HEADER = ['```mermaid', 'erDiagram'] as const

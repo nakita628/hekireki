@@ -4,7 +4,9 @@
  * @param modelName - The name of the model.
  * @returns The generated TypeScript type definition line.
  */
-export function inferInput(modelName: string) {
+export function inferInput(
+  modelName: string,
+): `export type ${string} = v.InferInput<typeof ${string}Schema>` {
   return `export type ${modelName} = v.InferInput<typeof ${modelName}Schema>`
 }
 
@@ -54,7 +56,7 @@ export function properties(
  * @param documentation - The raw documentation string.
  * @returns An array of non-Valibot documentation lines.
  */
-export function isValibotDocument(documentation?: string): string[] {
+export function isValibotDocument(documentation?: string): readonly string[] {
   return (
     documentation
       ?.split('\n')

@@ -1,5 +1,5 @@
 import { properties } from '../utils/index.js'
-import { schema } from './index.js'
+import { schema } from './schema.js'
 
 /**
  * Generate Zod schemas
