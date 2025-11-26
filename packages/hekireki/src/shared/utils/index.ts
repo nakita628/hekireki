@@ -25,21 +25,21 @@ export function snakeCase(name: string): string {
  * @returns An object mapping each model name to its corresponding array of fields.
  */
 export function groupByModel(
-  validFields: Required<{
-    documentation: string
-    modelName: string
-    fieldName: string
-    comment: string[]
-    validation: string | null
-  }>[],
+  validFields: {
+    readonly documentation: string
+    readonly modelName: string
+    readonly fieldName: string
+    readonly comment: string[]
+    readonly validation: string | null
+  }[],
 ): Record<
   string,
   {
-    documentation: string
-    modelName: string
-    fieldName: string
-    comment: string[]
-    validation: string | null
+    readonly documentation: string
+    readonly modelName: string
+    readonly fieldName: string
+    readonly comment: string[]
+    readonly validation: string | null
   }[]
 > {
   return validFields.reduce<
@@ -70,11 +70,11 @@ export function groupByModel(
  */
 export function isFields(
   modelFields: {
-    documentation: string | undefined
-    modelName: string
-    fieldName: string
-    comment: string[]
-    validation: string | null
+    readonly documentation: string | undefined
+    readonly modelName: string
+    readonly fieldName: string
+    readonly comment: readonly string[]
+    readonly validation: string | null
   }[][],
 ) {
   return modelFields.flat().filter(

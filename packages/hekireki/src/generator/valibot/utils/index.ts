@@ -20,11 +20,11 @@ export function inferInput(modelName: string) {
  */
 export function properties(
   modelFields: {
-    documentation: string
-    modelName: string
-    fieldName: string
-    validation: string | null
-    comment: string[]
+    readonly documentation: string
+    readonly modelName: string
+    readonly fieldName: string
+    readonly validation: string | null
+    readonly comment: string[]
   }[],
   comment: boolean,
 ): string {

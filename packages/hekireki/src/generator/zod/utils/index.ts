@@ -6,7 +6,9 @@ import { extractAnno } from '../../../shared/utils/index.js'
  * @param modelName - The name of the model.
  * @returns The generated TypeScript type definition line using Zod.
  */
-export function infer(modelName: string) {
+export function infer(
+  modelName: string,
+): `export type ${string} = z.infer<typeof ${string}Schema>` {
   return `export type ${modelName} = z.infer<typeof ${modelName}Schema>`
 }
 
@@ -22,11 +24,11 @@ export function infer(modelName: string) {
  */
 export function properties(
   modelFields: {
-    documentation: string
-    modelName: string
-    fieldName: string
-    validation: string | null
-    comment: string[]
+    readonly documentation: string
+    readonly modelName: string
+    readonly fieldName: string
+    readonly validation: string | null
+    readonly comment: string[]
   }[],
   comment: boolean,
 ): string {
@@ -54,7 +56,7 @@ export function properties(
  * @param documentation - The documentation string to parse.
  * @returns An array of non-Zod documentation lines.
  */
-export function isZodDocument(documentation?: string): string[] {
+export function isZodDocument(documentation?: string): readonly string[] {
   return (
     documentation
       ?.split('\n')
