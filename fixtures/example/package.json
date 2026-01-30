@@ -2,14 +2,18 @@
   "name": "@fixtures/example",
   "type": "module",
   "scripts": {
-    "generate": "prisma generate"
+    "generate": "prisma generate",
+    "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
+    "arktype": "^2.1.29",
+    "effect": "^3.19.15",
     "prisma": "^7.0.1",
     "valibot": "^1.2.0",
-    "zod": "^4.1.13"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@typescript/native-preview": "7.0.0-dev.20260130.1",
     "hekireki": "workspace:^"
   }
 }

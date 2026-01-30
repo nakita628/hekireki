@@ -34,10 +34,16 @@ export const PostSchema = v.object({
 
 export type Post = v.InferInput<typeof PostSchema>
 
-export const UserRelationsSchema = v.object({ ...UserSchema.entries, posts: v.array(PostSchema) })
+export const UserRelationsSchema = v.object({
+  ...UserSchema.entries,
+  posts: v.array(PostSchema),
+})
 
 export type UserRelations = v.InferInput<typeof UserRelationsSchema>
 
-export const PostRelationsSchema = v.object({ ...PostSchema.entries, user: UserSchema })
+export const PostRelationsSchema = v.object({
+  ...PostSchema.entries,
+  user: UserSchema,
+})
 
 export type PostRelations = v.InferInput<typeof PostRelationsSchema>

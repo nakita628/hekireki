@@ -34,23 +34,19 @@ export function buildZodRelations(
   options?: { readonly includeType?: boolean },
 ): string | null {
   if (relProps.length === 0) return null
-  const base = `...${model.name}Schema.shape`
+  const base = `  ...${model.name}Schema.shape,`
   const rels = relProps
     .map(
-      (r) => `${r.key}:${r.isMany ? `z.array(${r.targetModel}Schema)` : `${r.targetModel}Schema`}`,
+      (r) => `  ${r.key}: ${r.isMany ? `z.array(${r.targetModel}Schema)` : `${r.targetModel}Schema`},`,
     )
-    .join(',')
+    .join('\n')
 
-  const extractor = makeAnnotationExtractor('@z.')
-  const anno = model.documentation ? extractor(model.documentation) : null
-  const wrapperType =
-    anno === 'strictObject' ? 'strictObject' : anno === 'looseObject' ? 'looseObject' : 'object'
-  const objectDef = makeZodObject(`${base},${rels}`, wrapperType)
+  const fields = `${base}\n${rels}`
 
   const typeLine = options?.includeType
     ? `\n\nexport type ${model.name}Relations = z.infer<typeof ${model.name}RelationsSchema>`
     : ''
-  return `export const ${model.name}RelationsSchema = ${objectDef}${typeLine}`
+  return `export const ${model.name}RelationsSchema = z.object({\n${fields}\n})${typeLine}`
 }
 
 /**

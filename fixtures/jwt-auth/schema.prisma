@@ -20,6 +20,18 @@ generator Hekireki-Valibot {
     relation = true
 }
 
+generator Hekireki-ArkType {
+    provider = "hekireki-arktype"
+    type     = true
+    comment  = true
+}
+
+generator Hekireki-Effect {
+    provider = "hekireki-effect"
+    type     = true
+    comment  = true
+}
+
 enum Role {
     ADMIN
     USER

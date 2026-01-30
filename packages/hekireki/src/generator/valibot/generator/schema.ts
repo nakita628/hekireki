@@ -32,23 +32,19 @@ export function buildValibotRelations(
   options?: { readonly includeType?: boolean },
 ): string | null {
   if (relProps.length === 0) return null
-  const base = `...${model.name}Schema.entries`
+  const base = `  ...${model.name}Schema.entries,`
   const rels = relProps
     .map(
-      (r) => `${r.key}:${r.isMany ? `v.array(${r.targetModel}Schema)` : `${r.targetModel}Schema`}`,
+      (r) => `  ${r.key}: ${r.isMany ? `v.array(${r.targetModel}Schema)` : `${r.targetModel}Schema`},`,
     )
-    .join(',')
+    .join('\n')
 
-  const extractor = makeAnnotationExtractor('@v.')
-  const modelAnno = model.documentation ? extractor(model.documentation) : null
-  const wrapperType =
-    modelAnno === 'strictObject' ? 'strictObject' : modelAnno === 'looseObject' ? 'looseObject' : 'object'
-  const objectDef = makeValibotObject(`${base},${rels}`, wrapperType)
+  const fields = `${base}\n${rels}`
 
   const typeLine = options?.includeType
     ? `\n\nexport type ${model.name}Relations = v.InferInput<typeof ${model.name}RelationsSchema>`
     : ''
-  return `export const ${model.name}RelationsSchema = ${objectDef}${typeLine}`
+  return `export const ${model.name}RelationsSchema = v.object({\n${fields}\n})${typeLine}`
 }
 
 /**

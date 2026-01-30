@@ -1,5 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
-import { makeDocumentParser, makeValidationExtractor, makeZodInfer } from 'utils-lab'
+import { makeValidationExtractor, makeZodInfer } from 'utils-lab'
+import { parseDocumentWithoutAnnotations } from '../../../shared/helper/document-parser.js'
 import { validationSchemas } from '../../../shared/utils/index.js'
 import { schemas } from './schemas.js'
 
@@ -28,7 +29,7 @@ export function zod(
   return validationSchemas(models, type, comment, {
     importStatement,
     annotationPrefix: '@z.',
-    parseDocument: makeDocumentParser('@z.'),
+    parseDocument: parseDocumentWithoutAnnotations,
     extractValidation: makeValidationExtractor('@z.'),
     inferType: makeZodInfer,
     schemas,

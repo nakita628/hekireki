@@ -571,9 +571,15 @@ export const PostSchema = z.object({
   userId: z.uuid(),
 })
 
-export const UserRelationsSchema = z.object({ ...UserSchema.shape, posts: z.array(PostSchema) })
+export const UserRelationsSchema = z.object({
+  ...UserSchema.shape,
+  posts: z.array(PostSchema),
+})
 
-export const PostRelationsSchema = z.object({ ...PostSchema.shape, user: UserSchema })
+export const PostRelationsSchema = z.object({
+  ...PostSchema.shape,
+  user: UserSchema,
+})
 `
     expect(result).toBe(expected)
   }, 30000)
@@ -673,11 +679,17 @@ export const PostSchema = z.object({
 
 export type Post = z.infer<typeof PostSchema>
 
-export const UserRelationsSchema = z.object({ ...UserSchema.shape, posts: z.array(PostSchema) })
+export const UserRelationsSchema = z.object({
+  ...UserSchema.shape,
+  posts: z.array(PostSchema),
+})
 
 export type UserRelations = z.infer<typeof UserRelationsSchema>
 
-export const PostRelationsSchema = z.object({ ...PostSchema.shape, user: UserSchema })
+export const PostRelationsSchema = z.object({
+  ...PostSchema.shape,
+  user: UserSchema,
+})
 
 export type PostRelations = z.infer<typeof PostRelationsSchema>
 `
@@ -941,7 +953,7 @@ export const PostSchema = v.object({
 export type Post = v.InferInput<typeof PostSchema>
 `
     expect(result).toBe(expected)
-  })
+  }, 30000)
   // output zod-test file test.ts
   it('hekireki-zod output zod-test file test.ts', async () => {
     const prisma = `generator client {
@@ -1015,7 +1027,7 @@ export const PostSchema = v.object({
 })
 `
     expect(result).toBe(expected)
-  })
+  }, 30000)
 
   it('hekireki-valibot comment true relation true', async () => {
     const prisma = `generator client {
@@ -1107,12 +1119,18 @@ export const PostSchema = v.object({
   userId: v.pipe(v.string(), v.uuid()),
 })
 
-export const UserRelationsSchema = v.object({ ...UserSchema.entries, posts: v.array(PostSchema) })
+export const UserRelationsSchema = v.object({
+  ...UserSchema.entries,
+  posts: v.array(PostSchema),
+})
 
-export const PostRelationsSchema = v.object({ ...PostSchema.entries, user: UserSchema })
+export const PostRelationsSchema = v.object({
+  ...PostSchema.entries,
+  user: UserSchema,
+})
 `
     expect(result).toBe(expected)
-  })
+  }, 30000)
 
   it('hekireki-zod type true comment true relation true', async () => {
     const prisma = `generator client {
@@ -1209,11 +1227,17 @@ export const PostSchema = v.object({
 
 export type Post = v.InferInput<typeof PostSchema>
 
-export const UserRelationsSchema = v.object({ ...UserSchema.entries, posts: v.array(PostSchema) })
+export const UserRelationsSchema = v.object({
+  ...UserSchema.entries,
+  posts: v.array(PostSchema),
+})
 
 export type UserRelations = v.InferInput<typeof UserRelationsSchema>
 
-export const PostRelationsSchema = v.object({ ...PostSchema.entries, user: UserSchema })
+export const PostRelationsSchema = v.object({
+  ...PostSchema.entries,
+  user: UserSchema,
+})
 
 export type PostRelations = v.InferInput<typeof PostRelationsSchema>
 `

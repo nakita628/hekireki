@@ -1,5 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
-import { makeDocumentParser, makeValidationExtractor, makeValibotInfer } from 'utils-lab'
+import { makeValidationExtractor, makeValibotInfer } from 'utils-lab'
+import { parseDocumentWithoutAnnotations } from '../../../shared/helper/document-parser.js'
 import { validationSchemas } from '../../../shared/utils/index.js'
 import { schemas } from './schemas.js'
 
@@ -15,7 +16,7 @@ export function valibot(models: readonly DMMF.Model[], type: boolean, comment: b
   return validationSchemas(models, type, comment, {
     importStatement: `import * as v from 'valibot'`,
     annotationPrefix: '@v.',
-    parseDocument: makeDocumentParser('@v.'),
+    parseDocument: parseDocumentWithoutAnnotations,
     extractValidation: makeValidationExtractor('@v.'),
     inferType: makeValibotInfer,
     schemas,
