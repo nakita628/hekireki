@@ -1,12 +1,14 @@
 # Hekireki
 
-**[Hekireki](https://www.npmjs.com/package/hekireki)** is a tool that generates validation schemas for Zod and Valibot, as well as ER diagrams, from [Prisma](https://www.prisma.io/) schemas annotated with comments.
+**[Hekireki](https://www.npmjs.com/package/hekireki)** is a tool that generates validation schemas for Zod, Valibot, ArkType, and Effect Schema, as well as ER diagrams, from [Prisma](https://www.prisma.io/) schemas annotated with comments.
 
 ## Features
 
 - 💎 Automatically generates [Zod](https://zod.dev/) schemas from your Prisma schema
 - 🤖 Automatically generates [Valibot](https://valibot.dev/) schemas from your Prisma schema
-- 📊 Creates [Mermaid](https://mermaid.js.org/) ER diagrams
+- 🏹 Automatically generates [ArkType](https://arktype.io/) schemas from your Prisma schema
+- ⚡ Automatically generates [Effect Schema](https://effect.website/docs/schema/introduction/) from your Prisma schema
+- 📊 Creates [Mermaid](https://mermaid.js.org/) ER diagrams with PK/FK markers
 - 🧪 Generates [Ecto](https://hexdocs.pm/ecto/Ecto.Schema.html) schemas for Elixir projects
   ⚠️ Foreign key constraints are **not** included — manage relationships in your application logic
 
@@ -21,13 +23,8 @@ npm install -D hekireki
 Prepare `schema.prisma`:
 
 ```prisma
-generator client {
-    provider = "prisma-client-js"
-}
-
 datasource db {
     provider = "sqlite"
-    url      = env("DATABASE_URL")
 }
 
 generator Hekireki-ER {
@@ -48,6 +45,18 @@ generator Hekireki-Valibot {
     relation = true
 }
 
+generator Hekireki-ArkType {
+    provider = "hekireki-arktype"
+    type     = true
+    comment  = true
+}
+
+generator Hekireki-Effect {
+    provider = "hekireki-effect"
+    type     = true
+    comment  = true
+}
+
 generator Hekireki-Ecto {
     provider = "hekireki-ecto"
     output = "schema"
@@ -58,32 +67,43 @@ model User {
     /// Primary key
     /// @z.uuid()
     /// @v.pipe(v.string(), v.uuid())
+    /// @a."string.uuid"
+    /// @e.Schema.UUID
     id    String @id @default(uuid())
     /// Display name
     /// @z.string().min(1).max(50)
     /// @v.pipe(v.string(), v.minLength(1), v.maxLength(50))
+    /// @a."1 <= string <= 50"
+    /// @e.Schema.String.pipe(Schema.minLength(1), Schema.maxLength(50))
     name  String
     /// One-to-many relation to Post
     posts Post[]
 }
 
-/// @relation User.id Post.userId one-to-many
 model Post {
     /// Primary key
     /// @z.uuid()
     /// @v.pipe(v.string(), v.uuid())
+    /// @a."string.uuid"
+    /// @e.Schema.UUID
     id String @id @default(uuid())
     /// Article title
     /// @z.string().min(1).max(100)
     /// @v.pipe(v.string(), v.minLength(1), v.maxLength(100))
+    /// @a."1 <= string <= 100"
+    /// @e.Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100))
     title String
     /// Body content (no length limit)
     /// @z.string()
     /// @v.string()
+    /// @a."string"
+    /// @e.Schema.String
     content String
     /// Foreign key referencing User.id
     /// @z.uuid()
     /// @v.pipe(v.string(), v.uuid())
+    /// @a."string.uuid"
+    /// @e.Schema.UUID
     userId  String
     /// Prisma relation definition
     user    User   @relation(fields: [userId], references: [id])
@@ -147,6 +167,7 @@ export type PostRelations = z.infer<typeof PostRelationsSchema>
 ```
 
 ## Valibot
+
 ```ts
 import * as v from 'valibot'
 
@@ -184,13 +205,75 @@ export const PostSchema = v.object({
 
 export type Post = v.InferInput<typeof PostSchema>
 
-export const UserRelationsSchema = v.object({ ...UserSchema.entries, posts: v.array(PostSchema) })
+export const UserRelationsSchema = v.object({
+  ...UserSchema.entries,
+  posts: v.array(PostSchema),
+})
 
 export type UserRelations = v.InferInput<typeof UserRelationsSchema>
 
-export const PostRelationsSchema = v.object({ ...PostSchema.entries, user: UserSchema })
+export const PostRelationsSchema = v.object({
+  ...PostSchema.entries,
+  user: UserSchema,
+})
 
 export type PostRelations = v.InferInput<typeof PostRelationsSchema>
+```
+
+## ArkType
+
+```ts
+import { type } from 'arktype'
+
+export const UserSchema = type({
+  /** Primary key */
+  id: 'string.uuid',
+  /** Display name */
+  name: '1 <= string <= 50',
+})
+
+export type User = typeof UserSchema.infer
+
+export const PostSchema = type({
+  /** Primary key */
+  id: 'string.uuid',
+  /** Article title */
+  title: '1 <= string <= 100',
+  /** Body content (no length limit) */
+  content: 'string',
+  /** Foreign key referencing User.id */
+  userId: 'string.uuid',
+})
+
+export type Post = typeof PostSchema.infer
+```
+
+## Effect Schema
+
+```ts
+import { Schema } from 'effect'
+
+export const UserSchema = Schema.Struct({
+  /** Primary key */
+  id: Schema.UUID,
+  /** Display name */
+  name: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(50)),
+})
+
+export type User = Schema.Schema.Type<typeof UserSchema>
+
+export const PostSchema = Schema.Struct({
+  /** Primary key */
+  id: Schema.UUID,
+  /** Article title */
+  title: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100)),
+  /** Body content (no length limit) */
+  content: Schema.String,
+  /** Foreign key referencing User.id */
+  userId: Schema.UUID,
+})
+
+export type Post = Schema.Schema.Type<typeof PostSchema>
 ```
 
 ## Mermaid
@@ -199,14 +282,14 @@ export type PostRelations = v.InferInput<typeof PostRelationsSchema>
 erDiagram
     User ||--}| Post : "(id) - (userId)"
     User {
-        String id "Primary key"
-        String name "Display name"
+        string id PK "Primary key"
+        string name "Display name"
     }
     Post {
-        String id "Primary key"
-        String title "Article title"
-        String content "Body content (no length limit)"
-        String userId "Foreign key referencing User.id"
+        string id PK "Primary key"
+        string title "Article title"
+        string content "Body content (no length limit)"
+        string userId FK "Foreign key referencing User.id"
     }
 ```
 
@@ -273,6 +356,24 @@ end
 | `comment`    | `boolean` | `false`                             | Include schema documentation                     |
 | `relation`   | `boolean` | `false`                             | Generate relation schemas                        |
 
+### ArkType Generator Options
+
+| Option       | Type      | Default                             | Description                                      |
+|--------------|-----------|-------------------------------------|--------------------------------------------------|
+| `output`     | `string`  | `./arktype`                         | Output directory                                 |
+| `file`       | `string`  | `index.ts`                          | File Name                                        |
+| `type`       | `boolean` | `false`                             | Generate TypeScript types                        |
+| `comment`    | `boolean` | `false`                             | Include schema documentation                     |
+
+### Effect Schema Generator Options
+
+| Option       | Type      | Default                             | Description                                      |
+|--------------|-----------|-------------------------------------|--------------------------------------------------|
+| `output`     | `string`  | `./effect`                          | Output directory                                 |
+| `file`       | `string`  | `index.ts`                          | File Name                                        |
+| `type`       | `boolean` | `false`                             | Generate TypeScript types                        |
+| `comment`    | `boolean` | `false`                             | Include schema documentation                     |
+
 ### Mermaid ER Generator Options
 
 | Option       | Type      | Default                             | Description                                      |
@@ -285,12 +386,18 @@ end
 | Option       | Type      | Default                             | Description                                      |
 |--------------|-----------|-------------------------------------|--------------------------------------------------|
 | `output`     | `string`  | `./ecto`                            | Output directory                                 |
-| `app`        | `string`  | `MyApp`                             | App Name                                        |
+| `app`        | `string`  | `MyApp`                             | App Name                                         |
 
-⚠️ WARNING: Potential Breaking Changes Without Notice
+## Annotation Prefixes
 
-This project is in **early development** and being maintained by a developer with about 2 years of experience. While I'm doing my best to create a useful tool:
+Each generator uses a specific annotation prefix in Prisma schema comments:
 
+| Generator      | Prefix | Example                                                    |
+|----------------|--------|------------------------------------------------------------|
+| Zod            | `@z.`  | `/// @z.uuid()`                                            |
+| Valibot        | `@v.`  | `/// @v.pipe(v.string(), v.uuid())`                        |
+| ArkType        | `@a.`  | `/// @a."string.uuid"`                                     |
+| Effect Schema  | `@e.`  | `/// @e.Schema.UUID`                                       |
 
 ## License
 
