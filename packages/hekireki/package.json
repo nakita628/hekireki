@@ -22,8 +22,6 @@
   "bugs": {
     "url": "https://github.com/nakita628/hekireki/issues"
   },
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
   "files": [
     "dist"
   ],
@@ -36,7 +34,7 @@
   "scripts": {
     "generate": "prisma generate",
     "deps": "rm -rf node_modules && pnpm install",
-    "build": "rm -rf ./dist/* && tsc",
+    "build": "tsdown",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "coverage": "vitest run --coverage",
@@ -44,13 +42,15 @@
   },
   "dependencies": {
     "@prisma/generator-helper": "^7.0.1",
-    "prettier": "^3.6.2"
+    "oxfmt": "^0.27.0",
+    "utils-lab": "^0.0.1"
   },
   "devDependencies": {
     "@prisma/client": "^7.0.1",
     "@types/node": "^24.10.1",
     "@vitest/coverage-v8": "^4.0.14",
     "prisma": "^7.0.1",
+    "tsdown": "^0.20.1",
     "tsx": "^4.20.6",
     "valibot": "1.2.0",
     "vitest": "^4.0.14",

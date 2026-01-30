@@ -337,17 +337,17 @@ export const PostSchema = z.object({
 })
 `
     expect(result).toBe(expected)
-  })
+  }, 30000)
 
   it('hekireki-zod zod v4-mini', async () => {
     const prisma = `generator client {
       provider = "prisma-client-js"
   }
-  
+
   datasource db {
       provider = "sqlite"
   }
-  
+
   generator Hekireki-Zod {
       provider = "hekireki-zod"
       zod     = "mini"

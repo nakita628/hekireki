@@ -1,7 +1,7 @@
-import fsp from 'node:fs/promises'
 import { join } from 'node:path'
 import type { DMMF } from '@prisma/generator-helper'
-import { snakeCase } from '../../../shared/utils/index.js'
+import { makeSnakeCase } from 'utils-lab'
+import { mkdir, writeFile } from '../../../shared/fsp/index.js'
 import { prismaTypeToEctoType } from '../utils/prisma-type-to-ecto-type.js'
 
 type PrimaryKeyConfig = {
@@ -131,7 +131,7 @@ export function ectoSchemas(models: readonly DMMF.Model[], app: string | string[
         '',
         ...typeSpecLines,
         '',
-        `  schema "${snakeCase(model.name)}" do`,
+        `  schema "${makeSnakeCase(model.name)}" do`,
         ...schemaFields,
         ...(timestampsLine ? [timestampsLine] : []),
         '  end',
@@ -148,15 +148,26 @@ export async function writeEctoSchemasToFiles(
   models: readonly DMMF.Model[],
   app: string | string[],
   outDir: string,
-) {
-  await fsp.mkdir(outDir, { recursive: true })
+): Promise<
+  | { readonly ok: true; readonly value: undefined }
+  | { readonly ok: false; readonly error: string }
+> {
+  const mkdirResult = await mkdir(outDir)
+  if (!mkdirResult.ok) {
+    return mkdirResult
+  }
 
   for (const model of models) {
     const code = ectoSchemas([model], app)
     if (!code.trim()) continue
 
-    const filePath = join(outDir, `${snakeCase(model.name)}.ex`)
-    await fsp.writeFile(filePath, code, 'utf8')
+    const filePath = join(outDir, `${makeSnakeCase(model.name)}.ex`)
+    const writeResult = await writeFile(filePath, code)
+    if (!writeResult.ok) {
+      return writeResult
+    }
     console.log(`✅ wrote ${filePath}`)
   }
+
+  return { ok: true, value: undefined }
 }

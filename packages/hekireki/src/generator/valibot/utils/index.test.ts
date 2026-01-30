@@ -1,21 +1,28 @@
 import { describe, expect, it } from 'vitest'
-import { inferInput, isValibot, isValibotDocument, properties } from './index.js'
+import {
+  makeDocumentParser,
+  makePropertiesGenerator,
+  makeValidationExtractor,
+  makeValibotInfer,
+} from 'utils-lab'
 
 // Test run
 // pnpm vitest run ./src/generator/valibot/utils/index.test.ts
 
 describe('utils', () => {
-  // inferInput
-  describe('inferInput', () => {
-    it.concurrent('inferInput test', () => {
-      const result = inferInput('User')
+  // makeValibotInfer
+  describe('makeValibotInfer', () => {
+    it.concurrent('makeValibotInfer test', () => {
+      const result = makeValibotInfer('User')
       const expected = 'export type User = v.InferInput<typeof UserSchema>'
       expect(result).toBe(expected)
     })
   })
 
-  // properties
-  describe('properties', () => {
+  // makePropertiesGenerator('v')
+  describe('makePropertiesGenerator', () => {
+    const properties = makePropertiesGenerator('v')
+
     it.concurrent('properties comment true', () => {
       const result = properties(
         [
@@ -75,8 +82,10 @@ describe('utils', () => {
   })
 
   describe('validator', () => {
-    // isValibot
-    describe('isValibotDocument', () => {
+    // makeDocumentParser('@v.')
+    describe('makeDocumentParser', () => {
+      const isValibotDocument = makeDocumentParser('@v.')
+
       it.concurrent('isValibotDocument Test', () => {
         const result = isValibotDocument(`Unique identifier for the user
 @z.uuid()
@@ -86,8 +95,10 @@ describe('utils', () => {
       })
     })
 
-    // isValibot
-    describe('isValibot', () => {
+    // makeValidationExtractor('@v.')
+    describe('makeValidationExtractor', () => {
+      const isValibot = makeValidationExtractor('@v.')
+
       it.concurrent('isValibot Test', () => {
         const result = isValibot(`Unique identifier for the user
 @z.uuid()

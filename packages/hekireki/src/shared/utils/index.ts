@@ -1,24 +1,5 @@
 import type { DMMF } from '@prisma/generator-helper'
-
-/**
- * Capitalize the first letter of a string.
- *
- * @param str - The input string.
- * @returns A new string with the first letter capitalized.
- */
-export function capitalize(str: string): string {
-  return `${str.charAt(0).toUpperCase()}${str.slice(1)}`
-}
-
-/**
- * Convert a camelCase or PascalCase string to snake_case.
- *
- * @param name - The input string in camelCase or PascalCase.
- * @returns The converted string in snake_case.
- */
-export function snakeCase(name: string): string {
-  return `${name.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase()}`
-}
+import type { ValidationLibraryConfig } from '../types/index.js'
 
 /**
  * Group valid fields by their model name.
@@ -94,29 +75,6 @@ export function isFields(
 }
 
 /**
- * Extracts annotation content from documentation lines.
- * Returns the substring after the tag (e.g. '@z.' or '@v.').
- */
-export function extractAnno(doc: string, tag: '@z.' | '@v.'): string | null {
-  const line = doc
-    .split('\n')
-    .map((s) => s.trim())
-    .find((l) => l.startsWith(tag))
-  return line ? line.slice(tag.length) : null
-}
-
-/**
- * Builds JSDoc from documentation, excluding annotation lines like '@z.' and '@v.'.
- */
-export function jsdoc(doc?: string): string {
-  const lines = (doc ?? '')
-    .split('\n')
-    .map((s) => s.trim())
-    .filter((l) => l && !l.startsWith('@z.') && !l.startsWith('@v.'))
-  return lines.length ? `/**\n * ${lines.join('\n * ')}\n */\n` : ''
-}
-
-/**
  * Creates schema from model fields.
  *
  * @param modelFields - The list of model fields with metadata.
@@ -167,22 +125,7 @@ export function validationSchemas<T extends DMMF.Model>(
   models: readonly T[],
   type: boolean,
   comment: boolean,
-  config: {
-    readonly importStatement: string
-    readonly parseDocument: (doc: string | undefined) => readonly string[]
-    readonly extractValidation: (doc: string | undefined) => string | null
-    readonly inferType: (modelName: string) => string
-    readonly schemas: (
-      fields: readonly {
-        readonly documentation: string
-        readonly modelName: string
-        readonly fieldName: string
-        readonly validation: string | null
-        readonly comment: readonly string[]
-      }[],
-      comment: boolean,
-    ) => string
-  },
+  config: ValidationLibraryConfig,
 ): string {
   const modelInfos = models.map((model) => ({
     documentation: model.documentation ?? '',

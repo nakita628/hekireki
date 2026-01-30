@@ -1,23 +1,25 @@
 import type { DMMF } from '@prisma/generator-helper'
-import { extractAnno, jsdoc } from '../../../shared/utils/index.js'
-import { buildZodObject, wrapCardinality } from '../utils/index.js'
+import { makeAnnotationExtractor, makeJsDoc, makeZodCardinality, makeZodObject } from 'utils-lab'
 
 const zPrim = (f: DMMF.Field): string => {
-  const anno = extractAnno(f.documentation ?? '', '@z.')
-  return wrapCardinality(`z.${anno}`, f)
+  const extractor = makeAnnotationExtractor('@z.')
+  const anno = extractor(f.documentation ?? '')
+  return makeZodCardinality(`z.${anno}`, f.isList, f.isRequired)
 }
-
-// moved to utils
 
 export function buildZodModel(
   model: DMMF.Model,
 ): `export const ${string}Schema = ${string}\n\nexport type ${string} = z.infer<typeof ${string}Schema>` {
   const fields = model.fields
     .filter((f) => f.kind !== 'object')
-    .map((f) => `${jsdoc(f.documentation)}  ${f.name}: ${zPrim(f)},`)
+    .map((f) => `${makeJsDoc(f.documentation, ['@z.', '@v.'])}  ${f.name}: ${zPrim(f)},`)
     .join('\n')
 
-  const objectDef = buildZodObject(fields, model.documentation)
+  const extractor = makeAnnotationExtractor('@z.')
+  const anno = model.documentation ? extractor(model.documentation) : null
+  const wrapperType =
+    anno === 'strictObject' ? 'strictObject' : anno === 'looseObject' ? 'looseObject' : 'object'
+  const objectDef = makeZodObject(fields, wrapperType)
 
   return `export const ${model.name}Schema = ${objectDef}\n\nexport type ${model.name} = z.infer<typeof ${model.name}Schema>`
 }
@@ -39,15 +41,17 @@ export function buildZodRelations(
     )
     .join(',')
 
-  const objectDef = buildZodObject(`${base},${rels}`, model.documentation)
+  const extractor = makeAnnotationExtractor('@z.')
+  const anno = model.documentation ? extractor(model.documentation) : null
+  const wrapperType =
+    anno === 'strictObject' ? 'strictObject' : anno === 'looseObject' ? 'looseObject' : 'object'
+  const objectDef = makeZodObject(`${base},${rels}`, wrapperType)
 
   const typeLine = options?.includeType
     ? `\n\nexport type ${model.name}Relations = z.infer<typeof ${model.name}RelationsSchema>`
     : ''
   return `export const ${model.name}RelationsSchema = ${objectDef}${typeLine}`
 }
-
-// moved to utils
 
 /**
  * Generate Zod schema

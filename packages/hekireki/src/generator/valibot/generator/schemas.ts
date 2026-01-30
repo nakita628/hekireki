@@ -1,5 +1,5 @@
+import { makePropertiesGenerator } from 'utils-lab'
 import { schemaFromFields } from '../../../shared/utils/index.js'
-import { properties } from '../utils/index.js'
 import { schema } from './schema.js'
 
 /**
@@ -19,5 +19,5 @@ export function schemas(
   }[],
   comment: boolean,
 ): string {
-  return schemaFromFields(modelFields, comment, schema, properties)
+  return schemaFromFields(modelFields, comment, schema, makePropertiesGenerator('v'))
 }

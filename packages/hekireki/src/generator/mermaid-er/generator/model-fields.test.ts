@@ -71,7 +71,7 @@ describe('modelFields', () => {
       isGenerated: false,
     })
 
-    const expected = ['        String id "Primary key"', '        String name "Display name"']
+    const expected = ['        string id PK "Primary key"', '        string name "Display name"']
     expect(result).toStrictEqual(expected)
   })
 })

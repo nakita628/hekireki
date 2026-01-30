@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import fsp from 'node:fs/promises'
 import type { GeneratorOptions } from '@prisma/generator-helper'
 import pkg from '@prisma/generator-helper'
+import { mkdir, writeFile } from '../../shared/fsp/index.js'
 import { erContent } from './generator/er-content.js'
 
 const { generatorHandler } = pkg
@@ -11,16 +11,21 @@ export async function main(options: GeneratorOptions): Promise<void> {
   const output = options.generator.output?.value ?? './mermaid-er'
   const file = options.generator.config?.file ?? 'ER.md'
 
-  // Handle case where output is a file path (contains extension)
   const isOutputFile = output.includes('.')
   const outputDir = isOutputFile ? '.' : output
   const outputFile = isOutputFile ? output : `${output}/${file}`
 
-  await fsp.mkdir(outputDir, { recursive: true })
-  await fsp.writeFile(outputFile, content.join('\n'), { encoding: 'utf-8' })
+  const mkdirResult = await mkdir(outputDir)
+  if (!mkdirResult.ok) {
+    throw new Error(`Failed to create directory: ${mkdirResult.error}`)
+  }
+
+  const writeResult = await writeFile(outputFile, content.join('\n'))
+  if (!writeResult.ok) {
+    throw new Error(`Failed to write file: ${writeResult.error}`)
+  }
 }
 
-// prisma generator handler
 generatorHandler({
   onManifest() {
     return {

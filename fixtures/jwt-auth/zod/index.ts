@@ -209,3 +209,49 @@ export const PasswordResetSchema = z.object({
 })
 
 export type PasswordReset = z.infer<typeof PasswordResetSchema>
+
+export const UserRelationsSchema = z.object({
+  ...UserSchema.shape,
+  oauthAccounts: z.array(OAuthAccountSchema),
+  twoFactorSetting: TwoFactorSettingSchema,
+  refreshTokens: z.array(RefreshTokenSchema),
+  emailVerifications: z.array(EmailVerificationSchema),
+  passwordResets: z.array(PasswordResetSchema),
+})
+
+export type UserRelations = z.infer<typeof UserRelationsSchema>
+
+export const OAuthAccountRelationsSchema = z.object({
+  ...OAuthAccountSchema.shape,
+  user: UserSchema,
+})
+
+export type OAuthAccountRelations = z.infer<typeof OAuthAccountRelationsSchema>
+
+export const TwoFactorSettingRelationsSchema = z.object({
+  ...TwoFactorSettingSchema.shape,
+  user: UserSchema,
+})
+
+export type TwoFactorSettingRelations = z.infer<typeof TwoFactorSettingRelationsSchema>
+
+export const RefreshTokenRelationsSchema = z.object({
+  ...RefreshTokenSchema.shape,
+  user: UserSchema,
+})
+
+export type RefreshTokenRelations = z.infer<typeof RefreshTokenRelationsSchema>
+
+export const EmailVerificationRelationsSchema = z.object({
+  ...EmailVerificationSchema.shape,
+  user: UserSchema,
+})
+
+export type EmailVerificationRelations = z.infer<typeof EmailVerificationRelationsSchema>
+
+export const PasswordResetRelationsSchema = z.object({
+  ...PasswordResetSchema.shape,
+  user: UserSchema,
+})
+
+export type PasswordResetRelations = z.infer<typeof PasswordResetRelationsSchema>

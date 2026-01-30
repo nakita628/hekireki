@@ -1,13 +1,8 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-generator client {
-  provider = "prisma-client-js"
-}
-
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
 }
 
 generator Hekireki-ER {
@@ -27,12 +22,6 @@ generator Hekireki-Ecto {
 }
 
 
-/// @relation User.id Post.userId one-to-many
-/// @relation User.id Comment.userId one-to-many
-/// @relation User.id Notification.userId one-to-many
-/// @relation User.id Follow.followerId one-to-many
-/// @relation User.id Follow.followingId one-to-many
-/// @relation User.id Like.userId one-to-many
 model User {
   /// Unique identifier for the user
   /// @z.uuid()
@@ -95,10 +84,10 @@ model Post {
   /// @z.string().min(1).max(1000)
   body      String
   /// Timestamp when the post was created
-  /// z.iso.datetime()
+  /// @z.iso.datetime()
   createdAt DateTime  @default(now())
   /// Timestamp when the post was last updated
-  /// z.iso.datetime()
+  /// @z.iso.datetime()
   updatedAt DateTime  @updatedAt
   /// ID of the user who created the post
   /// @z.uuid()
@@ -112,34 +101,24 @@ model Post {
 }
 
 model Follow {
-  /// Unique identifier for the follow relationship
-  /// @z.uuid()
-  id          String   @id @default(uuid())
   /// ID of the user who is following
-  /// @z.string().uuid()
+  /// @z.uuid()
   followerId  String
   /// ID of the user being followed
-  /// @z.string().uuid()
+  /// @z.uuid()
   followingId String
   /// Timestamp when the follow relationship was created
-  /// z.iso.datetime()
+  /// @z.iso.datetime()
   createdAt   DateTime @default(now())
-  // Relationships
   /// User who created the follow relationship (the follower)
-  follower    User     @relation("Following", fields: [followerId], references: [id], onDelete: Cascade) // User who is following
+  follower    User     @relation("Following", fields: [followerId], references: [id], onDelete: Cascade)
   /// User being followed
-  following   User     @relation("Follower", fields: [followingId], references: [id], onDelete: Cascade) // User being followed
+  following   User     @relation("Follower", fields: [followingId], references: [id], onDelete: Cascade)
 
-  // Constraints
-  @@unique([followerId, followingId]) // Ensures a user can't follow another user multiple times
-  @@index([followerId]) // Index for better query performance
-  @@index([followingId]) // Index for better query performance
+  @@id([followerId, followingId])
 }
 
 model Like {
-  /// Unique identifier for the like
-  /// @z.uuid()
-  id        String   @id @default(uuid())
   /// ID of the user who liked the post
   /// @z.uuid()
   userId    String
@@ -149,15 +128,12 @@ model Like {
   /// Timestamp when the like was created
   /// @z.iso.datetime()
   createdAt DateTime @default(now())
-  // Relationships
   /// User who liked the post
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade) // Reference to the user who liked
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   /// Post that was liked
-  post Post @relation(fields: [postId], references: [id], onDelete: Cascade) // Reference to the liked post
-  // Constraints
-  @@unique([userId, postId]) // Ensures a user can't like the same post multiple times
-  @@index([userId]) // Index for better query performance
-  @@index([postId]) // Index for better query performance
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@id([userId, postId])
 }
 
 model Comment {

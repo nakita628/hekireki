@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import {
-  excludeManyToOneRelations,
-  isRelationship,
-  parseRelation,
-  removeDuplicateRelations,
-} from '.'
+import { isRelationshipType } from 'utils-lab'
+import { excludeManyToOneRelations, parseRelation, removeDuplicateRelations } from '.'
 
 // Test run
 // pnpm vitest run ./src/generator/mermaid-er/utils/index.test.ts
@@ -41,26 +37,26 @@ describe('utils', () => {
     })
   })
 
-  // isRelationship
-  describe('isRelationship', () => {
-    it.concurrent(`isRelationship > should return true for input 'zero-one' `, () => {
-      const result = isRelationship('zero-one')
+  // isRelationshipType (from utils-lab)
+  describe('isRelationshipType', () => {
+    it.concurrent(`isRelationshipType > should return true for input 'zero-one' `, () => {
+      const result = isRelationshipType('zero-one')
       expect(result).toBe(true)
     })
-    it.concurrent(`isRelationship > should return true for input 'one' `, () => {
-      const result = isRelationship('one')
+    it.concurrent(`isRelationshipType > should return true for input 'one' `, () => {
+      const result = isRelationshipType('one')
       expect(result).toBe(true)
     })
-    it.concurrent(`isRelationship > should return true for input 'zero-many'`, () => {
-      const result = isRelationship('zero-many')
+    it.concurrent(`isRelationshipType > should return true for input 'zero-many'`, () => {
+      const result = isRelationshipType('zero-many')
       expect(result).toBe(true)
     })
-    it.concurrent(`isRelationship > should return true for input 'many'`, () => {
-      const result = isRelationship('many')
+    it.concurrent(`isRelationshipType > should return true for input 'many'`, () => {
+      const result = isRelationshipType('many')
       expect(result).toBe(true)
     })
-    it.concurrent(`isRelationship > should return false for input 'invalid-key'`, () => {
-      const result = isRelationship('invalid-key')
+    it.concurrent(`isRelationshipType > should return false for input 'invalid-key'`, () => {
+      const result = isRelationshipType('invalid-key')
       expect(result).toBe(false)
     })
   })

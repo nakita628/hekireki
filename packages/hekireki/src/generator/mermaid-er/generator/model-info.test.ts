@@ -73,8 +73,8 @@ describe('modelInfo', () => {
 
     const expected = [
       '    User {',
-      '        String id "Primary key"',
-      '        String name "Display name"',
+      '        string id PK "Primary key"',
+      '        string name "Display name"',
       '    }',
     ]
     expect(result).toStrictEqual(expected)

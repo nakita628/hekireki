@@ -13,7 +13,23 @@ describe('relationLine', () => {
       toField: 'userId',
       type: 'one-to-many',
     })
-    const expected = '    User ||--}| Post : "(id) - (userId)"'
-    expect(result).toBe(expected)
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value).toBe('    User ||--}| Post : "(id) - (userId)"')
+    }
+  })
+
+  it.concurrent('relationLine returns error for unknown type', () => {
+    const result = relationLine({
+      fromModel: 'User',
+      fromField: 'id',
+      toModel: 'Post',
+      toField: 'userId',
+      type: 'unknown-type',
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error).toBe('Invalid input format: unknown-type')
+    }
   })
 })

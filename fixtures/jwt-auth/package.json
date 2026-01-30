@@ -1,0 +1,12 @@
+{
+  "name": "jwt-auth",
+  "type": "module",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "generate": "prisma generate"
+  },
+  "devDependencies": {
+    "prisma": "^7.0.1"
+  }
+}
