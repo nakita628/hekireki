@@ -149,8 +149,7 @@ export async function writeEctoSchemasToFiles(
   app: string | string[],
   outDir: string,
 ): Promise<
-  | { readonly ok: true; readonly value: undefined }
-  | { readonly ok: false; readonly error: string }
+  { readonly ok: true; readonly value: undefined } | { readonly ok: false; readonly error: string }
 > {
   const mkdirResult = await mkdir(outDir)
   if (!mkdirResult.ok) {

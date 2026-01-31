@@ -1,0 +1,15 @@
+Table User {
+  id String [pk, note: 'Primary key']
+  name String [note: 'Display name']
+  posts Post [note: 'One-to-many relation to Post']
+}
+
+Table Post {
+  id String [pk, note: 'Primary key']
+  title String [note: 'Article title']
+  content String [note: 'Body content (no length limit)']
+  userId String [note: 'Foreign key referencing User.id']
+  user User [note: 'Prisma relation definition']
+}
+
+Ref Post_userId_User_id_fk: Post.userId > User.id

@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
 import { makeCapitalized, makeSnakeCase } from 'utils-lab'
+import { describe, expect, it } from 'vitest'
 import { groupByModel, isFields } from '.'
 
 // Test run

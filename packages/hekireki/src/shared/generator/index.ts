@@ -32,8 +32,7 @@ export async function schemaGenerator(
     models: readonly DMMF.Model[],
   ) => readonly { model: string; key: string; targetModel: string; isMany: boolean }[],
 ): Promise<
-  | { readonly ok: true; readonly value: undefined }
-  | { readonly ok: false; readonly error: string }
+  { readonly ok: true; readonly value: undefined } | { readonly ok: false; readonly error: string }
 > {
   const models = dmmf.datamodel.models
   const relIndex = collectRelationProps(models)

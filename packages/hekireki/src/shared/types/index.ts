@@ -5,4 +5,3 @@ export type {
   ObjectWrapperType,
   ValidationLibraryConfig,
 } from './validation-library.js'
-

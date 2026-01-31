@@ -1,0 +1,105 @@
+Enum Role {
+  ADMIN
+  USER
+  GUEST
+}
+
+Enum OAuthProvider {
+  GOOGLE
+  GITHUB
+  FACEBOOK
+  TWITTER
+  APPLE
+}
+
+Enum TwoFactorMethod {
+  TOTP
+  SMS
+  EMAIL
+}
+
+Table User {
+  id String [pk, note: 'User ID']
+  email String [unique, note: 'Email address']
+  passwordHash String [note: 'Hashed password (null for OAuth-only users)']
+  name String [note: 'Display name']
+  avatarUrl String [note: 'Profile image URL']
+  role Role [note: 'User role']
+  emailVerified Boolean [note: 'Email verification status']
+  isActive Boolean [note: 'Account active status']
+  createdAt DateTime [note: 'Account creation timestamp']
+  updatedAt DateTime [note: 'Last update timestamp']
+  lastLoginAt DateTime [note: 'Last login timestamp']
+  oauthAccounts OAuthAccount [note: 'OAuth accounts']
+  twoFactorSetting TwoFactorSetting [note: 'Two-factor authentication setting']
+  refreshTokens RefreshToken [note: 'Refresh tokens']
+  emailVerifications EmailVerification [note: 'Email verifications']
+  passwordResets PasswordReset [note: 'Password resets']
+}
+
+Table OAuthAccount {
+  id String [pk, note: 'OAuth account ID']
+  userId String [note: 'User ID']
+  provider OAuthProvider [note: 'OAuth provider']
+  providerAccountId String [note: 'Provider account ID']
+  accessToken String [note: 'Access token from provider']
+  refreshToken String [note: 'Refresh token from provider']
+  expiresAt DateTime [note: 'Token expiration timestamp']
+  createdAt DateTime [note: 'Account creation timestamp']
+  user User [note: 'User relation']
+}
+
+Table TwoFactorSetting {
+  id String [pk, note: '2FA setting ID']
+  userId String [unique, note: 'User ID']
+  enabled Boolean [note: '2FA enabled status']
+  method TwoFactorMethod [note: '2FA method']
+  totpSecret String [note: 'TOTP secret (encrypted)']
+  phoneNumber String [note: 'Phone number for SMS (E.164 format)']
+  backupCodes String [note: 'Backup codes (hashed, JSON array)']
+  verifiedAt DateTime [note: 'Last verified timestamp']
+  createdAt DateTime [note: 'Creation timestamp']
+  updatedAt DateTime [note: 'Last update timestamp']
+  user User [note: 'User relation']
+}
+
+Table RefreshToken {
+  id String [pk, note: 'Refresh token ID']
+  userId String [note: 'User ID']
+  tokenHash String [unique, note: 'Token hash (SHA-256)']
+  deviceInfo String [note: 'Device/client identifier']
+  ipAddress String [note: 'IP address at creation']
+  expiresAt DateTime [note: 'Token expiration timestamp']
+  createdAt DateTime [note: 'Token creation timestamp']
+  revoked Boolean [note: 'Revocation status']
+  user User [note: 'User relation']
+}
+
+Table EmailVerification {
+  id String [pk, note: 'Verification ID']
+  userId String [note: 'User ID']
+  tokenHash String [unique, note: 'Verification token (hashed)']
+  expiresAt DateTime [note: 'Token expiration timestamp']
+  createdAt DateTime [note: 'Creation timestamp']
+  user User [note: 'User relation']
+}
+
+Table PasswordReset {
+  id String [pk, note: 'Reset ID']
+  userId String [note: 'User ID']
+  tokenHash String [unique, note: 'Reset token (hashed)']
+  expiresAt DateTime [note: 'Token expiration timestamp']
+  used Boolean [note: 'Used status']
+  createdAt DateTime [note: 'Creation timestamp']
+  user User [note: 'User relation']
+}
+
+Ref OAuthAccount_userId_User_id_fk: OAuthAccount.userId > User.id
+
+Ref TwoFactorSetting_userId_User_id_fk: TwoFactorSetting.userId - User.id
+
+Ref RefreshToken_userId_User_id_fk: RefreshToken.userId > User.id
+
+Ref EmailVerification_userId_User_id_fk: EmailVerification.userId > User.id
+
+Ref PasswordReset_userId_User_id_fk: PasswordReset.userId > User.id

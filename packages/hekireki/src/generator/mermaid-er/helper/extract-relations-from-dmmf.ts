@@ -22,7 +22,11 @@ export function extractRelationsFromDmmf(models: readonly DMMF.Model[]): readonl
   for (const model of models) {
     for (const field of model.fields) {
       // Skip non-relation fields
-      if (field.kind !== 'object' || !field.relationFromFields || field.relationFromFields.length === 0) {
+      if (
+        field.kind !== 'object' ||
+        !field.relationFromFields ||
+        field.relationFromFields.length === 0
+      ) {
         continue
       }
 

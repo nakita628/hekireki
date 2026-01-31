@@ -32,6 +32,10 @@ generator Hekireki-Effect {
     comment  = true
 }
 
+generator Hekireki-DBML {
+    provider = "hekireki-dbml"
+}
+
 generator Hekireki-Ecto {
     provider = "hekireki-ecto"
     output = "schema"

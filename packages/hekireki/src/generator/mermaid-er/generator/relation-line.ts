@@ -12,9 +12,7 @@ export function relationLine(relation: {
   fromField: string
   toField: string
   type: string
-}):
-  | { readonly ok: true; readonly value: string }
-  | { readonly ok: false; readonly error: string } {
+}): { readonly ok: true; readonly value: string } | { readonly ok: false; readonly error: string } {
   const result = buildRelationLine(relation.type)
 
   if (!result.ok) {

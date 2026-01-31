@@ -21,6 +21,10 @@ generator Hekireki-Ecto {
   app = "DBSchema"
 }
 
+generator Hekireki-DBML {
+  provider = "hekireki-dbml"
+}
+
 
 model User {
   /// Unique identifier for the user

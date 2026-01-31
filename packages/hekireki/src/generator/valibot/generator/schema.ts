@@ -1,5 +1,10 @@
 import type { DMMF } from '@prisma/generator-helper'
-import { makeAnnotationExtractor, makeJsDoc, makeValibotCardinality, makeValibotObject } from 'utils-lab'
+import {
+  makeAnnotationExtractor,
+  makeJsDoc,
+  makeValibotCardinality,
+  makeValibotObject,
+} from 'utils-lab'
 
 const vPrim = (f: DMMF.Field): string => {
   const extractor = makeAnnotationExtractor('@v.')
@@ -16,7 +21,11 @@ export function buildValibotModel(model: DMMF.Model): string {
   const extractor = makeAnnotationExtractor('@v.')
   const modelAnno = model.documentation ? extractor(model.documentation) : null
   const wrapperType =
-    modelAnno === 'strictObject' ? 'strictObject' : modelAnno === 'looseObject' ? 'looseObject' : 'object'
+    modelAnno === 'strictObject'
+      ? 'strictObject'
+      : modelAnno === 'looseObject'
+        ? 'looseObject'
+        : 'object'
   const objectDef = makeValibotObject(fields, wrapperType)
 
   return `export const ${model.name}Schema = ${objectDef}\n\nexport type ${model.name} = v.InferInput<typeof ${model.name}Schema>`
@@ -35,7 +44,8 @@ export function buildValibotRelations(
   const base = `  ...${model.name}Schema.entries,`
   const rels = relProps
     .map(
-      (r) => `  ${r.key}: ${r.isMany ? `v.array(${r.targetModel}Schema)` : `${r.targetModel}Schema`},`,
+      (r) =>
+        `  ${r.key}: ${r.isMany ? `v.array(${r.targetModel}Schema)` : `${r.targetModel}Schema`},`,
     )
     .join('\n')
 

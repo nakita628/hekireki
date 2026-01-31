@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
 import { isRelationshipType } from 'utils-lab'
+import { describe, expect, it } from 'vitest'
 import { excludeManyToOneRelations, parseRelation, removeDuplicateRelations } from '.'
 
 // Test run

@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'vitest'
 import {
   makeDocumentParser,
   makePropertiesGenerator,
   makeValidationExtractor,
   makeZodInfer,
 } from 'utils-lab'
+import { describe, expect, it } from 'vitest'
 
 // Test run
 // pnpm vitest run ./src/generator/zod/utils/index.test.ts

@@ -16,7 +16,10 @@ function effectPropertiesGenerator(
 ): string {
   return fields
     .map((field) => {
-      const commentLines = comment && field.comment.length > 0 ? field.comment.map((c) => `  /** ${c} */`).join('\n') + '\n' : ''
+      const commentLines =
+        comment && field.comment.length > 0
+          ? `${field.comment.map((c) => `  /** ${c} */`).join('\n')}\n`
+          : ''
       return `${commentLines}  ${field.fieldName}: ${field.validation ?? 'Schema.Unknown'},`
     })
     .join('\n')

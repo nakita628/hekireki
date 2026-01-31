@@ -10,7 +10,9 @@ const ANNOTATION_PREFIXES = ['@z.', '@v.', '@a.', '@e.'] as const
  * @param documentation - The documentation string from Prisma field
  * @returns Array of comment lines without any annotations
  */
-export function parseDocumentWithoutAnnotations(documentation: string | undefined): readonly string[] {
+export function parseDocumentWithoutAnnotations(
+  documentation: string | undefined,
+): readonly string[] {
   if (!documentation) return []
 
   return documentation

@@ -13,9 +13,9 @@ const RELATIONSHIPS = {
  * @param input - A relationship string like `"one-to-many"` or `"zero-one-to-one-optional"`.
  * @returns A Result containing the Mermaid connector string (e.g., `"||--}|"` or `"|o..}o"`), or an error.
  */
-export function buildRelationLine(input: string):
-  | { readonly ok: true; readonly value: string }
-  | { readonly ok: false; readonly error: string } {
+export function buildRelationLine(
+  input: string,
+): { readonly ok: true; readonly value: string } | { readonly ok: false; readonly error: string } {
   const parts = input.split('-to-')
   if (parts.length !== 2) {
     return { ok: false, error: `Invalid input format: ${input}` }

@@ -1,5 +1,5 @@
 import type { DMMF } from '@prisma/generator-helper'
-import { makeValidationExtractor, makeValibotInfer } from 'utils-lab'
+import { makeValibotInfer, makeValidationExtractor } from 'utils-lab'
 import { parseDocumentWithoutAnnotations } from '../../../shared/helper/document-parser.js'
 import { validationSchemas } from '../../../shared/utils/index.js'
 import { schemas } from './schemas.js'

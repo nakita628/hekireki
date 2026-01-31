@@ -37,7 +37,8 @@ export function buildZodRelations(
   const base = `  ...${model.name}Schema.shape,`
   const rels = relProps
     .map(
-      (r) => `  ${r.key}: ${r.isMany ? `z.array(${r.targetModel}Schema)` : `${r.targetModel}Schema`},`,
+      (r) =>
+        `  ${r.key}: ${r.isMany ? `z.array(${r.targetModel}Schema)` : `${r.targetModel}Schema`},`,
     )
     .join('\n')
 

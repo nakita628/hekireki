@@ -32,6 +32,10 @@ generator Hekireki-Effect {
     comment  = true
 }
 
+generator Hekireki-DBML {
+    provider = "hekireki-dbml"
+}
+
 enum Role {
     ADMIN
     USER

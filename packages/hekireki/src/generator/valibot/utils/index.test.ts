@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'vitest'
 import {
   makeDocumentParser,
   makePropertiesGenerator,
-  makeValidationExtractor,
   makeValibotInfer,
+  makeValidationExtractor,
 } from 'utils-lab'
+import { describe, expect, it } from 'vitest'
 
 // Test run
 // pnpm vitest run ./src/generator/valibot/utils/index.test.ts

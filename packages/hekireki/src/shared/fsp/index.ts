@@ -6,9 +6,10 @@ import fsp from 'node:fs/promises'
  * @param dir - Directory path to create.
  * @returns A `Result` that is `ok` on success, otherwise an error message.
  */
-export async function mkdir(dir: string): Promise<
-  | { readonly ok: true; readonly value: undefined }
-  | { readonly ok: false; readonly error: string }
+export async function mkdir(
+  dir: string,
+): Promise<
+  { readonly ok: true; readonly value: undefined } | { readonly ok: false; readonly error: string }
 > {
   try {
     await fsp.mkdir(dir, { recursive: true })
@@ -25,9 +26,11 @@ export async function mkdir(dir: string): Promise<
  * @param data - Text data to write.
  * @returns A `Result` that is `ok` on success, otherwise an error message.
  */
-export async function writeFile(path: string, data: string): Promise<
-  | { readonly ok: true; readonly value: undefined }
-  | { readonly ok: false; readonly error: string }
+export async function writeFile(
+  path: string,
+  data: string,
+): Promise<
+  { readonly ok: true; readonly value: undefined } | { readonly ok: false; readonly error: string }
 > {
   try {
     await fsp.writeFile(path, data, 'utf-8')

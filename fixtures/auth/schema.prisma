@@ -17,6 +17,10 @@ generator Hekireki-ER {
   provider = "hekireki-mermaid-er"
 }
 
+generator Hekireki-DBML {
+  provider = "hekireki-dbml"
+}
+
 enum UserRole {
   ADMIN
   USER
