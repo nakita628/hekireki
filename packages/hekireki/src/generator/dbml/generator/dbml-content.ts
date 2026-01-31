@@ -204,7 +204,7 @@ function getRelationOperator(
 /**
  * Combine keys for composite foreign keys
  */
-function combineKeys(keys: string[]): string {
+function combineKeys(keys: readonly string[]): string {
   return keys.length > 1 ? `(${keys.join(', ')})` : keys[0]
 }
 

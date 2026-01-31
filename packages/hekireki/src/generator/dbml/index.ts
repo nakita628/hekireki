@@ -7,14 +7,22 @@ import { dbmlContent } from './generator/dbml-content.js'
 const { generatorHandler } = pkg
 
 /**
+ * Get string value from config
+ */
+function getStringValue(value: string | string[] | undefined): string | undefined {
+  if (value === undefined) return undefined
+  return Array.isArray(value) ? value[0] : value
+}
+
+/**
  * Get boolean option from config
  */
 function getBoolOption(
-  config: Record<string, string>,
+  config: Record<string, string | string[] | undefined>,
   key: string,
   defaultValue: boolean,
 ): boolean {
-  const value = config[key]
+  const value = getStringValue(config[key])
   if (value === undefined) return defaultValue
   return value.toLowerCase() !== 'false'
 }
@@ -27,7 +35,7 @@ export async function main(options: GeneratorOptions): Promise<void> {
   const content = dbmlContent(options.dmmf.datamodel, mapToDbSchema, includeRelationFields)
 
   const output = options.generator.output?.value ?? './dbml'
-  const file = config.file ?? 'schema.dbml'
+  const file = getStringValue(config.file) ?? 'schema.dbml'
 
   const isOutputFile = output.includes('.')
   const outputDir = isOutputFile ? '.' : output

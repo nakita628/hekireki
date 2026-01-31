@@ -11,14 +11,22 @@ const { generatorHandler } = pkg
 type DiagramFormat = 'svg' | 'png' | 'dot'
 
 /**
+ * Get string value from config
+ */
+function getStringValue(value: string | string[] | undefined): string | undefined {
+  if (value === undefined) return undefined
+  return Array.isArray(value) ? value[0] : value
+}
+
+/**
  * Get boolean option from config
  */
 function getBoolOption(
-  config: Record<string, string>,
+  config: Record<string, string | string[] | undefined>,
   key: string,
   defaultValue: boolean
 ): boolean {
-  const value = config[key]
+  const value = getStringValue(config[key])
   if (value === undefined) return defaultValue
   return value.toLowerCase() !== 'false'
 }
@@ -43,7 +51,8 @@ export async function main(options: GeneratorOptions): Promise<void> {
   const includeRelationFields = getBoolOption(config, 'includeRelationFields', false)
 
   // Get format option (svg, png, or dot)
-  const format = (config.format?.toLowerCase() as DiagramFormat) || 'png'
+  const formatValue = getStringValue(config.format)?.toLowerCase() as DiagramFormat | undefined
+  const format: DiagramFormat = formatValue || 'png'
 
   // Generate DBML content from DMMF
   const dbml = dbmlContent(options.dmmf.datamodel, mapToDbSchema, includeRelationFields)
@@ -51,7 +60,7 @@ export async function main(options: GeneratorOptions): Promise<void> {
   // Determine output path
   const output = options.generator.output?.value ?? './docs'
   const defaultFile = `er-diagram.${getExtension(format)}`
-  const file = config.file ?? defaultFile
+  const file = getStringValue(config.file) ?? defaultFile
 
   const isOutputFile = output.includes('.')
   const outputDir = isOutputFile ? '.' : output

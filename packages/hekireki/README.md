@@ -9,6 +9,8 @@
 - 🏹 Automatically generates [ArkType](https://arktype.io/) schemas from your Prisma schema
 - ⚡ Automatically generates [Effect Schema](https://effect.website/docs/schema/introduction/) from your Prisma schema
 - 📊 Creates [Mermaid](https://mermaid.js.org/) ER diagrams with PK/FK markers
+- 📝 Generates [DBML](https://dbml.dbdiagram.io/) (Database Markup Language) files
+- 🖼️ Outputs ER diagrams as **PNG/SVG** images using [dbml-renderer](https://github.com/softwaretechnik-berlin/dbml-renderer)
 - 🧪 Generates [Ecto](https://hexdocs.pm/ecto/Ecto.Schema.html) schemas for Elixir projects
   ⚠️ Foreign key constraints are **not** included — manage relationships in your application logic
 
@@ -61,6 +63,16 @@ generator Hekireki-Ecto {
     provider = "hekireki-ecto"
     output = "schema"
     app = "DBSchema"
+}
+
+generator Hekireki-DBML {
+    provider = "hekireki-dbml"
+}
+
+generator Hekireki-SVG {
+    provider = "hekireki-svg"
+    output   = "docs"
+    format   = "png"
 }
 
 model User {
@@ -333,6 +345,32 @@ defmodule DBSchema.Post do
 end
 ```
 
+## DBML
+
+```dbml
+Table User {
+  id String [pk, note: 'Primary key']
+  name String [not null, note: 'Display name']
+  posts Post [not null, note: 'One-to-many relation to Post']
+}
+
+Table Post {
+  id String [pk, note: 'Primary key']
+  title String [not null, note: 'Article title']
+  content String [not null, note: 'Body content (no length limit)']
+  userId String [not null, note: 'Foreign key referencing User.id']
+  user User [not null, note: 'Prisma relation definition']
+}
+
+Ref Post_userId_fk: Post.userId > User.id
+```
+
+## PNG/SVG
+
+The `hekireki-svg` generator outputs ER diagrams as PNG or SVG images using [dbml-renderer](https://github.com/softwaretechnik-berlin/dbml-renderer).
+
+Output: `docs/er-diagram.png`
+
 ## Configuration
 
 ### Zod Generator Options
@@ -387,6 +425,21 @@ end
 |--------------|-----------|-------------------------------------|--------------------------------------------------|
 | `output`     | `string`  | `./ecto`                            | Output directory                                 |
 | `app`        | `string`  | `MyApp`                             | App Name                                         |
+
+### DBML Generator Options
+
+| Option       | Type      | Default                             | Description                                      |
+|--------------|-----------|-------------------------------------|--------------------------------------------------|
+| `output`     | `string`  | `./dbml`                            | Output directory                                 |
+| `file`       | `string`  | `schema.dbml`                       | File Name                                        |
+
+### SVG Generator Options
+
+| Option       | Type      | Default                             | Description                                      |
+|--------------|-----------|-------------------------------------|--------------------------------------------------|
+| `output`     | `string`  | `./docs`                            | Output directory                                 |
+| `file`       | `string`  | `er-diagram`                        | File Name (without extension)                    |
+| `format`     | `string`  | `png`                               | Output format (`png`, `svg`, or `dot`)           |
 
 ## Annotation Prefixes
 
