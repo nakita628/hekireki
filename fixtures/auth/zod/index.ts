@@ -2,210 +2,162 @@ import * as z from 'zod'
 
 export const UserSchema = z.object({
   /**
-   * User ID
+   * Unique user ID
    */
-  id: z.uuid(),
+  id: z.cuid(),
+  /**
+   * Display name
+   */
+  name: z.string().min(1).max(50),
   /**
    * Email address
    */
   email: z.email(),
   /**
-   * Hashed password (null for OAuth-only users)
+   * Date when the email was verified
    */
-  passwordHash: z.string().min(8).nullable(),
-  /**
-   * Display name
-   */
-  name: z.string().min(1).max(100),
+  emailVerified: z.iso.date(),
   /**
    * Profile image URL
    */
-  avatarUrl: z.url().nullable(),
+  image: z.url(),
   /**
-   * Email verification status
+   * Hashed password
    */
-  emailVerified: z.boolean(),
+  password: z.string().min(8),
   /**
-   * Account active status
+   * Whether 2FA is enabled
    */
-  isActive: z.boolean(),
-  /**
-   * Account creation timestamp
-   */
-  createdAt: z.iso.datetime(),
-  /**
-   * Last update timestamp
-   */
-  updatedAt: z.iso.datetime(),
-  /**
-   * Last login timestamp
-   */
-  lastLoginAt: z.iso.datetime().nullable(),
+  isTwoFactorEnabled: z.boolean(),
 })
 
 export type User = z.infer<typeof UserSchema>
 
-export const OAuthAccountSchema = z.object({
+export const AccountSchema = z.object({
   /**
-   * OAuth account ID
+   * Unique account ID
    */
-  id: z.uuid(),
+  id: z.cuid(),
   /**
-   * User ID
+   * Reference to the user ID
    */
-  userId: z.uuid(),
+  userId: z.string(),
   /**
-   * Provider account ID
+   * Type of account (e.g., oauth, email)
+   */
+  type: z.string(),
+  /**
+   * Name of the provider (e.g., google, github)
+   */
+  provider: z.string(),
+  /**
+   * Provider-specific account ID
    */
   providerAccountId: z.string(),
   /**
-   * Access token from provider
+   * Refresh token
    */
-  accessToken: z.string().nullable(),
+  refresh_token: z.string(),
   /**
-   * Refresh token from provider
+   * Access token
    */
-  refreshToken: z.string().nullable(),
+  access_token: z.string(),
   /**
-   * Token expiration timestamp
+   * Expiration time (UNIX timestamp)
    */
-  expiresAt: z.iso.datetime().nullable(),
+  expires_at: z.int(),
   /**
-   * Account creation timestamp
+   * Token type (e.g., Bearer)
    */
-  createdAt: z.iso.datetime(),
+  token_type: z.string().optional(),
+  /**
+   * OAuth scope
+   */
+  scope: z.string().optional(),
+  /**
+   * ID token
+   */
+  id_token: z.string().optional(),
+  /**
+   * Session state
+   */
+  session_state: z.string().optional(),
 })
 
-export type OAuthAccount = z.infer<typeof OAuthAccountSchema>
+export type Account = z.infer<typeof AccountSchema>
 
-export const TwoFactorSettingSchema = z.object({
+export const VerificationTokenSchema = z.object({
   /**
-   * 2FA setting ID
+   * Token ID
+   */
+  id: z.cuid(),
+  /**
+   * Email address
+   */
+  email: z.email(),
+  /**
+   * Token string
+   */
+  token: z.string(),
+  /**
+   * Expiry time
+   */
+  expires: z.iso.date(),
+})
+
+export type VerificationToken = z.infer<typeof VerificationTokenSchema>
+
+export const PasswordResetTokenSchema = z.object({
+  /**
+   * Token ID
+   */
+  id: z.cuid(),
+  /**
+   * Email address
+   */
+  email: z.email(),
+  /**
+   * Token string
+   */
+  token: z.string(),
+  /**
+   * Expiry time
+   */
+  expires: z.iso.date(),
+})
+
+export type PasswordResetToken = z.infer<typeof PasswordResetTokenSchema>
+
+export const TwoFactorTokenSchema = z.object({
+  /**
+   * Token ID
+   */
+  id: z.cuid(),
+  /**
+   * Email address
+   */
+  email: z.email(),
+  /**
+   * Token string
+   */
+  token: z.string(),
+  /**
+   * Expiry time
+   */
+  expires: z.iso.date(),
+})
+
+export type TwoFactorToken = z.infer<typeof TwoFactorTokenSchema>
+
+export const TwoFactorConfirmationSchema = z.object({
+  /**
+   * Confirmation ID
    */
   id: z.uuid(),
   /**
-   * User ID
+   * Reference to user
    */
-  userId: z.uuid(),
-  /**
-   * 2FA enabled status
-   */
-  enabled: z.boolean(),
-  /**
-   * TOTP secret (encrypted)
-   */
-  totpSecret: z.string().nullable(),
-  /**
-   * Phone number for SMS (E.164 format)
-   */
-  phoneNumber: z.string().nullable(),
-  /**
-   * Backup codes (hashed, JSON array)
-   */
-  backupCodes: z.string().nullable(),
-  /**
-   * Last verified timestamp
-   */
-  verifiedAt: z.iso.datetime().nullable(),
-  /**
-   * Creation timestamp
-   */
-  createdAt: z.iso.datetime(),
-  /**
-   * Last update timestamp
-   */
-  updatedAt: z.iso.datetime(),
+  userId: z.string(),
 })
 
-export type TwoFactorSetting = z.infer<typeof TwoFactorSettingSchema>
-
-export const RefreshTokenSchema = z.object({
-  /**
-   * Refresh token ID
-   */
-  id: z.uuid(),
-  /**
-   * User ID
-   */
-  userId: z.uuid(),
-  /**
-   * Token hash (SHA-256)
-   */
-  tokenHash: z.string(),
-  /**
-   * Device/client identifier
-   */
-  deviceInfo: z.string().nullable(),
-  /**
-   * IP address at creation
-   */
-  ipAddress: z.string().nullable(),
-  /**
-   * Token expiration timestamp
-   */
-  expiresAt: z.iso.datetime(),
-  /**
-   * Token creation timestamp
-   */
-  createdAt: z.iso.datetime(),
-  /**
-   * Revocation status
-   */
-  revoked: z.boolean(),
-})
-
-export type RefreshToken = z.infer<typeof RefreshTokenSchema>
-
-export const EmailVerificationSchema = z.object({
-  /**
-   * Verification ID
-   */
-  id: z.uuid(),
-  /**
-   * User ID
-   */
-  userId: z.uuid(),
-  /**
-   * Verification token (hashed)
-   */
-  tokenHash: z.string(),
-  /**
-   * Token expiration timestamp
-   */
-  expiresAt: z.iso.datetime(),
-  /**
-   * Creation timestamp
-   */
-  createdAt: z.iso.datetime(),
-})
-
-export type EmailVerification = z.infer<typeof EmailVerificationSchema>
-
-export const PasswordResetSchema = z.object({
-  /**
-   * Reset ID
-   */
-  id: z.uuid(),
-  /**
-   * User ID
-   */
-  userId: z.uuid(),
-  /**
-   * Reset token (hashed)
-   */
-  tokenHash: z.string(),
-  /**
-   * Token expiration timestamp
-   */
-  expiresAt: z.iso.datetime(),
-  /**
-   * Used status
-   */
-  used: z.boolean(),
-  /**
-   * Creation timestamp
-   */
-  createdAt: z.iso.datetime(),
-})
-
-export type PasswordReset = z.infer<typeof PasswordResetSchema>
+export type TwoFactorConfirmation = z.infer<typeof TwoFactorConfirmationSchema>

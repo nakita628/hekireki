@@ -9,6 +9,7 @@ export default defineConfig({
     'generator/arktype/index': './src/generator/arktype/index.ts',
     'generator/effect/index': './src/generator/effect/index.ts',
     'generator/dbml/index': './src/generator/dbml/index.ts',
+    'generator/svg/index': './src/generator/svg/index.ts',
   },
   format: 'esm',
   dts: true,

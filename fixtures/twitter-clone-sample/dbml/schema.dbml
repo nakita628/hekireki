@@ -1,42 +1,42 @@
 Table User {
   id String [pk, note: 'Unique identifier for the user']
-  name String [note: 'User\'s display name']
-  username String [unique, note: 'Unique username for the user']
-  bio String [note: 'User\'s biography or profile description']
-  email String [unique, note: 'User\'s unique email address']
+  name String [not null, note: 'User\'s display name']
+  username String [unique, not null, note: 'Unique username for the user']
+  bio String [default: '', note: 'User\'s biography or profile description']
+  email String [unique, not null, note: 'User\'s unique email address']
   emailVerified DateTime [note: 'Timestamp of email verification']
   image String [note: 'URL of user\'s image']
   coverImage String [note: 'URL of user\'s cover image']
   profileImage String [note: 'URL of user\'s profile image']
   hashedPassword String [note: 'Hashed password for security']
-  createdAt DateTime [note: 'Timestamp when the user was created']
-  updatedAt DateTime [note: 'Timestamp when the user was last updated']
-  hasNotification Boolean [note: 'Flag indicating if user has unread notifications']
-  posts Post [note: 'Posts created by the user']
-  comments Comment [note: 'Comments created by the user']
-  notifications Notification [note: 'Notifications received by the user']
-  followers Follow [note: 'Followers of the user']
-  following Follow [note: 'Users the user is following']
-  likes Like [note: 'Likes created by the user']
+  createdAt DateTime [default: `now()`, not null, note: 'Timestamp when the user was created']
+  updatedAt DateTime [not null, note: 'Timestamp when the user was last updated']
+  hasNotification Boolean [default: false, note: 'Flag indicating if user has unread notifications']
+  posts Post [not null, note: 'Posts created by the user']
+  comments Comment [not null, note: 'Comments created by the user']
+  notifications Notification [not null, note: 'Notifications received by the user']
+  followers Follow [not null, note: 'Followers of the user']
+  following Follow [not null, note: 'Users the user is following']
+  likes Like [not null, note: 'Likes created by the user']
 }
 
 Table Post {
   id String [pk, note: 'Unique identifier for the post']
-  body String [note: 'Content of the post']
-  createdAt DateTime [note: 'Timestamp when the post was created']
-  updatedAt DateTime [note: 'Timestamp when the post was last updated']
-  userId String [note: 'ID of the user who created the post']
-  user User [note: 'User who created the post']
-  comments Comment [note: 'Comments on the post']
-  likes Like [note: 'Likes on the post']
+  body String [not null, note: 'Content of the post']
+  createdAt DateTime [default: `now()`, not null, note: 'Timestamp when the post was created']
+  updatedAt DateTime [not null, note: 'Timestamp when the post was last updated']
+  userId String [not null, note: 'ID of the user who created the post']
+  user User [not null, note: 'User who created the post']
+  comments Comment [not null, note: 'Comments on the post']
+  likes Like [not null, note: 'Likes on the post']
 }
 
 Table Follow {
-  followerId String [note: 'ID of the user who is following']
-  followingId String [note: 'ID of the user being followed']
-  createdAt DateTime [note: 'Timestamp when the follow relationship was created']
-  follower User [note: 'User who created the follow relationship (the follower)']
-  following User [note: 'User being followed']
+  followerId String [not null, note: 'ID of the user who is following']
+  followingId String [not null, note: 'ID of the user being followed']
+  createdAt DateTime [default: `now()`, not null, note: 'Timestamp when the follow relationship was created']
+  follower User [not null, note: 'User who created the follow relationship (the follower)']
+  following User [not null, note: 'User being followed']
 
   indexes {
     (followerId, followingId) [pk]
@@ -44,11 +44,11 @@ Table Follow {
 }
 
 Table Like {
-  userId String [note: 'ID of the user who liked the post']
-  postId String [note: 'ID of the post that was liked']
-  createdAt DateTime [note: 'Timestamp when the like was created']
-  user User [note: 'User who liked the post']
-  post Post [note: 'Post that was liked']
+  userId String [not null, note: 'ID of the user who liked the post']
+  postId String [not null, note: 'ID of the post that was liked']
+  createdAt DateTime [default: `now()`, not null, note: 'Timestamp when the like was created']
+  user User [not null, note: 'User who liked the post']
+  post Post [not null, note: 'Post that was liked']
 
   indexes {
     (userId, postId) [pk]
@@ -57,35 +57,35 @@ Table Like {
 
 Table Comment {
   id String [pk, note: 'Unique identifier for the comment']
-  body String [note: 'Content of the comment']
-  createdAt DateTime [note: 'Timestamp when the comment was created']
-  updatedAt DateTime [note: 'Timestamp when the comment was last updated']
-  userId String [note: 'ID of the user who created the comment']
-  postId String [note: 'ID of the post this comment belongs to']
-  user User [note: 'User who created the comment']
-  post Post [note: 'Post that was commented on']
+  body String [not null, note: 'Content of the comment']
+  createdAt DateTime [default: `now()`, not null, note: 'Timestamp when the comment was created']
+  updatedAt DateTime [not null, note: 'Timestamp when the comment was last updated']
+  userId String [not null, note: 'ID of the user who created the comment']
+  postId String [not null, note: 'ID of the post this comment belongs to']
+  user User [not null, note: 'User who created the comment']
+  post Post [not null, note: 'Post that was commented on']
 }
 
 Table Notification {
   id String [pk, note: 'Unique identifier for the notification']
-  body String [note: 'Content of the notification message']
-  userId String [note: 'ID of the user who receives the notification']
-  createdAt DateTime [note: 'Timestamp when the notification was created']
-  user User [note: 'User who receives the notification']
+  body String [not null, note: 'Content of the notification message']
+  userId String [not null, note: 'ID of the user who receives the notification']
+  createdAt DateTime [default: `now()`, not null, note: 'Timestamp when the notification was created']
+  user User [not null, note: 'User who receives the notification']
 }
 
-Ref Post_userId_User_id_fk: Post.userId > User.id
+Ref Post_userId_fk: Post.userId > User.id [delete: Cascade]
 
-Ref Follow_followerId_User_id_fk: Follow.followerId > User.id
+Ref Follow_followerId_fk: Follow.followerId > User.id [delete: Cascade]
 
-Ref Follow_followingId_User_id_fk: Follow.followingId > User.id
+Ref Follow_followingId_fk: Follow.followingId > User.id [delete: Cascade]
 
-Ref Like_userId_User_id_fk: Like.userId > User.id
+Ref Like_userId_fk: Like.userId > User.id [delete: Cascade]
 
-Ref Like_postId_Post_id_fk: Like.postId > Post.id
+Ref Like_postId_fk: Like.postId > Post.id [delete: Cascade]
 
-Ref Comment_userId_User_id_fk: Comment.userId > User.id
+Ref Comment_userId_fk: Comment.userId > User.id [delete: Cascade]
 
-Ref Comment_postId_Post_id_fk: Comment.postId > Post.id
+Ref Comment_postId_fk: Comment.postId > Post.id [delete: Cascade]
 
-Ref Notification_userId_User_id_fk: Notification.userId > User.id
+Ref Notification_userId_fk: Notification.userId > User.id [delete: Cascade]

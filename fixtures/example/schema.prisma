@@ -42,6 +42,12 @@ generator Hekireki-Ecto {
     app = "DBSchema"
 }
 
+generator Hekireki-SVG {
+    provider = "hekireki-svg"
+    output   = "docs"
+    format   = "png"
+}
+
 model User {
     /// Primary key
     /// @z.uuid()

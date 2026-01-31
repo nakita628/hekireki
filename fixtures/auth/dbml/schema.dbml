@@ -10,18 +10,18 @@ Table User {
   emailVerified DateTime [note: 'Date when the email was verified']
   image String [note: 'Profile image URL']
   password String [note: 'Hashed password']
-  role UserRole [note: 'Role of the user (ADMIN or USER)']
-  accounts Account [note: 'Linked accounts']
-  isTwoFactorEnabled Boolean [note: 'Whether 2FA is enabled']
+  role UserRole [default: 'USER', not null, note: 'Role of the user (ADMIN or USER)']
+  accounts Account [not null, note: 'Linked accounts']
+  isTwoFactorEnabled Boolean [default: false, note: 'Whether 2FA is enabled']
   twoFactorConfirmation TwoFactorConfirmation [note: '2FA confirmation']
 }
 
 Table Account {
   id String [pk, note: 'Unique account ID']
-  userId String [note: 'Reference to the user ID']
-  type String [note: 'Type of account (e.g., oauth, email)']
-  provider String [note: 'Name of the provider (e.g., google, github)']
-  providerAccountId String [note: 'Provider-specific account ID']
+  userId String [not null, note: 'Reference to the user ID']
+  type String [not null, note: 'Type of account (e.g., oauth, email)']
+  provider String [not null, note: 'Name of the provider (e.g., google, github)']
+  providerAccountId String [not null, note: 'Provider-specific account ID']
   refresh_token String [note: 'Refresh token']
   access_token String [note: 'Access token']
   expires_at Int [note: 'Expiration time (UNIX timestamp)']
@@ -29,36 +29,56 @@ Table Account {
   scope String [note: 'OAuth scope']
   id_token String [note: 'ID token']
   session_state String [note: 'Session state']
-  user User [note: 'Belongs to user']
+  user User [not null, note: 'Belongs to user']
+
+  indexes {
+    (provider, providerAccountId) [unique]
+  }
 }
 
 Table VerificationToken {
   id String [pk, note: 'Token ID']
-  email String [note: 'Email address']
-  token String [unique, note: 'Token string']
-  expires DateTime [note: 'Expiry time']
+  email String [not null, note: 'Email address']
+  token String [unique, not null, note: 'Token string']
+  expires DateTime [not null, note: 'Expiry time']
+
+  indexes {
+    (email, token) [unique]
+  }
+
+  Note: 'Email verification token'
 }
 
 Table PasswordResetToken {
   id String [pk, note: 'Token ID']
-  email String [note: 'Email address']
-  token String [unique, note: 'Token string']
-  expires DateTime [note: 'Expiry time']
+  email String [not null, note: 'Email address']
+  token String [unique, not null, note: 'Token string']
+  expires DateTime [not null, note: 'Expiry time']
+
+  indexes {
+    (email, token) [unique]
+  }
+
+  Note: 'Password reset token'
 }
 
 Table TwoFactorToken {
   id String [pk, note: 'Token ID']
-  email String [note: 'Email address']
-  token String [unique, note: 'Token string']
-  expires DateTime [note: 'Expiry time']
+  email String [not null, note: 'Email address']
+  token String [unique, not null, note: 'Token string']
+  expires DateTime [not null, note: 'Expiry time']
+
+  indexes {
+    (email, token) [unique]
+  }
 }
 
 Table TwoFactorConfirmation {
   id String [pk, note: 'Confirmation ID']
-  userId String [unique, note: 'Reference to user']
-  user User [note: 'The user who confirmed 2FA']
+  userId String [unique, not null, note: 'Reference to user']
+  user User [not null, note: 'The user who confirmed 2FA']
 }
 
-Ref Account_userId_User_id_fk: Account.userId > User.id
+Ref Account_userId_fk: Account.userId > User.id [delete: Cascade]
 
-Ref TwoFactorConfirmation_userId_User_id_fk: TwoFactorConfirmation.userId - User.id
+Ref TwoFactorConfirmation_userId_fk: TwoFactorConfirmation.userId - User.id [delete: Cascade]

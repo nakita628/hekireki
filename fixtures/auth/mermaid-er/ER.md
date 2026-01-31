@@ -1,68 +1,51 @@
 ```mermaid
 erDiagram
-    User ||--}| OAuthAccount : "(id) - (userId)"
-    User ||--|| TwoFactorSetting : "(id) - (userId)"
-    User ||--}| RefreshToken : "(id) - (userId)"
-    User ||--}| EmailVerification : "(id) - (userId)"
-    User ||--}| PasswordReset : "(id) - (userId)"
+    User ||--}| Account : "(id) - (userId)"
+    User ||--|| TwoFactorConfirmation : "(id) - (userId)"
     User {
-        string id PK "User ID"
-        string email "Email address"
-        string passwordHash "Hashed password (null for OAuth-only users)"
+        string id PK "Unique user ID"
         string name "Display name"
-        string avatarUrl "Profile image URL"
-        role role "User role"
-        boolean emailVerified "Email verification status"
-        boolean isActive "Account active status"
-        datetime createdAt "Account creation timestamp"
-        datetime updatedAt "Last update timestamp"
-        datetime lastLoginAt "Last login timestamp"
+        string email "Email address"
+        datetime emailVerified "Date when the email was verified"
+        string image "Profile image URL"
+        string password "Hashed password"
+        userrole role "Role of the user (ADMIN or USER)"
+        boolean isTwoFactorEnabled "Whether 2FA is enabled"
     }
-    OAuthAccount {
-        string id PK "OAuth account ID"
-        string userId FK "User ID"
-        oauthprovider provider "OAuth provider"
-        string providerAccountId "Provider account ID"
-        string accessToken "Access token from provider"
-        string refreshToken "Refresh token from provider"
-        datetime expiresAt "Token expiration timestamp"
-        datetime createdAt "Account creation timestamp"
+    Account {
+        string id PK "Unique account ID"
+        string userId FK "Reference to the user ID"
+        string type "Type of account (e.g., oauth, email)"
+        string provider "Name of the provider (e.g., google, github)"
+        string providerAccountId "Provider-specific account ID"
+        string refresh_token "Refresh token"
+        string access_token "Access token"
+        int expires_at "Expiration time (UNIX timestamp)"
+        string token_type "Token type (e.g., Bearer)"
+        string scope "OAuth scope"
+        string id_token "ID token"
+        string session_state "Session state"
     }
-    TwoFactorSetting {
-        string id PK "2FA setting ID"
-        string userId FK "User ID"
-        boolean enabled "2FA enabled status"
-        twofactormethod method "2FA method"
-        string totpSecret "TOTP secret (encrypted)"
-        string phoneNumber "Phone number for SMS (E.164 format)"
-        string backupCodes "Backup codes (hashed, JSON array)"
-        datetime verifiedAt "Last verified timestamp"
-        datetime createdAt "Creation timestamp"
-        datetime updatedAt "Last update timestamp"
+    VerificationToken {
+        string id PK "Token ID"
+        string email "Email address"
+        string token "Token string"
+        datetime expires "Expiry time"
     }
-    RefreshToken {
-        string id PK "Refresh token ID"
-        string userId FK "User ID"
-        string tokenHash "Token hash (SHA-256)"
-        string deviceInfo "Device/client identifier"
-        string ipAddress "IP address at creation"
-        datetime expiresAt "Token expiration timestamp"
-        datetime createdAt "Token creation timestamp"
-        boolean revoked "Revocation status"
+    PasswordResetToken {
+        string id PK "Token ID"
+        string email "Email address"
+        string token "Token string"
+        datetime expires "Expiry time"
     }
-    EmailVerification {
-        string id PK "Verification ID"
-        string userId FK "User ID"
-        string tokenHash "Verification token (hashed)"
-        datetime expiresAt "Token expiration timestamp"
-        datetime createdAt "Creation timestamp"
+    TwoFactorToken {
+        string id PK "Token ID"
+        string email "Email address"
+        string token "Token string"
+        datetime expires "Expiry time"
     }
-    PasswordReset {
-        string id PK "Reset ID"
-        string userId FK "User ID"
-        string tokenHash "Reset token (hashed)"
-        datetime expiresAt "Token expiration timestamp"
-        boolean used "Used status"
-        datetime createdAt "Creation timestamp"
+    TwoFactorConfirmation {
+        string id PK "Confirmation ID"
+        string userId FK "Reference to user"
     }
 ```

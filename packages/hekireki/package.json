@@ -35,7 +35,8 @@
     "hekireki-ecto": "dist/generator/ecto/index.js",
     "hekireki-arktype": "dist/generator/arktype/index.js",
     "hekireki-effect": "dist/generator/effect/index.js",
-    "hekireki-dbml": "dist/generator/dbml/index.js"
+    "hekireki-dbml": "dist/generator/dbml/index.js",
+    "hekireki-svg": "dist/generator/svg/index.js"
   },
   "scripts": {
     "generate": "prisma generate",
@@ -48,8 +49,10 @@
   },
   "dependencies": {
     "@prisma/generator-helper": "^7.0.1",
+    "@resvg/resvg-js": "^2.6.2",
+    "@softwaretechnik/dbml-renderer": "^1.0.31",
     "oxfmt": "^0.27.0",
-    "utils-lab": "^0.0.2"
+    "utils-lab": "file:../../../utils-lab"
   },
   "devDependencies": {
     "@prisma/client": "^7.0.1",

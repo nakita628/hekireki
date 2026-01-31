@@ -36,6 +36,12 @@ generator Hekireki-DBML {
     provider = "hekireki-dbml"
 }
 
+generator Hekireki-SVG {
+    provider = "hekireki-svg"
+    output   = "docs"
+    format   = "png"
+}
+
 enum Role {
     ADMIN
     USER

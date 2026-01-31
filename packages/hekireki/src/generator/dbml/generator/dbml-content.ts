@@ -20,6 +20,25 @@ import {
 } from 'utils-lab'
 
 /**
+ * Strip validation annotations (@z.*, @v.*, @a.*, @e.*) and relation annotations (@relation) from documentation
+ */
+function stripAnnotations(doc: string | undefined): string | undefined {
+  if (!doc) return undefined
+  const lines = doc.split('\n').filter((line) => {
+    const trimmed = line.trim()
+    return (
+      !trimmed.startsWith('@z.') &&
+      !trimmed.startsWith('@v.') &&
+      !trimmed.startsWith('@a.') &&
+      !trimmed.startsWith('@e.') &&
+      !trimmed.startsWith('@relation')
+    )
+  })
+  const result = lines.join('\n').trim()
+  return result.length > 0 ? result : undefined
+}
+
+/**
  * Convert Prisma field to DBMLColumn
  */
 function toDBMLColumn(
@@ -64,7 +83,7 @@ function toDBMLColumn(
     isUnique: field.isUnique,
     isNotNull: field.isRequired && !field.isId,
     defaultValue,
-    note: field.documentation ?? undefined,
+    note: stripAnnotations(field.documentation),
   }
 }
 
@@ -149,9 +168,8 @@ export function generateTables(
     const indexBlock =
       indexes.length > 0 ? `\n\n  indexes {\n${indexes.map(generateIndex).join('\n')}\n  }` : ''
 
-    const noteBlock = model.documentation
-      ? `\n\n  Note: ${quote(escapeNote(model.documentation))}`
-      : ''
+    const strippedNote = stripAnnotations(model.documentation)
+    const noteBlock = strippedNote ? `\n\n  Note: ${quote(escapeNote(strippedNote))}` : ''
 
     return `Table ${modelName} {\n${columnLines}${indexBlock}${noteBlock}\n}`
   })

@@ -25,6 +25,11 @@ generator Hekireki-DBML {
   provider = "hekireki-dbml"
 }
 
+generator Hekireki-SVG {
+  provider = "hekireki-svg"
+  output   = "docs"
+  format   = "png"
+}
 
 model User {
   /// Unique identifier for the user
