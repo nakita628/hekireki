@@ -1,10 +1,5 @@
-generator client {
-    provider = "prisma-client-js"
-}
-
 datasource db {
     provider = "sqlite"
-    url      = env("DATABASE_URL")
 }
 
 generator Hekireki-ER {
@@ -25,42 +20,75 @@ generator Hekireki-Valibot {
     relation = true
 }
 
+generator Hekireki-ArkType {
+    provider = "hekireki-arktype"
+    type     = true
+    comment  = true
+}
+
+generator Hekireki-Effect {
+    provider = "hekireki-effect"
+    type     = true
+    comment  = true
+}
+
+generator Hekireki-DBML {
+    provider = "hekireki-dbml"
+}
+
 generator Hekireki-Ecto {
     provider = "hekireki-ecto"
     output = "schema"
     app = "DBSchema"
 }
 
+generator Hekireki-SVG {
+    provider = "hekireki-svg"
+    output   = "docs"
+    format   = "png"
+}
+
 model User {
     /// Primary key
     /// @z.uuid()
     /// @v.pipe(v.string(), v.uuid())
+    /// @a."string.uuid"
+    /// @e.Schema.UUID
     id    String @id @default(uuid())
     /// Display name
     /// @z.string().min(1).max(50)
     /// @v.pipe(v.string(), v.minLength(1), v.maxLength(50))
+    /// @a."1 <= string <= 50"
+    /// @e.Schema.String.pipe(Schema.minLength(1), Schema.maxLength(50))
     name  String
     /// One-to-many relation to Post
     posts Post[]
 }
 
-/// @relation User.id Post.userId one-to-many
 model Post {
     /// Primary key
     /// @z.uuid()
     /// @v.pipe(v.string(), v.uuid())
+    /// @a."string.uuid"
+    /// @e.Schema.UUID
     id String @id @default(uuid())
     /// Article title
     /// @z.string().min(1).max(100)
     /// @v.pipe(v.string(), v.minLength(1), v.maxLength(100))
+    /// @a."1 <= string <= 100"
+    /// @e.Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100))
     title String
     /// Body content (no length limit)
     /// @z.string()
     /// @v.string()
+    /// @a."string"
+    /// @e.Schema.String
     content String
     /// Foreign key referencing User.id
     /// @z.uuid()
     /// @v.pipe(v.string(), v.uuid())
+    /// @a."string.uuid"
+    /// @e.Schema.UUID
     userId  String
     /// Prisma relation definition
     user    User   @relation(fields: [userId], references: [id])

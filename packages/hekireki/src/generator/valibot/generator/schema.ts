@@ -1,31 +1,32 @@
 import type { DMMF } from '@prisma/generator-helper'
-import { extractAnno, jsdoc } from '../utils/index.js'
+import {
+  makeAnnotationExtractor,
+  makeJsDoc,
+  makeValibotCardinality,
+  makeValibotObject,
+} from 'utils-lab'
 
 const vPrim = (f: DMMF.Field): string => {
-  const anno = extractAnno(f.documentation ?? '', '@v.')
-  return wrapV(`v.${anno}`, f)
+  const extractor = makeAnnotationExtractor('@v.')
+  const anno = extractor(f.documentation ?? '')
+  return makeValibotCardinality(`v.${anno}`, f.isList, f.isRequired)
 }
-
-const wrapV = (expr: string, f: DMMF.Field): string => {
-  const card = f.isList ? `v.array(${expr})` : expr
-  return f.isRequired ? card : `v.optional(${card})`
-}
-
-// jsdoc moved to utils
 
 export function buildValibotModel(model: DMMF.Model): string {
   const fields = model.fields
     .filter((f) => f.kind !== 'object')
-    .map((f) => `${jsdoc(f.documentation)}  ${f.name}: ${vPrim(f)},`)
+    .map((f) => `${makeJsDoc(f.documentation, ['@z.', '@v.'])}  ${f.name}: ${vPrim(f)},`)
     .join('\n')
 
-  const modelAnno = extractAnno(model.documentation ?? '', '@v.')
-  const objectDef =
+  const extractor = makeAnnotationExtractor('@v.')
+  const modelAnno = model.documentation ? extractor(model.documentation) : null
+  const wrapperType =
     modelAnno === 'strictObject'
-      ? `v.strictObject({\n${fields}\n})`
+      ? 'strictObject'
       : modelAnno === 'looseObject'
-        ? `v.looseObject({\n${fields}\n})`
-        : `v.object({\n${fields}\n})`
+        ? 'looseObject'
+        : 'object'
+  const objectDef = makeValibotObject(fields, wrapperType)
 
   return `export const ${model.name}Schema = ${objectDef}\n\nexport type ${model.name} = v.InferInput<typeof ${model.name}Schema>`
 }
@@ -40,28 +41,21 @@ export function buildValibotRelations(
   options?: { readonly includeType?: boolean },
 ): string | null {
   if (relProps.length === 0) return null
-  const base = `...${model.name}Schema.entries`
+  const base = `  ...${model.name}Schema.entries,`
   const rels = relProps
     .map(
-      (r) => `${r.key}:${r.isMany ? `v.array(${r.targetModel}Schema)` : `${r.targetModel}Schema`}`,
+      (r) =>
+        `  ${r.key}: ${r.isMany ? `v.array(${r.targetModel}Schema)` : `${r.targetModel}Schema`},`,
     )
-    .join(',')
+    .join('\n')
 
-  const modelAnno = extractAnno(model.documentation ?? '', '@v.')
-  const objectDef =
-    modelAnno === 'strictObject'
-      ? `v.strictObject({${base},${rels}})`
-      : modelAnno === 'looseObject'
-        ? `v.looseObject({${base},${rels}})`
-        : `v.object({${base},${rels}})`
+  const fields = `${base}\n${rels}`
 
   const typeLine = options?.includeType
     ? `\n\nexport type ${model.name}Relations = v.InferInput<typeof ${model.name}RelationsSchema>`
     : ''
-  return `export const ${model.name}RelationsSchema = ${objectDef}${typeLine}`
+  return `export const ${model.name}RelationsSchema = v.object({\n${fields}\n})${typeLine}`
 }
-
-// extractAnno provided by utils
 
 /**
  * Generate Valibot schema

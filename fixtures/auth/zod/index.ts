@@ -8,31 +8,27 @@ export const UserSchema = z.object({
   /**
    * Display name
    */
-  name: z.string().min(1).max(50).optional(),
+  name: z.string().min(1).max(50),
   /**
    * Email address
    */
-  email: z.email().optional(),
+  email: z.email(),
   /**
    * Date when the email was verified
    */
-  emailVerified: z.iso.date().optional(),
+  emailVerified: z.iso.date(),
   /**
    * Profile image URL
    */
-  image: z.url().optional(),
+  image: z.url(),
   /**
    * Hashed password
    */
-  password: z.string().min(8).optional(),
-  /**
-   * Role of the user (ADMIN or USER)
-   */
-  role: z.unknown(),
+  password: z.string().min(8),
   /**
    * Whether 2FA is enabled
    */
-  isTwoFactorEnabled: z.boolean().optional(),
+  isTwoFactorEnabled: z.boolean(),
 })
 
 export type User = z.infer<typeof UserSchema>
@@ -61,31 +57,31 @@ export const AccountSchema = z.object({
   /**
    * Refresh token
    */
-  refresh_token: z.string().optional(),
+  refresh_token: z.string(),
   /**
    * Access token
    */
-  access_token: z.string().optional(),
+  access_token: z.string(),
   /**
    * Expiration time (UNIX timestamp)
    */
-  expires_at: z.int().optional(),
+  expires_at: z.int(),
   /**
    * Token type (e.g., Bearer)
    */
-  token_type: z.string().optional().optional(),
+  token_type: z.string().optional(),
   /**
    * OAuth scope
    */
-  scope: z.string().optional().optional(),
+  scope: z.string().optional(),
   /**
    * ID token
    */
-  id_token: z.string().optional().optional(),
+  id_token: z.string().optional(),
   /**
    * Session state
    */
-  session_state: z.string().optional().optional(),
+  session_state: z.string().optional(),
 })
 
 export type Account = z.infer<typeof AccountSchema>
@@ -165,22 +161,3 @@ export const TwoFactorConfirmationSchema = z.object({
 })
 
 export type TwoFactorConfirmation = z.infer<typeof TwoFactorConfirmationSchema>
-
-export const UserRelationsSchema = z.object({
-  ...UserSchema.shape,
-  accounts: z.array(AccountSchema),
-  twoFactorConfirmation: TwoFactorConfirmationSchema,
-})
-
-export type UserRelations = z.infer<typeof UserRelationsSchema>
-
-export const AccountRelationsSchema = z.object({ ...AccountSchema.shape, user: UserSchema })
-
-export type AccountRelations = z.infer<typeof AccountRelationsSchema>
-
-export const TwoFactorConfirmationRelationsSchema = z.object({
-  ...TwoFactorConfirmationSchema.shape,
-  user: UserSchema,
-})
-
-export type TwoFactorConfirmationRelations = z.infer<typeof TwoFactorConfirmationRelationsSchema>

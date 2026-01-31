@@ -17,7 +17,9 @@ export function extractRelations(model: DMMF.Model): readonly string[] {
     .split('\n')
     .map((line: string) => {
       const relation = parseRelation(line)
-      return relation ? relationLine(relation) : null
+      if (!relation) return null
+      const result = relationLine(relation)
+      return result.ok ? result.value : null
     })
     .filter((line): line is string => line !== null)
 }

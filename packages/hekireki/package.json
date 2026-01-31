@@ -3,13 +3,16 @@
   "type": "module",
   "version": "0.4.2",
   "license": "MIT",
-  "description": "Hekireki is a tool that generates validation schemas for Zod and Valibot, as well as ER diagrams, from Prisma schemas annotated with comments.",
+  "description": "Hekireki is a tool that generates validation schemas for Zod, Valibot, ArkType, and Effect Schema, as well as ER diagrams and DBML, from Prisma schemas annotated with comments.",
   "keywords": [
     "prisma",
     "zod",
     "valibot",
+    "arktype",
+    "effect",
     "mermaid",
-    "ecto"
+    "ecto",
+    "dbml"
   ],
   "homepage": "https://github.com/nakita628/hekireki",
   "publishConfig": {
@@ -22,8 +25,6 @@
   "bugs": {
     "url": "https://github.com/nakita628/hekireki/issues"
   },
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
   "files": [
     "dist"
   ],
@@ -31,12 +32,16 @@
     "hekireki-zod": "dist/generator/zod/index.js",
     "hekireki-valibot": "dist/generator/valibot/index.js",
     "hekireki-mermaid-er": "dist/generator/mermaid-er/index.js",
-    "hekireki-ecto": "dist/generator/ecto/index.js"
+    "hekireki-ecto": "dist/generator/ecto/index.js",
+    "hekireki-arktype": "dist/generator/arktype/index.js",
+    "hekireki-effect": "dist/generator/effect/index.js",
+    "hekireki-dbml": "dist/generator/dbml/index.js",
+    "hekireki-svg": "dist/generator/svg/index.js"
   },
   "scripts": {
     "generate": "prisma generate",
     "deps": "rm -rf node_modules && pnpm install",
-    "build": "rm -rf ./dist/* && tsc",
+    "build": "tsdown",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "coverage": "vitest run --coverage",
@@ -44,13 +49,20 @@
   },
   "dependencies": {
     "@prisma/generator-helper": "^7.0.1",
-    "prettier": "^3.6.2"
+    "@resvg/resvg-js": "^2.6.2",
+    "@softwaretechnik/dbml-renderer": "^1.0.31",
+    "oxfmt": "^0.27.0",
+    "utils-lab": "^0.0.2"
   },
   "devDependencies": {
     "@prisma/client": "^7.0.1",
     "@types/node": "^24.10.1",
+    "@typescript/native-preview": "7.0.0-dev.20260130.1",
     "@vitest/coverage-v8": "^4.0.14",
+    "arktype": "^2.1.29",
+    "effect": "^3.19.15",
     "prisma": "^7.0.1",
+    "tsdown": "^0.20.1",
     "tsx": "^4.20.6",
     "valibot": "1.2.0",
     "vitest": "^4.0.14",

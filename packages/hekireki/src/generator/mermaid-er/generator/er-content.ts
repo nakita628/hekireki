@@ -1,5 +1,5 @@
 import type { DMMF } from '@prisma/generator-helper'
-import { extractRelations } from '../helper/extract-relations.js'
+import { extractRelationsFromDmmf } from '../helper/extract-relations-from-dmmf.js'
 import { removeDuplicateRelations } from '../utils/index.js'
 import { modelInfo } from './model-info.js'
 
@@ -16,8 +16,8 @@ const ER_FOOTER = ['```'] as const
  * @returns An array of Mermaid ER diagram lines.
  */
 export function erContent(models: readonly DMMF.Model[]): readonly string[] {
-  // extract all relations
-  const allRelations = models.flatMap(extractRelations)
+  // extract all relations from DMMF
+  const allRelations = extractRelationsFromDmmf(models)
   // remove duplicate relations
   const uniqueRelations = removeDuplicateRelations(allRelations)
   // collect all model info

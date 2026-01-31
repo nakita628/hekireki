@@ -1,19 +1,26 @@
+import {
+  makeDocumentParser,
+  makePropertiesGenerator,
+  makeValidationExtractor,
+  makeZodInfer,
+} from 'utils-lab'
 import { describe, expect, it } from 'vitest'
-import { infer, isZod, isZodDocument, properties } from './index.js'
 
 // Test run
 // pnpm vitest run ./src/generator/zod/utils/index.test.ts
 
 describe('utils', () => {
-  // infer
-  describe('infer', () => {
-    it.concurrent('infer', () => {
-      expect(infer('User')).toBe('export type User = z.infer<typeof UserSchema>')
+  // makeZodInfer
+  describe('makeZodInfer', () => {
+    it.concurrent('makeZodInfer', () => {
+      expect(makeZodInfer('User')).toBe('export type User = z.infer<typeof UserSchema>')
     })
   })
 
-  // properties
-  describe('properties', () => {
+  // makePropertiesGenerator('z')
+  describe('makePropertiesGenerator', () => {
+    const properties = makePropertiesGenerator('z')
+
     it.concurrent('properties comment true', () => {
       const result = properties(
         [
@@ -70,8 +77,10 @@ describe('utils', () => {
     })
   })
 
-  // isZodDocument
-  describe('isZodDocument', () => {
+  // makeDocumentParser('@z.')
+  describe('makeDocumentParser', () => {
+    const isZodDocument = makeDocumentParser('@z.')
+
     it.concurrent('isZodDocument Test', () => {
       const result = isZodDocument(`Unique identifier for the user
       @z.uuid()
@@ -81,8 +90,10 @@ describe('utils', () => {
     })
   })
 
-  // isZod
-  describe('isZod', () => {
+  // makeValidationExtractor('@z.')
+  describe('makeValidationExtractor', () => {
+    const isZod = makeValidationExtractor('@z.')
+
     it.concurrent('isZod Test', () => {
       const result = isZod(`Unique identifier for the user
   @z.uuid()

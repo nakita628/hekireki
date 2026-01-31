@@ -1,10 +1,5 @@
-generator client {
-  provider = "prisma-client-js"
-}
-
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
 }
 
 generator Hekireki-Zod {
@@ -15,6 +10,16 @@ generator Hekireki-Zod {
 
 generator Hekireki-ER {
   provider = "hekireki-mermaid-er"
+}
+
+generator Hekireki-DBML {
+  provider = "hekireki-dbml"
+}
+
+generator Hekireki-SVG {
+  provider = "hekireki-svg"
+  output   = "docs"
+  format   = "png"
 }
 
 enum UserRole {

@@ -1,0 +1,295 @@
+datasource db {
+    provider = "sqlite"
+}
+
+generator Hekireki-ER {
+    provider = "hekireki-mermaid-er"
+}
+
+generator Hekireki-Zod {
+    provider = "hekireki-zod"
+    type     = true
+    comment  = true
+    relation = true
+}
+
+generator Hekireki-Valibot {
+    provider = "hekireki-valibot"
+    type     = true
+    comment  = true
+    relation = true
+}
+
+generator Hekireki-ArkType {
+    provider = "hekireki-arktype"
+    type     = true
+    comment  = true
+}
+
+generator Hekireki-Effect {
+    provider = "hekireki-effect"
+    type     = true
+    comment  = true
+}
+
+generator Hekireki-DBML {
+    provider = "hekireki-dbml"
+}
+
+generator Hekireki-SVG {
+    provider = "hekireki-svg"
+    output   = "docs"
+    format   = "png"
+}
+
+enum Role {
+    ADMIN
+    USER
+    GUEST
+}
+
+enum OAuthProvider {
+    GOOGLE
+    GITHUB
+    FACEBOOK
+    TWITTER
+    APPLE
+}
+
+enum TwoFactorMethod {
+    TOTP
+    SMS
+    EMAIL
+}
+
+/// User account
+model User {
+    /// User ID
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    id              String               @id @default(uuid())
+    /// Email address
+    /// @z.email()
+    /// @v.pipe(v.string(), v.email())
+    email           String               @unique
+    /// Hashed password (null for OAuth-only users)
+    /// @z.string().min(8).nullable()
+    /// @v.nullish(v.pipe(v.string(), v.minLength(8)))
+    passwordHash    String?
+    /// Display name
+    /// @z.string().min(1).max(100)
+    /// @v.pipe(v.string(), v.minLength(1), v.maxLength(100))
+    name            String
+    /// Profile image URL
+    /// @z.url().nullable()
+    /// @v.nullish(v.pipe(v.string(), v.url()))
+    avatarUrl       String?
+    /// User role
+    role            Role                 @default(USER)
+    /// Email verification status
+    /// @z.boolean()
+    /// @v.boolean()
+    emailVerified   Boolean              @default(false)
+    /// Account active status
+    /// @z.boolean()
+    /// @v.boolean()
+    isActive        Boolean              @default(true)
+    /// Account creation timestamp
+    /// @z.iso.datetime()
+    /// @v.pipe(v.string(), v.isoTimestamp())
+    createdAt       DateTime             @default(now())
+    /// Last update timestamp
+    /// @z.iso.datetime()
+    /// @v.pipe(v.string(), v.isoTimestamp())
+    updatedAt       DateTime             @updatedAt
+    /// Last login timestamp
+    /// @z.iso.datetime().nullable()
+    /// @v.nullish(v.pipe(v.string(), v.isoTimestamp()))
+    lastLoginAt     DateTime?
+    /// OAuth accounts
+    oauthAccounts   OAuthAccount[]
+    /// Two-factor authentication setting
+    twoFactorSetting TwoFactorSetting?
+    /// Refresh tokens
+    refreshTokens   RefreshToken[]
+    /// Email verifications
+    emailVerifications EmailVerification[]
+    /// Password resets
+    passwordResets  PasswordReset[]
+}
+
+/// OAuth account linked to user
+model OAuthAccount {
+    /// OAuth account ID
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    id                String        @id @default(uuid())
+    /// User ID
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    userId            String
+    /// OAuth provider
+    provider          OAuthProvider
+    /// Provider account ID
+    /// @z.string()
+    /// @v.string()
+    providerAccountId String
+    /// Access token from provider
+    /// @z.string().nullable()
+    /// @v.nullish(v.string())
+    accessToken       String?
+    /// Refresh token from provider
+    /// @z.string().nullable()
+    /// @v.nullish(v.string())
+    refreshToken      String?
+    /// Token expiration timestamp
+    /// @z.iso.datetime().nullable()
+    /// @v.nullish(v.pipe(v.string(), v.isoTimestamp()))
+    expiresAt         DateTime?
+    /// Account creation timestamp
+    /// @z.iso.datetime()
+    /// @v.pipe(v.string(), v.isoTimestamp())
+    createdAt         DateTime      @default(now())
+    /// User relation
+    user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@unique([provider, providerAccountId])
+}
+
+/// Two-factor authentication settings
+model TwoFactorSetting {
+    /// 2FA setting ID
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    id          String           @id @default(uuid())
+    /// User ID
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    userId      String           @unique
+    /// 2FA enabled status
+    /// @z.boolean()
+    /// @v.boolean()
+    enabled     Boolean          @default(false)
+    /// 2FA method
+    method      TwoFactorMethod?
+    /// TOTP secret (encrypted)
+    /// @z.string().nullable()
+    /// @v.nullish(v.string())
+    totpSecret  String?
+    /// Phone number for SMS (E.164 format)
+    /// @z.string().nullable()
+    /// @v.nullish(v.string())
+    phoneNumber String?
+    /// Backup codes (hashed, JSON array)
+    /// @z.string().nullable()
+    /// @v.nullish(v.string())
+    backupCodes String?
+    /// Last verified timestamp
+    /// @z.iso.datetime().nullable()
+    /// @v.nullish(v.pipe(v.string(), v.isoTimestamp()))
+    verifiedAt  DateTime?
+    /// Creation timestamp
+    /// @z.iso.datetime()
+    /// @v.pipe(v.string(), v.isoTimestamp())
+    createdAt   DateTime         @default(now())
+    /// Last update timestamp
+    /// @z.iso.datetime()
+    /// @v.pipe(v.string(), v.isoTimestamp())
+    updatedAt   DateTime         @updatedAt
+    /// User relation
+    user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// JWT refresh token for session management
+model RefreshToken {
+    /// Refresh token ID
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    id         String   @id @default(uuid())
+    /// User ID
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    userId     String
+    /// Token hash (SHA-256)
+    /// @z.string()
+    /// @v.string()
+    tokenHash  String   @unique
+    /// Device/client identifier
+    /// @z.string().nullable()
+    /// @v.nullish(v.string())
+    deviceInfo String?
+    /// IP address at creation
+    /// @z.string().nullable()
+    /// @v.nullish(v.string())
+    ipAddress  String?
+    /// Token expiration timestamp
+    /// @z.iso.datetime()
+    /// @v.pipe(v.string(), v.isoTimestamp())
+    expiresAt  DateTime
+    /// Token creation timestamp
+    /// @z.iso.datetime()
+    /// @v.pipe(v.string(), v.isoTimestamp())
+    createdAt  DateTime @default(now())
+    /// Revocation status
+    /// @z.boolean()
+    /// @v.boolean()
+    revoked    Boolean  @default(false)
+    /// User relation
+    user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// Email verification token
+model EmailVerification {
+    /// Verification ID
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    id        String   @id @default(uuid())
+    /// User ID
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    userId    String
+    /// Verification token (hashed)
+    /// @z.string()
+    /// @v.string()
+    tokenHash String   @unique
+    /// Token expiration timestamp
+    /// @z.iso.datetime()
+    /// @v.pipe(v.string(), v.isoTimestamp())
+    expiresAt DateTime
+    /// Creation timestamp
+    /// @z.iso.datetime()
+    /// @v.pipe(v.string(), v.isoTimestamp())
+    createdAt DateTime @default(now())
+    /// User relation
+    user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// Password reset token
+model PasswordReset {
+    /// Reset ID
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    id        String   @id @default(uuid())
+    /// User ID
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    userId    String
+    /// Reset token (hashed)
+    /// @z.string()
+    /// @v.string()
+    tokenHash String   @unique
+    /// Token expiration timestamp
+    /// @z.iso.datetime()
+    /// @v.pipe(v.string(), v.isoTimestamp())
+    expiresAt DateTime
+    /// Used status
+    /// @z.boolean()
+    /// @v.boolean()
+    used      Boolean  @default(false)
+    /// Creation timestamp
+    /// @z.iso.datetime()
+    /// @v.pipe(v.string(), v.isoTimestamp())
+    createdAt DateTime @default(now())
+    /// User relation
+    user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

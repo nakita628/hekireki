@@ -9,8 +9,12 @@ export async function main(options: GeneratorOptions): Promise<void> {
   const output = options.generator.output?.value ?? './ecto'
   const app = options.generator.config?.app ?? 'MyApp'
 
-  await writeEctoSchemasToFiles(options.dmmf.datamodel.models, app, output)
+  const result = await writeEctoSchemasToFiles(options.dmmf.datamodel.models, app, output)
+  if (!result.ok) {
+    throw new Error(`Failed to write Ecto schemas: ${result.error}`)
+  }
 }
+
 generatorHandler({
   onManifest() {
     return {

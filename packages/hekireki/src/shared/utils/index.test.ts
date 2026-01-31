@@ -1,43 +1,44 @@
+import { makeCapitalized, makeSnakeCase } from 'utils-lab'
 import { describe, expect, it } from 'vitest'
-import { capitalize, groupByModel, isFields, snakeCase } from '.'
+import { groupByModel, isFields } from '.'
 
 // Test run
 // pnpm vitest run ./src/shared/utils/index.test.ts
 
 describe('utils', () => {
-  // capitalize
-  describe('capitalize', () => {
-    it.concurrent(`capitalize('test') -> 'Test'`, () => {
-      const result = capitalize('test')
+  // makeCapitalized
+  describe('makeCapitalized', () => {
+    it.concurrent(`makeCapitalized('test') -> 'Test'`, () => {
+      const result = makeCapitalized('test')
       const expected = 'Test'
       expect(result).toBe(expected)
     })
-    it.concurrent(`capitalize('Test') -> 'Test'`, () => {
-      const result = capitalize('Test')
+    it.concurrent(`makeCapitalized('Test') -> 'Test'`, () => {
+      const result = makeCapitalized('Test')
       const expected = 'Test'
       expect(result).toBe(expected)
     })
   })
 
-  // snakeCase
-  describe('snakeCase', () => {
+  // makeSnakeCase
+  describe('makeSnakeCase', () => {
     it('converts PascalCase to snake_case and pluralizes', () => {
-      expect(snakeCase('TodoTag')).toBe('todo_tag')
-      expect(snakeCase('User')).toBe('user')
-      expect(snakeCase('Category')).toBe('category')
+      expect(makeSnakeCase('TodoTag')).toBe('todo_tag')
+      expect(makeSnakeCase('User')).toBe('user')
+      expect(makeSnakeCase('Category')).toBe('category')
     })
 
     it('converts camelCase to snake_case and pluralizes', () => {
-      expect(snakeCase('todoTag')).toBe('todo_tag')
-      expect(snakeCase('userProfile')).toBe('user_profile')
+      expect(makeSnakeCase('todoTag')).toBe('todo_tag')
+      expect(makeSnakeCase('userProfile')).toBe('user_profile')
     })
 
     it('handles single lowercase word', () => {
-      expect(snakeCase('tag')).toBe('tag')
+      expect(makeSnakeCase('tag')).toBe('tag')
     })
 
     it('handles empty string', () => {
-      expect(snakeCase('')).toBe('')
+      expect(makeSnakeCase('')).toBe('')
     })
   })
 

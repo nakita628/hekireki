@@ -55,6 +55,33 @@ describe('buildRelationLine', () => {
     expected,
   }) => {
     const result = buildRelationLine(input)
-    expect(result).toBe(expected)
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value).toBe(expected)
+    }
+  })
+
+  it('should return error for invalid input format', () => {
+    const result = buildRelationLine('invalid')
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error).toBe('Invalid input format: invalid')
+    }
+  })
+
+  it('should return error for invalid from relationship', () => {
+    const result = buildRelationLine('invalid-to-one')
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error).toBe('Invalid relationship: invalid')
+    }
+  })
+
+  it('should return error for invalid to relationship', () => {
+    const result = buildRelationLine('one-to-invalid')
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error).toBe('Invalid relationship: invalid')
+    }
   })
 })

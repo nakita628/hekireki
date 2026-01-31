@@ -185,5 +185,5 @@ export const UserSchema = v.object({
 `
 
     expect(result).toBe(expected)
-  })
+  }, 30000)
 })

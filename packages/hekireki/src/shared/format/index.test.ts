@@ -7,8 +7,14 @@ import { fmt } from '.'
 describe('fmt', () => {
   it.concurrent('fmt Test', async () => {
     const result = await fmt('const hekireki = "hekireki";')
-    const expected = `const hekireki = 'hekireki'
-`
-    expect(result).toBe(expected)
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value).toBe(`const hekireki = 'hekireki'\n`)
+    }
+  })
+
+  it.concurrent('fmt error Test', async () => {
+    const result = await fmt('const x = {')
+    expect(result.ok).toBe(false)
   })
 })

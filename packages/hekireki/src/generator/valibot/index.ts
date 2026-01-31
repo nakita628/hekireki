@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-import fsp from 'node:fs/promises'
 import path from 'node:path'
 import type { GeneratorOptions } from '@prisma/generator-helper'
 import pkg from '@prisma/generator-helper'
 import { fmt } from '../../shared/format/index.js'
+import { mkdir, writeFile } from '../../shared/fsp/index.js'
+import { getBool, getString } from '../../shared/generator/index.js'
 import { collectRelationProps } from '../../shared/helper/relations.js'
 import { buildValibotRelations } from './generator/schema.js'
 import { valibot } from './generator/valibot.js'
@@ -43,12 +44,6 @@ const buildRelationsOnly = (dmmf: GeneratorOptions['dmmf'], includeType: boolean
     .join('\n\n')
 }
 
-const getString = (v: string | string[] | undefined, fallback?: string): string | undefined =>
-  typeof v === 'string' ? v : Array.isArray(v) ? (v[0] ?? fallback) : fallback
-
-const getBool = (v: unknown, fallback = false): boolean =>
-  v === true || v === 'true' || (Array.isArray(v) && v[0] === 'true') ? true : fallback
-
 const emit = async (options: GeneratorOptions, enableRelation: boolean): Promise<void> => {
   const outDir = options.generator.output?.value ?? './valibot'
   const file = getString(options.generator.config?.file, 'index.ts') ?? 'index.ts'
@@ -61,9 +56,21 @@ const emit = async (options: GeneratorOptions, enableRelation: boolean): Promise
     ? buildRelationsOnly(options.dmmf, getBool(options.generator.config?.type))
     : ''
   const full = [base, relations].filter(Boolean).join('\n\n')
-  const code = await fmt(full)
-  await fsp.mkdir(outDir, { recursive: true })
-  await fsp.writeFile(path.join(outDir, file), code, 'utf8')
+
+  const fmtResult = await fmt(full)
+  if (!fmtResult.ok) {
+    throw new Error(`Format error: ${fmtResult.error}`)
+  }
+
+  const mkdirResult = await mkdir(outDir)
+  if (!mkdirResult.ok) {
+    throw new Error(`Failed to create directory: ${mkdirResult.error}`)
+  }
+
+  const writeResult = await writeFile(path.join(outDir, file), fmtResult.value)
+  if (!writeResult.ok) {
+    throw new Error(`Failed to write file: ${writeResult.error}`)
+  }
 }
 
 export const onGenerate = (options: GeneratorOptions) =>
