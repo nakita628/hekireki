@@ -12,7 +12,9 @@
     "effect",
     "mermaid",
     "ecto",
-    "dbml"
+    "dbml",
+    "docs",
+    "documentation"
   ],
   "homepage": "https://github.com/nakita628/hekireki",
   "publishConfig": {
@@ -36,7 +38,9 @@
     "hekireki-arktype": "dist/generator/arktype/index.js",
     "hekireki-effect": "dist/generator/effect/index.js",
     "hekireki-dbml": "dist/generator/dbml/index.js",
-    "hekireki-svg": "dist/generator/svg/index.js"
+    "hekireki-svg": "dist/generator/svg/index.js",
+    "hekireki-docs": "dist/generator/docs/index.js",
+    "hekireki-docs-serve": "dist/generator/docs/cli.js"
   },
   "scripts": {
     "generate": "prisma generate",
@@ -48,9 +52,11 @@
     "release": "npm pkg fix && pnpm build && npm publish"
   },
   "dependencies": {
+    "@hono/node-server": "^1.14.1",
     "@prisma/generator-helper": "^7.0.1",
     "@resvg/resvg-js": "^2.6.2",
     "@softwaretechnik/dbml-renderer": "^1.0.31",
+    "hono": "^4.7.4",
     "oxfmt": "^0.27.0",
     "utils-lab": "^0.0.2"
   },

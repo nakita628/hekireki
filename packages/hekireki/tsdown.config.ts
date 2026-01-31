@@ -10,6 +10,8 @@ export default defineConfig({
     'generator/effect/index': './src/generator/effect/index.ts',
     'generator/dbml/index': './src/generator/dbml/index.ts',
     'generator/svg/index': './src/generator/svg/index.ts',
+    'generator/docs/index': './src/generator/docs/index.ts',
+    'generator/docs/cli': './src/generator/docs/cli.ts',
   },
   format: 'esm',
   dts: true,

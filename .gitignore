@@ -4,7 +4,7 @@ pnpm-lock.yaml
 dist
 coverage
 copilot-instructions.md
-docs
+fixtures/*/docs
 .DS_Store
 .cursor
 .codex

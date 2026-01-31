@@ -1,0 +1,595 @@
+import type { DMMF } from '@prisma/generator-helper'
+
+// Model action string literals (avoiding runtime DMMF usage)
+const ModelAction = {
+  create: 'create',
+  deleteMany: 'deleteMany',
+  delete: 'delete',
+  findMany: 'findMany',
+  findUnique: 'findUnique',
+  findFirst: 'findFirst',
+  update: 'update',
+  updateMany: 'updateMany',
+  upsert: 'upsert',
+} as const
+import { type Generatable, capitalize, isScalarType, lowerCase } from './helpers.js'
+import type { DMMFDocument, DMMFMapping } from './transformDMMF.js'
+
+type ModelGeneratorStructure = {
+  models: MGModel[]
+}
+
+type MGModel = {
+  documentation?: string
+  name: string
+  directives: MGModelDirective[]
+  fields: MGModelField[]
+  operations: MGModelOperation[]
+}
+
+type MGModelDirective = {
+  name: string
+  values: readonly string[]
+}
+
+type MGModelField = {
+  name: string
+  type: string
+  bareTypeName: string
+  directives: string[]
+  documentation?: string
+  required: boolean
+}
+
+type MGModelOperationKeys = {
+  name: string
+  types: readonly DMMF.InputTypeRef[]
+  required: boolean
+}
+
+type MGModelOperationOutput = {
+  type: string
+  required: boolean
+  list: boolean
+}
+
+type MakeOptionallyUndefined<T> = {
+  [k in keyof T]: T[k] | undefined
+}
+
+type MGModelOperation = {
+  name: string
+  description: string
+  opKeys: MGModelOperationKeys[] | undefined
+  usage: string
+  output: MakeOptionallyUndefined<MGModelOperationOutput>
+}
+
+interface FieldDefault {
+  name: string
+  args: any[]
+}
+
+const fieldDirectiveMap = new Map<string, string>([
+  ['isUnique', '@unique'],
+  ['isId', '@id'],
+  ['hasDefaultValue', '@default'],
+  ['isUpdatedAt', '@updatedAt'],
+])
+
+const escapeHtml = (str: string): string =>
+  str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+
+export class ModelGenerator implements Generatable<ModelGeneratorStructure> {
+  data: ModelGeneratorStructure
+
+  constructor(d: DMMFDocument) {
+    this.data = this.getData(d)
+  }
+
+  private getModelDirectiveHTML(directive: MGModelDirective): string {
+    return `
+      <tr>
+        <td class="px-4 py-2 border dark:border-gray-400">
+         <strong class="text-dark dark:text-white">${directive.name}</strong>
+        </td>
+        <td class="px-4 py-2 border dark:border-gray-400"> <ul>
+            ${directive.values.map((val) => `<li class="text-dark dark:text-white">${val}</li>`).join('')}
+          </ul>
+        </td>
+      </tr>
+    `
+  }
+
+  private getModelFieldTableRow(field: MGModelField, modelName: string): string {
+    return `
+    <tr id="${`model-${modelName}-${field.name}`}">
+      <td class="px-4 py-2 border text-black dark:text-white dark:border-gray-400">
+       ${field.name}
+      </td>
+      <td class="px-4 py-2 border text-black dark:text-white dark:border-gray-400">
+       ${
+         isScalarType(field.bareTypeName)
+           ? field.type
+           : `<a href="#type-outputType-${field.bareTypeName}">${field.type}</a>`
+       }
+      </td>
+      <td class="px-4 py-2 border text-black dark:text-white dark:border-gray-400">
+        <ul class="text-black dark:text-white">
+          ${
+            field.directives.length > 0
+              ? field.directives.map((directive) => `<li><strong>${directive}</strong></li>`).join('')
+              : '<li> - </li>'
+          }
+        </ul>
+      </td>
+      <td class="px-4 py-2 border text-black dark:text-white dark:border-gray-400">
+        ${field.required ? `<strong>Yes</strong>` : 'No'}
+      </td>
+      <td class="px-4 py-2 border text-black dark:text-white dark:border-gray-400">
+        ${field.documentation ?? '-'}
+      </td>
+    </tr>
+    `
+  }
+
+  private getModelOperationMarkup(operation: MGModelOperation, modelName: string): string {
+    return `
+                <div class="mt-4">
+                  <h4 id="${`model-${modelName}-${operation.name}`}" class="mb-2 text-lg font-bold dark:text-white">${operation.name}</h4>
+                  <p class="text-black dark:text-white">${operation.description}</p>
+                  <div class="mb-2">
+                    <pre class="language-markup"><code class="language-javascript">${operation.usage}</code></pre>
+                  </div>
+                  <h4 class="text-lg mb-2 text-black dark:text-white">Input</h4>
+                  <table class="table-auto mb-2">
+                    <thead>
+                      <tr>
+                        <th class="px-4 py-2 border dark:text-white dark:border-gray-400">Name</th>
+                        <th class="px-4 py-2 border dark:text-white dark:border-gray-400">Type</th>
+                        <th class="px-4 py-2 border dark:text-white dark:border-gray-400">Required</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${operation.opKeys
+                        ?.map(
+                          (opK) => `
+                      <tr>
+                        <td class="px-4 py-2 border dark:text-white dark:border-gray-400">
+                          ${opK.name}
+                        </td>
+                        <td class="px-4 py-2 border dark:text-white dark:border-gray-400">
+                        ${opK.types
+                          .map((t) =>
+                            isScalarType(t.type as string)
+                              ? t.type
+                              : `<a href="#type-inputType-${t.type}" class="dark:text-white">${t.type}${t.isList ? '[]' : ''}</a>`,
+                          )
+                          .join(' | ')}
+                        </td>
+                        <td class="px-4 py-2 border dark:text-white dark:border-gray-400">
+                         ${opK.required ? '<strong>Yes</strong>' : 'No'}
+                        </td>
+                      </tr>
+                      `,
+                        )
+                        .join('')}
+                    </tbody>
+                  </table>
+                  <h4 class="text-lg mb-2 text-black dark:text-white">Output</h4>
+                  <div class="text-dark dark:text-white"><strong>Type: </strong> <a href="#type-outputType-${operation.output.type}">${operation.output.type}</a></div>
+                  <div class="text-dark dark:text-white"><strong>Required: </strong>
+                  ${operation.output.required ? `Yes` : `No`}</div>
+                  <div class="text-dark dark:text-white"><strong>List: </strong>
+                  ${operation.output.list ? `Yes` : `No`}</div>
+              </div>
+    `
+  }
+
+  toHTML(): string {
+    return `
+        <div class="mb-8">
+          <h1 class="text-3xl text-gray-800 dark:text-white" id="models">Models</h1>
+            ${this.data.models
+              .map(
+                (model) => `
+            <div class="px-4 mb-4">
+              <h2 class="text-2xl text-black dark:text-white" id="model-${model.name}">${model.name}</h2>
+              ${
+                model.documentation
+                  ? `<div class="mb-2 text-black dark:text-white">Description: ${model.documentation}</div>`
+                  : ''
+              }
+              ${
+                model.directives.length > 0
+                  ? `
+              <table class="table-auto">
+                <thead>
+                  <tr>
+                    <th class="px-4 py-2 border dark:text-white dark:border-gray-400">Name</th>
+                    <th class="px-4 py-2 border dark:text-white dark:border-gray-400">Value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${model.directives.map((directive) => this.getModelDirectiveHTML(directive)).join('')}
+                </tbody>
+              </table>
+                `
+                  : ''
+              }
+              <div class="px-4 mt-4">
+                <h3 class="mb-2 text-xl text-black dark:text-white" id="model-${model.name}-fields">Fields</h3>
+                <div class="px-2 mb-4">
+                  <table class="table-auto">
+                    <thead>
+                      <tr>
+                        <th class="px-4 py-2 border text-black dark:text-white dark:border-gray-400">Name</th>
+                        <th class="px-4 py-2 border text-black dark:text-white dark:border-gray-400">Type</th>
+                        <th class="px-4 py-2 border text-black dark:text-white dark:border-gray-400">Attributes</th>
+                        <th class="px-4 py-2 border text-black dark:text-white dark:border-gray-400">Required</th>
+                        <th class="px-4 py-2 border text-black dark:text-white dark:border-gray-400">Comment</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                    ${model.fields.map((field) => this.getModelFieldTableRow(field, model.name)).join('')}
+                    </tbody>
+                  </table>
+                </div>
+            </div>
+            <hr class="my-8">
+              <div class="px-4 mt-4">
+                <h3 class="mb-2 text-xl dark:text-white" id="model-${model.name}-operations">Operations</h3>
+                <div class="px-2 mb-4">
+                  ${model.operations.map((op) => this.getModelOperationMarkup(op, model.name)).join(`<hr class="my-4 dark:text-white">`)}
+                </div>
+            </div>
+          </div>
+            `,
+              )
+              .join(`<hr class="my-16">`)}
+        </div>
+    `
+  }
+
+  private getModelDirective(model: DMMF.Model): MGModelDirective[] {
+    const directiveValue: MGModelDirective[] = []
+
+    if (model.primaryKey) {
+      directiveValue.push({ name: '@@id', values: [...model.primaryKey.fields] })
+    }
+
+    if (model.uniqueFields.length > 0) {
+      model.uniqueFields.forEach((uniqueField) => {
+        directiveValue.push({ name: '@@unique', values: [...uniqueField] })
+      })
+    }
+
+    if (model.uniqueIndexes.length > 0) {
+      model.uniqueIndexes.forEach((uniqueIndex) => {
+        directiveValue.push({ name: '@@index', values: [...uniqueIndex.fields] })
+      })
+    }
+
+    return directiveValue
+  }
+
+  private getModelFields(model: DMMF.Model): MGModelField[] {
+    return model.fields.map((field) => ({
+      name: field.name,
+      type: this.getFieldType(field),
+      bareTypeName: field.type,
+      documentation: (field as any).documentation,
+      directives: this.getFieldDirectives(field),
+      required: field.isRequired,
+    }))
+  }
+
+  private getFieldType(field: DMMF.Field): string {
+    let name = field.type
+    if (!field.isRequired && !field.isList) {
+      name += '?'
+    }
+    if (field.isList) {
+      name += '[]'
+    }
+    return name
+  }
+
+  private getFieldDirectives(field: DMMF.Field): string[] {
+    const filteredEntries = Object.entries(field).filter(([_, v]) => Boolean(v))
+    const directives: string[] = []
+
+    filteredEntries.forEach(([k]) => {
+      const mappedDirectiveValue = fieldDirectiveMap.get(k)
+      if (mappedDirectiveValue) {
+        if (k === 'hasDefaultValue' && field.default !== undefined) {
+          if (
+            typeof field.default === 'string' ||
+            typeof field.default === 'number' ||
+            typeof field.default === 'boolean'
+          ) {
+            directives.push(`${mappedDirectiveValue}(${field.default})`)
+          } else if (Array.isArray(field.default)) {
+            directives.push(`${mappedDirectiveValue}([${field.default.toString()}])`)
+          } else if (typeof field.default === 'object') {
+            directives.push(
+              `${mappedDirectiveValue}(${(field.default as FieldDefault).name}(${(field.default as FieldDefault).args.join(',')}))`,
+            )
+          }
+        } else {
+          directives.push(mappedDirectiveValue)
+        }
+      }
+    })
+
+    return directives
+  }
+
+  private getModelOperations(
+    model: DMMF.Model,
+    mappings: DMMFMapping | undefined,
+    schema: DMMF.Schema,
+  ): MGModelOperation[] {
+    if (!mappings) {
+      throw new Error(`No operation mapping found for model: ${model.name}`)
+    }
+
+    const modelOps = Object.entries(mappings).filter(([map]) => map !== 'model')
+    const ops: MGModelOperation[] = []
+
+    const mapArgs = (
+      args: readonly DMMF.SchemaArg[] | undefined,
+    ): MGModelOperationKeys[] | undefined => {
+      return args?.map((a) => ({
+        name: a.name,
+        types: a.inputTypes as readonly DMMF.InputTypeRef[],
+        required: a.isRequired as boolean,
+      }))
+    }
+
+    modelOps.forEach(([op, val]) => {
+      const singular = capitalize(model.name)
+      const plural = capitalize(singular)
+      const method = `prisma.${lowerCase(model.name)}.${op}`
+
+      const generateUsage = (code: string): string => escapeHtml(code)
+
+      switch (op) {
+        case ModelAction.create: {
+          const field = schema.outputObjectTypes.prisma
+            .find((t) => t.name === 'Mutation')
+            ?.fields.find((f) => f.name === val)
+          ops.push({
+            name: op,
+            description: `Create one ${singular}`,
+            usage: generateUsage(`// Create one ${singular}
+const ${singular} = await ${method}({
+  data: {
+    // ... data to create a ${singular}
+  }
+})`),
+            opKeys: mapArgs(field?.args),
+            output: {
+              type: field?.outputType.type as string,
+              required: !field?.isNullable,
+              list: field?.outputType.isList,
+            },
+          })
+          break
+        }
+        case ModelAction.deleteMany: {
+          const field = schema.outputObjectTypes.prisma
+            .find((t) => t.name === 'Mutation')
+            ?.fields.find((f) => f.name === val)
+          ops.push({
+            name: op,
+            description: `Delete zero or more ${singular}`,
+            usage: generateUsage(`// Delete a few ${plural}
+const { count } = await ${method}({
+  where: {
+    // ... provide filter here
+  }
+})`),
+            opKeys: mapArgs(field?.args),
+            output: {
+              type: field?.outputType.type as string,
+              required: !field?.isNullable,
+              list: field?.outputType.isList,
+            },
+          })
+          break
+        }
+        case ModelAction.delete: {
+          const field = schema.outputObjectTypes.prisma
+            .find((t) => t.name === 'Mutation')
+            ?.fields.find((f) => f.name === val)
+          ops.push({
+            name: op,
+            description: `Delete one ${singular}`,
+            usage: generateUsage(`// Delete one ${singular}
+const ${singular} = await ${method}({
+  where: {
+    // ... filter to delete one ${singular}
+  }
+})`),
+            opKeys: mapArgs(field?.args),
+            output: {
+              type: field?.outputType.type as string,
+              required: !field?.isNullable,
+              list: field?.outputType.isList,
+            },
+          })
+          break
+        }
+        case ModelAction.findMany: {
+          const field = schema.outputObjectTypes.prisma
+            .find((t) => t.name === 'Query')
+            ?.fields.find((f) => f.name === val)
+          ops.push({
+            name: op,
+            description: `Find zero or more ${plural}`,
+            usage: generateUsage(`// Get all ${plural}
+const ${plural} = await ${method}()
+// Get first 10 ${plural}
+const ${plural} = await ${method}({ take: 10 })`),
+            opKeys: mapArgs(field?.args),
+            output: {
+              type: field?.outputType.type as string,
+              required: !field?.isNullable,
+              list: field?.outputType.isList,
+            },
+          })
+          break
+        }
+        case ModelAction.findUnique: {
+          const field = schema.outputObjectTypes.prisma
+            .find((t) => t.name === 'Query')
+            ?.fields.find((f) => f.name === val)
+          ops.push({
+            name: op,
+            description: `Find zero or one ${plural}`,
+            usage: generateUsage(`// Get one ${singular}
+const ${lowerCase(singular)} = await ${method}({
+  where: {
+    // ... provide filter here
+  }
+})`),
+            opKeys: mapArgs(field?.args),
+            output: {
+              type: field?.outputType.type as string,
+              required: !field?.isNullable,
+              list: field?.outputType.isList,
+            },
+          })
+          break
+        }
+        case ModelAction.findFirst: {
+          const field = schema.outputObjectTypes.prisma
+            .find((t) => t.name === 'Query')
+            ?.fields.find((f) => f.name === val)
+          ops.push({
+            name: op,
+            description: `Find first ${plural}`,
+            usage: generateUsage(`// Get one ${singular}
+const ${lowerCase(singular)} = await ${method}({
+  where: {
+    // ... provide filter here
+  }
+})`),
+            opKeys: mapArgs(field?.args),
+            output: {
+              type: field?.outputType.type as string,
+              required: !field?.isNullable,
+              list: field?.outputType.isList,
+            },
+          })
+          break
+        }
+        case ModelAction.update: {
+          const field = schema.outputObjectTypes.prisma
+            .find((t) => t.name === 'Mutation')
+            ?.fields.find((f) => f.name === val)
+          ops.push({
+            name: op,
+            description: `Update one ${singular}`,
+            usage: generateUsage(`// Update one ${singular}
+const ${lowerCase(singular)} = await ${method}({
+  where: {
+    // ... provide filter here
+  },
+  data: {
+    // ... provide data here
+  }
+})`),
+            opKeys: mapArgs(field?.args),
+            output: {
+              type: field?.outputType.type as string,
+              required: !field?.isNullable,
+              list: field?.outputType.isList,
+            },
+          })
+          break
+        }
+        case ModelAction.updateMany: {
+          const field = schema.outputObjectTypes.prisma
+            .find((t) => t.name === 'Mutation')
+            ?.fields.find((f) => f.name === val)
+          ops.push({
+            name: op,
+            description: `Update zero or one ${plural}`,
+            usage: generateUsage(`const { count } = await ${method}({
+  where: {
+    // ... provide filter here
+  },
+  data: {
+    // ... provide data here
+  }
+})`),
+            opKeys: mapArgs(field?.args),
+            output: {
+              type: field?.outputType.type as string,
+              required: !field?.isNullable,
+              list: field?.outputType.isList,
+            },
+          })
+          break
+        }
+        case ModelAction.upsert: {
+          const field = schema.outputObjectTypes.prisma
+            .find((t) => t.name === 'Mutation')
+            ?.fields.find((f) => f.name === val)
+          ops.push({
+            name: op,
+            description: `Create or update one ${plural}`,
+            usage: generateUsage(`// Update or create a ${singular}
+const ${lowerCase(singular)} = await ${method}({
+  create: {
+    // ... data to create a ${singular}
+  },
+  update: {
+    // ... in case it already exists, update
+  },
+  where: {
+    // ... the filter for the ${singular} we want to update
+  }
+})`),
+            opKeys: mapArgs(field?.args),
+            output: {
+              type: field?.outputType.type as string,
+              required: !field?.isNullable,
+              list: field?.outputType.isList,
+            },
+          })
+          break
+        }
+      }
+    })
+
+    return ops
+  }
+
+  private getModels(dmmf: DMMFDocument): MGModel[] {
+    return dmmf.datamodel.models.map((model) => ({
+      name: model.name,
+      documentation: (model as any).documentation as string,
+      directives: this.getModelDirective(model),
+      fields: this.getModelFields(model),
+      operations: this.getModelOperations(
+        model,
+        dmmf.mappings.find((map) => map.model === model.name),
+        dmmf.schema,
+      ),
+    }))
+  }
+
+  getData(d: DMMFDocument): ModelGeneratorStructure {
+    return {
+      models: this.getModels(d),
+    }
+  }
+}
