@@ -52,7 +52,7 @@
     "@resvg/resvg-js": "^2.6.2",
     "@softwaretechnik/dbml-renderer": "^1.0.31",
     "oxfmt": "^0.27.0",
-    "utils-lab": "file:../../../utils-lab"
+    "utils-lab": "^0.0.2"
   },
   "devDependencies": {
     "@prisma/client": "^7.0.1",
