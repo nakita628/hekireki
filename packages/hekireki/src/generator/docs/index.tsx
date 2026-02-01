@@ -28,6 +28,6 @@ generatorHandler({
     }
 
     await fs.mkdir(output, { recursive: true })
-    await fs.writeFile(path.join(output, 'index.html'), html.toHTML())
+    await fs.writeFile(path.join(output, 'index.html'), await html.toHTML())
   },
 })

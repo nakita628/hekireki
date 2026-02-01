@@ -2,7 +2,7 @@ import type { DMMFDocument } from './transformDMMF.js'
 
 export interface Generatable<T> {
   data: T
-  toHTML(): string
+  toHTML(): string | Promise<string>
   getData(d: DMMFDocument): T
 }
 

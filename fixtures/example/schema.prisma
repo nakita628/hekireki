@@ -34,6 +34,7 @@ generator Hekireki-Effect {
 
 generator Hekireki-DBML {
     provider = "hekireki-dbml"
+    output   = "docs"
 }
 
 generator Hekireki-Ecto {
@@ -42,10 +43,9 @@ generator Hekireki-Ecto {
     app = "DBSchema"
 }
 
-generator Hekireki-SVG {
-    provider = "hekireki-svg"
+generator Hekireki-Docs {
+    provider = "node /workspaces/npm/hekireki/packages/hekireki/dist/generator/docs/index.js"
     output   = "docs"
-    format   = "png"
 }
 
 model User {

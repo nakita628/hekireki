@@ -8,7 +8,9 @@
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
     "types": ["node"],
-    "declaration": true
+    "declaration": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "hono/jsx"
   },
   "include": ["**/src/**/*"],
   "exclude": ["**/src/**/*.test.ts"]

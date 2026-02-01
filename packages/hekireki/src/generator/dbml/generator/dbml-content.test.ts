@@ -557,7 +557,10 @@ describe('generateEnums', () => {
 
     const result = generateEnums(enums)
 
-    expect(result).toStrictEqual(['Enum Role {\n  USER\n}', 'Enum Status {\n  ACTIVE\n  INACTIVE\n}'])
+    expect(result).toStrictEqual([
+      'Enum Role {\n  USER\n}',
+      'Enum Status {\n  ACTIVE\n  INACTIVE\n}',
+    ])
   })
 
   it('returns empty array for empty enums', () => {

@@ -3,7 +3,8 @@
   "type": "module",
   "scripts": {
     "generate": "prisma generate",
-    "typecheck": "tsgo --noEmit"
+    "typecheck": "tsgo --noEmit",
+    "docs": "hekireki docs serve"
   },
   "dependencies": {
     "arktype": "^2.1.29",

@@ -2,6 +2,7 @@ import { defineConfig } from 'tsdown'
 
 export default defineConfig({
   entry: {
+    'cli/index': './src/cli/index.ts',
     'generator/zod/index': './src/generator/zod/index.ts',
     'generator/valibot/index': './src/generator/valibot/index.ts',
     'generator/mermaid-er/index': './src/generator/mermaid-er/index.ts',
@@ -9,9 +10,7 @@ export default defineConfig({
     'generator/arktype/index': './src/generator/arktype/index.ts',
     'generator/effect/index': './src/generator/effect/index.ts',
     'generator/dbml/index': './src/generator/dbml/index.ts',
-    'generator/svg/index': './src/generator/svg/index.ts',
-    'generator/docs/index': './src/generator/docs/index.ts',
-    'generator/docs/cli': './src/generator/docs/cli.ts',
+    'generator/docs/index': './src/generator/docs/index.tsx',
   },
   format: 'esm',
   dts: true,

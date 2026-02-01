@@ -31,6 +31,7 @@
     "dist"
   ],
   "bin": {
+    "hekireki": "dist/cli/index.js",
     "hekireki-zod": "dist/generator/zod/index.js",
     "hekireki-valibot": "dist/generator/valibot/index.js",
     "hekireki-mermaid-er": "dist/generator/mermaid-er/index.js",
@@ -38,9 +39,7 @@
     "hekireki-arktype": "dist/generator/arktype/index.js",
     "hekireki-effect": "dist/generator/effect/index.js",
     "hekireki-dbml": "dist/generator/dbml/index.js",
-    "hekireki-svg": "dist/generator/svg/index.js",
-    "hekireki-docs": "dist/generator/docs/index.js",
-    "hekireki-docs-serve": "dist/generator/docs/cli.js"
+    "hekireki-docs": "dist/generator/docs/index.js"
   },
   "scripts": {
     "generate": "prisma generate",

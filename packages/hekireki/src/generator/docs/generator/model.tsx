@@ -1,4 +1,8 @@
+import type { FC } from 'hono/jsx'
 import type { DMMF } from '@prisma/generator-helper'
+import { capitalize, type Generatable, isScalarType, lowerCase } from './helpers.js'
+import type { DMMFDocument, DMMFMapping } from './transformDMMF.js'
+import { styles } from '../styles.js'
 
 // Model action string literals (avoiding runtime DMMF usage)
 const ModelAction = {
@@ -12,8 +16,6 @@ const ModelAction = {
   updateMany: 'updateMany',
   upsert: 'upsert',
 } as const
-import { type Generatable, capitalize, isScalarType, lowerCase } from './helpers.js'
-import type { DMMFDocument, DMMFMapping } from './transformDMMF.js'
 
 type ModelGeneratorStructure = {
   models: MGModel[]
@@ -85,6 +87,201 @@ const escapeHtml = (str: string): string =>
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;')
 
+// Components
+const DirectiveRow: FC<{ directive: MGModelDirective }> = ({ directive }) => (
+  <tr>
+    <td>
+      <strong>{directive.name}</strong>
+    </td>
+    <td>
+      <ul>
+        {directive.values.map((val) => (
+          <li>{val}</li>
+        ))}
+      </ul>
+    </td>
+  </tr>
+)
+
+const FieldTypeLink: FC<{ type: string; bareTypeName: string }> = ({ type, bareTypeName }) => {
+  if (isScalarType(bareTypeName)) {
+    return <>{type}</>
+  }
+  return <a href={`#type-outputType-${bareTypeName}`}>{type}</a>
+}
+
+const FieldTableRow: FC<{ field: MGModelField; modelName: string }> = ({ field, modelName }) => (
+  <tr id={`model-${modelName}-${field.name}`}>
+    <td>{field.name}</td>
+    <td>
+      <FieldTypeLink type={field.type} bareTypeName={field.bareTypeName} />
+    </td>
+    <td>
+      <ul>
+        {field.directives.length > 0 ? (
+          field.directives.map((directive) => (
+            <li>
+              <strong>{directive}</strong>
+            </li>
+          ))
+        ) : (
+          <li> - </li>
+        )}
+      </ul>
+    </td>
+    <td>{field.required ? <strong>Yes</strong> : 'No'}</td>
+    <td>{field.documentation ?? '-'}</td>
+  </tr>
+)
+
+const OperationInputTypeLink: FC<{ typeRef: DMMF.InputTypeRef }> = ({ typeRef }) => {
+  const typeName = typeRef.type as string
+  if (isScalarType(typeName)) {
+    return <>{typeName}</>
+  }
+  return (
+    <a href={`#type-inputType-${typeName}`}>
+      {typeName}
+      {typeRef.isList ? '[]' : ''}
+    </a>
+  )
+}
+
+const OperationInputRow: FC<{ opKey: MGModelOperationKeys }> = ({ opKey }) => (
+  <tr>
+    <td>{opKey.name}</td>
+    <td>
+      {opKey.types.map((t, i) => (
+        <>
+          {i > 0 && ' | '}
+          <OperationInputTypeLink typeRef={t} />
+        </>
+      ))}
+    </td>
+    <td>{opKey.required ? <strong>Yes</strong> : 'No'}</td>
+  </tr>
+)
+
+const OperationMarkup: FC<{ operation: MGModelOperation; modelName: string }> = ({
+  operation,
+  modelName,
+}) => (
+  <div class={styles.operationItem}>
+    <h4 id={`model-${modelName}-${operation.name}`} class={styles.h4}>
+      {operation.name}
+    </h4>
+    <p class={styles.text}>{operation.description}</p>
+    <div class={styles.mb2}>
+      <pre class={styles.codeBlock}>
+        <code>{operation.usage}</code>
+      </pre>
+    </div>
+    <h4 class={styles.h4}>Input</h4>
+    <table class={styles.table}>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Required</th>
+        </tr>
+      </thead>
+      <tbody>
+        {operation.opKeys?.map((opK) => (
+          <OperationInputRow opKey={opK} />
+        ))}
+      </tbody>
+    </table>
+    <h4 class={styles.h4}>Output</h4>
+    <div class={styles.text}>
+      <strong>Type: </strong>
+      <a href={`#type-outputType-${operation.output.type}`}>{operation.output.type}</a>
+    </div>
+    <div class={styles.text}>
+      <strong>Required: </strong>
+      {operation.output.required ? 'Yes' : 'No'}
+    </div>
+    <div class={styles.text}>
+      <strong>List: </strong>
+      {operation.output.list ? 'Yes' : 'No'}
+    </div>
+  </div>
+)
+
+const ModelItem: FC<{ model: MGModel; isLast: boolean }> = ({ model, isLast }) => (
+  <>
+    <div class={styles.modelSection}>
+      <h2 class={styles.h2} id={`model-${model.name}`}>
+        {model.name}
+      </h2>
+      {model.documentation && <div class={styles.text}>Description: {model.documentation}</div>}
+      {model.directives.length > 0 && (
+        <table class={styles.table}>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            {model.directives.map((directive) => (
+              <DirectiveRow directive={directive} />
+            ))}
+          </tbody>
+        </table>
+      )}
+      <div class={styles.fieldsSection}>
+        <h3 class={styles.h3} id={`model-${model.name}-fields`}>
+          Fields
+        </h3>
+        <div class={styles.ml4}>
+          <table class={styles.table}>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Attributes</th>
+                <th>Required</th>
+                <th>Comment</th>
+              </tr>
+            </thead>
+            <tbody>
+              {model.fields.map((field) => (
+                <FieldTableRow field={field} modelName={model.name} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <hr class={styles.hr} />
+      <div class={styles.operationsSection}>
+        <h3 class={styles.h3} id={`model-${model.name}-operations`}>
+          Operations
+        </h3>
+        <div class={styles.ml4}>
+          {model.operations.map((op, i) => (
+            <>
+              {i > 0 && <hr class={styles.hrSmall} />}
+              <OperationMarkup operation={op} modelName={model.name} />
+            </>
+          ))}
+        </div>
+      </div>
+    </div>
+    {!isLast && <hr class={styles.hr} />}
+  </>
+)
+
+const ModelsSection: FC<{ data: ModelGeneratorStructure }> = ({ data }) => (
+  <div class={styles.section}>
+    <h1 class={styles.h1} id="models">
+      Models
+    </h1>
+    {data.models.map((model, i) => (
+      <ModelItem model={model} isLast={i === data.models.length - 1} />
+    ))}
+  </div>
+)
+
 export class ModelGenerator implements Generatable<ModelGeneratorStructure> {
   data: ModelGeneratorStructure
 
@@ -92,168 +289,12 @@ export class ModelGenerator implements Generatable<ModelGeneratorStructure> {
     this.data = this.getData(d)
   }
 
-  private getModelDirectiveHTML(directive: MGModelDirective): string {
-    return `
-      <tr>
-        <td class="px-4 py-2 border dark:border-gray-400">
-         <strong class="text-dark dark:text-white">${directive.name}</strong>
-        </td>
-        <td class="px-4 py-2 border dark:border-gray-400"> <ul>
-            ${directive.values.map((val) => `<li class="text-dark dark:text-white">${val}</li>`).join('')}
-          </ul>
-        </td>
-      </tr>
-    `
-  }
-
-  private getModelFieldTableRow(field: MGModelField, modelName: string): string {
-    return `
-    <tr id="${`model-${modelName}-${field.name}`}">
-      <td class="px-4 py-2 border text-black dark:text-white dark:border-gray-400">
-       ${field.name}
-      </td>
-      <td class="px-4 py-2 border text-black dark:text-white dark:border-gray-400">
-       ${
-         isScalarType(field.bareTypeName)
-           ? field.type
-           : `<a href="#type-outputType-${field.bareTypeName}">${field.type}</a>`
-       }
-      </td>
-      <td class="px-4 py-2 border text-black dark:text-white dark:border-gray-400">
-        <ul class="text-black dark:text-white">
-          ${
-            field.directives.length > 0
-              ? field.directives.map((directive) => `<li><strong>${directive}</strong></li>`).join('')
-              : '<li> - </li>'
-          }
-        </ul>
-      </td>
-      <td class="px-4 py-2 border text-black dark:text-white dark:border-gray-400">
-        ${field.required ? `<strong>Yes</strong>` : 'No'}
-      </td>
-      <td class="px-4 py-2 border text-black dark:text-white dark:border-gray-400">
-        ${field.documentation ?? '-'}
-      </td>
-    </tr>
-    `
-  }
-
-  private getModelOperationMarkup(operation: MGModelOperation, modelName: string): string {
-    return `
-                <div class="mt-4">
-                  <h4 id="${`model-${modelName}-${operation.name}`}" class="mb-2 text-lg font-bold dark:text-white">${operation.name}</h4>
-                  <p class="text-black dark:text-white">${operation.description}</p>
-                  <div class="mb-2">
-                    <pre class="language-markup"><code class="language-javascript">${operation.usage}</code></pre>
-                  </div>
-                  <h4 class="text-lg mb-2 text-black dark:text-white">Input</h4>
-                  <table class="table-auto mb-2">
-                    <thead>
-                      <tr>
-                        <th class="px-4 py-2 border dark:text-white dark:border-gray-400">Name</th>
-                        <th class="px-4 py-2 border dark:text-white dark:border-gray-400">Type</th>
-                        <th class="px-4 py-2 border dark:text-white dark:border-gray-400">Required</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      ${operation.opKeys
-                        ?.map(
-                          (opK) => `
-                      <tr>
-                        <td class="px-4 py-2 border dark:text-white dark:border-gray-400">
-                          ${opK.name}
-                        </td>
-                        <td class="px-4 py-2 border dark:text-white dark:border-gray-400">
-                        ${opK.types
-                          .map((t) =>
-                            isScalarType(t.type as string)
-                              ? t.type
-                              : `<a href="#type-inputType-${t.type}" class="dark:text-white">${t.type}${t.isList ? '[]' : ''}</a>`,
-                          )
-                          .join(' | ')}
-                        </td>
-                        <td class="px-4 py-2 border dark:text-white dark:border-gray-400">
-                         ${opK.required ? '<strong>Yes</strong>' : 'No'}
-                        </td>
-                      </tr>
-                      `,
-                        )
-                        .join('')}
-                    </tbody>
-                  </table>
-                  <h4 class="text-lg mb-2 text-black dark:text-white">Output</h4>
-                  <div class="text-dark dark:text-white"><strong>Type: </strong> <a href="#type-outputType-${operation.output.type}">${operation.output.type}</a></div>
-                  <div class="text-dark dark:text-white"><strong>Required: </strong>
-                  ${operation.output.required ? `Yes` : `No`}</div>
-                  <div class="text-dark dark:text-white"><strong>List: </strong>
-                  ${operation.output.list ? `Yes` : `No`}</div>
-              </div>
-    `
-  }
-
   toHTML(): string {
-    return `
-        <div class="mb-8">
-          <h1 class="text-3xl text-gray-800 dark:text-white" id="models">Models</h1>
-            ${this.data.models
-              .map(
-                (model) => `
-            <div class="px-4 mb-4">
-              <h2 class="text-2xl text-black dark:text-white" id="model-${model.name}">${model.name}</h2>
-              ${
-                model.documentation
-                  ? `<div class="mb-2 text-black dark:text-white">Description: ${model.documentation}</div>`
-                  : ''
-              }
-              ${
-                model.directives.length > 0
-                  ? `
-              <table class="table-auto">
-                <thead>
-                  <tr>
-                    <th class="px-4 py-2 border dark:text-white dark:border-gray-400">Name</th>
-                    <th class="px-4 py-2 border dark:text-white dark:border-gray-400">Value</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${model.directives.map((directive) => this.getModelDirectiveHTML(directive)).join('')}
-                </tbody>
-              </table>
-                `
-                  : ''
-              }
-              <div class="px-4 mt-4">
-                <h3 class="mb-2 text-xl text-black dark:text-white" id="model-${model.name}-fields">Fields</h3>
-                <div class="px-2 mb-4">
-                  <table class="table-auto">
-                    <thead>
-                      <tr>
-                        <th class="px-4 py-2 border text-black dark:text-white dark:border-gray-400">Name</th>
-                        <th class="px-4 py-2 border text-black dark:text-white dark:border-gray-400">Type</th>
-                        <th class="px-4 py-2 border text-black dark:text-white dark:border-gray-400">Attributes</th>
-                        <th class="px-4 py-2 border text-black dark:text-white dark:border-gray-400">Required</th>
-                        <th class="px-4 py-2 border text-black dark:text-white dark:border-gray-400">Comment</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                    ${model.fields.map((field) => this.getModelFieldTableRow(field, model.name)).join('')}
-                    </tbody>
-                  </table>
-                </div>
-            </div>
-            <hr class="my-8">
-              <div class="px-4 mt-4">
-                <h3 class="mb-2 text-xl dark:text-white" id="model-${model.name}-operations">Operations</h3>
-                <div class="px-2 mb-4">
-                  ${model.operations.map((op) => this.getModelOperationMarkup(op, model.name)).join(`<hr class="my-4 dark:text-white">`)}
-                </div>
-            </div>
-          </div>
-            `,
-              )
-              .join(`<hr class="my-16">`)}
-        </div>
-    `
+    return this.toJSX().toString()
+  }
+
+  toJSX(): JSX.Element {
+    return <ModelsSection data={this.data} />
   }
 
   private getModelDirective(model: DMMF.Model): MGModelDirective[] {
@@ -291,7 +332,7 @@ export class ModelGenerator implements Generatable<ModelGeneratorStructure> {
 
   private getFieldType(field: DMMF.Field): string {
     let name = field.type
-    if (!field.isRequired && !field.isList) {
+    if (!(field.isRequired || field.isList)) {
       name += '?'
     }
     if (field.isList) {
