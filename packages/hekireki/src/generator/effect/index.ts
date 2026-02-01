@@ -5,20 +5,59 @@ import pkg from '@prisma/generator-helper'
 import { fmt } from '../../shared/format/index.js'
 import { mkdir, writeFile } from '../../shared/fsp/index.js'
 import { getBool, getString } from '../../shared/generator/index.js'
+import { collectRelationProps } from '../../shared/helper/relations.js'
 import { effect } from './generator/effect.js'
+import { makeEffectRelations } from './generator/schema.js'
 
 const { generatorHandler } = pkg
 
-const emit = async (options: GeneratorOptions): Promise<void> => {
+const buildRelationsOnly = (dmmf: GeneratorOptions['dmmf'], includeType: boolean): string => {
+  const models = dmmf.datamodel.models
+  const relIndex = collectRelationProps(models)
+  const relByModel: Record<
+    string,
+    readonly {
+      readonly model: string
+      readonly key: string
+      readonly targetModel: string
+      readonly isMany: boolean
+    }[]
+  > = {}
+
+  for (const r of relIndex) {
+    const existing = relByModel[r.model] ?? []
+    relByModel[r.model] = [...existing, r]
+  }
+  return models
+    .map((model) =>
+      makeEffectRelations(
+        model,
+        (relByModel[model.name] ?? []).map(({ key, targetModel, isMany }) => ({
+          key,
+          targetModel,
+          isMany,
+        })),
+        { includeType },
+      ),
+    )
+    .filter((code): code is string => Boolean(code))
+    .join('\n\n')
+}
+
+const emit = async (options: GeneratorOptions, enableRelation: boolean): Promise<void> => {
   const outDir = options.generator.output?.value ?? './effect'
   const file = getString(options.generator.config?.file, 'index.ts') ?? 'index.ts'
-  const content = effect(
+  const base = effect(
     options.dmmf.datamodel.models,
     getBool(options.generator.config?.type),
     getBool(options.generator.config?.comment),
   )
+  const relations = enableRelation
+    ? buildRelationsOnly(options.dmmf, getBool(options.generator.config?.type))
+    : ''
+  const full = [base, relations].filter(Boolean).join('\n\n')
 
-  const fmtResult = await fmt(content)
+  const fmtResult = await fmt(full)
   if (!fmtResult.ok) {
     throw new Error(`Format error: ${fmtResult.error}`)
   }
@@ -34,7 +73,13 @@ const emit = async (options: GeneratorOptions): Promise<void> => {
   }
 }
 
-export const onGenerate = (options: GeneratorOptions) => emit(options)
+export const onGenerate = (options: GeneratorOptions) =>
+  emit(
+    options,
+    options.generator.config?.relation === 'true' ||
+      (Array.isArray(options.generator.config?.relation) &&
+        options.generator.config?.relation[0] === 'true'),
+  )
 
 generatorHandler({
   onManifest() {
