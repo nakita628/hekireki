@@ -139,7 +139,7 @@ const startDocsServer = (options: DocsServeOptions): Result<string> => {
 
   return {
     ok: true,
-    value: `✅ Hekireki Docs Server started at http://localhost:${options.port}\n📂 Serving documentation from: ${absolutePath}`,
+    value: `⚡️ Hekireki Docs Server started at http://localhost:${options.port}\n📂 Serving documentation from: ${absolutePath}`,
   }
 }
 

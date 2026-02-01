@@ -1,11 +1,3 @@
-import type { DMMFDocument } from './transformDMMF.js'
-
-export interface Generatable<T> {
-  data: T
-  toHTML(): string | Promise<string>
-  getData(d: DMMFDocument): T
-}
-
 export const capitalize = (str: string): string => str[0].toUpperCase() + str.slice(1)
 
 export const lowerCase = (name: string): string =>

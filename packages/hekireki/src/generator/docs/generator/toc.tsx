@@ -1,23 +1,22 @@
 import type { FC } from 'hono/jsx'
 import type { DMMF } from '@prisma/generator-helper'
-import type { Generatable } from './helpers.js'
 import type { DMMFDocument, DMMFMapping } from './transformDMMF.js'
 import { styles } from '../styles.js'
 
 type TOCStructure = {
-  models: TOCModel[]
-  types: TOCTypes
+  readonly models: readonly TOCModel[]
+  readonly types: TOCTypes
 }
 
 type TOCModel = {
-  name: string
-  fields: string[]
-  operations: string[]
+  readonly name: string
+  readonly fields: readonly string[]
+  readonly operations: readonly string[]
 }
 
 type TOCTypes = {
-  inputTypes: string[]
-  outputTypes: string[]
+  readonly inputTypes: readonly string[]
+  readonly outputTypes: readonly string[]
 }
 
 const TOCSubHeader: FC<{ name: string }> = ({ name }) => (
@@ -70,7 +69,7 @@ const TOCModelItem: FC<{ model: TOCModel }> = ({ model }) => (
   </li>
 )
 
-const TOCTypeSection: FC<{ title: string; href: string; types: string[]; kind: string }> = ({
+const TOCTypeSection: FC<{ title: string; href: string; types: readonly string[]; kind: string }> = ({
   title,
   href,
   types,
@@ -124,48 +123,34 @@ const TOCComponent: FC<{ data: TOCStructure }> = ({ data }) => (
   </div>
 )
 
-export class TOCGenerator implements Generatable<TOCStructure> {
-  data: TOCStructure
+const getModels = (dmmfModel: readonly DMMF.Model[], mappings: readonly DMMFMapping[]): readonly TOCModel[] =>
+  dmmfModel.map((model) => ({
+    name: model.name,
+    fields: model.fields.map((field) => field.name),
+    operations: Object.keys(mappings.find((x) => x.model === model.name) ?? {}).filter(
+      (op) => op !== 'model',
+    ),
+  }))
 
-  constructor(d: DMMFDocument) {
-    this.data = this.getData(d)
+const getTypes = (dmmfSchema: DMMF.Schema): TOCTypes => {
+  const prismaInputTypes = dmmfSchema.inputObjectTypes.prisma ?? []
+  return {
+    inputTypes: prismaInputTypes.map((inputType) => inputType.name),
+    outputTypes: [
+      ...dmmfSchema.outputObjectTypes.model.map((ot) => ot.name),
+      ...dmmfSchema.outputObjectTypes.prisma
+        .map((outputType) => outputType.name)
+        .filter((ot) => ot !== 'Query' && ot !== 'Mutation'),
+    ],
   }
+}
 
-  toHTML(): string {
-    return this.toJSX().toString()
-  }
+const getTOCData = (d: DMMFDocument): TOCStructure => ({
+  models: getModels([...d.datamodel.models], d.mappings),
+  types: getTypes(d.schema),
+})
 
-  toJSX(): JSX.Element {
-    return <TOCComponent data={this.data} />
-  }
-
-  private getModels(dmmfModel: DMMF.Model[], mappings: DMMFMapping[]): TOCModel[] {
-    return dmmfModel.map((model) => ({
-      name: model.name,
-      fields: model.fields.map((field) => field.name),
-      operations: Object.keys(mappings.find((x) => x.model === model.name) ?? {}).filter(
-        (op) => op !== 'model',
-      ),
-    }))
-  }
-
-  private getTypes(dmmfSchema: DMMF.Schema): TOCTypes {
-    const prismaInputTypes = dmmfSchema.inputObjectTypes.prisma ?? []
-    return {
-      inputTypes: prismaInputTypes.map((inputType) => inputType.name),
-      outputTypes: [
-        ...dmmfSchema.outputObjectTypes.model.map((ot) => ot.name),
-        ...dmmfSchema.outputObjectTypes.prisma
-          .map((outputType) => outputType.name)
-          .filter((ot) => ot !== 'Query' && ot !== 'Mutation'),
-      ],
-    }
-  }
-
-  getData(d: DMMFDocument): TOCStructure {
-    return {
-      models: this.getModels([...d.datamodel.models], d.mappings),
-      types: this.getTypes(d.schema),
-    }
-  }
+export const createTOC = (d: DMMFDocument) => {
+  const data = getTOCData(d)
+  return <TOCComponent data={data} />
 }

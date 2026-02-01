@@ -1,23 +1,23 @@
 import type { FC } from 'hono/jsx'
 import type { DMMF } from '@prisma/generator-helper'
-import { type Generatable, isScalarType } from './helpers.js'
+import { isScalarType } from './helpers.js'
 import type { DMMFDocument } from './transformDMMF.js'
 import { styles } from '../styles.js'
 
 type TypesGeneratorStructure = {
-  inputTypes: TGType[]
-  outputTypes: TGType[]
+  readonly inputTypes: readonly TGType[]
+  readonly outputTypes: readonly TGType[]
 }
 
 type TGType = {
-  name: string
-  fields: TGTypeField[]
+  readonly name: string
+  readonly fields: readonly TGTypeField[]
 }
 
 type TGTypeField = {
-  name: string
-  type: readonly DMMF.InputTypeRef[]
-  nullable: boolean
+  readonly name: string
+  readonly type: readonly DMMF.InputTypeRef[]
+  readonly nullable: boolean
 }
 
 const TypeRefLink: FC<{ typeRef: DMMF.InputTypeRef; kind: 'inputType' | 'outputType' }> = ({
@@ -110,59 +110,46 @@ const TypesSection: FC<{ data: TypesGeneratorStructure }> = ({ data }) => (
   </div>
 )
 
-export class TypesGenerator implements Generatable<TypesGeneratorStructure> {
-  data: TypesGeneratorStructure
+const getInputTypes = (dmmfInputType: readonly DMMF.InputType[]): readonly TGType[] =>
+  dmmfInputType.map((inputType) => ({
+    name: inputType.name,
+    fields: inputType.fields.map((ip) => ({
+      name: ip.name,
+      nullable: ip.isNullable as boolean,
+      type: ip.inputTypes as readonly DMMF.InputTypeRef[],
+    })),
+  }))
 
-  constructor(d: DMMFDocument) {
-    this.data = this.getData(d)
-  }
+const getOutputTypes = (dmmfOutputTypes: readonly DMMF.OutputType[]): readonly TGType[] =>
+  dmmfOutputTypes.map((outputType) => ({
+    name: outputType.name,
+    fields: outputType.fields.map((op) => ({
+      name: op.name,
+      nullable: !op.isNullable,
+      type: [
+        {
+          isList: op.outputType.isList,
+          type: op.outputType.type as string,
+          location: op.outputType.location,
+        },
+      ] as readonly DMMF.InputTypeRef[],
+    })),
+  }))
 
-  toHTML(): string {
-    return this.toJSX().toString()
+const getTypesData = (d: DMMFDocument): TypesGeneratorStructure => {
+  const prismaInputTypes = d.schema.inputObjectTypes.prisma ?? []
+  return {
+    inputTypes: getInputTypes(prismaInputTypes),
+    outputTypes: getOutputTypes([
+      ...d.schema.outputObjectTypes.model,
+      ...d.schema.outputObjectTypes.prisma.filter(
+        (op) => op.name !== 'Query' && op.name !== 'Mutation',
+      ),
+    ]),
   }
+}
 
-  toJSX() {
-    return <TypesSection data={this.data} />
-  }
-
-  private getInputTypes(dmmfInputType: readonly DMMF.InputType[]): TGType[] {
-    return dmmfInputType.map((inputType) => ({
-      name: inputType.name,
-      fields: inputType.fields.map((ip) => ({
-        name: ip.name,
-        nullable: ip.isNullable as boolean,
-        type: ip.inputTypes as readonly DMMF.InputTypeRef[],
-      })),
-    }))
-  }
-
-  private getOutputTypes(dmmfOutputTypes: readonly DMMF.OutputType[]): TGType[] {
-    return dmmfOutputTypes.map((outputType) => ({
-      name: outputType.name,
-      fields: outputType.fields.map((op) => ({
-        name: op.name,
-        nullable: !op.isNullable,
-        type: [
-          {
-            isList: op.outputType.isList,
-            type: op.outputType.type as string,
-            location: op.outputType.location,
-          },
-        ] as readonly DMMF.InputTypeRef[],
-      })),
-    }))
-  }
-
-  getData(d: DMMFDocument): TypesGeneratorStructure {
-    const prismaInputTypes = d.schema.inputObjectTypes.prisma ?? []
-    return {
-      inputTypes: this.getInputTypes(prismaInputTypes),
-      outputTypes: this.getOutputTypes([
-        ...d.schema.outputObjectTypes.model,
-        ...d.schema.outputObjectTypes.prisma.filter(
-          (op) => op.name !== 'Query' && op.name !== 'Mutation',
-        ),
-      ]),
-    }
-  }
+export const createTypes = (d: DMMFDocument) => {
+  const data = getTypesData(d)
+  return <TypesSection data={data} />
 }

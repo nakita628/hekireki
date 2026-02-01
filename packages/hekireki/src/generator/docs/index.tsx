@@ -3,7 +3,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import pkg from '@prisma/generator-helper'
 import { transformDMMF } from './generator/transformDMMF.js'
-import { HTMLPrinter } from './printer/index.js'
+import { generateHTML } from './printer/index.js'
 
 const { generatorHandler } = pkg
 
@@ -19,7 +19,7 @@ generatorHandler({
     const includeRelationFields = config.includeRelationFields !== 'false'
 
     const dmmf = transformDMMF(options.dmmf, { includeRelationFields })
-    const html = new HTMLPrinter(dmmf)
+    const html = await generateHTML(dmmf)
 
     const output = options.generator.output?.value
 
@@ -28,6 +28,6 @@ generatorHandler({
     }
 
     await fs.mkdir(output, { recursive: true })
-    await fs.writeFile(path.join(output, 'index.html'), await html.toHTML())
+    await fs.writeFile(path.join(output, 'index.html'), html)
   },
 })

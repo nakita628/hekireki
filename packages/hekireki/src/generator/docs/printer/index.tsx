@@ -1,9 +1,8 @@
 import type { FC, PropsWithChildren } from 'hono/jsx'
 import { raw } from 'hono/html'
-import { TypesGenerator } from '../generator/apitypes.js'
-import type { Generatable } from '../generator/helpers.js'
-import { ModelGenerator } from '../generator/model.js'
-import { TOCGenerator } from '../generator/toc.js'
+import { createTypes } from '../generator/apitypes.js'
+import { createModels } from '../generator/model.js'
+import { createTOC } from '../generator/toc.js'
 import type { DMMFDocument } from '../generator/transformDMMF.js'
 import {
   darkModeScript,
@@ -49,7 +48,7 @@ const Layout: FC<PropsWithChildren> = ({ children }) => (
   </html>
 )
 
-const Sidebar: FC<{ toc: Element }> = ({ toc }) => (
+const Sidebar: FC<{ toc: ReturnType<typeof createTOC> }> = ({ toc }) => (
   <div class={styles.sidebar}>
     <div class={styles.header}>
       <div class={styles.logoContainer}>
@@ -62,38 +61,25 @@ const Sidebar: FC<{ toc: Element }> = ({ toc }) => (
   </div>
 )
 
-const MainContent: FC<{ models: JSX.Element; types: JSX.Element }> = ({ models, types }) => (
+const MainContent: FC<{
+  models: ReturnType<typeof createModels>
+  types: ReturnType<typeof createTypes>
+}> = ({ models, types }) => (
   <div class={styles.mainContent}>
     {models}
     {types}
   </div>
 )
 
-export class HTMLPrinter implements Generatable<DMMFDocument> {
-  data: DMMFDocument
+export const generateHTML = async (data: DMMFDocument): Promise<string> => {
+  const element = (
+    <Layout>
+      <div class={styles.container}>
+        <Sidebar toc={createTOC(data)} />
+        <MainContent models={createModels(data)} types={createTypes(data)} />
+      </div>
+    </Layout>
+  )
 
-  constructor(d: DMMFDocument) {
-    this.data = this.getData(d)
-  }
-
-  getData(d: DMMFDocument): DMMFDocument {
-    return d
-  }
-
-  async toHTML(): Promise<string> {
-    const tocGen = new TOCGenerator(this.data)
-    const modelGen = new ModelGenerator(this.data)
-    const typeGen = new TypesGenerator(this.data)
-
-    const element = (
-      <Layout>
-        <div class={styles.container}>
-          <Sidebar toc={tocGen.toJSX()} />
-          <MainContent models={modelGen.toJSX()} types={typeGen.toJSX()} />
-        </div>
-      </Layout>
-    )
-
-    return '<!DOCTYPE html>' + (element.toString())
-  }
+  return '<!DOCTYPE html>' + element.toString()
 }

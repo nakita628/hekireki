@@ -2,10 +2,26 @@ datasource db {
     provider = "sqlite"
 }
 
+// ============================================================================
+// Hekireki Generators
+// ============================================================================
+
+// Mermaid ER Diagram Generator
+// Options:
+//   output - Output directory (default: ./mermaid-er)
+//   file   - File name (default: ER.md)
 generator Hekireki-ER {
     provider = "hekireki-mermaid-er"
 }
 
+// Zod Schema Generator
+// Options:
+//   output   - Output directory (default: ./zod)
+//   file     - File name (default: index.ts)
+//   type     - Generate TypeScript types (default: false)
+//   comment  - Include schema documentation (default: false)
+//   zod      - Zod import: 'v4' | 'mini' | '@hono/zod-openapi' (default: 'v4')
+//   relation - Generate relation schemas (default: false)
 generator Hekireki-Zod {
     provider = "hekireki-zod"
     type     = true
@@ -13,6 +29,13 @@ generator Hekireki-Zod {
     relation = true
 }
 
+// Valibot Schema Generator
+// Options:
+//   output   - Output directory (default: ./valibot)
+//   file     - File name (default: index.ts)
+//   type     - Generate TypeScript types (default: false)
+//   comment  - Include schema documentation (default: false)
+//   relation - Generate relation schemas (default: false)
 generator Hekireki-Valibot {
     provider = "hekireki-valibot"
     type     = true
@@ -20,33 +43,68 @@ generator Hekireki-Valibot {
     relation = true
 }
 
+// ArkType Schema Generator
+// Options:
+//   output  - Output directory (default: ./arktype)
+//   file    - File name (default: index.ts)
+//   type    - Generate TypeScript types (default: false)
+//   comment - Include schema documentation (default: false)
 generator Hekireki-ArkType {
     provider = "hekireki-arktype"
     type     = true
     comment  = true
 }
 
+// Effect Schema Generator
+// Options:
+//   output  - Output directory (default: ./effect)
+//   file    - File name (default: index.ts)
+//   type    - Generate TypeScript types (default: false)
+//   comment - Include schema documentation (default: false)
 generator Hekireki-Effect {
     provider = "hekireki-effect"
     type     = true
     comment  = true
 }
 
+// DBML + ER Diagram PNG Generator
+// Outputs both schema.dbml and er-diagram.png
+// Options:
+//   output  - Output directory (default: ./dbml)
+//   file    - DBML file name (default: schema.dbml)
+//   pngFile - PNG file name (default: er-diagram.png)
 generator Hekireki-DBML {
     provider = "hekireki-dbml"
     output   = "docs"
 }
 
+// Ecto Schema Generator (Elixir)
+// Options:
+//   output - Output directory (default: ./ecto)
+//   app    - App module name (default: MyApp)
 generator Hekireki-Ecto {
     provider = "hekireki-ecto"
-    output = "schema"
-    app = "DBSchema"
+    output   = "schema"
+    app      = "DBSchema"
 }
 
+// HTML Documentation Generator
+// Options:
+//   output - Output directory (default: ./docs)
 generator Hekireki-Docs {
     provider = "node /workspaces/npm/hekireki/packages/hekireki/dist/generator/docs/index.js"
     output   = "docs"
 }
+
+// ============================================================================
+// Annotation Prefixes
+// ============================================================================
+// Each generator uses a specific annotation prefix in field comments:
+//   Zod:    @z.  e.g. @z.uuid()
+//   Valibot: @v. e.g. @v.pipe(v.string(), v.uuid())
+//   ArkType: @a. e.g. @a."string.uuid"
+//   Effect:  @e. e.g. @e.Schema.UUID
+// ============================================================================
 
 model User {
     /// Primary key
@@ -71,13 +129,13 @@ model Post {
     /// @v.pipe(v.string(), v.uuid())
     /// @a."string.uuid"
     /// @e.Schema.UUID
-    id String @id @default(uuid())
+    id      String @id @default(uuid())
     /// Article title
     /// @z.string().min(1).max(100)
     /// @v.pipe(v.string(), v.minLength(1), v.maxLength(100))
     /// @a."1 <= string <= 100"
     /// @e.Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100))
-    title String
+    title   String
     /// Body content (no length limit)
     /// @z.string()
     /// @v.string()
