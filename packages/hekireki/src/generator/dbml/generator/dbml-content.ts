@@ -26,12 +26,12 @@ function stripAnnotations(doc: string | undefined): string | undefined {
   if (!doc) return undefined
   const lines = doc.split('\n').filter((line) => {
     const trimmed = line.trim()
-    return (
-      !trimmed.startsWith('@z.') &&
-      !trimmed.startsWith('@v.') &&
-      !trimmed.startsWith('@a.') &&
-      !trimmed.startsWith('@e.') &&
-      !trimmed.startsWith('@relation')
+    return !(
+      trimmed.startsWith('@z.') ||
+      trimmed.startsWith('@v.') ||
+      trimmed.startsWith('@a.') ||
+      trimmed.startsWith('@e.') ||
+      trimmed.startsWith('@relation')
     )
   })
   const result = lines.join('\n').trim()

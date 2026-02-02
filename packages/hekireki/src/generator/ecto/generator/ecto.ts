@@ -165,7 +165,7 @@ export async function writeEctoSchemasToFiles(
     if (!writeResult.ok) {
       return writeResult
     }
-    console.log(`✅ wrote ${filePath}`)
+    console.log(`⚡️ wrote ${filePath}`)
   }
 
   return { ok: true, value: undefined }

@@ -375,84 +375,77 @@ Output: `docs/er-diagram.png`
 
 ## Configuration
 
-### Zod Generator Options
+Configure each generator directly in your `schema.prisma` file:
 
-| Option       | Type      | Default                             | Description                                      |
-|--------------|-----------|-------------------------------------|--------------------------------------------------|
-| `output`     | `string`  | `./zod`                             | Output directory                                 |
-| `file`       | `string`  | `index.ts`                          | File Name                                        |
-| `type`       | `boolean` | `false`                             | Generate TypeScript types                        |
-| `comment`    | `boolean` | `false`                             | Include schema documentation                     |
-| `zod`        | `string`  | `'v4'`                              | Zod import version (`'mini'`, `'@hono/zod-openapi'`, or default `'v4'`) |
-| `relation`   | `boolean` | `false`                             | Generate relation schemas                        |
+```prisma
+// Zod Generator
+generator Hekireki-Zod {
+    provider = "hekireki-zod"
+    output   = "./zod"       // Output directory (default: ./zod)
+    file     = "index.ts"    // File name (default: index.ts)
+    type     = true          // Generate TypeScript types (default: false)
+    comment  = true          // Include schema documentation (default: false)
+    zod      = "v4"          // Zod import: "v4", "mini", or "@hono/zod-openapi" (default: v4)
+    relation = true          // Generate relation schemas (default: false)
+}
 
-### Valibot Generator Options
+// Valibot Generator
+generator Hekireki-Valibot {
+    provider = "hekireki-valibot"
+    output   = "./valibot"   // Output directory (default: ./valibot)
+    file     = "index.ts"    // File name (default: index.ts)
+    type     = true          // Generate TypeScript types (default: false)
+    comment  = true          // Include schema documentation (default: false)
+    relation = true          // Generate relation schemas (default: false)
+}
 
-| Option       | Type      | Default                             | Description                                      |
-|--------------|-----------|-------------------------------------|--------------------------------------------------|
-| `output`     | `string`  | `./valibot`                         | Output directory                                 |
-| `file`       | `string`  | `index.ts`                          | File Name                                        |
-| `type`       | `boolean` | `false`                             | Generate TypeScript types                        |
-| `comment`    | `boolean` | `false`                             | Include schema documentation                     |
-| `relation`   | `boolean` | `false`                             | Generate relation schemas                        |
+// ArkType Generator
+generator Hekireki-ArkType {
+    provider = "hekireki-arktype"
+    output   = "./arktype"   // Output directory (default: ./arktype)
+    file     = "index.ts"    // File name (default: index.ts)
+    type     = true          // Generate TypeScript types (default: false)
+    comment  = true          // Include schema documentation (default: false)
+}
 
-### ArkType Generator Options
+// Effect Schema Generator
+generator Hekireki-Effect {
+    provider = "hekireki-effect"
+    output   = "./effect"    // Output directory (default: ./effect)
+    file     = "index.ts"    // File name (default: index.ts)
+    type     = true          // Generate TypeScript types (default: false)
+    comment  = true          // Include schema documentation (default: false)
+}
 
-| Option       | Type      | Default                             | Description                                      |
-|--------------|-----------|-------------------------------------|--------------------------------------------------|
-| `output`     | `string`  | `./arktype`                         | Output directory                                 |
-| `file`       | `string`  | `index.ts`                          | File Name                                        |
-| `type`       | `boolean` | `false`                             | Generate TypeScript types                        |
-| `comment`    | `boolean` | `false`                             | Include schema documentation                     |
+// Mermaid ER Generator
+generator Hekireki-ER {
+    provider = "hekireki-mermaid-er"
+    output   = "./mermaid-er" // Output directory (default: ./mermaid-er)
+    file     = "ER.md"        // File name (default: ER.md)
+}
 
-### Effect Schema Generator Options
+// Ecto Generator
+generator Hekireki-Ecto {
+    provider = "hekireki-ecto"
+    output   = "./ecto"      // Output directory (default: ./ecto)
+    app      = "MyApp"       // App name (default: MyApp)
+}
 
-| Option       | Type      | Default                             | Description                                      |
-|--------------|-----------|-------------------------------------|--------------------------------------------------|
-| `output`     | `string`  | `./effect`                          | Output directory                                 |
-| `file`       | `string`  | `index.ts`                          | File Name                                        |
-| `type`       | `boolean` | `false`                             | Generate TypeScript types                        |
-| `comment`    | `boolean` | `false`                             | Include schema documentation                     |
+// DBML Generator
+generator Hekireki-DBML {
+    provider = "hekireki-dbml"
+    output   = "./dbml"      // Output directory (default: ./dbml)
+    file     = "schema.dbml" // File name (default: schema.dbml)
+}
 
-### Mermaid ER Generator Options
-
-| Option       | Type      | Default                             | Description                                      |
-|--------------|-----------|-------------------------------------|--------------------------------------------------|
-| `output`     | `string`  | `./mermaid-er`                      | Output directory                                 |
-| `file`       | `string`  | `ER.md`                             | File Name                                        |
-
-### Ecto Generator Options
-
-| Option       | Type      | Default                             | Description                                      |
-|--------------|-----------|-------------------------------------|--------------------------------------------------|
-| `output`     | `string`  | `./ecto`                            | Output directory                                 |
-| `app`        | `string`  | `MyApp`                             | App Name                                         |
-
-### DBML Generator Options
-
-| Option       | Type      | Default                             | Description                                      |
-|--------------|-----------|-------------------------------------|--------------------------------------------------|
-| `output`     | `string`  | `./dbml`                            | Output directory                                 |
-| `file`       | `string`  | `schema.dbml`                       | File Name                                        |
-
-### SVG Generator Options
-
-| Option       | Type      | Default                             | Description                                      |
-|--------------|-----------|-------------------------------------|--------------------------------------------------|
-| `output`     | `string`  | `./docs`                            | Output directory                                 |
-| `file`       | `string`  | `er-diagram`                        | File Name (without extension)                    |
-| `format`     | `string`  | `png`                               | Output format (`png`, `svg`, or `dot`)           |
-
-## Annotation Prefixes
-
-Each generator uses a specific annotation prefix in Prisma schema comments:
-
-| Generator      | Prefix | Example                                                    |
-|----------------|--------|------------------------------------------------------------|
-| Zod            | `@z.`  | `/// @z.uuid()`                                            |
-| Valibot        | `@v.`  | `/// @v.pipe(v.string(), v.uuid())`                        |
-| ArkType        | `@a.`  | `/// @a."string.uuid"`                                     |
-| Effect Schema  | `@e.`  | `/// @e.Schema.UUID`                                       |
+// SVG/PNG Generator
+generator Hekireki-SVG {
+    provider = "hekireki-svg"
+    output   = "./docs"      // Output directory (default: ./docs)
+    file     = "er-diagram"  // File name without extension (default: er-diagram)
+    format   = "png"         // Output format: "png", "svg", or "dot" (default: png)
+}
+```
 
 ## License
 

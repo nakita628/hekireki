@@ -1,7 +1,7 @@
 {
   "name": "hekireki",
   "type": "module",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "license": "MIT",
   "description": "Hekireki is a tool that generates validation schemas for Zod, Valibot, ArkType, and Effect Schema, as well as ER diagrams and DBML, from Prisma schemas annotated with comments.",
   "keywords": [
@@ -12,7 +12,9 @@
     "effect",
     "mermaid",
     "ecto",
-    "dbml"
+    "dbml",
+    "docs",
+    "documentation"
   ],
   "homepage": "https://github.com/nakita628/hekireki",
   "publishConfig": {
@@ -29,6 +31,7 @@
     "dist"
   ],
   "bin": {
+    "hekireki": "dist/cli/index.js",
     "hekireki-zod": "dist/generator/zod/index.js",
     "hekireki-valibot": "dist/generator/valibot/index.js",
     "hekireki-mermaid-er": "dist/generator/mermaid-er/index.js",
@@ -36,7 +39,7 @@
     "hekireki-arktype": "dist/generator/arktype/index.js",
     "hekireki-effect": "dist/generator/effect/index.js",
     "hekireki-dbml": "dist/generator/dbml/index.js",
-    "hekireki-svg": "dist/generator/svg/index.js"
+    "hekireki-docs": "dist/generator/docs/index.js"
   },
   "scripts": {
     "generate": "prisma generate",
@@ -48,9 +51,11 @@
     "release": "npm pkg fix && pnpm build && npm publish"
   },
   "dependencies": {
+    "@hono/node-server": "^1.14.1",
     "@prisma/generator-helper": "^7.0.1",
     "@resvg/resvg-js": "^2.6.2",
     "@softwaretechnik/dbml-renderer": "^1.0.31",
+    "hono": "^4.7.4",
     "oxfmt": "^0.27.0",
     "utils-lab": "^0.0.2"
   },
