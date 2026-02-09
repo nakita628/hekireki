@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import type { GeneratorOptions } from '@prisma/generator-helper'
 import pkg from '@prisma/generator-helper'
-import { writeEctoSchemasToFiles } from './generator/ecto.js'
+import { writeEctoSchemasToFiles } from '../../helper/ecto.js'
 
 const { generatorHandler } = pkg
 

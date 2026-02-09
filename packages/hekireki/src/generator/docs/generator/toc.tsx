@@ -1,7 +1,16 @@
 import type { FC } from 'hono/jsx'
 import type { DMMF } from '@prisma/generator-helper'
 import type { DMMFDocument, DMMFMapping } from './transformDMMF.js'
-import { styles } from '../styles.js'
+import {
+  tocSectionClass,
+  tocSubHeaderClass,
+  tocSubSectionClass,
+  tocSubSectionTitleClass,
+  tocListClass,
+  tocLinkClass,
+  tocHeadingClass,
+  listItemClass,
+} from '../styles.js'
 
 type TOCStructure = {
   readonly models: readonly TOCModel[]
@@ -20,8 +29,8 @@ type TOCTypes = {
 }
 
 const TOCSubHeader: FC<{ name: string }> = ({ name }) => (
-  <div class={styles.tocSubHeader}>
-    <a href={`#model-${name}`} class={styles.tocLink}>
+  <div class={tocSubHeaderClass}>
+    <a href={`#model-${name}`} class={tocLinkClass}>
       {name}
     </a>
   </div>
@@ -33,34 +42,34 @@ const TOCSubField: FC<{ identifier: string; root: string; field: string }> = ({
   field,
 }) => (
   <li>
-    <a href={`#${identifier}-${root}-${field}`} class={styles.tocLink}>
+    <a href={`#${identifier}-${root}-${field}`} class={tocLinkClass}>
       {field}
     </a>
   </li>
 )
 
 const TOCModelItem: FC<{ model: TOCModel }> = ({ model }) => (
-  <li class={styles.listItem}>
+  <li class={listItemClass}>
     <TOCSubHeader name={model.name} />
-    <div class={styles.tocSubSection}>
-      <div class={styles.tocSubSectionTitle}>
-        <a href={`#model-${model.name}-fields`} class={styles.tocLink}>
+    <div class={tocSubSectionClass}>
+      <div class={tocSubSectionTitleClass}>
+        <a href={`#model-${model.name}-fields`} class={tocLinkClass}>
           Fields
         </a>
       </div>
-      <ul class={styles.tocList}>
+      <ul class={tocListClass}>
         {model.fields.map((field) => (
           <TOCSubField identifier="model" root={model.name} field={field} />
         ))}
       </ul>
     </div>
-    <div class={styles.tocSubSection}>
-      <div class={styles.tocSubSectionTitle}>
-        <a href={`#model-${model.name}-operations`} class={styles.tocLink}>
+    <div class={tocSubSectionClass}>
+      <div class={tocSubSectionTitleClass}>
+        <a href={`#model-${model.name}-operations`} class={tocLinkClass}>
           Operations
         </a>
       </div>
-      <ul class={styles.tocList}>
+      <ul class={tocListClass}>
         {model.operations.map((op) => (
           <TOCSubField identifier="model" root={model.name} field={op} />
         ))}
@@ -75,13 +84,13 @@ const TOCTypeSection: FC<{ title: string; href: string; types: readonly string[]
   types,
   kind,
 }) => (
-  <li class={styles.listItem}>
-    <div class={styles.tocSubHeader}>
-      <a href={href} class={styles.tocLink}>
+  <li class={listItemClass}>
+    <div class={tocSubHeaderClass}>
+      <a href={href} class={tocLinkClass}>
         {title}
       </a>
     </div>
-    <ul class={styles.tocList}>
+    <ul class={tocListClass}>
       {types.map((type) => (
         <TOCSubField identifier="type" root={kind} field={type} />
       ))}
@@ -91,22 +100,22 @@ const TOCTypeSection: FC<{ title: string; href: string; types: readonly string[]
 
 const TOCComponent: FC<{ data: TOCStructure }> = ({ data }) => (
   <div>
-    <h5 class={styles.tocHeading}>
-      <a href="#models" class={styles.tocLink}>
+    <h5 class={tocHeadingClass}>
+      <a href="#models" class={tocLinkClass}>
         Models
       </a>
     </h5>
-    <ul class={styles.tocSection}>
+    <ul class={tocSectionClass}>
       {data.models.map((model) => (
         <TOCModelItem model={model} />
       ))}
     </ul>
-    <h5 class={styles.tocHeading}>
-      <a href="#types" class={styles.tocLink}>
+    <h5 class={tocHeadingClass}>
+      <a href="#types" class={tocLinkClass}>
         Types
       </a>
     </h5>
-    <ul class={styles.tocSection}>
+    <ul class={tocSectionClass}>
       <TOCTypeSection
         title="Input Types"
         href="#input-types"

@@ -2,7 +2,15 @@ import type { FC } from 'hono/jsx'
 import type { DMMF } from '@prisma/generator-helper'
 import { isScalarType } from './helpers.js'
 import type { DMMFDocument } from './transformDMMF.js'
-import { styles } from '../styles.js'
+import {
+  h1Class,
+  h2Class,
+  h3Class,
+  tableClass,
+  sectionClass,
+  ml4Class,
+  hrSmallClass,
+} from '../styles.js'
 
 type TypesGeneratorStructure = {
   readonly inputTypes: readonly TGType[]
@@ -56,10 +64,10 @@ const TypeFieldRow: FC<{ field: TGTypeField; kind: 'inputType' | 'outputType' }>
 
 const TypeItem: FC<{ type: TGType; kind: 'inputType' | 'outputType' }> = ({ type, kind }) => (
   <div>
-    <h3 class={styles.h3} id={`type-${kind}-${type.name}`}>
+    <h3 class={h3Class} id={`type-${kind}-${type.name}`}>
       {type.name}
     </h3>
-    <table class={styles.table}>
+    <table class={tableClass}>
       <thead>
         <tr>
           <th>Name</th>
@@ -77,31 +85,31 @@ const TypeItem: FC<{ type: TGType; kind: 'inputType' | 'outputType' }> = ({ type
 )
 
 const TypesSection: FC<{ data: TypesGeneratorStructure }> = ({ data }) => (
-  <div class={styles.section}>
-    <h1 class={styles.h1} id="types">
+  <div class={sectionClass}>
+    <h1 class={h1Class} id="types">
       Types
     </h1>
-    <div class={styles.ml4}>
-      <h2 class={styles.h2} id="input-types">
+    <div class={ml4Class}>
+      <h2 class={h2Class} id="input-types">
         Input Types
       </h2>
-      <div class={styles.ml4}>
+      <div class={ml4Class}>
         {data.inputTypes.map((inputType, i) => (
           <>
-            {i > 0 && <hr class={styles.hrSmall} />}
+            {i > 0 && <hr class={hrSmallClass} />}
             <TypeItem type={inputType} kind="inputType" />
           </>
         ))}
       </div>
     </div>
-    <div class={styles.ml4}>
-      <h2 class={styles.h2} id="output-types">
+    <div class={ml4Class}>
+      <h2 class={h2Class} id="output-types">
         Output Types
       </h2>
-      <div class={styles.ml4}>
+      <div class={ml4Class}>
         {data.outputTypes.map((outputType, i) => (
           <>
-            {i > 0 && <hr class={styles.hrSmall} />}
+            {i > 0 && <hr class={hrSmallClass} />}
             <TypeItem type={outputType} kind="outputType" />
           </>
         ))}

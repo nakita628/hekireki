@@ -1,357 +1,282 @@
-// Dark mode script for initialization
-export const darkModeScript = `
-  const isDarkMode = localStorage.getItem('isDarkMode') === 'true';
-  if (isDarkMode) document.documentElement.classList.add('dark');
-`
+import { css } from 'hono/css'
 
-// Dark mode toggle script
-export const darkModeToggleScript = `
-  const darkModeToggle = document.getElementById('darkModeToggle');
-  const isDarkModeStored = localStorage.getItem('isDarkMode') === 'true';
-  darkModeToggle.checked = isDarkModeStored;
-  darkModeToggle.addEventListener('change', function () {
-    const isDark = this.checked;
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
+// Global CSS - CSS Custom Properties + resets
+// :-hono-global prevents css`` from scoping selectors under a generated class,
+// so :root, body, *, a selectors apply globally as intended.
+export const globalCss = css`
+  :-hono-global {
+    :root {
+      --bg-primary: #e5e7eb;
+      --bg-secondary: #ffffff;
+      --text-primary: #111827;
+      --text-secondary: #374151;
+      --text-muted: #6b7280;
+      --border-color: #d1d5db;
+      --link-color: #4f46e5;
+      --icon-color: #4f46e5;
+      --code-bg: #f6f8fa;
+      --code-color: inherit;
     }
-    localStorage.setItem('isDarkMode', isDark);
-  });
+    :root.dark {
+      --bg-primary: #1f2937;
+      --bg-secondary: #1f2937;
+      --text-primary: #f9fafb;
+      --text-secondary: #e5e7eb;
+      --text-muted: #9ca3af;
+      --border-color: #4b5563;
+      --link-color: #818cf8;
+      --icon-color: #818cf8;
+      --code-bg: #374151;
+      --code-color: #e5e7eb;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+    }
+    a { color: var(--link-color); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  }
 `
 
-// All CSS styles as a single string
-export const globalStyles = `
-  :root {
-    --bg-primary: #e5e7eb;
-    --bg-secondary: #ffffff;
-    --text-primary: #111827;
-    --text-secondary: #374151;
-    --text-muted: #6b7280;
-    --border-color: #d1d5db;
-    --link-color: #4f46e5;
-  }
+// Layout
+export const containerClass = css`
+  display: flex;
+  min-height: 100vh;
+`
 
-  :root.dark {
-    --bg-primary: #1f2937;
-    --bg-secondary: #1f2937;
-    --text-primary: #f9fafb;
-    --text-secondary: #e5e7eb;
-    --text-muted: #9ca3af;
-    --border-color: #4b5563;
-    --link-color: #818cf8;
-  }
+export const sidebarClass = css`
+  position: sticky;
+  top: 0;
+  width: 20%;
+  flex-shrink: 0;
+  height: 100vh;
+  padding: 1rem 1.5rem;
+  overflow: auto;
+  background-color: var(--bg-secondary);
+`
 
-  * {
-    box-sizing: border-box;
-  }
+export const mainContentClass = css`
+  width: 100%;
+  padding: 1rem;
+  background-color: var(--bg-secondary);
+  overflow-x: hidden;
+`
 
-  body {
-    margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-    background-color: var(--bg-primary);
-    color: var(--text-primary);
-    min-height: 100vh;
-  }
+// Header
+export const headerClass = css`
+  margin-bottom: 2rem;
+`
 
-  a {
-    color: var(--link-color);
-    text-decoration: none;
-  }
+export const logoContainerClass = css`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`
 
-  a:hover {
-    text-decoration: underline;
-  }
+export const logoTextClass = css`
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+`
 
-  /* Layout */
-  .container {
-    display: flex;
-    min-height: 100vh;
-  }
+export const darkModeToggleContainerClass = css`
+  margin-top: 1.25rem;
+`
 
-  .sidebar {
-    position: sticky;
-    top: 0;
-    width: 20%;
-    flex-shrink: 0;
-    height: 100vh;
-    padding: 1rem 1.5rem;
-    overflow: auto;
-    background-color: var(--bg-secondary);
-  }
+export const darkModeToggleLabelClass = css`
+  color: var(--text-primary);
+  margin-left: 0.5rem;
+`
 
-  .main-content {
-    width: 100%;
-    padding: 1rem;
-    background-color: var(--bg-secondary);
-    overflow-x: hidden;
-  }
+// Icon
+export const iconClass = css`
+  color: var(--icon-color);
+  cursor: pointer;
+`
 
-  /* Header */
-  .header {
-    margin-bottom: 2rem;
-  }
+// Typography
+export const h1Class = css`
+  font-size: 1.875rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 1rem 0;
+`
 
-  .logo-container {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
+export const h2Class = css`
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 0.5rem 0;
+`
 
-  .logo-text {
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: var(--text-primary);
-  }
+export const h3Class = css`
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 0.5rem 0;
+`
 
-  .dark-mode-toggle-container {
-    margin-top: 1.25rem;
-  }
+export const h4Class = css`
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 0.5rem 0;
+`
 
-  .dark-mode-toggle-label {
-    color: var(--text-primary);
-    margin-left: 0.5rem;
-  }
+export const textClass = css`
+  color: var(--text-primary);
+`
 
-  /* Icon */
-  .icon {
-    color: #4f46e5;
-    cursor: pointer;
-  }
+export const textMutedClass = css`
+  color: var(--text-muted);
+`
 
-  .dark .icon {
-    color: #818cf8;
-  }
-
-  /* Typography */
-  .h1 {
-    font-size: 1.875rem;
-    font-weight: 700;
-    color: var(--text-primary);
-    margin: 0 0 1rem 0;
-  }
-
-  .h2 {
-    font-size: 1.5rem;
-    font-weight: 600;
-    color: var(--text-primary);
-    margin: 0 0 0.5rem 0;
-  }
-
-  .h3 {
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: var(--text-primary);
-    margin: 0 0 0.5rem 0;
-  }
-
-  .h4 {
-    font-size: 1.125rem;
-    font-weight: 700;
-    color: var(--text-primary);
-    margin: 0 0 0.5rem 0;
-  }
-
-  .text {
-    color: var(--text-primary);
-  }
-
-  .text-muted {
-    color: var(--text-muted);
-  }
-
-  /* Table */
-  .table {
-    border-collapse: collapse;
-    table-layout: auto;
-  }
-
-  .table th {
+// Table
+export const tableClass = css`
+  border-collapse: collapse;
+  table-layout: auto;
+  & th {
     padding: 0.5rem 1rem;
     border: 1px solid var(--border-color);
     color: var(--text-primary);
     font-weight: 600;
     text-align: left;
   }
-
-  .table td {
+  & td {
     padding: 0.5rem 1rem;
     border: 1px solid var(--border-color);
     color: var(--text-primary);
   }
+`
 
-  /* TOC */
-  .toc-section {
-    margin-bottom: 0.5rem;
-    margin-left: 0.25rem;
-    list-style: none;
-    padding: 0;
-  }
+// TOC
+export const tocSectionClass = css`
+  margin-bottom: 0.5rem;
+  margin-left: 0.25rem;
+  list-style: none;
+  padding: 0;
+`
 
-  .toc-sub-header {
-    font-weight: 600;
-    color: var(--text-secondary);
-  }
+export const tocSubHeaderClass = css`
+  font-weight: 600;
+  color: var(--text-secondary);
+`
 
-  .toc-sub-section {
-    margin-top: 0.25rem;
-    margin-left: 0.5rem;
-  }
+export const tocSubSectionClass = css`
+  margin-top: 0.25rem;
+  margin-left: 0.5rem;
+`
 
-  .toc-sub-section-title {
-    margin-bottom: 0.25rem;
-    font-weight: 500;
-    color: var(--text-muted);
-  }
+export const tocSubSectionTitleClass = css`
+  margin-bottom: 0.25rem;
+  font-weight: 500;
+  color: var(--text-muted);
+`
 
-  .toc-list {
-    padding-left: 0.75rem;
-    margin: 0;
-    margin-left: 0.25rem;
-    border-left: 2px solid var(--border-color);
-    list-style: none;
-  }
+export const tocListClass = css`
+  padding-left: 0.75rem;
+  margin: 0;
+  margin-left: 0.25rem;
+  border-left: 2px solid var(--border-color);
+  list-style: none;
+`
 
-  .toc-link {
-    color: var(--text-primary);
-    text-decoration: none;
-  }
-
-  .toc-link:hover {
+export const tocLinkClass = css`
+  color: var(--text-primary);
+  text-decoration: none;
+  &:hover {
     text-decoration: underline;
-  }
-
-  .toc-heading {
-    margin-bottom: 0.5rem;
-    font-weight: 700;
-    color: var(--text-primary);
-  }
-
-  /* Code block */
-  .code-block {
-    background: #f6f8fa;
-    padding: 1em;
-    border-radius: 0.5em;
-    overflow: auto;
-    font-family: 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
-    font-size: 14px;
-    line-height: 1.5;
-    margin: 0;
-  }
-
-  .dark .code-block {
-    background: #374151;
-    color: #e5e7eb;
-  }
-
-  /* Section */
-  .section {
-    margin-bottom: 2rem;
-  }
-
-  .model-section {
-    padding-left: 1rem;
-    margin-bottom: 1rem;
-  }
-
-  .fields-section {
-    padding-left: 1rem;
-    margin-top: 1rem;
-  }
-
-  .operations-section {
-    padding-left: 1rem;
-    margin-top: 1rem;
-  }
-
-  .operation-item {
-    margin-top: 1rem;
-  }
-
-  /* Dividers */
-  .hr {
-    margin: 2rem 0;
-    border: none;
-    border-top: 1px solid var(--border-color);
-  }
-
-  .hr-small {
-    margin: 1rem 0;
-    border: none;
-    border-top: 1px solid var(--border-color);
-  }
-
-  /* List */
-  .list {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  .list-item {
-    margin-bottom: 1rem;
-  }
-
-  /* Spacing utilities */
-  .mb-2 {
-    margin-bottom: 0.5rem;
-  }
-
-  .mb-4 {
-    margin-bottom: 1rem;
-  }
-
-  .mt-2 {
-    margin-top: 0.5rem;
-  }
-
-  .mt-4 {
-    margin-top: 1rem;
-  }
-
-  .ml-4 {
-    margin-left: 1rem;
   }
 `
 
-// CSS class names
-export const styles = {
-  container: 'container',
-  sidebar: 'sidebar',
-  mainContent: 'main-content',
-  header: 'header',
-  logoContainer: 'logo-container',
-  logoText: 'logo-text',
-  darkModeToggleContainer: 'dark-mode-toggle-container',
-  darkModeToggleLabel: 'dark-mode-toggle-label',
-  icon: 'icon',
-  h1: 'h1',
-  h2: 'h2',
-  h3: 'h3',
-  h4: 'h4',
-  text: 'text',
-  textMuted: 'text-muted',
-  table: 'table',
-  tocSection: 'toc-section',
-  tocSubHeader: 'toc-sub-header',
-  tocSubSection: 'toc-sub-section',
-  tocSubSectionTitle: 'toc-sub-section-title',
-  tocList: 'toc-list',
-  tocLink: 'toc-link',
-  tocHeading: 'toc-heading',
-  codeBlock: 'code-block',
-  section: 'section',
-  modelSection: 'model-section',
-  fieldsSection: 'fields-section',
-  operationsSection: 'operations-section',
-  operationItem: 'operation-item',
-  hr: 'hr',
-  hrSmall: 'hr-small',
-  list: 'list',
-  listItem: 'list-item',
-  mb2: 'mb-2',
-  mb4: 'mb-4',
-  mt2: 'mt-2',
-  mt4: 'mt-4',
-  ml4: 'ml-4',
-} as const
+export const tocHeadingClass = css`
+  margin-bottom: 0.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+`
+
+// Code block
+export const codeBlockClass = css`
+  background: var(--code-bg);
+  color: var(--code-color);
+  padding: 1em;
+  border-radius: 0.5em;
+  overflow: auto;
+  font-family: 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+`
+
+// Section
+export const sectionClass = css`
+  margin-bottom: 2rem;
+`
+
+export const modelSectionClass = css`
+  padding-left: 1rem;
+  margin-bottom: 1rem;
+`
+
+export const fieldsSectionClass = css`
+  padding-left: 1rem;
+  margin-top: 1rem;
+`
+
+export const operationsSectionClass = css`
+  padding-left: 1rem;
+  margin-top: 1rem;
+`
+
+export const operationItemClass = css`
+  margin-top: 1rem;
+`
+
+// Dividers
+export const hrClass = css`
+  margin: 2rem 0;
+  border: none;
+  border-top: 1px solid var(--border-color);
+`
+
+export const hrSmallClass = css`
+  margin: 1rem 0;
+  border: none;
+  border-top: 1px solid var(--border-color);
+`
+
+// List
+export const listClass = css`
+  margin: 0;
+  padding: 0;
+  list-style: none;
+`
+
+export const listItemClass = css`
+  margin-bottom: 1rem;
+`
+
+// Spacing utilities
+export const mb2Class = css`
+  margin-bottom: 0.5rem;
+`
+
+export const mb4Class = css`
+  margin-bottom: 1rem;
+`
+
+export const mt2Class = css`
+  margin-top: 0.5rem;
+`
+
+export const mt4Class = css`
+  margin-top: 1rem;
+`
+
+export const ml4Class = css`
+  margin-left: 1rem;
+`

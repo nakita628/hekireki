@@ -2,7 +2,24 @@ import type { FC } from 'hono/jsx'
 import type { DMMF } from '@prisma/generator-helper'
 import { capitalize, isScalarType, lowerCase } from './helpers.js'
 import type { DMMFDocument, DMMFMapping } from './transformDMMF.js'
-import { styles } from '../styles.js'
+import {
+  operationItemClass,
+  h1Class,
+  h2Class,
+  h3Class,
+  h4Class,
+  textClass,
+  mb2Class,
+  codeBlockClass,
+  tableClass,
+  modelSectionClass,
+  fieldsSectionClass,
+  operationsSectionClass,
+  ml4Class,
+  hrClass,
+  hrSmallClass,
+  sectionClass,
+} from '../styles.js'
 
 const ModelAction = {
   create: 'create',
@@ -165,18 +182,18 @@ const OperationMarkup: FC<{ operation: MGModelOperation; modelName: string }> = 
   operation,
   modelName,
 }) => (
-  <div class={styles.operationItem}>
-    <h4 id={`model-${modelName}-${operation.name}`} class={styles.h4}>
+  <div class={operationItemClass}>
+    <h4 id={`model-${modelName}-${operation.name}`} class={h4Class}>
       {operation.name}
     </h4>
-    <p class={styles.text}>{operation.description}</p>
-    <div class={styles.mb2}>
-      <pre class={styles.codeBlock}>
+    <p class={textClass}>{operation.description}</p>
+    <div class={mb2Class}>
+      <pre class={codeBlockClass}>
         <code>{operation.usage}</code>
       </pre>
     </div>
-    <h4 class={styles.h4}>Input</h4>
-    <table class={styles.table}>
+    <h4 class={h4Class}>Input</h4>
+    <table class={tableClass}>
       <thead>
         <tr>
           <th>Name</th>
@@ -190,16 +207,16 @@ const OperationMarkup: FC<{ operation: MGModelOperation; modelName: string }> = 
         ))}
       </tbody>
     </table>
-    <h4 class={styles.h4}>Output</h4>
-    <div class={styles.text}>
+    <h4 class={h4Class}>Output</h4>
+    <div class={textClass}>
       <strong>Type: </strong>
       <a href={`#type-outputType-${operation.output.type}`}>{operation.output.type}</a>
     </div>
-    <div class={styles.text}>
+    <div class={textClass}>
       <strong>Required: </strong>
       {operation.output.required ? 'Yes' : 'No'}
     </div>
-    <div class={styles.text}>
+    <div class={textClass}>
       <strong>List: </strong>
       {operation.output.list ? 'Yes' : 'No'}
     </div>
@@ -208,13 +225,13 @@ const OperationMarkup: FC<{ operation: MGModelOperation; modelName: string }> = 
 
 const ModelItem: FC<{ model: MGModel; isLast: boolean }> = ({ model, isLast }) => (
   <>
-    <div class={styles.modelSection}>
-      <h2 class={styles.h2} id={`model-${model.name}`}>
+    <div class={modelSectionClass}>
+      <h2 class={h2Class} id={`model-${model.name}`}>
         {model.name}
       </h2>
-      {model.documentation && <div class={styles.text}>Description: {model.documentation}</div>}
+      {model.documentation && <div class={textClass}>Description: {model.documentation}</div>}
       {model.directives.length > 0 && (
-        <table class={styles.table}>
+        <table class={tableClass}>
           <thead>
             <tr>
               <th>Name</th>
@@ -228,12 +245,12 @@ const ModelItem: FC<{ model: MGModel; isLast: boolean }> = ({ model, isLast }) =
           </tbody>
         </table>
       )}
-      <div class={styles.fieldsSection}>
-        <h3 class={styles.h3} id={`model-${model.name}-fields`}>
+      <div class={fieldsSectionClass}>
+        <h3 class={h3Class} id={`model-${model.name}-fields`}>
           Fields
         </h3>
-        <div class={styles.ml4}>
-          <table class={styles.table}>
+        <div class={ml4Class}>
+          <table class={tableClass}>
             <thead>
               <tr>
                 <th>Name</th>
@@ -251,28 +268,28 @@ const ModelItem: FC<{ model: MGModel; isLast: boolean }> = ({ model, isLast }) =
           </table>
         </div>
       </div>
-      <hr class={styles.hr} />
-      <div class={styles.operationsSection}>
-        <h3 class={styles.h3} id={`model-${model.name}-operations`}>
+      <hr class={hrClass} />
+      <div class={operationsSectionClass}>
+        <h3 class={h3Class} id={`model-${model.name}-operations`}>
           Operations
         </h3>
-        <div class={styles.ml4}>
+        <div class={ml4Class}>
           {model.operations.map((op, i) => (
             <>
-              {i > 0 && <hr class={styles.hrSmall} />}
+              {i > 0 && <hr class={hrSmallClass} />}
               <OperationMarkup operation={op} modelName={model.name} />
             </>
           ))}
         </div>
       </div>
     </div>
-    {!isLast && <hr class={styles.hr} />}
+    {!isLast && <hr class={hrClass} />}
   </>
 )
 
 const ModelsSection: FC<{ data: ModelGeneratorStructure }> = ({ data }) => (
-  <div class={styles.section}>
-    <h1 class={styles.h1} id="models">
+  <div class={sectionClass}>
+    <h1 class={h1Class} id="models">
       Models
     </h1>
     {data.models.map((model, i) => (
