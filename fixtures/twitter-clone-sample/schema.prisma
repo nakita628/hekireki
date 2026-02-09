@@ -26,11 +26,6 @@ generator Hekireki-DBML {
   output   = "dbml"
 }
 
-// generator Hekireki-Docs {
-//   provider = "hekireki-docs"
-//   output   = "docs"
-// }
-
 model User {
   /// Unique identifier for the user
   /// @z.uuid()
