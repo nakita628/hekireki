@@ -6,8 +6,11 @@
     "generate": "prisma generate"
   },
   "dependencies": {
-    "prisma": "^7.0.1",
+    "prisma": "^7.3.0",
     "valibot": "^1.2.0",
     "zod": "^4.1.13"
+  },
+  "devDependencies": {
+    "hekireki": "workspace:^"
   }
 }

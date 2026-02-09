@@ -23,13 +23,13 @@ generator Hekireki-Ecto {
 
 generator Hekireki-DBML {
   provider = "hekireki-dbml"
+  output   = "dbml"
 }
 
-generator Hekireki-SVG {
-  provider = "hekireki-svg"
-  output   = "docs"
-  format   = "png"
-}
+// generator Hekireki-Docs {
+//   provider = "hekireki-docs"
+//   output   = "docs"
+// }
 
 model User {
   /// Unique identifier for the user
