@@ -1,41 +1,45 @@
 import { css } from 'hono/css'
 
-// Global CSS (passed to <Style> as children) - CSS Custom Properties + resets
+// Global CSS - CSS Custom Properties + resets
+// :-hono-global prevents css`` from scoping selectors under a generated class,
+// so :root, body, *, a selectors apply globally as intended.
 export const globalCss = css`
-  :root {
-    --bg-primary: #e5e7eb;
-    --bg-secondary: #ffffff;
-    --text-primary: #111827;
-    --text-secondary: #374151;
-    --text-muted: #6b7280;
-    --border-color: #d1d5db;
-    --link-color: #4f46e5;
-    --icon-color: #4f46e5;
-    --code-bg: #f6f8fa;
-    --code-color: inherit;
+  :-hono-global {
+    :root {
+      --bg-primary: #e5e7eb;
+      --bg-secondary: #ffffff;
+      --text-primary: #111827;
+      --text-secondary: #374151;
+      --text-muted: #6b7280;
+      --border-color: #d1d5db;
+      --link-color: #4f46e5;
+      --icon-color: #4f46e5;
+      --code-bg: #f6f8fa;
+      --code-color: inherit;
+    }
+    :root.dark {
+      --bg-primary: #1f2937;
+      --bg-secondary: #1f2937;
+      --text-primary: #f9fafb;
+      --text-secondary: #e5e7eb;
+      --text-muted: #9ca3af;
+      --border-color: #4b5563;
+      --link-color: #818cf8;
+      --icon-color: #818cf8;
+      --code-bg: #374151;
+      --code-color: #e5e7eb;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+    }
+    a { color: var(--link-color); text-decoration: none; }
+    a:hover { text-decoration: underline; }
   }
-  :root.dark {
-    --bg-primary: #1f2937;
-    --bg-secondary: #1f2937;
-    --text-primary: #f9fafb;
-    --text-secondary: #e5e7eb;
-    --text-muted: #9ca3af;
-    --border-color: #4b5563;
-    --link-color: #818cf8;
-    --icon-color: #818cf8;
-    --code-bg: #374151;
-    --code-color: #e5e7eb;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-    background-color: var(--bg-primary);
-    color: var(--text-primary);
-    min-height: 100vh;
-  }
-  a { color: var(--link-color); text-decoration: none; }
-  a:hover { text-decoration: underline; }
 `
 
 // Layout

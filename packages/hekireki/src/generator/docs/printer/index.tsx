@@ -56,12 +56,12 @@ const DarkModeToggle: FC = () => (
 )
 
 const Layout: FC<PropsWithChildren> = ({ children }) => (
-  <html lang="en">
+  <html lang="en" class={globalCss}>
     <head>
       <meta charset="UTF-8" />
       <meta name="viewport" content="width=device-width,initial-scale=1.0" />
       <title>Hekireki Generated Docs</title>
-      <Style>{globalCss}</Style>
+      <Style />
       <script>{raw(`
         const isDarkMode = localStorage.getItem('isDarkMode') === 'true';
         if (isDarkMode) document.documentElement.classList.add('dark');
