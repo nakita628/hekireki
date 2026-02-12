@@ -12,7 +12,7 @@
 - ⚡ Automatically generates [Effect Schema](https://effect.website/docs/schema/introduction/) from your Prisma schema
 - 📊 Creates [Mermaid](https://mermaid.js.org/) ER diagrams with PK/FK markers
 - 📝 Generates [DBML](https://dbml.dbdiagram.io/) (Database Markup Language) files
-- 🖼️ Outputs ER diagrams as **PNG/SVG** images using [dbml-renderer](https://github.com/softwaretechnik-berlin/dbml-renderer)
+- 🖼️ Outputs ER diagrams as **PNG** images using [dbml-renderer](https://github.com/softwaretechnik-berlin/dbml-renderer)
 - 🧪 Generates [Ecto](https://hexdocs.pm/ecto/Ecto.Schema.html) schemas for Elixir projects
   ⚠️ Foreign key constraints are **not** included — manage relationships in your application logic
 
@@ -53,28 +53,24 @@ generator Hekireki-ArkType {
     provider = "hekireki-arktype"
     type     = true
     comment  = true
+    relation = true
 }
 
 generator Hekireki-Effect {
     provider = "hekireki-effect"
     type     = true
     comment  = true
+    relation = true
 }
 
 generator Hekireki-Ecto {
     provider = "hekireki-ecto"
-    output = "schema"
+    output = "./ecto"
     app = "DBSchema"
 }
 
 generator Hekireki-DBML {
     provider = "hekireki-dbml"
-}
-
-generator Hekireki-SVG {
-    provider = "hekireki-svg"
-    output   = "docs"
-    format   = "png"
 }
 
 model User {
@@ -367,11 +363,9 @@ Table Post {
 Ref Post_userId_fk: Post.userId > User.id
 ```
 
-## PNG/SVG
+## PNG
 
-The `hekireki-svg` generator outputs ER diagrams as PNG or SVG images using [dbml-renderer](https://github.com/softwaretechnik-berlin/dbml-renderer).
-
-Output: `docs/er-diagram.png`
+The `hekireki-dbml` generator also outputs ER diagrams as PNG images using [dbml-renderer](https://github.com/softwaretechnik-berlin/dbml-renderer). Configure the `pngFile` option to set the output file name.
 
 ## Configuration
 
@@ -406,6 +400,7 @@ generator Hekireki-ArkType {
     file     = "index.ts"    // File name (default: index.ts)
     type     = true          // Generate TypeScript types (default: false)
     comment  = true          // Include schema documentation (default: false)
+    relation = true          // Generate relation schemas (default: false)
 }
 
 // Effect Schema Generator
@@ -415,6 +410,7 @@ generator Hekireki-Effect {
     file     = "index.ts"    // File name (default: index.ts)
     type     = true          // Generate TypeScript types (default: false)
     comment  = true          // Include schema documentation (default: false)
+    relation = true          // Generate relation schemas (default: false)
 }
 
 // Mermaid ER Generator
@@ -427,23 +423,24 @@ generator Hekireki-ER {
 // Ecto Generator
 generator Hekireki-Ecto {
     provider = "hekireki-ecto"
-    output   = "./ecto"      // Output directory (default: ./ecto)
+    output   = "./ecto"      // Output directory (default: ./ecto/)
     app      = "MyApp"       // App name (default: MyApp)
 }
 
 // DBML Generator
 generator Hekireki-DBML {
     provider = "hekireki-dbml"
-    output   = "./dbml"      // Output directory (default: ./dbml)
-    file     = "schema.dbml" // File name (default: schema.dbml)
+    output   = "./dbml"              // Output directory (default: ./dbml)
+    file     = "schema.dbml"         // File name (default: schema.dbml)
+    mapToDbSchema = true             // Map to DB schema names (default: true)
+    includeRelationFields = true     // Include relation fields (default: true)
+    pngFile  = "er-diagram.png"      // PNG output file name (default: er-diagram.png)
 }
 
-// SVG/PNG Generator
-generator Hekireki-SVG {
-    provider = "hekireki-svg"
-    output   = "./docs"      // Output directory (default: ./docs)
-    file     = "er-diagram"  // File name without extension (default: er-diagram)
-    format   = "png"         // Output format: "png", "svg", or "dot" (default: png)
+// Docs Generator
+generator Hekireki-Docs {
+    provider = "hekireki-docs"
+    includeRelationFields = true     // Include relation fields (default: true)
 }
 ```
 
