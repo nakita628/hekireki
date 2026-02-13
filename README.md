@@ -71,6 +71,7 @@ generator Hekireki-Ecto {
 
 generator Hekireki-DBML {
     provider = "hekireki-dbml"
+    // Also outputs er-diagram.png
 }
 
 model User {
@@ -120,9 +121,9 @@ model Post {
 }
 ```
 
-## Generate
+## Generated Output
 
-## Zod
+### Zod
 
 ```ts
 import * as z from 'zod'
@@ -176,7 +177,7 @@ export const PostRelationsSchema = z.object({
 export type PostRelations = z.infer<typeof PostRelationsSchema>
 ```
 
-## Valibot
+### Valibot
 
 ```ts
 import * as v from 'valibot'
@@ -230,7 +231,7 @@ export const PostRelationsSchema = v.object({
 export type PostRelations = v.InferInput<typeof PostRelationsSchema>
 ```
 
-## ArkType
+### ArkType
 
 ```ts
 import { type } from 'arktype'
@@ -258,7 +259,7 @@ export const PostSchema = type({
 export type Post = typeof PostSchema.infer
 ```
 
-## Effect Schema
+### Effect Schema
 
 ```ts
 import { Schema } from 'effect'
@@ -286,7 +287,7 @@ export const PostSchema = Schema.Struct({
 export type Post = Schema.Schema.Type<typeof PostSchema>
 ```
 
-## Mermaid
+### Mermaid
 
 ```mermaid
 erDiagram
@@ -303,7 +304,7 @@ erDiagram
     }
 ```
 
-## Ecto
+### Ecto
 
 ```elixir
 defmodule DBSchema.User do
@@ -343,7 +344,7 @@ defmodule DBSchema.Post do
 end
 ```
 
-## DBML
+### DBML
 
 ```dbml
 Table User {
@@ -363,7 +364,7 @@ Table Post {
 Ref Post_userId_fk: Post.userId > User.id
 ```
 
-## PNG
+### PNG
 
 The `hekireki-dbml` generator also outputs ER diagrams as PNG images using [dbml-renderer](https://github.com/softwaretechnik-berlin/dbml-renderer). Configure the `pngFile` option to set the output file name.
 

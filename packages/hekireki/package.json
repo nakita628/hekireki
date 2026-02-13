@@ -39,6 +39,7 @@
     "hekireki-arktype": "dist/generator/arktype/index.js",
     "hekireki-effect": "dist/generator/effect/index.js",
     "hekireki-dbml": "dist/generator/dbml/index.js",
+    "hekireki-png": "dist/generator/png/index.js",
     "hekireki-docs": "dist/generator/docs/index.js"
   },
   "scripts": {

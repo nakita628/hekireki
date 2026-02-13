@@ -14,23 +14,23 @@ export async function main(options: GeneratorOptions): Promise<void> {
 
   const content = dbmlContent(options.dmmf.datamodel, mapToDbSchema, includeRelationFields)
 
-  const output = options.generator.output?.value ?? './dbml'
-  const file = getString(config?.file, 'schema.dbml') ?? 'schema.dbml'
+  const output = options.generator.output?.value ?? './png'
+  const file = getString(config?.file, 'er-diagram.png') ?? 'er-diagram.png'
 
   const mkdirResult = await mkdir(output)
   if (!mkdirResult.ok) {
     throw new Error(`Failed to create directory: ${mkdirResult.error}`)
   }
 
-  if (file.endsWith('.png')) {
-    const pngResult = await generatePng(output, content, file)
-    if (!pngResult.ok) {
-      throw new Error(pngResult.error)
-    }
-  } else {
+  if (file.endsWith('.dbml')) {
     const dbmlResult = await generateDbmlFile(output, content, file)
     if (!dbmlResult.ok) {
       throw new Error(dbmlResult.error)
+    }
+  } else {
+    const pngResult = await generatePng(output, content, file)
+    if (!pngResult.ok) {
+      throw new Error(pngResult.error)
     }
   }
 }
@@ -38,8 +38,8 @@ export async function main(options: GeneratorOptions): Promise<void> {
 generatorHandler({
   onManifest() {
     return {
-      defaultOutput: './dbml',
-      prettyName: 'Hekireki-DBML',
+      defaultOutput: './png',
+      prettyName: 'Hekireki-PNG',
     }
   },
   onGenerate: main,
