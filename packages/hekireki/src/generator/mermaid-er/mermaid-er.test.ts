@@ -138,8 +138,7 @@ const postModel: DMMF.Model = {
       nativeType: null,
       isGenerated: false,
       isUpdatedAt: false,
-      documentation:
-        'Foreign key referencing User.id\n@z.uuid()\n@v.pipe(v.string(), v.uuid())',
+      documentation: 'Foreign key referencing User.id\n@z.uuid()\n@v.pipe(v.string(), v.uuid())',
     },
     {
       name: 'user',
@@ -191,9 +190,7 @@ describe('modelInfo', () => {
 describe('extractRelationsFromDmmf', () => {
   it.concurrent('extracts relations from DMMF models', () => {
     const result = extractRelationsFromDmmf([userModel, postModel])
-    expect(result).toStrictEqual([
-      '    User ||--}| Post : "(id) - (userId)"',
-    ])
+    expect(result).toStrictEqual(['    User ||--}| Post : "(id) - (userId)"'])
   })
 })
 

@@ -1,11 +1,11 @@
 import type { DMMF } from '@prisma/generator-helper'
-import { validationSchemas } from './prisma.js'
 import {
   makeArktypeInfer,
   makeArktypeSchemas,
   makeValidationExtractor,
   parseDocumentWithoutAnnotations,
 } from '../utils/index.js'
+import { validationSchemas } from './prisma.js'
 
 export function makeArktypeRelations(
   model: DMMF.Model,
@@ -20,8 +20,7 @@ export function makeArktypeRelations(
   const base = `...${model.name}Schema.t,`
   const rels = relProps
     .map(
-      (r) =>
-        `${r.key}:${r.isMany ? `${r.targetModel}Schema.array()` : `${r.targetModel}Schema`},`,
+      (r) => `${r.key}:${r.isMany ? `${r.targetModel}Schema.array()` : `${r.targetModel}Schema`},`,
     )
     .join('')
 

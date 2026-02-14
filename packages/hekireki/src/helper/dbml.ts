@@ -36,11 +36,7 @@ function resolveDefaultValue(field: DMMF.Field): string | undefined {
   return undefined
 }
 
-function toDBMLColumn(
-  field: DMMF.Field,
-  models: readonly DMMF.Model[],
-  mapToDbSchema: boolean,
-) {
+function toDBMLColumn(field: DMMF.Field, models: readonly DMMF.Model[], mapToDbSchema: boolean) {
   const defaultDef = field.default as DMMF.FieldDefault | undefined
   return {
     name: field.name,
@@ -59,9 +55,7 @@ function generateTableIndexes(model: DMMF.Model) {
     ...(model.primaryKey?.fields && model.primaryKey.fields.length > 0
       ? [{ columns: model.primaryKey.fields, isPrimaryKey: true }]
       : []),
-    ...model.uniqueFields
-      .filter((c) => c.length > 1)
-      .map((c) => ({ columns: c, isUnique: true })),
+    ...model.uniqueFields.filter((c) => c.length > 1).map((c) => ({ columns: c, isUnique: true })),
   ]
 }
 

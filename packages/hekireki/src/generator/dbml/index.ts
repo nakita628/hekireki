@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import type { GeneratorOptions } from '@prisma/generator-helper'
 import pkg from '@prisma/generator-helper'
-import { dbmlContent, generateDbmlFile, generatePng } from '../../helper/dbml.js'
 import { mkdir } from '../../fsp/index.js'
+import { dbmlContent, generateDbmlFile, generatePng } from '../../helper/dbml.js'
 import { getString } from '../../utils/index.js'
 
 const { generatorHandler } = pkg

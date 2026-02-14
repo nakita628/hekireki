@@ -94,8 +94,8 @@ export const darkModeToggleLabelClass = css`
 
 // Icon
 export const iconClass = css`
-  color: var(--icon-color);
-  cursor: pointer;
+  border-radius: 50%;
+  object-fit: cover;
 `
 
 // Typography

@@ -88,6 +88,10 @@ type FieldDefault = {
   readonly args: readonly unknown[]
 }
 
+function isFieldDefault(v: unknown): v is FieldDefault {
+  return typeof v === 'object' && v !== null && 'name' in v && 'args' in v
+}
+
 const fieldDirectiveMap = new Map<string, string>([
   ['isUnique', '@unique'],
   ['isId', '@id'],
@@ -151,7 +155,7 @@ const FieldTableRow: FC<{ field: MGModelField; modelName: string }> = ({ field, 
 )
 
 const OperationInputTypeLink: FC<{ typeRef: DMMF.InputTypeRef }> = ({ typeRef }) => {
-  const typeName = typeRef.type as string
+  const typeName = typeRef.type
   if (isScalarType(typeName)) {
     return <>{typeName}</>
   }
@@ -341,9 +345,9 @@ const getFieldDirectives = (field: DMMF.Field): readonly string[] => {
           directives.push(`${mappedDirectiveValue}(${field.default})`)
         } else if (Array.isArray(field.default)) {
           directives.push(`${mappedDirectiveValue}([${field.default.toString()}])`)
-        } else if (typeof field.default === 'object') {
+        } else if (isFieldDefault(field.default)) {
           directives.push(
-            `${mappedDirectiveValue}(${(field.default as FieldDefault).name}(${(field.default as FieldDefault).args.join(',')}))`,
+            `${mappedDirectiveValue}(${field.default.name}(${field.default.args.join(',')}))`,
           )
         }
       } else {
@@ -360,7 +364,7 @@ const getModelFields = (model: DMMF.Model): readonly MGModelField[] =>
     name: field.name,
     type: getFieldType(field),
     bareTypeName: field.type,
-    documentation: (field as { documentation?: string }).documentation,
+    documentation: field.documentation,
     directives: getFieldDirectives(field),
     required: field.isRequired,
   }))
@@ -370,8 +374,8 @@ const mapArgs = (
 ): readonly MGModelOperationKeys[] | undefined =>
   args?.map((a) => ({
     name: a.name,
-    types: a.inputTypes as readonly DMMF.InputTypeRef[],
-    required: a.isRequired as boolean,
+    types: a.inputTypes,
+    required: a.isRequired,
   }))
 
 const operationDescriptions: Record<string, (singular: string, plural: string) => { desc: string; queryType: 'Query' | 'Mutation' }> = {
@@ -483,7 +487,7 @@ const getModelOperations = (
         usage: escapeHtml(usageTemplate(singular, plural, method)),
         opKeys: mapArgs(field?.args),
         output: {
-          type: field?.outputType.type as string,
+          type: field?.outputType.type,
           required: !field?.isNullable,
           list: field?.outputType.isList,
         },
@@ -495,7 +499,7 @@ const getModelOperations = (
 const getModels = (dmmf: DMMFDocument): readonly MGModel[] =>
   dmmf.datamodel.models.map((model) => ({
     name: model.name,
-    documentation: (model as { documentation?: string }).documentation,
+    documentation: model.documentation,
     directives: getModelDirective(model),
     fields: getModelFields(model),
     operations: getModelOperations(
