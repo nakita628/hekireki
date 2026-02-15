@@ -173,6 +173,14 @@ export const generatePng = async (
   dbml: string,
   fileName: string,
 ): Promise<{ readonly ok: true } | { readonly ok: false; readonly error: string }> => {
+  const outputFile = `${outputDir}/${fileName}`
+  return generatePngFile(outputFile, dbml)
+}
+
+export const generatePngFile = async (
+  outputPath: string,
+  dbml: string,
+): Promise<{ readonly ok: true } | { readonly ok: false; readonly error: string }> => {
   const svg = run(dbml, 'svg')
   const resvg = new Resvg(svg, {
     font: {
@@ -182,8 +190,7 @@ export const generatePng = async (
   const pngData = resvg.render()
   const pngBuffer = pngData.asPng()
 
-  const outputFile = `${outputDir}/${fileName}`
-  const writeResult = await writeFileBinary(outputFile, pngBuffer)
+  const writeResult = await writeFileBinary(outputPath, pngBuffer)
 
   if (!writeResult.ok) {
     return { ok: false, error: `Failed to write PNG: ${writeResult.error}` }

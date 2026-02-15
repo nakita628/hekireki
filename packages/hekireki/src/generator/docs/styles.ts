@@ -94,8 +94,7 @@ export const darkModeToggleLabelClass = css`
 
 // Icon
 export const iconClass = css`
-  border-radius: 50%;
-  object-fit: cover;
+  color: var(--icon-color);
 `
 
 // Typography
@@ -129,10 +128,6 @@ export const h4Class = css`
 
 export const textClass = css`
   color: var(--text-primary);
-`
-
-export const textMutedClass = css`
-  color: var(--text-muted);
 `
 
 // Table
@@ -250,12 +245,6 @@ export const hrSmallClass = css`
 `
 
 // List
-export const listClass = css`
-  margin: 0;
-  padding: 0;
-  list-style: none;
-`
-
 export const listItemClass = css`
   margin-bottom: 1rem;
 `
@@ -263,18 +252,6 @@ export const listItemClass = css`
 // Spacing utilities
 export const mb2Class = css`
   margin-bottom: 0.5rem;
-`
-
-export const mb4Class = css`
-  margin-bottom: 1rem;
-`
-
-export const mt2Class = css`
-  margin-top: 0.5rem;
-`
-
-export const mt4Class = css`
-  margin-top: 1rem;
 `
 
 export const ml4Class = css`
