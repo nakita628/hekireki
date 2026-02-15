@@ -11,6 +11,7 @@ export default defineConfig({
     'generator/effect/index': './src/generator/effect/index.ts',
     'generator/dbml/index': './src/generator/dbml/index.ts',
     'generator/docs/index': './src/generator/docs/index.tsx',
+    'generator/drizzle/index': './src/generator/drizzle/index.ts',
   },
   format: 'esm',
   dts: true,
