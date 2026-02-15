@@ -17,10 +17,6 @@ export type DMMFDocument = Omit<ExternalDMMF.Document, 'mappings'> & {
   mappings: DMMFMapping[]
 }
 
-type TransformOptions = {
-  includeRelationFields: boolean
-}
-
 const getMappings = (
   mappings: ExternalDMMF.Mappings,
   datamodel: ExternalDMMF.Datamodel,
@@ -49,23 +45,10 @@ const getMappings = (
 
 export const transformDMMF = (
   dmmf: ExternalDMMF.Document,
-  { includeRelationFields }: TransformOptions,
 ): DMMFDocument => {
-  let datamodel = dmmf.datamodel
-
-  if (!includeRelationFields) {
-    datamodel = {
-      ...dmmf.datamodel,
-      models: dmmf.datamodel.models.map((model) => ({
-        ...model,
-        fields: model.fields.filter((field) => !field.relationName),
-      })),
-    }
-  }
-
   return {
     ...dmmf,
-    datamodel,
-    mappings: getMappings(dmmf.mappings, datamodel),
+    datamodel: dmmf.datamodel,
+    mappings: getMappings(dmmf.mappings, dmmf.datamodel),
   }
 }

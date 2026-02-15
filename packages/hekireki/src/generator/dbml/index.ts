@@ -12,9 +12,8 @@ const { generatorHandler } = pkg
 export async function main(options: GeneratorOptions): Promise<void> {
   const { config } = options.generator
   const mapToDbSchema = getString(config?.mapToDbSchema) !== 'false'
-  const includeRelationFields = getString(config?.includeRelationFields) !== 'false'
 
-  const content = dbmlContent(options.dmmf.datamodel, mapToDbSchema, includeRelationFields)
+  const content = dbmlContent(options.dmmf.datamodel, mapToDbSchema)
 
   const output = options.generator.output?.value ?? './dbml'
 

@@ -62,16 +62,11 @@ function generateTableIndexes(model: DMMF.Model) {
 export function generateTables(
   models: readonly DMMF.Model[],
   mapToDbSchema = false,
-  includeRelationFields = true,
 ): readonly string[] {
   return models.map((model) => {
     const modelName = mapToDbSchema && model.dbName ? model.dbName : model.name
 
-    const filteredFields = includeRelationFields
-      ? model.fields
-      : model.fields.filter((field) => !field.relationName)
-
-    const columns = filteredFields.map((field) => toDBMLColumn(field, models, mapToDbSchema))
+    const columns = model.fields.map((field) => toDBMLColumn(field, models, mapToDbSchema))
     const columnLines = columns.map(generatePrismaColumn).join('\n')
 
     const indexes = generateTableIndexes(model)
@@ -144,9 +139,8 @@ export function generateRelations(
 export function dbmlContent(
   datamodel: DMMF.Datamodel,
   mapToDbSchema = false,
-  includeRelationFields = true,
 ): string {
-  const tables = generateTables(datamodel.models, mapToDbSchema, includeRelationFields)
+  const tables = generateTables(datamodel.models, mapToDbSchema)
   const enums = generateEnums(datamodel.enums)
   const refs = generateRelations(datamodel.models, mapToDbSchema)
 

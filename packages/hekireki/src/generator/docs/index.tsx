@@ -15,10 +15,7 @@ generatorHandler({
     }
   },
   async onGenerate(options) {
-    const { config } = options.generator
-    const includeRelationFields = config.includeRelationFields !== 'false'
-
-    const dmmf = transformDMMF(options.dmmf, { includeRelationFields })
+    const dmmf = transformDMMF(options.dmmf)
     const html = await generateHTML(dmmf)
 
     const output = options.generator.output?.value

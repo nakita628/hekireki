@@ -11,8 +11,7 @@
 - 🏹 Automatically generates [ArkType](https://arktype.io/) schemas from your Prisma schema
 - ⚡ Automatically generates [Effect Schema](https://effect.website/docs/schema/introduction/) from your Prisma schema
 - 📊 Creates [Mermaid](https://mermaid.js.org/) ER diagrams with PK/FK markers
-- 📝 Generates [DBML](https://dbml.dbdiagram.io/) (Database Markup Language) files
-- 🖼️ Outputs ER diagrams as **PNG** images using [dbml-renderer](https://github.com/softwaretechnik-berlin/dbml-renderer)
+- 📝 Generates [DBML](https://dbml.dbdiagram.io/) (Database Markup Language) files and **PNG** ER diagrams via [dbml-renderer](https://github.com/softwaretechnik-berlin/dbml-renderer) — output format is determined by the file extension (`.dbml` or `.png`)
 - 🧪 Generates [Ecto](https://hexdocs.pm/ecto/Ecto.Schema.html) schemas for Elixir projects
   ⚠️ Foreign key constraints are **not** included — manage relationships in your application logic
 
@@ -71,10 +70,7 @@ generator Hekireki-Ecto {
 
 generator Hekireki-DBML {
     provider = "hekireki-dbml"
-}
-
-generator Hekireki-PNG {
-    provider = "hekireki-png"
+    output   = "docs/schema.dbml"
 }
 
 model User {
@@ -369,7 +365,14 @@ Ref Post_userId_fk: Post.userId > User.id
 
 ### PNG
 
-The `hekireki-png` generator outputs ER diagrams as PNG images using [dbml-renderer](https://github.com/softwaretechnik-berlin/dbml-renderer). Configure the `file` option to set the output file name.
+The `hekireki-dbml` generator also outputs ER diagrams as PNG images when the `output` path ends with `.png`:
+
+```prisma
+generator Hekireki-PNG {
+    provider = "hekireki-dbml"
+    output   = "docs/er-diagram.png"
+}
+```
 
 ## Configuration
 
@@ -431,30 +434,40 @@ generator Hekireki-Ecto {
     app      = "MyApp"       // App name (default: MyApp)
 }
 
-// DBML Generator
+// DBML Generator (output extension determines format: .dbml or .png)
 generator Hekireki-DBML {
     provider = "hekireki-dbml"
-    output   = "./dbml"              // Output directory (default: ./dbml)
-    file     = "schema.dbml"         // File name (default: schema.dbml)
+    output   = "docs/schema.dbml"    // File path ending in .dbml or .png
     mapToDbSchema = true             // Map to DB schema names (default: true)
-    includeRelationFields = true     // Include relation fields (default: true)
 }
 
-// PNG Generator
+// PNG output (same provider, different extension)
 generator Hekireki-PNG {
-    provider = "hekireki-png"
-    output   = "./png"               // Output directory (default: ./png)
-    file     = "er-diagram.png"      // File name (default: er-diagram.png)
+    provider = "hekireki-dbml"
+    output   = "docs/er-diagram.png" // .png extension → PNG output
     mapToDbSchema = true             // Map to DB schema names (default: true)
-    includeRelationFields = true     // Include relation fields (default: true)
 }
 
 // Docs Generator
 generator Hekireki-Docs {
     provider = "hekireki-docs"
-    includeRelationFields = true     // Include relation fields (default: true)
+    output   = "./docs"              // Output directory (default: ./docs)
 }
 ```
+
+## Docs Server
+
+Hekireki includes a built-in documentation server powered by [Hono](https://hono.dev/). After generating docs with `prisma generate`, you can preview them locally:
+
+```bash
+# Start the docs server (default: http://localhost:5858)
+hekireki docs serve
+
+# Specify a custom port
+hekireki docs serve -p 3000
+```
+
+> **Note:** Run `prisma generate` first to generate the `docs/` directory with `index.html`.
 
 ## License
 
