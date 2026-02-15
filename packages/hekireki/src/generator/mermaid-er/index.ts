@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import type { GeneratorOptions } from '@prisma/generator-helper'
 import pkg from '@prisma/generator-helper'
-import { erContent } from '../../helper/mermaid-er.js'
 import { mkdir, writeFile } from '../../fsp/index.js'
+import { erContent } from '../../helper/mermaid-er.js'
 
 const { generatorHandler } = pkg
 

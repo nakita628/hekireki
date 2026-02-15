@@ -24,11 +24,7 @@ export async function main(options: GeneratorOptions): Promise<void> {
     getBool(options.generator.config?.comment),
   )
   const relations = enableRelation
-    ? makeRelationsOnly(
-        options.dmmf,
-        getBool(options.generator.config?.type),
-        makeArktypeRelations,
-      )
+    ? makeRelationsOnly(options.dmmf, getBool(options.generator.config?.type), makeArktypeRelations)
     : ''
   const full = [base, relations].filter(Boolean).join('\n\n')
 

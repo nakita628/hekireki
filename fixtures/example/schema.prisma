@@ -67,15 +67,12 @@ generator Hekireki-Effect {
     comment  = true
 }
 
-// DBML + ER Diagram PNG Generator
-// Outputs both schema.dbml and er-diagram.png
+// DBML Generator
 // Options:
-//   output  - Output directory (default: ./dbml)
-//   file    - DBML file name (default: schema.dbml)
-//   pngFile - PNG file name (default: er-diagram.png)
+//   output - File path with extension (.dbml or .png) or directory (default: ./dbml)
 generator Hekireki-DBML {
     provider = "hekireki-dbml"
-    output   = "docs"
+    output   = "docs/schema.dbml"
 }
 
 // Ecto Schema Generator (Elixir)

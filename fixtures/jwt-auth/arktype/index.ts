@@ -1,1 +1,1 @@
-import { type } from 'arktype'
+export {}

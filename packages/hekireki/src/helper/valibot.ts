@@ -1,5 +1,4 @@
 import type { DMMF } from '@prisma/generator-helper'
-import { validationSchemas } from './prisma.js'
 import {
   makeAnnotationExtractor,
   makeJsDoc,
@@ -10,6 +9,7 @@ import {
   makeValidationExtractor,
   parseDocumentWithoutAnnotations,
 } from '../utils/index.js'
+import { validationSchemas } from './prisma.js'
 
 const vPrim = (f: DMMF.Field): string => {
   const extractor = makeAnnotationExtractor('@v.')

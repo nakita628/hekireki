@@ -1,11 +1,11 @@
 import type { DMMF } from '@prisma/generator-helper'
-import { validationSchemas } from './prisma.js'
 import {
   makeEffectInfer,
   makeEffectSchemas,
   makeValidationExtractor,
   parseDocumentWithoutAnnotations,
 } from '../utils/index.js'
+import { validationSchemas } from './prisma.js'
 
 export function makeEffectRelations(
   model: DMMF.Model,

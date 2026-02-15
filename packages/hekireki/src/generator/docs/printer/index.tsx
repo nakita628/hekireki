@@ -18,7 +18,7 @@ import {
   iconClass,
 } from '../styles.js'
 
-const HekirekiSvg: FC = () => (
+const HekirekiLogo: FC = () => (
   <svg
     width="40"
     height="40"
@@ -75,7 +75,7 @@ const Sidebar: FC<{ toc: ReturnType<typeof createTOC> }> = ({ toc }) => (
   <div class={sidebarClass}>
     <div class={headerClass}>
       <div class={logoContainerClass}>
-        <HekirekiSvg />
+        <HekirekiLogo />
         <span class={logoTextClass}>Hekireki Docs</span>
       </div>
       <DarkModeToggle />

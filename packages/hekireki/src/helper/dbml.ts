@@ -36,11 +36,7 @@ function resolveDefaultValue(field: DMMF.Field): string | undefined {
   return undefined
 }
 
-function toDBMLColumn(
-  field: DMMF.Field,
-  models: readonly DMMF.Model[],
-  mapToDbSchema: boolean,
-) {
+function toDBMLColumn(field: DMMF.Field, models: readonly DMMF.Model[], mapToDbSchema: boolean) {
   const defaultDef = field.default as DMMF.FieldDefault | undefined
   return {
     name: field.name,
@@ -59,25 +55,18 @@ function generateTableIndexes(model: DMMF.Model) {
     ...(model.primaryKey?.fields && model.primaryKey.fields.length > 0
       ? [{ columns: model.primaryKey.fields, isPrimaryKey: true }]
       : []),
-    ...model.uniqueFields
-      .filter((c) => c.length > 1)
-      .map((c) => ({ columns: c, isUnique: true })),
+    ...model.uniqueFields.filter((c) => c.length > 1).map((c) => ({ columns: c, isUnique: true })),
   ]
 }
 
 export function generateTables(
   models: readonly DMMF.Model[],
   mapToDbSchema = false,
-  includeRelationFields = true,
 ): readonly string[] {
   return models.map((model) => {
     const modelName = mapToDbSchema && model.dbName ? model.dbName : model.name
 
-    const filteredFields = includeRelationFields
-      ? model.fields
-      : model.fields.filter((field) => !field.relationName)
-
-    const columns = filteredFields.map((field) => toDBMLColumn(field, models, mapToDbSchema))
+    const columns = model.fields.map((field) => toDBMLColumn(field, models, mapToDbSchema))
     const columnLines = columns.map(generatePrismaColumn).join('\n')
 
     const indexes = generateTableIndexes(model)
@@ -147,12 +136,8 @@ export function generateRelations(
   )
 }
 
-export function dbmlContent(
-  datamodel: DMMF.Datamodel,
-  mapToDbSchema = false,
-  includeRelationFields = true,
-): string {
-  const tables = generateTables(datamodel.models, mapToDbSchema, includeRelationFields)
+export function dbmlContent(datamodel: DMMF.Datamodel, mapToDbSchema = false): string {
+  const tables = generateTables(datamodel.models, mapToDbSchema)
   const enums = generateEnums(datamodel.enums)
   const refs = generateRelations(datamodel.models, mapToDbSchema)
 
@@ -179,6 +164,14 @@ export const generatePng = async (
   dbml: string,
   fileName: string,
 ): Promise<{ readonly ok: true } | { readonly ok: false; readonly error: string }> => {
+  const outputFile = `${outputDir}/${fileName}`
+  return generatePngFile(outputFile, dbml)
+}
+
+export const generatePngFile = async (
+  outputPath: string,
+  dbml: string,
+): Promise<{ readonly ok: true } | { readonly ok: false; readonly error: string }> => {
   const svg = run(dbml, 'svg')
   const resvg = new Resvg(svg, {
     font: {
@@ -188,8 +181,7 @@ export const generatePng = async (
   const pngData = resvg.render()
   const pngBuffer = pngData.asPng()
 
-  const outputFile = `${outputDir}/${fileName}`
-  const writeResult = await writeFileBinary(outputFile, pngBuffer)
+  const writeResult = await writeFileBinary(outputPath, pngBuffer)
 
   if (!writeResult.ok) {
     return { ok: false, error: `Failed to write PNG: ${writeResult.error}` }

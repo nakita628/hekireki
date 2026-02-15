@@ -74,7 +74,7 @@ export function extractRelationsFromDmmf(models: readonly DMMF.Model[]): readonl
       .map((field) => {
         const toModel = model.name
         const fromModel = field.type
-        const toField = field.relationFromFields![0]
+        const toField = field.relationFromFields?.[0]
         const fromField = field.relationToFields?.[0] ?? 'id'
 
         const fromCardinality: RelationshipKey = 'one'
@@ -85,8 +85,12 @@ export function extractRelationsFromDmmf(models: readonly DMMF.Model[]): readonl
         )
 
         const toCardinality: RelationshipKey = inverseField?.isList
-          ? field.isRequired ? 'many' : 'zero-many'
-          : field.isRequired ? 'one' : 'zero-one'
+          ? field.isRequired
+            ? 'many'
+            : 'zero-many'
+          : field.isRequired
+            ? 'one'
+            : 'zero-one'
 
         const fromSymbol = RELATIONSHIPS[fromCardinality]
         const toSymbol = RELATIONSHIPS[toCardinality]

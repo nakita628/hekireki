@@ -697,6 +697,105 @@ export type PostRelations = z.infer<typeof PostRelationsSchema>
   })
 })
 
+// no annotation
+describe('prisma generate zod (no annotation)', () => {
+  afterEach(() => {
+    fs.rmSync('./prisma/schema.prisma', { force: true })
+    fs.rmSync('./prisma/zod', { recursive: true, force: true })
+  })
+
+  it('hekireki-zod no annotation', async () => {
+    const prisma = `generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "sqlite"
+}
+
+generator Hekireki-Zod {
+    provider = "hekireki-zod"
+}
+
+model User {
+    id    String @id @default(uuid())
+    name  String
+    posts Post[]
+}
+
+model Post {
+    id      String @id @default(uuid())
+    title   String
+    content String
+    userId  String
+    user    User   @relation(fields: [userId], references: [id])
+}
+`
+
+    fs.mkdirSync('./prisma', { recursive: true })
+    fs.writeFileSync('./prisma/schema.prisma', prisma, { encoding: 'utf-8' })
+    await command()
+    const result = fs.readFileSync('./prisma/zod/index.ts', {
+      encoding: 'utf-8',
+    })
+
+    const expected = `import * as z from 'zod'
+`
+    expect(result).toBe(expected)
+  }, 30000)
+
+  it('hekireki-zod no annotation relation true', async () => {
+    const prisma = `generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "sqlite"
+}
+
+generator Hekireki-Zod {
+    provider = "hekireki-zod"
+    relation = true
+}
+
+model User {
+    id    String @id @default(uuid())
+    name  String
+    posts Post[]
+}
+
+model Post {
+    id      String @id @default(uuid())
+    title   String
+    content String
+    userId  String
+    user    User   @relation(fields: [userId], references: [id])
+}
+`
+
+    fs.mkdirSync('./prisma', { recursive: true })
+    fs.writeFileSync('./prisma/schema.prisma', prisma, { encoding: 'utf-8' })
+    await command()
+    const result = fs.readFileSync('./prisma/zod/index.ts', {
+      encoding: 'utf-8',
+    })
+
+    const expected = `import * as z from 'zod'
+
+export const UserRelationsSchema = z.object({
+  ...UserSchema.shape,
+  posts: z.array(PostSchema),
+})
+
+export const PostRelationsSchema = z.object({
+  ...PostSchema.shape,
+  user: UserSchema,
+})
+`
+    expect(result).toBe(expected)
+  }, 30000)
+})
+
 // valibot
 describe('prisma generate valibot', () => {
   afterEach(() => {
@@ -1243,4 +1342,103 @@ export type PostRelations = v.InferInput<typeof PostRelationsSchema>
 `
     expect(result).toBe(expected)
   })
+})
+
+// no annotation valibot
+describe('prisma generate valibot (no annotation)', () => {
+  afterEach(() => {
+    fs.rmSync('./prisma/schema.prisma', { force: true })
+    fs.rmSync('./prisma/valibot', { recursive: true, force: true })
+  })
+
+  it('hekireki-valibot no annotation', async () => {
+    const prisma = `generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "sqlite"
+}
+
+generator Hekireki-Valibot {
+    provider = "hekireki-valibot"
+}
+
+model User {
+    id    String @id @default(uuid())
+    name  String
+    posts Post[]
+}
+
+model Post {
+    id      String @id @default(uuid())
+    title   String
+    content String
+    userId  String
+    user    User   @relation(fields: [userId], references: [id])
+}
+`
+
+    fs.mkdirSync('./prisma', { recursive: true })
+    fs.writeFileSync('./prisma/schema.prisma', prisma, { encoding: 'utf-8' })
+    await command()
+    const result = fs.readFileSync('./prisma/valibot/index.ts', {
+      encoding: 'utf-8',
+    })
+
+    const expected = `import * as v from 'valibot'
+`
+    expect(result).toBe(expected)
+  }, 30000)
+
+  it('hekireki-valibot no annotation relation true', async () => {
+    const prisma = `generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "sqlite"
+}
+
+generator Hekireki-Valibot {
+    provider = "hekireki-valibot"
+    relation = true
+}
+
+model User {
+    id    String @id @default(uuid())
+    name  String
+    posts Post[]
+}
+
+model Post {
+    id      String @id @default(uuid())
+    title   String
+    content String
+    userId  String
+    user    User   @relation(fields: [userId], references: [id])
+}
+`
+
+    fs.mkdirSync('./prisma', { recursive: true })
+    fs.writeFileSync('./prisma/schema.prisma', prisma, { encoding: 'utf-8' })
+    await command()
+    const result = fs.readFileSync('./prisma/valibot/index.ts', {
+      encoding: 'utf-8',
+    })
+
+    const expected = `import * as v from 'valibot'
+
+export const UserRelationsSchema = v.object({
+  ...UserSchema.entries,
+  posts: v.array(PostSchema),
+})
+
+export const PostRelationsSchema = v.object({
+  ...PostSchema.entries,
+  user: UserSchema,
+})
+`
+    expect(result).toBe(expected)
+  }, 30000)
 })

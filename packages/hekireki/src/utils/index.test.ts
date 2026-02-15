@@ -17,13 +17,13 @@ import {
   makeRelationLine,
   makeRelationLineFromRelation,
   makeSnakeCase,
+  makeValibotInfer,
+  makeValibotSchema,
+  makeValibotSchemas,
   makeValidationExtractor,
   makeZodInfer,
   makeZodSchema,
   makeZodSchemas,
-  makeValibotInfer,
-  makeValibotSchema,
-  makeValibotSchemas,
   parseRelation,
   prismaTypeToEctoType,
   quote,
@@ -76,7 +76,10 @@ describe('utils', () => {
       const result = isZodDocument(`Unique identifier for the user
       @z.uuid()
       @v.pipe(v.string(), v.uuid())`)
-      expect(result).toStrictEqual(['Unique identifier for the user', '@v.pipe(v.string(), v.uuid())'])
+      expect(result).toStrictEqual([
+        'Unique identifier for the user',
+        '@v.pipe(v.string(), v.uuid())',
+      ])
     })
     it.concurrent('filters out Valibot annotation lines', () => {
       const isValibotDocument = makeDocumentParser('@v.')
@@ -504,9 +507,7 @@ describe('utils', () => {
     })
     it.concurrent('zero-to-many', () => {
       expect(
-        parseRelation(
-          '@relation ProjectTeam.project_id TeamMember.team_member_id zero-to-many',
-        ),
+        parseRelation('@relation ProjectTeam.project_id TeamMember.team_member_id zero-to-many'),
       ).toStrictEqual({
         fromModel: 'ProjectTeam',
         toModel: 'TeamMember',
@@ -516,9 +517,9 @@ describe('utils', () => {
       })
     })
     it.concurrent('returns null for optional suffix', () => {
-      expect(
-        parseRelation('@relation User.id Settings.user_id one-to-one-optional'),
-      ).toStrictEqual(null)
+      expect(parseRelation('@relation User.id Settings.user_id one-to-one-optional')).toStrictEqual(
+        null,
+      )
     })
   })
 
@@ -714,9 +715,9 @@ describe('utils', () => {
 
   describe('generatePrismaColumn', () => {
     it('generates pk column', () => {
-      expect(
-        generatePrismaColumn({ name: 'id', type: 'String', isPrimaryKey: true }),
-      ).toBe('  id String [pk]')
+      expect(generatePrismaColumn({ name: 'id', type: 'String', isPrimaryKey: true })).toBe(
+        '  id String [pk]',
+      )
     })
     it('generates column with all constraints', () => {
       expect(
@@ -874,9 +875,7 @@ describe('utils', () => {
       const models = [
         {
           name: 'User',
-          fields: [
-            { name: 'id', kind: 'scalar', documentation: undefined },
-          ],
+          fields: [{ name: 'id', kind: 'scalar', documentation: undefined }],
         },
       ]
       expect(findMissingAnnotations(models, extractZod)).toStrictEqual([

@@ -1,3 +1,5 @@
+![img](https://raw.githubusercontent.com/nakita628/hekireki/refs/heads/main/assets/img/hekireki.png)
+
 # Hekireki
 
 **[Hekireki](https://www.npmjs.com/package/hekireki)** is a tool that generates validation schemas for Zod, Valibot, ArkType, and Effect Schema, as well as ER diagrams, from [Prisma](https://www.prisma.io/) schemas annotated with comments.
@@ -9,8 +11,7 @@
 - 🏹 Automatically generates [ArkType](https://arktype.io/) schemas from your Prisma schema
 - ⚡ Automatically generates [Effect Schema](https://effect.website/docs/schema/introduction/) from your Prisma schema
 - 📊 Creates [Mermaid](https://mermaid.js.org/) ER diagrams with PK/FK markers
-- 📝 Generates [DBML](https://dbml.dbdiagram.io/) (Database Markup Language) files
-- 🖼️ Outputs ER diagrams as **PNG/SVG** images using [dbml-renderer](https://github.com/softwaretechnik-berlin/dbml-renderer)
+- 📝 Generates [DBML](https://dbml.dbdiagram.io/) (Database Markup Language) files and **PNG** ER diagrams via [dbml-renderer](https://github.com/softwaretechnik-berlin/dbml-renderer) — output format is determined by the file extension (`.dbml` or `.png`)
 - 🧪 Generates [Ecto](https://hexdocs.pm/ecto/Ecto.Schema.html) schemas for Elixir projects
   ⚠️ Foreign key constraints are **not** included — manage relationships in your application logic
 
@@ -51,28 +52,30 @@ generator Hekireki-ArkType {
     provider = "hekireki-arktype"
     type     = true
     comment  = true
+    relation = true
 }
 
 generator Hekireki-Effect {
     provider = "hekireki-effect"
     type     = true
     comment  = true
+    relation = true
 }
 
 generator Hekireki-Ecto {
     provider = "hekireki-ecto"
-    output = "schema"
+    output = "./ecto"
     app = "DBSchema"
 }
 
 generator Hekireki-DBML {
     provider = "hekireki-dbml"
+    output   = "docs/schema.dbml"
 }
 
-generator Hekireki-SVG {
-    provider = "hekireki-svg"
-    output   = "docs"
-    format   = "png"
+generator Hekireki-Docs {
+    provider = "hekireki-docs"
+    output   = "./docs"
 }
 
 model User {
@@ -122,9 +125,9 @@ model Post {
 }
 ```
 
-## Generate
+## Generated Output
 
-## Zod
+### Zod
 
 ```ts
 import * as z from 'zod'
@@ -178,7 +181,7 @@ export const PostRelationsSchema = z.object({
 export type PostRelations = z.infer<typeof PostRelationsSchema>
 ```
 
-## Valibot
+### Valibot
 
 ```ts
 import * as v from 'valibot'
@@ -232,7 +235,7 @@ export const PostRelationsSchema = v.object({
 export type PostRelations = v.InferInput<typeof PostRelationsSchema>
 ```
 
-## ArkType
+### ArkType
 
 ```ts
 import { type } from 'arktype'
@@ -260,7 +263,7 @@ export const PostSchema = type({
 export type Post = typeof PostSchema.infer
 ```
 
-## Effect Schema
+### Effect Schema
 
 ```ts
 import { Schema } from 'effect'
@@ -288,7 +291,7 @@ export const PostSchema = Schema.Struct({
 export type Post = Schema.Schema.Type<typeof PostSchema>
 ```
 
-## Mermaid
+### Mermaid
 
 ```mermaid
 erDiagram
@@ -305,7 +308,7 @@ erDiagram
     }
 ```
 
-## Ecto
+### Ecto
 
 ```elixir
 defmodule DBSchema.User do
@@ -345,7 +348,7 @@ defmodule DBSchema.Post do
 end
 ```
 
-## DBML
+### DBML
 
 ```dbml
 Table User {
@@ -365,11 +368,27 @@ Table Post {
 Ref Post_userId_fk: Post.userId > User.id
 ```
 
-## PNG/SVG
+### PNG
 
-The `hekireki-svg` generator outputs ER diagrams as PNG or SVG images using [dbml-renderer](https://github.com/softwaretechnik-berlin/dbml-renderer).
+The `hekireki-dbml` generator also outputs ER diagrams as PNG images when the `output` path ends with `.png`:
 
-Output: `docs/er-diagram.png`
+```prisma
+generator Hekireki-PNG {
+    provider = "hekireki-dbml"
+    output   = "docs/er-diagram.png"
+}
+```
+
+### Docs
+
+The `hekireki-docs` generator creates an HTML documentation page from your Prisma schema. Serve it locally with `hekireki docs serve`:
+
+```prisma
+generator Hekireki-Docs {
+    provider = "hekireki-docs"
+    output   = "./docs"
+}
+```
 
 ## Configuration
 
@@ -404,6 +423,7 @@ generator Hekireki-ArkType {
     file     = "index.ts"    // File name (default: index.ts)
     type     = true          // Generate TypeScript types (default: false)
     comment  = true          // Include schema documentation (default: false)
+    relation = true          // Generate relation schemas (default: false)
 }
 
 // Effect Schema Generator
@@ -413,6 +433,7 @@ generator Hekireki-Effect {
     file     = "index.ts"    // File name (default: index.ts)
     type     = true          // Generate TypeScript types (default: false)
     comment  = true          // Include schema documentation (default: false)
+    relation = true          // Generate relation schemas (default: false)
 }
 
 // Mermaid ER Generator
@@ -425,25 +446,44 @@ generator Hekireki-ER {
 // Ecto Generator
 generator Hekireki-Ecto {
     provider = "hekireki-ecto"
-    output   = "./ecto"      // Output directory (default: ./ecto)
+    output   = "./ecto"      // Output directory (default: ./ecto/)
     app      = "MyApp"       // App name (default: MyApp)
 }
 
-// DBML Generator
+// DBML Generator (output extension determines format: .dbml or .png)
 generator Hekireki-DBML {
     provider = "hekireki-dbml"
-    output   = "./dbml"      // Output directory (default: ./dbml)
-    file     = "schema.dbml" // File name (default: schema.dbml)
+    output   = "docs/schema.dbml"    // File path ending in .dbml or .png
+    mapToDbSchema = true             // Map to DB schema names (default: true)
 }
 
-// SVG/PNG Generator
-generator Hekireki-SVG {
-    provider = "hekireki-svg"
-    output   = "./docs"      // Output directory (default: ./docs)
-    file     = "er-diagram"  // File name without extension (default: er-diagram)
-    format   = "png"         // Output format: "png", "svg", or "dot" (default: png)
+// PNG output (same provider, different extension)
+generator Hekireki-PNG {
+    provider = "hekireki-dbml"
+    output   = "docs/er-diagram.png" // .png extension → PNG output
+    mapToDbSchema = true             // Map to DB schema names (default: true)
+}
+
+// Docs Generator
+generator Hekireki-Docs {
+    provider = "hekireki-docs"
+    output   = "./docs"              // Output directory (default: ./docs)
 }
 ```
+
+## Docs Server
+
+Hekireki includes a built-in documentation server powered by [Hono](https://hono.dev/). After generating docs with `prisma generate`, you can preview them locally:
+
+```bash
+# Start the docs server (default: http://localhost:5858)
+hekireki docs serve
+
+# Specify a custom port
+hekireki docs serve -p 3000
+```
+
+> **Note:** Run `prisma generate` first to generate the `docs/` directory with `index.html`.
 
 ## License
 

@@ -90,6 +90,58 @@ erDiagram
     expect(result).toBe(expected)
   }, 30000)
 
+  it('hekireki-mermaid-er no annotation', async () => {
+    const prisma = `generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+generator Hekireki-ER {
+  provider = "hekireki-mermaid-er"
+}
+
+model User {
+  id    String @id @default(uuid())
+  name  String
+  posts Post[]
+}
+
+model Post {
+  id      String @id @default(uuid())
+  title   String
+  content String
+  userId  String
+  user    User   @relation(fields: [userId], references: [id])
+}
+`
+
+    fs.mkdirSync('./prisma-mermaid-er', { recursive: true })
+    fs.writeFileSync('./prisma-mermaid-er/schema.prisma', prisma, { encoding: 'utf-8' })
+    await promisify(exec)('npx prisma generate --schema=./prisma-mermaid-er/schema.prisma')
+    const result = fs.readFileSync('./prisma-mermaid-er/mermaid-er/ER.md', {
+      encoding: 'utf-8',
+    })
+    const expected = `\`\`\`mermaid
+erDiagram
+    User ||--}| Post : "(id) - (userId)"
+    User {
+        string id PK
+        string name
+    }
+    Post {
+        string id PK
+        string title
+        string content
+        string userId FK
+    }
+\`\`\``
+
+    expect(result).toBe(expected)
+  }, 30000)
+
   it('hekireki-mermaid-er output mermaid-er-test file test.md', async () => {
     const prisma = `generator client {
   provider = "prisma-client-js"

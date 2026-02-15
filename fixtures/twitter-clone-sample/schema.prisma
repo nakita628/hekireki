@@ -23,7 +23,7 @@ generator Hekireki-Ecto {
 
 generator Hekireki-DBML {
   provider = "hekireki-dbml"
-  output   = "dbml"
+  output   = "dbml/schema.dbml"
 }
 
 model User {

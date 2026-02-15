@@ -16,7 +16,11 @@ export function makeRelationsOnly(
   includeType: boolean,
   makeRelations: (
     model: DMMF.Model,
-    relProps: readonly { readonly key: string; readonly targetModel: string; readonly isMany: boolean }[],
+    relProps: readonly {
+      readonly key: string
+      readonly targetModel: string
+      readonly isMany: boolean
+    }[],
     options: { readonly includeType: boolean },
   ) => string | null,
 ): string {

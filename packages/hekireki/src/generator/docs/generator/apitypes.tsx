@@ -22,17 +22,22 @@ type TGType = {
   readonly fields: readonly TGTypeField[]
 }
 
+type TypeRefDisplay = {
+  readonly type: string
+  readonly isList: boolean
+}
+
 type TGTypeField = {
   readonly name: string
-  readonly type: readonly DMMF.InputTypeRef[]
+  readonly type: readonly TypeRefDisplay[]
   readonly nullable: boolean
 }
 
-const TypeRefLink: FC<{ typeRef: DMMF.InputTypeRef; kind: 'inputType' | 'outputType' }> = ({
+const TypeRefLink: FC<{ typeRef: TypeRefDisplay; kind: 'inputType' | 'outputType' }> = ({
   typeRef,
   kind,
 }) => {
-  const typeName = typeRef.type as string
+  const typeName = typeRef.type
   if (isScalarType(typeName)) {
     return <>{typeName}</>
   }
@@ -123,8 +128,8 @@ const getInputTypes = (dmmfInputType: readonly DMMF.InputType[]): readonly TGTyp
     name: inputType.name,
     fields: inputType.fields.map((ip) => ({
       name: ip.name,
-      nullable: ip.isNullable as boolean,
-      type: ip.inputTypes as readonly DMMF.InputTypeRef[],
+      nullable: ip.isNullable,
+      type: ip.inputTypes,
     })),
   }))
 
@@ -137,10 +142,9 @@ const getOutputTypes = (dmmfOutputTypes: readonly DMMF.OutputType[]): readonly T
       type: [
         {
           isList: op.outputType.isList,
-          type: op.outputType.type as string,
-          location: op.outputType.location,
+          type: op.outputType.type,
         },
-      ] as readonly DMMF.InputTypeRef[],
+      ],
     })),
   }))
 
