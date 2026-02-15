@@ -12,10 +12,6 @@
     "release": "pnpm -F hekireki release"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.3.7",
-    "typedoc": "^0.28.14"
-  },
-  "dependencies": {
-    "hekireki": "link:packages/hekireki"
+    "@biomejs/biome": "^2.3.15"
   }
 }

@@ -136,10 +136,7 @@ export function generateRelations(
   )
 }
 
-export function dbmlContent(
-  datamodel: DMMF.Datamodel,
-  mapToDbSchema = false,
-): string {
+export function dbmlContent(datamodel: DMMF.Datamodel, mapToDbSchema = false): string {
   const tables = generateTables(datamodel.models, mapToDbSchema)
   const enums = generateEnums(datamodel.enums)
   const refs = generateRelations(datamodel.models, mapToDbSchema)

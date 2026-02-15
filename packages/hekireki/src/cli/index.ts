@@ -70,7 +70,7 @@ const parsePort = (args: readonly string[]): Result<number> => {
 
   const port = parseInt(portStr, 10)
 
-  if (isNaN(port)) {
+  if (Number.isNaN(port)) {
     return { ok: false, error: `❌ Error: Invalid port number: ${portStr}` }
   }
 

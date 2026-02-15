@@ -73,6 +73,11 @@ generator Hekireki-DBML {
     output   = "docs/schema.dbml"
 }
 
+generator Hekireki-Docs {
+    provider = "hekireki-docs"
+    output   = "./docs"
+}
+
 model User {
     /// Primary key
     /// @z.uuid()
@@ -371,6 +376,17 @@ The `hekireki-dbml` generator also outputs ER diagrams as PNG images when the `o
 generator Hekireki-PNG {
     provider = "hekireki-dbml"
     output   = "docs/er-diagram.png"
+}
+```
+
+### Docs
+
+The `hekireki-docs` generator creates an HTML documentation page from your Prisma schema. Serve it locally with `hekireki docs serve`:
+
+```prisma
+generator Hekireki-Docs {
+    provider = "hekireki-docs"
+    output   = "./docs"
 }
 ```
 

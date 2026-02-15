@@ -2,8 +2,7 @@
 import { dirname } from 'node:path'
 import type { GeneratorOptions } from '@prisma/generator-helper'
 import pkg from '@prisma/generator-helper'
-import { mkdir } from '../../fsp/index.js'
-import { writeFile } from '../../fsp/index.js'
+import { mkdir, writeFile } from '../../fsp/index.js'
 import { dbmlContent, generateDbmlFile, generatePng, generatePngFile } from '../../helper/dbml.js'
 import { getString } from '../../utils/index.js'
 
