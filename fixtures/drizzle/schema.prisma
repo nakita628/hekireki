@@ -1,0 +1,143 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator Hekireki-Drizzle {
+  provider = "hekireki-drizzle"
+}
+
+// ============================================================================
+// Enums
+// ============================================================================
+
+enum Role {
+  ADMIN
+  USER
+  GUEST
+}
+
+enum PostStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+// ============================================================================
+// Models
+// ============================================================================
+
+/// User account
+model User {
+  id        Int       @id @default(autoincrement())
+  email     String    @unique @db.VarChar(255)
+  name      String    @db.VarChar(100)
+  bio       String?
+  avatarUrl String?   @map("avatar_url")
+  role      Role      @default(USER)
+  active    Boolean   @default(true)
+  score     Decimal   @default(0) @db.Decimal(10, 2)
+  tags      String[]
+  metadata  Json?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  posts     Post[]
+  profile   Profile?
+  comments  Comment[]
+
+  @@map("users")
+}
+
+/// User profile (1:1)
+model Profile {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    Int      @unique @map("user_id")
+  website   String?
+  location  String?  @db.VarChar(100)
+  birthDate DateTime? @map("birth_date") @db.Date
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("profiles")
+}
+
+/// Blog post
+model Post {
+  id        Int        @id @default(autoincrement())
+  title     String     @db.VarChar(200)
+  slug      String     @unique
+  content   String
+  status    PostStatus @default(DRAFT)
+  views     Int        @default(0)
+  authorId  Int        @map("author_id")
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+  author    User       @relation(fields: [authorId], references: [id])
+  comments  Comment[]
+  postTags  PostTag[]
+
+  @@index([authorId])
+  @@index([status, createdAt])
+  @@map("posts")
+}
+
+/// Comment on a post
+model Comment {
+  id        Int      @id @default(autoincrement())
+  body      String
+  postId    Int      @map("post_id")
+  authorId  Int      @map("author_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  post      Post     @relation(fields: [postId], references: [id])
+  author    User     @relation(fields: [authorId], references: [id])
+
+  @@index([postId])
+  @@map("comments")
+}
+
+/// Tag
+model Tag {
+  id       Int       @id @default(autoincrement())
+  name     String    @unique @db.VarChar(50)
+  postTags PostTag[]
+
+  @@map("tags")
+}
+
+/// Post-Tag junction (composite PK)
+model PostTag {
+  postId    Int      @map("post_id")
+  tagId     Int      @map("tag_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  post      Post     @relation(fields: [postId], references: [id])
+  tag       Tag      @relation(fields: [tagId], references: [id])
+
+  @@id([postId, tagId])
+  @@map("post_tags")
+}
+
+/// Session with dbgenerated default
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    Int      @map("user_id")
+  expiresAt DateTime @map("expires_at")
+  ipAddress String?  @map("ip_address") @db.VarChar(45)
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+/// Audit log with precise timestamp
+model AuditLog {
+  id        BigInt   @id @default(autoincrement())
+  action    String   @db.VarChar(50)
+  tableName String   @map("table_name") @db.VarChar(50)
+  recordId  String   @map("record_id")
+  payload   Json?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([tableName, recordId])
+  @@map("audit_logs")
+}

@@ -1,15 +1,15 @@
 {
-  "name": "@fixtures/auth",
+  "name": "@fixtures/drizzle",
   "type": "module",
-  "private": true,
   "scripts": {
     "generate": "prisma generate"
   },
   "dependencies": {
     "@paralleldrive/cuid2": "^2.2.2",
     "drizzle-orm": "^0.45.1",
-    "hekireki": "workspace:^",
-    "prisma": "^7.0.1",
-    "zod": "^4.1.13"
+    "prisma": "^7.4.0"
+  },
+  "devDependencies": {
+    "hekireki": "workspace:^"
   }
 }

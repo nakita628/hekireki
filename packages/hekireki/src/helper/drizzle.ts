@@ -176,6 +176,7 @@ function mysqlNativeType(name: string, args: readonly string[]): string | null {
 class ImportTracker {
   private readonly coreFns = new Set<string>()
   private readonly ormFns = new Set<string>()
+  private readonly extPkgs = new Map<string, Set<string>>()
   private readonly provider: DbProvider
 
   constructor(provider: DbProvider) {
@@ -188,6 +189,12 @@ class ImportTracker {
 
   addOrm(fn: string): void {
     this.ormFns.add(fn)
+  }
+
+  addExternal(pkg: string, fn: string): void {
+    const fns = this.extPkgs.get(pkg) ?? new Set<string>()
+    fns.add(fn)
+    this.extPkgs.set(pkg, fns)
   }
 
   generate(): string {
@@ -203,7 +210,10 @@ class ImportTracker {
       this.ormFns.size > 0
         ? `import { ${[...this.ormFns].sort().join(', ')} } from 'drizzle-orm'`
         : ''
-    return [coreImport, ormImport].filter(Boolean).join('\n')
+    const extImports = [...this.extPkgs.entries()].map(
+      ([pkg, fns]) => `import { ${[...fns].sort().join(', ')} } from '${pkg}'`,
+    )
+    return [coreImport, ormImport, ...extImports].filter(Boolean).join('\n')
   }
 }
 
@@ -281,7 +291,11 @@ function makeColumnExpr(
   return insertColName(baseExpr, colName)
 }
 
-function makeDefaultChain(dflt: DMMF.Field['default'], imports: ImportTracker): string {
+function makeDefaultChain(
+  dflt: DMMF.Field['default'],
+  fieldType: string,
+  imports: ImportTracker,
+): string {
   if (dflt === undefined || dflt === null) return ''
   if (isFieldDefault(dflt)) {
     switch (dflt.name) {
@@ -291,8 +305,10 @@ function makeDefaultChain(dflt: DMMF.Field['default'], imports: ImportTracker): 
         return '.defaultNow()'
       case 'uuid':
         return '.$defaultFn(() => crypto.randomUUID())'
-      case 'cuid':
+      case 'cuid': {
+        imports.addExternal('@paralleldrive/cuid2', 'createId')
         return '.$defaultFn(() => createId())'
+      }
       case 'dbgenerated':
         if (typeof dflt.args[0] === 'string') {
           imports.addOrm('sql')
@@ -304,7 +320,8 @@ function makeDefaultChain(dflt: DMMF.Field['default'], imports: ImportTracker): 
     }
   }
   if (typeof dflt === 'string') return `.default('${dflt}')`
-  if (typeof dflt === 'number') return `.default(${dflt})`
+  if (typeof dflt === 'number')
+    return fieldType === 'Decimal' ? `.default('${dflt}')` : `.default(${dflt})`
   if (typeof dflt === 'boolean') return `.default(${dflt})`
   return ''
 }
@@ -337,7 +354,7 @@ function makeColumn(
       ? provider === 'mysql'
         ? '.autoincrement()'
         : ''
-      : makeDefaultChain(field.default, imports),
+      : makeDefaultChain(field.default, field.type, imports),
     field.isUpdatedAt ? '.$onUpdate(() => new Date())' : '',
     field.isList && field.kind === 'scalar' && provider === 'postgresql' ? '.array()' : '',
   ].join('')
@@ -441,57 +458,37 @@ function makeRelationField(
   if (field.relationFromFields && field.relationFromFields.length > 0) {
     const fromCol = field.relationFromFields[0]
     const toCol = field.relationToFields?.[0] ?? 'id'
-    const aliasStr = needsAlias ? ` alias: '${field.relationName}',` : ''
-    return `${field.name}: r.one.${targetVar}({${aliasStr} from: r.${modelVar}.${fromCol}, to: r.${targetVar}.${toCol} })`
+    const configParts = [
+      `fields: [${modelVar}.${fromCol}]`,
+      `references: [${targetVar}.${toCol}]`,
+      needsAlias ? `relationName: '${field.relationName}'` : '',
+    ].filter(Boolean)
+    return `${field.name}: one(${targetVar}, { ${configParts.join(', ')} })`
   }
-
-  const targetModel = models.find((m) => m.name === field.type)
-  const otherSide = targetModel?.fields.find(
-    (f) =>
-      f.kind === 'object' &&
-      f.type === model.name &&
-      f.relationName === field.relationName &&
-      f.relationFromFields &&
-      f.relationFromFields.length > 0,
-  )
 
   if (field.isList) {
-    if (otherSide?.relationFromFields && otherSide.relationToFields) {
-      const fromCol = otherSide.relationToFields[0] ?? 'id'
-      const toCol = otherSide.relationFromFields[0]
-      const aliasStr = needsAlias ? ` alias: '${field.relationName}',` : ''
-      return `${field.name}: r.many.${targetVar}({${aliasStr} from: r.${modelVar}.${fromCol}, to: r.${targetVar}.${toCol} })`
-    }
-    return `${field.name}: r.many.${targetVar}()`
+    return needsAlias
+      ? `${field.name}: many(${targetVar}, { relationName: '${field.relationName}' })`
+      : `${field.name}: many(${targetVar})`
   }
 
-  if (otherSide?.relationFromFields && otherSide.relationToFields) {
-    const fromCol = otherSide.relationToFields[0] ?? 'id'
-    const toCol = otherSide.relationFromFields[0]
-    return `${field.name}: r.one.${targetVar}({ from: r.${modelVar}.${fromCol}, to: r.${targetVar}.${toCol} })`
-  }
-
-  return `${field.name}: r.one.${targetVar}()`
+  return `${field.name}: one(${targetVar})`
 }
 
-function makeRelations(models: readonly DMMF.Model[], imports: ImportTracker): string | null {
-  if (!models.some((model) => model.fields.some((f) => f.kind === 'object'))) return null
+function makeRelations(models: readonly DMMF.Model[], imports: ImportTracker): readonly string[] {
+  const modelsWithRels = models.filter((model) => model.fields.some((f) => f.kind === 'object'))
+  if (modelsWithRels.length === 0) return []
 
-  imports.addOrm('defineRelations')
+  imports.addOrm('relations')
 
-  const tableVars = models.map((m) => toCamelCase(m.name)).join(', ')
-  const modelBlocks = models
-    .filter((model) => model.fields.some((f) => f.kind === 'object'))
-    .map((model) => {
-      const relFields = model.fields.filter((f) => f.kind === 'object')
-      const fieldLines = relFields
-        .map((field) => makeRelationField(field, model, models, relFields))
-        .join(', ')
-      return `${toCamelCase(model.name)}: { ${fieldLines} }`
-    })
-    .join(', ')
-
-  return `export const relations = defineRelations({ ${tableVars} }, (r) => ({ ${modelBlocks} }))`
+  return modelsWithRels.map((model) => {
+    const relFields = model.fields.filter((f) => f.kind === 'object')
+    const fieldLines = relFields
+      .map((field) => makeRelationField(field, model, models, relFields))
+      .join(', ')
+    const modelVar = toCamelCase(model.name)
+    return `export const ${modelVar}Relations = relations(${modelVar}, ({ one, many }) => ({ ${fieldLines} }))`
+  })
 }
 
 // ============================================================================
@@ -510,13 +507,13 @@ export function drizzleSchema(
   const tableLines = datamodel.models.map((model) =>
     makeTable(model, db, imports, datamodel.enums, indexes),
   )
-  const relationsBlock = makeRelations(datamodel.models, imports)
+  const relationsLines = makeRelations(datamodel.models, imports)
 
   return [
     imports.generate(),
     '',
     ...(enumLines.length > 0 ? [...enumLines, ''] : []),
     ...tableLines,
-    ...(relationsBlock ? ['', relationsBlock] : []),
+    ...(relationsLines.length > 0 ? ['', ...relationsLines] : []),
   ].join('\n')
 }

@@ -7,5 +7,5 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["zod/**/*.ts", "valibot/**/*.ts", "arktype/**/*.ts", "effect/**/*.ts", "drizzle/**/*.ts"]
+  "include": ["drizzle/**/*.ts"]
 }

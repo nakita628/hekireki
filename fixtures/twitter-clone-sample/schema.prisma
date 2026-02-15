@@ -26,6 +26,10 @@ generator Hekireki-DBML {
   output   = "dbml/schema.dbml"
 }
 
+generator Hekireki-Drizzle {
+  provider = "hekireki-drizzle"
+}
+
 model User {
   /// Unique identifier for the user
   /// @z.uuid()

@@ -75,6 +75,14 @@ generator Hekireki-DBML {
     output   = "docs/schema.dbml"
 }
 
+// Drizzle Schema Generator
+// Options:
+//   output - Output directory (default: ./drizzle)
+//   file   - File name (default: schema.ts)
+generator Hekireki-Drizzle {
+    provider = "hekireki-drizzle"
+}
+
 // Ecto Schema Generator (Elixir)
 // Options:
 //   output - Output directory (default: ./ecto)

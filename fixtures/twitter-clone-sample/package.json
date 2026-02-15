@@ -6,6 +6,7 @@
     "generate": "prisma generate"
   },
   "dependencies": {
+    "drizzle-orm": "^0.45.1",
     "prisma": "^7.3.0",
     "valibot": "^1.2.0",
     "zod": "^4.1.13"

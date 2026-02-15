@@ -668,12 +668,13 @@ describe('drizzleSchema - Relations', () => {
     expect(result).toBe(
       [
         "import { integer, pgTable } from 'drizzle-orm/pg-core'",
-        "import { defineRelations } from 'drizzle-orm'",
+        "import { relations } from 'drizzle-orm'",
         '',
         "export const user = pgTable('user', { id: integer('id').primaryKey() })",
         "export const post = pgTable('post', { id: integer('id').primaryKey(), userId: integer('userId').notNull() })",
         '',
-        'export const relations = defineRelations({ user, post }, (r) => ({ user: { posts: r.many.post({ from: r.user.id, to: r.post.userId }) }, post: { user: r.one.user({ from: r.post.userId, to: r.user.id }) } }))',
+        'export const userRelations = relations(user, ({ one, many }) => ({ posts: many(post) }))',
+        'export const postRelations = relations(post, ({ one, many }) => ({ user: one(user, { fields: [post.userId], references: [user.id] }) }))',
       ].join('\n'),
     )
   })
@@ -839,6 +840,7 @@ describe('drizzleSchema - Default values', () => {
     expect(result).toBe(
       [
         "import { pgTable, text } from 'drizzle-orm/pg-core'",
+        "import { createId } from '@paralleldrive/cuid2'",
         '',
         "export const user = pgTable('user', { id: text('id').primaryKey().$defaultFn(() => createId()) })",
       ].join('\n'),

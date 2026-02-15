@@ -16,6 +16,10 @@ generator Hekireki-DBML {
   provider = "hekireki-dbml"
 }
 
+generator Hekireki-Drizzle {
+  provider = "hekireki-drizzle"
+}
+
 generator Hekireki-SVG {
   provider = "hekireki-svg"
   output   = "docs"
