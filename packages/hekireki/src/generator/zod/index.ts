@@ -1,18 +1,17 @@
 #!/usr/bin/env node
-import path from 'node:path'
 import type { GeneratorOptions } from '@prisma/generator-helper'
 import pkg from '@prisma/generator-helper'
 import { fmt } from '../../format/index.js'
 import { mkdir, writeFile } from '../../fsp/index.js'
 import { makeRelationsOnly } from '../../helper/prisma.js'
 import { makeZodRelations, zod } from '../../helper/zod.js'
-import { getBool, getString } from '../../utils/index.js'
+import { getBool, getString, requireOutput, resolveOutput } from '../../utils/index.js'
 
 const { generatorHandler } = pkg
 
 export async function main(options: GeneratorOptions): Promise<void> {
-  const outDir = options.generator.output?.value ?? './zod'
-  const file = getString(options.generator.config?.file, 'index.ts') ?? 'index.ts'
+  const output = requireOutput(options.generator.output?.value, 'Hekireki-Zod', options.generator.isCustomOutput)
+  const resolved = resolveOutput(output, 'index.ts')
   const zodVersion = getString(options.generator.config?.zod, 'v4')
   const enableRelation =
     options.generator.config?.relation === 'true' ||
@@ -35,12 +34,12 @@ export async function main(options: GeneratorOptions): Promise<void> {
     throw new Error(`Format error: ${fmtResult.error}`)
   }
 
-  const mkdirResult = await mkdir(outDir)
+  const mkdirResult = await mkdir(resolved.dir)
   if (!mkdirResult.ok) {
     throw new Error(`Failed to create directory: ${mkdirResult.error}`)
   }
 
-  const writeResult = await writeFile(path.join(outDir, file), fmtResult.value)
+  const writeResult = await writeFile(resolved.file, fmtResult.value)
   if (!writeResult.ok) {
     throw new Error(`Failed to write file: ${writeResult.error}`)
   }
@@ -49,7 +48,7 @@ export async function main(options: GeneratorOptions): Promise<void> {
 generatorHandler({
   onManifest() {
     return {
-      defaultOutput: './zod/',
+      defaultOutput: '.',
       prettyName: 'Hekireki-Zod',
     }
   },

@@ -2,11 +2,12 @@
 import type { GeneratorOptions } from '@prisma/generator-helper'
 import pkg from '@prisma/generator-helper'
 import { writeEctoSchemasToFiles } from '../../helper/ecto.js'
+import { requireOutput } from '../../utils/index.js'
 
 const { generatorHandler } = pkg
 
 export async function main(options: GeneratorOptions): Promise<void> {
-  const output = options.generator.output?.value ?? './ecto'
+  const output = requireOutput(options.generator.output?.value, 'Hekireki-Ecto', options.generator.isCustomOutput)
   const app = options.generator.config?.app ?? 'MyApp'
 
   const result = await writeEctoSchemasToFiles(options.dmmf.datamodel.models, app, output)
@@ -18,7 +19,7 @@ export async function main(options: GeneratorOptions): Promise<void> {
 generatorHandler({
   onManifest() {
     return {
-      defaultOutput: './ecto/',
+      defaultOutput: '.',
       prettyName: 'Hekireki-Ecto',
     }
   },

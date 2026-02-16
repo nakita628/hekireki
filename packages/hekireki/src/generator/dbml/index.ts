@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-import { dirname } from 'node:path'
+import { basename, dirname } from 'node:path'
 import type { GeneratorOptions } from '@prisma/generator-helper'
 import pkg from '@prisma/generator-helper'
 import { mkdir, writeFile } from '../../fsp/index.js'
 import { dbmlContent, generateDbmlFile, generatePng, generatePngFile } from '../../helper/dbml.js'
-import { getString } from '../../utils/index.js'
+import { getString, requireOutput, resolveOutput } from '../../utils/index.js'
 
 const { generatorHandler } = pkg
 
@@ -14,7 +14,7 @@ export async function main(options: GeneratorOptions): Promise<void> {
 
   const content = dbmlContent(options.dmmf.datamodel, mapToDbSchema)
 
-  const output = options.generator.output?.value ?? './dbml'
+  const output = requireOutput(options.generator.output?.value, 'Hekireki-DBML', options.generator.isCustomOutput)
 
   if (output.endsWith('.png') || output.endsWith('.dbml')) {
     const dir = dirname(output)
@@ -30,16 +30,17 @@ export async function main(options: GeneratorOptions): Promise<void> {
       if (!dbmlResult.ok) throw new Error(`Failed to write DBML: ${dbmlResult.error}`)
     }
   } else {
-    const file = getString(config?.file, 'schema.dbml') ?? 'schema.dbml'
-    const mkdirResult = await mkdir(output)
+    const resolved = resolveOutput(output, 'schema.dbml')
+    const mkdirResult = await mkdir(resolved.dir)
     if (!mkdirResult.ok) {
       throw new Error(`Failed to create directory: ${mkdirResult.error}`)
     }
-    if (file.endsWith('.png')) {
-      const pngResult = await generatePng(output, content, file)
+    const fileName = basename(resolved.file)
+    if (fileName.endsWith('.png')) {
+      const pngResult = await generatePng(resolved.dir, content, fileName)
       if (!pngResult.ok) throw new Error(pngResult.error)
     } else {
-      const dbmlResult = await generateDbmlFile(output, content, file)
+      const dbmlResult = await generateDbmlFile(resolved.dir, content, fileName)
       if (!dbmlResult.ok) throw new Error(dbmlResult.error)
     }
   }
@@ -48,7 +49,7 @@ export async function main(options: GeneratorOptions): Promise<void> {
 generatorHandler({
   onManifest() {
     return {
-      defaultOutput: './dbml',
+      defaultOutput: '.',
       prettyName: 'Hekireki-DBML',
     }
   },

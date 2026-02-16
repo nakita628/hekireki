@@ -4,10 +4,12 @@ datasource db {
 
 generator Hekireki-ER {
     provider = "hekireki-mermaid-er"
+    output   = "mermaid-er"
 }
 
 generator Hekireki-Zod {
     provider = "hekireki-zod"
+    output   = "zod"
     type     = true
     comment  = true
     relation = true
@@ -15,6 +17,7 @@ generator Hekireki-Zod {
 
 generator Hekireki-Valibot {
     provider = "hekireki-valibot"
+    output   = "valibot"
     type     = true
     comment  = true
     relation = true
@@ -22,22 +25,26 @@ generator Hekireki-Valibot {
 
 generator Hekireki-ArkType {
     provider = "hekireki-arktype"
+    output   = "arktype"
     type     = true
     comment  = true
 }
 
 generator Hekireki-Effect {
     provider = "hekireki-effect"
+    output   = "effect"
     type     = true
     comment  = true
 }
 
 generator Hekireki-DBML {
     provider = "hekireki-dbml"
+    output   = "dbml"
 }
 
 generator Hekireki-Drizzle {
     provider = "hekireki-drizzle"
+    output   = "drizzle"
 }
 
 enum OrgStatus {

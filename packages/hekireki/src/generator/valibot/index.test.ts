@@ -28,6 +28,7 @@ datasource db {
 
 generator Hekireki-Valibot {
   provider = "hekireki-valibot"
+  output   = "valibot"
 }
 
 model User {
@@ -67,6 +68,7 @@ datasource db {
 
 generator Hekireki-Valibot {
   provider = "hekireki-valibot"
+  output   = "valibot"
   comment  = true
 }
 
@@ -114,6 +116,7 @@ datasource db {
 
 generator Hekireki-Valibot {
   provider = "hekireki-valibot"
+  output   = "valibot"
   type     = true
 }
 
@@ -145,7 +148,7 @@ export type User = v.InferInput<typeof UserSchema>
 
     expect(result).toBe(expected)
   })
-  it('hekireki-valibot output valibot-test file test.ts', async () => {
+  it('hekireki-valibot output valibot-test/test.ts', async () => {
     const prisma = `generator client {
   provider = "prisma-client-js"
 }
@@ -156,8 +159,7 @@ datasource db {
 
 generator Hekireki-Valibot {
   provider = "hekireki-valibot"
-  output   = "./valibot-test"
-  file     = "test.ts"
+  output   = "./valibot-test/test.ts"
 }
 
 model User {

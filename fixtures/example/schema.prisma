@@ -8,22 +8,22 @@ datasource db {
 
 // Mermaid ER Diagram Generator
 // Options:
-//   output - Output directory (default: ./mermaid-er)
-//   file   - File name (default: ER.md)
+//   output - Output path (required)
 generator Hekireki-ER {
     provider = "hekireki-mermaid-er"
+    output   = "mermaid-er"
 }
 
 // Zod Schema Generator
 // Options:
-//   output   - Output directory (default: ./zod)
-//   file     - File name (default: index.ts)
+//   output   - Output path (required)
 //   type     - Generate TypeScript types (default: false)
 //   comment  - Include schema documentation (default: false)
 //   zod      - Zod import: 'v4' | 'mini' | '@hono/zod-openapi' (default: 'v4')
 //   relation - Generate relation schemas (default: false)
 generator Hekireki-Zod {
     provider = "hekireki-zod"
+    output   = "zod"
     type     = true
     comment  = true
     relation = true
@@ -31,13 +31,13 @@ generator Hekireki-Zod {
 
 // Valibot Schema Generator
 // Options:
-//   output   - Output directory (default: ./valibot)
-//   file     - File name (default: index.ts)
+//   output   - Output path (required)
 //   type     - Generate TypeScript types (default: false)
 //   comment  - Include schema documentation (default: false)
 //   relation - Generate relation schemas (default: false)
 generator Hekireki-Valibot {
     provider = "hekireki-valibot"
+    output   = "valibot"
     type     = true
     comment  = true
     relation = true
@@ -45,31 +45,31 @@ generator Hekireki-Valibot {
 
 // ArkType Schema Generator
 // Options:
-//   output  - Output directory (default: ./arktype)
-//   file    - File name (default: index.ts)
+//   output  - Output path (required)
 //   type    - Generate TypeScript types (default: false)
 //   comment - Include schema documentation (default: false)
 generator Hekireki-ArkType {
     provider = "hekireki-arktype"
+    output   = "arktype"
     type     = true
     comment  = true
 }
 
 // Effect Schema Generator
 // Options:
-//   output  - Output directory (default: ./effect)
-//   file    - File name (default: index.ts)
+//   output  - Output path (required)
 //   type    - Generate TypeScript types (default: false)
 //   comment - Include schema documentation (default: false)
 generator Hekireki-Effect {
     provider = "hekireki-effect"
+    output   = "effect"
     type     = true
     comment  = true
 }
 
 // DBML Generator
 // Options:
-//   output - File path with extension (.dbml or .png) or directory (default: ./dbml)
+//   output - File path with extension (.dbml or .png) or directory (required)
 generator Hekireki-DBML {
     provider = "hekireki-dbml"
     output   = "docs/schema.dbml"
@@ -77,15 +77,15 @@ generator Hekireki-DBML {
 
 // Drizzle Schema Generator
 // Options:
-//   output - Output directory (default: ./drizzle)
-//   file   - File name (default: schema.ts)
+//   output - Output path (required)
 generator Hekireki-Drizzle {
     provider = "hekireki-drizzle"
+    output   = "drizzle"
 }
 
 // Ecto Schema Generator (Elixir)
 // Options:
-//   output - Output directory (default: ./ecto)
+//   output - Output directory (required)
 //   app    - App module name (default: MyApp)
 generator Hekireki-Ecto {
     provider = "hekireki-ecto"
@@ -95,7 +95,7 @@ generator Hekireki-Ecto {
 
 // HTML Documentation Generator
 // Options:
-//   output - Output directory (default: ./docs)
+//   output - Output directory (required)
 generator Hekireki-Docs {
     provider = "node /workspaces/npm/hekireki/packages/hekireki/dist/generator/docs/index.js"
     output   = "docs"

@@ -1,3 +1,4 @@
+import { relations } from 'drizzle-orm'
 import {
   boolean,
   index,
@@ -8,7 +9,6 @@ import {
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core'
-import { relations } from 'drizzle-orm'
 
 export const user = pgTable('users', {
   id: uuid('id')

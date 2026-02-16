@@ -28,6 +28,7 @@ datasource db {
 
 generator Hekireki-ER {
   provider = "hekireki-mermaid-er"
+  output   = "mermaid-er"
 }
 
 model User {
@@ -101,6 +102,7 @@ datasource db {
 
 generator Hekireki-ER {
   provider = "hekireki-mermaid-er"
+  output   = "mermaid-er"
 }
 
 model User {
@@ -142,7 +144,7 @@ erDiagram
     expect(result).toBe(expected)
   }, 30000)
 
-  it('hekireki-mermaid-er output mermaid-er-test file test.md', async () => {
+  it('hekireki-mermaid-er output mermaid-er-test/test.md', async () => {
     const prisma = `generator client {
   provider = "prisma-client-js"
 }
@@ -153,8 +155,7 @@ datasource db {
 
 generator Hekireki-ER {
   provider = "hekireki-mermaid-er"
-  output   = "mermaid-er-test"
-  file     = "test.md"
+  output   = "mermaid-er-test/test.md"
 }
 
 model User {

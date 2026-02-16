@@ -451,7 +451,7 @@ function makeTable(
 function makeRelationField(
   field: DMMF.Field,
   model: DMMF.Model,
-  models: readonly DMMF.Model[],
+  _models: readonly DMMF.Model[],
   relFields: readonly DMMF.Field[],
 ): string {
   const targetVar = toCamelCase(field.type)

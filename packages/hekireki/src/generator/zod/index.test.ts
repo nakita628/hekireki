@@ -34,6 +34,7 @@ describe('prisma generate zod', () => {
   
   generator Hekireki-Zod {
       provider = "hekireki-zod"
+      output   = "zod"
   }
   
   model User {
@@ -108,6 +109,7 @@ export const PostSchema = z.object({
   
   generator Hekireki-Zod {
       provider = "hekireki-zod"
+      output   = "zod"
       comment  = true
   }
   
@@ -200,6 +202,7 @@ export const PostSchema = z.object({
   
   generator Hekireki-Zod {
       provider = "hekireki-zod"
+      output   = "zod"
       type     = true
   }
   
@@ -265,20 +268,19 @@ export type Post = z.infer<typeof PostSchema>
 `
     expect(result).toBe(expected)
   })
-  // output zod-test file test.ts
-  it('hekireki-zod output zod-test file test.ts', async () => {
+  // output zod-test/test.ts
+  it('hekireki-zod output zod-test/test.ts', async () => {
     const prisma = `generator client {
       provider = "prisma-client-js"
   }
-  
+
   datasource db {
       provider = "sqlite"
   }
-  
+
   generator Hekireki-Zod {
       provider = "hekireki-zod"
-      output   = "zod-test"
-      file     = "test.ts"
+      output   = "zod-test/test.ts"
   }
   
   model User {
@@ -350,6 +352,7 @@ export const PostSchema = z.object({
 
   generator Hekireki-Zod {
       provider = "hekireki-zod"
+      output   = "zod"
       zod     = "mini"
   }
   
@@ -419,6 +422,7 @@ export const PostSchema = z.object({
   
   generator Hekireki-Zod {
       provider = "hekireki-zod"
+      output   = "zod"
       zod      = "@hono/zod-openapi"
   }
   
@@ -492,6 +496,7 @@ datasource db {
 
 generator Hekireki-Zod {
     provider = "hekireki-zod"
+    output   = "zod"
     comment  = true
     relation = true
 }
@@ -595,6 +600,7 @@ datasource db {
 
 generator Hekireki-Zod {
     provider = "hekireki-zod"
+    output   = "zod"
     type     = true
     comment  = true
     relation = true
@@ -715,6 +721,7 @@ datasource db {
 
 generator Hekireki-Zod {
     provider = "hekireki-zod"
+    output   = "zod"
 }
 
 model User {
@@ -755,6 +762,7 @@ datasource db {
 
 generator Hekireki-Zod {
     provider = "hekireki-zod"
+    output   = "zod"
     relation = true
 }
 
@@ -821,6 +829,7 @@ describe('prisma generate valibot', () => {
   
   generator Hekireki-Valibot {
       provider = "hekireki-valibot"
+      output   = "valibot"
   }
   
   model User {
@@ -895,6 +904,7 @@ export const PostSchema = v.object({
   
   generator Hekireki-Valibot {
       provider = "hekireki-valibot"
+      output   = "valibot"
       comment  = true
   }
   
@@ -988,6 +998,7 @@ export const PostSchema = v.object({
   
   generator Hekireki-Valibot {
       provider = "hekireki-valibot"
+      output   = "valibot"
       type     = true
   }
   
@@ -1053,20 +1064,19 @@ export type Post = v.InferInput<typeof PostSchema>
 `
     expect(result).toBe(expected)
   }, 30000)
-  // output zod-test file test.ts
-  it('hekireki-zod output zod-test file test.ts', async () => {
+  // output valibot-test/test.ts
+  it('hekireki-valibot output valibot-test/test.ts', async () => {
     const prisma = `generator client {
       provider = "prisma-client-js"
   }
-  
+
   datasource db {
       provider = "sqlite"
   }
-  
+
   generator Hekireki-Valibot {
       provider = "hekireki-valibot"
-      output   = "valibot-test"
-      file     = "test.ts"
+      output   = "valibot-test/test.ts"
   }
   
   model User {
@@ -1139,6 +1149,7 @@ datasource db {
 
 generator Hekireki-Valibot {
     provider = "hekireki-valibot"
+    output   = "valibot"
     comment  = true
     relation = true
 }
@@ -1242,6 +1253,7 @@ datasource db {
 
 generator Hekireki-Valibot {
     provider = "hekireki-valibot"
+    output   = "valibot"
     type     = true
     comment  = true
     relation = true
@@ -1362,6 +1374,7 @@ datasource db {
 
 generator Hekireki-Valibot {
     provider = "hekireki-valibot"
+    output   = "valibot"
 }
 
 model User {
@@ -1402,6 +1415,7 @@ datasource db {
 
 generator Hekireki-Valibot {
     provider = "hekireki-valibot"
+    output   = "valibot"
     relation = true
 }
 
