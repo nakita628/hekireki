@@ -1,0 +1,216 @@
+datasource db {
+    provider = "postgresql"
+}
+
+generator Hekireki-ER {
+    provider = "hekireki-mermaid-er"
+    output   = "mermaid-er"
+}
+
+generator Hekireki-Zod {
+    provider = "hekireki-zod"
+    output   = "zod"
+    type     = true
+    comment  = true
+    relation = true
+}
+
+generator Hekireki-Valibot {
+    provider = "hekireki-valibot"
+    output   = "valibot"
+    type     = true
+    comment  = true
+    relation = true
+}
+
+generator Hekireki-ArkType {
+    provider = "hekireki-arktype"
+    output   = "arktype"
+    type     = true
+    comment  = true
+}
+
+generator Hekireki-Effect {
+    provider = "hekireki-effect"
+    output   = "effect"
+    type     = true
+    comment  = true
+}
+
+generator Hekireki-DBML {
+    provider = "hekireki-dbml"
+    output   = "dbml"
+}
+
+generator Hekireki-Drizzle {
+    provider = "hekireki-drizzle"
+    output   = "drizzle"
+}
+
+enum Role {
+    ADMIN
+    USER
+}
+
+/// User account
+model User {
+    /// User ID
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    /// @a."string.uuid"
+    /// @e.Schema.UUID
+    id                String            @id @default(uuid()) @db.Uuid
+    /// Email address
+    /// @z.email()
+    /// @v.pipe(v.string(), v.email())
+    /// @a."string.email"
+    /// @e.Schema.String
+    email             String            @unique @db.VarChar(255)
+    /// Hashed password
+    /// @z.string().min(8)
+    /// @v.pipe(v.string(), v.minLength(8))
+    /// @a."string >= 8"
+    /// @e.Schema.String.pipe(Schema.minLength(8))
+    passwordHash      String            @map("password_hash")
+    /// Display name
+    /// @z.string().min(1).max(100)
+    /// @v.pipe(v.string(), v.minLength(1), v.maxLength(100))
+    /// @a."1 <= string <= 100"
+    /// @e.Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100))
+    name              String            @db.VarChar(100)
+    /// User role
+    role              Role              @default(USER)
+    /// Account active status
+    /// @z.boolean()
+    /// @v.boolean()
+    /// @a."boolean"
+    /// @e.Schema.Boolean
+    isActive          Boolean           @default(true) @map("is_active")
+    /// Account creation timestamp
+    createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz
+    /// Last update timestamp
+    updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz
+    /// Sessions
+    sessions          Session[]
+    /// Login history
+    loginHistories    LoginHistory[]
+    /// Password history
+    passwordHistories PasswordHistory[]
+
+    @@map("users")
+}
+
+/// Server-side session
+model Session {
+    /// Session ID
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    /// @a."string.uuid"
+    /// @e.Schema.UUID
+    id        String   @id @default(uuid()) @db.Uuid
+    /// Session token
+    /// @z.string()
+    /// @v.string()
+    /// @a."string"
+    /// @e.Schema.String
+    token     String   @unique @db.VarChar(255)
+    /// User ID
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    /// @a."string.uuid"
+    /// @e.Schema.UUID
+    userId    String   @map("user_id") @db.Uuid
+    /// Session expiration
+    expiresAt DateTime @map("expires_at") @db.Timestamptz
+    /// Client IP address
+    /// @z.string().nullable()
+    /// @v.nullish(v.string())
+    /// @a."string | null"
+    /// @e.Schema.NullOr(Schema.String)
+    ipAddress String?  @map("ip_address") @db.VarChar(45)
+    /// Client user agent
+    /// @z.string().nullable()
+    /// @v.nullish(v.string())
+    /// @a."string | null"
+    /// @e.Schema.NullOr(Schema.String)
+    userAgent String?  @map("user_agent")
+    /// Session creation timestamp
+    createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+    /// User relation
+    user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@index([userId])
+    @@index([expiresAt])
+    @@map("sessions")
+}
+
+/// Login history record
+model LoginHistory {
+    /// Login history ID
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    /// @a."string.uuid"
+    /// @e.Schema.UUID
+    id        String   @id @default(uuid()) @db.Uuid
+    /// User ID
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    /// @a."string.uuid"
+    /// @e.Schema.UUID
+    userId    String   @map("user_id") @db.Uuid
+    /// Client IP address
+    /// @z.string()
+    /// @v.string()
+    /// @a."string"
+    /// @e.Schema.String
+    ipAddress String   @map("ip_address") @db.VarChar(45)
+    /// Client user agent
+    /// @z.string().nullable()
+    /// @v.nullish(v.string())
+    /// @a."string | null"
+    /// @e.Schema.NullOr(Schema.String)
+    userAgent String?  @map("user_agent")
+    /// Login success status
+    /// @z.boolean()
+    /// @v.boolean()
+    /// @a."boolean"
+    /// @e.Schema.Boolean
+    success   Boolean
+    /// Login timestamp
+    createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+    /// User relation
+    user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@index([userId])
+    @@index([createdAt])
+    @@map("login_histories")
+}
+
+/// Password change history
+model PasswordHistory {
+    /// Password history ID
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    /// @a."string.uuid"
+    /// @e.Schema.UUID
+    id           String   @id @default(uuid()) @db.Uuid
+    /// User ID
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    /// @a."string.uuid"
+    /// @e.Schema.UUID
+    userId       String   @map("user_id") @db.Uuid
+    /// Hashed password
+    /// @z.string()
+    /// @v.string()
+    /// @a."string"
+    /// @e.Schema.String
+    passwordHash String   @map("password_hash")
+    /// Change timestamp
+    createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+    /// User relation
+    user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@index([userId])
+    @@map("password_histories")
+}

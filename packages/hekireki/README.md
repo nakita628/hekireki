@@ -2,7 +2,7 @@
 
 # Hekireki
 
-**[Hekireki](https://www.npmjs.com/package/hekireki)** is a tool that generates validation schemas for Zod, Valibot, ArkType, and Effect Schema, as well as ER diagrams, from [Prisma](https://www.prisma.io/) schemas annotated with comments.
+**[Hekireki](https://www.npmjs.com/package/hekireki)** is a tool that generates validation schemas for Zod, Valibot, ArkType, and Effect Schema, as well as [Drizzle ORM](https://orm.drizzle.team/) schemas and ER diagrams, from [Prisma](https://www.prisma.io/) schemas annotated with comments.
 
 ## Features
 
@@ -10,6 +10,7 @@
 - 🤖 Automatically generates [Valibot](https://valibot.dev/) schemas from your Prisma schema
 - 🏹 Automatically generates [ArkType](https://arktype.io/) schemas from your Prisma schema
 - ⚡ Automatically generates [Effect Schema](https://effect.website/docs/schema/introduction/) from your Prisma schema
+- 🗄️ Automatically generates [Drizzle ORM](https://orm.drizzle.team/) table schemas and relations from your Prisma schema
 - 📊 Creates [Mermaid](https://mermaid.js.org/) ER diagrams with PK/FK markers
 - 📝 Generates [DBML](https://dbml.dbdiagram.io/) (Database Markup Language) files and **PNG** ER diagrams via [dbml-renderer](https://github.com/softwaretechnik-berlin/dbml-renderer) — output format is determined by the file extension (`.dbml` or `.png`)
 - 🧪 Generates [Ecto](https://hexdocs.pm/ecto/Ecto.Schema.html) schemas for Elixir projects
@@ -60,6 +61,10 @@ generator Hekireki-Effect {
     type     = true
     comment  = true
     relation = true
+}
+
+generator Hekireki-Drizzle {
+    provider = "hekireki-drizzle"
 }
 
 generator Hekireki-Ecto {
@@ -291,6 +296,35 @@ export const PostSchema = Schema.Struct({
 export type Post = Schema.Schema.Type<typeof PostSchema>
 ```
 
+### Drizzle
+
+```ts
+import { sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import { relations } from 'drizzle-orm'
+
+export const user = sqliteTable('user', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  name: text('name').notNull(),
+})
+
+export const post = sqliteTable('post', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  title: text('title').notNull(),
+  content: text('content').notNull(),
+  userId: text('userId').notNull(),
+})
+
+export const userRelations = relations(user, ({ many }) => ({ posts: many(post) }))
+
+export const postRelations = relations(post, ({ one }) => ({
+  user: one(user, { fields: [post.userId], references: [user.id] }),
+}))
+```
+
 ### Mermaid
 
 ```mermaid
@@ -398,8 +432,7 @@ Configure each generator directly in your `schema.prisma` file:
 // Zod Generator
 generator Hekireki-Zod {
     provider = "hekireki-zod"
-    output   = "./zod"       // Output directory (default: ./zod)
-    file     = "index.ts"    // File name (default: index.ts)
+    output   = "./zod"       // Output path (default: ./zod/index.ts)
     type     = true          // Generate TypeScript types (default: false)
     comment  = true          // Include schema documentation (default: false)
     zod      = "v4"          // Zod import: "v4", "mini", or "@hono/zod-openapi" (default: v4)
@@ -409,8 +442,7 @@ generator Hekireki-Zod {
 // Valibot Generator
 generator Hekireki-Valibot {
     provider = "hekireki-valibot"
-    output   = "./valibot"   // Output directory (default: ./valibot)
-    file     = "index.ts"    // File name (default: index.ts)
+    output   = "./valibot"   // Output path (default: ./valibot/index.ts)
     type     = true          // Generate TypeScript types (default: false)
     comment  = true          // Include schema documentation (default: false)
     relation = true          // Generate relation schemas (default: false)
@@ -419,8 +451,7 @@ generator Hekireki-Valibot {
 // ArkType Generator
 generator Hekireki-ArkType {
     provider = "hekireki-arktype"
-    output   = "./arktype"   // Output directory (default: ./arktype)
-    file     = "index.ts"    // File name (default: index.ts)
+    output   = "./arktype"   // Output path (default: ./arktype/index.ts)
     type     = true          // Generate TypeScript types (default: false)
     comment  = true          // Include schema documentation (default: false)
     relation = true          // Generate relation schemas (default: false)
@@ -429,18 +460,22 @@ generator Hekireki-ArkType {
 // Effect Schema Generator
 generator Hekireki-Effect {
     provider = "hekireki-effect"
-    output   = "./effect"    // Output directory (default: ./effect)
-    file     = "index.ts"    // File name (default: index.ts)
+    output   = "./effect"    // Output path (default: ./effect/index.ts)
     type     = true          // Generate TypeScript types (default: false)
     comment  = true          // Include schema documentation (default: false)
     relation = true          // Generate relation schemas (default: false)
 }
 
+// Drizzle ORM Schema Generator
+generator Hekireki-Drizzle {
+    provider = "hekireki-drizzle"
+    output   = "./drizzle"   // Output path (default: ./drizzle/schema.ts)
+}
+
 // Mermaid ER Generator
 generator Hekireki-ER {
     provider = "hekireki-mermaid-er"
-    output   = "./mermaid-er" // Output directory (default: ./mermaid-er)
-    file     = "ER.md"        // File name (default: ER.md)
+    output   = "./mermaid-er" // Output path (default: ./mermaid-er/ER.md)
 }
 
 // Ecto Generator

@@ -1,0 +1,390 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator Hekireki-ER {
+  provider = "hekireki-mermaid-er"
+}
+
+generator Hekireki-Zod {
+  provider = "hekireki-zod"
+  type     = true
+  comment  = true
+  relation = true
+}
+
+generator Hekireki-Valibot {
+  provider = "hekireki-valibot"
+  type     = true
+  comment  = true
+  relation = true
+}
+
+generator Hekireki-ArkType {
+  provider = "hekireki-arktype"
+  type     = true
+  comment  = true
+}
+
+generator Hekireki-Effect {
+  provider = "hekireki-effect"
+  type     = true
+  comment  = true
+}
+
+generator Hekireki-DBML {
+  provider = "hekireki-dbml"
+}
+
+generator Hekireki-Drizzle {
+  provider = "hekireki-drizzle"
+}
+
+// ============================================================================
+// Enums
+// ============================================================================
+
+enum Role {
+  ADMIN
+  USER
+  GUEST
+}
+
+enum PostStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+// ============================================================================
+// Models
+// ============================================================================
+
+/// User account
+model User {
+  /// User ID
+  /// @z.number().int()
+  /// @v.pipe(v.number(), v.integer())
+  /// @a."number.integer"
+  /// @e.Schema.Int
+  id        Int       @id @default(autoincrement())
+  /// Email address
+  /// @z.email()
+  /// @v.pipe(v.string(), v.email())
+  /// @a."string.email"
+  /// @e.Schema.String
+  email     String    @unique @db.VarChar(255)
+  /// Display name
+  /// @z.string().min(1).max(100)
+  /// @v.pipe(v.string(), v.minLength(1), v.maxLength(100))
+  /// @a."1 <= string <= 100"
+  /// @e.Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100))
+  name      String    @db.VarChar(100)
+  /// Biography
+  /// @z.string().nullable()
+  /// @v.nullish(v.string())
+  /// @a."string | null"
+  /// @e.Schema.NullOr(Schema.String)
+  bio       String?
+  /// Avatar URL
+  /// @z.url().nullable()
+  /// @v.nullish(v.pipe(v.string(), v.url()))
+  /// @a."string.url | null"
+  /// @e.Schema.NullOr(Schema.String)
+  avatarUrl String?   @map("avatar_url")
+  /// User role
+  role      Role      @default(USER)
+  /// Account active status
+  /// @z.boolean()
+  /// @v.boolean()
+  /// @a."boolean"
+  /// @e.Schema.Boolean
+  active    Boolean   @default(true)
+  /// Score
+  /// @z.number()
+  /// @v.number()
+  /// @a."number"
+  /// @e.Schema.Number
+  score     Decimal   @default(0) @db.Decimal(10, 2)
+  /// Tags
+  /// @z.array(z.string())
+  /// @v.array(v.string())
+  /// @a."string[]"
+  /// @e.Schema.Array(Schema.String)
+  tags      String[]
+  /// Metadata JSON
+  /// @z.any().nullable()
+  /// @v.nullish(v.any())
+  /// @a."unknown | null"
+  /// @e.Schema.NullOr(Schema.Unknown)
+  metadata  Json?
+  /// Account creation timestamp
+  createdAt DateTime  @default(now()) @map("created_at")
+  /// Last update timestamp
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  /// Posts by this user
+  posts     Post[]
+  /// User profile
+  profile   Profile?
+  /// Comments by this user
+  comments  Comment[]
+
+  @@map("users")
+}
+
+/// User profile (1:1)
+model Profile {
+  /// Profile ID
+  /// @z.uuid()
+  /// @v.pipe(v.string(), v.uuid())
+  /// @a."string.uuid"
+  /// @e.Schema.UUID
+  id        String   @id @default(uuid()) @db.Uuid
+  /// User ID
+  /// @z.number().int()
+  /// @v.pipe(v.number(), v.integer())
+  /// @a."number.integer"
+  /// @e.Schema.Int
+  userId    Int      @unique @map("user_id")
+  /// Website URL
+  /// @z.url().nullable()
+  /// @v.nullish(v.pipe(v.string(), v.url()))
+  /// @a."string.url | null"
+  /// @e.Schema.NullOr(Schema.String)
+  website   String?
+  /// Location
+  /// @z.string().nullable()
+  /// @v.nullish(v.string())
+  /// @a."string | null"
+  /// @e.Schema.NullOr(Schema.String)
+  location  String?  @db.VarChar(100)
+  /// Birth date
+  /// @z.iso.date().nullable()
+  /// @v.nullish(v.pipe(v.string(), v.isoDate()))
+  /// @a."string.date.iso | null"
+  /// @e.Schema.NullOr(Schema.DateFromString)
+  birthDate DateTime? @map("birth_date") @db.Date
+  /// Related user
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("profiles")
+}
+
+/// Blog post
+model Post {
+  /// Post ID
+  /// @z.number().int()
+  /// @v.pipe(v.number(), v.integer())
+  /// @a."number.integer"
+  /// @e.Schema.Int
+  id        Int        @id @default(autoincrement())
+  /// Post title
+  /// @z.string().min(1).max(200)
+  /// @v.pipe(v.string(), v.minLength(1), v.maxLength(200))
+  /// @a."1 <= string <= 200"
+  /// @e.Schema.String.pipe(Schema.minLength(1), Schema.maxLength(200))
+  title     String     @db.VarChar(200)
+  /// URL slug
+  /// @z.string()
+  /// @v.string()
+  /// @a."string"
+  /// @e.Schema.String
+  slug      String     @unique
+  /// Post content
+  /// @z.string()
+  /// @v.string()
+  /// @a."string"
+  /// @e.Schema.String
+  content   String
+  /// Publication status
+  status    PostStatus @default(DRAFT)
+  /// View count
+  /// @z.number().int()
+  /// @v.pipe(v.number(), v.integer())
+  /// @a."number.integer"
+  /// @e.Schema.Int
+  views     Int        @default(0)
+  /// Author user ID
+  /// @z.number().int()
+  /// @v.pipe(v.number(), v.integer())
+  /// @a."number.integer"
+  /// @e.Schema.Int
+  authorId  Int        @map("author_id")
+  /// Creation timestamp
+  createdAt DateTime   @default(now()) @map("created_at")
+  /// Last update timestamp
+  updatedAt DateTime   @updatedAt @map("updated_at")
+  /// Author
+  author    User       @relation(fields: [authorId], references: [id])
+  /// Comments
+  comments  Comment[]
+  /// Tags
+  postTags  PostTag[]
+
+  @@index([authorId])
+  @@index([status, createdAt])
+  @@map("posts")
+}
+
+/// Comment on a post
+model Comment {
+  /// Comment ID
+  /// @z.number().int()
+  /// @v.pipe(v.number(), v.integer())
+  /// @a."number.integer"
+  /// @e.Schema.Int
+  id        Int      @id @default(autoincrement())
+  /// Comment body
+  /// @z.string()
+  /// @v.string()
+  /// @a."string"
+  /// @e.Schema.String
+  body      String
+  /// Post ID
+  /// @z.number().int()
+  /// @v.pipe(v.number(), v.integer())
+  /// @a."number.integer"
+  /// @e.Schema.Int
+  postId    Int      @map("post_id")
+  /// Author user ID
+  /// @z.number().int()
+  /// @v.pipe(v.number(), v.integer())
+  /// @a."number.integer"
+  /// @e.Schema.Int
+  authorId  Int      @map("author_id")
+  /// Creation timestamp
+  createdAt DateTime @default(now()) @map("created_at")
+  /// Post
+  post      Post     @relation(fields: [postId], references: [id])
+  /// Author
+  author    User     @relation(fields: [authorId], references: [id])
+
+  @@index([postId])
+  @@map("comments")
+}
+
+/// Tag
+model Tag {
+  /// Tag ID
+  /// @z.number().int()
+  /// @v.pipe(v.number(), v.integer())
+  /// @a."number.integer"
+  /// @e.Schema.Int
+  id       Int       @id @default(autoincrement())
+  /// Tag name
+  /// @z.string().min(1).max(50)
+  /// @v.pipe(v.string(), v.minLength(1), v.maxLength(50))
+  /// @a."1 <= string <= 50"
+  /// @e.Schema.String.pipe(Schema.minLength(1), Schema.maxLength(50))
+  name     String    @unique @db.VarChar(50)
+  /// Post tags
+  postTags PostTag[]
+
+  @@map("tags")
+}
+
+/// Post-Tag junction (composite PK)
+model PostTag {
+  /// Post ID
+  /// @z.number().int()
+  /// @v.pipe(v.number(), v.integer())
+  /// @a."number.integer"
+  /// @e.Schema.Int
+  postId    Int      @map("post_id")
+  /// Tag ID
+  /// @z.number().int()
+  /// @v.pipe(v.number(), v.integer())
+  /// @a."number.integer"
+  /// @e.Schema.Int
+  tagId     Int      @map("tag_id")
+  /// Creation timestamp
+  createdAt DateTime @default(now()) @map("created_at")
+  /// Post
+  post      Post     @relation(fields: [postId], references: [id])
+  /// Tag
+  tag       Tag      @relation(fields: [tagId], references: [id])
+
+  @@id([postId, tagId])
+  @@map("post_tags")
+}
+
+/// Session with dbgenerated default
+model Session {
+  /// Session ID
+  /// @z.cuid()
+  /// @v.pipe(v.string(), v.cuid2())
+  /// @a."string"
+  /// @e.Schema.String
+  id        String   @id @default(cuid())
+  /// Session token
+  /// @z.string()
+  /// @v.string()
+  /// @a."string"
+  /// @e.Schema.String
+  token     String   @unique
+  /// User ID
+  /// @z.number().int()
+  /// @v.pipe(v.number(), v.integer())
+  /// @a."number.integer"
+  /// @e.Schema.Int
+  userId    Int      @map("user_id")
+  /// Expiration timestamp
+  /// @z.iso.datetime()
+  /// @v.pipe(v.string(), v.isoTimestamp())
+  /// @a."string.date.iso"
+  /// @e.Schema.DateFromString
+  expiresAt DateTime @map("expires_at")
+  /// Client IP address
+  /// @z.string().nullable()
+  /// @v.nullish(v.string())
+  /// @a."string | null"
+  /// @e.Schema.NullOr(Schema.String)
+  ipAddress String?  @map("ip_address") @db.VarChar(45)
+  /// User agent string
+  /// @z.string().nullable()
+  /// @v.nullish(v.string())
+  /// @a."string | null"
+  /// @e.Schema.NullOr(Schema.String)
+  userAgent String?  @map("user_agent")
+  /// Creation timestamp
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+/// Audit log with precise timestamp
+model AuditLog {
+  /// Audit log ID
+  /// @z.number().int()
+  /// @v.pipe(v.number(), v.integer())
+  /// @a."number.integer"
+  /// @e.Schema.Int
+  id        BigInt   @id @default(autoincrement())
+  /// Action performed
+  /// @z.string()
+  /// @v.string()
+  /// @a."string"
+  /// @e.Schema.String
+  action    String   @db.VarChar(50)
+  /// Table name
+  /// @z.string()
+  /// @v.string()
+  /// @a."string"
+  /// @e.Schema.String
+  tableName String   @map("table_name") @db.VarChar(50)
+  /// Record ID
+  /// @z.string()
+  /// @v.string()
+  /// @a."string"
+  /// @e.Schema.String
+  recordId  String   @map("record_id")
+  /// Payload JSON
+  payload   Json?
+  /// Creation timestamp
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([tableName, recordId])
+  @@map("audit_logs")
+}

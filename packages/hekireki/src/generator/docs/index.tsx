@@ -10,19 +10,20 @@ const { generatorHandler } = pkg
 generatorHandler({
   onManifest() {
     return {
-      defaultOutput: './docs',
+      defaultOutput: '.',
       prettyName: 'Hekireki-Docs',
     }
   },
   async onGenerate(options) {
+    if (!options.generator.isCustomOutput || !options.generator.output?.value) {
+      throw new Error(
+        'output is required for Hekireki-Docs. Please specify output in your generator config.',
+      )
+    }
+    const output = options.generator.output.value
+
     const dmmf = transformDMMF(options.dmmf)
     const html = await generateHTML(dmmf)
-
-    const output = options.generator.output?.value
-
-    if (!output) {
-      throw new Error('No output was specified for Hekireki Docs Generator')
-    }
 
     await fs.mkdir(output, { recursive: true })
     await fs.writeFile(path.join(output, 'index.html'), html)

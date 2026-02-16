@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "arktype": "^2.1.29",
+    "drizzle-orm": "^0.45.1",
     "effect": "^3.19.15",
     "prisma": "^7.0.1",
     "valibot": "^1.2.0",

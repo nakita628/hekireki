@@ -1,0 +1,61 @@
+Enum Role {
+  ADMIN
+  USER
+}
+
+Table users {
+  id String [pk, note: 'User ID']
+  email String [unique, not null, note: 'Email address']
+  passwordHash String [not null, note: 'Hashed password']
+  name String [not null, note: 'Display name']
+  role Role [default: 'USER', not null, note: 'User role']
+  isActive Boolean [default: true, not null, note: 'Account active status']
+  createdAt DateTime [default: `now()`, not null, note: 'Account creation timestamp']
+  updatedAt DateTime [not null, note: 'Last update timestamp']
+  sessions sessions [not null, note: 'Sessions']
+  loginHistories login_histories [not null, note: 'Login history']
+  passwordHistories password_histories [not null, note: 'Password history']
+
+  Note: 'User account'
+}
+
+Table sessions {
+  id String [pk, note: 'Session ID']
+  token String [unique, not null, note: 'Session token']
+  userId String [not null, note: 'User ID']
+  expiresAt DateTime [not null, note: 'Session expiration']
+  ipAddress String [note: 'Client IP address']
+  userAgent String [note: 'Client user agent']
+  createdAt DateTime [default: `now()`, not null, note: 'Session creation timestamp']
+  user users [not null, note: 'User relation']
+
+  Note: 'Server-side session'
+}
+
+Table login_histories {
+  id String [pk, note: 'Login history ID']
+  userId String [not null, note: 'User ID']
+  ipAddress String [not null, note: 'Client IP address']
+  userAgent String [note: 'Client user agent']
+  success Boolean [not null, note: 'Login success status']
+  createdAt DateTime [default: `now()`, not null, note: 'Login timestamp']
+  user users [not null, note: 'User relation']
+
+  Note: 'Login history record'
+}
+
+Table password_histories {
+  id String [pk, note: 'Password history ID']
+  userId String [not null, note: 'User ID']
+  passwordHash String [not null, note: 'Hashed password']
+  createdAt DateTime [default: `now()`, not null, note: 'Change timestamp']
+  user users [not null, note: 'User relation']
+
+  Note: 'Password change history'
+}
+
+Ref sessions_userId_fk: sessions.userId > users.id [delete: Cascade]
+
+Ref login_histories_userId_fk: login_histories.userId > users.id [delete: Cascade]
+
+Ref password_histories_userId_fk: password_histories.userId > users.id [delete: Cascade]

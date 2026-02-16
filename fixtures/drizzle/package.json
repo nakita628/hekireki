@@ -1,0 +1,15 @@
+{
+  "name": "@fixtures/drizzle",
+  "type": "module",
+  "scripts": {
+    "generate": "prisma generate"
+  },
+  "dependencies": {
+    "@paralleldrive/cuid2": "^2.2.2",
+    "drizzle-orm": "^0.45.1",
+    "prisma": "^7.4.0"
+  },
+  "devDependencies": {
+    "hekireki": "workspace:^"
+  }
+}

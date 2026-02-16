@@ -1,0 +1,128 @@
+Enum Role {
+  ADMIN
+  USER
+  GUEST
+}
+
+Enum PostStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+Table users {
+  id Int [pk, increment, note: 'User ID']
+  email String [unique, not null, note: 'Email address']
+  name String [not null, note: 'Display name']
+  bio String [note: 'Biography']
+  avatarUrl String [note: 'Avatar URL']
+  role Role [default: 'USER', not null, note: 'User role']
+  active Boolean [default: true, not null, note: 'Account active status']
+  score Decimal [default: 0, not null, note: 'Score']
+  tags String[] [not null, note: 'Tags']
+  metadata Json [note: 'Metadata JSON']
+  createdAt DateTime [default: `now()`, not null, note: 'Account creation timestamp']
+  updatedAt DateTime [not null, note: 'Last update timestamp']
+  posts posts [not null, note: 'Posts by this user']
+  profile profiles [note: 'User profile']
+  comments comments [not null, note: 'Comments by this user']
+
+  Note: 'User account'
+}
+
+Table profiles {
+  id String [pk, note: 'Profile ID']
+  userId Int [unique, not null, note: 'User ID']
+  website String [note: 'Website URL']
+  location String [note: 'Location']
+  birthDate DateTime [note: 'Birth date']
+  user users [not null, note: 'Related user']
+
+  Note: 'User profile (1:1)'
+}
+
+Table posts {
+  id Int [pk, increment, note: 'Post ID']
+  title String [not null, note: 'Post title']
+  slug String [unique, not null, note: 'URL slug']
+  content String [not null, note: 'Post content']
+  status PostStatus [default: 'DRAFT', not null, note: 'Publication status']
+  views Int [default: 0, not null, note: 'View count']
+  authorId Int [not null, note: 'Author user ID']
+  createdAt DateTime [default: `now()`, not null, note: 'Creation timestamp']
+  updatedAt DateTime [not null, note: 'Last update timestamp']
+  author users [not null, note: 'Author']
+  comments comments [not null, note: 'Comments']
+  postTags post_tags [not null, note: 'Tags']
+
+  Note: 'Blog post'
+}
+
+Table comments {
+  id Int [pk, increment, note: 'Comment ID']
+  body String [not null, note: 'Comment body']
+  postId Int [not null, note: 'Post ID']
+  authorId Int [not null, note: 'Author user ID']
+  createdAt DateTime [default: `now()`, not null, note: 'Creation timestamp']
+  post posts [not null, note: 'Post']
+  author users [not null, note: 'Author']
+
+  Note: 'Comment on a post'
+}
+
+Table tags {
+  id Int [pk, increment, note: 'Tag ID']
+  name String [unique, not null, note: 'Tag name']
+  postTags post_tags [not null, note: 'Post tags']
+
+  Note: 'Tag'
+}
+
+Table post_tags {
+  postId Int [not null, note: 'Post ID']
+  tagId Int [not null, note: 'Tag ID']
+  createdAt DateTime [default: `now()`, not null, note: 'Creation timestamp']
+  post posts [not null, note: 'Post']
+  tag tags [not null, note: 'Tag']
+
+  indexes {
+    (postId, tagId) [pk]
+  }
+
+  Note: 'Post-Tag junction (composite PK)'
+}
+
+Table sessions {
+  id String [pk, note: 'Session ID']
+  token String [unique, not null, note: 'Session token']
+  userId Int [not null, note: 'User ID']
+  expiresAt DateTime [not null, note: 'Expiration timestamp']
+  ipAddress String [note: 'Client IP address']
+  userAgent String [note: 'User agent string']
+  createdAt DateTime [default: `now()`, not null, note: 'Creation timestamp']
+
+  Note: 'Session with dbgenerated default'
+}
+
+Table audit_logs {
+  id BigInt [pk, increment, note: 'Audit log ID']
+  action String [not null, note: 'Action performed']
+  tableName String [not null, note: 'Table name']
+  recordId String [not null, note: 'Record ID']
+  payload Json [note: 'Payload JSON']
+  createdAt DateTime [default: `now()`, not null, note: 'Creation timestamp']
+
+  Note: 'Audit log with precise timestamp'
+}
+
+Ref profiles_userId_fk: profiles.userId - users.id
+
+Ref posts_authorId_fk: posts.authorId > users.id
+
+Ref comments_postId_fk: comments.postId > posts.id
+
+Ref comments_authorId_fk: comments.authorId > users.id
+
+Ref post_tags_postId_fk: post_tags.postId > posts.id
+
+Ref post_tags_tagId_fk: post_tags.tagId > tags.id

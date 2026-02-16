@@ -1,0 +1,292 @@
+datasource db {
+    provider = "mysql"
+}
+
+generator Hekireki-ER {
+    provider = "hekireki-mermaid-er"
+    output   = "mermaid-er"
+}
+
+generator Hekireki-Zod {
+    provider = "hekireki-zod"
+    output   = "zod"
+    type     = true
+    comment  = true
+    relation = true
+}
+
+generator Hekireki-Valibot {
+    provider = "hekireki-valibot"
+    output   = "valibot"
+    type     = true
+    comment  = true
+    relation = true
+}
+
+generator Hekireki-ArkType {
+    provider = "hekireki-arktype"
+    output   = "arktype"
+    type     = true
+    comment  = true
+}
+
+generator Hekireki-Effect {
+    provider = "hekireki-effect"
+    output   = "effect"
+    type     = true
+    comment  = true
+}
+
+generator Hekireki-DBML {
+    provider = "hekireki-dbml"
+    output   = "dbml"
+}
+
+generator Hekireki-Drizzle {
+    provider = "hekireki-drizzle"
+    output   = "drizzle"
+}
+
+enum OrgStatus {
+    ACTIVE
+    INACTIVE
+    SUSPENDED
+}
+
+/// Organization / tenant
+model Organization {
+    /// Organization ID
+    /// @z.number().int()
+    /// @v.pipe(v.number(), v.integer())
+    /// @a."number.integer"
+    /// @e.Schema.Int
+    id        Int       @id @default(autoincrement())
+    /// Organization name
+    /// @z.string().min(1).max(200)
+    /// @v.pipe(v.string(), v.minLength(1), v.maxLength(200))
+    /// @a."1 <= string <= 200"
+    /// @e.Schema.String.pipe(Schema.minLength(1), Schema.maxLength(200))
+    name      String    @db.VarChar(200)
+    /// URL-safe slug
+    /// @z.string().min(1).max(100)
+    /// @v.pipe(v.string(), v.minLength(1), v.maxLength(100))
+    /// @a."1 <= string <= 100"
+    /// @e.Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100))
+    slug      String    @unique @db.VarChar(100)
+    /// Organization status
+    status    OrgStatus @default(ACTIVE)
+    /// Creation timestamp
+    createdAt DateTime  @default(now()) @map("created_at")
+    /// Last update timestamp
+    updatedAt DateTime  @updatedAt @map("updated_at")
+    /// Users
+    users     User[]
+
+    @@map("organizations")
+}
+
+/// User account
+model User {
+    /// User ID
+    /// @z.number().int()
+    /// @v.pipe(v.number(), v.integer())
+    /// @a."number.integer"
+    /// @e.Schema.Int
+    id             Int          @id @default(autoincrement())
+    /// Organization ID
+    /// @z.number().int()
+    /// @v.pipe(v.number(), v.integer())
+    /// @a."number.integer"
+    /// @e.Schema.Int
+    organizationId Int          @map("organization_id")
+    /// Email address
+    /// @z.email()
+    /// @v.pipe(v.string(), v.email())
+    /// @a."string.email"
+    /// @e.Schema.String
+    email          String       @unique @db.VarChar(255)
+    /// Display name
+    /// @z.string().min(1).max(100)
+    /// @v.pipe(v.string(), v.minLength(1), v.maxLength(100))
+    /// @a."1 <= string <= 100"
+    /// @e.Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100))
+    name           String       @db.VarChar(100)
+    /// Creation timestamp
+    createdAt      DateTime     @default(now()) @map("created_at")
+    /// Last update timestamp
+    updatedAt      DateTime     @updatedAt @map("updated_at")
+    /// Organization relation
+    organization   Organization @relation(fields: [organizationId], references: [id])
+    /// User-Role assignments
+    userRoles      UserRole[]
+    /// Audit logs
+    auditLogs      AuditLog[]
+
+    @@index([organizationId])
+    @@map("users")
+}
+
+/// Role definition
+model Role {
+    /// Role ID
+    /// @z.number().int()
+    /// @v.pipe(v.number(), v.integer())
+    /// @a."number.integer"
+    /// @e.Schema.Int
+    id              Int              @id @default(autoincrement())
+    /// Role name
+    /// @z.string().min(1).max(100)
+    /// @v.pipe(v.string(), v.minLength(1), v.maxLength(100))
+    /// @a."1 <= string <= 100"
+    /// @e.Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100))
+    name            String           @unique @db.VarChar(100)
+    /// Role description
+    /// @z.string().nullable()
+    /// @v.nullish(v.string())
+    /// @a."string | null"
+    /// @e.Schema.NullOr(Schema.String)
+    description     String?          @db.VarChar(500)
+    /// Creation timestamp
+    createdAt       DateTime         @default(now()) @map("created_at")
+    /// Last update timestamp
+    updatedAt       DateTime         @updatedAt @map("updated_at")
+    /// User-Role assignments
+    userRoles       UserRole[]
+    /// Role-Permission assignments
+    rolePermissions RolePermission[]
+
+    @@map("roles")
+}
+
+/// Permission definition
+model Permission {
+    /// Permission ID
+    /// @z.number().int()
+    /// @v.pipe(v.number(), v.integer())
+    /// @a."number.integer"
+    /// @e.Schema.Int
+    id              Int              @id @default(autoincrement())
+    /// Resource name
+    /// @z.string().min(1).max(100)
+    /// @v.pipe(v.string(), v.minLength(1), v.maxLength(100))
+    /// @a."1 <= string <= 100"
+    /// @e.Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100))
+    resource        String           @db.VarChar(100)
+    /// Action name
+    /// @z.string().min(1).max(100)
+    /// @v.pipe(v.string(), v.minLength(1), v.maxLength(100))
+    /// @a."1 <= string <= 100"
+    /// @e.Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100))
+    action          String           @db.VarChar(100)
+    /// Permission description
+    /// @z.string().nullable()
+    /// @v.nullish(v.string())
+    /// @a."string | null"
+    /// @e.Schema.NullOr(Schema.String)
+    description     String?          @db.VarChar(500)
+    /// Creation timestamp
+    createdAt       DateTime         @default(now()) @map("created_at")
+    /// Role-Permission assignments
+    rolePermissions RolePermission[]
+
+    @@unique([resource, action])
+    @@map("permissions")
+}
+
+/// User-Role junction (composite PK)
+model UserRole {
+    /// User ID
+    /// @z.number().int()
+    /// @v.pipe(v.number(), v.integer())
+    /// @a."number.integer"
+    /// @e.Schema.Int
+    userId     Int      @map("user_id")
+    /// Role ID
+    /// @z.number().int()
+    /// @v.pipe(v.number(), v.integer())
+    /// @a."number.integer"
+    /// @e.Schema.Int
+    roleId     Int      @map("role_id")
+    /// Assignment timestamp
+    assignedAt DateTime @default(now()) @map("assigned_at")
+    /// User relation
+    user       User     @relation(fields: [userId], references: [id])
+    /// Role relation
+    role       Role     @relation(fields: [roleId], references: [id])
+
+    @@id([userId, roleId])
+    @@map("user_roles")
+}
+
+/// Role-Permission junction (composite PK)
+model RolePermission {
+    /// Role ID
+    /// @z.number().int()
+    /// @v.pipe(v.number(), v.integer())
+    /// @a."number.integer"
+    /// @e.Schema.Int
+    roleId       Int        @map("role_id")
+    /// Permission ID
+    /// @z.number().int()
+    /// @v.pipe(v.number(), v.integer())
+    /// @a."number.integer"
+    /// @e.Schema.Int
+    permissionId Int        @map("permission_id")
+    /// Assignment timestamp
+    assignedAt   DateTime   @default(now()) @map("assigned_at")
+    /// Role relation
+    role         Role       @relation(fields: [roleId], references: [id])
+    /// Permission relation
+    permission   Permission @relation(fields: [permissionId], references: [id])
+
+    @@id([roleId, permissionId])
+    @@map("role_permissions")
+}
+
+/// Audit log
+model AuditLog {
+    /// Audit log ID
+    /// @z.number().int()
+    /// @v.pipe(v.number(), v.integer())
+    /// @a."number.integer"
+    /// @e.Schema.Int
+    id        Int      @id @default(autoincrement())
+    /// User ID
+    /// @z.number().int()
+    /// @v.pipe(v.number(), v.integer())
+    /// @a."number.integer"
+    /// @e.Schema.Int
+    userId    Int      @map("user_id")
+    /// Action performed
+    /// @z.string()
+    /// @v.string()
+    /// @a."string"
+    /// @e.Schema.String
+    action    String   @db.VarChar(50)
+    /// Resource name
+    /// @z.string()
+    /// @v.string()
+    /// @a."string"
+    /// @e.Schema.String
+    resource  String   @db.VarChar(100)
+    /// Action detail
+    /// @z.string().nullable()
+    /// @v.nullish(v.string())
+    /// @a."string | null"
+    /// @e.Schema.NullOr(Schema.String)
+    detail    String?
+    /// Client IP address
+    /// @z.string().nullable()
+    /// @v.nullish(v.string())
+    /// @a."string | null"
+    /// @e.Schema.NullOr(Schema.String)
+    ipAddress String?  @map("ip_address") @db.VarChar(45)
+    /// Action timestamp
+    createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+    /// User relation
+    user      User     @relation(fields: [userId], references: [id])
+
+    @@index([userId])
+    @@index([createdAt])
+    @@map("audit_logs")
+}

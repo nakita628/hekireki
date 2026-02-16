@@ -4,22 +4,45 @@ datasource db {
 
 generator Hekireki-Zod {
   provider = "hekireki-zod"
+  output   = "zod"
+  type     = true
+  comment  = true
+}
+
+generator Hekireki-Valibot {
+  provider = "hekireki-valibot"
+  output   = "valibot"
+  type     = true
+  comment  = true
+}
+
+generator Hekireki-ArkType {
+  provider = "hekireki-arktype"
+  output   = "arktype"
+  type     = true
+  comment  = true
+}
+
+generator Hekireki-Effect {
+  provider = "hekireki-effect"
+  output   = "effect"
   type     = true
   comment  = true
 }
 
 generator Hekireki-ER {
   provider = "hekireki-mermaid-er"
+  output   = "mermaid-er"
 }
 
 generator Hekireki-DBML {
   provider = "hekireki-dbml"
+  output   = "dbml"
 }
 
-generator Hekireki-SVG {
-  provider = "hekireki-svg"
-  output   = "docs"
-  format   = "png"
+generator Hekireki-Drizzle {
+  provider = "hekireki-drizzle"
+  output   = "drizzle"
 }
 
 enum UserRole {
@@ -32,21 +55,39 @@ enum UserRole {
 model User {
   /// Unique user ID
   /// @z.cuid()
+  /// @v.pipe(v.string(), v.cuid2())
+  /// @a."string"
+  /// @e.Schema.String
   id                    String                 @id @default(cuid())
   /// Display name
   /// @z.string().min(1).max(50)
+  /// @v.pipe(v.string(), v.minLength(1), v.maxLength(50))
+  /// @a."1 <= string <= 50"
+  /// @e.Schema.String.pipe(Schema.minLength(1), Schema.maxLength(50))
   name                  String?
   /// Email address
   /// @z.email()
+  /// @v.pipe(v.string(), v.email())
+  /// @a."string.email"
+  /// @e.Schema.String
   email                 String?                @unique
   /// Date when the email was verified
   /// @z.iso.date()
+  /// @v.pipe(v.string(), v.isoDate())
+  /// @a."string.date.iso"
+  /// @e.Schema.DateFromString
   emailVerified         DateTime?
   /// Profile image URL
   /// @z.url()
+  /// @v.pipe(v.string(), v.url())
+  /// @a."string.url"
+  /// @e.Schema.String
   image                 String?
   /// Hashed password
   /// @z.string().min(8)
+  /// @v.pipe(v.string(), v.minLength(8))
+  /// @a."string >= 8"
+  /// @e.Schema.String.pipe(Schema.minLength(8))
   password              String?
   /// Role of the user (ADMIN or USER)
   role                  UserRole               @default(USER)
@@ -54,6 +95,9 @@ model User {
   accounts              Account[]
   /// Whether 2FA is enabled
   /// @z.boolean()
+  /// @v.boolean()
+  /// @a."boolean"
+  /// @e.Schema.Boolean
   isTwoFactorEnabled    Boolean?               @default(false)
   /// 2FA confirmation
   twoFactorConfirmation TwoFactorConfirmation?
@@ -63,39 +107,75 @@ model User {
 model Account {
   /// Unique account ID
   /// @z.cuid()
+  /// @v.pipe(v.string(), v.cuid2())
+  /// @a."string"
+  /// @e.Schema.String
   id                String  @id @default(cuid())
   /// Reference to the user ID
   /// @z.string()
+  /// @v.string()
+  /// @a."string"
+  /// @e.Schema.String
   userId            String
   /// Type of account (e.g., oauth, email)
   /// @z.string()
+  /// @v.string()
+  /// @a."string"
+  /// @e.Schema.String
   type              String
   /// Name of the provider (e.g., google, github)
   /// @z.string()
+  /// @v.string()
+  /// @a."string"
+  /// @e.Schema.String
   provider          String
   /// Provider-specific account ID
   /// @z.string()
+  /// @v.string()
+  /// @a."string"
+  /// @e.Schema.String
   providerAccountId String
   /// Refresh token
   /// @z.string()
+  /// @v.nullish(v.string())
+  /// @a."string | null"
+  /// @e.Schema.NullOr(Schema.String)
   refresh_token     String?
   /// Access token
   /// @z.string()
+  /// @v.nullish(v.string())
+  /// @a."string | null"
+  /// @e.Schema.NullOr(Schema.String)
   access_token      String?
   /// Expiration time (UNIX timestamp)
   /// @z.int()
+  /// @v.pipe(v.number(), v.integer())
+  /// @a."number.integer"
+  /// @e.Schema.Int
   expires_at        Int?
   /// Token type (e.g., Bearer)
   /// @z.string().optional()
+  /// @v.nullish(v.string())
+  /// @a."string | null"
+  /// @e.Schema.NullOr(Schema.String)
   token_type        String?
   /// OAuth scope
   /// @z.string().optional()
+  /// @v.nullish(v.string())
+  /// @a."string | null"
+  /// @e.Schema.NullOr(Schema.String)
   scope             String?
   /// ID token
   /// @z.string().optional()
+  /// @v.nullish(v.string())
+  /// @a."string | null"
+  /// @e.Schema.NullOr(Schema.String)
   id_token          String?
   /// Session state
   /// @z.string().optional()
+  /// @v.nullish(v.string())
+  /// @a."string | null"
+  /// @e.Schema.NullOr(Schema.String)
   session_state     String?
   /// Belongs to user
   user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -107,15 +187,27 @@ model Account {
 model VerificationToken {
   /// Token ID
   /// @z.cuid()
+  /// @v.pipe(v.string(), v.cuid2())
+  /// @a."string"
+  /// @e.Schema.String
   id      String   @id @default(cuid())
   /// Email address
   /// @z.email()
+  /// @v.pipe(v.string(), v.email())
+  /// @a."string.email"
+  /// @e.Schema.String
   email   String
   /// Token string
   /// @z.string()
+  /// @v.string()
+  /// @a."string"
+  /// @e.Schema.String
   token   String   @unique
   /// Expiry time
   /// @z.iso.date()
+  /// @v.pipe(v.string(), v.isoDate())
+  /// @a."string.date.iso"
+  /// @e.Schema.DateFromString
   expires DateTime
 
   @@unique([email, token])
@@ -125,15 +217,27 @@ model VerificationToken {
 model PasswordResetToken {
   /// Token ID
   /// @z.cuid()
+  /// @v.pipe(v.string(), v.cuid2())
+  /// @a."string"
+  /// @e.Schema.String
   id      String   @id @default(cuid())
   /// Email address
   /// @z.email()
+  /// @v.pipe(v.string(), v.email())
+  /// @a."string.email"
+  /// @e.Schema.String
   email   String
   /// Token string
   /// @z.string()
+  /// @v.string()
+  /// @a."string"
+  /// @e.Schema.String
   token   String   @unique
   /// Expiry time
   /// @z.iso.date()
+  /// @v.pipe(v.string(), v.isoDate())
+  /// @a."string.date.iso"
+  /// @e.Schema.DateFromString
   expires DateTime
 
   @@unique([email, token])
@@ -142,15 +246,27 @@ model PasswordResetToken {
 model TwoFactorToken {
   /// Token ID
   /// @z.cuid()
+  /// @v.pipe(v.string(), v.cuid2())
+  /// @a."string"
+  /// @e.Schema.String
   id      String   @id @default(cuid())
   /// Email address
   /// @z.email()
+  /// @v.pipe(v.string(), v.email())
+  /// @a."string.email"
+  /// @e.Schema.String
   email   String
   /// Token string
   /// @z.string()
+  /// @v.string()
+  /// @a."string"
+  /// @e.Schema.String
   token   String   @unique
   /// Expiry time
   /// @z.iso.date()
+  /// @v.pipe(v.string(), v.isoDate())
+  /// @a."string.date.iso"
+  /// @e.Schema.DateFromString
   expires DateTime
 
   @@unique([email, token])
@@ -160,9 +276,15 @@ model TwoFactorToken {
 model TwoFactorConfirmation {
   /// Confirmation ID
   /// @z.uuid()
+  /// @v.pipe(v.string(), v.uuid())
+  /// @a."string.uuid"
+  /// @e.Schema.UUID
   id     String @id @default(cuid())
   /// Reference to user
   /// @z.string()
+  /// @v.string()
+  /// @a."string"
+  /// @e.Schema.String
   userId String
   /// The user who confirmed 2FA
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)

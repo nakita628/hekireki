@@ -1,0 +1,23 @@
+{
+  "name": "session-auth",
+  "type": "module",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "generate": "prisma generate",
+    "typecheck": "tsgo --noEmit"
+  },
+  "dependencies": {
+    "@paralleldrive/cuid2": "^2.2.2",
+    "arktype": "^2.1.29",
+    "drizzle-orm": "^0.45.1",
+    "effect": "^3.19.15",
+    "hekireki": "workspace:*",
+    "prisma": "^7.0.1",
+    "valibot": "^1.2.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@typescript/native-preview": "7.0.0-dev.20260130.1"
+  }
+}
