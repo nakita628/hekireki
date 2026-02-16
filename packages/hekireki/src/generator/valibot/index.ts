@@ -1,17 +1,25 @@
 #!/usr/bin/env node
+import path from 'node:path'
 import type { GeneratorOptions } from '@prisma/generator-helper'
 import pkg from '@prisma/generator-helper'
 import { fmt } from '../../format/index.js'
 import { mkdir, writeFile } from '../../fsp/index.js'
 import { makeRelationsOnly } from '../../helper/prisma.js'
 import { makeValibotRelations, valibot } from '../../helper/valibot.js'
-import { getBool, requireOutput, resolveOutput } from '../../utils/index.js'
+import { getBool } from '../../utils/index.js'
 
 const { generatorHandler } = pkg
 
 export async function main(options: GeneratorOptions): Promise<void> {
-  const output = requireOutput(options.generator.output?.value, 'Hekireki-Valibot', options.generator.isCustomOutput)
-  const resolved = resolveOutput(output, 'index.ts')
+  if (!options.generator.isCustomOutput || !options.generator.output?.value) {
+    throw new Error(
+      'output is required for Hekireki-Valibot. Please specify output in your generator config.',
+    )
+  }
+  const output = options.generator.output.value
+  const resolved = path.extname(output)
+    ? { dir: path.dirname(output), file: output }
+    : { dir: output, file: path.join(output, 'index.ts') }
   const enableRelation =
     options.generator.config?.relation === 'true' ||
     (Array.isArray(options.generator.config?.relation) &&

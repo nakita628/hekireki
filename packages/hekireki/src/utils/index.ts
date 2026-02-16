@@ -1,39 +1,3 @@
-import path from 'node:path'
-
-// ============================================================================
-// Output Path Utilities
-// ============================================================================
-
-/**
- * Require output to be explicitly specified by the user.
- * Throws if the user did not set `output` in their generator config.
- */
-export const requireOutput = (
-  output: string | undefined | null,
-  generatorName: string,
-  isCustomOutput: boolean | undefined,
-): string => {
-  if (!isCustomOutput || !output) {
-    throw new Error(
-      `output is required for ${generatorName}. Please specify output in your generator config.`,
-    )
-  }
-  return output
-}
-
-/**
- * Resolve output path: if it has an extension, treat as file path; otherwise as directory.
- */
-export const resolveOutput = (
-  output: string,
-  defaultFile: string,
-): { dir: string; file: string } => {
-  if (path.extname(output)) {
-    return { dir: path.dirname(output), file: output }
-  }
-  return { dir: output, file: path.join(output, defaultFile) }
-}
-
 // ============================================================================
 // Config Utilities
 // ============================================================================

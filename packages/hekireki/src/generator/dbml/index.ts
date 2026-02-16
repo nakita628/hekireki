@@ -1,23 +1,28 @@
 #!/usr/bin/env node
-import { basename, dirname } from 'node:path'
+import path from 'node:path'
 import type { GeneratorOptions } from '@prisma/generator-helper'
 import pkg from '@prisma/generator-helper'
 import { mkdir, writeFile } from '../../fsp/index.js'
 import { dbmlContent, generateDbmlFile, generatePng, generatePngFile } from '../../helper/dbml.js'
-import { getString, requireOutput, resolveOutput } from '../../utils/index.js'
+import { getString } from '../../utils/index.js'
 
 const { generatorHandler } = pkg
 
 export async function main(options: GeneratorOptions): Promise<void> {
+  if (!options.generator.isCustomOutput || !options.generator.output?.value) {
+    throw new Error(
+      'output is required for Hekireki-DBML. Please specify output in your generator config.',
+    )
+  }
+  const output = options.generator.output.value
+
   const { config } = options.generator
   const mapToDbSchema = getString(config?.mapToDbSchema) !== 'false'
 
   const content = dbmlContent(options.dmmf.datamodel, mapToDbSchema)
 
-  const output = requireOutput(options.generator.output?.value, 'Hekireki-DBML', options.generator.isCustomOutput)
-
   if (output.endsWith('.png') || output.endsWith('.dbml')) {
-    const dir = dirname(output)
+    const dir = path.dirname(output)
     const mkdirResult = await mkdir(dir)
     if (!mkdirResult.ok) {
       throw new Error(`Failed to create directory: ${mkdirResult.error}`)
@@ -30,12 +35,14 @@ export async function main(options: GeneratorOptions): Promise<void> {
       if (!dbmlResult.ok) throw new Error(`Failed to write DBML: ${dbmlResult.error}`)
     }
   } else {
-    const resolved = resolveOutput(output, 'schema.dbml')
+    const resolved = path.extname(output)
+      ? { dir: path.dirname(output), file: output }
+      : { dir: output, file: path.join(output, 'schema.dbml') }
     const mkdirResult = await mkdir(resolved.dir)
     if (!mkdirResult.ok) {
       throw new Error(`Failed to create directory: ${mkdirResult.error}`)
     }
-    const fileName = basename(resolved.file)
+    const fileName = path.basename(resolved.file)
     if (fileName.endsWith('.png')) {
       const pngResult = await generatePng(resolved.dir, content, fileName)
       if (!pngResult.ok) throw new Error(pngResult.error)

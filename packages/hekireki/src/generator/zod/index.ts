@@ -1,17 +1,25 @@
 #!/usr/bin/env node
+import path from 'node:path'
 import type { GeneratorOptions } from '@prisma/generator-helper'
 import pkg from '@prisma/generator-helper'
 import { fmt } from '../../format/index.js'
 import { mkdir, writeFile } from '../../fsp/index.js'
 import { makeRelationsOnly } from '../../helper/prisma.js'
 import { makeZodRelations, zod } from '../../helper/zod.js'
-import { getBool, getString, requireOutput, resolveOutput } from '../../utils/index.js'
+import { getBool, getString } from '../../utils/index.js'
 
 const { generatorHandler } = pkg
 
 export async function main(options: GeneratorOptions): Promise<void> {
-  const output = requireOutput(options.generator.output?.value, 'Hekireki-Zod', options.generator.isCustomOutput)
-  const resolved = resolveOutput(output, 'index.ts')
+  if (!options.generator.isCustomOutput || !options.generator.output?.value) {
+    throw new Error(
+      'output is required for Hekireki-Zod. Please specify output in your generator config.',
+    )
+  }
+  const output = options.generator.output.value
+  const resolved = path.extname(output)
+    ? { dir: path.dirname(output), file: output }
+    : { dir: output, file: path.join(output, 'index.ts') }
   const zodVersion = getString(options.generator.config?.zod, 'v4')
   const enableRelation =
     options.generator.config?.relation === 'true' ||
