@@ -328,6 +328,41 @@ describe('drizzleSchema - MySQL basics', () => {
     )
   })
 
+  it('generates default(sql`now()`) for MySQL @default(now())', () => {
+    const result = drizzleSchema(
+      {
+        models: [
+          makeModel({
+            name: 'Post',
+            fields: [
+              makeField({ name: 'id', type: 'Int', isId: true }),
+              makeField({
+                name: 'createdAt',
+                type: 'DateTime',
+                hasDefaultValue: true,
+                default: { name: 'now', args: [] },
+              }),
+            ],
+          }),
+        ],
+        enums: [],
+        types: [],
+        indexes: [],
+      },
+      'mysql',
+      [],
+    )
+
+    expect(result).toBe(
+      [
+        "import { datetime, int, mysqlTable } from 'drizzle-orm/mysql-core'",
+        "import { sql } from 'drizzle-orm'",
+        '',
+        "export const post = mysqlTable('post', { id: int('id').primaryKey(), createdAt: datetime('createdAt').notNull().default(sql`now()`) })",
+      ].join('\n'),
+    )
+  })
+
   it('generates MySQL inline enum', () => {
     const result = drizzleSchema(
       {
@@ -613,9 +648,7 @@ describe('drizzleSchema - Enums', () => {
       [
         "import { integer, pgEnum, pgTable } from 'drizzle-orm/pg-core'",
         '',
-        "export const role = pgEnum('Role', ['USER', 'ADMIN'])",
-        '',
-        "export const user = pgTable('user', { id: integer('id').primaryKey(), role: role('role').notNull() })",
+        "export const user = pgTable('user', { id: integer('id').primaryKey(), role: pgEnum('Role', ['USER', 'ADMIN'])('role').notNull() })",
       ].join('\n'),
     )
   })
@@ -674,9 +707,9 @@ describe('drizzleSchema - Relations', () => {
         '',
         "export const post = pgTable('post', { id: integer('id').primaryKey(), userId: integer('userId').notNull() })",
         '',
-        'export const userRelations = relations(user, ({ one, many }) => ({ posts: many(post) }))',
+        'export const userRelations = relations(user, ({ many }) => ({ posts: many(post) }))',
         '',
-        'export const postRelations = relations(post, ({ one, many }) => ({ user: one(user, { fields: [post.userId], references: [user.id] }) }))',
+        'export const postRelations = relations(post, ({ one }) => ({ user: one(user, { fields: [post.userId], references: [user.id] }) }))',
       ].join('\n'),
     )
   })

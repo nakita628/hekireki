@@ -17,16 +17,13 @@ import {
 import { relations } from 'drizzle-orm'
 import { createId } from '@paralleldrive/cuid2'
 
-export const role = pgEnum('Role', ['ADMIN', 'USER', 'GUEST'])
-export const postStatus = pgEnum('PostStatus', ['DRAFT', 'PUBLISHED', 'ARCHIVED'])
-
 export const user = pgTable('users', {
   id: serial('id').primaryKey(),
   email: varchar('email', { length: 255 }).notNull().unique(),
   name: varchar('name', { length: 100 }).notNull(),
   bio: text('bio'),
   avatarUrl: text('avatar_url'),
-  role: role('role').notNull().default('USER'),
+  role: pgEnum('Role', ['ADMIN', 'USER', 'GUEST'])('role').notNull().default('USER'),
   active: boolean('active').notNull().default(true),
   score: numeric('score', { precision: 10, scale: 2 }).notNull().default('0'),
   tags: text('tags').notNull().array(),
@@ -54,7 +51,9 @@ export const post = pgTable(
     title: varchar('title', { length: 200 }).notNull(),
     slug: text('slug').notNull().unique(),
     content: text('content').notNull(),
-    status: postStatus('status').notNull().default('DRAFT'),
+    status: pgEnum('PostStatus', ['DRAFT', 'PUBLISHED', 'ARCHIVED'])('status')
+      .notNull()
+      .default('DRAFT'),
     views: integer('views').notNull().default(0),
     authorId: integer('author_id').notNull(),
     createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -130,7 +129,7 @@ export const userRelations = relations(user, ({ one, many }) => ({
   comments: many(comment),
 }))
 
-export const profileRelations = relations(profile, ({ one, many }) => ({
+export const profileRelations = relations(profile, ({ one }) => ({
   user: one(user, { fields: [profile.userId], references: [user.id] }),
 }))
 
@@ -140,14 +139,14 @@ export const postRelations = relations(post, ({ one, many }) => ({
   postTags: many(postTag),
 }))
 
-export const commentRelations = relations(comment, ({ one, many }) => ({
+export const commentRelations = relations(comment, ({ one }) => ({
   post: one(post, { fields: [comment.postId], references: [post.id] }),
   author: one(user, { fields: [comment.authorId], references: [user.id] }),
 }))
 
-export const tagRelations = relations(tag, ({ one, many }) => ({ postTags: many(postTag) }))
+export const tagRelations = relations(tag, ({ many }) => ({ postTags: many(postTag) }))
 
-export const postTagRelations = relations(postTag, ({ one, many }) => ({
+export const postTagRelations = relations(postTag, ({ one }) => ({
   post: one(post, { fields: [postTag.postId], references: [post.id] }),
   tag: one(tag, { fields: [postTag.tagId], references: [tag.id] }),
 }))

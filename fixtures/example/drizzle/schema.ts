@@ -17,8 +17,8 @@ export const post = sqliteTable('post', {
   userId: text('userId').notNull(),
 })
 
-export const userRelations = relations(user, ({ one, many }) => ({ posts: many(post) }))
+export const userRelations = relations(user, ({ many }) => ({ posts: many(post) }))
 
-export const postRelations = relations(post, ({ one, many }) => ({
+export const postRelations = relations(post, ({ one }) => ({
   user: one(user, { fields: [post.userId], references: [user.id] }),
 }))

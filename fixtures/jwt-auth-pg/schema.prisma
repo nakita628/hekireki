@@ -1,0 +1,344 @@
+datasource db {
+    provider = "postgresql"
+}
+
+generator Hekireki-ER {
+    provider = "hekireki-mermaid-er"
+}
+
+generator Hekireki-Zod {
+    provider = "hekireki-zod"
+    type     = true
+    comment  = true
+    relation = true
+}
+
+generator Hekireki-Valibot {
+    provider = "hekireki-valibot"
+    type     = true
+    comment  = true
+    relation = true
+}
+
+generator Hekireki-ArkType {
+    provider = "hekireki-arktype"
+    type     = true
+    comment  = true
+}
+
+generator Hekireki-Effect {
+    provider = "hekireki-effect"
+    type     = true
+    comment  = true
+}
+
+generator Hekireki-DBML {
+    provider = "hekireki-dbml"
+}
+
+generator Hekireki-Drizzle {
+    provider = "hekireki-drizzle"
+}
+
+enum Role {
+    ADMIN
+    USER
+    GUEST
+}
+
+enum OAuthProvider {
+    GOOGLE
+    GITHUB
+    FACEBOOK
+    TWITTER
+    APPLE
+}
+
+enum TwoFactorMethod {
+    TOTP
+    SMS
+    EMAIL
+}
+
+/// User account
+model User {
+    /// User ID
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    /// @a."string.uuid"
+    /// @e.Schema.UUID
+    id                 String              @id @default(uuid()) @db.Uuid
+    /// Email address
+    /// @z.email()
+    /// @v.pipe(v.string(), v.email())
+    /// @a."string.email"
+    /// @e.Schema.String
+    email              String              @unique @db.VarChar(255)
+    /// Hashed password (null for OAuth-only users)
+    /// @z.string().min(8).nullable()
+    /// @v.nullish(v.pipe(v.string(), v.minLength(8)))
+    /// @a."string >= 8 | null"
+    /// @e.Schema.NullOr(Schema.String.pipe(Schema.minLength(8)))
+    passwordHash       String?             @map("password_hash")
+    /// Display name
+    /// @z.string().min(1).max(100)
+    /// @v.pipe(v.string(), v.minLength(1), v.maxLength(100))
+    /// @a."1 <= string <= 100"
+    /// @e.Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100))
+    name               String              @db.VarChar(100)
+    /// Profile image URL
+    /// @z.url().nullable()
+    /// @v.nullish(v.pipe(v.string(), v.url()))
+    /// @a."string.url | null"
+    /// @e.Schema.NullOr(Schema.String)
+    avatarUrl          String?             @map("avatar_url")
+    /// User role
+    role               Role                @default(USER)
+    /// Credit balance
+    /// @z.number()
+    /// @v.number()
+    /// @a."number"
+    /// @e.Schema.Number
+    creditBalance      Decimal             @default(0) @map("credit_balance") @db.Decimal(10, 2)
+    /// Email verification status
+    /// @z.boolean()
+    /// @v.boolean()
+    /// @a."boolean"
+    /// @e.Schema.Boolean
+    emailVerified      Boolean             @default(false) @map("email_verified")
+    /// Account active status
+    /// @z.boolean()
+    /// @v.boolean()
+    /// @a."boolean"
+    /// @e.Schema.Boolean
+    isActive           Boolean             @default(true) @map("is_active")
+    /// Account creation timestamp
+    createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz
+    /// Last update timestamp
+    updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz
+    /// Last login timestamp
+    lastLoginAt        DateTime?           @map("last_login_at") @db.Timestamptz
+    /// OAuth accounts
+    oauthAccounts      OAuthAccount[]
+    /// Two-factor authentication setting
+    twoFactorSetting   TwoFactorSetting?
+    /// Refresh tokens
+    refreshTokens      RefreshToken[]
+    /// Email verifications
+    emailVerifications EmailVerification[]
+    /// Password resets
+    passwordResets     PasswordReset[]
+
+    @@map("users")
+}
+
+/// OAuth account linked to user
+model OAuthAccount {
+    /// OAuth account ID
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    /// @a."string.uuid"
+    /// @e.Schema.UUID
+    id                String        @id @default(uuid()) @db.Uuid
+    /// User ID
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    /// @a."string.uuid"
+    /// @e.Schema.UUID
+    userId            String        @map("user_id") @db.Uuid
+    /// OAuth provider
+    provider          OAuthProvider
+    /// Provider account ID
+    /// @z.string()
+    /// @v.string()
+    /// @a."string"
+    /// @e.Schema.String
+    providerAccountId String        @map("provider_account_id") @db.VarChar(255)
+    /// Access token from provider
+    /// @z.string().nullable()
+    /// @v.nullish(v.string())
+    /// @a."string | null"
+    /// @e.Schema.NullOr(Schema.String)
+    accessToken       String?       @map("access_token")
+    /// Refresh token from provider
+    /// @z.string().nullable()
+    /// @v.nullish(v.string())
+    /// @a."string | null"
+    /// @e.Schema.NullOr(Schema.String)
+    refreshToken      String?       @map("refresh_token")
+    /// Token expiration timestamp
+    expiresAt         DateTime?     @map("expires_at") @db.Timestamptz
+    /// Account creation timestamp
+    createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz
+    /// User relation
+    user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@unique([provider, providerAccountId])
+    @@index([userId])
+    @@map("oauth_accounts")
+}
+
+/// Two-factor authentication settings
+model TwoFactorSetting {
+    /// 2FA setting ID
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    /// @a."string.uuid"
+    /// @e.Schema.UUID
+    id          String           @id @default(uuid()) @db.Uuid
+    /// User ID
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    /// @a."string.uuid"
+    /// @e.Schema.UUID
+    userId      String           @unique @map("user_id") @db.Uuid
+    /// 2FA enabled status
+    /// @z.boolean()
+    /// @v.boolean()
+    /// @a."boolean"
+    /// @e.Schema.Boolean
+    enabled     Boolean          @default(false)
+    /// 2FA method
+    method      TwoFactorMethod?
+    /// TOTP secret (encrypted)
+    /// @z.string().nullable()
+    /// @v.nullish(v.string())
+    /// @a."string | null"
+    /// @e.Schema.NullOr(Schema.String)
+    totpSecret  String?          @map("totp_secret")
+    /// Phone number for SMS (E.164 format)
+    /// @z.string().nullable()
+    /// @v.nullish(v.string())
+    /// @a."string | null"
+    /// @e.Schema.NullOr(Schema.String)
+    phoneNumber String?          @map("phone_number") @db.VarChar(20)
+    /// Backup codes (hashed, JSON array)
+    /// @z.string().nullable()
+    /// @v.nullish(v.string())
+    /// @a."string | null"
+    /// @e.Schema.NullOr(Schema.String)
+    backupCodes String?          @map("backup_codes")
+    /// Last verified timestamp
+    verifiedAt  DateTime?        @map("verified_at") @db.Timestamptz
+    /// Creation timestamp
+    createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz
+    /// Last update timestamp
+    updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+    /// User relation
+    user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@map("two_factor_settings")
+}
+
+/// JWT refresh token for session management
+model RefreshToken {
+    /// Refresh token ID
+    id         String   @id @default(cuid())
+    /// User ID
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    /// @a."string.uuid"
+    /// @e.Schema.UUID
+    userId     String   @map("user_id") @db.Uuid
+    /// Token hash (SHA-256)
+    /// @z.string()
+    /// @v.string()
+    /// @a."string"
+    /// @e.Schema.String
+    tokenHash  String   @unique @map("token_hash")
+    /// Device/client identifier
+    /// @z.string().nullable()
+    /// @v.nullish(v.string())
+    /// @a."string | null"
+    /// @e.Schema.NullOr(Schema.String)
+    deviceInfo String?  @map("device_info")
+    /// IP address at creation
+    /// @z.string().nullable()
+    /// @v.nullish(v.string())
+    /// @a."string | null"
+    /// @e.Schema.NullOr(Schema.String)
+    ipAddress  String?  @map("ip_address") @db.VarChar(45)
+    /// Token expiration timestamp
+    expiresAt  DateTime @map("expires_at") @db.Timestamptz
+    /// Token creation timestamp
+    createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+    /// Revocation status
+    /// @z.boolean()
+    /// @v.boolean()
+    /// @a."boolean"
+    /// @e.Schema.Boolean
+    revoked    Boolean  @default(false)
+    /// User relation
+    user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@index([userId])
+    @@map("refresh_tokens")
+}
+
+/// Email verification token
+model EmailVerification {
+    /// Verification ID
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    /// @a."string.uuid"
+    /// @e.Schema.UUID
+    id        String   @id @default(uuid()) @db.Uuid
+    /// User ID
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    /// @a."string.uuid"
+    /// @e.Schema.UUID
+    userId    String   @map("user_id") @db.Uuid
+    /// Verification token (hashed)
+    /// @z.string()
+    /// @v.string()
+    /// @a."string"
+    /// @e.Schema.String
+    tokenHash String   @unique @map("token_hash")
+    /// Token expiration timestamp
+    expiresAt DateTime @map("expires_at") @db.Timestamptz
+    /// Creation timestamp
+    createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+    /// User relation
+    user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@index([userId])
+    @@map("email_verifications")
+}
+
+/// Password reset token
+model PasswordReset {
+    /// Reset ID
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    /// @a."string.uuid"
+    /// @e.Schema.UUID
+    id        String   @id @default(uuid()) @db.Uuid
+    /// User ID
+    /// @z.uuid()
+    /// @v.pipe(v.string(), v.uuid())
+    /// @a."string.uuid"
+    /// @e.Schema.UUID
+    userId    String   @map("user_id") @db.Uuid
+    /// Reset token (hashed)
+    /// @z.string()
+    /// @v.string()
+    /// @a."string"
+    /// @e.Schema.String
+    tokenHash String   @unique @map("token_hash")
+    /// Token expiration timestamp
+    expiresAt DateTime @map("expires_at") @db.Timestamptz
+    /// Used status
+    /// @z.boolean()
+    /// @v.boolean()
+    /// @a."boolean"
+    /// @e.Schema.Boolean
+    used      Boolean  @default(false)
+    /// Creation timestamp
+    createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+    /// User relation
+    user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@index([userId])
+    @@map("password_resets")
+}

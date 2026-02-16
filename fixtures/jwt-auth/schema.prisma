@@ -40,12 +40,6 @@ generator Hekireki-Drizzle {
     provider = "hekireki-drizzle"
 }
 
-generator Hekireki-SVG {
-    provider = "hekireki-svg"
-    output   = "docs"
-    format   = "png"
-}
-
 enum Role {
     ADMIN
     USER
@@ -71,44 +65,64 @@ model User {
     /// User ID
     /// @z.uuid()
     /// @v.pipe(v.string(), v.uuid())
+    /// @a."string.uuid"
+    /// @e.Schema.UUID
     id              String               @id @default(uuid())
     /// Email address
     /// @z.email()
     /// @v.pipe(v.string(), v.email())
+    /// @a."string.email"
+    /// @e.Schema.String
     email           String               @unique
     /// Hashed password (null for OAuth-only users)
     /// @z.string().min(8).nullable()
     /// @v.nullish(v.pipe(v.string(), v.minLength(8)))
+    /// @a."string >= 8 | null"
+    /// @e.Schema.NullOr(Schema.String.pipe(Schema.minLength(8)))
     passwordHash    String?
     /// Display name
     /// @z.string().min(1).max(100)
     /// @v.pipe(v.string(), v.minLength(1), v.maxLength(100))
+    /// @a."1 <= string <= 100"
+    /// @e.Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100))
     name            String
     /// Profile image URL
     /// @z.url().nullable()
     /// @v.nullish(v.pipe(v.string(), v.url()))
+    /// @a."string.url | null"
+    /// @e.Schema.NullOr(Schema.String)
     avatarUrl       String?
     /// User role
     role            Role                 @default(USER)
     /// Email verification status
     /// @z.boolean()
     /// @v.boolean()
+    /// @a."boolean"
+    /// @e.Schema.Boolean
     emailVerified   Boolean              @default(false)
     /// Account active status
     /// @z.boolean()
     /// @v.boolean()
+    /// @a."boolean"
+    /// @e.Schema.Boolean
     isActive        Boolean              @default(true)
     /// Account creation timestamp
     /// @z.iso.datetime()
     /// @v.pipe(v.string(), v.isoTimestamp())
+    /// @a."string.date.iso"
+    /// @e.Schema.DateFromString
     createdAt       DateTime             @default(now())
     /// Last update timestamp
     /// @z.iso.datetime()
     /// @v.pipe(v.string(), v.isoTimestamp())
+    /// @a."string.date.iso"
+    /// @e.Schema.DateFromString
     updatedAt       DateTime             @updatedAt
     /// Last login timestamp
     /// @z.iso.datetime().nullable()
     /// @v.nullish(v.pipe(v.string(), v.isoTimestamp()))
+    /// @a."string.date.iso | null"
+    /// @e.Schema.NullOr(Schema.DateFromString)
     lastLoginAt     DateTime?
     /// OAuth accounts
     oauthAccounts   OAuthAccount[]
@@ -127,32 +141,46 @@ model OAuthAccount {
     /// OAuth account ID
     /// @z.uuid()
     /// @v.pipe(v.string(), v.uuid())
+    /// @a."string.uuid"
+    /// @e.Schema.UUID
     id                String        @id @default(uuid())
     /// User ID
     /// @z.uuid()
     /// @v.pipe(v.string(), v.uuid())
+    /// @a."string.uuid"
+    /// @e.Schema.UUID
     userId            String
     /// OAuth provider
     provider          OAuthProvider
     /// Provider account ID
     /// @z.string()
     /// @v.string()
+    /// @a."string"
+    /// @e.Schema.String
     providerAccountId String
     /// Access token from provider
     /// @z.string().nullable()
     /// @v.nullish(v.string())
+    /// @a."string | null"
+    /// @e.Schema.NullOr(Schema.String)
     accessToken       String?
     /// Refresh token from provider
     /// @z.string().nullable()
     /// @v.nullish(v.string())
+    /// @a."string | null"
+    /// @e.Schema.NullOr(Schema.String)
     refreshToken      String?
     /// Token expiration timestamp
     /// @z.iso.datetime().nullable()
     /// @v.nullish(v.pipe(v.string(), v.isoTimestamp()))
+    /// @a."string.date.iso | null"
+    /// @e.Schema.NullOr(Schema.DateFromString)
     expiresAt         DateTime?
     /// Account creation timestamp
     /// @z.iso.datetime()
     /// @v.pipe(v.string(), v.isoTimestamp())
+    /// @a."string.date.iso"
+    /// @e.Schema.DateFromString
     createdAt         DateTime      @default(now())
     /// User relation
     user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -165,40 +193,58 @@ model TwoFactorSetting {
     /// 2FA setting ID
     /// @z.uuid()
     /// @v.pipe(v.string(), v.uuid())
+    /// @a."string.uuid"
+    /// @e.Schema.UUID
     id          String           @id @default(uuid())
     /// User ID
     /// @z.uuid()
     /// @v.pipe(v.string(), v.uuid())
+    /// @a."string.uuid"
+    /// @e.Schema.UUID
     userId      String           @unique
     /// 2FA enabled status
     /// @z.boolean()
     /// @v.boolean()
+    /// @a."boolean"
+    /// @e.Schema.Boolean
     enabled     Boolean          @default(false)
     /// 2FA method
     method      TwoFactorMethod?
     /// TOTP secret (encrypted)
     /// @z.string().nullable()
     /// @v.nullish(v.string())
+    /// @a."string | null"
+    /// @e.Schema.NullOr(Schema.String)
     totpSecret  String?
     /// Phone number for SMS (E.164 format)
     /// @z.string().nullable()
     /// @v.nullish(v.string())
+    /// @a."string | null"
+    /// @e.Schema.NullOr(Schema.String)
     phoneNumber String?
     /// Backup codes (hashed, JSON array)
     /// @z.string().nullable()
     /// @v.nullish(v.string())
+    /// @a."string | null"
+    /// @e.Schema.NullOr(Schema.String)
     backupCodes String?
     /// Last verified timestamp
     /// @z.iso.datetime().nullable()
     /// @v.nullish(v.pipe(v.string(), v.isoTimestamp()))
+    /// @a."string.date.iso | null"
+    /// @e.Schema.NullOr(Schema.DateFromString)
     verifiedAt  DateTime?
     /// Creation timestamp
     /// @z.iso.datetime()
     /// @v.pipe(v.string(), v.isoTimestamp())
+    /// @a."string.date.iso"
+    /// @e.Schema.DateFromString
     createdAt   DateTime         @default(now())
     /// Last update timestamp
     /// @z.iso.datetime()
     /// @v.pipe(v.string(), v.isoTimestamp())
+    /// @a."string.date.iso"
+    /// @e.Schema.DateFromString
     updatedAt   DateTime         @updatedAt
     /// User relation
     user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -209,34 +255,50 @@ model RefreshToken {
     /// Refresh token ID
     /// @z.uuid()
     /// @v.pipe(v.string(), v.uuid())
+    /// @a."string.uuid"
+    /// @e.Schema.UUID
     id         String   @id @default(uuid())
     /// User ID
     /// @z.uuid()
     /// @v.pipe(v.string(), v.uuid())
+    /// @a."string.uuid"
+    /// @e.Schema.UUID
     userId     String
     /// Token hash (SHA-256)
     /// @z.string()
     /// @v.string()
+    /// @a."string"
+    /// @e.Schema.String
     tokenHash  String   @unique
     /// Device/client identifier
     /// @z.string().nullable()
     /// @v.nullish(v.string())
+    /// @a."string | null"
+    /// @e.Schema.NullOr(Schema.String)
     deviceInfo String?
     /// IP address at creation
     /// @z.string().nullable()
     /// @v.nullish(v.string())
+    /// @a."string | null"
+    /// @e.Schema.NullOr(Schema.String)
     ipAddress  String?
     /// Token expiration timestamp
     /// @z.iso.datetime()
     /// @v.pipe(v.string(), v.isoTimestamp())
+    /// @a."string.date.iso"
+    /// @e.Schema.DateFromString
     expiresAt  DateTime
     /// Token creation timestamp
     /// @z.iso.datetime()
     /// @v.pipe(v.string(), v.isoTimestamp())
+    /// @a."string.date.iso"
+    /// @e.Schema.DateFromString
     createdAt  DateTime @default(now())
     /// Revocation status
     /// @z.boolean()
     /// @v.boolean()
+    /// @a."boolean"
+    /// @e.Schema.Boolean
     revoked    Boolean  @default(false)
     /// User relation
     user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -247,22 +309,32 @@ model EmailVerification {
     /// Verification ID
     /// @z.uuid()
     /// @v.pipe(v.string(), v.uuid())
+    /// @a."string.uuid"
+    /// @e.Schema.UUID
     id        String   @id @default(uuid())
     /// User ID
     /// @z.uuid()
     /// @v.pipe(v.string(), v.uuid())
+    /// @a."string.uuid"
+    /// @e.Schema.UUID
     userId    String
     /// Verification token (hashed)
     /// @z.string()
     /// @v.string()
+    /// @a."string"
+    /// @e.Schema.String
     tokenHash String   @unique
     /// Token expiration timestamp
     /// @z.iso.datetime()
     /// @v.pipe(v.string(), v.isoTimestamp())
+    /// @a."string.date.iso"
+    /// @e.Schema.DateFromString
     expiresAt DateTime
     /// Creation timestamp
     /// @z.iso.datetime()
     /// @v.pipe(v.string(), v.isoTimestamp())
+    /// @a."string.date.iso"
+    /// @e.Schema.DateFromString
     createdAt DateTime @default(now())
     /// User relation
     user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -273,26 +345,38 @@ model PasswordReset {
     /// Reset ID
     /// @z.uuid()
     /// @v.pipe(v.string(), v.uuid())
+    /// @a."string.uuid"
+    /// @e.Schema.UUID
     id        String   @id @default(uuid())
     /// User ID
     /// @z.uuid()
     /// @v.pipe(v.string(), v.uuid())
+    /// @a."string.uuid"
+    /// @e.Schema.UUID
     userId    String
     /// Reset token (hashed)
     /// @z.string()
     /// @v.string()
+    /// @a."string"
+    /// @e.Schema.String
     tokenHash String   @unique
     /// Token expiration timestamp
     /// @z.iso.datetime()
     /// @v.pipe(v.string(), v.isoTimestamp())
+    /// @a."string.date.iso"
+    /// @e.Schema.DateFromString
     expiresAt DateTime
     /// Used status
     /// @z.boolean()
     /// @v.boolean()
+    /// @a."boolean"
+    /// @e.Schema.Boolean
     used      Boolean  @default(false)
     /// Creation timestamp
     /// @z.iso.datetime()
     /// @v.pipe(v.string(), v.isoTimestamp())
+    /// @a."string.date.iso"
+    /// @e.Schema.DateFromString
     createdAt DateTime @default(now())
     /// User relation
     user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)

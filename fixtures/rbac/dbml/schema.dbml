@@ -1,0 +1,111 @@
+Enum OrgStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+Table organizations {
+  id Int [pk, increment, note: 'Organization ID']
+  name String [not null, note: 'Organization name']
+  slug String [unique, not null, note: 'URL-safe slug']
+  status OrgStatus [default: 'ACTIVE', not null, note: 'Organization status']
+  createdAt DateTime [default: `now()`, not null, note: 'Creation timestamp']
+  updatedAt DateTime [not null, note: 'Last update timestamp']
+  users users [not null, note: 'Users']
+
+  Note: 'Organization / tenant'
+}
+
+Table users {
+  id Int [pk, increment, note: 'User ID']
+  organizationId Int [not null, note: 'Organization ID']
+  email String [unique, not null, note: 'Email address']
+  name String [not null, note: 'Display name']
+  createdAt DateTime [default: `now()`, not null, note: 'Creation timestamp']
+  updatedAt DateTime [not null, note: 'Last update timestamp']
+  organization organizations [not null, note: 'Organization relation']
+  userRoles user_roles [not null, note: 'User-Role assignments']
+  auditLogs audit_logs [not null, note: 'Audit logs']
+
+  Note: 'User account'
+}
+
+Table roles {
+  id Int [pk, increment, note: 'Role ID']
+  name String [unique, not null, note: 'Role name']
+  description String [note: 'Role description']
+  createdAt DateTime [default: `now()`, not null, note: 'Creation timestamp']
+  updatedAt DateTime [not null, note: 'Last update timestamp']
+  userRoles user_roles [not null, note: 'User-Role assignments']
+  rolePermissions role_permissions [not null, note: 'Role-Permission assignments']
+
+  Note: 'Role definition'
+}
+
+Table permissions {
+  id Int [pk, increment, note: 'Permission ID']
+  resource String [not null, note: 'Resource name']
+  action String [not null, note: 'Action name']
+  description String [note: 'Permission description']
+  createdAt DateTime [default: `now()`, not null, note: 'Creation timestamp']
+  rolePermissions role_permissions [not null, note: 'Role-Permission assignments']
+
+  indexes {
+    (resource, action) [unique]
+  }
+
+  Note: 'Permission definition'
+}
+
+Table user_roles {
+  userId Int [not null, note: 'User ID']
+  roleId Int [not null, note: 'Role ID']
+  assignedAt DateTime [default: `now()`, not null, note: 'Assignment timestamp']
+  user users [not null, note: 'User relation']
+  role roles [not null, note: 'Role relation']
+
+  indexes {
+    (userId, roleId) [pk]
+  }
+
+  Note: 'User-Role junction (composite PK)'
+}
+
+Table role_permissions {
+  roleId Int [not null, note: 'Role ID']
+  permissionId Int [not null, note: 'Permission ID']
+  assignedAt DateTime [default: `now()`, not null, note: 'Assignment timestamp']
+  role roles [not null, note: 'Role relation']
+  permission permissions [not null, note: 'Permission relation']
+
+  indexes {
+    (roleId, permissionId) [pk]
+  }
+
+  Note: 'Role-Permission junction (composite PK)'
+}
+
+Table audit_logs {
+  id Int [pk, increment, note: 'Audit log ID']
+  userId Int [not null, note: 'User ID']
+  action String [not null, note: 'Action performed']
+  resource String [not null, note: 'Resource name']
+  detail String [note: 'Action detail']
+  ipAddress String [note: 'Client IP address']
+  createdAt DateTime [default: `now()`, not null, note: 'Action timestamp']
+  user users [not null, note: 'User relation']
+
+  Note: 'Audit log'
+}
+
+Ref users_organizationId_fk: users.organizationId > organizations.id
+
+Ref user_roles_userId_fk: user_roles.userId > users.id
+
+Ref user_roles_roleId_fk: user_roles.roleId > roles.id
+
+Ref role_permissions_roleId_fk: role_permissions.roleId > roles.id
+
+Ref role_permissions_permissionId_fk: role_permissions.permissionId > permissions.id
+
+Ref audit_logs_userId_fk: audit_logs.userId > users.id

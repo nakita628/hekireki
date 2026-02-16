@@ -271,7 +271,11 @@ function makeColumnExpr(
   if (field.kind === 'enum') {
     const enumDef = enums.find((e) => e.name === field.type)
     const enumValues = enumDef ? enumDef.values.map((v) => `'${v.name}'`).join(', ') : ''
-    if (provider === 'postgresql') return `${toCamelCase(field.type)}('${colName}')`
+    if (provider === 'postgresql') {
+      imports.addCore('pgEnum')
+      const enumDbName = enumDef?.dbName ?? field.type
+      return `pgEnum('${enumDbName}', [${enumValues}])('${colName}')`
+    }
     if (provider === 'mysql') {
       imports.addCore('mysqlEnum')
       return `mysqlEnum('${colName}', [${enumValues}])`
@@ -306,6 +310,10 @@ function makeDefaultChain(
         if (provider === 'sqlite') {
           imports.addOrm('sql')
           return '.default(sql`(unixepoch())`)'
+        }
+        if (provider === 'mysql') {
+          imports.addOrm('sql')
+          return '.default(sql`now()`)'
         }
         return '.defaultNow()'
       case 'uuid':
@@ -371,17 +379,8 @@ function makeColumn(
 // Enum
 // ============================================================================
 
-function makeEnums(
-  enums: readonly DMMF.DatamodelEnum[],
-  provider: DbProvider,
-  imports: ImportTracker,
-): readonly string[] {
-  if (provider !== 'postgresql' || enums.length === 0) return []
-  imports.addCore('pgEnum')
-  return enums.map(
-    (e) =>
-      `export const ${toCamelCase(e.name)} = pgEnum('${e.dbName ?? e.name}', [${e.values.map((v) => `'${v.name}'`).join(', ')}])`,
-  )
+function makeEnums(): readonly string[] {
+  return []
 }
 
 // ============================================================================
@@ -491,7 +490,14 @@ function makeRelations(models: readonly DMMF.Model[], imports: ImportTracker): r
       .map((field) => makeRelationField(field, model, models, relFields))
       .join(', ')
     const modelVar = toCamelCase(model.name)
-    return `export const ${modelVar}Relations = relations(${modelVar}, ({ one, many }) => ({ ${fieldLines} }))`
+    const needsOne = relFields.some(
+      (f) => (f.relationFromFields && f.relationFromFields.length > 0) || !f.isList,
+    )
+    const needsMany = relFields.some(
+      (f) => f.isList && !(f.relationFromFields && f.relationFromFields.length > 0),
+    )
+    const destructured = [needsOne ? 'one' : '', needsMany ? 'many' : ''].filter(Boolean).join(', ')
+    return `export const ${modelVar}Relations = relations(${modelVar}, ({ ${destructured} }) => ({ ${fieldLines} }))`
   })
 }
 
@@ -507,7 +513,7 @@ export function drizzleSchema(
   const db = resolveProvider(provider)
   const imports = new ImportTracker(db)
 
-  const enumLines = makeEnums(datamodel.enums, db, imports)
+  const enumLines = makeEnums()
   const tableLines = datamodel.models.map((model) =>
     makeTable(model, db, imports, datamodel.enums, indexes),
   )

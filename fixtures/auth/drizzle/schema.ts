@@ -93,10 +93,10 @@ export const userRelations = relations(user, ({ one, many }) => ({
   twoFactorConfirmation: one(twoFactorConfirmation),
 }))
 
-export const accountRelations = relations(account, ({ one, many }) => ({
+export const accountRelations = relations(account, ({ one }) => ({
   user: one(user, { fields: [account.userId], references: [user.id] }),
 }))
 
-export const twoFactorConfirmationRelations = relations(twoFactorConfirmation, ({ one, many }) => ({
+export const twoFactorConfirmationRelations = relations(twoFactorConfirmation, ({ one }) => ({
   user: one(user, { fields: [twoFactorConfirmation.userId], references: [user.id] }),
 }))
