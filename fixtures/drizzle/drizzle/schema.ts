@@ -36,6 +36,7 @@ export const user = pgTable('users', {
     .notNull()
     .$onUpdate(() => new Date()),
 })
+
 export const profile = pgTable('profiles', {
   id: uuid('id')
     .primaryKey()
@@ -45,6 +46,7 @@ export const profile = pgTable('profiles', {
   location: varchar('location', { length: 100 }),
   birthDate: date('birth_date'),
 })
+
 export const post = pgTable(
   'posts',
   {
@@ -60,11 +62,12 @@ export const post = pgTable(
       .notNull()
       .$onUpdate(() => new Date()),
   },
-  (table) => ({
-    idxAuthorId: index('idx_authorId').on(table.authorId),
-    idxStatusCreatedAt: index('idx_status_createdAt').on(table.status, table.createdAt),
-  }),
+  (table) => [
+    index('idx_authorId').on(table.authorId),
+    index('idx_status_createdAt').on(table.status, table.createdAt),
+  ],
 )
+
 export const comment = pgTable(
   'comments',
   {
@@ -74,12 +77,14 @@ export const comment = pgTable(
     authorId: integer('author_id').notNull(),
     createdAt: timestamp('created_at').notNull().defaultNow(),
   },
-  (table) => ({ idxPostId: index('idx_postId').on(table.postId) }),
+  (table) => [index('idx_postId').on(table.postId)],
 )
+
 export const tag = pgTable('tags', {
   id: serial('id').primaryKey(),
   name: varchar('name', { length: 50 }).notNull().unique(),
 })
+
 export const postTag = pgTable(
   'post_tags',
   {
@@ -87,8 +92,9 @@ export const postTag = pgTable(
     tagId: integer('tag_id').notNull(),
     createdAt: timestamp('created_at').notNull().defaultNow(),
   },
-  (table) => ({ pk: primaryKey({ columns: [table.postId, table.tagId] }) }),
+  (table) => [primaryKey({ columns: [table.postId, table.tagId] })],
 )
+
 export const session = pgTable(
   'sessions',
   {
@@ -102,11 +108,9 @@ export const session = pgTable(
     userAgent: text('user_agent'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
   },
-  (table) => ({
-    idxUserId: index('idx_userId').on(table.userId),
-    idxExpiresAt: index('idx_expiresAt').on(table.expiresAt),
-  }),
+  (table) => [index('idx_userId').on(table.userId), index('idx_expiresAt').on(table.expiresAt)],
 )
+
 export const auditLog = pgTable(
   'audit_logs',
   {
@@ -117,9 +121,7 @@ export const auditLog = pgTable(
     payload: jsonb('payload'),
     createdAt: timestamp('created_at', { withTimezone: true, precision: 3 }).notNull().defaultNow(),
   },
-  (table) => ({
-    idxTableNameRecordId: index('idx_tableName_recordId').on(table.tableName, table.recordId),
-  }),
+  (table) => [index('idx_tableName_recordId').on(table.tableName, table.recordId)],
 )
 
 export const userRelations = relations(user, ({ one, many }) => ({
@@ -127,19 +129,24 @@ export const userRelations = relations(user, ({ one, many }) => ({
   profile: one(profile),
   comments: many(comment),
 }))
+
 export const profileRelations = relations(profile, ({ one, many }) => ({
   user: one(user, { fields: [profile.userId], references: [user.id] }),
 }))
+
 export const postRelations = relations(post, ({ one, many }) => ({
   author: one(user, { fields: [post.authorId], references: [user.id] }),
   comments: many(comment),
   postTags: many(postTag),
 }))
+
 export const commentRelations = relations(comment, ({ one, many }) => ({
   post: one(post, { fields: [comment.postId], references: [post.id] }),
   author: one(user, { fields: [comment.authorId], references: [user.id] }),
 }))
+
 export const tagRelations = relations(tag, ({ one, many }) => ({ postTags: many(postTag) }))
+
 export const postTagRelations = relations(postTag, ({ one, many }) => ({
   post: one(post, { fields: [postTag.postId], references: [post.id] }),
   tag: one(tag, { fields: [postTag.tagId], references: [tag.id] }),

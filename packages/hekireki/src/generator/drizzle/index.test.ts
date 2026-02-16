@@ -499,7 +499,7 @@ describe('drizzleSchema - Composite @@id', () => {
       [
         "import { integer, pgTable, primaryKey } from 'drizzle-orm/pg-core'",
         '',
-        "export const postTag = pgTable('post_tag', { postId: integer('postId').notNull(), tagId: integer('tagId').notNull() }, (table) => ({ pk: primaryKey({ columns: [table.postId, table.tagId] }) }))",
+        "export const postTag = pgTable('post_tag', { postId: integer('postId').notNull(), tagId: integer('tagId').notNull() }, (table) => [primaryKey({ columns: [table.postId, table.tagId] })])",
       ].join('\n'),
     )
   })
@@ -532,7 +532,7 @@ describe('drizzleSchema - Composite @@unique', () => {
       [
         "import { integer, pgTable, text, unique } from 'drizzle-orm/pg-core'",
         '',
-        "export const account = pgTable('account', { id: integer('id').primaryKey(), provider: text('provider').notNull(), providerAccountId: text('providerAccountId').notNull() }, (table) => ({ uniqueProviderProviderAccountId: unique().on(table.provider, table.providerAccountId) }))",
+        "export const account = pgTable('account', { id: integer('id').primaryKey(), provider: text('provider').notNull(), providerAccountId: text('providerAccountId').notNull() }, (table) => [unique().on(table.provider, table.providerAccountId)])",
       ].join('\n'),
     )
   })
@@ -573,7 +573,7 @@ describe('drizzleSchema - @@index', () => {
       [
         "import { index, integer, pgTable } from 'drizzle-orm/pg-core'",
         '',
-        "export const post = pgTable('post', { id: integer('id').primaryKey(), userId: integer('userId').notNull() }, (table) => ({ idxUserId: index('post_user_id_idx').on(table.userId) }))",
+        "export const post = pgTable('post', { id: integer('id').primaryKey(), userId: integer('userId').notNull() }, (table) => [index('post_user_id_idx').on(table.userId)])",
       ].join('\n'),
     )
   })
@@ -671,9 +671,11 @@ describe('drizzleSchema - Relations', () => {
         "import { relations } from 'drizzle-orm'",
         '',
         "export const user = pgTable('user', { id: integer('id').primaryKey() })",
+        '',
         "export const post = pgTable('post', { id: integer('id').primaryKey(), userId: integer('userId').notNull() })",
         '',
         'export const userRelations = relations(user, ({ one, many }) => ({ posts: many(post) }))',
+        '',
         'export const postRelations = relations(post, ({ one, many }) => ({ user: one(user, { fields: [post.userId], references: [user.id] }) }))',
       ].join('\n'),
     )
@@ -774,6 +776,41 @@ describe('drizzleSchema - Default values', () => {
         "import { integer, pgTable, timestamp } from 'drizzle-orm/pg-core'",
         '',
         "export const post = pgTable('post', { id: integer('id').primaryKey(), createdAt: timestamp('createdAt').notNull().defaultNow() })",
+      ].join('\n'),
+    )
+  })
+
+  it('generates default(sql`(unixepoch())`) for SQLite @default(now())', () => {
+    const result = drizzleSchema(
+      {
+        models: [
+          makeModel({
+            name: 'Post',
+            fields: [
+              makeField({ name: 'id', type: 'Int', isId: true }),
+              makeField({
+                name: 'createdAt',
+                type: 'DateTime',
+                hasDefaultValue: true,
+                default: { name: 'now', args: [] },
+              }),
+            ],
+          }),
+        ],
+        enums: [],
+        types: [],
+        indexes: [],
+      },
+      'sqlite',
+      [],
+    )
+
+    expect(result).toBe(
+      [
+        "import { integer, sqliteTable } from 'drizzle-orm/sqlite-core'",
+        "import { sql } from 'drizzle-orm'",
+        '',
+        "export const post = sqliteTable('post', { id: integer('id').primaryKey(), createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`) })",
       ].join('\n'),
     )
   })

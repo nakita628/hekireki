@@ -7,6 +7,7 @@ export const user = sqliteTable('user', {
     .$defaultFn(() => crypto.randomUUID()),
   name: text('name').notNull(),
 })
+
 export const post = sqliteTable('post', {
   id: text('id')
     .primaryKey()
@@ -17,6 +18,7 @@ export const post = sqliteTable('post', {
 })
 
 export const userRelations = relations(user, ({ one, many }) => ({ posts: many(post) }))
+
 export const postRelations = relations(post, ({ one, many }) => ({
   user: one(user, { fields: [post.userId], references: [user.id] }),
 }))

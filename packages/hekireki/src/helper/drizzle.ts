@@ -294,6 +294,7 @@ function makeColumnExpr(
 function makeDefaultChain(
   dflt: DMMF.Field['default'],
   fieldType: string,
+  provider: DbProvider,
   imports: ImportTracker,
 ): string {
   if (dflt === undefined || dflt === null) return ''
@@ -302,6 +303,10 @@ function makeDefaultChain(
       case 'autoincrement':
         return ''
       case 'now':
+        if (provider === 'sqlite') {
+          imports.addOrm('sql')
+          return '.default(sql`(unixepoch())`)'
+        }
         return '.defaultNow()'
       case 'uuid':
         return '.$defaultFn(() => crypto.randomUUID())'
@@ -354,7 +359,7 @@ function makeColumn(
       ? provider === 'mysql'
         ? '.autoincrement()'
         : ''
-      : makeDefaultChain(field.default, field.type, imports),
+      : makeDefaultChain(field.default, field.type, provider, imports),
     field.isUpdatedAt ? '.$onUpdate(() => new Date())' : '',
     field.isList && field.kind === 'scalar' && provider === 'postgresql' ? '.array()' : '',
   ].join('')
@@ -391,13 +396,13 @@ function makeCompositeConstraints(
   const pkLine = model.primaryKey
     ? (() => {
         imports.addCore('primaryKey')
-        return `pk: primaryKey({ columns: [${model.primaryKey.fields.map((f) => `table.${f}`).join(', ')}] })`
+        return `primaryKey({ columns: [${model.primaryKey.fields.map((f) => `table.${f}`).join(', ')}] })`
       })()
     : null
 
   const uniqueLines = model.uniqueFields.map((fields) => {
     imports.addCore('unique')
-    return `unique${fields.map((f) => f.charAt(0).toUpperCase() + f.slice(1)).join('')}: unique().on(${fields.map((f) => `table.${f}`).join(', ')})`
+    return `unique().on(${fields.map((f) => `table.${f}`).join(', ')})`
   })
 
   const indexLines = indexes
@@ -405,8 +410,7 @@ function makeCompositeConstraints(
     .map((idx) => {
       imports.addCore('index')
       const idxName = idx.dbName ?? idx.name ?? `idx_${idx.fields.map((f) => f.name).join('_')}`
-      const varName = `idx${idx.fields.map((f) => f.name.charAt(0).toUpperCase() + f.name.slice(1)).join('')}`
-      return `${varName}: index('${idxName}').on(${idx.fields.map((f) => `table.${f.name}`).join(', ')})`
+      return `index('${idxName}').on(${idx.fields.map((f) => `table.${f.name}`).join(', ')})`
     })
 
   const all = [pkLine, ...uniqueLines, ...indexLines].filter((l): l is string => l !== null)
@@ -437,7 +441,7 @@ function makeTable(
   const constraints = makeCompositeConstraints(model, imports, indexes)
 
   return constraints
-    ? `export const ${varName} = ${tableFunc}('${tableName}', { ${columns} }, (table) => ({ ${constraints} }))`
+    ? `export const ${varName} = ${tableFunc}('${tableName}', { ${columns} }, (table) => [${constraints}])`
     : `export const ${varName} = ${tableFunc}('${tableName}', { ${columns} })`
 }
 
@@ -509,11 +513,18 @@ export function drizzleSchema(
   )
   const relationsLines = makeRelations(datamodel.models, imports)
 
+  const tableLinesWithGap = tableLines.flatMap((line, i) =>
+    i < tableLines.length - 1 ? [line, ''] : [line],
+  )
+  const relationsLinesWithGap = relationsLines.flatMap((line, i) =>
+    i < relationsLines.length - 1 ? [line, ''] : [line],
+  )
+
   return [
     imports.generate(),
     '',
     ...(enumLines.length > 0 ? [...enumLines, ''] : []),
-    ...tableLines,
-    ...(relationsLines.length > 0 ? ['', ...relationsLines] : []),
+    ...tableLinesWithGap,
+    ...(relationsLinesWithGap.length > 0 ? ['', ...relationsLinesWithGap] : []),
   ].join('\n')
 }

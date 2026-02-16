@@ -16,6 +16,7 @@ export const user = sqliteTable('user', {
     .default('USER'),
   isTwoFactorEnabled: integer('isTwoFactorEnabled', { mode: 'boolean' }).default(false),
 })
+
 export const account = sqliteTable(
   'account',
   {
@@ -34,10 +35,9 @@ export const account = sqliteTable(
     id_token: text('id_token'),
     session_state: text('session_state'),
   },
-  (table) => ({
-    uniqueProviderProviderAccountId: unique().on(table.provider, table.providerAccountId),
-  }),
+  (table) => [unique().on(table.provider, table.providerAccountId)],
 )
+
 export const verificationToken = sqliteTable(
   'verification_token',
   {
@@ -48,8 +48,9 @@ export const verificationToken = sqliteTable(
     token: text('token').notNull().unique(),
     expires: integer('expires', { mode: 'timestamp' }).notNull(),
   },
-  (table) => ({ uniqueEmailToken: unique().on(table.email, table.token) }),
+  (table) => [unique().on(table.email, table.token)],
 )
+
 export const passwordResetToken = sqliteTable(
   'password_reset_token',
   {
@@ -60,8 +61,9 @@ export const passwordResetToken = sqliteTable(
     token: text('token').notNull().unique(),
     expires: integer('expires', { mode: 'timestamp' }).notNull(),
   },
-  (table) => ({ uniqueEmailToken: unique().on(table.email, table.token) }),
+  (table) => [unique().on(table.email, table.token)],
 )
+
 export const twoFactorToken = sqliteTable(
   'two_factor_token',
   {
@@ -72,8 +74,9 @@ export const twoFactorToken = sqliteTable(
     token: text('token').notNull().unique(),
     expires: integer('expires', { mode: 'timestamp' }).notNull(),
   },
-  (table) => ({ uniqueEmailToken: unique().on(table.email, table.token) }),
+  (table) => [unique().on(table.email, table.token)],
 )
+
 export const twoFactorConfirmation = sqliteTable(
   'two_factor_confirmation',
   {
@@ -82,16 +85,18 @@ export const twoFactorConfirmation = sqliteTable(
       .$defaultFn(() => createId()),
     userId: text('userId').notNull().unique(),
   },
-  (table) => ({ uniqueUserId: unique().on(table.userId) }),
+  (table) => [unique().on(table.userId)],
 )
 
 export const userRelations = relations(user, ({ one, many }) => ({
   accounts: many(account),
   twoFactorConfirmation: one(twoFactorConfirmation),
 }))
+
 export const accountRelations = relations(account, ({ one, many }) => ({
   user: one(user, { fields: [account.userId], references: [user.id] }),
 }))
+
 export const twoFactorConfirmationRelations = relations(twoFactorConfirmation, ({ one, many }) => ({
   user: one(user, { fields: [twoFactorConfirmation.userId], references: [user.id] }),
 }))
