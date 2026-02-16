@@ -27,6 +27,7 @@ datasource db {
 
 generator Hekireki-Ecto {
     provider = "hekireki-ecto"
+    output   = "ecto"
     app      = "DBSchema"
 }
 
