@@ -9,7 +9,7 @@ import { getString } from '../../utils/index.js'
 const { generatorHandler } = pkg
 
 export async function main(options: GeneratorOptions): Promise<void> {
-  if (!options.generator.isCustomOutput || !options.generator.output?.value) {
+  if (!(options.generator.isCustomOutput && options.generator.output?.value)) {
     throw new Error(
       'output is required for Hekireki-DBML. Please specify output in your generator config.',
     )
