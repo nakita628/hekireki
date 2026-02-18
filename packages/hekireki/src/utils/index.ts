@@ -36,6 +36,98 @@ export function makeSnakeCase(name: string): string {
 }
 
 // ============================================================================
+// Bare Annotation Type Mappings
+// ============================================================================
+
+export const PRISMA_TO_ZOD: Record<string, string> = {
+  String: 'string()',
+  Int: 'number()',
+  Float: 'number()',
+  Boolean: 'boolean()',
+  DateTime: 'date()',
+  BigInt: 'bigint()',
+  Decimal: 'number()',
+  Json: 'unknown()',
+  Bytes: 'any()',
+}
+
+export const PRISMA_TO_VALIBOT: Record<string, string> = {
+  String: 'string()',
+  Int: 'number()',
+  Float: 'number()',
+  Boolean: 'boolean()',
+  DateTime: 'date()',
+  BigInt: 'bigint()',
+  Decimal: 'number()',
+  Json: 'unknown()',
+  Bytes: 'any()',
+}
+
+export const PRISMA_TO_ARKTYPE: Record<string, string> = {
+  String: '"string"',
+  Int: '"number"',
+  Float: '"number"',
+  Boolean: '"boolean"',
+  DateTime: '"Date"',
+  BigInt: '"bigint"',
+  Decimal: '"number"',
+  Json: '"unknown"',
+  Bytes: '"unknown"',
+}
+
+export const PRISMA_TO_EFFECT: Record<string, string> = {
+  String: 'Schema.String',
+  Int: 'Schema.Number',
+  Float: 'Schema.Number',
+  Boolean: 'Schema.Boolean',
+  DateTime: 'Schema.Date',
+  BigInt: 'Schema.BigIntFromSelf',
+  Decimal: 'Schema.Number',
+  Json: 'Schema.Unknown',
+  Bytes: 'Schema.Unknown',
+}
+
+/**
+ * Check if documentation contains a bare annotation (e.g. "@z" without ".something")
+ */
+export function hasBareAnnotation(documentation: string | undefined, barePrefix: string): boolean {
+  if (!documentation) return false
+  return documentation.split('\n').some((line) => line.trim() === barePrefix)
+}
+
+// ============================================================================
+// Enum Formatters
+// ============================================================================
+
+/**
+ * Format enum values as Zod enum expression
+ */
+export function makeZodEnumExpression(values: readonly string[]): string {
+  return `enum([${values.map((v) => `'${v}'`).join(', ')}])`
+}
+
+/**
+ * Format enum values as Valibot picklist expression
+ */
+export function makeValibotEnumExpression(values: readonly string[]): string {
+  return `picklist([${values.map((v) => `'${v}'`).join(', ')}])`
+}
+
+/**
+ * Format enum values as ArkType union expression
+ */
+export function makeArktypeEnumExpression(values: readonly string[]): string {
+  return `"${values.map((v) => `'${v}'`).join(' | ')}"`
+}
+
+/**
+ * Format enum values as Effect Schema.Literal expression
+ */
+export function makeEffectEnumExpression(values: readonly string[]): string {
+  return `Schema.Literal(${values.map((v) => `'${v}'`).join(', ')})`
+}
+
+// ============================================================================
 // Annotation Utilities
 // ============================================================================
 
@@ -43,12 +135,13 @@ export function makeSnakeCase(name: string): string {
  * Create a document parser that filters out annotation lines
  */
 export function makeDocumentParser(annotationPrefix: `@${string}.`) {
+  const barePrefix = annotationPrefix.slice(0, -1) // '@z.' → '@z'
   return function parseDocument(documentation: string | undefined): readonly string[] {
     return (
       documentation
         ?.split('\n')
         .map((line) => line.trim())
-        .filter((line) => line && !line.includes(annotationPrefix)) ?? []
+        .filter((line) => line && !line.includes(annotationPrefix) && line !== barePrefix) ?? []
     )
   }
 }
@@ -87,10 +180,14 @@ export function makeJsDoc(
   documentation: string | undefined,
   excludePrefixes: readonly `@${string}.`[] = ['@z.', '@v.'],
 ): string {
+  const barePrefixes = excludePrefixes.map((p) => p.slice(0, -1))
   const lines = (documentation ?? '')
     .split('\n')
     .map((s) => s.trim())
-    .filter((l) => l && !excludePrefixes.some((prefix) => l.startsWith(prefix)))
+    .filter(
+      (l) =>
+        l && !excludePrefixes.some((prefix) => l.startsWith(prefix)) && !barePrefixes.includes(l),
+    )
   return lines.length ? `/**\n * ${lines.join('\n * ')}\n */\n` : ''
 }
 
@@ -106,6 +203,7 @@ export function parseDocumentWithoutAnnotations(
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => !['@z.', '@v.', '@a.', '@e.'].some((prefix) => line.startsWith(prefix)))
+    .filter((line) => !['@z', '@v', '@a', '@e'].includes(line))
     .filter((line) => line.length > 0)
 }
 
@@ -531,7 +629,11 @@ export function stripAnnotations(doc: string | undefined): string | undefined {
       trimmed.startsWith('@v.') ||
       trimmed.startsWith('@a.') ||
       trimmed.startsWith('@e.') ||
-      trimmed.startsWith('@relation')
+      trimmed.startsWith('@relation') ||
+      trimmed === '@z' ||
+      trimmed === '@v' ||
+      trimmed === '@a' ||
+      trimmed === '@e'
     )
   })
   const result = lines.join('\n').trim()

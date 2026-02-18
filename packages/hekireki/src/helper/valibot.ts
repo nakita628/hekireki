@@ -3,10 +3,12 @@ import {
   makeAnnotationExtractor,
   makeJsDoc,
   makeValibotCardinality,
+  makeValibotEnumExpression,
   makeValibotInfer,
   makeValibotObject,
   makeValibotSchemas,
   makeValidationExtractor,
+  PRISMA_TO_VALIBOT,
   parseDocumentWithoutAnnotations,
 } from '../utils/index.js'
 import { validationSchemas } from './prisma.js'
@@ -62,7 +64,12 @@ export function makeValibotRelations(
   return `export const ${model.name}RelationsSchema = v.object({\n${fields}\n})${typeLine}`
 }
 
-export function valibot(models: readonly DMMF.Model[], type: boolean, comment: boolean): string {
+export function valibot(
+  models: readonly DMMF.Model[],
+  type: boolean,
+  comment: boolean,
+  enums?: readonly DMMF.DatamodelEnum[],
+): string {
   return validationSchemas(models, type, comment, {
     importStatement: `import * as v from 'valibot'`,
     annotationPrefix: '@v.',
@@ -70,5 +77,8 @@ export function valibot(models: readonly DMMF.Model[], type: boolean, comment: b
     extractValidation: makeValidationExtractor('@v.'),
     inferType: makeValibotInfer,
     schemas: makeValibotSchemas,
+    typeMapping: PRISMA_TO_VALIBOT,
+    enums,
+    formatEnum: makeValibotEnumExpression,
   })
 }

@@ -37,14 +37,20 @@ export function modelFields(model: DMMF.Model): string[] {
       const commentPart = field.documentation
         ? field.documentation
             .split('\n')
-            .filter(
-              (line) =>
-                !(
-                  line.includes(ZOD_ANNOTATION) ||
-                  line.includes(VALIBOT_ANNOTATION) ||
-                  line.includes(RELATION_ANNOTATION)
-                ),
-            )
+            .filter((line) => {
+              const trimmed = line.trim()
+              return !(
+                trimmed.startsWith(ZOD_ANNOTATION) ||
+                trimmed.startsWith(VALIBOT_ANNOTATION) ||
+                trimmed.startsWith('@a.') ||
+                trimmed.startsWith('@e.') ||
+                trimmed.includes(RELATION_ANNOTATION) ||
+                trimmed === '@z' ||
+                trimmed === '@v' ||
+                trimmed === '@a' ||
+                trimmed === '@e'
+              )
+            })
             .join('\n')
             .trim()
         : ''

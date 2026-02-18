@@ -1,8 +1,10 @@
 import type { DMMF } from '@prisma/generator-helper'
 import {
+  makeEffectEnumExpression,
   makeEffectInfer,
   makeEffectSchemas,
   makeValidationExtractor,
+  PRISMA_TO_EFFECT,
   parseDocumentWithoutAnnotations,
 } from '../utils/index.js'
 import { validationSchemas } from './prisma.js'
@@ -33,7 +35,12 @@ export function makeEffectRelations(
   return `export const ${model.name}RelationsSchema = Schema.Struct({${fields}})${typeLine}`
 }
 
-export function effect(models: readonly DMMF.Model[], type: boolean, comment: boolean): string {
+export function effect(
+  models: readonly DMMF.Model[],
+  type: boolean,
+  comment: boolean,
+  enums?: readonly DMMF.DatamodelEnum[],
+): string {
   return validationSchemas(models, type, comment, {
     importStatement: `import { Schema } from 'effect'`,
     annotationPrefix: '@e.',
@@ -41,5 +48,8 @@ export function effect(models: readonly DMMF.Model[], type: boolean, comment: bo
     extractValidation: makeValidationExtractor('@e.'),
     inferType: makeEffectInfer,
     schemas: makeEffectSchemas,
+    typeMapping: PRISMA_TO_EFFECT,
+    enums,
+    formatEnum: makeEffectEnumExpression,
   })
 }

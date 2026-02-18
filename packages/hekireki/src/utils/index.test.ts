@@ -9,21 +9,31 @@ import {
   generatePrismaColumn,
   generateRef,
   groupByModel,
+  hasBareAnnotation,
   isFields,
   isRelationshipType,
+  makeArktypeEnumExpression,
   makeCapitalized,
   makeDocumentParser,
+  makeEffectEnumExpression,
   makePropertiesGenerator,
   makeRelationLine,
   makeRelationLineFromRelation,
   makeSnakeCase,
+  makeValibotEnumExpression,
   makeValibotInfer,
   makeValibotSchema,
   makeValibotSchemas,
   makeValidationExtractor,
+  makeZodEnumExpression,
   makeZodInfer,
   makeZodSchema,
   makeZodSchemas,
+  PRISMA_TO_ARKTYPE,
+  PRISMA_TO_EFFECT,
+  PRISMA_TO_VALIBOT,
+  PRISMA_TO_ZOD,
+  parseDocumentWithoutAnnotations,
   parseRelation,
   prismaTypeToEctoType,
   quote,
@@ -826,6 +836,124 @@ describe('utils', () => {
   // ============================================================================
   // Annotation Detection
   // ============================================================================
+
+  describe('hasBareAnnotation', () => {
+    it('detects bare @z annotation', () => {
+      expect(hasBareAnnotation('@z', '@z')).toBe(true)
+    })
+    it('detects bare @v annotation in multiline', () => {
+      expect(hasBareAnnotation('User name\n@v', '@v')).toBe(true)
+    })
+    it('does not match @z. prefix as bare', () => {
+      expect(hasBareAnnotation('@z.string()', '@z')).toBe(false)
+    })
+    it('returns false for undefined', () => {
+      expect(hasBareAnnotation(undefined, '@z')).toBe(false)
+    })
+    it('returns false for empty string', () => {
+      expect(hasBareAnnotation('', '@z')).toBe(false)
+    })
+    it('returns false when no bare annotation present', () => {
+      expect(hasBareAnnotation('just a comment', '@z')).toBe(false)
+    })
+    it('detects bare @a annotation', () => {
+      expect(hasBareAnnotation('@a', '@a')).toBe(true)
+    })
+    it('detects bare @e annotation', () => {
+      expect(hasBareAnnotation('@e', '@e')).toBe(true)
+    })
+  })
+
+  describe('parseDocumentWithoutAnnotations (bare)', () => {
+    it('filters out bare @z annotation', () => {
+      const result = parseDocumentWithoutAnnotations('User name\n@z')
+      expect(result).toStrictEqual(['User name'])
+    })
+    it('filters out bare @v annotation', () => {
+      const result = parseDocumentWithoutAnnotations('User name\n@v')
+      expect(result).toStrictEqual(['User name'])
+    })
+    it('filters out bare @a annotation', () => {
+      const result = parseDocumentWithoutAnnotations('User name\n@a')
+      expect(result).toStrictEqual(['User name'])
+    })
+    it('filters out bare @e annotation', () => {
+      const result = parseDocumentWithoutAnnotations('User name\n@e')
+      expect(result).toStrictEqual(['User name'])
+    })
+    it('filters both bare and prefixed annotations', () => {
+      const result = parseDocumentWithoutAnnotations('User name\n@z\n@v.string()')
+      expect(result).toStrictEqual(['User name'])
+    })
+  })
+
+  describe('stripAnnotations (bare)', () => {
+    it('strips bare @z annotation', () => {
+      expect(stripAnnotations('Email address\n@z')).toBe('Email address')
+    })
+    it('strips bare @v annotation', () => {
+      expect(stripAnnotations('Email address\n@v')).toBe('Email address')
+    })
+    it('strips bare @a annotation', () => {
+      expect(stripAnnotations('Email address\n@a')).toBe('Email address')
+    })
+    it('strips bare @e annotation', () => {
+      expect(stripAnnotations('Email address\n@e')).toBe('Email address')
+    })
+    it('strips mixed bare and prefixed annotations', () => {
+      expect(stripAnnotations('Email\n@z\n@v.string()\n@a\n@e.Schema.String')).toBe('Email')
+    })
+    it('returns undefined for bare annotation only', () => {
+      expect(stripAnnotations('@z')).toBeUndefined()
+    })
+  })
+
+  describe('type mapping constants', () => {
+    it('PRISMA_TO_ZOD maps String to string()', () => {
+      expect(PRISMA_TO_ZOD.String).toBe('string()')
+      expect(PRISMA_TO_ZOD.Int).toBe('number()')
+      expect(PRISMA_TO_ZOD.Boolean).toBe('boolean()')
+      expect(PRISMA_TO_ZOD.DateTime).toBe('date()')
+      expect(PRISMA_TO_ZOD.BigInt).toBe('bigint()')
+    })
+    it('PRISMA_TO_VALIBOT maps String to string()', () => {
+      expect(PRISMA_TO_VALIBOT.String).toBe('string()')
+      expect(PRISMA_TO_VALIBOT.Int).toBe('number()')
+    })
+    it('PRISMA_TO_ARKTYPE maps String to "string"', () => {
+      expect(PRISMA_TO_ARKTYPE.String).toBe('"string"')
+      expect(PRISMA_TO_ARKTYPE.Int).toBe('"number"')
+      expect(PRISMA_TO_ARKTYPE.DateTime).toBe('"Date"')
+    })
+    it('PRISMA_TO_EFFECT maps String to Schema.String', () => {
+      expect(PRISMA_TO_EFFECT.String).toBe('Schema.String')
+      expect(PRISMA_TO_EFFECT.Int).toBe('Schema.Number')
+      expect(PRISMA_TO_EFFECT.BigInt).toBe('Schema.BigIntFromSelf')
+    })
+  })
+
+  describe('enum formatters', () => {
+    const values = ['USER', 'ADMIN', 'MODERATOR']
+
+    it('makeZodEnumExpression generates z.enum()', () => {
+      expect(makeZodEnumExpression(values)).toBe("enum(['USER', 'ADMIN', 'MODERATOR'])")
+    })
+    it('makeValibotEnumExpression generates v.picklist()', () => {
+      expect(makeValibotEnumExpression(values)).toBe("picklist(['USER', 'ADMIN', 'MODERATOR'])")
+    })
+    it('makeArktypeEnumExpression generates union string', () => {
+      expect(makeArktypeEnumExpression(values)).toBe("\"'USER' | 'ADMIN' | 'MODERATOR'\"")
+    })
+    it('makeEffectEnumExpression generates Schema.Literal()', () => {
+      expect(makeEffectEnumExpression(values)).toBe("Schema.Literal('USER', 'ADMIN', 'MODERATOR')")
+    })
+    it('handles single value', () => {
+      expect(makeZodEnumExpression(['ACTIVE'])).toBe("enum(['ACTIVE'])")
+      expect(makeValibotEnumExpression(['ACTIVE'])).toBe("picklist(['ACTIVE'])")
+      expect(makeArktypeEnumExpression(['ACTIVE'])).toBe('"\'ACTIVE\'"')
+      expect(makeEffectEnumExpression(['ACTIVE'])).toBe("Schema.Literal('ACTIVE')")
+    })
+  })
 
   describe('findMissingAnnotations', () => {
     const extractZod = makeValidationExtractor('@z.')

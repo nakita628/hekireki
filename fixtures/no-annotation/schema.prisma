@@ -1,0 +1,108 @@
+datasource db {
+    provider = "sqlite"
+}
+
+// ============================================================================
+// Hekireki Generators (No Annotation Test)
+// ============================================================================
+// This fixture tests all generators WITHOUT any annotation prefixes
+// (@z, @v, @a, @e). Generators should still produce output using
+// typeMapping fallback for validation libs, and type-based generation
+// for DBML/ER/Ecto/Drizzle.
+// ============================================================================
+
+generator Hekireki-ER {
+    provider = "hekireki-mermaid-er"
+    output   = "mermaid-er"
+}
+
+generator Hekireki-Zod {
+    provider = "hekireki-zod"
+    output   = "zod"
+    type     = true
+    relation = true
+}
+
+generator Hekireki-Valibot {
+    provider = "hekireki-valibot"
+    output   = "valibot"
+    type     = true
+    relation = true
+}
+
+generator Hekireki-ArkType {
+    provider = "hekireki-arktype"
+    output   = "arktype"
+    type     = true
+}
+
+generator Hekireki-Effect {
+    provider = "hekireki-effect"
+    output   = "effect"
+    type     = true
+}
+
+generator Hekireki-DBML {
+    provider = "hekireki-dbml"
+    output   = "docs/schema.dbml"
+}
+
+generator Hekireki-Drizzle {
+    provider = "hekireki-drizzle"
+    output   = "drizzle"
+}
+
+generator Hekireki-Ecto {
+    provider = "hekireki-ecto"
+    output   = "schema"
+    app      = "DBSchema"
+}
+
+// ============================================================================
+// Models - NO annotations (@z, @v, @a, @e)
+// ============================================================================
+
+model User {
+    id        String   @id @default(uuid())
+    email     String   @unique
+    name      String?
+    age       Int?
+    isActive  Boolean  @default(true)
+    role      Role     @default(MEMBER)
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+    posts     Post[]
+    profile   Profile?
+}
+
+model Post {
+    id        String   @id @default(uuid())
+    title     String
+    content   String
+    published Boolean  @default(false)
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+    authorId  String
+    author    User     @relation(fields: [authorId], references: [id])
+    tags      Tag[]
+}
+
+model Profile {
+    id     String  @id @default(uuid())
+    bio    String?
+    avatar String?
+    userId String  @unique
+    user   User    @relation(fields: [userId], references: [id])
+}
+
+model Tag {
+    id    String @id @default(uuid())
+    name  String @unique
+    posts Post[]
+}
+
+enum Role {
+    ADMIN
+    MEMBER
+    GUEST
+}

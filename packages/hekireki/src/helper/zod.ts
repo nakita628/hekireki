@@ -4,9 +4,11 @@ import {
   makeJsDoc,
   makeValidationExtractor,
   makeZodCardinality,
+  makeZodEnumExpression,
   makeZodInfer,
   makeZodObject,
   makeZodSchemas,
+  PRISMA_TO_ZOD,
   parseDocumentWithoutAnnotations,
 } from '../utils/index.js'
 import { validationSchemas } from './prisma.js'
@@ -65,6 +67,7 @@ export function zod(
   type: boolean,
   comment: boolean,
   zodVersion?: string | string[],
+  enums?: readonly DMMF.DatamodelEnum[],
 ): string {
   const importStatement =
     zodVersion === 'mini'
@@ -80,5 +83,8 @@ export function zod(
     extractValidation: makeValidationExtractor('@z.'),
     inferType: makeZodInfer,
     schemas: makeZodSchemas,
+    typeMapping: PRISMA_TO_ZOD,
+    enums,
+    formatEnum: makeZodEnumExpression,
   })
 }

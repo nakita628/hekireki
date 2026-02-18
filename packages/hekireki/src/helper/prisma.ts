@@ -1,5 +1,5 @@
 import type { DMMF, GeneratorOptions } from '@prisma/generator-helper'
-import { findMissingAnnotations, groupByModel, isFields } from '../utils/index.js'
+import { groupByModel, isFields } from '../utils/index.js'
 
 export function collectRelationProps(
   models: readonly DMMF.Model[],
@@ -66,6 +66,9 @@ export function validationSchemas<T extends DMMF.Model>(
       }[],
       comment: boolean,
     ) => string
+    readonly typeMapping?: Record<string, string>
+    readonly enums?: readonly DMMF.DatamodelEnum[]
+    readonly formatEnum?: (values: readonly string[]) => string
   },
 ): string {
   const modelInfos = models.map((model) => ({
@@ -74,18 +77,44 @@ export function validationSchemas<T extends DMMF.Model>(
     fields: model.fields,
   }))
 
+  const resolveValidation = (field: DMMF.Field): string | null => {
+    const annotation = config.extractValidation(field.documentation)
+    if (annotation !== null) return annotation
+    if (config.typeMapping) {
+      const mapped = config.typeMapping[field.type]
+      if (mapped) return mapped
+    }
+    if (config.enums && config.formatEnum && field.kind === 'enum') {
+      const enumDef = config.enums.find((e) => e.name === field.type)
+      if (enumDef) return config.formatEnum(enumDef.values.map((v) => v.name))
+    }
+    return null
+  }
+
   const modelFields = modelInfos.map((model) => {
     const fields = model.fields.map((field) => ({
       documentation: model.documentation,
       modelName: model.name,
       fieldName: field.name,
       comment: config.parseDocument(field.documentation),
-      validation: config.extractValidation(field.documentation),
+      validation: resolveValidation(field),
     }))
     return fields
   })
 
-  const missing = findMissingAnnotations(models, config.extractValidation)
+  const missing = models.flatMap((model) =>
+    model.fields
+      .filter((f) => f.kind !== 'object')
+      .filter((f) => {
+        if (config.extractValidation(f.documentation) !== null) return false
+        if (config.typeMapping?.[f.type]) return false
+        if (config.enums && f.kind === 'enum' && config.enums.some((e) => e.name === f.type)) {
+          return false
+        }
+        return true
+      })
+      .map((f) => ({ modelName: model.name, fieldName: f.name })),
+  )
   for (const { modelName, fieldName } of missing) {
     console.warn(
       `Warning: Field "${modelName}.${fieldName}" has no ${config.annotationPrefix} annotation and will be omitted from the schema`,
