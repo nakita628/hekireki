@@ -29,6 +29,7 @@ export async function main(options: GeneratorOptions): Promise<void> {
     options.dmmf.datamodel.models,
     getBool(options.generator.config?.type),
     getBool(options.generator.config?.comment),
+    options.dmmf.datamodel.enums,
   )
   const relations = enableRelation
     ? makeRelationsOnly(options.dmmf, getBool(options.generator.config?.type), makeArktypeRelations)

@@ -16,7 +16,7 @@ export const UserSchema = z.object({
   /**
    * User's biography or profile description
    */
-  bio: z.string().optional().default(''),
+  bio: z.string().optional().default('').exactOptional(),
   /**
    * User's unique email address
    */
@@ -24,23 +24,23 @@ export const UserSchema = z.object({
   /**
    * Timestamp of email verification
    */
-  emailVerified: z.date().nullable(),
+  emailVerified: z.date().nullable().exactOptional(),
   /**
    * URL of user's image
    */
-  image: z.url().nullable(),
+  image: z.url().nullable().exactOptional(),
   /**
    * URL of user's cover image
    */
-  coverImage: z.url().nullable(),
+  coverImage: z.url().nullable().exactOptional(),
   /**
    * URL of user's profile image
    */
-  profileImage: z.url().nullable(),
+  profileImage: z.url().nullable().exactOptional(),
   /**
    * Hashed password for security
    */
-  hashedPassword: z.string(),
+  hashedPassword: z.string().exactOptional(),
   /**
    * Timestamp when the user was created
    */
@@ -52,7 +52,7 @@ export const UserSchema = z.object({
   /**
    * Flag indicating if user has unread notifications
    */
-  hasNotification: z.boolean().default(false),
+  hasNotification: z.boolean().default(false).exactOptional(),
 })
 
 export type User = z.infer<typeof UserSchema>

@@ -7,100 +7,52 @@ erDiagram
     Permission ||--}| RolePermission : "(id) - (permissionId)"
     User ||--}| AuditLog : "(id) - (userId)"
     Organization {
-        int id PK "Organization ID
-@a."number.integer"
-@e.Schema.Int"
-        string name "Organization name
-@a."1 <= string <= 200"
-@e.Schema.String.pipe(Schema.minLength(1), Schema.maxLength(200))"
-        string slug "URL-safe slug
-@a."1 <= string <= 100"
-@e.Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100))"
+        int id PK "Organization ID"
+        string name "Organization name"
+        string slug "URL-safe slug"
         orgstatus status "Organization status"
         datetime createdAt "Creation timestamp"
         datetime updatedAt "Last update timestamp"
     }
     User {
-        int id PK "User ID
-@a."number.integer"
-@e.Schema.Int"
-        int organizationId FK "Organization ID
-@a."number.integer"
-@e.Schema.Int"
-        string email "Email address
-@a."string.email"
-@e.Schema.String"
-        string name "Display name
-@a."1 <= string <= 100"
-@e.Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100))"
+        int id PK "User ID"
+        int organizationId FK "Organization ID"
+        string email "Email address"
+        string name "Display name"
         datetime createdAt "Creation timestamp"
         datetime updatedAt "Last update timestamp"
     }
     Role {
-        int id PK "Role ID
-@a."number.integer"
-@e.Schema.Int"
-        string name "Role name
-@a."1 <= string <= 100"
-@e.Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100))"
-        string description "Role description
-@a."string | null"
-@e.Schema.NullOr(Schema.String)"
+        int id PK "Role ID"
+        string name "Role name"
+        string description "Role description"
         datetime createdAt "Creation timestamp"
         datetime updatedAt "Last update timestamp"
     }
     Permission {
-        int id PK "Permission ID
-@a."number.integer"
-@e.Schema.Int"
-        string resource "Resource name
-@a."1 <= string <= 100"
-@e.Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100))"
-        string action "Action name
-@a."1 <= string <= 100"
-@e.Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100))"
-        string description "Permission description
-@a."string | null"
-@e.Schema.NullOr(Schema.String)"
+        int id PK "Permission ID"
+        string resource "Resource name"
+        string action "Action name"
+        string description "Permission description"
         datetime createdAt "Creation timestamp"
     }
     UserRole {
-        int userId FK "User ID
-@a."number.integer"
-@e.Schema.Int"
-        int roleId FK "Role ID
-@a."number.integer"
-@e.Schema.Int"
+        int userId FK "User ID"
+        int roleId FK "Role ID"
         datetime assignedAt "Assignment timestamp"
     }
     RolePermission {
-        int roleId FK "Role ID
-@a."number.integer"
-@e.Schema.Int"
-        int permissionId FK "Permission ID
-@a."number.integer"
-@e.Schema.Int"
+        int roleId FK "Role ID"
+        int permissionId FK "Permission ID"
         datetime assignedAt "Assignment timestamp"
     }
     AuditLog {
-        int id PK "Audit log ID
-@a."number.integer"
-@e.Schema.Int"
-        int userId FK "User ID
-@a."number.integer"
-@e.Schema.Int"
-        string action "Action performed
-@a."string"
-@e.Schema.String"
-        string resource "Resource name
-@a."string"
-@e.Schema.String"
-        string detail "Action detail
-@a."string | null"
-@e.Schema.NullOr(Schema.String)"
-        string ipAddress "Client IP address
-@a."string | null"
-@e.Schema.NullOr(Schema.String)"
+        int id PK "Audit log ID"
+        int userId FK "User ID"
+        string action "Action performed"
+        string resource "Resource name"
+        string detail "Action detail"
+        string ipAddress "Client IP address"
         datetime createdAt "Action timestamp"
     }
 ```

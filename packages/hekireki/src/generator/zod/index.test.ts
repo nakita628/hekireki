@@ -747,6 +747,18 @@ model Post {
     })
 
     const expected = `import * as z from 'zod'
+
+export const UserSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+})
+
+export const PostSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  content: z.string(),
+  userId: z.string(),
+})
 `
     expect(result).toBe(expected)
   }, 30000)
@@ -789,6 +801,18 @@ model Post {
     })
 
     const expected = `import * as z from 'zod'
+
+export const UserSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+})
+
+export const PostSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  content: z.string(),
+  userId: z.string(),
+})
 
 export const UserRelationsSchema = z.object({
   ...UserSchema.shape,
@@ -1400,6 +1424,18 @@ model Post {
     })
 
     const expected = `import * as v from 'valibot'
+
+export const UserSchema = v.object({
+  id: v.string(),
+  name: v.string(),
+})
+
+export const PostSchema = v.object({
+  id: v.string(),
+  title: v.string(),
+  content: v.string(),
+  userId: v.string(),
+})
 `
     expect(result).toBe(expected)
   }, 30000)
@@ -1442,6 +1478,18 @@ model Post {
     })
 
     const expected = `import * as v from 'valibot'
+
+export const UserSchema = v.object({
+  id: v.string(),
+  name: v.string(),
+})
+
+export const PostSchema = v.object({
+  id: v.string(),
+  title: v.string(),
+  content: v.string(),
+  userId: v.string(),
+})
 
 export const UserRelationsSchema = v.object({
   ...UserSchema.entries,

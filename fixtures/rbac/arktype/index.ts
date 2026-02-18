@@ -7,6 +7,12 @@ export const OrganizationSchema = type({
   name: '1 <= string <= 200',
   /** URL-safe slug */
   slug: '1 <= string <= 100',
+  /** Organization status */
+  status: "'ACTIVE' | 'INACTIVE' | 'SUSPENDED'",
+  /** Creation timestamp */
+  createdAt: 'Date',
+  /** Last update timestamp */
+  updatedAt: 'Date',
 })
 
 export type Organization = typeof OrganizationSchema.infer
@@ -20,6 +26,10 @@ export const UserSchema = type({
   email: 'string.email',
   /** Display name */
   name: '1 <= string <= 100',
+  /** Creation timestamp */
+  createdAt: 'Date',
+  /** Last update timestamp */
+  updatedAt: 'Date',
 })
 
 export type User = typeof UserSchema.infer
@@ -31,6 +41,10 @@ export const RoleSchema = type({
   name: '1 <= string <= 100',
   /** Role description */
   description: 'string | null',
+  /** Creation timestamp */
+  createdAt: 'Date',
+  /** Last update timestamp */
+  updatedAt: 'Date',
 })
 
 export type Role = typeof RoleSchema.infer
@@ -44,6 +58,8 @@ export const PermissionSchema = type({
   action: '1 <= string <= 100',
   /** Permission description */
   description: 'string | null',
+  /** Creation timestamp */
+  createdAt: 'Date',
 })
 
 export type Permission = typeof PermissionSchema.infer
@@ -53,6 +69,8 @@ export const UserRoleSchema = type({
   userId: 'number.integer',
   /** Role ID */
   roleId: 'number.integer',
+  /** Assignment timestamp */
+  assignedAt: 'Date',
 })
 
 export type UserRole = typeof UserRoleSchema.infer
@@ -62,6 +80,8 @@ export const RolePermissionSchema = type({
   roleId: 'number.integer',
   /** Permission ID */
   permissionId: 'number.integer',
+  /** Assignment timestamp */
+  assignedAt: 'Date',
 })
 
 export type RolePermission = typeof RolePermissionSchema.infer
@@ -79,6 +99,8 @@ export const AuditLogSchema = type({
   detail: 'string | null',
   /** Client IP address */
   ipAddress: 'string | null',
+  /** Action timestamp */
+  createdAt: 'Date',
 })
 
 export type AuditLog = typeof AuditLogSchema.infer

@@ -13,6 +13,18 @@ export const OrganizationSchema = z.object({
    * URL-safe slug
    */
   slug: z.string().min(1).max(100),
+  /**
+   * Organization status
+   */
+  status: z.enum(['ACTIVE', 'INACTIVE', 'SUSPENDED']),
+  /**
+   * Creation timestamp
+   */
+  createdAt: z.iso.datetime(),
+  /**
+   * Last update timestamp
+   */
+  updatedAt: z.iso.datetime(),
 })
 
 export type Organization = z.infer<typeof OrganizationSchema>
@@ -34,6 +46,14 @@ export const UserSchema = z.object({
    * Display name
    */
   name: z.string().min(1).max(100),
+  /**
+   * Creation timestamp
+   */
+  createdAt: z.iso.datetime(),
+  /**
+   * Last update timestamp
+   */
+  updatedAt: z.iso.datetime(),
 })
 
 export type User = z.infer<typeof UserSchema>
@@ -50,7 +70,15 @@ export const RoleSchema = z.object({
   /**
    * Role description
    */
-  description: z.string().nullable(),
+  description: z.string().nullable().exactOptional(),
+  /**
+   * Creation timestamp
+   */
+  createdAt: z.iso.datetime(),
+  /**
+   * Last update timestamp
+   */
+  updatedAt: z.iso.datetime(),
 })
 
 export type Role = z.infer<typeof RoleSchema>
@@ -71,7 +99,11 @@ export const PermissionSchema = z.object({
   /**
    * Permission description
    */
-  description: z.string().nullable(),
+  description: z.string().nullable().exactOptional(),
+  /**
+   * Creation timestamp
+   */
+  createdAt: z.iso.datetime(),
 })
 
 export type Permission = z.infer<typeof PermissionSchema>
@@ -85,6 +117,10 @@ export const UserRoleSchema = z.object({
    * Role ID
    */
   roleId: z.number().int(),
+  /**
+   * Assignment timestamp
+   */
+  assignedAt: z.iso.datetime(),
 })
 
 export type UserRole = z.infer<typeof UserRoleSchema>
@@ -98,6 +134,10 @@ export const RolePermissionSchema = z.object({
    * Permission ID
    */
   permissionId: z.number().int(),
+  /**
+   * Assignment timestamp
+   */
+  assignedAt: z.iso.datetime(),
 })
 
 export type RolePermission = z.infer<typeof RolePermissionSchema>
@@ -122,11 +162,15 @@ export const AuditLogSchema = z.object({
   /**
    * Action detail
    */
-  detail: z.string().nullable(),
+  detail: z.string().nullable().exactOptional(),
   /**
    * Client IP address
    */
-  ipAddress: z.string().nullable(),
+  ipAddress: z.string().nullable().exactOptional(),
+  /**
+   * Action timestamp
+   */
+  createdAt: z.iso.datetime(),
 })
 
 export type AuditLog = z.infer<typeof AuditLogSchema>

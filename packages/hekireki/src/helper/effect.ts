@@ -1,11 +1,40 @@
 import type { DMMF } from '@prisma/generator-helper'
 import {
+  makeEffectEnumExpression,
   makeEffectInfer,
-  makeEffectSchemas,
+  makeEffectProperties,
+  makeEffectSchema,
   makeValidationExtractor,
   parseDocumentWithoutAnnotations,
+  schemaFromFields,
 } from '../utils/index.js'
 import { validationSchemas } from './prisma.js'
+
+export const PRISMA_TO_EFFECT: Record<string, string> = {
+  String: 'Schema.String',
+  Int: 'Schema.Number',
+  Float: 'Schema.Number',
+  Boolean: 'Schema.Boolean',
+  DateTime: 'Schema.Date',
+  BigInt: 'Schema.BigIntFromSelf',
+  Decimal: 'Schema.Number',
+  Json: 'Schema.Unknown',
+  Bytes: 'Schema.Unknown',
+}
+
+export function makeEffectSchemas(
+  modelFields: readonly {
+    readonly documentation: string
+    readonly modelName: string
+    readonly fieldName: string
+    readonly validation: string | null
+    readonly isRequired: boolean
+    readonly comment: readonly string[]
+  }[],
+  comment: boolean,
+): string {
+  return schemaFromFields(modelFields, comment, makeEffectSchema, makeEffectProperties)
+}
 
 export function makeEffectRelations(
   model: DMMF.Model,
@@ -33,7 +62,12 @@ export function makeEffectRelations(
   return `export const ${model.name}RelationsSchema = Schema.Struct({${fields}})${typeLine}`
 }
 
-export function effect(models: readonly DMMF.Model[], type: boolean, comment: boolean): string {
+export function effect(
+  models: readonly DMMF.Model[],
+  type: boolean,
+  comment: boolean,
+  enums?: readonly DMMF.DatamodelEnum[],
+): string {
   return validationSchemas(models, type, comment, {
     importStatement: `import { Schema } from 'effect'`,
     annotationPrefix: '@e.',
@@ -41,5 +75,8 @@ export function effect(models: readonly DMMF.Model[], type: boolean, comment: bo
     extractValidation: makeValidationExtractor('@e.'),
     inferType: makeEffectInfer,
     schemas: makeEffectSchemas,
+    typeMapping: PRISMA_TO_EFFECT,
+    enums,
+    formatEnum: makeEffectEnumExpression,
   })
 }

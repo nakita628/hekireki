@@ -1,9 +1,5 @@
 import type { DMMF } from '@prisma/generator-helper'
-import {
-  makeRelationLineFromRelation,
-  parseRelation,
-  removeDuplicateRelations,
-} from '../utils/index.js'
+import { isRelationshipType, parseRelation, removeDuplicateRelations } from '../utils/index.js'
 
 const ZOD_ANNOTATION = '@z.'
 const VALIBOT_ANNOTATION = '@v.'
@@ -17,6 +13,58 @@ const RELATIONSHIPS = {
 } as const
 
 type RelationshipKey = keyof typeof RELATIONSHIPS
+
+// ============================================================================
+// Composite functions (built from atomic utils)
+// ============================================================================
+
+export function makeRelationLine(
+  input: string,
+): { readonly ok: true; readonly value: string } | { readonly ok: false; readonly error: string } {
+  const parts = input.split('-to-')
+  if (parts.length !== 2) {
+    return { ok: false, error: `Invalid input format: ${input}` }
+  }
+  const [toRaw, optionalFlag] = parts[1].includes('-optional')
+    ? [parts[1].replace('-optional', ''), 'optional']
+    : [parts[1], '']
+  const from = parts[0]
+  const to = toRaw
+  const isOptional = optionalFlag === 'optional'
+  if (!isRelationshipType(from)) {
+    return { ok: false, error: `Invalid relationship: ${from}` }
+  }
+  if (!isRelationshipType(to)) {
+    return { ok: false, error: `Invalid relationship: ${to}` }
+  }
+  const fromSymbol = RELATIONSHIPS[from]
+  const toSymbol = RELATIONSHIPS[to]
+  const connector = isOptional ? '..' : '--'
+  return { ok: true, value: `${fromSymbol}${connector}${toSymbol}` }
+}
+
+export function makeRelationLineFromRelation(relation: {
+  fromModel: string
+  toModel: string
+  fromField: string
+  toField: string
+  type: string
+}): { readonly ok: true; readonly value: string } | { readonly ok: false; readonly error: string } {
+  const result = makeRelationLine(relation.type)
+
+  if (!result.ok) {
+    return result
+  }
+
+  return {
+    ok: true,
+    value: `    ${relation.fromModel} ${result.value} ${relation.toModel} : "(${relation.fromField}) - (${relation.toField})"`,
+  }
+}
+
+// ============================================================================
+// Mermaid ER Generation
+// ============================================================================
 
 function toMermaidType(prismaType: string): string {
   return prismaType.toLowerCase()
@@ -37,14 +85,20 @@ export function modelFields(model: DMMF.Model): string[] {
       const commentPart = field.documentation
         ? field.documentation
             .split('\n')
-            .filter(
-              (line) =>
-                !(
-                  line.includes(ZOD_ANNOTATION) ||
-                  line.includes(VALIBOT_ANNOTATION) ||
-                  line.includes(RELATION_ANNOTATION)
-                ),
-            )
+            .filter((line) => {
+              const trimmed = line.trim()
+              return !(
+                trimmed.startsWith(ZOD_ANNOTATION) ||
+                trimmed.startsWith(VALIBOT_ANNOTATION) ||
+                trimmed.startsWith('@a.') ||
+                trimmed.startsWith('@e.') ||
+                trimmed.includes(RELATION_ANNOTATION) ||
+                trimmed === '@z' ||
+                trimmed === '@v' ||
+                trimmed === '@a' ||
+                trimmed === '@e'
+              )
+            })
             .join('\n')
             .trim()
         : ''

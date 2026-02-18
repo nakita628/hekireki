@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": [
+    "zod/**/*.ts",
+    "valibot/**/*.ts",
+    "arktype/**/*.ts",
+    "effect/**/*.ts",
+    "drizzle/**/*.ts"
+  ]
+}

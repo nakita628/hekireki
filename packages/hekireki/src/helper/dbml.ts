@@ -5,13 +5,85 @@ import { writeFile, writeFileBinary } from '../fsp/index.js'
 import {
   combineKeys,
   escapeNote,
-  generateEnum,
-  generateIndex,
-  generatePrismaColumn,
-  generateRef,
-  quote,
+  formatConstraints,
+  makeEnum,
+  makeRefName,
   stripAnnotations,
 } from '../utils/index.js'
+
+// ============================================================================
+// Composite functions (built from atomic utils)
+// ============================================================================
+
+function quote(value: string): string {
+  return `'${escapeNote(value)}'`
+}
+
+function makeIndex(index: {
+  readonly columns: readonly string[]
+  readonly isPrimaryKey?: boolean
+  readonly isUnique?: boolean
+  readonly name?: string
+}): string {
+  const columns = index.columns.length > 1 ? `(${index.columns.join(', ')})` : index.columns[0]
+
+  const constraints = [
+    index.isPrimaryKey && 'pk',
+    index.isUnique && 'unique',
+    index.name && `name: '${index.name}'`,
+  ].filter((c): c is string => Boolean(c))
+
+  return `    ${columns}${formatConstraints(constraints)}`
+}
+
+function makeRef(ref: {
+  readonly name?: string
+  readonly fromTable: string
+  readonly fromColumn: string
+  readonly toTable: string
+  readonly toColumn: string
+  readonly type?: '>' | '<' | '-'
+  readonly onDelete?: string
+  readonly onUpdate?: string
+}): string {
+  const name = makeRefName(ref)
+  const operator = ref.type ?? '>'
+
+  const actions = [
+    ref.onDelete && `delete: ${ref.onDelete}`,
+    ref.onUpdate && `update: ${ref.onUpdate}`,
+  ].filter((a): a is string => Boolean(a))
+
+  const actionStr = actions.length > 0 ? ` [${actions.join(', ')}]` : ''
+
+  return `Ref ${name}: ${ref.fromTable}.${ref.fromColumn} ${operator} ${ref.toTable}.${ref.toColumn}${actionStr}`
+}
+
+function makePrismaColumn(column: {
+  readonly name: string
+  readonly type: string
+  readonly isPrimaryKey?: boolean
+  readonly isUnique?: boolean
+  readonly isNotNull?: boolean
+  readonly isIncrement?: boolean
+  readonly defaultValue?: string
+  readonly note?: string
+}): string {
+  const constraints = [
+    column.isPrimaryKey && 'pk',
+    column.isIncrement && 'increment',
+    column.defaultValue !== undefined && `default: ${column.defaultValue}`,
+    column.isUnique && 'unique',
+    column.isNotNull && 'not null',
+    column.note && `note: ${quote(column.note)}`,
+  ].filter((c): c is string => Boolean(c))
+
+  return `  ${column.name} ${column.type}${formatConstraints(constraints)}`
+}
+
+// ============================================================================
+// DBML Generation
+// ============================================================================
 
 function resolveFieldType(
   field: DMMF.Field,
@@ -50,7 +122,7 @@ function toDBMLColumn(field: DMMF.Field, models: readonly DMMF.Model[], mapToDbS
   }
 }
 
-function generateTableIndexes(model: DMMF.Model) {
+function makeTableIndexes(model: DMMF.Model) {
   return [
     ...(model.primaryKey?.fields && model.primaryKey.fields.length > 0
       ? [{ columns: model.primaryKey.fields, isPrimaryKey: true }]
@@ -59,7 +131,7 @@ function generateTableIndexes(model: DMMF.Model) {
   ]
 }
 
-export function generateTables(
+export function makeTables(
   models: readonly DMMF.Model[],
   mapToDbSchema = false,
 ): readonly string[] {
@@ -67,11 +139,11 @@ export function generateTables(
     const modelName = mapToDbSchema && model.dbName ? model.dbName : model.name
 
     const columns = model.fields.map((field) => toDBMLColumn(field, models, mapToDbSchema))
-    const columnLines = columns.map(generatePrismaColumn).join('\n')
+    const columnLines = columns.map(makePrismaColumn).join('\n')
 
-    const indexes = generateTableIndexes(model)
+    const indexes = makeTableIndexes(model)
     const indexBlock =
-      indexes.length > 0 ? `\n\n  indexes {\n${indexes.map(generateIndex).join('\n')}\n  }` : ''
+      indexes.length > 0 ? `\n\n  indexes {\n${indexes.map(makeIndex).join('\n')}\n  }` : ''
 
     const strippedNote = stripAnnotations(model.documentation)
     const noteBlock = strippedNote ? `\n\n  Note: ${quote(escapeNote(strippedNote))}` : ''
@@ -80,9 +152,9 @@ export function generateTables(
   })
 }
 
-export function generateEnums(enums: readonly DMMF.DatamodelEnum[]): readonly string[] {
+export function makeEnums(enums: readonly DMMF.DatamodelEnum[]): readonly string[] {
   return enums.map((e) => {
-    return generateEnum({
+    return makeEnum({
       name: e.name,
       values: e.values.map((v) => v.name),
     })
@@ -99,7 +171,7 @@ function getRelationOperator(
   return field?.isList ? '>' : '-'
 }
 
-export function generateRelations(
+export function makeRelations(
   models: readonly DMMF.Model[],
   mapToDbSchema = false,
 ): readonly string[] {
@@ -123,7 +195,7 @@ export function generateRelations(
         const fromColumn = combineKeys(field.relationFromFields ?? [])
         const toColumn = combineKeys(field.relationToFields ?? [])
 
-        return generateRef({
+        return makeRef({
           name: `${relationFromName}_${fromColumn}_fk`,
           fromTable: relationFromName,
           fromColumn,
@@ -137,14 +209,14 @@ export function generateRelations(
 }
 
 export function dbmlContent(datamodel: DMMF.Datamodel, mapToDbSchema = false): string {
-  const tables = generateTables(datamodel.models, mapToDbSchema)
-  const enums = generateEnums(datamodel.enums)
-  const refs = generateRelations(datamodel.models, mapToDbSchema)
+  const tables = makeTables(datamodel.models, mapToDbSchema)
+  const enums = makeEnums(datamodel.enums)
+  const refs = makeRelations(datamodel.models, mapToDbSchema)
 
   return [...enums, ...tables, ...refs].join('\n\n')
 }
 
-export const generateDbmlFile = async (
+export const makeDbmlFile = async (
   outputDir: string,
   content: string,
   fileName: string,
@@ -159,16 +231,16 @@ export const generateDbmlFile = async (
   return { ok: true }
 }
 
-export const generatePng = async (
+export const makePng = async (
   outputDir: string,
   dbml: string,
   fileName: string,
 ): Promise<{ readonly ok: true } | { readonly ok: false; readonly error: string }> => {
   const outputFile = `${outputDir}/${fileName}`
-  return generatePngFile(outputFile, dbml)
+  return makePngFile(outputFile, dbml)
 }
 
-export const generatePngFile = async (
+export const makePngFile = async (
   outputPath: string,
   dbml: string,
 ): Promise<{ readonly ok: true } | { readonly ok: false; readonly error: string }> => {

@@ -1,11 +1,40 @@
 import type { DMMF } from '@prisma/generator-helper'
 import {
+  makeArktypeEnumExpression,
   makeArktypeInfer,
-  makeArktypeSchemas,
+  makeArktypeProperties,
+  makeArktypeSchema,
   makeValidationExtractor,
   parseDocumentWithoutAnnotations,
+  schemaFromFields,
 } from '../utils/index.js'
 import { validationSchemas } from './prisma.js'
+
+export const PRISMA_TO_ARKTYPE: Record<string, string> = {
+  String: '"string"',
+  Int: '"number"',
+  Float: '"number"',
+  Boolean: '"boolean"',
+  DateTime: '"Date"',
+  BigInt: '"bigint"',
+  Decimal: '"number"',
+  Json: '"unknown"',
+  Bytes: '"unknown"',
+}
+
+export function makeArktypeSchemas(
+  modelFields: readonly {
+    readonly documentation: string
+    readonly modelName: string
+    readonly fieldName: string
+    readonly validation: string | null
+    readonly isRequired: boolean
+    readonly comment: readonly string[]
+  }[],
+  comment: boolean,
+): string {
+  return schemaFromFields(modelFields, comment, makeArktypeSchema, makeArktypeProperties)
+}
 
 export function makeArktypeRelations(
   model: DMMF.Model,
@@ -32,7 +61,12 @@ export function makeArktypeRelations(
   return `export const ${model.name}RelationsSchema = type({${fields}})${typeLine}`
 }
 
-export function arktype(models: readonly DMMF.Model[], type: boolean, comment: boolean): string {
+export function arktype(
+  models: readonly DMMF.Model[],
+  type: boolean,
+  comment: boolean,
+  enums?: readonly DMMF.DatamodelEnum[],
+): string {
   return validationSchemas(models, type, comment, {
     importStatement: `import { type } from 'arktype'`,
     annotationPrefix: '@a.',
@@ -40,5 +74,8 @@ export function arktype(models: readonly DMMF.Model[], type: boolean, comment: b
     extractValidation: makeValidationExtractor('@a.'),
     inferType: makeArktypeInfer,
     schemas: makeArktypeSchemas,
+    typeMapping: PRISMA_TO_ARKTYPE,
+    enums,
+    formatEnum: makeArktypeEnumExpression,
   })
 }

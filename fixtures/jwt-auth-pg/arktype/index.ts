@@ -11,12 +11,20 @@ export const UserSchema = type({
   name: '1 <= string <= 100',
   /** Profile image URL */
   avatarUrl: 'string.url | null',
+  /** User role */
+  role: "'ADMIN' | 'USER' | 'GUEST'",
   /** Credit balance */
   creditBalance: 'number',
   /** Email verification status */
   emailVerified: 'boolean',
   /** Account active status */
   isActive: 'boolean',
+  /** Account creation timestamp */
+  createdAt: 'Date',
+  /** Last update timestamp */
+  updatedAt: 'Date',
+  /** Last login timestamp */
+  lastLoginAt: 'Date',
 })
 
 export type User = typeof UserSchema.infer
@@ -26,12 +34,18 @@ export const OAuthAccountSchema = type({
   id: 'string.uuid',
   /** User ID */
   userId: 'string.uuid',
+  /** OAuth provider */
+  provider: "'GOOGLE' | 'GITHUB' | 'FACEBOOK' | 'TWITTER' | 'APPLE'",
   /** Provider account ID */
   providerAccountId: 'string',
   /** Access token from provider */
   accessToken: 'string | null',
   /** Refresh token from provider */
   refreshToken: 'string | null',
+  /** Token expiration timestamp */
+  expiresAt: 'Date',
+  /** Account creation timestamp */
+  createdAt: 'Date',
 })
 
 export type OAuthAccount = typeof OAuthAccountSchema.infer
@@ -43,17 +57,27 @@ export const TwoFactorSettingSchema = type({
   userId: 'string.uuid',
   /** 2FA enabled status */
   enabled: 'boolean',
+  /** 2FA method */
+  method: "'TOTP' | 'SMS' | 'EMAIL'",
   /** TOTP secret (encrypted) */
   totpSecret: 'string | null',
   /** Phone number for SMS (E.164 format) */
   phoneNumber: 'string | null',
   /** Backup codes (hashed, JSON array) */
   backupCodes: 'string | null',
+  /** Last verified timestamp */
+  verifiedAt: 'Date',
+  /** Creation timestamp */
+  createdAt: 'Date',
+  /** Last update timestamp */
+  updatedAt: 'Date',
 })
 
 export type TwoFactorSetting = typeof TwoFactorSettingSchema.infer
 
 export const RefreshTokenSchema = type({
+  /** Refresh token ID */
+  id: 'string',
   /** User ID */
   userId: 'string.uuid',
   /** Token hash (SHA-256) */
@@ -62,6 +86,10 @@ export const RefreshTokenSchema = type({
   deviceInfo: 'string | null',
   /** IP address at creation */
   ipAddress: 'string | null',
+  /** Token expiration timestamp */
+  expiresAt: 'Date',
+  /** Token creation timestamp */
+  createdAt: 'Date',
   /** Revocation status */
   revoked: 'boolean',
 })
@@ -75,6 +103,10 @@ export const EmailVerificationSchema = type({
   userId: 'string.uuid',
   /** Verification token (hashed) */
   tokenHash: 'string',
+  /** Token expiration timestamp */
+  expiresAt: 'Date',
+  /** Creation timestamp */
+  createdAt: 'Date',
 })
 
 export type EmailVerification = typeof EmailVerificationSchema.infer
@@ -86,8 +118,12 @@ export const PasswordResetSchema = type({
   userId: 'string.uuid',
   /** Reset token (hashed) */
   tokenHash: 'string',
+  /** Token expiration timestamp */
+  expiresAt: 'Date',
   /** Used status */
   used: 'boolean',
+  /** Creation timestamp */
+  createdAt: 'Date',
 })
 
 export type PasswordReset = typeof PasswordResetSchema.infer

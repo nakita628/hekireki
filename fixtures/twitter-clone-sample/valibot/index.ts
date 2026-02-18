@@ -16,7 +16,7 @@ export const UserSchema = v.object({
   /**
    * User's biography or profile description
    */
-  bio: v.nullish(v.string()),
+  bio: v.exactOptional(v.nullish(v.string())),
   /**
    * User's unique email address
    */
@@ -24,23 +24,23 @@ export const UserSchema = v.object({
   /**
    * Timestamp of email verification
    */
-  emailVerified: v.nullish(v.pipe(v.string(), v.isoDate())),
+  emailVerified: v.exactOptional(v.nullish(v.pipe(v.string(), v.isoDate()))),
   /**
    * URL of user's image
    */
-  image: v.nullish(v.pipe(v.string(), v.url())),
+  image: v.exactOptional(v.nullish(v.pipe(v.string(), v.url()))),
   /**
    * URL of user's cover image
    */
-  coverImage: v.nullish(v.pipe(v.string(), v.url())),
+  coverImage: v.exactOptional(v.nullish(v.pipe(v.string(), v.url()))),
   /**
    * URL of user's profile image
    */
-  profileImage: v.nullish(v.pipe(v.string(), v.url())),
+  profileImage: v.exactOptional(v.nullish(v.pipe(v.string(), v.url()))),
   /**
    * Hashed password for security
    */
-  hashedPassword: v.nullish(v.string()),
+  hashedPassword: v.exactOptional(v.nullish(v.string())),
   /**
    * Timestamp when the user was created
    */
@@ -52,7 +52,7 @@ export const UserSchema = v.object({
   /**
    * Flag indicating if user has unread notifications
    */
-  hasNotification: v.nullish(v.boolean()),
+  hasNotification: v.exactOptional(v.nullish(v.boolean())),
 })
 
 export type User = v.InferInput<typeof UserSchema>

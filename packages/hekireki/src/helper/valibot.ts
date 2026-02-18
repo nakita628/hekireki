@@ -2,14 +2,50 @@ import type { DMMF } from '@prisma/generator-helper'
 import {
   makeAnnotationExtractor,
   makeJsDoc,
+  makePropertiesGenerator,
   makeValibotCardinality,
+  makeValibotEnumExpression,
   makeValibotInfer,
   makeValibotObject,
-  makeValibotSchemas,
+  makeValibotSchema,
   makeValidationExtractor,
   parseDocumentWithoutAnnotations,
+  schemaFromFields,
 } from '../utils/index.js'
 import { validationSchemas } from './prisma.js'
+
+export const PRISMA_TO_VALIBOT: Record<string, string> = {
+  String: 'string()',
+  Int: 'number()',
+  Float: 'number()',
+  Boolean: 'boolean()',
+  DateTime: 'date()',
+  BigInt: 'bigint()',
+  Decimal: 'number()',
+  Json: 'unknown()',
+  Bytes: 'any()',
+}
+
+export function makeValibotSchemas(
+  modelFields: readonly {
+    readonly documentation: string
+    readonly modelName: string
+    readonly fieldName: string
+    readonly validation: string | null
+    readonly isRequired: boolean
+    readonly comment: readonly string[]
+  }[],
+  comment: boolean,
+): string {
+  return schemaFromFields(
+    modelFields,
+    comment,
+    makeValibotSchema,
+    makePropertiesGenerator('v', (expr, isRequired) =>
+      isRequired ? expr : `v.exactOptional(${expr})`,
+    ),
+  )
+}
 
 const vPrim = (f: DMMF.Field): string => {
   const extractor = makeAnnotationExtractor('@v.')
@@ -62,7 +98,12 @@ export function makeValibotRelations(
   return `export const ${model.name}RelationsSchema = v.object({\n${fields}\n})${typeLine}`
 }
 
-export function valibot(models: readonly DMMF.Model[], type: boolean, comment: boolean): string {
+export function valibot(
+  models: readonly DMMF.Model[],
+  type: boolean,
+  comment: boolean,
+  enums?: readonly DMMF.DatamodelEnum[],
+): string {
   return validationSchemas(models, type, comment, {
     importStatement: `import * as v from 'valibot'`,
     annotationPrefix: '@v.',
@@ -70,5 +111,8 @@ export function valibot(models: readonly DMMF.Model[], type: boolean, comment: b
     extractValidation: makeValidationExtractor('@v.'),
     inferType: makeValibotInfer,
     schemas: makeValibotSchemas,
+    typeMapping: PRISMA_TO_VALIBOT,
+    enums,
+    formatEnum: makeValibotEnumExpression,
   })
 }

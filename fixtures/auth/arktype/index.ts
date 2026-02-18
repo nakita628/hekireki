@@ -13,6 +13,8 @@ export const UserSchema = type({
   image: 'string.url',
   /** Hashed password */
   password: 'string >= 8',
+  /** Role of the user (ADMIN or USER) */
+  role: "'ADMIN' | 'USER'",
   /** Whether 2FA is enabled */
   isTwoFactorEnabled: 'boolean',
 })

@@ -31,6 +31,7 @@ export async function main(options: GeneratorOptions): Promise<void> {
     getBool(options.generator.config?.type),
     getBool(options.generator.config?.comment),
     zodVersion,
+    options.dmmf.datamodel.enums,
   )
   const relations = enableRelation
     ? makeRelationsOnly(options.dmmf, getBool(options.generator.config?.type), makeZodRelations)
