@@ -1,11 +1,11 @@
 import type { DMMF } from '@prisma/generator-helper'
 import { describe, expect, it } from 'vitest'
-import { dbmlContent, generateEnums, generateRelations, generateTables } from '../../helper/dbml.js'
+import { dbmlContent, makeEnums, makeRelations, makeTables } from '../../helper/dbml.js'
 
 // Test run
 // pnpm vitest run ./src/generator/dbml/dbml.test.ts
 
-describe('generateTables', () => {
+describe('makeTables', () => {
   it('strips Zod annotations from field documentation', () => {
     const models: DMMF.Model[] = [
       {
@@ -33,7 +33,7 @@ describe('generateTables', () => {
         isGenerated: false,
       },
     ]
-    expect(generateTables(models)).toStrictEqual([
+    expect(makeTables(models)).toStrictEqual([
       "Table User {\n  id String [pk, note: 'Unique user ID']\n}",
     ])
   })
@@ -65,7 +65,7 @@ describe('generateTables', () => {
         isGenerated: false,
       },
     ]
-    expect(generateTables(models)).toStrictEqual([
+    expect(makeTables(models)).toStrictEqual([
       "Table User {\n  email String [unique, not null, note: 'Email address']\n}",
     ])
   })
@@ -97,7 +97,7 @@ describe('generateTables', () => {
         documentation: '@relation User.id Post.userId one-to-many',
       },
     ]
-    expect(generateTables(models)).toStrictEqual(['Table User {\n  id String [pk]\n}'])
+    expect(makeTables(models)).toStrictEqual(['Table User {\n  id String [pk]\n}'])
   })
 
   it('generates basic table definition', () => {
@@ -140,7 +140,7 @@ describe('generateTables', () => {
         isGenerated: false,
       },
     ]
-    expect(generateTables(models)).toStrictEqual([
+    expect(makeTables(models)).toStrictEqual([
       'Table User {\n  id Int [pk, increment]\n  name String [not null]\n}',
     ])
   })
@@ -197,13 +197,13 @@ describe('generateTables', () => {
         isGenerated: false,
       },
     ]
-    expect(generateTables(models)).toStrictEqual([
+    expect(makeTables(models)).toStrictEqual([
       'Table Account {\n  id String [pk]\n  provider String [not null]\n  providerAccountId String [not null]\n\n  indexes {\n    (provider, providerAccountId) [unique]\n  }\n}',
     ])
   })
 })
 
-describe('generateEnums', () => {
+describe('makeEnums', () => {
   it('generates enum definition', () => {
     const enums: DMMF.DatamodelEnum[] = [
       {
@@ -215,15 +215,15 @@ describe('generateEnums', () => {
         dbName: null,
       },
     ]
-    expect(generateEnums(enums)).toStrictEqual(['Enum Role {\n  USER\n  ADMIN\n}'])
+    expect(makeEnums(enums)).toStrictEqual(['Enum Role {\n  USER\n  ADMIN\n}'])
   })
 
   it('returns empty array for empty enums', () => {
-    expect(generateEnums([])).toStrictEqual([])
+    expect(makeEnums([])).toStrictEqual([])
   })
 })
 
-describe('generateRelations', () => {
+describe('makeRelations', () => {
   it('generates foreign key reference', () => {
     const models: DMMF.Model[] = [
       {
@@ -318,7 +318,7 @@ describe('generateRelations', () => {
         isGenerated: false,
       },
     ]
-    expect(generateRelations(models)).toStrictEqual(['Ref Post_userId_fk: Post.userId > User.id'])
+    expect(makeRelations(models)).toStrictEqual(['Ref Post_userId_fk: Post.userId > User.id'])
   })
 
   it('generates relation with onDelete cascade', () => {
@@ -414,7 +414,7 @@ describe('generateRelations', () => {
         isGenerated: false,
       },
     ]
-    expect(generateRelations(models)).toStrictEqual([
+    expect(makeRelations(models)).toStrictEqual([
       'Ref Post_userId_fk: Post.userId > User.id [delete: Cascade]',
     ])
   })
@@ -445,7 +445,7 @@ describe('generateRelations', () => {
         isGenerated: false,
       },
     ]
-    expect(generateRelations(models)).toStrictEqual([])
+    expect(makeRelations(models)).toStrictEqual([])
   })
 })
 

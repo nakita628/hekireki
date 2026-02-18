@@ -2,12 +2,39 @@ import type { DMMF } from '@prisma/generator-helper'
 import {
   makeEffectEnumExpression,
   makeEffectInfer,
-  makeEffectSchemas,
+  makeEffectProperties,
+  makeEffectSchema,
   makeValidationExtractor,
-  PRISMA_TO_EFFECT,
   parseDocumentWithoutAnnotations,
+  schemaFromFields,
 } from '../utils/index.js'
 import { validationSchemas } from './prisma.js'
+
+export const PRISMA_TO_EFFECT: Record<string, string> = {
+  String: 'Schema.String',
+  Int: 'Schema.Number',
+  Float: 'Schema.Number',
+  Boolean: 'Schema.Boolean',
+  DateTime: 'Schema.Date',
+  BigInt: 'Schema.BigIntFromSelf',
+  Decimal: 'Schema.Number',
+  Json: 'Schema.Unknown',
+  Bytes: 'Schema.Unknown',
+}
+
+export function makeEffectSchemas(
+  modelFields: readonly {
+    readonly documentation: string
+    readonly modelName: string
+    readonly fieldName: string
+    readonly validation: string | null
+    readonly isRequired: boolean
+    readonly comment: readonly string[]
+  }[],
+  comment: boolean,
+): string {
+  return schemaFromFields(modelFields, comment, makeEffectSchema, makeEffectProperties)
+}
 
 export function makeEffectRelations(
   model: DMMF.Model,

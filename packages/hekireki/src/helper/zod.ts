@@ -2,16 +2,50 @@ import type { DMMF } from '@prisma/generator-helper'
 import {
   makeAnnotationExtractor,
   makeJsDoc,
+  makePropertiesGenerator,
   makeValidationExtractor,
   makeZodCardinality,
   makeZodEnumExpression,
   makeZodInfer,
   makeZodObject,
-  makeZodSchemas,
-  PRISMA_TO_ZOD,
+  makeZodSchema,
   parseDocumentWithoutAnnotations,
+  schemaFromFields,
 } from '../utils/index.js'
 import { validationSchemas } from './prisma.js'
+
+export const PRISMA_TO_ZOD: Record<string, string> = {
+  String: 'string()',
+  Int: 'number()',
+  Float: 'number()',
+  Boolean: 'boolean()',
+  DateTime: 'iso.datetime()',
+  BigInt: 'bigint()',
+  Decimal: 'number()',
+  Json: 'unknown()',
+  Bytes: 'any()',
+}
+
+export function makeZodSchemas(
+  modelFields: readonly {
+    readonly documentation: string
+    readonly modelName: string
+    readonly fieldName: string
+    readonly validation: string | null
+    readonly isRequired: boolean
+    readonly comment: readonly string[]
+  }[],
+  comment: boolean,
+): string {
+  return schemaFromFields(
+    modelFields,
+    comment,
+    makeZodSchema,
+    makePropertiesGenerator('z', (expr, isRequired) =>
+      isRequired ? expr : `${expr}.exactOptional()`,
+    ),
+  )
+}
 
 const zPrim = (f: DMMF.Field): string => {
   const extractor = makeAnnotationExtractor('@z.')

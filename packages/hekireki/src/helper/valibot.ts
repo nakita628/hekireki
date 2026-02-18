@@ -2,16 +2,50 @@ import type { DMMF } from '@prisma/generator-helper'
 import {
   makeAnnotationExtractor,
   makeJsDoc,
+  makePropertiesGenerator,
   makeValibotCardinality,
   makeValibotEnumExpression,
   makeValibotInfer,
   makeValibotObject,
-  makeValibotSchemas,
+  makeValibotSchema,
   makeValidationExtractor,
-  PRISMA_TO_VALIBOT,
   parseDocumentWithoutAnnotations,
+  schemaFromFields,
 } from '../utils/index.js'
 import { validationSchemas } from './prisma.js'
+
+export const PRISMA_TO_VALIBOT: Record<string, string> = {
+  String: 'string()',
+  Int: 'number()',
+  Float: 'number()',
+  Boolean: 'boolean()',
+  DateTime: 'date()',
+  BigInt: 'bigint()',
+  Decimal: 'number()',
+  Json: 'unknown()',
+  Bytes: 'any()',
+}
+
+export function makeValibotSchemas(
+  modelFields: readonly {
+    readonly documentation: string
+    readonly modelName: string
+    readonly fieldName: string
+    readonly validation: string | null
+    readonly isRequired: boolean
+    readonly comment: readonly string[]
+  }[],
+  comment: boolean,
+): string {
+  return schemaFromFields(
+    modelFields,
+    comment,
+    makeValibotSchema,
+    makePropertiesGenerator('v', (expr, isRequired) =>
+      isRequired ? expr : `v.exactOptional(${expr})`,
+    ),
+  )
+}
 
 const vPrim = (f: DMMF.Field): string => {
   const extractor = makeAnnotationExtractor('@v.')

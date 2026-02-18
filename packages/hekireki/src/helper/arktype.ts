@@ -2,12 +2,39 @@ import type { DMMF } from '@prisma/generator-helper'
 import {
   makeArktypeEnumExpression,
   makeArktypeInfer,
-  makeArktypeSchemas,
+  makeArktypeProperties,
+  makeArktypeSchema,
   makeValidationExtractor,
-  PRISMA_TO_ARKTYPE,
   parseDocumentWithoutAnnotations,
+  schemaFromFields,
 } from '../utils/index.js'
 import { validationSchemas } from './prisma.js'
+
+export const PRISMA_TO_ARKTYPE: Record<string, string> = {
+  String: '"string"',
+  Int: '"number"',
+  Float: '"number"',
+  Boolean: '"boolean"',
+  DateTime: '"Date"',
+  BigInt: '"bigint"',
+  Decimal: '"number"',
+  Json: '"unknown"',
+  Bytes: '"unknown"',
+}
+
+export function makeArktypeSchemas(
+  modelFields: readonly {
+    readonly documentation: string
+    readonly modelName: string
+    readonly fieldName: string
+    readonly validation: string | null
+    readonly isRequired: boolean
+    readonly comment: readonly string[]
+  }[],
+  comment: boolean,
+): string {
+  return schemaFromFields(modelFields, comment, makeArktypeSchema, makeArktypeProperties)
+}
 
 export function makeArktypeRelations(
   model: DMMF.Model,

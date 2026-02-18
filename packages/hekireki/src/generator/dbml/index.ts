@@ -3,7 +3,7 @@ import path from 'node:path'
 import type { GeneratorOptions } from '@prisma/generator-helper'
 import pkg from '@prisma/generator-helper'
 import { mkdir, writeFile } from '../../fsp/index.js'
-import { dbmlContent, generateDbmlFile, generatePng, generatePngFile } from '../../helper/dbml.js'
+import { dbmlContent, makeDbmlFile, makePng, makePngFile } from '../../helper/dbml.js'
 import { getString } from '../../utils/index.js'
 
 const { generatorHandler } = pkg
@@ -28,7 +28,7 @@ export async function main(options: GeneratorOptions): Promise<void> {
       throw new Error(`Failed to create directory: ${mkdirResult.error}`)
     }
     if (output.endsWith('.png')) {
-      const pngResult = await generatePngFile(output, content)
+      const pngResult = await makePngFile(output, content)
       if (!pngResult.ok) throw new Error(pngResult.error)
     } else {
       const dbmlResult = await writeFile(output, content)
@@ -44,10 +44,10 @@ export async function main(options: GeneratorOptions): Promise<void> {
     }
     const fileName = path.basename(resolved.file)
     if (fileName.endsWith('.png')) {
-      const pngResult = await generatePng(resolved.dir, content, fileName)
+      const pngResult = await makePng(resolved.dir, content, fileName)
       if (!pngResult.ok) throw new Error(pngResult.error)
     } else {
-      const dbmlResult = await generateDbmlFile(resolved.dir, content, fileName)
+      const dbmlResult = await makeDbmlFile(resolved.dir, content, fileName)
       if (!dbmlResult.ok) throw new Error(dbmlResult.error)
     }
   }

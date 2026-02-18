@@ -4,10 +4,6 @@ import {
   excludeManyToOneRelations,
   findMissingAnnotations,
   formatConstraints,
-  generateEnum,
-  generateIndex,
-  generatePrismaColumn,
-  generateRef,
   groupByModel,
   hasBareAnnotation,
   isFields,
@@ -16,27 +12,19 @@ import {
   makeCapitalized,
   makeDocumentParser,
   makeEffectEnumExpression,
+  makeEnum,
   makePropertiesGenerator,
-  makeRelationLine,
-  makeRelationLineFromRelation,
   makeSnakeCase,
   makeValibotEnumExpression,
   makeValibotInfer,
   makeValibotSchema,
-  makeValibotSchemas,
   makeValidationExtractor,
   makeZodEnumExpression,
   makeZodInfer,
   makeZodSchema,
-  makeZodSchemas,
-  PRISMA_TO_ARKTYPE,
-  PRISMA_TO_EFFECT,
-  PRISMA_TO_VALIBOT,
-  PRISMA_TO_ZOD,
   parseDocumentWithoutAnnotations,
   parseRelation,
   prismaTypeToEctoType,
-  quote,
   removeDuplicateRelations,
   stripAnnotations,
 } from '.'
@@ -270,71 +258,6 @@ describe('utils', () => {
     })
   })
 
-  describe('makeZodSchemas', () => {
-    it.concurrent('schemas comment true', () => {
-      const result = makeZodSchemas(
-        [
-          {
-            documentation: '',
-            modelName: 'User',
-            fieldName: 'id',
-            comment: ['Primary key', '@v.pipe(v.string(), v.uuid())'],
-            validation: 'uuid()',
-            isRequired: true,
-          },
-          {
-            documentation: '',
-            modelName: 'User',
-            fieldName: 'name',
-            comment: ['Display name', '@v.pipe(v.string(), v.minLength(1), v.maxLength(50))'],
-            validation: 'string().min(1).max(50)',
-            isRequired: true,
-          },
-        ],
-        true,
-      )
-      const expected = `export const UserSchema = z.object({
-  /**
-   * Primary key
-   */
-  id: z.uuid(),
-  /**
-   * Display name
-   */
-  name: z.string().min(1).max(50)
-})`
-      expect(result).toBe(expected)
-    })
-    it.concurrent('schemas comment false', () => {
-      const result = makeZodSchemas(
-        [
-          {
-            documentation: '',
-            modelName: 'User',
-            fieldName: 'id',
-            comment: ['Primary key', '@v.pipe(v.string(), v.uuid())'],
-            validation: 'uuid()',
-            isRequired: true,
-          },
-          {
-            documentation: '',
-            modelName: 'User',
-            fieldName: 'name',
-            comment: ['Display name', '@v.pipe(v.string(), v.minLength(1), v.maxLength(50))'],
-            validation: 'string().min(1).max(50)',
-            isRequired: true,
-          },
-        ],
-        false,
-      )
-      const expected = `export const UserSchema = z.object({
-  id: z.uuid(),
-  name: z.string().min(1).max(50)
-})`
-      expect(result).toBe(expected)
-    })
-  })
-
   // ============================================================================
   // Valibot Helpers
   // ============================================================================
@@ -376,73 +299,6 @@ describe('utils', () => {
         `  id: v.pipe(v.string(), v.uuid()),
   name: v.pipe(v.string(), v.minLength(1), v.maxLength(50))`,
       )
-      const expected = `export const UserSchema = v.object({
-  id: v.pipe(v.string(), v.uuid()),
-  name: v.pipe(v.string(), v.minLength(1), v.maxLength(50))
-})`
-      expect(result).toBe(expected)
-    })
-  })
-
-  describe('makeValibotSchemas', () => {
-    it.concurrent('schemas comment true', () => {
-      const result = makeValibotSchemas(
-        [
-          {
-            documentation: '',
-            modelName: 'User',
-            fieldName: 'id',
-            comment: ['Primary key', '@z.uuid()'],
-            validation: 'pipe(v.string(), v.uuid())',
-            isRequired: true,
-          },
-          {
-            documentation: '',
-            modelName: 'User',
-            fieldName: 'name',
-            comment: ['Display name', '@z.string().min(1).max(50)'],
-            validation: 'pipe(v.string(), v.minLength(1), v.maxLength(50))',
-            isRequired: true,
-          },
-        ],
-        true,
-      )
-
-      const expected = `export const UserSchema = v.object({
-  /**
-   * Primary key
-   */
-  id: v.pipe(v.string(), v.uuid()),
-  /**
-   * Display name
-   */
-  name: v.pipe(v.string(), v.minLength(1), v.maxLength(50))
-})`
-      expect(result).toBe(expected)
-    })
-    it.concurrent('schemas comment false', () => {
-      const result = makeValibotSchemas(
-        [
-          {
-            documentation: '',
-            modelName: 'User',
-            fieldName: 'id',
-            comment: ['Primary key', '@z.uuid()'],
-            validation: 'pipe(v.string(), v.uuid())',
-            isRequired: true,
-          },
-          {
-            documentation: '',
-            modelName: 'User',
-            fieldName: 'name',
-            comment: ['Display name', '@z.string().min(1).max(50)'],
-            validation: 'pipe(v.string(), v.minLength(1), v.maxLength(50))',
-            isRequired: true,
-          },
-        ],
-        false,
-      )
-
       const expected = `export const UserSchema = v.object({
   id: v.pipe(v.string(), v.uuid()),
   name: v.pipe(v.string(), v.minLength(1), v.maxLength(50))
@@ -570,85 +426,6 @@ describe('utils', () => {
     })
   })
 
-  describe('makeRelationLine', () => {
-    const testCases = [
-      { input: 'zero-one-to-zero-one', expected: '|o--|o' },
-      { input: 'zero-one-to-one', expected: '|o--||' },
-      { input: 'zero-one-to-zero-many', expected: '|o--}o' },
-      { input: 'zero-one-to-many', expected: '|o--}|' },
-      { input: 'zero-one-to-zero-one-optional', expected: '|o..|o' },
-      { input: 'zero-one-to-one-optional', expected: '|o..||' },
-      { input: 'one-to-zero-one', expected: '||--|o' },
-      { input: 'one-to-one', expected: '||--||' },
-      { input: 'one-to-zero-many', expected: '||--}o' },
-      { input: 'one-to-many', expected: '||--}|' },
-      { input: 'one-to-zero-one-optional', expected: '||..|o' },
-      { input: 'one-to-one-optional', expected: '||..||' },
-      { input: 'many-to-zero-one', expected: '}|--|o' },
-      { input: 'many-to-one', expected: '}|--||' },
-      { input: 'many-to-many', expected: '}|--}|' },
-      { input: 'many-to-many-optional', expected: '}|..}|' },
-    ]
-    it.each(testCases)('should return $expected for input $input', ({ input, expected }) => {
-      const result = makeRelationLine(input)
-      expect(result.ok).toBe(true)
-      if (result.ok) {
-        expect(result.value).toBe(expected)
-      }
-    })
-
-    it('returns error for invalid input', () => {
-      const result = makeRelationLine('invalid')
-      expect(result.ok).toBe(false)
-      if (!result.ok) {
-        expect(result.error).toBe('Invalid input format: invalid')
-      }
-    })
-    it('returns error for invalid from relationship', () => {
-      const result = makeRelationLine('invalid-to-one')
-      expect(result.ok).toBe(false)
-      if (!result.ok) {
-        expect(result.error).toBe('Invalid relationship: invalid')
-      }
-    })
-    it('returns error for invalid to relationship', () => {
-      const result = makeRelationLine('one-to-invalid')
-      expect(result.ok).toBe(false)
-      if (!result.ok) {
-        expect(result.error).toBe('Invalid relationship: invalid')
-      }
-    })
-  })
-
-  describe('makeRelationLineFromRelation', () => {
-    it.concurrent('generates relation line', () => {
-      const result = makeRelationLineFromRelation({
-        fromModel: 'User',
-        fromField: 'id',
-        toModel: 'Post',
-        toField: 'userId',
-        type: 'one-to-many',
-      })
-      expect(result.ok).toBe(true)
-      if (result.ok) {
-        expect(result.value).toBe('    User ||--}| Post : "(id) - (userId)"')
-      }
-    })
-    it.concurrent('returns error for unknown type', () => {
-      const result = makeRelationLineFromRelation({
-        fromModel: 'User',
-        fromField: 'id',
-        toModel: 'Post',
-        toField: 'userId',
-        type: 'unknown-type',
-      })
-      expect(result.ok).toBe(false)
-      if (!result.ok) {
-        expect(result.error).toBe('Invalid input format: unknown-type')
-      }
-    })
-  })
-
   // ============================================================================
   // DBML Utilities
   // ============================================================================
@@ -656,12 +433,6 @@ describe('utils', () => {
   describe('escapeNote', () => {
     it('escapes single quotes', () => {
       expect(escapeNote("User's bio")).toBe("User\\'s bio")
-    })
-  })
-
-  describe('quote', () => {
-    it('wraps and escapes', () => {
-      expect(quote("User's bio")).toBe("'User\\'s bio'")
     })
   })
 
@@ -674,48 +445,11 @@ describe('utils', () => {
     })
   })
 
-  describe('generateEnum', () => {
+  describe('makeEnum', () => {
     it('generates enum', () => {
-      expect(generateEnum({ name: 'Role', values: ['USER', 'ADMIN'] })).toBe(
+      expect(makeEnum({ name: 'Role', values: ['USER', 'ADMIN'] })).toBe(
         'Enum Role {\n  USER\n  ADMIN\n}',
       )
-    })
-  })
-
-  describe('generateIndex', () => {
-    it('generates pk index', () => {
-      expect(generateIndex({ columns: ['id'], isPrimaryKey: true })).toBe('    id [pk]')
-    })
-    it('generates composite unique index', () => {
-      expect(generateIndex({ columns: ['a', 'b'], isUnique: true })).toBe('    (a, b) [unique]')
-    })
-  })
-
-  describe('generateRef', () => {
-    it('generates simple ref', () => {
-      expect(
-        generateRef({
-          name: 'Post_userId_fk',
-          fromTable: 'Post',
-          fromColumn: 'userId',
-          toTable: 'User',
-          toColumn: 'id',
-          type: '>',
-        }),
-      ).toBe('Ref Post_userId_fk: Post.userId > User.id')
-    })
-    it('generates ref with onDelete', () => {
-      expect(
-        generateRef({
-          name: 'Post_userId_fk',
-          fromTable: 'Post',
-          fromColumn: 'userId',
-          toTable: 'User',
-          toColumn: 'id',
-          type: '>',
-          onDelete: 'Cascade',
-        }),
-      ).toBe('Ref Post_userId_fk: Post.userId > User.id [delete: Cascade]')
     })
   })
 
@@ -732,25 +466,6 @@ describe('utils', () => {
     })
     it('returns undefined for undefined input', () => {
       expect(stripAnnotations(undefined)).toBeUndefined()
-    })
-  })
-
-  describe('generatePrismaColumn', () => {
-    it('generates pk column', () => {
-      expect(generatePrismaColumn({ name: 'id', type: 'String', isPrimaryKey: true })).toBe(
-        '  id String [pk]',
-      )
-    })
-    it('generates column with all constraints', () => {
-      expect(
-        generatePrismaColumn({
-          name: 'email',
-          type: 'String',
-          isUnique: true,
-          isNotNull: true,
-          note: "User's email",
-        }),
-      ).toBe("  email String [unique, not null, note: 'User\\'s email']")
     })
   })
 
@@ -923,30 +638,6 @@ describe('utils', () => {
     })
     it('returns undefined for bare annotation only', () => {
       expect(stripAnnotations('@z')).toBeUndefined()
-    })
-  })
-
-  describe('type mapping constants', () => {
-    it('PRISMA_TO_ZOD maps String to string()', () => {
-      expect(PRISMA_TO_ZOD.String).toBe('string()')
-      expect(PRISMA_TO_ZOD.Int).toBe('number()')
-      expect(PRISMA_TO_ZOD.Boolean).toBe('boolean()')
-      expect(PRISMA_TO_ZOD.DateTime).toBe('iso.datetime()')
-      expect(PRISMA_TO_ZOD.BigInt).toBe('bigint()')
-    })
-    it('PRISMA_TO_VALIBOT maps String to string()', () => {
-      expect(PRISMA_TO_VALIBOT.String).toBe('string()')
-      expect(PRISMA_TO_VALIBOT.Int).toBe('number()')
-    })
-    it('PRISMA_TO_ARKTYPE maps String to "string"', () => {
-      expect(PRISMA_TO_ARKTYPE.String).toBe('"string"')
-      expect(PRISMA_TO_ARKTYPE.Int).toBe('"number"')
-      expect(PRISMA_TO_ARKTYPE.DateTime).toBe('"Date"')
-    })
-    it('PRISMA_TO_EFFECT maps String to Schema.String', () => {
-      expect(PRISMA_TO_EFFECT.String).toBe('Schema.String')
-      expect(PRISMA_TO_EFFECT.Int).toBe('Schema.Number')
-      expect(PRISMA_TO_EFFECT.BigInt).toBe('Schema.BigIntFromSelf')
     })
   })
 

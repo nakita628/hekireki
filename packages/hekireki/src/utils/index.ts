@@ -36,56 +36,8 @@ export function makeSnakeCase(name: string): string {
 }
 
 // ============================================================================
-// Bare Annotation Type Mappings
+// Annotation Utilities
 // ============================================================================
-
-export const PRISMA_TO_ZOD: Record<string, string> = {
-  String: 'string()',
-  Int: 'number()',
-  Float: 'number()',
-  Boolean: 'boolean()',
-  DateTime: 'iso.datetime()',
-  BigInt: 'bigint()',
-  Decimal: 'number()',
-  Json: 'unknown()',
-  Bytes: 'any()',
-}
-
-export const PRISMA_TO_VALIBOT: Record<string, string> = {
-  String: 'string()',
-  Int: 'number()',
-  Float: 'number()',
-  Boolean: 'boolean()',
-  DateTime: 'date()',
-  BigInt: 'bigint()',
-  Decimal: 'number()',
-  Json: 'unknown()',
-  Bytes: 'any()',
-}
-
-export const PRISMA_TO_ARKTYPE: Record<string, string> = {
-  String: '"string"',
-  Int: '"number"',
-  Float: '"number"',
-  Boolean: '"boolean"',
-  DateTime: '"Date"',
-  BigInt: '"bigint"',
-  Decimal: '"number"',
-  Json: '"unknown"',
-  Bytes: '"unknown"',
-}
-
-export const PRISMA_TO_EFFECT: Record<string, string> = {
-  String: 'Schema.String',
-  Int: 'Schema.Number',
-  Float: 'Schema.Number',
-  Boolean: 'Schema.Boolean',
-  DateTime: 'Schema.Date',
-  BigInt: 'Schema.BigIntFromSelf',
-  Decimal: 'Schema.Number',
-  Json: 'Schema.Unknown',
-  Bytes: 'Schema.Unknown',
-}
 
 /**
  * Check if documentation contains a bare annotation (e.g. "@z" without ".something")
@@ -94,42 +46,6 @@ export function hasBareAnnotation(documentation: string | undefined, barePrefix:
   if (!documentation) return false
   return documentation.split('\n').some((line) => line.trim() === barePrefix)
 }
-
-// ============================================================================
-// Enum Formatters
-// ============================================================================
-
-/**
- * Format enum values as Zod enum expression
- */
-export function makeZodEnumExpression(values: readonly string[]): string {
-  return `enum([${values.map((v) => `'${v}'`).join(', ')}])`
-}
-
-/**
- * Format enum values as Valibot picklist expression
- */
-export function makeValibotEnumExpression(values: readonly string[]): string {
-  return `picklist([${values.map((v) => `'${v}'`).join(', ')}])`
-}
-
-/**
- * Format enum values as ArkType union expression
- */
-export function makeArktypeEnumExpression(values: readonly string[]): string {
-  return `"${values.map((v) => `'${v}'`).join(' | ')}"`
-}
-
-/**
- * Format enum values as Effect Schema.Literal expression
- */
-export function makeEffectEnumExpression(values: readonly string[]): string {
-  return `Schema.Literal(${values.map((v) => `'${v}'`).join(', ')})`
-}
-
-// ============================================================================
-// Annotation Utilities
-// ============================================================================
 
 /**
  * Create a document parser that filters out annotation lines
@@ -208,6 +124,38 @@ export function parseDocumentWithoutAnnotations(
 }
 
 // ============================================================================
+// Enum Formatters
+// ============================================================================
+
+/**
+ * Format enum values as Zod enum expression
+ */
+export function makeZodEnumExpression(values: readonly string[]): string {
+  return `enum([${values.map((v) => `'${v}'`).join(', ')}])`
+}
+
+/**
+ * Format enum values as Valibot picklist expression
+ */
+export function makeValibotEnumExpression(values: readonly string[]): string {
+  return `picklist([${values.map((v) => `'${v}'`).join(', ')}])`
+}
+
+/**
+ * Format enum values as ArkType union expression
+ */
+export function makeArktypeEnumExpression(values: readonly string[]): string {
+  return `"${values.map((v) => `'${v}'`).join(' | ')}"`
+}
+
+/**
+ * Format enum values as Effect Schema.Literal expression
+ */
+export function makeEffectEnumExpression(values: readonly string[]): string {
+  return `Schema.Literal(${values.map((v) => `'${v}'`).join(', ')})`
+}
+
+// ============================================================================
 // Properties Generator
 // ============================================================================
 
@@ -218,7 +166,7 @@ export function makePropertiesGenerator(
   libraryPrefix: string,
   wrapCardinality?: (expr: string, isRequired: boolean) => string,
 ) {
-  return function generateProperties(
+  return function makeProperties(
     modelFields: readonly {
       readonly documentation: string
       readonly modelName: string
@@ -439,20 +387,14 @@ export function makeEffectProperties(
 // Relation Utilities
 // ============================================================================
 
-const RELATIONSHIP_TYPES = ['zero-one', 'one', 'zero-many', 'many'] as const
-
 /**
  * Check if string is a valid relationship type
  */
 export function isRelationshipType(
   type: string,
 ): type is 'zero-one' | 'one' | 'zero-many' | 'many' {
-  return RELATIONSHIP_TYPES.includes(type as 'zero-one' | 'one' | 'zero-many' | 'many')
+  return type === 'zero-one' || type === 'one' || type === 'zero-many' || type === 'many'
 }
-
-// ============================================================================
-// Mermaid ER Utilities
-// ============================================================================
 
 /**
  * Remove duplicate relations and exclude any that are many-to-one.
@@ -496,63 +438,6 @@ export function removeDuplicateRelations(relations: readonly string[]): readonly
   return [...new Set(relations)]
 }
 
-const RELATIONSHIPS = {
-  'zero-one': '|o',
-  one: '||',
-  'zero-many': '}o',
-  many: '}|',
-} as const
-
-/**
- * Generate a Mermaid ER diagram relation connector from a custom relationship string.
- */
-export function makeRelationLine(
-  input: string,
-): { readonly ok: true; readonly value: string } | { readonly ok: false; readonly error: string } {
-  const parts = input.split('-to-')
-  if (parts.length !== 2) {
-    return { ok: false, error: `Invalid input format: ${input}` }
-  }
-  const [toRaw, optionalFlag] = parts[1].includes('-optional')
-    ? [parts[1].replace('-optional', ''), 'optional']
-    : [parts[1], '']
-  const from = parts[0]
-  const to = toRaw
-  const isOptional = optionalFlag === 'optional'
-  if (!isRelationshipType(from)) {
-    return { ok: false, error: `Invalid relationship: ${from}` }
-  }
-  if (!isRelationshipType(to)) {
-    return { ok: false, error: `Invalid relationship: ${to}` }
-  }
-  const fromSymbol = RELATIONSHIPS[from]
-  const toSymbol = RELATIONSHIPS[to]
-  const connector = isOptional ? '..' : '--'
-  return { ok: true, value: `${fromSymbol}${connector}${toSymbol}` }
-}
-
-/**
- * Generate a Mermaid ER diagram relation line from a relation definition.
- */
-export function makeRelationLineFromRelation(relation: {
-  fromModel: string
-  toModel: string
-  fromField: string
-  toField: string
-  type: string
-}): { readonly ok: true; readonly value: string } | { readonly ok: false; readonly error: string } {
-  const result = makeRelationLine(relation.type)
-
-  if (!result.ok) {
-    return result
-  }
-
-  return {
-    ok: true,
-    value: `    ${relation.fromModel} ${result.value} ${relation.toModel} : "(${relation.fromField}) - (${relation.toField})"`,
-  }
-}
-
 // ============================================================================
 // DBML Utilities
 // ============================================================================
@@ -561,39 +446,18 @@ export function escapeNote(str: string): string {
   return str.replace(/'/g, "\\'")
 }
 
-export function quote(value: string): string {
-  return `'${escapeNote(value)}'`
-}
-
 export function formatConstraints(constraints: readonly string[]): string {
   return constraints.length > 0 ? ` [${constraints.join(', ')}]` : ''
 }
 
-export function generateEnum(enumDef: {
+export function makeEnum(enumDef: {
   readonly name: string
   readonly values: readonly string[]
 }): string {
   return [`Enum ${enumDef.name} {`, ...enumDef.values.map((v) => `  ${v}`), '}'].join('\n')
 }
 
-export function generateIndex(index: {
-  readonly columns: readonly string[]
-  readonly isPrimaryKey?: boolean
-  readonly isUnique?: boolean
-  readonly name?: string
-}): string {
-  const columns = index.columns.length > 1 ? `(${index.columns.join(', ')})` : index.columns[0]
-
-  const constraints = [
-    index.isPrimaryKey && 'pk',
-    index.isUnique && 'unique',
-    index.name && `name: '${index.name}'`,
-  ].filter((c): c is string => Boolean(c))
-
-  return `    ${columns}${formatConstraints(constraints)}`
-}
-
-export function generateRefName(ref: {
+export function makeRefName(ref: {
   readonly name?: string
   readonly fromTable: string
   readonly fromColumn: string
@@ -601,29 +465,6 @@ export function generateRefName(ref: {
   readonly toColumn: string
 }): string {
   return ref.name ?? `${ref.fromTable}_${ref.fromColumn}_${ref.toTable}_${ref.toColumn}_fk`
-}
-
-export function generateRef(ref: {
-  readonly name?: string
-  readonly fromTable: string
-  readonly fromColumn: string
-  readonly toTable: string
-  readonly toColumn: string
-  readonly type?: '>' | '<' | '-'
-  readonly onDelete?: string
-  readonly onUpdate?: string
-}): string {
-  const name = generateRefName(ref)
-  const operator = ref.type ?? '>'
-
-  const actions = [
-    ref.onDelete && `delete: ${ref.onDelete}`,
-    ref.onUpdate && `update: ${ref.onUpdate}`,
-  ].filter((a): a is string => Boolean(a))
-
-  const actionStr = actions.length > 0 ? ` [${actions.join(', ')}]` : ''
-
-  return `Ref ${name}: ${ref.fromTable}.${ref.fromColumn} ${operator} ${ref.toTable}.${ref.toColumn}${actionStr}`
 }
 
 /**
@@ -647,31 +488,6 @@ export function stripAnnotations(doc: string | undefined): string | undefined {
   })
   const result = lines.join('\n').trim()
   return result.length > 0 ? result : undefined
-}
-
-/**
- * Generate custom column line with Prisma-specific formatting
- */
-export function generatePrismaColumn(column: {
-  readonly name: string
-  readonly type: string
-  readonly isPrimaryKey?: boolean
-  readonly isUnique?: boolean
-  readonly isNotNull?: boolean
-  readonly isIncrement?: boolean
-  readonly defaultValue?: string
-  readonly note?: string
-}): string {
-  const constraints = [
-    column.isPrimaryKey && 'pk',
-    column.isIncrement && 'increment',
-    column.defaultValue !== undefined && `default: ${column.defaultValue}`,
-    column.isUnique && 'unique',
-    column.isNotNull && 'not null',
-    column.note && `note: ${quote(column.note)}`,
-  ].filter((c): c is string => Boolean(c))
-
-  return `  ${column.name} ${column.type}${formatConstraints(constraints)}`
 }
 
 /**
@@ -839,86 +655,4 @@ export function schemaFromFields(
   const modelName = modelFields[0].modelName
   const fields = propertiesGenerator(modelFields, comment)
   return schemaBuilder(modelName, fields)
-}
-
-/**
- * Creates Zod schemas from model fields.
- */
-export function makeZodSchemas(
-  modelFields: readonly {
-    readonly documentation: string
-    readonly modelName: string
-    readonly fieldName: string
-    readonly validation: string | null
-    readonly isRequired: boolean
-    readonly comment: readonly string[]
-  }[],
-  comment: boolean,
-): string {
-  return schemaFromFields(
-    modelFields,
-    comment,
-    makeZodSchema,
-    makePropertiesGenerator('z', (expr, isRequired) =>
-      isRequired ? expr : `${expr}.exactOptional()`,
-    ),
-  )
-}
-
-/**
- * Creates Valibot schemas from model fields.
- */
-export function makeValibotSchemas(
-  modelFields: readonly {
-    readonly documentation: string
-    readonly modelName: string
-    readonly fieldName: string
-    readonly validation: string | null
-    readonly isRequired: boolean
-    readonly comment: readonly string[]
-  }[],
-  comment: boolean,
-): string {
-  return schemaFromFields(
-    modelFields,
-    comment,
-    makeValibotSchema,
-    makePropertiesGenerator('v', (expr, isRequired) =>
-      isRequired ? expr : `v.exactOptional(${expr})`,
-    ),
-  )
-}
-
-/**
- * Creates ArkType schemas from model fields.
- */
-export function makeArktypeSchemas(
-  modelFields: readonly {
-    readonly documentation: string
-    readonly modelName: string
-    readonly fieldName: string
-    readonly validation: string | null
-    readonly isRequired: boolean
-    readonly comment: readonly string[]
-  }[],
-  comment: boolean,
-): string {
-  return schemaFromFields(modelFields, comment, makeArktypeSchema, makeArktypeProperties)
-}
-
-/**
- * Creates Effect schemas from model fields.
- */
-export function makeEffectSchemas(
-  modelFields: readonly {
-    readonly documentation: string
-    readonly modelName: string
-    readonly fieldName: string
-    readonly validation: string | null
-    readonly isRequired: boolean
-    readonly comment: readonly string[]
-  }[],
-  comment: boolean,
-): string {
-  return schemaFromFields(modelFields, comment, makeEffectSchema, makeEffectProperties)
 }
