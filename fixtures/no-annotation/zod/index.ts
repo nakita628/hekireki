@@ -3,12 +3,12 @@ import * as z from 'zod'
 export const UserSchema = z.object({
   id: z.string(),
   email: z.string(),
-  name: z.string(),
-  age: z.number(),
+  name: z.string().exactOptional(),
+  age: z.number().exactOptional(),
   isActive: z.boolean(),
   role: z.enum(['ADMIN', 'MEMBER', 'GUEST']),
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
 })
 
 export type User = z.infer<typeof UserSchema>
@@ -18,8 +18,8 @@ export const PostSchema = z.object({
   title: z.string(),
   content: z.string(),
   published: z.boolean(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
   authorId: z.string(),
 })
 
@@ -27,8 +27,8 @@ export type Post = z.infer<typeof PostSchema>
 
 export const ProfileSchema = z.object({
   id: z.string(),
-  bio: z.string(),
-  avatar: z.string(),
+  bio: z.string().exactOptional(),
+  avatar: z.string().exactOptional(),
   userId: z.string(),
 })
 

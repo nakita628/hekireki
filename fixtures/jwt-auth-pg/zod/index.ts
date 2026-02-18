@@ -12,7 +12,7 @@ export const UserSchema = z.object({
   /**
    * Hashed password (null for OAuth-only users)
    */
-  passwordHash: z.string().min(8).nullable(),
+  passwordHash: z.string().min(8).nullable().exactOptional(),
   /**
    * Display name
    */
@@ -20,7 +20,11 @@ export const UserSchema = z.object({
   /**
    * Profile image URL
    */
-  avatarUrl: z.url().nullable(),
+  avatarUrl: z.url().nullable().exactOptional(),
+  /**
+   * User role
+   */
+  role: z.enum(['ADMIN', 'USER', 'GUEST']),
   /**
    * Credit balance
    */
@@ -33,6 +37,18 @@ export const UserSchema = z.object({
    * Account active status
    */
   isActive: z.boolean(),
+  /**
+   * Account creation timestamp
+   */
+  createdAt: z.iso.datetime(),
+  /**
+   * Last update timestamp
+   */
+  updatedAt: z.iso.datetime(),
+  /**
+   * Last login timestamp
+   */
+  lastLoginAt: z.iso.datetime().exactOptional(),
 })
 
 export type User = z.infer<typeof UserSchema>
@@ -47,17 +63,29 @@ export const OAuthAccountSchema = z.object({
    */
   userId: z.uuid(),
   /**
+   * OAuth provider
+   */
+  provider: z.enum(['GOOGLE', 'GITHUB', 'FACEBOOK', 'TWITTER', 'APPLE']),
+  /**
    * Provider account ID
    */
   providerAccountId: z.string(),
   /**
    * Access token from provider
    */
-  accessToken: z.string().nullable(),
+  accessToken: z.string().nullable().exactOptional(),
   /**
    * Refresh token from provider
    */
-  refreshToken: z.string().nullable(),
+  refreshToken: z.string().nullable().exactOptional(),
+  /**
+   * Token expiration timestamp
+   */
+  expiresAt: z.iso.datetime().exactOptional(),
+  /**
+   * Account creation timestamp
+   */
+  createdAt: z.iso.datetime(),
 })
 
 export type OAuthAccount = z.infer<typeof OAuthAccountSchema>
@@ -76,22 +104,42 @@ export const TwoFactorSettingSchema = z.object({
    */
   enabled: z.boolean(),
   /**
+   * 2FA method
+   */
+  method: z.enum(['TOTP', 'SMS', 'EMAIL']).exactOptional(),
+  /**
    * TOTP secret (encrypted)
    */
-  totpSecret: z.string().nullable(),
+  totpSecret: z.string().nullable().exactOptional(),
   /**
    * Phone number for SMS (E.164 format)
    */
-  phoneNumber: z.string().nullable(),
+  phoneNumber: z.string().nullable().exactOptional(),
   /**
    * Backup codes (hashed, JSON array)
    */
-  backupCodes: z.string().nullable(),
+  backupCodes: z.string().nullable().exactOptional(),
+  /**
+   * Last verified timestamp
+   */
+  verifiedAt: z.iso.datetime().exactOptional(),
+  /**
+   * Creation timestamp
+   */
+  createdAt: z.iso.datetime(),
+  /**
+   * Last update timestamp
+   */
+  updatedAt: z.iso.datetime(),
 })
 
 export type TwoFactorSetting = z.infer<typeof TwoFactorSettingSchema>
 
 export const RefreshTokenSchema = z.object({
+  /**
+   * Refresh token ID
+   */
+  id: z.string(),
   /**
    * User ID
    */
@@ -103,11 +151,19 @@ export const RefreshTokenSchema = z.object({
   /**
    * Device/client identifier
    */
-  deviceInfo: z.string().nullable(),
+  deviceInfo: z.string().nullable().exactOptional(),
   /**
    * IP address at creation
    */
-  ipAddress: z.string().nullable(),
+  ipAddress: z.string().nullable().exactOptional(),
+  /**
+   * Token expiration timestamp
+   */
+  expiresAt: z.iso.datetime(),
+  /**
+   * Token creation timestamp
+   */
+  createdAt: z.iso.datetime(),
   /**
    * Revocation status
    */
@@ -129,6 +185,14 @@ export const EmailVerificationSchema = z.object({
    * Verification token (hashed)
    */
   tokenHash: z.string(),
+  /**
+   * Token expiration timestamp
+   */
+  expiresAt: z.iso.datetime(),
+  /**
+   * Creation timestamp
+   */
+  createdAt: z.iso.datetime(),
 })
 
 export type EmailVerification = z.infer<typeof EmailVerificationSchema>
@@ -147,9 +211,17 @@ export const PasswordResetSchema = z.object({
    */
   tokenHash: z.string(),
   /**
+   * Token expiration timestamp
+   */
+  expiresAt: z.iso.datetime(),
+  /**
    * Used status
    */
   used: z.boolean(),
+  /**
+   * Creation timestamp
+   */
+  createdAt: z.iso.datetime(),
 })
 
 export type PasswordReset = z.infer<typeof PasswordResetSchema>

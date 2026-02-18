@@ -18,9 +18,21 @@ export const UserSchema = z.object({
    */
   name: z.string().min(1).max(100),
   /**
+   * User role
+   */
+  role: z.enum(['ADMIN', 'USER']),
+  /**
    * Account active status
    */
   isActive: z.boolean(),
+  /**
+   * Account creation timestamp
+   */
+  createdAt: z.iso.datetime(),
+  /**
+   * Last update timestamp
+   */
+  updatedAt: z.iso.datetime(),
 })
 
 export type User = z.infer<typeof UserSchema>
@@ -39,13 +51,21 @@ export const SessionSchema = z.object({
    */
   userId: z.uuid(),
   /**
+   * Session expiration
+   */
+  expiresAt: z.iso.datetime(),
+  /**
    * Client IP address
    */
-  ipAddress: z.string().nullable(),
+  ipAddress: z.string().nullable().exactOptional(),
   /**
    * Client user agent
    */
-  userAgent: z.string().nullable(),
+  userAgent: z.string().nullable().exactOptional(),
+  /**
+   * Session creation timestamp
+   */
+  createdAt: z.iso.datetime(),
 })
 
 export type Session = z.infer<typeof SessionSchema>
@@ -66,11 +86,15 @@ export const LoginHistorySchema = z.object({
   /**
    * Client user agent
    */
-  userAgent: z.string().nullable(),
+  userAgent: z.string().nullable().exactOptional(),
   /**
    * Login success status
    */
   success: z.boolean(),
+  /**
+   * Login timestamp
+   */
+  createdAt: z.iso.datetime(),
 })
 
 export type LoginHistory = z.infer<typeof LoginHistorySchema>
@@ -88,6 +112,10 @@ export const PasswordHistorySchema = z.object({
    * Hashed password
    */
   passwordHash: z.string(),
+  /**
+   * Change timestamp
+   */
+  createdAt: z.iso.datetime(),
 })
 
 export type PasswordHistory = z.infer<typeof PasswordHistorySchema>

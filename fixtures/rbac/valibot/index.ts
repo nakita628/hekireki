@@ -13,6 +13,18 @@ export const OrganizationSchema = v.object({
    * URL-safe slug
    */
   slug: v.pipe(v.string(), v.minLength(1), v.maxLength(100)),
+  /**
+   * Organization status
+   */
+  status: v.picklist(['ACTIVE', 'INACTIVE', 'SUSPENDED']),
+  /**
+   * Creation timestamp
+   */
+  createdAt: v.date(),
+  /**
+   * Last update timestamp
+   */
+  updatedAt: v.date(),
 })
 
 export type Organization = v.InferInput<typeof OrganizationSchema>
@@ -34,6 +46,14 @@ export const UserSchema = v.object({
    * Display name
    */
   name: v.pipe(v.string(), v.minLength(1), v.maxLength(100)),
+  /**
+   * Creation timestamp
+   */
+  createdAt: v.date(),
+  /**
+   * Last update timestamp
+   */
+  updatedAt: v.date(),
 })
 
 export type User = v.InferInput<typeof UserSchema>
@@ -50,7 +70,15 @@ export const RoleSchema = v.object({
   /**
    * Role description
    */
-  description: v.nullish(v.string()),
+  description: v.optional(v.nullish(v.string())),
+  /**
+   * Creation timestamp
+   */
+  createdAt: v.date(),
+  /**
+   * Last update timestamp
+   */
+  updatedAt: v.date(),
 })
 
 export type Role = v.InferInput<typeof RoleSchema>
@@ -71,7 +99,11 @@ export const PermissionSchema = v.object({
   /**
    * Permission description
    */
-  description: v.nullish(v.string()),
+  description: v.optional(v.nullish(v.string())),
+  /**
+   * Creation timestamp
+   */
+  createdAt: v.date(),
 })
 
 export type Permission = v.InferInput<typeof PermissionSchema>
@@ -85,6 +117,10 @@ export const UserRoleSchema = v.object({
    * Role ID
    */
   roleId: v.pipe(v.number(), v.integer()),
+  /**
+   * Assignment timestamp
+   */
+  assignedAt: v.date(),
 })
 
 export type UserRole = v.InferInput<typeof UserRoleSchema>
@@ -98,6 +134,10 @@ export const RolePermissionSchema = v.object({
    * Permission ID
    */
   permissionId: v.pipe(v.number(), v.integer()),
+  /**
+   * Assignment timestamp
+   */
+  assignedAt: v.date(),
 })
 
 export type RolePermission = v.InferInput<typeof RolePermissionSchema>
@@ -122,11 +162,15 @@ export const AuditLogSchema = v.object({
   /**
    * Action detail
    */
-  detail: v.nullish(v.string()),
+  detail: v.optional(v.nullish(v.string())),
   /**
    * Client IP address
    */
-  ipAddress: v.nullish(v.string()),
+  ipAddress: v.optional(v.nullish(v.string())),
+  /**
+   * Action timestamp
+   */
+  createdAt: v.date(),
 })
 
 export type AuditLog = v.InferInput<typeof AuditLogSchema>

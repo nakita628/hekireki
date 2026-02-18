@@ -12,7 +12,7 @@ export const UserSchema = v.object({
   /**
    * Hashed password (null for OAuth-only users)
    */
-  passwordHash: v.nullish(v.pipe(v.string(), v.minLength(8))),
+  passwordHash: v.optional(v.nullish(v.pipe(v.string(), v.minLength(8)))),
   /**
    * Display name
    */
@@ -20,7 +20,11 @@ export const UserSchema = v.object({
   /**
    * Profile image URL
    */
-  avatarUrl: v.nullish(v.pipe(v.string(), v.url())),
+  avatarUrl: v.optional(v.nullish(v.pipe(v.string(), v.url()))),
+  /**
+   * User role
+   */
+  role: v.picklist(['ADMIN', 'USER', 'GUEST']),
   /**
    * Credit balance
    */
@@ -33,6 +37,18 @@ export const UserSchema = v.object({
    * Account active status
    */
   isActive: v.boolean(),
+  /**
+   * Account creation timestamp
+   */
+  createdAt: v.date(),
+  /**
+   * Last update timestamp
+   */
+  updatedAt: v.date(),
+  /**
+   * Last login timestamp
+   */
+  lastLoginAt: v.optional(v.date()),
 })
 
 export type User = v.InferInput<typeof UserSchema>
@@ -47,17 +63,29 @@ export const OAuthAccountSchema = v.object({
    */
   userId: v.pipe(v.string(), v.uuid()),
   /**
+   * OAuth provider
+   */
+  provider: v.picklist(['GOOGLE', 'GITHUB', 'FACEBOOK', 'TWITTER', 'APPLE']),
+  /**
    * Provider account ID
    */
   providerAccountId: v.string(),
   /**
    * Access token from provider
    */
-  accessToken: v.nullish(v.string()),
+  accessToken: v.optional(v.nullish(v.string())),
   /**
    * Refresh token from provider
    */
-  refreshToken: v.nullish(v.string()),
+  refreshToken: v.optional(v.nullish(v.string())),
+  /**
+   * Token expiration timestamp
+   */
+  expiresAt: v.optional(v.date()),
+  /**
+   * Account creation timestamp
+   */
+  createdAt: v.date(),
 })
 
 export type OAuthAccount = v.InferInput<typeof OAuthAccountSchema>
@@ -76,22 +104,42 @@ export const TwoFactorSettingSchema = v.object({
    */
   enabled: v.boolean(),
   /**
+   * 2FA method
+   */
+  method: v.optional(v.picklist(['TOTP', 'SMS', 'EMAIL'])),
+  /**
    * TOTP secret (encrypted)
    */
-  totpSecret: v.nullish(v.string()),
+  totpSecret: v.optional(v.nullish(v.string())),
   /**
    * Phone number for SMS (E.164 format)
    */
-  phoneNumber: v.nullish(v.string()),
+  phoneNumber: v.optional(v.nullish(v.string())),
   /**
    * Backup codes (hashed, JSON array)
    */
-  backupCodes: v.nullish(v.string()),
+  backupCodes: v.optional(v.nullish(v.string())),
+  /**
+   * Last verified timestamp
+   */
+  verifiedAt: v.optional(v.date()),
+  /**
+   * Creation timestamp
+   */
+  createdAt: v.date(),
+  /**
+   * Last update timestamp
+   */
+  updatedAt: v.date(),
 })
 
 export type TwoFactorSetting = v.InferInput<typeof TwoFactorSettingSchema>
 
 export const RefreshTokenSchema = v.object({
+  /**
+   * Refresh token ID
+   */
+  id: v.string(),
   /**
    * User ID
    */
@@ -103,11 +151,19 @@ export const RefreshTokenSchema = v.object({
   /**
    * Device/client identifier
    */
-  deviceInfo: v.nullish(v.string()),
+  deviceInfo: v.optional(v.nullish(v.string())),
   /**
    * IP address at creation
    */
-  ipAddress: v.nullish(v.string()),
+  ipAddress: v.optional(v.nullish(v.string())),
+  /**
+   * Token expiration timestamp
+   */
+  expiresAt: v.date(),
+  /**
+   * Token creation timestamp
+   */
+  createdAt: v.date(),
   /**
    * Revocation status
    */
@@ -129,6 +185,14 @@ export const EmailVerificationSchema = v.object({
    * Verification token (hashed)
    */
   tokenHash: v.string(),
+  /**
+   * Token expiration timestamp
+   */
+  expiresAt: v.date(),
+  /**
+   * Creation timestamp
+   */
+  createdAt: v.date(),
 })
 
 export type EmailVerification = v.InferInput<typeof EmailVerificationSchema>
@@ -147,9 +211,17 @@ export const PasswordResetSchema = v.object({
    */
   tokenHash: v.string(),
   /**
+   * Token expiration timestamp
+   */
+  expiresAt: v.date(),
+  /**
    * Used status
    */
   used: v.boolean(),
+  /**
+   * Creation timestamp
+   */
+  createdAt: v.date(),
 })
 
 export type PasswordReset = v.InferInput<typeof PasswordResetSchema>

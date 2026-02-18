@@ -13,6 +13,8 @@ export const UserSchema = Schema.Struct({
   image: Schema.String,
   /** Hashed password */
   password: Schema.String.pipe(Schema.minLength(8)),
+  /** Role of the user (ADMIN or USER) */
+  role: Schema.Literal('ADMIN', 'USER'),
   /** Whether 2FA is enabled */
   isTwoFactorEnabled: Schema.Boolean,
 })

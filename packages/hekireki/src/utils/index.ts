@@ -44,7 +44,7 @@ export const PRISMA_TO_ZOD: Record<string, string> = {
   Int: 'number()',
   Float: 'number()',
   Boolean: 'boolean()',
-  DateTime: 'date()',
+  DateTime: 'iso.datetime()',
   BigInt: 'bigint()',
   Decimal: 'number()',
   Json: 'unknown()',
@@ -214,13 +214,17 @@ export function parseDocumentWithoutAnnotations(
 /**
  * Create a properties generator for a specific validation library
  */
-export function makePropertiesGenerator(libraryPrefix: string) {
+export function makePropertiesGenerator(
+  libraryPrefix: string,
+  wrapCardinality?: (expr: string, isRequired: boolean) => string,
+) {
   return function generateProperties(
     modelFields: readonly {
       readonly documentation: string
       readonly modelName: string
       readonly fieldName: string
       readonly validation: string | null
+      readonly isRequired: boolean
       readonly comment: readonly string[]
     }[],
     includeComments: boolean,
@@ -237,7 +241,10 @@ export function makePropertiesGenerator(libraryPrefix: string) {
             ? `  /**\n${cleanLines.map((line) => `   * ${line}`).join('\n')}\n   */\n`
             : ''
 
-        return `${docComment}  ${field.fieldName}: ${libraryPrefix}.${field.validation}`
+        const base = `${libraryPrefix}.${field.validation}`
+        const wrapped = wrapCardinality ? wrapCardinality(base, field.isRequired) : base
+
+        return `${docComment}  ${field.fieldName}: ${wrapped}`
       })
       .join(',\n')
   }
@@ -278,7 +285,7 @@ export function makeZodObject(
  */
 export function makeZodCardinality(expr: string, isList: boolean, isRequired: boolean): string {
   const withList = isList ? `z.array(${expr})` : expr
-  return isRequired ? withList : `${withList}.optional()`
+  return isRequired ? withList : `${withList}.exactOptional()`
 }
 
 /**
@@ -366,6 +373,7 @@ export function makeArktypeProperties(
     readonly modelName: string
     readonly fieldName: string
     readonly validation: string | null
+    readonly isRequired: boolean
     readonly comment: readonly string[]
   }[],
   comment: boolean,
@@ -411,6 +419,7 @@ export function makeEffectProperties(
     readonly modelName: string
     readonly fieldName: string
     readonly validation: string | null
+    readonly isRequired: boolean
     readonly comment: readonly string[]
   }[],
   comment: boolean,
@@ -753,6 +762,7 @@ export function groupByModel(
     readonly fieldName: string
     readonly comment: readonly string[]
     readonly validation: string | null
+    readonly isRequired: boolean
   }[],
 ): Record<
   string,
@@ -762,6 +772,7 @@ export function groupByModel(
     readonly fieldName: string
     readonly comment: readonly string[]
     readonly validation: string | null
+    readonly isRequired: boolean
   }[]
 > {
   const raw = Object.groupBy(validFields, (f) => f.modelName)
@@ -782,6 +793,7 @@ export function isFields(
     readonly fieldName: string
     readonly comment: readonly string[]
     readonly validation: string | null
+    readonly isRequired: boolean
   }[][],
 ) {
   return modelFields.flat().filter(
@@ -793,6 +805,7 @@ export function isFields(
       fieldName: string
       comment: string[]
       validation: string | null
+      isRequired: boolean
     }> => field.validation !== null,
   )
 }
@@ -806,6 +819,7 @@ export function schemaFromFields(
     readonly modelName: string
     readonly fieldName: string
     readonly validation: string | null
+    readonly isRequired: boolean
     readonly comment: readonly string[]
   }[],
   comment: boolean,
@@ -816,6 +830,7 @@ export function schemaFromFields(
       readonly modelName: string
       readonly fieldName: string
       readonly validation: string | null
+      readonly isRequired: boolean
       readonly comment: readonly string[]
     }[],
     comment: boolean,
@@ -835,11 +850,19 @@ export function makeZodSchemas(
     readonly modelName: string
     readonly fieldName: string
     readonly validation: string | null
+    readonly isRequired: boolean
     readonly comment: readonly string[]
   }[],
   comment: boolean,
 ): string {
-  return schemaFromFields(modelFields, comment, makeZodSchema, makePropertiesGenerator('z'))
+  return schemaFromFields(
+    modelFields,
+    comment,
+    makeZodSchema,
+    makePropertiesGenerator('z', (expr, isRequired) =>
+      isRequired ? expr : `${expr}.exactOptional()`,
+    ),
+  )
 }
 
 /**
@@ -851,11 +874,19 @@ export function makeValibotSchemas(
     readonly modelName: string
     readonly fieldName: string
     readonly validation: string | null
+    readonly isRequired: boolean
     readonly comment: readonly string[]
   }[],
   comment: boolean,
 ): string {
-  return schemaFromFields(modelFields, comment, makeValibotSchema, makePropertiesGenerator('v'))
+  return schemaFromFields(
+    modelFields,
+    comment,
+    makeValibotSchema,
+    makePropertiesGenerator('v', (expr, isRequired) =>
+      isRequired ? expr : `v.optional(${expr})`,
+    ),
+  )
 }
 
 /**
@@ -867,6 +898,7 @@ export function makeArktypeSchemas(
     readonly modelName: string
     readonly fieldName: string
     readonly validation: string | null
+    readonly isRequired: boolean
     readonly comment: readonly string[]
   }[],
   comment: boolean,
@@ -883,6 +915,7 @@ export function makeEffectSchemas(
     readonly modelName: string
     readonly fieldName: string
     readonly validation: string | null
+    readonly isRequired: boolean
     readonly comment: readonly string[]
   }[],
   comment: boolean,

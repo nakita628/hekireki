@@ -8,27 +8,31 @@ export const UserSchema = z.object({
   /**
    * Display name
    */
-  name: z.string().min(1).max(50),
+  name: z.string().min(1).max(50).exactOptional(),
   /**
    * Email address
    */
-  email: z.email(),
+  email: z.email().exactOptional(),
   /**
    * Date when the email was verified
    */
-  emailVerified: z.iso.date(),
+  emailVerified: z.iso.date().exactOptional(),
   /**
    * Profile image URL
    */
-  image: z.url(),
+  image: z.url().exactOptional(),
   /**
    * Hashed password
    */
-  password: z.string().min(8),
+  password: z.string().min(8).exactOptional(),
+  /**
+   * Role of the user (ADMIN or USER)
+   */
+  role: z.enum(['ADMIN', 'USER']),
   /**
    * Whether 2FA is enabled
    */
-  isTwoFactorEnabled: z.boolean(),
+  isTwoFactorEnabled: z.boolean().exactOptional(),
 })
 
 export type User = z.infer<typeof UserSchema>
@@ -57,31 +61,31 @@ export const AccountSchema = z.object({
   /**
    * Refresh token
    */
-  refresh_token: z.string(),
+  refresh_token: z.string().exactOptional(),
   /**
    * Access token
    */
-  access_token: z.string(),
+  access_token: z.string().exactOptional(),
   /**
    * Expiration time (UNIX timestamp)
    */
-  expires_at: z.int(),
+  expires_at: z.int().exactOptional(),
   /**
    * Token type (e.g., Bearer)
    */
-  token_type: z.string().optional(),
+  token_type: z.string().optional().exactOptional(),
   /**
    * OAuth scope
    */
-  scope: z.string().optional(),
+  scope: z.string().optional().exactOptional(),
   /**
    * ID token
    */
-  id_token: z.string().optional(),
+  id_token: z.string().optional().exactOptional(),
   /**
    * Session state
    */
-  session_state: z.string().optional(),
+  session_state: z.string().optional().exactOptional(),
 })
 
 export type Account = z.infer<typeof AccountSchema>

@@ -18,9 +18,21 @@ export const UserSchema = v.object({
    */
   name: v.pipe(v.string(), v.minLength(1), v.maxLength(100)),
   /**
+   * User role
+   */
+  role: v.picklist(['ADMIN', 'USER']),
+  /**
    * Account active status
    */
   isActive: v.boolean(),
+  /**
+   * Account creation timestamp
+   */
+  createdAt: v.date(),
+  /**
+   * Last update timestamp
+   */
+  updatedAt: v.date(),
 })
 
 export type User = v.InferInput<typeof UserSchema>
@@ -39,13 +51,21 @@ export const SessionSchema = v.object({
    */
   userId: v.pipe(v.string(), v.uuid()),
   /**
+   * Session expiration
+   */
+  expiresAt: v.date(),
+  /**
    * Client IP address
    */
-  ipAddress: v.nullish(v.string()),
+  ipAddress: v.optional(v.nullish(v.string())),
   /**
    * Client user agent
    */
-  userAgent: v.nullish(v.string()),
+  userAgent: v.optional(v.nullish(v.string())),
+  /**
+   * Session creation timestamp
+   */
+  createdAt: v.date(),
 })
 
 export type Session = v.InferInput<typeof SessionSchema>
@@ -66,11 +86,15 @@ export const LoginHistorySchema = v.object({
   /**
    * Client user agent
    */
-  userAgent: v.nullish(v.string()),
+  userAgent: v.optional(v.nullish(v.string())),
   /**
    * Login success status
    */
   success: v.boolean(),
+  /**
+   * Login timestamp
+   */
+  createdAt: v.date(),
 })
 
 export type LoginHistory = v.InferInput<typeof LoginHistorySchema>
@@ -88,6 +112,10 @@ export const PasswordHistorySchema = v.object({
    * Hashed password
    */
   passwordHash: v.string(),
+  /**
+   * Change timestamp
+   */
+  createdAt: v.date(),
 })
 
 export type PasswordHistory = v.InferInput<typeof PasswordHistorySchema>

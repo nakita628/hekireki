@@ -3,8 +3,8 @@ import * as v from 'valibot'
 export const UserSchema = v.object({
   id: v.string(),
   email: v.string(),
-  name: v.string(),
-  age: v.number(),
+  name: v.optional(v.string()),
+  age: v.optional(v.number()),
   isActive: v.boolean(),
   role: v.picklist(['ADMIN', 'MEMBER', 'GUEST']),
   createdAt: v.date(),
@@ -27,8 +27,8 @@ export type Post = v.InferInput<typeof PostSchema>
 
 export const ProfileSchema = v.object({
   id: v.string(),
-  bio: v.string(),
-  avatar: v.string(),
+  bio: v.optional(v.string()),
+  avatar: v.optional(v.string()),
   userId: v.string(),
 })
 

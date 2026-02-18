@@ -62,6 +62,7 @@ export function validationSchemas<T extends DMMF.Model>(
         readonly modelName: string
         readonly fieldName: string
         readonly validation: string | null
+        readonly isRequired: boolean
         readonly comment: readonly string[]
       }[],
       comment: boolean,
@@ -98,6 +99,7 @@ export function validationSchemas<T extends DMMF.Model>(
       fieldName: field.name,
       comment: config.parseDocument(field.documentation),
       validation: resolveValidation(field),
+      isRequired: field.isRequired,
     }))
     return fields
   })

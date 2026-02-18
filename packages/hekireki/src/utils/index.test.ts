@@ -132,6 +132,7 @@ describe('utils', () => {
         fieldName: 'id',
         comment: ['Primary key', '@v.pipe(v.string(), v.uuid())'],
         validation: 'uuid()',
+        isRequired: true,
       },
       {
         documentation: '',
@@ -139,6 +140,7 @@ describe('utils', () => {
         fieldName: 'name',
         comment: ['Display name', '@v.pipe(v.string(), v.minLength(1), v.maxLength(50))'],
         validation: 'string().min(1).max(50)',
+        isRequired: true,
       },
     ] as const
 
@@ -149,6 +151,7 @@ describe('utils', () => {
         fieldName: 'id',
         comment: ['Primary key', '@z.uuid()'],
         validation: 'pipe(v.string(), v.uuid())',
+        isRequired: true,
       },
       {
         documentation: '',
@@ -156,6 +159,7 @@ describe('utils', () => {
         fieldName: 'name',
         comment: ['Display name', '@z.string().min(1).max(50)'],
         validation: 'pipe(v.string(), v.minLength(1), v.maxLength(50))',
+        isRequired: true,
       },
     ] as const
 
@@ -276,6 +280,7 @@ describe('utils', () => {
             fieldName: 'id',
             comment: ['Primary key', '@v.pipe(v.string(), v.uuid())'],
             validation: 'uuid()',
+            isRequired: true,
           },
           {
             documentation: '',
@@ -283,6 +288,7 @@ describe('utils', () => {
             fieldName: 'name',
             comment: ['Display name', '@v.pipe(v.string(), v.minLength(1), v.maxLength(50))'],
             validation: 'string().min(1).max(50)',
+            isRequired: true,
           },
         ],
         true,
@@ -308,6 +314,7 @@ describe('utils', () => {
             fieldName: 'id',
             comment: ['Primary key', '@v.pipe(v.string(), v.uuid())'],
             validation: 'uuid()',
+            isRequired: true,
           },
           {
             documentation: '',
@@ -315,6 +322,7 @@ describe('utils', () => {
             fieldName: 'name',
             comment: ['Display name', '@v.pipe(v.string(), v.minLength(1), v.maxLength(50))'],
             validation: 'string().min(1).max(50)',
+            isRequired: true,
           },
         ],
         false,
@@ -386,6 +394,7 @@ describe('utils', () => {
             fieldName: 'id',
             comment: ['Primary key', '@z.uuid()'],
             validation: 'pipe(v.string(), v.uuid())',
+            isRequired: true,
           },
           {
             documentation: '',
@@ -393,6 +402,7 @@ describe('utils', () => {
             fieldName: 'name',
             comment: ['Display name', '@z.string().min(1).max(50)'],
             validation: 'pipe(v.string(), v.minLength(1), v.maxLength(50))',
+            isRequired: true,
           },
         ],
         true,
@@ -419,6 +429,7 @@ describe('utils', () => {
             fieldName: 'id',
             comment: ['Primary key', '@z.uuid()'],
             validation: 'pipe(v.string(), v.uuid())',
+            isRequired: true,
           },
           {
             documentation: '',
@@ -426,6 +437,7 @@ describe('utils', () => {
             fieldName: 'name',
             comment: ['Display name', '@z.string().min(1).max(50)'],
             validation: 'pipe(v.string(), v.minLength(1), v.maxLength(50))',
+            isRequired: true,
           },
         ],
         false,
@@ -779,6 +791,7 @@ describe('utils', () => {
           fieldName: 'id',
           comment: ['Primary key', '@v.pipe(v.string(), v.uuid())'],
           validation: 'uuid()',
+          isRequired: true,
         },
         {
           documentation: '',
@@ -786,6 +799,7 @@ describe('utils', () => {
           fieldName: 'name',
           comment: ['Display name', '@v.pipe(v.string(), v.minLength(1), v.maxLength(50))'],
           validation: 'string().min(1).max(50)',
+          isRequired: true,
         },
         {
           documentation: '@relation User.id Post.userId one-to-many',
@@ -793,6 +807,7 @@ describe('utils', () => {
           fieldName: 'id',
           comment: ['Primary key', '@v.pipe(v.string(), v.uuid())'],
           validation: 'uuid()',
+          isRequired: true,
         },
         {
           documentation: '@relation User.id Post.userId one-to-many',
@@ -800,6 +815,7 @@ describe('utils', () => {
           fieldName: 'title',
           comment: ['Article title', '@v.pipe(v.string(), v.minLength(1), v.maxLength(100))'],
           validation: 'string().min(1).max(100)',
+          isRequired: true,
         },
       ])
       expect(Object.keys(result)).toStrictEqual(['User', 'Post'])
@@ -818,6 +834,7 @@ describe('utils', () => {
             fieldName: 'id',
             comment: ['Primary key'],
             validation: 'uuid()',
+            isRequired: true,
           },
           {
             documentation: '',
@@ -825,6 +842,7 @@ describe('utils', () => {
             fieldName: 'posts',
             comment: ['One-to-many'],
             validation: null,
+            isRequired: true,
           },
         ],
       ])
@@ -913,7 +931,7 @@ describe('utils', () => {
       expect(PRISMA_TO_ZOD.String).toBe('string()')
       expect(PRISMA_TO_ZOD.Int).toBe('number()')
       expect(PRISMA_TO_ZOD.Boolean).toBe('boolean()')
-      expect(PRISMA_TO_ZOD.DateTime).toBe('date()')
+      expect(PRISMA_TO_ZOD.DateTime).toBe('iso.datetime()')
       expect(PRISMA_TO_ZOD.BigInt).toBe('bigint()')
     })
     it('PRISMA_TO_VALIBOT maps String to string()', () => {
