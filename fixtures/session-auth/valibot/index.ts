@@ -57,11 +57,11 @@ export const SessionSchema = v.object({
   /**
    * Client IP address
    */
-  ipAddress: v.optional(v.nullish(v.string())),
+  ipAddress: v.exactOptional(v.nullish(v.string())),
   /**
    * Client user agent
    */
-  userAgent: v.optional(v.nullish(v.string())),
+  userAgent: v.exactOptional(v.nullish(v.string())),
   /**
    * Session creation timestamp
    */
@@ -86,7 +86,7 @@ export const LoginHistorySchema = v.object({
   /**
    * Client user agent
    */
-  userAgent: v.optional(v.nullish(v.string())),
+  userAgent: v.exactOptional(v.nullish(v.string())),
   /**
    * Login success status
    */

@@ -12,7 +12,7 @@ export const UserSchema = v.object({
   /**
    * Hashed password (null for OAuth-only users)
    */
-  passwordHash: v.optional(v.nullish(v.pipe(v.string(), v.minLength(8)))),
+  passwordHash: v.exactOptional(v.nullish(v.pipe(v.string(), v.minLength(8)))),
   /**
    * Display name
    */
@@ -20,7 +20,7 @@ export const UserSchema = v.object({
   /**
    * Profile image URL
    */
-  avatarUrl: v.optional(v.nullish(v.pipe(v.string(), v.url()))),
+  avatarUrl: v.exactOptional(v.nullish(v.pipe(v.string(), v.url()))),
   /**
    * User role
    */
@@ -48,7 +48,7 @@ export const UserSchema = v.object({
   /**
    * Last login timestamp
    */
-  lastLoginAt: v.optional(v.date()),
+  lastLoginAt: v.exactOptional(v.date()),
 })
 
 export type User = v.InferInput<typeof UserSchema>
@@ -73,15 +73,15 @@ export const OAuthAccountSchema = v.object({
   /**
    * Access token from provider
    */
-  accessToken: v.optional(v.nullish(v.string())),
+  accessToken: v.exactOptional(v.nullish(v.string())),
   /**
    * Refresh token from provider
    */
-  refreshToken: v.optional(v.nullish(v.string())),
+  refreshToken: v.exactOptional(v.nullish(v.string())),
   /**
    * Token expiration timestamp
    */
-  expiresAt: v.optional(v.date()),
+  expiresAt: v.exactOptional(v.date()),
   /**
    * Account creation timestamp
    */
@@ -106,23 +106,23 @@ export const TwoFactorSettingSchema = v.object({
   /**
    * 2FA method
    */
-  method: v.optional(v.picklist(['TOTP', 'SMS', 'EMAIL'])),
+  method: v.exactOptional(v.picklist(['TOTP', 'SMS', 'EMAIL'])),
   /**
    * TOTP secret (encrypted)
    */
-  totpSecret: v.optional(v.nullish(v.string())),
+  totpSecret: v.exactOptional(v.nullish(v.string())),
   /**
    * Phone number for SMS (E.164 format)
    */
-  phoneNumber: v.optional(v.nullish(v.string())),
+  phoneNumber: v.exactOptional(v.nullish(v.string())),
   /**
    * Backup codes (hashed, JSON array)
    */
-  backupCodes: v.optional(v.nullish(v.string())),
+  backupCodes: v.exactOptional(v.nullish(v.string())),
   /**
    * Last verified timestamp
    */
-  verifiedAt: v.optional(v.date()),
+  verifiedAt: v.exactOptional(v.date()),
   /**
    * Creation timestamp
    */
@@ -151,11 +151,11 @@ export const RefreshTokenSchema = v.object({
   /**
    * Device/client identifier
    */
-  deviceInfo: v.optional(v.nullish(v.string())),
+  deviceInfo: v.exactOptional(v.nullish(v.string())),
   /**
    * IP address at creation
    */
-  ipAddress: v.optional(v.nullish(v.string())),
+  ipAddress: v.exactOptional(v.nullish(v.string())),
   /**
    * Token expiration timestamp
    */

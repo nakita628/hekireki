@@ -8,23 +8,23 @@ export const UserSchema = v.object({
   /**
    * Display name
    */
-  name: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(50))),
+  name: v.exactOptional(v.pipe(v.string(), v.minLength(1), v.maxLength(50))),
   /**
    * Email address
    */
-  email: v.optional(v.pipe(v.string(), v.email())),
+  email: v.exactOptional(v.pipe(v.string(), v.email())),
   /**
    * Date when the email was verified
    */
-  emailVerified: v.optional(v.pipe(v.string(), v.isoDate())),
+  emailVerified: v.exactOptional(v.pipe(v.string(), v.isoDate())),
   /**
    * Profile image URL
    */
-  image: v.optional(v.pipe(v.string(), v.url())),
+  image: v.exactOptional(v.pipe(v.string(), v.url())),
   /**
    * Hashed password
    */
-  password: v.optional(v.pipe(v.string(), v.minLength(8))),
+  password: v.exactOptional(v.pipe(v.string(), v.minLength(8))),
   /**
    * Role of the user (ADMIN or USER)
    */
@@ -32,7 +32,7 @@ export const UserSchema = v.object({
   /**
    * Whether 2FA is enabled
    */
-  isTwoFactorEnabled: v.optional(v.boolean()),
+  isTwoFactorEnabled: v.exactOptional(v.boolean()),
 })
 
 export type User = v.InferInput<typeof UserSchema>
@@ -61,31 +61,31 @@ export const AccountSchema = v.object({
   /**
    * Refresh token
    */
-  refresh_token: v.optional(v.nullish(v.string())),
+  refresh_token: v.exactOptional(v.nullish(v.string())),
   /**
    * Access token
    */
-  access_token: v.optional(v.nullish(v.string())),
+  access_token: v.exactOptional(v.nullish(v.string())),
   /**
    * Expiration time (UNIX timestamp)
    */
-  expires_at: v.optional(v.pipe(v.number(), v.integer())),
+  expires_at: v.exactOptional(v.pipe(v.number(), v.integer())),
   /**
    * Token type (e.g., Bearer)
    */
-  token_type: v.optional(v.nullish(v.string())),
+  token_type: v.exactOptional(v.nullish(v.string())),
   /**
    * OAuth scope
    */
-  scope: v.optional(v.nullish(v.string())),
+  scope: v.exactOptional(v.nullish(v.string())),
   /**
    * ID token
    */
-  id_token: v.optional(v.nullish(v.string())),
+  id_token: v.exactOptional(v.nullish(v.string())),
   /**
    * Session state
    */
-  session_state: v.optional(v.nullish(v.string())),
+  session_state: v.exactOptional(v.nullish(v.string())),
 })
 
 export type Account = v.InferInput<typeof AccountSchema>

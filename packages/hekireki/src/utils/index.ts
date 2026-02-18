@@ -333,7 +333,7 @@ export function makeValibotObject(
  */
 export function makeValibotCardinality(expr: string, isList: boolean, isRequired: boolean): string {
   const withList = isList ? `v.array(${expr})` : expr
-  return isRequired ? withList : `v.optional(${withList})`
+  return isRequired ? withList : `v.exactOptional(${withList})`
 }
 
 /**
@@ -884,7 +884,7 @@ export function makeValibotSchemas(
     comment,
     makeValibotSchema,
     makePropertiesGenerator('v', (expr, isRequired) =>
-      isRequired ? expr : `v.optional(${expr})`,
+      isRequired ? expr : `v.exactOptional(${expr})`,
     ),
   )
 }

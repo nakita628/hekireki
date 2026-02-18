@@ -70,7 +70,7 @@ export const RoleSchema = v.object({
   /**
    * Role description
    */
-  description: v.optional(v.nullish(v.string())),
+  description: v.exactOptional(v.nullish(v.string())),
   /**
    * Creation timestamp
    */
@@ -99,7 +99,7 @@ export const PermissionSchema = v.object({
   /**
    * Permission description
    */
-  description: v.optional(v.nullish(v.string())),
+  description: v.exactOptional(v.nullish(v.string())),
   /**
    * Creation timestamp
    */
@@ -162,11 +162,11 @@ export const AuditLogSchema = v.object({
   /**
    * Action detail
    */
-  detail: v.optional(v.nullish(v.string())),
+  detail: v.exactOptional(v.nullish(v.string())),
   /**
    * Client IP address
    */
-  ipAddress: v.optional(v.nullish(v.string())),
+  ipAddress: v.exactOptional(v.nullish(v.string())),
   /**
    * Action timestamp
    */
