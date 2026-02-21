@@ -7,12 +7,12 @@ defmodule DBSchema.Profile do
           id: Ecto.UUID.t(),
           bio: String.t(),
           avatar: String.t(),
-          userId: String.t()
+          user: DBSchema.User.t() | nil
         }
 
   schema "profile" do
     field(:bio, :string)
     field(:avatar, :string)
-    field(:userId, :string)
+    belongs_to(:user, DBSchema.User, foreign_key: :userId, type: :binary_id)
   end
 end

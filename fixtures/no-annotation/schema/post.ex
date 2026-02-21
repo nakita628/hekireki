@@ -8,14 +8,14 @@ defmodule DBSchema.Post do
           title: String.t(),
           content: String.t(),
           published: boolean(),
-          authorId: String.t()
+          author: DBSchema.User.t() | nil
         }
 
   schema "post" do
     field(:title, :string)
     field(:content, :string)
     field(:published, :boolean, default: false)
-    field(:authorId, :string)
+    belongs_to(:author, DBSchema.User, foreign_key: :authorId, type: :binary_id)
     timestamps(inserted_at: :createdAt, updated_at: :updatedAt)
   end
 end

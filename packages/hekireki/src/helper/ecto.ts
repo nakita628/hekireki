@@ -56,7 +56,117 @@ function makeTimestampsLine(fields: DMMF.Field[]): { line: string | null; exclud
   }
 }
 
-export function ectoSchemas(models: readonly DMMF.Model[], app: string | string[]): string {
+interface BelongsToAssoc {
+  readonly name: string
+  readonly targetModel: string
+  readonly foreignKey: string
+  readonly fkType: string | null
+  readonly references: string
+}
+
+interface HasAssoc {
+  readonly name: string
+  readonly targetModel: string
+  readonly foreignKey: string
+}
+
+function getBelongsToFkType(
+  allModels: readonly DMMF.Model[],
+  targetModelName: string,
+): string | null {
+  const targetModel = allModels.find((m) => m.name === targetModelName)
+  if (!targetModel) return null
+  const targetPk = targetModel.fields.find((f) => f.isId)
+  if (!targetPk) return null
+
+  const pkConfig = getPrimaryKeyConfig(targetPk)
+  if (pkConfig.line.includes('binary_id')) return 'binary_id'
+
+  const ectoType = prismaTypeToEctoType(targetPk.type)
+  if (ectoType === 'integer') return null
+  return ectoType
+}
+
+function getAssociations(
+  model: DMMF.Model,
+  allModels: readonly DMMF.Model[],
+): {
+  belongsTo: BelongsToAssoc[]
+  hasMany: HasAssoc[]
+  hasOne: HasAssoc[]
+} {
+  const belongsTo: BelongsToAssoc[] = []
+  const hasMany: HasAssoc[] = []
+  const hasOne: HasAssoc[] = []
+
+  for (const field of model.fields) {
+    if (field.kind !== 'object') continue
+
+    if (field.relationFromFields && field.relationFromFields.length > 0) {
+      const fkFieldName = field.relationFromFields[0]
+      const fkType = getBelongsToFkType(allModels, field.type)
+      const references = field.relationToFields?.[0] ?? 'id'
+
+      belongsTo.push({
+        name: field.name,
+        targetModel: field.type,
+        foreignKey: fkFieldName,
+        fkType,
+        references,
+      })
+    } else if (field.isList) {
+      const targetModel = allModels.find((m) => m.name === field.type)
+      if (!targetModel) continue
+
+      const otherSide = targetModel.fields.find(
+        (f) => f.relationName === field.relationName && f.kind === 'object',
+      )
+      if (otherSide?.isList) continue
+
+      const fkField = targetModel.fields.find(
+        (f) =>
+          f.relationName === field.relationName &&
+          f.relationFromFields &&
+          f.relationFromFields.length > 0,
+      )
+      const foreignKey = fkField?.relationFromFields?.[0]
+      if (!foreignKey) continue
+
+      hasMany.push({
+        name: field.name,
+        targetModel: field.type,
+        foreignKey,
+      })
+    } else {
+      const targetModel = allModels.find((m) => m.name === field.type)
+      if (!targetModel) continue
+
+      const fkField = targetModel.fields.find(
+        (f) =>
+          f.relationName === field.relationName &&
+          f.relationFromFields &&
+          f.relationFromFields.length > 0,
+      )
+      const foreignKey = fkField?.relationFromFields?.[0]
+      if (!foreignKey) continue
+
+      hasOne.push({
+        name: field.name,
+        targetModel: field.type,
+        foreignKey,
+      })
+    }
+  }
+
+  return { belongsTo, hasMany, hasOne }
+}
+
+export function ectoSchemas(
+  models: readonly DMMF.Model[],
+  app: string | string[],
+  allModels?: readonly DMMF.Model[],
+): string {
+  const contextModels = allModels ?? models
   return models
     .map((model) => {
       const idField = model.fields.find((f) => f.isId)
@@ -65,10 +175,18 @@ export function ectoSchemas(models: readonly DMMF.Model[], app: string | string[
       const pk = getPrimaryKeyConfig(idField)
       const fields = model.fields.map((f) => ({ ...f }))
       const { line: timestampsLine, exclude: timestampsExclude } = makeTimestampsLine(fields)
+      const associations = getAssociations(model, contextModels)
+
+      const belongsToFkFields = new Set(associations.belongsTo.map((a) => a.foreignKey))
 
       const schemaFieldsRaw = fields.filter(
         (f) =>
-          !(f.relationName || (f.isId && pk.omitIdFieldInSchema) || timestampsExclude.has(f.name)),
+          !(
+            f.relationName ||
+            (f.isId && pk.omitIdFieldInSchema) ||
+            timestampsExclude.has(f.name) ||
+            belongsToFkFields.has(f.name)
+          ),
       )
 
       const typeSpecFields = [
@@ -76,6 +194,9 @@ export function ectoSchemas(models: readonly DMMF.Model[], app: string | string[
         ...schemaFieldsRaw.map(
           (f) => `${f.name}: ${ectoTypeToTypespec(prismaTypeToEctoType(f.type))}`,
         ),
+        ...associations.belongsTo.map((a) => `${a.name}: ${app}.${a.targetModel}.t() | nil`),
+        ...associations.hasOne.map((a) => `${a.name}: ${app}.${a.targetModel}.t() | nil`),
+        ...associations.hasMany.map((a) => `${a.name}: [${app}.${a.targetModel}.t()]`),
       ]
 
       const typeSpecLines = [
@@ -95,6 +216,21 @@ export function ectoSchemas(models: readonly DMMF.Model[], app: string | string[
         return `    field(:${f.name}, :${type}${primary}${defaultClause})`
       })
 
+      const belongsToLines = associations.belongsTo.map((a) => {
+        const opts = [`foreign_key: :${a.foreignKey}`]
+        if (a.fkType) opts.push(`type: :${a.fkType}`)
+        if (a.references !== 'id') opts.push(`references: :${a.references}`)
+        return `    belongs_to(:${a.name}, ${app}.${a.targetModel}, ${opts.join(', ')})`
+      })
+
+      const hasOneLines = associations.hasOne.map((a) => {
+        return `    has_one(:${a.name}, ${app}.${a.targetModel}, foreign_key: :${a.foreignKey})`
+      })
+
+      const hasManyLines = associations.hasMany.map((a) => {
+        return `    has_many(:${a.name}, ${app}.${a.targetModel}, foreign_key: :${a.foreignKey})`
+      })
+
       const lines = [
         `defmodule ${app}.${model.name} do`,
         '  use Ecto.Schema',
@@ -105,6 +241,9 @@ export function ectoSchemas(models: readonly DMMF.Model[], app: string | string[
         '',
         `  schema "${makeSnakeCase(model.name)}" do`,
         ...schemaFields,
+        ...belongsToLines,
+        ...hasOneLines,
+        ...hasManyLines,
         ...(timestampsLine ? [timestampsLine] : []),
         '  end',
         'end',
@@ -129,7 +268,7 @@ export async function writeEctoSchemasToFiles(
   }
 
   for (const model of models) {
-    const code = ectoSchemas([model], app)
+    const code = ectoSchemas([model], app, models)
     if (!code.trim()) continue
 
     const filePath = join(outDir, `${makeSnakeCase(model.name)}.ex`)

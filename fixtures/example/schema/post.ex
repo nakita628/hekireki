@@ -7,12 +7,12 @@ defmodule DBSchema.Post do
           id: Ecto.UUID.t(),
           title: String.t(),
           content: String.t(),
-          userId: String.t()
+          user: DBSchema.User.t() | nil
         }
 
   schema "post" do
     field(:title, :string)
     field(:content, :string)
-    field(:userId, :string)
+    belongs_to(:user, DBSchema.User, foreign_key: :userId, type: :binary_id)
   end
 end

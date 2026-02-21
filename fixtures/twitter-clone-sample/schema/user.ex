@@ -14,7 +14,13 @@ defmodule DBSchema.User do
           coverImage: String.t(),
           profileImage: String.t(),
           hashedPassword: String.t(),
-          hasNotification: boolean()
+          hasNotification: boolean(),
+          posts: [DBSchema.Post.t()],
+          comments: [DBSchema.Comment.t()],
+          notifications: [DBSchema.Notification.t()],
+          followers: [DBSchema.Follow.t()],
+          following: [DBSchema.Follow.t()],
+          likes: [DBSchema.Like.t()]
         }
 
   schema "user" do
@@ -28,6 +34,12 @@ defmodule DBSchema.User do
     field(:profileImage, :string)
     field(:hashedPassword, :string)
     field(:hasNotification, :boolean, default: false)
+    has_many(:posts, DBSchema.Post, foreign_key: :userId)
+    has_many(:comments, DBSchema.Comment, foreign_key: :userId)
+    has_many(:notifications, DBSchema.Notification, foreign_key: :userId)
+    has_many(:followers, DBSchema.Follow, foreign_key: :followingId)
+    has_many(:following, DBSchema.Follow, foreign_key: :followerId)
+    has_many(:likes, DBSchema.Like, foreign_key: :userId)
     timestamps(inserted_at: :createdAt, updated_at: :updatedAt)
   end
 end

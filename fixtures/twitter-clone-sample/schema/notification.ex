@@ -6,12 +6,12 @@ defmodule DBSchema.Notification do
   @type t :: %__MODULE__{
           id: Ecto.UUID.t(),
           body: String.t(),
-          userId: String.t()
+          user: DBSchema.User.t() | nil
         }
 
   schema "notification" do
     field(:body, :string)
-    field(:userId, :string)
+    belongs_to(:user, DBSchema.User, foreign_key: :userId, type: :binary_id)
     timestamps(inserted_at: :createdAt, updated_at: :updated_at)
   end
 end
