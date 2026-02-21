@@ -249,4 +249,134 @@ end`
 
     expect(userResult).toBe(userExpected)
   }, 30000)
+
+  it('hekireki-ecto with timestamps, defaults, and join model', async () => {
+    const prisma = `generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "postgresql"
+}
+
+generator Hekireki-Ecto {
+    provider = "hekireki-ecto"
+    output   = "ecto"
+    app      = "WISE"
+}
+
+model Agent {
+    id       String  @id @default(uuid())
+    codeName String
+    active   Boolean @default(true)
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    assignments MissionAssignment[]
+}
+
+model Mission {
+    id        String  @id @default(uuid())
+    name      String
+    priority  Int     @default(1)
+    completed Boolean @default(false)
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    assignments MissionAssignment[]
+}
+
+model MissionAssignment {
+    id   String @id @default(uuid())
+    role String
+
+    agentId   String
+    agent     Agent   @relation(fields: [agentId], references: [id])
+    missionId String
+    mission   Mission @relation(fields: [missionId], references: [id])
+
+    assignedAt DateTime @default(now())
+}
+`
+
+    fs.mkdirSync('./prisma-ecto', { recursive: true })
+    fs.writeFileSync('./prisma-ecto/schema.prisma', prisma, { encoding: 'utf-8' })
+    await promisify(exec)('npx prisma generate --schema=./prisma-ecto/schema.prisma')
+
+    const agentResult = fs.readFileSync('./prisma-ecto/ecto/agent.ex', { encoding: 'utf-8' })
+    const agentExpected = `defmodule WISE.Agent do
+  use Ecto.Schema
+
+  @primary_key {:id, :binary_id, autogenerate: true}
+
+  @type t :: %__MODULE__{
+          id: Ecto.UUID.t(),
+          codeName: String.t(),
+          active: boolean(),
+          assignments: [WISE.MissionAssignment.t()]
+        }
+
+  schema "agent" do
+    field(:codeName, :string)
+    field(:active, :boolean, default: true)
+    has_many(:assignments, WISE.MissionAssignment, foreign_key: :agentId)
+    timestamps(inserted_at: :createdAt, updated_at: :updatedAt)
+  end
+end`
+
+    expect(agentResult).toBe(agentExpected)
+
+    const missionResult = fs.readFileSync('./prisma-ecto/ecto/mission.ex', { encoding: 'utf-8' })
+    const missionExpected = `defmodule WISE.Mission do
+  use Ecto.Schema
+
+  @primary_key {:id, :binary_id, autogenerate: true}
+
+  @type t :: %__MODULE__{
+          id: Ecto.UUID.t(),
+          name: String.t(),
+          priority: integer(),
+          completed: boolean(),
+          assignments: [WISE.MissionAssignment.t()]
+        }
+
+  schema "mission" do
+    field(:name, :string)
+    field(:priority, :integer, default: 1)
+    field(:completed, :boolean, default: false)
+    has_many(:assignments, WISE.MissionAssignment, foreign_key: :missionId)
+    timestamps(inserted_at: :createdAt, updated_at: :updatedAt)
+  end
+end`
+
+    expect(missionResult).toBe(missionExpected)
+
+    const assignmentResult = fs.readFileSync('./prisma-ecto/ecto/mission_assignment.ex', {
+      encoding: 'utf-8',
+    })
+    const assignmentExpected = `defmodule WISE.MissionAssignment do
+  use Ecto.Schema
+
+  @primary_key {:id, :binary_id, autogenerate: true}
+
+  @type t :: %__MODULE__{
+          id: Ecto.UUID.t(),
+          role: String.t(),
+          assignedAt: DateTime.t(),
+          agent: WISE.Agent.t() | nil,
+          mission: WISE.Mission.t() | nil
+        }
+
+  schema "mission_assignment" do
+    field(:role, :string)
+    field(:assignedAt, :utc_datetime)
+    belongs_to(:agent, WISE.Agent, foreign_key: :agentId, type: :binary_id)
+    belongs_to(:mission, WISE.Mission, foreign_key: :missionId, type: :binary_id)
+  end
+end`
+
+    expect(assignmentResult).toBe(assignmentExpected)
+  }, 30000)
 })
