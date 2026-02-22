@@ -57,6 +57,7 @@ model Post {
   use Ecto.Schema
 
   @primary_key {:id, :binary_id, autogenerate: true}
+  @foreign_key_type :binary_id
 
   @type t :: %__MODULE__{
           id: Ecto.UUID.t(),
@@ -66,7 +67,7 @@ model Post {
 
   schema "user" do
     field(:name, :string)
-    has_many(:posts, DBSchema.Post, foreign_key: :userId)
+    has_many(:posts, DBSchema.Post, foreign_key: :user_id)
   end
 end`
 
@@ -80,6 +81,7 @@ end`
   use Ecto.Schema
 
   @primary_key {:id, :binary_id, autogenerate: true}
+  @foreign_key_type :binary_id
 
   @type t :: %__MODULE__{
           id: Ecto.UUID.t(),
@@ -91,7 +93,8 @@ end`
   schema "post" do
     field(:title, :string)
     field(:content, :string)
-    belongs_to(:user, DBSchema.User, foreign_key: :userId, type: :binary_id)
+    field(:user_id, :binary_id, source: :userId)
+    belongs_to(:user, DBSchema.User, foreign_key: :user_id, define_field: false)
   end
 end`
 
@@ -136,6 +139,7 @@ model Profile {
   use Ecto.Schema
 
   @primary_key {:id, :binary_id, autogenerate: true}
+  @foreign_key_type :binary_id
 
   @type t :: %__MODULE__{
           id: Ecto.UUID.t(),
@@ -145,7 +149,7 @@ model Profile {
 
   schema "user" do
     field(:name, :string)
-    has_one(:profile, DBSchema.Profile, foreign_key: :userId)
+    has_one(:profile, DBSchema.Profile, foreign_key: :user_id)
   end
 end`
 
@@ -156,6 +160,7 @@ end`
   use Ecto.Schema
 
   @primary_key {:id, :binary_id, autogenerate: true}
+  @foreign_key_type :binary_id
 
   @type t :: %__MODULE__{
           id: Ecto.UUID.t(),
@@ -165,7 +170,8 @@ end`
 
   schema "profile" do
     field(:bio, :string)
-    belongs_to(:user, DBSchema.User, foreign_key: :userId, type: :binary_id)
+    field(:user_id, :binary_id, source: :userId)
+    belongs_to(:user, DBSchema.User, foreign_key: :user_id, define_field: false)
   end
 end`
 
@@ -212,6 +218,7 @@ model Follow {
   use Ecto.Schema
 
   @primary_key {:id, :binary_id, autogenerate: true}
+  @foreign_key_type :binary_id
 
   @type t :: %__MODULE__{
           id: Ecto.UUID.t(),
@@ -220,8 +227,10 @@ model Follow {
         }
 
   schema "follow" do
-    belongs_to(:follower, DBSchema.User, foreign_key: :followerId, type: :binary_id)
-    belongs_to(:following, DBSchema.User, foreign_key: :followingId, type: :binary_id)
+    field(:follower_id, :binary_id, source: :followerId)
+    field(:following_id, :binary_id, source: :followingId)
+    belongs_to(:follower, DBSchema.User, foreign_key: :follower_id, define_field: false)
+    belongs_to(:following, DBSchema.User, foreign_key: :following_id, define_field: false)
   end
 end`
 
@@ -232,6 +241,7 @@ end`
   use Ecto.Schema
 
   @primary_key {:id, :binary_id, autogenerate: true}
+  @foreign_key_type :binary_id
 
   @type t :: %__MODULE__{
           id: Ecto.UUID.t(),
@@ -242,8 +252,8 @@ end`
 
   schema "user" do
     field(:name, :string)
-    has_many(:followers, DBSchema.Follow, foreign_key: :followingId)
-    has_many(:following, DBSchema.Follow, foreign_key: :followerId)
+    has_many(:followers, DBSchema.Follow, foreign_key: :following_id)
+    has_many(:following, DBSchema.Follow, foreign_key: :follower_id)
   end
 end`
 
@@ -310,19 +320,20 @@ model MissionAssignment {
   use Ecto.Schema
 
   @primary_key {:id, :binary_id, autogenerate: true}
+  @foreign_key_type :binary_id
 
   @type t :: %__MODULE__{
           id: Ecto.UUID.t(),
-          codeName: String.t(),
+          code_name: String.t(),
           active: boolean(),
           assignments: [WISE.MissionAssignment.t()]
         }
 
   schema "agent" do
-    field(:codeName, :string)
+    field(:code_name, :string, source: :codeName)
     field(:active, :boolean, default: true)
-    has_many(:assignments, WISE.MissionAssignment, foreign_key: :agentId)
-    timestamps(inserted_at: :createdAt, updated_at: :updatedAt)
+    has_many(:assignments, WISE.MissionAssignment, foreign_key: :agent_id)
+    timestamps(type: :utc_datetime, inserted_at_source: :createdAt, updated_at_source: :updatedAt)
   end
 end`
 
@@ -333,6 +344,7 @@ end`
   use Ecto.Schema
 
   @primary_key {:id, :binary_id, autogenerate: true}
+  @foreign_key_type :binary_id
 
   @type t :: %__MODULE__{
           id: Ecto.UUID.t(),
@@ -346,8 +358,8 @@ end`
     field(:name, :string)
     field(:priority, :integer, default: 1)
     field(:completed, :boolean, default: false)
-    has_many(:assignments, WISE.MissionAssignment, foreign_key: :missionId)
-    timestamps(inserted_at: :createdAt, updated_at: :updatedAt)
+    has_many(:assignments, WISE.MissionAssignment, foreign_key: :mission_id)
+    timestamps(type: :utc_datetime, inserted_at_source: :createdAt, updated_at_source: :updatedAt)
   end
 end`
 
@@ -360,20 +372,23 @@ end`
   use Ecto.Schema
 
   @primary_key {:id, :binary_id, autogenerate: true}
+  @foreign_key_type :binary_id
 
   @type t :: %__MODULE__{
           id: Ecto.UUID.t(),
           role: String.t(),
-          assignedAt: DateTime.t(),
+          assigned_at: DateTime.t(),
           agent: WISE.Agent.t() | nil,
           mission: WISE.Mission.t() | nil
         }
 
   schema "mission_assignment" do
     field(:role, :string)
-    field(:assignedAt, :utc_datetime)
-    belongs_to(:agent, WISE.Agent, foreign_key: :agentId, type: :binary_id)
-    belongs_to(:mission, WISE.Mission, foreign_key: :missionId, type: :binary_id)
+    field(:assigned_at, :utc_datetime, source: :assignedAt)
+    field(:agent_id, :binary_id, source: :agentId)
+    field(:mission_id, :binary_id, source: :missionId)
+    belongs_to(:agent, WISE.Agent, foreign_key: :agent_id, define_field: false)
+    belongs_to(:mission, WISE.Mission, foreign_key: :mission_id, define_field: false)
   end
 end`
 

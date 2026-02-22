@@ -35,7 +35,7 @@ function makeField(overrides: Partial<DMMF.Field> & { name: string; type: string
 
 describe('ectoSchemas', () => {
   describe('timestamps', () => {
-    it('generates timestamps with createdAt/updatedAt', () => {
+    it('generates timestamps with createdAt/updatedAt using source options', () => {
       const model = makeModel({
         name: 'Agent',
         fields: [
@@ -63,6 +63,7 @@ describe('ectoSchemas', () => {
   use Ecto.Schema
 
   @primary_key {:id, :binary_id, autogenerate: true}
+  @foreign_key_type :binary_id
 
   @type t :: %__MODULE__{
           id: Ecto.UUID.t(),
@@ -71,12 +72,12 @@ describe('ectoSchemas', () => {
 
   schema "agent" do
     field(:name, :string)
-    timestamps(inserted_at: :createdAt, updated_at: :updatedAt)
+    timestamps(type: :utc_datetime, inserted_at_source: :createdAt, updated_at_source: :updatedAt)
   end
 end`)
     })
 
-    it('generates plain timestamps() with inserted_at/updated_at', () => {
+    it('generates timestamps with type for inserted_at/updated_at', () => {
       const model = makeModel({
         name: 'Post',
         fields: [
@@ -99,6 +100,7 @@ end`)
   use Ecto.Schema
 
   @primary_key {:id, :binary_id, autogenerate: true}
+  @foreign_key_type :binary_id
 
   @type t :: %__MODULE__{
           id: Ecto.UUID.t(),
@@ -107,7 +109,7 @@ end`)
 
   schema "post" do
     field(:title, :string)
-    timestamps()
+    timestamps(type: :utc_datetime)
   end
 end`)
     })
@@ -133,6 +135,7 @@ end`)
   use Ecto.Schema
 
   @primary_key {:id, :binary_id, autogenerate: true}
+  @foreign_key_type :binary_id
 
   @type t :: %__MODULE__{
           id: Ecto.UUID.t(),
@@ -244,7 +247,7 @@ end`)
 
       const result = ectoSchemas([model], 'App')
 
-      expect(result).toContain('field(:occurredAt, :utc_datetime)')
+      expect(result).toContain('field(:occurred_at, :utc_datetime, source: :occurredAt)')
       expect(result).not.toContain('default:')
     })
   })
@@ -292,7 +295,7 @@ end`)
   })
 
   describe('primary key', () => {
-    it('generates binary_id PK for uuid default', () => {
+    it('generates binary_id PK with @foreign_key_type for uuid default', () => {
       const model = makeModel({
         name: 'User',
         fields: [
@@ -309,10 +312,11 @@ end`)
       const result = ectoSchemas([model], 'App')
 
       expect(result).toContain('@primary_key {:id, :binary_id, autogenerate: true}')
+      expect(result).toContain('@foreign_key_type :binary_id')
       expect(result).toContain('id: Ecto.UUID.t()')
     })
 
-    it('generates @primary_key false for non-uuid String PK', () => {
+    it('generates @primary_key false without @foreign_key_type for non-uuid String PK', () => {
       const model = makeModel({
         name: 'User',
         fields: [
@@ -328,6 +332,7 @@ end`)
 
       expect(result).toContain('@primary_key false')
       expect(result).toContain('field(:id, :binary_id, primary_key: true)')
+      expect(result).not.toContain('@foreign_key_type')
     })
   })
 
@@ -385,8 +390,57 @@ end`)
     })
   })
 
+  describe('snake_case field names', () => {
+    it('converts camelCase field names to snake_case with source', () => {
+      const model = makeModel({
+        name: 'Agent',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'String',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'uuid', args: [4] },
+          }),
+          makeField({ name: 'codeName', type: 'String' }),
+          makeField({ name: 'isActive', type: 'Boolean' }),
+        ],
+      })
+
+      const result = ectoSchemas([model], 'App')
+
+      expect(result).toContain('field(:code_name, :string, source: :codeName)')
+      expect(result).toContain('field(:is_active, :boolean, source: :isActive)')
+      expect(result).toContain('code_name: String.t()')
+      expect(result).toContain('is_active: boolean()')
+    })
+
+    it('keeps already snake_case field names without source', () => {
+      const model = makeModel({
+        name: 'Agent',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'String',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'uuid', args: [4] },
+          }),
+          makeField({ name: 'name', type: 'String' }),
+          makeField({ name: 'is_active', type: 'Boolean' }),
+        ],
+      })
+
+      const result = ectoSchemas([model], 'App')
+
+      expect(result).toContain('field(:name, :string)')
+      expect(result).toContain('field(:is_active, :boolean)')
+      expect(result).not.toContain('source:')
+    })
+  })
+
   describe('associations', () => {
-    it('generates belongs_to with binary_id FK type', () => {
+    it('generates belongs_to with snake_case FK and define_field: false', () => {
       const agentModel = makeModel({
         name: 'Agent',
         fields: [
@@ -438,12 +492,15 @@ end`)
       const profileResult = ectoSchemas([profileModel], 'App', allModels)
 
       expect(profileResult).toContain(
-        'belongs_to(:agent, App.Agent, foreign_key: :agentId, type: :binary_id)',
+        'field(:agent_id, :binary_id, source: :agentId)',
+      )
+      expect(profileResult).toContain(
+        'belongs_to(:agent, App.Agent, foreign_key: :agent_id, define_field: false)',
       )
       expect(profileResult).not.toContain('field(:agentId')
     })
 
-    it('generates has_one association', () => {
+    it('generates has_one association with snake_case FK', () => {
       const agentModel = makeModel({
         name: 'Agent',
         fields: [
@@ -493,12 +550,12 @@ end`)
       const agentResult = ectoSchemas([agentModel], 'App', allModels)
 
       expect(agentResult).toContain(
-        'has_one(:profile, App.Profile, foreign_key: :agentId)',
+        'has_one(:profile, App.Profile, foreign_key: :agent_id)',
       )
       expect(agentResult).toContain('profile: App.Profile.t() | nil')
     })
 
-    it('generates has_many association', () => {
+    it('generates has_many association with snake_case FK', () => {
       const agentModel = makeModel({
         name: 'Agent',
         fields: [
@@ -548,12 +605,12 @@ end`)
       const agentResult = ectoSchemas([agentModel], 'App', allModels)
 
       expect(agentResult).toContain(
-        'has_many(:reports, App.Report, foreign_key: :agentId)',
+        'has_many(:reports, App.Report, foreign_key: :agent_id)',
       )
       expect(agentResult).toContain('reports: [App.Report.t()]')
     })
 
-    it('generates join model with two belongs_to', () => {
+    it('generates join model with two belongs_to using snake_case FKs', () => {
       const agentModel = makeModel({
         name: 'Agent',
         fields: [
@@ -637,11 +694,13 @@ end`)
 
       expect(result).toContain('schema "mission_assignment" do')
       expect(result).toContain('field(:role, :string)')
+      expect(result).toContain('field(:agent_id, :binary_id, source: :agentId)')
+      expect(result).toContain('field(:mission_id, :binary_id, source: :missionId)')
       expect(result).toContain(
-        'belongs_to(:agent, App.Agent, foreign_key: :agentId, type: :binary_id)',
+        'belongs_to(:agent, App.Agent, foreign_key: :agent_id, define_field: false)',
       )
       expect(result).toContain(
-        'belongs_to(:mission, App.Mission, foreign_key: :missionId, type: :binary_id)',
+        'belongs_to(:mission, App.Mission, foreign_key: :mission_id, define_field: false)',
       )
       expect(result).not.toContain('field(:agentId')
       expect(result).not.toContain('field(:missionId')
@@ -649,7 +708,7 @@ end`)
   })
 
   describe('multiple relations on one model', () => {
-    it('generates has_one + has_many on same model', () => {
+    it('generates has_one + has_many on same model with snake_case', () => {
       const agentModel = makeModel({
         name: 'Agent',
         fields: [
@@ -748,21 +807,22 @@ end`)
   use Ecto.Schema
 
   @primary_key {:id, :binary_id, autogenerate: true}
+  @foreign_key_type :binary_id
 
   @type t :: %__MODULE__{
           id: Ecto.UUID.t(),
-          codeName: String.t(),
+          code_name: String.t(),
           active: boolean(),
           profile: App.Profile.t() | nil,
           reports: [App.Report.t()]
         }
 
   schema "agent" do
-    field(:codeName, :string)
+    field(:code_name, :string, source: :codeName)
     field(:active, :boolean, default: true)
-    has_one(:profile, App.Profile, foreign_key: :agentId)
-    has_many(:reports, App.Report, foreign_key: :agentId)
-    timestamps(inserted_at: :createdAt, updated_at: :updatedAt)
+    has_one(:profile, App.Profile, foreign_key: :agent_id)
+    has_many(:reports, App.Report, foreign_key: :agent_id)
+    timestamps(type: :utc_datetime, inserted_at_source: :createdAt, updated_at_source: :updatedAt)
   end
 end`)
     })

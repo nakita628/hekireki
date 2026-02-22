@@ -46,12 +46,17 @@ function makeTimestampsLine(fields: DMMF.Field[]): { line: string | null; exclud
 
   if (!(inserted || updated)) return { line: null, exclude }
 
-  if (inserted?.name === 'inserted_at' && updated?.name === 'updated_at') {
-    return { line: '    timestamps()', exclude }
+  const opts: string[] = ['type: :utc_datetime']
+
+  if (inserted && inserted.name !== 'inserted_at') {
+    opts.push(`inserted_at_source: :${inserted.name}`)
+  }
+  if (updated && updated.name !== 'updated_at') {
+    opts.push(`updated_at_source: :${updated.name}`)
   }
 
   return {
-    line: `    timestamps(inserted_at: :${inserted?.name ?? 'inserted_at'}, updated_at: :${updated?.name ?? 'updated_at'})`,
+    line: `    timestamps(${opts.join(', ')})`,
     exclude,
   }
 }
@@ -173,6 +178,7 @@ export function ectoSchemas(
       if (!idField) return ''
 
       const pk = getPrimaryKeyConfig(idField)
+      const useBinaryId = pk.line.includes('binary_id')
       const fields = model.fields.map((f) => ({ ...f }))
       const { line: timestampsLine, exclude: timestampsExclude } = makeTimestampsLine(fields)
       const associations = getAssociations(model, contextModels)
@@ -192,11 +198,18 @@ export function ectoSchemas(
       const typeSpecFields = [
         `id: ${pk.typeSpec}`,
         ...schemaFieldsRaw.map(
-          (f) => `${f.name}: ${ectoTypeToTypespec(prismaTypeToEctoType(f.type))}`,
+          (f) =>
+            `${makeSnakeCase(f.name)}: ${ectoTypeToTypespec(prismaTypeToEctoType(f.type))}`,
         ),
-        ...associations.belongsTo.map((a) => `${a.name}: ${app}.${a.targetModel}.t() | nil`),
-        ...associations.hasOne.map((a) => `${a.name}: ${app}.${a.targetModel}.t() | nil`),
-        ...associations.hasMany.map((a) => `${a.name}: [${app}.${a.targetModel}.t()]`),
+        ...associations.belongsTo.map(
+          (a) => `${makeSnakeCase(a.name)}: ${app}.${a.targetModel}.t() | nil`,
+        ),
+        ...associations.hasOne.map(
+          (a) => `${makeSnakeCase(a.name)}: ${app}.${a.targetModel}.t() | nil`,
+        ),
+        ...associations.hasMany.map(
+          (a) => `${makeSnakeCase(a.name)}: [${app}.${a.targetModel}.t()]`,
+        ),
       ]
 
       const typeSpecLines = [
@@ -213,22 +226,43 @@ export function ectoSchemas(
         const primary = f.isId && !pk.omitIdFieldInSchema ? ', primary_key: true' : ''
         const defaultOpt = getFieldDefaultOption(f)
         const defaultClause = defaultOpt ? `, ${defaultOpt}` : ''
-        return `    field(:${f.name}, :${type}${primary}${defaultClause})`
+        const snakeName = makeSnakeCase(f.name)
+        const sourceOpt = snakeName !== f.name ? `, source: :${f.name}` : ''
+        return `    field(:${snakeName}, :${type}${primary}${defaultClause}${sourceOpt})`
       })
 
+      const fkFieldLines: string[] = []
+      for (const a of associations.belongsTo) {
+        const snakeFk = makeSnakeCase(a.foreignKey)
+        if (snakeFk !== a.foreignKey) {
+          const fkType = a.fkType ?? 'id'
+          fkFieldLines.push(`    field(:${snakeFk}, :${fkType}, source: :${a.foreignKey})`)
+        }
+      }
+
       const belongsToLines = associations.belongsTo.map((a) => {
-        const opts = [`foreign_key: :${a.foreignKey}`]
-        if (a.fkType) opts.push(`type: :${a.fkType}`)
+        const snakeFk = makeSnakeCase(a.foreignKey)
+        const snakeAssocName = makeSnakeCase(a.name)
+        const needsSource = snakeFk !== a.foreignKey
+        const opts: string[] = [`foreign_key: :${snakeFk}`]
+        if (needsSource) opts.push('define_field: false')
+        if (a.fkType && (!useBinaryId || a.fkType !== 'binary_id')) {
+          opts.push(`type: :${a.fkType}`)
+        }
         if (a.references !== 'id') opts.push(`references: :${a.references}`)
-        return `    belongs_to(:${a.name}, ${app}.${a.targetModel}, ${opts.join(', ')})`
+        return `    belongs_to(:${snakeAssocName}, ${app}.${a.targetModel}, ${opts.join(', ')})`
       })
 
       const hasOneLines = associations.hasOne.map((a) => {
-        return `    has_one(:${a.name}, ${app}.${a.targetModel}, foreign_key: :${a.foreignKey})`
+        const snakeFk = makeSnakeCase(a.foreignKey)
+        const snakeAssocName = makeSnakeCase(a.name)
+        return `    has_one(:${snakeAssocName}, ${app}.${a.targetModel}, foreign_key: :${snakeFk})`
       })
 
       const hasManyLines = associations.hasMany.map((a) => {
-        return `    has_many(:${a.name}, ${app}.${a.targetModel}, foreign_key: :${a.foreignKey})`
+        const snakeFk = makeSnakeCase(a.foreignKey)
+        const snakeAssocName = makeSnakeCase(a.name)
+        return `    has_many(:${snakeAssocName}, ${app}.${a.targetModel}, foreign_key: :${snakeFk})`
       })
 
       const lines = [
@@ -236,11 +270,13 @@ export function ectoSchemas(
         '  use Ecto.Schema',
         '',
         `  ${pk.line}`,
+        ...(useBinaryId ? ['  @foreign_key_type :binary_id'] : []),
         '',
         ...typeSpecLines,
         '',
         `  schema "${makeSnakeCase(model.name)}" do`,
         ...schemaFields,
+        ...fkFieldLines,
         ...belongsToLines,
         ...hasOneLines,
         ...hasManyLines,
