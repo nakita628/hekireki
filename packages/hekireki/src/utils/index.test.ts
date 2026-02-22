@@ -486,10 +486,23 @@ describe('utils', () => {
     it('converts DateTime to utc_datetime', () => {
       expect(prismaTypeToEctoType('DateTime')).toBe('utc_datetime')
     })
+    it('maps Float to float', () => {
+      expect(prismaTypeToEctoType('Float')).toBe('float')
+    })
+    it('maps BigInt to integer', () => {
+      expect(prismaTypeToEctoType('BigInt')).toBe('integer')
+    })
+    it('maps Decimal to decimal', () => {
+      expect(prismaTypeToEctoType('Decimal')).toBe('decimal')
+    })
+    it('maps Json to map', () => {
+      expect(prismaTypeToEctoType('Json')).toBe('map')
+    })
+    it('maps Bytes to binary', () => {
+      expect(prismaTypeToEctoType('Bytes')).toBe('binary')
+    })
     it('returns string for unsupported types', () => {
-      expect(prismaTypeToEctoType('Json')).toBe('string')
-      expect(prismaTypeToEctoType('Float')).toBe('string')
-      expect(prismaTypeToEctoType('BigInt')).toBe('string')
+      expect(prismaTypeToEctoType('Unknown')).toBe('string')
     })
   })
 

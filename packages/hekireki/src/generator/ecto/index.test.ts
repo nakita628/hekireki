@@ -260,6 +260,181 @@ end`
     expect(userResult).toBe(userExpected)
   }, 30000)
 
+  it('hekireki-ecto with cuid PK, enum, and nullable fields', async () => {
+    const prisma = `generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "postgresql"
+}
+
+generator Hekireki-Ecto {
+    provider = "hekireki-ecto"
+    output   = "ecto"
+    app      = "DBSchema"
+}
+
+enum Role {
+    ADMIN
+    USER
+    MODERATOR
+}
+
+model User {
+    id    String  @id @default(cuid())
+    name  String
+    bio   String?
+    role  Role    @default(USER)
+    posts Post[]
+}
+
+model Post {
+    id      String  @id @default(cuid())
+    title   String
+    content String?
+    userId  String
+    user    User    @relation(fields: [userId], references: [id])
+}
+`
+
+    fs.mkdirSync('./prisma-ecto', { recursive: true })
+    fs.writeFileSync('./prisma-ecto/schema.prisma', prisma, { encoding: 'utf-8' })
+    await promisify(exec)('npx prisma generate --schema=./prisma-ecto/schema.prisma')
+
+    const userResult = fs.readFileSync('./prisma-ecto/ecto/user.ex', { encoding: 'utf-8' })
+    const userExpected = `defmodule DBSchema.User do
+  use Ecto.Schema
+
+  @primary_key false
+
+  @type t :: %__MODULE__{
+          id: String.t(),
+          name: String.t(),
+          bio: String.t() | nil,
+          role: atom(),
+          posts: [DBSchema.Post.t()]
+        }
+
+  schema "user" do
+    field(:id, :string, primary_key: true)
+    field(:name, :string)
+    field(:bio, :string)
+    field(:role, Ecto.Enum, values: [:ADMIN, :USER, :MODERATOR])
+    has_many(:posts, DBSchema.Post, foreign_key: :user_id)
+  end
+end`
+
+    expect(userResult).toBe(userExpected)
+
+    const postResult = fs.readFileSync('./prisma-ecto/ecto/post.ex', { encoding: 'utf-8' })
+    const postExpected = `defmodule DBSchema.Post do
+  use Ecto.Schema
+
+  @primary_key false
+
+  @type t :: %__MODULE__{
+          id: String.t(),
+          title: String.t(),
+          content: String.t() | nil,
+          user: DBSchema.User.t() | nil
+        }
+
+  schema "post" do
+    field(:id, :string, primary_key: true)
+    field(:title, :string)
+    field(:content, :string)
+    field(:user_id, :string, source: :userId)
+    belongs_to(:user, DBSchema.User, foreign_key: :user_id, define_field: false, type: :string)
+  end
+end`
+
+    expect(postResult).toBe(postExpected)
+  }, 30000)
+
+  it('hekireki-ecto with autoincrement PK and enum', async () => {
+    const prisma = `generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "postgresql"
+}
+
+generator Hekireki-Ecto {
+    provider = "hekireki-ecto"
+    output   = "ecto"
+    app      = "DBSchema"
+}
+
+enum Status {
+    ACTIVE
+    INACTIVE
+}
+
+model User {
+    id     Int    @id @default(autoincrement())
+    name   String
+    status Status @default(ACTIVE)
+    posts  Post[]
+}
+
+model Post {
+    id     Int    @id @default(autoincrement())
+    title  String
+    userId Int
+    user   User   @relation(fields: [userId], references: [id])
+}
+`
+
+    fs.mkdirSync('./prisma-ecto', { recursive: true })
+    fs.writeFileSync('./prisma-ecto/schema.prisma', prisma, { encoding: 'utf-8' })
+    await promisify(exec)('npx prisma generate --schema=./prisma-ecto/schema.prisma')
+
+    const userResult = fs.readFileSync('./prisma-ecto/ecto/user.ex', { encoding: 'utf-8' })
+    const userExpected = `defmodule DBSchema.User do
+  use Ecto.Schema
+
+  @primary_key {:id, :id, autogenerate: true}
+
+  @type t :: %__MODULE__{
+          id: integer(),
+          name: String.t(),
+          status: atom(),
+          posts: [DBSchema.Post.t()]
+        }
+
+  schema "user" do
+    field(:name, :string)
+    field(:status, Ecto.Enum, values: [:ACTIVE, :INACTIVE])
+    has_many(:posts, DBSchema.Post, foreign_key: :user_id)
+  end
+end`
+
+    expect(userResult).toBe(userExpected)
+
+    const postResult = fs.readFileSync('./prisma-ecto/ecto/post.ex', { encoding: 'utf-8' })
+    const postExpected = `defmodule DBSchema.Post do
+  use Ecto.Schema
+
+  @primary_key {:id, :id, autogenerate: true}
+
+  @type t :: %__MODULE__{
+          id: integer(),
+          title: String.t(),
+          user: DBSchema.User.t() | nil
+        }
+
+  schema "post" do
+    field(:title, :string)
+    field(:user_id, :id, source: :userId)
+    belongs_to(:user, DBSchema.User, foreign_key: :user_id, define_field: false)
+  end
+end`
+
+    expect(postResult).toBe(postExpected)
+  }, 30000)
+
   it('hekireki-ecto with timestamps, defaults, and join model', async () => {
     const prisma = `generator client {
     provider = "prisma-client-js"

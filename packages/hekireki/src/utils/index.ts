@@ -506,11 +506,16 @@ export function combineKeys(keys: readonly string[]): string {
  */
 export function prismaTypeToEctoType(
   type: string,
-): 'integer' | 'string' | 'boolean' | 'utc_datetime' {
+): 'integer' | 'string' | 'boolean' | 'utc_datetime' | 'float' | 'decimal' | 'map' | 'binary' {
   if (type === 'Int') return 'integer'
+  if (type === 'BigInt') return 'integer'
+  if (type === 'Float') return 'float'
+  if (type === 'Decimal') return 'decimal'
   if (type === 'String') return 'string'
   if (type === 'Boolean') return 'boolean'
   if (type === 'DateTime') return 'utc_datetime'
+  if (type === 'Json') return 'map'
+  if (type === 'Bytes') return 'binary'
   return 'string'
 }
 
@@ -533,6 +538,12 @@ export function ectoTypeToTypespec(type: string): string {
       return 'NaiveDateTime.t()'
     case 'utc_datetime':
       return 'DateTime.t()'
+    case 'decimal':
+      return 'Decimal.t()'
+    case 'map':
+      return 'map()'
+    case 'binary':
+      return 'binary()'
     default:
       return 'term()'
   }

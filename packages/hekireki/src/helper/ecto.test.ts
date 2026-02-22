@@ -331,7 +331,7 @@ end`)
       const result = ectoSchemas([model], 'App')
 
       expect(result).toContain('@primary_key false')
-      expect(result).toContain('field(:id, :binary_id, primary_key: true)')
+      expect(result).toContain('field(:id, :string, primary_key: true)')
       expect(result).not.toContain('@foreign_key_type')
     })
   })
@@ -491,9 +491,7 @@ end`)
       const allModels = [agentModel, profileModel]
       const profileResult = ectoSchemas([profileModel], 'App', allModels)
 
-      expect(profileResult).toContain(
-        'field(:agent_id, :binary_id, source: :agentId)',
-      )
+      expect(profileResult).toContain('field(:agent_id, :binary_id, source: :agentId)')
       expect(profileResult).toContain(
         'belongs_to(:agent, App.Agent, foreign_key: :agent_id, define_field: false)',
       )
@@ -549,9 +547,7 @@ end`)
       const allModels = [agentModel, profileModel]
       const agentResult = ectoSchemas([agentModel], 'App', allModels)
 
-      expect(agentResult).toContain(
-        'has_one(:profile, App.Profile, foreign_key: :agent_id)',
-      )
+      expect(agentResult).toContain('has_one(:profile, App.Profile, foreign_key: :agent_id)')
       expect(agentResult).toContain('profile: App.Profile.t() | nil')
     })
 
@@ -604,9 +600,7 @@ end`)
       const allModels = [agentModel, reportModel]
       const agentResult = ectoSchemas([agentModel], 'App', allModels)
 
-      expect(agentResult).toContain(
-        'has_many(:reports, App.Report, foreign_key: :agent_id)',
-      )
+      expect(agentResult).toContain('has_many(:reports, App.Report, foreign_key: :agent_id)')
       expect(agentResult).toContain('reports: [App.Report.t()]')
     })
 
@@ -825,6 +819,264 @@ end`)
     timestamps(type: :utc_datetime, inserted_at_source: :createdAt, updated_at_source: :updatedAt)
   end
 end`)
+    })
+  })
+
+  describe('cuid primary key', () => {
+    it('generates @primary_key false with field(:id, :string, primary_key: true) for cuid', () => {
+      const model = makeModel({
+        name: 'User',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'String',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'cuid', args: [] },
+          }),
+          makeField({ name: 'name', type: 'String' }),
+        ],
+      })
+
+      const result = ectoSchemas([model], 'App')
+
+      expect(result).toContain('@primary_key false')
+      expect(result).toContain('field(:id, :string, primary_key: true)')
+      expect(result).toContain('id: String.t()')
+      expect(result).not.toContain('@foreign_key_type')
+    })
+  })
+
+  describe('autoincrement primary key', () => {
+    it('generates :id PK with autogenerate for autoincrement', () => {
+      const model = makeModel({
+        name: 'Post',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'Int',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'autoincrement', args: [] },
+          }),
+          makeField({ name: 'title', type: 'String' }),
+        ],
+      })
+
+      const result = ectoSchemas([model], 'App')
+
+      expect(result).toContain('@primary_key {:id, :id, autogenerate: true}')
+      expect(result).toContain('id: integer()')
+      expect(result).not.toContain('@foreign_key_type')
+      expect(result).not.toContain('field(:id,')
+    })
+  })
+
+  describe('extended type mapping', () => {
+    it('maps Float, BigInt, Decimal, Json, Bytes correctly', () => {
+      const model = makeModel({
+        name: 'TypeTest',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'String',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'uuid', args: [4] },
+          }),
+          makeField({ name: 'score', type: 'Float' }),
+          makeField({ name: 'bigNum', type: 'BigInt' }),
+          makeField({ name: 'price', type: 'Decimal' }),
+          makeField({ name: 'metadata', type: 'Json' }),
+          makeField({ name: 'data', type: 'Bytes' }),
+        ],
+      })
+
+      const result = ectoSchemas([model], 'App')
+
+      expect(result).toContain('field(:score, :float)')
+      expect(result).toContain('field(:big_num, :integer, source: :bigNum)')
+      expect(result).toContain('field(:price, :decimal)')
+      expect(result).toContain('field(:metadata, :map)')
+      expect(result).toContain('field(:data, :binary)')
+    })
+
+    it('generates correct typespecs for extended types', () => {
+      const model = makeModel({
+        name: 'TypeTest',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'String',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'uuid', args: [4] },
+          }),
+          makeField({ name: 'score', type: 'Float' }),
+          makeField({ name: 'bigNum', type: 'BigInt' }),
+          makeField({ name: 'price', type: 'Decimal' }),
+          makeField({ name: 'metadata', type: 'Json' }),
+          makeField({ name: 'data', type: 'Bytes' }),
+        ],
+      })
+
+      const result = ectoSchemas([model], 'App')
+
+      expect(result).toContain('score: float()')
+      expect(result).toContain('big_num: integer()')
+      expect(result).toContain('price: Decimal.t()')
+      expect(result).toContain('metadata: map()')
+      expect(result).toContain('data: binary()')
+    })
+  })
+
+  describe('enum support', () => {
+    it('generates Ecto.Enum field with values', () => {
+      const model = makeModel({
+        name: 'User',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'String',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'uuid', args: [4] },
+          }),
+          makeField({ name: 'name', type: 'String' }),
+          makeField({ name: 'role', type: 'Role', kind: 'enum' }),
+        ],
+      })
+
+      const enums = [
+        {
+          name: 'Role',
+          values: [
+            { name: 'ADMIN', dbName: null },
+            { name: 'USER', dbName: null },
+          ],
+        },
+      ] as const
+
+      const result = ectoSchemas([model], 'App', undefined, enums)
+
+      expect(result).toContain('field(:role, Ecto.Enum, values: [:ADMIN, :USER])')
+      expect(result).toContain('role: atom()')
+    })
+
+    it('generates nullable enum typespec', () => {
+      const model = makeModel({
+        name: 'User',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'String',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'uuid', args: [4] },
+          }),
+          makeField({ name: 'role', type: 'Role', kind: 'enum', isRequired: false }),
+        ],
+      })
+
+      const enums = [
+        {
+          name: 'Role',
+          values: [
+            { name: 'ADMIN', dbName: null },
+            { name: 'USER', dbName: null },
+          ],
+        },
+      ] as const
+
+      const result = ectoSchemas([model], 'App', undefined, enums)
+
+      expect(result).toContain('role: atom() | nil')
+      expect(result).toContain('field(:role, Ecto.Enum, values: [:ADMIN, :USER])')
+    })
+  })
+
+  describe('nullable field typespecs', () => {
+    it('appends | nil for non-required fields', () => {
+      const model = makeModel({
+        name: 'User',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'String',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'uuid', args: [4] },
+          }),
+          makeField({ name: 'name', type: 'String' }),
+          makeField({ name: 'bio', type: 'String', isRequired: false }),
+          makeField({ name: 'age', type: 'Int', isRequired: false }),
+        ],
+      })
+
+      const result = ectoSchemas([model], 'App')
+
+      expect(result).toContain('name: String.t(),')
+      expect(result).toContain('bio: String.t() | nil,')
+      expect(result).toContain('age: integer() | nil')
+      expect(result).not.toContain('name: String.t() | nil')
+    })
+  })
+
+  describe('belongs_to with autoincrement PK target', () => {
+    it('does not emit FK type for integer PK target', () => {
+      const userModel = makeModel({
+        name: 'User',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'Int',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'autoincrement', args: [] },
+          }),
+          makeField({
+            name: 'posts',
+            type: 'Post',
+            kind: 'object',
+            isList: true,
+            isRequired: false,
+            relationName: 'UserToPost',
+          }),
+        ],
+      })
+
+      const postModel = makeModel({
+        name: 'Post',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'Int',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'autoincrement', args: [] },
+          }),
+          makeField({ name: 'title', type: 'String' }),
+          makeField({ name: 'userId', type: 'Int' }),
+          makeField({
+            name: 'user',
+            type: 'User',
+            kind: 'object',
+            isList: false,
+            isRequired: true,
+            relationName: 'UserToPost',
+            relationFromFields: ['userId'],
+            relationToFields: ['id'],
+          }),
+        ],
+      })
+
+      const allModels = [userModel, postModel]
+      const result = ectoSchemas([postModel], 'App', allModels)
+
+      expect(result).toContain(
+        'belongs_to(:user, App.User, foreign_key: :user_id, define_field: false)',
+      )
+      expect(result).not.toContain('type: :binary_id')
     })
   })
 

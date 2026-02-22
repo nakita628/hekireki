@@ -4,24 +4,35 @@ import { mkdir, writeFile } from '../fsp/index.js'
 import { ectoTypeToTypespec, makeSnakeCase, prismaTypeToEctoType } from '../utils/index.js'
 
 function getPrimaryKeyConfig(field: DMMF.Field) {
-  if (
-    field.type === 'String' &&
-    field.default &&
-    typeof field.default === 'object' &&
-    'name' in field.default &&
-    field.default.name === 'uuid'
-  ) {
+  const def = field.default
+  const isFunctionDefault = def && typeof def === 'object' && 'name' in def
+
+  // UUID PK: String + @default(uuid())
+  if (field.type === 'String' && isFunctionDefault && def.name === 'uuid') {
     return {
       line: '@primary_key {:id, :binary_id, autogenerate: true}',
       typeSpec: 'Ecto.UUID.t()',
       omitIdFieldInSchema: true,
+      useBinaryForeignKey: true,
     }
   }
 
+  // Autoincrement PK: Int + @default(autoincrement())
+  if (field.type === 'Int' && isFunctionDefault && def.name === 'autoincrement') {
+    return {
+      line: '@primary_key {:id, :id, autogenerate: true}',
+      typeSpec: 'integer()',
+      omitIdFieldInSchema: true,
+      useBinaryForeignKey: false,
+    }
+  }
+
+  // CUID or other string PK (no special Ecto type)
   return {
     line: '@primary_key false',
     typeSpec: 'String.t()',
     omitIdFieldInSchema: false,
+    useBinaryForeignKey: false,
   }
 }
 
@@ -85,7 +96,15 @@ function getBelongsToFkType(
   if (!targetPk) return null
 
   const pkConfig = getPrimaryKeyConfig(targetPk)
-  if (pkConfig.line.includes('binary_id')) return 'binary_id'
+
+  // UUID PK → binary_id FK type
+  if (pkConfig.useBinaryForeignKey) return 'binary_id'
+
+  // Autoincrement integer PK → no explicit FK type needed (Ecto default :id)
+  if (pkConfig.line.includes(':id, autogenerate')) return null
+
+  // CUID or other string PK → string FK type
+  if (targetPk.type === 'String') return 'string'
 
   const ectoType = prismaTypeToEctoType(targetPk.type)
   if (ectoType === 'integer') return null
@@ -170,6 +189,7 @@ export function ectoSchemas(
   models: readonly DMMF.Model[],
   app: string | string[],
   allModels?: readonly DMMF.Model[],
+  enums?: readonly DMMF.DatamodelEnum[],
 ): string {
   const contextModels = allModels ?? models
   return models
@@ -178,12 +198,22 @@ export function ectoSchemas(
       if (!idField) return ''
 
       const pk = getPrimaryKeyConfig(idField)
-      const useBinaryId = pk.line.includes('binary_id')
+      const useBinaryId = pk.useBinaryForeignKey
       const fields = model.fields.map((f) => ({ ...f }))
       const { line: timestampsLine, exclude: timestampsExclude } = makeTimestampsLine(fields)
       const associations = getAssociations(model, contextModels)
 
       const belongsToFkFields = new Set(associations.belongsTo.map((a) => a.foreignKey))
+
+      const enumMap = new Map<string, readonly string[]>()
+      if (enums) {
+        for (const e of enums) {
+          enumMap.set(
+            e.name,
+            e.values.map((v) => v.name),
+          )
+        }
+      }
 
       const schemaFieldsRaw = fields.filter(
         (f) =>
@@ -196,11 +226,14 @@ export function ectoSchemas(
       )
 
       const typeSpecFields = [
-        `id: ${pk.typeSpec}`,
-        ...schemaFieldsRaw.map(
-          (f) =>
-            `${makeSnakeCase(f.name)}: ${ectoTypeToTypespec(prismaTypeToEctoType(f.type))}`,
-        ),
+        ...(pk.omitIdFieldInSchema ? [`id: ${pk.typeSpec}`] : []),
+        ...schemaFieldsRaw.map((f) => {
+          const nullSuffix = f.isRequired ? '' : ' | nil'
+          if (f.kind === 'enum') {
+            return `${makeSnakeCase(f.name)}: atom()${nullSuffix}`
+          }
+          return `${makeSnakeCase(f.name)}: ${ectoTypeToTypespec(prismaTypeToEctoType(f.type))}${nullSuffix}`
+        }),
         ...associations.belongsTo.map(
           (a) => `${makeSnakeCase(a.name)}: ${app}.${a.targetModel}.t() | nil`,
         ),
@@ -222,12 +255,19 @@ export function ectoSchemas(
       ]
 
       const schemaFields = schemaFieldsRaw.map((f) => {
-        const type = f.isId ? 'binary_id' : prismaTypeToEctoType(f.type)
+        const snakeName = makeSnakeCase(f.name)
         const primary = f.isId && !pk.omitIdFieldInSchema ? ', primary_key: true' : ''
+        const sourceOpt = snakeName !== f.name ? `, source: :${f.name}` : ''
+
+        if (f.kind === 'enum') {
+          const values = enumMap.get(f.type)
+          const valuesStr = values ? values.map((v) => `:${v}`).join(', ') : ''
+          return `    field(:${snakeName}, Ecto.Enum, values: [${valuesStr}]${sourceOpt})`
+        }
+
+        const type = prismaTypeToEctoType(f.type)
         const defaultOpt = getFieldDefaultOption(f)
         const defaultClause = defaultOpt ? `, ${defaultOpt}` : ''
-        const snakeName = makeSnakeCase(f.name)
-        const sourceOpt = snakeName !== f.name ? `, source: :${f.name}` : ''
         return `    field(:${snakeName}, :${type}${primary}${defaultClause}${sourceOpt})`
       })
 
@@ -295,6 +335,7 @@ export async function writeEctoSchemasToFiles(
   models: readonly DMMF.Model[],
   app: string | string[],
   outDir: string,
+  enums?: readonly DMMF.DatamodelEnum[],
 ): Promise<
   { readonly ok: true; readonly value: undefined } | { readonly ok: false; readonly error: string }
 > {
@@ -304,7 +345,7 @@ export async function writeEctoSchemasToFiles(
   }
 
   for (const model of models) {
-    const code = ectoSchemas([model], app, models)
+    const code = ectoSchemas([model], app, models, enums)
     if (!code.trim()) continue
 
     const filePath = join(outDir, `${makeSnakeCase(model.name)}.ex`)
