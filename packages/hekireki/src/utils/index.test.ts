@@ -1,31 +1,49 @@
 import { describe, expect, it } from 'vitest'
 import {
+  combineKeys,
+  ectoTypeToTypespec,
   escapeNote,
   excludeManyToOneRelations,
   findMissingAnnotations,
   formatConstraints,
+  getBool,
+  getString,
   groupByModel,
   hasBareAnnotation,
   isFields,
   isRelationshipType,
+  makeAnnotationExtractor,
   makeArktypeEnumExpression,
+  makeArktypeInfer,
+  makeArktypeProperties,
+  makeArktypeSchema,
   makeCapitalized,
   makeDocumentParser,
   makeEffectEnumExpression,
+  makeEffectInfer,
+  makeEffectProperties,
+  makeEffectSchema,
   makeEnum,
+  makeJsDoc,
   makePropertiesGenerator,
+  makeRefName,
   makeSnakeCase,
+  makeValibotCardinality,
   makeValibotEnumExpression,
   makeValibotInfer,
+  makeValibotObject,
   makeValibotSchema,
   makeValidationExtractor,
+  makeZodCardinality,
   makeZodEnumExpression,
   makeZodInfer,
+  makeZodObject,
   makeZodSchema,
   parseDocumentWithoutAnnotations,
   parseRelation,
   prismaTypeToEctoType,
   removeDuplicateRelations,
+  schemaFromFields,
   stripAnnotations,
 } from '.'
 
@@ -486,10 +504,23 @@ describe('utils', () => {
     it('converts DateTime to utc_datetime', () => {
       expect(prismaTypeToEctoType('DateTime')).toBe('utc_datetime')
     })
+    it('maps Float to float', () => {
+      expect(prismaTypeToEctoType('Float')).toBe('float')
+    })
+    it('maps BigInt to integer', () => {
+      expect(prismaTypeToEctoType('BigInt')).toBe('integer')
+    })
+    it('maps Decimal to decimal', () => {
+      expect(prismaTypeToEctoType('Decimal')).toBe('decimal')
+    })
+    it('maps Json to map', () => {
+      expect(prismaTypeToEctoType('Json')).toBe('map')
+    })
+    it('maps Bytes to binary', () => {
+      expect(prismaTypeToEctoType('Bytes')).toBe('binary')
+    })
     it('returns string for unsupported types', () => {
-      expect(prismaTypeToEctoType('Json')).toBe('string')
-      expect(prismaTypeToEctoType('Float')).toBe('string')
-      expect(prismaTypeToEctoType('BigInt')).toBe('string')
+      expect(prismaTypeToEctoType('Unknown')).toBe('string')
     })
   })
 
@@ -741,6 +772,382 @@ describe('utils', () => {
         { modelName: 'User', fieldName: 'email' },
         { modelName: 'Post', fieldName: 'id' },
       ])
+    })
+  })
+
+  // ============================================================================
+  // Config Utilities
+  // ============================================================================
+
+  describe('getString', () => {
+    it('returns string when given a string', () => {
+      expect(getString('hello')).toBe('hello')
+    })
+    it('returns first element when given an array', () => {
+      expect(getString(['first', 'second'])).toBe('first')
+    })
+    it('returns fallback when given undefined', () => {
+      expect(getString(undefined, 'default')).toBe('default')
+    })
+    it('returns fallback when array is empty', () => {
+      expect(getString([], 'fallback')).toBe('fallback')
+    })
+    it('returns undefined when no value and no fallback', () => {
+      expect(getString(undefined)).toBeUndefined()
+    })
+  })
+
+  describe('getBool', () => {
+    it('returns true for boolean true', () => {
+      expect(getBool(true)).toBe(true)
+    })
+    it('returns true for string "true"', () => {
+      expect(getBool('true')).toBe(true)
+    })
+    it('returns true for array with "true"', () => {
+      expect(getBool(['true'])).toBe(true)
+    })
+    it('returns fallback for undefined', () => {
+      expect(getBool(undefined)).toBe(false)
+    })
+    it('returns custom fallback', () => {
+      expect(getBool(undefined, true)).toBe(true)
+    })
+    it('returns fallback for false', () => {
+      expect(getBool(false)).toBe(false)
+    })
+  })
+
+  // ============================================================================
+  // Annotation Extractor
+  // ============================================================================
+
+  describe('makeAnnotationExtractor', () => {
+    const extractZod = makeAnnotationExtractor('@z.')
+
+    it('extracts annotation after prefix', () => {
+      expect(extractZod('User name\n@z.uuid()')).toBe('uuid()')
+    })
+    it('returns null when no matching annotation', () => {
+      expect(extractZod('User name\n@v.string()')).toBeNull()
+    })
+    it('extracts from multiline with multiple annotations', () => {
+      const extractValibot = makeAnnotationExtractor('@v.')
+      expect(extractValibot('desc\n@z.uuid()\n@v.pipe(v.string())')).toBe('pipe(v.string())')
+    })
+  })
+
+  // ============================================================================
+  // JSDoc
+  // ============================================================================
+
+  describe('makeJsDoc', () => {
+    it('generates JSDoc from documentation', () => {
+      expect(makeJsDoc('User name')).toBe('/**\n * User name\n */\n')
+    })
+    it('excludes annotation lines', () => {
+      expect(makeJsDoc('User name\n@z.uuid()\n@v.string()')).toBe('/**\n * User name\n */\n')
+    })
+    it('returns empty string for undefined', () => {
+      expect(makeJsDoc(undefined)).toBe('')
+    })
+    it('returns empty string for annotation-only doc', () => {
+      expect(makeJsDoc('@z.uuid()')).toBe('')
+    })
+  })
+
+  // ============================================================================
+  // Zod Object & Cardinality
+  // ============================================================================
+
+  describe('makeZodObject', () => {
+    it('wraps with z.object by default', () => {
+      expect(makeZodObject('inner')).toBe('z.object({inner})')
+    })
+    it('wraps with z.strictObject', () => {
+      expect(makeZodObject('inner', 'strictObject')).toBe('z.strictObject({inner})')
+    })
+    it('wraps with z.looseObject', () => {
+      expect(makeZodObject('inner', 'looseObject')).toBe('z.looseObject({inner})')
+    })
+  })
+
+  describe('makeZodCardinality', () => {
+    it('returns expr as-is for required non-list', () => {
+      expect(makeZodCardinality('z.string()', false, true)).toBe('z.string()')
+    })
+    it('wraps with z.array for list', () => {
+      expect(makeZodCardinality('z.string()', true, true)).toBe('z.array(z.string())')
+    })
+    it('appends .exactOptional() for optional', () => {
+      expect(makeZodCardinality('z.string()', false, false)).toBe('z.string().exactOptional()')
+    })
+    it('wraps array and optional together', () => {
+      expect(makeZodCardinality('z.string()', true, false)).toBe(
+        'z.array(z.string()).exactOptional()',
+      )
+    })
+  })
+
+  // ============================================================================
+  // Valibot Object & Cardinality
+  // ============================================================================
+
+  describe('makeValibotObject', () => {
+    it('wraps with v.object by default', () => {
+      expect(makeValibotObject('inner')).toBe('v.object({inner})')
+    })
+    it('wraps with v.strictObject', () => {
+      expect(makeValibotObject('inner', 'strictObject')).toBe('v.strictObject({inner})')
+    })
+    it('wraps with v.looseObject', () => {
+      expect(makeValibotObject('inner', 'looseObject')).toBe('v.looseObject({inner})')
+    })
+  })
+
+  describe('makeValibotCardinality', () => {
+    it('returns expr as-is for required non-list', () => {
+      expect(makeValibotCardinality('v.string()', false, true)).toBe('v.string()')
+    })
+    it('wraps with v.array for list', () => {
+      expect(makeValibotCardinality('v.string()', true, true)).toBe('v.array(v.string())')
+    })
+    it('wraps with v.exactOptional for optional', () => {
+      expect(makeValibotCardinality('v.string()', false, false)).toBe(
+        'v.exactOptional(v.string())',
+      )
+    })
+    it('wraps array and optional together', () => {
+      expect(makeValibotCardinality('v.string()', true, false)).toBe(
+        'v.exactOptional(v.array(v.string()))',
+      )
+    })
+  })
+
+  // ============================================================================
+  // ArkType Helpers
+  // ============================================================================
+
+  describe('makeArktypeInfer', () => {
+    it('generates ArkType infer type', () => {
+      expect(makeArktypeInfer('User')).toBe('export type User = typeof UserSchema.infer')
+    })
+    it('works with different model name', () => {
+      expect(makeArktypeInfer('Post')).toBe('export type Post = typeof PostSchema.infer')
+    })
+  })
+
+  describe('makeArktypeSchema', () => {
+    it('generates ArkType schema definition', () => {
+      expect(makeArktypeSchema('User', '  id: "string"')).toBe(
+        'export const UserSchema = type({\n  id: "string"\n})',
+      )
+    })
+  })
+
+  describe('makeArktypeProperties', () => {
+    const fields = [
+      {
+        documentation: '',
+        modelName: 'User',
+        fieldName: 'id',
+        validation: '"string.uuid"',
+        isRequired: true,
+        comment: ['Primary key'],
+      },
+    ]
+
+    it('generates properties with comments', () => {
+      const result = makeArktypeProperties(fields, true)
+      expect(result).toBe('  /** Primary key */\n  id: "string.uuid",')
+    })
+    it('generates properties without comments', () => {
+      const result = makeArktypeProperties(fields, false)
+      expect(result).toBe('  id: "string.uuid",')
+    })
+    it('uses "unknown" for null validation', () => {
+      const nullFields = [{ ...fields[0], validation: null, comment: [] }]
+      const result = makeArktypeProperties(nullFields, false)
+      expect(result).toBe('  id: "unknown",')
+    })
+  })
+
+  // ============================================================================
+  // Effect Helpers
+  // ============================================================================
+
+  describe('makeEffectInfer', () => {
+    it('generates Effect infer type', () => {
+      expect(makeEffectInfer('User')).toBe(
+        'export type User = Schema.Schema.Type<typeof UserSchema>',
+      )
+    })
+    it('works with different model name', () => {
+      expect(makeEffectInfer('Post')).toBe(
+        'export type Post = Schema.Schema.Type<typeof PostSchema>',
+      )
+    })
+  })
+
+  describe('makeEffectSchema', () => {
+    it('generates Effect schema definition', () => {
+      expect(makeEffectSchema('User', '  id: Schema.String')).toBe(
+        'export const UserSchema = Schema.Struct({\n  id: Schema.String\n})',
+      )
+    })
+  })
+
+  describe('makeEffectProperties', () => {
+    const fields = [
+      {
+        documentation: '',
+        modelName: 'User',
+        fieldName: 'id',
+        validation: 'Schema.String',
+        isRequired: true,
+        comment: ['Primary key'],
+      },
+    ]
+
+    it('generates properties with comments', () => {
+      const result = makeEffectProperties(fields, true)
+      expect(result).toBe('  /** Primary key */\n  id: Schema.String,')
+    })
+    it('generates properties without comments', () => {
+      const result = makeEffectProperties(fields, false)
+      expect(result).toBe('  id: Schema.String,')
+    })
+    it('uses Schema.Unknown for null validation', () => {
+      const nullFields = [{ ...fields[0], validation: null, comment: [] }]
+      const result = makeEffectProperties(nullFields, false)
+      expect(result).toBe('  id: Schema.Unknown,')
+    })
+  })
+
+  // ============================================================================
+  // DBML Ref Name
+  // ============================================================================
+
+  describe('makeRefName', () => {
+    it('uses provided name', () => {
+      expect(
+        makeRefName({
+          name: 'custom_fk',
+          fromTable: 'Post',
+          fromColumn: 'userId',
+          toTable: 'User',
+          toColumn: 'id',
+        }),
+      ).toBe('custom_fk')
+    })
+    it('generates name from table/column when no name', () => {
+      expect(
+        makeRefName({
+          fromTable: 'Post',
+          fromColumn: 'userId',
+          toTable: 'User',
+          toColumn: 'id',
+        }),
+      ).toBe('Post_userId_User_id_fk')
+    })
+  })
+
+  // ============================================================================
+  // combineKeys
+  // ============================================================================
+
+  describe('combineKeys', () => {
+    it('returns single key as-is', () => {
+      expect(combineKeys(['id'])).toBe('id')
+    })
+    it('wraps multiple keys in parentheses', () => {
+      expect(combineKeys(['id', 'name'])).toBe('(id, name)')
+    })
+    it('handles three keys', () => {
+      expect(combineKeys(['a', 'b', 'c'])).toBe('(a, b, c)')
+    })
+  })
+
+  // ============================================================================
+  // ectoTypeToTypespec
+  // ============================================================================
+
+  describe('ectoTypeToTypespec', () => {
+    it('converts string to String.t()', () => {
+      expect(ectoTypeToTypespec('string')).toBe('String.t()')
+    })
+    it('converts integer to integer()', () => {
+      expect(ectoTypeToTypespec('integer')).toBe('integer()')
+    })
+    it('converts binary_id to Ecto.UUID.t()', () => {
+      expect(ectoTypeToTypespec('binary_id')).toBe('Ecto.UUID.t()')
+    })
+    it('converts utc_datetime to DateTime.t()', () => {
+      expect(ectoTypeToTypespec('utc_datetime')).toBe('DateTime.t()')
+    })
+    it('returns term() for unknown types', () => {
+      expect(ectoTypeToTypespec('unknown_type')).toBe('term()')
+    })
+  })
+
+  // ============================================================================
+  // schemaFromFields
+  // ============================================================================
+
+  describe('schemaFromFields', () => {
+    it('combines schemaBuilder and propertiesGenerator', () => {
+      const fields = [
+        {
+          documentation: '',
+          modelName: 'User',
+          fieldName: 'id',
+          validation: 'uuid()',
+          isRequired: true,
+          comment: ['Primary key'],
+        },
+        {
+          documentation: '',
+          modelName: 'User',
+          fieldName: 'name',
+          validation: 'string()',
+          isRequired: true,
+          comment: ['Name'],
+        },
+      ]
+      const mockSchema = (name: string, f: string) => `schema(${name}, ${f})`
+      const mockProps = (
+        _fields: readonly { readonly fieldName: string }[],
+        _comment: boolean,
+      ) => _fields.map((f) => f.fieldName).join(', ')
+
+      // biome-ignore lint/suspicious/noExplicitAny: test mock
+      const result = schemaFromFields(fields, true, mockSchema, mockProps as any)
+      expect(result).toBe('schema(User, id, name)')
+    })
+    it('passes comment flag to propertiesGenerator', () => {
+      const fields = [
+        {
+          documentation: '',
+          modelName: 'Post',
+          fieldName: 'title',
+          validation: 'string()',
+          isRequired: true,
+          comment: [],
+        },
+      ]
+      let receivedComment = false
+      const mockSchema = (_name: string, f: string) => f
+      const mockProps = (
+        _fields: readonly { readonly fieldName: string }[],
+        comment: boolean,
+      ) => {
+        receivedComment = comment
+        return 'props'
+      }
+
+      // biome-ignore lint/suspicious/noExplicitAny: test mock
+      schemaFromFields(fields, false, mockSchema, mockProps as any)
+      expect(receivedComment).toBe(false)
     })
   })
 })
