@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 import { describe, expect, it } from 'vitest'
-import { makeRelations, makeTables } from './dbml.js'
+import { dbmlContent, makeEnums, makeRelations, makeTables } from './dbml.js'
 
 describe('helper/dbml', () => {
   describe('quote', () => {
@@ -254,6 +254,224 @@ describe('helper/dbml', () => {
       expect(tables[0]).toBe(
         "Table Test {\n  email String [unique, not null, note: 'User\\'s email']\n}",
       )
+    })
+  })
+
+  describe('makeEnums', () => {
+    it('generates enum definitions', () => {
+      const enums: DMMF.DatamodelEnum[] = [
+        {
+          name: 'Role',
+          values: [{ name: 'ADMIN', dbName: null }, { name: 'USER', dbName: null }],
+        },
+      ]
+      const result = makeEnums(enums)
+      expect(result).toEqual(['Enum Role {\n  ADMIN\n  USER\n}'])
+    })
+
+    it('handles multiple enums', () => {
+      const enums: DMMF.DatamodelEnum[] = [
+        {
+          name: 'Role',
+          values: [{ name: 'ADMIN', dbName: null }],
+        },
+        {
+          name: 'Status',
+          values: [
+            { name: 'ACTIVE', dbName: null },
+            { name: 'INACTIVE', dbName: null },
+          ],
+        },
+      ]
+      const result = makeEnums(enums)
+      expect(result).toHaveLength(2)
+      expect(result[0]).toBe('Enum Role {\n  ADMIN\n}')
+      expect(result[1]).toBe('Enum Status {\n  ACTIVE\n  INACTIVE\n}')
+    })
+
+    it('returns empty array for no enums', () => {
+      expect(makeEnums([])).toEqual([])
+    })
+  })
+
+  describe('dbmlContent', () => {
+    it('combines enums, tables, and refs into full DBML output', () => {
+      const datamodel: DMMF.Datamodel = {
+        models: [
+          {
+            name: 'User',
+            dbName: null,
+            fields: [
+              {
+                name: 'id',
+                kind: 'scalar',
+                isList: false,
+                isRequired: true,
+                isUnique: false,
+                isId: true,
+                isReadOnly: false,
+                hasDefaultValue: false,
+                type: 'String',
+                isGenerated: false,
+                isUpdatedAt: false,
+              },
+            ],
+            primaryKey: null,
+            uniqueFields: [],
+            uniqueIndexes: [],
+            isGenerated: false,
+          } as DMMF.Model,
+        ],
+        enums: [
+          {
+            name: 'Role',
+            values: [{ name: 'ADMIN', dbName: null }, { name: 'USER', dbName: null }],
+          },
+        ],
+        types: [],
+      }
+      const result = dbmlContent(datamodel)
+      expect(result).toContain('Enum Role {')
+      expect(result).toContain('ADMIN')
+      expect(result).toContain('Table User {')
+      expect(result).toContain('id String [pk]')
+    })
+
+    it('generates output with relations', () => {
+      const datamodel: DMMF.Datamodel = {
+        models: [
+          {
+            name: 'Post',
+            dbName: null,
+            fields: [
+              {
+                name: 'id',
+                kind: 'scalar',
+                isList: false,
+                isRequired: true,
+                isUnique: false,
+                isId: true,
+                isReadOnly: false,
+                hasDefaultValue: false,
+                type: 'String',
+                isGenerated: false,
+                isUpdatedAt: false,
+              },
+              {
+                name: 'userId',
+                kind: 'scalar',
+                isList: false,
+                isRequired: true,
+                isUnique: false,
+                isId: false,
+                isReadOnly: false,
+                hasDefaultValue: false,
+                type: 'String',
+                isGenerated: false,
+                isUpdatedAt: false,
+              },
+              {
+                name: 'user',
+                kind: 'object',
+                isList: false,
+                isRequired: true,
+                isUnique: false,
+                isId: false,
+                isReadOnly: false,
+                hasDefaultValue: false,
+                type: 'User',
+                isGenerated: false,
+                isUpdatedAt: false,
+                relationName: 'PostToUser',
+                relationFromFields: ['userId'],
+                relationToFields: ['id'],
+              },
+            ],
+            primaryKey: null,
+            uniqueFields: [],
+            uniqueIndexes: [],
+            isGenerated: false,
+          } as DMMF.Model,
+          {
+            name: 'User',
+            dbName: null,
+            fields: [
+              {
+                name: 'id',
+                kind: 'scalar',
+                isList: false,
+                isRequired: true,
+                isUnique: false,
+                isId: true,
+                isReadOnly: false,
+                hasDefaultValue: false,
+                type: 'String',
+                isGenerated: false,
+                isUpdatedAt: false,
+              },
+              {
+                name: 'posts',
+                kind: 'object',
+                isList: true,
+                isRequired: false,
+                isUnique: false,
+                isId: false,
+                isReadOnly: false,
+                hasDefaultValue: false,
+                type: 'Post',
+                isGenerated: false,
+                isUpdatedAt: false,
+                relationName: 'PostToUser',
+              },
+            ],
+            primaryKey: null,
+            uniqueFields: [],
+            uniqueIndexes: [],
+            isGenerated: false,
+          } as DMMF.Model,
+        ],
+        enums: [],
+        types: [],
+      }
+      const result = dbmlContent(datamodel)
+      expect(result).toContain('Table Post {')
+      expect(result).toContain('Table User {')
+      expect(result).toContain('Ref Post_userId_fk: Post.userId > User.id')
+    })
+
+    it('uses dbName when mapToDbSchema is true', () => {
+      const datamodel: DMMF.Datamodel = {
+        models: [
+          {
+            name: 'User',
+            dbName: 'users',
+            fields: [
+              {
+                name: 'id',
+                kind: 'scalar',
+                isList: false,
+                isRequired: true,
+                isUnique: false,
+                isId: true,
+                isReadOnly: false,
+                hasDefaultValue: false,
+                type: 'String',
+                isGenerated: false,
+                isUpdatedAt: false,
+              },
+            ],
+            primaryKey: null,
+            uniqueFields: [],
+            uniqueIndexes: [],
+            isGenerated: false,
+          } as DMMF.Model,
+        ],
+        enums: [],
+        types: [],
+      }
+      const result = dbmlContent(datamodel, true)
+      expect(result).toContain('Table users {')
+      expect(result).not.toContain('Table User {')
     })
   })
 })
