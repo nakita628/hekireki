@@ -13,8 +13,7 @@
 - 🗄️ Automatically generates [Drizzle ORM](https://orm.drizzle.team/) table schemas and relations from your Prisma schema
 - 📊 Creates [Mermaid](https://mermaid.js.org/) ER diagrams with PK/FK markers
 - 📝 Generates [DBML](https://dbml.dbdiagram.io/) (Database Markup Language) files and **PNG** ER diagrams via [dbml-renderer](https://github.com/softwaretechnik-berlin/dbml-renderer) — output format is determined by the file extension (`.dbml` or `.png`)
-- 🧪 Generates [Ecto](https://hexdocs.pm/ecto/Ecto.Schema.html) schemas for Elixir projects
-  ⚠️ Foreign key constraints are **not** included — manage relationships in your application logic
+- 🧪 Generates [Ecto](https://hexdocs.pm/ecto/Ecto.Schema.html) schemas for Elixir projects — with associations (`belongs_to`, `has_many`, `has_one`), composite primary keys, `@type t` typespecs, array fields, `@@map`/`@map` support, and `@moduledoc`
 
 ## Installation
 
@@ -344,19 +343,25 @@ erDiagram
 
 ### Ecto
 
+Each model is output as a separate `.ex` file (1 model = 1 file), following Elixir conventions.
+
 ```elixir
 defmodule DBSchema.User do
   use Ecto.Schema
+  @moduledoc false
 
   @primary_key {:id, :binary_id, autogenerate: true}
+  @foreign_key_type :binary_id
 
   @type t :: %__MODULE__{
           id: Ecto.UUID.t(),
-          name: String.t()
+          name: String.t(),
+          posts: [DBSchema.Post.t()]
         }
 
   schema "user" do
     field(:name, :string)
+    has_many(:posts, DBSchema.Post, foreign_key: :user_id)
   end
 end
 ```
@@ -364,23 +369,39 @@ end
 ```elixir
 defmodule DBSchema.Post do
   use Ecto.Schema
+  @moduledoc false
 
   @primary_key {:id, :binary_id, autogenerate: true}
+  @foreign_key_type :binary_id
 
   @type t :: %__MODULE__{
           id: Ecto.UUID.t(),
           title: String.t(),
           content: String.t(),
-          userId: String.t()
+          user: DBSchema.User.t() | nil
         }
 
   schema "post" do
     field(:title, :string)
     field(:content, :string)
-    field(:userId, :string)
+    field(:user_id, :binary_id, source: :userId)
+    belongs_to(:user, DBSchema.User, foreign_key: :user_id, define_field: false)
   end
 end
 ```
+
+**Supported features:**
+
+| Feature | Details |
+|---|---|
+| Primary keys | UUID (`@default(uuid())`), autoincrement (`@default(autoincrement())`), CUID, composite (`@@id`) |
+| Associations | `belongs_to`, `has_many`, `has_one` with correct FK types |
+| Timestamps | `timestamps()` with `inserted_at_source`/`updated_at_source` for `@map`/camelCase fields |
+| Enums | `Ecto.Enum` with `values: [...]` |
+| Array fields | `{:array, :type}` for Prisma list scalars (`String[]`, `Int[]`, etc.) |
+| Name mapping | `@@map` → schema table name, `@map` → field `source:` option |
+| Typespecs | `@type t :: %__MODULE__{...}` auto-generated for Dialyzer |
+| `@moduledoc` | Uses `///` model documentation, or `false` when absent |
 
 ### DBML
 
