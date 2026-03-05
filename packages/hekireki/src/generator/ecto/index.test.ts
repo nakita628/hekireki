@@ -55,6 +55,7 @@ model Post {
 
     const usersExpected = `defmodule DBSchema.User do
   use Ecto.Schema
+  @moduledoc false
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -79,6 +80,7 @@ end`
 
     const postsExpected = `defmodule DBSchema.Post do
   use Ecto.Schema
+  @moduledoc false
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -137,6 +139,7 @@ model Profile {
     const userResult = fs.readFileSync('./prisma-ecto/ecto/user.ex', { encoding: 'utf-8' })
     const userExpected = `defmodule DBSchema.User do
   use Ecto.Schema
+  @moduledoc false
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -158,6 +161,7 @@ end`
     const profileResult = fs.readFileSync('./prisma-ecto/ecto/profile.ex', { encoding: 'utf-8' })
     const profileExpected = `defmodule DBSchema.Profile do
   use Ecto.Schema
+  @moduledoc false
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -216,6 +220,7 @@ model Follow {
     const followResult = fs.readFileSync('./prisma-ecto/ecto/follow.ex', { encoding: 'utf-8' })
     const followExpected = `defmodule DBSchema.Follow do
   use Ecto.Schema
+  @moduledoc false
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -239,6 +244,7 @@ end`
     const userResult = fs.readFileSync('./prisma-ecto/ecto/user.ex', { encoding: 'utf-8' })
     const userExpected = `defmodule DBSchema.User do
   use Ecto.Schema
+  @moduledoc false
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -305,6 +311,7 @@ model Post {
     const userResult = fs.readFileSync('./prisma-ecto/ecto/user.ex', { encoding: 'utf-8' })
     const userExpected = `defmodule DBSchema.User do
   use Ecto.Schema
+  @moduledoc false
 
   @primary_key false
 
@@ -330,6 +337,7 @@ end`
     const postResult = fs.readFileSync('./prisma-ecto/ecto/post.ex', { encoding: 'utf-8' })
     const postExpected = `defmodule DBSchema.Post do
   use Ecto.Schema
+  @moduledoc false
 
   @primary_key false
 
@@ -394,6 +402,7 @@ model Post {
     const userResult = fs.readFileSync('./prisma-ecto/ecto/user.ex', { encoding: 'utf-8' })
     const userExpected = `defmodule DBSchema.User do
   use Ecto.Schema
+  @moduledoc false
 
   @primary_key {:id, :id, autogenerate: true}
 
@@ -416,6 +425,7 @@ end`
     const postResult = fs.readFileSync('./prisma-ecto/ecto/post.ex', { encoding: 'utf-8' })
     const postExpected = `defmodule DBSchema.Post do
   use Ecto.Schema
+  @moduledoc false
 
   @primary_key {:id, :id, autogenerate: true}
 
@@ -433,6 +443,119 @@ end`
 end`
 
     expect(postResult).toBe(postExpected)
+  }, 30000)
+
+  it('hekireki-ecto with composite primary key (@@id)', async () => {
+    const prisma = `generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "sqlite"
+}
+
+generator Hekireki-Ecto {
+    provider = "hekireki-ecto"
+    output   = "ecto"
+    app      = "DBSchema"
+}
+
+model User {
+    id        String   @id @default(uuid())
+    name      String
+    followers Follow[] @relation("Follower")
+    following Follow[] @relation("Following")
+    likes     Like[]
+}
+
+model Post {
+    id    String @id @default(uuid())
+    title String
+    likes Like[]
+}
+
+model Follow {
+    followerId  String
+    followingId String
+    createdAt   DateTime @default(now())
+    follower    User     @relation("Following", fields: [followerId], references: [id])
+    following   User     @relation("Follower", fields: [followingId], references: [id])
+
+    @@id([followerId, followingId])
+}
+
+model Like {
+    userId    String
+    postId    String
+    createdAt DateTime @default(now())
+    user      User     @relation(fields: [userId], references: [id])
+    post      Post     @relation(fields: [postId], references: [id])
+
+    @@id([userId, postId])
+}
+`
+
+    fs.mkdirSync('./prisma-ecto', { recursive: true })
+    fs.writeFileSync('./prisma-ecto/schema.prisma', prisma, { encoding: 'utf-8' })
+    await promisify(exec)('npx prisma generate --schema=./prisma-ecto/schema.prisma')
+
+    const followResult = fs.readFileSync('./prisma-ecto/ecto/follow.ex', { encoding: 'utf-8' })
+    const followExpected = `defmodule DBSchema.Follow do
+  use Ecto.Schema
+  @moduledoc false
+
+  @primary_key false
+
+  @type t :: %__MODULE__{
+          follower_id: Ecto.UUID.t(),
+          following_id: Ecto.UUID.t(),
+          follower: DBSchema.User.t() | nil,
+          following: DBSchema.User.t() | nil
+        }
+
+  schema "follow" do
+    field(:follower_id, :binary_id, primary_key: true, source: :followerId)
+    field(:following_id, :binary_id, primary_key: true, source: :followingId)
+    belongs_to(:follower, DBSchema.User, foreign_key: :follower_id, define_field: false, type: :binary_id)
+    belongs_to(:following, DBSchema.User, foreign_key: :following_id, define_field: false, type: :binary_id)
+    timestamps(type: :utc_datetime, inserted_at_source: :createdAt)
+  end
+end`
+
+    expect(followResult).toBe(followExpected)
+
+    const likeResult = fs.readFileSync('./prisma-ecto/ecto/like.ex', { encoding: 'utf-8' })
+    const likeExpected = `defmodule DBSchema.Like do
+  use Ecto.Schema
+  @moduledoc false
+
+  @primary_key false
+
+  @type t :: %__MODULE__{
+          user_id: Ecto.UUID.t(),
+          post_id: Ecto.UUID.t(),
+          user: DBSchema.User.t() | nil,
+          post: DBSchema.Post.t() | nil
+        }
+
+  schema "like" do
+    field(:user_id, :binary_id, primary_key: true, source: :userId)
+    field(:post_id, :binary_id, primary_key: true, source: :postId)
+    belongs_to(:user, DBSchema.User, foreign_key: :user_id, define_field: false, type: :binary_id)
+    belongs_to(:post, DBSchema.Post, foreign_key: :post_id, define_field: false, type: :binary_id)
+    timestamps(type: :utc_datetime, inserted_at_source: :createdAt)
+  end
+end`
+
+    expect(likeResult).toBe(likeExpected)
+
+    // Verify parent models still generate has_many to composite PK models
+    const userResult = fs.readFileSync('./prisma-ecto/ecto/user.ex', { encoding: 'utf-8' })
+    expect(userResult).toContain(
+      'has_many(:followers, DBSchema.Follow, foreign_key: :following_id)',
+    )
+    expect(userResult).toContain('has_many(:following, DBSchema.Follow, foreign_key: :follower_id)')
+    expect(userResult).toContain('has_many(:likes, DBSchema.Like, foreign_key: :user_id)')
   }, 30000)
 
   it('hekireki-ecto with timestamps, defaults, and join model', async () => {
@@ -493,6 +616,7 @@ model MissionAssignment {
     const agentResult = fs.readFileSync('./prisma-ecto/ecto/agent.ex', { encoding: 'utf-8' })
     const agentExpected = `defmodule WISE.Agent do
   use Ecto.Schema
+  @moduledoc false
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -517,6 +641,7 @@ end`
     const missionResult = fs.readFileSync('./prisma-ecto/ecto/mission.ex', { encoding: 'utf-8' })
     const missionExpected = `defmodule WISE.Mission do
   use Ecto.Schema
+  @moduledoc false
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -545,6 +670,7 @@ end`
     })
     const assignmentExpected = `defmodule WISE.MissionAssignment do
   use Ecto.Schema
+  @moduledoc false
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id

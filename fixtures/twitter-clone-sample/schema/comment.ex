@@ -1,7 +1,9 @@
 defmodule DBSchema.Comment do
   use Ecto.Schema
+  @moduledoc false
 
   @primary_key {:id, :binary_id, autogenerate: true}
+  @foreign_key_type :binary_id
 
   @type t :: %__MODULE__{
           id: Ecto.UUID.t(),
@@ -12,8 +14,10 @@ defmodule DBSchema.Comment do
 
   schema "comment" do
     field(:body, :string)
-    belongs_to(:user, DBSchema.User, foreign_key: :userId, type: :binary_id)
-    belongs_to(:post, DBSchema.Post, foreign_key: :postId, type: :binary_id)
-    timestamps(inserted_at: :createdAt, updated_at: :updatedAt)
+    field(:user_id, :binary_id, source: :userId)
+    field(:post_id, :binary_id, source: :postId)
+    belongs_to(:user, DBSchema.User, foreign_key: :user_id, define_field: false)
+    belongs_to(:post, DBSchema.Post, foreign_key: :post_id, define_field: false)
+    timestamps(type: :utc_datetime, inserted_at_source: :createdAt, updated_at_source: :updatedAt)
   end
 end

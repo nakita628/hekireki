@@ -49,7 +49,8 @@ function makeTimestampsLine(fields: DMMF.Field[]): { line: string | null; exclud
   const updatedAliases = ['updated_at', 'modified_at', 'updatedAt', 'modifiedAt']
 
   const inserted = fields.find((f) => insertedAliases.includes(f.name))
-  const updated = fields.find((f) => updatedAliases.includes(f.name))
+  const updated =
+    fields.find((f) => f.isUpdatedAt) ?? fields.find((f) => updatedAliases.includes(f.name))
 
   const exclude = new Set<string>()
   if (inserted) exclude.add(inserted.name)
@@ -59,11 +60,17 @@ function makeTimestampsLine(fields: DMMF.Field[]): { line: string | null; exclud
 
   const opts: string[] = ['type: :utc_datetime']
 
-  if (inserted && inserted.name !== 'inserted_at') {
-    opts.push(`inserted_at_source: :${inserted.name}`)
+  if (inserted) {
+    const source = inserted.dbName ?? inserted.name
+    if (source !== 'inserted_at') {
+      opts.push(`inserted_at_source: :${source}`)
+    }
   }
-  if (updated && updated.name !== 'updated_at') {
-    opts.push(`updated_at_source: :${updated.name}`)
+  if (updated) {
+    const source = updated.dbName ?? updated.name
+    if (source !== 'updated_at') {
+      opts.push(`updated_at_source: :${source}`)
+    }
   }
 
   return {
@@ -195,9 +202,19 @@ export function ectoSchemas(
   return models
     .map((model) => {
       const idField = model.fields.find((f) => f.isId)
-      if (!idField) return ''
+      const compositePkFieldNames = new Set(model.primaryKey?.fields ?? [])
+      const isCompositePk = !idField && compositePkFieldNames.size > 0
 
-      const pk = getPrimaryKeyConfig(idField)
+      if (!(idField || isCompositePk)) return ''
+
+      const pk = idField
+        ? getPrimaryKeyConfig(idField)
+        : {
+            line: '@primary_key false',
+            typeSpec: '',
+            omitIdFieldInSchema: false,
+            useBinaryForeignKey: false,
+          }
       const useBinaryId = pk.useBinaryForeignKey
       const fields = model.fields.map((f) => ({ ...f }))
       const { line: timestampsLine, exclude: timestampsExclude } = makeTimestampsLine(fields)
@@ -225,14 +242,27 @@ export function ectoSchemas(
           ),
       )
 
+      const compositePkFkTypeSpecs = isCompositePk
+        ? associations.belongsTo
+            .filter((a) => compositePkFieldNames.has(a.foreignKey))
+            .map((a) => {
+              const snakeFk = makeSnakeCase(a.foreignKey)
+              const fkType = a.fkType ?? 'id'
+              return `${snakeFk}: ${ectoTypeToTypespec(fkType)}`
+            })
+        : []
+
       const typeSpecFields = [
         ...(pk.omitIdFieldInSchema ? [`id: ${pk.typeSpec}`] : []),
+        ...compositePkFkTypeSpecs,
         ...schemaFieldsRaw.map((f) => {
           const nullSuffix = f.isRequired ? '' : ' | nil'
           if (f.kind === 'enum') {
             return `${makeSnakeCase(f.name)}: atom()${nullSuffix}`
           }
-          return `${makeSnakeCase(f.name)}: ${ectoTypeToTypespec(prismaTypeToEctoType(f.type))}${nullSuffix}`
+          const baseTypeSpec = ectoTypeToTypespec(prismaTypeToEctoType(f.type))
+          const typeSpec = f.isList ? `[${baseTypeSpec}]` : baseTypeSpec
+          return `${makeSnakeCase(f.name)}: ${typeSpec}${nullSuffix}`
         }),
         ...associations.belongsTo.map(
           (a) => `${makeSnakeCase(a.name)}: ${app}.${a.targetModel}.t() | nil`,
@@ -256,8 +286,12 @@ export function ectoSchemas(
 
       const schemaFields = schemaFieldsRaw.map((f) => {
         const snakeName = makeSnakeCase(f.name)
-        const primary = f.isId && !pk.omitIdFieldInSchema ? ', primary_key: true' : ''
-        const sourceOpt = snakeName !== f.name ? `, source: :${f.name}` : ''
+        const primary =
+          (f.isId && !pk.omitIdFieldInSchema) || compositePkFieldNames.has(f.name)
+            ? ', primary_key: true'
+            : ''
+        const dbColumnName = f.dbName ?? f.name
+        const sourceOpt = snakeName !== dbColumnName ? `, source: :${dbColumnName}` : ''
 
         if (f.kind === 'enum') {
           const values = enumMap.get(f.type)
@@ -266,26 +300,36 @@ export function ectoSchemas(
         }
 
         const type = prismaTypeToEctoType(f.type)
+        const ectoType = f.isList ? `{:array, :${type}}` : `:${type}`
         const defaultOpt = getFieldDefaultOption(f)
         const defaultClause = defaultOpt ? `, ${defaultOpt}` : ''
-        return `    field(:${snakeName}, :${type}${primary}${defaultClause}${sourceOpt})`
+        return `    field(:${snakeName}, ${ectoType}${primary}${defaultClause}${sourceOpt})`
       })
 
       const fkFieldLines: string[] = []
       for (const a of associations.belongsTo) {
         const snakeFk = makeSnakeCase(a.foreignKey)
-        if (snakeFk !== a.foreignKey) {
+        const fkFieldObj = fields.find((f) => f.name === a.foreignKey)
+        const fkDbName = fkFieldObj?.dbName ?? a.foreignKey
+        const needsSource = snakeFk !== fkDbName
+        const isPkField = compositePkFieldNames.has(a.foreignKey)
+        if (needsSource || isPkField) {
           const fkType = a.fkType ?? 'id'
-          fkFieldLines.push(`    field(:${snakeFk}, :${fkType}, source: :${a.foreignKey})`)
+          const pkOpt = isPkField ? ', primary_key: true' : ''
+          const sourceOpt = needsSource ? `, source: :${fkDbName}` : ''
+          fkFieldLines.push(`    field(:${snakeFk}, :${fkType}${pkOpt}${sourceOpt})`)
         }
       }
 
       const belongsToLines = associations.belongsTo.map((a) => {
         const snakeFk = makeSnakeCase(a.foreignKey)
         const snakeAssocName = makeSnakeCase(a.name)
-        const needsSource = snakeFk !== a.foreignKey
+        const fkFieldObj = fields.find((f) => f.name === a.foreignKey)
+        const fkDbName = fkFieldObj?.dbName ?? a.foreignKey
+        const needsSource = snakeFk !== fkDbName
+        const isPkField = compositePkFieldNames.has(a.foreignKey)
         const opts: string[] = [`foreign_key: :${snakeFk}`]
-        if (needsSource) opts.push('define_field: false')
+        if (needsSource || isPkField) opts.push('define_field: false')
         if (a.fkType && (!useBinaryId || a.fkType !== 'binary_id')) {
           opts.push(`type: :${a.fkType}`)
         }
@@ -308,13 +352,16 @@ export function ectoSchemas(
       const lines = [
         `defmodule ${app}.${model.name} do`,
         '  use Ecto.Schema',
+        ...(model.documentation
+          ? [`  @moduledoc """`, ...model.documentation.split('\n').map((l) => `  ${l}`), '  """']
+          : ['  @moduledoc false']),
         '',
         `  ${pk.line}`,
         ...(useBinaryId ? ['  @foreign_key_type :binary_id'] : []),
         '',
         ...typeSpecLines,
         '',
-        `  schema "${makeSnakeCase(model.name)}" do`,
+        `  schema "${model.dbName ?? makeSnakeCase(model.name)}" do`,
         ...schemaFields,
         ...fkFieldLines,
         ...belongsToLines,

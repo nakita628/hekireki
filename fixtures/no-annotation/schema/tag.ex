@@ -1,7 +1,9 @@
 defmodule DBSchema.Tag do
   use Ecto.Schema
+  @moduledoc false
 
   @primary_key {:id, :binary_id, autogenerate: true}
+  @foreign_key_type :binary_id
 
   @type t :: %__MODULE__{
           id: Ecto.UUID.t(),

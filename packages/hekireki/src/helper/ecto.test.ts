@@ -61,6 +61,7 @@ describe('ectoSchemas', () => {
 
       expect(result).toBe(`defmodule App.Agent do
   use Ecto.Schema
+  @moduledoc false
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -98,6 +99,7 @@ end`)
 
       expect(result).toBe(`defmodule App.Post do
   use Ecto.Schema
+  @moduledoc false
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -133,6 +135,7 @@ end`)
 
       expect(result).toBe(`defmodule App.Tag do
   use Ecto.Schema
+  @moduledoc false
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -799,6 +802,7 @@ end`)
 
       expect(result).toBe(`defmodule App.Agent do
   use Ecto.Schema
+  @moduledoc false
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -1080,8 +1084,580 @@ end`)
     })
   })
 
+  describe('composite primary key', () => {
+    it('generates schema with composite PK using @@id', () => {
+      const userModel = makeModel({
+        name: 'User',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'String',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'uuid', args: [4] },
+          }),
+          makeField({
+            name: 'followers',
+            type: 'Follow',
+            kind: 'object',
+            isList: true,
+            isRequired: false,
+            relationName: 'Follower',
+          }),
+          makeField({
+            name: 'following',
+            type: 'Follow',
+            kind: 'object',
+            isList: true,
+            isRequired: false,
+            relationName: 'Following',
+          }),
+        ],
+      })
+
+      const followModel = makeModel({
+        name: 'Follow',
+        primaryKey: { name: null, fields: ['followerId', 'followingId'] },
+        fields: [
+          makeField({ name: 'followerId', type: 'String' }),
+          makeField({ name: 'followingId', type: 'String' }),
+          makeField({
+            name: 'follower',
+            type: 'User',
+            kind: 'object',
+            isList: false,
+            isRequired: true,
+            relationName: 'Following',
+            relationFromFields: ['followerId'],
+            relationToFields: ['id'],
+          }),
+          makeField({
+            name: 'following',
+            type: 'User',
+            kind: 'object',
+            isList: false,
+            isRequired: true,
+            relationName: 'Follower',
+            relationFromFields: ['followingId'],
+            relationToFields: ['id'],
+          }),
+        ],
+      })
+
+      const allModels = [userModel, followModel]
+      const result = ectoSchemas([followModel], 'App', allModels)
+
+      expect(result).toBe(`defmodule App.Follow do
+  use Ecto.Schema
+  @moduledoc false
+
+  @primary_key false
+
+  @type t :: %__MODULE__{
+          follower_id: Ecto.UUID.t(),
+          following_id: Ecto.UUID.t(),
+          follower: App.User.t() | nil,
+          following: App.User.t() | nil
+        }
+
+  schema "follow" do
+    field(:follower_id, :binary_id, primary_key: true, source: :followerId)
+    field(:following_id, :binary_id, primary_key: true, source: :followingId)
+    belongs_to(:follower, App.User, foreign_key: :follower_id, define_field: false, type: :binary_id)
+    belongs_to(:following, App.User, foreign_key: :following_id, define_field: false, type: :binary_id)
+  end
+end`)
+    })
+
+    it('generates composite PK with timestamps', () => {
+      const userModel = makeModel({
+        name: 'User',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'String',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'uuid', args: [4] },
+          }),
+          makeField({
+            name: 'likes',
+            type: 'Like',
+            kind: 'object',
+            isList: true,
+            isRequired: false,
+            relationName: 'UserToLike',
+          }),
+        ],
+      })
+
+      const postModel = makeModel({
+        name: 'Post',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'String',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'uuid', args: [4] },
+          }),
+          makeField({
+            name: 'likes',
+            type: 'Like',
+            kind: 'object',
+            isList: true,
+            isRequired: false,
+            relationName: 'PostToLike',
+          }),
+        ],
+      })
+
+      const likeModel = makeModel({
+        name: 'Like',
+        primaryKey: { name: null, fields: ['userId', 'postId'] },
+        fields: [
+          makeField({ name: 'userId', type: 'String' }),
+          makeField({ name: 'postId', type: 'String' }),
+          makeField({
+            name: 'createdAt',
+            type: 'DateTime',
+            hasDefaultValue: true,
+            default: { name: 'now', args: [] },
+          }),
+          makeField({
+            name: 'user',
+            type: 'User',
+            kind: 'object',
+            isList: false,
+            isRequired: true,
+            relationName: 'UserToLike',
+            relationFromFields: ['userId'],
+            relationToFields: ['id'],
+          }),
+          makeField({
+            name: 'post',
+            type: 'Post',
+            kind: 'object',
+            isList: false,
+            isRequired: true,
+            relationName: 'PostToLike',
+            relationFromFields: ['postId'],
+            relationToFields: ['id'],
+          }),
+        ],
+      })
+
+      const allModels = [userModel, postModel, likeModel]
+      const result = ectoSchemas([likeModel], 'App', allModels)
+
+      expect(result).toContain('@primary_key false')
+      expect(result).toContain('field(:user_id, :binary_id, primary_key: true, source: :userId)')
+      expect(result).toContain('field(:post_id, :binary_id, primary_key: true, source: :postId)')
+      expect(result).toContain(
+        'belongs_to(:user, App.User, foreign_key: :user_id, define_field: false, type: :binary_id)',
+      )
+      expect(result).toContain(
+        'belongs_to(:post, App.Post, foreign_key: :post_id, define_field: false, type: :binary_id)',
+      )
+      expect(result).toContain('timestamps(type: :utc_datetime, inserted_at_source: :createdAt)')
+      expect(result).toContain('user_id: Ecto.UUID.t()')
+      expect(result).toContain('post_id: Ecto.UUID.t()')
+    })
+
+    it('generates composite PK without FK relations (plain fields)', () => {
+      const model = makeModel({
+        name: 'PostTag',
+        primaryKey: { name: null, fields: ['postSlug', 'tagSlug'] },
+        fields: [
+          makeField({ name: 'postSlug', type: 'String' }),
+          makeField({ name: 'tagSlug', type: 'String' }),
+        ],
+      })
+
+      const result = ectoSchemas([model], 'App')
+
+      expect(result).toBe(`defmodule App.PostTag do
+  use Ecto.Schema
+  @moduledoc false
+
+  @primary_key false
+
+  @type t :: %__MODULE__{
+          post_slug: String.t(),
+          tag_slug: String.t()
+        }
+
+  schema "post_tag" do
+    field(:post_slug, :string, primary_key: true, source: :postSlug)
+    field(:tag_slug, :string, primary_key: true, source: :tagSlug)
+  end
+end`)
+    })
+
+    it('generates composite PK with snake_case FK fields', () => {
+      const userModel = makeModel({
+        name: 'User',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'String',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'uuid', args: [4] },
+          }),
+        ],
+      })
+
+      const postModel = makeModel({
+        name: 'Post',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'String',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'uuid', args: [4] },
+          }),
+        ],
+      })
+
+      const likeModel = makeModel({
+        name: 'Like',
+        primaryKey: { name: null, fields: ['user_id', 'post_id'] },
+        fields: [
+          makeField({ name: 'user_id', type: 'String' }),
+          makeField({ name: 'post_id', type: 'String' }),
+          makeField({
+            name: 'user',
+            type: 'User',
+            kind: 'object',
+            isList: false,
+            isRequired: true,
+            relationName: 'UserToLike',
+            relationFromFields: ['user_id'],
+            relationToFields: ['id'],
+          }),
+          makeField({
+            name: 'post',
+            type: 'Post',
+            kind: 'object',
+            isList: false,
+            isRequired: true,
+            relationName: 'PostToLike',
+            relationFromFields: ['post_id'],
+            relationToFields: ['id'],
+          }),
+        ],
+      })
+
+      const allModels = [userModel, postModel, likeModel]
+      const result = ectoSchemas([likeModel], 'App', allModels)
+
+      expect(result).toContain('@primary_key false')
+      expect(result).toContain('field(:user_id, :binary_id, primary_key: true)')
+      expect(result).toContain('field(:post_id, :binary_id, primary_key: true)')
+      expect(result).toContain(
+        'belongs_to(:user, App.User, foreign_key: :user_id, define_field: false, type: :binary_id)',
+      )
+      expect(result).not.toContain('source:')
+    })
+
+    it('generates has_many on parent model pointing to composite PK model', () => {
+      const userModel = makeModel({
+        name: 'User',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'String',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'uuid', args: [4] },
+          }),
+          makeField({
+            name: 'followers',
+            type: 'Follow',
+            kind: 'object',
+            isList: true,
+            isRequired: false,
+            relationName: 'Follower',
+          }),
+          makeField({
+            name: 'following',
+            type: 'Follow',
+            kind: 'object',
+            isList: true,
+            isRequired: false,
+            relationName: 'Following',
+          }),
+        ],
+      })
+
+      const followModel = makeModel({
+        name: 'Follow',
+        primaryKey: { name: null, fields: ['followerId', 'followingId'] },
+        fields: [
+          makeField({ name: 'followerId', type: 'String' }),
+          makeField({ name: 'followingId', type: 'String' }),
+          makeField({
+            name: 'follower',
+            type: 'User',
+            kind: 'object',
+            isList: false,
+            isRequired: true,
+            relationName: 'Following',
+            relationFromFields: ['followerId'],
+            relationToFields: ['id'],
+          }),
+          makeField({
+            name: 'following',
+            type: 'User',
+            kind: 'object',
+            isList: false,
+            isRequired: true,
+            relationName: 'Follower',
+            relationFromFields: ['followingId'],
+            relationToFields: ['id'],
+          }),
+        ],
+      })
+
+      const allModels = [userModel, followModel]
+      const userResult = ectoSchemas([userModel], 'App', allModels)
+
+      expect(userResult).toContain('has_many(:followers, App.Follow, foreign_key: :following_id)')
+      expect(userResult).toContain('has_many(:following, App.Follow, foreign_key: :follower_id)')
+      expect(userResult).toContain('followers: [App.Follow.t()]')
+      expect(userResult).toContain('following: [App.Follow.t()]')
+    })
+  })
+
+  describe('@@map table name', () => {
+    it('uses dbName for schema table name when @@map is set', () => {
+      const model = makeModel({
+        name: 'UserProfile',
+        dbName: 'user_profiles',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'String',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'uuid', args: [4] },
+          }),
+          makeField({ name: 'bio', type: 'String' }),
+        ],
+      })
+
+      const result = ectoSchemas([model], 'App')
+
+      expect(result).toContain('schema "user_profiles" do')
+    })
+
+    it('falls back to snake_case model name when dbName is null', () => {
+      const model = makeModel({
+        name: 'UserProfile',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'String',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'uuid', args: [4] },
+          }),
+          makeField({ name: 'bio', type: 'String' }),
+        ],
+      })
+
+      const result = ectoSchemas([model], 'App')
+
+      expect(result).toContain('schema "user_profile" do')
+    })
+  })
+
+  describe('@map field name', () => {
+    it('uses dbName for field source option when @map is set', () => {
+      const model = makeModel({
+        name: 'User',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'String',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'uuid', args: [4] },
+          }),
+          makeField({ name: 'firstName', type: 'String', dbName: 'first_name' }),
+        ],
+      })
+
+      const result = ectoSchemas([model], 'App')
+
+      // snake_case of "firstName" is "first_name" which matches dbName, so no source needed
+      expect(result).toContain('field(:first_name, :string)')
+      expect(result).not.toContain('source:')
+    })
+
+    it('adds source option when dbName differs from snake_case name', () => {
+      const model = makeModel({
+        name: 'User',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'String',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'uuid', args: [4] },
+          }),
+          makeField({ name: 'firstName', type: 'String', dbName: 'fname' }),
+        ],
+      })
+
+      const result = ectoSchemas([model], 'App')
+
+      expect(result).toContain('field(:first_name, :string, source: :fname)')
+    })
+
+    it('uses dbName over field name for source when both differ from snake_case', () => {
+      const model = makeModel({
+        name: 'User',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'String',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'uuid', args: [4] },
+          }),
+          makeField({ name: 'displayName', type: 'String', dbName: 'display_nm' }),
+        ],
+      })
+
+      const result = ectoSchemas([model], 'App')
+
+      // source should use dbName, not field name
+      expect(result).toContain('source: :display_nm')
+      expect(result).not.toContain('source: :displayName')
+    })
+  })
+
+  describe('array fields', () => {
+    it('generates {:array, :type} for list scalar fields', () => {
+      const model = makeModel({
+        name: 'Post',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'String',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'uuid', args: [4] },
+          }),
+          makeField({ name: 'tags', type: 'String', isList: true }),
+          makeField({ name: 'scores', type: 'Int', isList: true }),
+        ],
+      })
+
+      const result = ectoSchemas([model], 'App')
+
+      expect(result).toContain('field(:tags, {:array, :string})')
+      expect(result).toContain('field(:scores, {:array, :integer})')
+    })
+
+    it('generates list typespec for array fields', () => {
+      const model = makeModel({
+        name: 'Post',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'String',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'uuid', args: [4] },
+          }),
+          makeField({ name: 'tags', type: 'String', isList: true }),
+          makeField({ name: 'scores', type: 'Int', isList: true }),
+        ],
+      })
+
+      const result = ectoSchemas([model], 'App')
+
+      expect(result).toContain('tags: [String.t()]')
+      expect(result).toContain('scores: [integer()]')
+    })
+  })
+
+  describe('@moduledoc false', () => {
+    it('includes @moduledoc false when no documentation', () => {
+      const model = makeModel({
+        name: 'User',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'String',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'uuid', args: [4] },
+          }),
+        ],
+      })
+
+      const result = ectoSchemas([model], 'App')
+
+      expect(result).toContain('  @moduledoc false')
+      const lines = result.split('\n')
+      const useIdx = lines.findIndex((l) => l.includes('use Ecto.Schema'))
+      expect(lines[useIdx + 1]).toBe('  @moduledoc false')
+    })
+
+    it('uses model.documentation for @moduledoc when present', () => {
+      const model = makeModel({
+        name: 'User',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'String',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'uuid', args: [4] },
+          }),
+        ],
+        documentation: 'User account schema',
+      })
+
+      const result = ectoSchemas([model], 'App')
+
+      expect(result).toContain('  @moduledoc """')
+      expect(result).toContain('  User account schema')
+      expect(result).toContain('  """')
+      expect(result).not.toContain('@moduledoc false')
+    })
+
+    it('handles multi-line documentation', () => {
+      const model = makeModel({
+        name: 'User',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'String',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'uuid', args: [4] },
+          }),
+        ],
+        documentation: 'User account schema\nUsed for authentication',
+      })
+
+      const result = ectoSchemas([model], 'App')
+
+      expect(result).toContain('  @moduledoc """')
+      expect(result).toContain('  User account schema')
+      expect(result).toContain('  Used for authentication')
+      expect(result).toContain('  """')
+    })
+  })
+
   describe('empty model', () => {
-    it('skips models without id field', () => {
+    it('skips models without id field and without composite PK', () => {
       const model = makeModel({
         name: 'NoId',
         fields: [makeField({ name: 'name', type: 'String' })],

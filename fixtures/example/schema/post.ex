@@ -1,7 +1,9 @@
 defmodule DBSchema.Post do
   use Ecto.Schema
+  @moduledoc false
 
   @primary_key {:id, :binary_id, autogenerate: true}
+  @foreign_key_type :binary_id
 
   @type t :: %__MODULE__{
           id: Ecto.UUID.t(),
@@ -13,6 +15,7 @@ defmodule DBSchema.Post do
   schema "post" do
     field(:title, :string)
     field(:content, :string)
-    belongs_to(:user, DBSchema.User, foreign_key: :userId, type: :binary_id)
+    field(:user_id, :binary_id, source: :userId)
+    belongs_to(:user, DBSchema.User, foreign_key: :user_id, define_field: false)
   end
 end
