@@ -1,3 +1,4 @@
+import type { DMMF } from '@prisma/generator-helper'
 import { describe, expect, it } from 'vitest'
 import { makeRelations, makeTables } from './dbml.js'
 
@@ -28,7 +29,7 @@ describe('helper/dbml', () => {
           uniqueFields: [],
           uniqueIndexes: [],
           isGenerated: false,
-        } as any,
+        } as DMMF.Model,
       ])
       expect(tables[0]).toBe("Table User {\n  id String [pk, note: 'User\\'s ID']\n}")
     })
@@ -59,7 +60,7 @@ describe('helper/dbml', () => {
           uniqueFields: [],
           uniqueIndexes: [],
           isGenerated: false,
-        } as any,
+        } as DMMF.Model,
       ])
       expect(tables[0]).toBe(
         'Table User {\n  id String [not null]\n\n  indexes {\n    (id, name) [pk]\n  }\n}',
@@ -102,7 +103,7 @@ describe('helper/dbml', () => {
           uniqueFields: [['a', 'b']],
           uniqueIndexes: [],
           isGenerated: false,
-        } as any,
+        } as DMMF.Model,
       ])
       expect(tables[0]).toBe(
         'Table User {\n  a String [not null]\n  b String [not null]\n\n  indexes {\n    (a, b) [unique]\n  }\n}',
@@ -151,7 +152,7 @@ describe('helper/dbml', () => {
           uniqueFields: [],
           uniqueIndexes: [],
           isGenerated: false,
-        } as any,
+        } as DMMF.Model,
         {
           name: 'User',
           dbName: null,
@@ -188,7 +189,7 @@ describe('helper/dbml', () => {
           uniqueFields: [],
           uniqueIndexes: [],
           isGenerated: false,
-        } as any,
+        } as DMMF.Model,
       ])
       expect(refs[0]).toBe('Ref Post_userId_fk: Post.userId > User.id')
     })
@@ -219,7 +220,7 @@ describe('helper/dbml', () => {
           uniqueFields: [],
           uniqueIndexes: [],
           isGenerated: false,
-        } as any,
+        } as DMMF.Model,
       ])
       expect(tables[0]).toBe('Table Test {\n  id String [pk]\n}')
     })
@@ -248,7 +249,7 @@ describe('helper/dbml', () => {
           uniqueFields: [],
           uniqueIndexes: [],
           isGenerated: false,
-        } as any,
+        } as DMMF.Model,
       ])
       expect(tables[0]).toBe(
         "Table Test {\n  email String [unique, not null, note: 'User\\'s email']\n}",
