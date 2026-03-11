@@ -1,31 +1,13 @@
 import type { DMMF } from '@prisma/generator-helper'
 import { makeSnakeCase } from '../utils/index.js'
 
-// ============================================================================
-// Provider
-// ============================================================================
-
 type DbProvider = 'postgresql' | 'mysql' | 'sqlite'
-
-function resolveProvider(provider: string): DbProvider {
-  switch (provider) {
-    case 'postgresql':
-    case 'cockroachdb':
-      return 'postgresql'
-    case 'mysql':
-      return 'mysql'
-    case 'sqlite':
-      return 'sqlite'
-    default:
-      throw new Error(`Unsupported provider: ${provider}`)
-  }
-}
 
 // ============================================================================
 // Type Maps
 // ============================================================================
 
-const PG_SCALAR_MAP: Record<string, string> = {
+const PG_SCALAR_MAP: { [k: string]: string } = {
   String: 'text()',
   Int: 'integer()',
   BigInt: "bigint({ mode: 'bigint' })",
@@ -37,7 +19,7 @@ const PG_SCALAR_MAP: Record<string, string> = {
   Bytes: 'text()',
 }
 
-const MYSQL_SCALAR_MAP: Record<string, string> = {
+const MYSQL_SCALAR_MAP: { [k: string]: string } = {
   String: 'text()',
   Int: 'int()',
   BigInt: "bigint({ mode: 'bigint' })",
@@ -49,7 +31,7 @@ const MYSQL_SCALAR_MAP: Record<string, string> = {
   Bytes: 'binary()',
 }
 
-const SQLITE_SCALAR_MAP: Record<string, string> = {
+const SQLITE_SCALAR_MAP: { [k: string]: string } = {
   String: 'text()',
   Int: 'integer()',
   BigInt: "blob({ mode: 'bigint' })",
@@ -229,14 +211,6 @@ function isFieldDefault(v: unknown): v is DMMF.FieldDefault {
   return typeof v === 'object' && v !== null && 'name' in v
 }
 
-function insertColName(expr: string, colName: string): string {
-  const parenIdx = expr.indexOf('(')
-  if (parenIdx === -1) return expr
-  const fnName = expr.slice(0, parenIdx)
-  const rest = expr.slice(parenIdx + 1)
-  return rest === ')' ? `${fnName}('${colName}')` : `${fnName}('${colName}', ${rest}`
-}
-
 // ============================================================================
 // Column
 // ============================================================================
@@ -292,7 +266,11 @@ function makeColumnExpr(
   const baseExpr = resolveScalarType(field, provider)
   const fnName = baseExpr.match(/^(\w+)/)?.[1]
   if (fnName) imports.addCore(fnName)
-  return insertColName(baseExpr, colName)
+  const parenIdx = baseExpr.indexOf('(')
+  if (parenIdx === -1) return baseExpr
+  const baseFnName = baseExpr.slice(0, parenIdx)
+  const rest = baseExpr.slice(parenIdx + 1)
+  return rest === ')' ? `${baseFnName}('${colName}')` : `${baseFnName}('${colName}', ${rest}`
 }
 
 function makeDefaultChain(
@@ -373,14 +351,6 @@ function makeColumn(
   ].join('')
 
   return `${field.name}: ${colExpr}${chain}`
-}
-
-// ============================================================================
-// Enum
-// ============================================================================
-
-function makeEnums(): readonly string[] {
-  return []
 }
 
 // ============================================================================
@@ -510,10 +480,21 @@ export function drizzleSchema(
   provider: string,
   indexes: readonly DMMF.Index[],
 ): string {
-  const db = resolveProvider(provider)
+  const db: DbProvider = (() => {
+    switch (provider) {
+      case 'postgresql':
+      case 'cockroachdb':
+        return 'postgresql' as const
+      case 'mysql':
+        return 'mysql' as const
+      case 'sqlite':
+        return 'sqlite' as const
+      default:
+        throw new Error(`Unsupported provider: ${provider}`)
+    }
+  })()
   const imports = new ImportTracker(db)
 
-  const enumLines = makeEnums()
   const tableLines = datamodel.models.map((model) =>
     makeTable(model, db, imports, datamodel.enums, indexes),
   )
@@ -529,7 +510,6 @@ export function drizzleSchema(
   return [
     imports.generate(),
     '',
-    ...(enumLines.length > 0 ? [...enumLines, ''] : []),
     ...tableLinesWithGap,
     ...(relationsLinesWithGap.length > 0 ? ['', ...relationsLinesWithGap] : []),
   ].join('\n')

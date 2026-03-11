@@ -1,34 +1,14 @@
-import type { DMMF } from '@prisma/generator-helper'
 import { describe, expect, it } from 'vitest'
-import { arktype, makeArktypeRelations, makeArktypeSchemas, PRISMA_TO_ARKTYPE } from './arktype.js'
-
-function makeModel(overrides: Partial<DMMF.Model> & { name: string }): DMMF.Model {
-  return {
-    dbName: null,
-    fields: [],
-    uniqueFields: [],
-    uniqueIndexes: [],
-    primaryKey: null,
-    isGenerated: false,
-    schema: null,
-    ...overrides,
-  }
-}
-
-function makeField(overrides: Partial<DMMF.Field> & { name: string; type: string }): DMMF.Field {
-  return {
-    kind: 'scalar',
-    isList: false,
-    isRequired: true,
-    isUnique: false,
-    isId: false,
-    isReadOnly: false,
-    isGenerated: false,
-    isUpdatedAt: false,
-    hasDefaultValue: false,
-    ...overrides,
-  }
-}
+import {
+  arktype,
+  makeArktypeEnumExpression,
+  makeArktypeInfer,
+  makeArktypeProperties,
+  makeArktypeRelations,
+  makeArktypeSchema,
+  makeArktypeSchemas,
+  PRISMA_TO_ARKTYPE,
+} from './arktype.js'
 
 describe('helper/arktype', () => {
   describe('PRISMA_TO_ARKTYPE', () => {
@@ -103,14 +83,12 @@ describe('helper/arktype', () => {
 
   describe('makeArktypeRelations', () => {
     it('returns null when no relations', () => {
-      const model = makeModel({ name: 'User' })
-      const result = makeArktypeRelations(model, [])
+      const result = makeArktypeRelations({ name: 'User' }, [])
       expect(result).toBeNull()
     })
 
     it('generates relation schema with single and many relations', () => {
-      const model = makeModel({ name: 'User' })
-      const result = makeArktypeRelations(model, [
+      const result = makeArktypeRelations({ name: 'User' }, [
         { key: 'posts', targetModel: 'Post', isMany: true },
         { key: 'profile', targetModel: 'Profile', isMany: false },
       ])
@@ -120,14 +98,13 @@ describe('helper/arktype', () => {
     })
 
     it('includes type export when includeType is true', () => {
-      const model = makeModel({ name: 'User' })
       const result = makeArktypeRelations(
-        model,
+        { name: 'User' },
         [{ key: 'posts', targetModel: 'Post', isMany: true }],
         { includeType: true },
       )
-      expect(result).toContain(
-        'export type UserRelations = typeof UserRelationsSchema.infer',
+      expect(result).toBe(
+        'export const UserRelationsSchema = type({...UserSchema.t,posts:PostSchema.array(),})\n\nexport type UserRelations = typeof UserRelationsSchema.infer',
       )
     })
   })
@@ -135,46 +112,106 @@ describe('helper/arktype', () => {
   describe('arktype', () => {
     it('generates full output with import and schemas', () => {
       const models = [
-        makeModel({
+        {
           name: 'User',
           fields: [
-            makeField({ name: 'id', type: 'String', documentation: '@a."string"' }),
-            makeField({ name: 'age', type: 'Int', documentation: undefined }),
+            {
+              name: 'id',
+              type: 'String',
+              kind: 'scalar',
+              isRequired: true,
+              isList: false,
+              documentation: '@a."string"',
+            },
+            { name: 'age', type: 'Int', kind: 'scalar', isRequired: true, isList: false },
           ],
-        }),
+        },
       ]
       const result = arktype(models, false, false)
-      expect(result).toContain("import { type } from 'arktype'")
-      expect(result).toContain('export const UserSchema = type({')
-      expect(result).toContain('id: "string"')
-      expect(result).toContain('age: "number"')
+      expect(result).toBe(
+        'import { type } from \'arktype\'\n\nexport const UserSchema = type({\n  id: "string",\n  age: "number",\n})',
+      )
     })
 
     it('generates type inference when type is true', () => {
       const models = [
-        makeModel({
+        {
           name: 'Post',
-          fields: [makeField({ name: 'title', type: 'String' })],
-        }),
+          fields: [
+            { name: 'title', type: 'String', kind: 'scalar', isRequired: true, isList: false },
+          ],
+        },
       ]
       const result = arktype(models, true, false)
-      expect(result).toContain('export type Post = typeof PostSchema.infer')
+      expect(result).toBe(
+        'import { type } from \'arktype\'\n\nexport const PostSchema = type({\n  title: "string",\n})\n\nexport type Post = typeof PostSchema.infer',
+      )
     })
 
     it('handles enums', () => {
       const models = [
-        makeModel({
+        {
           name: 'User',
-          fields: [makeField({ name: 'role', type: 'Role', kind: 'enum' })],
-        }),
+          fields: [{ name: 'role', type: 'Role', kind: 'enum', isRequired: true, isList: false }],
+        },
       ]
-      const enums: DMMF.DatamodelEnum[] = [
-        { name: 'Role', values: [{ name: 'ADMIN', dbName: null }, { name: 'USER', dbName: null }] },
+      const enums = [
+        {
+          name: 'Role',
+          values: [{ name: 'ADMIN' }, { name: 'USER' }],
+        },
       ]
       const result = arktype(models, false, false, enums)
-      expect(result).toContain('role:')
-      expect(result).toContain('ADMIN')
-      expect(result).toContain('USER')
+      expect(result).toBe(
+        "import { type } from 'arktype'\n\nexport const UserSchema = type({\n  role: \"'ADMIN' | 'USER'\",\n})",
+      )
+    })
+  })
+
+  describe('makeArktypeInfer', () => {
+    it('generates ArkType infer type', () => {
+      expect(makeArktypeInfer('User')).toBe('export type User = typeof UserSchema.infer')
+    })
+  })
+
+  describe('makeArktypeSchema', () => {
+    it('generates ArkType schema definition', () => {
+      expect(makeArktypeSchema('User', '  id: "string"')).toBe(
+        'export const UserSchema = type({\n  id: "string"\n})',
+      )
+    })
+  })
+
+  describe('makeArktypeProperties', () => {
+    const fields = [
+      {
+        documentation: '',
+        modelName: 'User',
+        fieldName: 'id',
+        validation: '"string.uuid"',
+        isRequired: true,
+        comment: ['Primary key'],
+      },
+    ]
+
+    it('generates properties with comments', () => {
+      expect(makeArktypeProperties(fields, true)).toBe('  /** Primary key */\n  id: "string.uuid",')
+    })
+    it('generates properties without comments', () => {
+      expect(makeArktypeProperties(fields, false)).toBe('  id: "string.uuid",')
+    })
+    it('uses "unknown" for null validation', () => {
+      const nullFields = [{ ...fields[0], validation: null, comment: [] }]
+      expect(makeArktypeProperties(nullFields, false)).toBe('  id: "unknown",')
+    })
+  })
+
+  describe('makeArktypeEnumExpression', () => {
+    it('generates union string', () => {
+      expect(makeArktypeEnumExpression(['USER', 'ADMIN'])).toBe("\"'USER' | 'ADMIN'\"")
+    })
+    it('handles single value', () => {
+      expect(makeArktypeEnumExpression(['ACTIVE'])).toBe('"\'ACTIVE\'"')
     })
   })
 })

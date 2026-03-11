@@ -1,34 +1,14 @@
-import type { DMMF } from '@prisma/generator-helper'
 import { describe, expect, it } from 'vitest'
-import { effect, makeEffectRelations, makeEffectSchemas, PRISMA_TO_EFFECT } from './effect.js'
-
-function makeModel(overrides: Partial<DMMF.Model> & { name: string }): DMMF.Model {
-  return {
-    dbName: null,
-    fields: [],
-    uniqueFields: [],
-    uniqueIndexes: [],
-    primaryKey: null,
-    isGenerated: false,
-    schema: null,
-    ...overrides,
-  }
-}
-
-function makeField(overrides: Partial<DMMF.Field> & { name: string; type: string }): DMMF.Field {
-  return {
-    kind: 'scalar',
-    isList: false,
-    isRequired: true,
-    isUnique: false,
-    isId: false,
-    isReadOnly: false,
-    isGenerated: false,
-    isUpdatedAt: false,
-    hasDefaultValue: false,
-    ...overrides,
-  }
-}
+import {
+  effect,
+  makeEffectEnumExpression,
+  makeEffectInfer,
+  makeEffectProperties,
+  makeEffectRelations,
+  makeEffectSchema,
+  makeEffectSchemas,
+  PRISMA_TO_EFFECT,
+} from './effect.js'
 
 describe('helper/effect', () => {
   describe('PRISMA_TO_EFFECT', () => {
@@ -103,14 +83,12 @@ describe('helper/effect', () => {
 
   describe('makeEffectRelations', () => {
     it('returns null when no relations', () => {
-      const model = makeModel({ name: 'User' })
-      const result = makeEffectRelations(model, [])
+      const result = makeEffectRelations({ name: 'User' }, [])
       expect(result).toBeNull()
     })
 
     it('generates relation schema with single and many relations', () => {
-      const model = makeModel({ name: 'User' })
-      const result = makeEffectRelations(model, [
+      const result = makeEffectRelations({ name: 'User' }, [
         { key: 'posts', targetModel: 'Post', isMany: true },
         { key: 'profile', targetModel: 'Profile', isMany: false },
       ])
@@ -120,14 +98,13 @@ describe('helper/effect', () => {
     })
 
     it('includes type export when includeType is true', () => {
-      const model = makeModel({ name: 'User' })
       const result = makeEffectRelations(
-        model,
+        { name: 'User' },
         [{ key: 'posts', targetModel: 'Post', isMany: true }],
         { includeType: true },
       )
-      expect(result).toContain(
-        'export type UserRelations = Schema.Schema.Type<typeof UserRelationsSchema>',
+      expect(result).toBe(
+        'export const UserRelationsSchema = Schema.Struct({...UserSchema.fields,posts:Schema.Array(PostSchema),})\n\nexport type UserRelations = Schema.Schema.Type<typeof UserRelationsSchema>',
       )
     })
   })
@@ -135,48 +112,108 @@ describe('helper/effect', () => {
   describe('effect', () => {
     it('generates full output with import and schemas', () => {
       const models = [
-        makeModel({
+        {
           name: 'User',
           fields: [
-            makeField({ name: 'id', type: 'String', documentation: '@e.Schema.UUID' }),
-            makeField({ name: 'age', type: 'Int', documentation: undefined }),
+            {
+              name: 'id',
+              type: 'String',
+              kind: 'scalar',
+              isRequired: true,
+              isList: false,
+              documentation: '@e.Schema.UUID',
+            },
+            { name: 'age', type: 'Int', kind: 'scalar', isRequired: true, isList: false },
           ],
-        }),
+        },
       ]
       const result = effect(models, false, false)
-      expect(result).toContain("import { Schema } from 'effect'")
-      expect(result).toContain('export const UserSchema = Schema.Struct({')
-      expect(result).toContain('id: Schema.UUID')
-      expect(result).toContain('age: Schema.Number')
+      expect(result).toBe(
+        "import { Schema } from 'effect'\n\nexport const UserSchema = Schema.Struct({\n  id: Schema.UUID,\n  age: Schema.Number,\n})",
+      )
     })
 
     it('generates type inference when type is true', () => {
       const models = [
-        makeModel({
+        {
           name: 'Post',
-          fields: [makeField({ name: 'title', type: 'String' })],
-        }),
+          fields: [
+            { name: 'title', type: 'String', kind: 'scalar', isRequired: true, isList: false },
+          ],
+        },
       ]
       const result = effect(models, true, false)
-      expect(result).toContain(
-        'export type Post = Schema.Schema.Type<typeof PostSchema>',
+      expect(result).toBe(
+        "import { Schema } from 'effect'\n\nexport const PostSchema = Schema.Struct({\n  title: Schema.String,\n})\n\nexport type Post = Schema.Schema.Type<typeof PostSchema>",
       )
     })
 
     it('handles enums', () => {
       const models = [
-        makeModel({
+        {
           name: 'User',
-          fields: [makeField({ name: 'role', type: 'Role', kind: 'enum' })],
-        }),
+          fields: [{ name: 'role', type: 'Role', kind: 'enum', isRequired: true, isList: false }],
+        },
       ]
-      const enums: DMMF.DatamodelEnum[] = [
-        { name: 'Role', values: [{ name: 'ADMIN', dbName: null }, { name: 'USER', dbName: null }] },
+      const enums = [
+        {
+          name: 'Role',
+          values: [{ name: 'ADMIN' }, { name: 'USER' }],
+        },
       ]
       const result = effect(models, false, false, enums)
-      expect(result).toContain('role:')
-      expect(result).toContain('ADMIN')
-      expect(result).toContain('USER')
+      expect(result).toBe(
+        "import { Schema } from 'effect'\n\nexport const UserSchema = Schema.Struct({\n  role: Schema.Literal('ADMIN', 'USER'),\n})",
+      )
+    })
+  })
+
+  describe('makeEffectInfer', () => {
+    it('generates Effect infer type', () => {
+      expect(makeEffectInfer('User')).toBe(
+        'export type User = Schema.Schema.Type<typeof UserSchema>',
+      )
+    })
+  })
+
+  describe('makeEffectSchema', () => {
+    it('generates Effect schema definition', () => {
+      expect(makeEffectSchema('User', '  id: Schema.String')).toBe(
+        'export const UserSchema = Schema.Struct({\n  id: Schema.String\n})',
+      )
+    })
+  })
+
+  describe('makeEffectProperties', () => {
+    const fields = [
+      {
+        documentation: '',
+        modelName: 'User',
+        fieldName: 'id',
+        validation: 'Schema.String',
+        isRequired: true,
+        comment: ['Primary key'],
+      },
+    ]
+
+    it('generates properties with comments', () => {
+      expect(makeEffectProperties(fields, true)).toBe('  /** Primary key */\n  id: Schema.String,')
+    })
+    it('generates properties without comments', () => {
+      expect(makeEffectProperties(fields, false)).toBe('  id: Schema.String,')
+    })
+    it('uses Schema.Unknown for null validation', () => {
+      const nullFields = [{ ...fields[0], validation: null, comment: [] }]
+      expect(makeEffectProperties(nullFields, false)).toBe('  id: Schema.Unknown,')
+    })
+  })
+
+  describe('makeEffectEnumExpression', () => {
+    it('generates Schema.Literal()', () => {
+      expect(makeEffectEnumExpression(['USER', 'ADMIN'])).toBe("Schema.Literal('USER', 'ADMIN')")
+    })
+    it('handles single value', () => {
+      expect(makeEffectEnumExpression(['ACTIVE'])).toBe("Schema.Literal('ACTIVE')")
     })
   })
 })

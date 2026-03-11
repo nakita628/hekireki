@@ -1,7 +1,53 @@
 import { join } from 'node:path'
 import type { DMMF } from '@prisma/generator-helper'
 import { mkdir, writeFile } from '../fsp/index.js'
-import { ectoTypeToTypespec, makeSnakeCase, prismaTypeToEctoType } from '../utils/index.js'
+import { makeSnakeCase } from '../utils/index.js'
+
+// ============================================================================
+// Ecto Utilities
+// ============================================================================
+
+export function prismaTypeToEctoType(
+  type: string,
+): 'integer' | 'string' | 'boolean' | 'utc_datetime' | 'float' | 'decimal' | 'map' | 'binary' {
+  if (type === 'Int') return 'integer'
+  if (type === 'BigInt') return 'integer'
+  if (type === 'Float') return 'float'
+  if (type === 'Decimal') return 'decimal'
+  if (type === 'String') return 'string'
+  if (type === 'Boolean') return 'boolean'
+  if (type === 'DateTime') return 'utc_datetime'
+  if (type === 'Json') return 'map'
+  if (type === 'Bytes') return 'binary'
+  return 'string'
+}
+
+export function ectoTypeToTypespec(type: string): string {
+  switch (type) {
+    case 'string':
+      return 'String.t()'
+    case 'integer':
+      return 'integer()'
+    case 'float':
+      return 'float()'
+    case 'boolean':
+      return 'boolean()'
+    case 'binary_id':
+      return 'Ecto.UUID.t()'
+    case 'naive_datetime':
+      return 'NaiveDateTime.t()'
+    case 'utc_datetime':
+      return 'DateTime.t()'
+    case 'decimal':
+      return 'Decimal.t()'
+    case 'map':
+      return 'map()'
+    case 'binary':
+      return 'binary()'
+    default:
+      return 'term()'
+  }
+}
 
 function getPrimaryKeyConfig(field: DMMF.Field) {
   const def = field.default
@@ -34,14 +80,6 @@ function getPrimaryKeyConfig(field: DMMF.Field) {
     omitIdFieldInSchema: false,
     useBinaryForeignKey: false,
   }
-}
-
-function getFieldDefaultOption(field: DMMF.Field): string | null {
-  const def = field.default
-  if (def === undefined || def === null) return null
-  if (typeof def === 'string') return `default: "${def}"`
-  if (typeof def === 'number' || typeof def === 'boolean') return `default: ${def}`
-  return null
 }
 
 function makeTimestampsLine(fields: DMMF.Field[]): { line: string | null; exclude: Set<string> } {
@@ -301,7 +339,12 @@ export function ectoSchemas(
 
         const type = prismaTypeToEctoType(f.type)
         const ectoType = f.isList ? `{:array, :${type}}` : `:${type}`
-        const defaultOpt = getFieldDefaultOption(f)
+        const defaultOpt = ((def: DMMF.Field['default']): string | null => {
+          if (def === undefined || def === null) return null
+          if (typeof def === 'string') return `default: "${def}"`
+          if (typeof def === 'number' || typeof def === 'boolean') return `default: ${def}`
+          return null
+        })(f.default)
         const defaultClause = defaultOpt ? `, ${defaultOpt}` : ''
         return `    field(:${snakeName}, ${ectoType}${primary}${defaultClause}${sourceOpt})`
       })

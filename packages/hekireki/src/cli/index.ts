@@ -169,7 +169,7 @@ const handleDocs = (args: readonly string[]): Result<string> => {
 /**
  * Command handlers map.
  */
-const commands: Record<string, (args: readonly string[]) => Result<string>> = {
+const commands: { [k: string]: (args: readonly string[]) => Result<string> } = {
   docs: handleDocs,
 }
 

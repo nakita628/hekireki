@@ -2,14 +2,40 @@ import type { DMMF } from '@prisma/generator-helper'
 import { Resvg } from '@resvg/resvg-js'
 import { run } from '@softwaretechnik/dbml-renderer'
 import { writeFile, writeFileBinary } from '../fsp/index.js'
-import {
-  combineKeys,
-  escapeNote,
-  formatConstraints,
-  makeEnum,
-  makeRefName,
-  stripAnnotations,
-} from '../utils/index.js'
+import { stripAnnotations } from '../utils/index.js'
+
+// ============================================================================
+// DBML Utilities
+// ============================================================================
+
+export function escapeNote(str: string): string {
+  return str.replace(/'/g, "\\'")
+}
+
+export function formatConstraints(constraints: readonly string[]): string {
+  return constraints.length > 0 ? ` [${constraints.join(', ')}]` : ''
+}
+
+export function makeEnum(enumDef: {
+  readonly name: string
+  readonly values: readonly string[]
+}): string {
+  return [`Enum ${enumDef.name} {`, ...enumDef.values.map((v) => `  ${v}`), '}'].join('\n')
+}
+
+export function makeRefName(ref: {
+  readonly name?: string
+  readonly fromTable: string
+  readonly fromColumn: string
+  readonly toTable: string
+  readonly toColumn: string
+}): string {
+  return ref.name ?? `${ref.fromTable}_${ref.fromColumn}_${ref.toTable}_${ref.toColumn}_fk`
+}
+
+export function combineKeys(keys: readonly string[]): string {
+  return keys.length > 1 ? `(${keys.join(', ')})` : keys[0]
+}
 
 // ============================================================================
 // Composite functions (built from atomic utils)
@@ -85,50 +111,35 @@ function makePrismaColumn(column: {
 // DBML Generation
 // ============================================================================
 
-function resolveFieldType(
-  field: DMMF.Field,
-  models: readonly DMMF.Model[],
-  mapToDbSchema: boolean,
-): string {
+function toDBMLColumn(field: DMMF.Field, models: readonly DMMF.Model[], mapToDbSchema: boolean) {
+  const defaultDef = field.default as DMMF.FieldDefault | undefined
+
   const baseType = mapToDbSchema
     ? (models.find((m) => m.name === field.type)?.dbName ?? field.type)
     : field.type
-  return field.isList && !field.relationName ? `${baseType}[]` : baseType
-}
+  const type = field.isList && !field.relationName ? `${baseType}[]` : baseType
 
-function resolveDefaultValue(field: DMMF.Field): string | undefined {
-  const defaultDef = field.default as DMMF.FieldDefault | undefined
-  if (defaultDef?.name === 'autoincrement') return undefined
-  if (defaultDef?.name === 'now') return '`now()`'
-  if (field.hasDefaultValue && typeof field.default !== 'object') {
-    return field.type === 'String' || field.type === 'Json' || field.kind === 'enum'
-      ? `'${field.default}'`
-      : String(field.default)
-  }
-  return undefined
-}
+  const defaultValue = (() => {
+    if (defaultDef?.name === 'autoincrement') return undefined
+    if (defaultDef?.name === 'now') return '`now()`'
+    if (field.hasDefaultValue && typeof field.default !== 'object') {
+      return field.type === 'String' || field.type === 'Json' || field.kind === 'enum'
+        ? `'${field.default}'`
+        : String(field.default)
+    }
+    return undefined
+  })()
 
-function toDBMLColumn(field: DMMF.Field, models: readonly DMMF.Model[], mapToDbSchema: boolean) {
-  const defaultDef = field.default as DMMF.FieldDefault | undefined
   return {
     name: field.name,
-    type: resolveFieldType(field, models, mapToDbSchema),
+    type,
     isPrimaryKey: field.isId,
     isIncrement: defaultDef?.name === 'autoincrement',
     isUnique: field.isUnique,
     isNotNull: field.isRequired && !field.isId,
-    defaultValue: resolveDefaultValue(field),
+    defaultValue,
     note: stripAnnotations(field.documentation),
   }
-}
-
-function makeTableIndexes(model: DMMF.Model) {
-  return [
-    ...(model.primaryKey?.fields && model.primaryKey.fields.length > 0
-      ? [{ columns: model.primaryKey.fields, isPrimaryKey: true }]
-      : []),
-    ...model.uniqueFields.filter((c) => c.length > 1).map((c) => ({ columns: c, isUnique: true })),
-  ]
 }
 
 export function makeTables(
@@ -141,7 +152,14 @@ export function makeTables(
     const columns = model.fields.map((field) => toDBMLColumn(field, models, mapToDbSchema))
     const columnLines = columns.map(makePrismaColumn).join('\n')
 
-    const indexes = makeTableIndexes(model)
+    const indexes = [
+      ...(model.primaryKey?.fields && model.primaryKey.fields.length > 0
+        ? [{ columns: model.primaryKey.fields, isPrimaryKey: true }]
+        : []),
+      ...model.uniqueFields
+        .filter((c) => c.length > 1)
+        .map((c) => ({ columns: c, isUnique: true })),
+    ]
     const indexBlock =
       indexes.length > 0 ? `\n\n  indexes {\n${indexes.map(makeIndex).join('\n')}\n  }` : ''
 
@@ -161,16 +179,6 @@ export function makeEnums(enums: readonly DMMF.DatamodelEnum[]): readonly string
   })
 }
 
-function getRelationOperator(
-  models: readonly DMMF.Model[],
-  from: string,
-  to: string,
-): '>' | '<' | '-' {
-  const model = models.find((m) => m.name === to)
-  const field = model?.fields.find((f) => f.type === from)
-  return field?.isList ? '>' : '-'
-}
-
 export function makeRelations(
   models: readonly DMMF.Model[],
   mapToDbSchema = false,
@@ -185,7 +193,9 @@ export function makeRelations(
         const relationFrom = model.name
         const relationTo = field.type
 
-        const operator = getRelationOperator(models, relationFrom, relationTo)
+        const toModel = models.find((m) => m.name === relationTo)
+        const toField = toModel?.fields.find((f) => f.type === relationFrom)
+        const operator: '>' | '<' | '-' = toField?.isList ? '>' : '-'
 
         const relationFromName = mapToDbSchema && model.dbName ? model.dbName : model.name
         const relatedModel = models.find((m) => m.name === relationTo)
@@ -216,11 +226,11 @@ export function dbmlContent(datamodel: DMMF.Datamodel, mapToDbSchema = false): s
   return [...enums, ...tables, ...refs].join('\n\n')
 }
 
-export const makeDbmlFile = async (
+export async function makeDbmlFile(
   outputDir: string,
   content: string,
   fileName: string,
-): Promise<{ readonly ok: true } | { readonly ok: false; readonly error: string }> => {
+): Promise<{ readonly ok: true } | { readonly ok: false; readonly error: string }> {
   const outputFile = `${outputDir}/${fileName}`
   const writeResult = await writeFile(outputFile, content)
 
@@ -231,19 +241,19 @@ export const makeDbmlFile = async (
   return { ok: true }
 }
 
-export const makePng = async (
+export async function makePng(
   outputDir: string,
   dbml: string,
   fileName: string,
-): Promise<{ readonly ok: true } | { readonly ok: false; readonly error: string }> => {
+): Promise<{ readonly ok: true } | { readonly ok: false; readonly error: string }> {
   const outputFile = `${outputDir}/${fileName}`
   return makePngFile(outputFile, dbml)
 }
 
-export const makePngFile = async (
+export async function makePngFile(
   outputPath: string,
   dbml: string,
-): Promise<{ readonly ok: true } | { readonly ok: false; readonly error: string }> => {
+): Promise<{ readonly ok: true } | { readonly ok: false; readonly error: string }> {
   const svg = run(dbml, 'svg')
   const resvg = new Resvg(svg, {
     font: {

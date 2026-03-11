@@ -1,9 +1,44 @@
 import type { DMMF } from '@prisma/generator-helper'
-import { isRelationshipType, parseRelation, removeDuplicateRelations } from '../utils/index.js'
+import { stripAnnotations } from '../utils/index.js'
 
-const ZOD_ANNOTATION = '@z.'
-const VALIBOT_ANNOTATION = '@v.'
-const RELATION_ANNOTATION = '@relation'
+// ============================================================================
+// Relation Utilities
+// ============================================================================
+
+export function isRelationshipType(
+  type: string,
+): type is 'zero-one' | 'one' | 'zero-many' | 'many' {
+  return type === 'zero-one' || type === 'one' || type === 'zero-many' || type === 'many'
+}
+
+export function parseRelation(line: string): {
+  readonly fromModel: string
+  readonly fromField: string
+  readonly toModel: string
+  readonly toField: string
+  readonly type: string
+} | null {
+  const relationRegex = /^@relation\s+(\w+)\.(\w+)\s+(\w+)\.(\w+)\s+(\w+-to-\w+)$/
+  const match = line.trim().match(relationRegex)
+
+  if (!match) {
+    return null
+  }
+
+  const [, fromModel, fromField, toModel, toField, relationType] = match
+
+  return {
+    fromModel,
+    fromField,
+    toModel,
+    toField,
+    type: relationType,
+  }
+}
+
+export function removeDuplicateRelations(relations: readonly string[]): readonly string[] {
+  return [...new Set(relations)]
+}
 
 const RELATIONSHIPS = {
   'zero-one': '|o',
@@ -66,10 +101,6 @@ export function makeRelationLineFromRelation(relation: {
 // Mermaid ER Generation
 // ============================================================================
 
-function toMermaidType(prismaType: string): string {
-  return prismaType.toLowerCase()
-}
-
 export function modelFields(model: DMMF.Model): string[] {
   const fkFields = new Set(
     model.fields
@@ -82,30 +113,11 @@ export function modelFields(model: DMMF.Model): string[] {
       if (field.relationName) {
         return null
       }
-      const commentPart = field.documentation
-        ? field.documentation
-            .split('\n')
-            .filter((line) => {
-              const trimmed = line.trim()
-              return !(
-                trimmed.startsWith(ZOD_ANNOTATION) ||
-                trimmed.startsWith(VALIBOT_ANNOTATION) ||
-                trimmed.startsWith('@a.') ||
-                trimmed.startsWith('@e.') ||
-                trimmed.includes(RELATION_ANNOTATION) ||
-                trimmed === '@z' ||
-                trimmed === '@v' ||
-                trimmed === '@a' ||
-                trimmed === '@e'
-              )
-            })
-            .join('\n')
-            .trim()
-        : ''
+      const commentPart = stripAnnotations(field.documentation) ?? ''
 
       const keyMarker = field.isId ? 'PK' : fkFields.has(field.name) ? 'FK' : ''
       const keyPart = keyMarker ? ` ${keyMarker}` : ''
-      const fieldType = toMermaidType(field.type)
+      const fieldType = field.type.toLowerCase()
 
       return `        ${fieldType} ${field.name}${keyPart}${commentPart ? ` "${commentPart}"` : ''}`
     })
