@@ -61,9 +61,7 @@ model Post {
       encoding: 'utf-8',
     })
 
-    const expected = `import type { FromSchema } from 'json-schema-to-ts'
-
-export const UserSchema = {
+    const expected = `export const UserSchema = {
   type: 'object' as const,
   properties: {
     id: { type: 'string' as const, format: 'uuid' as const },
@@ -205,9 +203,7 @@ model Post {
       encoding: 'utf-8',
     })
 
-    const expected = `import type { FromSchema } from 'json-schema-to-ts'
-
-export const UserSchema = {
+    const expected = `export const UserSchema = {
   type: 'object' as const,
   properties: {
     id: { type: 'string' as const },
@@ -352,9 +348,7 @@ model User {
       encoding: 'utf-8',
     })
 
-    const expected = `import type { FromSchema } from 'json-schema-to-ts'
-
-export const UserSchema = {
+    const expected = `export const UserSchema = {
   type: 'object' as const,
   properties: {
     id: { type: 'string' as const, format: 'uuid' as const },

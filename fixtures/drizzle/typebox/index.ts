@@ -1,4 +1,4 @@
-import { type Static, Type } from '@sinclair/typebox'
+import { Type } from '@sinclair/typebox'
 
 export const UserSchema = Type.Object({
   id: Type.Integer(),

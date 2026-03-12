@@ -179,11 +179,9 @@ export function validationSchemas(
     inferType: type ? config.inferType(fields[0].modelName) : '',
   }))
 
-  return [
-    config.importStatement,
-    '',
-    schemaResults
-      .flatMap(({ schema, inferType }) => [schema, inferType].filter(Boolean))
-      .join('\n\n'),
-  ].join('\n')
+  const schemas = schemaResults
+    .flatMap(({ schema, inferType }) => [schema, inferType].filter(Boolean))
+    .join('\n\n')
+
+  return config.importStatement ? [config.importStatement, '', schemas].join('\n') : schemas
 }

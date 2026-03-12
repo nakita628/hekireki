@@ -121,7 +121,9 @@ export function typebox(
   }[],
 ): string {
   return validationSchemas(models, type, comment, {
-    importStatement: `import { Type, type Static } from '@sinclair/typebox'`,
+    importStatement: type
+      ? `import { type Static, Type } from '@sinclair/typebox'`
+      : `import { Type } from '@sinclair/typebox'`,
     annotationPrefix: '@t.',
     parseDocument: parseDocumentWithoutAnnotations,
     extractValidation: makeValidationExtractor('@t.'),

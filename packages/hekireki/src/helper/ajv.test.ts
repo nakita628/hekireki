@@ -216,9 +216,7 @@ export type UserRelations = FromSchema<typeof UserRelationsSchema>`
 
       const result = ajv([model], false, false)
 
-      const expected = `import type { FromSchema } from 'json-schema-to-ts'
-
-export const UserSchema = {
+      const expected = `export const UserSchema = {
   type: 'object' as const,
   properties: {
     id: { type: 'string' as const, format: 'uuid' as const },
@@ -241,9 +239,7 @@ export const UserSchema = {
 
       const result = ajv([model], false, false)
 
-      const expected = `import type { FromSchema } from 'json-schema-to-ts'
-
-export const ItemSchema = {
+      const expected = `export const ItemSchema = {
   type: 'object' as const,
   properties: {
     id: { type: 'integer' as const },

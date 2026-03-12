@@ -1,5 +1,3 @@
-import type { FromSchema } from 'json-schema-to-ts'
-
 export const UserSchema = {
   type: 'object' as const,
   properties: {

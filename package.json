@@ -12,6 +12,6 @@
     "release": "pnpm -F hekireki release"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.3.15"
+    "@biomejs/biome": "^2.4.6"
   }
 }

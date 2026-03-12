@@ -61,7 +61,7 @@ model Post {
       encoding: 'utf-8',
     })
 
-    const expected = `import { Type, type Static } from '@sinclair/typebox'
+    const expected = `import { Type } from '@sinclair/typebox'
 
 export const UserSchema = Type.Object({
   id: Type.String({ format: 'uuid' }),
@@ -124,7 +124,7 @@ model Post {
       encoding: 'utf-8',
     })
 
-    const expected = `import { Type, type Static } from '@sinclair/typebox'
+    const expected = `import { Type } from '@sinclair/typebox'
 
 export const UserSchema = Type.Object({
   /** Primary key */
@@ -187,7 +187,7 @@ model Post {
       encoding: 'utf-8',
     })
 
-    const expected = `import { Type, type Static } from '@sinclair/typebox'
+    const expected = `import { type Static, Type } from '@sinclair/typebox'
 
 export const UserSchema = Type.Object({
   id: Type.String({ format: 'uuid' }),
@@ -256,7 +256,7 @@ model Post {
       encoding: 'utf-8',
     })
 
-    const expected = `import { Type, type Static } from '@sinclair/typebox'
+    const expected = `import { type Static, Type } from '@sinclair/typebox'
 
 export const UserSchema = Type.Object({
   /** Primary key */
@@ -330,7 +330,7 @@ model Post {
       encoding: 'utf-8',
     })
 
-    const expected = `import { Type, type Static } from '@sinclair/typebox'
+    const expected = `import { Type } from '@sinclair/typebox'
 
 export const UserSchema = Type.Object({
   id: Type.String(),
@@ -373,7 +373,7 @@ model User {
       encoding: 'utf-8',
     })
 
-    const expected = `import { Type, type Static } from '@sinclair/typebox'
+    const expected = `import { Type } from '@sinclair/typebox'
 
 export const UserSchema = Type.Object({
   id: Type.String({ format: 'uuid' }),
@@ -417,7 +417,7 @@ model Post {
       encoding: 'utf-8',
     })
 
-    const expected = `import { Type, type Static } from '@sinclair/typebox'
+    const expected = `import { type Static, Type } from '@sinclair/typebox'
 
 export const UserSchema = Type.Object({
   id: Type.String(),

@@ -115,7 +115,7 @@ export function ajv(
   }[],
 ): string {
   return validationSchemas(models, type, comment, {
-    importStatement: `import type { FromSchema } from 'json-schema-to-ts'`,
+    importStatement: type ? `import type { FromSchema } from 'json-schema-to-ts'` : '',
     annotationPrefix: '@j.',
     parseDocument: parseDocumentWithoutAnnotations,
     extractValidation: makeValidationExtractor('@j.'),

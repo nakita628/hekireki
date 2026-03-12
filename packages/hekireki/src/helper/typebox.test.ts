@@ -172,7 +172,7 @@ describe('helper/typebox', () => {
       const result = typebox([model], false, false)
 
       expect(result).toBe(
-        "import { Type, type Static } from '@sinclair/typebox'\n\nexport const UserSchema = Type.Object({\n  id: Type.String(),\n  name: Type.String(),\n})",
+        "import { Type } from '@sinclair/typebox'\n\nexport const UserSchema = Type.Object({\n  id: Type.String(),\n  name: Type.String(),\n})",
       )
     })
 
@@ -188,7 +188,7 @@ describe('helper/typebox', () => {
       const result = typebox([model], false, false)
 
       expect(result).toBe(
-        "import { Type, type Static } from '@sinclair/typebox'\n\nexport const ItemSchema = Type.Object({\n  id: Type.Integer(),\n  name: Type.String(),\n})",
+        "import { Type } from '@sinclair/typebox'\n\nexport const ItemSchema = Type.Object({\n  id: Type.Integer(),\n  name: Type.String(),\n})",
       )
     })
 
