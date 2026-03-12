@@ -41,8 +41,11 @@ export function parseDocumentWithoutAnnotations(
   return documentation
     .split('\n')
     .map((line) => line.trim())
-    .filter((line) => !['@z.', '@v.', '@a.', '@e.'].some((prefix) => line.startsWith(prefix)))
-    .filter((line) => !['@z', '@v', '@a', '@e'].includes(line))
+    .filter(
+      (line) =>
+        !['@z.', '@v.', '@a.', '@e.', '@t.', '@j.'].some((prefix) => line.startsWith(prefix)),
+    )
+    .filter((line) => !['@z', '@v', '@a', '@e', '@t', '@j'].includes(line))
     .filter((line) => line.length > 0)
 }
 
@@ -55,11 +58,15 @@ export function stripAnnotations(doc: string | undefined): string | undefined {
       trimmed.startsWith('@v.') ||
       trimmed.startsWith('@a.') ||
       trimmed.startsWith('@e.') ||
+      trimmed.startsWith('@t.') ||
+      trimmed.startsWith('@j.') ||
       trimmed.startsWith('@relation') ||
       trimmed === '@z' ||
       trimmed === '@v' ||
       trimmed === '@a' ||
-      trimmed === '@e'
+      trimmed === '@e' ||
+      trimmed === '@t' ||
+      trimmed === '@j'
     )
   })
   const result = lines.join('\n').trim()

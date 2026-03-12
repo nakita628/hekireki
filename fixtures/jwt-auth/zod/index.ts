@@ -12,7 +12,7 @@ export const UserSchema = z.object({
   /**
    * Hashed password (null for OAuth-only users)
    */
-  passwordHash: z.string().min(8).nullable(),
+  passwordHash: z.string().min(8).nullable().exactOptional(),
   /**
    * Display name
    */
@@ -20,7 +20,11 @@ export const UserSchema = z.object({
   /**
    * Profile image URL
    */
-  avatarUrl: z.url().nullable(),
+  avatarUrl: z.url().nullable().exactOptional(),
+  /**
+   * User role
+   */
+  role: z.enum(['ADMIN', 'USER', 'GUEST']),
   /**
    * Email verification status
    */
@@ -40,7 +44,7 @@ export const UserSchema = z.object({
   /**
    * Last login timestamp
    */
-  lastLoginAt: z.iso.datetime().nullable(),
+  lastLoginAt: z.iso.datetime().nullable().exactOptional(),
 })
 
 export type User = z.infer<typeof UserSchema>
@@ -55,21 +59,25 @@ export const OAuthAccountSchema = z.object({
    */
   userId: z.uuid(),
   /**
+   * OAuth provider
+   */
+  provider: z.enum(['GOOGLE', 'GITHUB', 'FACEBOOK', 'TWITTER', 'APPLE']),
+  /**
    * Provider account ID
    */
   providerAccountId: z.string(),
   /**
    * Access token from provider
    */
-  accessToken: z.string().nullable(),
+  accessToken: z.string().nullable().exactOptional(),
   /**
    * Refresh token from provider
    */
-  refreshToken: z.string().nullable(),
+  refreshToken: z.string().nullable().exactOptional(),
   /**
    * Token expiration timestamp
    */
-  expiresAt: z.iso.datetime().nullable(),
+  expiresAt: z.iso.datetime().nullable().exactOptional(),
   /**
    * Account creation timestamp
    */
@@ -92,21 +100,25 @@ export const TwoFactorSettingSchema = z.object({
    */
   enabled: z.boolean(),
   /**
+   * 2FA method
+   */
+  method: z.enum(['TOTP', 'SMS', 'EMAIL']).exactOptional(),
+  /**
    * TOTP secret (encrypted)
    */
-  totpSecret: z.string().nullable(),
+  totpSecret: z.string().nullable().exactOptional(),
   /**
    * Phone number for SMS (E.164 format)
    */
-  phoneNumber: z.string().nullable(),
+  phoneNumber: z.string().nullable().exactOptional(),
   /**
    * Backup codes (hashed, JSON array)
    */
-  backupCodes: z.string().nullable(),
+  backupCodes: z.string().nullable().exactOptional(),
   /**
    * Last verified timestamp
    */
-  verifiedAt: z.iso.datetime().nullable(),
+  verifiedAt: z.iso.datetime().nullable().exactOptional(),
   /**
    * Creation timestamp
    */
@@ -135,11 +147,11 @@ export const RefreshTokenSchema = z.object({
   /**
    * Device/client identifier
    */
-  deviceInfo: z.string().nullable(),
+  deviceInfo: z.string().nullable().exactOptional(),
   /**
    * IP address at creation
    */
-  ipAddress: z.string().nullable(),
+  ipAddress: z.string().nullable().exactOptional(),
   /**
    * Token expiration timestamp
    */

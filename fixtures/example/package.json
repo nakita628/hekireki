@@ -7,9 +7,11 @@
     "docs": "hekireki docs serve"
   },
   "dependencies": {
+    "@sinclair/typebox": "^0.34.48",
     "arktype": "^2.1.29",
     "drizzle-orm": "^0.45.1",
     "effect": "^3.19.15",
+    "json-schema-to-ts": "^3.1.1",
     "prisma": "^7.0.1",
     "valibot": "^1.2.0",
     "zod": "^4.3.6"

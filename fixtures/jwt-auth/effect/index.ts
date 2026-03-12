@@ -11,6 +11,8 @@ export const UserSchema = Schema.Struct({
   name: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100)),
   /** Profile image URL */
   avatarUrl: Schema.NullOr(Schema.String),
+  /** User role */
+  role: Schema.Literal('ADMIN', 'USER', 'GUEST'),
   /** Email verification status */
   emailVerified: Schema.Boolean,
   /** Account active status */
@@ -30,6 +32,8 @@ export const OAuthAccountSchema = Schema.Struct({
   id: Schema.UUID,
   /** User ID */
   userId: Schema.UUID,
+  /** OAuth provider */
+  provider: Schema.Literal('GOOGLE', 'GITHUB', 'FACEBOOK', 'TWITTER', 'APPLE'),
   /** Provider account ID */
   providerAccountId: Schema.String,
   /** Access token from provider */
@@ -51,6 +55,8 @@ export const TwoFactorSettingSchema = Schema.Struct({
   userId: Schema.UUID,
   /** 2FA enabled status */
   enabled: Schema.Boolean,
+  /** 2FA method */
+  method: Schema.Literal('TOTP', 'SMS', 'EMAIL'),
   /** TOTP secret (encrypted) */
   totpSecret: Schema.NullOr(Schema.String),
   /** Phone number for SMS (E.164 format) */
