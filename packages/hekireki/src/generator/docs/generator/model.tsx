@@ -378,7 +378,7 @@ const mapArgs = (
     required: a.isRequired,
   }))
 
-const operationDescriptions: Record<string, (singular: string, plural: string) => { desc: string; queryType: 'Query' | 'Mutation' }> = {
+const operationDescriptions: { [k: string]: (singular: string, plural: string) => { desc: string; queryType: 'Query' | 'Mutation' } } = {
   [ModelAction.create]: (singular) => ({ desc: `Create one ${singular}`, queryType: 'Mutation' }),
   [ModelAction.deleteMany]: (singular) => ({ desc: `Delete zero or more ${singular}`, queryType: 'Mutation' }),
   [ModelAction.delete]: (singular) => ({ desc: `Delete one ${singular}`, queryType: 'Mutation' }),
@@ -390,7 +390,7 @@ const operationDescriptions: Record<string, (singular: string, plural: string) =
   [ModelAction.upsert]: (_, plural) => ({ desc: `Create or update one ${plural}`, queryType: 'Mutation' }),
 }
 
-const operationUsageTemplates: Record<string, (singular: string, plural: string, method: string) => string> = {
+const operationUsageTemplates: { [k: string]: (singular: string, plural: string, method: string) => string } = {
   [ModelAction.create]: (singular, _, method) => `// Create one ${singular}
 const ${singular} = await ${method}({
   data: {

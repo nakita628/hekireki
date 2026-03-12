@@ -1,6 +1,16 @@
 import type { DMMF } from '@prisma/generator-helper'
 import { describe, expect, it } from 'vitest'
-import { dbmlContent, makeEnums, makeRelations, makeTables } from './dbml.js'
+import {
+  combineKeys,
+  dbmlContent,
+  escapeNote,
+  formatConstraints,
+  makeEnum,
+  makeEnums,
+  makeRefName,
+  makeRelations,
+  makeTables,
+} from './dbml.js'
 
 describe('helper/dbml', () => {
   describe('quote', () => {
@@ -262,7 +272,10 @@ describe('helper/dbml', () => {
       const enums: DMMF.DatamodelEnum[] = [
         {
           name: 'Role',
-          values: [{ name: 'ADMIN', dbName: null }, { name: 'USER', dbName: null }],
+          values: [
+            { name: 'ADMIN', dbName: null },
+            { name: 'USER', dbName: null },
+          ],
         },
       ]
       const result = makeEnums(enums)
@@ -325,16 +338,16 @@ describe('helper/dbml', () => {
         enums: [
           {
             name: 'Role',
-            values: [{ name: 'ADMIN', dbName: null }, { name: 'USER', dbName: null }],
+            values: [
+              { name: 'ADMIN', dbName: null },
+              { name: 'USER', dbName: null },
+            ],
           },
         ],
         types: [],
       }
       const result = dbmlContent(datamodel)
-      expect(result).toContain('Enum Role {')
-      expect(result).toContain('ADMIN')
-      expect(result).toContain('Table User {')
-      expect(result).toContain('id String [pk]')
+      expect(result).toBe('Enum Role {\n  ADMIN\n  USER\n}\n\nTable User {\n  id String [pk]\n}')
     })
 
     it('generates output with relations', () => {
@@ -434,9 +447,9 @@ describe('helper/dbml', () => {
         types: [],
       }
       const result = dbmlContent(datamodel)
-      expect(result).toContain('Table Post {')
-      expect(result).toContain('Table User {')
-      expect(result).toContain('Ref Post_userId_fk: Post.userId > User.id')
+      expect(result).toBe(
+        'Table Post {\n  id String [pk]\n  userId String [not null]\n  user User [not null]\n}\n\nTable User {\n  id String [pk]\n  posts Post\n}\n\nRef Post_userId_fk: Post.userId > User.id',
+      )
     })
 
     it('uses dbName when mapToDbSchema is true', () => {
@@ -470,8 +483,66 @@ describe('helper/dbml', () => {
         types: [],
       }
       const result = dbmlContent(datamodel, true)
-      expect(result).toContain('Table users {')
-      expect(result).not.toContain('Table User {')
+      expect(result).toBe('Table users {\n  id String [pk]\n}')
+    })
+  })
+
+  describe('escapeNote', () => {
+    it('escapes single quotes', () => {
+      expect(escapeNote("User's bio")).toBe("User\\'s bio")
+    })
+  })
+
+  describe('formatConstraints', () => {
+    it('formats non-empty', () => {
+      expect(formatConstraints(['pk', 'not null'])).toBe(' [pk, not null]')
+    })
+    it('returns empty for empty', () => {
+      expect(formatConstraints([])).toBe('')
+    })
+  })
+
+  describe('makeEnum', () => {
+    it('generates enum', () => {
+      expect(makeEnum({ name: 'Role', values: ['USER', 'ADMIN'] })).toBe(
+        'Enum Role {\n  USER\n  ADMIN\n}',
+      )
+    })
+  })
+
+  describe('makeRefName', () => {
+    it('uses provided name', () => {
+      expect(
+        makeRefName({
+          name: 'custom_fk',
+          fromTable: 'Post',
+          fromColumn: 'userId',
+          toTable: 'User',
+          toColumn: 'id',
+        }),
+      ).toBe('custom_fk')
+    })
+    it('generates name from table/column when no name', () => {
+      expect(
+        makeRefName({
+          fromTable: 'Post',
+          fromColumn: 'userId',
+          toTable: 'User',
+          toColumn: 'id',
+        }),
+      ).toBe('Post_userId_User_id_fk')
+    })
+  })
+
+  describe('combineKeys', () => {
+    it('returns single key as-is', () => {
+      expect(combineKeys(['id'])).toBe('id')
+    })
+    it('wraps multiple keys in parentheses', () => {
+      expect(combineKeys(['id', 'name'])).toBe('(id, name)')
+    })
+    it('handles three keys', () => {
+      expect(combineKeys(['a', 'b', 'c'])).toBe('(a, b, c)')
     })
   })
 })

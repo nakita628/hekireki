@@ -2,7 +2,7 @@
 
 # Hekireki
 
-**[Hekireki](https://www.npmjs.com/package/hekireki)** is a tool that generates validation schemas for Zod, Valibot, ArkType, and Effect Schema, as well as [Drizzle ORM](https://orm.drizzle.team/) schemas and ER diagrams, from [Prisma](https://www.prisma.io/) schemas annotated with comments.
+**[Hekireki](https://www.npmjs.com/package/hekireki)** is a tool that generates validation schemas for Zod, Valibot, ArkType, Effect Schema, TypeBox, and AJV (JSON Schema), as well as [Drizzle ORM](https://orm.drizzle.team/) schemas and ER diagrams, from [Prisma](https://www.prisma.io/) schemas annotated with comments.
 
 ## Features
 
@@ -10,6 +10,8 @@
 - 🤖 Automatically generates [Valibot](https://valibot.dev/) schemas from your Prisma schema
 - 🏹 Automatically generates [ArkType](https://arktype.io/) schemas from your Prisma schema
 - ⚡ Automatically generates [Effect Schema](https://effect.website/docs/schema/introduction/) from your Prisma schema
+- 📦 Automatically generates [TypeBox](https://github.com/sinclairzx81/typebox) schemas from your Prisma schema
+- 📋 Automatically generates [AJV](https://ajv.js.org/)-compatible JSON Schema objects from your Prisma schema
 - 🗄️ Automatically generates [Drizzle ORM](https://orm.drizzle.team/) table schemas and relations from your Prisma schema
 - 📊 Creates [Mermaid](https://mermaid.js.org/) ER diagrams with PK/FK markers
 - 📝 Generates [DBML](https://dbml.dbdiagram.io/) (Database Markup Language) files and **PNG** ER diagrams via [dbml-renderer](https://github.com/softwaretechnik-berlin/dbml-renderer) — output format is determined by the file extension (`.dbml` or `.png`)
@@ -62,6 +64,20 @@ generator Hekireki-Effect {
     relation = true
 }
 
+generator Hekireki-TypeBox {
+    provider = "hekireki-typebox"
+    type     = true
+    comment  = true
+    relation = true
+}
+
+generator Hekireki-AJV {
+    provider = "hekireki-ajv"
+    type     = true
+    comment  = true
+    relation = true
+}
+
 generator Hekireki-Drizzle {
     provider = "hekireki-drizzle"
 }
@@ -88,12 +104,16 @@ model User {
     /// @v.pipe(v.string(), v.uuid())
     /// @a."string.uuid"
     /// @e.Schema.UUID
+    /// @t.Type.String({ format: 'uuid' })
+    /// @j.{ type: 'string' as const, format: 'uuid' as const }
     id    String @id @default(uuid())
     /// Display name
     /// @z.string().min(1).max(50)
     /// @v.pipe(v.string(), v.minLength(1), v.maxLength(50))
     /// @a."1 <= string <= 50"
     /// @e.Schema.String.pipe(Schema.minLength(1), Schema.maxLength(50))
+    /// @t.Type.String({ minLength: 1, maxLength: 50 })
+    /// @j.{ type: 'string' as const, minLength: 1, maxLength: 50 }
     name  String
     /// One-to-many relation to Post
     posts Post[]
@@ -105,24 +125,32 @@ model Post {
     /// @v.pipe(v.string(), v.uuid())
     /// @a."string.uuid"
     /// @e.Schema.UUID
+    /// @t.Type.String({ format: 'uuid' })
+    /// @j.{ type: 'string' as const, format: 'uuid' as const }
     id String @id @default(uuid())
     /// Article title
     /// @z.string().min(1).max(100)
     /// @v.pipe(v.string(), v.minLength(1), v.maxLength(100))
     /// @a."1 <= string <= 100"
     /// @e.Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100))
+    /// @t.Type.String({ minLength: 1, maxLength: 100 })
+    /// @j.{ type: 'string' as const, minLength: 1, maxLength: 100 }
     title String
     /// Body content (no length limit)
     /// @z.string()
     /// @v.string()
     /// @a."string"
     /// @e.Schema.String
+    /// @t.Type.String()
+    /// @j.{ type: 'string' as const }
     content String
     /// Foreign key referencing User.id
     /// @z.uuid()
     /// @v.pipe(v.string(), v.uuid())
     /// @a."string.uuid"
     /// @e.Schema.UUID
+    /// @t.Type.String({ format: 'uuid' })
+    /// @j.{ type: 'string' as const, format: 'uuid' as const }
     userId  String
     /// Prisma relation definition
     user    User   @relation(fields: [userId], references: [id])
@@ -295,6 +323,108 @@ export const PostSchema = Schema.Struct({
 export type Post = Schema.Schema.Type<typeof PostSchema>
 ```
 
+### TypeBox
+
+```ts
+import { type Static, Type } from '@sinclair/typebox'
+
+export const UserSchema = Type.Object({
+  /** Primary key */
+  id: Type.String({ format: 'uuid' }),
+  /** Display name */
+  name: Type.String({ minLength: 1, maxLength: 50 }),
+})
+
+export type User = Static<typeof UserSchema>
+
+export const PostSchema = Type.Object({
+  /** Primary key */
+  id: Type.String({ format: 'uuid' }),
+  /** Article title */
+  title: Type.String({ minLength: 1, maxLength: 100 }),
+  /** Body content (no length limit) */
+  content: Type.String(),
+  /** Foreign key referencing User.id */
+  userId: Type.String({ format: 'uuid' }),
+})
+
+export type Post = Static<typeof PostSchema>
+
+export const UserRelationsSchema = Type.Object({
+  ...UserSchema.properties,
+  posts: Type.Array(PostSchema),
+})
+
+export type UserRelations = Static<typeof UserRelationsSchema>
+
+export const PostRelationsSchema = Type.Object({
+  ...PostSchema.properties,
+  user: UserSchema,
+})
+
+export type PostRelations = Static<typeof PostRelationsSchema>
+```
+
+### AJV (JSON Schema)
+
+```ts
+import type { FromSchema } from 'json-schema-to-ts'
+
+export const UserSchema = {
+  type: 'object' as const,
+  properties: {
+    /** Primary key */
+    id: { type: 'string' as const, format: 'uuid' as const },
+    /** Display name */
+    name: { type: 'string' as const, minLength: 1, maxLength: 50 },
+  },
+  required: ['id', 'name'] as const,
+  additionalProperties: false,
+} as const
+
+export type User = FromSchema<typeof UserSchema>
+
+export const PostSchema = {
+  type: 'object' as const,
+  properties: {
+    /** Primary key */
+    id: { type: 'string' as const, format: 'uuid' as const },
+    /** Article title */
+    title: { type: 'string' as const, minLength: 1, maxLength: 100 },
+    /** Body content (no length limit) */
+    content: { type: 'string' as const },
+    /** Foreign key referencing User.id */
+    userId: { type: 'string' as const, format: 'uuid' as const },
+  },
+  required: ['id', 'title', 'content', 'userId'] as const,
+  additionalProperties: false,
+} as const
+
+export type Post = FromSchema<typeof PostSchema>
+
+export const UserRelationsSchema = {
+  type: 'object' as const,
+  properties: {
+    ...UserSchema.properties,
+    posts: { type: 'array' as const, items: PostSchema },
+  },
+  additionalProperties: false,
+} as const
+
+export type UserRelations = FromSchema<typeof UserRelationsSchema>
+
+export const PostRelationsSchema = {
+  type: 'object' as const,
+  properties: {
+    ...PostSchema.properties,
+    user: UserSchema,
+  },
+  additionalProperties: false,
+} as const
+
+export type PostRelations = FromSchema<typeof PostRelationsSchema>
+```
+
 ### Drizzle
 
 ```ts
@@ -390,19 +520,6 @@ defmodule DBSchema.Post do
 end
 ```
 
-**Supported features:**
-
-| Feature | Details |
-|---|---|
-| Primary keys | UUID (`@default(uuid())`), autoincrement (`@default(autoincrement())`), CUID, composite (`@@id`) |
-| Associations | `belongs_to`, `has_many`, `has_one` with correct FK types |
-| Timestamps | `timestamps()` with `inserted_at_source`/`updated_at_source` for `@map`/camelCase fields |
-| Enums | `Ecto.Enum` with `values: [...]` |
-| Array fields | `{:array, :type}` for Prisma list scalars (`String[]`, `Int[]`, etc.) |
-| Name mapping | `@@map` → schema table name, `@map` → field `source:` option |
-| Typespecs | `@type t :: %__MODULE__{...}` auto-generated for Dialyzer |
-| `@moduledoc` | Uses `///` model documentation, or `false` when absent |
-
 ### DBML
 
 ```dbml
@@ -482,6 +599,24 @@ generator Hekireki-ArkType {
 generator Hekireki-Effect {
     provider = "hekireki-effect"
     output   = "./effect"    // Output path (default: ./effect/index.ts)
+    type     = true          // Generate TypeScript types (default: false)
+    comment  = true          // Include schema documentation (default: false)
+    relation = true          // Generate relation schemas (default: false)
+}
+
+// TypeBox Generator
+generator Hekireki-TypeBox {
+    provider = "hekireki-typebox"
+    output   = "./typebox"   // Output path (default: ./typebox/index.ts)
+    type     = true          // Generate TypeScript types (default: false)
+    comment  = true          // Include schema documentation (default: false)
+    relation = true          // Generate relation schemas (default: false)
+}
+
+// AJV (JSON Schema) Generator
+generator Hekireki-AJV {
+    provider = "hekireki-ajv"
+    output   = "./ajv"       // Output path (default: ./ajv/index.ts)
     type     = true          // Generate TypeScript types (default: false)
     comment  = true          // Include schema documentation (default: false)
     relation = true          // Generate relation schemas (default: false)

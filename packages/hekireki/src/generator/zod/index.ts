@@ -21,10 +21,7 @@ export async function main(options: GeneratorOptions): Promise<void> {
     ? { dir: path.dirname(output), file: output }
     : { dir: output, file: path.join(output, 'index.ts') }
   const zodVersion = getString(options.generator.config?.zod, 'v4')
-  const enableRelation =
-    options.generator.config?.relation === 'true' ||
-    (Array.isArray(options.generator.config?.relation) &&
-      options.generator.config?.relation[0] === 'true')
+  const enableRelation = getBool(options.generator.config?.relation)
 
   const base = zod(
     options.dmmf.datamodel.models,

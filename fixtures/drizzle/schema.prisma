@@ -40,6 +40,16 @@ generator Hekireki-Drizzle {
   provider = "hekireki-drizzle"
 }
 
+generator Hekireki-TypeBox {
+  provider = "hekireki-typebox"
+  output   = "typebox"
+}
+
+generator Hekireki-AJV {
+  provider = "hekireki-ajv"
+  output   = "ajv"
+}
+
 // ============================================================================
 // Enums
 // ============================================================================

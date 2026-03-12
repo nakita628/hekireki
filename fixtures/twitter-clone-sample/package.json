@@ -6,7 +6,9 @@
     "generate": "prisma generate"
   },
   "dependencies": {
+    "@sinclair/typebox": "^0.34.48",
     "drizzle-orm": "^0.45.1",
+    "json-schema-to-ts": "^3.1.1",
     "prisma": "^7.3.0",
     "valibot": "^1.2.0",
     "zod": "^4.1.13"

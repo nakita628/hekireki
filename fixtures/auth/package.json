@@ -7,8 +7,10 @@
   },
   "dependencies": {
     "@paralleldrive/cuid2": "^2.2.2",
+    "@sinclair/typebox": "^0.34.48",
     "drizzle-orm": "^0.45.1",
     "hekireki": "workspace:^",
+    "json-schema-to-ts": "^3.1.1",
     "prisma": "^7.0.1",
     "zod": "^4.1.13"
   }

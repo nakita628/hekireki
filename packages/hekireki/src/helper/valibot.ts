@@ -1,20 +1,33 @@
-import type { DMMF } from '@prisma/generator-helper'
 import {
-  makeAnnotationExtractor,
-  makeJsDoc,
   makePropertiesGenerator,
-  makeValibotCardinality,
-  makeValibotEnumExpression,
-  makeValibotInfer,
-  makeValibotObject,
-  makeValibotSchema,
   makeValidationExtractor,
   parseDocumentWithoutAnnotations,
   schemaFromFields,
 } from '../utils/index.js'
 import { validationSchemas } from './prisma.js'
 
-export const PRISMA_TO_VALIBOT: Record<string, string> = {
+// ============================================================================
+// Valibot Helpers
+// ============================================================================
+
+export function makeValibotInfer(
+  modelName: string,
+): `export type ${string} = v.InferInput<typeof ${string}Schema>` {
+  return `export type ${modelName} = v.InferInput<typeof ${modelName}Schema>`
+}
+
+export function makeValibotSchema(
+  modelName: string,
+  fields: string,
+): `export const ${string}Schema = v.object({\n${string}\n})` {
+  return `export const ${modelName}Schema = v.object({\n${fields}\n})`
+}
+
+export function makeValibotEnumExpression(values: readonly string[]): `picklist([${string}])` {
+  return `picklist([${values.map((v) => `'${v}'`).join(', ')}])`
+}
+
+export const PRISMA_TO_VALIBOT: { [k: string]: string } = {
   String: 'string()',
   Int: 'number()',
   Float: 'number()',
@@ -47,33 +60,8 @@ export function makeValibotSchemas(
   )
 }
 
-const vPrim = (f: DMMF.Field): string => {
-  const extractor = makeAnnotationExtractor('@v.')
-  const anno = extractor(f.documentation ?? '')
-  return makeValibotCardinality(`v.${anno}`, f.isList, f.isRequired)
-}
-
-export function makeValibotModel(model: DMMF.Model): string {
-  const fields = model.fields
-    .filter((f) => f.kind !== 'object')
-    .map((f) => `${makeJsDoc(f.documentation, ['@z.', '@v.'])}  ${f.name}: ${vPrim(f)},`)
-    .join('\n')
-
-  const extractor = makeAnnotationExtractor('@v.')
-  const modelAnno = model.documentation ? extractor(model.documentation) : null
-  const wrapperType =
-    modelAnno === 'strictObject'
-      ? 'strictObject'
-      : modelAnno === 'looseObject'
-        ? 'looseObject'
-        : 'object'
-  const objectDef = makeValibotObject(fields, wrapperType)
-
-  return `export const ${model.name}Schema = ${objectDef}\n\nexport type ${model.name} = v.InferInput<typeof ${model.name}Schema>`
-}
-
 export function makeValibotRelations(
-  model: DMMF.Model,
+  model: { readonly name: string },
   relProps: readonly {
     readonly key: string
     readonly targetModel: string
@@ -90,19 +78,31 @@ export function makeValibotRelations(
     )
     .join('\n')
 
-  const fields = `${base}\n${rels}`
-
   const typeLine = options?.includeType
     ? `\n\nexport type ${model.name}Relations = v.InferInput<typeof ${model.name}RelationsSchema>`
     : ''
-  return `export const ${model.name}RelationsSchema = v.object({\n${fields}\n})${typeLine}`
+  return `export const ${model.name}RelationsSchema = v.object({\n${base}\n${rels}\n})${typeLine}`
 }
 
 export function valibot(
-  models: readonly DMMF.Model[],
+  models: readonly {
+    readonly name: string
+    readonly documentation?: string
+    readonly fields: readonly {
+      readonly name: string
+      readonly type: string
+      readonly kind: string
+      readonly documentation?: string
+      readonly isRequired: boolean
+      readonly isList: boolean
+    }[]
+  }[],
   type: boolean,
   comment: boolean,
-  enums?: readonly DMMF.DatamodelEnum[],
+  enums?: readonly {
+    readonly name: string
+    readonly values: readonly { readonly name: string }[]
+  }[],
 ): string {
   return validationSchemas(models, type, comment, {
     importStatement: `import * as v from 'valibot'`,

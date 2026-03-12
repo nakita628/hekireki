@@ -551,11 +551,29 @@ end`
 
     // Verify parent models still generate has_many to composite PK models
     const userResult = fs.readFileSync('./prisma-ecto/ecto/user.ex', { encoding: 'utf-8' })
-    expect(userResult).toContain(
-      'has_many(:followers, DBSchema.Follow, foreign_key: :following_id)',
-    )
-    expect(userResult).toContain('has_many(:following, DBSchema.Follow, foreign_key: :follower_id)')
-    expect(userResult).toContain('has_many(:likes, DBSchema.Like, foreign_key: :user_id)')
+    const userExpected = `defmodule DBSchema.User do
+  use Ecto.Schema
+  @moduledoc false
+
+  @primary_key {:id, :binary_id, autogenerate: true}
+  @foreign_key_type :binary_id
+
+  @type t :: %__MODULE__{
+          id: Ecto.UUID.t(),
+          name: String.t(),
+          followers: [DBSchema.Follow.t()],
+          following: [DBSchema.Follow.t()],
+          likes: [DBSchema.Like.t()]
+        }
+
+  schema "user" do
+    field(:name, :string)
+    has_many(:followers, DBSchema.Follow, foreign_key: :following_id)
+    has_many(:following, DBSchema.Follow, foreign_key: :follower_id)
+    has_many(:likes, DBSchema.Like, foreign_key: :user_id)
+  end
+end`
+    expect(userResult).toBe(userExpected)
   }, 30000)
 
   it('hekireki-ecto with timestamps, defaults, and join model', async () => {

@@ -2,13 +2,6 @@ import type { DMMF } from '@prisma/generator-helper'
 import { describe, expect, it } from 'vitest'
 import { drizzleSchema } from './drizzle.js'
 
-// Test run
-// pnpm vitest run ./src/helper/drizzle.test.ts
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
 function makeModel(overrides: Partial<DMMF.Model> & { name: string }): DMMF.Model {
   return {
     dbName: null,
@@ -33,15 +26,11 @@ function makeField(overrides: Partial<DMMF.Field> & { name: string; type: string
     isGenerated: false,
     isUpdatedAt: false,
     hasDefaultValue: false,
-    nativeType: null,
     ...overrides,
   }
 }
 
-function makeDatamodel(
-  models: DMMF.Model[],
-  enums: DMMF.DatamodelEnum[] = [],
-): DMMF.Datamodel {
+function makeDatamodel(models: DMMF.Model[], enums: DMMF.DatamodelEnum[] = []): DMMF.Datamodel {
   return { models, enums, types: [] }
 }
 
@@ -102,31 +91,9 @@ describe('drizzleSchema', () => {
 
       const result = drizzleSchema(datamodel, 'postgresql', [])
 
-      // Import statements
-      expect(result).toContain("from 'drizzle-orm/pg-core'")
-      expect(result).toContain('serial')
-      expect(result).toContain('text')
-      expect(result).toContain('integer')
-      expect(result).toContain('pgTable')
-
-      // Table definitions
-      expect(result).toContain("export const user = pgTable('user'")
-      expect(result).toContain("id: serial('id').primaryKey()")
-      expect(result).toContain("name: text('name').notNull()")
-      expect(result).toContain("email: text('email').notNull().unique()")
-
-      expect(result).toContain("export const post = pgTable('post'")
-      expect(result).toContain("title: text('title').notNull()")
-
-      // Relations
-      expect(result).toContain("from 'drizzle-orm'")
-      expect(result).toContain('relations')
-      expect(result).toContain('export const userRelations = relations(user,')
-      expect(result).toContain('many')
-      expect(result).toContain('posts: many(post)')
-      expect(result).toContain('export const postRelations = relations(post,')
-      expect(result).toContain('one')
-      expect(result).toContain('author: one(user,')
+      expect(result).toBe(
+        "import { integer, pgTable, serial, text } from 'drizzle-orm/pg-core'\nimport { relations } from 'drizzle-orm'\n\nexport const user = pgTable('user', { id: serial('id').primaryKey(), name: text('name').notNull(), email: text('email').notNull().unique() })\n\nexport const post = pgTable('post', { id: serial('id').primaryKey(), title: text('title').notNull(), userId: integer('userId').notNull() })\n\nexport const userRelations = relations(user, ({ many }) => ({ posts: many(post) }))\n\nexport const postRelations = relations(post, ({ one }) => ({ author: one(user, { fields: [post.userId], references: [user.id] }) }))",
+      )
     })
   })
 
@@ -156,16 +123,9 @@ describe('drizzleSchema', () => {
 
       const result = drizzleSchema(datamodel, 'sqlite', [])
 
-      expect(result).toContain("from 'drizzle-orm/sqlite-core'")
-      expect(result).toContain('sqliteTable')
-      expect(result).toContain("export const user = sqliteTable('user'")
-      // SQLite autoincrement uses primaryKey({ autoIncrement: true })
-      expect(result).toContain("id: integer('id').primaryKey({ autoIncrement: true })")
-      expect(result).toContain("name: text('name').notNull()")
-      // SQLite Boolean maps to integer({ mode: 'boolean' })
-      expect(result).toContain("active: integer('active', { mode: 'boolean' }).notNull()")
-      // SQLite DateTime maps to integer({ mode: 'timestamp' })
-      expect(result).toContain("createdAt: integer('createdAt', { mode: 'timestamp' }).notNull()")
+      expect(result).toBe(
+        "import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'\n\nexport const user = sqliteTable('user', { id: integer('id').primaryKey({ autoIncrement: true }), name: text('name').notNull(), active: integer('active', { mode: 'boolean' }).notNull(), createdAt: integer('createdAt', { mode: 'timestamp' }).notNull() })",
+      )
     })
   })
 
@@ -193,11 +153,9 @@ describe('drizzleSchema', () => {
 
       const result = drizzleSchema(datamodel, 'mysql', [])
 
-      expect(result).toContain("from 'drizzle-orm/mysql-core'")
-      expect(result).toContain('mysqlTable')
-      expect(result).toContain("export const user = mysqlTable('user'")
-      expect(result).toContain("id: int('id').primaryKey().autoincrement()")
-      expect(result).toContain("name: text('name').notNull()")
+      expect(result).toBe(
+        "import { int, mysqlTable, text } from 'drizzle-orm/mysql-core'\n\nexport const user = mysqlTable('user', { id: int('id').primaryKey().autoincrement(), name: text('name').notNull() })",
+      )
     })
   })
 
@@ -237,8 +195,9 @@ describe('drizzleSchema', () => {
 
       const result = drizzleSchema(datamodel, 'postgresql', [])
 
-      expect(result).toContain('pgEnum')
-      expect(result).toContain("pgEnum('Role', ['ADMIN', 'USER'])")
+      expect(result).toBe(
+        "import { pgEnum, pgTable, serial } from 'drizzle-orm/pg-core'\n\nexport const user = pgTable('user', { id: serial('id').primaryKey(), role: pgEnum('Role', ['ADMIN', 'USER'])('role').notNull() })",
+      )
     })
 
     it('should generate SQLite enum as text with enum option', () => {
@@ -272,7 +231,9 @@ describe('drizzleSchema', () => {
 
       const result = drizzleSchema(datamodel, 'sqlite', [])
 
-      expect(result).toContain("text('role', { enum: ['ADMIN', 'USER'] })")
+      expect(result).toBe(
+        "import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'\n\nexport const user = sqliteTable('user', { id: integer('id').primaryKey({ autoIncrement: true }), role: text('role', { enum: ['ADMIN', 'USER'] }).notNull() })",
+      )
     })
   })
 
@@ -301,11 +262,9 @@ describe('drizzleSchema', () => {
 
       const result = drizzleSchema(datamodel, 'postgresql', [])
 
-      // Optional fields should not have .notNull()
-      expect(result).toContain("bio: text('bio')")
-      expect(result).not.toContain("bio: text('bio').notNull()")
-      expect(result).toContain("age: integer('age')")
-      expect(result).not.toContain("age: integer('age').notNull()")
+      expect(result).toBe(
+        "import { integer, pgTable, serial, text } from 'drizzle-orm/pg-core'\n\nexport const profile = pgTable('profile', { id: serial('id').primaryKey(), bio: text('bio'), age: integer('age') })",
+      )
     })
   })
 
@@ -338,7 +297,9 @@ describe('drizzleSchema', () => {
 
       const result = drizzleSchema(datamodel, 'postgresql', [])
 
-      expect(result).toContain(".default('en')")
+      expect(result).toBe(
+        "import { pgTable, serial, text } from 'drizzle-orm/pg-core'\n\nexport const config = pgTable('config', { id: serial('id').primaryKey(), locale: text('locale').notNull().default('en') })",
+      )
     })
 
     it('should handle now() default on PostgreSQL', () => {
@@ -365,7 +326,9 @@ describe('drizzleSchema', () => {
 
       const result = drizzleSchema(datamodel, 'postgresql', [])
 
-      expect(result).toContain('.defaultNow()')
+      expect(result).toBe(
+        "import { pgTable, serial, timestamp } from 'drizzle-orm/pg-core'\n\nexport const event = pgTable('event', { id: serial('id').primaryKey(), createdAt: timestamp('createdAt').notNull().defaultNow() })",
+      )
     })
 
     it('should handle now() default on SQLite with sql`(unixepoch())`', () => {
@@ -392,7 +355,9 @@ describe('drizzleSchema', () => {
 
       const result = drizzleSchema(datamodel, 'sqlite', [])
 
-      expect(result).toContain('sql`(unixepoch())`')
+      expect(result).toBe(
+        "import { integer, sqliteTable } from 'drizzle-orm/sqlite-core'\nimport { sql } from 'drizzle-orm'\n\nexport const event = sqliteTable('event', { id: integer('id').primaryKey({ autoIncrement: true }), createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`) })",
+      )
     })
 
     it('should handle numeric default', () => {
@@ -419,7 +384,9 @@ describe('drizzleSchema', () => {
 
       const result = drizzleSchema(datamodel, 'postgresql', [])
 
-      expect(result).toContain('.default(0)')
+      expect(result).toBe(
+        "import { integer, pgTable, serial } from 'drizzle-orm/pg-core'\n\nexport const counter = pgTable('counter', { id: serial('id').primaryKey(), count: integer('count').notNull().default(0) })",
+      )
     })
 
     it('should handle boolean default', () => {
@@ -446,7 +413,9 @@ describe('drizzleSchema', () => {
 
       const result = drizzleSchema(datamodel, 'postgresql', [])
 
-      expect(result).toContain('.default(false)')
+      expect(result).toBe(
+        "import { boolean, pgTable, serial } from 'drizzle-orm/pg-core'\n\nexport const feature = pgTable('feature', { id: serial('id').primaryKey(), enabled: boolean('enabled').notNull().default(false) })",
+      )
     })
   })
 })

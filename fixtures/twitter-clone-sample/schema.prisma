@@ -54,6 +54,16 @@ generator Hekireki-Drizzle {
   output   = "drizzle"
 }
 
+generator Hekireki-TypeBox {
+  provider = "hekireki-typebox"
+  output   = "typebox"
+}
+
+generator Hekireki-AJV {
+  provider = "hekireki-ajv"
+  output   = "ajv"
+}
+
 model User {
   /// Unique identifier for the user
   /// @z.uuid()

@@ -1,8 +1,15 @@
-import type { DMMF, GeneratorOptions } from '@prisma/generator-helper'
 import { groupByModel, isFields } from '../utils/index.js'
 
 export function collectRelationProps(
-  models: readonly DMMF.Model[],
+  models: readonly {
+    readonly name: string
+    readonly fields: readonly {
+      readonly name: string
+      readonly type: string
+      readonly kind: string
+      readonly isList: boolean
+    }[]
+  }[],
 ): readonly { model: string; key: string; targetModel: string; isMany: boolean }[] {
   return models.flatMap((m) =>
     m.fields
@@ -12,10 +19,36 @@ export function collectRelationProps(
 }
 
 export function makeRelationsOnly(
-  dmmf: GeneratorOptions['dmmf'],
+  dmmf: {
+    readonly datamodel: {
+      readonly models: readonly {
+        readonly name: string
+        readonly documentation?: string
+        readonly fields: readonly {
+          readonly name: string
+          readonly type: string
+          readonly kind: string
+          readonly documentation?: string
+          readonly isRequired: boolean
+          readonly isList: boolean
+        }[]
+      }[]
+    }
+  },
   includeType: boolean,
   makeRelations: (
-    model: DMMF.Model,
+    model: {
+      readonly name: string
+      readonly documentation?: string
+      readonly fields: readonly {
+        readonly name: string
+        readonly type: string
+        readonly kind: string
+        readonly documentation?: string
+        readonly isRequired: boolean
+        readonly isList: boolean
+      }[]
+    },
     relProps: readonly {
       readonly key: string
       readonly targetModel: string
@@ -46,8 +79,19 @@ export function makeRelationsOnly(
 /**
  * Creates validation schemas for models.
  */
-export function validationSchemas<T extends DMMF.Model>(
-  models: readonly T[],
+export function validationSchemas(
+  models: readonly {
+    readonly name: string
+    readonly documentation?: string
+    readonly fields: readonly {
+      readonly name: string
+      readonly type: string
+      readonly kind: string
+      readonly documentation?: string
+      readonly isRequired: boolean
+      readonly isList: boolean
+    }[]
+  }[],
   type: boolean,
   comment: boolean,
   config: {
@@ -67,8 +111,11 @@ export function validationSchemas<T extends DMMF.Model>(
       }[],
       comment: boolean,
     ) => string
-    readonly typeMapping?: Record<string, string>
-    readonly enums?: readonly DMMF.DatamodelEnum[]
+    readonly typeMapping?: { [k: string]: string }
+    readonly enums?: readonly {
+      readonly name: string
+      readonly values: readonly { readonly name: string }[]
+    }[]
     readonly formatEnum?: (values: readonly string[]) => string
   },
 ): string {
@@ -78,7 +125,11 @@ export function validationSchemas<T extends DMMF.Model>(
     fields: model.fields,
   }))
 
-  const resolveValidation = (field: DMMF.Field): string | null => {
+  const resolveValidation = (field: {
+    readonly type: string
+    readonly kind: string
+    readonly documentation?: string
+  }): string | null => {
     const annotation = config.extractValidation(field.documentation)
     if (annotation !== null) return annotation
     if (config.typeMapping) {
@@ -128,11 +179,9 @@ export function validationSchemas<T extends DMMF.Model>(
     inferType: type ? config.inferType(fields[0].modelName) : '',
   }))
 
-  return [
-    config.importStatement,
-    '',
-    schemaResults
-      .flatMap(({ schema, inferType }) => [schema, inferType].filter(Boolean))
-      .join('\n\n'),
-  ].join('\n')
+  const schemas = schemaResults
+    .flatMap(({ schema, inferType }) => [schema, inferType].filter(Boolean))
+    .join('\n\n')
+
+  return config.importStatement ? [config.importStatement, '', schemas].join('\n') : schemas
 }

@@ -1,7 +1,7 @@
 {
   "name": "hekireki",
   "type": "module",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "license": "MIT",
   "description": "Hekireki is a tool that generates validation schemas for Zod, Valibot, ArkType, and Effect Schema, as well as ER diagrams and DBML, from Prisma schemas annotated with comments.",
   "keywords": [
@@ -13,6 +13,9 @@
     "mermaid",
     "ecto",
     "dbml",
+    "typebox",
+    "ajv",
+    "json-schema",
     "docs",
     "documentation"
   ],
@@ -40,7 +43,9 @@
     "hekireki-effect": "dist/generator/effect/index.js",
     "hekireki-dbml": "dist/generator/dbml/index.js",
     "hekireki-docs": "dist/generator/docs/index.js",
-    "hekireki-drizzle": "dist/generator/drizzle/index.js"
+    "hekireki-drizzle": "dist/generator/drizzle/index.js",
+    "hekireki-typebox": "dist/generator/typebox/index.js",
+    "hekireki-ajv": "dist/generator/ajv/index.js"
   },
   "scripts": {
     "generate": "prisma generate",
@@ -72,6 +77,9 @@
     "typescript": "^5.9.3",
     "valibot": "1.2.0",
     "vitest": "^4.0.18",
+    "@sinclair/typebox": "^0.34.33",
+    "ajv": "^8.17.1",
+    "json-schema-to-ts": "^3.1.1",
     "zod": "^4.3.6"
   }
 }

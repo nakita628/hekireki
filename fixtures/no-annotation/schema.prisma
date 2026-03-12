@@ -52,6 +52,20 @@ generator Hekireki-Drizzle {
     output   = "drizzle"
 }
 
+generator Hekireki-TypeBox {
+    provider = "hekireki-typebox"
+    output   = "typebox"
+    type     = true
+    relation = true
+}
+
+generator Hekireki-AJV {
+    provider = "hekireki-ajv"
+    output   = "ajv"
+    type     = true
+    relation = true
+}
+
 generator Hekireki-Ecto {
     provider = "hekireki-ecto"
     output   = "schema"

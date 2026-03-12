@@ -1,20 +1,33 @@
-import type { DMMF } from '@prisma/generator-helper'
 import {
-  makeAnnotationExtractor,
-  makeJsDoc,
   makePropertiesGenerator,
   makeValidationExtractor,
-  makeZodCardinality,
-  makeZodEnumExpression,
-  makeZodInfer,
-  makeZodObject,
-  makeZodSchema,
   parseDocumentWithoutAnnotations,
   schemaFromFields,
 } from '../utils/index.js'
 import { validationSchemas } from './prisma.js'
 
-export const PRISMA_TO_ZOD: Record<string, string> = {
+// ============================================================================
+// Zod Helpers
+// ============================================================================
+
+export function makeZodInfer(
+  modelName: string,
+): `export type ${string} = z.infer<typeof ${string}Schema>` {
+  return `export type ${modelName} = z.infer<typeof ${modelName}Schema>`
+}
+
+export function makeZodSchema(
+  modelName: string,
+  fields: string,
+): `export const ${string}Schema = z.object({\n${string}\n})` {
+  return `export const ${modelName}Schema = z.object({\n${fields}\n})`
+}
+
+export function makeZodEnumExpression(values: readonly string[]): `enum([${string}])` {
+  return `enum([${values.map((v) => `'${v}'`).join(', ')}])`
+}
+
+export const PRISMA_TO_ZOD: { [k: string]: string } = {
   String: 'string()',
   Int: 'number()',
   Float: 'number()',
@@ -47,31 +60,8 @@ export function makeZodSchemas(
   )
 }
 
-const zPrim = (f: DMMF.Field): string => {
-  const extractor = makeAnnotationExtractor('@z.')
-  const anno = extractor(f.documentation ?? '')
-  return makeZodCardinality(`z.${anno}`, f.isList, f.isRequired)
-}
-
-export function makeZodModel(
-  model: DMMF.Model,
-): `export const ${string}Schema = ${string}\n\nexport type ${string} = z.infer<typeof ${string}Schema>` {
-  const fields = model.fields
-    .filter((f) => f.kind !== 'object')
-    .map((f) => `${makeJsDoc(f.documentation, ['@z.', '@v.'])}  ${f.name}: ${zPrim(f)},`)
-    .join('\n')
-
-  const extractor = makeAnnotationExtractor('@z.')
-  const anno = model.documentation ? extractor(model.documentation) : null
-  const wrapperType =
-    anno === 'strictObject' ? 'strictObject' : anno === 'looseObject' ? 'looseObject' : 'object'
-  const objectDef = makeZodObject(fields, wrapperType)
-
-  return `export const ${model.name}Schema = ${objectDef}\n\nexport type ${model.name} = z.infer<typeof ${model.name}Schema>`
-}
-
 export function makeZodRelations(
-  model: DMMF.Model,
+  model: { readonly name: string },
   relProps: readonly {
     readonly key: string
     readonly targetModel: string
@@ -88,20 +78,32 @@ export function makeZodRelations(
     )
     .join('\n')
 
-  const fields = `${base}\n${rels}`
-
   const typeLine = options?.includeType
     ? `\n\nexport type ${model.name}Relations = z.infer<typeof ${model.name}RelationsSchema>`
     : ''
-  return `export const ${model.name}RelationsSchema = z.object({\n${fields}\n})${typeLine}`
+  return `export const ${model.name}RelationsSchema = z.object({\n${base}\n${rels}\n})${typeLine}`
 }
 
 export function zod(
-  models: readonly DMMF.Model[],
+  models: readonly {
+    readonly name: string
+    readonly documentation?: string
+    readonly fields: readonly {
+      readonly name: string
+      readonly type: string
+      readonly kind: string
+      readonly documentation?: string
+      readonly isRequired: boolean
+      readonly isList: boolean
+    }[]
+  }[],
   type: boolean,
   comment: boolean,
   zodVersion?: string | string[],
-  enums?: readonly DMMF.DatamodelEnum[],
+  enums?: readonly {
+    readonly name: string
+    readonly values: readonly { readonly name: string }[]
+  }[],
 ): string {
   const importStatement =
     zodVersion === 'mini'

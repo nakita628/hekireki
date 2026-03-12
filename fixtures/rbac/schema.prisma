@@ -47,6 +47,22 @@ generator Hekireki-Drizzle {
     output   = "drizzle"
 }
 
+generator Hekireki-TypeBox {
+    provider = "hekireki-typebox"
+    output   = "typebox"
+    type     = true
+    comment  = true
+    relation = true
+}
+
+generator Hekireki-AJV {
+    provider = "hekireki-ajv"
+    output   = "ajv"
+    type     = true
+    comment  = true
+    relation = true
+}
+
 enum OrgStatus {
     ACTIVE
     INACTIVE

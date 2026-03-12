@@ -11,6 +11,8 @@ export const UserSchema = type({
   name: '1 <= string <= 100',
   /** Profile image URL */
   avatarUrl: 'string.url | null',
+  /** User role */
+  role: "'ADMIN' | 'USER' | 'GUEST'",
   /** Email verification status */
   emailVerified: 'boolean',
   /** Account active status */
@@ -30,6 +32,8 @@ export const OAuthAccountSchema = type({
   id: 'string.uuid',
   /** User ID */
   userId: 'string.uuid',
+  /** OAuth provider */
+  provider: "'GOOGLE' | 'GITHUB' | 'FACEBOOK' | 'TWITTER' | 'APPLE'",
   /** Provider account ID */
   providerAccountId: 'string',
   /** Access token from provider */
@@ -51,6 +55,8 @@ export const TwoFactorSettingSchema = type({
   userId: 'string.uuid',
   /** 2FA enabled status */
   enabled: 'boolean',
+  /** 2FA method */
+  method: "'TOTP' | 'SMS' | 'EMAIL'",
   /** TOTP secret (encrypted) */
   totpSecret: 'string | null',
   /** Phone number for SMS (E.164 format) */

@@ -45,6 +45,20 @@ generator Hekireki-Drizzle {
   output   = "drizzle"
 }
 
+generator Hekireki-TypeBox {
+  provider = "hekireki-typebox"
+  output   = "typebox"
+  type     = true
+  comment  = true
+}
+
+generator Hekireki-AJV {
+  provider = "hekireki-ajv"
+  output   = "ajv"
+  type     = true
+  comment  = true
+}
+
 enum UserRole {
   ADMIN
   USER

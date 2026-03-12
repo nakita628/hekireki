@@ -1,5 +1,45 @@
+import type { DMMF } from '@prisma/generator-helper'
 import { describe, expect, it } from 'vitest'
-import { makeRelationLine, makeRelationLineFromRelation } from './mermaid-er.js'
+import {
+  erContent,
+  extractRelations,
+  extractRelationsFromDmmf,
+  isRelationshipType,
+  makeRelationLine,
+  makeRelationLineFromRelation,
+  modelFields,
+  modelInfo,
+  parseRelation,
+  removeDuplicateRelations,
+} from './mermaid-er.js'
+
+function makeModel(overrides: Partial<DMMF.Model> & { name: string }): DMMF.Model {
+  return {
+    dbName: null,
+    fields: [],
+    uniqueFields: [],
+    uniqueIndexes: [],
+    primaryKey: null,
+    isGenerated: false,
+    schema: null,
+    ...overrides,
+  }
+}
+
+function makeField(overrides: Partial<DMMF.Field> & { name: string; type: string }): DMMF.Field {
+  return {
+    kind: 'scalar',
+    isList: false,
+    isRequired: true,
+    isUnique: false,
+    isId: false,
+    isReadOnly: false,
+    isGenerated: false,
+    isUpdatedAt: false,
+    hasDefaultValue: false,
+    ...overrides,
+  }
+}
 
 describe('helper/mermaid-er', () => {
   describe('makeRelationLine', () => {
@@ -78,6 +118,360 @@ describe('helper/mermaid-er', () => {
       if (!result.ok) {
         expect(result.error).toBe('Invalid input format: unknown-type')
       }
+    })
+  })
+
+  describe('isRelationshipType', () => {
+    it('returns true for valid types', () => {
+      expect(isRelationshipType('zero-one')).toBe(true)
+      expect(isRelationshipType('one')).toBe(true)
+      expect(isRelationshipType('zero-many')).toBe(true)
+      expect(isRelationshipType('many')).toBe(true)
+    })
+    it('returns false for invalid', () => {
+      expect(isRelationshipType('invalid-key')).toBe(false)
+    })
+  })
+
+  describe('parseRelation', () => {
+    it('one-to-one', () => {
+      expect(parseRelation('@relation User.id Profile.user_id one-to-one')).toStrictEqual({
+        fromModel: 'User',
+        toModel: 'Profile',
+        fromField: 'id',
+        toField: 'user_id',
+        type: 'one-to-one',
+      })
+    })
+    it('one-to-many', () => {
+      expect(parseRelation('@relation Team.id TeamMember.team_id one-to-many')).toStrictEqual({
+        fromModel: 'Team',
+        toModel: 'TeamMember',
+        fromField: 'id',
+        toField: 'team_id',
+        type: 'one-to-many',
+      })
+    })
+    it('returns null for invalid format', () => {
+      expect(parseRelation('@relation User.id Settings.user_id one-to-one-optional')).toBeNull()
+    })
+  })
+
+  describe('removeDuplicateRelations', () => {
+    it('removes duplicates', () => {
+      expect(
+        removeDuplicateRelations([
+          '    Post }o--|| User : "PK(authorId) <- FK(id)"',
+          '    Post }o--|| User : "PK(authorId) <- FK(id)"',
+        ]),
+      ).toStrictEqual(['    Post }o--|| User : "PK(authorId) <- FK(id)"'])
+    })
+    it('keeps unique relations', () => {
+      const input = [
+        '    User ||--o{ Post : "(id) - (userId)"',
+        '    User ||--o{ Comment : "(id) - (userId)"',
+      ]
+      expect(removeDuplicateRelations(input)).toStrictEqual(input)
+    })
+    it('handles empty', () => {
+      expect(removeDuplicateRelations([])).toStrictEqual([])
+    })
+  })
+
+  describe('modelFields', () => {
+    it('generates field lines with PK marker', () => {
+      const model = makeModel({
+        name: 'User',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({ name: 'name', type: 'String' }),
+        ],
+      })
+      const result = modelFields(model)
+      expect(result).toStrictEqual(['        int id PK', '        string name'])
+    })
+
+    it('marks FK fields from relation', () => {
+      const model = makeModel({
+        name: 'Post',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({ name: 'userId', type: 'Int' }),
+          makeField({
+            name: 'author',
+            type: 'User',
+            kind: 'object',
+            relationName: 'PostToUser',
+            relationFromFields: ['userId'],
+            relationToFields: ['id'],
+          }),
+        ],
+      })
+      const result = modelFields(model)
+      expect(result).toStrictEqual(['        int id PK', '        int userId FK'])
+    })
+
+    it('skips relation fields', () => {
+      const model = makeModel({
+        name: 'User',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({
+            name: 'posts',
+            type: 'Post',
+            kind: 'object',
+            isList: true,
+            relationName: 'PostToUser',
+          }),
+        ],
+      })
+      const result = modelFields(model)
+      expect(result).toStrictEqual(['        int id PK'])
+    })
+
+    it('includes stripped documentation as comment', () => {
+      const model = makeModel({
+        name: 'User',
+        fields: [
+          makeField({
+            name: 'email',
+            type: 'String',
+            documentation: 'Email address\n@z.email()',
+          }),
+        ],
+      })
+      const result = modelFields(model)
+      expect(result).toStrictEqual(['        string email "Email address"'])
+    })
+
+    it('handles field with no documentation', () => {
+      const model = makeModel({
+        name: 'User',
+        fields: [makeField({ name: 'age', type: 'Int' })],
+      })
+      const result = modelFields(model)
+      expect(result).toStrictEqual(['        int age'])
+    })
+  })
+
+  describe('modelInfo', () => {
+    it('wraps fields with model name braces', () => {
+      const model = makeModel({
+        name: 'User',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({ name: 'name', type: 'String' }),
+        ],
+      })
+      const result = modelInfo(model)
+      expect(result).toStrictEqual([
+        '    User {',
+        '        int id PK',
+        '        string name',
+        '    }',
+      ])
+    })
+
+    it('handles model with no fields', () => {
+      const model = makeModel({ name: 'Empty' })
+      const result = modelInfo(model)
+      expect(result).toStrictEqual(['    Empty {', '    }'])
+    })
+  })
+
+  describe('extractRelationsFromDmmf', () => {
+    it('extracts one-to-many relation', () => {
+      const models = [
+        makeModel({
+          name: 'User',
+          fields: [
+            makeField({ name: 'id', type: 'Int', isId: true }),
+            makeField({
+              name: 'posts',
+              type: 'Post',
+              kind: 'object',
+              isList: true,
+              relationName: 'PostToUser',
+            }),
+          ],
+        }),
+        makeModel({
+          name: 'Post',
+          fields: [
+            makeField({ name: 'id', type: 'Int', isId: true }),
+            makeField({ name: 'userId', type: 'Int' }),
+            makeField({
+              name: 'author',
+              type: 'User',
+              kind: 'object',
+              relationName: 'PostToUser',
+              relationFromFields: ['userId'],
+              relationToFields: ['id'],
+            }),
+          ],
+        }),
+      ]
+      const result = extractRelationsFromDmmf(models)
+      expect(result).toStrictEqual(['    User ||--}| Post : "(id) - (userId)"'])
+    })
+
+    it('extracts optional relation (zero-many)', () => {
+      const models = [
+        makeModel({
+          name: 'User',
+          fields: [
+            makeField({ name: 'id', type: 'Int', isId: true }),
+            makeField({
+              name: 'posts',
+              type: 'Post',
+              kind: 'object',
+              isList: true,
+              relationName: 'PostToUser',
+            }),
+          ],
+        }),
+        makeModel({
+          name: 'Post',
+          fields: [
+            makeField({ name: 'id', type: 'Int', isId: true }),
+            makeField({ name: 'userId', type: 'Int' }),
+            makeField({
+              name: 'author',
+              type: 'User',
+              kind: 'object',
+              isRequired: false,
+              relationName: 'PostToUser',
+              relationFromFields: ['userId'],
+              relationToFields: ['id'],
+            }),
+          ],
+        }),
+      ]
+      const result = extractRelationsFromDmmf(models)
+      expect(result).toStrictEqual(['    User ||--}o Post : "(id) - (userId)"'])
+    })
+
+    it('returns empty for models with no relations', () => {
+      const models = [
+        makeModel({
+          name: 'Setting',
+          fields: [makeField({ name: 'id', type: 'Int', isId: true })],
+        }),
+      ]
+      expect(extractRelationsFromDmmf(models)).toStrictEqual([])
+    })
+  })
+
+  describe('extractRelations', () => {
+    it('extracts relations from model documentation', () => {
+      const model = makeModel({
+        name: 'User',
+        documentation: '@relation User.id Post.userId one-to-many',
+      })
+      const result = extractRelations(model)
+      expect(result).toStrictEqual(['    User ||--}| Post : "(id) - (userId)"'])
+    })
+
+    it('extracts multiple relations', () => {
+      const model = makeModel({
+        name: 'User',
+        documentation:
+          '@relation User.id Post.userId one-to-many\n@relation User.id Profile.userId one-to-one',
+      })
+      const result = extractRelations(model)
+      expect(result).toStrictEqual([
+        '    User ||--}| Post : "(id) - (userId)"',
+        '    User ||--|| Profile : "(id) - (userId)"',
+      ])
+    })
+
+    it('returns empty when no documentation', () => {
+      const model = makeModel({ name: 'User' })
+      expect(extractRelations(model)).toStrictEqual([])
+    })
+
+    it('skips invalid lines', () => {
+      const model = makeModel({
+        name: 'User',
+        documentation: 'Some comment\n@relation User.id Post.userId one-to-many',
+      })
+      const result = extractRelations(model)
+      expect(result).toStrictEqual(['    User ||--}| Post : "(id) - (userId)"'])
+    })
+  })
+
+  describe('erContent', () => {
+    it('generates complete ER diagram', () => {
+      const models = [
+        makeModel({
+          name: 'User',
+          fields: [
+            makeField({ name: 'id', type: 'Int', isId: true }),
+            makeField({ name: 'name', type: 'String' }),
+            makeField({
+              name: 'posts',
+              type: 'Post',
+              kind: 'object',
+              isList: true,
+              relationName: 'PostToUser',
+            }),
+          ],
+        }),
+        makeModel({
+          name: 'Post',
+          fields: [
+            makeField({ name: 'id', type: 'Int', isId: true }),
+            makeField({ name: 'title', type: 'String' }),
+            makeField({ name: 'userId', type: 'Int' }),
+            makeField({
+              name: 'author',
+              type: 'User',
+              kind: 'object',
+              relationName: 'PostToUser',
+              relationFromFields: ['userId'],
+              relationToFields: ['id'],
+            }),
+          ],
+        }),
+      ]
+      const result = erContent(models)
+      expect(result).toStrictEqual([
+        '```mermaid',
+        'erDiagram',
+        '    User ||--}| Post : "(id) - (userId)"',
+        '    User {',
+        '        int id PK',
+        '        string name',
+        '    }',
+        '    Post {',
+        '        int id PK',
+        '        string title',
+        '        int userId FK',
+        '    }',
+        '```',
+      ])
+    })
+
+    it('generates ER diagram with no relations', () => {
+      const models = [
+        makeModel({
+          name: 'Setting',
+          fields: [
+            makeField({ name: 'id', type: 'Int', isId: true }),
+            makeField({ name: 'key', type: 'String' }),
+          ],
+        }),
+      ]
+      const result = erContent(models)
+      expect(result).toStrictEqual([
+        '```mermaid',
+        'erDiagram',
+        '    Setting {',
+        '        int id PK',
+        '        string key',
+        '    }',
+        '```',
+      ])
     })
   })
 })

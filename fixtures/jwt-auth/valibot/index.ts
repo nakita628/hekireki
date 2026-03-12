@@ -12,7 +12,7 @@ export const UserSchema = v.object({
   /**
    * Hashed password (null for OAuth-only users)
    */
-  passwordHash: v.nullish(v.pipe(v.string(), v.minLength(8))),
+  passwordHash: v.exactOptional(v.nullish(v.pipe(v.string(), v.minLength(8)))),
   /**
    * Display name
    */
@@ -20,7 +20,11 @@ export const UserSchema = v.object({
   /**
    * Profile image URL
    */
-  avatarUrl: v.nullish(v.pipe(v.string(), v.url())),
+  avatarUrl: v.exactOptional(v.nullish(v.pipe(v.string(), v.url()))),
+  /**
+   * User role
+   */
+  role: v.picklist(['ADMIN', 'USER', 'GUEST']),
   /**
    * Email verification status
    */
@@ -40,7 +44,7 @@ export const UserSchema = v.object({
   /**
    * Last login timestamp
    */
-  lastLoginAt: v.nullish(v.pipe(v.string(), v.isoTimestamp())),
+  lastLoginAt: v.exactOptional(v.nullish(v.pipe(v.string(), v.isoTimestamp()))),
 })
 
 export type User = v.InferInput<typeof UserSchema>
@@ -55,21 +59,25 @@ export const OAuthAccountSchema = v.object({
    */
   userId: v.pipe(v.string(), v.uuid()),
   /**
+   * OAuth provider
+   */
+  provider: v.picklist(['GOOGLE', 'GITHUB', 'FACEBOOK', 'TWITTER', 'APPLE']),
+  /**
    * Provider account ID
    */
   providerAccountId: v.string(),
   /**
    * Access token from provider
    */
-  accessToken: v.nullish(v.string()),
+  accessToken: v.exactOptional(v.nullish(v.string())),
   /**
    * Refresh token from provider
    */
-  refreshToken: v.nullish(v.string()),
+  refreshToken: v.exactOptional(v.nullish(v.string())),
   /**
    * Token expiration timestamp
    */
-  expiresAt: v.nullish(v.pipe(v.string(), v.isoTimestamp())),
+  expiresAt: v.exactOptional(v.nullish(v.pipe(v.string(), v.isoTimestamp()))),
   /**
    * Account creation timestamp
    */
@@ -92,21 +100,25 @@ export const TwoFactorSettingSchema = v.object({
    */
   enabled: v.boolean(),
   /**
+   * 2FA method
+   */
+  method: v.exactOptional(v.picklist(['TOTP', 'SMS', 'EMAIL'])),
+  /**
    * TOTP secret (encrypted)
    */
-  totpSecret: v.nullish(v.string()),
+  totpSecret: v.exactOptional(v.nullish(v.string())),
   /**
    * Phone number for SMS (E.164 format)
    */
-  phoneNumber: v.nullish(v.string()),
+  phoneNumber: v.exactOptional(v.nullish(v.string())),
   /**
    * Backup codes (hashed, JSON array)
    */
-  backupCodes: v.nullish(v.string()),
+  backupCodes: v.exactOptional(v.nullish(v.string())),
   /**
    * Last verified timestamp
    */
-  verifiedAt: v.nullish(v.pipe(v.string(), v.isoTimestamp())),
+  verifiedAt: v.exactOptional(v.nullish(v.pipe(v.string(), v.isoTimestamp()))),
   /**
    * Creation timestamp
    */
@@ -135,11 +147,11 @@ export const RefreshTokenSchema = v.object({
   /**
    * Device/client identifier
    */
-  deviceInfo: v.nullish(v.string()),
+  deviceInfo: v.exactOptional(v.nullish(v.string())),
   /**
    * IP address at creation
    */
-  ipAddress: v.nullish(v.string()),
+  ipAddress: v.exactOptional(v.nullish(v.string())),
   /**
    * Token expiration timestamp
    */
