@@ -5,7 +5,9 @@ import { validationSchemas } from './prisma.js'
 // AJV (JSON Schema) Helpers
 // ============================================================================
 
-export function makeAjvInfer(modelName: string): string {
+export function makeAjvInfer(
+  modelName: string,
+): `export type ${string} = FromSchema<typeof ${string}Schema>` {
   return `export type ${modelName} = FromSchema<typeof ${modelName}Schema>`
 }
 
@@ -31,7 +33,9 @@ export function makeAjvProperties(
     .join('\n')
 }
 
-export function makeAjvEnumExpression(values: readonly string[]): string {
+export function makeAjvEnumExpression(
+  values: readonly string[],
+): `{ enum: [${string}] as const }` {
   return `{ enum: [${values.map((v) => `'${v}'`).join(', ')}] as const }`
 }
 
@@ -57,7 +61,7 @@ export function makeAjvSchemas(
     readonly comment: readonly string[]
   }[],
   comment: boolean,
-): string {
+): `export const ${string}Schema = {\n${string}\n} as const` {
   const modelName = modelFields[0].modelName
   const properties = makeAjvProperties(modelFields, comment)
   const requiredFields = modelFields.filter((f) => f.isRequired).map((f) => f.fieldName)
@@ -76,7 +80,7 @@ export function makeAjvRelations(
     readonly isMany: boolean
   }[],
   options?: { readonly includeType?: boolean },
-): string | null {
+): `export const ${string}RelationsSchema = {\n${string}\n} as const${string}` | null {
   if (relProps.length === 0) return null
   const base = `    ...${model.name}Schema.properties,`
   const rels = relProps

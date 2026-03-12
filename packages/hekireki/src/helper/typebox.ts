@@ -9,7 +9,9 @@ import { validationSchemas } from './prisma.js'
 // TypeBox Helpers
 // ============================================================================
 
-export function makeTypeBoxInfer(modelName: string): string {
+export function makeTypeBoxInfer(
+  modelName: string,
+): `export type ${string} = Static<typeof ${string}Schema>` {
   return `export type ${modelName} = Static<typeof ${modelName}Schema>`
 }
 
@@ -44,7 +46,9 @@ export function makeTypeBoxProperties(
     .join('\n')
 }
 
-export function makeTypeBoxEnumExpression(values: readonly string[]): string {
+export function makeTypeBoxEnumExpression(
+  values: readonly string[],
+): `Type.Union([${string}])` {
   return `Type.Union([${values.map((v) => `Type.Literal('${v}')`).join(', ')}])`
 }
 
@@ -82,7 +86,7 @@ export function makeTypeBoxRelations(
     readonly isMany: boolean
   }[],
   options?: { readonly includeType?: boolean },
-): string | null {
+): `export const ${string}RelationsSchema = Type.Object({\n${string}\n})${string}` | null {
   if (relProps.length === 0) return null
   const base = `  ...${model.name}Schema.properties,`
   const rels = relProps
