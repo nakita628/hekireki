@@ -16,11 +16,16 @@ export function makeValibotInfer(
   return `export type ${modelName} = v.InferInput<typeof ${modelName}Schema>`
 }
 
-export function makeValibotSchema(modelName: string, fields: string) {
+export function makeValibotSchema(
+  modelName: string,
+  fields: string,
+): `export const ${string}Schema = v.object({\n${string}\n})` {
   return `export const ${modelName}Schema = v.object({\n${fields}\n})`
 }
 
-export function makeValibotEnumExpression(values: readonly string[]): string {
+export function makeValibotEnumExpression(
+  values: readonly string[],
+): `picklist([${string}])` {
   return `picklist([${values.map((v) => `'${v}'`).join(', ')}])`
 }
 
@@ -75,12 +80,10 @@ export function makeValibotRelations(
     )
     .join('\n')
 
-  const fields = `${base}\n${rels}`
-
   const typeLine = options?.includeType
     ? `\n\nexport type ${model.name}Relations = v.InferInput<typeof ${model.name}RelationsSchema>`
     : ''
-  return `export const ${model.name}RelationsSchema = v.object({\n${fields}\n})${typeLine}`
+  return `export const ${model.name}RelationsSchema = v.object({\n${base}\n${rels}\n})${typeLine}`
 }
 
 export function valibot(

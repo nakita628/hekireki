@@ -96,7 +96,16 @@ export function makePropertiesGenerator(
       .filter((field) => field.validation)
       .map((field) => {
         const cleanLines = field.comment.filter(
-          (line) => !(line.includes('@relation') || line.includes('@v') || line.includes('@z')),
+          (line) =>
+            !(
+              line.includes('@relation') ||
+              line.includes('@z') ||
+              line.includes('@v') ||
+              line.includes('@a') ||
+              line.includes('@e') ||
+              line.includes('@t') ||
+              line.includes('@j')
+            ),
         )
 
         const docComment =

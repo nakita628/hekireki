@@ -11,28 +11,6 @@ export function makeAjvInfer(
   return `export type ${modelName} = FromSchema<typeof ${modelName}Schema>`
 }
 
-export function makeAjvProperties(
-  fields: readonly {
-    readonly documentation: string
-    readonly modelName: string
-    readonly fieldName: string
-    readonly validation: string | null
-    readonly isRequired: boolean
-    readonly comment: readonly string[]
-  }[],
-  comment: boolean,
-): string {
-  return fields
-    .map((field) => {
-      const commentLines =
-        comment && field.comment.length > 0
-          ? `${field.comment.map((c) => `    /** ${c} */`).join('\n')}\n`
-          : ''
-      return `${commentLines}    ${field.fieldName}: ${field.validation ?? "{ type: 'unknown' as const }"},`
-    })
-    .join('\n')
-}
-
 export function makeAjvEnumExpression(
   values: readonly string[],
 ): `{ enum: [${string}] as const }` {
@@ -63,7 +41,15 @@ export function makeAjvSchemas(
   comment: boolean,
 ): `export const ${string}Schema = {\n${string}\n} as const` {
   const modelName = modelFields[0].modelName
-  const properties = makeAjvProperties(modelFields, comment)
+  const properties = modelFields
+    .map((field) => {
+      const commentLines =
+        comment && field.comment.length > 0
+          ? `${field.comment.map((c) => `    /** ${c} */`).join('\n')}\n`
+          : ''
+      return `${commentLines}    ${field.fieldName}: ${field.validation ?? "{ type: 'unknown' as const }"},`
+    })
+    .join('\n')
   const requiredFields = modelFields.filter((f) => f.isRequired).map((f) => f.fieldName)
   const requiredLine =
     requiredFields.length > 0
@@ -90,12 +76,10 @@ export function makeAjvRelations(
     )
     .join('\n')
 
-  const fields = `${base}\n${rels}`
-
   const typeLine = options?.includeType
     ? `\n\nexport type ${model.name}Relations = FromSchema<typeof ${model.name}RelationsSchema>`
     : ''
-  return `export const ${model.name}RelationsSchema = {\n  type: 'object' as const,\n  properties: {\n${fields}\n  },\n  additionalProperties: false,\n} as const${typeLine}`
+  return `export const ${model.name}RelationsSchema = {\n  type: 'object' as const,\n  properties: {\n${base}\n${rels}\n  },\n  additionalProperties: false,\n} as const${typeLine}`
 }
 
 export function ajv(

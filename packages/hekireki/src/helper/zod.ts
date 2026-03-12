@@ -23,7 +23,9 @@ export function makeZodSchema(
   return `export const ${modelName}Schema = z.object({\n${fields}\n})`
 }
 
-export function makeZodEnumExpression(values: readonly string[]): string {
+export function makeZodEnumExpression(
+  values: readonly string[],
+): `enum([${string}])` {
   return `enum([${values.map((v) => `'${v}'`).join(', ')}])`
 }
 
@@ -78,12 +80,10 @@ export function makeZodRelations(
     )
     .join('\n')
 
-  const fields = `${base}\n${rels}`
-
   const typeLine = options?.includeType
     ? `\n\nexport type ${model.name}Relations = z.infer<typeof ${model.name}RelationsSchema>`
     : ''
-  return `export const ${model.name}RelationsSchema = z.object({\n${fields}\n})${typeLine}`
+  return `export const ${model.name}RelationsSchema = z.object({\n${base}\n${rels}\n})${typeLine}`
 }
 
 export function zod(

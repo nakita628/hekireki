@@ -9,7 +9,9 @@ import { validationSchemas } from './prisma.js'
 // Effect Helpers
 // ============================================================================
 
-export function makeEffectInfer(modelName: string): string {
+export function makeEffectInfer(
+  modelName: string,
+): `export type ${string} = Schema.Schema.Type<typeof ${string}Schema>` {
   return `export type ${modelName} = Schema.Schema.Type<typeof ${modelName}Schema>`
 }
 
@@ -42,7 +44,9 @@ export function makeEffectProperties(
     .join('\n')
 }
 
-export function makeEffectEnumExpression(values: readonly string[]): string {
+export function makeEffectEnumExpression(
+  values: readonly string[],
+): `Schema.Literal(${string})` {
   return `Schema.Literal(${values.map((v) => `'${v}'`).join(', ')})`
 }
 

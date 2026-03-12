@@ -9,7 +9,9 @@ import { validationSchemas } from './prisma.js'
 // ArkType Helpers
 // ============================================================================
 
-export function makeArktypeInfer(modelName: string): string {
+export function makeArktypeInfer(
+  modelName: string,
+): `export type ${string} = typeof ${string}Schema.infer` {
   return `export type ${modelName} = typeof ${modelName}Schema.infer`
 }
 
@@ -42,7 +44,9 @@ export function makeArktypeProperties(
     .join('\n')
 }
 
-export function makeArktypeEnumExpression(values: readonly string[]): string {
+export function makeArktypeEnumExpression(
+  values: readonly string[],
+): `"${string}"` {
   return `"${values.map((v) => `'${v}'`).join(' | ')}"`
 }
 
