@@ -11,9 +11,7 @@ export function makeAjvInfer(
   return `export type ${modelName} = FromSchema<typeof ${modelName}Schema>`
 }
 
-export function makeAjvEnumExpression(
-  values: readonly string[],
-): `{ enum: [${string}] as const }` {
+export function makeAjvEnumExpression(values: readonly string[]): `{ enum: [${string}] as const }` {
   return `{ enum: [${values.map((v) => `'${v}'`).join(', ')}] as const }`
 }
 

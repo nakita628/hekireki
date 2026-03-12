@@ -23,9 +23,7 @@ export function makeZodSchema(
   return `export const ${modelName}Schema = z.object({\n${fields}\n})`
 }
 
-export function makeZodEnumExpression(
-  values: readonly string[],
-): `enum([${string}])` {
+export function makeZodEnumExpression(values: readonly string[]): `enum([${string}])` {
   return `enum([${values.map((v) => `'${v}'`).join(', ')}])`
 }
 

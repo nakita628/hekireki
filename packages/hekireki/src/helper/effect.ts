@@ -44,9 +44,7 @@ export function makeEffectProperties(
     .join('\n')
 }
 
-export function makeEffectEnumExpression(
-  values: readonly string[],
-): `Schema.Literal(${string})` {
+export function makeEffectEnumExpression(values: readonly string[]): `Schema.Literal(${string})` {
   return `Schema.Literal(${values.map((v) => `'${v}'`).join(', ')})`
 }
 

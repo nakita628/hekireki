@@ -23,9 +23,7 @@ export function makeValibotSchema(
   return `export const ${modelName}Schema = v.object({\n${fields}\n})`
 }
 
-export function makeValibotEnumExpression(
-  values: readonly string[],
-): `picklist([${string}])` {
+export function makeValibotEnumExpression(values: readonly string[]): `picklist([${string}])` {
   return `picklist([${values.map((v) => `'${v}'`).join(', ')}])`
 }
 

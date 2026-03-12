@@ -46,9 +46,7 @@ export function makeTypeBoxProperties(
     .join('\n')
 }
 
-export function makeTypeBoxEnumExpression(
-  values: readonly string[],
-): `Type.Union([${string}])` {
+export function makeTypeBoxEnumExpression(values: readonly string[]): `Type.Union([${string}])` {
   return `Type.Union([${values.map((v) => `Type.Literal('${v}')`).join(', ')}])`
 }
 
