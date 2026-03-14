@@ -398,3 +398,8 @@ model AuditLog {
   @@index([tableName, recordId])
   @@map("audit_logs")
 }
+
+generator Hekireki-SQLAlchemy {
+    provider = "hekireki-sqlalchemy"
+    output   = "sqlalchemy"
+}

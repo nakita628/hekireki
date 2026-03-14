@@ -185,7 +185,7 @@ class Profile(Base):
 
     bio: Mapped[str] = mapped_column(String, nullable=False)
 
-    user_id: Mapped[str] = mapped_column(String, ForeignKey("user.id"), nullable=False)
+    user_id: Mapped[str] = mapped_column(String, ForeignKey("user.id"), unique=True, nullable=False)
 
     user: Mapped["User"] = relationship("User", back_populates="profile")
 `
@@ -242,9 +242,9 @@ class User(Base):
 
     name: Mapped[str] = mapped_column(String, nullable=False)
 
-    followers: Mapped[list["Follow"]] = relationship("Follow", back_populates="following")
+    followers: Mapped[list["Follow"]] = relationship("Follow", foreign_keys="Follow.following_id", back_populates="following")
 
-    following: Mapped[list["Follow"]] = relationship("Follow", back_populates="follower")
+    following: Mapped[list["Follow"]] = relationship("Follow", foreign_keys="Follow.follower_id", back_populates="follower")
 `
     expect(userResult).toBe(userExpected)
 
@@ -266,9 +266,9 @@ class Follow(Base):
 
     following_id: Mapped[str] = mapped_column(String, ForeignKey("user.id"), nullable=False)
 
-    follower: Mapped["User"] = relationship("User", back_populates="following")
+    follower: Mapped["User"] = relationship("User", foreign_keys=[follower_id], back_populates="following")
 
-    following: Mapped["User"] = relationship("User", back_populates="followers")
+    following: Mapped["User"] = relationship("User", foreign_keys=[following_id], back_populates="followers")
 `
     expect(followResult).toBe(followExpected)
   }, 30000)

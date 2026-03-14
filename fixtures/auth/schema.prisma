@@ -305,3 +305,8 @@ model TwoFactorConfirmation {
 
   @@unique([userId])
 }
+
+generator Hekireki-SQLAlchemy {
+    provider = "hekireki-sqlalchemy"
+    output   = "sqlalchemy"
+}

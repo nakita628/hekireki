@@ -128,6 +128,19 @@ function formatDefault(def: DMMF.Field['default']): string | null {
   return null
 }
 
+function isFunctionDefault(
+  def: DMMF.Field['default'],
+): def is { readonly name: string; readonly args: readonly (string | number)[] } {
+  return def !== null && typeof def === 'object' && 'name' in def
+}
+
+function needsForeignKeysParam(
+  targetModel: string,
+  assocs: BelongsToAssoc[] | HasAssoc[],
+): boolean {
+  return assocs.filter((a) => a.targetModel === targetModel).length > 1
+}
+
 export function sqlalchemySchemas(
   models: readonly DMMF.Model[],
   allModels?: readonly DMMF.Model[],
@@ -164,6 +177,13 @@ function generateModel(
     }
   }
 
+  // Check if func is needed (server_default or onupdate)
+  const needsFunc = model.fields.some(
+    (f) =>
+      (f.type === 'DateTime' && isFunctionDefault(f.default) && f.default.name === 'now') ||
+      f.isUpdatedAt,
+  )
+
   // Collect imports
   const saTypeImports = new Set<string>()
   const needsForeignKey = belongsToFkFields.size > 0 || isCompositePk
@@ -189,6 +209,7 @@ function generateModel(
   }
 
   if (needsForeignKey) saTypeImports.add('ForeignKey')
+  if (needsFunc) saTypeImports.add('func')
 
   // Build import lines
   const saImports = [...saTypeImports].sort()
@@ -229,7 +250,7 @@ function generateModel(
 
   for (const field of scalarFields) {
     lines.push('')
-    const snakeName = makeSnakeCase(field.name)
+    const snakeName = field.dbName ?? makeSnakeCase(field.name)
     const isPk = field.isId || compositePkFieldNames.has(field.name)
     const isFk = belongsToFkFields.has(field.name)
 
@@ -261,7 +282,8 @@ function generateModel(
     if (isFk) {
       const assoc = associations.belongsTo.find((a) => a.foreignKey === field.name)
       if (assoc) {
-        const targetTable = makeSnakeCase(assoc.targetModel)
+        const targetModelObj = allModels.find((m) => m.name === assoc.targetModel)
+        const targetTable = targetModelObj?.dbName ?? makeSnakeCase(assoc.targetModel)
         const targetCol = makeSnakeCase(assoc.references)
         colArgs.push(`ForeignKey("${targetTable}.${targetCol}")`)
       }
@@ -270,44 +292,79 @@ function generateModel(
     // primary_key
     if (isPk) colArgs.push('primary_key=True')
 
+    // unique
+    if (field.isUnique) colArgs.push('unique=True')
+
     // nullable
     if (!isPk) {
       colArgs.push(field.isRequired ? 'nullable=False' : 'nullable=True')
     }
 
-    // default
-    if (!isPk) {
+    // server_default for @default(now())
+    if (
+      field.type === 'DateTime' &&
+      isFunctionDefault(field.default) &&
+      field.default.name === 'now'
+    ) {
+      colArgs.push('server_default=func.now()')
+    } else if (!isPk) {
       const defaultVal = formatDefault(field.default)
       if (defaultVal !== null) {
         colArgs.push(`default=${defaultVal}`)
       }
     }
 
+    // onupdate for @updatedAt
+    if (field.isUpdatedAt) {
+      colArgs.push('onupdate=func.now()')
+    }
+
     lines.push(`    ${snakeName}: Mapped[${typeHint}] = mapped_column(${colArgs.join(', ')})`)
   }
 
-  // Relationships
+  // Relationships — belongsTo (many-to-one, FK is on this model)
   for (const assoc of associations.belongsTo) {
     lines.push('')
     const snakeName = makeSnakeCase(assoc.name)
+    const fkFieldObj = model.fields.find((f) => f.name === assoc.foreignKey)
+    const snakeFk = fkFieldObj?.dbName ?? makeSnakeCase(assoc.foreignKey)
+    const backPop = findBackPopulates(assoc.targetModel, model.name, assoc.foreignKey, allModels)
+    const needsFkParam = needsForeignKeysParam(assoc.targetModel, associations.belongsTo)
+    const fkClause = needsFkParam ? `, foreign_keys=[${snakeFk}]` : ''
     lines.push(
-      `    ${snakeName}: Mapped["${assoc.targetModel}"] = relationship("${assoc.targetModel}", back_populates="${findBackPopulates(assoc.targetModel, model.name, assoc.foreignKey, allModels)}")`,
+      `    ${snakeName}: Mapped["${assoc.targetModel}"] = relationship("${assoc.targetModel}"${fkClause}, back_populates="${backPop}")`,
     )
   }
 
+  // Relationships — hasMany (one-to-many, FK is on the other model)
   for (const assoc of associations.hasMany) {
     lines.push('')
     const snakeName = makeSnakeCase(assoc.name)
+    const backPop = findBackPopulates(assoc.targetModel, model.name, assoc.foreignKey, allModels)
+    const targetModel = allModels.find((m) => m.name === assoc.targetModel)
+    const needsFkParam = targetModel
+      ? needsForeignKeysParam(model.name, getAssociations(targetModel, allModels).belongsTo)
+      : false
+    const targetFkSnake = makeSnakeCase(assoc.foreignKey)
+    const fkClause = needsFkParam ? `, foreign_keys="${assoc.targetModel}.${targetFkSnake}"` : ''
     lines.push(
-      `    ${snakeName}: Mapped[list["${assoc.targetModel}"]] = relationship("${assoc.targetModel}", back_populates="${findBackPopulates(assoc.targetModel, model.name, assoc.foreignKey, allModels)}")`,
+      `    ${snakeName}: Mapped[list["${assoc.targetModel}"]] = relationship("${assoc.targetModel}"${fkClause}, back_populates="${backPop}")`,
     )
   }
 
+  // Relationships — hasOne (one-to-one, FK is on the other model)
   for (const assoc of associations.hasOne) {
     lines.push('')
     const snakeName = makeSnakeCase(assoc.name)
+    const backPop = findBackPopulates(assoc.targetModel, model.name, assoc.foreignKey, allModels)
+    const targetModel = allModels.find((m) => m.name === assoc.targetModel)
+    const needsFkParam = targetModel
+      ? needsForeignKeysParam(model.name, getAssociations(targetModel, allModels).belongsTo)
+      : false
+    const targetFkSnake = makeSnakeCase(assoc.foreignKey)
+    const fkClause = needsFkParam ? `, foreign_keys="${assoc.targetModel}.${targetFkSnake}"` : ''
     lines.push(
-      `    ${snakeName}: Mapped["${assoc.targetModel}"] = relationship("${assoc.targetModel}", back_populates="${findBackPopulates(assoc.targetModel, model.name, assoc.foreignKey, allModels)}", uselist=False)`,
+      `    ${snakeName}: Mapped["${assoc.targetModel}"] = relationship("${assoc.targetModel}"${fkClause}, back_populates="${backPop}", uselist=False)`,
     )
   }
 
@@ -323,14 +380,10 @@ function findBackPopulates(
   const targetModel = allModels.find((m) => m.name === targetModelName)
   if (!targetModel) return makeSnakeCase(sourceModelName)
 
-  // Find the relation field on the target model that points back to source
-  // and matches the foreign key
   const backField = targetModel.fields.find((f) => {
     if (f.kind !== 'object') return false
     if (f.type !== sourceModelName) return false
-    // For belongsTo on target side, check if its FK matches
     if (f.relationFromFields?.includes(foreignKey)) return true
-    // For hasMany/hasOne on target side, find the matching relation
     const sourceModel = allModels.find((m) => m.name === sourceModelName)
     if (!sourceModel) return false
     const sourceFkField = sourceModel.fields.find(

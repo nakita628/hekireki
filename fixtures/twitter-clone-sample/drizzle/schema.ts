@@ -1,5 +1,5 @@
-import { relations, sql } from 'drizzle-orm'
 import { index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import { relations, sql } from 'drizzle-orm'
 
 export const user = sqliteTable('user', {
   id: text('id')
@@ -14,7 +14,9 @@ export const user = sqliteTable('user', {
   coverImage: text('coverImage'),
   profileImage: text('profileImage'),
   hashedPassword: text('hashedPassword'),
-  createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  createdAt: integer('createdAt', { mode: 'timestamp' })
+    .notNull()
+    .default(sql`(unixepoch())`),
   updatedAt: integer('updatedAt', { mode: 'timestamp' })
     .notNull()
     .$onUpdate(() => new Date()),
@@ -26,7 +28,9 @@ export const post = sqliteTable('post', {
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
   body: text('body').notNull(),
-  createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  createdAt: integer('createdAt', { mode: 'timestamp' })
+    .notNull()
+    .default(sql`(unixepoch())`),
   updatedAt: integer('updatedAt', { mode: 'timestamp' })
     .notNull()
     .$onUpdate(() => new Date()),
@@ -38,7 +42,9 @@ export const follow = sqliteTable(
   {
     followerId: text('followerId').notNull(),
     followingId: text('followingId').notNull(),
-    createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    createdAt: integer('createdAt', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(unixepoch())`),
   },
   (table) => [primaryKey({ columns: [table.followerId, table.followingId] })],
 )
@@ -48,7 +54,9 @@ export const like = sqliteTable(
   {
     userId: text('userId').notNull(),
     postId: text('postId').notNull(),
-    createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    createdAt: integer('createdAt', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(unixepoch())`),
   },
   (table) => [primaryKey({ columns: [table.userId, table.postId] })],
 )
@@ -60,7 +68,9 @@ export const comment = sqliteTable(
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
     body: text('body').notNull(),
-    createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    createdAt: integer('createdAt', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(unixepoch())`),
     updatedAt: integer('updatedAt', { mode: 'timestamp' })
       .notNull()
       .$onUpdate(() => new Date()),
@@ -78,7 +88,9 @@ export const notification = sqliteTable(
       .$defaultFn(() => crypto.randomUUID()),
     body: text('body').notNull(),
     userId: text('userId').notNull(),
-    createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    createdAt: integer('createdAt', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(unixepoch())`),
   },
   (table) => [index('idx_userId').on(table.userId)],
 )

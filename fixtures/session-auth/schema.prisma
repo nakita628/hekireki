@@ -230,3 +230,8 @@ model PasswordHistory {
     @@index([userId])
     @@map("password_histories")
 }
+
+generator Hekireki-SQLAlchemy {
+    provider = "hekireki-sqlalchemy"
+    output   = "sqlalchemy"
+}

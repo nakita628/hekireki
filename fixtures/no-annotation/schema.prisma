@@ -120,3 +120,8 @@ enum Role {
     MEMBER
     GUEST
 }
+
+generator Hekireki-SQLAlchemy {
+    provider = "hekireki-sqlalchemy"
+    output   = "sqlalchemy"
+}

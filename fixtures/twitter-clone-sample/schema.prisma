@@ -326,3 +326,8 @@ model Notification {
 
   @@index([userId])
 }
+
+generator Hekireki-SQLAlchemy {
+    provider = "hekireki-sqlalchemy"
+    output   = "sqlalchemy"
+}
