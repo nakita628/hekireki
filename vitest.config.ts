@@ -1,8 +1,4 @@
-import { resolve } from 'node:path'
 import { defineConfig } from 'vitest/config'
-
-const pkgBin = resolve('node_modules/.bin')
-process.env.PATH = `${pkgBin}:${process.env.PATH}`
 
 export default defineConfig({
   test: {

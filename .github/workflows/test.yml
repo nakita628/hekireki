@@ -33,5 +33,8 @@ jobs:
       - name: Build
         run: pnpm -F hekireki build
 
+      - name: Link
+        run: cd packages/hekireki && pnpm link .
+
       - name: Run Coverage
         run: pnpm coverage
