@@ -225,9 +225,7 @@ function generateModel(
   lines.push(`    __tablename__ = "${tableName}"`)
 
   // Columns
-  const scalarFields = model.fields.filter(
-    (f) => f.kind !== 'object',
-  )
+  const scalarFields = model.fields.filter((f) => f.kind !== 'object')
 
   for (const field of scalarFields) {
     lines.push('')
@@ -331,7 +329,7 @@ function findBackPopulates(
     if (f.kind !== 'object') return false
     if (f.type !== sourceModelName) return false
     // For belongsTo on target side, check if its FK matches
-    if (f.relationFromFields && f.relationFromFields.includes(foreignKey)) return true
+    if (f.relationFromFields?.includes(foreignKey)) return true
     // For hasMany/hasOne on target side, find the matching relation
     const sourceModel = allModels.find((m) => m.name === sourceModelName)
     if (!sourceModel) return false
@@ -357,9 +355,7 @@ class Base(DeclarativeBase):
 }
 
 function generateInitFile(models: readonly DMMF.Model[]): string {
-  const imports = models
-    .map((m) => `from .${makeSnakeCase(m.name)} import ${m.name}`)
-    .join('\n')
+  const imports = models.map((m) => `from .${makeSnakeCase(m.name)} import ${m.name}`).join('\n')
 
   const all = models.map((m) => `    "${m.name}",`).join('\n')
 
