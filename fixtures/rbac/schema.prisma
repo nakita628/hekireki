@@ -306,3 +306,8 @@ model AuditLog {
     @@index([createdAt])
     @@map("audit_logs")
 }
+
+generator Hekireki-SQLAlchemy {
+    provider = "hekireki-sqlalchemy"
+    output   = "sqlalchemy"
+}

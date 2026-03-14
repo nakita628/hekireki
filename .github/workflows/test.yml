@@ -5,7 +5,7 @@ on:
     branches:
       - main
   pull_request:
-    types: [opened, synchronize, reopened] 
+    types: [opened, synchronize, reopened]
 
 jobs:
   test:
@@ -13,21 +13,20 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
       - uses: actions/setup-node@v4
         with:
           node-version: '22.x'
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
+          cache: 'pnpm'
 
       - name: Install Dependencies
-        run: pnpm -F hekireki deps
+        run: pnpm install --frozen-lockfile
 
       - name: Check
-        run: pnpm biome check --write ./
-      
+        run: pnpm biome check ./
+
       - name: Typecheck
         run: pnpm -F hekireki typecheck
 
@@ -38,4 +37,4 @@ jobs:
         run: cd packages/hekireki && pnpm link .
 
       - name: Run Coverage
-        run: pnpm -F hekireki coverage
+        run: pnpm coverage

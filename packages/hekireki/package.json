@@ -45,15 +45,14 @@
     "hekireki-docs": "dist/generator/docs/index.js",
     "hekireki-drizzle": "dist/generator/drizzle/index.js",
     "hekireki-typebox": "dist/generator/typebox/index.js",
-    "hekireki-ajv": "dist/generator/ajv/index.js"
+    "hekireki-ajv": "dist/generator/ajv/index.js",
+    "hekireki-sqlalchemy": "dist/generator/sqlalchemy/index.js"
   },
   "scripts": {
     "generate": "prisma generate",
     "deps": "rm -rf node_modules && pnpm install",
     "build": "tsdown",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "coverage": "vitest run --coverage",
     "release": "npm pkg fix && pnpm build && npm publish"
   },
   "dependencies": {
@@ -68,7 +67,6 @@
     "@prisma/client": "^7.4.0",
     "@types/node": "^25.2.3",
     "@typescript/native-preview": "7.0.0-dev.20260218.1",
-    "@vitest/coverage-v8": "^4.0.18",
     "arktype": "^2.1.29",
     "effect": "^3.19.18",
     "prisma": "^7.4.0",
@@ -76,7 +74,6 @@
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "valibot": "1.2.0",
-    "vitest": "^4.0.18",
     "@sinclair/typebox": "^0.34.33",
     "ajv": "^8.17.1",
     "json-schema-to-ts": "^3.1.1",

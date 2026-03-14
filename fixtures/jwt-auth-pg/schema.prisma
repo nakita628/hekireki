@@ -365,3 +365,8 @@ model PasswordReset {
     @@index([userId])
     @@map("password_resets")
 }
+
+generator Hekireki-SQLAlchemy {
+    provider = "hekireki-sqlalchemy"
+    output   = "sqlalchemy"
+}

@@ -1,5 +1,5 @@
-import { relations, sql } from 'drizzle-orm'
 import { integer, sqliteTable, text, unique } from 'drizzle-orm/sqlite-core'
+import { relations, sql } from 'drizzle-orm'
 
 export const user = sqliteTable('user', {
   id: text('id')
@@ -14,7 +14,9 @@ export const user = sqliteTable('user', {
     .default('USER'),
   emailVerified: integer('emailVerified', { mode: 'boolean' }).notNull().default(false),
   isActive: integer('isActive', { mode: 'boolean' }).notNull().default(true),
-  createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  createdAt: integer('createdAt', { mode: 'timestamp' })
+    .notNull()
+    .default(sql`(unixepoch())`),
   updatedAt: integer('updatedAt', { mode: 'timestamp' })
     .notNull()
     .$onUpdate(() => new Date()),
@@ -35,7 +37,9 @@ export const oAuthAccount = sqliteTable(
     accessToken: text('accessToken'),
     refreshToken: text('refreshToken'),
     expiresAt: integer('expiresAt', { mode: 'timestamp' }),
-    createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    createdAt: integer('createdAt', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(unixepoch())`),
   },
   (table) => [unique().on(table.provider, table.providerAccountId)],
 )
@@ -51,7 +55,9 @@ export const twoFactorSetting = sqliteTable('two_factor_setting', {
   phoneNumber: text('phoneNumber'),
   backupCodes: text('backupCodes'),
   verifiedAt: integer('verifiedAt', { mode: 'timestamp' }),
-  createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  createdAt: integer('createdAt', { mode: 'timestamp' })
+    .notNull()
+    .default(sql`(unixepoch())`),
   updatedAt: integer('updatedAt', { mode: 'timestamp' })
     .notNull()
     .$onUpdate(() => new Date()),
@@ -66,7 +72,9 @@ export const refreshToken = sqliteTable('refresh_token', {
   deviceInfo: text('deviceInfo'),
   ipAddress: text('ipAddress'),
   expiresAt: integer('expiresAt', { mode: 'timestamp' }).notNull(),
-  createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  createdAt: integer('createdAt', { mode: 'timestamp' })
+    .notNull()
+    .default(sql`(unixepoch())`),
   revoked: integer('revoked', { mode: 'boolean' }).notNull().default(false),
 })
 
@@ -77,7 +85,9 @@ export const emailVerification = sqliteTable('email_verification', {
   userId: text('userId').notNull(),
   tokenHash: text('tokenHash').notNull().unique(),
   expiresAt: integer('expiresAt', { mode: 'timestamp' }).notNull(),
-  createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  createdAt: integer('createdAt', { mode: 'timestamp' })
+    .notNull()
+    .default(sql`(unixepoch())`),
 })
 
 export const passwordReset = sqliteTable('password_reset', {
@@ -88,7 +98,9 @@ export const passwordReset = sqliteTable('password_reset', {
   tokenHash: text('tokenHash').notNull().unique(),
   expiresAt: integer('expiresAt', { mode: 'timestamp' }).notNull(),
   used: integer('used', { mode: 'boolean' }).notNull().default(false),
-  createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  createdAt: integer('createdAt', { mode: 'timestamp' })
+    .notNull()
+    .default(sql`(unixepoch())`),
 })
 
 export const userRelations = relations(user, ({ one, many }) => ({
