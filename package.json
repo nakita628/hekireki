@@ -3,15 +3,18 @@
   "private": "true",
   "license": "MIT",
   "scripts": {
-    "deps": "mkdir -p /tmp/pnpm-store && pnpm config set store-dir /tmp/pnpm-store &&rm -rf node_modules && rm -rf pnpm-lock.yaml && rm -rf ~/.pnpm-store && pnpm store prune && pnpm install --no-prefer-frozen-lockfile",
+    "deps": "rm -rf node_modules && rm -rf pnpm-lock.yaml && pnpm install",
     "build": "pnpm -F hekireki build",
     "check": "pnpm biome check --write ./",
     "typecheck": "pnpm -F hekireki typecheck",
-    "test": "pnpm -F hekireki test",
-    "coverage": "pnpm -F hekireki coverage",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage",
     "release": "pnpm -F hekireki release"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.6"
+    "@biomejs/biome": "^2.4.6",
+    "@vitest/coverage-v8": "^4.0.18",
+    "hekireki": "workspace:*",
+    "vitest": "^4.0.18"
   }
 }
