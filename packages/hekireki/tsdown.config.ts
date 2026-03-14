@@ -14,6 +14,7 @@ export default defineConfig({
     'generator/drizzle/index': './src/generator/drizzle/index.ts',
     'generator/typebox/index': './src/generator/typebox/index.ts',
     'generator/ajv/index': './src/generator/ajv/index.ts',
+    'generator/sqlalchemy/index': './src/generator/sqlalchemy/index.ts',
   },
   format: 'esm',
   dts: true,

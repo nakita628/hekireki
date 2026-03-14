@@ -45,7 +45,8 @@
     "hekireki-docs": "dist/generator/docs/index.js",
     "hekireki-drizzle": "dist/generator/drizzle/index.js",
     "hekireki-typebox": "dist/generator/typebox/index.js",
-    "hekireki-ajv": "dist/generator/ajv/index.js"
+    "hekireki-ajv": "dist/generator/ajv/index.js",
+    "hekireki-sqlalchemy": "dist/generator/sqlalchemy/index.js"
   },
   "scripts": {
     "generate": "prisma generate",
