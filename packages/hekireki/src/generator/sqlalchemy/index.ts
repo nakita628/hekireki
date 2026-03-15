@@ -1,7 +1,8 @@
 #!/usr/bin/env node
+import path from 'node:path'
 import type { GeneratorOptions } from '@prisma/generator-helper'
 import pkg from '@prisma/generator-helper'
-import { writeSQLAlchemyModelsToFiles } from '../../helper/sqlalchemy.js'
+import { writeSQLAlchemyFile } from '../../helper/sqlalchemy.js'
 
 const { generatorHandler } = pkg
 
@@ -12,9 +13,11 @@ export async function main(options: GeneratorOptions): Promise<void> {
     )
   }
   const output = options.generator.output.value
+  const resolved = path.extname(output) ? output : path.join(output, 'models.py')
 
   const enums = options.dmmf.datamodel.enums
-  const result = await writeSQLAlchemyModelsToFiles(options.dmmf.datamodel.models, output, enums)
+  const indexes = options.dmmf.datamodel.indexes
+  const result = await writeSQLAlchemyFile(options.dmmf.datamodel.models, resolved, enums, indexes)
   if (!result.ok) {
     throw new Error(`Failed to write SQLAlchemy models: ${result.error}`)
   }
