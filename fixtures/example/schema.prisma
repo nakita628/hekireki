@@ -172,3 +172,8 @@ model Post {
     /// Prisma relation definition
     user    User   @relation(fields: [userId], references: [id])
 }
+
+generator Hekireki-SQLAlchemy {
+    provider = "hekireki-sqlalchemy"
+    output   = "sqlalchemy"
+}

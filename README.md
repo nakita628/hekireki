@@ -2,9 +2,11 @@
 
 # Hekireki
 
-**[Hekireki](https://www.npmjs.com/package/hekireki)** is a tool that generates validation schemas for Zod, Valibot, ArkType, Effect Schema, TypeBox, and AJV (JSON Schema), as well as [Drizzle ORM](https://orm.drizzle.team/) schemas and ER diagrams, from [Prisma](https://www.prisma.io/) schemas annotated with comments.
+**[Hekireki](https://www.npmjs.com/package/hekireki)** is a tool that generates validation schemas, ORM models, and ER diagrams from [Prisma](https://www.prisma.io/) schemas — supporting TypeScript, Python, Go, Rust, and Elixir.
 
 ## Features
+
+### TypeScript Validation Libraries
 
 - 💎 Automatically generates [Zod](https://zod.dev/) schemas from your Prisma schema
 - 🤖 Automatically generates [Valibot](https://valibot.dev/) schemas from your Prisma schema
@@ -12,10 +14,19 @@
 - ⚡ Automatically generates [Effect Schema](https://effect.website/docs/schema/introduction/) from your Prisma schema
 - 📦 Automatically generates [TypeBox](https://github.com/sinclairzx81/typebox) schemas from your Prisma schema
 - 📋 Automatically generates [AJV](https://ajv.js.org/)-compatible JSON Schema objects from your Prisma schema
+
+### ORM / Schema Generation (Multi-Language)
+
 - 🗄️ Automatically generates [Drizzle ORM](https://orm.drizzle.team/) table schemas and relations from your Prisma schema
+- 🐍 Automatically generates [SQLAlchemy](https://www.sqlalchemy.org/) models (Python) — with `Mapped[T]` type hints, relationships, enums, composite keys, and index support
+- 🐹 Automatically generates [GORM](https://gorm.io/) models (Go) — with struct tags, JSON tags, relationships, enums, composite keys, and index support
+- 🦀 Automatically generates [Sea-ORM](https://www.sea-ql.org/SeaORM/) entities (Rust) — with `DeriveEntityModel`, relations, enums, serde support, and `rename_all`
+- 🧪 Generates [Ecto](https://hexdocs.pm/ecto/Ecto.Schema.html) schemas (Elixir) — with associations (`belongs_to`, `has_many`, `has_one`), composite primary keys, `@type t` typespecs, array fields, `@@map`/`@map` support, and `@moduledoc`
+
+### Diagrams & Documentation
+
 - 📊 Creates [Mermaid](https://mermaid.js.org/) ER diagrams with PK/FK markers
 - 📝 Generates [DBML](https://dbml.dbdiagram.io/) (Database Markup Language) files and **PNG** ER diagrams via [dbml-renderer](https://github.com/softwaretechnik-berlin/dbml-renderer) — output format is determined by the file extension (`.dbml` or `.png`)
-- 🧪 Generates [Ecto](https://hexdocs.pm/ecto/Ecto.Schema.html) schemas for Elixir projects — with associations (`belongs_to`, `has_many`, `has_one`), composite primary keys, `@type t` typespecs, array fields, `@@map`/`@map` support, and `@moduledoc`
 
 ## Installation
 
@@ -80,6 +91,23 @@ generator Hekireki-AJV {
 
 generator Hekireki-Drizzle {
     provider = "hekireki-drizzle"
+}
+
+generator Hekireki-SQLAlchemy {
+    provider = "hekireki-sqlalchemy"
+    output   = "./sqlalchemy"
+}
+
+generator Hekireki-GORM {
+    provider = "hekireki-gorm"
+    output   = "./gorm"
+    package  = "model"
+}
+
+generator Hekireki-SeaORM {
+    provider   = "hekireki-sea-orm"
+    output     = "./sea_orm"
+    renameAll  = "camelCase"
 }
 
 generator Hekireki-Ecto {
@@ -520,6 +548,91 @@ defmodule DBSchema.Post do
 end
 ```
 
+### SQLAlchemy
+
+```python
+from sqlalchemy import ForeignKey
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class User(Base):
+    __tablename__ = "user"
+
+    id: Mapped[str] = mapped_column(primary_key=True)
+    name: Mapped[str]
+
+    posts: Mapped[list["Post"]] = relationship(back_populates="user")
+
+
+class Post(Base):
+    __tablename__ = "post"
+
+    id: Mapped[str] = mapped_column(primary_key=True)
+    title: Mapped[str]
+    content: Mapped[str]
+    user_id: Mapped[str] = mapped_column(ForeignKey("user.id"))
+
+    user: Mapped["User"] = relationship(back_populates="posts")
+```
+
+### GORM
+
+```go
+package model
+
+type User struct {
+	ID   string `gorm:"column:id;primaryKey;type:char(36)" json:"id"`
+	Name string `gorm:"column:name;not null" json:"name"`
+	Posts []Post `gorm:"foreignKey:UserID"`
+}
+
+type Post struct {
+	ID      string `gorm:"column:id;primaryKey;type:char(36)" json:"id"`
+	Title   string `gorm:"column:title;not null" json:"title"`
+	Content string `gorm:"column:content;not null" json:"content"`
+	UserID  string `gorm:"column:user_id;not null" json:"user_id"`
+	User    User
+}
+```
+
+### Sea-ORM
+
+Each model is output as a separate `.rs` file with `mod.rs` and `prelude.rs`, following Sea-ORM conventions.
+
+**user.rs:**
+
+```rust
+use sea_orm::entity::prelude::*;
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[sea_orm(table_name = "user")]
+pub struct Model {
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub id: String,
+    pub name: String,
+}
+
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(has_many = "super::post::Entity")]
+    Posts,
+}
+
+impl Related<super::post::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Posts.def()
+    }
+}
+
+impl ActiveModelBehavior for ActiveModel {}
+```
+
 ### DBML
 
 ```dbml
@@ -634,7 +747,27 @@ generator Hekireki-ER {
     output   = "./mermaid-er" // Output path (default: ./mermaid-er/ER.md)
 }
 
-// Ecto Generator
+// SQLAlchemy Generator (Python)
+generator Hekireki-SQLAlchemy {
+    provider = "hekireki-sqlalchemy"
+    output   = "./sqlalchemy"      // Output path (default: ./sqlalchemy/models.py)
+}
+
+// GORM Generator (Go)
+generator Hekireki-GORM {
+    provider = "hekireki-gorm"
+    output   = "./gorm"            // Output path (default: ./gorm/models.go)
+    package  = "model"             // Go package name (default: model)
+}
+
+// Sea-ORM Generator (Rust)
+generator Hekireki-SeaORM {
+    provider   = "hekireki-sea-orm"
+    output     = "./sea_orm"       // Output directory for .rs files
+    renameAll  = "camelCase"       // #[serde(rename_all = "...")] attribute (optional)
+}
+
+// Ecto Generator (Elixir)
 generator Hekireki-Ecto {
     provider = "hekireki-ecto"
     output   = "./ecto"      // Output directory (default: ./ecto/)

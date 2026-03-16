@@ -334,7 +334,6 @@ describe('utils', () => {
       const mockProps = (_fields: readonly { readonly fieldName: string }[], _comment: boolean) =>
         _fields.map((f) => f.fieldName).join(', ')
 
-      // biome-ignore lint/suspicious/noExplicitAny: test mock
       const result = schemaFromFields(fields, true, mockSchema, mockProps as any)
       expect(result).toBe('schema(User, id, name)')
     })
@@ -356,7 +355,6 @@ describe('utils', () => {
         return 'props'
       }
 
-      // biome-ignore lint/suspicious/noExplicitAny: test mock
       schemaFromFields(fields, false, mockSchema, mockProps as any)
       expect(receivedComment).toBe(false)
     })

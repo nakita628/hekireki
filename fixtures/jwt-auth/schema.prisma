@@ -404,3 +404,8 @@ model PasswordReset {
     /// User relation
     user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
+
+generator Hekireki-SQLAlchemy {
+    provider = "hekireki-sqlalchemy"
+    output   = "sqlalchemy"
+}

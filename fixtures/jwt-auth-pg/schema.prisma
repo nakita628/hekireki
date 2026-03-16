@@ -365,3 +365,18 @@ model PasswordReset {
     @@index([userId])
     @@map("password_resets")
 }
+
+generator Hekireki-SQLAlchemy {
+    provider = "hekireki-sqlalchemy"
+    output   = "sqlalchemy"
+}
+
+generator Hekireki-GORM {
+    provider = "hekireki-gorm"
+    output   = "gorm"
+}
+
+generator HekirekiSeaORM {
+    provider = "hekireki-sea-orm"
+    output   = "sea_orm"
+}
