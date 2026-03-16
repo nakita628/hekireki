@@ -107,7 +107,6 @@ generator Hekireki-GORM {
 generator Hekireki-SeaORM {
     provider   = "hekireki-sea-orm"
     output     = "./sea_orm"
-    serde      = true
     renameAll  = "camelCase"
 }
 
@@ -765,7 +764,6 @@ generator Hekireki-GORM {
 generator Hekireki-SeaORM {
     provider   = "hekireki-sea-orm"
     output     = "./sea_orm"       // Output directory for .rs files
-    serde      = true              // Derive Serialize/Deserialize (default: true)
     renameAll  = "camelCase"       // #[serde(rename_all = "...")] attribute (optional)
 }
 

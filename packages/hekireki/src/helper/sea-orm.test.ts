@@ -222,7 +222,7 @@ describe('generateEnum', () => {
       values: [{ name: 'ADMIN' }, { name: 'USER' }, { name: 'MODERATOR' }],
     } as any
 
-    const result = generateEnum(e, true)
+    const result = generateEnum(e)
     expect(result).toContain(
       '#[derive(Debug, Clone, PartialEq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]',
     )
@@ -231,40 +231,18 @@ describe('generateEnum', () => {
     expect(result).toContain('    Admin,')
   })
 
-  it('generates DeriveActiveEnum without serde when serde = false', () => {
-    const e = {
-      name: 'Role',
-      values: [{ name: 'ADMIN' }, { name: 'USER' }],
-    } as any
-
-    const result = generateEnum(e, false)
-    expect(result).toContain('#[derive(Debug, Clone, PartialEq, EnumIter, DeriveActiveEnum)]')
-    expect(result).not.toContain('Serialize')
-  })
-
   it('generates serde rename_all attribute when renameAll is set', () => {
     const e = {
       name: 'Role',
       values: [{ name: 'ADMIN' }, { name: 'USER' }],
     } as any
 
-    const result = generateEnum(e, { enabled: true, renameAll: 'camelCase' })
+    const result = generateEnum(e, { renameAll: 'camelCase' })
     expect(result).toContain(
       '#[derive(Debug, Clone, PartialEq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]',
     )
     expect(result).toContain('#[serde(rename_all = "camelCase")]')
     expect(result).toContain('#[sea_orm(rs_type = "String"')
-  })
-
-  it('does not generate serde rename_all when serde is disabled', () => {
-    const e = {
-      name: 'Role',
-      values: [{ name: 'ADMIN' }, { name: 'USER' }],
-    } as any
-
-    const result = generateEnum(e, { enabled: false, renameAll: 'camelCase' })
-    expect(result).not.toContain('serde')
-    expect(result).not.toContain('Serialize')
   })
 })
 
@@ -307,7 +285,7 @@ describe('generateEntityFile with renameAll', () => {
       },
     ])
 
-    const result = generateEntityFile(model, [model], [], { enabled: true, renameAll: 'camelCase' })
+    const result = generateEntityFile(model, [model], [], { renameAll: 'camelCase' })
     expect(result).toContain(
       '#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]',
     )
@@ -332,7 +310,7 @@ describe('generateEntityFile with renameAll', () => {
       },
     ])
 
-    const result = generateEntityFile(model, [model], [], true)
+    const result = generateEntityFile(model, [model], [])
     expect(result).not.toContain('#[serde(')
   })
 })

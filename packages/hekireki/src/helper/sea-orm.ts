@@ -292,19 +292,10 @@ function toModuleName(modelName: string): string {
 // ============================================================================
 
 export interface SerdeOptions {
-  readonly enabled: boolean
   readonly renameAll?: string
 }
 
-export function normalizeSerdeOptions(serde: boolean | SerdeOptions): SerdeOptions {
-  if (typeof serde === 'boolean') {
-    return { enabled: serde }
-  }
-  return serde
-}
-
 function buildSerdeAttributes(opts: SerdeOptions): string[] {
-  if (!opts.enabled) return []
   const parts: string[] = []
   if (opts.renameAll) {
     parts.push(`rename_all = "${opts.renameAll}"`)
@@ -317,18 +308,16 @@ function buildSerdeAttributes(opts: SerdeOptions): string[] {
 // Enum Generation
 // ============================================================================
 
-export function generateEnum(e: DMMF.DatamodelEnum, serde: boolean | SerdeOptions): string {
-  const opts = normalizeSerdeOptions(serde)
+export function generateEnum(e: DMMF.DatamodelEnum, serde: SerdeOptions = {}): string {
   const variants = e.values.map((v) => {
     const pascalName = v.name.charAt(0).toUpperCase() + v.name.slice(1).toLowerCase()
     return `    #[sea_orm(string_value = "${v.name}")]\n    ${pascalName},`
   })
 
-  const derives = opts.enabled
-    ? '#[derive(Debug, Clone, PartialEq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]'
-    : '#[derive(Debug, Clone, PartialEq, EnumIter, DeriveActiveEnum)]'
+  const derives =
+    '#[derive(Debug, Clone, PartialEq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]'
 
-  const serdeAttrs = buildSerdeAttributes(opts)
+  const serdeAttrs = buildSerdeAttributes(serde)
 
   return [
     derives,
@@ -478,7 +467,7 @@ export function generateEntityFile(
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
   enums: readonly DMMF.DatamodelEnum[],
-  serde: boolean | SerdeOptions,
+  serde: SerdeOptions = {},
 ): string {
   const idField = model.fields.find((f) => f.isId)
   const compositePkFieldNames = new Set(model.primaryKey?.fields ?? [])
@@ -516,17 +505,12 @@ export function generateEntityFile(
   const relationEnum = generateRelationEnum(model, associations)
   const relatedImpls = generateRelatedImpls(model, associations)
 
-  const opts = normalizeSerdeOptions(serde)
+  const useLines = ['use sea_orm::entity::prelude::*;', 'use serde::{Deserialize, Serialize};']
 
-  const useLines = opts.enabled
-    ? ['use sea_orm::entity::prelude::*;', 'use serde::{Deserialize, Serialize};']
-    : ['use sea_orm::entity::prelude::*;']
+  const deriveModel =
+    '#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]'
 
-  const deriveModel = opts.enabled
-    ? '#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]'
-    : '#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]'
-
-  const serdeAttrs = buildSerdeAttributes(opts)
+  const serdeAttrs = buildSerdeAttributes(serde)
 
   const lines = [
     ...useLines,
@@ -555,9 +539,8 @@ function generateM2MEntity(
   leftModel: string,
   rightModel: string,
   _allModels: readonly DMMF.Model[],
-  serde: boolean | SerdeOptions,
+  serde: SerdeOptions = {},
 ): string {
-  const opts = normalizeSerdeOptions(serde)
   const [sortedLeft, sortedRight] =
     leftModel < rightModel ? [leftModel, rightModel] : [rightModel, leftModel]
 
@@ -569,15 +552,12 @@ function generateM2MEntity(
   const leftCol = toPascalCase(`${toSnakeCase(sortedLeft)}Id`)
   const rightCol = toPascalCase(`${toSnakeCase(sortedRight)}Id`)
 
-  const useLines = opts.enabled
-    ? ['use sea_orm::entity::prelude::*;', 'use serde::{Deserialize, Serialize};']
-    : ['use sea_orm::entity::prelude::*;']
+  const useLines = ['use sea_orm::entity::prelude::*;', 'use serde::{Deserialize, Serialize};']
 
-  const deriveModel = opts.enabled
-    ? '#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]'
-    : '#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]'
+  const deriveModel =
+    '#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]'
 
-  const serdeAttrs = buildSerdeAttributes(opts)
+  const serdeAttrs = buildSerdeAttributes(serde)
 
   return [
     ...useLines,
@@ -639,7 +619,7 @@ export async function writeSeaOrmFiles(
   models: readonly DMMF.Model[],
   outDir: string,
   enums: readonly DMMF.DatamodelEnum[],
-  serde: boolean | SerdeOptions = true,
+  serde: SerdeOptions = {},
 ): Promise<
   { readonly ok: true; readonly value: undefined } | { readonly ok: false; readonly error: string }
 > {
@@ -668,12 +648,9 @@ export async function writeSeaOrmFiles(
   }
 
   // Generate enum files
-  const serdeOpts = normalizeSerdeOptions(serde)
   for (const e of enums) {
     const moduleName = toSnakeCase(e.name)
-    const useLines = serdeOpts.enabled
-      ? ['use sea_orm::entity::prelude::*;', 'use serde::{Deserialize, Serialize};']
-      : ['use sea_orm::entity::prelude::*;']
+    const useLines = ['use sea_orm::entity::prelude::*;', 'use serde::{Deserialize, Serialize};']
     const code = [...useLines, '', generateEnum(e, serde), ''].join('\n')
     const filePath = join(outDir, `${moduleName}.rs`)
     const writeResult = await writeFile(filePath, code)
