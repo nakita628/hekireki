@@ -19,7 +19,9 @@
     "docs",
     "documentation",
     "gorm",
-    "go"
+    "go",
+    "sea-orm",
+    "rust"
   ],
   "homepage": "https://github.com/nakita628/hekireki",
   "publishConfig": {
@@ -49,7 +51,8 @@
     "hekireki-typebox": "dist/generator/typebox/index.js",
     "hekireki-ajv": "dist/generator/ajv/index.js",
     "hekireki-sqlalchemy": "dist/generator/sqlalchemy/index.js",
-    "hekireki-gorm": "dist/generator/gorm/index.js"
+    "hekireki-gorm": "dist/generator/gorm/index.js",
+    "hekireki-sea-orm": "dist/generator/sea-orm/index.js"
   },
   "scripts": {
     "generate": "prisma generate",

@@ -16,6 +16,7 @@ export default defineConfig({
     'generator/ajv/index': './src/generator/ajv/index.ts',
     'generator/sqlalchemy/index': './src/generator/sqlalchemy/index.ts',
     'generator/gorm/index': './src/generator/gorm/index.ts',
+    'generator/sea-orm/index': './src/generator/sea-orm/index.ts',
   },
   format: 'esm',
   dts: true,
