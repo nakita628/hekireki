@@ -1,3 +1,5 @@
+import { createId } from '@paralleldrive/cuid2'
+import { relations } from 'drizzle-orm'
 import {
   boolean,
   index,
@@ -10,8 +12,6 @@ import {
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core'
-import { relations } from 'drizzle-orm'
-import { createId } from '@paralleldrive/cuid2'
 
 export const user = pgTable('users', {
   id: uuid('id')

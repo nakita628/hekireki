@@ -213,9 +213,7 @@ describe('buildGormTags', () => {
       isUpdatedAt: false,
       hasDefaultValue: false,
     } as any
-    expect(buildGormTags(field, false, false, [])).toStrictEqual(
-      '`gorm:"column:name" json:"name"`',
-    )
+    expect(buildGormTags(field, false, false, [])).toStrictEqual('`gorm:"column:name" json:"name"`')
   })
 
   it('includes composite uniqueIndex tag from @@unique', () => {

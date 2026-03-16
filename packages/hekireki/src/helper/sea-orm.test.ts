@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildSeaOrmAttributes,
+  generateEntityFile,
   generateEnum,
   prismaTypeToRustType,
   resolveSeaOrmColumnType,
@@ -138,9 +139,7 @@ describe('buildSeaOrmAttributes', () => {
       default: { name: 'autoincrement', args: [] },
       nativeType: null,
     } as any
-    expect(buildSeaOrmAttributes(field, true, false)).toStrictEqual([
-      '#[sea_orm(primary_key)]',
-    ])
+    expect(buildSeaOrmAttributes(field, true, false)).toStrictEqual(['#[sea_orm(primary_key)]'])
   })
 
   it('generates unique attribute', () => {
@@ -156,9 +155,7 @@ describe('buildSeaOrmAttributes', () => {
       hasDefaultValue: false,
       nativeType: null,
     } as any
-    expect(buildSeaOrmAttributes(field, false, false)).toStrictEqual([
-      '#[sea_orm(unique)]',
-    ])
+    expect(buildSeaOrmAttributes(field, false, false)).toStrictEqual(['#[sea_orm(unique)]'])
   })
 
   it('generates default_value for boolean', () => {
@@ -219,20 +216,123 @@ describe('buildSeaOrmAttributes', () => {
 })
 
 describe('generateEnum', () => {
-  it('generates DeriveActiveEnum for Prisma enum', () => {
+  it('generates DeriveActiveEnum with serde for Prisma enum (default)', () => {
     const e = {
       name: 'Role',
       values: [{ name: 'ADMIN' }, { name: 'USER' }, { name: 'MODERATOR' }],
     } as any
 
-    const result = generateEnum(e)
-    expect(result).toContain('#[derive(Debug, Clone, PartialEq, EnumIter, DeriveActiveEnum)]')
+    const result = generateEnum(e, true)
+    expect(result).toContain(
+      '#[derive(Debug, Clone, PartialEq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]',
+    )
     expect(result).toContain('pub enum Role {')
     expect(result).toContain('#[sea_orm(string_value = "ADMIN")]')
     expect(result).toContain('    Admin,')
-    expect(result).toContain('#[sea_orm(string_value = "USER")]')
-    expect(result).toContain('    User,')
-    expect(result).toContain('#[sea_orm(string_value = "MODERATOR")]')
-    expect(result).toContain('    Moderator,')
+  })
+
+  it('generates DeriveActiveEnum without serde when serde = false', () => {
+    const e = {
+      name: 'Role',
+      values: [{ name: 'ADMIN' }, { name: 'USER' }],
+    } as any
+
+    const result = generateEnum(e, false)
+    expect(result).toContain('#[derive(Debug, Clone, PartialEq, EnumIter, DeriveActiveEnum)]')
+    expect(result).not.toContain('Serialize')
+  })
+
+  it('generates serde rename_all attribute when renameAll is set', () => {
+    const e = {
+      name: 'Role',
+      values: [{ name: 'ADMIN' }, { name: 'USER' }],
+    } as any
+
+    const result = generateEnum(e, { enabled: true, renameAll: 'camelCase' })
+    expect(result).toContain(
+      '#[derive(Debug, Clone, PartialEq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]',
+    )
+    expect(result).toContain('#[serde(rename_all = "camelCase")]')
+    expect(result).toContain('#[sea_orm(rs_type = "String"')
+  })
+
+  it('does not generate serde rename_all when serde is disabled', () => {
+    const e = {
+      name: 'Role',
+      values: [{ name: 'ADMIN' }, { name: 'USER' }],
+    } as any
+
+    const result = generateEnum(e, { enabled: false, renameAll: 'camelCase' })
+    expect(result).not.toContain('serde')
+    expect(result).not.toContain('Serialize')
+  })
+})
+
+describe('generateEntityFile with renameAll', () => {
+  const makeModel = (name: string, fields: any[]): any => ({
+    name,
+    dbName: null,
+    fields,
+    primaryKey: null,
+    uniqueFields: [],
+    uniqueIndexes: [],
+  })
+
+  it('generates serde rename_all attribute on Model struct', () => {
+    const model = makeModel('User', [
+      {
+        name: 'id',
+        kind: 'scalar',
+        type: 'String',
+        isRequired: true,
+        isId: true,
+        isUnique: false,
+        isList: false,
+        isUpdatedAt: false,
+        hasDefaultValue: true,
+        default: { name: 'uuid', args: [] },
+        nativeType: null,
+      },
+      {
+        name: 'userName',
+        kind: 'scalar',
+        type: 'String',
+        isRequired: true,
+        isId: false,
+        isUnique: false,
+        isList: false,
+        isUpdatedAt: false,
+        hasDefaultValue: false,
+        nativeType: null,
+      },
+    ])
+
+    const result = generateEntityFile(model, [model], [], { enabled: true, renameAll: 'camelCase' })
+    expect(result).toContain(
+      '#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]',
+    )
+    expect(result).toContain('#[serde(rename_all = "camelCase")]')
+    expect(result).toContain('#[sea_orm(table_name = "user")]')
+  })
+
+  it('does not generate serde rename_all when renameAll is not set', () => {
+    const model = makeModel('User', [
+      {
+        name: 'id',
+        kind: 'scalar',
+        type: 'String',
+        isRequired: true,
+        isId: true,
+        isUnique: false,
+        isList: false,
+        isUpdatedAt: false,
+        hasDefaultValue: true,
+        default: { name: 'uuid', args: [] },
+        nativeType: null,
+      },
+    ])
+
+    const result = generateEntityFile(model, [model], [], true)
+    expect(result).not.toContain('#[serde(')
   })
 })

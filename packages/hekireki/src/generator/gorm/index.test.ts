@@ -692,9 +692,7 @@ describe('fixture: no-annotation (M2M implicit)', () => {
   })
 
   it('generates models with implicit M2M (Post <-> Tag), enum, one-to-one, @updatedAt', async () => {
-    await promisify(exec)(
-      'npx prisma generate --schema=../../fixtures/no-annotation/schema.prisma',
-    )
+    await promisify(exec)('npx prisma generate --schema=../../fixtures/no-annotation/schema.prisma')
 
     expect(
       fs.readFileSync('../../fixtures/no-annotation/gorm/models.go', 'utf-8'),
@@ -750,9 +748,7 @@ describe('fixture: jwt-auth-pg', () => {
   })
 
   it('generates PostgreSQL models with @db.Uuid, @db.VarChar, @db.Decimal, @db.Timestamptz, @@map', async () => {
-    await promisify(exec)(
-      'npx prisma generate --schema=../../fixtures/jwt-auth-pg/schema.prisma',
-    )
+    await promisify(exec)('npx prisma generate --schema=../../fixtures/jwt-auth-pg/schema.prisma')
 
     expect(fs.readFileSync('../../fixtures/jwt-auth-pg/gorm/models.go', 'utf-8')).toStrictEqual(
       `package model

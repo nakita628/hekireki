@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 import type { GeneratorOptions } from '@prisma/generator-helper'
 import pkg from '@prisma/generator-helper'
+import type { SerdeOptions } from '../../helper/sea-orm.js'
 import { writeSeaOrmFiles } from '../../helper/sea-orm.js'
+import { getBool, getString } from '../../utils/index.js'
 
 const { generatorHandler } = pkg
 
@@ -12,9 +14,16 @@ export async function main(options: GeneratorOptions): Promise<void> {
     )
   }
   const output = options.generator.output.value
+  const serdeEnabled = getBool(options.generator.config?.serde, true)
+  const renameAll = getString(options.generator.config?.renameAll)
+
+  const serde: SerdeOptions = {
+    enabled: serdeEnabled,
+    renameAll,
+  }
 
   const enums = options.dmmf.datamodel.enums
-  const result = await writeSeaOrmFiles(options.dmmf.datamodel.models, output, enums)
+  const result = await writeSeaOrmFiles(options.dmmf.datamodel.models, output, enums, serde)
   if (!result.ok) {
     throw new Error(`Failed to write SeaORM entities: ${result.error}`)
   }
