@@ -603,7 +603,7 @@ function generateModelBody(
 
 function collectGlobalImports(
   models: readonly DMMF.Model[],
-  enums: readonly DMMF.DatamodelEnum[] | undefined,
+  _enums: readonly DMMF.DatamodelEnum[] | undefined,
   indexes: readonly DMMF.Index[],
   m2mTables: readonly M2MTableInfo[],
 ): readonly string[] {

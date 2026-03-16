@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildGormTags, generateGormModels, goFieldName, prismaTypeToGoType } from './gorm.js'
+import { buildGormTags, goFieldName, prismaTypeToGoType } from './gorm.js'
 
 // Test run
 // pnpm vitest run ./src/helper/gorm.test.ts

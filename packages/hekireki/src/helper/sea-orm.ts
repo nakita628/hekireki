@@ -597,18 +597,16 @@ function generateM2MEntity(
 // ============================================================================
 
 export function generateModRs(moduleNames: readonly string[]): string {
-  return moduleNames.map((m) => `pub mod ${m};`).join('\n') + '\n'
+  return `${moduleNames.map((m) => `pub mod ${m};`).join('\n')}\n`
 }
 
 export function generatePreludeRs(models: readonly DMMF.Model[]): string {
-  return (
-    models
-      .map((m) => {
-        const moduleName = toModuleName(m.name)
-        return `pub use super::${moduleName}::Entity as ${m.name};`
-      })
-      .join('\n') + '\n'
-  )
+  return `${models
+    .map((m) => {
+      const moduleName = toModuleName(m.name)
+      return `pub use super::${moduleName}::Entity as ${m.name};`
+    })
+    .join('\n')}\n`
 }
 
 // ============================================================================
