@@ -15,6 +15,7 @@ export default defineConfig({
     'generator/typebox/index': './src/generator/typebox/index.ts',
     'generator/ajv/index': './src/generator/ajv/index.ts',
     'generator/sqlalchemy/index': './src/generator/sqlalchemy/index.ts',
+    'generator/gorm/index': './src/generator/gorm/index.ts',
   },
   format: 'esm',
   dts: true,

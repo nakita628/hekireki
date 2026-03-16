@@ -17,7 +17,9 @@
     "ajv",
     "json-schema",
     "docs",
-    "documentation"
+    "documentation",
+    "gorm",
+    "go"
   ],
   "homepage": "https://github.com/nakita628/hekireki",
   "publishConfig": {
@@ -46,7 +48,8 @@
     "hekireki-drizzle": "dist/generator/drizzle/index.js",
     "hekireki-typebox": "dist/generator/typebox/index.js",
     "hekireki-ajv": "dist/generator/ajv/index.js",
-    "hekireki-sqlalchemy": "dist/generator/sqlalchemy/index.js"
+    "hekireki-sqlalchemy": "dist/generator/sqlalchemy/index.js",
+    "hekireki-gorm": "dist/generator/gorm/index.js"
   },
   "scripts": {
     "generate": "prisma generate",
