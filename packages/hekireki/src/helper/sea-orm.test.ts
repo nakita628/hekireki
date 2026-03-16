@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildSeaOrmAttributes,
+  canDeriveEq,
   generateEntityFile,
   generateEnum,
   prismaTypeToRustType,
@@ -224,7 +225,7 @@ describe('generateEnum', () => {
 
     const result = generateEnum(e)
     expect(result).toContain(
-      '#[derive(Debug, Clone, PartialEq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]',
+      '#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]',
     )
     expect(result).toContain('pub enum Role {')
     expect(result).toContain('#[sea_orm(string_value = "ADMIN")]')
@@ -239,7 +240,7 @@ describe('generateEnum', () => {
 
     const result = generateEnum(e, { renameAll: 'camelCase' })
     expect(result).toContain(
-      '#[derive(Debug, Clone, PartialEq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]',
+      '#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]',
     )
     expect(result).toContain('#[serde(rename_all = "camelCase")]')
     expect(result).toContain('#[sea_orm(rs_type = "String"')
@@ -287,7 +288,7 @@ describe('generateEntityFile with renameAll', () => {
 
     const result = generateEntityFile(model, [model], [], { renameAll: 'camelCase' })
     expect(result).toContain(
-      '#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]',
+      '#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]',
     )
     expect(result).toContain('#[serde(rename_all = "camelCase")]')
     expect(result).toContain('#[sea_orm(table_name = "user")]')
@@ -312,5 +313,95 @@ describe('generateEntityFile with renameAll', () => {
 
     const result = generateEntityFile(model, [model], [])
     expect(result).not.toContain('#[serde(')
+  })
+})
+
+describe('canDeriveEq', () => {
+  it('returns true for String and Int fields', () => {
+    const fields = [
+      { kind: 'scalar', type: 'String' },
+      { kind: 'scalar', type: 'Int' },
+    ] as any
+    expect(canDeriveEq(fields)).toBe(true)
+  })
+
+  it('returns false when Float field exists', () => {
+    const fields = [
+      { kind: 'scalar', type: 'String' },
+      { kind: 'scalar', type: 'Float' },
+    ] as any
+    expect(canDeriveEq(fields)).toBe(false)
+  })
+
+  it('ignores object (relation) fields', () => {
+    const fields = [
+      { kind: 'scalar', type: 'String' },
+      { kind: 'object', type: 'Post' },
+    ] as any
+    expect(canDeriveEq(fields)).toBe(true)
+  })
+})
+
+describe('generateEntityFile Eq derive', () => {
+  const makeModel = (name: string, fields: any[]): any => ({
+    name,
+    dbName: null,
+    fields,
+    primaryKey: null,
+    uniqueFields: [],
+    uniqueIndexes: [],
+  })
+
+  it('includes Eq when all fields support Eq', () => {
+    const model = makeModel('User', [
+      {
+        name: 'id',
+        kind: 'scalar',
+        type: 'String',
+        isRequired: true,
+        isId: true,
+        isUnique: false,
+        isList: false,
+        isUpdatedAt: false,
+        hasDefaultValue: true,
+        default: { name: 'uuid', args: [] },
+        nativeType: null,
+      },
+    ])
+    const result = generateEntityFile(model, [model], [])
+    expect(result).toContain('PartialEq, Eq, DeriveEntityModel')
+  })
+
+  it('omits Eq when Float field exists', () => {
+    const model = makeModel('Product', [
+      {
+        name: 'id',
+        kind: 'scalar',
+        type: 'Int',
+        isRequired: true,
+        isId: true,
+        isUnique: false,
+        isList: false,
+        isUpdatedAt: false,
+        hasDefaultValue: true,
+        default: { name: 'autoincrement', args: [] },
+        nativeType: null,
+      },
+      {
+        name: 'price',
+        kind: 'scalar',
+        type: 'Float',
+        isRequired: true,
+        isId: false,
+        isUnique: false,
+        isList: false,
+        isUpdatedAt: false,
+        hasDefaultValue: false,
+        nativeType: null,
+      },
+    ])
+    const result = generateEntityFile(model, [model], [])
+    expect(result).toContain('PartialEq, DeriveEntityModel')
+    expect(result).not.toContain('PartialEq, Eq')
   })
 })

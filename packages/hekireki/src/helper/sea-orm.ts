@@ -295,6 +295,13 @@ export interface SerdeOptions {
   readonly renameAll?: string
 }
 
+// Types that do NOT implement Eq in Rust (f64: NaN != NaN)
+const NON_EQ_PRISMA_TYPES = new Set(['Float'])
+
+export function canDeriveEq(fields: readonly DMMF.Field[]): boolean {
+  return fields.filter((f) => f.kind !== 'object').every((f) => !NON_EQ_PRISMA_TYPES.has(f.type))
+}
+
 function buildSerdeAttributes(opts: SerdeOptions): string[] {
   const parts: string[] = []
   if (opts.renameAll) {
@@ -315,7 +322,7 @@ export function generateEnum(e: DMMF.DatamodelEnum, serde: SerdeOptions = {}): s
   })
 
   const derives =
-    '#[derive(Debug, Clone, PartialEq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]'
+    '#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]'
 
   const serdeAttrs = buildSerdeAttributes(serde)
 
@@ -507,8 +514,10 @@ export function generateEntityFile(
 
   const useLines = ['use sea_orm::entity::prelude::*;', 'use serde::{Deserialize, Serialize};']
 
-  const deriveModel =
-    '#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]'
+  const eq = canDeriveEq(scalarFields)
+  const deriveModel = eq
+    ? '#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]'
+    : '#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]'
 
   const serdeAttrs = buildSerdeAttributes(serde)
 
@@ -555,7 +564,7 @@ function generateM2MEntity(
   const useLines = ['use sea_orm::entity::prelude::*;', 'use serde::{Deserialize, Serialize};']
 
   const deriveModel =
-    '#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]'
+    '#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]'
 
   const serdeAttrs = buildSerdeAttributes(serde)
 

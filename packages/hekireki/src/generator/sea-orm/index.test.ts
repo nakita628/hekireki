@@ -52,7 +52,7 @@ model Post {
     expect(userResult).toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "user")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
@@ -78,7 +78,7 @@ impl ActiveModelBehavior for ActiveModel {}`)
     expect(postResult).toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "post")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
@@ -158,7 +158,7 @@ model Profile {
     expect(userResult).toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "user")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
@@ -186,7 +186,7 @@ impl ActiveModelBehavior for ActiveModel {}`)
     expect(profileResult).toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "profile")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
@@ -251,7 +251,7 @@ model Post {
     expect(userResult).toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "user")]
 pub struct Model {
     #[sea_orm(primary_key)]
@@ -277,7 +277,7 @@ impl ActiveModelBehavior for ActiveModel {}`)
     expect(postResult).toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "post")]
 pub struct Model {
     #[sea_orm(primary_key)]
@@ -351,7 +351,7 @@ model Post {
     expect(roleResult).toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
 #[sea_orm(rs_type = "String", db_type = "String(StringLen::None)")]
 pub enum Role {
     #[sea_orm(string_value = "ADMIN")]
@@ -367,7 +367,7 @@ pub enum Role {
     expect(userResult).toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "user")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
@@ -437,7 +437,7 @@ model Like {
     expect(likeResult).toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "like")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
@@ -512,7 +512,7 @@ model Tag {
     expect(postResult).toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "post")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
@@ -538,7 +538,7 @@ impl ActiveModelBehavior for ActiveModel {}`)
     expect(tagResult).toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "tag")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
@@ -567,7 +567,7 @@ impl ActiveModelBehavior for ActiveModel {}`)
     expect(junctionResult).toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "_PostToTag")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
@@ -629,7 +629,7 @@ model Agent {
     expect(result).toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "agent")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
@@ -690,7 +690,7 @@ model Post {
     expect(userResult).toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[sea_orm(table_name = "user")]
 pub struct Model {
@@ -722,7 +722,7 @@ impl ActiveModelBehavior for ActiveModel {}`)
     const roleResult = fs.readFileSync('./prisma-sea-orm/sea_orm/role.rs', { encoding: 'utf-8' })
     expect(roleResult).toContain('#[serde(rename_all = "camelCase")]')
     expect(roleResult).toContain(
-      '#[derive(Debug, Clone, PartialEq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]',
+      '#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]',
     )
   }, 30000)
 
@@ -756,7 +756,7 @@ model User {
     expect(result).toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "user")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
@@ -792,7 +792,7 @@ describe('fixture: twitter-clone-sample', () => {
     ).toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "user")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
@@ -874,7 +874,7 @@ impl ActiveModelBehavior for ActiveModel {}`)
     ).toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "follow")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
@@ -940,7 +940,7 @@ describe('fixture: rbac', () => {
     ).toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "organizations")]
 pub struct Model {
     #[sea_orm(primary_key)]
@@ -975,7 +975,7 @@ impl ActiveModelBehavior for ActiveModel {}`)
     ).toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "user_roles")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
@@ -1020,7 +1020,7 @@ impl ActiveModelBehavior for ActiveModel {}`)
     ).toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "audit_logs")]
 pub struct Model {
     #[sea_orm(primary_key)]
@@ -1059,7 +1059,7 @@ impl ActiveModelBehavior for ActiveModel {}`)
     ).toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
 #[sea_orm(rs_type = "String", db_type = "String(StringLen::None)")]
 pub enum OrgStatus {
     #[sea_orm(string_value = "ACTIVE")]
@@ -1086,7 +1086,7 @@ describe('fixture: no-annotation (M2M implicit)', () => {
     ).toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "user")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
@@ -1130,7 +1130,7 @@ impl ActiveModelBehavior for ActiveModel {}`)
     ).toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "post")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
@@ -1176,7 +1176,7 @@ impl ActiveModelBehavior for ActiveModel {}`)
     ).toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "tag")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
@@ -1204,7 +1204,7 @@ impl ActiveModelBehavior for ActiveModel {}`)
     ).toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "_PostToTag")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
@@ -1257,7 +1257,7 @@ describe('fixture: jwt-auth-pg', () => {
     ).toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "users")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
@@ -1337,7 +1337,7 @@ impl ActiveModelBehavior for ActiveModel {}`)
     ).toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "oauth_accounts")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
@@ -1379,7 +1379,7 @@ impl ActiveModelBehavior for ActiveModel {}`)
     ).toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "two_factor_settings")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
@@ -1426,7 +1426,7 @@ impl ActiveModelBehavior for ActiveModel {}`)
     ).toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
 #[sea_orm(rs_type = "String", db_type = "String(StringLen::None)")]
 pub enum Role {
     #[sea_orm(string_value = "ADMIN")]
