@@ -769,7 +769,7 @@ describe('drizzleSchema - Relations', () => {
         '',
         'export const userRelations = relations(user, ({ many }) => ({ posts: many(post) }))',
         '',
-        "export const postRelations = relations(post, ({ one }) => ({ user: one(user, { fields: [post.authorId], references: [user.id] }) }))",
+        'export const postRelations = relations(post, ({ one }) => ({ user: one(user, { fields: [post.authorId], references: [user.id] }) }))',
       ].join('\n'),
     )
   })
@@ -780,9 +780,7 @@ describe('drizzleSchema - Relations', () => {
         models: [
           makeModel({
             name: 'User',
-            fields: [
-              makeField({ name: 'id', type: 'Int', isId: true }),
-            ],
+            fields: [makeField({ name: 'id', type: 'Int', isId: true })],
           }),
           makeModel({
             name: 'Post',
@@ -855,7 +853,7 @@ describe('drizzleSchema - Relations', () => {
       [],
     )
 
-    expect(result).toContain(".references(() => user.id)")
+    expect(result).toContain('.references(() => user.id)')
     expect(result).not.toContain('onDelete')
   })
 })
@@ -1587,9 +1585,9 @@ describe('drizzleSchema - complex schema with all Bug fixes', () => {
         '',
         'export const userRelations = relations(user, ({ many }) => ({ posts: many(post) }))',
         '',
-        "export const postRelations = relations(post, ({ one }) => ({ user: one(user, { fields: [post.userId], references: [user.id] }) }))",
+        'export const postRelations = relations(post, ({ one }) => ({ user: one(user, { fields: [post.userId], references: [user.id] }) }))',
         '',
-        "export const commentRelations = relations(comment, ({ one }) => ({ user: one(user, { fields: [comment.userId], references: [user.id] }) }))",
+        'export const commentRelations = relations(comment, ({ one }) => ({ user: one(user, { fields: [comment.userId], references: [user.id] }) }))',
       ].join('\n'),
     )
   })
@@ -1656,7 +1654,7 @@ describe('drizzleSchema - complex schema with all Bug fixes', () => {
         '',
         'export const userRelations = relations(user, ({ many }) => ({ posts: many(post) }))',
         '',
-        "export const postRelations = relations(post, ({ one }) => ({ user: one(user, { fields: [post.userId], references: [user.id] }) }))",
+        'export const postRelations = relations(post, ({ one }) => ({ user: one(user, { fields: [post.userId], references: [user.id] }) }))',
       ].join('\n'),
     )
   })

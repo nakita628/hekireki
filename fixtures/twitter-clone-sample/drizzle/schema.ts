@@ -1,5 +1,5 @@
-import { index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 import { relations, sql } from 'drizzle-orm'
+import { index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 export const user = sqliteTable('user', {
   id: text('id')
@@ -14,9 +14,7 @@ export const user = sqliteTable('user', {
   coverImage: text('coverImage'),
   profileImage: text('profileImage'),
   hashedPassword: text('hashedPassword'),
-  createdAt: integer('createdAt', { mode: 'timestamp' })
-    .notNull()
-    .default(sql`(unixepoch())`),
+  createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
   updatedAt: integer('updatedAt', { mode: 'timestamp' })
     .notNull()
     .default(sql`(unixepoch())`)
@@ -29,9 +27,7 @@ export const post = sqliteTable('post', {
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
   body: text('body').notNull(),
-  createdAt: integer('createdAt', { mode: 'timestamp' })
-    .notNull()
-    .default(sql`(unixepoch())`),
+  createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
   updatedAt: integer('updatedAt', { mode: 'timestamp' })
     .notNull()
     .default(sql`(unixepoch())`)
@@ -50,9 +46,7 @@ export const follow = sqliteTable(
     followingId: text('followingId')
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
-    createdAt: integer('createdAt', { mode: 'timestamp' })
-      .notNull()
-      .default(sql`(unixepoch())`),
+    createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
   },
   (table) => [primaryKey({ columns: [table.followerId, table.followingId] })],
 )
@@ -66,9 +60,7 @@ export const like = sqliteTable(
     postId: text('postId')
       .notNull()
       .references(() => post.id, { onDelete: 'cascade' }),
-    createdAt: integer('createdAt', { mode: 'timestamp' })
-      .notNull()
-      .default(sql`(unixepoch())`),
+    createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
   },
   (table) => [primaryKey({ columns: [table.userId, table.postId] })],
 )
@@ -80,9 +72,7 @@ export const comment = sqliteTable(
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
     body: text('body').notNull(),
-    createdAt: integer('createdAt', { mode: 'timestamp' })
-      .notNull()
-      .default(sql`(unixepoch())`),
+    createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
     updatedAt: integer('updatedAt', { mode: 'timestamp' })
       .notNull()
       .default(sql`(unixepoch())`)
@@ -110,9 +100,7 @@ export const notification = sqliteTable(
     userId: text('userId')
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
-    createdAt: integer('createdAt', { mode: 'timestamp' })
-      .notNull()
-      .default(sql`(unixepoch())`),
+    createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
   },
   (table) => [index('idx_notification_userId').on(table.userId)],
 )

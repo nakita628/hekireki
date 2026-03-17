@@ -107,7 +107,17 @@ describe('prisma generate drizzle - better-auth assertion tests', () => {
   it('postgresql-full: all plugins combined', async () => {
     const result = await generateAndRead(readFixture('better-auth-prisma-drizzle-postgresql-full'))
 
-    for (const model of ['user', 'session', 'account', 'verification', 'twoFactor', 'organization', 'member', 'invitation', 'jwks']) {
+    for (const model of [
+      'user',
+      'session',
+      'account',
+      'verification',
+      'twoFactor',
+      'organization',
+      'member',
+      'invitation',
+      'jwks',
+    ]) {
       expect(result).toContain(`export const ${model}`)
     }
     expect(result).not.toContain('unique().on(table.email)')
@@ -144,7 +154,17 @@ describe('prisma generate drizzle - better-auth assertion tests', () => {
   it('mysql-full: all plugins combined', async () => {
     const result = await generateAndRead(readFixture('better-auth-prisma-drizzle-mysql-full'))
 
-    for (const model of ['user', 'session', 'account', 'verification', 'twoFactor', 'organization', 'member', 'invitation', 'jwks']) {
+    for (const model of [
+      'user',
+      'session',
+      'account',
+      'verification',
+      'twoFactor',
+      'organization',
+      'member',
+      'invitation',
+      'jwks',
+    ]) {
       expect(result).toContain(`export const ${model}`)
     }
     expect(result).toContain('mysqlTable')
