@@ -26,7 +26,7 @@ const MYSQL_SCALAR_MAP: { [k: string]: string } = {
   Float: 'double()',
   Decimal: 'decimal()',
   Boolean: 'boolean()',
-  DateTime: 'datetime()',
+  DateTime: 'datetime({ fsp: 3 })',
   Json: 'json()',
   Bytes: 'binary()',
 }
@@ -38,7 +38,7 @@ const SQLITE_SCALAR_MAP: { [k: string]: string } = {
   Float: 'real()',
   Decimal: 'numeric()',
   Boolean: "integer({ mode: 'boolean' })",
-  DateTime: "integer({ mode: 'timestamp' })",
+  DateTime: "integer({ mode: 'timestamp_ms' })",
   Json: "text({ mode: 'json' })",
   Bytes: 'blob()',
 }
@@ -135,9 +135,9 @@ function mysqlNativeType(name: string, args: readonly string[]): string | null {
     case 'Time':
       return args[0] ? `time({ fsp: ${args[0]} })` : 'time()'
     case 'DateTime':
-      return args[0] ? `datetime({ fsp: ${args[0]} })` : 'datetime()'
+      return `datetime({ fsp: ${args[0] ?? 3} })`
     case 'Timestamp':
-      return args[0] ? `timestamp({ fsp: ${args[0]} })` : 'timestamp()'
+      return `timestamp({ fsp: ${args[0] ?? 3} })`
     case 'Json':
       return 'json()'
     case 'Binary':
@@ -287,11 +287,11 @@ function makeDefaultChain(
       case 'now':
         if (provider === 'sqlite') {
           imports.addOrm('sql')
-          return '.default(sql`(unixepoch())`)'
+          return '.default(sql`(unixepoch() * 1000)`)'
         }
         if (provider === 'mysql') {
           imports.addOrm('sql')
-          return '.default(sql`now()`)'
+          return '.default(sql`CURRENT_TIMESTAMP(3)`)'
         }
         return '.defaultNow()'
       case 'uuid':
@@ -315,6 +315,34 @@ function makeDefaultChain(
     return fieldType === 'Decimal' ? `.default('${dflt}')` : `.default(${dflt})`
   if (typeof dflt === 'boolean') return `.default(${dflt})`
   return ''
+}
+
+const PRISMA_ACTION_MAP: Record<string, string> = {
+  Cascade: 'cascade',
+  SetNull: 'set null',
+  Restrict: 'restrict',
+  NoAction: 'no action',
+  SetDefault: 'set default',
+}
+
+function makeFkReference(
+  field: DMMF.Field,
+  model: DMMF.Model,
+): string {
+  const relField = model.fields.find(
+    (f) =>
+      f.kind === 'object' &&
+      f.relationFromFields &&
+      f.relationFromFields.includes(field.name),
+  )
+  if (!relField || !relField.relationFromFields || !relField.relationToFields) return ''
+
+  const targetVar = toCamelCase(relField.type)
+  const toCol = relField.relationToFields[0] ?? 'id'
+  const onDelete = relField.relationOnDelete
+  const drizzleAction = onDelete ? PRISMA_ACTION_MAP[onDelete] : undefined
+  const opts = drizzleAction ? `, { onDelete: '${drizzleAction}' }` : ''
+  return `.references(() => ${targetVar}.${toCol}${opts})`
 }
 
 function makeColumn(
@@ -341,11 +369,24 @@ function makeColumn(
       ? '.notNull()'
       : '',
     field.isUnique ? '.unique()' : '',
+    makeFkReference(field, model),
     isAutoincrement
       ? provider === 'mysql'
         ? '.autoincrement()'
         : ''
-      : makeDefaultChain(field.default, field.type, provider, imports),
+      : field.isUpdatedAt && (field.default === undefined || field.default === null)
+        ? (() => {
+            if (provider === 'sqlite') {
+              imports.addOrm('sql')
+              return '.default(sql`(unixepoch() * 1000)`)'
+            }
+            if (provider === 'mysql') {
+              imports.addOrm('sql')
+              return '.default(sql`CURRENT_TIMESTAMP(3)`)'
+            }
+            return '.defaultNow()'
+          })()
+        : makeDefaultChain(field.default, field.type, provider, imports),
     field.isUpdatedAt ? '.$onUpdate(() => new Date())' : '',
     field.isList && field.kind === 'scalar' && provider === 'postgresql' ? '.array()' : '',
   ].join('')
@@ -361,6 +402,7 @@ function makeCompositeConstraints(
   model: DMMF.Model,
   imports: ImportTracker,
   indexes: readonly DMMF.Index[],
+  tableName: string,
 ): string | null {
   const pkLine = model.primaryKey
     ? (() => {
@@ -369,16 +411,18 @@ function makeCompositeConstraints(
       })()
     : null
 
-  const uniqueLines = model.uniqueFields.map((fields) => {
-    imports.addCore('unique')
-    return `unique().on(${fields.map((f) => `table.${f}`).join(', ')})`
-  })
+  const uniqueLines = model.uniqueFields
+    .filter((fields) => fields.length > 1)
+    .map((fields) => {
+      imports.addCore('unique')
+      return `unique().on(${fields.map((f) => `table.${f}`).join(', ')})`
+    })
 
   const indexLines = indexes
     .filter((idx) => idx.model === model.name && (idx.type === 'normal' || idx.type === 'fulltext'))
     .map((idx) => {
       imports.addCore('index')
-      const idxName = idx.dbName ?? idx.name ?? `idx_${idx.fields.map((f) => f.name).join('_')}`
+      const idxName = idx.dbName ?? idx.name ?? `idx_${tableName}_${idx.fields.map((f) => f.name).join('_')}`
       return `index('${idxName}').on(${idx.fields.map((f) => `table.${f.name}`).join(', ')})`
     })
 
@@ -407,7 +451,7 @@ function makeTable(
     .map((field) => makeColumn(field, model, provider, imports, enums))
     .filter((c): c is string => c !== null)
     .join(', ')
-  const constraints = makeCompositeConstraints(model, imports, indexes)
+  const constraints = makeCompositeConstraints(model, imports, indexes, tableName)
 
   return constraints
     ? `export const ${varName} = ${tableFunc}('${tableName}', { ${columns} }, (table) => [${constraints}])`

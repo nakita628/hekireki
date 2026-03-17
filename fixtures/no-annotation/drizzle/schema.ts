@@ -1,5 +1,5 @@
-import { relations, sql } from 'drizzle-orm'
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import { relations, sql } from 'drizzle-orm'
 
 export const user = sqliteTable('user', {
   id: text('id')
@@ -12,9 +12,12 @@ export const user = sqliteTable('user', {
   role: text('role', { enum: ['ADMIN', 'MEMBER', 'GUEST'] })
     .notNull()
     .default('MEMBER'),
-  createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  createdAt: integer('createdAt', { mode: 'timestamp' })
+    .notNull()
+    .default(sql`(unixepoch())`),
   updatedAt: integer('updatedAt', { mode: 'timestamp' })
     .notNull()
+    .default(sql`(unixepoch())`)
     .$onUpdate(() => new Date()),
 })
 
@@ -25,11 +28,16 @@ export const post = sqliteTable('post', {
   title: text('title').notNull(),
   content: text('content').notNull(),
   published: integer('published', { mode: 'boolean' }).notNull().default(false),
-  createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  createdAt: integer('createdAt', { mode: 'timestamp' })
+    .notNull()
+    .default(sql`(unixepoch())`),
   updatedAt: integer('updatedAt', { mode: 'timestamp' })
     .notNull()
+    .default(sql`(unixepoch())`)
     .$onUpdate(() => new Date()),
-  authorId: text('authorId').notNull(),
+  authorId: text('authorId')
+    .notNull()
+    .references(() => user.id),
 })
 
 export const profile = sqliteTable('profile', {
@@ -38,7 +46,10 @@ export const profile = sqliteTable('profile', {
     .$defaultFn(() => crypto.randomUUID()),
   bio: text('bio'),
   avatar: text('avatar'),
-  userId: text('userId').notNull().unique(),
+  userId: text('userId')
+    .notNull()
+    .unique()
+    .references(() => user.id),
 })
 
 export const tag = sqliteTable('tag', {

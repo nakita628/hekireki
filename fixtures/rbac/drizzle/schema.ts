@@ -1,4 +1,3 @@
-import { relations, sql } from 'drizzle-orm'
 import {
   datetime,
   index,
@@ -10,15 +9,19 @@ import {
   unique,
   varchar,
 } from 'drizzle-orm/mysql-core'
+import { relations, sql } from 'drizzle-orm'
 
 export const organization = mysqlTable('organizations', {
   id: int('id').primaryKey().autoincrement(),
   name: varchar('name', { length: 200 }).notNull(),
   slug: varchar('slug', { length: 100 }).notNull().unique(),
   status: mysqlEnum('status', ['ACTIVE', 'INACTIVE', 'SUSPENDED']).notNull().default('ACTIVE'),
-  createdAt: datetime('created_at').notNull().default(sql`now()`),
+  createdAt: datetime('created_at')
+    .notNull()
+    .default(sql`now()`),
   updatedAt: datetime('updated_at')
     .notNull()
+    .default(sql`now()`)
     .$onUpdate(() => new Date()),
 })
 
@@ -26,24 +29,32 @@ export const user = mysqlTable(
   'users',
   {
     id: int('id').primaryKey().autoincrement(),
-    organizationId: int('organization_id').notNull(),
+    organizationId: int('organization_id')
+      .notNull()
+      .references(() => organization.id),
     email: varchar('email', { length: 255 }).notNull().unique(),
     name: varchar('name', { length: 100 }).notNull(),
-    createdAt: datetime('created_at').notNull().default(sql`now()`),
+    createdAt: datetime('created_at')
+      .notNull()
+      .default(sql`now()`),
     updatedAt: datetime('updated_at')
       .notNull()
+      .default(sql`now()`)
       .$onUpdate(() => new Date()),
   },
-  (table) => [index('idx_organizationId').on(table.organizationId)],
+  (table) => [index('idx_users_organizationId').on(table.organizationId)],
 )
 
 export const role = mysqlTable('roles', {
   id: int('id').primaryKey().autoincrement(),
   name: varchar('name', { length: 100 }).notNull().unique(),
   description: varchar('description', { length: 500 }),
-  createdAt: datetime('created_at').notNull().default(sql`now()`),
+  createdAt: datetime('created_at')
+    .notNull()
+    .default(sql`now()`),
   updatedAt: datetime('updated_at')
     .notNull()
+    .default(sql`now()`)
     .$onUpdate(() => new Date()),
 })
 
@@ -54,7 +65,9 @@ export const permission = mysqlTable(
     resource: varchar('resource', { length: 100 }).notNull(),
     action: varchar('action', { length: 100 }).notNull(),
     description: varchar('description', { length: 500 }),
-    createdAt: datetime('created_at').notNull().default(sql`now()`),
+    createdAt: datetime('created_at')
+      .notNull()
+      .default(sql`now()`),
   },
   (table) => [unique().on(table.resource, table.action)],
 )
@@ -62,9 +75,15 @@ export const permission = mysqlTable(
 export const userRole = mysqlTable(
   'user_roles',
   {
-    userId: int('user_id').notNull(),
-    roleId: int('role_id').notNull(),
-    assignedAt: datetime('assigned_at').notNull().default(sql`now()`),
+    userId: int('user_id')
+      .notNull()
+      .references(() => user.id),
+    roleId: int('role_id')
+      .notNull()
+      .references(() => role.id),
+    assignedAt: datetime('assigned_at')
+      .notNull()
+      .default(sql`now()`),
   },
   (table) => [primaryKey({ columns: [table.userId, table.roleId] })],
 )
@@ -72,9 +91,15 @@ export const userRole = mysqlTable(
 export const rolePermission = mysqlTable(
   'role_permissions',
   {
-    roleId: int('role_id').notNull(),
-    permissionId: int('permission_id').notNull(),
-    assignedAt: datetime('assigned_at').notNull().default(sql`now()`),
+    roleId: int('role_id')
+      .notNull()
+      .references(() => role.id),
+    permissionId: int('permission_id')
+      .notNull()
+      .references(() => permission.id),
+    assignedAt: datetime('assigned_at')
+      .notNull()
+      .default(sql`now()`),
   },
   (table) => [primaryKey({ columns: [table.roleId, table.permissionId] })],
 )
@@ -83,14 +108,21 @@ export const auditLog = mysqlTable(
   'audit_logs',
   {
     id: int('id').primaryKey().autoincrement(),
-    userId: int('user_id').notNull(),
+    userId: int('user_id')
+      .notNull()
+      .references(() => user.id),
     action: varchar('action', { length: 50 }).notNull(),
     resource: varchar('resource', { length: 100 }).notNull(),
     detail: text('detail'),
     ipAddress: varchar('ip_address', { length: 45 }),
-    createdAt: datetime('created_at', { fsp: 3 }).notNull().default(sql`now()`),
+    createdAt: datetime('created_at', { fsp: 3 })
+      .notNull()
+      .default(sql`now()`),
   },
-  (table) => [index('idx_userId').on(table.userId), index('idx_createdAt').on(table.createdAt)],
+  (table) => [
+    index('idx_audit_logs_userId').on(table.userId),
+    index('idx_audit_logs_createdAt').on(table.createdAt),
+  ],
 )
 
 export const organizationRelations = relations(organization, ({ many }) => ({ users: many(user) }))

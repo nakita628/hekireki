@@ -1,5 +1,5 @@
-import { relations, sql } from 'drizzle-orm'
 import { index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import { relations, sql } from 'drizzle-orm'
 
 export const user = sqliteTable('user', {
   id: text('id')
@@ -14,9 +14,12 @@ export const user = sqliteTable('user', {
   coverImage: text('coverImage'),
   profileImage: text('profileImage'),
   hashedPassword: text('hashedPassword'),
-  createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  createdAt: integer('createdAt', { mode: 'timestamp' })
+    .notNull()
+    .default(sql`(unixepoch())`),
   updatedAt: integer('updatedAt', { mode: 'timestamp' })
     .notNull()
+    .default(sql`(unixepoch())`)
     .$onUpdate(() => new Date()),
   hasNotification: integer('hasNotification', { mode: 'boolean' }).default(false),
 })
@@ -26,19 +29,30 @@ export const post = sqliteTable('post', {
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
   body: text('body').notNull(),
-  createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  createdAt: integer('createdAt', { mode: 'timestamp' })
+    .notNull()
+    .default(sql`(unixepoch())`),
   updatedAt: integer('updatedAt', { mode: 'timestamp' })
     .notNull()
+    .default(sql`(unixepoch())`)
     .$onUpdate(() => new Date()),
-  userId: text('userId').notNull(),
+  userId: text('userId')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
 })
 
 export const follow = sqliteTable(
   'follow',
   {
-    followerId: text('followerId').notNull(),
-    followingId: text('followingId').notNull(),
-    createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    followerId: text('followerId')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    followingId: text('followingId')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    createdAt: integer('createdAt', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(unixepoch())`),
   },
   (table) => [primaryKey({ columns: [table.followerId, table.followingId] })],
 )
@@ -46,9 +60,15 @@ export const follow = sqliteTable(
 export const like = sqliteTable(
   'like',
   {
-    userId: text('userId').notNull(),
-    postId: text('postId').notNull(),
-    createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    userId: text('userId')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    postId: text('postId')
+      .notNull()
+      .references(() => post.id, { onDelete: 'cascade' }),
+    createdAt: integer('createdAt', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(unixepoch())`),
   },
   (table) => [primaryKey({ columns: [table.userId, table.postId] })],
 )
@@ -60,14 +80,24 @@ export const comment = sqliteTable(
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
     body: text('body').notNull(),
-    createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    createdAt: integer('createdAt', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(unixepoch())`),
     updatedAt: integer('updatedAt', { mode: 'timestamp' })
       .notNull()
+      .default(sql`(unixepoch())`)
       .$onUpdate(() => new Date()),
-    userId: text('userId').notNull(),
-    postId: text('postId').notNull(),
+    userId: text('userId')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    postId: text('postId')
+      .notNull()
+      .references(() => post.id, { onDelete: 'cascade' }),
   },
-  (table) => [index('idx_userId').on(table.userId), index('idx_postId').on(table.postId)],
+  (table) => [
+    index('idx_comment_userId').on(table.userId),
+    index('idx_comment_postId').on(table.postId),
+  ],
 )
 
 export const notification = sqliteTable(
@@ -77,10 +107,14 @@ export const notification = sqliteTable(
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
     body: text('body').notNull(),
-    userId: text('userId').notNull(),
-    createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    userId: text('userId')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    createdAt: integer('createdAt', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(unixepoch())`),
   },
-  (table) => [index('idx_userId').on(table.userId)],
+  (table) => [index('idx_notification_userId').on(table.userId)],
 )
 
 export const userRelations = relations(user, ({ many }) => ({

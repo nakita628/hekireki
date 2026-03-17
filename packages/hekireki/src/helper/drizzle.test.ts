@@ -92,7 +92,7 @@ describe('drizzleSchema', () => {
       const result = drizzleSchema(datamodel, 'postgresql', [])
 
       expect(result).toBe(
-        "import { integer, pgTable, serial, text } from 'drizzle-orm/pg-core'\nimport { relations } from 'drizzle-orm'\n\nexport const user = pgTable('user', { id: serial('id').primaryKey(), name: text('name').notNull(), email: text('email').notNull().unique() })\n\nexport const post = pgTable('post', { id: serial('id').primaryKey(), title: text('title').notNull(), userId: integer('userId').notNull() })\n\nexport const userRelations = relations(user, ({ many }) => ({ posts: many(post) }))\n\nexport const postRelations = relations(post, ({ one }) => ({ author: one(user, { fields: [post.userId], references: [user.id] }) }))",
+        "import { integer, pgTable, serial, text } from 'drizzle-orm/pg-core'\nimport { relations } from 'drizzle-orm'\n\nexport const user = pgTable('user', { id: serial('id').primaryKey(), name: text('name').notNull(), email: text('email').notNull().unique() })\n\nexport const post = pgTable('post', { id: serial('id').primaryKey(), title: text('title').notNull(), userId: integer('userId').notNull().references(() => user.id) })\n\nexport const userRelations = relations(user, ({ many }) => ({ posts: many(post) }))\n\nexport const postRelations = relations(post, ({ one }) => ({ author: one(user, { fields: [post.userId], references: [user.id] }) }))",
       )
     })
   })
@@ -124,7 +124,7 @@ describe('drizzleSchema', () => {
       const result = drizzleSchema(datamodel, 'sqlite', [])
 
       expect(result).toBe(
-        "import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'\n\nexport const user = sqliteTable('user', { id: integer('id').primaryKey({ autoIncrement: true }), name: text('name').notNull(), active: integer('active', { mode: 'boolean' }).notNull(), createdAt: integer('createdAt', { mode: 'timestamp' }).notNull() })",
+        "import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'\n\nexport const user = sqliteTable('user', { id: integer('id').primaryKey({ autoIncrement: true }), name: text('name').notNull(), active: integer('active', { mode: 'boolean' }).notNull(), createdAt: integer('createdAt', { mode: 'timestamp_ms' }).notNull() })",
       )
     })
   })
@@ -356,7 +356,7 @@ describe('drizzleSchema', () => {
       const result = drizzleSchema(datamodel, 'sqlite', [])
 
       expect(result).toBe(
-        "import { integer, sqliteTable } from 'drizzle-orm/sqlite-core'\nimport { sql } from 'drizzle-orm'\n\nexport const event = sqliteTable('event', { id: integer('id').primaryKey({ autoIncrement: true }), createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`) })",
+        "import { integer, sqliteTable } from 'drizzle-orm/sqlite-core'\nimport { sql } from 'drizzle-orm'\n\nexport const event = sqliteTable('event', { id: integer('id').primaryKey({ autoIncrement: true }), createdAt: integer('createdAt', { mode: 'timestamp_ms' }).notNull().default(sql`(unixepoch() * 1000)`) })",
       )
     })
 
