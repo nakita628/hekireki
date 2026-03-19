@@ -4,7 +4,7 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "deps": "rm -rf node_modules && rm -rf pnpm-lock.yaml && pnpm install",
+    "deps": "mkdir -p /tmp/pnpm-store && pnpm config set store-dir /tmp/pnpm-store &&rm -rf node_modules && rm -rf pnpm-lock.yaml && rm -rf ~/.pnpm-store && pnpm store prune && pnpm install --no-prefer-frozen-lockfile",
     "build": "pnpm -F hekireki build",
     "check": "vp check --fix",
     "lint": "vp lint",
