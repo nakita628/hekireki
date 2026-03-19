@@ -19,7 +19,7 @@ jobs:
 
       - run: vp install
 
-      - run: pnpm build
+      - run: vp run build
 
       - run: vp check
 
