@@ -16,10 +16,12 @@ export const organization = mysqlTable('organizations', {
   name: varchar('name', { length: 200 }).notNull(),
   slug: varchar('slug', { length: 100 }).notNull().unique(),
   status: mysqlEnum('status', ['ACTIVE', 'INACTIVE', 'SUSPENDED']).notNull().default('ACTIVE'),
-  createdAt: datetime('created_at').notNull().default(sql`now()`),
-  updatedAt: datetime('updated_at')
+  createdAt: datetime('created_at', { fsp: 3 })
     .notNull()
-    .default(sql`now()`)
+    .default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt: datetime('updated_at', { fsp: 3 })
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP(3)`)
     .$onUpdate(() => new Date()),
 })
 
@@ -32,10 +34,12 @@ export const user = mysqlTable(
       .references(() => organization.id),
     email: varchar('email', { length: 255 }).notNull().unique(),
     name: varchar('name', { length: 100 }).notNull(),
-    createdAt: datetime('created_at').notNull().default(sql`now()`),
-    updatedAt: datetime('updated_at')
+    createdAt: datetime('created_at', { fsp: 3 })
       .notNull()
-      .default(sql`now()`)
+      .default(sql`CURRENT_TIMESTAMP(3)`),
+    updatedAt: datetime('updated_at', { fsp: 3 })
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP(3)`)
       .$onUpdate(() => new Date()),
   },
   (table) => [index('idx_users_organizationId').on(table.organizationId)],
@@ -45,10 +49,12 @@ export const role = mysqlTable('roles', {
   id: int('id').primaryKey().autoincrement(),
   name: varchar('name', { length: 100 }).notNull().unique(),
   description: varchar('description', { length: 500 }),
-  createdAt: datetime('created_at').notNull().default(sql`now()`),
-  updatedAt: datetime('updated_at')
+  createdAt: datetime('created_at', { fsp: 3 })
     .notNull()
-    .default(sql`now()`)
+    .default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt: datetime('updated_at', { fsp: 3 })
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP(3)`)
     .$onUpdate(() => new Date()),
 })
 
@@ -59,7 +65,9 @@ export const permission = mysqlTable(
     resource: varchar('resource', { length: 100 }).notNull(),
     action: varchar('action', { length: 100 }).notNull(),
     description: varchar('description', { length: 500 }),
-    createdAt: datetime('created_at').notNull().default(sql`now()`),
+    createdAt: datetime('created_at', { fsp: 3 })
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP(3)`),
   },
   (table) => [unique().on(table.resource, table.action)],
 )
@@ -73,7 +81,9 @@ export const userRole = mysqlTable(
     roleId: int('role_id')
       .notNull()
       .references(() => role.id),
-    assignedAt: datetime('assigned_at').notNull().default(sql`now()`),
+    assignedAt: datetime('assigned_at', { fsp: 3 })
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP(3)`),
   },
   (table) => [primaryKey({ columns: [table.userId, table.roleId] })],
 )
@@ -87,7 +97,9 @@ export const rolePermission = mysqlTable(
     permissionId: int('permission_id')
       .notNull()
       .references(() => permission.id),
-    assignedAt: datetime('assigned_at').notNull().default(sql`now()`),
+    assignedAt: datetime('assigned_at', { fsp: 3 })
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP(3)`),
   },
   (table) => [primaryKey({ columns: [table.roleId, table.permissionId] })],
 )
@@ -103,7 +115,9 @@ export const auditLog = mysqlTable(
     resource: varchar('resource', { length: 100 }).notNull(),
     detail: text('detail'),
     ipAddress: varchar('ip_address', { length: 45 }),
-    createdAt: datetime('created_at', { fsp: 3 }).notNull().default(sql`now()`),
+    createdAt: datetime('created_at', { fsp: 3 })
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP(3)`),
   },
   (table) => [
     index('idx_audit_logs_userId').on(table.userId),

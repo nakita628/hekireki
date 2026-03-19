@@ -1,4 +1,5 @@
 import type { DMMF } from '@prisma/generator-helper'
+
 import { makeSnakeCase } from '../utils/index.js'
 
 export type DbProvider = 'postgresql' | 'mysql' | 'sqlite'

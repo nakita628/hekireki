@@ -1,64 +1,63 @@
 {
   "name": "hekireki",
-  "type": "module",
   "version": "0.7.3",
-  "license": "MIT",
   "description": "Hekireki is a tool that generates validation schemas for Zod, Valibot, ArkType, and Effect Schema, as well as ER diagrams and DBML, from Prisma schemas annotated with comments.",
   "keywords": [
-    "prisma",
-    "zod",
-    "valibot",
-    "arktype",
-    "effect",
-    "mermaid",
-    "ecto",
-    "dbml",
-    "typebox",
     "ajv",
-    "json-schema",
+    "arktype",
+    "dbml",
     "docs",
     "documentation",
-    "gorm",
+    "ecto",
+    "effect",
     "go",
+    "gorm",
+    "json-schema",
+    "mermaid",
+    "prisma",
+    "rust",
     "sea-orm",
-    "rust"
+    "typebox",
+    "valibot",
+    "zod"
   ],
   "homepage": "https://github.com/nakita628/hekireki",
-  "publishConfig": {
-    "access": "public"
+  "bugs": {
+    "url": "https://github.com/nakita628/hekireki/issues"
   },
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/nakita628/hekireki.git"
   },
-  "bugs": {
-    "url": "https://github.com/nakita628/hekireki/issues"
+  "bin": {
+    "hekireki": "dist/cli/index.js",
+    "hekireki-ajv": "dist/generator/ajv/index.js",
+    "hekireki-arktype": "dist/generator/arktype/index.js",
+    "hekireki-dbml": "dist/generator/dbml/index.js",
+    "hekireki-docs": "dist/generator/docs/index.js",
+    "hekireki-drizzle": "dist/generator/drizzle/index.js",
+    "hekireki-ecto": "dist/generator/ecto/index.js",
+    "hekireki-effect": "dist/generator/effect/index.js",
+    "hekireki-gorm": "dist/generator/gorm/index.js",
+    "hekireki-mermaid-er": "dist/generator/mermaid-er/index.js",
+    "hekireki-sea-orm": "dist/generator/sea-orm/index.js",
+    "hekireki-sqlalchemy": "dist/generator/sqlalchemy/index.js",
+    "hekireki-typebox": "dist/generator/typebox/index.js",
+    "hekireki-valibot": "dist/generator/valibot/index.js",
+    "hekireki-zod": "dist/generator/zod/index.js"
   },
   "files": [
     "dist"
   ],
-  "bin": {
-    "hekireki": "dist/cli/index.js",
-    "hekireki-zod": "dist/generator/zod/index.js",
-    "hekireki-valibot": "dist/generator/valibot/index.js",
-    "hekireki-mermaid-er": "dist/generator/mermaid-er/index.js",
-    "hekireki-ecto": "dist/generator/ecto/index.js",
-    "hekireki-arktype": "dist/generator/arktype/index.js",
-    "hekireki-effect": "dist/generator/effect/index.js",
-    "hekireki-dbml": "dist/generator/dbml/index.js",
-    "hekireki-docs": "dist/generator/docs/index.js",
-    "hekireki-drizzle": "dist/generator/drizzle/index.js",
-    "hekireki-typebox": "dist/generator/typebox/index.js",
-    "hekireki-ajv": "dist/generator/ajv/index.js",
-    "hekireki-sqlalchemy": "dist/generator/sqlalchemy/index.js",
-    "hekireki-gorm": "dist/generator/gorm/index.js",
-    "hekireki-sea-orm": "dist/generator/sea-orm/index.js"
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "generate": "prisma generate",
     "deps": "rm -rf node_modules && pnpm install",
     "build": "tsdown",
-    "typecheck": "tsc --noEmit",
     "release": "npm pkg fix && pnpm build && npm publish"
   },
   "dependencies": {

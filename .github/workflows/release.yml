@@ -2,8 +2,8 @@ name: release
 
 on:
   push:
-    paths: [ "packages/hekireki/package.json" ]
-    branches: [ main ]
+    paths: ['packages/hekireki/package.json']
+    branches: [main]
 
 permissions:
   contents: write
@@ -26,6 +26,6 @@ jobs:
       - uses: ncipollo/release-action@v1
         if: ${{ steps.ver.outputs.curr != steps.ver.outputs.prev }}
         with:
-          tag:  v${{ steps.ver.outputs.curr }}
+          tag: v${{ steps.ver.outputs.curr }}
           name: v${{ steps.ver.outputs.curr }}
           generateReleaseNotes: true

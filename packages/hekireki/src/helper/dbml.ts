@@ -1,6 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 import { Resvg } from '@resvg/resvg-js'
 import { run } from '@softwaretechnik/dbml-renderer'
+
 import { writeFile, writeFileBinary } from '../fsp/index.js'
 import { stripAnnotations } from '../utils/index.js'
 

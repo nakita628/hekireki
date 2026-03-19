@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+
 import { makeValidationExtractor, parseDocumentWithoutAnnotations } from '../utils/index.js'
 import { collectRelationProps, makeRelationsOnly, validationSchemas } from './prisma.js'
 import { makeZodInfer, makeZodSchemas, PRISMA_TO_ZOD } from './zod.js'

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import type { GeneratorOptions } from '@prisma/generator-helper'
 import pkg from '@prisma/generator-helper'
+
 import type { SerdeOptions } from '../../helper/sea-orm.js'
 import { writeSeaOrmFiles } from '../../helper/sea-orm.js'
 import { getString } from '../../utils/index.js'

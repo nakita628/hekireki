@@ -1,5 +1,7 @@
 import { dirname } from 'node:path'
+
 import type { DMMF } from '@prisma/generator-helper'
+
 import { mkdir, writeFile } from '../fsp/index.js'
 import { makeSnakeCase } from '../utils/index.js'
 

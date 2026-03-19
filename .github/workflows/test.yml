@@ -2,39 +2,21 @@ name: Test
 
 on:
   push:
-    branches:
-      - main
   pull_request:
-    types: [opened, synchronize, reopened]
 
 jobs:
   test:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+
+      - uses: voidzero-dev/setup-vp@v1
         with:
-          version: 10
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22.x'
-          cache: 'pnpm'
+          node-version: '22'
+          cache: true
 
-      - name: Install Dependencies
-        run: pnpm install --frozen-lockfile
+      - run: vp install
 
-      - name: Check
-        run: pnpm biome check ./
+      - run: vp check
 
-      - name: Typecheck
-        run: pnpm -F hekireki typecheck
-
-      - name: Build
-        run: pnpm -F hekireki build
-
-      - name: Link
-        run: cd packages/hekireki && pnpm link .
-
-      - name: Run Coverage
-        run: pnpm coverage
+      - run: vp test --coverage

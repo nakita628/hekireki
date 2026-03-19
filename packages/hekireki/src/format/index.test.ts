@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+
 import { fmt } from './index.js'
 
 // Test run

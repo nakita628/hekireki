@@ -29,16 +29,24 @@ export const globalCss = css`
       --code-bg: #374151;
       --code-color: #e5e7eb;
     }
-    * { box-sizing: border-box; }
+    * {
+      box-sizing: border-box;
+    }
     body {
       margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      font-family:
+        -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
       background-color: var(--bg-primary);
       color: var(--text-primary);
       min-height: 100vh;
     }
-    a { color: var(--link-color); text-decoration: none; }
-    a:hover { text-decoration: underline; }
+    a {
+      color: var(--link-color);
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
   }
 `
 
@@ -201,7 +209,8 @@ export const codeBlockClass = css`
   padding: 1em;
   border-radius: 0.5em;
   overflow: auto;
-  font-family: 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-family:
+    'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
   font-size: 14px;
   line-height: 1.5;
   margin: 0;

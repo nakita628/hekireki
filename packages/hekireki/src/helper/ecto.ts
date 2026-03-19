@@ -1,5 +1,7 @@
 import { join } from 'node:path'
+
 import type { DMMF } from '@prisma/generator-helper'
+
 import { mkdir, writeFile } from '../fsp/index.js'
 import { makeSnakeCase } from '../utils/index.js'
 
@@ -236,6 +238,7 @@ export function ectoSchemas(
   allModels?: readonly DMMF.Model[],
   enums?: readonly DMMF.DatamodelEnum[],
 ): string {
+  const appName = Array.isArray(app) ? app.join('.') : app
   const contextModels = allModels ?? models
   return models
     .map((model) => {
@@ -303,13 +306,13 @@ export function ectoSchemas(
           return `${makeSnakeCase(f.name)}: ${typeSpec}${nullSuffix}`
         }),
         ...associations.belongsTo.map(
-          (a) => `${makeSnakeCase(a.name)}: ${app}.${a.targetModel}.t() | nil`,
+          (a) => `${makeSnakeCase(a.name)}: ${appName}.${a.targetModel}.t() | nil`,
         ),
         ...associations.hasOne.map(
-          (a) => `${makeSnakeCase(a.name)}: ${app}.${a.targetModel}.t() | nil`,
+          (a) => `${makeSnakeCase(a.name)}: ${appName}.${a.targetModel}.t() | nil`,
         ),
         ...associations.hasMany.map(
-          (a) => `${makeSnakeCase(a.name)}: [${app}.${a.targetModel}.t()]`,
+          (a) => `${makeSnakeCase(a.name)}: [${appName}.${a.targetModel}.t()]`,
         ),
       ]
 
@@ -377,23 +380,23 @@ export function ectoSchemas(
           opts.push(`type: :${a.fkType}`)
         }
         if (a.references !== 'id') opts.push(`references: :${a.references}`)
-        return `    belongs_to(:${snakeAssocName}, ${app}.${a.targetModel}, ${opts.join(', ')})`
+        return `    belongs_to(:${snakeAssocName}, ${appName}.${a.targetModel}, ${opts.join(', ')})`
       })
 
       const hasOneLines = associations.hasOne.map((a) => {
         const snakeFk = makeSnakeCase(a.foreignKey)
         const snakeAssocName = makeSnakeCase(a.name)
-        return `    has_one(:${snakeAssocName}, ${app}.${a.targetModel}, foreign_key: :${snakeFk})`
+        return `    has_one(:${snakeAssocName}, ${appName}.${a.targetModel}, foreign_key: :${snakeFk})`
       })
 
       const hasManyLines = associations.hasMany.map((a) => {
         const snakeFk = makeSnakeCase(a.foreignKey)
         const snakeAssocName = makeSnakeCase(a.name)
-        return `    has_many(:${snakeAssocName}, ${app}.${a.targetModel}, foreign_key: :${snakeFk})`
+        return `    has_many(:${snakeAssocName}, ${appName}.${a.targetModel}, foreign_key: :${snakeFk})`
       })
 
       const lines = [
-        `defmodule ${app}.${model.name} do`,
+        `defmodule ${appName}.${model.name} do`,
         '  use Ecto.Schema',
         ...(model.documentation
           ? [`  @moduledoc """`, ...model.documentation.split('\n').map((l) => `  ${l}`), '  """']

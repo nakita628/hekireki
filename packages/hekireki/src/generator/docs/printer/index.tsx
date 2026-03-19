@@ -1,6 +1,7 @@
-import type { FC, PropsWithChildren } from 'hono/jsx'
 import { Style } from 'hono/css'
 import { raw } from 'hono/html'
+import type { FC, PropsWithChildren } from 'hono/jsx'
+
 import { createTypes } from '../generator/apitypes.js'
 import { createModels } from '../generator/model.js'
 import { createTOC } from '../generator/toc.js'
@@ -38,7 +39,8 @@ const DarkModeToggle: FC = () => (
     <label for="darkModeToggle" class={darkModeToggleLabelClass}>
       Dark Mode
     </label>
-    <script>{raw(`
+    <script>
+      {raw(`
       const darkModeToggle = document.getElementById('darkModeToggle');
       const isDarkModeStored = localStorage.getItem('isDarkMode') === 'true';
       darkModeToggle.checked = isDarkModeStored;
@@ -51,7 +53,8 @@ const DarkModeToggle: FC = () => (
         }
         localStorage.setItem('isDarkMode', isDark);
       });
-    `)}</script>
+    `)}
+    </script>
   </div>
 )
 
@@ -62,10 +65,12 @@ const Layout: FC<PropsWithChildren> = ({ children }) => (
       <meta name="viewport" content="width=device-width,initial-scale=1.0" />
       <title>Hekireki Generated Docs</title>
       <Style />
-      <script>{raw(`
+      <script>
+        {raw(`
         const isDarkMode = localStorage.getItem('isDarkMode') === 'true';
         if (isDarkMode) document.documentElement.classList.add('dark');
-      `)}</script>
+      `)}
+      </script>
     </head>
     <body>{children}</body>
   </html>
@@ -104,5 +109,5 @@ export const generateHTML = async (data: DMMFDocument): Promise<string> => {
     </Layout>
   )
 
-  return '<!DOCTYPE html>' + await element.toString()
+  return '<!DOCTYPE html>' + String(await element.toString())
 }

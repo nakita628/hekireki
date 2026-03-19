@@ -1,6 +1,7 @@
 import { exec } from 'node:child_process'
 import fs from 'node:fs'
 import { promisify } from 'node:util'
+
 import { afterAll, afterEach, describe, expect, it } from 'vitest'
 
 // Test run
@@ -763,9 +764,8 @@ describe('fixture: twitter-clone-sample', () => {
       'npx prisma generate --schema=../../fixtures/twitter-clone-sample/schema.prisma',
     )
 
-    expect(
-      fs.readFileSync('../../fixtures/twitter-clone-sample/sqlalchemy/models.py', 'utf-8'),
-    ).toBe(`from sqlalchemy import ForeignKey, Index, func
+    expect(fs.readFileSync('../../fixtures/twitter-clone-sample/sqlalchemy/models.py', 'utf-8'))
+      .toBe(`from sqlalchemy import ForeignKey, Index, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from typing import Optional
 from datetime import datetime
@@ -993,9 +993,8 @@ describe('fixture: no-annotation (M2M implicit)', () => {
   it('generates models with implicit M2M (Post <-> Tag), enum, one-to-one, @updatedAt', async () => {
     await promisify(exec)('npx prisma generate --schema=../../fixtures/no-annotation/schema.prisma')
 
-    expect(
-      fs.readFileSync('../../fixtures/no-annotation/sqlalchemy/models.py', 'utf-8'),
-    ).toBe(`from sqlalchemy import Column, Enum, ForeignKey, String, Table, func
+    expect(fs.readFileSync('../../fixtures/no-annotation/sqlalchemy/models.py', 'utf-8'))
+      .toBe(`from sqlalchemy import Column, Enum, ForeignKey, String, Table, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from typing import Optional
 from datetime import datetime

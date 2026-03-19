@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 import fs from 'node:fs/promises'
 import path from 'node:path'
+
 import pkg from '@prisma/generator-helper'
+
 import { transformDMMF } from './generator/transformDMMF.js'
 import { generateHTML } from './printer/index.js'
 

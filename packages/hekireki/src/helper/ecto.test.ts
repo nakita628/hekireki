@@ -1,5 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 import { describe, expect, it } from 'vitest'
+
 import { ectoSchemas, ectoTypeToTypespec, prismaTypeToEctoType } from './ecto.js'
 
 function makeModel(overrides: Partial<DMMF.Model> & { name: string }): DMMF.Model {

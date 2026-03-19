@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 import path from 'node:path'
+
 import type { GeneratorOptions } from '@prisma/generator-helper'
 import pkg from '@prisma/generator-helper'
+
 import { fmt } from '../../format/index.js'
 import { mkdir, writeFile } from '../../fsp/index.js'
 import { arktype, makeArktypeRelations } from '../../helper/arktype.js'

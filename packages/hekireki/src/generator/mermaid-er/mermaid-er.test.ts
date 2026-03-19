@@ -1,5 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 import { describe, expect, it } from 'vitest'
+
 import {
   erContent,
   extractRelations,

@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 import path from 'node:path'
+
 import type { GeneratorOptions } from '@prisma/generator-helper'
 import pkg from '@prisma/generator-helper'
+
 import { writeGormFile } from '../../helper/gorm.js'
 import { getString } from '../../utils/index.js'
 

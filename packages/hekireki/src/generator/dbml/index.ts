@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 import path from 'node:path'
+
 import type { GeneratorOptions } from '@prisma/generator-helper'
 import pkg from '@prisma/generator-helper'
+
 import { mkdir, writeFile } from '../../fsp/index.js'
 import { dbmlContent, makeDbmlFile, makePng, makePngFile } from '../../helper/dbml.js'
 import { getString } from '../../utils/index.js'

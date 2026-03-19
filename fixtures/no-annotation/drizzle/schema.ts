@@ -12,10 +12,12 @@ export const user = sqliteTable('user', {
   role: text('role', { enum: ['ADMIN', 'MEMBER', 'GUEST'] })
     .notNull()
     .default('MEMBER'),
-  createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
-  updatedAt: integer('updatedAt', { mode: 'timestamp' })
+  createdAt: integer('createdAt', { mode: 'timestamp_ms' })
     .notNull()
-    .default(sql`(unixepoch())`)
+    .default(sql`(unixepoch() * 1000)`),
+  updatedAt: integer('updatedAt', { mode: 'timestamp_ms' })
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`)
     .$onUpdate(() => new Date()),
 })
 
@@ -26,10 +28,12 @@ export const post = sqliteTable('post', {
   title: text('title').notNull(),
   content: text('content').notNull(),
   published: integer('published', { mode: 'boolean' }).notNull().default(false),
-  createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
-  updatedAt: integer('updatedAt', { mode: 'timestamp' })
+  createdAt: integer('createdAt', { mode: 'timestamp_ms' })
     .notNull()
-    .default(sql`(unixepoch())`)
+    .default(sql`(unixepoch() * 1000)`),
+  updatedAt: integer('updatedAt', { mode: 'timestamp_ms' })
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`)
     .$onUpdate(() => new Date()),
   authorId: text('authorId')
     .notNull()

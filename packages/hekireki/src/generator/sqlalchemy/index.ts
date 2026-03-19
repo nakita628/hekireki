@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 import path from 'node:path'
+
 import type { GeneratorOptions } from '@prisma/generator-helper'
 import pkg from '@prisma/generator-helper'
+
 import { writeSQLAlchemyFile } from '../../helper/sqlalchemy.js'
 
 const { generatorHandler } = pkg
