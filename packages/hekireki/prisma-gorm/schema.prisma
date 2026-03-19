@@ -1,0 +1,33 @@
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "sqlite"
+}
+
+generator Hekireki-GORM {
+    provider = "hekireki-gorm"
+    output   = "gorm"
+}
+
+model User {
+    id    String @id @default(uuid())
+    name  String
+    likes Like[]
+}
+
+model Post {
+    id    String @id @default(uuid())
+    title String
+    likes Like[]
+}
+
+model Like {
+    userId    String
+    postId    String
+    user      User     @relation(fields: [userId], references: [id])
+    post      Post     @relation(fields: [postId], references: [id])
+
+    @@id([userId, postId])
+}

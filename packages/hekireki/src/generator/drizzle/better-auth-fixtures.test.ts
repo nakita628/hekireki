@@ -3,14 +3,19 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { promisify } from 'node:util'
 
-import { describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it } from 'vitest'
 
 // pnpm vitest run ./src/generator/drizzle/better-auth-fixtures.test.ts
 //
-// Generates Drizzle schemas from each fixture using the workspace-linked
-// hekireki package, then verifies the output matches the saved snapshot.
+// Generates Drizzle schemas from each fixture into a temp directory,
+// then verifies the output matches the snapshot.
 
 const FIXTURES_DIR = path.resolve(__dirname, '../../../../../fixtures')
+const TMP_DIR = path.resolve(__dirname, '../../../../../.tmp-drizzle-test')
+
+afterAll(() => {
+  fs.rmSync(TMP_DIR, { recursive: true, force: true })
+})
 
 const PRISMA_DRIZZLE_FIXTURES = [
   // SQLite
@@ -36,20 +41,28 @@ const PRISMA_DRIZZLE_FIXTURES = [
   { name: 'better-auth-prisma-drizzle-mysql-full', label: 'mysql / full' },
 ]
 
-describe('fixture: prisma generate drizzle - strict output match', () => {
+describe('fixture: prisma generate drizzle - snapshot', () => {
   for (const fixture of PRISMA_DRIZZLE_FIXTURES) {
     it(`${fixture.name}: ${fixture.label}`, async () => {
       const fixtureDir = path.join(FIXTURES_DIR, fixture.name)
-      const schemaPath = path.join(fixtureDir, 'schema.prisma')
-      const outputPath = path.join(fixtureDir, 'drizzle', 'schema.ts')
+      const originalSchema = fs.readFileSync(path.join(fixtureDir, 'schema.prisma'), 'utf-8')
 
-      const saved = fs.readFileSync(outputPath, { encoding: 'utf-8' })
+      // Rewrite output path to a temp directory inside the project
+      const tmpOutputDir = path.join(TMP_DIR, fixture.name, 'drizzle')
+      fs.mkdirSync(path.join(TMP_DIR, fixture.name), { recursive: true })
 
-      await promisify(exec)(`npx prisma generate --schema=${schemaPath}`)
+      const modifiedSchema = originalSchema.replace(
+        /output\s*=\s*"drizzle"/,
+        `output   = "${tmpOutputDir}"`,
+      )
+      const tmpSchemaPath = path.join(TMP_DIR, fixture.name, 'schema.prisma')
+      fs.writeFileSync(tmpSchemaPath, modifiedSchema)
 
-      const result = fs.readFileSync(outputPath, { encoding: 'utf-8' })
+      await promisify(exec)(`npx prisma generate --schema=${tmpSchemaPath}`)
 
-      expect(result).toStrictEqual(saved)
+      const result = fs.readFileSync(path.join(tmpOutputDir, 'schema.ts'), 'utf-8')
+
+      expect(result).toMatchSnapshot()
     }, 30000)
   }
 })

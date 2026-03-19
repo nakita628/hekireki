@@ -6,4 +6,4 @@ copilot-instructions.md
 fixtures/*/docs
 .DS_Store
 .claude
-CLAUDE.md
+CLAUDE.md.tmp-drizzle-test

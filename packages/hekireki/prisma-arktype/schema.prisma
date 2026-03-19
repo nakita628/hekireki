@@ -1,0 +1,19 @@
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "sqlite"
+}
+
+generator HekirekiArkType {
+    provider = "hekireki-arktype"
+    output   = "arktype-test/test.ts"
+}
+
+model User {
+    /// @a."string.uuid"
+    id    String @id @default(uuid())
+    /// @a."string"
+    name  String
+}
