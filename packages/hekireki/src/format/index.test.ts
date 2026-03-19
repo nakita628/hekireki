@@ -6,16 +6,12 @@ import { fmt } from './index.js'
 // pnpm vitest run ./src/format/index.test.ts
 
 describe('fmt', () => {
-  it.concurrent('fmt Test', async () => {
+  it.concurrent('formats valid TypeScript code', async () => {
     const result = await fmt('const hekireki = "hekireki";')
-    expect(result.ok).toBe(true)
-    if (result.ok) {
-      expect(result.value).toBe(`const hekireki = 'hekireki'\n`)
-    }
+    expect(result).toBe(`const hekireki = 'hekireki'\n`)
   })
 
-  it.concurrent('fmt error Test', async () => {
-    const result = await fmt('const x = {')
-    expect(result.ok).toBe(false)
+  it.concurrent('throws on invalid syntax', async () => {
+    await expect(fmt('const x = {')).rejects.toThrow()
   })
 })

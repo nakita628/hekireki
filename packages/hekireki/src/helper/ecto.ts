@@ -429,25 +429,15 @@ export async function writeEctoSchemasToFiles(
   app: string | string[],
   outDir: string,
   enums?: readonly DMMF.DatamodelEnum[],
-): Promise<
-  { readonly ok: true; readonly value: undefined } | { readonly ok: false; readonly error: string }
-> {
-  const mkdirResult = await mkdir(outDir)
-  if (!mkdirResult.ok) {
-    return mkdirResult
-  }
+): Promise<void> {
+  await mkdir(outDir)
 
   for (const model of models) {
     const code = ectoSchemas([model], app, models, enums)
     if (!code.trim()) continue
 
     const filePath = join(outDir, `${makeSnakeCase(model.name)}.ex`)
-    const writeResult = await writeFile(filePath, code)
-    if (!writeResult.ok) {
-      return writeResult
-    }
+    await writeFile(filePath, code)
     console.log(`wrote ${filePath}`)
   }
-
-  return { ok: true, value: undefined }
 }

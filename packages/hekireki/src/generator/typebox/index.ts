@@ -7,7 +7,7 @@ import pkg from '@prisma/generator-helper'
 import { fmt } from '../../format/index.js'
 import { mkdir, writeFile } from '../../fsp/index.js'
 import { makeRelationsOnly } from '../../helper/prisma.js'
-import { makeTypeBoxRelations, typebox } from '../../helper/typebox.js'
+import { makeTypeboxRelations, typebox } from '../../helper/typebox.js'
 import { getBool } from '../../utils/index.js'
 
 const { generatorHandler } = pkg
@@ -31,24 +31,13 @@ export async function main(options: GeneratorOptions): Promise<void> {
     options.dmmf.datamodel.enums,
   )
   const relations = enableRelation
-    ? makeRelationsOnly(options.dmmf, getBool(options.generator.config?.type), makeTypeBoxRelations)
+    ? makeRelationsOnly(options.dmmf, getBool(options.generator.config?.type), makeTypeboxRelations)
     : ''
   const full = [base, relations].filter(Boolean).join('\n\n')
 
-  const fmtResult = await fmt(full)
-  if (!fmtResult.ok) {
-    throw new Error(`Format error: ${fmtResult.error}`)
-  }
-
-  const mkdirResult = await mkdir(resolved.dir)
-  if (!mkdirResult.ok) {
-    throw new Error(`Failed to create directory: ${mkdirResult.error}`)
-  }
-
-  const writeResult = await writeFile(resolved.file, fmtResult.value)
-  if (!writeResult.ok) {
-    throw new Error(`Failed to write file: ${writeResult.error}`)
-  }
+  const code = await fmt(full)
+  await mkdir(resolved.dir)
+  await writeFile(resolved.file, code)
 }
 
 generatorHandler({

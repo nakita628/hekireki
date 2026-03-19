@@ -22,10 +22,7 @@ export async function main(options: GeneratorOptions): Promise<void> {
   }
 
   const enums = options.dmmf.datamodel.enums
-  const result = await writeSeaOrmFiles(options.dmmf.datamodel.models, output, enums, serde)
-  if (!result.ok) {
-    throw new Error(`Failed to write SeaORM entities: ${result.error}`)
-  }
+  await writeSeaOrmFiles(options.dmmf.datamodel.models, output, enums, serde)
 }
 
 generatorHandler({

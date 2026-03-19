@@ -19,10 +19,7 @@ export async function main(options: GeneratorOptions): Promise<void> {
 
   const enums = options.dmmf.datamodel.enums
   const indexes = options.dmmf.datamodel.indexes
-  const result = await writeSQLAlchemyFile(options.dmmf.datamodel.models, resolved, enums, indexes)
-  if (!result.ok) {
-    throw new Error(`Failed to write SQLAlchemy models: ${result.error}`)
-  }
+  await writeSQLAlchemyFile(options.dmmf.datamodel.models, resolved, enums, indexes)
 }
 
 generatorHandler({

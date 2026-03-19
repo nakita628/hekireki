@@ -24,14 +24,9 @@ export async function main(options: GeneratorOptions): Promise<void> {
 
   const code = drizzleSchema(options.dmmf.datamodel, provider, options.dmmf.datamodel.indexes)
 
-  const fmtResult = await fmt(code)
-  if (!fmtResult.ok) throw new Error(`Format error: ${fmtResult.error}`)
-
-  const mkdirResult = await mkdir(resolved.dir)
-  if (!mkdirResult.ok) throw new Error(`Failed to create directory: ${mkdirResult.error}`)
-
-  const writeResult = await writeFile(resolved.file, fmtResult.value)
-  if (!writeResult.ok) throw new Error(`Failed to write file: ${writeResult.error}`)
+  const formatted = await fmt(code)
+  await mkdir(resolved.dir)
+  await writeFile(resolved.file, formatted)
 }
 
 generatorHandler({

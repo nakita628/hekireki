@@ -16,10 +16,7 @@ export async function main(options: GeneratorOptions): Promise<void> {
   const app = options.generator.config?.app ?? 'MyApp'
 
   const enums = options.dmmf.datamodel.enums
-  const result = await writeEctoSchemasToFiles(options.dmmf.datamodel.models, app, output, enums)
-  if (!result.ok) {
-    throw new Error(`Failed to write Ecto schemas: ${result.error}`)
-  }
+  await writeEctoSchemasToFiles(options.dmmf.datamodel.models, app, output, enums)
 }
 
 generatorHandler({
