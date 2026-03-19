@@ -77,6 +77,16 @@ describe('utils', () => {
     it('handles empty string', () => {
       expect(makeSnakeCase('')).toBe('')
     })
+    it('handles consecutive uppercase (acronyms)', () => {
+      expect(makeSnakeCase('HTMLParser')).toBe('htmlparser')
+      expect(makeSnakeCase('APIKey')).toBe('apikey')
+    })
+    it('handles single character', () => {
+      expect(makeSnakeCase('A')).toBe('a')
+    })
+    it('handles already snake_case', () => {
+      expect(makeSnakeCase('user_profile')).toBe('user_profile')
+    })
   })
 
   // ============================================================================
@@ -98,6 +108,24 @@ describe('utils', () => {
 @v.pipe(v.string(), v.uuid())`)
       expect(result).toStrictEqual('pipe(v.string(), v.uuid())')
     })
+    it.concurrent('extracts TypeBox validation', () => {
+      const isTypeBox = makeValidationExtractor('@t.')
+      const result = isTypeBox('Primary key\n@t.Type.String()')
+      expect(result).toBe('Type.String()')
+    })
+    it.concurrent('extracts AJV validation', () => {
+      const isAjv = makeValidationExtractor('@j.')
+      const result = isAjv("@j.{ type: 'string' as const }")
+      expect(result).toBe("{ type: 'string' as const }")
+    })
+    it.concurrent('returns null for undefined documentation', () => {
+      const isZod = makeValidationExtractor('@z.')
+      expect(isZod(undefined)).toBeNull()
+    })
+    it.concurrent('returns null when no matching prefix', () => {
+      const isZod = makeValidationExtractor('@z.')
+      expect(isZod('Just a comment')).toBeNull()
+    })
   })
 
   describe('parseDocumentWithoutAnnotations', () => {
@@ -117,6 +145,26 @@ describe('utils', () => {
       expect(parseDocumentWithoutAnnotations('User name\n@z\n@v.string()')).toStrictEqual([
         'User name',
       ])
+    })
+    it('filters out bare @t annotation', () => {
+      expect(parseDocumentWithoutAnnotations('Name\n@t')).toStrictEqual(['Name'])
+    })
+    it('filters out bare @j annotation', () => {
+      expect(parseDocumentWithoutAnnotations('Name\n@j')).toStrictEqual(['Name'])
+    })
+    it('filters out @t. prefixed annotation', () => {
+      expect(parseDocumentWithoutAnnotations('Name\n@t.Type.String()')).toStrictEqual(['Name'])
+    })
+    it('filters out @j. prefixed annotation', () => {
+      expect(
+        parseDocumentWithoutAnnotations("Name\n@j.{ type: 'string' as const }"),
+      ).toStrictEqual(['Name'])
+    })
+    it('returns empty for undefined', () => {
+      expect(parseDocumentWithoutAnnotations(undefined)).toStrictEqual([])
+    })
+    it('returns empty for only annotations', () => {
+      expect(parseDocumentWithoutAnnotations('@z.uuid()\n@v.string()')).toStrictEqual([])
     })
   })
 
@@ -151,6 +199,21 @@ describe('utils', () => {
     })
     it('returns undefined for bare annotation only', () => {
       expect(stripAnnotations('@z')).toBeUndefined()
+    })
+    it('strips bare @t annotation', () => {
+      expect(stripAnnotations('Primary key\n@t')).toBe('Primary key')
+    })
+    it('strips bare @j annotation', () => {
+      expect(stripAnnotations('Primary key\n@j')).toBe('Primary key')
+    })
+    it('strips @t. prefixed annotation', () => {
+      expect(stripAnnotations('Primary key\n@t.Type.String()')).toBe('Primary key')
+    })
+    it('strips @j. prefixed annotation', () => {
+      expect(stripAnnotations("Primary key\n@j.{ type: 'string' as const }")).toBe('Primary key')
+    })
+    it('strips @relation annotation', () => {
+      expect(stripAnnotations('@relation User.id Post.userId one-to-many')).toBeUndefined()
     })
   })
 
@@ -235,6 +298,56 @@ describe('utils', () => {
       const expected = `  id: v.pipe(v.string(), v.uuid()),
   name: v.pipe(v.string(), v.minLength(1), v.maxLength(50))`
       expect(result).toBe(expected)
+    })
+
+    it.concurrent('wraps optional fields with wrapCardinality', () => {
+      const zodWithWrap = makePropertiesGenerator('z', (expr, isRequired) =>
+        isRequired ? expr : `${expr}.exactOptional()`,
+      )
+      const fields = [
+        {
+          documentation: '',
+          modelName: 'User',
+          fieldName: 'id',
+          comment: [] as string[],
+          validation: 'uuid()',
+          isRequired: true,
+        },
+        {
+          documentation: '',
+          modelName: 'User',
+          fieldName: 'email',
+          comment: [] as string[],
+          validation: 'string()',
+          isRequired: false,
+        },
+      ] as const
+      const result = zodWithWrap(fields, false)
+      expect(result).toBe('  id: z.uuid(),\n  email: z.string().exactOptional()')
+    })
+
+    it.concurrent('skips fields with null validation', () => {
+      const gen = makePropertiesGenerator('z')
+      const fields = [
+        {
+          documentation: '',
+          modelName: 'User',
+          fieldName: 'id',
+          comment: [] as string[],
+          validation: 'uuid()',
+          isRequired: true,
+        },
+        {
+          documentation: '',
+          modelName: 'User',
+          fieldName: 'posts',
+          comment: [] as string[],
+          validation: null,
+          isRequired: true,
+        },
+      ] as const
+      const result = gen(fields, false)
+      expect(result).toBe('  id: z.uuid()')
     })
   })
 

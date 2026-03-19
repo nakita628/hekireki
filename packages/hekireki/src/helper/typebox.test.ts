@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   makeTypeBoxEnumExpression,
   makeTypeBoxInfer,
+  makeTypeBoxProperties,
   makeTypeBoxRelations,
   makeTypeBoxSchema,
   makeTypeBoxSchemas,
@@ -201,7 +202,9 @@ describe('helper/typebox', () => {
 
       const result = typebox([model], true, false)
 
-      expect(result).toContain('export type User = Static<typeof UserSchema>')
+      expect(result).toBe(
+        "import { type Static, Type } from '@sinclair/typebox'\n\nexport const UserSchema = Type.Object({\n  id: Type.String(),\n})\n\nexport type User = Static<typeof UserSchema>",
+      )
     })
   })
 
@@ -217,6 +220,38 @@ describe('helper/typebox', () => {
       expect(result).toBe(
         'export const PostSchema = Type.Object({\n  id: Type.String(),\n  title: Type.String()\n})',
       )
+    })
+  })
+
+  describe('makeTypeBoxProperties', () => {
+    const fields = [
+      {
+        documentation: '',
+        modelName: 'User',
+        fieldName: 'id',
+        validation: 'Type.String()',
+        isRequired: true,
+        comment: ['Primary key'],
+      },
+    ]
+
+    it('generates properties with comments', () => {
+      expect(makeTypeBoxProperties(fields, true)).toBe(
+        '  /** Primary key */\n  id: Type.String(),',
+      )
+    })
+    it('generates properties without comments', () => {
+      expect(makeTypeBoxProperties(fields, false)).toBe('  id: Type.String(),')
+    })
+    it('wraps optional fields with Type.Optional', () => {
+      const optionalFields = [{ ...fields[0], isRequired: false }]
+      expect(makeTypeBoxProperties(optionalFields, false)).toBe(
+        '  id: Type.Optional(Type.String()),',
+      )
+    })
+    it('uses Type.Unknown() for null validation', () => {
+      const nullFields = [{ ...fields[0], validation: null, comment: [] }]
+      expect(makeTypeBoxProperties(nullFields, false)).toBe('  id: Type.Unknown(),')
     })
   })
 

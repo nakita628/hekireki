@@ -172,6 +172,42 @@ describe('helper/zod', () => {
         "import { z } from '@hono/zod-openapi'\n\nexport const ItemSchema = z.object({\n  id: z.number()\n})",
       )
     })
+
+    it('generates with comment true and type true', () => {
+      const model = {
+        name: 'User',
+        fields: [
+          {
+            name: 'id',
+            type: 'String',
+            kind: 'scalar',
+            isRequired: true,
+            isList: false,
+            documentation: 'Primary key\n@z.uuid()',
+          },
+        ],
+      }
+
+      const result = zod([model], true, true)
+
+      expect(result).toBe(
+        "import * as z from 'zod'\n\nexport const UserSchema = z.object({\n  /**\n   * Primary key\n   */\n  id: z.uuid()\n})\n\nexport type User = z.infer<typeof UserSchema>",
+      )
+    })
+
+    it('handles enums', () => {
+      const model = {
+        name: 'User',
+        fields: [{ name: 'role', type: 'Role', kind: 'enum', isRequired: true, isList: false }],
+      }
+      const enums = [{ name: 'Role', values: [{ name: 'ADMIN' }, { name: 'USER' }] }]
+
+      const result = zod([model], false, false, undefined, enums)
+
+      expect(result).toBe(
+        "import * as z from 'zod'\n\nexport const UserSchema = z.object({\n  role: z.enum(['ADMIN', 'USER'])\n})",
+      )
+    })
   })
 
   describe('makeZodInfer', () => {

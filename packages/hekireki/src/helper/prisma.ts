@@ -117,6 +117,7 @@ export function validationSchemas(
       readonly values: readonly { readonly name: string }[]
     }[]
     readonly formatEnum?: (values: readonly string[]) => string
+    readonly onWarning?: (message: string) => void
   },
 ): string {
   const modelInfos = models.map((model) => ({
@@ -168,10 +169,12 @@ export function validationSchemas(
       })
       .map((f) => ({ modelName: model.name, fieldName: f.name })),
   )
-  for (const { modelName, fieldName } of missing) {
-    console.warn(
-      `Warning: Field "${modelName}.${fieldName}" has no ${config.annotationPrefix} annotation and will be omitted from the schema`,
-    )
+  if (config.onWarning) {
+    for (const { modelName, fieldName } of missing) {
+      config.onWarning(
+        `Warning: Field "${modelName}.${fieldName}" has no ${config.annotationPrefix} annotation and will be omitted from the schema`,
+      )
+    }
   }
 
   const schemaResults = Object.values(groupByModel(isFields(modelFields))).map((fields) => ({
