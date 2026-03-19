@@ -25,7 +25,7 @@ generatorHandler({
     const output = options.generator.output.value
 
     const dmmf = transformDMMF(options.dmmf)
-    const html = await generateHTML(dmmf)
+    const html = generateHTML(dmmf)
 
     await fs.mkdir(output, { recursive: true })
     await fs.writeFile(path.join(output, 'index.html'), html)

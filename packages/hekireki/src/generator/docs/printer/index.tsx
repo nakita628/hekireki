@@ -99,7 +99,7 @@ const MainContent: FC<{
   </div>
 )
 
-export const generateHTML = async (data: DMMFDocument): Promise<string> => {
+export const generateHTML = (data: DMMFDocument): string => {
   const element = (
     <Layout>
       <div class={containerClass}>
@@ -109,5 +109,6 @@ export const generateHTML = async (data: DMMFDocument): Promise<string> => {
     </Layout>
   )
 
-  return '<!DOCTYPE html>' + String(await element.toString())
+  // eslint-disable-next-line @typescript-eslint/no-base-to-string -- HtmlEscapedString implements toString()
+  return `<!DOCTYPE html>${element.toString()}`
 }
