@@ -1,4 +1,5 @@
 import type { DMMF } from '@prisma/generator-helper'
+
 import { stripAnnotations } from '../utils/index.js'
 
 // ============================================================================

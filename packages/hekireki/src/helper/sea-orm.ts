@@ -1,5 +1,7 @@
 import { join } from 'node:path'
+
 import type { DMMF } from '@prisma/generator-helper'
+
 import { mkdir, writeFile } from '../fsp/index.js'
 import { makeSnakeCase } from '../utils/index.js'
 
@@ -627,11 +629,8 @@ export async function writeSeaOrmFiles(
   outDir: string,
   enums: readonly DMMF.DatamodelEnum[],
   serde: SerdeOptions = {},
-): Promise<
-  { readonly ok: true; readonly value: undefined } | { readonly ok: false; readonly error: string }
-> {
-  const mkdirResult = await mkdir(outDir)
-  if (!mkdirResult.ok) return mkdirResult
+): Promise<void> {
+  await mkdir(outDir)
 
   const moduleNames: string[] = []
 
@@ -660,8 +659,7 @@ export async function writeSeaOrmFiles(
     const useLines = ['use sea_orm::entity::prelude::*;', 'use serde::{Deserialize, Serialize};']
     const code = [...useLines, '', generateEnum(e, serde), ''].join('\n')
     const filePath = join(outDir, `${moduleName}.rs`)
-    const writeResult = await writeFile(filePath, code)
-    if (!writeResult.ok) return writeResult
+    await writeFile(filePath, code)
     moduleNames.push(moduleName)
     console.log(`wrote ${filePath}`)
   }
@@ -673,8 +671,7 @@ export async function writeSeaOrmFiles(
 
     const moduleName = toModuleName(model.name)
     const filePath = join(outDir, `${moduleName}.rs`)
-    const writeResult = await writeFile(filePath, code)
-    if (!writeResult.ok) return writeResult
+    await writeFile(filePath, code)
     moduleNames.push(moduleName)
     console.log(`wrote ${filePath}`)
   }
@@ -684,8 +681,7 @@ export async function writeSeaOrmFiles(
     const moduleName = toSnakeCase(`${pair.left}To${pair.right}`)
     const code = generateM2MEntity(pair.left, pair.right, models, serde)
     const filePath = join(outDir, `${moduleName}.rs`)
-    const writeResult = await writeFile(filePath, code)
-    if (!writeResult.ok) return writeResult
+    await writeFile(filePath, code)
     moduleNames.push(moduleName)
     console.log(`wrote ${filePath}`)
   }
@@ -693,8 +689,7 @@ export async function writeSeaOrmFiles(
   // Generate prelude.rs
   const preludeCode = generatePreludeRs(models)
   const preludePath = join(outDir, 'prelude.rs')
-  const preludeResult = await writeFile(preludePath, preludeCode)
-  if (!preludeResult.ok) return preludeResult
+  await writeFile(preludePath, preludeCode)
   moduleNames.push('prelude')
   console.log(`wrote ${preludePath}`)
 
@@ -702,9 +697,6 @@ export async function writeSeaOrmFiles(
   moduleNames.sort()
   const modCode = generateModRs(moduleNames)
   const modPath = join(outDir, 'mod.rs')
-  const modResult = await writeFile(modPath, modCode)
-  if (!modResult.ok) return modResult
+  await writeFile(modPath, modCode)
   console.log(`wrote ${modPath}`)
-
-  return { ok: true, value: undefined }
 }

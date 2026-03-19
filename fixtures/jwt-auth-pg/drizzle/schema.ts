@@ -28,6 +28,7 @@ export const user = pgTable('users', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true })
     .notNull()
+    .defaultNow()
     .$onUpdate(() => new Date()),
   lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
 })
@@ -38,7 +39,9 @@ export const oAuthAccount = pgTable(
     id: uuid('id')
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
-    userId: uuid('user_id').notNull(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
     provider: pgEnum('OAuthProvider', ['GOOGLE', 'GITHUB', 'FACEBOOK', 'TWITTER', 'APPLE'])(
       'provider',
     ).notNull(),
@@ -50,7 +53,7 @@ export const oAuthAccount = pgTable(
   },
   (table) => [
     unique().on(table.provider, table.providerAccountId),
-    index('idx_userId').on(table.userId),
+    index('idx_oauth_accounts_userId').on(table.userId),
   ],
 )
 
@@ -58,7 +61,10 @@ export const twoFactorSetting = pgTable('two_factor_settings', {
   id: uuid('id')
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
-  userId: uuid('user_id').notNull().unique(),
+  userId: uuid('user_id')
+    .notNull()
+    .unique()
+    .references(() => user.id, { onDelete: 'cascade' }),
   enabled: boolean('enabled').notNull().default(false),
   method: pgEnum('TwoFactorMethod', ['TOTP', 'SMS', 'EMAIL'])('method'),
   totpSecret: text('totp_secret'),
@@ -68,6 +74,7 @@ export const twoFactorSetting = pgTable('two_factor_settings', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true })
     .notNull()
+    .defaultNow()
     .$onUpdate(() => new Date()),
 })
 
@@ -77,7 +84,9 @@ export const refreshToken = pgTable(
     id: text('id')
       .primaryKey()
       .$defaultFn(() => createId()),
-    userId: uuid('user_id').notNull(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
     tokenHash: text('token_hash').notNull().unique(),
     deviceInfo: text('device_info'),
     ipAddress: varchar('ip_address', { length: 45 }),
@@ -85,7 +94,7 @@ export const refreshToken = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     revoked: boolean('revoked').notNull().default(false),
   },
-  (table) => [index('idx_userId').on(table.userId)],
+  (table) => [index('idx_refresh_tokens_userId').on(table.userId)],
 )
 
 export const emailVerification = pgTable(
@@ -94,12 +103,14 @@ export const emailVerification = pgTable(
     id: uuid('id')
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
-    userId: uuid('user_id').notNull(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
     tokenHash: text('token_hash').notNull().unique(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index('idx_userId').on(table.userId)],
+  (table) => [index('idx_email_verifications_userId').on(table.userId)],
 )
 
 export const passwordReset = pgTable(
@@ -108,13 +119,15 @@ export const passwordReset = pgTable(
     id: uuid('id')
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
-    userId: uuid('user_id').notNull(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
     tokenHash: text('token_hash').notNull().unique(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     used: boolean('used').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index('idx_userId').on(table.userId)],
+  (table) => [index('idx_password_resets_userId').on(table.userId)],
 )
 
 export const userRelations = relations(user, ({ one, many }) => ({

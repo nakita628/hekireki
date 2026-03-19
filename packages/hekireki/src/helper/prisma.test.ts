@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+
 import { makeValidationExtractor, parseDocumentWithoutAnnotations } from '../utils/index.js'
 import { collectRelationProps, makeRelationsOnly, validationSchemas } from './prisma.js'
 import { makeZodInfer, makeZodSchemas, PRISMA_TO_ZOD } from './zod.js'
@@ -270,5 +271,135 @@ describe('validationSchemas', () => {
     expect(result).toBe(
       "import * as z from 'zod'\n\nexport const ItemSchema = z.object({\n  count: z.number()\n})",
     )
+  })
+
+  it('should generate schemas with comment true and type false', () => {
+    const models = [
+      {
+        name: 'User',
+        fields: [
+          {
+            name: 'id',
+            type: 'String',
+            kind: 'scalar',
+            isRequired: true,
+            isList: false,
+            documentation: 'Primary key\n@z.uuid()',
+          },
+        ],
+      },
+    ]
+
+    const result = validationSchemas(models, false, true, {
+      importStatement: "import * as z from 'zod'",
+      annotationPrefix: '@z.',
+      parseDocument: parseDocumentWithoutAnnotations,
+      extractValidation: makeValidationExtractor('@z.'),
+      inferType: makeZodInfer,
+      schemas: makeZodSchemas,
+      typeMapping: PRISMA_TO_ZOD,
+    })
+
+    expect(result).toBe(
+      "import * as z from 'zod'\n\nexport const UserSchema = z.object({\n  /**\n   * Primary key\n   */\n  id: z.uuid()\n})",
+    )
+  })
+
+  it('should resolve enum fields via formatEnum', () => {
+    const models = [
+      {
+        name: 'User',
+        fields: [
+          {
+            name: 'role',
+            type: 'Role',
+            kind: 'enum',
+            isRequired: true,
+            isList: false,
+          },
+        ],
+      },
+    ]
+
+    const enums = [{ name: 'Role', values: [{ name: 'ADMIN' }, { name: 'USER' }] }]
+
+    const result = validationSchemas(models, false, false, {
+      importStatement: "import * as z from 'zod'",
+      annotationPrefix: '@z.',
+      parseDocument: parseDocumentWithoutAnnotations,
+      extractValidation: makeValidationExtractor('@z.'),
+      inferType: makeZodInfer,
+      schemas: makeZodSchemas,
+      typeMapping: PRISMA_TO_ZOD,
+      enums,
+      formatEnum: (values) => `enum([${values.map((v) => `'${v}'`).join(', ')}])`,
+    })
+
+    expect(result).toBe(
+      "import * as z from 'zod'\n\nexport const UserSchema = z.object({\n  role: z.enum(['ADMIN', 'USER'])\n})",
+    )
+  })
+
+  it('should call onWarning for fields with no annotation or typeMapping', () => {
+    const warnings: string[] = []
+    const models = [
+      {
+        name: 'User',
+        fields: [
+          {
+            name: 'mystery',
+            type: 'CustomType',
+            kind: 'scalar',
+            isRequired: true,
+            isList: false,
+          },
+        ],
+      },
+    ]
+
+    validationSchemas(models, false, false, {
+      importStatement: '',
+      annotationPrefix: '@z.',
+      parseDocument: parseDocumentWithoutAnnotations,
+      extractValidation: makeValidationExtractor('@z.'),
+      inferType: makeZodInfer,
+      schemas: makeZodSchemas,
+      onWarning: (msg) => warnings.push(msg),
+    })
+
+    expect(warnings).toStrictEqual([
+      'Warning: Field "User.mystery" has no @z. annotation and will be omitted from the schema',
+    ])
+  })
+
+  it('should not call onWarning when all fields have annotations', () => {
+    const warnings: string[] = []
+    const models = [
+      {
+        name: 'User',
+        fields: [
+          {
+            name: 'id',
+            type: 'String',
+            kind: 'scalar',
+            isRequired: true,
+            isList: false,
+            documentation: '@z.uuid()',
+          },
+        ],
+      },
+    ]
+
+    validationSchemas(models, false, false, {
+      importStatement: "import * as z from 'zod'",
+      annotationPrefix: '@z.',
+      parseDocument: parseDocumentWithoutAnnotations,
+      extractValidation: makeValidationExtractor('@z.'),
+      inferType: makeZodInfer,
+      schemas: makeZodSchemas,
+      onWarning: (msg) => warnings.push(msg),
+    })
+
+    expect(warnings).toStrictEqual([])
   })
 })

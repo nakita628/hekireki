@@ -1,6 +1,7 @@
 import { exec } from 'node:child_process'
 import fs from 'node:fs'
 import { promisify } from 'node:util'
+
 import { afterAll, afterEach, describe, expect, it } from 'vitest'
 
 // Test run
@@ -787,9 +788,8 @@ describe('fixture: twitter-clone-sample', () => {
       'npx prisma generate --schema=../../fixtures/twitter-clone-sample/schema.prisma',
     )
 
-    expect(
-      fs.readFileSync('../../fixtures/twitter-clone-sample/sea_orm/user.rs', 'utf-8'),
-    ).toStrictEqual(`use sea_orm::entity::prelude::*;
+    expect(fs.readFileSync('../../fixtures/twitter-clone-sample/sea_orm/user.rs', 'utf-8'))
+      .toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
@@ -869,9 +869,8 @@ impl Related<super::like::Entity> for Entity {
 
 impl ActiveModelBehavior for ActiveModel {}`)
 
-    expect(
-      fs.readFileSync('../../fixtures/twitter-clone-sample/sea_orm/follow.rs', 'utf-8'),
-    ).toStrictEqual(`use sea_orm::entity::prelude::*;
+    expect(fs.readFileSync('../../fixtures/twitter-clone-sample/sea_orm/follow.rs', 'utf-8'))
+      .toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
@@ -914,9 +913,8 @@ impl Related<super::user::Entity> for Entity {
 
 impl ActiveModelBehavior for ActiveModel {}`)
 
-    expect(
-      fs.readFileSync('../../fixtures/twitter-clone-sample/sea_orm/mod.rs', 'utf-8'),
-    ).toStrictEqual(`pub mod comment;
+    expect(fs.readFileSync('../../fixtures/twitter-clone-sample/sea_orm/mod.rs', 'utf-8'))
+      .toStrictEqual(`pub mod comment;
 pub mod follow;
 pub mod like;
 pub mod notification;
@@ -935,9 +933,8 @@ describe('fixture: rbac', () => {
   it('generates RBAC entities with @@map, @db.VarChar, autoincrement, enum, composite PK', async () => {
     await promisify(exec)('npx prisma generate --schema=../../fixtures/rbac/schema.prisma')
 
-    expect(
-      fs.readFileSync('../../fixtures/rbac/sea_orm/organization.rs', 'utf-8'),
-    ).toStrictEqual(`use sea_orm::entity::prelude::*;
+    expect(fs.readFileSync('../../fixtures/rbac/sea_orm/organization.rs', 'utf-8'))
+      .toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
@@ -970,9 +967,8 @@ impl Related<super::user::Entity> for Entity {
 
 impl ActiveModelBehavior for ActiveModel {}`)
 
-    expect(
-      fs.readFileSync('../../fixtures/rbac/sea_orm/user_role.rs', 'utf-8'),
-    ).toStrictEqual(`use sea_orm::entity::prelude::*;
+    expect(fs.readFileSync('../../fixtures/rbac/sea_orm/user_role.rs', 'utf-8'))
+      .toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
@@ -1015,9 +1011,8 @@ impl Related<super::role::Entity> for Entity {
 
 impl ActiveModelBehavior for ActiveModel {}`)
 
-    expect(
-      fs.readFileSync('../../fixtures/rbac/sea_orm/audit_log.rs', 'utf-8'),
-    ).toStrictEqual(`use sea_orm::entity::prelude::*;
+    expect(fs.readFileSync('../../fixtures/rbac/sea_orm/audit_log.rs', 'utf-8'))
+      .toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
@@ -1054,9 +1049,8 @@ impl Related<super::user::Entity> for Entity {
 
 impl ActiveModelBehavior for ActiveModel {}`)
 
-    expect(
-      fs.readFileSync('../../fixtures/rbac/sea_orm/org_status.rs', 'utf-8'),
-    ).toStrictEqual(`use sea_orm::entity::prelude::*;
+    expect(fs.readFileSync('../../fixtures/rbac/sea_orm/org_status.rs', 'utf-8'))
+      .toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
@@ -1081,9 +1075,8 @@ describe('fixture: no-annotation (M2M implicit)', () => {
   it('generates entities with implicit M2M (Post <-> Tag), enum, one-to-one', async () => {
     await promisify(exec)('npx prisma generate --schema=../../fixtures/no-annotation/schema.prisma')
 
-    expect(
-      fs.readFileSync('../../fixtures/no-annotation/sea_orm/user.rs', 'utf-8'),
-    ).toStrictEqual(`use sea_orm::entity::prelude::*;
+    expect(fs.readFileSync('../../fixtures/no-annotation/sea_orm/user.rs', 'utf-8'))
+      .toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
@@ -1125,9 +1118,8 @@ impl Related<super::profile::Entity> for Entity {
 
 impl ActiveModelBehavior for ActiveModel {}`)
 
-    expect(
-      fs.readFileSync('../../fixtures/no-annotation/sea_orm/post.rs', 'utf-8'),
-    ).toStrictEqual(`use sea_orm::entity::prelude::*;
+    expect(fs.readFileSync('../../fixtures/no-annotation/sea_orm/post.rs', 'utf-8'))
+      .toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
@@ -1171,9 +1163,8 @@ impl Related<super::tag::Entity> for Entity {
 
 impl ActiveModelBehavior for ActiveModel {}`)
 
-    expect(
-      fs.readFileSync('../../fixtures/no-annotation/sea_orm/tag.rs', 'utf-8'),
-    ).toStrictEqual(`use sea_orm::entity::prelude::*;
+    expect(fs.readFileSync('../../fixtures/no-annotation/sea_orm/tag.rs', 'utf-8'))
+      .toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
@@ -1199,9 +1190,8 @@ impl Related<super::post::Entity> for Entity {
 
 impl ActiveModelBehavior for ActiveModel {}`)
 
-    expect(
-      fs.readFileSync('../../fixtures/no-annotation/sea_orm/post_to_tag.rs', 'utf-8'),
-    ).toStrictEqual(`use sea_orm::entity::prelude::*;
+    expect(fs.readFileSync('../../fixtures/no-annotation/sea_orm/post_to_tag.rs', 'utf-8'))
+      .toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
@@ -1231,9 +1221,8 @@ pub enum Relation {
 
 impl ActiveModelBehavior for ActiveModel {}`)
 
-    expect(
-      fs.readFileSync('../../fixtures/no-annotation/sea_orm/mod.rs', 'utf-8'),
-    ).toStrictEqual(`pub mod post;
+    expect(fs.readFileSync('../../fixtures/no-annotation/sea_orm/mod.rs', 'utf-8'))
+      .toStrictEqual(`pub mod post;
 pub mod post_to_tag;
 pub mod prelude;
 pub mod profile;
@@ -1252,9 +1241,8 @@ describe('fixture: jwt-auth-pg', () => {
   it('generates PostgreSQL entities with @db.Uuid, @db.VarChar, @db.Decimal, @db.Timestamptz, @@map', async () => {
     await promisify(exec)('npx prisma generate --schema=../../fixtures/jwt-auth-pg/schema.prisma')
 
-    expect(
-      fs.readFileSync('../../fixtures/jwt-auth-pg/sea_orm/user.rs', 'utf-8'),
-    ).toStrictEqual(`use sea_orm::entity::prelude::*;
+    expect(fs.readFileSync('../../fixtures/jwt-auth-pg/sea_orm/user.rs', 'utf-8'))
+      .toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
@@ -1332,9 +1320,8 @@ impl Related<super::two_factor_setting::Entity> for Entity {
 
 impl ActiveModelBehavior for ActiveModel {}`)
 
-    expect(
-      fs.readFileSync('../../fixtures/jwt-auth-pg/sea_orm/oauth_account.rs', 'utf-8'),
-    ).toStrictEqual(`use sea_orm::entity::prelude::*;
+    expect(fs.readFileSync('../../fixtures/jwt-auth-pg/sea_orm/oauth_account.rs', 'utf-8'))
+      .toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
@@ -1374,9 +1361,8 @@ impl Related<super::user::Entity> for Entity {
 
 impl ActiveModelBehavior for ActiveModel {}`)
 
-    expect(
-      fs.readFileSync('../../fixtures/jwt-auth-pg/sea_orm/two_factor_setting.rs', 'utf-8'),
-    ).toStrictEqual(`use sea_orm::entity::prelude::*;
+    expect(fs.readFileSync('../../fixtures/jwt-auth-pg/sea_orm/two_factor_setting.rs', 'utf-8'))
+      .toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
@@ -1421,9 +1407,8 @@ impl Related<super::user::Entity> for Entity {
 
 impl ActiveModelBehavior for ActiveModel {}`)
 
-    expect(
-      fs.readFileSync('../../fixtures/jwt-auth-pg/sea_orm/role.rs', 'utf-8'),
-    ).toStrictEqual(`use sea_orm::entity::prelude::*;
+    expect(fs.readFileSync('../../fixtures/jwt-auth-pg/sea_orm/role.rs', 'utf-8'))
+      .toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
@@ -1438,9 +1423,8 @@ pub enum Role {
 }
 `)
 
-    expect(
-      fs.readFileSync('../../fixtures/jwt-auth-pg/sea_orm/mod.rs', 'utf-8'),
-    ).toStrictEqual(`pub mod email_verification;
+    expect(fs.readFileSync('../../fixtures/jwt-auth-pg/sea_orm/mod.rs', 'utf-8'))
+      .toStrictEqual(`pub mod email_verification;
 pub mod oauth_account;
 pub mod oauth_provider;
 pub mod password_reset;

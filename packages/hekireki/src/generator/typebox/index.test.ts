@@ -1,6 +1,7 @@
 import { exec } from 'node:child_process'
 import fs from 'node:fs'
 import { promisify } from 'node:util'
+
 import { afterEach, describe, expect, it } from 'vitest'
 
 // Test run

@@ -1,6 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 import { Resvg } from '@resvg/resvg-js'
 import { run } from '@softwaretechnik/dbml-renderer'
+
 import { writeFile, writeFileBinary } from '../fsp/index.js'
 import { stripAnnotations } from '../utils/index.js'
 
@@ -230,30 +231,17 @@ export async function makeDbmlFile(
   outputDir: string,
   content: string,
   fileName: string,
-): Promise<{ readonly ok: true } | { readonly ok: false; readonly error: string }> {
+): Promise<void> {
   const outputFile = `${outputDir}/${fileName}`
-  const writeResult = await writeFile(outputFile, content)
-
-  if (!writeResult.ok) {
-    return { ok: false, error: `Failed to write DBML: ${writeResult.error}` }
-  }
-
-  return { ok: true }
+  await writeFile(outputFile, content)
 }
 
-export async function makePng(
-  outputDir: string,
-  dbml: string,
-  fileName: string,
-): Promise<{ readonly ok: true } | { readonly ok: false; readonly error: string }> {
+export async function makePng(outputDir: string, dbml: string, fileName: string): Promise<void> {
   const outputFile = `${outputDir}/${fileName}`
-  return makePngFile(outputFile, dbml)
+  await makePngFile(outputFile, dbml)
 }
 
-export async function makePngFile(
-  outputPath: string,
-  dbml: string,
-): Promise<{ readonly ok: true } | { readonly ok: false; readonly error: string }> {
+export async function makePngFile(outputPath: string, dbml: string): Promise<void> {
   const svg = run(dbml, 'svg')
   const resvg = new Resvg(svg, {
     font: {
@@ -263,11 +251,5 @@ export async function makePngFile(
   const pngData = resvg.render()
   const pngBuffer = pngData.asPng()
 
-  const writeResult = await writeFileBinary(outputPath, pngBuffer)
-
-  if (!writeResult.ok) {
-    return { ok: false, error: `Failed to write PNG: ${writeResult.error}` }
-  }
-
-  return { ok: true }
+  await writeFileBinary(outputPath, pngBuffer)
 }

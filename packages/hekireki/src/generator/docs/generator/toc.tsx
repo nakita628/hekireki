@@ -1,6 +1,6 @@
-import type { FC } from 'hono/jsx'
 import type { DMMF } from '@prisma/generator-helper'
-import type { DMMFDocument, DMMFMapping } from './transformDMMF.js'
+import type { FC } from 'hono/jsx'
+
 import {
   tocSectionClass,
   tocSubHeaderClass,
@@ -11,6 +11,7 @@ import {
   tocHeadingClass,
   listItemClass,
 } from '../styles.js'
+import type { DMMFDocument, DMMFMapping } from './transformDMMF.js'
 
 type TOCStructure = {
   readonly models: readonly TOCModel[]
@@ -78,12 +79,12 @@ const TOCModelItem: FC<{ model: TOCModel }> = ({ model }) => (
   </li>
 )
 
-const TOCTypeSection: FC<{ title: string; href: string; types: readonly string[]; kind: string }> = ({
-  title,
-  href,
-  types,
-  kind,
-}) => (
+const TOCTypeSection: FC<{
+  title: string
+  href: string
+  types: readonly string[]
+  kind: string
+}> = ({ title, href, types, kind }) => (
   <li class={listItemClass}>
     <div class={tocSubHeaderClass}>
       <a href={href} class={tocLinkClass}>
@@ -132,7 +133,10 @@ const TOCComponent: FC<{ data: TOCStructure }> = ({ data }) => (
   </div>
 )
 
-const getModels = (dmmfModel: readonly DMMF.Model[], mappings: readonly DMMFMapping[]): readonly TOCModel[] =>
+const getModels = (
+  dmmfModel: readonly DMMF.Model[],
+  mappings: readonly DMMFMapping[],
+): readonly TOCModel[] =>
   dmmfModel.map((model) => ({
     name: model.name,
     fields: model.fields.map((field) => field.name),

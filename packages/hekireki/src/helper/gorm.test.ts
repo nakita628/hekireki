@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+
 import { buildGormTags, goFieldName, prismaTypeToGoType } from './gorm.js'
 
 // Test run

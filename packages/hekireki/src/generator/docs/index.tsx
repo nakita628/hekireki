@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 import fs from 'node:fs/promises'
 import path from 'node:path'
+
 import pkg from '@prisma/generator-helper'
+
 import { transformDMMF } from './generator/transformDMMF.js'
 import { generateHTML } from './printer/index.js'
 
@@ -23,7 +25,7 @@ generatorHandler({
     const output = options.generator.output.value
 
     const dmmf = transformDMMF(options.dmmf)
-    const html = await generateHTML(dmmf)
+    const html = generateHTML(dmmf)
 
     await fs.mkdir(output, { recursive: true })
     await fs.writeFile(path.join(output, 'index.html'), html)

@@ -1,7 +1,7 @@
 {
   "name": "@fixtures/twitter-clone-sample",
-  "type": "module",
   "private": true,
+  "type": "module",
   "scripts": {
     "generate": "prisma generate"
   },

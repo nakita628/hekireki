@@ -1,7 +1,6 @@
-import type { FC } from 'hono/jsx'
 import type { DMMF } from '@prisma/generator-helper'
-import { isScalarType } from './helpers.js'
-import type { DMMFDocument } from './transformDMMF.js'
+import type { FC } from 'hono/jsx'
+
 import {
   h1Class,
   h2Class,
@@ -11,6 +10,8 @@ import {
   ml4Class,
   hrSmallClass,
 } from '../styles.js'
+import { isScalarType } from './helpers.js'
+import type { DMMFDocument } from './transformDMMF.js'
 
 type TypesGeneratorStructure = {
   readonly inputTypes: readonly TGType[]

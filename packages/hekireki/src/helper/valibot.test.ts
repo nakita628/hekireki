@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+
 import {
   makeValibotEnumExpression,
   makeValibotInfer,
@@ -155,6 +156,42 @@ describe('helper/valibot', () => {
 
       expect(result).toBe(
         "import * as v from 'valibot'\n\nexport const ItemSchema = v.object({\n  id: v.number()\n})\n\nexport type Item = v.InferInput<typeof ItemSchema>",
+      )
+    })
+
+    it('generates with comment true and type true', () => {
+      const model = {
+        name: 'User',
+        fields: [
+          {
+            name: 'id',
+            type: 'String',
+            kind: 'scalar',
+            isRequired: true,
+            isList: false,
+            documentation: 'Primary key\n@v.pipe(v.string(), v.uuid())',
+          },
+        ],
+      }
+
+      const result = valibot([model], true, true)
+
+      expect(result).toBe(
+        "import * as v from 'valibot'\n\nexport const UserSchema = v.object({\n  /**\n   * Primary key\n   */\n  id: v.pipe(v.string(), v.uuid())\n})\n\nexport type User = v.InferInput<typeof UserSchema>",
+      )
+    })
+
+    it('handles enums', () => {
+      const model = {
+        name: 'User',
+        fields: [{ name: 'role', type: 'Role', kind: 'enum', isRequired: true, isList: false }],
+      }
+      const enums = [{ name: 'Role', values: [{ name: 'ADMIN' }, { name: 'USER' }] }]
+
+      const result = valibot([model], false, false, enums)
+
+      expect(result).toBe(
+        "import * as v from 'valibot'\n\nexport const UserSchema = v.object({\n  role: v.picklist(['ADMIN', 'USER'])\n})",
       )
     })
   })

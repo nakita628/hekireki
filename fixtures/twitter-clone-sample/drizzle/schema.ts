@@ -9,14 +9,17 @@ export const user = sqliteTable('user', {
   username: text('username').notNull().unique(),
   bio: text('bio').default(''),
   email: text('email').notNull().unique(),
-  emailVerified: integer('emailVerified', { mode: 'timestamp' }),
+  emailVerified: integer('emailVerified', { mode: 'timestamp_ms' }),
   image: text('image'),
   coverImage: text('coverImage'),
   profileImage: text('profileImage'),
   hashedPassword: text('hashedPassword'),
-  createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
-  updatedAt: integer('updatedAt', { mode: 'timestamp' })
+  createdAt: integer('createdAt', { mode: 'timestamp_ms' })
     .notNull()
+    .default(sql`(unixepoch() * 1000)`),
+  updatedAt: integer('updatedAt', { mode: 'timestamp_ms' })
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`)
     .$onUpdate(() => new Date()),
   hasNotification: integer('hasNotification', { mode: 'boolean' }).default(false),
 })
@@ -26,19 +29,30 @@ export const post = sqliteTable('post', {
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
   body: text('body').notNull(),
-  createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
-  updatedAt: integer('updatedAt', { mode: 'timestamp' })
+  createdAt: integer('createdAt', { mode: 'timestamp_ms' })
     .notNull()
+    .default(sql`(unixepoch() * 1000)`),
+  updatedAt: integer('updatedAt', { mode: 'timestamp_ms' })
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`)
     .$onUpdate(() => new Date()),
-  userId: text('userId').notNull(),
+  userId: text('userId')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
 })
 
 export const follow = sqliteTable(
   'follow',
   {
-    followerId: text('followerId').notNull(),
-    followingId: text('followingId').notNull(),
-    createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    followerId: text('followerId')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    followingId: text('followingId')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    createdAt: integer('createdAt', { mode: 'timestamp_ms' })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
   },
   (table) => [primaryKey({ columns: [table.followerId, table.followingId] })],
 )
@@ -46,9 +60,15 @@ export const follow = sqliteTable(
 export const like = sqliteTable(
   'like',
   {
-    userId: text('userId').notNull(),
-    postId: text('postId').notNull(),
-    createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    userId: text('userId')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    postId: text('postId')
+      .notNull()
+      .references(() => post.id, { onDelete: 'cascade' }),
+    createdAt: integer('createdAt', { mode: 'timestamp_ms' })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
   },
   (table) => [primaryKey({ columns: [table.userId, table.postId] })],
 )
@@ -60,14 +80,24 @@ export const comment = sqliteTable(
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
     body: text('body').notNull(),
-    createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
-    updatedAt: integer('updatedAt', { mode: 'timestamp' })
+    createdAt: integer('createdAt', { mode: 'timestamp_ms' })
       .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: integer('updatedAt', { mode: 'timestamp_ms' })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`)
       .$onUpdate(() => new Date()),
-    userId: text('userId').notNull(),
-    postId: text('postId').notNull(),
+    userId: text('userId')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    postId: text('postId')
+      .notNull()
+      .references(() => post.id, { onDelete: 'cascade' }),
   },
-  (table) => [index('idx_userId').on(table.userId), index('idx_postId').on(table.postId)],
+  (table) => [
+    index('idx_comment_userId').on(table.userId),
+    index('idx_comment_postId').on(table.postId),
+  ],
 )
 
 export const notification = sqliteTable(
@@ -77,10 +107,14 @@ export const notification = sqliteTable(
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
     body: text('body').notNull(),
-    userId: text('userId').notNull(),
-    createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    userId: text('userId')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    createdAt: integer('createdAt', { mode: 'timestamp_ms' })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
   },
-  (table) => [index('idx_userId').on(table.userId)],
+  (table) => [index('idx_notification_userId').on(table.userId)],
 )
 
 export const userRelations = relations(user, ({ many }) => ({

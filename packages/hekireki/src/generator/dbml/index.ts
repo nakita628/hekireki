@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 import path from 'node:path'
+
 import type { GeneratorOptions } from '@prisma/generator-helper'
 import pkg from '@prisma/generator-helper'
+
 import { mkdir, writeFile } from '../../fsp/index.js'
 import { dbmlContent, makeDbmlFile, makePng, makePngFile } from '../../helper/dbml.js'
 import { getString } from '../../utils/index.js'
@@ -23,32 +25,22 @@ export async function main(options: GeneratorOptions): Promise<void> {
 
   if (output.endsWith('.png') || output.endsWith('.dbml')) {
     const dir = path.dirname(output)
-    const mkdirResult = await mkdir(dir)
-    if (!mkdirResult.ok) {
-      throw new Error(`Failed to create directory: ${mkdirResult.error}`)
-    }
+    await mkdir(dir)
     if (output.endsWith('.png')) {
-      const pngResult = await makePngFile(output, content)
-      if (!pngResult.ok) throw new Error(pngResult.error)
+      await makePngFile(output, content)
     } else {
-      const dbmlResult = await writeFile(output, content)
-      if (!dbmlResult.ok) throw new Error(`Failed to write DBML: ${dbmlResult.error}`)
+      await writeFile(output, content)
     }
   } else {
     const resolved = path.extname(output)
       ? { dir: path.dirname(output), file: output }
       : { dir: output, file: path.join(output, 'schema.dbml') }
-    const mkdirResult = await mkdir(resolved.dir)
-    if (!mkdirResult.ok) {
-      throw new Error(`Failed to create directory: ${mkdirResult.error}`)
-    }
+    await mkdir(resolved.dir)
     const fileName = path.basename(resolved.file)
     if (fileName.endsWith('.png')) {
-      const pngResult = await makePng(resolved.dir, content, fileName)
-      if (!pngResult.ok) throw new Error(pngResult.error)
+      await makePng(resolved.dir, content, fileName)
     } else {
-      const dbmlResult = await makeDbmlFile(resolved.dir, content, fileName)
-      if (!dbmlResult.ok) throw new Error(dbmlResult.error)
+      await makeDbmlFile(resolved.dir, content, fileName)
     }
   }
 }

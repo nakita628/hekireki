@@ -1,5 +1,7 @@
 import { dirname } from 'node:path'
+
 import type { DMMF } from '@prisma/generator-helper'
+
 import { mkdir, writeFile } from '../fsp/index.js'
 import { makeSnakeCase } from '../utils/index.js'
 
@@ -780,17 +782,11 @@ export async function writeSQLAlchemyFile(
   outPath: string,
   enums?: readonly DMMF.DatamodelEnum[],
   indexes?: readonly DMMF.Index[],
-): Promise<
-  { readonly ok: true; readonly value: undefined } | { readonly ok: false; readonly error: string }
-> {
+): Promise<void> {
   const dir = dirname(outPath)
-  const mkdirResult = await mkdir(dir)
-  if (!mkdirResult.ok) return mkdirResult
+  await mkdir(dir)
 
   const code = generateSingleFile(models, enums, indexes)
-  const writeResult = await writeFile(outPath, code)
-  if (!writeResult.ok) return writeResult
+  await writeFile(outPath, code)
   console.log(`wrote ${outPath}`)
-
-  return { ok: true, value: undefined }
 }

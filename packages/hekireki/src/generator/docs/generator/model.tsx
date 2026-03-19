@@ -1,7 +1,6 @@
-import type { FC } from 'hono/jsx'
 import type { DMMF } from '@prisma/generator-helper'
-import { capitalize, isScalarType, lowerCase } from './helpers.js'
-import type { DMMFDocument, DMMFMapping } from './transformDMMF.js'
+import type { FC } from 'hono/jsx'
+
 import {
   operationItemClass,
   h1Class,
@@ -20,6 +19,8 @@ import {
   hrSmallClass,
   sectionClass,
 } from '../styles.js'
+import { capitalize, isScalarType, lowerCase } from './helpers.js'
+import type { DMMFDocument, DMMFMapping } from './transformDMMF.js'
 
 const ModelAction = {
   create: 'create',
@@ -322,10 +323,7 @@ const getModelDirective = (model: DMMF.Model): readonly MGModelDirective[] => {
 }
 
 const getFieldType = (field: DMMF.Field): string => {
-  const name =
-    field.isRequired || field.isList
-      ? field.type
-      : `${field.type}?`
+  const name = field.isRequired || field.isList ? field.type : `${field.type}?`
   return field.isList ? `${name.replace('?', '')}[]` : name
 }
 
@@ -378,19 +376,41 @@ const mapArgs = (
     required: a.isRequired,
   }))
 
-const operationDescriptions: { [k: string]: (singular: string, plural: string) => { desc: string; queryType: 'Query' | 'Mutation' } } = {
+const operationDescriptions: {
+  [k: string]: (
+    singular: string,
+    plural: string,
+  ) => { desc: string; queryType: 'Query' | 'Mutation' }
+} = {
   [ModelAction.create]: (singular) => ({ desc: `Create one ${singular}`, queryType: 'Mutation' }),
-  [ModelAction.deleteMany]: (singular) => ({ desc: `Delete zero or more ${singular}`, queryType: 'Mutation' }),
+  [ModelAction.deleteMany]: (singular) => ({
+    desc: `Delete zero or more ${singular}`,
+    queryType: 'Mutation',
+  }),
   [ModelAction.delete]: (singular) => ({ desc: `Delete one ${singular}`, queryType: 'Mutation' }),
-  [ModelAction.findMany]: (_, plural) => ({ desc: `Find zero or more ${plural}`, queryType: 'Query' }),
-  [ModelAction.findUnique]: (_, plural) => ({ desc: `Find zero or one ${plural}`, queryType: 'Query' }),
+  [ModelAction.findMany]: (_, plural) => ({
+    desc: `Find zero or more ${plural}`,
+    queryType: 'Query',
+  }),
+  [ModelAction.findUnique]: (_, plural) => ({
+    desc: `Find zero or one ${plural}`,
+    queryType: 'Query',
+  }),
   [ModelAction.findFirst]: (_, plural) => ({ desc: `Find first ${plural}`, queryType: 'Query' }),
   [ModelAction.update]: (singular) => ({ desc: `Update one ${singular}`, queryType: 'Mutation' }),
-  [ModelAction.updateMany]: (_, plural) => ({ desc: `Update zero or one ${plural}`, queryType: 'Mutation' }),
-  [ModelAction.upsert]: (_, plural) => ({ desc: `Create or update one ${plural}`, queryType: 'Mutation' }),
+  [ModelAction.updateMany]: (_, plural) => ({
+    desc: `Update zero or one ${plural}`,
+    queryType: 'Mutation',
+  }),
+  [ModelAction.upsert]: (_, plural) => ({
+    desc: `Create or update one ${plural}`,
+    queryType: 'Mutation',
+  }),
 }
 
-const operationUsageTemplates: { [k: string]: (singular: string, plural: string, method: string) => string } = {
+const operationUsageTemplates: {
+  [k: string]: (singular: string, plural: string, method: string) => string
+} = {
   [ModelAction.create]: (singular, _, method) => `// Create one ${singular}
 const ${singular} = await ${method}({
   data: {

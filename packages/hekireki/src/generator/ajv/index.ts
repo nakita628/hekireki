@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 import path from 'node:path'
+
 import type { GeneratorOptions } from '@prisma/generator-helper'
 import pkg from '@prisma/generator-helper'
+
 import { fmt } from '../../format/index.js'
 import { mkdir, writeFile } from '../../fsp/index.js'
 import { ajv, makeAjvRelations } from '../../helper/ajv.js'
@@ -33,20 +35,9 @@ export async function main(options: GeneratorOptions): Promise<void> {
     : ''
   const full = [base, relations].filter(Boolean).join('\n\n')
 
-  const fmtResult = await fmt(full)
-  if (!fmtResult.ok) {
-    throw new Error(`Format error: ${fmtResult.error}`)
-  }
-
-  const mkdirResult = await mkdir(resolved.dir)
-  if (!mkdirResult.ok) {
-    throw new Error(`Failed to create directory: ${mkdirResult.error}`)
-  }
-
-  const writeResult = await writeFile(resolved.file, fmtResult.value)
-  if (!writeResult.ok) {
-    throw new Error(`Failed to write file: ${writeResult.error}`)
-  }
+  const code = await fmt(full)
+  await mkdir(resolved.dir)
+  await writeFile(resolved.file, code)
 }
 
 generatorHandler({
