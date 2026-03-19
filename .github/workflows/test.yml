@@ -21,6 +21,8 @@ jobs:
 
       - run: vp run build
 
+      - run: npm link ./packages/hekireki
+
       - run: vp check
 
       - run: vp test --coverage
