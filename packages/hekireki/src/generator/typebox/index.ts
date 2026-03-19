@@ -7,7 +7,7 @@ import pkg from '@prisma/generator-helper'
 import { fmt } from '../../format/index.js'
 import { mkdir, writeFile } from '../../fsp/index.js'
 import { makeRelationsOnly } from '../../helper/prisma.js'
-import { makeTypeboxRelations, typebox } from '../../helper/typebox.js'
+import { makeTypeBoxRelations, typebox } from '../../helper/typebox.js'
 import { getBool } from '../../utils/index.js'
 
 const { generatorHandler } = pkg
@@ -31,7 +31,7 @@ export async function main(options: GeneratorOptions): Promise<void> {
     options.dmmf.datamodel.enums,
   )
   const relations = enableRelation
-    ? makeRelationsOnly(options.dmmf, getBool(options.generator.config?.type), makeTypeboxRelations)
+    ? makeRelationsOnly(options.dmmf, getBool(options.generator.config?.type), makeTypeBoxRelations)
     : ''
   const full = [base, relations].filter(Boolean).join('\n\n')
 
