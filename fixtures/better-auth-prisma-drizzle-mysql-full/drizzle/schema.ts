@@ -1,5 +1,5 @@
-import { boolean, datetime, index, mysqlTable, text } from 'drizzle-orm/mysql-core'
 import { relations, sql } from 'drizzle-orm'
+import { boolean, datetime, index, mysqlTable, text } from 'drizzle-orm/mysql-core'
 
 export const user = mysqlTable('user', {
   id: text('id').primaryKey(),

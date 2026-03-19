@@ -279,8 +279,42 @@ describe('utils', () => {
         },
       ])
       expect(Object.keys(result)).toStrictEqual(['User', 'Post'])
-      expect(result.User).toHaveLength(2)
-      expect(result.Post).toHaveLength(2)
+      expect(result.User).toStrictEqual([
+        {
+          documentation: '',
+          modelName: 'User',
+          fieldName: 'id',
+          comment: ['Primary key', '@v.pipe(v.string(), v.uuid())'],
+          validation: 'uuid()',
+          isRequired: true,
+        },
+        {
+          documentation: '',
+          modelName: 'User',
+          fieldName: 'name',
+          comment: ['Display name', '@v.pipe(v.string(), v.minLength(1), v.maxLength(50))'],
+          validation: 'string().min(1).max(50)',
+          isRequired: true,
+        },
+      ])
+      expect(result.Post).toStrictEqual([
+        {
+          documentation: '@relation User.id Post.userId one-to-many',
+          modelName: 'Post',
+          fieldName: 'id',
+          comment: ['Primary key', '@v.pipe(v.string(), v.uuid())'],
+          validation: 'uuid()',
+          isRequired: true,
+        },
+        {
+          documentation: '@relation User.id Post.userId one-to-many',
+          modelName: 'Post',
+          fieldName: 'title',
+          comment: ['Article title', '@v.pipe(v.string(), v.minLength(1), v.maxLength(100))'],
+          validation: 'string().min(1).max(100)',
+          isRequired: true,
+        },
+      ])
     })
   })
 
@@ -306,8 +340,16 @@ describe('utils', () => {
           },
         ],
       ])
-      expect(result).toHaveLength(1)
-      expect(result[0].fieldName).toBe('id')
+      expect(result).toStrictEqual([
+        {
+          documentation: '',
+          modelName: 'User',
+          fieldName: 'id',
+          comment: ['Primary key'],
+          validation: 'uuid()',
+          isRequired: true,
+        },
+      ])
     })
   })
 

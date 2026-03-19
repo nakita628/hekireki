@@ -280,7 +280,7 @@ describe('helper/dbml', () => {
         },
       ]
       const result = makeEnums(enums)
-      expect(result).toEqual(['Enum Role {\n  ADMIN\n  USER\n}'])
+      expect(result).toStrictEqual(['Enum Role {\n  ADMIN\n  USER\n}'])
     })
 
     it('handles multiple enums', () => {
@@ -298,13 +298,14 @@ describe('helper/dbml', () => {
         },
       ]
       const result = makeEnums(enums)
-      expect(result).toHaveLength(2)
-      expect(result[0]).toBe('Enum Role {\n  ADMIN\n}')
-      expect(result[1]).toBe('Enum Status {\n  ACTIVE\n  INACTIVE\n}')
+      expect(result).toStrictEqual([
+        'Enum Role {\n  ADMIN\n}',
+        'Enum Status {\n  ACTIVE\n  INACTIVE\n}',
+      ])
     })
 
     it('returns empty array for no enums', () => {
-      expect(makeEnums([])).toEqual([])
+      expect(makeEnums([])).toStrictEqual([])
     })
   })
 
