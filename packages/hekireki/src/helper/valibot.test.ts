@@ -110,7 +110,7 @@ describe('helper/valibot', () => {
       const result = makeValibotRelations({ name: 'User' }, relProps, { includeType: true })
 
       expect(result).toBe(
-        'export const UserRelationsSchema = v.object({\n  ...UserSchema.entries,\n  posts: v.array(PostSchema),\n})\n\nexport type UserRelations = v.InferInput<typeof UserRelationsSchema>',
+        'export const UserRelationsSchema = v.object({\n  ...UserSchema.entries,\n  posts: v.array(PostSchema),\n})\n\nexport type UserRelations = v.InferOutput<typeof UserRelationsSchema>',
       )
     })
   })
@@ -155,7 +155,7 @@ describe('helper/valibot', () => {
       const result = valibot([model], true, false)
 
       expect(result).toBe(
-        "import * as v from 'valibot'\n\nexport const ItemSchema = v.object({\n  id: v.number()\n})\n\nexport type Item = v.InferInput<typeof ItemSchema>",
+        "import * as v from 'valibot'\n\nexport const ItemSchema = v.object({\n  id: v.number()\n})\n\nexport type Item = v.InferOutput<typeof ItemSchema>",
       )
     })
 
@@ -177,7 +177,7 @@ describe('helper/valibot', () => {
       const result = valibot([model], true, true)
 
       expect(result).toBe(
-        "import * as v from 'valibot'\n\nexport const UserSchema = v.object({\n  /**\n   * Primary key\n   */\n  id: v.pipe(v.string(), v.uuid())\n})\n\nexport type User = v.InferInput<typeof UserSchema>",
+        "import * as v from 'valibot'\n\nexport const UserSchema = v.object({\n  /**\n   * Primary key\n   */\n  id: v.pipe(v.string(), v.uuid())\n})\n\nexport type User = v.InferOutput<typeof UserSchema>",
       )
     })
 
@@ -198,7 +198,7 @@ describe('helper/valibot', () => {
 
   describe('makeValibotInfer', () => {
     it('generates Valibot infer type', () => {
-      expect(makeValibotInfer('User')).toBe('export type User = v.InferInput<typeof UserSchema>')
+      expect(makeValibotInfer('User')).toBe('export type User = v.InferOutput<typeof UserSchema>')
     })
   })
 

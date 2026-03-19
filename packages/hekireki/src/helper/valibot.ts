@@ -12,8 +12,8 @@ import { validationSchemas } from './prisma.js'
 
 export function makeValibotInfer(
   modelName: string,
-): `export type ${string} = v.InferInput<typeof ${string}Schema>` {
-  return `export type ${modelName} = v.InferInput<typeof ${modelName}Schema>`
+): `export type ${string} = v.InferOutput<typeof ${string}Schema>` {
+  return `export type ${modelName} = v.InferOutput<typeof ${modelName}Schema>`
 }
 
 export function makeValibotSchema(
@@ -79,7 +79,7 @@ export function makeValibotRelations(
     .join('\n')
 
   const typeLine = options?.includeType
-    ? `\n\nexport type ${model.name}Relations = v.InferInput<typeof ${model.name}RelationsSchema>`
+    ? `\n\nexport type ${model.name}Relations = v.InferOutput<typeof ${model.name}RelationsSchema>`
     : ''
   return `export const ${model.name}RelationsSchema = v.object({\n${base}\n${rels}\n})${typeLine}`
 }
