@@ -236,9 +236,7 @@ describe('helper/typebox', () => {
     ]
 
     it('generates properties with comments', () => {
-      expect(makeTypeBoxProperties(fields, true)).toBe(
-        '  /** Primary key */\n  id: Type.String(),',
-      )
+      expect(makeTypeBoxProperties(fields, true)).toBe('  /** Primary key */\n  id: Type.String(),')
     })
     it('generates properties without comments', () => {
       expect(makeTypeBoxProperties(fields, false)).toBe('  id: Type.String(),')

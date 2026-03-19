@@ -156,9 +156,9 @@ describe('utils', () => {
       expect(parseDocumentWithoutAnnotations('Name\n@t.Type.String()')).toStrictEqual(['Name'])
     })
     it('filters out @j. prefixed annotation', () => {
-      expect(
-        parseDocumentWithoutAnnotations("Name\n@j.{ type: 'string' as const }"),
-      ).toStrictEqual(['Name'])
+      expect(parseDocumentWithoutAnnotations("Name\n@j.{ type: 'string' as const }")).toStrictEqual(
+        ['Name'],
+      )
     })
     it('returns empty for undefined', () => {
       expect(parseDocumentWithoutAnnotations(undefined)).toStrictEqual([])
