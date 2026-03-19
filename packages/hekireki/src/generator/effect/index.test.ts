@@ -232,7 +232,7 @@ export const UserSchema = Schema.Struct({
   name: Schema.String,
 })
 
-export type User = Schema.Schema.Type<typeof UserSchema>
+export type UserEncoded = typeof UserSchema.Encoded
 
 export const PostSchema = Schema.Struct({
   id: Schema.UUID,
@@ -241,7 +241,7 @@ export const PostSchema = Schema.Struct({
   userId: Schema.UUID,
 })
 
-export type Post = Schema.Schema.Type<typeof PostSchema>
+export type PostEncoded = typeof PostSchema.Encoded
 `
     expect(result).toBe(expected)
   }, 30000)
@@ -307,7 +307,7 @@ export const UserSchema = Schema.Struct({
   name: Schema.String,
 })
 
-export type User = Schema.Schema.Type<typeof UserSchema>
+export type UserEncoded = typeof UserSchema.Encoded
 
 export const PostSchema = Schema.Struct({
   /** Primary key */
@@ -320,18 +320,18 @@ export const PostSchema = Schema.Struct({
   userId: Schema.UUID,
 })
 
-export type Post = Schema.Schema.Type<typeof PostSchema>
+export type PostEncoded = typeof PostSchema.Encoded
 
 export const UserRelationsSchema = Schema.Struct({
   ...UserSchema.fields,
   posts: Schema.Array(PostSchema),
 })
 
-export type UserRelations = Schema.Schema.Type<typeof UserRelationsSchema>
+export type UserRelationsEncoded = typeof UserRelationsSchema.Encoded
 
 export const PostRelationsSchema = Schema.Struct({ ...PostSchema.fields, user: UserSchema })
 
-export type PostRelations = Schema.Schema.Type<typeof PostRelationsSchema>
+export type PostRelationsEncoded = typeof PostRelationsSchema.Encoded
 `
     expect(result).toBe(expected)
   }, 30000)

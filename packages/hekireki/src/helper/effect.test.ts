@@ -105,7 +105,7 @@ describe('helper/effect', () => {
         { includeType: true },
       )
       expect(result).toBe(
-        'export const UserRelationsSchema = Schema.Struct({...UserSchema.fields,posts:Schema.Array(PostSchema),})\n\nexport type UserRelations = Schema.Schema.Type<typeof UserRelationsSchema>',
+        'export const UserRelationsSchema = Schema.Struct({...UserSchema.fields,posts:Schema.Array(PostSchema),})\n\nexport type UserRelationsEncoded = typeof UserRelationsSchema.Encoded',
       )
     })
   })
@@ -145,7 +145,7 @@ describe('helper/effect', () => {
       ]
       const result = effect(models, true, false)
       expect(result).toBe(
-        "import { Schema } from 'effect'\n\nexport const PostSchema = Schema.Struct({\n  title: Schema.String,\n})\n\nexport type Post = Schema.Schema.Type<typeof PostSchema>",
+        "import { Schema } from 'effect'\n\nexport const PostSchema = Schema.Struct({\n  title: Schema.String,\n})\n\nexport type PostEncoded = typeof PostSchema.Encoded",
       )
     })
 
@@ -172,7 +172,7 @@ describe('helper/effect', () => {
   describe('makeEffectInfer', () => {
     it('generates Effect infer type', () => {
       expect(makeEffectInfer('User')).toBe(
-        'export type User = Schema.Schema.Type<typeof UserSchema>',
+        'export type UserEncoded = typeof UserSchema.Encoded',
       )
     })
   })
