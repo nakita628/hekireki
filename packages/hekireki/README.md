@@ -257,7 +257,7 @@ export const UserSchema = v.object({
   name: v.pipe(v.string(), v.minLength(1), v.maxLength(50)),
 })
 
-export type User = v.InferInput<typeof UserSchema>
+export type User = v.InferOutput<typeof UserSchema>
 
 export const PostSchema = v.object({
   /**
@@ -278,21 +278,21 @@ export const PostSchema = v.object({
   userId: v.pipe(v.string(), v.uuid()),
 })
 
-export type Post = v.InferInput<typeof PostSchema>
+export type Post = v.InferOutput<typeof PostSchema>
 
 export const UserRelationsSchema = v.object({
   ...UserSchema.entries,
   posts: v.array(PostSchema),
 })
 
-export type UserRelations = v.InferInput<typeof UserRelationsSchema>
+export type UserRelations = v.InferOutput<typeof UserRelationsSchema>
 
 export const PostRelationsSchema = v.object({
   ...PostSchema.entries,
   user: UserSchema,
 })
 
-export type PostRelations = v.InferInput<typeof PostRelationsSchema>
+export type PostRelations = v.InferOutput<typeof PostRelationsSchema>
 ```
 
 ### ArkType
@@ -329,26 +329,38 @@ export type Post = typeof PostSchema.infer
 import { Schema } from 'effect'
 
 export const UserSchema = Schema.Struct({
-  /** Primary key */
+  /**
+   * Primary key
+   */
   id: Schema.UUID,
-  /** Display name */
+  /**
+   * Display name
+   */
   name: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(50)),
 })
 
-export type User = Schema.Schema.Type<typeof UserSchema>
+export type UserEncoded = typeof UserSchema.Encoded
 
 export const PostSchema = Schema.Struct({
-  /** Primary key */
+  /**
+   * Primary key
+   */
   id: Schema.UUID,
-  /** Article title */
+  /**
+   * Article title
+   */
   title: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100)),
-  /** Body content (no length limit) */
+  /**
+   * Body content (no length limit)
+   */
   content: Schema.String,
-  /** Foreign key referencing User.id */
+  /**
+   * Foreign key referencing User.id
+   */
   userId: Schema.UUID,
 })
 
-export type Post = Schema.Schema.Type<typeof PostSchema>
+export type PostEncoded = typeof PostSchema.Encoded
 ```
 
 ### TypeBox
