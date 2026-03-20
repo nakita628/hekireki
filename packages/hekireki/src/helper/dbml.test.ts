@@ -547,4 +547,186 @@ describe('helper/dbml', () => {
       expect(combineKeys(['a', 'b', 'c'])).toBe('(a, b, c)')
     })
   })
+
+  // ============================================================================
+  // Real-world use case tests
+  // ============================================================================
+
+  describe('E-Commerce schema', () => {
+    const orderModel: DMMF.Model = {
+      name: 'Order',
+      dbName: 'orders',
+      fields: [
+        {
+          name: 'id',
+          kind: 'scalar',
+          isList: false,
+          isRequired: true,
+          isUnique: false,
+          isId: true,
+          isReadOnly: false,
+          hasDefaultValue: false,
+          type: 'String',
+          isGenerated: false,
+          isUpdatedAt: false,
+          documentation: 'Order ID',
+        },
+        {
+          name: 'totalAmount',
+          kind: 'scalar',
+          isList: false,
+          isRequired: true,
+          isUnique: false,
+          isId: false,
+          isReadOnly: false,
+          hasDefaultValue: false,
+          type: 'Int',
+          isGenerated: false,
+          isUpdatedAt: false,
+          documentation: 'Total amount in cents',
+        },
+        {
+          name: 'customerId',
+          kind: 'scalar',
+          isList: false,
+          isRequired: true,
+          isUnique: false,
+          isId: false,
+          isReadOnly: false,
+          hasDefaultValue: false,
+          type: 'String',
+          isGenerated: false,
+          isUpdatedAt: false,
+        },
+        {
+          name: 'customer',
+          kind: 'object',
+          isList: false,
+          isRequired: true,
+          isUnique: false,
+          isId: false,
+          isReadOnly: false,
+          hasDefaultValue: false,
+          type: 'Customer',
+          isGenerated: false,
+          isUpdatedAt: false,
+          relationName: 'OrderToCustomer',
+          relationFromFields: ['customerId'],
+          relationToFields: ['id'],
+        },
+      ],
+      primaryKey: null,
+      uniqueFields: [],
+      uniqueIndexes: [],
+      isGenerated: false,
+    } as DMMF.Model
+
+    const customerModel: DMMF.Model = {
+      name: 'Customer',
+      dbName: 'customers',
+      fields: [
+        {
+          name: 'id',
+          kind: 'scalar',
+          isList: false,
+          isRequired: true,
+          isUnique: false,
+          isId: true,
+          isReadOnly: false,
+          hasDefaultValue: false,
+          type: 'String',
+          isGenerated: false,
+          isUpdatedAt: false,
+        },
+        {
+          name: 'email',
+          kind: 'scalar',
+          isList: false,
+          isRequired: true,
+          isUnique: true,
+          isId: false,
+          isReadOnly: false,
+          hasDefaultValue: false,
+          type: 'String',
+          isGenerated: false,
+          isUpdatedAt: false,
+          documentation: 'Unique email address',
+        },
+        {
+          name: 'orders',
+          kind: 'object',
+          isList: true,
+          isRequired: false,
+          isUnique: false,
+          isId: false,
+          isReadOnly: false,
+          hasDefaultValue: false,
+          type: 'Order',
+          isGenerated: false,
+          isUpdatedAt: false,
+          relationName: 'OrderToCustomer',
+        },
+      ],
+      primaryKey: null,
+      uniqueFields: [],
+      uniqueIndexes: [],
+      isGenerated: false,
+    } as DMMF.Model
+
+    it('generates Order table with note and FK', () => {
+      const tables = makeTables([orderModel])
+      expect(tables[0]).toBe(
+        "Table Order {\n  id String [pk, note: 'Order ID']\n  totalAmount Int [not null, note: 'Total amount in cents']\n  customerId String [not null]\n  customer Customer [not null]\n}",
+      )
+    })
+
+    it('uses dbName when mapToDbSchema is true', () => {
+      const tables = makeTables([orderModel], true)
+      expect(tables[0]).toBe(
+        "Table orders {\n  id String [pk, note: 'Order ID']\n  totalAmount Int [not null, note: 'Total amount in cents']\n  customerId String [not null]\n  customer Customer [not null]\n}",
+      )
+    })
+
+    it('generates FK reference from Order to Customer', () => {
+      const refs = makeRelations([orderModel, customerModel])
+      expect(refs).toStrictEqual(['Ref Order_customerId_fk: Order.customerId > Customer.id'])
+    })
+
+    it('generates complete DBML with enum', () => {
+      const datamodel: DMMF.Datamodel = {
+        models: [orderModel, customerModel],
+        enums: [
+          {
+            name: 'OrderStatus',
+            values: [
+              { name: 'PENDING', dbName: null },
+              { name: 'CONFIRMED', dbName: null },
+              { name: 'SHIPPED', dbName: null },
+              { name: 'DELIVERED', dbName: null },
+              { name: 'CANCELLED', dbName: null },
+            ],
+          },
+        ],
+        types: [],
+      }
+      const result = dbmlContent(datamodel)
+      expect(result).toBe(
+        "Enum OrderStatus {\n  PENDING\n  CONFIRMED\n  SHIPPED\n  DELIVERED\n  CANCELLED\n}\n\nTable Order {\n  id String [pk, note: 'Order ID']\n  totalAmount Int [not null, note: 'Total amount in cents']\n  customerId String [not null]\n  customer Customer [not null]\n}\n\nTable Customer {\n  id String [pk]\n  email String [unique, not null, note: 'Unique email address']\n  orders Order\n}\n\nRef Order_customerId_fk: Order.customerId > Customer.id",
+      )
+    })
+  })
+
+  describe('edge cases', () => {
+    it('escapes apostrophe in note', () => {
+      expect(escapeNote("Customer's order total")).toBe("Customer\\'s order total")
+    })
+
+    it('escapes multiple apostrophes', () => {
+      expect(escapeNote("It's the user's data")).toBe("It\\'s the user\\'s data")
+    })
+
+    it('handles empty string', () => {
+      expect(escapeNote('')).toBe('')
+    })
+  })
 })

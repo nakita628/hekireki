@@ -475,4 +475,188 @@ describe('helper/mermaid-er', () => {
       ])
     })
   })
+
+  // ============================================================================
+  // Real-world use case tests
+  // ============================================================================
+
+  describe('E-Commerce ER diagram', () => {
+    const customerModel = makeModel({
+      name: 'Customer',
+      fields: [
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({ name: 'email', type: 'String', isUnique: true, documentation: 'Email address' }),
+        makeField({ name: 'name', type: 'String', documentation: 'Full name' }),
+        makeField({
+          name: 'orders',
+          type: 'Order',
+          kind: 'object',
+          isList: true,
+          relationName: 'OrderToCustomer',
+        }),
+      ],
+    })
+
+    const orderModel = makeModel({
+      name: 'Order',
+      fields: [
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({ name: 'totalAmount', type: 'Int', documentation: 'Total in cents' }),
+        makeField({ name: 'customerId', type: 'String' }),
+        makeField({
+          name: 'customer',
+          type: 'Customer',
+          kind: 'object',
+          relationName: 'OrderToCustomer',
+          relationFromFields: ['customerId'],
+          relationToFields: ['id'],
+        }),
+        makeField({
+          name: 'items',
+          type: 'OrderItem',
+          kind: 'object',
+          isList: true,
+          relationName: 'OrderItemToOrder',
+        }),
+      ],
+    })
+
+    const orderItemModel = makeModel({
+      name: 'OrderItem',
+      fields: [
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({ name: 'quantity', type: 'Int' }),
+        makeField({ name: 'unitPrice', type: 'Int', documentation: 'Price per unit in cents' }),
+        makeField({ name: 'orderId', type: 'String' }),
+        makeField({
+          name: 'order',
+          type: 'Order',
+          kind: 'object',
+          relationName: 'OrderItemToOrder',
+          relationFromFields: ['orderId'],
+          relationToFields: ['id'],
+        }),
+      ],
+    })
+
+    it('generates complete E-Commerce ER diagram with 3 models', () => {
+      const result = erContent([customerModel, orderModel, orderItemModel])
+      expect(result).toStrictEqual([
+        '```mermaid',
+        'erDiagram',
+        '    Customer ||--}| Order : "(id) - (customerId)"',
+        '    Order ||--}| OrderItem : "(id) - (orderId)"',
+        '    Customer {',
+        '        string id PK',
+        '        string email "Email address"',
+        '        string name "Full name"',
+        '    }',
+        '    Order {',
+        '        string id PK',
+        '        int totalAmount "Total in cents"',
+        '        string customerId FK',
+        '    }',
+        '    OrderItem {',
+        '        string id PK',
+        '        int quantity',
+        '        int unitPrice "Price per unit in cents"',
+        '        string orderId FK',
+        '    }',
+        '```',
+      ])
+    })
+
+    it('extracts correct DMMF relations for Order→Customer', () => {
+      const relations = extractRelationsFromDmmf([customerModel, orderModel])
+      expect(relations).toStrictEqual(['    Customer ||--}| Order : "(id) - (customerId)"'])
+    })
+
+    it('generates Customer model fields with PK and documentation', () => {
+      const fields = modelFields(customerModel)
+      expect(fields).toStrictEqual([
+        '        string id PK',
+        '        string email "Email address"',
+        '        string name "Full name"',
+      ])
+    })
+
+    it('generates Order model fields with FK marker', () => {
+      const fields = modelFields(orderModel)
+      expect(fields).toStrictEqual([
+        '        string id PK',
+        '        int totalAmount "Total in cents"',
+        '        string customerId FK',
+      ])
+    })
+  })
+
+  describe('self-referencing relation (Category tree)', () => {
+    it('generates self-referencing ER relation', () => {
+      const categoryModel = makeModel({
+        name: 'Category',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({ name: 'name', type: 'String' }),
+          makeField({ name: 'parentId', type: 'Int', isRequired: false }),
+          makeField({
+            name: 'parent',
+            type: 'Category',
+            kind: 'object',
+            isRequired: false,
+            relationName: 'CategoryToCategory',
+            relationFromFields: ['parentId'],
+            relationToFields: ['id'],
+          }),
+          makeField({
+            name: 'children',
+            type: 'Category',
+            kind: 'object',
+            isList: true,
+            relationName: 'CategoryToCategory',
+          }),
+        ],
+      })
+
+      const relations = extractRelationsFromDmmf([categoryModel])
+      expect(relations).toStrictEqual(['    Category ||--}o Category : "(id) - (parentId)"'])
+    })
+  })
+
+  describe('one-to-one relation (User-Profile)', () => {
+    it('generates one-to-one ER relation', () => {
+      const userModel = makeModel({
+        name: 'User',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({
+            name: 'profile',
+            type: 'Profile',
+            kind: 'object',
+            isList: false,
+            isRequired: false,
+            relationName: 'ProfileToUser',
+          }),
+        ],
+      })
+
+      const profileModel = makeModel({
+        name: 'Profile',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({ name: 'userId', type: 'Int', isUnique: true }),
+          makeField({
+            name: 'user',
+            type: 'User',
+            kind: 'object',
+            relationName: 'ProfileToUser',
+            relationFromFields: ['userId'],
+            relationToFields: ['id'],
+          }),
+        ],
+      })
+
+      const relations = extractRelationsFromDmmf([userModel, profileModel])
+      expect(relations).toStrictEqual(['    User ||--|| Profile : "(id) - (userId)"'])
+    })
+  })
 })

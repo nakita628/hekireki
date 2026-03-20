@@ -219,4 +219,164 @@ describe('helper/valibot', () => {
       expect(makeValibotEnumExpression(['ACTIVE'])).toBe("picklist(['ACTIVE'])")
     })
   })
+
+  // ============================================================================
+  // Real-world use case tests
+  // ============================================================================
+
+  describe('E-Commerce order pattern', () => {
+    const orderFields = [
+      {
+        documentation: '',
+        modelName: 'Order',
+        fieldName: 'id',
+        comment: ['Order ID'],
+        validation: 'pipe(v.string(), v.uuid())',
+        isRequired: true,
+      },
+      {
+        documentation: '',
+        modelName: 'Order',
+        fieldName: 'status',
+        comment: ['Order status'],
+        validation: null,
+        isRequired: true,
+      },
+      {
+        documentation: '',
+        modelName: 'Order',
+        fieldName: 'totalAmount',
+        comment: ['Total amount in cents'],
+        validation: 'pipe(v.number(), v.integer(), v.minValue(0))',
+        isRequired: true,
+      },
+      {
+        documentation: '',
+        modelName: 'Order',
+        fieldName: 'note',
+        comment: ['Customer note', 'Optional memo from customer'],
+        validation: 'string()',
+        isRequired: false,
+      },
+    ]
+
+    it('generates Order schema with comments, enum skipped, optional field', () => {
+      const result = makeValibotSchemas(orderFields, true)
+      expect(result).toBe(`export const OrderSchema = v.object({
+  /**
+   * Order ID
+   */
+  id: v.pipe(v.string(), v.uuid()),
+  /**
+   * Total amount in cents
+   */
+  totalAmount: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  /**
+   * Customer note
+   * Optional memo from customer
+   */
+  note: v.exactOptional(v.string())
+})`)
+    })
+
+    it('generates Order schema without comments', () => {
+      const result = makeValibotSchemas(orderFields, false)
+      expect(result).toBe(`export const OrderSchema = v.object({
+  id: v.pipe(v.string(), v.uuid()),
+  totalAmount: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  note: v.exactOptional(v.string())
+})`)
+    })
+
+    it('generates Order relations with items and customer', () => {
+      const result = makeValibotRelations(
+        { name: 'Order' },
+        [
+          { key: 'items', targetModel: 'OrderItem', isMany: true },
+          { key: 'customer', targetModel: 'Customer', isMany: false },
+        ],
+        { includeType: true },
+      )
+      expect(result).toBe(
+        'export const OrderRelationsSchema = v.object({\n  ...OrderSchema.entries,\n  items: v.array(OrderItemSchema),\n  customer: CustomerSchema,\n})\n\nexport type OrderRelations = v.InferOutput<typeof OrderRelationsSchema>',
+      )
+    })
+
+    it('generates full E-Commerce output with enum and type', () => {
+      const models = [
+        {
+          name: 'Order',
+          fields: [
+            {
+              name: 'id',
+              type: 'String',
+              kind: 'scalar',
+              isRequired: true,
+              isList: false,
+              documentation: '@v.pipe(v.string(), v.uuid())',
+            },
+            {
+              name: 'status',
+              type: 'OrderStatus',
+              kind: 'enum',
+              isRequired: true,
+              isList: false,
+            },
+            {
+              name: 'totalAmount',
+              type: 'Int',
+              kind: 'scalar',
+              isRequired: true,
+              isList: false,
+              documentation: '@v.pipe(v.number(), v.integer(), v.minValue(0))',
+            },
+          ],
+        },
+      ]
+      const enums = [
+        {
+          name: 'OrderStatus',
+          values: [
+            { name: 'PENDING' },
+            { name: 'CONFIRMED' },
+            { name: 'SHIPPED' },
+            { name: 'DELIVERED' },
+            { name: 'CANCELLED' },
+          ],
+        },
+      ]
+
+      const result = valibot(models, true, false, enums)
+      expect(result).toBe(
+        "import * as v from 'valibot'\n\nexport const OrderSchema = v.object({\n  id: v.pipe(v.string(), v.uuid()),\n  status: v.picklist(['PENDING', 'CONFIRMED', 'SHIPPED', 'DELIVERED', 'CANCELLED']),\n  totalAmount: v.pipe(v.number(), v.integer(), v.minValue(0))\n})\n\nexport type Order = v.InferOutput<typeof OrderSchema>",
+      )
+    })
+  })
+
+  describe('multi-line comment handling', () => {
+    it('filters annotation lines from comments', () => {
+      const fields = [
+        {
+          documentation: '',
+          modelName: 'Payment',
+          fieldName: 'amount',
+          comment: [
+            'Payment amount',
+            'Stored in smallest currency unit (e.g. cents)',
+            '@v.number()',
+          ],
+          validation: 'number()',
+          isRequired: true,
+        },
+      ]
+      const result = makeValibotSchemas(fields, true)
+      expect(result).toBe(`export const PaymentSchema = v.object({
+  /**
+   * Payment amount
+   * Stored in smallest currency unit (e.g. cents)
+   */
+  amount: v.number()
+})`)
+    })
+  })
 })
