@@ -440,4 +440,187 @@ export type OrderRelations = FromSchema<typeof OrderRelationsSchema>`)
       ).toBe("{ enum: ['PENDING', 'CONFIRMED', 'SHIPPED', 'DELIVERED', 'CANCELLED'] as const }")
     })
   })
+
+  // ============================================================================
+  // Edge case tests
+  // ============================================================================
+
+  describe('edge cases', () => {
+    it('all Prisma scalar types produce valid JSON Schema', () => {
+      const allTypes = [
+        'String',
+        'Int',
+        'Float',
+        'Boolean',
+        'DateTime',
+        'BigInt',
+        'Decimal',
+        'Json',
+        'Bytes',
+      ]
+      for (const t of allTypes) {
+        expect(PRISMA_TO_AJV[t]).toBeDefined()
+        expect(typeof PRISMA_TO_AJV[t]).toBe('string')
+      }
+    })
+
+    it('generates schema with all optional fields (no required array)', () => {
+      const result = makeAjvSchemas(
+        [
+          {
+            documentation: '',
+            modelName: 'Session',
+            fieldName: 'token',
+            comment: [],
+            validation: "{ type: 'string' as const }",
+            isRequired: false,
+          },
+          {
+            documentation: '',
+            modelName: 'Session',
+            fieldName: 'expiresAt',
+            comment: [],
+            validation: "{ type: 'string' as const, format: 'date-time' as const }",
+            isRequired: false,
+          },
+        ],
+        false,
+      )
+      expect(result).toBe(`export const SessionSchema = {
+  type: 'object' as const,
+  properties: {
+    token: { type: 'string' as const },
+    expiresAt: { type: 'string' as const, format: 'date-time' as const },
+  },
+  additionalProperties: false,
+} as const`)
+    })
+
+    it('generates schema with multi-line comments', () => {
+      const result = makeAjvSchemas(
+        [
+          {
+            documentation: '',
+            modelName: 'Payment',
+            fieldName: 'amount',
+            comment: ['Total amount in cents', 'Integer to avoid floating point issues'],
+            validation: "{ type: 'integer' as const }",
+            isRequired: true,
+          },
+        ],
+        true,
+      )
+      expect(result).toBe(`export const PaymentSchema = {
+  type: 'object' as const,
+  properties: {
+    /**
+     * Total amount in cents
+     * Integer to avoid floating point issues
+     */
+    amount: { type: 'integer' as const },
+  },
+  required: ['amount'] as const,
+  additionalProperties: false,
+} as const`)
+    })
+
+    it('generates schema with empty comment array when comment is true', () => {
+      const result = makeAjvSchemas(
+        [
+          {
+            documentation: '',
+            modelName: 'Token',
+            fieldName: 'value',
+            comment: [],
+            validation: "{ type: 'string' as const }",
+            isRequired: true,
+          },
+        ],
+        true,
+      )
+      expect(result).toBe(`export const TokenSchema = {
+  type: 'object' as const,
+  properties: {
+    value: { type: 'string' as const },
+  },
+  required: ['value'] as const,
+  additionalProperties: false,
+} as const`)
+    })
+
+    it('handles multiple models in a single ajv() call', () => {
+      const models = [
+        {
+          name: 'User',
+          fields: [{ name: 'id', type: 'String', kind: 'scalar', isRequired: true, isList: false }],
+        },
+        {
+          name: 'Post',
+          fields: [
+            { name: 'id', type: 'String', kind: 'scalar', isRequired: true, isList: false },
+            { name: 'title', type: 'String', kind: 'scalar', isRequired: true, isList: false },
+          ],
+        },
+      ]
+      const result = ajv(models, false, false)
+      expect(result).toContain('export const UserSchema')
+      expect(result).toContain('export const PostSchema')
+    })
+
+    it('relation returns null for empty relations', () => {
+      expect(makeAjvRelations({ name: 'Orphan' }, [])).toBeNull()
+    })
+
+    it('relation without includeType omits type export', () => {
+      const result = makeAjvRelations({ name: 'User' }, [
+        { key: 'posts', targetModel: 'Post', isMany: true },
+      ])
+      expect(result).not.toContain('export type')
+      expect(result).toContain('export const UserRelationsSchema')
+    })
+  })
+
+  // ============================================================================
+  // Session auth pattern
+  // ============================================================================
+
+  describe('Session auth pattern', () => {
+    it('generates Session schema with mixed required/optional and DateTime', () => {
+      const models = [
+        {
+          name: 'Session',
+          fields: [
+            { name: 'id', type: 'String', kind: 'scalar', isRequired: true, isList: false },
+            { name: 'userId', type: 'String', kind: 'scalar', isRequired: true, isList: false },
+            { name: 'token', type: 'String', kind: 'scalar', isRequired: true, isList: false },
+            {
+              name: 'expiresAt',
+              type: 'DateTime',
+              kind: 'scalar',
+              isRequired: true,
+              isList: false,
+            },
+            { name: 'ipAddress', type: 'String', kind: 'scalar', isRequired: false, isList: false },
+          ],
+        },
+      ]
+      const result = ajv(models, true, false)
+      expect(result).toBe(`import type { FromSchema } from 'json-schema-to-ts'
+
+export const SessionSchema = {
+  type: 'object' as const,
+  properties: {
+    id: { type: 'string' as const },
+    userId: { type: 'string' as const },
+    token: { type: 'string' as const },
+    expiresAt: { type: 'string' as const, format: 'date-time' as const },
+    ipAddress: { type: 'string' as const },
+  },
+  required: ['id', 'userId', 'token', 'expiresAt'] as const,
+  additionalProperties: false,
+} as const
+
+export type Session = FromSchema<typeof SessionSchema>`)
+    })
+  })
 })
