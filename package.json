@@ -1,6 +1,6 @@
 {
   "name": "hekireki-monorepo",
-  "private": "true",
+  "private": true,
   "license": "MIT",
   "type": "module",
   "scripts": {
