@@ -13,6 +13,9 @@
     "coverage": "vp test --coverage",
     "release": "pnpm -F hekireki release"
   },
+  "dependencies": {
+    "hekireki": "link:packages/hekireki"
+  },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.1.0",
     "vite-plus": "^0.1.12"
