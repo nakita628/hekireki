@@ -11,7 +11,7 @@ export const UserSchema = v.object({
   updatedAt: v.date(),
 })
 
-export type User = v.InferInput<typeof UserSchema>
+export type User = v.InferOutput<typeof UserSchema>
 
 export const PostSchema = v.object({
   id: v.string(),
@@ -23,7 +23,7 @@ export const PostSchema = v.object({
   authorId: v.string(),
 })
 
-export type Post = v.InferInput<typeof PostSchema>
+export type Post = v.InferOutput<typeof PostSchema>
 
 export const ProfileSchema = v.object({
   id: v.string(),
@@ -32,14 +32,14 @@ export const ProfileSchema = v.object({
   userId: v.string(),
 })
 
-export type Profile = v.InferInput<typeof ProfileSchema>
+export type Profile = v.InferOutput<typeof ProfileSchema>
 
 export const TagSchema = v.object({
   id: v.string(),
   name: v.string(),
 })
 
-export type Tag = v.InferInput<typeof TagSchema>
+export type Tag = v.InferOutput<typeof TagSchema>
 
 export const UserRelationsSchema = v.object({
   ...UserSchema.entries,
@@ -47,7 +47,7 @@ export const UserRelationsSchema = v.object({
   profile: ProfileSchema,
 })
 
-export type UserRelations = v.InferInput<typeof UserRelationsSchema>
+export type UserRelations = v.InferOutput<typeof UserRelationsSchema>
 
 export const PostRelationsSchema = v.object({
   ...PostSchema.entries,
@@ -55,18 +55,18 @@ export const PostRelationsSchema = v.object({
   tags: v.array(TagSchema),
 })
 
-export type PostRelations = v.InferInput<typeof PostRelationsSchema>
+export type PostRelations = v.InferOutput<typeof PostRelationsSchema>
 
 export const ProfileRelationsSchema = v.object({
   ...ProfileSchema.entries,
   user: UserSchema,
 })
 
-export type ProfileRelations = v.InferInput<typeof ProfileRelationsSchema>
+export type ProfileRelations = v.InferOutput<typeof ProfileRelationsSchema>
 
 export const TagRelationsSchema = v.object({
   ...TagSchema.entries,
   posts: v.array(PostSchema),
 })
 
-export type TagRelations = v.InferInput<typeof TagRelationsSchema>
+export type TagRelations = v.InferOutput<typeof TagRelationsSchema>

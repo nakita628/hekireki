@@ -161,20 +161,32 @@ model Post {
     const expected = `import { Schema } from 'effect'
 
 export const UserSchema = Schema.Struct({
-  /** Primary key */
+  /**
+   * Primary key
+   */
   id: Schema.UUID,
-  /** Display name */
+  /**
+   * Display name
+   */
   name: Schema.String,
 })
 
 export const PostSchema = Schema.Struct({
-  /** Primary key */
+  /**
+   * Primary key
+   */
   id: Schema.UUID,
-  /** Article title */
+  /**
+   * Article title
+   */
   title: Schema.String,
-  /** Body content */
+  /**
+   * Body content
+   */
   content: Schema.String,
-  /** Foreign key */
+  /**
+   * Foreign key
+   */
   userId: Schema.UUID,
 })
 `
@@ -301,22 +313,34 @@ model Post {
     const expected = `import { Schema } from 'effect'
 
 export const UserSchema = Schema.Struct({
-  /** Primary key */
+  /**
+   * Primary key
+   */
   id: Schema.UUID,
-  /** Display name */
+  /**
+   * Display name
+   */
   name: Schema.String,
 })
 
 export type UserEncoded = typeof UserSchema.Encoded
 
 export const PostSchema = Schema.Struct({
-  /** Primary key */
+  /**
+   * Primary key
+   */
   id: Schema.UUID,
-  /** Article title */
+  /**
+   * Article title
+   */
   title: Schema.String,
-  /** Body content */
+  /**
+   * Body content
+   */
   content: Schema.String,
-  /** Foreign key */
+  /**
+   * Foreign key
+   */
   userId: Schema.UUID,
 })
 

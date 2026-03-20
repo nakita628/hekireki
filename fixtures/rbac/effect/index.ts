@@ -1,106 +1,176 @@
 import { Schema } from 'effect'
 
 export const OrganizationSchema = Schema.Struct({
-  /** Organization ID */
+  /**
+   * Organization ID
+   */
   id: Schema.Int,
-  /** Organization name */
+  /**
+   * Organization name
+   */
   name: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(200)),
-  /** URL-safe slug */
+  /**
+   * URL-safe slug
+   */
   slug: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100)),
-  /** Organization status */
+  /**
+   * Organization status
+   */
   status: Schema.Literal('ACTIVE', 'INACTIVE', 'SUSPENDED'),
-  /** Creation timestamp */
+  /**
+   * Creation timestamp
+   */
   createdAt: Schema.Date,
-  /** Last update timestamp */
+  /**
+   * Last update timestamp
+   */
   updatedAt: Schema.Date,
 })
 
-export type Organization = Schema.Schema.Type<typeof OrganizationSchema>
+export type OrganizationEncoded = typeof OrganizationSchema.Encoded
 
 export const UserSchema = Schema.Struct({
-  /** User ID */
+  /**
+   * User ID
+   */
   id: Schema.Int,
-  /** Organization ID */
+  /**
+   * Organization ID
+   */
   organizationId: Schema.Int,
-  /** Email address */
+  /**
+   * Email address
+   */
   email: Schema.String,
-  /** Display name */
+  /**
+   * Display name
+   */
   name: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100)),
-  /** Creation timestamp */
+  /**
+   * Creation timestamp
+   */
   createdAt: Schema.Date,
-  /** Last update timestamp */
+  /**
+   * Last update timestamp
+   */
   updatedAt: Schema.Date,
 })
 
-export type User = Schema.Schema.Type<typeof UserSchema>
+export type UserEncoded = typeof UserSchema.Encoded
 
 export const RoleSchema = Schema.Struct({
-  /** Role ID */
+  /**
+   * Role ID
+   */
   id: Schema.Int,
-  /** Role name */
+  /**
+   * Role name
+   */
   name: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100)),
-  /** Role description */
+  /**
+   * Role description
+   */
   description: Schema.NullOr(Schema.String),
-  /** Creation timestamp */
+  /**
+   * Creation timestamp
+   */
   createdAt: Schema.Date,
-  /** Last update timestamp */
+  /**
+   * Last update timestamp
+   */
   updatedAt: Schema.Date,
 })
 
-export type Role = Schema.Schema.Type<typeof RoleSchema>
+export type RoleEncoded = typeof RoleSchema.Encoded
 
 export const PermissionSchema = Schema.Struct({
-  /** Permission ID */
+  /**
+   * Permission ID
+   */
   id: Schema.Int,
-  /** Resource name */
+  /**
+   * Resource name
+   */
   resource: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100)),
-  /** Action name */
+  /**
+   * Action name
+   */
   action: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100)),
-  /** Permission description */
+  /**
+   * Permission description
+   */
   description: Schema.NullOr(Schema.String),
-  /** Creation timestamp */
+  /**
+   * Creation timestamp
+   */
   createdAt: Schema.Date,
 })
 
-export type Permission = Schema.Schema.Type<typeof PermissionSchema>
+export type PermissionEncoded = typeof PermissionSchema.Encoded
 
 export const UserRoleSchema = Schema.Struct({
-  /** User ID */
+  /**
+   * User ID
+   */
   userId: Schema.Int,
-  /** Role ID */
+  /**
+   * Role ID
+   */
   roleId: Schema.Int,
-  /** Assignment timestamp */
+  /**
+   * Assignment timestamp
+   */
   assignedAt: Schema.Date,
 })
 
-export type UserRole = Schema.Schema.Type<typeof UserRoleSchema>
+export type UserRoleEncoded = typeof UserRoleSchema.Encoded
 
 export const RolePermissionSchema = Schema.Struct({
-  /** Role ID */
+  /**
+   * Role ID
+   */
   roleId: Schema.Int,
-  /** Permission ID */
+  /**
+   * Permission ID
+   */
   permissionId: Schema.Int,
-  /** Assignment timestamp */
+  /**
+   * Assignment timestamp
+   */
   assignedAt: Schema.Date,
 })
 
-export type RolePermission = Schema.Schema.Type<typeof RolePermissionSchema>
+export type RolePermissionEncoded = typeof RolePermissionSchema.Encoded
 
 export const AuditLogSchema = Schema.Struct({
-  /** Audit log ID */
+  /**
+   * Audit log ID
+   */
   id: Schema.Int,
-  /** User ID */
+  /**
+   * User ID
+   */
   userId: Schema.Int,
-  /** Action performed */
+  /**
+   * Action performed
+   */
   action: Schema.String,
-  /** Resource name */
+  /**
+   * Resource name
+   */
   resource: Schema.String,
-  /** Action detail */
+  /**
+   * Action detail
+   */
   detail: Schema.NullOr(Schema.String),
-  /** Client IP address */
+  /**
+   * Client IP address
+   */
   ipAddress: Schema.NullOr(Schema.String),
-  /** Action timestamp */
+  /**
+   * Action timestamp
+   */
   createdAt: Schema.Date,
 })
 
-export type AuditLog = Schema.Schema.Type<typeof AuditLogSchema>
+export type AuditLogEncoded = typeof AuditLogSchema.Encoded

@@ -39,7 +39,7 @@ export const UserSchema = v.object({
   metadata: v.nullish(v.any()),
 })
 
-export type User = v.InferInput<typeof UserSchema>
+export type User = v.InferOutput<typeof UserSchema>
 
 export const ProfileSchema = v.object({
   /**
@@ -64,7 +64,7 @@ export const ProfileSchema = v.object({
   birthDate: v.nullish(v.pipe(v.string(), v.isoDate())),
 })
 
-export type Profile = v.InferInput<typeof ProfileSchema>
+export type Profile = v.InferOutput<typeof ProfileSchema>
 
 export const PostSchema = v.object({
   /**
@@ -93,7 +93,7 @@ export const PostSchema = v.object({
   authorId: v.pipe(v.number(), v.integer()),
 })
 
-export type Post = v.InferInput<typeof PostSchema>
+export type Post = v.InferOutput<typeof PostSchema>
 
 export const CommentSchema = v.object({
   /**
@@ -114,7 +114,7 @@ export const CommentSchema = v.object({
   authorId: v.pipe(v.number(), v.integer()),
 })
 
-export type Comment = v.InferInput<typeof CommentSchema>
+export type Comment = v.InferOutput<typeof CommentSchema>
 
 export const TagSchema = v.object({
   /**
@@ -127,7 +127,7 @@ export const TagSchema = v.object({
   name: v.pipe(v.string(), v.minLength(1), v.maxLength(50)),
 })
 
-export type Tag = v.InferInput<typeof TagSchema>
+export type Tag = v.InferOutput<typeof TagSchema>
 
 export const PostTagSchema = v.object({
   /**
@@ -140,7 +140,7 @@ export const PostTagSchema = v.object({
   tagId: v.pipe(v.number(), v.integer()),
 })
 
-export type PostTag = v.InferInput<typeof PostTagSchema>
+export type PostTag = v.InferOutput<typeof PostTagSchema>
 
 export const SessionSchema = v.object({
   /**
@@ -169,7 +169,7 @@ export const SessionSchema = v.object({
   userAgent: v.nullish(v.string()),
 })
 
-export type Session = v.InferInput<typeof SessionSchema>
+export type Session = v.InferOutput<typeof SessionSchema>
 
 export const AuditLogSchema = v.object({
   /**
@@ -190,7 +190,7 @@ export const AuditLogSchema = v.object({
   recordId: v.string(),
 })
 
-export type AuditLog = v.InferInput<typeof AuditLogSchema>
+export type AuditLog = v.InferOutput<typeof AuditLogSchema>
 
 export const UserRelationsSchema = v.object({
   ...UserSchema.entries,
@@ -199,14 +199,14 @@ export const UserRelationsSchema = v.object({
   comments: v.array(CommentSchema),
 })
 
-export type UserRelations = v.InferInput<typeof UserRelationsSchema>
+export type UserRelations = v.InferOutput<typeof UserRelationsSchema>
 
 export const ProfileRelationsSchema = v.object({
   ...ProfileSchema.entries,
   user: UserSchema,
 })
 
-export type ProfileRelations = v.InferInput<typeof ProfileRelationsSchema>
+export type ProfileRelations = v.InferOutput<typeof ProfileRelationsSchema>
 
 export const PostRelationsSchema = v.object({
   ...PostSchema.entries,
@@ -215,7 +215,7 @@ export const PostRelationsSchema = v.object({
   postTags: v.array(PostTagSchema),
 })
 
-export type PostRelations = v.InferInput<typeof PostRelationsSchema>
+export type PostRelations = v.InferOutput<typeof PostRelationsSchema>
 
 export const CommentRelationsSchema = v.object({
   ...CommentSchema.entries,
@@ -223,14 +223,14 @@ export const CommentRelationsSchema = v.object({
   author: UserSchema,
 })
 
-export type CommentRelations = v.InferInput<typeof CommentRelationsSchema>
+export type CommentRelations = v.InferOutput<typeof CommentRelationsSchema>
 
 export const TagRelationsSchema = v.object({
   ...TagSchema.entries,
   postTags: v.array(PostTagSchema),
 })
 
-export type TagRelations = v.InferInput<typeof TagRelationsSchema>
+export type TagRelations = v.InferOutput<typeof TagRelationsSchema>
 
 export const PostTagRelationsSchema = v.object({
   ...PostTagSchema.entries,
@@ -238,4 +238,4 @@ export const PostTagRelationsSchema = v.object({
   tag: TagSchema,
 })
 
-export type PostTagRelations = v.InferInput<typeof PostTagRelationsSchema>
+export type PostTagRelations = v.InferOutput<typeof PostTagRelationsSchema>

@@ -44,9 +44,13 @@ describe('helper/effect', () => {
         true,
       )
       const expected = `export const UserSchema = Schema.Struct({
-  /** Primary key */
+  /**
+   * Primary key
+   */
   id: Schema.String,
-  /** Display name */
+  /**
+   * Display name
+   */
   name: Schema.String,
 })`
       expect(result).toBe(expected)
@@ -171,9 +175,7 @@ describe('helper/effect', () => {
 
   describe('makeEffectInfer', () => {
     it('generates Effect infer type', () => {
-      expect(makeEffectInfer('User')).toBe(
-        'export type UserEncoded = typeof UserSchema.Encoded',
-      )
+      expect(makeEffectInfer('User')).toBe('export type UserEncoded = typeof UserSchema.Encoded')
     })
   })
 
@@ -198,7 +200,9 @@ describe('helper/effect', () => {
     ]
 
     it('generates properties with comments', () => {
-      expect(makeEffectProperties(fields, true)).toBe('  /** Primary key */\n  id: Schema.String,')
+      expect(makeEffectProperties(fields, true)).toBe(
+        '  /**\n   * Primary key\n   */\n  id: Schema.String,',
+      )
     })
     it('generates properties without comments', () => {
       expect(makeEffectProperties(fields, false)).toBe('  id: Schema.String,')

@@ -1,127 +1,319 @@
 import { Schema } from 'effect'
 
 export const UserSchema = Schema.Struct({
-  /** User ID */
+  /**
+
+   * User ID
+
+   */
   id: Schema.UUID,
-  /** Email address */
+  /**
+
+   * Email address
+
+   */
   email: Schema.String,
-  /** Hashed password (null for OAuth-only users) */
+  /**
+
+   * Hashed password (null for OAuth-only users)
+
+   */
   passwordHash: Schema.NullOr(Schema.String.pipe(Schema.minLength(8))),
-  /** Display name */
+  /**
+
+   * Display name
+
+   */
   name: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100)),
-  /** Profile image URL */
+  /**
+
+   * Profile image URL
+
+   */
   avatarUrl: Schema.NullOr(Schema.String),
-  /** User role */
+  /**
+
+   * User role
+
+   */
   role: Schema.Literal('ADMIN', 'USER', 'GUEST'),
-  /** Email verification status */
+  /**
+
+   * Email verification status
+
+   */
   emailVerified: Schema.Boolean,
-  /** Account active status */
+  /**
+
+   * Account active status
+
+   */
   isActive: Schema.Boolean,
-  /** Account creation timestamp */
+  /**
+
+   * Account creation timestamp
+
+   */
   createdAt: Schema.DateFromString,
-  /** Last update timestamp */
+  /**
+
+   * Last update timestamp
+
+   */
   updatedAt: Schema.DateFromString,
-  /** Last login timestamp */
+  /**
+
+   * Last login timestamp
+
+   */
   lastLoginAt: Schema.NullOr(Schema.DateFromString),
 })
 
-export type User = Schema.Schema.Type<typeof UserSchema>
+export type UserEncoded = typeof UserSchema.Encoded
 
 export const OAuthAccountSchema = Schema.Struct({
-  /** OAuth account ID */
+  /**
+
+   * OAuth account ID
+
+   */
   id: Schema.UUID,
-  /** User ID */
+  /**
+
+   * User ID
+
+   */
   userId: Schema.UUID,
-  /** OAuth provider */
+  /**
+
+   * OAuth provider
+
+   */
   provider: Schema.Literal('GOOGLE', 'GITHUB', 'FACEBOOK', 'TWITTER', 'APPLE'),
-  /** Provider account ID */
+  /**
+
+   * Provider account ID
+
+   */
   providerAccountId: Schema.String,
-  /** Access token from provider */
+  /**
+
+   * Access token from provider
+
+   */
   accessToken: Schema.NullOr(Schema.String),
-  /** Refresh token from provider */
+  /**
+
+   * Refresh token from provider
+
+   */
   refreshToken: Schema.NullOr(Schema.String),
-  /** Token expiration timestamp */
+  /**
+
+   * Token expiration timestamp
+
+   */
   expiresAt: Schema.NullOr(Schema.DateFromString),
-  /** Account creation timestamp */
+  /**
+
+   * Account creation timestamp
+
+   */
   createdAt: Schema.DateFromString,
 })
 
-export type OAuthAccount = Schema.Schema.Type<typeof OAuthAccountSchema>
+export type OAuthAccountEncoded = typeof OAuthAccountSchema.Encoded
 
 export const TwoFactorSettingSchema = Schema.Struct({
-  /** 2FA setting ID */
+  /**
+
+   * 2FA setting ID
+
+   */
   id: Schema.UUID,
-  /** User ID */
+  /**
+
+   * User ID
+
+   */
   userId: Schema.UUID,
-  /** 2FA enabled status */
+  /**
+
+   * 2FA enabled status
+
+   */
   enabled: Schema.Boolean,
-  /** 2FA method */
+  /**
+
+   * 2FA method
+
+   */
   method: Schema.Literal('TOTP', 'SMS', 'EMAIL'),
-  /** TOTP secret (encrypted) */
+  /**
+
+   * TOTP secret (encrypted)
+
+   */
   totpSecret: Schema.NullOr(Schema.String),
-  /** Phone number for SMS (E.164 format) */
+  /**
+
+   * Phone number for SMS (E.164 format)
+
+   */
   phoneNumber: Schema.NullOr(Schema.String),
-  /** Backup codes (hashed, JSON array) */
+  /**
+
+   * Backup codes (hashed, JSON array)
+
+   */
   backupCodes: Schema.NullOr(Schema.String),
-  /** Last verified timestamp */
+  /**
+
+   * Last verified timestamp
+
+   */
   verifiedAt: Schema.NullOr(Schema.DateFromString),
-  /** Creation timestamp */
+  /**
+
+   * Creation timestamp
+
+   */
   createdAt: Schema.DateFromString,
-  /** Last update timestamp */
+  /**
+
+   * Last update timestamp
+
+   */
   updatedAt: Schema.DateFromString,
 })
 
-export type TwoFactorSetting = Schema.Schema.Type<typeof TwoFactorSettingSchema>
+export type TwoFactorSettingEncoded = typeof TwoFactorSettingSchema.Encoded
 
 export const RefreshTokenSchema = Schema.Struct({
-  /** Refresh token ID */
+  /**
+
+   * Refresh token ID
+
+   */
   id: Schema.UUID,
-  /** User ID */
+  /**
+
+   * User ID
+
+   */
   userId: Schema.UUID,
-  /** Token hash (SHA-256) */
+  /**
+
+   * Token hash (SHA-256)
+
+   */
   tokenHash: Schema.String,
-  /** Device/client identifier */
+  /**
+
+   * Device/client identifier
+
+   */
   deviceInfo: Schema.NullOr(Schema.String),
-  /** IP address at creation */
+  /**
+
+   * IP address at creation
+
+   */
   ipAddress: Schema.NullOr(Schema.String),
-  /** Token expiration timestamp */
+  /**
+
+   * Token expiration timestamp
+
+   */
   expiresAt: Schema.DateFromString,
-  /** Token creation timestamp */
+  /**
+
+   * Token creation timestamp
+
+   */
   createdAt: Schema.DateFromString,
-  /** Revocation status */
+  /**
+
+   * Revocation status
+
+   */
   revoked: Schema.Boolean,
 })
 
-export type RefreshToken = Schema.Schema.Type<typeof RefreshTokenSchema>
+export type RefreshTokenEncoded = typeof RefreshTokenSchema.Encoded
 
 export const EmailVerificationSchema = Schema.Struct({
-  /** Verification ID */
+  /**
+
+   * Verification ID
+
+   */
   id: Schema.UUID,
-  /** User ID */
+  /**
+
+   * User ID
+
+   */
   userId: Schema.UUID,
-  /** Verification token (hashed) */
+  /**
+
+   * Verification token (hashed)
+
+   */
   tokenHash: Schema.String,
-  /** Token expiration timestamp */
+  /**
+
+   * Token expiration timestamp
+
+   */
   expiresAt: Schema.DateFromString,
-  /** Creation timestamp */
+  /**
+
+   * Creation timestamp
+
+   */
   createdAt: Schema.DateFromString,
 })
 
-export type EmailVerification = Schema.Schema.Type<typeof EmailVerificationSchema>
+export type EmailVerificationEncoded = typeof EmailVerificationSchema.Encoded
 
 export const PasswordResetSchema = Schema.Struct({
-  /** Reset ID */
+  /**
+
+   * Reset ID
+
+   */
   id: Schema.UUID,
-  /** User ID */
+  /**
+
+   * User ID
+
+   */
   userId: Schema.UUID,
-  /** Reset token (hashed) */
+  /**
+
+   * Reset token (hashed)
+
+   */
   tokenHash: Schema.String,
-  /** Token expiration timestamp */
+  /**
+
+   * Token expiration timestamp
+
+   */
   expiresAt: Schema.DateFromString,
-  /** Used status */
+  /**
+
+   * Used status
+
+   */
   used: Schema.Boolean,
-  /** Creation timestamp */
+  /**
+
+   * Creation timestamp
+
+   */
   createdAt: Schema.DateFromString,
 })
 
-export type PasswordReset = Schema.Schema.Type<typeof PasswordResetSchema>
+export type PasswordResetEncoded = typeof PasswordResetSchema.Encoded
