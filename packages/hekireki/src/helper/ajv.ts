@@ -1,4 +1,8 @@
-import { makeCommentBlock, makeValidationExtractor, parseDocumentWithoutAnnotations } from '../utils/index.js'
+import {
+  makeCommentBlock,
+  makeValidationExtractor,
+  parseDocumentWithoutAnnotations,
+} from '../utils/index.js'
 import { validationSchemas } from './prisma.js'
 
 // ============================================================================
