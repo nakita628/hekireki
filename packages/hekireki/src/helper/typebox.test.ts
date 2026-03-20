@@ -461,9 +461,7 @@ describe('helper/typebox', () => {
       const models = [
         {
           name: 'User',
-          fields: [
-            { name: 'id', type: 'String', kind: 'scalar', isRequired: true, isList: false },
-          ],
+          fields: [{ name: 'id', type: 'String', kind: 'scalar', isRequired: true, isList: false }],
         },
         {
           name: 'Post',
@@ -483,10 +481,9 @@ describe('helper/typebox', () => {
     })
 
     it('relation without includeType omits type export', () => {
-      const result = makeTypeBoxRelations(
-        { name: 'User' },
-        [{ key: 'posts', targetModel: 'Post', isMany: true }],
-      )
+      const result = makeTypeBoxRelations({ name: 'User' }, [
+        { key: 'posts', targetModel: 'Post', isMany: true },
+      ])
       expect(result).not.toContain('export type')
       expect(result).toContain('export const UserRelationsSchema')
     })
@@ -505,7 +502,13 @@ describe('helper/typebox', () => {
             { name: 'id', type: 'String', kind: 'scalar', isRequired: true, isList: false },
             { name: 'userId', type: 'String', kind: 'scalar', isRequired: true, isList: false },
             { name: 'token', type: 'String', kind: 'scalar', isRequired: true, isList: false },
-            { name: 'expiresAt', type: 'DateTime', kind: 'scalar', isRequired: true, isList: false },
+            {
+              name: 'expiresAt',
+              type: 'DateTime',
+              kind: 'scalar',
+              isRequired: true,
+              isList: false,
+            },
             { name: 'ipAddress', type: 'String', kind: 'scalar', isRequired: false, isList: false },
           ],
         },

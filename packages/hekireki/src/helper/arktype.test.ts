@@ -332,4 +332,153 @@ describe('helper/arktype', () => {
       )
     })
   })
+
+  // ============================================================================
+  // Edge case tests
+  // ============================================================================
+
+  describe('edge cases', () => {
+    it('all Prisma scalar types produce valid ArkType expressions', () => {
+      const allTypes = [
+        'String',
+        'Int',
+        'Float',
+        'Boolean',
+        'DateTime',
+        'BigInt',
+        'Decimal',
+        'Json',
+        'Bytes',
+      ]
+      for (const t of allTypes) {
+        expect(PRISMA_TO_ARKTYPE[t]).toBeDefined()
+        expect(typeof PRISMA_TO_ARKTYPE[t]).toBe('string')
+      }
+    })
+
+    it('generates schema with multi-line comments', () => {
+      const result = makeArktypeProperties(
+        [
+          {
+            documentation: '',
+            modelName: 'Payment',
+            fieldName: 'amount',
+            comment: ['Total amount in cents', 'Integer to avoid floating point issues'],
+            validation: '"number"',
+            isRequired: true,
+          },
+        ],
+        true,
+      )
+      expect(result).toBe(`  /**
+   * Total amount in cents
+   * Integer to avoid floating point issues
+   */
+  amount: "number",`)
+    })
+
+    it('generates schema with empty comment array when comment is true', () => {
+      const result = makeArktypeProperties(
+        [
+          {
+            documentation: '',
+            modelName: 'Token',
+            fieldName: 'value',
+            comment: [],
+            validation: '"string"',
+            isRequired: true,
+          },
+        ],
+        true,
+      )
+      expect(result).toBe('  value: "string",')
+    })
+
+    it('handles multiple models in a single arktype() call', () => {
+      const models = [
+        {
+          name: 'User',
+          fields: [{ name: 'id', type: 'String', kind: 'scalar', isRequired: true, isList: false }],
+        },
+        {
+          name: 'Post',
+          fields: [
+            { name: 'id', type: 'String', kind: 'scalar', isRequired: true, isList: false },
+            { name: 'title', type: 'String', kind: 'scalar', isRequired: true, isList: false },
+          ],
+        },
+      ]
+      const result = arktype(models, false, false)
+      expect(result).toContain('export const UserSchema')
+      expect(result).toContain('export const PostSchema')
+    })
+
+    it('relation returns null for empty relations', () => {
+      expect(makeArktypeRelations({ name: 'Orphan' }, [])).toBeNull()
+    })
+
+    it('relation without includeType omits type export', () => {
+      const result = makeArktypeRelations({ name: 'User' }, [
+        { key: 'posts', targetModel: 'Post', isMany: true },
+      ])
+      expect(result).not.toContain('export type')
+      expect(result).toContain('export const UserRelationsSchema')
+    })
+
+    it('uses "unknown" for null validation', () => {
+      const result = makeArktypeProperties(
+        [
+          {
+            documentation: '',
+            modelName: 'Data',
+            fieldName: 'payload',
+            comment: [],
+            validation: null,
+            isRequired: true,
+          },
+        ],
+        false,
+      )
+      expect(result).toBe('  payload: "unknown",')
+    })
+  })
+
+  // ============================================================================
+  // Session auth pattern
+  // ============================================================================
+
+  describe('Session auth pattern', () => {
+    it('generates Session schema with DateTime and type', () => {
+      const models = [
+        {
+          name: 'Session',
+          fields: [
+            { name: 'id', type: 'String', kind: 'scalar', isRequired: true, isList: false },
+            { name: 'userId', type: 'String', kind: 'scalar', isRequired: true, isList: false },
+            { name: 'token', type: 'String', kind: 'scalar', isRequired: true, isList: false },
+            {
+              name: 'expiresAt',
+              type: 'DateTime',
+              kind: 'scalar',
+              isRequired: true,
+              isList: false,
+            },
+            { name: 'ipAddress', type: 'String', kind: 'scalar', isRequired: false, isList: false },
+          ],
+        },
+      ]
+      const result = arktype(models, true, false)
+      expect(result).toBe(`import { type } from 'arktype'
+
+export const SessionSchema = type({
+  id: "string",
+  userId: "string",
+  token: "string",
+  expiresAt: "Date",
+  ipAddress: "string",
+})
+
+export type Session = typeof SessionSchema.infer`)
+    })
+  })
 })
