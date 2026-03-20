@@ -485,7 +485,12 @@ describe('helper/mermaid-er', () => {
       name: 'Customer',
       fields: [
         makeField({ name: 'id', type: 'String', isId: true }),
-        makeField({ name: 'email', type: 'String', isUnique: true, documentation: 'Email address' }),
+        makeField({
+          name: 'email',
+          type: 'String',
+          isUnique: true,
+          documentation: 'Email address',
+        }),
         makeField({ name: 'name', type: 'String', documentation: 'Full name' }),
         makeField({
           name: 'orders',

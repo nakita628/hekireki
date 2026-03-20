@@ -374,7 +374,11 @@ describe('helper/zod', () => {
           documentation: '',
           modelName: 'Payment',
           fieldName: 'amount',
-          comment: ['Payment amount', 'Stored in smallest currency unit (e.g. cents)', '@z.number()'],
+          comment: [
+            'Payment amount',
+            'Stored in smallest currency unit (e.g. cents)',
+            '@z.number()',
+          ],
           validation: 'number()',
           isRequired: true,
         },

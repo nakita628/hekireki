@@ -427,9 +427,7 @@ export type OrderRelations = FromSchema<typeof OrderRelationsSchema>`)
     it('generates enum with 5 values', () => {
       expect(
         makeAjvEnumExpression(['PENDING', 'CONFIRMED', 'SHIPPED', 'DELIVERED', 'CANCELLED']),
-      ).toBe(
-        "{ enum: ['PENDING', 'CONFIRMED', 'SHIPPED', 'DELIVERED', 'CANCELLED'] as const }",
-      )
+      ).toBe("{ enum: ['PENDING', 'CONFIRMED', 'SHIPPED', 'DELIVERED', 'CANCELLED'] as const }")
     })
   })
 })
