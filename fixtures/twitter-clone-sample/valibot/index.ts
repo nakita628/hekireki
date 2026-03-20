@@ -55,7 +55,7 @@ export const UserSchema = v.object({
   hasNotification: v.exactOptional(v.nullish(v.boolean())),
 })
 
-export type User = v.InferInput<typeof UserSchema>
+export type User = v.InferOutput<typeof UserSchema>
 
 export const PostSchema = v.object({
   /**
@@ -80,7 +80,7 @@ export const PostSchema = v.object({
   userId: v.pipe(v.string(), v.uuid()),
 })
 
-export type Post = v.InferInput<typeof PostSchema>
+export type Post = v.InferOutput<typeof PostSchema>
 
 export const FollowSchema = v.object({
   /**
@@ -97,7 +97,7 @@ export const FollowSchema = v.object({
   createdAt: v.pipe(v.string(), v.isoTimestamp()),
 })
 
-export type Follow = v.InferInput<typeof FollowSchema>
+export type Follow = v.InferOutput<typeof FollowSchema>
 
 export const LikeSchema = v.object({
   /**
@@ -114,7 +114,7 @@ export const LikeSchema = v.object({
   createdAt: v.pipe(v.string(), v.isoTimestamp()),
 })
 
-export type Like = v.InferInput<typeof LikeSchema>
+export type Like = v.InferOutput<typeof LikeSchema>
 
 export const CommentSchema = v.object({
   /**
@@ -143,7 +143,7 @@ export const CommentSchema = v.object({
   postId: v.pipe(v.string(), v.uuid()),
 })
 
-export type Comment = v.InferInput<typeof CommentSchema>
+export type Comment = v.InferOutput<typeof CommentSchema>
 
 export const NotificationSchema = v.object({
   /**
@@ -164,4 +164,4 @@ export const NotificationSchema = v.object({
   createdAt: v.pipe(v.string(), v.isoTimestamp()),
 })
 
-export type Notification = v.InferInput<typeof NotificationSchema>
+export type Notification = v.InferOutput<typeof NotificationSchema>

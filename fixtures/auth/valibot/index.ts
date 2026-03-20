@@ -35,7 +35,7 @@ export const UserSchema = v.object({
   isTwoFactorEnabled: v.exactOptional(v.boolean()),
 })
 
-export type User = v.InferInput<typeof UserSchema>
+export type User = v.InferOutput<typeof UserSchema>
 
 export const AccountSchema = v.object({
   /**
@@ -88,7 +88,7 @@ export const AccountSchema = v.object({
   session_state: v.exactOptional(v.nullish(v.string())),
 })
 
-export type Account = v.InferInput<typeof AccountSchema>
+export type Account = v.InferOutput<typeof AccountSchema>
 
 export const VerificationTokenSchema = v.object({
   /**
@@ -109,7 +109,7 @@ export const VerificationTokenSchema = v.object({
   expires: v.pipe(v.string(), v.isoDate()),
 })
 
-export type VerificationToken = v.InferInput<typeof VerificationTokenSchema>
+export type VerificationToken = v.InferOutput<typeof VerificationTokenSchema>
 
 export const PasswordResetTokenSchema = v.object({
   /**
@@ -130,7 +130,7 @@ export const PasswordResetTokenSchema = v.object({
   expires: v.pipe(v.string(), v.isoDate()),
 })
 
-export type PasswordResetToken = v.InferInput<typeof PasswordResetTokenSchema>
+export type PasswordResetToken = v.InferOutput<typeof PasswordResetTokenSchema>
 
 export const TwoFactorTokenSchema = v.object({
   /**
@@ -151,7 +151,7 @@ export const TwoFactorTokenSchema = v.object({
   expires: v.pipe(v.string(), v.isoDate()),
 })
 
-export type TwoFactorToken = v.InferInput<typeof TwoFactorTokenSchema>
+export type TwoFactorToken = v.InferOutput<typeof TwoFactorTokenSchema>
 
 export const TwoFactorConfirmationSchema = v.object({
   /**
@@ -164,4 +164,4 @@ export const TwoFactorConfirmationSchema = v.object({
   userId: v.string(),
 })
 
-export type TwoFactorConfirmation = v.InferInput<typeof TwoFactorConfirmationSchema>
+export type TwoFactorConfirmation = v.InferOutput<typeof TwoFactorConfirmationSchema>

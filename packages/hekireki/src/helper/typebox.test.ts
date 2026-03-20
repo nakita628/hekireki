@@ -263,4 +263,116 @@ describe('helper/typebox', () => {
       expect(makeTypeBoxEnumExpression(['ACTIVE'])).toBe("Type.Union([Type.Literal('ACTIVE')])")
     })
   })
+
+  // ============================================================================
+  // Real-world use case tests
+  // ============================================================================
+
+  describe('E-Commerce order pattern', () => {
+    it('generates Order schema with enum and type', () => {
+      const models = [
+        {
+          name: 'Order',
+          fields: [
+            {
+              name: 'id',
+              type: 'String',
+              kind: 'scalar',
+              isRequired: true,
+              isList: false,
+              documentation: "@t.Type.String({ format: 'uuid' })",
+            },
+            {
+              name: 'status',
+              type: 'OrderStatus',
+              kind: 'enum',
+              isRequired: true,
+              isList: false,
+            },
+            {
+              name: 'totalAmount',
+              type: 'Int',
+              kind: 'scalar',
+              isRequired: true,
+              isList: false,
+            },
+          ],
+        },
+      ]
+      const enums = [
+        {
+          name: 'OrderStatus',
+          values: [
+            { name: 'PENDING' },
+            { name: 'CONFIRMED' },
+            { name: 'SHIPPED' },
+            { name: 'DELIVERED' },
+            { name: 'CANCELLED' },
+          ],
+        },
+      ]
+      const result = typebox(models, true, false, enums)
+      expect(result).toBe(
+        "import { type Static, Type } from '@sinclair/typebox'\n\nexport const OrderSchema = Type.Object({\n  id: Type.String({ format: 'uuid' }),\n  status: Type.Union([Type.Literal('PENDING'), Type.Literal('CONFIRMED'), Type.Literal('SHIPPED'), Type.Literal('DELIVERED'), Type.Literal('CANCELLED')]),\n  totalAmount: Type.Integer(),\n})\n\nexport type Order = Static<typeof OrderSchema>",
+      )
+    })
+
+    it('generates Order schema with optional note field', () => {
+      const result = makeTypeBoxSchemas(
+        [
+          {
+            documentation: '',
+            modelName: 'Order',
+            fieldName: 'id',
+            comment: ['Order ID'],
+            validation: "Type.String({ format: 'uuid' })",
+            isRequired: true,
+          },
+          {
+            documentation: '',
+            modelName: 'Order',
+            fieldName: 'note',
+            comment: ['Customer note'],
+            validation: 'Type.String()',
+            isRequired: false,
+          },
+        ],
+        true,
+      )
+      expect(result).toBe(`export const OrderSchema = Type.Object({
+  /** Order ID */
+  id: Type.String({ format: 'uuid' }),
+  /** Customer note */
+  note: Type.Optional(Type.String()),
+})`)
+    })
+
+    it('generates Order relations', () => {
+      const result = makeTypeBoxRelations(
+        { name: 'Order' },
+        [
+          { key: 'items', targetModel: 'OrderItem', isMany: true },
+          { key: 'customer', targetModel: 'Customer', isMany: false },
+        ],
+        { includeType: true },
+      )
+      expect(result).toBe(
+        'export const OrderRelationsSchema = Type.Object({\n  ...OrderSchema.properties,\n  items: Type.Array(OrderItemSchema),\n  customer: CustomerSchema,\n})\n\nexport type OrderRelations = Static<typeof OrderRelationsSchema>',
+      )
+    })
+  })
+
+  describe('multiple Prisma scalar types', () => {
+    it('maps all scalar types correctly', () => {
+      expect(PRISMA_TO_TYPEBOX.String).toBe('Type.String()')
+      expect(PRISMA_TO_TYPEBOX.Int).toBe('Type.Integer()')
+      expect(PRISMA_TO_TYPEBOX.Float).toBe('Type.Number()')
+      expect(PRISMA_TO_TYPEBOX.Boolean).toBe('Type.Boolean()')
+      expect(PRISMA_TO_TYPEBOX.DateTime).toBe('Type.Date()')
+      expect(PRISMA_TO_TYPEBOX.BigInt).toBe('Type.BigInt()')
+      expect(PRISMA_TO_TYPEBOX.Decimal).toBe('Type.Number()')
+      expect(PRISMA_TO_TYPEBOX.Json).toBe('Type.Unknown()')
+      expect(PRISMA_TO_TYPEBOX.Bytes).toBe('Type.Any()')
+    })
+  })
 })

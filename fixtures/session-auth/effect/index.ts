@@ -1,71 +1,171 @@
 import { Schema } from 'effect'
 
 export const UserSchema = Schema.Struct({
-  /** User ID */
+  /**
+
+   * User ID
+
+   */
   id: Schema.UUID,
-  /** Email address */
+  /**
+
+   * Email address
+
+   */
   email: Schema.String,
-  /** Hashed password */
+  /**
+
+   * Hashed password
+
+   */
   passwordHash: Schema.String.pipe(Schema.minLength(8)),
-  /** Display name */
+  /**
+
+   * Display name
+
+   */
   name: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100)),
-  /** User role */
+  /**
+
+   * User role
+
+   */
   role: Schema.Literal('ADMIN', 'USER'),
-  /** Account active status */
+  /**
+
+   * Account active status
+
+   */
   isActive: Schema.Boolean,
-  /** Account creation timestamp */
+  /**
+
+   * Account creation timestamp
+
+   */
   createdAt: Schema.Date,
-  /** Last update timestamp */
+  /**
+
+   * Last update timestamp
+
+   */
   updatedAt: Schema.Date,
 })
 
-export type User = Schema.Schema.Type<typeof UserSchema>
+export type UserEncoded = typeof UserSchema.Encoded
 
 export const SessionSchema = Schema.Struct({
-  /** Session ID */
+  /**
+
+   * Session ID
+
+   */
   id: Schema.UUID,
-  /** Session token */
+  /**
+
+   * Session token
+
+   */
   token: Schema.String,
-  /** User ID */
+  /**
+
+   * User ID
+
+   */
   userId: Schema.UUID,
-  /** Session expiration */
+  /**
+
+   * Session expiration
+
+   */
   expiresAt: Schema.Date,
-  /** Client IP address */
+  /**
+
+   * Client IP address
+
+   */
   ipAddress: Schema.NullOr(Schema.String),
-  /** Client user agent */
+  /**
+
+   * Client user agent
+
+   */
   userAgent: Schema.NullOr(Schema.String),
-  /** Session creation timestamp */
+  /**
+
+   * Session creation timestamp
+
+   */
   createdAt: Schema.Date,
 })
 
-export type Session = Schema.Schema.Type<typeof SessionSchema>
+export type SessionEncoded = typeof SessionSchema.Encoded
 
 export const LoginHistorySchema = Schema.Struct({
-  /** Login history ID */
+  /**
+
+   * Login history ID
+
+   */
   id: Schema.UUID,
-  /** User ID */
+  /**
+
+   * User ID
+
+   */
   userId: Schema.UUID,
-  /** Client IP address */
+  /**
+
+   * Client IP address
+
+   */
   ipAddress: Schema.String,
-  /** Client user agent */
+  /**
+
+   * Client user agent
+
+   */
   userAgent: Schema.NullOr(Schema.String),
-  /** Login success status */
+  /**
+
+   * Login success status
+
+   */
   success: Schema.Boolean,
-  /** Login timestamp */
+  /**
+
+   * Login timestamp
+
+   */
   createdAt: Schema.Date,
 })
 
-export type LoginHistory = Schema.Schema.Type<typeof LoginHistorySchema>
+export type LoginHistoryEncoded = typeof LoginHistorySchema.Encoded
 
 export const PasswordHistorySchema = Schema.Struct({
-  /** Password history ID */
+  /**
+
+   * Password history ID
+
+   */
   id: Schema.UUID,
-  /** User ID */
+  /**
+
+   * User ID
+
+   */
   userId: Schema.UUID,
-  /** Hashed password */
+  /**
+
+   * Hashed password
+
+   */
   passwordHash: Schema.String,
-  /** Change timestamp */
+  /**
+
+   * Change timestamp
+
+   */
   createdAt: Schema.Date,
 })
 
-export type PasswordHistory = Schema.Schema.Type<typeof PasswordHistorySchema>
+export type PasswordHistoryEncoded = typeof PasswordHistorySchema.Encoded

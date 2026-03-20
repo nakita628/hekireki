@@ -144,7 +144,7 @@ export const UserSchema = v.object({
   name: v.pipe(v.string(), v.minLength(1), v.maxLength(50)),
 })
 
-export type User = v.InferInput<typeof UserSchema>
+export type User = v.InferOutput<typeof UserSchema>
 `
 
     expect(result).toBe(expected)

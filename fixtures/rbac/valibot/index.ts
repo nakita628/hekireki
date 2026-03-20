@@ -27,7 +27,7 @@ export const OrganizationSchema = v.object({
   updatedAt: v.date(),
 })
 
-export type Organization = v.InferInput<typeof OrganizationSchema>
+export type Organization = v.InferOutput<typeof OrganizationSchema>
 
 export const UserSchema = v.object({
   /**
@@ -56,7 +56,7 @@ export const UserSchema = v.object({
   updatedAt: v.date(),
 })
 
-export type User = v.InferInput<typeof UserSchema>
+export type User = v.InferOutput<typeof UserSchema>
 
 export const RoleSchema = v.object({
   /**
@@ -81,7 +81,7 @@ export const RoleSchema = v.object({
   updatedAt: v.date(),
 })
 
-export type Role = v.InferInput<typeof RoleSchema>
+export type Role = v.InferOutput<typeof RoleSchema>
 
 export const PermissionSchema = v.object({
   /**
@@ -106,7 +106,7 @@ export const PermissionSchema = v.object({
   createdAt: v.date(),
 })
 
-export type Permission = v.InferInput<typeof PermissionSchema>
+export type Permission = v.InferOutput<typeof PermissionSchema>
 
 export const UserRoleSchema = v.object({
   /**
@@ -123,7 +123,7 @@ export const UserRoleSchema = v.object({
   assignedAt: v.date(),
 })
 
-export type UserRole = v.InferInput<typeof UserRoleSchema>
+export type UserRole = v.InferOutput<typeof UserRoleSchema>
 
 export const RolePermissionSchema = v.object({
   /**
@@ -140,7 +140,7 @@ export const RolePermissionSchema = v.object({
   assignedAt: v.date(),
 })
 
-export type RolePermission = v.InferInput<typeof RolePermissionSchema>
+export type RolePermission = v.InferOutput<typeof RolePermissionSchema>
 
 export const AuditLogSchema = v.object({
   /**
@@ -173,14 +173,14 @@ export const AuditLogSchema = v.object({
   createdAt: v.date(),
 })
 
-export type AuditLog = v.InferInput<typeof AuditLogSchema>
+export type AuditLog = v.InferOutput<typeof AuditLogSchema>
 
 export const OrganizationRelationsSchema = v.object({
   ...OrganizationSchema.entries,
   users: v.array(UserSchema),
 })
 
-export type OrganizationRelations = v.InferInput<typeof OrganizationRelationsSchema>
+export type OrganizationRelations = v.InferOutput<typeof OrganizationRelationsSchema>
 
 export const UserRelationsSchema = v.object({
   ...UserSchema.entries,
@@ -189,7 +189,7 @@ export const UserRelationsSchema = v.object({
   auditLogs: v.array(AuditLogSchema),
 })
 
-export type UserRelations = v.InferInput<typeof UserRelationsSchema>
+export type UserRelations = v.InferOutput<typeof UserRelationsSchema>
 
 export const RoleRelationsSchema = v.object({
   ...RoleSchema.entries,
@@ -197,14 +197,14 @@ export const RoleRelationsSchema = v.object({
   rolePermissions: v.array(RolePermissionSchema),
 })
 
-export type RoleRelations = v.InferInput<typeof RoleRelationsSchema>
+export type RoleRelations = v.InferOutput<typeof RoleRelationsSchema>
 
 export const PermissionRelationsSchema = v.object({
   ...PermissionSchema.entries,
   rolePermissions: v.array(RolePermissionSchema),
 })
 
-export type PermissionRelations = v.InferInput<typeof PermissionRelationsSchema>
+export type PermissionRelations = v.InferOutput<typeof PermissionRelationsSchema>
 
 export const UserRoleRelationsSchema = v.object({
   ...UserRoleSchema.entries,
@@ -212,7 +212,7 @@ export const UserRoleRelationsSchema = v.object({
   role: RoleSchema,
 })
 
-export type UserRoleRelations = v.InferInput<typeof UserRoleRelationsSchema>
+export type UserRoleRelations = v.InferOutput<typeof UserRoleRelationsSchema>
 
 export const RolePermissionRelationsSchema = v.object({
   ...RolePermissionSchema.entries,
@@ -220,11 +220,11 @@ export const RolePermissionRelationsSchema = v.object({
   permission: PermissionSchema,
 })
 
-export type RolePermissionRelations = v.InferInput<typeof RolePermissionRelationsSchema>
+export type RolePermissionRelations = v.InferOutput<typeof RolePermissionRelationsSchema>
 
 export const AuditLogRelationsSchema = v.object({
   ...AuditLogSchema.entries,
   user: UserSchema,
 })
 
-export type AuditLogRelations = v.InferInput<typeof AuditLogRelationsSchema>
+export type AuditLogRelations = v.InferOutput<typeof AuditLogRelationsSchema>

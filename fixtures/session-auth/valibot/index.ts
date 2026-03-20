@@ -35,7 +35,7 @@ export const UserSchema = v.object({
   updatedAt: v.date(),
 })
 
-export type User = v.InferInput<typeof UserSchema>
+export type User = v.InferOutput<typeof UserSchema>
 
 export const SessionSchema = v.object({
   /**
@@ -68,7 +68,7 @@ export const SessionSchema = v.object({
   createdAt: v.date(),
 })
 
-export type Session = v.InferInput<typeof SessionSchema>
+export type Session = v.InferOutput<typeof SessionSchema>
 
 export const LoginHistorySchema = v.object({
   /**
@@ -97,7 +97,7 @@ export const LoginHistorySchema = v.object({
   createdAt: v.date(),
 })
 
-export type LoginHistory = v.InferInput<typeof LoginHistorySchema>
+export type LoginHistory = v.InferOutput<typeof LoginHistorySchema>
 
 export const PasswordHistorySchema = v.object({
   /**
@@ -118,7 +118,7 @@ export const PasswordHistorySchema = v.object({
   createdAt: v.date(),
 })
 
-export type PasswordHistory = v.InferInput<typeof PasswordHistorySchema>
+export type PasswordHistory = v.InferOutput<typeof PasswordHistorySchema>
 
 export const UserRelationsSchema = v.object({
   ...UserSchema.entries,
@@ -127,25 +127,25 @@ export const UserRelationsSchema = v.object({
   passwordHistories: v.array(PasswordHistorySchema),
 })
 
-export type UserRelations = v.InferInput<typeof UserRelationsSchema>
+export type UserRelations = v.InferOutput<typeof UserRelationsSchema>
 
 export const SessionRelationsSchema = v.object({
   ...SessionSchema.entries,
   user: UserSchema,
 })
 
-export type SessionRelations = v.InferInput<typeof SessionRelationsSchema>
+export type SessionRelations = v.InferOutput<typeof SessionRelationsSchema>
 
 export const LoginHistoryRelationsSchema = v.object({
   ...LoginHistorySchema.entries,
   user: UserSchema,
 })
 
-export type LoginHistoryRelations = v.InferInput<typeof LoginHistoryRelationsSchema>
+export type LoginHistoryRelations = v.InferOutput<typeof LoginHistoryRelationsSchema>
 
 export const PasswordHistoryRelationsSchema = v.object({
   ...PasswordHistorySchema.entries,
   user: UserSchema,
 })
 
-export type PasswordHistoryRelations = v.InferInput<typeof PasswordHistoryRelationsSchema>
+export type PasswordHistoryRelations = v.InferOutput<typeof PasswordHistoryRelationsSchema>

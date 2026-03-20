@@ -290,4 +290,144 @@ export type User = FromSchema<typeof UserSchema>`
       expect(makeAjvEnumExpression(['ACTIVE'])).toBe("{ enum: ['ACTIVE'] as const }")
     })
   })
+
+  // ============================================================================
+  // Real-world use case tests
+  // ============================================================================
+
+  describe('E-Commerce order pattern', () => {
+    it('generates Order JSON Schema with enum and type', () => {
+      const models = [
+        {
+          name: 'Order',
+          fields: [
+            {
+              name: 'id',
+              type: 'String',
+              kind: 'scalar',
+              isRequired: true,
+              isList: false,
+              documentation: "@j.{ type: 'string' as const, format: 'uuid' as const }",
+            },
+            {
+              name: 'status',
+              type: 'OrderStatus',
+              kind: 'enum',
+              isRequired: true,
+              isList: false,
+            },
+            {
+              name: 'totalAmount',
+              type: 'Int',
+              kind: 'scalar',
+              isRequired: true,
+              isList: false,
+            },
+          ],
+        },
+      ]
+      const enums = [
+        {
+          name: 'OrderStatus',
+          values: [
+            { name: 'PENDING' },
+            { name: 'CONFIRMED' },
+            { name: 'SHIPPED' },
+            { name: 'DELIVERED' },
+            { name: 'CANCELLED' },
+          ],
+        },
+      ]
+      const result = ajv(models, true, false, enums)
+      expect(result).toBe(`import type { FromSchema } from 'json-schema-to-ts'
+
+export const OrderSchema = {
+  type: 'object' as const,
+  properties: {
+    id: { type: 'string' as const, format: 'uuid' as const },
+    status: { enum: ['PENDING', 'CONFIRMED', 'SHIPPED', 'DELIVERED', 'CANCELLED'] as const },
+    totalAmount: { type: 'integer' as const },
+  },
+  required: ['id', 'status', 'totalAmount'] as const,
+  additionalProperties: false,
+} as const
+
+export type Order = FromSchema<typeof OrderSchema>`)
+    })
+
+    it('generates Order schema with mixed required/optional fields', () => {
+      const result = makeAjvSchemas(
+        [
+          {
+            documentation: '',
+            modelName: 'Order',
+            fieldName: 'id',
+            comment: ['Order ID'],
+            validation: "{ type: 'string' as const, format: 'uuid' as const }",
+            isRequired: true,
+          },
+          {
+            documentation: '',
+            modelName: 'Order',
+            fieldName: 'totalAmount',
+            comment: ['Total amount in cents'],
+            validation: "{ type: 'integer' as const }",
+            isRequired: true,
+          },
+          {
+            documentation: '',
+            modelName: 'Order',
+            fieldName: 'note',
+            comment: ['Customer note'],
+            validation: "{ type: 'string' as const }",
+            isRequired: false,
+          },
+        ],
+        true,
+      )
+      expect(result).toBe(`export const OrderSchema = {
+  type: 'object' as const,
+  properties: {
+    /** Order ID */
+    id: { type: 'string' as const, format: 'uuid' as const },
+    /** Total amount in cents */
+    totalAmount: { type: 'integer' as const },
+    /** Customer note */
+    note: { type: 'string' as const },
+  },
+  required: ['id', 'totalAmount'] as const,
+  additionalProperties: false,
+} as const`)
+    })
+
+    it('generates Order relations', () => {
+      const result = makeAjvRelations(
+        { name: 'Order' },
+        [
+          { key: 'items', targetModel: 'OrderItem', isMany: true },
+          { key: 'customer', targetModel: 'Customer', isMany: false },
+        ],
+        { includeType: true },
+      )
+      expect(result).toBe(`export const OrderRelationsSchema = {
+  type: 'object' as const,
+  properties: {
+    ...OrderSchema.properties,
+    items: { type: 'array' as const, items: OrderItemSchema },
+    customer: CustomerSchema,
+  },
+  additionalProperties: false,
+} as const
+
+export type OrderRelations = FromSchema<typeof OrderRelationsSchema>`)
+    })
+  })
+
+  describe('multi-value enum', () => {
+    it('generates enum with 5 values', () => {
+      expect(
+        makeAjvEnumExpression(['PENDING', 'CONFIRMED', 'SHIPPED', 'DELIVERED', 'CANCELLED']),
+      ).toBe("{ enum: ['PENDING', 'CONFIRMED', 'SHIPPED', 'DELIVERED', 'CANCELLED'] as const }")
+    })
+  })
 })

@@ -44,9 +44,13 @@ describe('helper/effect', () => {
         true,
       )
       const expected = `export const UserSchema = Schema.Struct({
-  /** Primary key */
+  /**
+   * Primary key
+   */
   id: Schema.String,
-  /** Display name */
+  /**
+   * Display name
+   */
   name: Schema.String,
 })`
       expect(result).toBe(expected)
@@ -105,7 +109,7 @@ describe('helper/effect', () => {
         { includeType: true },
       )
       expect(result).toBe(
-        'export const UserRelationsSchema = Schema.Struct({...UserSchema.fields,posts:Schema.Array(PostSchema),})\n\nexport type UserRelations = Schema.Schema.Type<typeof UserRelationsSchema>',
+        'export const UserRelationsSchema = Schema.Struct({...UserSchema.fields,posts:Schema.Array(PostSchema),})\n\nexport type UserRelationsEncoded = typeof UserRelationsSchema.Encoded',
       )
     })
   })
@@ -145,7 +149,7 @@ describe('helper/effect', () => {
       ]
       const result = effect(models, true, false)
       expect(result).toBe(
-        "import { Schema } from 'effect'\n\nexport const PostSchema = Schema.Struct({\n  title: Schema.String,\n})\n\nexport type Post = Schema.Schema.Type<typeof PostSchema>",
+        "import { Schema } from 'effect'\n\nexport const PostSchema = Schema.Struct({\n  title: Schema.String,\n})\n\nexport type PostEncoded = typeof PostSchema.Encoded",
       )
     })
 
@@ -171,9 +175,7 @@ describe('helper/effect', () => {
 
   describe('makeEffectInfer', () => {
     it('generates Effect infer type', () => {
-      expect(makeEffectInfer('User')).toBe(
-        'export type User = Schema.Schema.Type<typeof UserSchema>',
-      )
+      expect(makeEffectInfer('User')).toBe('export type UserEncoded = typeof UserSchema.Encoded')
     })
   })
 
@@ -198,7 +200,9 @@ describe('helper/effect', () => {
     ]
 
     it('generates properties with comments', () => {
-      expect(makeEffectProperties(fields, true)).toBe('  /** Primary key */\n  id: Schema.String,')
+      expect(makeEffectProperties(fields, true)).toBe(
+        '  /**\n   * Primary key\n   */\n  id: Schema.String,',
+      )
     })
     it('generates properties without comments', () => {
       expect(makeEffectProperties(fields, false)).toBe('  id: Schema.String,')
@@ -215,6 +219,140 @@ describe('helper/effect', () => {
     })
     it('handles single value', () => {
       expect(makeEffectEnumExpression(['ACTIVE'])).toBe("Schema.Literal('ACTIVE')")
+    })
+  })
+
+  // ============================================================================
+  // Real-world use case tests
+  // ============================================================================
+
+  describe('E-Commerce order pattern', () => {
+    it('generates Order schema with comments and nullable field', () => {
+      const orderFields = [
+        {
+          documentation: '',
+          modelName: 'Order',
+          fieldName: 'id',
+          comment: ['Order ID'],
+          validation: 'Schema.UUID',
+          isRequired: true,
+        },
+        {
+          documentation: '',
+          modelName: 'Order',
+          fieldName: 'totalAmount',
+          comment: ['Total amount in cents'],
+          validation: 'Schema.Number',
+          isRequired: true,
+        },
+        {
+          documentation: '',
+          modelName: 'Order',
+          fieldName: 'note',
+          comment: ['Customer note', 'Optional memo from customer'],
+          validation: 'Schema.NullOr(Schema.String)',
+          isRequired: true,
+        },
+      ]
+
+      const result = makeEffectSchemas(orderFields, true)
+      expect(result).toBe(`export const OrderSchema = Schema.Struct({
+  /**
+   * Order ID
+   */
+  id: Schema.UUID,
+  /**
+   * Total amount in cents
+   */
+  totalAmount: Schema.Number,
+  /**
+   * Customer note
+   * Optional memo from customer
+   */
+  note: Schema.NullOr(Schema.String),
+})`)
+    })
+
+    it('generates Order relations with items and customer', () => {
+      const result = makeEffectRelations(
+        { name: 'Order' },
+        [
+          { key: 'items', targetModel: 'OrderItem', isMany: true },
+          { key: 'customer', targetModel: 'Customer', isMany: false },
+        ],
+        { includeType: true },
+      )
+      expect(result).toBe(
+        'export const OrderRelationsSchema = Schema.Struct({...OrderSchema.fields,items:Schema.Array(OrderItemSchema),customer:CustomerSchema,})\n\nexport type OrderRelationsEncoded = typeof OrderRelationsSchema.Encoded',
+      )
+    })
+
+    it('generates full E-Commerce output with enum and type', () => {
+      const models = [
+        {
+          name: 'Order',
+          fields: [
+            {
+              name: 'id',
+              type: 'String',
+              kind: 'scalar',
+              isRequired: true,
+              isList: false,
+              documentation: '@e.Schema.UUID',
+            },
+            {
+              name: 'status',
+              type: 'OrderStatus',
+              kind: 'enum',
+              isRequired: true,
+              isList: false,
+            },
+            {
+              name: 'totalAmount',
+              type: 'Int',
+              kind: 'scalar',
+              isRequired: true,
+              isList: false,
+            },
+          ],
+        },
+      ]
+      const enums = [
+        {
+          name: 'OrderStatus',
+          values: [
+            { name: 'PENDING' },
+            { name: 'CONFIRMED' },
+            { name: 'SHIPPED' },
+            { name: 'DELIVERED' },
+            { name: 'CANCELLED' },
+          ],
+        },
+      ]
+
+      const result = effect(models, true, false, enums)
+      expect(result).toBe(
+        "import { Schema } from 'effect'\n\nexport const OrderSchema = Schema.Struct({\n  id: Schema.UUID,\n  status: Schema.Literal('PENDING', 'CONFIRMED', 'SHIPPED', 'DELIVERED', 'CANCELLED'),\n  totalAmount: Schema.Number,\n})\n\nexport type OrderEncoded = typeof OrderSchema.Encoded",
+      )
+    })
+  })
+
+  describe('multi-line comment handling', () => {
+    it('generates multi-line JSDoc for detailed field documentation', () => {
+      const fields = [
+        {
+          documentation: '',
+          modelName: 'Payment',
+          fieldName: 'amount',
+          comment: ['Payment amount', 'Stored in smallest currency unit (e.g. cents)'],
+          validation: 'Schema.Number',
+          isRequired: true,
+        },
+      ]
+      const result = makeEffectProperties(fields, true)
+      expect(result).toBe(
+        '  /**\n   * Payment amount\n   * Stored in smallest currency unit (e.g. cents)\n   */\n  amount: Schema.Number,',
+      )
     })
   })
 })

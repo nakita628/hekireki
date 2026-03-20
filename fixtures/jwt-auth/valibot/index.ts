@@ -47,7 +47,7 @@ export const UserSchema = v.object({
   lastLoginAt: v.exactOptional(v.nullish(v.pipe(v.string(), v.isoTimestamp()))),
 })
 
-export type User = v.InferInput<typeof UserSchema>
+export type User = v.InferOutput<typeof UserSchema>
 
 export const OAuthAccountSchema = v.object({
   /**
@@ -84,7 +84,7 @@ export const OAuthAccountSchema = v.object({
   createdAt: v.pipe(v.string(), v.isoTimestamp()),
 })
 
-export type OAuthAccount = v.InferInput<typeof OAuthAccountSchema>
+export type OAuthAccount = v.InferOutput<typeof OAuthAccountSchema>
 
 export const TwoFactorSettingSchema = v.object({
   /**
@@ -129,7 +129,7 @@ export const TwoFactorSettingSchema = v.object({
   updatedAt: v.pipe(v.string(), v.isoTimestamp()),
 })
 
-export type TwoFactorSetting = v.InferInput<typeof TwoFactorSettingSchema>
+export type TwoFactorSetting = v.InferOutput<typeof TwoFactorSettingSchema>
 
 export const RefreshTokenSchema = v.object({
   /**
@@ -166,7 +166,7 @@ export const RefreshTokenSchema = v.object({
   revoked: v.boolean(),
 })
 
-export type RefreshToken = v.InferInput<typeof RefreshTokenSchema>
+export type RefreshToken = v.InferOutput<typeof RefreshTokenSchema>
 
 export const EmailVerificationSchema = v.object({
   /**
@@ -191,7 +191,7 @@ export const EmailVerificationSchema = v.object({
   createdAt: v.pipe(v.string(), v.isoTimestamp()),
 })
 
-export type EmailVerification = v.InferInput<typeof EmailVerificationSchema>
+export type EmailVerification = v.InferOutput<typeof EmailVerificationSchema>
 
 export const PasswordResetSchema = v.object({
   /**
@@ -220,7 +220,7 @@ export const PasswordResetSchema = v.object({
   createdAt: v.pipe(v.string(), v.isoTimestamp()),
 })
 
-export type PasswordReset = v.InferInput<typeof PasswordResetSchema>
+export type PasswordReset = v.InferOutput<typeof PasswordResetSchema>
 
 export const UserRelationsSchema = v.object({
   ...UserSchema.entries,
@@ -231,39 +231,39 @@ export const UserRelationsSchema = v.object({
   passwordResets: v.array(PasswordResetSchema),
 })
 
-export type UserRelations = v.InferInput<typeof UserRelationsSchema>
+export type UserRelations = v.InferOutput<typeof UserRelationsSchema>
 
 export const OAuthAccountRelationsSchema = v.object({
   ...OAuthAccountSchema.entries,
   user: UserSchema,
 })
 
-export type OAuthAccountRelations = v.InferInput<typeof OAuthAccountRelationsSchema>
+export type OAuthAccountRelations = v.InferOutput<typeof OAuthAccountRelationsSchema>
 
 export const TwoFactorSettingRelationsSchema = v.object({
   ...TwoFactorSettingSchema.entries,
   user: UserSchema,
 })
 
-export type TwoFactorSettingRelations = v.InferInput<typeof TwoFactorSettingRelationsSchema>
+export type TwoFactorSettingRelations = v.InferOutput<typeof TwoFactorSettingRelationsSchema>
 
 export const RefreshTokenRelationsSchema = v.object({
   ...RefreshTokenSchema.entries,
   user: UserSchema,
 })
 
-export type RefreshTokenRelations = v.InferInput<typeof RefreshTokenRelationsSchema>
+export type RefreshTokenRelations = v.InferOutput<typeof RefreshTokenRelationsSchema>
 
 export const EmailVerificationRelationsSchema = v.object({
   ...EmailVerificationSchema.entries,
   user: UserSchema,
 })
 
-export type EmailVerificationRelations = v.InferInput<typeof EmailVerificationRelationsSchema>
+export type EmailVerificationRelations = v.InferOutput<typeof EmailVerificationRelationsSchema>
 
 export const PasswordResetRelationsSchema = v.object({
   ...PasswordResetSchema.entries,
   user: UserSchema,
 })
 
-export type PasswordResetRelations = v.InferInput<typeof PasswordResetRelationsSchema>
+export type PasswordResetRelations = v.InferOutput<typeof PasswordResetRelationsSchema>

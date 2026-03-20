@@ -215,4 +215,111 @@ describe('helper/arktype', () => {
       expect(makeArktypeEnumExpression(['ACTIVE'])).toBe('"\'ACTIVE\'"')
     })
   })
+
+  // ============================================================================
+  // Real-world use case tests
+  // ============================================================================
+
+  describe('E-Commerce order pattern', () => {
+    it('generates Order schema with enum and type', () => {
+      const models = [
+        {
+          name: 'Order',
+          fields: [
+            {
+              name: 'id',
+              type: 'String',
+              kind: 'scalar',
+              isRequired: true,
+              isList: false,
+              documentation: '@a."string.uuid"',
+            },
+            {
+              name: 'status',
+              type: 'OrderStatus',
+              kind: 'enum',
+              isRequired: true,
+              isList: false,
+            },
+            {
+              name: 'totalAmount',
+              type: 'Int',
+              kind: 'scalar',
+              isRequired: true,
+              isList: false,
+            },
+          ],
+        },
+      ]
+      const enums = [
+        {
+          name: 'OrderStatus',
+          values: [
+            { name: 'PENDING' },
+            { name: 'CONFIRMED' },
+            { name: 'SHIPPED' },
+            { name: 'DELIVERED' },
+            { name: 'CANCELLED' },
+          ],
+        },
+      ]
+      const result = arktype(models, true, false, enums)
+      expect(result).toBe(
+        "import { type } from 'arktype'\n\nexport const OrderSchema = type({\n  id: \"string.uuid\",\n  status: \"'PENDING' | 'CONFIRMED' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED'\",\n  totalAmount: \"number\",\n})\n\nexport type Order = typeof OrderSchema.infer",
+      )
+    })
+
+    it('generates Order schema with comments', () => {
+      const result = makeArktypeSchemas(
+        [
+          {
+            documentation: '',
+            modelName: 'Order',
+            fieldName: 'id',
+            comment: ['Order ID'],
+            validation: '"string.uuid"',
+            isRequired: true,
+          },
+          {
+            documentation: '',
+            modelName: 'Order',
+            fieldName: 'totalAmount',
+            comment: ['Total amount in cents', 'Integer to avoid floating point issues'],
+            validation: '"number"',
+            isRequired: true,
+          },
+        ],
+        true,
+      )
+      expect(result).toBe(`export const OrderSchema = type({
+  /** Order ID */
+  id: "string.uuid",
+  /** Total amount in cents */
+  /** Integer to avoid floating point issues */
+  totalAmount: "number",
+})`)
+    })
+
+    it('generates Order relations with items and customer', () => {
+      const result = makeArktypeRelations(
+        { name: 'Order' },
+        [
+          { key: 'items', targetModel: 'OrderItem', isMany: true },
+          { key: 'customer', targetModel: 'Customer', isMany: false },
+        ],
+        { includeType: true },
+      )
+      expect(result).toBe(
+        'export const OrderRelationsSchema = type({...OrderSchema.t,items:OrderItemSchema.array(),customer:CustomerSchema,})\n\nexport type OrderRelations = typeof OrderRelationsSchema.infer',
+      )
+    })
+  })
+
+  describe('multiple enum values (RBAC)', () => {
+    it('generates multi-value enum expression', () => {
+      expect(makeArktypeEnumExpression(['OWNER', 'ADMIN', 'EDITOR', 'VIEWER', 'GUEST'])).toBe(
+        "\"'OWNER' | 'ADMIN' | 'EDITOR' | 'VIEWER' | 'GUEST'\"",
+      )
+    })
+  })
 })

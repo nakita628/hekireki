@@ -1,117 +1,269 @@
 import { Schema } from 'effect'
 
 export const UserSchema = Schema.Struct({
-  /** User ID */
+  /**
+
+   * User ID
+
+   */
   id: Schema.Int,
-  /** Email address */
+  /**
+
+   * Email address
+
+   */
   email: Schema.String,
-  /** Display name */
+  /**
+
+   * Display name
+
+   */
   name: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100)),
-  /** Biography */
+  /**
+
+   * Biography
+
+   */
   bio: Schema.NullOr(Schema.String),
-  /** Avatar URL */
+  /**
+
+   * Avatar URL
+
+   */
   avatarUrl: Schema.NullOr(Schema.String),
-  /** Account active status */
+  /**
+
+   * Account active status
+
+   */
   active: Schema.Boolean,
-  /** Score */
+  /**
+
+   * Score
+
+   */
   score: Schema.Number,
-  /** Tags */
+  /**
+
+   * Tags
+
+   */
   tags: Schema.Array(Schema.String),
-  /** Metadata JSON */
+  /**
+
+   * Metadata JSON
+
+   */
   metadata: Schema.NullOr(Schema.Unknown),
 })
 
-export type User = Schema.Schema.Type<typeof UserSchema>
+export type UserEncoded = typeof UserSchema.Encoded
 
 export const ProfileSchema = Schema.Struct({
-  /** Profile ID */
+  /**
+
+   * Profile ID
+
+   */
   id: Schema.UUID,
-  /** User ID */
+  /**
+
+   * User ID
+
+   */
   userId: Schema.Int,
-  /** Website URL */
+  /**
+
+   * Website URL
+
+   */
   website: Schema.NullOr(Schema.String),
-  /** Location */
+  /**
+
+   * Location
+
+   */
   location: Schema.NullOr(Schema.String),
-  /** Birth date */
+  /**
+
+   * Birth date
+
+   */
   birthDate: Schema.NullOr(Schema.DateFromString),
 })
 
-export type Profile = Schema.Schema.Type<typeof ProfileSchema>
+export type ProfileEncoded = typeof ProfileSchema.Encoded
 
 export const PostSchema = Schema.Struct({
-  /** Post ID */
+  /**
+
+   * Post ID
+
+   */
   id: Schema.Int,
-  /** Post title */
+  /**
+
+   * Post title
+
+   */
   title: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(200)),
-  /** URL slug */
+  /**
+
+   * URL slug
+
+   */
   slug: Schema.String,
-  /** Post content */
+  /**
+
+   * Post content
+
+   */
   content: Schema.String,
-  /** View count */
+  /**
+
+   * View count
+
+   */
   views: Schema.Int,
-  /** Author user ID */
+  /**
+
+   * Author user ID
+
+   */
   authorId: Schema.Int,
 })
 
-export type Post = Schema.Schema.Type<typeof PostSchema>
+export type PostEncoded = typeof PostSchema.Encoded
 
 export const CommentSchema = Schema.Struct({
-  /** Comment ID */
+  /**
+
+   * Comment ID
+
+   */
   id: Schema.Int,
-  /** Comment body */
+  /**
+
+   * Comment body
+
+   */
   body: Schema.String,
-  /** Post ID */
+  /**
+
+   * Post ID
+
+   */
   postId: Schema.Int,
-  /** Author user ID */
+  /**
+
+   * Author user ID
+
+   */
   authorId: Schema.Int,
 })
 
-export type Comment = Schema.Schema.Type<typeof CommentSchema>
+export type CommentEncoded = typeof CommentSchema.Encoded
 
 export const TagSchema = Schema.Struct({
-  /** Tag ID */
+  /**
+
+   * Tag ID
+
+   */
   id: Schema.Int,
-  /** Tag name */
+  /**
+
+   * Tag name
+
+   */
   name: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(50)),
 })
 
-export type Tag = Schema.Schema.Type<typeof TagSchema>
+export type TagEncoded = typeof TagSchema.Encoded
 
 export const PostTagSchema = Schema.Struct({
-  /** Post ID */
+  /**
+
+   * Post ID
+
+   */
   postId: Schema.Int,
-  /** Tag ID */
+  /**
+
+   * Tag ID
+
+   */
   tagId: Schema.Int,
 })
 
-export type PostTag = Schema.Schema.Type<typeof PostTagSchema>
+export type PostTagEncoded = typeof PostTagSchema.Encoded
 
 export const SessionSchema = Schema.Struct({
-  /** Session ID */
+  /**
+
+   * Session ID
+
+   */
   id: Schema.String,
-  /** Session token */
+  /**
+
+   * Session token
+
+   */
   token: Schema.String,
-  /** User ID */
+  /**
+
+   * User ID
+
+   */
   userId: Schema.Int,
-  /** Expiration timestamp */
+  /**
+
+   * Expiration timestamp
+
+   */
   expiresAt: Schema.DateFromString,
-  /** Client IP address */
+  /**
+
+   * Client IP address
+
+   */
   ipAddress: Schema.NullOr(Schema.String),
-  /** User agent string */
+  /**
+
+   * User agent string
+
+   */
   userAgent: Schema.NullOr(Schema.String),
 })
 
-export type Session = Schema.Schema.Type<typeof SessionSchema>
+export type SessionEncoded = typeof SessionSchema.Encoded
 
 export const AuditLogSchema = Schema.Struct({
-  /** Audit log ID */
+  /**
+
+   * Audit log ID
+
+   */
   id: Schema.Int,
-  /** Action performed */
+  /**
+
+   * Action performed
+
+   */
   action: Schema.String,
-  /** Table name */
+  /**
+
+   * Table name
+
+   */
   tableName: Schema.String,
-  /** Record ID */
+  /**
+
+   * Record ID
+
+   */
   recordId: Schema.String,
 })
 
-export type AuditLog = Schema.Schema.Type<typeof AuditLogSchema>
+export type AuditLogEncoded = typeof AuditLogSchema.Encoded

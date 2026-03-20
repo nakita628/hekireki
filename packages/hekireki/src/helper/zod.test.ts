@@ -233,4 +233,164 @@ describe('helper/zod', () => {
       expect(makeZodEnumExpression(['ACTIVE'])).toBe("enum(['ACTIVE'])")
     })
   })
+
+  // ============================================================================
+  // Real-world use case tests
+  // ============================================================================
+
+  describe('E-Commerce order pattern', () => {
+    const orderFields = [
+      {
+        documentation: '',
+        modelName: 'Order',
+        fieldName: 'id',
+        comment: ['Order ID'],
+        validation: 'uuid()',
+        isRequired: true,
+      },
+      {
+        documentation: '',
+        modelName: 'Order',
+        fieldName: 'status',
+        comment: ['Order status'],
+        validation: null,
+        isRequired: true,
+      },
+      {
+        documentation: '',
+        modelName: 'Order',
+        fieldName: 'totalAmount',
+        comment: ['Total amount in cents'],
+        validation: 'number().int().nonnegative()',
+        isRequired: true,
+      },
+      {
+        documentation: '',
+        modelName: 'Order',
+        fieldName: 'note',
+        comment: ['Customer note', 'Optional memo from customer'],
+        validation: 'string()',
+        isRequired: false,
+      },
+    ]
+
+    it('generates Order schema with comments, enum skipped, optional field', () => {
+      const result = makeZodSchemas(orderFields, true)
+      expect(result).toBe(`export const OrderSchema = z.object({
+  /**
+   * Order ID
+   */
+  id: z.uuid(),
+  /**
+   * Total amount in cents
+   */
+  totalAmount: z.number().int().nonnegative(),
+  /**
+   * Customer note
+   * Optional memo from customer
+   */
+  note: z.string().exactOptional()
+})`)
+    })
+
+    it('generates Order schema without comments', () => {
+      const result = makeZodSchemas(orderFields, false)
+      expect(result).toBe(`export const OrderSchema = z.object({
+  id: z.uuid(),
+  totalAmount: z.number().int().nonnegative(),
+  note: z.string().exactOptional()
+})`)
+    })
+
+    it('generates Order relations with items and customer', () => {
+      const result = makeZodRelations(
+        { name: 'Order' },
+        [
+          { key: 'items', targetModel: 'OrderItem', isMany: true },
+          { key: 'customer', targetModel: 'Customer', isMany: false },
+        ],
+        { includeType: true },
+      )
+      expect(result).toBe(
+        'export const OrderRelationsSchema = z.object({\n  ...OrderSchema.shape,\n  items: z.array(OrderItemSchema),\n  customer: CustomerSchema,\n})\n\nexport type OrderRelations = z.infer<typeof OrderRelationsSchema>',
+      )
+    })
+
+    it('generates full E-Commerce output with enum and type', () => {
+      const models = [
+        {
+          name: 'Order',
+          fields: [
+            {
+              name: 'id',
+              type: 'String',
+              kind: 'scalar',
+              isRequired: true,
+              isList: false,
+              documentation: '@z.uuid()',
+            },
+            {
+              name: 'status',
+              type: 'OrderStatus',
+              kind: 'enum',
+              isRequired: true,
+              isList: false,
+            },
+            {
+              name: 'totalAmount',
+              type: 'Int',
+              kind: 'scalar',
+              isRequired: true,
+              isList: false,
+              documentation: '@z.number().int().nonnegative()',
+            },
+          ],
+        },
+      ]
+      const enums = [
+        {
+          name: 'OrderStatus',
+          values: [
+            { name: 'PENDING' },
+            { name: 'CONFIRMED' },
+            { name: 'SHIPPED' },
+            { name: 'DELIVERED' },
+            { name: 'CANCELLED' },
+          ],
+        },
+      ]
+
+      const result = zod(models, true, false, undefined, enums)
+      expect(result).toBe(
+        "import * as z from 'zod'\n\nexport const OrderSchema = z.object({\n  id: z.uuid(),\n  status: z.enum(['PENDING', 'CONFIRMED', 'SHIPPED', 'DELIVERED', 'CANCELLED']),\n  totalAmount: z.number().int().nonnegative()\n})\n\nexport type Order = z.infer<typeof OrderSchema>",
+      )
+    })
+  })
+
+  describe('multi-line comment handling', () => {
+    it('filters annotation lines from comments', () => {
+      const fields = [
+        {
+          documentation: '',
+          modelName: 'Payment',
+          fieldName: 'amount',
+          comment: [
+            'Payment amount',
+            'Stored in smallest currency unit (e.g. cents)',
+            '@z.number()',
+          ],
+          validation: 'number()',
+          isRequired: true,
+        },
+      ]
+      const result = makeZodSchemas(fields, true)
+      expect(result).toBe(`export const PaymentSchema = z.object({
+  /**
+   * Payment amount
+   * Stored in smallest currency unit (e.g. cents)
+   */
+  amount: z.number()
+})`)
+    })
+  })
 })

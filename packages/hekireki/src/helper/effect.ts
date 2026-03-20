@@ -11,8 +11,8 @@ import { validationSchemas } from './prisma.js'
 
 export function makeEffectInfer(
   modelName: string,
-): `export type ${string} = Schema.Schema.Type<typeof ${string}Schema>` {
-  return `export type ${modelName} = Schema.Schema.Type<typeof ${modelName}Schema>`
+): `export type ${string}Encoded = typeof ${string}Schema.Encoded` {
+  return `export type ${modelName}Encoded = typeof ${modelName}Schema.Encoded`
 }
 
 export function makeEffectSchema(
@@ -37,7 +37,7 @@ export function makeEffectProperties(
     .map((field) => {
       const commentLines =
         comment && field.comment.length > 0
-          ? `${field.comment.map((c) => `  /** ${c} */`).join('\n')}\n`
+          ? `  /**\n${field.comment.map((c) => `   * ${c}`).join('\n')}\n   */\n`
           : ''
       return `${commentLines}  ${field.fieldName}: ${field.validation ?? 'Schema.Unknown'},`
     })
@@ -95,7 +95,7 @@ export function makeEffectRelations(
   const fields = `${base}${rels}`
 
   const typeLine = options?.includeType
-    ? `\n\nexport type ${model.name}Relations = Schema.Schema.Type<typeof ${model.name}RelationsSchema>`
+    ? `\n\nexport type ${model.name}RelationsEncoded = typeof ${model.name}RelationsSchema.Encoded`
     : ''
   return `export const ${model.name}RelationsSchema = Schema.Struct({${fields}})${typeLine}`
 }
