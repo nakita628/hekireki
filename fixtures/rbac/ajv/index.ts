@@ -3,17 +3,29 @@ import type { FromSchema } from 'json-schema-to-ts'
 export const OrganizationSchema = {
   type: 'object' as const,
   properties: {
-    /** Organization ID */
+    /**
+     * Organization ID
+     */
     id: { type: 'integer' as const },
-    /** Organization name */
+    /**
+     * Organization name
+     */
     name: { type: 'string' as const },
-    /** URL-safe slug */
+    /**
+     * URL-safe slug
+     */
     slug: { type: 'string' as const },
-    /** Organization status */
+    /**
+     * Organization status
+     */
     status: { enum: ['ACTIVE', 'INACTIVE', 'SUSPENDED'] as const },
-    /** Creation timestamp */
+    /**
+     * Creation timestamp
+     */
     createdAt: { type: 'string' as const, format: 'date-time' as const },
-    /** Last update timestamp */
+    /**
+     * Last update timestamp
+     */
     updatedAt: { type: 'string' as const, format: 'date-time' as const },
   },
   required: ['id', 'name', 'slug', 'status', 'createdAt', 'updatedAt'] as const,
@@ -25,17 +37,29 @@ export type Organization = FromSchema<typeof OrganizationSchema>
 export const UserSchema = {
   type: 'object' as const,
   properties: {
-    /** User ID */
+    /**
+     * User ID
+     */
     id: { type: 'integer' as const },
-    /** Organization ID */
+    /**
+     * Organization ID
+     */
     organizationId: { type: 'integer' as const },
-    /** Email address */
+    /**
+     * Email address
+     */
     email: { type: 'string' as const },
-    /** Display name */
+    /**
+     * Display name
+     */
     name: { type: 'string' as const },
-    /** Creation timestamp */
+    /**
+     * Creation timestamp
+     */
     createdAt: { type: 'string' as const, format: 'date-time' as const },
-    /** Last update timestamp */
+    /**
+     * Last update timestamp
+     */
     updatedAt: { type: 'string' as const, format: 'date-time' as const },
   },
   required: ['id', 'organizationId', 'email', 'name', 'createdAt', 'updatedAt'] as const,
@@ -47,15 +71,25 @@ export type User = FromSchema<typeof UserSchema>
 export const RoleSchema = {
   type: 'object' as const,
   properties: {
-    /** Role ID */
+    /**
+     * Role ID
+     */
     id: { type: 'integer' as const },
-    /** Role name */
+    /**
+     * Role name
+     */
     name: { type: 'string' as const },
-    /** Role description */
+    /**
+     * Role description
+     */
     description: { type: 'string' as const },
-    /** Creation timestamp */
+    /**
+     * Creation timestamp
+     */
     createdAt: { type: 'string' as const, format: 'date-time' as const },
-    /** Last update timestamp */
+    /**
+     * Last update timestamp
+     */
     updatedAt: { type: 'string' as const, format: 'date-time' as const },
   },
   required: ['id', 'name', 'createdAt', 'updatedAt'] as const,
@@ -67,15 +101,25 @@ export type Role = FromSchema<typeof RoleSchema>
 export const PermissionSchema = {
   type: 'object' as const,
   properties: {
-    /** Permission ID */
+    /**
+     * Permission ID
+     */
     id: { type: 'integer' as const },
-    /** Resource name */
+    /**
+     * Resource name
+     */
     resource: { type: 'string' as const },
-    /** Action name */
+    /**
+     * Action name
+     */
     action: { type: 'string' as const },
-    /** Permission description */
+    /**
+     * Permission description
+     */
     description: { type: 'string' as const },
-    /** Creation timestamp */
+    /**
+     * Creation timestamp
+     */
     createdAt: { type: 'string' as const, format: 'date-time' as const },
   },
   required: ['id', 'resource', 'action', 'createdAt'] as const,
@@ -87,11 +131,17 @@ export type Permission = FromSchema<typeof PermissionSchema>
 export const UserRoleSchema = {
   type: 'object' as const,
   properties: {
-    /** User ID */
+    /**
+     * User ID
+     */
     userId: { type: 'integer' as const },
-    /** Role ID */
+    /**
+     * Role ID
+     */
     roleId: { type: 'integer' as const },
-    /** Assignment timestamp */
+    /**
+     * Assignment timestamp
+     */
     assignedAt: { type: 'string' as const, format: 'date-time' as const },
   },
   required: ['userId', 'roleId', 'assignedAt'] as const,
@@ -103,11 +153,17 @@ export type UserRole = FromSchema<typeof UserRoleSchema>
 export const RolePermissionSchema = {
   type: 'object' as const,
   properties: {
-    /** Role ID */
+    /**
+     * Role ID
+     */
     roleId: { type: 'integer' as const },
-    /** Permission ID */
+    /**
+     * Permission ID
+     */
     permissionId: { type: 'integer' as const },
-    /** Assignment timestamp */
+    /**
+     * Assignment timestamp
+     */
     assignedAt: { type: 'string' as const, format: 'date-time' as const },
   },
   required: ['roleId', 'permissionId', 'assignedAt'] as const,
@@ -119,19 +175,33 @@ export type RolePermission = FromSchema<typeof RolePermissionSchema>
 export const AuditLogSchema = {
   type: 'object' as const,
   properties: {
-    /** Audit log ID */
+    /**
+     * Audit log ID
+     */
     id: { type: 'integer' as const },
-    /** User ID */
+    /**
+     * User ID
+     */
     userId: { type: 'integer' as const },
-    /** Action performed */
+    /**
+     * Action performed
+     */
     action: { type: 'string' as const },
-    /** Resource name */
+    /**
+     * Resource name
+     */
     resource: { type: 'string' as const },
-    /** Action detail */
+    /**
+     * Action detail
+     */
     detail: { type: 'string' as const },
-    /** Client IP address */
+    /**
+     * Client IP address
+     */
     ipAddress: { type: 'string' as const },
-    /** Action timestamp */
+    /**
+     * Action timestamp
+     */
     createdAt: { type: 'string' as const, format: 'date-time' as const },
   },
   required: ['id', 'userId', 'action', 'resource', 'createdAt'] as const,

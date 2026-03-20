@@ -1,4 +1,5 @@
 import {
+  makeCommentBlock,
   makeValidationExtractor,
   parseDocumentWithoutAnnotations,
   schemaFromFields,
@@ -9,12 +10,21 @@ import { validationSchemas } from './prisma.js'
 // TypeBox Helpers
 // ============================================================================
 
+/**
+ * Generate TypeBox type inference using Static
+ * @param modelName - The model name to generate type inference for
+ */
 export function makeTypeBoxInfer(
   modelName: string,
 ): `export type ${string} = Static<typeof ${string}Schema>` {
   return `export type ${modelName} = Static<typeof ${modelName}Schema>`
 }
 
+/**
+ * Generate TypeBox Type.Object schema definition
+ * @param modelName - The model name for the schema
+ * @param fields - The formatted field definitions string
+ */
 export function makeTypeBoxSchema(
   modelName: string,
   fields: string,
@@ -22,6 +32,11 @@ export function makeTypeBoxSchema(
   return `export const ${modelName}Schema = Type.Object({\n${fields}\n})`
 }
 
+/**
+ * Generate TypeBox property definitions with optional wrapping
+ * @param fields - The fields to generate properties for
+ * @param comment - Whether to include JSDoc comments in the generated code
+ */
 export function makeTypeBoxProperties(
   fields: readonly {
     readonly documentation: string
@@ -35,21 +50,23 @@ export function makeTypeBoxProperties(
 ): string {
   return fields
     .map((field) => {
-      const commentLines =
-        comment && field.comment.length > 0
-          ? `${field.comment.map((c) => `  /** ${c} */`).join('\n')}\n`
-          : ''
+      const commentBlock = comment ? makeCommentBlock(field.comment, 2) : ''
       const expr = field.validation ?? 'Type.Unknown()'
       const wrapped = field.isRequired ? expr : `Type.Optional(${expr})`
-      return `${commentLines}  ${field.fieldName}: ${wrapped},`
+      return `${commentBlock}  ${field.fieldName}: ${wrapped},`
     })
     .join('\n')
 }
 
+/**
+ * Generate TypeBox enum expression using Type.Union with Type.Literal
+ * @param values - The enum values to generate expression for
+ */
 export function makeTypeBoxEnumExpression(values: readonly string[]): `Type.Union([${string}])` {
   return `Type.Union([${values.map((v) => `Type.Literal('${v}')`).join(', ')}])`
 }
 
+/** Mapping from Prisma scalar types to TypeBox type expressions */
 export const PRISMA_TO_TYPEBOX: { [k: string]: string } = {
   String: 'Type.String()',
   Int: 'Type.Integer()',
@@ -62,6 +79,11 @@ export const PRISMA_TO_TYPEBOX: { [k: string]: string } = {
   Bytes: 'Type.Any()',
 }
 
+/**
+ * Generate TypeBox Type.Object schema from model fields
+ * @param modelFields - The fields of the model
+ * @param comment - Whether to include JSDoc comments in the generated code
+ */
 export function makeTypeBoxSchemas(
   modelFields: readonly {
     readonly documentation: string
@@ -76,6 +98,12 @@ export function makeTypeBoxSchemas(
   return schemaFromFields(modelFields, comment, makeTypeBoxSchema, makeTypeBoxProperties)
 }
 
+/**
+ * Generate TypeBox relation schema definition
+ * @param model - The model to generate relations for
+ * @param relProps - The relation properties
+ * @param options - Options for type export generation
+ */
 export function makeTypeBoxRelations(
   model: { readonly name: string },
   relProps: readonly {
@@ -100,6 +128,13 @@ export function makeTypeBoxRelations(
   return `export const ${model.name}RelationsSchema = Type.Object({\n${base}\n${rels}\n})${typeLine}`
 }
 
+/**
+ * Generate TypeBox validation code from Prisma models
+ * @param models - The Prisma data models
+ * @param type - Whether to include type inference using Static
+ * @param comment - Whether to include JSDoc comments in the generated code
+ * @param enums - The Prisma enum definitions
+ */
 export function typebox(
   models: readonly {
     readonly name: string

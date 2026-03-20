@@ -1,105 +1,175 @@
 import { type Static, Type } from '@sinclair/typebox'
 
 export const OrganizationSchema = Type.Object({
-  /** Organization ID */
+  /**
+   * Organization ID
+   */
   id: Type.Integer(),
-  /** Organization name */
+  /**
+   * Organization name
+   */
   name: Type.String(),
-  /** URL-safe slug */
+  /**
+   * URL-safe slug
+   */
   slug: Type.String(),
-  /** Organization status */
+  /**
+   * Organization status
+   */
   status: Type.Union([Type.Literal('ACTIVE'), Type.Literal('INACTIVE'), Type.Literal('SUSPENDED')]),
-  /** Creation timestamp */
+  /**
+   * Creation timestamp
+   */
   createdAt: Type.Date(),
-  /** Last update timestamp */
+  /**
+   * Last update timestamp
+   */
   updatedAt: Type.Date(),
 })
 
 export type Organization = Static<typeof OrganizationSchema>
 
 export const UserSchema = Type.Object({
-  /** User ID */
+  /**
+   * User ID
+   */
   id: Type.Integer(),
-  /** Organization ID */
+  /**
+   * Organization ID
+   */
   organizationId: Type.Integer(),
-  /** Email address */
+  /**
+   * Email address
+   */
   email: Type.String(),
-  /** Display name */
+  /**
+   * Display name
+   */
   name: Type.String(),
-  /** Creation timestamp */
+  /**
+   * Creation timestamp
+   */
   createdAt: Type.Date(),
-  /** Last update timestamp */
+  /**
+   * Last update timestamp
+   */
   updatedAt: Type.Date(),
 })
 
 export type User = Static<typeof UserSchema>
 
 export const RoleSchema = Type.Object({
-  /** Role ID */
+  /**
+   * Role ID
+   */
   id: Type.Integer(),
-  /** Role name */
+  /**
+   * Role name
+   */
   name: Type.String(),
-  /** Role description */
+  /**
+   * Role description
+   */
   description: Type.Optional(Type.String()),
-  /** Creation timestamp */
+  /**
+   * Creation timestamp
+   */
   createdAt: Type.Date(),
-  /** Last update timestamp */
+  /**
+   * Last update timestamp
+   */
   updatedAt: Type.Date(),
 })
 
 export type Role = Static<typeof RoleSchema>
 
 export const PermissionSchema = Type.Object({
-  /** Permission ID */
+  /**
+   * Permission ID
+   */
   id: Type.Integer(),
-  /** Resource name */
+  /**
+   * Resource name
+   */
   resource: Type.String(),
-  /** Action name */
+  /**
+   * Action name
+   */
   action: Type.String(),
-  /** Permission description */
+  /**
+   * Permission description
+   */
   description: Type.Optional(Type.String()),
-  /** Creation timestamp */
+  /**
+   * Creation timestamp
+   */
   createdAt: Type.Date(),
 })
 
 export type Permission = Static<typeof PermissionSchema>
 
 export const UserRoleSchema = Type.Object({
-  /** User ID */
+  /**
+   * User ID
+   */
   userId: Type.Integer(),
-  /** Role ID */
+  /**
+   * Role ID
+   */
   roleId: Type.Integer(),
-  /** Assignment timestamp */
+  /**
+   * Assignment timestamp
+   */
   assignedAt: Type.Date(),
 })
 
 export type UserRole = Static<typeof UserRoleSchema>
 
 export const RolePermissionSchema = Type.Object({
-  /** Role ID */
+  /**
+   * Role ID
+   */
   roleId: Type.Integer(),
-  /** Permission ID */
+  /**
+   * Permission ID
+   */
   permissionId: Type.Integer(),
-  /** Assignment timestamp */
+  /**
+   * Assignment timestamp
+   */
   assignedAt: Type.Date(),
 })
 
 export type RolePermission = Static<typeof RolePermissionSchema>
 
 export const AuditLogSchema = Type.Object({
-  /** Audit log ID */
+  /**
+   * Audit log ID
+   */
   id: Type.Integer(),
-  /** User ID */
+  /**
+   * User ID
+   */
   userId: Type.Integer(),
-  /** Action performed */
+  /**
+   * Action performed
+   */
   action: Type.String(),
-  /** Resource name */
+  /**
+   * Resource name
+   */
   resource: Type.String(),
-  /** Action detail */
+  /**
+   * Action detail
+   */
   detail: Type.Optional(Type.String()),
-  /** Client IP address */
+  /**
+   * Client IP address
+   */
   ipAddress: Type.Optional(Type.String()),
-  /** Action timestamp */
+  /**
+   * Action timestamp
+   */
   createdAt: Type.Date(),
 })
 

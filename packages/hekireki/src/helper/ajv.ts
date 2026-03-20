@@ -1,20 +1,33 @@
-import { makeValidationExtractor, parseDocumentWithoutAnnotations } from '../utils/index.js'
+import {
+  makeCommentBlock,
+  makeValidationExtractor,
+  parseDocumentWithoutAnnotations,
+} from '../utils/index.js'
 import { validationSchemas } from './prisma.js'
 
 // ============================================================================
-// AJV (JSON Schema) Helpers
+// AJV Helpers
 // ============================================================================
 
+/**
+ * Generate AJV type inference using FromSchema
+ * @param modelName - The model name to generate type inference for
+ */
 export function makeAjvInfer(
   modelName: string,
 ): `export type ${string} = FromSchema<typeof ${string}Schema>` {
   return `export type ${modelName} = FromSchema<typeof ${modelName}Schema>`
 }
 
+/**
+ * Generate JSON Schema enum expression for AJV
+ * @param values - The enum values to generate expression for
+ */
 export function makeAjvEnumExpression(values: readonly string[]): `{ enum: [${string}] as const }` {
   return `{ enum: [${values.map((v) => `'${v}'`).join(', ')}] as const }`
 }
 
+/** Mapping from Prisma scalar types to JSON Schema type expressions */
 export const PRISMA_TO_AJV: { [k: string]: string } = {
   String: "{ type: 'string' as const }",
   Int: "{ type: 'integer' as const }",
@@ -27,6 +40,11 @@ export const PRISMA_TO_AJV: { [k: string]: string } = {
   Bytes: "{ type: 'string' as const }",
 }
 
+/**
+ * Generate JSON Schema object definition for a model
+ * @param modelFields - The fields of the model
+ * @param comment - Whether to include JSDoc comments in the generated code
+ */
 export function makeAjvSchemas(
   modelFields: readonly {
     readonly documentation: string
@@ -41,11 +59,8 @@ export function makeAjvSchemas(
   const modelName = modelFields[0].modelName
   const properties = modelFields
     .map((field) => {
-      const commentLines =
-        comment && field.comment.length > 0
-          ? `${field.comment.map((c) => `    /** ${c} */`).join('\n')}\n`
-          : ''
-      return `${commentLines}    ${field.fieldName}: ${field.validation ?? "{ type: 'unknown' as const }"},`
+      const commentBlock = comment ? makeCommentBlock(field.comment, 4) : ''
+      return `${commentBlock}    ${field.fieldName}: ${field.validation ?? "{ type: 'unknown' as const }"},`
     })
     .join('\n')
   const requiredFields = modelFields.filter((f) => f.isRequired).map((f) => f.fieldName)
@@ -56,6 +71,12 @@ export function makeAjvSchemas(
   return `export const ${modelName}Schema = {\n  type: 'object' as const,\n  properties: {\n${properties}\n  },${requiredLine}\n  additionalProperties: false,\n} as const`
 }
 
+/**
+ * Generate JSON Schema relation object definition
+ * @param model - The model to generate relations for
+ * @param relProps - The relation properties
+ * @param options - Options for type export generation
+ */
 export function makeAjvRelations(
   model: { readonly name: string },
   relProps: readonly {
@@ -80,6 +101,13 @@ export function makeAjvRelations(
   return `export const ${model.name}RelationsSchema = {\n  type: 'object' as const,\n  properties: {\n${base}\n${rels}\n  },\n  additionalProperties: false,\n} as const${typeLine}`
 }
 
+/**
+ * Generate AJV-compatible JSON Schema validation code from Prisma models
+ * @param models - The Prisma data models
+ * @param type - Whether to include type inference using FromSchema
+ * @param comment - Whether to include JSDoc comments in the generated code
+ * @param enums - The Prisma enum definitions
+ */
 export function ajv(
   models: readonly {
     readonly name: string

@@ -74,6 +74,21 @@ export function stripAnnotations(doc: string | undefined): string | undefined {
 }
 
 // ============================================================================
+// JSDoc Comment Block
+// ============================================================================
+
+/**
+ * Generate a JSDoc comment block from comment lines
+ * @param lines - The comment lines to include
+ * @param indent - The indentation level in spaces
+ */
+export function makeCommentBlock(lines: readonly string[], indent: number): string {
+  if (lines.length === 0) return ''
+  const prefix = ' '.repeat(indent)
+  return `${prefix}/**\n${lines.map((c) => `${prefix} * ${c}`).join('\n')}\n${prefix} */\n`
+}
+
+// ============================================================================
 // Properties Generator
 // ============================================================================
 
@@ -108,10 +123,7 @@ export function makePropertiesGenerator(
             ),
         )
 
-        const docComment =
-          includeComments && cleanLines.length > 0
-            ? `  /**\n${cleanLines.map((line) => `   * ${line}`).join('\n')}\n   */\n`
-            : ''
+        const docComment = includeComments ? makeCommentBlock(cleanLines, 2) : ''
 
         const base = `${libraryPrefix}.${field.validation}`
         const wrapped = wrapCardinality ? wrapCardinality(base, field.isRequired) : base

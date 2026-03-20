@@ -1,116 +1,268 @@
 import { type } from 'arktype'
 
 export const UserSchema = type({
-  /** User ID */
+  /**
+
+   * User ID
+
+   */
   id: 'number.integer',
-  /** Email address */
+  /**
+
+   * Email address
+
+   */
   email: 'string.email',
-  /** Display name */
+  /**
+
+   * Display name
+
+   */
   name: '1 <= string <= 100',
-  /** Biography */
+  /**
+
+   * Biography
+
+   */
   bio: 'string | null',
-  /** Avatar URL */
+  /**
+
+   * Avatar URL
+
+   */
   avatarUrl: 'string.url | null',
-  /** Account active status */
+  /**
+
+   * Account active status
+
+   */
   active: 'boolean',
-  /** Score */
+  /**
+
+   * Score
+
+   */
   score: 'number',
-  /** Tags */
+  /**
+
+   * Tags
+
+   */
   tags: 'string[]',
-  /** Metadata JSON */
+  /**
+
+   * Metadata JSON
+
+   */
   metadata: 'unknown | null',
 })
 
 export type User = typeof UserSchema.infer
 
 export const ProfileSchema = type({
-  /** Profile ID */
+  /**
+
+   * Profile ID
+
+   */
   id: 'string.uuid',
-  /** User ID */
+  /**
+
+   * User ID
+
+   */
   userId: 'number.integer',
-  /** Website URL */
+  /**
+
+   * Website URL
+
+   */
   website: 'string.url | null',
-  /** Location */
+  /**
+
+   * Location
+
+   */
   location: 'string | null',
-  /** Birth date */
+  /**
+
+   * Birth date
+
+   */
   birthDate: 'string.date.iso | null',
 })
 
 export type Profile = typeof ProfileSchema.infer
 
 export const PostSchema = type({
-  /** Post ID */
+  /**
+
+   * Post ID
+
+   */
   id: 'number.integer',
-  /** Post title */
+  /**
+
+   * Post title
+
+   */
   title: '1 <= string <= 200',
-  /** URL slug */
+  /**
+
+   * URL slug
+
+   */
   slug: 'string',
-  /** Post content */
+  /**
+
+   * Post content
+
+   */
   content: 'string',
-  /** View count */
+  /**
+
+   * View count
+
+   */
   views: 'number.integer',
-  /** Author user ID */
+  /**
+
+   * Author user ID
+
+   */
   authorId: 'number.integer',
 })
 
 export type Post = typeof PostSchema.infer
 
 export const CommentSchema = type({
-  /** Comment ID */
+  /**
+
+   * Comment ID
+
+   */
   id: 'number.integer',
-  /** Comment body */
+  /**
+
+   * Comment body
+
+   */
   body: 'string',
-  /** Post ID */
+  /**
+
+   * Post ID
+
+   */
   postId: 'number.integer',
-  /** Author user ID */
+  /**
+
+   * Author user ID
+
+   */
   authorId: 'number.integer',
 })
 
 export type Comment = typeof CommentSchema.infer
 
 export const TagSchema = type({
-  /** Tag ID */
+  /**
+
+   * Tag ID
+
+   */
   id: 'number.integer',
-  /** Tag name */
+  /**
+
+   * Tag name
+
+   */
   name: '1 <= string <= 50',
 })
 
 export type Tag = typeof TagSchema.infer
 
 export const PostTagSchema = type({
-  /** Post ID */
+  /**
+
+   * Post ID
+
+   */
   postId: 'number.integer',
-  /** Tag ID */
+  /**
+
+   * Tag ID
+
+   */
   tagId: 'number.integer',
 })
 
 export type PostTag = typeof PostTagSchema.infer
 
 export const SessionSchema = type({
-  /** Session ID */
+  /**
+
+   * Session ID
+
+   */
   id: 'string',
-  /** Session token */
+  /**
+
+   * Session token
+
+   */
   token: 'string',
-  /** User ID */
+  /**
+
+   * User ID
+
+   */
   userId: 'number.integer',
-  /** Expiration timestamp */
+  /**
+
+   * Expiration timestamp
+
+   */
   expiresAt: 'string.date.iso',
-  /** Client IP address */
+  /**
+
+   * Client IP address
+
+   */
   ipAddress: 'string | null',
-  /** User agent string */
+  /**
+
+   * User agent string
+
+   */
   userAgent: 'string | null',
 })
 
 export type Session = typeof SessionSchema.infer
 
 export const AuditLogSchema = type({
-  /** Audit log ID */
+  /**
+
+   * Audit log ID
+
+   */
   id: 'number.integer',
-  /** Action performed */
+  /**
+
+   * Action performed
+
+   */
   action: 'string',
-  /** Table name */
+  /**
+
+   * Table name
+
+   */
   tableName: 'string',
-  /** Record ID */
+  /**
+
+   * Record ID
+
+   */
   recordId: 'string',
 })
 

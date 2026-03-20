@@ -161,20 +161,32 @@ model Post {
     const expected = `import { type } from 'arktype'
 
 export const UserSchema = type({
-  /** Primary key */
+  /**
+   * Primary key
+   */
   id: 'string.uuid',
-  /** Display name */
+  /**
+   * Display name
+   */
   name: 'string',
 })
 
 export const PostSchema = type({
-  /** Primary key */
+  /**
+   * Primary key
+   */
   id: 'string.uuid',
-  /** Article title */
+  /**
+   * Article title
+   */
   title: 'string',
-  /** Body content */
+  /**
+   * Body content
+   */
   content: 'string',
-  /** Foreign key */
+  /**
+   * Foreign key
+   */
   userId: 'string.uuid',
 })
 `
@@ -301,22 +313,34 @@ model Post {
     const expected = `import { type } from 'arktype'
 
 export const UserSchema = type({
-  /** Primary key */
+  /**
+   * Primary key
+   */
   id: 'string.uuid',
-  /** Display name */
+  /**
+   * Display name
+   */
   name: 'string',
 })
 
 export type User = typeof UserSchema.infer
 
 export const PostSchema = type({
-  /** Primary key */
+  /**
+   * Primary key
+   */
   id: 'string.uuid',
-  /** Article title */
+  /**
+   * Article title
+   */
   title: 'string',
-  /** Body content */
+  /**
+   * Body content
+   */
   content: 'string',
-  /** Foreign key */
+  /**
+   * Foreign key
+   */
   userId: 'string.uuid',
 })
 
