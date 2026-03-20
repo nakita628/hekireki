@@ -1,105 +1,175 @@
 import { type } from 'arktype'
 
 export const OrganizationSchema = type({
-  /** Organization ID */
+  /**
+   * Organization ID
+   */
   id: 'number.integer',
-  /** Organization name */
+  /**
+   * Organization name
+   */
   name: '1 <= string <= 200',
-  /** URL-safe slug */
+  /**
+   * URL-safe slug
+   */
   slug: '1 <= string <= 100',
-  /** Organization status */
+  /**
+   * Organization status
+   */
   status: "'ACTIVE' | 'INACTIVE' | 'SUSPENDED'",
-  /** Creation timestamp */
+  /**
+   * Creation timestamp
+   */
   createdAt: 'Date',
-  /** Last update timestamp */
+  /**
+   * Last update timestamp
+   */
   updatedAt: 'Date',
 })
 
 export type Organization = typeof OrganizationSchema.infer
 
 export const UserSchema = type({
-  /** User ID */
+  /**
+   * User ID
+   */
   id: 'number.integer',
-  /** Organization ID */
+  /**
+   * Organization ID
+   */
   organizationId: 'number.integer',
-  /** Email address */
+  /**
+   * Email address
+   */
   email: 'string.email',
-  /** Display name */
+  /**
+   * Display name
+   */
   name: '1 <= string <= 100',
-  /** Creation timestamp */
+  /**
+   * Creation timestamp
+   */
   createdAt: 'Date',
-  /** Last update timestamp */
+  /**
+   * Last update timestamp
+   */
   updatedAt: 'Date',
 })
 
 export type User = typeof UserSchema.infer
 
 export const RoleSchema = type({
-  /** Role ID */
+  /**
+   * Role ID
+   */
   id: 'number.integer',
-  /** Role name */
+  /**
+   * Role name
+   */
   name: '1 <= string <= 100',
-  /** Role description */
+  /**
+   * Role description
+   */
   description: 'string | null',
-  /** Creation timestamp */
+  /**
+   * Creation timestamp
+   */
   createdAt: 'Date',
-  /** Last update timestamp */
+  /**
+   * Last update timestamp
+   */
   updatedAt: 'Date',
 })
 
 export type Role = typeof RoleSchema.infer
 
 export const PermissionSchema = type({
-  /** Permission ID */
+  /**
+   * Permission ID
+   */
   id: 'number.integer',
-  /** Resource name */
+  /**
+   * Resource name
+   */
   resource: '1 <= string <= 100',
-  /** Action name */
+  /**
+   * Action name
+   */
   action: '1 <= string <= 100',
-  /** Permission description */
+  /**
+   * Permission description
+   */
   description: 'string | null',
-  /** Creation timestamp */
+  /**
+   * Creation timestamp
+   */
   createdAt: 'Date',
 })
 
 export type Permission = typeof PermissionSchema.infer
 
 export const UserRoleSchema = type({
-  /** User ID */
+  /**
+   * User ID
+   */
   userId: 'number.integer',
-  /** Role ID */
+  /**
+   * Role ID
+   */
   roleId: 'number.integer',
-  /** Assignment timestamp */
+  /**
+   * Assignment timestamp
+   */
   assignedAt: 'Date',
 })
 
 export type UserRole = typeof UserRoleSchema.infer
 
 export const RolePermissionSchema = type({
-  /** Role ID */
+  /**
+   * Role ID
+   */
   roleId: 'number.integer',
-  /** Permission ID */
+  /**
+   * Permission ID
+   */
   permissionId: 'number.integer',
-  /** Assignment timestamp */
+  /**
+   * Assignment timestamp
+   */
   assignedAt: 'Date',
 })
 
 export type RolePermission = typeof RolePermissionSchema.infer
 
 export const AuditLogSchema = type({
-  /** Audit log ID */
+  /**
+   * Audit log ID
+   */
   id: 'number.integer',
-  /** User ID */
+  /**
+   * User ID
+   */
   userId: 'number.integer',
-  /** Action performed */
+  /**
+   * Action performed
+   */
   action: 'string',
-  /** Resource name */
+  /**
+   * Resource name
+   */
   resource: 'string',
-  /** Action detail */
+  /**
+   * Action detail
+   */
   detail: 'string | null',
-  /** Client IP address */
+  /**
+   * Client IP address
+   */
   ipAddress: 'string | null',
-  /** Action timestamp */
+  /**
+   * Action timestamp
+   */
   createdAt: 'Date',
 })
 

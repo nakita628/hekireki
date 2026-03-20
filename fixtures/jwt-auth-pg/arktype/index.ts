@@ -1,128 +1,226 @@
 import { type } from 'arktype'
 
 export const UserSchema = type({
-  /** User ID */
+  /**
+   * User ID
+   */
   id: 'string.uuid',
-  /** Email address */
+  /**
+   * Email address
+   */
   email: 'string.email',
-  /** Hashed password (null for OAuth-only users) */
+  /**
+   * Hashed password (null for OAuth-only users)
+   */
   passwordHash: 'string >= 8 | null',
-  /** Display name */
+  /**
+   * Display name
+   */
   name: '1 <= string <= 100',
-  /** Profile image URL */
+  /**
+   * Profile image URL
+   */
   avatarUrl: 'string.url | null',
-  /** User role */
+  /**
+   * User role
+   */
   role: "'ADMIN' | 'USER' | 'GUEST'",
-  /** Credit balance */
+  /**
+   * Credit balance
+   */
   creditBalance: 'number',
-  /** Email verification status */
+  /**
+   * Email verification status
+   */
   emailVerified: 'boolean',
-  /** Account active status */
+  /**
+   * Account active status
+   */
   isActive: 'boolean',
-  /** Account creation timestamp */
+  /**
+   * Account creation timestamp
+   */
   createdAt: 'Date',
-  /** Last update timestamp */
+  /**
+   * Last update timestamp
+   */
   updatedAt: 'Date',
-  /** Last login timestamp */
+  /**
+   * Last login timestamp
+   */
   lastLoginAt: 'Date',
 })
 
 export type User = typeof UserSchema.infer
 
 export const OAuthAccountSchema = type({
-  /** OAuth account ID */
+  /**
+   * OAuth account ID
+   */
   id: 'string.uuid',
-  /** User ID */
+  /**
+   * User ID
+   */
   userId: 'string.uuid',
-  /** OAuth provider */
+  /**
+   * OAuth provider
+   */
   provider: "'GOOGLE' | 'GITHUB' | 'FACEBOOK' | 'TWITTER' | 'APPLE'",
-  /** Provider account ID */
+  /**
+   * Provider account ID
+   */
   providerAccountId: 'string',
-  /** Access token from provider */
+  /**
+   * Access token from provider
+   */
   accessToken: 'string | null',
-  /** Refresh token from provider */
+  /**
+   * Refresh token from provider
+   */
   refreshToken: 'string | null',
-  /** Token expiration timestamp */
+  /**
+   * Token expiration timestamp
+   */
   expiresAt: 'Date',
-  /** Account creation timestamp */
+  /**
+   * Account creation timestamp
+   */
   createdAt: 'Date',
 })
 
 export type OAuthAccount = typeof OAuthAccountSchema.infer
 
 export const TwoFactorSettingSchema = type({
-  /** 2FA setting ID */
+  /**
+   * 2FA setting ID
+   */
   id: 'string.uuid',
-  /** User ID */
+  /**
+   * User ID
+   */
   userId: 'string.uuid',
-  /** 2FA enabled status */
+  /**
+   * 2FA enabled status
+   */
   enabled: 'boolean',
-  /** 2FA method */
+  /**
+   * 2FA method
+   */
   method: "'TOTP' | 'SMS' | 'EMAIL'",
-  /** TOTP secret (encrypted) */
+  /**
+   * TOTP secret (encrypted)
+   */
   totpSecret: 'string | null',
-  /** Phone number for SMS (E.164 format) */
+  /**
+   * Phone number for SMS (E.164 format)
+   */
   phoneNumber: 'string | null',
-  /** Backup codes (hashed, JSON array) */
+  /**
+   * Backup codes (hashed, JSON array)
+   */
   backupCodes: 'string | null',
-  /** Last verified timestamp */
+  /**
+   * Last verified timestamp
+   */
   verifiedAt: 'Date',
-  /** Creation timestamp */
+  /**
+   * Creation timestamp
+   */
   createdAt: 'Date',
-  /** Last update timestamp */
+  /**
+   * Last update timestamp
+   */
   updatedAt: 'Date',
 })
 
 export type TwoFactorSetting = typeof TwoFactorSettingSchema.infer
 
 export const RefreshTokenSchema = type({
-  /** Refresh token ID */
+  /**
+   * Refresh token ID
+   */
   id: 'string',
-  /** User ID */
+  /**
+   * User ID
+   */
   userId: 'string.uuid',
-  /** Token hash (SHA-256) */
+  /**
+   * Token hash (SHA-256)
+   */
   tokenHash: 'string',
-  /** Device/client identifier */
+  /**
+   * Device/client identifier
+   */
   deviceInfo: 'string | null',
-  /** IP address at creation */
+  /**
+   * IP address at creation
+   */
   ipAddress: 'string | null',
-  /** Token expiration timestamp */
+  /**
+   * Token expiration timestamp
+   */
   expiresAt: 'Date',
-  /** Token creation timestamp */
+  /**
+   * Token creation timestamp
+   */
   createdAt: 'Date',
-  /** Revocation status */
+  /**
+   * Revocation status
+   */
   revoked: 'boolean',
 })
 
 export type RefreshToken = typeof RefreshTokenSchema.infer
 
 export const EmailVerificationSchema = type({
-  /** Verification ID */
+  /**
+   * Verification ID
+   */
   id: 'string.uuid',
-  /** User ID */
+  /**
+   * User ID
+   */
   userId: 'string.uuid',
-  /** Verification token (hashed) */
+  /**
+   * Verification token (hashed)
+   */
   tokenHash: 'string',
-  /** Token expiration timestamp */
+  /**
+   * Token expiration timestamp
+   */
   expiresAt: 'Date',
-  /** Creation timestamp */
+  /**
+   * Creation timestamp
+   */
   createdAt: 'Date',
 })
 
 export type EmailVerification = typeof EmailVerificationSchema.infer
 
 export const PasswordResetSchema = type({
-  /** Reset ID */
+  /**
+   * Reset ID
+   */
   id: 'string.uuid',
-  /** User ID */
+  /**
+   * User ID
+   */
   userId: 'string.uuid',
-  /** Reset token (hashed) */
+  /**
+   * Reset token (hashed)
+   */
   tokenHash: 'string',
-  /** Token expiration timestamp */
+  /**
+   * Token expiration timestamp
+   */
   expiresAt: 'Date',
-  /** Used status */
+  /**
+   * Used status
+   */
   used: 'boolean',
-  /** Creation timestamp */
+  /**
+   * Creation timestamp
+   */
   createdAt: 'Date',
 })
 

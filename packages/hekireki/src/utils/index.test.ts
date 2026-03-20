@@ -5,6 +5,7 @@ import {
   getString,
   groupByModel,
   isFields,
+  makeCommentBlock,
   makePropertiesGenerator,
   makeSnakeCase,
   makeValidationExtractor,
@@ -214,6 +215,42 @@ describe('utils', () => {
     })
     it('strips @relation annotation', () => {
       expect(stripAnnotations('@relation User.id Post.userId one-to-many')).toBeUndefined()
+    })
+  })
+
+  // ============================================================================
+  // JSDoc Comment Block
+  // ============================================================================
+
+  describe('makeCommentBlock', () => {
+    it('generates multi-line JSDoc with 2-space indent', () => {
+      expect(makeCommentBlock(['Primary key'], 2)).toBe('  /**\n   * Primary key\n   */\n')
+    })
+
+    it('generates multi-line JSDoc with 4-space indent for AJV', () => {
+      expect(makeCommentBlock(['Primary key'], 4)).toBe('    /**\n     * Primary key\n     */\n')
+    })
+
+    it('handles multiple comment lines', () => {
+      expect(makeCommentBlock(['Line 1', 'Line 2'], 2)).toBe(
+        '  /**\n   * Line 1\n   * Line 2\n   */\n',
+      )
+    })
+
+    it('returns empty string for empty lines', () => {
+      expect(makeCommentBlock([], 2)).toBe('')
+    })
+
+    it('generates consistent format across all indentation levels', () => {
+      const lines = ['User ID']
+      const indent2 = makeCommentBlock(lines, 2)
+      const indent4 = makeCommentBlock(lines, 4)
+      expect(indent2).toContain('/**')
+      expect(indent2).toContain(' * User ID')
+      expect(indent2).toContain(' */')
+      expect(indent4).toContain('/**')
+      expect(indent4).toContain(' * User ID')
+      expect(indent4).toContain(' */')
     })
   })
 

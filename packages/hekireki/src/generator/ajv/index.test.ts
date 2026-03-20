@@ -139,9 +139,13 @@ model Post {
 export const UserSchema = {
   type: 'object' as const,
   properties: {
-    /** Primary key */
+    /**
+     * Primary key
+     */
     id: { type: 'string' as const, format: 'uuid' as const },
-    /** Display name */
+    /**
+     * Display name
+     */
     name: { type: 'string' as const, minLength: 1, maxLength: 50 },
   },
   required: ['id', 'name'] as const,
@@ -153,13 +157,21 @@ export type User = FromSchema<typeof UserSchema>
 export const PostSchema = {
   type: 'object' as const,
   properties: {
-    /** Primary key */
+    /**
+     * Primary key
+     */
     id: { type: 'string' as const, format: 'uuid' as const },
-    /** Article title */
+    /**
+     * Article title
+     */
     title: { type: 'string' as const, minLength: 1, maxLength: 100 },
-    /** Body content */
+    /**
+     * Body content
+     */
     content: { type: 'string' as const },
-    /** Foreign key */
+    /**
+     * Foreign key
+     */
     userId: { type: 'string' as const, format: 'uuid' as const },
   },
   required: ['id', 'title', 'content', 'userId'] as const,

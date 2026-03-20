@@ -50,9 +50,13 @@ describe('helper/typebox', () => {
         true,
       )
       const expected = `export const UserSchema = Type.Object({
-  /** Primary key */
+  /**
+   * Primary key
+   */
   id: Type.String(),
-  /** Display name */
+  /**
+   * Display name
+   */
   name: Type.String(),
 })`
       expect(result).toBe(expected)
@@ -236,7 +240,9 @@ describe('helper/typebox', () => {
     ]
 
     it('generates properties with comments', () => {
-      expect(makeTypeBoxProperties(fields, true)).toBe('  /** Primary key */\n  id: Type.String(),')
+      expect(makeTypeBoxProperties(fields, true)).toBe(
+        '  /**\n   * Primary key\n   */\n  id: Type.String(),',
+      )
     })
     it('generates properties without comments', () => {
       expect(makeTypeBoxProperties(fields, false)).toBe('  id: Type.String(),')
@@ -340,9 +346,13 @@ describe('helper/typebox', () => {
         true,
       )
       expect(result).toBe(`export const OrderSchema = Type.Object({
-  /** Order ID */
+  /**
+   * Order ID
+   */
   id: Type.String({ format: 'uuid' }),
-  /** Customer note */
+  /**
+   * Customer note
+   */
   note: Type.Optional(Type.String()),
 })`)
     })

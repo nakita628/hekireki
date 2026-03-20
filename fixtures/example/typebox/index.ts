@@ -1,22 +1,46 @@
 import { type Static, Type } from '@sinclair/typebox'
 
 export const UserSchema = Type.Object({
-  /** Primary key */
+  /**
+
+   * Primary key
+
+   */
   id: Type.String(),
-  /** Display name */
+  /**
+
+   * Display name
+
+   */
   name: Type.String(),
 })
 
 export type User = Static<typeof UserSchema>
 
 export const PostSchema = Type.Object({
-  /** Primary key */
+  /**
+
+   * Primary key
+
+   */
   id: Type.String(),
-  /** Article title */
+  /**
+
+   * Article title
+
+   */
   title: Type.String(),
-  /** Body content (no length limit) */
+  /**
+
+   * Body content (no length limit)
+
+   */
   content: Type.String(),
-  /** Foreign key referencing User.id */
+  /**
+
+   * Foreign key referencing User.id
+
+   */
   userId: Type.String(),
 })
 

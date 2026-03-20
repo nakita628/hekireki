@@ -1,98 +1,234 @@
 import { type Static, Type } from '@sinclair/typebox'
 
 export const UserSchema = Type.Object({
-  /** Unique user ID */
+  /**
+
+   * Unique user ID
+
+   */
   id: Type.String(),
-  /** Display name */
+  /**
+
+   * Display name
+
+   */
   name: Type.Optional(Type.String()),
-  /** Email address */
+  /**
+
+   * Email address
+
+   */
   email: Type.Optional(Type.String()),
-  /** Date when the email was verified */
+  /**
+
+   * Date when the email was verified
+
+   */
   emailVerified: Type.Optional(Type.Date()),
-  /** Profile image URL */
+  /**
+
+   * Profile image URL
+
+   */
   image: Type.Optional(Type.String()),
-  /** Hashed password */
+  /**
+
+   * Hashed password
+
+   */
   password: Type.Optional(Type.String()),
-  /** Role of the user (ADMIN or USER) */
+  /**
+
+   * Role of the user (ADMIN or USER)
+
+   */
   role: Type.Union([Type.Literal('ADMIN'), Type.Literal('USER')]),
-  /** Whether 2FA is enabled */
+  /**
+
+   * Whether 2FA is enabled
+
+   */
   isTwoFactorEnabled: Type.Optional(Type.Boolean()),
 })
 
 export type User = Static<typeof UserSchema>
 
 export const AccountSchema = Type.Object({
-  /** Unique account ID */
+  /**
+
+   * Unique account ID
+
+   */
   id: Type.String(),
-  /** Reference to the user ID */
+  /**
+
+   * Reference to the user ID
+
+   */
   userId: Type.String(),
-  /** Type of account (e.g., oauth, email) */
+  /**
+
+   * Type of account (e.g., oauth, email)
+
+   */
   type: Type.String(),
-  /** Name of the provider (e.g., google, github) */
+  /**
+
+   * Name of the provider (e.g., google, github)
+
+   */
   provider: Type.String(),
-  /** Provider-specific account ID */
+  /**
+
+   * Provider-specific account ID
+
+   */
   providerAccountId: Type.String(),
-  /** Refresh token */
+  /**
+
+   * Refresh token
+
+   */
   refresh_token: Type.Optional(Type.String()),
-  /** Access token */
+  /**
+
+   * Access token
+
+   */
   access_token: Type.Optional(Type.String()),
-  /** Expiration time (UNIX timestamp) */
+  /**
+
+   * Expiration time (UNIX timestamp)
+
+   */
   expires_at: Type.Optional(Type.Integer()),
-  /** Token type (e.g., Bearer) */
+  /**
+
+   * Token type (e.g., Bearer)
+
+   */
   token_type: Type.Optional(Type.String()),
-  /** OAuth scope */
+  /**
+
+   * OAuth scope
+
+   */
   scope: Type.Optional(Type.String()),
-  /** ID token */
+  /**
+
+   * ID token
+
+   */
   id_token: Type.Optional(Type.String()),
-  /** Session state */
+  /**
+
+   * Session state
+
+   */
   session_state: Type.Optional(Type.String()),
 })
 
 export type Account = Static<typeof AccountSchema>
 
 export const VerificationTokenSchema = Type.Object({
-  /** Token ID */
+  /**
+
+   * Token ID
+
+   */
   id: Type.String(),
-  /** Email address */
+  /**
+
+   * Email address
+
+   */
   email: Type.String(),
-  /** Token string */
+  /**
+
+   * Token string
+
+   */
   token: Type.String(),
-  /** Expiry time */
+  /**
+
+   * Expiry time
+
+   */
   expires: Type.Date(),
 })
 
 export type VerificationToken = Static<typeof VerificationTokenSchema>
 
 export const PasswordResetTokenSchema = Type.Object({
-  /** Token ID */
+  /**
+
+   * Token ID
+
+   */
   id: Type.String(),
-  /** Email address */
+  /**
+
+   * Email address
+
+   */
   email: Type.String(),
-  /** Token string */
+  /**
+
+   * Token string
+
+   */
   token: Type.String(),
-  /** Expiry time */
+  /**
+
+   * Expiry time
+
+   */
   expires: Type.Date(),
 })
 
 export type PasswordResetToken = Static<typeof PasswordResetTokenSchema>
 
 export const TwoFactorTokenSchema = Type.Object({
-  /** Token ID */
+  /**
+
+   * Token ID
+
+   */
   id: Type.String(),
-  /** Email address */
+  /**
+
+   * Email address
+
+   */
   email: Type.String(),
-  /** Token string */
+  /**
+
+   * Token string
+
+   */
   token: Type.String(),
-  /** Expiry time */
+  /**
+
+   * Expiry time
+
+   */
   expires: Type.Date(),
 })
 
 export type TwoFactorToken = Static<typeof TwoFactorTokenSchema>
 
 export const TwoFactorConfirmationSchema = Type.Object({
-  /** Confirmation ID */
+  /**
+
+   * Confirmation ID
+
+   */
   id: Type.String(),
-  /** Reference to user */
+  /**
+
+   * Reference to user
+
+   */
   userId: Type.String(),
 })
 

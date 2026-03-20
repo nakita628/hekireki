@@ -301,22 +301,34 @@ export type PostRelations = v.InferOutput<typeof PostRelationsSchema>
 import { type } from 'arktype'
 
 export const UserSchema = type({
-  /** Primary key */
+  /**
+   * Primary key
+   */
   id: 'string.uuid',
-  /** Display name */
+  /**
+   * Display name
+   */
   name: '1 <= string <= 50',
 })
 
 export type User = typeof UserSchema.infer
 
 export const PostSchema = type({
-  /** Primary key */
+  /**
+   * Primary key
+   */
   id: 'string.uuid',
-  /** Article title */
+  /**
+   * Article title
+   */
   title: '1 <= string <= 100',
-  /** Body content (no length limit) */
+  /**
+   * Body content (no length limit)
+   */
   content: 'string',
-  /** Foreign key referencing User.id */
+  /**
+   * Foreign key referencing User.id
+   */
   userId: 'string.uuid',
 })
 
@@ -369,22 +381,34 @@ export type PostEncoded = typeof PostSchema.Encoded
 import { type Static, Type } from '@sinclair/typebox'
 
 export const UserSchema = Type.Object({
-  /** Primary key */
+  /**
+   * Primary key
+   */
   id: Type.String({ format: 'uuid' }),
-  /** Display name */
+  /**
+   * Display name
+   */
   name: Type.String({ minLength: 1, maxLength: 50 }),
 })
 
 export type User = Static<typeof UserSchema>
 
 export const PostSchema = Type.Object({
-  /** Primary key */
+  /**
+   * Primary key
+   */
   id: Type.String({ format: 'uuid' }),
-  /** Article title */
+  /**
+   * Article title
+   */
   title: Type.String({ minLength: 1, maxLength: 100 }),
-  /** Body content (no length limit) */
+  /**
+   * Body content (no length limit)
+   */
   content: Type.String(),
-  /** Foreign key referencing User.id */
+  /**
+   * Foreign key referencing User.id
+   */
   userId: Type.String({ format: 'uuid' }),
 })
 
@@ -405,7 +429,7 @@ export const PostRelationsSchema = Type.Object({
 export type PostRelations = Static<typeof PostRelationsSchema>
 ```
 
-### AJV (JSON Schema)
+### AJV
 
 ```ts
 import type { FromSchema } from 'json-schema-to-ts'
@@ -413,9 +437,13 @@ import type { FromSchema } from 'json-schema-to-ts'
 export const UserSchema = {
   type: 'object' as const,
   properties: {
-    /** Primary key */
+    /**
+     * Primary key
+     */
     id: { type: 'string' as const, format: 'uuid' as const },
-    /** Display name */
+    /**
+     * Display name
+     */
     name: { type: 'string' as const, minLength: 1, maxLength: 50 },
   },
   required: ['id', 'name'] as const,
@@ -427,13 +455,21 @@ export type User = FromSchema<typeof UserSchema>
 export const PostSchema = {
   type: 'object' as const,
   properties: {
-    /** Primary key */
+    /**
+     * Primary key
+     */
     id: { type: 'string' as const, format: 'uuid' as const },
-    /** Article title */
+    /**
+     * Article title
+     */
     title: { type: 'string' as const, minLength: 1, maxLength: 100 },
-    /** Body content (no length limit) */
+    /**
+     * Body content (no length limit)
+     */
     content: { type: 'string' as const },
-    /** Foreign key referencing User.id */
+    /**
+     * Foreign key referencing User.id
+     */
     userId: { type: 'string' as const, format: 'uuid' as const },
   },
   required: ['id', 'title', 'content', 'userId'] as const,

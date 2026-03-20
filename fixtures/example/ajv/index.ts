@@ -3,9 +3,17 @@ import type { FromSchema } from 'json-schema-to-ts'
 export const UserSchema = {
   type: 'object' as const,
   properties: {
-    /** Primary key */
+    /**
+
+     * Primary key
+
+     */
     id: { type: 'string' as const },
-    /** Display name */
+    /**
+
+     * Display name
+
+     */
     name: { type: 'string' as const },
   },
   required: ['id', 'name'] as const,
@@ -17,13 +25,29 @@ export type User = FromSchema<typeof UserSchema>
 export const PostSchema = {
   type: 'object' as const,
   properties: {
-    /** Primary key */
+    /**
+
+     * Primary key
+
+     */
     id: { type: 'string' as const },
-    /** Article title */
+    /**
+
+     * Article title
+
+     */
     title: { type: 'string' as const },
-    /** Body content (no length limit) */
+    /**
+
+     * Body content (no length limit)
+
+     */
     content: { type: 'string' as const },
-    /** Foreign key referencing User.id */
+    /**
+
+     * Foreign key referencing User.id
+
+     */
     userId: { type: 'string' as const },
   },
   required: ['id', 'title', 'content', 'userId'] as const,

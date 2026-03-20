@@ -1,38 +1,94 @@
 import { type Static, Type } from '@sinclair/typebox'
 
 export const UserSchema = Type.Object({
-  /** User ID */
+  /**
+
+   * User ID
+
+   */
   id: Type.String(),
-  /** Email address */
+  /**
+
+   * Email address
+
+   */
   email: Type.String(),
-  /** Hashed password (null for OAuth-only users) */
+  /**
+
+   * Hashed password (null for OAuth-only users)
+
+   */
   passwordHash: Type.Optional(Type.String()),
-  /** Display name */
+  /**
+
+   * Display name
+
+   */
   name: Type.String(),
-  /** Profile image URL */
+  /**
+
+   * Profile image URL
+
+   */
   avatarUrl: Type.Optional(Type.String()),
-  /** User role */
+  /**
+
+   * User role
+
+   */
   role: Type.Union([Type.Literal('ADMIN'), Type.Literal('USER'), Type.Literal('GUEST')]),
-  /** Email verification status */
+  /**
+
+   * Email verification status
+
+   */
   emailVerified: Type.Boolean(),
-  /** Account active status */
+  /**
+
+   * Account active status
+
+   */
   isActive: Type.Boolean(),
-  /** Account creation timestamp */
+  /**
+
+   * Account creation timestamp
+
+   */
   createdAt: Type.Date(),
-  /** Last update timestamp */
+  /**
+
+   * Last update timestamp
+
+   */
   updatedAt: Type.Date(),
-  /** Last login timestamp */
+  /**
+
+   * Last login timestamp
+
+   */
   lastLoginAt: Type.Optional(Type.Date()),
 })
 
 export type User = Static<typeof UserSchema>
 
 export const OAuthAccountSchema = Type.Object({
-  /** OAuth account ID */
+  /**
+
+   * OAuth account ID
+
+   */
   id: Type.String(),
-  /** User ID */
+  /**
+
+   * User ID
+
+   */
   userId: Type.String(),
-  /** OAuth provider */
+  /**
+
+   * OAuth provider
+
+   */
   provider: Type.Union([
     Type.Literal('GOOGLE'),
     Type.Literal('GITHUB'),
@@ -40,95 +96,231 @@ export const OAuthAccountSchema = Type.Object({
     Type.Literal('TWITTER'),
     Type.Literal('APPLE'),
   ]),
-  /** Provider account ID */
+  /**
+
+   * Provider account ID
+
+   */
   providerAccountId: Type.String(),
-  /** Access token from provider */
+  /**
+
+   * Access token from provider
+
+   */
   accessToken: Type.Optional(Type.String()),
-  /** Refresh token from provider */
+  /**
+
+   * Refresh token from provider
+
+   */
   refreshToken: Type.Optional(Type.String()),
-  /** Token expiration timestamp */
+  /**
+
+   * Token expiration timestamp
+
+   */
   expiresAt: Type.Optional(Type.Date()),
-  /** Account creation timestamp */
+  /**
+
+   * Account creation timestamp
+
+   */
   createdAt: Type.Date(),
 })
 
 export type OAuthAccount = Static<typeof OAuthAccountSchema>
 
 export const TwoFactorSettingSchema = Type.Object({
-  /** 2FA setting ID */
+  /**
+
+   * 2FA setting ID
+
+   */
   id: Type.String(),
-  /** User ID */
+  /**
+
+   * User ID
+
+   */
   userId: Type.String(),
-  /** 2FA enabled status */
+  /**
+
+   * 2FA enabled status
+
+   */
   enabled: Type.Boolean(),
-  /** 2FA method */
+  /**
+
+   * 2FA method
+
+   */
   method: Type.Optional(
     Type.Union([Type.Literal('TOTP'), Type.Literal('SMS'), Type.Literal('EMAIL')]),
   ),
-  /** TOTP secret (encrypted) */
+  /**
+
+   * TOTP secret (encrypted)
+
+   */
   totpSecret: Type.Optional(Type.String()),
-  /** Phone number for SMS (E.164 format) */
+  /**
+
+   * Phone number for SMS (E.164 format)
+
+   */
   phoneNumber: Type.Optional(Type.String()),
-  /** Backup codes (hashed, JSON array) */
+  /**
+
+   * Backup codes (hashed, JSON array)
+
+   */
   backupCodes: Type.Optional(Type.String()),
-  /** Last verified timestamp */
+  /**
+
+   * Last verified timestamp
+
+   */
   verifiedAt: Type.Optional(Type.Date()),
-  /** Creation timestamp */
+  /**
+
+   * Creation timestamp
+
+   */
   createdAt: Type.Date(),
-  /** Last update timestamp */
+  /**
+
+   * Last update timestamp
+
+   */
   updatedAt: Type.Date(),
 })
 
 export type TwoFactorSetting = Static<typeof TwoFactorSettingSchema>
 
 export const RefreshTokenSchema = Type.Object({
-  /** Refresh token ID */
+  /**
+
+   * Refresh token ID
+
+   */
   id: Type.String(),
-  /** User ID */
+  /**
+
+   * User ID
+
+   */
   userId: Type.String(),
-  /** Token hash (SHA-256) */
+  /**
+
+   * Token hash (SHA-256)
+
+   */
   tokenHash: Type.String(),
-  /** Device/client identifier */
+  /**
+
+   * Device/client identifier
+
+   */
   deviceInfo: Type.Optional(Type.String()),
-  /** IP address at creation */
+  /**
+
+   * IP address at creation
+
+   */
   ipAddress: Type.Optional(Type.String()),
-  /** Token expiration timestamp */
+  /**
+
+   * Token expiration timestamp
+
+   */
   expiresAt: Type.Date(),
-  /** Token creation timestamp */
+  /**
+
+   * Token creation timestamp
+
+   */
   createdAt: Type.Date(),
-  /** Revocation status */
+  /**
+
+   * Revocation status
+
+   */
   revoked: Type.Boolean(),
 })
 
 export type RefreshToken = Static<typeof RefreshTokenSchema>
 
 export const EmailVerificationSchema = Type.Object({
-  /** Verification ID */
+  /**
+
+   * Verification ID
+
+   */
   id: Type.String(),
-  /** User ID */
+  /**
+
+   * User ID
+
+   */
   userId: Type.String(),
-  /** Verification token (hashed) */
+  /**
+
+   * Verification token (hashed)
+
+   */
   tokenHash: Type.String(),
-  /** Token expiration timestamp */
+  /**
+
+   * Token expiration timestamp
+
+   */
   expiresAt: Type.Date(),
-  /** Creation timestamp */
+  /**
+
+   * Creation timestamp
+
+   */
   createdAt: Type.Date(),
 })
 
 export type EmailVerification = Static<typeof EmailVerificationSchema>
 
 export const PasswordResetSchema = Type.Object({
-  /** Reset ID */
+  /**
+
+   * Reset ID
+
+   */
   id: Type.String(),
-  /** User ID */
+  /**
+
+   * User ID
+
+   */
   userId: Type.String(),
-  /** Reset token (hashed) */
+  /**
+
+   * Reset token (hashed)
+
+   */
   tokenHash: Type.String(),
-  /** Token expiration timestamp */
+  /**
+
+   * Token expiration timestamp
+
+   */
   expiresAt: Type.Date(),
-  /** Used status */
+  /**
+
+   * Used status
+
+   */
   used: Type.Boolean(),
-  /** Creation timestamp */
+  /**
+
+   * Creation timestamp
+
+   */
   createdAt: Type.Date(),
 })
 

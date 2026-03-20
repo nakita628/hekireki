@@ -44,9 +44,13 @@ describe('helper/arktype', () => {
         true,
       )
       const expected = `export const UserSchema = type({
-  /** Primary key */
+  /**
+   * Primary key
+   */
   id: "string",
-  /** Display name */
+  /**
+   * Display name
+   */
   name: "string",
 })`
       expect(result).toBe(expected)
@@ -196,7 +200,9 @@ describe('helper/arktype', () => {
     ]
 
     it('generates properties with comments', () => {
-      expect(makeArktypeProperties(fields, true)).toBe('  /** Primary key */\n  id: "string.uuid",')
+      expect(makeArktypeProperties(fields, true)).toBe(
+        '  /**\n   * Primary key\n   */\n  id: "string.uuid",',
+      )
     })
     it('generates properties without comments', () => {
       expect(makeArktypeProperties(fields, false)).toBe('  id: "string.uuid",')
@@ -292,10 +298,14 @@ describe('helper/arktype', () => {
         true,
       )
       expect(result).toBe(`export const OrderSchema = type({
-  /** Order ID */
+  /**
+   * Order ID
+   */
   id: "string.uuid",
-  /** Total amount in cents */
-  /** Integer to avoid floating point issues */
+  /**
+   * Total amount in cents
+   * Integer to avoid floating point issues
+   */
   totalAmount: "number",
 })`)
     })

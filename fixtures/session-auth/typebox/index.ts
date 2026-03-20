@@ -1,70 +1,170 @@
 import { type Static, Type } from '@sinclair/typebox'
 
 export const UserSchema = Type.Object({
-  /** User ID */
+  /**
+
+   * User ID
+
+   */
   id: Type.String(),
-  /** Email address */
+  /**
+
+   * Email address
+
+   */
   email: Type.String(),
-  /** Hashed password */
+  /**
+
+   * Hashed password
+
+   */
   passwordHash: Type.String(),
-  /** Display name */
+  /**
+
+   * Display name
+
+   */
   name: Type.String(),
-  /** User role */
+  /**
+
+   * User role
+
+   */
   role: Type.Union([Type.Literal('ADMIN'), Type.Literal('USER')]),
-  /** Account active status */
+  /**
+
+   * Account active status
+
+   */
   isActive: Type.Boolean(),
-  /** Account creation timestamp */
+  /**
+
+   * Account creation timestamp
+
+   */
   createdAt: Type.Date(),
-  /** Last update timestamp */
+  /**
+
+   * Last update timestamp
+
+   */
   updatedAt: Type.Date(),
 })
 
 export type User = Static<typeof UserSchema>
 
 export const SessionSchema = Type.Object({
-  /** Session ID */
+  /**
+
+   * Session ID
+
+   */
   id: Type.String(),
-  /** Session token */
+  /**
+
+   * Session token
+
+   */
   token: Type.String(),
-  /** User ID */
+  /**
+
+   * User ID
+
+   */
   userId: Type.String(),
-  /** Session expiration */
+  /**
+
+   * Session expiration
+
+   */
   expiresAt: Type.Date(),
-  /** Client IP address */
+  /**
+
+   * Client IP address
+
+   */
   ipAddress: Type.Optional(Type.String()),
-  /** Client user agent */
+  /**
+
+   * Client user agent
+
+   */
   userAgent: Type.Optional(Type.String()),
-  /** Session creation timestamp */
+  /**
+
+   * Session creation timestamp
+
+   */
   createdAt: Type.Date(),
 })
 
 export type Session = Static<typeof SessionSchema>
 
 export const LoginHistorySchema = Type.Object({
-  /** Login history ID */
+  /**
+
+   * Login history ID
+
+   */
   id: Type.String(),
-  /** User ID */
+  /**
+
+   * User ID
+
+   */
   userId: Type.String(),
-  /** Client IP address */
+  /**
+
+   * Client IP address
+
+   */
   ipAddress: Type.String(),
-  /** Client user agent */
+  /**
+
+   * Client user agent
+
+   */
   userAgent: Type.Optional(Type.String()),
-  /** Login success status */
+  /**
+
+   * Login success status
+
+   */
   success: Type.Boolean(),
-  /** Login timestamp */
+  /**
+
+   * Login timestamp
+
+   */
   createdAt: Type.Date(),
 })
 
 export type LoginHistory = Static<typeof LoginHistorySchema>
 
 export const PasswordHistorySchema = Type.Object({
-  /** Password history ID */
+  /**
+
+   * Password history ID
+
+   */
   id: Type.String(),
-  /** User ID */
+  /**
+
+   * User ID
+
+   */
   userId: Type.String(),
-  /** Hashed password */
+  /**
+
+   * Hashed password
+
+   */
   passwordHash: Type.String(),
-  /** Change timestamp */
+  /**
+
+   * Change timestamp
+
+   */
   createdAt: Type.Date(),
 })
 

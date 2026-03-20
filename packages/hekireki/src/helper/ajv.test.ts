@@ -52,9 +52,13 @@ describe('helper/ajv', () => {
       const expected = `export const UserSchema = {
   type: 'object' as const,
   properties: {
-    /** Primary key */
+    /**
+     * Primary key
+     */
     id: { type: 'string' as const },
-    /** Display name */
+    /**
+     * Display name
+     */
     name: { type: 'string' as const },
   },
   required: ['id', 'name'] as const,
@@ -388,11 +392,17 @@ export type Order = FromSchema<typeof OrderSchema>`)
       expect(result).toBe(`export const OrderSchema = {
   type: 'object' as const,
   properties: {
-    /** Order ID */
+    /**
+     * Order ID
+     */
     id: { type: 'string' as const, format: 'uuid' as const },
-    /** Total amount in cents */
+    /**
+     * Total amount in cents
+     */
     totalAmount: { type: 'integer' as const },
-    /** Customer note */
+    /**
+     * Customer note
+     */
     note: { type: 'string' as const },
   },
   required: ['id', 'totalAmount'] as const,

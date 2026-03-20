@@ -1,70 +1,170 @@
 import { type } from 'arktype'
 
 export const UserSchema = type({
-  /** User ID */
+  /**
+
+   * User ID
+
+   */
   id: 'string.uuid',
-  /** Email address */
+  /**
+
+   * Email address
+
+   */
   email: 'string.email',
-  /** Hashed password */
+  /**
+
+   * Hashed password
+
+   */
   passwordHash: 'string >= 8',
-  /** Display name */
+  /**
+
+   * Display name
+
+   */
   name: '1 <= string <= 100',
-  /** User role */
+  /**
+
+   * User role
+
+   */
   role: "'ADMIN' | 'USER'",
-  /** Account active status */
+  /**
+
+   * Account active status
+
+   */
   isActive: 'boolean',
-  /** Account creation timestamp */
+  /**
+
+   * Account creation timestamp
+
+   */
   createdAt: 'Date',
-  /** Last update timestamp */
+  /**
+
+   * Last update timestamp
+
+   */
   updatedAt: 'Date',
 })
 
 export type User = typeof UserSchema.infer
 
 export const SessionSchema = type({
-  /** Session ID */
+  /**
+
+   * Session ID
+
+   */
   id: 'string.uuid',
-  /** Session token */
+  /**
+
+   * Session token
+
+   */
   token: 'string',
-  /** User ID */
+  /**
+
+   * User ID
+
+   */
   userId: 'string.uuid',
-  /** Session expiration */
+  /**
+
+   * Session expiration
+
+   */
   expiresAt: 'Date',
-  /** Client IP address */
+  /**
+
+   * Client IP address
+
+   */
   ipAddress: 'string | null',
-  /** Client user agent */
+  /**
+
+   * Client user agent
+
+   */
   userAgent: 'string | null',
-  /** Session creation timestamp */
+  /**
+
+   * Session creation timestamp
+
+   */
   createdAt: 'Date',
 })
 
 export type Session = typeof SessionSchema.infer
 
 export const LoginHistorySchema = type({
-  /** Login history ID */
+  /**
+
+   * Login history ID
+
+   */
   id: 'string.uuid',
-  /** User ID */
+  /**
+
+   * User ID
+
+   */
   userId: 'string.uuid',
-  /** Client IP address */
+  /**
+
+   * Client IP address
+
+   */
   ipAddress: 'string',
-  /** Client user agent */
+  /**
+
+   * Client user agent
+
+   */
   userAgent: 'string | null',
-  /** Login success status */
+  /**
+
+   * Login success status
+
+   */
   success: 'boolean',
-  /** Login timestamp */
+  /**
+
+   * Login timestamp
+
+   */
   createdAt: 'Date',
 })
 
 export type LoginHistory = typeof LoginHistorySchema.infer
 
 export const PasswordHistorySchema = type({
-  /** Password history ID */
+  /**
+
+   * Password history ID
+
+   */
   id: 'string.uuid',
-  /** User ID */
+  /**
+
+   * User ID
+
+   */
   userId: 'string.uuid',
-  /** Hashed password */
+  /**
+
+   * Hashed password
+
+   */
   passwordHash: 'string',
-  /** Change timestamp */
+  /**
+
+   * Change timestamp
+
+   */
   createdAt: 'Date',
 })
 

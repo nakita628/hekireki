@@ -3,29 +3,53 @@ import type { FromSchema } from 'json-schema-to-ts'
 export const UserSchema = {
   type: 'object' as const,
   properties: {
-    /** User ID */
+    /**
+     * User ID
+     */
     id: { type: 'string' as const },
-    /** Email address */
+    /**
+     * Email address
+     */
     email: { type: 'string' as const },
-    /** Hashed password (null for OAuth-only users) */
+    /**
+     * Hashed password (null for OAuth-only users)
+     */
     passwordHash: { type: 'string' as const },
-    /** Display name */
+    /**
+     * Display name
+     */
     name: { type: 'string' as const },
-    /** Profile image URL */
+    /**
+     * Profile image URL
+     */
     avatarUrl: { type: 'string' as const },
-    /** User role */
+    /**
+     * User role
+     */
     role: { enum: ['ADMIN', 'USER', 'GUEST'] as const },
-    /** Credit balance */
+    /**
+     * Credit balance
+     */
     creditBalance: { type: 'number' as const },
-    /** Email verification status */
+    /**
+     * Email verification status
+     */
     emailVerified: { type: 'boolean' as const },
-    /** Account active status */
+    /**
+     * Account active status
+     */
     isActive: { type: 'boolean' as const },
-    /** Account creation timestamp */
+    /**
+     * Account creation timestamp
+     */
     createdAt: { type: 'string' as const, format: 'date-time' as const },
-    /** Last update timestamp */
+    /**
+     * Last update timestamp
+     */
     updatedAt: { type: 'string' as const, format: 'date-time' as const },
-    /** Last login timestamp */
+    /**
+     * Last login timestamp
+     */
     lastLoginAt: { type: 'string' as const, format: 'date-time' as const },
   },
   required: [
@@ -47,21 +71,37 @@ export type User = FromSchema<typeof UserSchema>
 export const OAuthAccountSchema = {
   type: 'object' as const,
   properties: {
-    /** OAuth account ID */
+    /**
+     * OAuth account ID
+     */
     id: { type: 'string' as const },
-    /** User ID */
+    /**
+     * User ID
+     */
     userId: { type: 'string' as const },
-    /** OAuth provider */
+    /**
+     * OAuth provider
+     */
     provider: { enum: ['GOOGLE', 'GITHUB', 'FACEBOOK', 'TWITTER', 'APPLE'] as const },
-    /** Provider account ID */
+    /**
+     * Provider account ID
+     */
     providerAccountId: { type: 'string' as const },
-    /** Access token from provider */
+    /**
+     * Access token from provider
+     */
     accessToken: { type: 'string' as const },
-    /** Refresh token from provider */
+    /**
+     * Refresh token from provider
+     */
     refreshToken: { type: 'string' as const },
-    /** Token expiration timestamp */
+    /**
+     * Token expiration timestamp
+     */
     expiresAt: { type: 'string' as const, format: 'date-time' as const },
-    /** Account creation timestamp */
+    /**
+     * Account creation timestamp
+     */
     createdAt: { type: 'string' as const, format: 'date-time' as const },
   },
   required: ['id', 'userId', 'provider', 'providerAccountId', 'createdAt'] as const,
@@ -73,25 +113,45 @@ export type OAuthAccount = FromSchema<typeof OAuthAccountSchema>
 export const TwoFactorSettingSchema = {
   type: 'object' as const,
   properties: {
-    /** 2FA setting ID */
+    /**
+     * 2FA setting ID
+     */
     id: { type: 'string' as const },
-    /** User ID */
+    /**
+     * User ID
+     */
     userId: { type: 'string' as const },
-    /** 2FA enabled status */
+    /**
+     * 2FA enabled status
+     */
     enabled: { type: 'boolean' as const },
-    /** 2FA method */
+    /**
+     * 2FA method
+     */
     method: { enum: ['TOTP', 'SMS', 'EMAIL'] as const },
-    /** TOTP secret (encrypted) */
+    /**
+     * TOTP secret (encrypted)
+     */
     totpSecret: { type: 'string' as const },
-    /** Phone number for SMS (E.164 format) */
+    /**
+     * Phone number for SMS (E.164 format)
+     */
     phoneNumber: { type: 'string' as const },
-    /** Backup codes (hashed, JSON array) */
+    /**
+     * Backup codes (hashed, JSON array)
+     */
     backupCodes: { type: 'string' as const },
-    /** Last verified timestamp */
+    /**
+     * Last verified timestamp
+     */
     verifiedAt: { type: 'string' as const, format: 'date-time' as const },
-    /** Creation timestamp */
+    /**
+     * Creation timestamp
+     */
     createdAt: { type: 'string' as const, format: 'date-time' as const },
-    /** Last update timestamp */
+    /**
+     * Last update timestamp
+     */
     updatedAt: { type: 'string' as const, format: 'date-time' as const },
   },
   required: ['id', 'userId', 'enabled', 'createdAt', 'updatedAt'] as const,
@@ -103,21 +163,37 @@ export type TwoFactorSetting = FromSchema<typeof TwoFactorSettingSchema>
 export const RefreshTokenSchema = {
   type: 'object' as const,
   properties: {
-    /** Refresh token ID */
+    /**
+     * Refresh token ID
+     */
     id: { type: 'string' as const },
-    /** User ID */
+    /**
+     * User ID
+     */
     userId: { type: 'string' as const },
-    /** Token hash (SHA-256) */
+    /**
+     * Token hash (SHA-256)
+     */
     tokenHash: { type: 'string' as const },
-    /** Device/client identifier */
+    /**
+     * Device/client identifier
+     */
     deviceInfo: { type: 'string' as const },
-    /** IP address at creation */
+    /**
+     * IP address at creation
+     */
     ipAddress: { type: 'string' as const },
-    /** Token expiration timestamp */
+    /**
+     * Token expiration timestamp
+     */
     expiresAt: { type: 'string' as const, format: 'date-time' as const },
-    /** Token creation timestamp */
+    /**
+     * Token creation timestamp
+     */
     createdAt: { type: 'string' as const, format: 'date-time' as const },
-    /** Revocation status */
+    /**
+     * Revocation status
+     */
     revoked: { type: 'boolean' as const },
   },
   required: ['id', 'userId', 'tokenHash', 'expiresAt', 'createdAt', 'revoked'] as const,
@@ -129,15 +205,25 @@ export type RefreshToken = FromSchema<typeof RefreshTokenSchema>
 export const EmailVerificationSchema = {
   type: 'object' as const,
   properties: {
-    /** Verification ID */
+    /**
+     * Verification ID
+     */
     id: { type: 'string' as const },
-    /** User ID */
+    /**
+     * User ID
+     */
     userId: { type: 'string' as const },
-    /** Verification token (hashed) */
+    /**
+     * Verification token (hashed)
+     */
     tokenHash: { type: 'string' as const },
-    /** Token expiration timestamp */
+    /**
+     * Token expiration timestamp
+     */
     expiresAt: { type: 'string' as const, format: 'date-time' as const },
-    /** Creation timestamp */
+    /**
+     * Creation timestamp
+     */
     createdAt: { type: 'string' as const, format: 'date-time' as const },
   },
   required: ['id', 'userId', 'tokenHash', 'expiresAt', 'createdAt'] as const,
@@ -149,17 +235,29 @@ export type EmailVerification = FromSchema<typeof EmailVerificationSchema>
 export const PasswordResetSchema = {
   type: 'object' as const,
   properties: {
-    /** Reset ID */
+    /**
+     * Reset ID
+     */
     id: { type: 'string' as const },
-    /** User ID */
+    /**
+     * User ID
+     */
     userId: { type: 'string' as const },
-    /** Reset token (hashed) */
+    /**
+     * Reset token (hashed)
+     */
     tokenHash: { type: 'string' as const },
-    /** Token expiration timestamp */
+    /**
+     * Token expiration timestamp
+     */
     expiresAt: { type: 'string' as const, format: 'date-time' as const },
-    /** Used status */
+    /**
+     * Used status
+     */
     used: { type: 'boolean' as const },
-    /** Creation timestamp */
+    /**
+     * Creation timestamp
+     */
     createdAt: { type: 'string' as const, format: 'date-time' as const },
   },
   required: ['id', 'userId', 'tokenHash', 'expiresAt', 'used', 'createdAt'] as const,

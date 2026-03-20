@@ -1,4 +1,5 @@
 import {
+  makeCommentBlock,
   makeValidationExtractor,
   parseDocumentWithoutAnnotations,
   schemaFromFields,
@@ -35,11 +36,8 @@ export function makeEffectProperties(
 ): string {
   return fields
     .map((field) => {
-      const commentLines =
-        comment && field.comment.length > 0
-          ? `  /**\n${field.comment.map((c) => `   * ${c}`).join('\n')}\n   */\n`
-          : ''
-      return `${commentLines}  ${field.fieldName}: ${field.validation ?? 'Schema.Unknown'},`
+      const commentBlock = comment ? makeCommentBlock(field.comment, 2) : ''
+      return `${commentBlock}  ${field.fieldName}: ${field.validation ?? 'Schema.Unknown'},`
     })
     .join('\n')
 }

@@ -12,6 +12,10 @@ import { getBool } from '../../utils/index.js'
 
 const { generatorHandler } = pkg
 
+/**
+ * Prisma generator entry point for AJV JSON Schema generation
+ * @param options - The Prisma generator options
+ */
 export async function main(options: GeneratorOptions): Promise<void> {
   if (!(options.generator.isCustomOutput && options.generator.output?.value)) {
     throw new Error(

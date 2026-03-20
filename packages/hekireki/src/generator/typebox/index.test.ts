@@ -128,20 +128,32 @@ model Post {
     const expected = `import { Type } from '@sinclair/typebox'
 
 export const UserSchema = Type.Object({
-  /** Primary key */
+  /**
+   * Primary key
+   */
   id: Type.String({ format: 'uuid' }),
-  /** Display name */
+  /**
+   * Display name
+   */
   name: Type.String({ minLength: 1, maxLength: 50 }),
 })
 
 export const PostSchema = Type.Object({
-  /** Primary key */
+  /**
+   * Primary key
+   */
   id: Type.String({ format: 'uuid' }),
-  /** Article title */
+  /**
+   * Article title
+   */
   title: Type.String({ minLength: 1, maxLength: 100 }),
-  /** Body content */
+  /**
+   * Body content
+   */
   content: Type.String(),
-  /** Foreign key */
+  /**
+   * Foreign key
+   */
   userId: Type.String({ format: 'uuid' }),
 })
 `
@@ -260,22 +272,34 @@ model Post {
     const expected = `import { type Static, Type } from '@sinclair/typebox'
 
 export const UserSchema = Type.Object({
-  /** Primary key */
+  /**
+   * Primary key
+   */
   id: Type.String({ format: 'uuid' }),
-  /** Display name */
+  /**
+   * Display name
+   */
   name: Type.String({ minLength: 1, maxLength: 50 }),
 })
 
 export type User = Static<typeof UserSchema>
 
 export const PostSchema = Type.Object({
-  /** Primary key */
+  /**
+   * Primary key
+   */
   id: Type.String({ format: 'uuid' }),
-  /** Article title */
+  /**
+   * Article title
+   */
   title: Type.String({ minLength: 1, maxLength: 100 }),
-  /** Body content */
+  /**
+   * Body content
+   */
   content: Type.String(),
-  /** Foreign key */
+  /**
+   * Foreign key
+   */
   userId: Type.String({ format: 'uuid' }),
 })
 
