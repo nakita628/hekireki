@@ -385,4 +385,143 @@ describe('helper/typebox', () => {
       expect(PRISMA_TO_TYPEBOX.Bytes).toBe('Type.Any()')
     })
   })
+
+  // ============================================================================
+  // Edge case tests
+  // ============================================================================
+
+  describe('edge cases', () => {
+    it('generates schema with all optional fields', () => {
+      const result = makeTypeBoxSchemas(
+        [
+          {
+            documentation: '',
+            modelName: 'Session',
+            fieldName: 'token',
+            comment: [],
+            validation: 'Type.String()',
+            isRequired: false,
+          },
+          {
+            documentation: '',
+            modelName: 'Session',
+            fieldName: 'expiresAt',
+            comment: [],
+            validation: 'Type.Date()',
+            isRequired: false,
+          },
+        ],
+        false,
+      )
+      expect(result).toBe(`export const SessionSchema = Type.Object({
+  token: Type.Optional(Type.String()),
+  expiresAt: Type.Optional(Type.Date()),
+})`)
+    })
+
+    it('generates schema with multi-line comments', () => {
+      const result = makeTypeBoxProperties(
+        [
+          {
+            documentation: '',
+            modelName: 'Payment',
+            fieldName: 'amount',
+            comment: ['Total amount in cents', 'Integer to avoid floating point issues'],
+            validation: 'Type.Integer()',
+            isRequired: true,
+          },
+        ],
+        true,
+      )
+      expect(result).toBe(`  /**
+   * Total amount in cents
+   * Integer to avoid floating point issues
+   */
+  amount: Type.Integer(),`)
+    })
+
+    it('generates schema with empty comment array when comment is true', () => {
+      const result = makeTypeBoxProperties(
+        [
+          {
+            documentation: '',
+            modelName: 'Token',
+            fieldName: 'value',
+            comment: [],
+            validation: 'Type.String()',
+            isRequired: true,
+          },
+        ],
+        true,
+      )
+      expect(result).toBe('  value: Type.String(),')
+    })
+
+    it('handles multiple models in a single typebox() call', () => {
+      const models = [
+        {
+          name: 'User',
+          fields: [
+            { name: 'id', type: 'String', kind: 'scalar', isRequired: true, isList: false },
+          ],
+        },
+        {
+          name: 'Post',
+          fields: [
+            { name: 'id', type: 'String', kind: 'scalar', isRequired: true, isList: false },
+            { name: 'title', type: 'String', kind: 'scalar', isRequired: true, isList: false },
+          ],
+        },
+      ]
+      const result = typebox(models, false, false)
+      expect(result).toContain('export const UserSchema')
+      expect(result).toContain('export const PostSchema')
+    })
+
+    it('relation returns null for empty relations', () => {
+      expect(makeTypeBoxRelations({ name: 'Orphan' }, [])).toBeNull()
+    })
+
+    it('relation without includeType omits type export', () => {
+      const result = makeTypeBoxRelations(
+        { name: 'User' },
+        [{ key: 'posts', targetModel: 'Post', isMany: true }],
+      )
+      expect(result).not.toContain('export type')
+      expect(result).toContain('export const UserRelationsSchema')
+    })
+  })
+
+  // ============================================================================
+  // Session auth pattern
+  // ============================================================================
+
+  describe('Session auth pattern', () => {
+    it('generates Session schema with mixed required/optional and Date', () => {
+      const models = [
+        {
+          name: 'Session',
+          fields: [
+            { name: 'id', type: 'String', kind: 'scalar', isRequired: true, isList: false },
+            { name: 'userId', type: 'String', kind: 'scalar', isRequired: true, isList: false },
+            { name: 'token', type: 'String', kind: 'scalar', isRequired: true, isList: false },
+            { name: 'expiresAt', type: 'DateTime', kind: 'scalar', isRequired: true, isList: false },
+            { name: 'ipAddress', type: 'String', kind: 'scalar', isRequired: false, isList: false },
+          ],
+        },
+      ]
+      const result = typebox(models, true, false)
+      expect(result).toBe(`import { type Static, Type } from '@sinclair/typebox'
+
+export const SessionSchema = Type.Object({
+  id: Type.String(),
+  userId: Type.String(),
+  token: Type.String(),
+  expiresAt: Type.Date(),
+  ipAddress: Type.Optional(Type.String()),
+})
+
+export type Session = Static<typeof SessionSchema>`)
+    })
+  })
 })
