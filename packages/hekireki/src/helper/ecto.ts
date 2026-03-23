@@ -234,7 +234,7 @@ function getAssociations(
 
 export function ectoSchemas(
   models: readonly DMMF.Model[],
-  app: string | readonly string[],
+  app: string | string[],
   allModels?: readonly DMMF.Model[],
   enums?: readonly DMMF.DatamodelEnum[],
 ): string {
@@ -426,7 +426,7 @@ export function ectoSchemas(
 
 export async function writeEctoSchemasToFiles(
   models: readonly DMMF.Model[],
-  app: string | readonly string[],
+  app: string | string[],
   outDir: string,
   enums?: readonly DMMF.DatamodelEnum[],
 ): Promise<void> {
