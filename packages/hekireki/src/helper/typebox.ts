@@ -28,8 +28,12 @@ export function makeTypeBoxInfer(
 export function makeTypeBoxSchema(
   modelName: string,
   fields: string,
-): `export const ${string}Schema = Type.Object({\n${string}\n})` {
-  return `export const ${modelName}Schema = Type.Object({\n${fields}\n})`
+  objectType?: 'strict' | 'loose',
+): string {
+  const obj = `Type.Object({\n${fields}\n})`
+  return objectType === 'strict'
+    ? `export const ${modelName}Schema = Type.Strict(${obj})`
+    : `export const ${modelName}Schema = ${obj}`
 }
 
 /**
@@ -94,8 +98,15 @@ export function makeTypeBoxSchemas(
     readonly comment: readonly string[]
   }[],
   comment: boolean,
+  objectType?: 'strict' | 'loose',
 ): string {
-  return schemaFromFields(modelFields, comment, makeTypeBoxSchema, makeTypeBoxProperties)
+  return schemaFromFields(
+    modelFields,
+    comment,
+    makeTypeBoxSchema,
+    makeTypeBoxProperties,
+    objectType,
+  )
 }
 
 /**

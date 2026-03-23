@@ -234,11 +234,11 @@ function getAssociations(
 
 export function ectoSchemas(
   models: readonly DMMF.Model[],
-  app: string | string[],
+  app: string | readonly string[],
   allModels?: readonly DMMF.Model[],
   enums?: readonly DMMF.DatamodelEnum[],
 ): string {
-  const appName = Array.isArray(app) ? app.join('.') : app
+  const appName: string = Array.isArray(app) ? app.join('.') : app
   const contextModels = allModels ?? models
   return models
     .map((model) => {
@@ -426,7 +426,7 @@ export function ectoSchemas(
 
 export async function writeEctoSchemasToFiles(
   models: readonly DMMF.Model[],
-  app: string | string[],
+  app: string | readonly string[],
   outDir: string,
   enums?: readonly DMMF.DatamodelEnum[],
 ): Promise<void> {

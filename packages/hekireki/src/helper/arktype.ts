@@ -28,8 +28,15 @@ export function makeArktypeInfer(
 export function makeArktypeSchema(
   modelName: string,
   fields: string,
-): `export const ${string}Schema = type({\n${string}\n})` {
-  return `export const ${modelName}Schema = type({\n${fields}\n})`
+  objectType?: 'strict' | 'loose',
+): string {
+  const undeclared =
+    objectType === 'strict'
+      ? '\n  "+": "reject",\n'
+      : objectType === 'loose'
+        ? '\n  "+": "ignore",\n'
+        : '\n'
+  return `export const ${modelName}Schema = type({${undeclared}${fields}\n})`
 }
 
 /**
@@ -92,8 +99,15 @@ export function makeArktypeSchemas(
     readonly comment: readonly string[]
   }[],
   comment: boolean,
+  objectType?: 'strict' | 'loose',
 ): string {
-  return schemaFromFields(modelFields, comment, makeArktypeSchema, makeArktypeProperties)
+  return schemaFromFields(
+    modelFields,
+    comment,
+    makeArktypeSchema,
+    makeArktypeProperties,
+    objectType,
+  )
 }
 
 /**

@@ -19,8 +19,11 @@ export function makeValibotInfer(
 export function makeValibotSchema(
   modelName: string,
   fields: string,
-): `export const ${string}Schema = v.object({\n${string}\n})` {
-  return `export const ${modelName}Schema = v.object({\n${fields}\n})`
+  objectType?: 'strict' | 'loose',
+): string {
+  const wrapper =
+    objectType === 'strict' ? 'strictObject' : objectType === 'loose' ? 'looseObject' : 'object'
+  return `export const ${modelName}Schema = v.${wrapper}({\n${fields}\n})`
 }
 
 export function makeValibotEnumExpression(values: readonly string[]): `picklist([${string}])` {
@@ -49,6 +52,7 @@ export function makeValibotSchemas(
     readonly comment: readonly string[]
   }[],
   comment: boolean,
+  objectType?: 'strict' | 'loose',
 ): string {
   return schemaFromFields(
     modelFields,
@@ -57,6 +61,7 @@ export function makeValibotSchemas(
     makePropertiesGenerator('v', (expr, isRequired) =>
       isRequired ? expr : `v.exactOptional(${expr})`,
     ),
+    objectType,
   )
 }
 

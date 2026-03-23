@@ -189,6 +189,27 @@ export function isFields(
   )
 }
 
+/**
+ * Extract object type (strict/loose) from model documentation.
+ */
+export function extractObjectType(
+  documentation: string | undefined,
+  prefix: `@${string}.`,
+): 'strict' | 'loose' | undefined {
+  if (!documentation) return undefined
+  const lines = documentation.split('\n').map((l) => l.trim())
+  const prefixWithoutAt = prefix.slice(1)
+  const match = lines.find(
+    (line) =>
+      line.includes(`${prefixWithoutAt}strictObject`) ||
+      line.includes(`${prefixWithoutAt}looseObject`),
+  )
+  if (!match) return undefined
+  if (match.includes('strictObject')) return 'strict'
+  if (match.includes('looseObject')) return 'loose'
+  return undefined
+}
+
 export function schemaFromFields(
   modelFields: readonly {
     readonly documentation: string
@@ -199,7 +220,7 @@ export function schemaFromFields(
     readonly comment: readonly string[]
   }[],
   comment: boolean,
-  schemaBuilder: (modelName: string, fields: string) => string,
+  schemaBuilder: (modelName: string, fields: string, objectType?: 'strict' | 'loose') => string,
   propertiesGenerator: (
     fields: readonly {
       readonly documentation: string
@@ -211,8 +232,9 @@ export function schemaFromFields(
     }[],
     comment: boolean,
   ) => string,
+  objectType?: 'strict' | 'loose',
 ): string {
   const modelName = modelFields[0].modelName
   const fields = propertiesGenerator(modelFields, comment)
-  return schemaBuilder(modelName, fields)
+  return schemaBuilder(modelName, fields, objectType)
 }

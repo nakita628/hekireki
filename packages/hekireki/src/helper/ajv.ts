@@ -55,7 +55,8 @@ export function makeAjvSchemas(
     readonly comment: readonly string[]
   }[],
   comment: boolean,
-): `export const ${string}Schema = {\n${string}\n} as const` {
+  objectType?: 'strict' | 'loose',
+): string {
   const modelName = modelFields[0].modelName
   const properties = modelFields
     .map((field) => {
@@ -68,7 +69,8 @@ export function makeAjvSchemas(
     requiredFields.length > 0
       ? `\n  required: [${requiredFields.map((f) => `'${f}'`).join(', ')}] as const,`
       : ''
-  return `export const ${modelName}Schema = {\n  type: 'object' as const,\n  properties: {\n${properties}\n  },${requiredLine}\n  additionalProperties: false,\n} as const`
+  const additionalProps = objectType === 'loose' ? 'true' : 'false'
+  return `export const ${modelName}Schema = {\n  type: 'object' as const,\n  properties: {\n${properties}\n  },${requiredLine}\n  additionalProperties: ${additionalProps},\n} as const`
 }
 
 /**

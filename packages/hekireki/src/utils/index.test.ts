@@ -553,3 +553,51 @@ describe('utils', () => {
     })
   })
 })
+
+// ============================================================================
+// extractObjectType
+// ============================================================================
+
+import { extractObjectType } from './index.js'
+
+describe('extractObjectType', () => {
+  it('returns strict for @z.strictObject', () => {
+    expect(extractObjectType('@z.strictObject', '@z.')).toBe('strict')
+  })
+
+  it('returns loose for @z.looseObject', () => {
+    expect(extractObjectType('@z.looseObject', '@z.')).toBe('loose')
+  })
+
+  it('returns undefined for no annotation', () => {
+    expect(extractObjectType('Some description', '@z.')).toBe(undefined)
+  })
+
+  it('returns undefined for undefined documentation', () => {
+    expect(extractObjectType(undefined, '@z.')).toBe(undefined)
+  })
+
+  it('returns strict for @v.strictObject', () => {
+    expect(extractObjectType('@v.strictObject', '@v.')).toBe('strict')
+  })
+
+  it('returns loose for @v.looseObject', () => {
+    expect(extractObjectType('@v.looseObject', '@v.')).toBe('loose')
+  })
+
+  it('returns strict for @a.strictObject', () => {
+    expect(extractObjectType('@a.strictObject', '@a.')).toBe('strict')
+  })
+
+  it('returns strict for @t.strictObject', () => {
+    expect(extractObjectType('@t.strictObject', '@t.')).toBe('strict')
+  })
+
+  it('returns strict from multiline documentation', () => {
+    expect(extractObjectType('User model\n@z.strictObject\nSome note', '@z.')).toBe('strict')
+  })
+
+  it('ignores other prefixes', () => {
+    expect(extractObjectType('@v.strictObject', '@z.')).toBe(undefined)
+  })
+})
