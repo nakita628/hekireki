@@ -527,4 +527,24 @@ export const SessionSchema = Type.Object({
 export type Session = Static<typeof SessionSchema>`)
     })
   })
+
+  describe('makeTypeBoxSchema strict/loose', () => {
+    it('generates Type.Strict(Type.Object({})) for strict', () => {
+      expect(makeTypeBoxSchema('User', '  id: Type.String()', 'strict')).toBe(
+        `export const UserSchema = Type.Strict(Type.Object({\n  id: Type.String()\n}))`,
+      )
+    })
+
+    it('generates Type.Object({}) for default', () => {
+      expect(makeTypeBoxSchema('User', '  id: Type.String()')).toBe(
+        `export const UserSchema = Type.Object({\n  id: Type.String()\n})`,
+      )
+    })
+
+    it('generates Type.Object({}) for loose (no change)', () => {
+      expect(makeTypeBoxSchema('User', '  id: Type.String()', 'loose')).toBe(
+        `export const UserSchema = Type.Object({\n  id: Type.String()\n})`,
+      )
+    })
+  })
 })

@@ -393,4 +393,24 @@ describe('helper/zod', () => {
 })`)
     })
   })
+
+  describe('makeZodSchema strict/loose', () => {
+    it('generates z.strictObject', () => {
+      expect(makeZodSchema('User', '  id: z.string()', 'strict')).toBe(
+        `export const UserSchema = z.strictObject({\n  id: z.string()\n})`,
+      )
+    })
+
+    it('generates z.looseObject', () => {
+      expect(makeZodSchema('User', '  id: z.string()', 'loose')).toBe(
+        `export const UserSchema = z.looseObject({\n  id: z.string()\n})`,
+      )
+    })
+
+    it('generates z.object by default', () => {
+      expect(makeZodSchema('User', '  id: z.string()')).toBe(
+        `export const UserSchema = z.object({\n  id: z.string()\n})`,
+      )
+    })
+  })
 })

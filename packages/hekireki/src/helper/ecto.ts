@@ -238,7 +238,7 @@ export function ectoSchemas(
   allModels?: readonly DMMF.Model[],
   enums?: readonly DMMF.DatamodelEnum[],
 ): string {
-  const appName = Array.isArray(app) ? app.join('.') : app
+  const appName: string = Array.isArray(app) ? app.join('.') : app
   const contextModels = allModels ?? models
   return models
     .map((model) => {

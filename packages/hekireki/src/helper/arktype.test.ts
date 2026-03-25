@@ -481,4 +481,24 @@ export const SessionSchema = type({
 export type Session = typeof SessionSchema.infer`)
     })
   })
+
+  describe('makeArktypeSchema strict/loose', () => {
+    it('generates type with "+": "reject" for strict', () => {
+      expect(makeArktypeSchema('User', '  id: "string"', 'strict')).toBe(
+        `export const UserSchema = type({\n  "+": "reject",\n  id: "string"\n})`,
+      )
+    })
+
+    it('generates type with "+": "ignore" for loose', () => {
+      expect(makeArktypeSchema('User', '  id: "string"', 'loose')).toBe(
+        `export const UserSchema = type({\n  "+": "ignore",\n  id: "string"\n})`,
+      )
+    })
+
+    it('generates type without "+" for default', () => {
+      expect(makeArktypeSchema('User', '  id: "string"')).toBe(
+        `export const UserSchema = type({\n  id: "string"\n})`,
+      )
+    })
+  })
 })

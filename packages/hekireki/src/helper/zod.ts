@@ -19,8 +19,11 @@ export function makeZodInfer(
 export function makeZodSchema(
   modelName: string,
   fields: string,
-): `export const ${string}Schema = z.object({\n${string}\n})` {
-  return `export const ${modelName}Schema = z.object({\n${fields}\n})`
+  objectType?: 'strict' | 'loose',
+): string {
+  const wrapper =
+    objectType === 'strict' ? 'strictObject' : objectType === 'loose' ? 'looseObject' : 'object'
+  return `export const ${modelName}Schema = z.${wrapper}({\n${fields}\n})`
 }
 
 export function makeZodEnumExpression(values: readonly string[]): `enum([${string}])` {
@@ -49,6 +52,7 @@ export function makeZodSchemas(
     readonly comment: readonly string[]
   }[],
   comment: boolean,
+  objectType?: 'strict' | 'loose',
 ): string {
   return schemaFromFields(
     modelFields,
@@ -57,6 +61,7 @@ export function makeZodSchemas(
     makePropertiesGenerator('z', (expr, isRequired) =>
       isRequired ? expr : `${expr}.exactOptional()`,
     ),
+    objectType,
   )
 }
 

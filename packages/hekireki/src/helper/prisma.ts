@@ -1,4 +1,4 @@
-import { groupByModel, isFields } from '../utils/index.js'
+import { extractObjectType, groupByModel, isFields } from '../utils/index.js'
 
 export function collectRelationProps(
   models: readonly {
@@ -110,8 +110,9 @@ export function validationSchemas(
         readonly comment: readonly string[]
       }[],
       comment: boolean,
+      objectType?: 'strict' | 'loose',
     ) => string
-    readonly typeMapping?: { [k: string]: string }
+    readonly typeMapping?: { readonly [k: string]: string }
     readonly enums?: readonly {
       readonly name: string
       readonly values: readonly { readonly name: string }[]
@@ -177,10 +178,13 @@ export function validationSchemas(
     }
   }
 
-  const schemaResults = Object.values(groupByModel(isFields(modelFields))).map((fields) => ({
-    schema: config.schemas(fields, comment),
-    inferType: type ? config.inferType(fields[0].modelName) : '',
-  }))
+  const schemaResults = Object.values(groupByModel(isFields(modelFields))).map((fields) => {
+    const objectType = extractObjectType(fields[0].documentation, config.annotationPrefix)
+    return {
+      schema: config.schemas(fields, comment, objectType),
+      inferType: type ? config.inferType(fields[0].modelName) : '',
+    }
+  })
 
   const schemas = schemaResults
     .flatMap(({ schema, inferType }) => [schema, inferType].filter(Boolean))

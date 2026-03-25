@@ -379,4 +379,24 @@ describe('helper/valibot', () => {
 })`)
     })
   })
+
+  describe('makeValibotSchema strict/loose', () => {
+    it('generates v.strictObject', () => {
+      expect(makeValibotSchema('User', '  id: v.string()', 'strict')).toBe(
+        `export const UserSchema = v.strictObject({\n  id: v.string()\n})`,
+      )
+    })
+
+    it('generates v.looseObject', () => {
+      expect(makeValibotSchema('User', '  id: v.string()', 'loose')).toBe(
+        `export const UserSchema = v.looseObject({\n  id: v.string()\n})`,
+      )
+    })
+
+    it('generates v.object by default', () => {
+      expect(makeValibotSchema('User', '  id: v.string()')).toBe(
+        `export const UserSchema = v.object({\n  id: v.string()\n})`,
+      )
+    })
+  })
 })
