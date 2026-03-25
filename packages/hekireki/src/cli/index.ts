@@ -13,7 +13,7 @@ import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
 import { Hono } from 'hono'
 
-const HELP_TEXT = `⚡️ hekireki - Prisma schema tools
+export const HELP_TEXT = `⚡️ hekireki - Prisma schema tools
 
 Usage:
   hekireki <command> [options]
@@ -29,7 +29,7 @@ Examples:
   hekireki docs serve
   hekireki docs serve -p 3000`
 
-const DOCS_HELP_TEXT = `⚡️ hekireki docs - Documentation tools
+export const DOCS_HELP_TEXT = `⚡️ hekireki docs - Documentation tools
 
 Usage:
   hekireki docs serve [options]
@@ -45,18 +45,14 @@ Examples:
   hekireki docs serve
   hekireki docs serve -p 3000`
 
-type DocsServeOptions = {
-  readonly port: number
-}
-
-type Result<T> =
-  | { readonly ok: true; readonly value: T }
-  | { readonly ok: false; readonly error: string }
-
 /**
  * Parse port from CLI arguments.
  */
-const parsePort = (args: readonly string[]): Result<number> => {
+export const parsePort = (
+  args: readonly string[],
+):
+  | { readonly ok: true; readonly value: number }
+  | { readonly ok: false; readonly error: string } => {
   const portIndex = args.findIndex((arg) => arg === '-p' || arg === '--port')
 
   if (portIndex === -1) {
@@ -81,7 +77,11 @@ const parsePort = (args: readonly string[]): Result<number> => {
 /**
  * Parse CLI arguments for docs serve command.
  */
-const parseDocsServeArgs = (args: readonly string[]): Result<DocsServeOptions> => {
+export const parseDocsServeArgs = (
+  args: readonly string[],
+):
+  | { readonly ok: true; readonly value: { readonly port: number } }
+  | { readonly ok: false; readonly error: string } => {
   const portResult = parsePort(args)
 
   if (!portResult.ok) {
@@ -94,7 +94,11 @@ const parseDocsServeArgs = (args: readonly string[]): Result<DocsServeOptions> =
 /**
  * Start the documentation server.
  */
-const startDocsServer = (options: DocsServeOptions): Result<string> => {
+const startDocsServer = (options: {
+  readonly port: number
+}):
+  | { readonly ok: true; readonly value: string }
+  | { readonly ok: false; readonly error: string } => {
   const docsPath = './docs'
   const absolutePath = path.resolve(docsPath)
 
@@ -147,7 +151,11 @@ const startDocsServer = (options: DocsServeOptions): Result<string> => {
 /**
  * Handle docs subcommand.
  */
-const handleDocs = (args: readonly string[]): Result<string> => {
+export const handleDocs = (
+  args: readonly string[],
+):
+  | { readonly ok: true; readonly value: string }
+  | { readonly ok: false; readonly error: string } => {
   const subcommand = args[0]
 
   if (!subcommand || subcommand === '-h' || subcommand === '--help') {
@@ -170,15 +178,24 @@ const handleDocs = (args: readonly string[]): Result<string> => {
 /**
  * Command handlers map.
  */
-const commands: { [k: string]: (args: readonly string[]) => Result<string> } = {
+const commands: {
+  [k: string]: (
+    args: readonly string[],
+  ) =>
+    | { readonly ok: true; readonly value: string }
+    | { readonly ok: false; readonly error: string }
+} = {
   docs: handleDocs,
 }
 
 /**
- * Main CLI entry point for hekireki.
+ * Main CLI dispatcher (pure — takes args, returns Result).
  */
-export const hekireki = (): Result<string> => {
-  const args = process.argv.slice(2)
+export const hekirekiCli = (
+  args: readonly string[],
+):
+  | { readonly ok: true; readonly value: string }
+  | { readonly ok: false; readonly error: string } => {
   const command = args[0]
 
   if (!command || command === '-h' || command === '--help') {
@@ -192,6 +209,15 @@ export const hekireki = (): Result<string> => {
   }
 
   return handler(args.slice(1))
+}
+
+/**
+ * Main CLI entry point for hekireki (reads process.argv).
+ */
+export const hekireki = ():
+  | { readonly ok: true; readonly value: string }
+  | { readonly ok: false; readonly error: string } => {
+  return hekirekiCli(process.argv.slice(2))
 }
 
 // Execute CLI
