@@ -2,7 +2,7 @@ import { exec } from 'node:child_process'
 import fs from 'node:fs'
 import { promisify } from 'node:util'
 
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
 
 // Test run
 // pnpm vitest run ./src/generator/typebox/index.test.ts
