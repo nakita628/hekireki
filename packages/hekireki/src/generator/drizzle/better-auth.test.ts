@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { promisify } from 'node:util'
 
-import { afterAll, afterEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, describe, expect, it } from 'vite-plus/test'
 
 // pnpm vitest run ./src/generator/drizzle/better-auth.test.ts
 

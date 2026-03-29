@@ -1,5 +1,5 @@
 import type { DMMF } from '@prisma/generator-helper'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 
 import { dbmlContent, makeEnums, makeRelations, makeTables } from '../../helper/dbml.js'
 
