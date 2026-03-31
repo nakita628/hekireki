@@ -360,6 +360,9 @@ function makeFkReference(field: DMMF.Field, model: DMMF.Model): string {
   )
   if (!(relField?.relationFromFields && relField.relationToFields)) return ''
 
+  // Skip inline .references() for self-referencing FKs to avoid TypeScript circular inference error
+  if (relField.type === model.name) return ''
+
   const targetVar = toCamelCase(relField.type)
   const toCol = relField.relationToFields[0] ?? 'id'
   const onDelete = relField.relationOnDelete
