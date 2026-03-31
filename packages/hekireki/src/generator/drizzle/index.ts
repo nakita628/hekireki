@@ -10,6 +10,13 @@ import { drizzleSchema } from '../../helper/drizzle.js'
 
 const { generatorHandler } = pkg
 
+function parsePrismaProvider(raw: string): 'postgresql' | 'cockroachdb' | 'mysql' | 'sqlite' {
+  if (raw === 'postgresql' || raw === 'cockroachdb' || raw === 'mysql' || raw === 'sqlite') {
+    return raw
+  }
+  throw new Error(`Unsupported provider: ${raw}`)
+}
+
 export async function main(options: GeneratorOptions): Promise<void> {
   if (!(options.generator.isCustomOutput && options.generator.output?.value)) {
     throw new Error(
@@ -20,7 +27,7 @@ export async function main(options: GeneratorOptions): Promise<void> {
   const resolved = path.extname(output)
     ? { dir: path.dirname(output), file: output }
     : { dir: output, file: path.join(output, 'schema.ts') }
-  const provider = options.datasources[0]?.activeProvider ?? 'postgresql'
+  const provider = parsePrismaProvider(options.datasources[0]?.activeProvider ?? 'postgresql')
 
   const code = drizzleSchema(options.dmmf.datamodel, provider, options.dmmf.datamodel.indexes)
 
