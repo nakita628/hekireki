@@ -4,6 +4,20 @@ import { makeSnakeCase } from '../utils/index.js'
 
 export type DbProvider = 'postgresql' | 'mysql' | 'sqlite'
 
+function resolveDbProvider(
+  provider: 'postgresql' | 'cockroachdb' | 'mysql' | 'sqlite',
+): DbProvider {
+  switch (provider) {
+    case 'postgresql':
+    case 'cockroachdb':
+      return 'postgresql'
+    case 'mysql':
+      return 'mysql'
+    case 'sqlite':
+      return 'sqlite'
+  }
+}
+
 // ============================================================================
 // Type Maps
 // ============================================================================
@@ -153,51 +167,42 @@ export function mysqlNativeType(name: string, args: readonly string[]): string |
 }
 
 // ============================================================================
-// Import Tracker
+// Import Tracking
 // ============================================================================
 
-class ImportTracker {
-  private readonly coreFns = new Set<string>()
-  private readonly ormFns = new Set<string>()
-  private readonly extPkgs = new Map<string, Set<string>>()
-  private readonly provider: DbProvider
+interface Imports {
+  readonly core: Set<string>
+  readonly orm: Set<string>
+  readonly ext: Map<string, Set<string>>
+}
 
-  constructor(provider: DbProvider) {
-    this.provider = provider
-  }
+function createImports(): Imports {
+  return { core: new Set(), orm: new Set(), ext: new Map() }
+}
 
-  addCore(fn: string): void {
-    this.coreFns.add(fn)
-  }
+function addExternal(imports: Imports, pkg: string, fn: string): void {
+  const fns = imports.ext.get(pkg) ?? new Set<string>()
+  fns.add(fn)
+  imports.ext.set(pkg, fns)
+}
 
-  addOrm(fn: string): void {
-    this.ormFns.add(fn)
-  }
-
-  addExternal(pkg: string, fn: string): void {
-    const fns = this.extPkgs.get(pkg) ?? new Set<string>()
-    fns.add(fn)
-    this.extPkgs.set(pkg, fns)
-  }
-
-  generate(): string {
-    const mod =
-      this.provider === 'postgresql'
-        ? 'drizzle-orm/pg-core'
-        : this.provider === 'mysql'
-          ? 'drizzle-orm/mysql-core'
-          : 'drizzle-orm/sqlite-core'
-    const coreImport =
-      this.coreFns.size > 0 ? `import { ${[...this.coreFns].sort().join(', ')} } from '${mod}'` : ''
-    const ormImport =
-      this.ormFns.size > 0
-        ? `import { ${[...this.ormFns].sort().join(', ')} } from 'drizzle-orm'`
-        : ''
-    const extImports = [...this.extPkgs.entries()].map(
-      ([pkg, fns]) => `import { ${[...fns].sort().join(', ')} } from '${pkg}'`,
-    )
-    return [coreImport, ormImport, ...extImports].filter(Boolean).join('\n')
-  }
+function generateImports(imports: Imports, provider: DbProvider): string {
+  const mod =
+    provider === 'postgresql'
+      ? 'drizzle-orm/pg-core'
+      : provider === 'mysql'
+        ? 'drizzle-orm/mysql-core'
+        : 'drizzle-orm/sqlite-core'
+  const coreImport =
+    imports.core.size > 0 ? `import { ${[...imports.core].sort().join(', ')} } from '${mod}'` : ''
+  const ormImport =
+    imports.orm.size > 0
+      ? `import { ${[...imports.orm].sort().join(', ')} } from 'drizzle-orm'`
+      : ''
+  const extImports = [...imports.ext.entries()].map(
+    ([pkg, fns]) => `import { ${[...fns].sort().join(', ')} } from '${pkg}'`,
+  )
+  return [coreImport, ormImport, ...extImports].filter(Boolean).join('\n')
 }
 
 // ============================================================================
@@ -237,7 +242,7 @@ export function resolveScalarType(field: DMMF.Field, provider: DbProvider): stri
 function makeColumnExpr(
   field: DMMF.Field,
   provider: DbProvider,
-  imports: ImportTracker,
+  imports: Imports,
   enums: readonly DMMF.DatamodelEnum[],
 ): string {
   const colName = field.dbName ?? field.name
@@ -247,26 +252,26 @@ function makeColumnExpr(
     const enumDef = enums.find((e) => e.name === field.type)
     const enumValues = enumDef ? enumDef.values.map((v) => `'${v.name}'`).join(', ') : ''
     if (provider === 'postgresql') {
-      imports.addCore('pgEnum')
+      imports.core.add('pgEnum')
       const enumDbName = enumDef?.dbName ?? field.type
       return `pgEnum('${enumDbName}', [${enumValues}])('${colName}')`
     }
     if (provider === 'mysql') {
-      imports.addCore('mysqlEnum')
+      imports.core.add('mysqlEnum')
       return `mysqlEnum('${colName}', [${enumValues}])`
     }
-    imports.addCore('text')
+    imports.core.add('text')
     return `text('${colName}', { enum: [${enumValues}] })`
   }
 
   if (isAutoincrement && provider === 'postgresql') {
-    imports.addCore('serial')
+    imports.core.add('serial')
     return `serial('${colName}')`
   }
 
   const baseExpr = resolveScalarType(field, provider)
   const fnName = baseExpr.match(/^(\w+)/)?.[1]
-  if (fnName) imports.addCore(fnName)
+  if (fnName) imports.core.add(fnName)
   const parenIdx = baseExpr.indexOf('(')
   if (parenIdx === -1) return baseExpr
   const baseFnName = baseExpr.slice(0, parenIdx)
@@ -338,11 +343,11 @@ function makeDefaultChain(
   dflt: DMMF.Field['default'],
   fieldType: string,
   provider: DbProvider,
-  imports: ImportTracker,
+  imports: Imports,
 ): string {
   const result = resolveDefaultValue(dflt, fieldType, provider)
-  if (result.needsSql) imports.addOrm('sql')
-  if (result.needsCuid) imports.addExternal('@paralleldrive/cuid2', 'createId')
+  if (result.needsSql) imports.orm.add('sql')
+  if (result.needsCuid) addExternal(imports, '@paralleldrive/cuid2', 'createId')
   return result.chain
 }
 
@@ -375,7 +380,7 @@ function makeColumn(
   field: DMMF.Field,
   model: DMMF.Model,
   provider: DbProvider,
-  imports: ImportTracker,
+  imports: Imports,
   enums: readonly DMMF.DatamodelEnum[],
 ): string | null {
   if (field.kind === 'object') return null
@@ -403,7 +408,7 @@ function makeColumn(
       : field.isUpdatedAt && (field.default === undefined || field.default === null)
         ? (() => {
             const r = resolveUpdatedAtDefault(provider)
-            if (r.needsSql) imports.addOrm('sql')
+            if (r.needsSql) imports.orm.add('sql')
             return r.chain
           })()
         : makeDefaultChain(field.default, field.type, provider, imports),
@@ -420,13 +425,13 @@ function makeColumn(
 
 function makeCompositeConstraints(
   model: DMMF.Model,
-  imports: ImportTracker,
+  imports: Imports,
   indexes: readonly DMMF.Index[],
   tableName: string,
 ): string | null {
   const pkLine = model.primaryKey
     ? (() => {
-        imports.addCore('primaryKey')
+        imports.core.add('primaryKey')
         return `primaryKey({ columns: [${model.primaryKey.fields.map((f) => `table.${f}`).join(', ')}] })`
       })()
     : null
@@ -434,14 +439,14 @@ function makeCompositeConstraints(
   const uniqueLines = model.uniqueFields
     .filter((fields) => fields.length > 1)
     .map((fields) => {
-      imports.addCore('unique')
+      imports.core.add('unique')
       return `unique().on(${fields.map((f) => `table.${f}`).join(', ')})`
     })
 
   const indexLines = indexes
     .filter((idx) => idx.model === model.name && (idx.type === 'normal' || idx.type === 'fulltext'))
     .map((idx) => {
-      imports.addCore('index')
+      imports.core.add('index')
       const idxName =
         idx.dbName ?? idx.name ?? `idx_${tableName}_${idx.fields.map((f) => f.name).join('_')}`
       return `index('${idxName}').on(${idx.fields.map((f) => `table.${f.name}`).join(', ')})`
@@ -458,13 +463,13 @@ function makeCompositeConstraints(
 function makeTable(
   model: DMMF.Model,
   provider: DbProvider,
-  imports: ImportTracker,
+  imports: Imports,
   enums: readonly DMMF.DatamodelEnum[],
   indexes: readonly DMMF.Index[],
 ): string {
   const tableFunc =
     provider === 'postgresql' ? 'pgTable' : provider === 'mysql' ? 'mysqlTable' : 'sqliteTable'
-  imports.addCore(tableFunc)
+  imports.core.add(tableFunc)
 
   const varName = toCamelCase(model.name)
   const tableName = model.dbName ?? makeSnakeCase(model.name)
@@ -513,11 +518,11 @@ function makeRelationField(
   return `${field.name}: one(${targetVar})`
 }
 
-function makeRelations(models: readonly DMMF.Model[], imports: ImportTracker): readonly string[] {
+function makeRelations(models: readonly DMMF.Model[], imports: Imports): readonly string[] {
   const modelsWithRels = models.filter((model) => model.fields.some((f) => f.kind === 'object'))
   if (modelsWithRels.length === 0) return []
 
-  imports.addOrm('relations')
+  imports.orm.add('relations')
 
   return modelsWithRels.map((model) => {
     const relFields = model.fields.filter((f) => f.kind === 'object')
@@ -542,23 +547,11 @@ function makeRelations(models: readonly DMMF.Model[], imports: ImportTracker): r
 
 export function drizzleSchema(
   datamodel: DMMF.Datamodel,
-  provider: string,
+  provider: 'postgresql' | 'cockroachdb' | 'mysql' | 'sqlite',
   indexes: readonly DMMF.Index[],
 ): string {
-  const db: DbProvider = (() => {
-    switch (provider) {
-      case 'postgresql':
-      case 'cockroachdb':
-        return 'postgresql' as const
-      case 'mysql':
-        return 'mysql' as const
-      case 'sqlite':
-        return 'sqlite' as const
-      default:
-        throw new Error(`Unsupported provider: ${provider}`)
-    }
-  })()
-  const imports = new ImportTracker(db)
+  const db = resolveDbProvider(provider)
+  const imports = createImports()
 
   const tableLines = datamodel.models.map((model) =>
     makeTable(model, db, imports, datamodel.enums, indexes),
@@ -573,7 +566,7 @@ export function drizzleSchema(
   )
 
   return [
-    imports.generate(),
+    generateImports(imports, db),
     '',
     ...tableLinesWithGap,
     ...(relationsLinesWithGap.length > 0 ? ['', ...relationsLinesWithGap] : []),
