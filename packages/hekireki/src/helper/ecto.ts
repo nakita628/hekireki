@@ -1,8 +1,8 @@
+import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import type { DMMF } from '@prisma/generator-helper'
 
-import { mkdir, writeFile } from '../fsp/index.js'
 import { makeSnakeCase } from '../utils/index.js'
 
 // ============================================================================
@@ -430,7 +430,7 @@ export async function writeEctoSchemasToFiles(
   outDir: string,
   enums?: readonly DMMF.DatamodelEnum[],
 ): Promise<void> {
-  await mkdir(outDir)
+  await mkdir(outDir, { recursive: true })
 
   for (const model of models) {
     const code = ectoSchemas([model], app, models, enums)

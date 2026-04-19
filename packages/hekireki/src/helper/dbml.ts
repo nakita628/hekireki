@@ -1,8 +1,9 @@
+import { writeFile } from 'node:fs/promises'
+
 import type { DMMF } from '@prisma/generator-helper'
 import { Resvg } from '@resvg/resvg-js'
 import { run } from '@softwaretechnik/dbml-renderer'
 
-import { writeFile, writeFileBinary } from '../fsp/index.js'
 import { stripAnnotations } from '../utils/index.js'
 
 // ============================================================================
@@ -251,5 +252,5 @@ export async function makePngFile(outputPath: string, dbml: string): Promise<voi
   const pngData = resvg.render()
   const pngBuffer = pngData.asPng()
 
-  await writeFileBinary(outputPath, pngBuffer)
+  await writeFile(outputPath, pngBuffer)
 }

@@ -1,8 +1,8 @@
+import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import type { DMMF } from '@prisma/generator-helper'
 
-import { mkdir, writeFile } from '../fsp/index.js'
 import { makeSnakeCase } from '../utils/index.js'
 
 // ============================================================================
@@ -630,7 +630,7 @@ export async function writeSeaOrmFiles(
   enums: readonly DMMF.DatamodelEnum[],
   serde: SerdeOptions = {},
 ): Promise<void> {
-  await mkdir(outDir)
+  await mkdir(outDir, { recursive: true })
 
   const moduleNames: string[] = []
 
