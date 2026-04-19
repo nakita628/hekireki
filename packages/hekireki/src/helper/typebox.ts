@@ -6,41 +6,21 @@ import {
 } from '../utils/index.js'
 import { validationSchemas } from './prisma.js'
 
-// ============================================================================
-// TypeBox Helpers
-// ============================================================================
-
-/**
- * Generate TypeBox type inference using Static
- * @param modelName - The model name to generate type inference for
- */
-export function makeTypeBoxInfer(
-  modelName: string,
-): `export type ${string} = Static<typeof ${string}Schema>` {
+export function makeTypeBoxInfer(modelName: string) {
   return `export type ${modelName} = Static<typeof ${modelName}Schema>`
 }
 
-/**
- * Generate TypeBox Type.Object schema definition
- * @param modelName - The model name for the schema
- * @param fields - The formatted field definitions string
- */
 export function makeTypeBoxSchema(
   modelName: string,
   fields: string,
   objectType?: 'strict' | 'loose',
-): string {
+) {
   const obj = `Type.Object({\n${fields}\n})`
   return objectType === 'strict'
     ? `export const ${modelName}Schema = Type.Strict(${obj})`
     : `export const ${modelName}Schema = ${obj}`
 }
 
-/**
- * Generate TypeBox property definitions with optional wrapping
- * @param fields - The fields to generate properties for
- * @param comment - Whether to include JSDoc comments in the generated code
- */
 export function makeTypeBoxProperties(
   fields: readonly {
     readonly documentation: string
@@ -51,7 +31,7 @@ export function makeTypeBoxProperties(
     readonly comment: readonly string[]
   }[],
   comment: boolean,
-): string {
+) {
   return fields
     .map((field) => {
       const commentBlock = comment ? makeCommentBlock(field.comment, 2) : ''
@@ -62,16 +42,11 @@ export function makeTypeBoxProperties(
     .join('\n')
 }
 
-/**
- * Generate TypeBox enum expression using Type.Union with Type.Literal
- * @param values - The enum values to generate expression for
- */
-export function makeTypeBoxEnumExpression(values: readonly string[]): `Type.Union([${string}])` {
+export function makeTypeBoxEnumExpression(values: readonly string[]) {
   return `Type.Union([${values.map((v) => `Type.Literal('${v}')`).join(', ')}])`
 }
 
-/** Mapping from Prisma scalar types to TypeBox type expressions */
-export const PRISMA_TO_TYPEBOX: { [k: string]: string } = {
+export const PRISMA_TO_TYPEBOX: Record<string, string> = {
   String: 'Type.String()',
   Int: 'Type.Integer()',
   Float: 'Type.Number()',
@@ -83,11 +58,6 @@ export const PRISMA_TO_TYPEBOX: { [k: string]: string } = {
   Bytes: 'Type.Any()',
 }
 
-/**
- * Generate TypeBox Type.Object schema from model fields
- * @param modelFields - The fields of the model
- * @param comment - Whether to include JSDoc comments in the generated code
- */
 export function makeTypeBoxSchemas(
   modelFields: readonly {
     readonly documentation: string
@@ -99,7 +69,7 @@ export function makeTypeBoxSchemas(
   }[],
   comment: boolean,
   objectType?: 'strict' | 'loose',
-): string {
+) {
   return schemaFromFields(
     modelFields,
     comment,
@@ -109,12 +79,6 @@ export function makeTypeBoxSchemas(
   )
 }
 
-/**
- * Generate TypeBox relation schema definition
- * @param model - The model to generate relations for
- * @param relProps - The relation properties
- * @param options - Options for type export generation
- */
 export function makeTypeBoxRelations(
   model: { readonly name: string },
   relProps: readonly {
@@ -123,7 +87,7 @@ export function makeTypeBoxRelations(
     readonly isMany: boolean
   }[],
   options?: { readonly includeType?: boolean },
-): `export const ${string}RelationsSchema = Type.Object({\n${string}\n})${string}` | null {
+) {
   if (relProps.length === 0) return null
   const base = `  ...${model.name}Schema.properties,`
   const rels = relProps
@@ -132,20 +96,12 @@ export function makeTypeBoxRelations(
         `  ${r.key}: ${r.isMany ? `Type.Array(${r.targetModel}Schema)` : `${r.targetModel}Schema`},`,
     )
     .join('\n')
-
   const typeLine = options?.includeType
     ? `\n\nexport type ${model.name}Relations = Static<typeof ${model.name}RelationsSchema>`
     : ''
   return `export const ${model.name}RelationsSchema = Type.Object({\n${base}\n${rels}\n})${typeLine}`
 }
 
-/**
- * Generate TypeBox validation code from Prisma models
- * @param models - The Prisma data models
- * @param type - Whether to include type inference using Static
- * @param comment - Whether to include JSDoc comments in the generated code
- * @param enums - The Prisma enum definitions
- */
 export function typebox(
   models: readonly {
     readonly name: string
@@ -165,7 +121,7 @@ export function typebox(
     readonly name: string
     readonly values: readonly { readonly name: string }[]
   }[],
-): string {
+) {
   return validationSchemas(models, type, comment, {
     importStatement: type
       ? `import { type Static, Type } from '@sinclair/typebox'`

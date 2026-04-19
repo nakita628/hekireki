@@ -6,31 +6,21 @@ import {
 } from '../utils/index.js'
 import { validationSchemas } from './prisma.js'
 
-// ============================================================================
-// Zod Helpers
-// ============================================================================
-
-export function makeZodInfer(
-  modelName: string,
-): `export type ${string} = z.infer<typeof ${string}Schema>` {
+export function makeZodInfer(modelName: string) {
   return `export type ${modelName} = z.infer<typeof ${modelName}Schema>`
 }
 
-export function makeZodSchema(
-  modelName: string,
-  fields: string,
-  objectType?: 'strict' | 'loose',
-): string {
+export function makeZodSchema(modelName: string, fields: string, objectType?: 'strict' | 'loose') {
   const wrapper =
     objectType === 'strict' ? 'strictObject' : objectType === 'loose' ? 'looseObject' : 'object'
   return `export const ${modelName}Schema = z.${wrapper}({\n${fields}\n})`
 }
 
-export function makeZodEnumExpression(values: readonly string[]): `enum([${string}])` {
+export function makeZodEnumExpression(values: readonly string[]) {
   return `enum([${values.map((v) => `'${v}'`).join(', ')}])`
 }
 
-export const PRISMA_TO_ZOD: { [k: string]: string } = {
+export const PRISMA_TO_ZOD: Record<string, string> = {
   String: 'string()',
   Int: 'number()',
   Float: 'number()',
@@ -53,7 +43,7 @@ export function makeZodSchemas(
   }[],
   comment: boolean,
   objectType?: 'strict' | 'loose',
-): string {
+) {
   return schemaFromFields(
     modelFields,
     comment,
@@ -73,7 +63,7 @@ export function makeZodRelations(
     readonly isMany: boolean
   }[],
   options?: { readonly includeType?: boolean },
-): string | null {
+) {
   if (relProps.length === 0) return null
   const base = `  ...${model.name}Schema.shape,`
   const rels = relProps
@@ -82,7 +72,6 @@ export function makeZodRelations(
         `  ${r.key}: ${r.isMany ? `z.array(${r.targetModel}Schema)` : `${r.targetModel}Schema`},`,
     )
     .join('\n')
-
   const typeLine = options?.includeType
     ? `\n\nexport type ${model.name}Relations = z.infer<typeof ${model.name}RelationsSchema>`
     : ''
@@ -109,7 +98,7 @@ export function zod(
     readonly name: string
     readonly values: readonly { readonly name: string }[]
   }[],
-): string {
+) {
   const importStatement =
     zodVersion === 'mini'
       ? `import * as z from 'zod/mini'`

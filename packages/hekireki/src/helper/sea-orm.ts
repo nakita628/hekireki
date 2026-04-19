@@ -5,10 +5,6 @@ import type { DMMF } from '@prisma/generator-helper'
 
 import { makeSnakeCase } from '../utils/index.js'
 
-// ============================================================================
-// Type Mappings
-// ============================================================================
-
 const PRISMA_TO_RUST: Record<string, string> = {
   String: 'String',
   Int: 'i32',
@@ -21,7 +17,7 @@ const PRISMA_TO_RUST: Record<string, string> = {
   Bytes: 'Vec<u8>',
 }
 
-export function prismaTypeToRustType(type: string, isRequired: boolean): string {
+export function prismaTypeToRustType(type: string, isRequired: boolean) {
   const base = PRISMA_TO_RUST[type] ?? 'String'
   if (!isRequired) {
     return `Option<${base}>`
@@ -29,11 +25,7 @@ export function prismaTypeToRustType(type: string, isRequired: boolean): string 
   return base
 }
 
-// ============================================================================
-// Native Type Resolution → SeaORM column_type
-// ============================================================================
-
-export function resolveSeaOrmColumnType(field: DMMF.Field): string | null {
+export function resolveSeaOrmColumnType(field: DMMF.Field) {
   if (!field.nativeType) return null
 
   const [nativeName, nativeArgs] = field.nativeType as [string, readonly (string | number)[]]
@@ -77,21 +69,17 @@ export function resolveSeaOrmColumnType(field: DMMF.Field): string | null {
   }
 }
 
-// ============================================================================
-// Default Value Handling
-// ============================================================================
-
 function isFunctionDefault(
   def: DMMF.Field['default'],
 ): def is { readonly name: string; readonly args: readonly (string | number)[] } {
   return def !== null && typeof def === 'object' && 'name' in def
 }
 
-function isAutoincrement(field: DMMF.Field): boolean {
+function isAutoincrement(field: DMMF.Field) {
   return isFunctionDefault(field.default) && field.default.name === 'autoincrement'
 }
 
-function formatRustDefault(def: DMMF.Field['default']): string | null {
+function formatRustDefault(def: DMMF.Field['default']) {
   if (def === undefined || def === null) return null
   if (typeof def === 'boolean') return def ? 'true' : 'false'
   if (typeof def === 'number') return String(def)
@@ -99,15 +87,7 @@ function formatRustDefault(def: DMMF.Field['default']): string | null {
   return null
 }
 
-// ============================================================================
-// SeaORM Attribute Building
-// ============================================================================
-
-export function buildSeaOrmAttributes(
-  field: DMMF.Field,
-  isPk: boolean,
-  isCompositePk: boolean,
-): string[] {
+export function buildSeaOrmAttributes(field: DMMF.Field, isPk: boolean, isCompositePk: boolean) {
   const attrs: string[] = []
 
   if (isPk) {
@@ -161,10 +141,6 @@ export function buildSeaOrmAttributes(
   return attrs
 }
 
-// ============================================================================
-// Association Types
-// ============================================================================
-
 interface BelongsToAssoc {
   readonly name: string
   readonly targetModel: string
@@ -192,10 +168,6 @@ interface Associations {
   readonly hasOne: readonly HasAssoc[]
   readonly manyToMany: readonly ManyToManyAssoc[]
 }
-
-// ============================================================================
-// Association Detection (same pattern as GORM)
-// ============================================================================
 
 function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]): Associations {
   const belongsTo: BelongsToAssoc[] = []
@@ -273,25 +245,17 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]): A
   return { belongsTo, hasMany, hasOne, manyToMany }
 }
 
-// ============================================================================
-// Naming Helpers
-// ============================================================================
-
-function toSnakeCase(name: string): string {
+function toSnakeCase(name: string) {
   return makeSnakeCase(name)
 }
 
-function toPascalCase(name: string): string {
+function toPascalCase(name: string) {
   return name.charAt(0).toUpperCase() + name.slice(1)
 }
 
-function toModuleName(modelName: string): string {
+function toModuleName(modelName: string) {
   return toSnakeCase(modelName)
 }
-
-// ============================================================================
-// Serde Options
-// ============================================================================
 
 export interface SerdeOptions {
   readonly renameAll?: string
@@ -300,11 +264,11 @@ export interface SerdeOptions {
 // Types that do NOT implement Eq in Rust (f64: NaN != NaN)
 const NON_EQ_PRISMA_TYPES = new Set(['Float'])
 
-export function canDeriveEq(fields: readonly DMMF.Field[]): boolean {
+export function canDeriveEq(fields: readonly DMMF.Field[]) {
   return fields.filter((f) => f.kind !== 'object').every((f) => !NON_EQ_PRISMA_TYPES.has(f.type))
 }
 
-function buildSerdeAttributes(opts: SerdeOptions): string[] {
+function buildSerdeAttributes(opts: SerdeOptions) {
   const parts: string[] = []
   if (opts.renameAll) {
     parts.push(`rename_all = "${opts.renameAll}"`)
@@ -313,11 +277,7 @@ function buildSerdeAttributes(opts: SerdeOptions): string[] {
   return [`#[serde(${parts.join(', ')})]`]
 }
 
-// ============================================================================
-// Enum Generation
-// ============================================================================
-
-export function generateEnum(e: DMMF.DatamodelEnum, serde: SerdeOptions = {}): string {
+export function generateEnum(e: DMMF.DatamodelEnum, serde: SerdeOptions = {}) {
   const variants = e.values.map((v) => {
     const pascalName = v.name.charAt(0).toUpperCase() + v.name.slice(1).toLowerCase()
     return `    #[sea_orm(string_value = "${v.name}")]\n    ${pascalName},`
@@ -338,11 +298,7 @@ export function generateEnum(e: DMMF.DatamodelEnum, serde: SerdeOptions = {}): s
   ].join('\n')
 }
 
-// ============================================================================
-// Relation Enum Generation
-// ============================================================================
-
-function generateRelationEnum(_model: DMMF.Model, associations: Associations): string {
+function generateRelationEnum(_model: DMMF.Model, associations: Associations) {
   const hasAny =
     associations.belongsTo.length > 0 ||
     associations.hasMany.length > 0 ||
@@ -388,11 +344,7 @@ function generateRelationEnum(_model: DMMF.Model, associations: Associations): s
   ].join('\n')
 }
 
-// ============================================================================
-// impl Related Generation
-// ============================================================================
-
-function generateRelatedImpls(model: DMMF.Model, associations: Associations): string[] {
+function generateRelatedImpls(model: DMMF.Model, associations: Associations) {
   const impls: string[] = []
 
   // Track models with M2M to avoid duplicate Related impls
@@ -468,16 +420,12 @@ function generateRelatedImpls(model: DMMF.Model, associations: Associations): st
   return impls
 }
 
-// ============================================================================
-// Entity File Generation
-// ============================================================================
-
 export function generateEntityFile(
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
   enums: readonly DMMF.DatamodelEnum[],
   serde: SerdeOptions = {},
-): string {
+) {
   const idField = model.fields.find((f) => f.isId)
   const compositePkFieldNames = new Set(model.primaryKey?.fields ?? [])
   const isCompositePk = !idField && compositePkFieldNames.size > 0
@@ -496,12 +444,11 @@ export function generateEntityFile(
     const isPk = field.isId || compositePkFieldNames.has(field.name)
     const attrs = buildSeaOrmAttributes(field, isPk, isCompositePk)
 
-    let rustType: string
-    if (enumNames.has(field.type)) {
-      rustType = field.isRequired ? field.type : `Option<${field.type}>`
-    } else {
-      rustType = prismaTypeToRustType(field.type, field.isRequired)
-    }
+    const rustType = enumNames.has(field.type)
+      ? field.isRequired
+        ? field.type
+        : `Option<${field.type}>`
+      : prismaTypeToRustType(field.type, field.isRequired)
 
     const fieldName = toSnakeCase(field.name)
 
@@ -542,16 +489,12 @@ export function generateEntityFile(
   return lines.join('\n')
 }
 
-// ============================================================================
-// M2M Junction Table Entity Generation
-// ============================================================================
-
 function generateM2MEntity(
   leftModel: string,
   rightModel: string,
   _allModels: readonly DMMF.Model[],
   serde: SerdeOptions = {},
-): string {
+) {
   const [sortedLeft, sortedRight] =
     leftModel < rightModel ? [leftModel, rightModel] : [rightModel, leftModel]
 
@@ -603,15 +546,11 @@ function generateM2MEntity(
   ].join('\n')
 }
 
-// ============================================================================
-// mod.rs and prelude.rs Generation
-// ============================================================================
-
-export function generateModRs(moduleNames: readonly string[]): string {
+export function generateModRs(moduleNames: readonly string[]) {
   return `${moduleNames.map((m) => `pub mod ${m};`).join('\n')}\n`
 }
 
-export function generatePreludeRs(models: readonly DMMF.Model[]): string {
+export function generatePreludeRs(models: readonly DMMF.Model[]) {
   return `${models
     .map((m) => {
       const moduleName = toModuleName(m.name)
@@ -619,10 +558,6 @@ export function generatePreludeRs(models: readonly DMMF.Model[]): string {
     })
     .join('\n')}\n`
 }
-
-// ============================================================================
-// File Output
-// ============================================================================
 
 export async function writeSeaOrmFiles(
   models: readonly DMMF.Model[],

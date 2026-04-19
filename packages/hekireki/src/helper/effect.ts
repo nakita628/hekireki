@@ -6,20 +6,11 @@ import {
 } from '../utils/index.js'
 import { validationSchemas } from './prisma.js'
 
-// ============================================================================
-// Effect Helpers
-// ============================================================================
-
-export function makeEffectInfer(
-  modelName: string,
-): `export type ${string}Encoded = typeof ${string}Schema.Encoded` {
+export function makeEffectInfer(modelName: string) {
   return `export type ${modelName}Encoded = typeof ${modelName}Schema.Encoded`
 }
 
-export function makeEffectSchema(
-  modelName: string,
-  fields: string,
-): `export const ${string}Schema = Schema.Struct({\n${string}\n})` {
+export function makeEffectSchema(modelName: string, fields: string) {
   return `export const ${modelName}Schema = Schema.Struct({\n${fields}\n})`
 }
 
@@ -33,7 +24,7 @@ export function makeEffectProperties(
     readonly comment: readonly string[]
   }[],
   comment: boolean,
-): string {
+) {
   return fields
     .map((field) => {
       const commentBlock = comment ? makeCommentBlock(field.comment, 2) : ''
@@ -42,11 +33,11 @@ export function makeEffectProperties(
     .join('\n')
 }
 
-export function makeEffectEnumExpression(values: readonly string[]): `Schema.Literal(${string})` {
+export function makeEffectEnumExpression(values: readonly string[]) {
   return `Schema.Literal(${values.map((v) => `'${v}'`).join(', ')})`
 }
 
-export const PRISMA_TO_EFFECT: { [k: string]: string } = {
+export const PRISMA_TO_EFFECT: Record<string, string> = {
   String: 'Schema.String',
   Int: 'Schema.Number',
   Float: 'Schema.Number',
@@ -68,7 +59,7 @@ export function makeEffectSchemas(
     readonly comment: readonly string[]
   }[],
   comment: boolean,
-): string {
+) {
   return schemaFromFields(modelFields, comment, makeEffectSchema, makeEffectProperties)
 }
 
@@ -80,7 +71,7 @@ export function makeEffectRelations(
     readonly isMany: boolean
   }[],
   options?: { readonly includeType?: boolean },
-): string | null {
+) {
   if (relProps.length === 0) return null
   const base = `...${model.name}Schema.fields,`
   const rels = relProps
@@ -89,13 +80,10 @@ export function makeEffectRelations(
         `${r.key}:${r.isMany ? `Schema.Array(${r.targetModel}Schema)` : `${r.targetModel}Schema`},`,
     )
     .join('')
-
-  const fields = `${base}${rels}`
-
   const typeLine = options?.includeType
     ? `\n\nexport type ${model.name}RelationsEncoded = typeof ${model.name}RelationsSchema.Encoded`
     : ''
-  return `export const ${model.name}RelationsSchema = Schema.Struct({${fields}})${typeLine}`
+  return `export const ${model.name}RelationsSchema = Schema.Struct({${base}${rels}})${typeLine}`
 }
 
 export function effect(
@@ -117,7 +105,7 @@ export function effect(
     readonly name: string
     readonly values: readonly { readonly name: string }[]
   }[],
-): string {
+) {
   return validationSchemas(models, type, comment, {
     importStatement: `import { Schema } from 'effect'`,
     annotationPrefix: '@e.',

@@ -5,30 +5,15 @@ import {
 } from '../utils/index.js'
 import { validationSchemas } from './prisma.js'
 
-// ============================================================================
-// AJV Helpers
-// ============================================================================
-
-/**
- * Generate AJV type inference using FromSchema
- * @param modelName - The model name to generate type inference for
- */
-export function makeAjvInfer(
-  modelName: string,
-): `export type ${string} = FromSchema<typeof ${string}Schema>` {
+export function makeAjvInfer(modelName: string) {
   return `export type ${modelName} = FromSchema<typeof ${modelName}Schema>`
 }
 
-/**
- * Generate JSON Schema enum expression for AJV
- * @param values - The enum values to generate expression for
- */
-export function makeAjvEnumExpression(values: readonly string[]): `{ enum: [${string}] as const }` {
+export function makeAjvEnumExpression(values: readonly string[]) {
   return `{ enum: [${values.map((v) => `'${v}'`).join(', ')}] as const }`
 }
 
-/** Mapping from Prisma scalar types to JSON Schema type expressions */
-export const PRISMA_TO_AJV: { [k: string]: string } = {
+export const PRISMA_TO_AJV: Record<string, string> = {
   String: "{ type: 'string' as const }",
   Int: "{ type: 'integer' as const }",
   Float: "{ type: 'number' as const }",
@@ -40,11 +25,6 @@ export const PRISMA_TO_AJV: { [k: string]: string } = {
   Bytes: "{ type: 'string' as const }",
 }
 
-/**
- * Generate JSON Schema object definition for a model
- * @param modelFields - The fields of the model
- * @param comment - Whether to include JSDoc comments in the generated code
- */
 export function makeAjvSchemas(
   modelFields: readonly {
     readonly documentation: string
@@ -56,7 +36,7 @@ export function makeAjvSchemas(
   }[],
   comment: boolean,
   objectType?: 'strict' | 'loose',
-): string {
+) {
   const modelName = modelFields[0].modelName
   const properties = modelFields
     .map((field) => {
@@ -73,12 +53,6 @@ export function makeAjvSchemas(
   return `export const ${modelName}Schema = {\n  type: 'object' as const,\n  properties: {\n${properties}\n  },${requiredLine}\n  additionalProperties: ${additionalProps},\n} as const`
 }
 
-/**
- * Generate JSON Schema relation object definition
- * @param model - The model to generate relations for
- * @param relProps - The relation properties
- * @param options - Options for type export generation
- */
 export function makeAjvRelations(
   model: { readonly name: string },
   relProps: readonly {
@@ -87,7 +61,7 @@ export function makeAjvRelations(
     readonly isMany: boolean
   }[],
   options?: { readonly includeType?: boolean },
-): `export const ${string}RelationsSchema = {\n${string}\n} as const${string}` | null {
+) {
   if (relProps.length === 0) return null
   const base = `    ...${model.name}Schema.properties,`
   const rels = relProps
@@ -96,20 +70,12 @@ export function makeAjvRelations(
         `    ${r.key}: ${r.isMany ? `{ type: 'array' as const, items: ${r.targetModel}Schema }` : `${r.targetModel}Schema`},`,
     )
     .join('\n')
-
   const typeLine = options?.includeType
     ? `\n\nexport type ${model.name}Relations = FromSchema<typeof ${model.name}RelationsSchema>`
     : ''
   return `export const ${model.name}RelationsSchema = {\n  type: 'object' as const,\n  properties: {\n${base}\n${rels}\n  },\n  additionalProperties: false,\n} as const${typeLine}`
 }
 
-/**
- * Generate AJV-compatible JSON Schema validation code from Prisma models
- * @param models - The Prisma data models
- * @param type - Whether to include type inference using FromSchema
- * @param comment - Whether to include JSDoc comments in the generated code
- * @param enums - The Prisma enum definitions
- */
 export function ajv(
   models: readonly {
     readonly name: string
@@ -129,7 +95,7 @@ export function ajv(
     readonly name: string
     readonly values: readonly { readonly name: string }[]
   }[],
-): string {
+) {
   return validationSchemas(models, type, comment, {
     importStatement: type ? `import type { FromSchema } from 'json-schema-to-ts'` : '',
     annotationPrefix: '@j.',

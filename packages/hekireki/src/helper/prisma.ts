@@ -56,7 +56,7 @@ export function makeRelationsOnly(
     }[],
     options: { readonly includeType: boolean },
   ) => string | null,
-): string {
+) {
   const models = dmmf.datamodel.models
   const relIndex = collectRelationProps(models)
   const relByModel = Object.groupBy(relIndex, (r) => r.model)
@@ -76,9 +76,6 @@ export function makeRelationsOnly(
     .join('\n\n')
 }
 
-/**
- * Creates validation schemas for models.
- */
 export function validationSchemas(
   models: readonly {
     readonly name: string
@@ -112,7 +109,7 @@ export function validationSchemas(
       comment: boolean,
       objectType?: 'strict' | 'loose',
     ) => string
-    readonly typeMapping?: { readonly [k: string]: string }
+    readonly typeMapping?: Record<string, string>
     readonly enums?: readonly {
       readonly name: string
       readonly values: readonly { readonly name: string }[]
@@ -120,7 +117,7 @@ export function validationSchemas(
     readonly formatEnum?: (values: readonly string[]) => string
     readonly onWarning?: (message: string) => void
   },
-): string {
+) {
   const modelInfos = models.map((model) => ({
     documentation: model.documentation ?? '',
     name: model.name,
@@ -145,32 +142,31 @@ export function validationSchemas(
     return null
   }
 
-  const modelFields = modelInfos.map((model) => {
-    const fields = model.fields.map((field) => ({
+  const modelFields = modelInfos.map((model) =>
+    model.fields.map((field) => ({
       documentation: model.documentation,
       modelName: model.name,
       fieldName: field.name,
       comment: config.parseDocument(field.documentation),
       validation: resolveValidation(field),
       isRequired: field.isRequired,
-    }))
-    return fields
-  })
-
-  const missing = models.flatMap((model) =>
-    model.fields
-      .filter((f) => f.kind !== 'object')
-      .filter((f) => {
-        if (config.extractValidation(f.documentation) !== null) return false
-        if (config.typeMapping?.[f.type]) return false
-        if (config.enums && f.kind === 'enum' && config.enums.some((e) => e.name === f.type)) {
-          return false
-        }
-        return true
-      })
-      .map((f) => ({ modelName: model.name, fieldName: f.name })),
+    })),
   )
+
   if (config.onWarning) {
+    const missing = models.flatMap((model) =>
+      model.fields
+        .filter((f) => f.kind !== 'object')
+        .filter((f) => {
+          if (config.extractValidation(f.documentation) !== null) return false
+          if (config.typeMapping?.[f.type]) return false
+          if (config.enums && f.kind === 'enum' && config.enums.some((e) => e.name === f.type)) {
+            return false
+          }
+          return true
+        })
+        .map((f) => ({ modelName: model.name, fieldName: f.name })),
+    )
     for (const { modelName, fieldName } of missing) {
       config.onWarning(
         `Warning: Field "${modelName}.${fieldName}" has no ${config.annotationPrefix} annotation and will be omitted from the schema`,

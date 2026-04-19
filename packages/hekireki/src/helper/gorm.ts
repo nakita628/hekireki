@@ -5,10 +5,6 @@ import type { DMMF } from '@prisma/generator-helper'
 
 import { makeSnakeCase } from '../utils/index.js'
 
-// ============================================================================
-// Type Mappings
-// ============================================================================
-
 const PRISMA_TO_GO: Record<string, string> = {
   String: 'string',
   Int: 'int',
@@ -21,7 +17,7 @@ const PRISMA_TO_GO: Record<string, string> = {
   Bytes: '[]byte',
 }
 
-export function prismaTypeToGoType(type: string, isRequired: boolean): string {
+export function prismaTypeToGoType(type: string, isRequired: boolean) {
   const base = PRISMA_TO_GO[type] ?? 'string'
   if (!isRequired && base !== '[]byte' && base !== 'datatypes.JSON') {
     return `*${base}`
@@ -29,11 +25,7 @@ export function prismaTypeToGoType(type: string, isRequired: boolean): string {
   return base
 }
 
-// ============================================================================
-// Native Type Resolution
-// ============================================================================
-
-function resolveNativeType(field: DMMF.Field): string | null {
+function resolveNativeType(field: DMMF.Field) {
   if (!field.nativeType) return null
 
   const [nativeName, nativeArgs] = field.nativeType as [string, readonly (string | number)[]]
@@ -79,10 +71,6 @@ function resolveNativeType(field: DMMF.Field): string | null {
   }
 }
 
-// ============================================================================
-// Association Types
-// ============================================================================
-
 interface BelongsToAssoc {
   readonly name: string
   readonly targetModel: string
@@ -110,10 +98,6 @@ interface Associations {
   readonly hasOne: readonly HasAssoc[]
   readonly manyToMany: readonly ManyToManyAssoc[]
 }
-
-// ============================================================================
-// Association Detection
-// ============================================================================
 
 function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]): Associations {
   const belongsTo: BelongsToAssoc[] = []
@@ -191,21 +175,17 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]): A
   return { belongsTo, hasMany, hasOne, manyToMany }
 }
 
-// ============================================================================
-// Default Value Handling
-// ============================================================================
-
 function isFunctionDefault(
   def: DMMF.Field['default'],
 ): def is { readonly name: string; readonly args: readonly (string | number)[] } {
   return def !== null && typeof def === 'object' && 'name' in def
 }
 
-function isAutoincrement(field: DMMF.Field): boolean {
+function isAutoincrement(field: DMMF.Field) {
   return isFunctionDefault(field.default) && field.default.name === 'autoincrement'
 }
 
-function formatGoDefault(def: DMMF.Field['default']): string | null {
+function formatGoDefault(def: DMMF.Field['default']) {
   if (def === undefined || def === null) return null
   if (typeof def === 'boolean') return def ? 'true' : 'false'
   if (typeof def === 'number') return String(def)
@@ -213,16 +193,12 @@ function formatGoDefault(def: DMMF.Field['default']): string | null {
   return null
 }
 
-// ============================================================================
-// GORM Tag Building
-// ============================================================================
-
 export function buildGormTags(
   field: DMMF.Field,
   isPk: boolean,
   isCompositePk: boolean,
   compositeIndexTags: readonly string[],
-): string {
+) {
   const columnName = field.dbName ?? makeSnakeCase(field.name)
   const parts: string[] = [`column:${columnName}`]
 
@@ -298,10 +274,6 @@ export function buildGormTags(
   return `\`gorm:"${parts.join(';')}" json:"${columnName}"\``
 }
 
-// ============================================================================
-// Composite Index / Unique Tag Collection
-// ============================================================================
-
 function collectCompositeIndexTags(
   model: DMMF.Model,
   indexes: readonly DMMF.Index[],
@@ -340,10 +312,6 @@ function collectCompositeIndexTags(
 
   return tagMap
 }
-
-// ============================================================================
-// Go Naming Conventions
-// ============================================================================
 
 // Go initialisms that should be ALL CAPS per https://go.dev/wiki/CodeReviewComments#initialisms
 const GO_INITIALISMS = new Set([
@@ -392,34 +360,21 @@ const GO_INITIALISMS = new Set([
  * e.g. "userId" -> ["User", "ID"], "avatarUrl" -> ["Avatar", "URL"],
  *      "ipAddress" -> ["IP", "Address"], "createdAt" -> ["Created", "At"]
  */
-function splitGoWords(name: string): readonly string[] {
-  const parts = name.replace(/([a-z0-9])([A-Z])/g, '$1\0$2').split('\0')
-  const result: string[] = []
-
-  let i = 0
-  while (i < parts.length) {
-    const lower = parts[i].toLowerCase()
-
-    if (GO_INITIALISMS.has(lower)) {
-      result.push(lower.toUpperCase())
-      i++
-      continue
-    }
-
-    result.push(parts[i].charAt(0).toUpperCase() + parts[i].slice(1))
-    i++
-  }
-
-  return result
+function splitGoWords(name: string) {
+  return name
+    .replace(/([a-z0-9])([A-Z])/g, '$1\0$2')
+    .split('\0')
+    .map((part) => {
+      const lower = part.toLowerCase()
+      return GO_INITIALISMS.has(lower)
+        ? lower.toUpperCase()
+        : part.charAt(0).toUpperCase() + part.slice(1)
+    })
 }
 
-export function goFieldName(name: string): string {
+export function goFieldName(name: string) {
   return splitGoWords(name).join('')
 }
-
-// ============================================================================
-// Struct Field Generation
-// ============================================================================
 
 function generateStructField(
   field: DMMF.Field,
@@ -427,15 +382,14 @@ function generateStructField(
   isCompositePk: boolean,
   compositeIndexTags: readonly string[],
   _enumNames: ReadonlySet<string>,
-): string {
+) {
   const fieldName = goFieldName(field.name)
-  let goType: string
-
-  if (field.kind === 'enum') {
-    goType = field.isRequired ? 'string' : '*string'
-  } else {
-    goType = prismaTypeToGoType(field.type, field.isRequired)
-  }
+  const goType =
+    field.kind === 'enum'
+      ? field.isRequired
+        ? 'string'
+        : '*string'
+      : prismaTypeToGoType(field.type, field.isRequired)
 
   const tag = buildGormTags(field, isPk, isCompositePk, compositeIndexTags)
   const tagStr = tag ? ` ${tag}` : ''
@@ -443,19 +397,15 @@ function generateStructField(
   return `\t${fieldName} ${goType}${tagStr}`
 }
 
-// ============================================================================
-// Relation Field Generation
-// ============================================================================
-
-function needsReferencesTag(references: string): boolean {
+function needsReferencesTag(references: string) {
   return references !== 'id'
 }
 
-function buildRelationTag(parts: string[]): string {
+function buildRelationTag(parts: string[]) {
   return `\`gorm:"${parts.join(';')}"\``
 }
 
-function generateRelationFields(model: DMMF.Model, associations: Associations): readonly string[] {
+function generateRelationFields(model: DMMF.Model, associations: Associations) {
   const lines: string[] = []
 
   // BelongsTo: relation struct field
@@ -512,16 +462,12 @@ function generateRelationFields(model: DMMF.Model, associations: Associations): 
   return lines
 }
 
-// ============================================================================
-// Model Generation
-// ============================================================================
-
 function generateModelStruct(
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
   enums: readonly DMMF.DatamodelEnum[] | undefined,
   indexes: readonly DMMF.Index[],
-): string | null {
+) {
   const idField = model.fields.find((f) => f.isId)
   const compositePkFieldNames = new Set(model.primaryKey?.fields ?? [])
   const isCompositePk = !idField && compositePkFieldNames.size > 0
@@ -561,11 +507,7 @@ function generateModelStruct(
   return lines.join('\n')
 }
 
-// ============================================================================
-// Import Collection
-// ============================================================================
-
-function collectImports(models: readonly DMMF.Model[]): readonly string[] {
+function collectImports(models: readonly DMMF.Model[]) {
   const imports: string[] = []
 
   const needsTime = models.some((m) =>
@@ -581,16 +523,12 @@ function collectImports(models: readonly DMMF.Model[]): readonly string[] {
   return imports
 }
 
-// ============================================================================
-// Public API
-// ============================================================================
-
 export function generateGormModels(
   models: readonly DMMF.Model[],
   enums?: readonly DMMF.DatamodelEnum[],
   indexes?: readonly DMMF.Index[],
   packageName = 'model',
-): string {
+) {
   const idx = indexes ?? []
 
   const modelBodies = models
@@ -620,10 +558,6 @@ export function generateGormModels(
 
   return lines.join('\n')
 }
-
-// ============================================================================
-// File Output
-// ============================================================================
 
 export async function writeGormFile(
   models: readonly DMMF.Model[],

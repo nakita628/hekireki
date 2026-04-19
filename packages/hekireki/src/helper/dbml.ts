@@ -6,22 +6,15 @@ import { run } from '@softwaretechnik/dbml-renderer'
 
 import { stripAnnotations } from '../utils/index.js'
 
-// ============================================================================
-// DBML Utilities
-// ============================================================================
-
-export function escapeNote(str: string): string {
+export function escapeNote(str: string) {
   return str.replace(/'/g, "\\'")
 }
 
-export function formatConstraints(constraints: readonly string[]): string {
+export function formatConstraints(constraints: readonly string[]) {
   return constraints.length > 0 ? ` [${constraints.join(', ')}]` : ''
 }
 
-export function makeEnum(enumDef: {
-  readonly name: string
-  readonly values: readonly string[]
-}): string {
+export function makeEnum(enumDef: { readonly name: string; readonly values: readonly string[] }) {
   return [`Enum ${enumDef.name} {`, ...enumDef.values.map((v) => `  ${v}`), '}'].join('\n')
 }
 
@@ -31,19 +24,15 @@ export function makeRefName(ref: {
   readonly fromColumn: string
   readonly toTable: string
   readonly toColumn: string
-}): string {
+}) {
   return ref.name ?? `${ref.fromTable}_${ref.fromColumn}_${ref.toTable}_${ref.toColumn}_fk`
 }
 
-export function combineKeys(keys: readonly string[]): string {
+export function combineKeys(keys: readonly string[]) {
   return keys.length > 1 ? `(${keys.join(', ')})` : keys[0]
 }
 
-// ============================================================================
-// Composite functions (built from atomic utils)
-// ============================================================================
-
-function quote(value: string): string {
+function quote(value: string) {
   return `'${escapeNote(value)}'`
 }
 
@@ -52,7 +41,7 @@ function makeIndex(index: {
   readonly isPrimaryKey?: boolean
   readonly isUnique?: boolean
   readonly name?: string
-}): string {
+}) {
   const columns = index.columns.length > 1 ? `(${index.columns.join(', ')})` : index.columns[0]
 
   const constraints = [
@@ -73,7 +62,7 @@ function makeRef(ref: {
   readonly type?: '>' | '<' | '-'
   readonly onDelete?: string
   readonly onUpdate?: string
-}): string {
+}) {
   const name = makeRefName(ref)
   const operator = ref.type ?? '>'
 
@@ -96,7 +85,7 @@ function makePrismaColumn(column: {
   readonly isIncrement?: boolean
   readonly defaultValue?: string
   readonly note?: string
-}): string {
+}) {
   const constraints = [
     column.isPrimaryKey && 'pk',
     column.isIncrement && 'increment',
@@ -108,10 +97,6 @@ function makePrismaColumn(column: {
 
   return `  ${column.name} ${column.type}${formatConstraints(constraints)}`
 }
-
-// ============================================================================
-// DBML Generation
-// ============================================================================
 
 function toDBMLColumn(field: DMMF.Field, models: readonly DMMF.Model[], mapToDbSchema: boolean) {
   const defaultDef = field.default as DMMF.FieldDefault | undefined
@@ -144,10 +129,7 @@ function toDBMLColumn(field: DMMF.Field, models: readonly DMMF.Model[], mapToDbS
   }
 }
 
-export function makeTables(
-  models: readonly DMMF.Model[],
-  mapToDbSchema = false,
-): readonly string[] {
+export function makeTables(models: readonly DMMF.Model[], mapToDbSchema = false) {
   return models.map((model) => {
     const modelName = mapToDbSchema && model.dbName ? model.dbName : model.name
 
@@ -172,7 +154,7 @@ export function makeTables(
   })
 }
 
-export function makeEnums(enums: readonly DMMF.DatamodelEnum[]): readonly string[] {
+export function makeEnums(enums: readonly DMMF.DatamodelEnum[]) {
   return enums.map((e) => {
     return makeEnum({
       name: e.name,
@@ -181,10 +163,7 @@ export function makeEnums(enums: readonly DMMF.DatamodelEnum[]): readonly string
   })
 }
 
-export function makeRelations(
-  models: readonly DMMF.Model[],
-  mapToDbSchema = false,
-): readonly string[] {
+export function makeRelations(models: readonly DMMF.Model[], mapToDbSchema = false) {
   return models.flatMap((model) =>
     model.fields
       .filter(
@@ -220,7 +199,7 @@ export function makeRelations(
   )
 }
 
-export function dbmlContent(datamodel: DMMF.Datamodel, mapToDbSchema = false): string {
+export function dbmlContent(datamodel: DMMF.Datamodel, mapToDbSchema = false) {
   const tables = makeTables(datamodel.models, mapToDbSchema)
   const enums = makeEnums(datamodel.enums)
   const refs = makeRelations(datamodel.models, mapToDbSchema)

@@ -5,10 +5,6 @@ import type { DMMF } from '@prisma/generator-helper'
 
 import { makeSnakeCase } from '../utils/index.js'
 
-// ============================================================================
-// Ecto Utilities
-// ============================================================================
-
 export function prismaTypeToEctoType(
   type: string,
 ): 'integer' | 'string' | 'boolean' | 'utc_datetime' | 'float' | 'decimal' | 'map' | 'binary' {
@@ -24,7 +20,7 @@ export function prismaTypeToEctoType(
   return 'string'
 }
 
-export function ectoTypeToTypespec(type: string): string {
+export function ectoTypeToTypespec(type: string) {
   switch (type) {
     case 'string':
       return 'String.t()'
@@ -133,10 +129,7 @@ interface HasAssoc {
   readonly foreignKey: string
 }
 
-function getBelongsToFkType(
-  allModels: readonly DMMF.Model[],
-  targetModelName: string,
-): string | null {
+function getBelongsToFkType(allModels: readonly DMMF.Model[], targetModelName: string) {
   const targetModel = allModels.find((m) => m.name === targetModelName)
   if (!targetModel) return null
   const targetPk = targetModel.fields.find((f) => f.isId)
@@ -237,7 +230,7 @@ export function ectoSchemas(
   app: string | string[],
   allModels?: readonly DMMF.Model[],
   enums?: readonly DMMF.DatamodelEnum[],
-): string {
+) {
   const appName: string = Array.isArray(app) ? app.join('.') : app
   const contextModels = allModels ?? models
   return models

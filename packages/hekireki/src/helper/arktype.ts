@@ -6,30 +6,15 @@ import {
 } from '../utils/index.js'
 import { validationSchemas } from './prisma.js'
 
-// ============================================================================
-// ArkType Helpers
-// ============================================================================
-
-/**
- * Generate ArkType type inference
- * @param modelName - The model name to generate type inference for
- */
-export function makeArktypeInfer(
-  modelName: string,
-): `export type ${string} = typeof ${string}Schema.infer` {
+export function makeArktypeInfer(modelName: string) {
   return `export type ${modelName} = typeof ${modelName}Schema.infer`
 }
 
-/**
- * Generate ArkType type() schema definition
- * @param modelName - The model name for the schema
- * @param fields - The formatted field definitions string
- */
 export function makeArktypeSchema(
   modelName: string,
   fields: string,
   objectType?: 'strict' | 'loose',
-): string {
+) {
   const undeclared =
     objectType === 'strict'
       ? '\n  "+": "reject",\n'
@@ -39,11 +24,6 @@ export function makeArktypeSchema(
   return `export const ${modelName}Schema = type({${undeclared}${fields}\n})`
 }
 
-/**
- * Generate ArkType property definitions
- * @param fields - The fields to generate properties for
- * @param comment - Whether to include JSDoc comments in the generated code
- */
 export function makeArktypeProperties(
   fields: readonly {
     readonly documentation: string
@@ -54,7 +34,7 @@ export function makeArktypeProperties(
     readonly comment: readonly string[]
   }[],
   comment: boolean,
-): string {
+) {
   return fields
     .map((field) => {
       const commentBlock = comment ? makeCommentBlock(field.comment, 2) : ''
@@ -63,16 +43,11 @@ export function makeArktypeProperties(
     .join('\n')
 }
 
-/**
- * Generate ArkType enum expression using union string syntax
- * @param values - The enum values to generate expression for
- */
-export function makeArktypeEnumExpression(values: readonly string[]): `"${string}"` {
+export function makeArktypeEnumExpression(values: readonly string[]) {
   return `"${values.map((v) => `'${v}'`).join(' | ')}"`
 }
 
-/** Mapping from Prisma scalar types to ArkType type expressions */
-export const PRISMA_TO_ARKTYPE: { [k: string]: string } = {
+export const PRISMA_TO_ARKTYPE: Record<string, string> = {
   String: '"string"',
   Int: '"number"',
   Float: '"number"',
@@ -84,11 +59,6 @@ export const PRISMA_TO_ARKTYPE: { [k: string]: string } = {
   Bytes: '"unknown"',
 }
 
-/**
- * Generate ArkType type() schema from model fields
- * @param modelFields - The fields of the model
- * @param comment - Whether to include JSDoc comments in the generated code
- */
 export function makeArktypeSchemas(
   modelFields: readonly {
     readonly documentation: string
@@ -100,7 +70,7 @@ export function makeArktypeSchemas(
   }[],
   comment: boolean,
   objectType?: 'strict' | 'loose',
-): string {
+) {
   return schemaFromFields(
     modelFields,
     comment,
@@ -110,12 +80,6 @@ export function makeArktypeSchemas(
   )
 }
 
-/**
- * Generate ArkType relation schema definition
- * @param model - The model to generate relations for
- * @param relProps - The relation properties
- * @param options - Options for type export generation
- */
 export function makeArktypeRelations(
   model: { readonly name: string },
   relProps: readonly {
@@ -124,7 +88,7 @@ export function makeArktypeRelations(
     readonly isMany: boolean
   }[],
   options?: { readonly includeType?: boolean },
-): string | null {
+) {
   if (relProps.length === 0) return null
   const base = `...${model.name}Schema.t,`
   const rels = relProps
@@ -132,22 +96,12 @@ export function makeArktypeRelations(
       (r) => `${r.key}:${r.isMany ? `${r.targetModel}Schema.array()` : `${r.targetModel}Schema`},`,
     )
     .join('')
-
-  const fields = `${base}${rels}`
-
   const typeLine = options?.includeType
     ? `\n\nexport type ${model.name}Relations = typeof ${model.name}RelationsSchema.infer`
     : ''
-  return `export const ${model.name}RelationsSchema = type({${fields}})${typeLine}`
+  return `export const ${model.name}RelationsSchema = type({${base}${rels}})${typeLine}`
 }
 
-/**
- * Generate ArkType validation code from Prisma models
- * @param models - The Prisma data models
- * @param type - Whether to include type inference
- * @param comment - Whether to include JSDoc comments in the generated code
- * @param enums - The Prisma enum definitions
- */
 export function arktype(
   models: readonly {
     readonly name: string
@@ -167,7 +121,7 @@ export function arktype(
     readonly name: string
     readonly values: readonly { readonly name: string }[]
   }[],
-): string {
+) {
   return validationSchemas(models, type, comment, {
     importStatement: `import { type } from 'arktype'`,
     annotationPrefix: '@a.',

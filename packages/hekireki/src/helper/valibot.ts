@@ -6,13 +6,7 @@ import {
 } from '../utils/index.js'
 import { validationSchemas } from './prisma.js'
 
-// ============================================================================
-// Valibot Helpers
-// ============================================================================
-
-export function makeValibotInfer(
-  modelName: string,
-): `export type ${string} = v.InferOutput<typeof ${string}Schema>` {
+export function makeValibotInfer(modelName: string) {
   return `export type ${modelName} = v.InferOutput<typeof ${modelName}Schema>`
 }
 
@@ -20,17 +14,17 @@ export function makeValibotSchema(
   modelName: string,
   fields: string,
   objectType?: 'strict' | 'loose',
-): string {
+) {
   const wrapper =
     objectType === 'strict' ? 'strictObject' : objectType === 'loose' ? 'looseObject' : 'object'
   return `export const ${modelName}Schema = v.${wrapper}({\n${fields}\n})`
 }
 
-export function makeValibotEnumExpression(values: readonly string[]): `picklist([${string}])` {
+export function makeValibotEnumExpression(values: readonly string[]) {
   return `picklist([${values.map((v) => `'${v}'`).join(', ')}])`
 }
 
-export const PRISMA_TO_VALIBOT: { [k: string]: string } = {
+export const PRISMA_TO_VALIBOT: Record<string, string> = {
   String: 'string()',
   Int: 'number()',
   Float: 'number()',
@@ -53,7 +47,7 @@ export function makeValibotSchemas(
   }[],
   comment: boolean,
   objectType?: 'strict' | 'loose',
-): string {
+) {
   return schemaFromFields(
     modelFields,
     comment,
@@ -73,7 +67,7 @@ export function makeValibotRelations(
     readonly isMany: boolean
   }[],
   options?: { readonly includeType?: boolean },
-): string | null {
+) {
   if (relProps.length === 0) return null
   const base = `  ...${model.name}Schema.entries,`
   const rels = relProps
@@ -82,7 +76,6 @@ export function makeValibotRelations(
         `  ${r.key}: ${r.isMany ? `v.array(${r.targetModel}Schema)` : `${r.targetModel}Schema`},`,
     )
     .join('\n')
-
   const typeLine = options?.includeType
     ? `\n\nexport type ${model.name}Relations = v.InferOutput<typeof ${model.name}RelationsSchema>`
     : ''
@@ -108,7 +101,7 @@ export function valibot(
     readonly name: string
     readonly values: readonly { readonly name: string }[]
   }[],
-): string {
+) {
   return validationSchemas(models, type, comment, {
     importStatement: `import * as v from 'valibot'`,
     annotationPrefix: '@v.',

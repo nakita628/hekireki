@@ -5,10 +5,6 @@ import type { DMMF } from '@prisma/generator-helper'
 
 import { makeSnakeCase } from '../utils/index.js'
 
-// ============================================================================
-// Type Mappings
-// ============================================================================
-
 const PRISMA_TO_PYTHON: Record<string, string> = {
   String: 'str',
   Int: 'int',
@@ -33,19 +29,15 @@ const PRISMA_TO_SQLALCHEMY: Record<string, string> = {
   Bytes: 'LargeBinary',
 }
 
-export function prismaTypeToSQLAlchemyType(type: string): string {
+export function prismaTypeToSQLAlchemyType(type: string) {
   return PRISMA_TO_SQLALCHEMY[type] ?? 'String'
 }
 
-export function prismaTypeToPythonType(type: string): string {
+export function prismaTypeToPythonType(type: string) {
   return PRISMA_TO_PYTHON[type] ?? 'str'
 }
 
-// ============================================================================
-// Native Type Resolution
-// ============================================================================
-
-function resolveNativeType(field: DMMF.Field): string {
+function resolveNativeType(field: DMMF.Field) {
   const baseType = prismaTypeToSQLAlchemyType(field.type)
   if (!field.nativeType) return baseType
 
@@ -90,7 +82,7 @@ function resolveNativeType(field: DMMF.Field): string {
   }
 }
 
-function needsExplicitSaType(field: DMMF.Field): boolean {
+function needsExplicitSaType(field: DMMF.Field) {
   if (field.kind === 'enum') return true
   if (field.nativeType) {
     const resolved = resolveNativeType(field)
@@ -99,7 +91,7 @@ function needsExplicitSaType(field: DMMF.Field): boolean {
   return false
 }
 
-function pythonTypeForNative(field: DMMF.Field): string {
+function pythonTypeForNative(field: DMMF.Field) {
   if (!field.nativeType) {
     const raw = prismaTypeToPythonType(field.type)
     return raw === 'Decimal' ? 'DecimalType' : raw
@@ -111,10 +103,6 @@ function pythonTypeForNative(field: DMMF.Field): string {
   const raw = prismaTypeToPythonType(field.type)
   return raw === 'Decimal' ? 'DecimalType' : raw
 }
-
-// ============================================================================
-// Association Types
-// ============================================================================
 
 interface BelongsToAssoc {
   readonly name: string
@@ -142,10 +130,6 @@ interface Associations {
   readonly hasOne: readonly HasAssoc[]
   readonly manyToMany: readonly ManyToManyAssoc[]
 }
-
-// ============================================================================
-// Association Detection
-// ============================================================================
 
 function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]): Associations {
   const belongsTo: BelongsToAssoc[] = []
@@ -219,10 +203,6 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]): A
   return { belongsTo, hasMany, hasOne, manyToMany }
 }
 
-// ============================================================================
-// Many-to-Many Association Table
-// ============================================================================
-
 interface M2MTableInfo {
   readonly tableName: string
   readonly varName: string
@@ -274,7 +254,7 @@ function collectManyToManyTables(allModels: readonly DMMF.Model[]): readonly M2M
   return tables
 }
 
-function generateAssociationTable(info: M2MTableInfo): string {
+function generateAssociationTable(info: M2MTableInfo) {
   const leftSaType = info.leftPkField ? resolveNativeType(info.leftPkField) : 'String'
   const rightSaType = info.rightPkField ? resolveNativeType(info.rightPkField) : 'String'
   const leftPkCol =
@@ -292,11 +272,7 @@ function generateAssociationTable(info: M2MTableInfo): string {
   ].join('\n')
 }
 
-// ============================================================================
-// Default Value Handling
-// ============================================================================
-
-function formatDefault(def: DMMF.Field['default']): string | null {
+function formatDefault(def: DMMF.Field['default']) {
   if (def === undefined || def === null) return null
   if (typeof def === 'boolean') return def ? 'True' : 'False'
   if (typeof def === 'number') return String(def)
@@ -310,18 +286,14 @@ function isFunctionDefault(
   return def !== null && typeof def === 'object' && 'name' in def
 }
 
-function isAutoincrement(field: DMMF.Field): boolean {
+function isAutoincrement(field: DMMF.Field) {
   return isFunctionDefault(field.default) && field.default.name === 'autoincrement'
 }
-
-// ============================================================================
-// Disambiguation
-// ============================================================================
 
 function needsForeignKeysParam(
   targetModel: string,
   assocs: readonly BelongsToAssoc[] | readonly HasAssoc[],
-): boolean {
+) {
   return assocs.filter((a) => a.targetModel === targetModel).length > 1
 }
 
@@ -330,7 +302,7 @@ function findBackPopulates(
   sourceModelName: string,
   foreignKey: string,
   allModels: readonly DMMF.Model[],
-): string {
+) {
   const targetModel = allModels.find((m) => m.name === targetModelName)
   if (!targetModel) return makeSnakeCase(sourceModelName)
 
@@ -356,7 +328,7 @@ function findM2MBackPopulates(
   sourceModelName: string,
   relationName: string,
   allModels: readonly DMMF.Model[],
-): string {
+) {
   const targetModel = allModels.find((m) => m.name === targetModelName)
   if (!targetModel) return makeSnakeCase(sourceModelName)
 
@@ -366,10 +338,6 @@ function findM2MBackPopulates(
   return backField ? makeSnakeCase(backField.name) : makeSnakeCase(sourceModelName)
 }
 
-// ============================================================================
-// Column Generation
-// ============================================================================
-
 function generateColumn(
   field: DMMF.Field,
   isPk: boolean,
@@ -377,7 +345,7 @@ function generateColumn(
   associations: Associations,
   allModels: readonly DMMF.Model[],
   enumMap: ReadonlyMap<string, readonly string[]>,
-): string {
+) {
   const snakeName = field.dbName ?? makeSnakeCase(field.name)
   const pythonType = field.kind === 'enum' ? 'str' : pythonTypeForNative(field)
   const typeHint = field.isRequired ? pythonType : `Optional[${pythonType}]`
@@ -430,11 +398,7 @@ function generateColumn(
   return `    ${snakeName}: Mapped[${typeHint}] = mapped_column(${colArgs.join(', ')})`
 }
 
-// ============================================================================
-// __table_args__ Generation
-// ============================================================================
-
-function generateTableArgs(model: DMMF.Model, indexes: readonly DMMF.Index[]): readonly string[] {
+function generateTableArgs(model: DMMF.Model, indexes: readonly DMMF.Index[]) {
   const uniqueConstraints = model.uniqueFields.map((fields) => {
     const cols = fields.map((f) => {
       const fieldObj = model.fields.find((mf) => mf.name === f)
@@ -461,15 +425,11 @@ function generateTableArgs(model: DMMF.Model, indexes: readonly DMMF.Index[]): r
   return ['', '    __table_args__ = (', ...allConstraints.map((c) => `        ${c},`), '    )']
 }
 
-// ============================================================================
-// Relationship Generation
-// ============================================================================
-
 function generateBelongsToRelationships(
   associations: Associations,
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
-): readonly string[] {
+) {
   return associations.belongsTo.map((assoc) => {
     const snakeName = makeSnakeCase(assoc.name)
     const fkFieldObj = model.fields.find((f) => f.name === assoc.foreignKey)
@@ -485,7 +445,7 @@ function generateHasManyRelationships(
   associations: Associations,
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
-): readonly string[] {
+) {
   return associations.hasMany.map((assoc) => {
     const snakeName = makeSnakeCase(assoc.name)
     const backPop = findBackPopulates(assoc.targetModel, model.name, assoc.foreignKey, allModels)
@@ -503,7 +463,7 @@ function generateHasOneRelationships(
   associations: Associations,
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
-): readonly string[] {
+) {
   return associations.hasOne.map((assoc) => {
     const snakeName = makeSnakeCase(assoc.name)
     const backPop = findBackPopulates(assoc.targetModel, model.name, assoc.foreignKey, allModels)
@@ -522,7 +482,7 @@ function generateManyToManyRelationships(
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
   m2mTables: readonly M2MTableInfo[],
-): readonly string[] {
+) {
   return associations.manyToMany.map((assoc) => {
     const snakeName = makeSnakeCase(assoc.name)
     const backPop = findM2MBackPopulates(
@@ -544,17 +504,13 @@ function generateManyToManyRelationships(
   })
 }
 
-// ============================================================================
-// Single-File Model Generation
-// ============================================================================
-
 function generateModelBody(
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
   enums: readonly DMMF.DatamodelEnum[] | undefined,
   indexes: readonly DMMF.Index[],
   m2mTables: readonly M2MTableInfo[],
-): string | null {
+) {
   const idField = model.fields.find((f) => f.isId)
   const compositePkFieldNames = new Set(model.primaryKey?.fields ?? [])
   const isCompositePk = !idField && compositePkFieldNames.size > 0
@@ -599,16 +555,12 @@ function generateModelBody(
   ].join('\n')
 }
 
-// ============================================================================
-// Import Collection (single-file)
-// ============================================================================
-
 function collectGlobalImports(
   models: readonly DMMF.Model[],
   _enums: readonly DMMF.DatamodelEnum[] | undefined,
   indexes: readonly DMMF.Index[],
   m2mTables: readonly M2MTableInfo[],
-): readonly string[] {
+) {
   const saImports = new Set<string>()
   const needsOptional = models.some((m) =>
     m.fields.some((f) => f.kind !== 'object' && !f.isRequired),
@@ -724,15 +676,11 @@ function collectGlobalImports(
   return lines
 }
 
-// ============================================================================
-// Public API
-// ============================================================================
-
 export function generateSingleFile(
   models: readonly DMMF.Model[],
   enums?: readonly DMMF.DatamodelEnum[],
   indexes?: readonly DMMF.Index[],
-): string {
+) {
   const idx = indexes ?? []
   const m2mTables = collectManyToManyTables(models)
 
@@ -769,13 +717,9 @@ export function sqlalchemySchemas(
   allModels?: readonly DMMF.Model[],
   enums?: readonly DMMF.DatamodelEnum[],
   indexes?: readonly DMMF.Index[],
-): string {
+) {
   return generateSingleFile(allModels ?? models, enums, indexes)
 }
-
-// ============================================================================
-// File Output
-// ============================================================================
 
 export async function writeSQLAlchemyFile(
   models: readonly DMMF.Model[],
