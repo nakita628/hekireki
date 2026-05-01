@@ -25,7 +25,7 @@ export function prismaTypeToRustType(type: string, isRequired: boolean) {
 export function resolveSeaOrmColumnType(field: DMMF.Field) {
   if (!field.nativeType) return null
 
-  const [nativeName, nativeArgs] = field.nativeType as [string, readonly (string | number)[]]
+  const [nativeName, nativeArgs] = field.nativeType
   const args = nativeArgs ?? []
 
   switch (nativeName) {
@@ -138,39 +138,28 @@ export function buildSeaOrmAttributes(field: DMMF.Field, isPk: boolean, isCompos
   return attrs
 }
 
-interface BelongsToAssoc {
-  readonly name: string
-  readonly targetModel: string
-  readonly foreignKey: string
-  readonly references: string
-}
-
-interface HasAssoc {
-  readonly name: string
-  readonly targetModel: string
-  readonly foreignKey: string
-  readonly references: string
-  readonly isList: boolean
-}
-
-interface ManyToManyAssoc {
-  readonly name: string
-  readonly targetModel: string
-  readonly relationName: string
-}
-
-interface Associations {
-  readonly belongsTo: readonly BelongsToAssoc[]
-  readonly hasMany: readonly HasAssoc[]
-  readonly hasOne: readonly HasAssoc[]
-  readonly manyToMany: readonly ManyToManyAssoc[]
-}
-
-function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]): Associations {
-  const belongsTo: BelongsToAssoc[] = []
-  const hasMany: HasAssoc[] = []
-  const hasOne: HasAssoc[] = []
-  const manyToMany: ManyToManyAssoc[] = []
+function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
+  const belongsTo: {
+    name: string
+    targetModel: string
+    foreignKey: string
+    references: string
+  }[] = []
+  const hasMany: {
+    name: string
+    targetModel: string
+    foreignKey: string
+    references: string
+    isList: boolean
+  }[] = []
+  const hasOne: {
+    name: string
+    targetModel: string
+    foreignKey: string
+    references: string
+    isList: boolean
+  }[] = []
+  const manyToMany: { name: string; targetModel: string; relationName: string }[] = []
 
   for (const field of model.fields) {
     if (field.kind !== 'object') continue
@@ -182,53 +171,45 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]): A
         foreignKey: field.relationFromFields[0],
         references: field.relationToFields?.[0] ?? 'id',
       })
-    } else if (field.isList) {
-      const targetModel = allModels.find((m) => m.name === field.type)
-      if (!targetModel) continue
+      continue
+    }
 
+    const targetModel = allModels.find((m) => m.name === field.type)
+    if (!targetModel) continue
+
+    if (field.isList) {
       const otherSide = targetModel.fields.find(
         (f) => f.relationName === field.relationName && f.kind === 'object',
       )
-
       if (otherSide?.isList) {
         manyToMany.push({
           name: field.name,
           targetModel: field.type,
           relationName: field.relationName ?? `${model.name}To${field.type}`,
         })
-      } else {
-        const fkField = targetModel.fields.find(
-          (f) =>
-            f.relationName === field.relationName &&
-            f.relationFromFields &&
-            f.relationFromFields.length > 0,
-        )
-        const foreignKey = fkField?.relationFromFields?.[0]
-        if (!foreignKey) continue
-        const references = fkField?.relationToFields?.[0] ?? 'id'
-
-        hasMany.push({
-          name: field.name,
-          targetModel: field.type,
-          foreignKey,
-          references,
-          isList: true,
-        })
+        continue
       }
+    }
+
+    const fkField = targetModel.fields.find(
+      (f) =>
+        f.relationName === field.relationName &&
+        f.relationFromFields &&
+        f.relationFromFields.length > 0,
+    )
+    const foreignKey = fkField?.relationFromFields?.[0]
+    if (!foreignKey) continue
+    const references = fkField?.relationToFields?.[0] ?? 'id'
+
+    if (field.isList) {
+      hasMany.push({
+        name: field.name,
+        targetModel: field.type,
+        foreignKey,
+        references,
+        isList: true,
+      })
     } else {
-      const targetModel = allModels.find((m) => m.name === field.type)
-      if (!targetModel) continue
-
-      const fkField = targetModel.fields.find(
-        (f) =>
-          f.relationName === field.relationName &&
-          f.relationFromFields &&
-          f.relationFromFields.length > 0,
-      )
-      const foreignKey = fkField?.relationFromFields?.[0]
-      if (!foreignKey) continue
-      const references = fkField?.relationToFields?.[0] ?? 'id'
-
       hasOne.push({
         name: field.name,
         targetModel: field.type,
@@ -295,7 +276,27 @@ export function generateEnum(e: DMMF.DatamodelEnum, serde: SerdeOptions = {}) {
   ].join('\n')
 }
 
-function generateRelationEnum(_model: DMMF.Model, associations: Associations) {
+function generateRelationEnum(
+  _model: DMMF.Model,
+  associations: {
+    belongsTo: { name: string; targetModel: string; foreignKey: string; references: string }[]
+    hasMany: {
+      name: string
+      targetModel: string
+      foreignKey: string
+      references: string
+      isList: boolean
+    }[]
+    hasOne: {
+      name: string
+      targetModel: string
+      foreignKey: string
+      references: string
+      isList: boolean
+    }[]
+    manyToMany: { name: string; targetModel: string; relationName: string }[]
+  },
+) {
   const hasAny =
     associations.belongsTo.length > 0 ||
     associations.hasMany.length > 0 ||
@@ -341,7 +342,27 @@ function generateRelationEnum(_model: DMMF.Model, associations: Associations) {
   ].join('\n')
 }
 
-function generateRelatedImpls(model: DMMF.Model, associations: Associations) {
+function generateRelatedImpls(
+  model: DMMF.Model,
+  associations: {
+    belongsTo: { name: string; targetModel: string; foreignKey: string; references: string }[]
+    hasMany: {
+      name: string
+      targetModel: string
+      foreignKey: string
+      references: string
+      isList: boolean
+    }[]
+    hasOne: {
+      name: string
+      targetModel: string
+      foreignKey: string
+      references: string
+      isList: boolean
+    }[]
+    manyToMany: { name: string; targetModel: string; relationName: string }[]
+  },
+) {
   const impls: string[] = []
 
   // Track models with M2M to avoid duplicate Related impls

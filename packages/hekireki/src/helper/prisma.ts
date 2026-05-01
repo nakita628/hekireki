@@ -14,7 +14,7 @@ export function collectRelationProps(
   return models.flatMap((m) =>
     m.fields
       .filter((f) => f.kind === 'object')
-      .map((f) => ({ model: m.name, key: f.name, targetModel: f.type, isMany: f.isList }) as const),
+      .map((f) => ({ model: m.name, key: f.name, targetModel: f.type, isMany: f.isList })),
   )
 }
 

@@ -112,20 +112,6 @@ function makeTimestampsLine(fields: DMMF.Field[]): { line: string | null; exclud
   }
 }
 
-interface BelongsToAssoc {
-  readonly name: string
-  readonly targetModel: string
-  readonly foreignKey: string
-  readonly fkType: string | null
-  readonly references: string
-}
-
-interface HasAssoc {
-  readonly name: string
-  readonly targetModel: string
-  readonly foreignKey: string
-}
-
 function getBelongsToFkType(allModels: readonly DMMF.Model[], targetModelName: string) {
   const targetModel = allModels.find((m) => m.name === targetModelName)
   if (!targetModel) return null
@@ -148,74 +134,54 @@ function getBelongsToFkType(allModels: readonly DMMF.Model[], targetModelName: s
   return ectoType
 }
 
-function getAssociations(
-  model: DMMF.Model,
-  allModels: readonly DMMF.Model[],
-): {
-  belongsTo: BelongsToAssoc[]
-  hasMany: HasAssoc[]
-  hasOne: HasAssoc[]
-} {
-  const belongsTo: BelongsToAssoc[] = []
-  const hasMany: HasAssoc[] = []
-  const hasOne: HasAssoc[] = []
+function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
+  const belongsTo: {
+    name: string
+    targetModel: string
+    foreignKey: string
+    fkType: string | null
+    references: string
+  }[] = []
+  const hasMany: { name: string; targetModel: string; foreignKey: string }[] = []
+  const hasOne: { name: string; targetModel: string; foreignKey: string }[] = []
 
   for (const field of model.fields) {
     if (field.kind !== 'object') continue
 
     if (field.relationFromFields && field.relationFromFields.length > 0) {
-      const fkFieldName = field.relationFromFields[0]
-      const fkType = getBelongsToFkType(allModels, field.type)
-      const references = field.relationToFields?.[0] ?? 'id'
-
       belongsTo.push({
         name: field.name,
         targetModel: field.type,
-        foreignKey: fkFieldName,
-        fkType,
-        references,
+        foreignKey: field.relationFromFields[0],
+        fkType: getBelongsToFkType(allModels, field.type),
+        references: field.relationToFields?.[0] ?? 'id',
       })
-    } else if (field.isList) {
-      const targetModel = allModels.find((m) => m.name === field.type)
-      if (!targetModel) continue
+      continue
+    }
 
+    const targetModel = allModels.find((m) => m.name === field.type)
+    if (!targetModel) continue
+
+    if (field.isList) {
       const otherSide = targetModel.fields.find(
         (f) => f.relationName === field.relationName && f.kind === 'object',
       )
       if (otherSide?.isList) continue
+    }
 
-      const fkField = targetModel.fields.find(
-        (f) =>
-          f.relationName === field.relationName &&
-          f.relationFromFields &&
-          f.relationFromFields.length > 0,
-      )
-      const foreignKey = fkField?.relationFromFields?.[0]
-      if (!foreignKey) continue
+    const fkField = targetModel.fields.find(
+      (f) =>
+        f.relationName === field.relationName &&
+        f.relationFromFields &&
+        f.relationFromFields.length > 0,
+    )
+    const foreignKey = fkField?.relationFromFields?.[0]
+    if (!foreignKey) continue
 
-      hasMany.push({
-        name: field.name,
-        targetModel: field.type,
-        foreignKey,
-      })
+    if (field.isList) {
+      hasMany.push({ name: field.name, targetModel: field.type, foreignKey })
     } else {
-      const targetModel = allModels.find((m) => m.name === field.type)
-      if (!targetModel) continue
-
-      const fkField = targetModel.fields.find(
-        (f) =>
-          f.relationName === field.relationName &&
-          f.relationFromFields &&
-          f.relationFromFields.length > 0,
-      )
-      const foreignKey = fkField?.relationFromFields?.[0]
-      if (!foreignKey) continue
-
-      hasOne.push({
-        name: field.name,
-        targetModel: field.type,
-        foreignKey,
-      })
+      hasOne.push({ name: field.name, targetModel: field.type, foreignKey })
     }
   }
 

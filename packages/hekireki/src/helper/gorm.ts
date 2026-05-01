@@ -25,7 +25,7 @@ export function prismaTypeToGoType(type: string, isRequired: boolean) {
 function resolveNativeType(field: DMMF.Field) {
   if (!field.nativeType) return null
 
-  const [nativeName, nativeArgs] = field.nativeType as [string, readonly (string | number)[]]
+  const [nativeName, nativeArgs] = field.nativeType
   const args = nativeArgs ?? []
 
   switch (nativeName) {
@@ -68,39 +68,28 @@ function resolveNativeType(field: DMMF.Field) {
   }
 }
 
-interface BelongsToAssoc {
-  readonly name: string
-  readonly targetModel: string
-  readonly foreignKey: string
-  readonly references: string
-}
-
-interface HasAssoc {
-  readonly name: string
-  readonly targetModel: string
-  readonly foreignKey: string
-  readonly references: string
-  readonly isList: boolean
-}
-
-interface ManyToManyAssoc {
-  readonly name: string
-  readonly targetModel: string
-  readonly relationName: string
-}
-
-interface Associations {
-  readonly belongsTo: readonly BelongsToAssoc[]
-  readonly hasMany: readonly HasAssoc[]
-  readonly hasOne: readonly HasAssoc[]
-  readonly manyToMany: readonly ManyToManyAssoc[]
-}
-
-function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]): Associations {
-  const belongsTo: BelongsToAssoc[] = []
-  const hasMany: HasAssoc[] = []
-  const hasOne: HasAssoc[] = []
-  const manyToMany: ManyToManyAssoc[] = []
+function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
+  const belongsTo: {
+    name: string
+    targetModel: string
+    foreignKey: string
+    references: string
+  }[] = []
+  const hasMany: {
+    name: string
+    targetModel: string
+    foreignKey: string
+    references: string
+    isList: boolean
+  }[] = []
+  const hasOne: {
+    name: string
+    targetModel: string
+    foreignKey: string
+    references: string
+    isList: boolean
+  }[] = []
+  const manyToMany: { name: string; targetModel: string; relationName: string }[] = []
 
   for (const field of model.fields) {
     if (field.kind !== 'object') continue
@@ -112,53 +101,45 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]): A
         foreignKey: field.relationFromFields[0],
         references: field.relationToFields?.[0] ?? 'id',
       })
-    } else if (field.isList) {
-      const targetModel = allModels.find((m) => m.name === field.type)
-      if (!targetModel) continue
+      continue
+    }
 
+    const targetModel = allModels.find((m) => m.name === field.type)
+    if (!targetModel) continue
+
+    if (field.isList) {
       const otherSide = targetModel.fields.find(
         (f) => f.relationName === field.relationName && f.kind === 'object',
       )
-
       if (otherSide?.isList) {
         manyToMany.push({
           name: field.name,
           targetModel: field.type,
           relationName: field.relationName ?? `${model.name}To${field.type}`,
         })
-      } else {
-        const fkField = targetModel.fields.find(
-          (f) =>
-            f.relationName === field.relationName &&
-            f.relationFromFields &&
-            f.relationFromFields.length > 0,
-        )
-        const foreignKey = fkField?.relationFromFields?.[0]
-        if (!foreignKey) continue
-        const references = fkField?.relationToFields?.[0] ?? 'id'
-
-        hasMany.push({
-          name: field.name,
-          targetModel: field.type,
-          foreignKey,
-          references,
-          isList: true,
-        })
+        continue
       }
+    }
+
+    const fkField = targetModel.fields.find(
+      (f) =>
+        f.relationName === field.relationName &&
+        f.relationFromFields &&
+        f.relationFromFields.length > 0,
+    )
+    const foreignKey = fkField?.relationFromFields?.[0]
+    if (!foreignKey) continue
+    const references = fkField?.relationToFields?.[0] ?? 'id'
+
+    if (field.isList) {
+      hasMany.push({
+        name: field.name,
+        targetModel: field.type,
+        foreignKey,
+        references,
+        isList: true,
+      })
     } else {
-      const targetModel = allModels.find((m) => m.name === field.type)
-      if (!targetModel) continue
-
-      const fkField = targetModel.fields.find(
-        (f) =>
-          f.relationName === field.relationName &&
-          f.relationFromFields &&
-          f.relationFromFields.length > 0,
-      )
-      const foreignKey = fkField?.relationFromFields?.[0]
-      if (!foreignKey) continue
-      const references = fkField?.relationToFields?.[0] ?? 'id'
-
       hasOne.push({
         name: field.name,
         targetModel: field.type,
@@ -197,117 +178,62 @@ export function buildGormTags(
   compositeIndexTags: readonly string[],
 ) {
   const columnName = field.dbName ?? makeSnakeCase(field.name)
-  const parts: string[] = [`column:${columnName}`]
-
-  if (isPk) {
-    parts.push('primaryKey')
-    if (isAutoincrement(field)) {
-      parts.push('autoIncrement')
-    }
-    if (isFunctionDefault(field.default) && field.default.name === 'uuid') {
-      parts.push('type:char(36)')
-    }
-  }
-
-  if (field.isUnique) {
-    parts.push('uniqueIndex')
-  }
-
-  // Composite unique / index tags from @@unique and @@index
-  for (const tag of compositeIndexTags) {
-    parts.push(tag)
-  }
-
-  // Native type
+  const isUuidDefault = isFunctionDefault(field.default) && field.default.name === 'uuid'
+  const isNowDefault =
+    field.type === 'DateTime' && isFunctionDefault(field.default) && field.default.name === 'now'
   const nativeType = resolveNativeType(field)
-  if (nativeType && !isPk) {
-    parts.push(`type:${nativeType}`)
-  } else if (nativeType && isPk && !isFunctionDefault(field.default)) {
-    parts.push(`type:${nativeType}`)
-  } else if (
-    nativeType &&
-    isPk &&
-    isFunctionDefault(field.default) &&
-    field.default.name !== 'uuid'
-  ) {
-    parts.push(`type:${nativeType}`)
-  }
+  const includeNativeType =
+    nativeType && (!isPk || !isFunctionDefault(field.default) || field.default.name !== 'uuid')
+  const includeAutoCreate = isNowDefault && (!isPk || isCompositePk || !isCompositePk)
+  const defaultVal =
+    (!isPk || isCompositePk) && !isNowDefault && !field.isUpdatedAt
+      ? formatGoDefault(field.default)
+      : null
 
-  // Default value
-  if (!isPk || isCompositePk) {
-    if (
-      field.type === 'DateTime' &&
-      isFunctionDefault(field.default) &&
-      field.default.name === 'now'
-    ) {
-      parts.push('autoCreateTime')
-    } else if (field.isUpdatedAt) {
-      // handled below
-    } else {
-      const defaultVal = formatGoDefault(field.default)
-      if (defaultVal !== null) {
-        parts.push(`default:${defaultVal}`)
-      }
-    }
-  } else if (isPk && !isCompositePk) {
-    if (
-      field.type === 'DateTime' &&
-      isFunctionDefault(field.default) &&
-      field.default.name === 'now'
-    ) {
-      parts.push('autoCreateTime')
-    }
-  }
-
-  if (field.isUpdatedAt) {
-    parts.push('autoUpdateTime')
-  }
-
-  // not null for required non-PK fields
-  if (field.isRequired && !isPk) {
-    parts.push('not null')
-  }
+  const parts = [
+    `column:${columnName}`,
+    isPk ? 'primaryKey' : null,
+    isPk && isAutoincrement(field) ? 'autoIncrement' : null,
+    isPk && isUuidDefault ? 'type:char(36)' : null,
+    field.isUnique ? 'uniqueIndex' : null,
+    ...compositeIndexTags,
+    includeNativeType ? `type:${nativeType}` : null,
+    includeAutoCreate ? 'autoCreateTime' : null,
+    defaultVal !== null ? `default:${defaultVal}` : null,
+    field.isUpdatedAt ? 'autoUpdateTime' : null,
+    field.isRequired && !isPk ? 'not null' : null,
+  ].filter((p): p is string => p !== null)
 
   return `\`gorm:"${parts.join(';')}" json:"${columnName}"\``
 }
 
-function collectCompositeIndexTags(
-  model: DMMF.Model,
-  indexes: readonly DMMF.Index[],
-): ReadonlyMap<string, readonly string[]> {
-  const tagMap = new Map<string, string[]>()
-
-  const addTag = (fieldName: string, tag: string) => {
-    const existing = tagMap.get(fieldName) ?? []
-    existing.push(tag)
-    tagMap.set(fieldName, existing)
-  }
-
+function collectCompositeIndexTags(model: DMMF.Model, indexes: readonly DMMF.Index[]) {
   // @@unique([a, b]) → uniqueIndex:idx_name on each field
-  for (const fields of model.uniqueFields) {
-    if (fields.length <= 1) continue
-    const cols = fields.map((f) => {
-      const fo = model.fields.find((mf) => mf.name === f)
-      return fo?.dbName ?? makeSnakeCase(f)
+  const uniqueTags = model.uniqueFields
+    .filter((fields) => fields.length > 1)
+    .flatMap((fields) => {
+      const cols = fields.map((f) => {
+        const fo = model.fields.find((mf) => mf.name === f)
+        return fo?.dbName ?? makeSnakeCase(f)
+      })
+      const idxName = `idx_${cols.join('_')}_unique`
+      return fields.map((f): [string, string] => [f, `uniqueIndex:${idxName}`])
     })
-    const idxName = `idx_${cols.join('_')}_unique`
-    for (const f of fields) {
-      addTag(f, `uniqueIndex:${idxName}`)
-    }
-  }
 
   // @@index([a, b]) → index:idx_name on each field
-  for (const idx of indexes) {
-    if (idx.model !== model.name) continue
-    if (idx.type !== 'normal' && idx.type !== 'fulltext') continue
-    const idxName =
-      idx.dbName ?? idx.name ?? `idx_${idx.fields.map((f) => makeSnakeCase(f.name)).join('_')}`
-    for (const f of idx.fields) {
-      addTag(f.name, `index:${idxName}`)
-    }
-  }
+  const indexTags = indexes
+    .filter((idx) => idx.model === model.name && (idx.type === 'normal' || idx.type === 'fulltext'))
+    .flatMap((idx) => {
+      const idxName =
+        idx.dbName ?? idx.name ?? `idx_${idx.fields.map((f) => makeSnakeCase(f.name)).join('_')}`
+      return idx.fields.map((f): [string, string] => [f.name, `index:${idxName}`])
+    })
 
-  return tagMap
+  return [...uniqueTags, ...indexTags].reduce<Map<string, string[]>>((map, [fieldName, tag]) => {
+    const existing = map.get(fieldName) ?? []
+    map.set(fieldName, [...existing, tag])
+    return map
+  }, new Map())
 }
 
 // Go initialisms that should be ALL CAPS per https://go.dev/wiki/CodeReviewComments#initialisms
@@ -402,61 +328,73 @@ function buildRelationTag(parts: string[]) {
   return `\`gorm:"${parts.join(';')}"\``
 }
 
-function generateRelationFields(model: DMMF.Model, associations: Associations) {
-  const lines: string[] = []
-
-  // BelongsTo: relation struct field
-  for (const assoc of associations.belongsTo) {
+function generateRelationFields(
+  model: DMMF.Model,
+  associations: {
+    belongsTo: { name: string; targetModel: string; foreignKey: string; references: string }[]
+    hasMany: {
+      name: string
+      targetModel: string
+      foreignKey: string
+      references: string
+      isList: boolean
+    }[]
+    hasOne: {
+      name: string
+      targetModel: string
+      foreignKey: string
+      references: string
+      isList: boolean
+    }[]
+    manyToMany: { name: string; targetModel: string; relationName: string }[]
+  },
+) {
+  const belongsToLines = associations.belongsTo.map((assoc) => {
     const fieldName = goFieldName(assoc.name)
     const fkFieldName = goFieldName(assoc.foreignKey)
     const refsFieldName = goFieldName(assoc.references)
     const isAmbiguous =
       fieldName !== assoc.targetModel ||
       associations.belongsTo.filter((a) => a.targetModel === assoc.targetModel).length > 1
-    const tagParts: string[] = []
-    if (isAmbiguous) tagParts.push(`foreignKey:${fkFieldName}`)
-    if (needsReferencesTag(assoc.references)) tagParts.push(`references:${refsFieldName}`)
+    const tagParts = [
+      isAmbiguous ? `foreignKey:${fkFieldName}` : null,
+      needsReferencesTag(assoc.references) ? `references:${refsFieldName}` : null,
+    ].filter((p): p is string => p !== null)
+    return tagParts.length > 0
+      ? `\t${fieldName} ${assoc.targetModel} ${buildRelationTag(tagParts)}`
+      : `\t${fieldName} ${assoc.targetModel}`
+  })
 
-    if (tagParts.length > 0) {
-      lines.push(`\t${fieldName} ${assoc.targetModel} ${buildRelationTag(tagParts)}`)
-    } else {
-      lines.push(`\t${fieldName} ${assoc.targetModel}`)
-    }
-  }
+  const hasManyLines = associations.hasMany.map((assoc) => {
+    const tagParts = [
+      `foreignKey:${goFieldName(assoc.foreignKey)}`,
+      ...(needsReferencesTag(assoc.references)
+        ? [`references:${goFieldName(assoc.references)}`]
+        : []),
+    ]
+    return `\t${goFieldName(assoc.name)} []${assoc.targetModel} ${buildRelationTag(tagParts)}`
+  })
 
-  // HasMany
-  for (const assoc of associations.hasMany) {
-    const fkFieldName = goFieldName(assoc.foreignKey)
-    const tagParts = [`foreignKey:${fkFieldName}`]
-    if (needsReferencesTag(assoc.references)) {
-      tagParts.push(`references:${goFieldName(assoc.references)}`)
-    }
-    lines.push(`\t${goFieldName(assoc.name)} []${assoc.targetModel} ${buildRelationTag(tagParts)}`)
-  }
+  const hasOneLines = associations.hasOne.map((assoc) => {
+    const tagParts = [
+      `foreignKey:${goFieldName(assoc.foreignKey)}`,
+      ...(needsReferencesTag(assoc.references)
+        ? [`references:${goFieldName(assoc.references)}`]
+        : []),
+    ]
+    return `\t${goFieldName(assoc.name)} ${assoc.targetModel} ${buildRelationTag(tagParts)}`
+  })
 
-  // HasOne
-  for (const assoc of associations.hasOne) {
-    const fkFieldName = goFieldName(assoc.foreignKey)
-    const tagParts = [`foreignKey:${fkFieldName}`]
-    if (needsReferencesTag(assoc.references)) {
-      tagParts.push(`references:${goFieldName(assoc.references)}`)
-    }
-    lines.push(`\t${goFieldName(assoc.name)} ${assoc.targetModel} ${buildRelationTag(tagParts)}`)
-  }
-
-  // ManyToMany
-  for (const assoc of associations.manyToMany) {
+  const manyToManyLines = associations.manyToMany.map((assoc) => {
     const [leftName, rightName] =
       model.name < assoc.targetModel
         ? [model.name, assoc.targetModel]
         : [assoc.targetModel, model.name]
     const joinTable = `_${leftName}To${rightName}`
-    lines.push(
-      `\t${goFieldName(assoc.name)} []${assoc.targetModel} \`gorm:"many2many:${joinTable};"\``,
-    )
-  }
+    return `\t${goFieldName(assoc.name)} []${assoc.targetModel} \`gorm:"many2many:${joinTable};"\``
+  })
 
-  return lines
+  return [...belongsToLines, ...hasManyLines, ...hasOneLines, ...manyToManyLines]
 }
 
 function generateModelStruct(
@@ -486,38 +424,36 @@ function generateModelStruct(
 
   const relationLines = generateRelationFields(model, associations)
 
-  const lines = [
+  const tableNameMethod =
+    tableName !== makeSnakeCase(model.name)
+      ? ['', `func (${model.name}) TableName() string {`, `\treturn "${tableName}"`, '}']
+      : []
+
+  return [
     `type ${model.name} struct {`,
     ...fieldLines,
-    ...(relationLines.length > 0 ? relationLines : []),
+    ...relationLines,
     '}',
-  ]
-
-  // Add TableName method if dbName differs from default
-  if (tableName !== makeSnakeCase(model.name)) {
-    lines.push('')
-    lines.push(`func (${model.name}) TableName() string {`)
-    lines.push(`\treturn "${tableName}"`)
-    lines.push('}')
-  }
-
-  return lines.join('\n')
+    ...tableNameMethod,
+  ].join('\n')
 }
 
 function collectImports(models: readonly DMMF.Model[]) {
-  const imports: string[] = []
-
   const needsTime = models.some((m) =>
     m.fields.some((f) => f.kind !== 'object' && f.type === 'DateTime'),
   )
   const needsDatatypes = models.some((m) =>
     m.fields.some((f) => f.kind !== 'object' && f.type === 'Json'),
   )
+  return [needsTime ? '"time"' : null, needsDatatypes ? '"gorm.io/datatypes"' : null].filter(
+    (i): i is string => i !== null,
+  )
+}
 
-  if (needsTime) imports.push('"time"')
-  if (needsDatatypes) imports.push('"gorm.io/datatypes"')
-
-  return imports
+function formatImports(imports: readonly string[]) {
+  if (imports.length === 0) return []
+  if (imports.length === 1) return ['', `import ${imports[0]}`]
+  return ['', 'import (', ...imports.map((imp) => `\t${imp}`), ')']
 }
 
 export function generateGormModels(
@@ -532,26 +468,11 @@ export function generateGormModels(
     .map((model) => generateModelStruct(model, models, enums, idx))
     .filter((body): body is string => body !== null)
 
-  const imports = collectImports(models)
-
-  const lines: string[] = [`package ${packageName}`]
-
-  if (imports.length > 0) {
-    lines.push('')
-    if (imports.length === 1) {
-      lines.push(`import ${imports[0]}`)
-    } else {
-      lines.push('import (')
-      for (const imp of imports) {
-        lines.push(`\t${imp}`)
-      }
-      lines.push(')')
-    }
-  }
-
-  lines.push('')
-  lines.push(modelBodies.join('\n\n'))
-  lines.push('')
-
-  return lines.join('\n')
+  return [
+    `package ${packageName}`,
+    ...formatImports(collectImports(models)),
+    '',
+    modelBodies.join('\n\n'),
+    '',
+  ].join('\n')
 }

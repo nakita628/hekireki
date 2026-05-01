@@ -38,7 +38,7 @@ function resolveNativeType(field: DMMF.Field) {
   const baseType = prismaTypeToSQLAlchemyType(field.type)
   if (!field.nativeType) return baseType
 
-  const [nativeName, nativeArgs] = field.nativeType as [string, readonly (string | number)[]]
+  const [nativeName, nativeArgs] = field.nativeType
   const args = nativeArgs ?? []
 
   switch (nativeName) {
@@ -93,7 +93,7 @@ function pythonTypeForNative(field: DMMF.Field) {
     const raw = prismaTypeToPythonType(field.type)
     return raw === 'Decimal' ? 'DecimalType' : raw
   }
-  const [nativeName] = field.nativeType as [string, readonly (string | number)[]]
+  const [nativeName] = field.nativeType
   if (nativeName === 'Uuid') return 'uuid_mod.UUID'
   if (nativeName === 'Date') return 'date'
   if (nativeName === 'Time') return 'time_type'
@@ -101,38 +101,16 @@ function pythonTypeForNative(field: DMMF.Field) {
   return raw === 'Decimal' ? 'DecimalType' : raw
 }
 
-interface BelongsToAssoc {
-  readonly name: string
-  readonly targetModel: string
-  readonly foreignKey: string
-  readonly references: string
-}
-
-interface HasAssoc {
-  readonly name: string
-  readonly targetModel: string
-  readonly foreignKey: string
-  readonly isList: boolean
-}
-
-interface ManyToManyAssoc {
-  readonly name: string
-  readonly targetModel: string
-  readonly relationName: string
-}
-
-interface Associations {
-  readonly belongsTo: readonly BelongsToAssoc[]
-  readonly hasMany: readonly HasAssoc[]
-  readonly hasOne: readonly HasAssoc[]
-  readonly manyToMany: readonly ManyToManyAssoc[]
-}
-
-function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]): Associations {
-  const belongsTo: BelongsToAssoc[] = []
-  const hasMany: HasAssoc[] = []
-  const hasOne: HasAssoc[] = []
-  const manyToMany: ManyToManyAssoc[] = []
+function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
+  const belongsTo: {
+    name: string
+    targetModel: string
+    foreignKey: string
+    references: string
+  }[] = []
+  const hasMany: { name: string; targetModel: string; foreignKey: string; isList: boolean }[] = []
+  const hasOne: { name: string; targetModel: string; foreignKey: string; isList: boolean }[] = []
+  const manyToMany: { name: string; targetModel: string; relationName: string }[] = []
 
   for (const field of model.fields) {
     if (field.kind !== 'object') continue
@@ -144,114 +122,97 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]): A
         foreignKey: field.relationFromFields[0],
         references: field.relationToFields?.[0] ?? 'id',
       })
-    } else if (field.isList) {
-      const targetModel = allModels.find((m) => m.name === field.type)
-      if (!targetModel) continue
+      continue
+    }
 
+    const targetModel = allModels.find((m) => m.name === field.type)
+    if (!targetModel) continue
+
+    if (field.isList) {
       const otherSide = targetModel.fields.find(
         (f) => f.relationName === field.relationName && f.kind === 'object',
       )
-
       if (otherSide?.isList) {
         manyToMany.push({
           name: field.name,
           targetModel: field.type,
           relationName: field.relationName ?? `${model.name}To${field.type}`,
         })
-      } else {
-        const fkField = targetModel.fields.find(
-          (f) =>
-            f.relationName === field.relationName &&
-            f.relationFromFields &&
-            f.relationFromFields.length > 0,
-        )
-        const foreignKey = fkField?.relationFromFields?.[0]
-        if (!foreignKey) continue
-
-        hasMany.push({
-          name: field.name,
-          targetModel: field.type,
-          foreignKey,
-          isList: true,
-        })
+        continue
       }
+    }
+
+    const fkField = targetModel.fields.find(
+      (f) =>
+        f.relationName === field.relationName &&
+        f.relationFromFields &&
+        f.relationFromFields.length > 0,
+    )
+    const foreignKey = fkField?.relationFromFields?.[0]
+    if (!foreignKey) continue
+
+    if (field.isList) {
+      hasMany.push({ name: field.name, targetModel: field.type, foreignKey, isList: true })
     } else {
-      const targetModel = allModels.find((m) => m.name === field.type)
-      if (!targetModel) continue
-
-      const fkField = targetModel.fields.find(
-        (f) =>
-          f.relationName === field.relationName &&
-          f.relationFromFields &&
-          f.relationFromFields.length > 0,
-      )
-      const foreignKey = fkField?.relationFromFields?.[0]
-      if (!foreignKey) continue
-
-      hasOne.push({
-        name: field.name,
-        targetModel: field.type,
-        foreignKey,
-        isList: false,
-      })
+      hasOne.push({ name: field.name, targetModel: field.type, foreignKey, isList: false })
     }
   }
 
   return { belongsTo, hasMany, hasOne, manyToMany }
 }
 
-interface M2MTableInfo {
-  readonly tableName: string
-  readonly varName: string
-  readonly leftModel: string
-  readonly leftTable: string
-  readonly leftPkField: DMMF.Field | undefined
-  readonly rightModel: string
-  readonly rightTable: string
-  readonly rightPkField: DMMF.Field | undefined
-}
-
-function collectManyToManyTables(allModels: readonly DMMF.Model[]): readonly M2MTableInfo[] {
-  const seen = new Set<string>()
-  const tables: M2MTableInfo[] = []
-
-  for (const model of allModels) {
-    for (const field of model.fields) {
-      if (field.kind !== 'object' || !field.isList) continue
+function collectManyToManyTables(allModels: readonly DMMF.Model[]) {
+  const candidates = allModels.flatMap((model) =>
+    model.fields.flatMap((field) => {
+      if (field.kind !== 'object' || !field.isList) return []
       const targetModel = allModels.find((m) => m.name === field.type)
-      if (!targetModel) continue
-
+      if (!targetModel) return []
       const otherSide = targetModel.fields.find(
         (f) => f.relationName === field.relationName && f.kind === 'object',
       )
-      if (!otherSide?.isList) continue
-
-      const relationName = field.relationName ?? `${model.name}To${field.type}`
-      if (seen.has(relationName)) continue
-      seen.add(relationName)
+      if (!otherSide?.isList) return []
 
       const [leftName, rightName] =
         model.name < field.type ? [model.name, field.type] : [field.type, model.name]
       const leftModelObj = allModels.find((m) => m.name === leftName)
       const rightModelObj = allModels.find((m) => m.name === rightName)
 
-      tables.push({
-        tableName: `_${leftName}To${rightName}`,
-        varName: `${makeSnakeCase(leftName)}_to_${makeSnakeCase(rightName)}`,
-        leftModel: leftName,
-        leftTable: leftModelObj?.dbName ?? makeSnakeCase(leftName),
-        leftPkField: leftModelObj?.fields.find((f) => f.isId),
-        rightModel: rightName,
-        rightTable: rightModelObj?.dbName ?? makeSnakeCase(rightName),
-        rightPkField: rightModelObj?.fields.find((f) => f.isId),
-      })
-    }
-  }
+      return [
+        {
+          relationName: field.relationName ?? `${model.name}To${field.type}`,
+          info: {
+            tableName: `_${leftName}To${rightName}`,
+            varName: `${makeSnakeCase(leftName)}_to_${makeSnakeCase(rightName)}`,
+            leftModel: leftName,
+            leftTable: leftModelObj?.dbName ?? makeSnakeCase(leftName),
+            leftPkField: leftModelObj?.fields.find((f) => f.isId),
+            rightModel: rightName,
+            rightTable: rightModelObj?.dbName ?? makeSnakeCase(rightName),
+            rightPkField: rightModelObj?.fields.find((f) => f.isId),
+          },
+        },
+      ]
+    }),
+  )
 
-  return tables
+  const seen = new Set<string>()
+  return candidates.flatMap(({ relationName, info }) => {
+    if (seen.has(relationName)) return []
+    seen.add(relationName)
+    return [info]
+  })
 }
 
-function generateAssociationTable(info: M2MTableInfo) {
+function generateAssociationTable(info: {
+  tableName: string
+  varName: string
+  leftModel: string
+  leftTable: string
+  leftPkField: DMMF.Field | undefined
+  rightModel: string
+  rightTable: string
+  rightPkField: DMMF.Field | undefined
+}) {
   const leftSaType = info.leftPkField ? resolveNativeType(info.leftPkField) : 'String'
   const rightSaType = info.rightPkField ? resolveNativeType(info.rightPkField) : 'String'
   const leftPkCol =
@@ -289,7 +250,7 @@ function isAutoincrement(field: DMMF.Field) {
 
 function needsForeignKeysParam(
   targetModel: string,
-  assocs: readonly BelongsToAssoc[] | readonly HasAssoc[],
+  assocs: readonly { readonly targetModel: string }[],
 ) {
   return assocs.filter((a) => a.targetModel === targetModel).length > 1
 }
@@ -339,7 +300,12 @@ function generateColumn(
   field: DMMF.Field,
   isPk: boolean,
   isFk: boolean,
-  associations: Associations,
+  associations: {
+    belongsTo: { name: string; targetModel: string; foreignKey: string; references: string }[]
+    hasMany: { name: string; targetModel: string; foreignKey: string; isList: boolean }[]
+    hasOne: { name: string; targetModel: string; foreignKey: string; isList: boolean }[]
+    manyToMany: { name: string; targetModel: string; relationName: string }[]
+  },
   allModels: readonly DMMF.Model[],
   enumMap: ReadonlyMap<string, readonly string[]>,
 ) {
@@ -423,7 +389,12 @@ function generateTableArgs(model: DMMF.Model, indexes: readonly DMMF.Index[]) {
 }
 
 function generateBelongsToRelationships(
-  associations: Associations,
+  associations: {
+    belongsTo: { name: string; targetModel: string; foreignKey: string; references: string }[]
+    hasMany: { name: string; targetModel: string; foreignKey: string; isList: boolean }[]
+    hasOne: { name: string; targetModel: string; foreignKey: string; isList: boolean }[]
+    manyToMany: { name: string; targetModel: string; relationName: string }[]
+  },
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
 ) {
@@ -439,7 +410,12 @@ function generateBelongsToRelationships(
 }
 
 function generateHasManyRelationships(
-  associations: Associations,
+  associations: {
+    belongsTo: { name: string; targetModel: string; foreignKey: string; references: string }[]
+    hasMany: { name: string; targetModel: string; foreignKey: string; isList: boolean }[]
+    hasOne: { name: string; targetModel: string; foreignKey: string; isList: boolean }[]
+    manyToMany: { name: string; targetModel: string; relationName: string }[]
+  },
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
 ) {
@@ -457,7 +433,12 @@ function generateHasManyRelationships(
 }
 
 function generateHasOneRelationships(
-  associations: Associations,
+  associations: {
+    belongsTo: { name: string; targetModel: string; foreignKey: string; references: string }[]
+    hasMany: { name: string; targetModel: string; foreignKey: string; isList: boolean }[]
+    hasOne: { name: string; targetModel: string; foreignKey: string; isList: boolean }[]
+    manyToMany: { name: string; targetModel: string; relationName: string }[]
+  },
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
 ) {
@@ -475,10 +456,24 @@ function generateHasOneRelationships(
 }
 
 function generateManyToManyRelationships(
-  associations: Associations,
+  associations: {
+    belongsTo: { name: string; targetModel: string; foreignKey: string; references: string }[]
+    hasMany: { name: string; targetModel: string; foreignKey: string; isList: boolean }[]
+    hasOne: { name: string; targetModel: string; foreignKey: string; isList: boolean }[]
+    manyToMany: { name: string; targetModel: string; relationName: string }[]
+  },
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
-  m2mTables: readonly M2MTableInfo[],
+  m2mTables: readonly {
+    tableName: string
+    varName: string
+    leftModel: string
+    leftTable: string
+    leftPkField: DMMF.Field | undefined
+    rightModel: string
+    rightTable: string
+    rightPkField: DMMF.Field | undefined
+  }[],
 ) {
   return associations.manyToMany.map((assoc) => {
     const snakeName = makeSnakeCase(assoc.name)
@@ -506,7 +501,16 @@ function generateModelBody(
   allModels: readonly DMMF.Model[],
   enums: readonly DMMF.DatamodelEnum[] | undefined,
   indexes: readonly DMMF.Index[],
-  m2mTables: readonly M2MTableInfo[],
+  m2mTables: readonly {
+    tableName: string
+    varName: string
+    leftModel: string
+    leftTable: string
+    leftPkField: DMMF.Field | undefined
+    rightModel: string
+    rightTable: string
+    rightPkField: DMMF.Field | undefined
+  }[],
 ) {
   const idField = model.fields.find((f) => f.isId)
   const compositePkFieldNames = new Set(model.primaryKey?.fields ?? [])
@@ -556,7 +560,16 @@ function collectGlobalImports(
   models: readonly DMMF.Model[],
   _enums: readonly DMMF.DatamodelEnum[] | undefined,
   indexes: readonly DMMF.Index[],
-  m2mTables: readonly M2MTableInfo[],
+  m2mTables: readonly {
+    tableName: string
+    varName: string
+    leftModel: string
+    leftTable: string
+    leftPkField: DMMF.Field | undefined
+    rightModel: string
+    rightTable: string
+    rightPkField: DMMF.Field | undefined
+  }[],
 ) {
   const saImports = new Set<string>()
   const needsOptional = models.some((m) =>

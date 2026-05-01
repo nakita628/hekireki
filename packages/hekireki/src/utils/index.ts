@@ -20,37 +20,57 @@ export function makeValidationExtractor(annotationPrefix: `@${string}.`) {
   }
 }
 
-const ANNOTATION_PREFIXES = ['@z.', '@v.', '@a.', '@e.', '@t.', '@j.'] as const
-const ANNOTATION_EXACT = new Set(['@z', '@v', '@a', '@e', '@t', '@j'])
-
 export function parseDocumentWithoutAnnotations(documentation: string | undefined) {
   if (!documentation) return []
+  const annotationPrefixes = ['@z.', '@v.', '@a.', '@e.', '@t.', '@j.']
+  const annotationExact = new Set(['@z', '@v', '@a', '@e', '@t', '@j'])
   return documentation
     .split('\n')
     .map((line) => line.trim())
     .filter(
       (line) =>
         line.length > 0 &&
-        !ANNOTATION_PREFIXES.some((p) => line.startsWith(p)) &&
-        !ANNOTATION_EXACT.has(line),
+        !annotationPrefixes.some((p) => line.startsWith(p)) &&
+        !annotationExact.has(line),
     )
 }
 
 export function stripAnnotations(doc: string | undefined) {
   if (!doc) return undefined
+  const annotationPrefixes = ['@z.', '@v.', '@a.', '@e.', '@t.', '@j.']
+  const annotationExact = new Set(['@z', '@v', '@a', '@e', '@t', '@j'])
   const result = doc
     .split('\n')
     .filter((line) => {
       const t = line.trim()
       return (
-        !ANNOTATION_PREFIXES.some((p) => t.startsWith(p)) &&
+        !annotationPrefixes.some((p) => t.startsWith(p)) &&
         !t.startsWith('@relation') &&
-        !ANNOTATION_EXACT.has(t)
+        !annotationExact.has(t)
       )
     })
     .join('\n')
     .trim()
   return result.length > 0 ? result : undefined
+}
+
+export function extractObjectType(
+  documentation: string | undefined,
+  prefix: `@${string}.`,
+): 'strict' | 'loose' | undefined {
+  if (!documentation) return undefined
+  const prefixWithoutAt = prefix.slice(1)
+  const match = documentation
+    .split('\n')
+    .map((l) => l.trim())
+    .find(
+      (line) =>
+        line.includes(`${prefixWithoutAt}strictObject`) ||
+        line.includes(`${prefixWithoutAt}looseObject`),
+    )
+  if (!match) return undefined
+  if (match.includes('strictObject')) return 'strict'
+  return 'loose'
 }
 
 export function makeCommentBlock(lines: readonly string[], indent: number) {
@@ -138,24 +158,6 @@ export function isFields(
       isRequired: boolean
     }> => field.validation !== null,
   )
-}
-
-export function extractObjectType(
-  documentation: string | undefined,
-  prefix: `@${string}.`,
-): 'strict' | 'loose' | undefined {
-  if (!documentation) return undefined
-  const prefixWithoutAt = prefix.slice(1)
-  const match = documentation
-    .split('\n')
-    .map((l) => l.trim())
-    .find(
-      (line) =>
-        line.includes(`${prefixWithoutAt}strictObject`) ||
-        line.includes(`${prefixWithoutAt}looseObject`),
-    )
-  if (!match) return undefined
-  return match.includes('strictObject') ? 'strict' : 'loose'
 }
 
 export function schemaFromFields(

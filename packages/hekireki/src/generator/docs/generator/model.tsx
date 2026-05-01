@@ -22,7 +22,18 @@ import {
 import { capitalize, isScalarType, lowerCase } from './helpers.js'
 import type { DMMFDocument, DMMFMapping } from './transformDMMF.js'
 
-const ModelAction = {
+const ModelAction: Record<
+  | 'create'
+  | 'deleteMany'
+  | 'delete'
+  | 'findMany'
+  | 'findUnique'
+  | 'findFirst'
+  | 'update'
+  | 'updateMany'
+  | 'upsert',
+  string
+> = {
   create: 'create',
   deleteMany: 'deleteMany',
   delete: 'delete',
@@ -32,7 +43,7 @@ const ModelAction = {
   update: 'update',
   updateMany: 'updateMany',
   upsert: 'upsert',
-} as const
+}
 
 type ModelGeneratorStructure = {
   readonly models: readonly MGModel[]

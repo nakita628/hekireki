@@ -96,8 +96,14 @@ function makePrismaColumn(column: {
   return `  ${column.name} ${column.type}${formatConstraints(constraints)}`
 }
 
+function isFunctionDefault(
+  def: DMMF.Field['default'],
+): def is { readonly name: string; readonly args: readonly (string | number)[] } {
+  return def !== null && typeof def === 'object' && 'name' in def
+}
+
 function toDBMLColumn(field: DMMF.Field, models: readonly DMMF.Model[], mapToDbSchema: boolean) {
-  const defaultDef = field.default as DMMF.FieldDefault | undefined
+  const defaultName = isFunctionDefault(field.default) ? field.default.name : undefined
 
   const baseType = mapToDbSchema
     ? (models.find((m) => m.name === field.type)?.dbName ?? field.type)
@@ -105,8 +111,8 @@ function toDBMLColumn(field: DMMF.Field, models: readonly DMMF.Model[], mapToDbS
   const type = field.isList && !field.relationName ? `${baseType}[]` : baseType
 
   const defaultValue = (() => {
-    if (defaultDef?.name === 'autoincrement') return undefined
-    if (defaultDef?.name === 'now') return '`now()`'
+    if (defaultName === 'autoincrement') return undefined
+    if (defaultName === 'now') return '`now()`'
     if (field.hasDefaultValue && typeof field.default !== 'object') {
       return field.type === 'String' || field.type === 'Json' || field.kind === 'enum'
         ? `'${field.default}'`
@@ -119,7 +125,7 @@ function toDBMLColumn(field: DMMF.Field, models: readonly DMMF.Model[], mapToDbS
     name: field.name,
     type,
     isPrimaryKey: field.isId,
-    isIncrement: defaultDef?.name === 'autoincrement',
+    isIncrement: defaultName === 'autoincrement',
     isUnique: field.isUnique,
     isNotNull: field.isRequired && !field.isId,
     defaultValue,

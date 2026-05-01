@@ -25,12 +25,12 @@ export function removeDuplicateRelations(relations: readonly string[]) {
   return [...new Set(relations)]
 }
 
-const RELATIONSHIPS = {
+const RELATIONSHIPS: Record<'zero-one' | 'one' | 'zero-many' | 'many', string> = {
   'zero-one': '|o',
   one: '||',
   'zero-many': '}o',
   many: '}|',
-} as const
+}
 
 export function makeRelationLine(
   input: string,
@@ -83,7 +83,7 @@ export function modelFields(model: DMMF.Model) {
 }
 
 export function modelInfo(model: DMMF.Model) {
-  return [`    ${model.name} {`, ...modelFields(model), '    }'] as const
+  return [`    ${model.name} {`, ...modelFields(model), '    }']
 }
 
 export function extractRelationsFromDmmf(models: readonly DMMF.Model[]) {
@@ -132,8 +132,8 @@ export function extractRelations(model: DMMF.Model) {
     .filter((line): line is string => line !== null)
 }
 
-const ER_HEADER = ['```mermaid', 'erDiagram'] as const
-const ER_FOOTER = ['```'] as const
+const ER_HEADER = ['```mermaid', 'erDiagram']
+const ER_FOOTER = ['```']
 
 export function erContent(models: readonly DMMF.Model[]) {
   const allRelations = extractRelationsFromDmmf(models)

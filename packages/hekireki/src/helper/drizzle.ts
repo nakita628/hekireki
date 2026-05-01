@@ -166,27 +166,28 @@ export function mysqlNativeType(name: string, args: readonly string[]): string |
   }
 }
 
-// ============================================================================
-// Import Tracking
-// ============================================================================
-
-interface Imports {
-  readonly core: Set<string>
-  readonly orm: Set<string>
-  readonly ext: Map<string, Set<string>>
+function createImports() {
+  return {
+    core: new Set<string>(),
+    orm: new Set<string>(),
+    ext: new Map<string, Set<string>>(),
+  }
 }
 
-function createImports(): Imports {
-  return { core: new Set(), orm: new Set(), ext: new Map() }
-}
-
-function addExternal(imports: Imports, pkg: string, fn: string): void {
+function addExternal(
+  imports: { core: Set<string>; orm: Set<string>; ext: Map<string, Set<string>> },
+  pkg: string,
+  fn: string,
+) {
   const fns = imports.ext.get(pkg) ?? new Set<string>()
   fns.add(fn)
   imports.ext.set(pkg, fns)
 }
 
-function generateImports(imports: Imports, provider: DbProvider): string {
+function generateImports(
+  imports: { core: Set<string>; orm: Set<string>; ext: Map<string, Set<string>> },
+  provider: DbProvider,
+) {
   const mod =
     provider === 'postgresql'
       ? 'drizzle-orm/pg-core'
@@ -242,7 +243,7 @@ export function resolveScalarType(field: DMMF.Field, provider: DbProvider): stri
 function makeColumnExpr(
   field: DMMF.Field,
   provider: DbProvider,
-  imports: Imports,
+  imports: { core: Set<string>; orm: Set<string>; ext: Map<string, Set<string>> },
   enums: readonly DMMF.DatamodelEnum[],
 ): string {
   const colName = field.dbName ?? field.name
@@ -343,7 +344,7 @@ function makeDefaultChain(
   dflt: DMMF.Field['default'],
   fieldType: string,
   provider: DbProvider,
-  imports: Imports,
+  imports: { core: Set<string>; orm: Set<string>; ext: Map<string, Set<string>> },
 ): string {
   const result = resolveDefaultValue(dflt, fieldType, provider)
   if (result.needsSql) imports.orm.add('sql')
@@ -380,7 +381,7 @@ function makeColumn(
   field: DMMF.Field,
   model: DMMF.Model,
   provider: DbProvider,
-  imports: Imports,
+  imports: { core: Set<string>; orm: Set<string>; ext: Map<string, Set<string>> },
   enums: readonly DMMF.DatamodelEnum[],
 ): string | null {
   if (field.kind === 'object') return null
@@ -425,7 +426,7 @@ function makeColumn(
 
 function makeCompositeConstraints(
   model: DMMF.Model,
-  imports: Imports,
+  imports: { core: Set<string>; orm: Set<string>; ext: Map<string, Set<string>> },
   indexes: readonly DMMF.Index[],
   tableName: string,
 ): string | null {
@@ -463,7 +464,7 @@ function makeCompositeConstraints(
 function makeTable(
   model: DMMF.Model,
   provider: DbProvider,
-  imports: Imports,
+  imports: { core: Set<string>; orm: Set<string>; ext: Map<string, Set<string>> },
   enums: readonly DMMF.DatamodelEnum[],
   indexes: readonly DMMF.Index[],
 ): string {
@@ -518,7 +519,10 @@ function makeRelationField(
   return `${field.name}: one(${targetVar})`
 }
 
-function makeRelations(models: readonly DMMF.Model[], imports: Imports): readonly string[] {
+function makeRelations(
+  models: readonly DMMF.Model[],
+  imports: { core: Set<string>; orm: Set<string>; ext: Map<string, Set<string>> },
+): readonly string[] {
   const modelsWithRels = models.filter((model) => model.fields.some((f) => f.kind === 'object'))
   if (modelsWithRels.length === 0) return []
 
