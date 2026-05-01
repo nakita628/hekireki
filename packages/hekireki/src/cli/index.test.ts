@@ -1,13 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import {
-  DOCS_HELP_TEXT,
-  HELP_TEXT,
-  handleDocs,
-  hekirekiCli,
-  parseDocsServeArgs,
-  parsePort,
-} from './index.js'
+import { DOCS_HELP_TEXT, HELP_TEXT, handleDocs, hekireki, parsePort } from './index.js'
 
 // =============================================================================
 // HELP_TEXT / DOCS_HELP_TEXT
@@ -119,34 +112,6 @@ describe('parsePort', () => {
 })
 
 // =============================================================================
-// parseDocsServeArgs
-// =============================================================================
-
-describe('parseDocsServeArgs', () => {
-  it('returns default port when no args', () => {
-    expect(parseDocsServeArgs([])).toStrictEqual({ ok: true, value: { port: 5858 } })
-  })
-
-  it('parses -p flag into port option', () => {
-    expect(parseDocsServeArgs(['-p', '3000'])).toStrictEqual({ ok: true, value: { port: 3000 } })
-  })
-
-  it('parses --port flag into port option', () => {
-    expect(parseDocsServeArgs(['--port', '4000'])).toStrictEqual({
-      ok: true,
-      value: { port: 4000 },
-    })
-  })
-
-  it('propagates error from parsePort', () => {
-    expect(parseDocsServeArgs(['-p', 'abc'])).toStrictEqual({
-      ok: false,
-      error: '❌ Error: Invalid port number: abc',
-    })
-  })
-})
-
-// =============================================================================
 // handleDocs
 // =============================================================================
 
@@ -187,24 +152,24 @@ describe('handleDocs', () => {
 })
 
 // =============================================================================
-// hekirekiCli
+// hekireki
 // =============================================================================
 
-describe('hekirekiCli', () => {
+describe('hekireki', () => {
   it('returns HELP_TEXT when no args', () => {
-    expect(hekirekiCli([])).toStrictEqual({ ok: true, value: HELP_TEXT })
+    expect(hekireki([])).toStrictEqual({ ok: true, value: HELP_TEXT })
   })
 
   it('returns HELP_TEXT for -h', () => {
-    expect(hekirekiCli(['-h'])).toStrictEqual({ ok: true, value: HELP_TEXT })
+    expect(hekireki(['-h'])).toStrictEqual({ ok: true, value: HELP_TEXT })
   })
 
   it('returns HELP_TEXT for --help', () => {
-    expect(hekirekiCli(['--help'])).toStrictEqual({ ok: true, value: HELP_TEXT })
+    expect(hekireki(['--help'])).toStrictEqual({ ok: true, value: HELP_TEXT })
   })
 
   it('returns error for unknown command', () => {
-    const result = hekirekiCli(['unknown'])
+    const result = hekireki(['unknown'])
     expect(result.ok).toBe(false)
     if (!result.ok) {
       expect(result.error).toBe(`❌ Unknown command: unknown\n\n${HELP_TEXT}`)
@@ -212,26 +177,26 @@ describe('hekirekiCli', () => {
   })
 
   it('dispatches docs subcommand to handleDocs', () => {
-    expect(hekirekiCli(['docs'])).toStrictEqual({ ok: true, value: DOCS_HELP_TEXT })
+    expect(hekireki(['docs'])).toStrictEqual({ ok: true, value: DOCS_HELP_TEXT })
   })
 
   it('dispatches docs -h to handleDocs', () => {
-    expect(hekirekiCli(['docs', '-h'])).toStrictEqual({ ok: true, value: DOCS_HELP_TEXT })
+    expect(hekireki(['docs', '-h'])).toStrictEqual({ ok: true, value: DOCS_HELP_TEXT })
   })
 
   it('dispatches docs --help to handleDocs', () => {
-    expect(hekirekiCli(['docs', '--help'])).toStrictEqual({ ok: true, value: DOCS_HELP_TEXT })
+    expect(hekireki(['docs', '--help'])).toStrictEqual({ ok: true, value: DOCS_HELP_TEXT })
   })
 
   it('returns error for docs serve with invalid port', () => {
-    expect(hekirekiCli(['docs', 'serve', '-p', 'abc'])).toStrictEqual({
+    expect(hekireki(['docs', 'serve', '-p', 'abc'])).toStrictEqual({
       ok: false,
       error: '❌ Error: Invalid port number: abc',
     })
   })
 
   it('returns error for docs unknown subcommand', () => {
-    const result = hekirekiCli(['docs', 'foo'])
+    const result = hekireki(['docs', 'foo'])
     expect(result.ok).toBe(false)
     if (!result.ok) {
       expect(result.error).toBe(`❌ Unknown command: docs foo\n\n${DOCS_HELP_TEXT}`)
