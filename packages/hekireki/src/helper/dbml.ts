@@ -1,5 +1,3 @@
-import { writeFile } from 'node:fs/promises'
-
 import type { DMMF } from '@prisma/generator-helper'
 import { Resvg } from '@resvg/resvg-js'
 import { run } from '@softwaretechnik/dbml-renderer'
@@ -207,29 +205,12 @@ export function dbmlContent(datamodel: DMMF.Datamodel, mapToDbSchema = false) {
   return [...enums, ...tables, ...refs].join('\n\n')
 }
 
-export async function makeDbmlFile(
-  outputDir: string,
-  content: string,
-  fileName: string,
-): Promise<void> {
-  const outputFile = `${outputDir}/${fileName}`
-  await writeFile(outputFile, content)
-}
-
-export async function makePng(outputDir: string, dbml: string, fileName: string): Promise<void> {
-  const outputFile = `${outputDir}/${fileName}`
-  await makePngFile(outputFile, dbml)
-}
-
-export async function makePngFile(outputPath: string, dbml: string): Promise<void> {
+export function dbmlToPng(dbml: string) {
   const svg = run(dbml, 'svg')
   const resvg = new Resvg(svg, {
     font: {
       loadSystemFonts: true,
     },
   })
-  const pngData = resvg.render()
-  const pngBuffer = pngData.asPng()
-
-  await writeFile(outputPath, pngBuffer)
+  return resvg.render().asPng()
 }

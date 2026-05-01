@@ -1,6 +1,3 @@
-import { mkdir, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
-
 import type { DMMF } from '@prisma/generator-helper'
 
 import { makeSnakeCase } from '../utils/index.js'
@@ -719,18 +716,4 @@ export function sqlalchemySchemas(
   indexes?: readonly DMMF.Index[],
 ) {
   return generateSingleFile(allModels ?? models, enums, indexes)
-}
-
-export async function writeSQLAlchemyFile(
-  models: readonly DMMF.Model[],
-  outPath: string,
-  enums?: readonly DMMF.DatamodelEnum[],
-  indexes?: readonly DMMF.Index[],
-): Promise<void> {
-  const dir = dirname(outPath)
-  await mkdir(dir, { recursive: true })
-
-  const code = generateSingleFile(models, enums, indexes)
-  await writeFile(outPath, code)
-  console.log(`wrote ${outPath}`)
 }

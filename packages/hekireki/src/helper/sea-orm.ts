@@ -1,6 +1,3 @@
-import { mkdir, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
-
 import type { DMMF } from '@prisma/generator-helper'
 
 import { makeSnakeCase } from '../utils/index.js'
@@ -559,79 +556,64 @@ export function generatePreludeRs(models: readonly DMMF.Model[]) {
     .join('\n')}\n`
 }
 
-export async function writeSeaOrmFiles(
-  models: readonly DMMF.Model[],
-  outDir: string,
-  enums: readonly DMMF.DatamodelEnum[],
-  serde: SerdeOptions = {},
-): Promise<void> {
-  await mkdir(outDir, { recursive: true })
-
-  const moduleNames: string[] = []
-
-  // Collect M2M junction tables to generate
-  const m2mJunctions = new Set<string>()
-  const m2mPairs: { left: string; right: string }[] = []
-
-  for (const model of models) {
-    const associations = getAssociations(model, models)
-    for (const assoc of associations.manyToMany) {
+function collectM2MPairs(models: readonly DMMF.Model[]) {
+  const pairs = models.flatMap((model) =>
+    getAssociations(model, models).manyToMany.map((assoc) => {
       const [left, right] =
         model.name < assoc.targetModel
           ? [model.name, assoc.targetModel]
           : [assoc.targetModel, model.name]
-      const key = `${left}_${right}`
-      if (!m2mJunctions.has(key)) {
-        m2mJunctions.add(key)
-        m2mPairs.push({ left, right })
-      }
-    }
-  }
+      return { left, right }
+    }),
+  )
+  const seen = new Set<string>()
+  return pairs.filter((pair) => {
+    const key = `${pair.left}_${pair.right}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
 
-  // Generate enum files
-  for (const e of enums) {
-    const moduleName = toSnakeCase(e.name)
-    const useLines = ['use sea_orm::entity::prelude::*;', 'use serde::{Deserialize, Serialize};']
-    const code = [...useLines, '', generateEnum(e, serde), ''].join('\n')
-    const filePath = join(outDir, `${moduleName}.rs`)
-    await writeFile(filePath, code)
-    moduleNames.push(moduleName)
-    console.log(`wrote ${filePath}`)
-  }
+export function seaOrmFiles(
+  models: readonly DMMF.Model[],
+  enums: readonly DMMF.DatamodelEnum[],
+  serde: SerdeOptions = {},
+) {
+  const useLines = ['use sea_orm::entity::prelude::*;', 'use serde::{Deserialize, Serialize};']
 
-  // Generate entity files
-  for (const model of models) {
-    const code = generateEntityFile(model, models, enums, serde)
-    if (!code.trim()) continue
+  const enumFiles = enums.map((e) => ({
+    fileName: `${toSnakeCase(e.name)}.rs`,
+    moduleName: toSnakeCase(e.name),
+    code: [...useLines, '', generateEnum(e, serde), ''].join('\n'),
+  }))
 
-    const moduleName = toModuleName(model.name)
-    const filePath = join(outDir, `${moduleName}.rs`)
-    await writeFile(filePath, code)
-    moduleNames.push(moduleName)
-    console.log(`wrote ${filePath}`)
-  }
+  const entityFiles = models
+    .map((model) => ({
+      fileName: `${toModuleName(model.name)}.rs`,
+      moduleName: toModuleName(model.name),
+      code: generateEntityFile(model, models, enums, serde),
+    }))
+    .filter((entry) => entry.code.trim().length > 0)
 
-  // Generate M2M junction table files
-  for (const pair of m2mPairs) {
+  const m2mFiles = collectM2MPairs(models).map((pair) => {
     const moduleName = toSnakeCase(`${pair.left}To${pair.right}`)
-    const code = generateM2MEntity(pair.left, pair.right, models, serde)
-    const filePath = join(outDir, `${moduleName}.rs`)
-    await writeFile(filePath, code)
-    moduleNames.push(moduleName)
-    console.log(`wrote ${filePath}`)
+    return {
+      fileName: `${moduleName}.rs`,
+      moduleName,
+      code: generateM2MEntity(pair.left, pair.right, models, serde),
+    }
+  })
+
+  const preludeEntry = {
+    fileName: 'prelude.rs',
+    moduleName: 'prelude',
+    code: generatePreludeRs(models),
   }
 
-  // Generate prelude.rs
-  const preludeCode = generatePreludeRs(models)
-  const preludePath = join(outDir, 'prelude.rs')
-  await writeFile(preludePath, preludeCode)
-  moduleNames.push('prelude')
-  console.log(`wrote ${preludePath}`)
+  const allEntries = [...enumFiles, ...entityFiles, ...m2mFiles, preludeEntry]
+  const moduleNames = allEntries.map((e) => e.moduleName).sort()
+  const modEntry = { fileName: 'mod.rs', code: generateModRs(moduleNames) }
 
-  // Generate mod.rs
-  moduleNames.sort()
-  const modCode = generateModRs(moduleNames)
-  const modPath = join(outDir, 'mod.rs')
-  await writeFile(modPath, modCode)
-  console.log(`wrote ${modPath}`)
+  return [...allEntries.map(({ fileName, code }) => ({ fileName, code })), modEntry]
 }

@@ -1,6 +1,3 @@
-import { mkdir, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
-
 import type { DMMF } from '@prisma/generator-helper'
 
 import { makeSnakeCase } from '../utils/index.js'
@@ -417,20 +414,15 @@ export function ectoSchemas(
     .join('\n\n')
 }
 
-export async function writeEctoSchemasToFiles(
+export function ectoSchemaFiles(
   models: readonly DMMF.Model[],
   app: string | string[],
-  outDir: string,
   enums?: readonly DMMF.DatamodelEnum[],
-): Promise<void> {
-  await mkdir(outDir, { recursive: true })
-
-  for (const model of models) {
-    const code = ectoSchemas([model], app, models, enums)
-    if (!code.trim()) continue
-
-    const filePath = join(outDir, `${makeSnakeCase(model.name)}.ex`)
-    await writeFile(filePath, code)
-    console.log(`wrote ${filePath}`)
-  }
+) {
+  return models
+    .map((model) => ({
+      fileName: `${makeSnakeCase(model.name)}.ex`,
+      code: ectoSchemas([model], app, models, enums),
+    }))
+    .filter((entry) => entry.code.trim().length > 0)
 }

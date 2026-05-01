@@ -1,6 +1,3 @@
-import { mkdir, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
-
 import type { DMMF } from '@prisma/generator-helper'
 
 import { makeSnakeCase } from '../utils/index.js'
@@ -557,19 +554,4 @@ export function generateGormModels(
   lines.push('')
 
   return lines.join('\n')
-}
-
-export async function writeGormFile(
-  models: readonly DMMF.Model[],
-  outPath: string,
-  enums?: readonly DMMF.DatamodelEnum[],
-  indexes?: readonly DMMF.Index[],
-  packageName = 'model',
-): Promise<void> {
-  const dir = dirname(outPath)
-  await mkdir(dir, { recursive: true })
-
-  const code = generateGormModels(models, enums, indexes, packageName)
-  await writeFile(outPath, code)
-  console.log(`wrote ${outPath}`)
 }
