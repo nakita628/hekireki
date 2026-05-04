@@ -1,7 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 import { describe, expect, it } from 'vite-plus/test'
 
-import { generateSingleFile, sqlalchemySchemas } from '../generator/sqlalchemy.js'
+import { generateSingleFile } from '../generator/sqlalchemy.js'
 import { prismaTypeToPythonType, prismaTypeToSQLAlchemyType } from './sqlalchemy.js'
 
 // Test run
@@ -1438,36 +1438,5 @@ class Article(Base):
     updated_at: Mapped[datetime] = mapped_column(onupdate=func.now())
 `,
     )
-  })
-})
-
-// ============================================================================
-// sqlalchemySchemas (backward compat)
-// ============================================================================
-
-describe('sqlalchemySchemas (backward compat)', () => {
-  it('delegates to generateSingleFile', () => {
-    const models = [
-      makeModel('User', [
-        makeField({ name: 'id', type: 'Int', isId: true }),
-        makeField({ name: 'name', type: 'String' }),
-      ]),
-    ]
-    const a = generateSingleFile(models)
-    const b = sqlalchemySchemas(models)
-    expect(a).toStrictEqual(b)
-  })
-
-  it('uses allModels when provided', () => {
-    const user = makeModel('User', [
-      makeField({ name: 'id', type: 'Int', isId: true }),
-      makeField({ name: 'name', type: 'String' }),
-    ])
-    const post = makeModel('Post', [
-      makeField({ name: 'id', type: 'Int', isId: true }),
-      makeField({ name: 'title', type: 'String' }),
-    ])
-    const result = sqlalchemySchemas([user], [user, post])
-    expect(result).toStrictEqual(generateSingleFile([user, post]))
   })
 })

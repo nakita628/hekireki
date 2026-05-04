@@ -41,12 +41,3 @@ export function generateSingleFile(
     '',
   ].join('\n')
 }
-
-export function sqlalchemySchemas(
-  models: readonly DMMF.Model[],
-  allModels?: readonly DMMF.Model[],
-  enums?: readonly DMMF.DatamodelEnum[],
-  indexes?: readonly DMMF.Index[],
-) {
-  return generateSingleFile(allModels ?? models, enums, indexes)
-}
