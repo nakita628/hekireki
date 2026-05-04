@@ -33,7 +33,7 @@ export function validationSchemas(
       comment: boolean,
       objectType?: 'strict' | 'loose',
     ) => string
-    readonly typeMapping?: Record<string, string>
+    readonly typeMapping?: { [k: string]: string }
     readonly enums?: readonly {
       readonly name: string
       readonly values: readonly { readonly name: string }[]

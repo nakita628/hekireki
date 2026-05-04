@@ -1,12 +1,8 @@
 import type { DMMF } from '@prisma/generator-helper'
 import { describe, expect, it } from 'vite-plus/test'
 
-import {
-  generateSingleFile,
-  prismaTypeToPythonType,
-  prismaTypeToSQLAlchemyType,
-  sqlalchemySchemas,
-} from './sqlalchemy.js'
+import { generateSingleFile, sqlalchemySchemas } from '../generator/sqlalchemy.js'
+import { prismaTypeToPythonType, prismaTypeToSQLAlchemyType } from './sqlalchemy.js'
 
 // Test run
 // pnpm vitest run ./src/helper/sqlalchemy.test.ts

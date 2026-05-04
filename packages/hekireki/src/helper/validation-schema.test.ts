@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import { makeZodInfer, makeZodSchemas, PRISMA_TO_ZOD } from '../core/zod.js'
 import { makeValidationExtractor, parseDocumentWithoutAnnotations } from '../utils/index.js'
 import { validationSchemas } from './validation-schema.js'
+import { makeZodInfer, makeZodSchemas, PRISMA_TO_ZOD } from './zod.js'
 
 describe('validationSchemas', () => {
   it('should generate validation schemas with type mapping', () => {

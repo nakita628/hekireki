@@ -10,7 +10,7 @@ import {
   valibotSchemaCode,
 } from './valibot.js'
 
-describe('core/valibot', () => {
+describe('helper/valibot', () => {
   describe('PRISMA_TO_VALIBOT', () => {
     it('PRISMA_TO_VALIBOT maps String to string()', () => {
       expect(PRISMA_TO_VALIBOT.String).toBe('string()')

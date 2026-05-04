@@ -11,7 +11,7 @@ import {
   PRISMA_TO_EFFECT,
 } from './effect.js'
 
-describe('core/effect', () => {
+describe('helper/effect', () => {
   describe('PRISMA_TO_EFFECT', () => {
     it('PRISMA_TO_EFFECT maps String to Schema.String', () => {
       expect(PRISMA_TO_EFFECT.String).toBe('Schema.String')

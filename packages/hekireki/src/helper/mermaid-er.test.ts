@@ -1,8 +1,8 @@
 import type { DMMF } from '@prisma/generator-helper'
 import { describe, expect, it } from 'vite-plus/test'
 
+import { erContent } from '../generator/mermaid-er.js'
 import {
-  erContent,
   extractRelations,
   extractRelationsFromDmmf,
   isRelationshipType,
@@ -42,7 +42,7 @@ function makeField(overrides: Partial<DMMF.Field> & { name: string; type: string
   }
 }
 
-describe('core/mermaid-er', () => {
+describe('helper/mermaid-er', () => {
   describe('makeRelationLine', () => {
     const testCases = [
       { input: 'zero-one-to-zero-one', expected: '|o--|o' },

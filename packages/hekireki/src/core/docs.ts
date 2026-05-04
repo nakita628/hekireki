@@ -3,8 +3,7 @@ import path from 'node:path'
 import type { GeneratorOptions } from '@prisma/generator-helper'
 
 import { emitRaw } from '../emit/index.js'
-import { transformDMMF } from './docs/generator/transformDMMF.js'
-import { generateHTML } from './docs/printer/index.js'
+import { docsHTML } from '../generator/docs.js'
 
 export async function docs(options: GeneratorOptions) {
   if (!(options.generator.isCustomOutput && options.generator.output?.value)) {
@@ -15,7 +14,6 @@ export async function docs(options: GeneratorOptions) {
     } as const
   }
   const output = options.generator.output.value
-  const dmmf = transformDMMF(options.dmmf)
-  const html = generateHTML(dmmf)
+  const html = docsHTML(options.dmmf)
   return emitRaw(html, output, path.join(output, 'index.html'))
 }

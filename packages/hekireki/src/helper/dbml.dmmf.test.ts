@@ -1,7 +1,8 @@
 import type { DMMF } from '@prisma/generator-helper'
 import { describe, expect, it } from 'vite-plus/test'
 
-import { dbmlContent, makeEnums, makeRelations, makeTables } from './dbml.js'
+import { dbmlContent } from '../generator/dbml.js'
+import { makeEnums, makeRelations, makeTables } from './dbml.js'
 
 // Test run
 // pnpm vitest run ./src/generator/dbml/dbml.test.ts

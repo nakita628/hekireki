@@ -10,7 +10,7 @@ import {
   zodSchemaCode,
 } from './zod.js'
 
-describe('core/zod', () => {
+describe('helper/zod', () => {
   describe('PRISMA_TO_ZOD', () => {
     it('PRISMA_TO_ZOD maps String to string()', () => {
       expect(PRISMA_TO_ZOD.String).toBe('string()')
