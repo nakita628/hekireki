@@ -1,6 +1,6 @@
-import { createId } from '@paralleldrive/cuid2'
-import { relations } from 'drizzle-orm'
 import { integer, sqliteTable, text, unique } from 'drizzle-orm/sqlite-core'
+import { relations } from 'drizzle-orm'
+import { createId } from '@paralleldrive/cuid2'
 
 export const user = sqliteTable('user', {
   id: text('id')
@@ -8,7 +8,7 @@ export const user = sqliteTable('user', {
     .$defaultFn(() => createId()),
   name: text('name'),
   email: text('email').unique(),
-  emailVerified: integer('emailVerified', { mode: 'timestamp' }),
+  emailVerified: integer('emailVerified', { mode: 'timestamp_ms' }),
   image: text('image'),
   password: text('password'),
   role: text('role', { enum: ['ADMIN', 'USER'] })
@@ -23,7 +23,9 @@ export const account = sqliteTable(
     id: text('id')
       .primaryKey()
       .$defaultFn(() => createId()),
-    userId: text('userId').notNull(),
+    userId: text('userId')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
     type: text('type').notNull(),
     provider: text('provider').notNull(),
     providerAccountId: text('providerAccountId').notNull(),
@@ -46,7 +48,7 @@ export const verificationToken = sqliteTable(
       .$defaultFn(() => createId()),
     email: text('email').notNull(),
     token: text('token').notNull().unique(),
-    expires: integer('expires', { mode: 'timestamp' }).notNull(),
+    expires: integer('expires', { mode: 'timestamp_ms' }).notNull(),
   },
   (table) => [unique().on(table.email, table.token)],
 )
@@ -59,7 +61,7 @@ export const passwordResetToken = sqliteTable(
       .$defaultFn(() => createId()),
     email: text('email').notNull(),
     token: text('token').notNull().unique(),
-    expires: integer('expires', { mode: 'timestamp' }).notNull(),
+    expires: integer('expires', { mode: 'timestamp_ms' }).notNull(),
   },
   (table) => [unique().on(table.email, table.token)],
 )
@@ -72,21 +74,20 @@ export const twoFactorToken = sqliteTable(
       .$defaultFn(() => createId()),
     email: text('email').notNull(),
     token: text('token').notNull().unique(),
-    expires: integer('expires', { mode: 'timestamp' }).notNull(),
+    expires: integer('expires', { mode: 'timestamp_ms' }).notNull(),
   },
   (table) => [unique().on(table.email, table.token)],
 )
 
-export const twoFactorConfirmation = sqliteTable(
-  'two_factor_confirmation',
-  {
-    id: text('id')
-      .primaryKey()
-      .$defaultFn(() => createId()),
-    userId: text('userId').notNull().unique(),
-  },
-  (table) => [unique().on(table.userId)],
-)
+export const twoFactorConfirmation = sqliteTable('two_factor_confirmation', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => createId()),
+  userId: text('userId')
+    .notNull()
+    .unique()
+    .references(() => user.id, { onDelete: 'cascade' }),
+})
 
 export const userRelations = relations(user, ({ one, many }) => ({
   accounts: many(account),

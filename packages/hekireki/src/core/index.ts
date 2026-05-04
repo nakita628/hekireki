@@ -1,6 +1,7 @@
 export * from './ajv.js'
 export * from './arktype.js'
 export * from './dbml.js'
+export * from './docs.js'
 export * from './drizzle.js'
 export * from './ecto.js'
 export * from './effect.js'

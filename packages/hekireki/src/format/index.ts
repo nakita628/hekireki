@@ -7,7 +7,10 @@ export async function fmt(input: string) {
     semi: false,
   })
   if (errors.length > 0) {
-    throw new Error(errors.map((e) => e.message).join('\n'))
+    return {
+      ok: false,
+      error: errors.map((e) => e.message).join('\n'),
+    } as const
   }
-  return code
+  return { ok: true, value: code } as const
 }

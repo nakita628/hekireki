@@ -1,0 +1,232 @@
+import { describe, expect, it } from 'vite-plus/test'
+
+import { makeZodInfer, makeZodSchemas, PRISMA_TO_ZOD } from '../core/zod.js'
+import { makeValidationExtractor, parseDocumentWithoutAnnotations } from '../utils/index.js'
+import { validationSchemas } from './validation-schema.js'
+
+describe('validationSchemas', () => {
+  it('should generate validation schemas with type mapping', () => {
+    const models = [
+      {
+        name: 'User',
+        fields: [
+          {
+            name: 'id',
+            type: 'String',
+            kind: 'scalar',
+            isRequired: true,
+            isList: false,
+            documentation: '@z.uuid()',
+          },
+          {
+            name: 'name',
+            type: 'String',
+            kind: 'scalar',
+            isRequired: true,
+            isList: false,
+            documentation: '@z.string().min(1)',
+          },
+        ],
+      },
+    ]
+
+    const result = validationSchemas(models, true, false, {
+      importStatement: "import * as z from 'zod'",
+      annotationPrefix: '@z.',
+      parseDocument: parseDocumentWithoutAnnotations,
+      extractValidation: makeValidationExtractor('@z.'),
+      inferType: makeZodInfer,
+      schemas: makeZodSchemas,
+      typeMapping: PRISMA_TO_ZOD,
+    })
+
+    expect(result).toBe(
+      "import * as z from 'zod'\n\nexport const UserSchema = z.object({\n  id: z.uuid(),\n  name: z.string().min(1)\n})\n\nexport type User = z.infer<typeof UserSchema>",
+    )
+  })
+
+  it('should generate schemas without type inference when type is false', () => {
+    const models = [
+      {
+        name: 'Post',
+        fields: [
+          {
+            name: 'title',
+            type: 'String',
+            kind: 'scalar',
+            isRequired: true,
+            isList: false,
+            documentation: '@z.string()',
+          },
+        ],
+      },
+    ]
+
+    const result = validationSchemas(models, false, false, {
+      importStatement: "import * as z from 'zod'",
+      annotationPrefix: '@z.',
+      parseDocument: parseDocumentWithoutAnnotations,
+      extractValidation: makeValidationExtractor('@z.'),
+      inferType: makeZodInfer,
+      schemas: makeZodSchemas,
+      typeMapping: PRISMA_TO_ZOD,
+    })
+
+    expect(result).toBe(
+      "import * as z from 'zod'\n\nexport const PostSchema = z.object({\n  title: z.string()\n})",
+    )
+  })
+
+  it('should use typeMapping fallback when no annotation is present', () => {
+    const models = [
+      {
+        name: 'Item',
+        fields: [{ name: 'count', type: 'Int', kind: 'scalar', isRequired: true, isList: false }],
+      },
+    ]
+
+    const result = validationSchemas(models, false, false, {
+      importStatement: "import * as z from 'zod'",
+      annotationPrefix: '@z.',
+      parseDocument: parseDocumentWithoutAnnotations,
+      extractValidation: makeValidationExtractor('@z.'),
+      inferType: makeZodInfer,
+      schemas: makeZodSchemas,
+      typeMapping: PRISMA_TO_ZOD,
+    })
+
+    expect(result).toBe(
+      "import * as z from 'zod'\n\nexport const ItemSchema = z.object({\n  count: z.number()\n})",
+    )
+  })
+
+  it('should generate schemas with comment true and type false', () => {
+    const models = [
+      {
+        name: 'User',
+        fields: [
+          {
+            name: 'id',
+            type: 'String',
+            kind: 'scalar',
+            isRequired: true,
+            isList: false,
+            documentation: 'Primary key\n@z.uuid()',
+          },
+        ],
+      },
+    ]
+
+    const result = validationSchemas(models, false, true, {
+      importStatement: "import * as z from 'zod'",
+      annotationPrefix: '@z.',
+      parseDocument: parseDocumentWithoutAnnotations,
+      extractValidation: makeValidationExtractor('@z.'),
+      inferType: makeZodInfer,
+      schemas: makeZodSchemas,
+      typeMapping: PRISMA_TO_ZOD,
+    })
+
+    expect(result).toBe(
+      "import * as z from 'zod'\n\nexport const UserSchema = z.object({\n  /**\n   * Primary key\n   */\n  id: z.uuid()\n})",
+    )
+  })
+
+  it('should resolve enum fields via formatEnum', () => {
+    const models = [
+      {
+        name: 'User',
+        fields: [
+          {
+            name: 'role',
+            type: 'Role',
+            kind: 'enum',
+            isRequired: true,
+            isList: false,
+          },
+        ],
+      },
+    ]
+
+    const enums = [{ name: 'Role', values: [{ name: 'ADMIN' }, { name: 'USER' }] }]
+
+    const result = validationSchemas(models, false, false, {
+      importStatement: "import * as z from 'zod'",
+      annotationPrefix: '@z.',
+      parseDocument: parseDocumentWithoutAnnotations,
+      extractValidation: makeValidationExtractor('@z.'),
+      inferType: makeZodInfer,
+      schemas: makeZodSchemas,
+      typeMapping: PRISMA_TO_ZOD,
+      enums,
+      formatEnum: (values) => `enum([${values.map((v) => `'${v}'`).join(', ')}])`,
+    })
+
+    expect(result).toBe(
+      "import * as z from 'zod'\n\nexport const UserSchema = z.object({\n  role: z.enum(['ADMIN', 'USER'])\n})",
+    )
+  })
+
+  it('should call onWarning for fields with no annotation or typeMapping', () => {
+    const warnings: string[] = []
+    const models = [
+      {
+        name: 'User',
+        fields: [
+          {
+            name: 'mystery',
+            type: 'CustomType',
+            kind: 'scalar',
+            isRequired: true,
+            isList: false,
+          },
+        ],
+      },
+    ]
+
+    validationSchemas(models, false, false, {
+      importStatement: '',
+      annotationPrefix: '@z.',
+      parseDocument: parseDocumentWithoutAnnotations,
+      extractValidation: makeValidationExtractor('@z.'),
+      inferType: makeZodInfer,
+      schemas: makeZodSchemas,
+      onWarning: (msg) => warnings.push(msg),
+    })
+
+    expect(warnings).toStrictEqual([
+      'Warning: Field "User.mystery" has no @z. annotation and will be omitted from the schema',
+    ])
+  })
+
+  it('should not call onWarning when all fields have annotations', () => {
+    const warnings: string[] = []
+    const models = [
+      {
+        name: 'User',
+        fields: [
+          {
+            name: 'id',
+            type: 'String',
+            kind: 'scalar',
+            isRequired: true,
+            isList: false,
+            documentation: '@z.uuid()',
+          },
+        ],
+      },
+    ]
+
+    validationSchemas(models, false, false, {
+      importStatement: "import * as z from 'zod'",
+      annotationPrefix: '@z.',
+      parseDocument: parseDocumentWithoutAnnotations,
+      extractValidation: makeValidationExtractor('@z.'),
+      inferType: makeZodInfer,
+      schemas: makeZodSchemas,
+      onWarning: (msg) => warnings.push(msg),
+    })
+
+    expect(warnings).toStrictEqual([])
+  })
+})

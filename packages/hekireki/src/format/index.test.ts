@@ -8,10 +8,15 @@ import { fmt } from './index.js'
 describe('fmt', () => {
   it.concurrent('formats valid TypeScript code', async () => {
     const result = await fmt('const hekireki = "hekireki";')
-    expect(result).toBe(`const hekireki = 'hekireki'\n`)
+    expect(result).toStrictEqual({ ok: true, value: `const hekireki = 'hekireki'\n` })
   })
 
-  it.concurrent('throws on invalid syntax', async () => {
-    await expect(fmt('const x = {')).rejects.toThrow()
+  it.concurrent('returns err on invalid syntax', async () => {
+    const result = await fmt('const x = {')
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(typeof result.error).toBe('string')
+      expect(result.error.length > 0).toBe(true)
+    }
   })
 })
