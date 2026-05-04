@@ -1,0 +1,550 @@
+import { describe, expect, it } from 'vite-plus/test'
+
+import {
+  makeTypeBoxEnumExpression,
+  makeTypeBoxInfer,
+  makeTypeBoxProperties,
+  makeTypeBoxRelations,
+  makeTypeBoxSchema,
+  makeTypeBoxSchemas,
+  PRISMA_TO_TYPEBOX,
+  typeboxSchemaCode,
+} from './typebox.js'
+
+describe('core/typebox', () => {
+  describe('PRISMA_TO_TYPEBOX', () => {
+    it('maps Prisma types to TypeBox types', () => {
+      expect(PRISMA_TO_TYPEBOX.String).toBe('Type.String()')
+      expect(PRISMA_TO_TYPEBOX.Int).toBe('Type.Integer()')
+      expect(PRISMA_TO_TYPEBOX.Float).toBe('Type.Number()')
+      expect(PRISMA_TO_TYPEBOX.Boolean).toBe('Type.Boolean()')
+      expect(PRISMA_TO_TYPEBOX.DateTime).toBe('Type.Date()')
+      expect(PRISMA_TO_TYPEBOX.BigInt).toBe('Type.BigInt()')
+      expect(PRISMA_TO_TYPEBOX.Decimal).toBe('Type.Number()')
+      expect(PRISMA_TO_TYPEBOX.Json).toBe('Type.Unknown()')
+      expect(PRISMA_TO_TYPEBOX.Bytes).toBe('Type.Any()')
+    })
+  })
+
+  describe('makeTypeBoxSchemas', () => {
+    it.concurrent('schemas comment true', () => {
+      const result = makeTypeBoxSchemas(
+        [
+          {
+            documentation: '',
+            modelName: 'User',
+            fieldName: 'id',
+            comment: ['Primary key'],
+            validation: 'Type.String()',
+            isRequired: true,
+          },
+          {
+            documentation: '',
+            modelName: 'User',
+            fieldName: 'name',
+            comment: ['Display name'],
+            validation: 'Type.String()',
+            isRequired: true,
+          },
+        ],
+        true,
+      )
+      const expected = `export const UserSchema = Type.Object({
+  /**
+   * Primary key
+   */
+  id: Type.String(),
+  /**
+   * Display name
+   */
+  name: Type.String(),
+})`
+      expect(result).toBe(expected)
+    })
+
+    it.concurrent('schemas comment false', () => {
+      const result = makeTypeBoxSchemas(
+        [
+          {
+            documentation: '',
+            modelName: 'User',
+            fieldName: 'id',
+            comment: ['Primary key'],
+            validation: 'Type.String()',
+            isRequired: true,
+          },
+          {
+            documentation: '',
+            modelName: 'User',
+            fieldName: 'name',
+            comment: ['Display name'],
+            validation: 'Type.String()',
+            isRequired: true,
+          },
+        ],
+        false,
+      )
+      const expected = `export const UserSchema = Type.Object({
+  id: Type.String(),
+  name: Type.String(),
+})`
+      expect(result).toBe(expected)
+    })
+
+    it.concurrent('wraps optional fields with Type.Optional', () => {
+      const result = makeTypeBoxSchemas(
+        [
+          {
+            documentation: '',
+            modelName: 'User',
+            fieldName: 'id',
+            comment: [],
+            validation: 'Type.String()',
+            isRequired: true,
+          },
+          {
+            documentation: '',
+            modelName: 'User',
+            fieldName: 'email',
+            comment: [],
+            validation: 'Type.String()',
+            isRequired: false,
+          },
+        ],
+        false,
+      )
+      const expected = `export const UserSchema = Type.Object({
+  id: Type.String(),
+  email: Type.Optional(Type.String()),
+})`
+      expect(result).toBe(expected)
+    })
+  })
+
+  describe('makeTypeBoxRelations', () => {
+    it('returns null when no relations', () => {
+      const result = makeTypeBoxRelations({ name: 'User' }, [])
+      expect(result).toBeNull()
+    })
+
+    it('generates relation schema with spread and relation fields', () => {
+      const relProps = [
+        { key: 'posts', targetModel: 'Post', isMany: true },
+        { key: 'profile', targetModel: 'Profile', isMany: false },
+      ]
+
+      const result = makeTypeBoxRelations({ name: 'User' }, relProps)
+
+      expect(result).toBe(
+        'export const UserRelationsSchema = Type.Object({\n  ...UserSchema.properties,\n  posts: Type.Array(PostSchema),\n  profile: ProfileSchema,\n})',
+      )
+    })
+
+    it('includes type export when includeType is true', () => {
+      const relProps = [{ key: 'posts', targetModel: 'Post', isMany: true }]
+
+      const result = makeTypeBoxRelations({ name: 'User' }, relProps, { includeType: true })
+
+      expect(result).toBe(
+        'export const UserRelationsSchema = Type.Object({\n  ...UserSchema.properties,\n  posts: Type.Array(PostSchema),\n})\n\nexport type UserRelations = Static<typeof UserRelationsSchema>',
+      )
+    })
+  })
+
+  describe('typebox', () => {
+    it('generates full output with import and schemas', () => {
+      const model = {
+        name: 'User',
+        fields: [
+          {
+            name: 'id',
+            type: 'String',
+            kind: 'scalar',
+            isRequired: true,
+            isList: false,
+            documentation: '@t.Type.String()',
+          },
+          {
+            name: 'name',
+            type: 'String',
+            kind: 'scalar',
+            isRequired: true,
+            isList: false,
+            documentation: '@t.Type.String()',
+          },
+        ],
+      }
+
+      const result = typeboxSchemaCode([model], false, false)
+
+      expect(result).toBe(
+        "import { Type } from '@sinclair/typebox'\n\nexport const UserSchema = Type.Object({\n  id: Type.String(),\n  name: Type.String(),\n})",
+      )
+    })
+
+    it('falls back to type mapping when no annotation', () => {
+      const model = {
+        name: 'Item',
+        fields: [
+          { name: 'id', type: 'Int', kind: 'scalar', isRequired: true, isList: false },
+          { name: 'name', type: 'String', kind: 'scalar', isRequired: true, isList: false },
+        ],
+      }
+
+      const result = typeboxSchemaCode([model], false, false)
+
+      expect(result).toBe(
+        "import { Type } from '@sinclair/typebox'\n\nexport const ItemSchema = Type.Object({\n  id: Type.Integer(),\n  name: Type.String(),\n})",
+      )
+    })
+
+    it('generates type inference when type is true', () => {
+      const model = {
+        name: 'User',
+        fields: [{ name: 'id', type: 'String', kind: 'scalar', isRequired: true, isList: false }],
+      }
+
+      const result = typeboxSchemaCode([model], true, false)
+
+      expect(result).toBe(
+        "import { type Static, Type } from '@sinclair/typebox'\n\nexport const UserSchema = Type.Object({\n  id: Type.String(),\n})\n\nexport type User = Static<typeof UserSchema>",
+      )
+    })
+  })
+
+  describe('makeTypeBoxInfer', () => {
+    it('generates TypeBox Static infer type', () => {
+      expect(makeTypeBoxInfer('User')).toBe('export type User = Static<typeof UserSchema>')
+    })
+  })
+
+  describe('makeTypeBoxSchema', () => {
+    it('generates schema with fields', () => {
+      const result = makeTypeBoxSchema('Post', '  id: Type.String(),\n  title: Type.String()')
+      expect(result).toBe(
+        'export const PostSchema = Type.Object({\n  id: Type.String(),\n  title: Type.String()\n})',
+      )
+    })
+  })
+
+  describe('makeTypeBoxProperties', () => {
+    const fields = [
+      {
+        documentation: '',
+        modelName: 'User',
+        fieldName: 'id',
+        validation: 'Type.String()',
+        isRequired: true,
+        comment: ['Primary key'],
+      },
+    ]
+
+    it('generates properties with comments', () => {
+      expect(makeTypeBoxProperties(fields, true)).toBe(
+        '  /**\n   * Primary key\n   */\n  id: Type.String(),',
+      )
+    })
+    it('generates properties without comments', () => {
+      expect(makeTypeBoxProperties(fields, false)).toBe('  id: Type.String(),')
+    })
+    it('wraps optional fields with Type.Optional', () => {
+      const optionalFields = [{ ...fields[0], isRequired: false }]
+      expect(makeTypeBoxProperties(optionalFields, false)).toBe(
+        '  id: Type.Optional(Type.String()),',
+      )
+    })
+    it('uses Type.Unknown() for null validation', () => {
+      const nullFields = [{ ...fields[0], validation: null, comment: [] }]
+      expect(makeTypeBoxProperties(nullFields, false)).toBe('  id: Type.Unknown(),')
+    })
+  })
+
+  describe('makeTypeBoxEnumExpression', () => {
+    it('generates Type.Union with Type.Literal', () => {
+      expect(makeTypeBoxEnumExpression(['USER', 'ADMIN'])).toBe(
+        "Type.Union([Type.Literal('USER'), Type.Literal('ADMIN')])",
+      )
+    })
+    it('handles single value', () => {
+      expect(makeTypeBoxEnumExpression(['ACTIVE'])).toBe("Type.Union([Type.Literal('ACTIVE')])")
+    })
+  })
+
+  // ============================================================================
+  // Real-world use case tests
+  // ============================================================================
+
+  describe('E-Commerce order pattern', () => {
+    it('generates Order schema with enum and type', () => {
+      const models = [
+        {
+          name: 'Order',
+          fields: [
+            {
+              name: 'id',
+              type: 'String',
+              kind: 'scalar',
+              isRequired: true,
+              isList: false,
+              documentation: "@t.Type.String({ format: 'uuid' })",
+            },
+            {
+              name: 'status',
+              type: 'OrderStatus',
+              kind: 'enum',
+              isRequired: true,
+              isList: false,
+            },
+            {
+              name: 'totalAmount',
+              type: 'Int',
+              kind: 'scalar',
+              isRequired: true,
+              isList: false,
+            },
+          ],
+        },
+      ]
+      const enums = [
+        {
+          name: 'OrderStatus',
+          values: [
+            { name: 'PENDING' },
+            { name: 'CONFIRMED' },
+            { name: 'SHIPPED' },
+            { name: 'DELIVERED' },
+            { name: 'CANCELLED' },
+          ],
+        },
+      ]
+      const result = typeboxSchemaCode(models, true, false, enums)
+      expect(result).toBe(
+        "import { type Static, Type } from '@sinclair/typebox'\n\nexport const OrderSchema = Type.Object({\n  id: Type.String({ format: 'uuid' }),\n  status: Type.Union([Type.Literal('PENDING'), Type.Literal('CONFIRMED'), Type.Literal('SHIPPED'), Type.Literal('DELIVERED'), Type.Literal('CANCELLED')]),\n  totalAmount: Type.Integer(),\n})\n\nexport type Order = Static<typeof OrderSchema>",
+      )
+    })
+
+    it('generates Order schema with optional note field', () => {
+      const result = makeTypeBoxSchemas(
+        [
+          {
+            documentation: '',
+            modelName: 'Order',
+            fieldName: 'id',
+            comment: ['Order ID'],
+            validation: "Type.String({ format: 'uuid' })",
+            isRequired: true,
+          },
+          {
+            documentation: '',
+            modelName: 'Order',
+            fieldName: 'note',
+            comment: ['Customer note'],
+            validation: 'Type.String()',
+            isRequired: false,
+          },
+        ],
+        true,
+      )
+      expect(result).toBe(`export const OrderSchema = Type.Object({
+  /**
+   * Order ID
+   */
+  id: Type.String({ format: 'uuid' }),
+  /**
+   * Customer note
+   */
+  note: Type.Optional(Type.String()),
+})`)
+    })
+
+    it('generates Order relations', () => {
+      const result = makeTypeBoxRelations(
+        { name: 'Order' },
+        [
+          { key: 'items', targetModel: 'OrderItem', isMany: true },
+          { key: 'customer', targetModel: 'Customer', isMany: false },
+        ],
+        { includeType: true },
+      )
+      expect(result).toBe(
+        'export const OrderRelationsSchema = Type.Object({\n  ...OrderSchema.properties,\n  items: Type.Array(OrderItemSchema),\n  customer: CustomerSchema,\n})\n\nexport type OrderRelations = Static<typeof OrderRelationsSchema>',
+      )
+    })
+  })
+
+  describe('multiple Prisma scalar types', () => {
+    it('maps all scalar types correctly', () => {
+      expect(PRISMA_TO_TYPEBOX.String).toBe('Type.String()')
+      expect(PRISMA_TO_TYPEBOX.Int).toBe('Type.Integer()')
+      expect(PRISMA_TO_TYPEBOX.Float).toBe('Type.Number()')
+      expect(PRISMA_TO_TYPEBOX.Boolean).toBe('Type.Boolean()')
+      expect(PRISMA_TO_TYPEBOX.DateTime).toBe('Type.Date()')
+      expect(PRISMA_TO_TYPEBOX.BigInt).toBe('Type.BigInt()')
+      expect(PRISMA_TO_TYPEBOX.Decimal).toBe('Type.Number()')
+      expect(PRISMA_TO_TYPEBOX.Json).toBe('Type.Unknown()')
+      expect(PRISMA_TO_TYPEBOX.Bytes).toBe('Type.Any()')
+    })
+  })
+
+  // ============================================================================
+  // Edge case tests
+  // ============================================================================
+
+  describe('edge cases', () => {
+    it('generates schema with all optional fields', () => {
+      const result = makeTypeBoxSchemas(
+        [
+          {
+            documentation: '',
+            modelName: 'Session',
+            fieldName: 'token',
+            comment: [],
+            validation: 'Type.String()',
+            isRequired: false,
+          },
+          {
+            documentation: '',
+            modelName: 'Session',
+            fieldName: 'expiresAt',
+            comment: [],
+            validation: 'Type.Date()',
+            isRequired: false,
+          },
+        ],
+        false,
+      )
+      expect(result).toBe(`export const SessionSchema = Type.Object({
+  token: Type.Optional(Type.String()),
+  expiresAt: Type.Optional(Type.Date()),
+})`)
+    })
+
+    it('generates schema with multi-line comments', () => {
+      const result = makeTypeBoxProperties(
+        [
+          {
+            documentation: '',
+            modelName: 'Payment',
+            fieldName: 'amount',
+            comment: ['Total amount in cents', 'Integer to avoid floating point issues'],
+            validation: 'Type.Integer()',
+            isRequired: true,
+          },
+        ],
+        true,
+      )
+      expect(result).toBe(`  /**
+   * Total amount in cents
+   * Integer to avoid floating point issues
+   */
+  amount: Type.Integer(),`)
+    })
+
+    it('generates schema with empty comment array when comment is true', () => {
+      const result = makeTypeBoxProperties(
+        [
+          {
+            documentation: '',
+            modelName: 'Token',
+            fieldName: 'value',
+            comment: [],
+            validation: 'Type.String()',
+            isRequired: true,
+          },
+        ],
+        true,
+      )
+      expect(result).toBe('  value: Type.String(),')
+    })
+
+    it('handles multiple models in a single typebox() call', () => {
+      const models = [
+        {
+          name: 'User',
+          fields: [{ name: 'id', type: 'String', kind: 'scalar', isRequired: true, isList: false }],
+        },
+        {
+          name: 'Post',
+          fields: [
+            { name: 'id', type: 'String', kind: 'scalar', isRequired: true, isList: false },
+            { name: 'title', type: 'String', kind: 'scalar', isRequired: true, isList: false },
+          ],
+        },
+      ]
+      const result = typeboxSchemaCode(models, false, false)
+      expect(result).toContain('export const UserSchema')
+      expect(result).toContain('export const PostSchema')
+    })
+
+    it('relation returns null for empty relations', () => {
+      expect(makeTypeBoxRelations({ name: 'Orphan' }, [])).toBeNull()
+    })
+
+    it('relation without includeType omits type export', () => {
+      const result = makeTypeBoxRelations({ name: 'User' }, [
+        { key: 'posts', targetModel: 'Post', isMany: true },
+      ])
+      expect(result).not.toContain('export type')
+      expect(result).toContain('export const UserRelationsSchema')
+    })
+  })
+
+  // ============================================================================
+  // Session auth pattern
+  // ============================================================================
+
+  describe('Session auth pattern', () => {
+    it('generates Session schema with mixed required/optional and Date', () => {
+      const models = [
+        {
+          name: 'Session',
+          fields: [
+            { name: 'id', type: 'String', kind: 'scalar', isRequired: true, isList: false },
+            { name: 'userId', type: 'String', kind: 'scalar', isRequired: true, isList: false },
+            { name: 'token', type: 'String', kind: 'scalar', isRequired: true, isList: false },
+            {
+              name: 'expiresAt',
+              type: 'DateTime',
+              kind: 'scalar',
+              isRequired: true,
+              isList: false,
+            },
+            { name: 'ipAddress', type: 'String', kind: 'scalar', isRequired: false, isList: false },
+          ],
+        },
+      ]
+      const result = typeboxSchemaCode(models, true, false)
+      expect(result).toBe(`import { type Static, Type } from '@sinclair/typebox'
+
+export const SessionSchema = Type.Object({
+  id: Type.String(),
+  userId: Type.String(),
+  token: Type.String(),
+  expiresAt: Type.Date(),
+  ipAddress: Type.Optional(Type.String()),
+})
+
+export type Session = Static<typeof SessionSchema>`)
+    })
+  })
+
+  describe('makeTypeBoxSchema strict/loose', () => {
+    it('generates Type.Strict(Type.Object({})) for strict', () => {
+      expect(makeTypeBoxSchema('User', '  id: Type.String()', 'strict')).toBe(
+        `export const UserSchema = Type.Strict(Type.Object({\n  id: Type.String()\n}))`,
+      )
+    })
+
+    it('generates Type.Object({}) for default', () => {
+      expect(makeTypeBoxSchema('User', '  id: Type.String()')).toBe(
+        `export const UserSchema = Type.Object({\n  id: Type.String()\n})`,
+      )
+    })
+
+    it('generates Type.Object({}) for loose (no change)', () => {
+      expect(makeTypeBoxSchema('User', '  id: Type.String()', 'loose')).toBe(
+        `export const UserSchema = Type.Object({\n  id: Type.String()\n})`,
+      )
+    })
+  })
+})
