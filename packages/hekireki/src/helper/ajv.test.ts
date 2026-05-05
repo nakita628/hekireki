@@ -9,7 +9,7 @@ import {
   PRISMA_TO_AJV,
 } from './ajv.js'
 
-describe('core/ajv', () => {
+describe('helper/ajv', () => {
   describe('PRISMA_TO_AJV', () => {
     it('maps Prisma types to JSON Schema types', () => {
       expect(PRISMA_TO_AJV.String).toBe("{ type: 'string' as const }")

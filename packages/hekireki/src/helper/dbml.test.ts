@@ -1,9 +1,9 @@
 import type { DMMF } from '@prisma/generator-helper'
 import { describe, expect, it } from 'vite-plus/test'
 
+import { dbmlContent } from '../generator/dbml.js'
 import {
   combineKeys,
-  dbmlContent,
   escapeNote,
   formatConstraints,
   makeEnum,
@@ -13,7 +13,7 @@ import {
   makeTables,
 } from './dbml.js'
 
-describe('core/dbml', () => {
+describe('helper/dbml', () => {
   describe('quote', () => {
     it('wraps and escapes via makePrismaColumn note', () => {
       const tables = makeTables([

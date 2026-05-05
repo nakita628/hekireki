@@ -11,7 +11,7 @@ import {
   PRISMA_TO_ARKTYPE,
 } from './arktype.js'
 
-describe('core/arktype', () => {
+describe('helper/arktype', () => {
   describe('PRISMA_TO_ARKTYPE', () => {
     it('PRISMA_TO_ARKTYPE maps String to "string"', () => {
       expect(PRISMA_TO_ARKTYPE.String).toBe('"string"')

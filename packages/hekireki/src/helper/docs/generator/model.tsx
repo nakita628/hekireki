@@ -22,18 +22,17 @@ import {
 import { capitalize, isScalarType, lowerCase } from './helpers.js'
 import type { DMMFDocument, DMMFMapping } from './transformDMMF.js'
 
-const ModelAction: Record<
-  | 'create'
-  | 'deleteMany'
-  | 'delete'
-  | 'findMany'
-  | 'findUnique'
-  | 'findFirst'
-  | 'update'
-  | 'updateMany'
-  | 'upsert',
-  string
-> = {
+const ModelAction: {
+  create: string
+  deleteMany: string
+  delete: string
+  findMany: string
+  findUnique: string
+  findFirst: string
+  update: string
+  updateMany: string
+  upsert: string
+} = {
   create: 'create',
   deleteMany: 'deleteMany',
   delete: 'delete',

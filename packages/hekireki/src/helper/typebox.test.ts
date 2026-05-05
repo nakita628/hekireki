@@ -11,7 +11,7 @@ import {
   typeboxSchemaCode,
 } from './typebox.js'
 
-describe('core/typebox', () => {
+describe('helper/typebox', () => {
   describe('PRISMA_TO_TYPEBOX', () => {
     it('maps Prisma types to TypeBox types', () => {
       expect(PRISMA_TO_TYPEBOX.String).toBe('Type.String()')
