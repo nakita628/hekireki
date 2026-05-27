@@ -35,7 +35,7 @@ export const UserSchema = Schema.Struct({
   isTwoFactorEnabled: Schema.Boolean,
 })
 
-export type UserEncoded = typeof UserSchema.Encoded
+export type User = typeof UserSchema.Type
 
 export const AccountSchema = Schema.Struct({
   /**
@@ -88,7 +88,7 @@ export const AccountSchema = Schema.Struct({
   session_state: Schema.NullOr(Schema.String),
 })
 
-export type AccountEncoded = typeof AccountSchema.Encoded
+export type Account = typeof AccountSchema.Type
 
 export const VerificationTokenSchema = Schema.Struct({
   /**
@@ -109,7 +109,7 @@ export const VerificationTokenSchema = Schema.Struct({
   expires: Schema.DateFromString,
 })
 
-export type VerificationTokenEncoded = typeof VerificationTokenSchema.Encoded
+export type VerificationToken = typeof VerificationTokenSchema.Type
 
 export const PasswordResetTokenSchema = Schema.Struct({
   /**
@@ -130,7 +130,7 @@ export const PasswordResetTokenSchema = Schema.Struct({
   expires: Schema.DateFromString,
 })
 
-export type PasswordResetTokenEncoded = typeof PasswordResetTokenSchema.Encoded
+export type PasswordResetToken = typeof PasswordResetTokenSchema.Type
 
 export const TwoFactorTokenSchema = Schema.Struct({
   /**
@@ -151,7 +151,7 @@ export const TwoFactorTokenSchema = Schema.Struct({
   expires: Schema.DateFromString,
 })
 
-export type TwoFactorTokenEncoded = typeof TwoFactorTokenSchema.Encoded
+export type TwoFactorToken = typeof TwoFactorTokenSchema.Type
 
 export const TwoFactorConfirmationSchema = Schema.Struct({
   /**
@@ -164,4 +164,4 @@ export const TwoFactorConfirmationSchema = Schema.Struct({
   userId: Schema.String,
 })
 
-export type TwoFactorConfirmationEncoded = typeof TwoFactorConfirmationSchema.Encoded
+export type TwoFactorConfirmation = typeof TwoFactorConfirmationSchema.Type

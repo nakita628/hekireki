@@ -57,7 +57,7 @@ export const UserSchema = Schema.Struct({
   metadata: Schema.NullOr(Schema.Unknown),
 })
 
-export type UserEncoded = typeof UserSchema.Encoded
+export type User = typeof UserSchema.Type
 
 export const ProfileSchema = Schema.Struct({
   /**
@@ -92,7 +92,7 @@ export const ProfileSchema = Schema.Struct({
   birthDate: Schema.NullOr(Schema.DateFromString),
 })
 
-export type ProfileEncoded = typeof ProfileSchema.Encoded
+export type Profile = typeof ProfileSchema.Type
 
 export const PostSchema = Schema.Struct({
   /**
@@ -133,7 +133,7 @@ export const PostSchema = Schema.Struct({
   authorId: Schema.Int,
 })
 
-export type PostEncoded = typeof PostSchema.Encoded
+export type Post = typeof PostSchema.Type
 
 export const CommentSchema = Schema.Struct({
   /**
@@ -162,7 +162,7 @@ export const CommentSchema = Schema.Struct({
   authorId: Schema.Int,
 })
 
-export type CommentEncoded = typeof CommentSchema.Encoded
+export type Comment = typeof CommentSchema.Type
 
 export const TagSchema = Schema.Struct({
   /**
@@ -179,7 +179,7 @@ export const TagSchema = Schema.Struct({
   name: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(50)),
 })
 
-export type TagEncoded = typeof TagSchema.Encoded
+export type Tag = typeof TagSchema.Type
 
 export const PostTagSchema = Schema.Struct({
   /**
@@ -196,7 +196,7 @@ export const PostTagSchema = Schema.Struct({
   tagId: Schema.Int,
 })
 
-export type PostTagEncoded = typeof PostTagSchema.Encoded
+export type PostTag = typeof PostTagSchema.Type
 
 export const SessionSchema = Schema.Struct({
   /**
@@ -237,7 +237,7 @@ export const SessionSchema = Schema.Struct({
   userAgent: Schema.NullOr(Schema.String),
 })
 
-export type SessionEncoded = typeof SessionSchema.Encoded
+export type Session = typeof SessionSchema.Type
 
 export const AuditLogSchema = Schema.Struct({
   /**
@@ -266,4 +266,4 @@ export const AuditLogSchema = Schema.Struct({
   recordId: Schema.String,
 })
 
-export type AuditLogEncoded = typeof AuditLogSchema.Encoded
+export type AuditLog = typeof AuditLogSchema.Type

@@ -27,7 +27,7 @@ export const OrganizationSchema = Schema.Struct({
   updatedAt: Schema.Date,
 })
 
-export type OrganizationEncoded = typeof OrganizationSchema.Encoded
+export type Organization = typeof OrganizationSchema.Type
 
 export const UserSchema = Schema.Struct({
   /**
@@ -56,7 +56,7 @@ export const UserSchema = Schema.Struct({
   updatedAt: Schema.Date,
 })
 
-export type UserEncoded = typeof UserSchema.Encoded
+export type User = typeof UserSchema.Type
 
 export const RoleSchema = Schema.Struct({
   /**
@@ -81,7 +81,7 @@ export const RoleSchema = Schema.Struct({
   updatedAt: Schema.Date,
 })
 
-export type RoleEncoded = typeof RoleSchema.Encoded
+export type Role = typeof RoleSchema.Type
 
 export const PermissionSchema = Schema.Struct({
   /**
@@ -106,7 +106,7 @@ export const PermissionSchema = Schema.Struct({
   createdAt: Schema.Date,
 })
 
-export type PermissionEncoded = typeof PermissionSchema.Encoded
+export type Permission = typeof PermissionSchema.Type
 
 export const UserRoleSchema = Schema.Struct({
   /**
@@ -123,7 +123,7 @@ export const UserRoleSchema = Schema.Struct({
   assignedAt: Schema.Date,
 })
 
-export type UserRoleEncoded = typeof UserRoleSchema.Encoded
+export type UserRole = typeof UserRoleSchema.Type
 
 export const RolePermissionSchema = Schema.Struct({
   /**
@@ -140,7 +140,7 @@ export const RolePermissionSchema = Schema.Struct({
   assignedAt: Schema.Date,
 })
 
-export type RolePermissionEncoded = typeof RolePermissionSchema.Encoded
+export type RolePermission = typeof RolePermissionSchema.Type
 
 export const AuditLogSchema = Schema.Struct({
   /**
@@ -173,4 +173,4 @@ export const AuditLogSchema = Schema.Struct({
   createdAt: Schema.Date,
 })
 
-export type AuditLogEncoded = typeof AuditLogSchema.Encoded
+export type AuditLog = typeof AuditLogSchema.Type

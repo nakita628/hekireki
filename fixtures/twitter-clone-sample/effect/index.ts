@@ -55,7 +55,7 @@ export const UserSchema = Schema.Struct({
   hasNotification: Schema.NullOr(Schema.Boolean),
 })
 
-export type UserEncoded = typeof UserSchema.Encoded
+export type User = typeof UserSchema.Type
 
 export const PostSchema = Schema.Struct({
   /**
@@ -80,7 +80,7 @@ export const PostSchema = Schema.Struct({
   userId: Schema.UUID,
 })
 
-export type PostEncoded = typeof PostSchema.Encoded
+export type Post = typeof PostSchema.Type
 
 export const FollowSchema = Schema.Struct({
   /**
@@ -97,7 +97,7 @@ export const FollowSchema = Schema.Struct({
   createdAt: Schema.DateFromString,
 })
 
-export type FollowEncoded = typeof FollowSchema.Encoded
+export type Follow = typeof FollowSchema.Type
 
 export const LikeSchema = Schema.Struct({
   /**
@@ -114,7 +114,7 @@ export const LikeSchema = Schema.Struct({
   createdAt: Schema.DateFromString,
 })
 
-export type LikeEncoded = typeof LikeSchema.Encoded
+export type Like = typeof LikeSchema.Type
 
 export const CommentSchema = Schema.Struct({
   /**
@@ -143,7 +143,7 @@ export const CommentSchema = Schema.Struct({
   postId: Schema.UUID,
 })
 
-export type CommentEncoded = typeof CommentSchema.Encoded
+export type Comment = typeof CommentSchema.Type
 
 export const NotificationSchema = Schema.Struct({
   /**
@@ -164,4 +164,4 @@ export const NotificationSchema = Schema.Struct({
   createdAt: Schema.DateFromString,
 })
 
-export type NotificationEncoded = typeof NotificationSchema.Encoded
+export type Notification = typeof NotificationSchema.Type
