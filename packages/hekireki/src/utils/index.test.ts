@@ -558,7 +558,41 @@ describe('utils', () => {
 // extractObjectType
 // ============================================================================
 
-import { extractObjectType } from './index.js'
+import { extractObjectType, parseRelation } from './index.js'
+
+describe('parseRelation', () => {
+  it('parses a full @relation annotation', () => {
+    expect(parseRelation('@relation User.id Profile.user_id one-to-one')).toStrictEqual({
+      fromModel: 'User',
+      fromField: 'id',
+      toModel: 'Profile',
+      toField: 'user_id',
+      type: 'one-to-one',
+    })
+  })
+
+  it('parses a one-to-many annotation', () => {
+    expect(parseRelation('@relation Team.id TeamMember.team_id one-to-many')).toStrictEqual({
+      fromModel: 'Team',
+      fromField: 'id',
+      toModel: 'TeamMember',
+      toField: 'team_id',
+      type: 'one-to-many',
+    })
+  })
+
+  it('returns null for the short-form (cardinality only)', () => {
+    expect(parseRelation('@relation one-to-many')).toBeNull()
+  })
+
+  it('returns null for the -optional suffix form', () => {
+    expect(parseRelation('@relation User.id Settings.user_id one-to-one-optional')).toBeNull()
+  })
+
+  it('returns null for a non-annotation line', () => {
+    expect(parseRelation('Some comment')).toBeNull()
+  })
+})
 
 describe('extractObjectType', () => {
   it('returns strict for @z.strictObject', () => {

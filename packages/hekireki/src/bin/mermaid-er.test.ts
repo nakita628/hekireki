@@ -222,7 +222,7 @@ erDiagram
   // Pin the current behavior: `/// @relation one-to-many` short-form (cardinality only)
   // does NOT drive ER generation. parseRelation requires the full 5-element form
   // `@relation Model.field Model.field type`. The short-form annotation is silently
-  // ignored; the relation line is still produced because extractRelationsFromDmmf
+  // ignored; the relation line is still produced because the inferred FK path
   // recovers cardinality from Prisma's standard `@relation(fields:..., references:...)`.
   // If a future change makes parseRelation accept the short form, this expected
   // output will need to change accordingly.
@@ -272,6 +272,56 @@ erDiagram
         string id PK
         string title
         string userId FK
+    }
+\`\`\``
+
+    expect(result).toBe(expected)
+  }, 30000)
+
+  it('hekireki-mermaid-er annotation-only relation (no physical FK)', async () => {
+    const prisma = `generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+generator Hekireki-ER {
+  provider = "hekireki-mermaid-er"
+  output   = "mermaid-er"
+}
+
+model User {
+  id    String @id @default(uuid())
+  name  String
+}
+
+/// @relation User.id Post.userId one-to-many
+model Post {
+  id      String @id @default(uuid())
+  title   String
+  userId  String
+}
+`
+
+    fs.mkdirSync('./prisma-mermaid-er', { recursive: true })
+    fs.writeFileSync('./prisma-mermaid-er/schema.prisma', prisma, { encoding: 'utf-8' })
+    await promisify(exec)('npx prisma generate --schema=./prisma-mermaid-er/schema.prisma')
+    const result = fs.readFileSync('./prisma-mermaid-er/mermaid-er/ER.md', {
+      encoding: 'utf-8',
+    })
+    const expected = `\`\`\`mermaid
+erDiagram
+    User ||--}| Post : "(id) - (userId)"
+    User {
+        string id PK
+        string name
+    }
+    Post {
+        string id PK
+        string title
+        string userId
     }
 \`\`\``
 

@@ -712,6 +712,25 @@ generator Hekireki-PNG {
 }
 ```
 
+### Logical Relations (without a Foreign Key)
+
+To draw a relation that has **no physical foreign key**, add a `/// @relation <Parent>.<field> <Child>.<field> <cardinality>` doc-comment on the model:
+
+```prisma
+model User {
+  id   String @id @default(uuid())
+  name String
+}
+
+/// @relation User.id Post.userId one-to-many
+model Post {
+  id     String @id @default(uuid())
+  userId String
+}
+```
+
+The relation is drawn in both the Mermaid and DBML output even though `Post.userId` has no `@relation(...)` foreign key. When a physical FK and an annotation describe the same pair, the annotation's cardinality wins in the Mermaid diagram.
+
 ### Docs
 
 The `hekireki-docs` generator creates an HTML documentation page from your Prisma schema. Serve it locally with `hekireki docs serve`:

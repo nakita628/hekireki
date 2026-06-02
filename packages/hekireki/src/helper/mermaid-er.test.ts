@@ -2,17 +2,7 @@ import type { DMMF } from '@prisma/generator-helper'
 import { describe, expect, it } from 'vite-plus/test'
 
 import { erContent } from '../generator/mermaid-er.js'
-import {
-  extractRelations,
-  extractRelationsFromDmmf,
-  isRelationshipType,
-  makeRelationLine,
-  makeRelationLineFromRelation,
-  modelFields,
-  modelInfo,
-  parseRelation,
-  removeDuplicateRelations,
-} from './mermaid-er.js'
+import { erRelationLine, modelFields, modelInfo } from './mermaid-er.js'
 
 function makeModel(overrides: Partial<DMMF.Model> & { name: string }): DMMF.Model {
   return {
@@ -43,139 +33,55 @@ function makeField(overrides: Partial<DMMF.Field> & { name: string; type: string
 }
 
 describe('helper/mermaid-er', () => {
-  describe('makeRelationLine', () => {
-    const testCases = [
-      { input: 'zero-one-to-zero-one', expected: '|o--|o' },
-      { input: 'zero-one-to-one', expected: '|o--||' },
-      { input: 'zero-one-to-zero-many', expected: '|o--}o' },
-      { input: 'zero-one-to-many', expected: '|o--}|' },
-      { input: 'zero-one-to-zero-one-optional', expected: '|o..|o' },
-      { input: 'zero-one-to-one-optional', expected: '|o..||' },
-      { input: 'one-to-zero-one', expected: '||--|o' },
-      { input: 'one-to-one', expected: '||--||' },
-      { input: 'one-to-zero-many', expected: '||--}o' },
-      { input: 'one-to-many', expected: '||--}|' },
-      { input: 'one-to-zero-one-optional', expected: '||..|o' },
-      { input: 'one-to-one-optional', expected: '||..||' },
-      { input: 'many-to-zero-one', expected: '}|--|o' },
-      { input: 'many-to-one', expected: '}|--||' },
-      { input: 'many-to-many', expected: '}|--}|' },
-      { input: 'many-to-many-optional', expected: '}|..}|' },
-    ]
-    it.each(testCases)('should return $expected for input $input', ({ input, expected }) => {
-      const result = makeRelationLine(input)
-      expect(result.ok).toBe(true)
-      if (result.ok) {
-        expect(result.value).toBe(expected)
-      }
-    })
-
-    it('returns error for invalid input', () => {
-      const result = makeRelationLine('invalid')
-      expect(result.ok).toBe(false)
-      if (!result.ok) {
-        expect(result.error).toBe('Invalid input format: invalid')
-      }
-    })
-    it('returns error for invalid from relationship', () => {
-      const result = makeRelationLine('invalid-to-one')
-      expect(result.ok).toBe(false)
-      if (!result.ok) {
-        expect(result.error).toBe('Invalid relationship: invalid')
-      }
-    })
-    it('returns error for invalid to relationship', () => {
-      const result = makeRelationLine('one-to-invalid')
-      expect(result.ok).toBe(false)
-      if (!result.ok) {
-        expect(result.error).toBe('Invalid relationship: invalid')
-      }
-    })
-  })
-
-  describe('makeRelationLineFromRelation', () => {
-    it('generates relation line', () => {
-      const result = makeRelationLineFromRelation({
-        fromModel: 'User',
-        fromField: 'id',
-        toModel: 'Post',
-        toField: 'userId',
-        type: 'one-to-many',
+  describe('erRelationLine', () => {
+    it('renders a one-to-many relation', () => {
+      const result = erRelationLine({
+        from: { model: 'User', field: 'id', cardinality: 'one' },
+        to: { model: 'Post', field: 'userId', cardinality: 'many' },
+        identifying: true,
+        origin: 'inferred',
       })
-      expect(result.ok).toBe(true)
-      if (result.ok) {
-        expect(result.value).toBe('    User ||--}| Post : "(id) - (userId)"')
-      }
+      expect(result).toBe('    User ||--}| Post : "(id) - (userId)"')
     })
-    it('returns error for unknown type', () => {
-      const result = makeRelationLineFromRelation({
-        fromModel: 'User',
-        fromField: 'id',
-        toModel: 'Post',
-        toField: 'userId',
-        type: 'unknown-type',
-      })
-      expect(result.ok).toBe(false)
-      if (!result.ok) {
-        expect(result.error).toBe('Invalid input format: unknown-type')
-      }
-    })
-  })
 
-  describe('isRelationshipType', () => {
-    it('returns true for valid types', () => {
-      expect(isRelationshipType('zero-one')).toBe(true)
-      expect(isRelationshipType('one')).toBe(true)
-      expect(isRelationshipType('zero-many')).toBe(true)
-      expect(isRelationshipType('many')).toBe(true)
-    })
-    it('returns false for invalid', () => {
-      expect(isRelationshipType('invalid-key')).toBe(false)
-    })
-  })
-
-  describe('parseRelation', () => {
-    it('one-to-one', () => {
-      expect(parseRelation('@relation User.id Profile.user_id one-to-one')).toStrictEqual({
-        fromModel: 'User',
-        toModel: 'Profile',
-        fromField: 'id',
-        toField: 'user_id',
-        type: 'one-to-one',
+    it('renders a one-to-zero-many relation', () => {
+      const result = erRelationLine({
+        from: { model: 'User', field: 'id', cardinality: 'one' },
+        to: { model: 'Post', field: 'userId', cardinality: 'zero-many' },
+        identifying: true,
+        origin: 'inferred',
       })
+      expect(result).toBe('    User ||--}o Post : "(id) - (userId)"')
     })
-    it('one-to-many', () => {
-      expect(parseRelation('@relation Team.id TeamMember.team_id one-to-many')).toStrictEqual({
-        fromModel: 'Team',
-        toModel: 'TeamMember',
-        fromField: 'id',
-        toField: 'team_id',
-        type: 'one-to-many',
-      })
-    })
-    it('returns null for invalid format', () => {
-      expect(parseRelation('@relation User.id Settings.user_id one-to-one-optional')).toBeNull()
-    })
-  })
 
-  describe('removeDuplicateRelations', () => {
-    it('removes duplicates', () => {
-      expect(
-        removeDuplicateRelations([
-          '    Post }o--|| User : "PK(authorId) <- FK(id)"',
-          '    Post }o--|| User : "PK(authorId) <- FK(id)"',
-        ]),
-      ).toStrictEqual(['    Post }o--|| User : "PK(authorId) <- FK(id)"'])
+    it('renders a one-to-one relation', () => {
+      const result = erRelationLine({
+        from: { model: 'User', field: 'id', cardinality: 'one' },
+        to: { model: 'Profile', field: 'userId', cardinality: 'one' },
+        identifying: true,
+        origin: 'inferred',
+      })
+      expect(result).toBe('    User ||--|| Profile : "(id) - (userId)"')
     })
-    it('keeps unique relations', () => {
-      const input = [
-        '    User ||--o{ Post : "(id) - (userId)"',
-        '    User ||--o{ Comment : "(id) - (userId)"',
-      ]
-      expect(removeDuplicateRelations(input)).toStrictEqual(input)
+
+    it('renders a one-to-zero-one relation', () => {
+      const result = erRelationLine({
+        from: { model: 'User', field: 'id', cardinality: 'one' },
+        to: { model: 'Profile', field: 'userId', cardinality: 'zero-one' },
+        identifying: true,
+        origin: 'inferred',
+      })
+      expect(result).toBe('    User ||--|o Profile : "(id) - (userId)"')
     })
-    it('handles empty', () => {
-      expect(removeDuplicateRelations([])).toStrictEqual([])
+
+    it('renders the from-side cardinality (many-to-many)', () => {
+      const result = erRelationLine({
+        from: { model: 'Post', field: 'id', cardinality: 'many' },
+        to: { model: 'Tag', field: 'id', cardinality: 'many' },
+        identifying: true,
+        origin: 'annotated',
+      })
+      expect(result).toBe('    Post }|--}| Tag : "(id) - (id)"')
     })
   })
 
@@ -280,127 +186,6 @@ describe('helper/mermaid-er', () => {
     })
   })
 
-  describe('extractRelationsFromDmmf', () => {
-    it('extracts one-to-many relation', () => {
-      const models = [
-        makeModel({
-          name: 'User',
-          fields: [
-            makeField({ name: 'id', type: 'Int', isId: true }),
-            makeField({
-              name: 'posts',
-              type: 'Post',
-              kind: 'object',
-              isList: true,
-              relationName: 'PostToUser',
-            }),
-          ],
-        }),
-        makeModel({
-          name: 'Post',
-          fields: [
-            makeField({ name: 'id', type: 'Int', isId: true }),
-            makeField({ name: 'userId', type: 'Int' }),
-            makeField({
-              name: 'author',
-              type: 'User',
-              kind: 'object',
-              relationName: 'PostToUser',
-              relationFromFields: ['userId'],
-              relationToFields: ['id'],
-            }),
-          ],
-        }),
-      ]
-      const result = extractRelationsFromDmmf(models)
-      expect(result).toStrictEqual(['    User ||--}| Post : "(id) - (userId)"'])
-    })
-
-    it('extracts optional relation (zero-many)', () => {
-      const models = [
-        makeModel({
-          name: 'User',
-          fields: [
-            makeField({ name: 'id', type: 'Int', isId: true }),
-            makeField({
-              name: 'posts',
-              type: 'Post',
-              kind: 'object',
-              isList: true,
-              relationName: 'PostToUser',
-            }),
-          ],
-        }),
-        makeModel({
-          name: 'Post',
-          fields: [
-            makeField({ name: 'id', type: 'Int', isId: true }),
-            makeField({ name: 'userId', type: 'Int' }),
-            makeField({
-              name: 'author',
-              type: 'User',
-              kind: 'object',
-              isRequired: false,
-              relationName: 'PostToUser',
-              relationFromFields: ['userId'],
-              relationToFields: ['id'],
-            }),
-          ],
-        }),
-      ]
-      const result = extractRelationsFromDmmf(models)
-      expect(result).toStrictEqual(['    User ||--}o Post : "(id) - (userId)"'])
-    })
-
-    it('returns empty for models with no relations', () => {
-      const models = [
-        makeModel({
-          name: 'Setting',
-          fields: [makeField({ name: 'id', type: 'Int', isId: true })],
-        }),
-      ]
-      expect(extractRelationsFromDmmf(models)).toStrictEqual([])
-    })
-  })
-
-  describe('extractRelations', () => {
-    it('extracts relations from model documentation', () => {
-      const model = makeModel({
-        name: 'User',
-        documentation: '@relation User.id Post.userId one-to-many',
-      })
-      const result = extractRelations(model)
-      expect(result).toStrictEqual(['    User ||--}| Post : "(id) - (userId)"'])
-    })
-
-    it('extracts multiple relations', () => {
-      const model = makeModel({
-        name: 'User',
-        documentation:
-          '@relation User.id Post.userId one-to-many\n@relation User.id Profile.userId one-to-one',
-      })
-      const result = extractRelations(model)
-      expect(result).toStrictEqual([
-        '    User ||--}| Post : "(id) - (userId)"',
-        '    User ||--|| Profile : "(id) - (userId)"',
-      ])
-    })
-
-    it('returns empty when no documentation', () => {
-      const model = makeModel({ name: 'User' })
-      expect(extractRelations(model)).toStrictEqual([])
-    })
-
-    it('skips invalid lines', () => {
-      const model = makeModel({
-        name: 'User',
-        documentation: 'Some comment\n@relation User.id Post.userId one-to-many',
-      })
-      const result = extractRelations(model)
-      expect(result).toStrictEqual(['    User ||--}| Post : "(id) - (userId)"'])
-    })
-  })
-
   describe('erContent', () => {
     it('generates complete ER diagram', () => {
       const models = [
@@ -474,11 +259,38 @@ describe('helper/mermaid-er', () => {
         '```',
       ])
     })
-  })
 
-  // ============================================================================
-  // Real-world use case tests
-  // ============================================================================
+    it('generates a relation from an annotation only (no physical FK)', () => {
+      const models = [
+        makeModel({
+          name: 'User',
+          fields: [makeField({ name: 'id', type: 'Int', isId: true })],
+        }),
+        makeModel({
+          name: 'Post',
+          documentation: '@relation User.id Post.userId one-to-many',
+          fields: [
+            makeField({ name: 'id', type: 'Int', isId: true }),
+            makeField({ name: 'userId', type: 'Int' }),
+          ],
+        }),
+      ]
+      const result = erContent(models)
+      expect(result).toStrictEqual([
+        '```mermaid',
+        'erDiagram',
+        '    User ||--}| Post : "(id) - (userId)"',
+        '    User {',
+        '        int id PK',
+        '    }',
+        '    Post {',
+        '        int id PK',
+        '        int userId',
+        '    }',
+        '```',
+      ])
+    })
+  })
 
   describe('E-Commerce ER diagram', () => {
     const customerModel = makeModel({
@@ -571,11 +383,6 @@ describe('helper/mermaid-er', () => {
       ])
     })
 
-    it('extracts correct DMMF relations for Order→Customer', () => {
-      const relations = extractRelationsFromDmmf([customerModel, orderModel])
-      expect(relations).toStrictEqual(['    Customer ||--}| Order : "(id) - (customerId)"'])
-    })
-
     it('generates Customer model fields with PK and documentation', () => {
       const fields = modelFields(customerModel)
       expect(fields).toStrictEqual([
@@ -592,76 +399,6 @@ describe('helper/mermaid-er', () => {
         '        int totalAmount "Total in cents"',
         '        string customerId FK',
       ])
-    })
-  })
-
-  describe('self-referencing relation (Category tree)', () => {
-    it('generates self-referencing ER relation', () => {
-      const categoryModel = makeModel({
-        name: 'Category',
-        fields: [
-          makeField({ name: 'id', type: 'Int', isId: true }),
-          makeField({ name: 'name', type: 'String' }),
-          makeField({ name: 'parentId', type: 'Int', isRequired: false }),
-          makeField({
-            name: 'parent',
-            type: 'Category',
-            kind: 'object',
-            isRequired: false,
-            relationName: 'CategoryToCategory',
-            relationFromFields: ['parentId'],
-            relationToFields: ['id'],
-          }),
-          makeField({
-            name: 'children',
-            type: 'Category',
-            kind: 'object',
-            isList: true,
-            relationName: 'CategoryToCategory',
-          }),
-        ],
-      })
-
-      const relations = extractRelationsFromDmmf([categoryModel])
-      expect(relations).toStrictEqual(['    Category ||--}o Category : "(id) - (parentId)"'])
-    })
-  })
-
-  describe('one-to-one relation (User-Profile)', () => {
-    it('generates one-to-one ER relation', () => {
-      const userModel = makeModel({
-        name: 'User',
-        fields: [
-          makeField({ name: 'id', type: 'Int', isId: true }),
-          makeField({
-            name: 'profile',
-            type: 'Profile',
-            kind: 'object',
-            isList: false,
-            isRequired: false,
-            relationName: 'ProfileToUser',
-          }),
-        ],
-      })
-
-      const profileModel = makeModel({
-        name: 'Profile',
-        fields: [
-          makeField({ name: 'id', type: 'Int', isId: true }),
-          makeField({ name: 'userId', type: 'Int', isUnique: true }),
-          makeField({
-            name: 'user',
-            type: 'User',
-            kind: 'object',
-            relationName: 'ProfileToUser',
-            relationFromFields: ['userId'],
-            relationToFields: ['id'],
-          }),
-        ],
-      })
-
-      const relations = extractRelationsFromDmmf([userModel, profileModel])
-      expect(relations).toStrictEqual(['    User ||--|| Profile : "(id) - (userId)"'])
     })
   })
 })
