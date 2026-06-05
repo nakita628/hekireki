@@ -51,7 +51,7 @@ export const UserSchema = Schema.Struct({
   updatedAt: Schema.Date,
 })
 
-export type UserEncoded = typeof UserSchema.Encoded
+export type User = typeof UserSchema.Type
 
 export const SessionSchema = Schema.Struct({
   /**
@@ -98,7 +98,7 @@ export const SessionSchema = Schema.Struct({
   createdAt: Schema.Date,
 })
 
-export type SessionEncoded = typeof SessionSchema.Encoded
+export type Session = typeof SessionSchema.Type
 
 export const LoginHistorySchema = Schema.Struct({
   /**
@@ -139,7 +139,7 @@ export const LoginHistorySchema = Schema.Struct({
   createdAt: Schema.Date,
 })
 
-export type LoginHistoryEncoded = typeof LoginHistorySchema.Encoded
+export type LoginHistory = typeof LoginHistorySchema.Type
 
 export const PasswordHistorySchema = Schema.Struct({
   /**
@@ -168,4 +168,4 @@ export const PasswordHistorySchema = Schema.Struct({
   createdAt: Schema.Date,
 })
 
-export type PasswordHistoryEncoded = typeof PasswordHistorySchema.Encoded
+export type PasswordHistory = typeof PasswordHistorySchema.Type

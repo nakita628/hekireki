@@ -1,3 +1,18 @@
+export type Relation = {
+  readonly fromModel: string
+  readonly fromField: string
+  readonly toModel: string
+  readonly toField: string
+  readonly type: string
+}
+
+export function parseRelation(line: string): Relation | null {
+  const match = line.trim().match(/^@relation\s+(\w+)\.(\w+)\s+(\w+)\.(\w+)\s+(\w+-to-\w+)$/)
+  if (!match) return null
+  const [, fromModel, fromField, toModel, toField, type] = match
+  return { fromModel, fromField, toModel, toField, type }
+}
+
 export function getString(v: string | string[] | undefined, fallback?: string) {
   return typeof v === 'string' ? v : Array.isArray(v) ? (v[0] ?? fallback) : fallback
 }

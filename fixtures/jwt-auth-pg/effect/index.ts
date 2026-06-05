@@ -51,7 +51,7 @@ export const UserSchema = Schema.Struct({
   lastLoginAt: Schema.Date,
 })
 
-export type UserEncoded = typeof UserSchema.Encoded
+export type User = typeof UserSchema.Type
 
 export const OAuthAccountSchema = Schema.Struct({
   /**
@@ -88,7 +88,7 @@ export const OAuthAccountSchema = Schema.Struct({
   createdAt: Schema.Date,
 })
 
-export type OAuthAccountEncoded = typeof OAuthAccountSchema.Encoded
+export type OAuthAccount = typeof OAuthAccountSchema.Type
 
 export const TwoFactorSettingSchema = Schema.Struct({
   /**
@@ -133,7 +133,7 @@ export const TwoFactorSettingSchema = Schema.Struct({
   updatedAt: Schema.Date,
 })
 
-export type TwoFactorSettingEncoded = typeof TwoFactorSettingSchema.Encoded
+export type TwoFactorSetting = typeof TwoFactorSettingSchema.Type
 
 export const RefreshTokenSchema = Schema.Struct({
   /**
@@ -170,7 +170,7 @@ export const RefreshTokenSchema = Schema.Struct({
   revoked: Schema.Boolean,
 })
 
-export type RefreshTokenEncoded = typeof RefreshTokenSchema.Encoded
+export type RefreshToken = typeof RefreshTokenSchema.Type
 
 export const EmailVerificationSchema = Schema.Struct({
   /**
@@ -195,7 +195,7 @@ export const EmailVerificationSchema = Schema.Struct({
   createdAt: Schema.Date,
 })
 
-export type EmailVerificationEncoded = typeof EmailVerificationSchema.Encoded
+export type EmailVerification = typeof EmailVerificationSchema.Type
 
 export const PasswordResetSchema = Schema.Struct({
   /**
@@ -224,4 +224,4 @@ export const PasswordResetSchema = Schema.Struct({
   createdAt: Schema.Date,
 })
 
-export type PasswordResetEncoded = typeof PasswordResetSchema.Encoded
+export type PasswordReset = typeof PasswordResetSchema.Type

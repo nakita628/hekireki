@@ -11,7 +11,7 @@ export const UserSchema = Schema.Struct({
   updatedAt: Schema.Date,
 })
 
-export type UserEncoded = typeof UserSchema.Encoded
+export type User = typeof UserSchema.Type
 
 export const PostSchema = Schema.Struct({
   id: Schema.String,
@@ -23,7 +23,7 @@ export const PostSchema = Schema.Struct({
   authorId: Schema.String,
 })
 
-export type PostEncoded = typeof PostSchema.Encoded
+export type Post = typeof PostSchema.Type
 
 export const ProfileSchema = Schema.Struct({
   id: Schema.String,
@@ -32,11 +32,11 @@ export const ProfileSchema = Schema.Struct({
   userId: Schema.String,
 })
 
-export type ProfileEncoded = typeof ProfileSchema.Encoded
+export type Profile = typeof ProfileSchema.Type
 
 export const TagSchema = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
 })
 
-export type TagEncoded = typeof TagSchema.Encoded
+export type Tag = typeof TagSchema.Type

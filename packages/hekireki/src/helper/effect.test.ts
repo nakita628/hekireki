@@ -109,7 +109,7 @@ describe('helper/effect', () => {
         { includeType: true },
       )
       expect(result).toBe(
-        'export const UserRelationsSchema = Schema.Struct({...UserSchema.fields,posts:Schema.Array(PostSchema),})\n\nexport type UserRelationsEncoded = typeof UserRelationsSchema.Encoded',
+        'export const UserRelationsSchema = Schema.Struct({...UserSchema.fields,posts:Schema.Array(PostSchema),})\n\nexport type UserRelations = typeof UserRelationsSchema.Type',
       )
     })
   })
@@ -149,7 +149,7 @@ describe('helper/effect', () => {
       ]
       const result = effectSchemaCode(models, true, false)
       expect(result).toBe(
-        "import { Schema } from 'effect'\n\nexport const PostSchema = Schema.Struct({\n  title: Schema.String,\n})\n\nexport type PostEncoded = typeof PostSchema.Encoded",
+        "import { Schema } from 'effect'\n\nexport const PostSchema = Schema.Struct({\n  title: Schema.String,\n})\n\nexport type Post = typeof PostSchema.Type",
       )
     })
 
@@ -175,7 +175,7 @@ describe('helper/effect', () => {
 
   describe('makeEffectInfer', () => {
     it('generates Effect infer type', () => {
-      expect(makeEffectInfer('User')).toBe('export type UserEncoded = typeof UserSchema.Encoded')
+      expect(makeEffectInfer('User')).toBe('export type User = typeof UserSchema.Type')
     })
   })
 
@@ -283,7 +283,7 @@ describe('helper/effect', () => {
         { includeType: true },
       )
       expect(result).toBe(
-        'export const OrderRelationsSchema = Schema.Struct({...OrderSchema.fields,items:Schema.Array(OrderItemSchema),customer:CustomerSchema,})\n\nexport type OrderRelationsEncoded = typeof OrderRelationsSchema.Encoded',
+        'export const OrderRelationsSchema = Schema.Struct({...OrderSchema.fields,items:Schema.Array(OrderItemSchema),customer:CustomerSchema,})\n\nexport type OrderRelations = typeof OrderRelationsSchema.Type',
       )
     })
 
@@ -332,7 +332,7 @@ describe('helper/effect', () => {
 
       const result = effectSchemaCode(models, true, false, enums)
       expect(result).toBe(
-        "import { Schema } from 'effect'\n\nexport const OrderSchema = Schema.Struct({\n  id: Schema.UUID,\n  status: Schema.Literal('PENDING', 'CONFIRMED', 'SHIPPED', 'DELIVERED', 'CANCELLED'),\n  totalAmount: Schema.Number,\n})\n\nexport type OrderEncoded = typeof OrderSchema.Encoded",
+        "import { Schema } from 'effect'\n\nexport const OrderSchema = Schema.Struct({\n  id: Schema.UUID,\n  status: Schema.Literal('PENDING', 'CONFIRMED', 'SHIPPED', 'DELIVERED', 'CANCELLED'),\n  totalAmount: Schema.Number,\n})\n\nexport type Order = typeof OrderSchema.Type",
       )
     })
   })

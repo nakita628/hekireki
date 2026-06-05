@@ -7,7 +7,7 @@ import {
 import { validationSchemas } from './validation-schema.js'
 
 export function makeEffectInfer(modelName: string) {
-  return `export type ${modelName}Encoded = typeof ${modelName}Schema.Encoded`
+  return `export type ${modelName} = typeof ${modelName}Schema.Type`
 }
 
 export function makeEffectSchema(modelName: string, fields: string) {
@@ -81,7 +81,7 @@ export function makeEffectRelations(
     )
     .join('')
   const typeLine = options?.includeType
-    ? `\n\nexport type ${model.name}RelationsEncoded = typeof ${model.name}RelationsSchema.Encoded`
+    ? `\n\nexport type ${model.name}Relations = typeof ${model.name}RelationsSchema.Type`
     : ''
   return `export const ${model.name}RelationsSchema = Schema.Struct({${base}${rels}})${typeLine}`
 }

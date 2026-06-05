@@ -244,7 +244,7 @@ export const UserSchema = Schema.Struct({
   name: Schema.String,
 })
 
-export type UserEncoded = typeof UserSchema.Encoded
+export type User = typeof UserSchema.Type
 
 export const PostSchema = Schema.Struct({
   id: Schema.UUID,
@@ -253,7 +253,7 @@ export const PostSchema = Schema.Struct({
   userId: Schema.UUID,
 })
 
-export type PostEncoded = typeof PostSchema.Encoded
+export type Post = typeof PostSchema.Type
 `
     expect(result).toBe(expected)
   }, 30000)
@@ -323,7 +323,7 @@ export const UserSchema = Schema.Struct({
   name: Schema.String,
 })
 
-export type UserEncoded = typeof UserSchema.Encoded
+export type User = typeof UserSchema.Type
 
 export const PostSchema = Schema.Struct({
   /**
@@ -344,18 +344,18 @@ export const PostSchema = Schema.Struct({
   userId: Schema.UUID,
 })
 
-export type PostEncoded = typeof PostSchema.Encoded
+export type Post = typeof PostSchema.Type
 
 export const UserRelationsSchema = Schema.Struct({
   ...UserSchema.fields,
   posts: Schema.Array(PostSchema),
 })
 
-export type UserRelationsEncoded = typeof UserRelationsSchema.Encoded
+export type UserRelations = typeof UserRelationsSchema.Type
 
 export const PostRelationsSchema = Schema.Struct({ ...PostSchema.fields, user: UserSchema })
 
-export type PostRelationsEncoded = typeof PostRelationsSchema.Encoded
+export type PostRelations = typeof PostRelationsSchema.Type
 `
     expect(result).toBe(expected)
   }, 30000)

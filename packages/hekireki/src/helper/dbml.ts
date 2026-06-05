@@ -1,6 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { stripAnnotations } from '../utils/index.js'
+import { type Cardinality, annotatedERRelations, erKey, inferredERRelations } from './relation.js'
 
 export function escapeNote(str: string) {
   return str.replace(/'/g, "\\'")
@@ -199,4 +200,40 @@ export function makeRelations(models: readonly DMMF.Model[], mapToDbSchema = fal
         })
       }),
   )
+}
+
+function isMany(cardinality: Cardinality) {
+  return cardinality === 'many' || cardinality === 'zero-many'
+}
+
+// DBML has four relationship operators and no notion of zero/optional, so a
+// cardinality pair collapses to one of them. The line reads `child OP parent`,
+// i.e. left = `to` (child), right = `from` (parent).
+// https://dbml.dbdiagram.io/docs/#relationships--foreign-key-definitions
+function dbmlOperator(leftMany: boolean, rightMany: boolean) {
+  if (leftMany && !rightMany) return '>'
+  if (!leftMany && rightMany) return '<'
+  if (leftMany && rightMany) return '<>'
+  return '-'
+}
+
+// Emits `Ref` lines for logical relations declared by `/// @relation` that have
+// NO physical FK backing them (annotation-only). Pairs already covered by a
+// physical FK are left to `makeRelations`, which carries the richer FK metadata
+// (onDelete, composite keys, dbName). Logical refs drop the `_fk` suffix that
+// physical FKs carry, since they are not DB-enforced constraints.
+export function annotatedDbmlRefs(models: readonly DMMF.Model[]) {
+  const inferredKeys = new Set(inferredERRelations(models).map(erKey))
+  return annotatedERRelations(models)
+    .filter((relation) => !inferredKeys.has(erKey(relation)))
+    .map((relation) => {
+      const left = `${relation.to.model}.${relation.to.field}`
+      const right = `${relation.from.model}.${relation.from.field}`
+      const operator = dbmlOperator(
+        isMany(relation.to.cardinality),
+        isMany(relation.from.cardinality),
+      )
+      const name = `${relation.to.model}_${relation.to.field}_${relation.from.model}_${relation.from.field}`
+      return `Ref ${name}: ${left} ${operator} ${right}`
+    })
 }

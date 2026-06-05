@@ -333,6 +333,20 @@ export const PostSchema = type({
 })
 
 export type Post = typeof PostSchema.infer
+
+export const UserRelationsSchema = type({
+  ...UserSchema.t,
+  posts: PostSchema.array(),
+})
+
+export type UserRelations = typeof UserRelationsSchema.infer
+
+export const PostRelationsSchema = type({
+  ...PostSchema.t,
+  user: UserSchema,
+})
+
+export type PostRelations = typeof PostRelationsSchema.infer
 ```
 
 ### Effect Schema
@@ -351,7 +365,7 @@ export const UserSchema = Schema.Struct({
   name: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(50)),
 })
 
-export type UserEncoded = typeof UserSchema.Encoded
+export type User = typeof UserSchema.Type
 
 export const PostSchema = Schema.Struct({
   /**
@@ -372,7 +386,21 @@ export const PostSchema = Schema.Struct({
   userId: Schema.UUID,
 })
 
-export type PostEncoded = typeof PostSchema.Encoded
+export type Post = typeof PostSchema.Type
+
+export const UserRelationsSchema = Schema.Struct({
+  ...UserSchema.fields,
+  posts: Schema.Array(PostSchema),
+})
+
+export type UserRelations = typeof UserRelationsSchema.Type
+
+export const PostRelationsSchema = Schema.Struct({
+  ...PostSchema.fields,
+  user: UserSchema,
+})
+
+export type PostRelations = typeof PostRelationsSchema.Type
 ```
 
 ### TypeBox
@@ -711,6 +739,25 @@ generator Hekireki-PNG {
     output   = "docs/er-diagram.png"
 }
 ```
+
+### Logical Relations (without a Foreign Key)
+
+To draw a relation that has **no physical foreign key**, add a `/// @relation <Parent>.<field> <Child>.<field> <cardinality>` doc-comment on the model:
+
+```prisma
+model User {
+  id   String @id @default(uuid())
+  name String
+}
+
+/// @relation User.id Post.userId one-to-many
+model Post {
+  id     String @id @default(uuid())
+  userId String
+}
+```
+
+The relation is drawn in both the Mermaid and DBML output even though `Post.userId` has no `@relation(...)` foreign key. When a physical FK and an annotation describe the same pair, the annotation's cardinality wins in the Mermaid diagram.
 
 ### Docs
 
