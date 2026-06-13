@@ -5,13 +5,9 @@
   "type": "module",
   "scripts": {
     "deps": "mkdir -p /tmp/pnpm-store && pnpm config set store-dir /tmp/pnpm-store &&rm -rf node_modules && rm -rf pnpm-lock.yaml && rm -rf ~/.pnpm-store && pnpm store prune && pnpm install --no-prefer-frozen-lockfile",
-    "build": "pnpm -F hekireki build",
     "check": "vp check --fix",
-    "lint": "vp lint",
-    "fmt": "vp fmt",
     "test": "vp test",
-    "coverage": "vp test --coverage",
-    "release": "pnpm -F hekireki release"
+    "coverage": "vp test --coverage"
   },
   "dependencies": {
     "hekireki": "link:packages/hekireki"
@@ -20,5 +16,5 @@
     "@vitest/coverage-v8": "^4.1.5",
     "vite-plus": "^0.1.20"
   },
-  "packageManager": "pnpm@10.32.1"
+  "packageManager": "pnpm@11.6.0"
 }

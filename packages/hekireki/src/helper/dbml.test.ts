@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vite-plus/test'
 
 import { dbmlContent } from '../generator/dbml.js'
 import {
+  annotatedDbmlRefs,
   combineKeys,
   escapeNote,
   formatConstraints,
@@ -12,6 +13,34 @@ import {
   makeRelations,
   makeTables,
 } from './dbml.js'
+
+function makeModel(overrides: Partial<DMMF.Model> & { name: string }): DMMF.Model {
+  return {
+    dbName: null,
+    fields: [],
+    uniqueFields: [],
+    uniqueIndexes: [],
+    primaryKey: null,
+    isGenerated: false,
+    schema: null,
+    ...overrides,
+  }
+}
+
+function makeField(overrides: Partial<DMMF.Field> & { name: string; type: string }): DMMF.Field {
+  return {
+    kind: 'scalar',
+    isList: false,
+    isRequired: true,
+    isUnique: false,
+    isId: false,
+    isReadOnly: false,
+    isGenerated: false,
+    isUpdatedAt: false,
+    hasDefaultValue: false,
+    ...overrides,
+  }
+}
 
 describe('helper/dbml', () => {
   describe('quote', () => {
@@ -307,6 +336,24 @@ describe('helper/dbml', () => {
     it('returns empty array for no enums', () => {
       expect(makeEnums([])).toStrictEqual([])
     })
+
+    it('generates enum definition', () => {
+      const enums: DMMF.DatamodelEnum[] = [
+        {
+          name: 'Role',
+          values: [
+            { name: 'USER', dbName: null },
+            { name: 'ADMIN', dbName: null },
+          ],
+          dbName: null,
+        },
+      ]
+      expect(makeEnums(enums)).toStrictEqual(['Enum Role {\n  USER\n  ADMIN\n}'])
+    })
+
+    it('returns empty array for empty enums', () => {
+      expect(makeEnums([])).toStrictEqual([])
+    })
   })
 
   describe('dbmlContent', () => {
@@ -486,6 +533,44 @@ describe('helper/dbml', () => {
       }
       const result = dbmlContent(datamodel, true)
       expect(result).toBe('Table users {\n  id String [pk]\n}')
+    })
+
+    it('generates complete DBML without header', () => {
+      const datamodel: DMMF.Datamodel = {
+        models: [
+          {
+            name: 'User',
+            dbName: null,
+            fields: [
+              {
+                name: 'id',
+                kind: 'scalar',
+                isList: false,
+                isRequired: true,
+                isUnique: false,
+                isId: true,
+                isReadOnly: false,
+                hasDefaultValue: true,
+                type: 'Int',
+                default: { name: 'autoincrement', args: [] },
+                isGenerated: false,
+                isUpdatedAt: false,
+              },
+            ],
+            primaryKey: null,
+            uniqueFields: [],
+            uniqueIndexes: [],
+            isGenerated: false,
+          },
+        ],
+        enums: [],
+        types: [],
+      }
+      expect(dbmlContent(datamodel)).toBe('Table User {\n  id Int [pk, increment]\n}')
+    })
+
+    it('returns empty string for empty datamodel', () => {
+      expect(dbmlContent({ models: [], enums: [], types: [] })).toBe('')
     })
   })
 
@@ -727,6 +812,763 @@ describe('helper/dbml', () => {
 
     it('handles empty string', () => {
       expect(escapeNote('')).toBe('')
+    })
+  })
+
+  describe('makeTables', () => {
+    it('strips Zod annotations from field documentation', () => {
+      const models: DMMF.Model[] = [
+        {
+          name: 'User',
+          dbName: null,
+          fields: [
+            {
+              name: 'id',
+              kind: 'scalar',
+              isList: false,
+              isRequired: true,
+              isUnique: false,
+              isId: true,
+              isReadOnly: false,
+              hasDefaultValue: false,
+              type: 'String',
+              documentation: 'Unique user ID\n@z.cuid()',
+              isGenerated: false,
+              isUpdatedAt: false,
+            },
+          ],
+          primaryKey: null,
+          uniqueFields: [],
+          uniqueIndexes: [],
+          isGenerated: false,
+        },
+      ]
+      expect(makeTables(models)).toStrictEqual([
+        "Table User {\n  id String [pk, note: 'Unique user ID']\n}",
+      ])
+    })
+
+    it('strips Valibot annotations from field documentation', () => {
+      const models: DMMF.Model[] = [
+        {
+          name: 'User',
+          dbName: null,
+          fields: [
+            {
+              name: 'email',
+              kind: 'scalar',
+              isList: false,
+              isRequired: true,
+              isUnique: true,
+              isId: false,
+              isReadOnly: false,
+              hasDefaultValue: false,
+              type: 'String',
+              documentation: 'Email address\n@v.pipe(v.string(), v.email())',
+              isGenerated: false,
+              isUpdatedAt: false,
+            },
+          ],
+          primaryKey: null,
+          uniqueFields: [],
+          uniqueIndexes: [],
+          isGenerated: false,
+        },
+      ]
+      expect(makeTables(models)).toStrictEqual([
+        "Table User {\n  email String [unique, not null, note: 'Email address']\n}",
+      ])
+    })
+
+    it('strips @relation annotations from model documentation', () => {
+      const models: DMMF.Model[] = [
+        {
+          name: 'User',
+          dbName: null,
+          fields: [
+            {
+              name: 'id',
+              kind: 'scalar',
+              isList: false,
+              isRequired: true,
+              isUnique: false,
+              isId: true,
+              isReadOnly: false,
+              hasDefaultValue: false,
+              type: 'String',
+              isGenerated: false,
+              isUpdatedAt: false,
+            },
+          ],
+          primaryKey: null,
+          uniqueFields: [],
+          uniqueIndexes: [],
+          isGenerated: false,
+          documentation: '@relation User.id Post.userId one-to-many',
+        },
+      ]
+      expect(makeTables(models)).toStrictEqual(['Table User {\n  id String [pk]\n}'])
+    })
+
+    it('generates basic table definition', () => {
+      const models: DMMF.Model[] = [
+        {
+          name: 'User',
+          dbName: null,
+          fields: [
+            {
+              name: 'id',
+              kind: 'scalar',
+              isList: false,
+              isRequired: true,
+              isUnique: false,
+              isId: true,
+              isReadOnly: false,
+              hasDefaultValue: true,
+              type: 'Int',
+              default: { name: 'autoincrement', args: [] },
+              isGenerated: false,
+              isUpdatedAt: false,
+            },
+            {
+              name: 'name',
+              kind: 'scalar',
+              isList: false,
+              isRequired: true,
+              isUnique: false,
+              isId: false,
+              isReadOnly: false,
+              hasDefaultValue: false,
+              type: 'String',
+              isGenerated: false,
+              isUpdatedAt: false,
+            },
+          ],
+          primaryKey: null,
+          uniqueFields: [],
+          uniqueIndexes: [],
+          isGenerated: false,
+        },
+      ]
+      expect(makeTables(models)).toStrictEqual([
+        'Table User {\n  id Int [pk, increment]\n  name String [not null]\n}',
+      ])
+    })
+
+    it('generates table with composite unique index', () => {
+      const models: DMMF.Model[] = [
+        {
+          name: 'Account',
+          dbName: null,
+          fields: [
+            {
+              name: 'id',
+              kind: 'scalar',
+              isList: false,
+              isRequired: true,
+              isUnique: false,
+              isId: true,
+              isReadOnly: false,
+              hasDefaultValue: false,
+              type: 'String',
+              isGenerated: false,
+              isUpdatedAt: false,
+            },
+            {
+              name: 'provider',
+              kind: 'scalar',
+              isList: false,
+              isRequired: true,
+              isUnique: false,
+              isId: false,
+              isReadOnly: false,
+              hasDefaultValue: false,
+              type: 'String',
+              isGenerated: false,
+              isUpdatedAt: false,
+            },
+            {
+              name: 'providerAccountId',
+              kind: 'scalar',
+              isList: false,
+              isRequired: true,
+              isUnique: false,
+              isId: false,
+              isReadOnly: false,
+              hasDefaultValue: false,
+              type: 'String',
+              isGenerated: false,
+              isUpdatedAt: false,
+            },
+          ],
+          primaryKey: null,
+          uniqueFields: [['provider', 'providerAccountId']],
+          uniqueIndexes: [],
+          isGenerated: false,
+        },
+      ]
+      expect(makeTables(models)).toStrictEqual([
+        'Table Account {\n  id String [pk]\n  provider String [not null]\n  providerAccountId String [not null]\n\n  indexes {\n    (provider, providerAccountId) [unique]\n  }\n}',
+      ])
+    })
+  })
+
+  describe('makeRelations', () => {
+    it('generates foreign key reference', () => {
+      const models: DMMF.Model[] = [
+        {
+          name: 'User',
+          dbName: null,
+          fields: [
+            {
+              name: 'id',
+              kind: 'scalar',
+              isList: false,
+              isRequired: true,
+              isUnique: false,
+              isId: true,
+              isReadOnly: false,
+              hasDefaultValue: true,
+              type: 'Int',
+              default: { name: 'autoincrement', args: [] },
+              isGenerated: false,
+              isUpdatedAt: false,
+            },
+            {
+              name: 'posts',
+              kind: 'object',
+              isList: true,
+              isRequired: false,
+              isUnique: false,
+              isId: false,
+              isReadOnly: false,
+              hasDefaultValue: false,
+              type: 'Post',
+              relationName: 'PostToUser',
+              isGenerated: false,
+              isUpdatedAt: false,
+            },
+          ],
+          primaryKey: null,
+          uniqueFields: [],
+          uniqueIndexes: [],
+          isGenerated: false,
+        },
+        {
+          name: 'Post',
+          dbName: null,
+          fields: [
+            {
+              name: 'id',
+              kind: 'scalar',
+              isList: false,
+              isRequired: true,
+              isUnique: false,
+              isId: true,
+              isReadOnly: false,
+              hasDefaultValue: true,
+              type: 'Int',
+              default: { name: 'autoincrement', args: [] },
+              isGenerated: false,
+              isUpdatedAt: false,
+            },
+            {
+              name: 'userId',
+              kind: 'scalar',
+              isList: false,
+              isRequired: true,
+              isUnique: false,
+              isId: false,
+              isReadOnly: false,
+              hasDefaultValue: false,
+              type: 'Int',
+              isGenerated: false,
+              isUpdatedAt: false,
+            },
+            {
+              name: 'user',
+              kind: 'object',
+              isList: false,
+              isRequired: true,
+              isUnique: false,
+              isId: false,
+              isReadOnly: false,
+              hasDefaultValue: false,
+              type: 'User',
+              relationName: 'PostToUser',
+              relationFromFields: ['userId'],
+              relationToFields: ['id'],
+              isGenerated: false,
+              isUpdatedAt: false,
+            },
+          ],
+          primaryKey: null,
+          uniqueFields: [],
+          uniqueIndexes: [],
+          isGenerated: false,
+        },
+      ]
+      expect(makeRelations(models)).toStrictEqual(['Ref Post_userId_fk: Post.userId > User.id'])
+    })
+
+    it('generates relation with onDelete cascade', () => {
+      const models: DMMF.Model[] = [
+        {
+          name: 'User',
+          dbName: null,
+          fields: [
+            {
+              name: 'id',
+              kind: 'scalar',
+              isList: false,
+              isRequired: true,
+              isUnique: false,
+              isId: true,
+              isReadOnly: false,
+              hasDefaultValue: false,
+              type: 'String',
+              isGenerated: false,
+              isUpdatedAt: false,
+            },
+            {
+              name: 'posts',
+              kind: 'object',
+              isList: true,
+              isRequired: false,
+              isUnique: false,
+              isId: false,
+              isReadOnly: false,
+              hasDefaultValue: false,
+              type: 'Post',
+              relationName: 'PostToUser',
+              isGenerated: false,
+              isUpdatedAt: false,
+            },
+          ],
+          primaryKey: null,
+          uniqueFields: [],
+          uniqueIndexes: [],
+          isGenerated: false,
+        },
+        {
+          name: 'Post',
+          dbName: null,
+          fields: [
+            {
+              name: 'id',
+              kind: 'scalar',
+              isList: false,
+              isRequired: true,
+              isUnique: false,
+              isId: true,
+              isReadOnly: false,
+              hasDefaultValue: false,
+              type: 'String',
+              isGenerated: false,
+              isUpdatedAt: false,
+            },
+            {
+              name: 'userId',
+              kind: 'scalar',
+              isList: false,
+              isRequired: true,
+              isUnique: false,
+              isId: false,
+              isReadOnly: false,
+              hasDefaultValue: false,
+              type: 'String',
+              isGenerated: false,
+              isUpdatedAt: false,
+            },
+            {
+              name: 'user',
+              kind: 'object',
+              isList: false,
+              isRequired: true,
+              isUnique: false,
+              isId: false,
+              isReadOnly: false,
+              hasDefaultValue: false,
+              type: 'User',
+              relationName: 'PostToUser',
+              relationFromFields: ['userId'],
+              relationToFields: ['id'],
+              relationOnDelete: 'Cascade',
+              isGenerated: false,
+              isUpdatedAt: false,
+            },
+          ],
+          primaryKey: null,
+          uniqueFields: [],
+          uniqueIndexes: [],
+          isGenerated: false,
+        },
+      ]
+      expect(makeRelations(models)).toStrictEqual([
+        'Ref Post_userId_fk: Post.userId > User.id [delete: cascade]',
+      ])
+    })
+
+    it('converts all Prisma referential actions to DBML lowercase values', () => {
+      const models: DMMF.Model[] = [
+        {
+          name: 'User',
+          dbName: null,
+          fields: [
+            {
+              name: 'id',
+              kind: 'scalar',
+              isList: false,
+              isRequired: true,
+              isUnique: false,
+              isId: true,
+              isReadOnly: false,
+              hasDefaultValue: false,
+              type: 'String',
+              isGenerated: false,
+              isUpdatedAt: false,
+            },
+            {
+              name: 'posts',
+              kind: 'object',
+              isList: true,
+              isRequired: false,
+              isUnique: false,
+              isId: false,
+              isReadOnly: false,
+              hasDefaultValue: false,
+              type: 'Post',
+              relationName: 'PostToUser',
+              isGenerated: false,
+              isUpdatedAt: false,
+            },
+          ],
+          primaryKey: null,
+          uniqueFields: [],
+          uniqueIndexes: [],
+          isGenerated: false,
+        },
+        {
+          name: 'Post',
+          dbName: null,
+          fields: [
+            {
+              name: 'id',
+              kind: 'scalar',
+              isList: false,
+              isRequired: true,
+              isUnique: false,
+              isId: true,
+              isReadOnly: false,
+              hasDefaultValue: false,
+              type: 'String',
+              isGenerated: false,
+              isUpdatedAt: false,
+            },
+            {
+              name: 'cascadeUserId',
+              kind: 'scalar',
+              isList: false,
+              isRequired: true,
+              isUnique: false,
+              isId: false,
+              isReadOnly: false,
+              hasDefaultValue: false,
+              type: 'String',
+              isGenerated: false,
+              isUpdatedAt: false,
+            },
+            {
+              name: 'setNullUserId',
+              kind: 'scalar',
+              isList: false,
+              isRequired: false,
+              isUnique: false,
+              isId: false,
+              isReadOnly: false,
+              hasDefaultValue: false,
+              type: 'String',
+              isGenerated: false,
+              isUpdatedAt: false,
+            },
+            {
+              name: 'setDefaultUserId',
+              kind: 'scalar',
+              isList: false,
+              isRequired: true,
+              isUnique: false,
+              isId: false,
+              isReadOnly: false,
+              hasDefaultValue: false,
+              type: 'String',
+              isGenerated: false,
+              isUpdatedAt: false,
+            },
+            {
+              name: 'noActionUserId',
+              kind: 'scalar',
+              isList: false,
+              isRequired: true,
+              isUnique: false,
+              isId: false,
+              isReadOnly: false,
+              hasDefaultValue: false,
+              type: 'String',
+              isGenerated: false,
+              isUpdatedAt: false,
+            },
+            {
+              name: 'restrictUserId',
+              kind: 'scalar',
+              isList: false,
+              isRequired: true,
+              isUnique: false,
+              isId: false,
+              isReadOnly: false,
+              hasDefaultValue: false,
+              type: 'String',
+              isGenerated: false,
+              isUpdatedAt: false,
+            },
+            {
+              name: 'cascadeUser',
+              kind: 'object',
+              isList: false,
+              isRequired: true,
+              isUnique: false,
+              isId: false,
+              isReadOnly: false,
+              hasDefaultValue: false,
+              type: 'User',
+              relationName: 'PostToUser',
+              relationFromFields: ['cascadeUserId'],
+              relationToFields: ['id'],
+              relationOnDelete: 'Cascade',
+              isGenerated: false,
+              isUpdatedAt: false,
+            },
+            {
+              name: 'setNullUser',
+              kind: 'object',
+              isList: false,
+              isRequired: false,
+              isUnique: false,
+              isId: false,
+              isReadOnly: false,
+              hasDefaultValue: false,
+              type: 'User',
+              relationName: 'PostSetNullToUser',
+              relationFromFields: ['setNullUserId'],
+              relationToFields: ['id'],
+              relationOnDelete: 'SetNull',
+              isGenerated: false,
+              isUpdatedAt: false,
+            },
+            {
+              name: 'setDefaultUser',
+              kind: 'object',
+              isList: false,
+              isRequired: true,
+              isUnique: false,
+              isId: false,
+              isReadOnly: false,
+              hasDefaultValue: false,
+              type: 'User',
+              relationName: 'PostSetDefaultToUser',
+              relationFromFields: ['setDefaultUserId'],
+              relationToFields: ['id'],
+              relationOnDelete: 'SetDefault',
+              isGenerated: false,
+              isUpdatedAt: false,
+            },
+            {
+              name: 'noActionUser',
+              kind: 'object',
+              isList: false,
+              isRequired: true,
+              isUnique: false,
+              isId: false,
+              isReadOnly: false,
+              hasDefaultValue: false,
+              type: 'User',
+              relationName: 'PostNoActionToUser',
+              relationFromFields: ['noActionUserId'],
+              relationToFields: ['id'],
+              relationOnDelete: 'NoAction',
+              isGenerated: false,
+              isUpdatedAt: false,
+            },
+            {
+              name: 'restrictUser',
+              kind: 'object',
+              isList: false,
+              isRequired: true,
+              isUnique: false,
+              isId: false,
+              isReadOnly: false,
+              hasDefaultValue: false,
+              type: 'User',
+              relationName: 'PostRestrictToUser',
+              relationFromFields: ['restrictUserId'],
+              relationToFields: ['id'],
+              relationOnDelete: 'Restrict',
+              isGenerated: false,
+              isUpdatedAt: false,
+            },
+          ],
+          primaryKey: null,
+          uniqueFields: [],
+          uniqueIndexes: [],
+          isGenerated: false,
+        },
+      ]
+      expect(makeRelations(models)).toStrictEqual([
+        'Ref Post_cascadeUserId_fk: Post.cascadeUserId > User.id [delete: cascade]',
+        'Ref Post_setNullUserId_fk: Post.setNullUserId > User.id [delete: set null]',
+        'Ref Post_setDefaultUserId_fk: Post.setDefaultUserId > User.id [delete: set default]',
+        'Ref Post_noActionUserId_fk: Post.noActionUserId > User.id [delete: no action]',
+        'Ref Post_restrictUserId_fk: Post.restrictUserId > User.id [delete: restrict]',
+      ])
+    })
+
+    it('returns empty array when no relations exist', () => {
+      const models: DMMF.Model[] = [
+        {
+          name: 'User',
+          dbName: null,
+          fields: [
+            {
+              name: 'id',
+              kind: 'scalar',
+              isList: false,
+              isRequired: true,
+              isUnique: false,
+              isId: true,
+              isReadOnly: false,
+              hasDefaultValue: false,
+              type: 'String',
+              isGenerated: false,
+              isUpdatedAt: false,
+            },
+          ],
+          primaryKey: null,
+          uniqueFields: [],
+          uniqueIndexes: [],
+          isGenerated: false,
+        },
+      ]
+      expect(makeRelations(models)).toStrictEqual([])
+    })
+  })
+
+  describe('annotatedDbmlRefs', () => {
+    it('emits a logical ref for an annotation-only relation (no physical FK)', () => {
+      const models = [
+        makeModel({
+          name: 'User',
+          fields: [makeField({ name: 'id', type: 'Int', isId: true })],
+        }),
+        makeModel({
+          name: 'Post',
+          documentation: '@relation User.id Post.userId one-to-many',
+          fields: [
+            makeField({ name: 'id', type: 'Int', isId: true }),
+            makeField({ name: 'userId', type: 'Int' }),
+          ],
+        }),
+      ]
+      expect(annotatedDbmlRefs(models)).toStrictEqual([
+        'Ref Post_userId_User_id: Post.userId > User.id',
+      ])
+    })
+
+    it('uses the dash operator for a one-to-one logical relation', () => {
+      const models = [
+        makeModel({
+          name: 'User',
+          fields: [makeField({ name: 'id', type: 'Int', isId: true })],
+        }),
+        makeModel({
+          name: 'Profile',
+          documentation: '@relation User.id Profile.userId one-to-one',
+          fields: [
+            makeField({ name: 'id', type: 'Int', isId: true }),
+            makeField({ name: 'userId', type: 'Int' }),
+          ],
+        }),
+      ]
+      expect(annotatedDbmlRefs(models)).toStrictEqual([
+        'Ref Profile_userId_User_id: Profile.userId - User.id',
+      ])
+    })
+
+    it('skips annotations already backed by a physical FK (FK ref wins)', () => {
+      const models = [
+        makeModel({
+          name: 'User',
+          fields: [
+            makeField({ name: 'id', type: 'Int', isId: true }),
+            makeField({
+              name: 'posts',
+              type: 'Post',
+              kind: 'object',
+              isList: true,
+              relationName: 'PostToUser',
+            }),
+          ],
+        }),
+        makeModel({
+          name: 'Post',
+          documentation: '@relation User.id Post.userId one-to-many',
+          fields: [
+            makeField({ name: 'id', type: 'Int', isId: true }),
+            makeField({ name: 'userId', type: 'Int' }),
+            makeField({
+              name: 'author',
+              type: 'User',
+              kind: 'object',
+              relationName: 'PostToUser',
+              relationFromFields: ['userId'],
+              relationToFields: ['id'],
+            }),
+          ],
+        }),
+      ]
+      expect(annotatedDbmlRefs(models)).toStrictEqual([])
+    })
+
+    it('returns empty when there are no annotations', () => {
+      expect(annotatedDbmlRefs([makeModel({ name: 'User' })])).toStrictEqual([])
+    })
+  })
+
+  describe('dbmlContent with annotation-only relation', () => {
+    it('appends the logical ref after the tables', () => {
+      const datamodel: DMMF.Datamodel = {
+        models: [
+          makeModel({
+            name: 'User',
+            fields: [makeField({ name: 'id', type: 'Int', isId: true })],
+          }),
+          makeModel({
+            name: 'Post',
+            documentation: '@relation User.id Post.userId one-to-many',
+            fields: [
+              makeField({ name: 'id', type: 'Int', isId: true }),
+              makeField({ name: 'userId', type: 'Int' }),
+            ],
+          }),
+        ],
+        enums: [],
+        types: [],
+      }
+      expect(dbmlContent(datamodel)).toBe(
+        [
+          'Table User {\n  id Int [pk]\n}',
+          'Table Post {\n  id Int [pk]\n  userId Int [not null]\n}',
+          'Ref Post_userId_User_id: Post.userId > User.id',
+        ].join('\n\n'),
+      )
     })
   })
 })

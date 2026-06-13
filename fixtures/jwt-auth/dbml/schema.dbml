@@ -110,12 +110,12 @@ Table PasswordReset {
   Note: 'Password reset token'
 }
 
-Ref OAuthAccount_userId_fk: OAuthAccount.userId > User.id [delete: Cascade]
+Ref OAuthAccount_userId_fk: OAuthAccount.userId > User.id [delete: cascade]
 
-Ref TwoFactorSetting_userId_fk: TwoFactorSetting.userId - User.id [delete: Cascade]
+Ref TwoFactorSetting_userId_fk: TwoFactorSetting.userId - User.id [delete: cascade]
 
-Ref RefreshToken_userId_fk: RefreshToken.userId > User.id [delete: Cascade]
+Ref RefreshToken_userId_fk: RefreshToken.userId > User.id [delete: cascade]
 
-Ref EmailVerification_userId_fk: EmailVerification.userId > User.id [delete: Cascade]
+Ref EmailVerification_userId_fk: EmailVerification.userId > User.id [delete: cascade]
 
-Ref PasswordReset_userId_fk: PasswordReset.userId > User.id [delete: Cascade]
+Ref PasswordReset_userId_fk: PasswordReset.userId > User.id [delete: cascade]

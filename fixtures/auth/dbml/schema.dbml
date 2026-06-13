@@ -79,6 +79,6 @@ Table TwoFactorConfirmation {
   user User [not null, note: 'The user who confirmed 2FA']
 }
 
-Ref Account_userId_fk: Account.userId > User.id [delete: Cascade]
+Ref Account_userId_fk: Account.userId > User.id [delete: cascade]
 
-Ref TwoFactorConfirmation_userId_fk: TwoFactorConfirmation.userId - User.id [delete: Cascade]
+Ref TwoFactorConfirmation_userId_fk: TwoFactorConfirmation.userId - User.id [delete: cascade]

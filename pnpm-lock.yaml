@@ -4,9 +4,6 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-overrides:
-  hekireki: link:packages/hekireki
-
 importers:
 
   .:
@@ -34,7 +31,7 @@ importers:
         specifier: ^0.45.1
         version: 0.45.1(@electric-sql/pglite@0.4.1)(@prisma/client@7.8.0(prisma@7.5.0(@types/react@19.2.14)(better-sqlite3@12.8.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3))(typescript@6.0.3))(better-sqlite3@12.8.0)(kysely@0.28.17)(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(postgres@3.4.7)(prisma@7.5.0(@types/react@19.2.14)(better-sqlite3@12.8.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3))
       hekireki:
-        specifier: link:../../packages/hekireki
+        specifier: workspace:^
         version: link:../../packages/hekireki
       json-schema-to-ts:
         specifier: ^3.1.1
@@ -68,7 +65,7 @@ importers:
         version: 7.5.0(@types/react@19.2.14)(better-sqlite3@12.8.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3)
     devDependencies:
       hekireki:
-        specifier: link:../../packages/hekireki
+        specifier: workspace:^
         version: link:../../packages/hekireki
 
   fixtures/better-auth-prisma-drizzle-mysql-admin:
@@ -93,7 +90,7 @@ importers:
         version: 7.5.0(@types/react@19.2.14)(better-sqlite3@12.8.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3)
     devDependencies:
       hekireki:
-        specifier: link:../../packages/hekireki
+        specifier: workspace:^
         version: link:../../packages/hekireki
 
   fixtures/better-auth-prisma-drizzle-mysql-base:
@@ -118,7 +115,7 @@ importers:
         version: 7.5.0(@types/react@19.2.14)(better-sqlite3@12.8.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3)
     devDependencies:
       hekireki:
-        specifier: link:../../packages/hekireki
+        specifier: workspace:^
         version: link:../../packages/hekireki
 
   fixtures/better-auth-prisma-drizzle-mysql-full:
@@ -143,7 +140,7 @@ importers:
         version: 7.5.0(@types/react@19.2.14)(better-sqlite3@12.8.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3)
     devDependencies:
       hekireki:
-        specifier: link:../../packages/hekireki
+        specifier: workspace:^
         version: link:../../packages/hekireki
 
   fixtures/better-auth-prisma-drizzle-mysql-jwt:
@@ -168,7 +165,7 @@ importers:
         version: 7.5.0(@types/react@19.2.14)(better-sqlite3@12.8.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3)
     devDependencies:
       hekireki:
-        specifier: link:../../packages/hekireki
+        specifier: workspace:^
         version: link:../../packages/hekireki
 
   fixtures/better-auth-prisma-drizzle-mysql-org:
@@ -193,7 +190,7 @@ importers:
         version: 7.5.0(@types/react@19.2.14)(better-sqlite3@12.8.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3)
     devDependencies:
       hekireki:
-        specifier: link:../../packages/hekireki
+        specifier: workspace:^
         version: link:../../packages/hekireki
 
   fixtures/better-auth-prisma-drizzle-postgresql-2fa:
@@ -218,7 +215,7 @@ importers:
         version: 7.5.0(@types/react@19.2.14)(better-sqlite3@12.8.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3)
     devDependencies:
       hekireki:
-        specifier: link:../../packages/hekireki
+        specifier: workspace:^
         version: link:../../packages/hekireki
 
   fixtures/better-auth-prisma-drizzle-postgresql-admin:
@@ -243,7 +240,7 @@ importers:
         version: 7.5.0(@types/react@19.2.14)(better-sqlite3@12.8.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3)
     devDependencies:
       hekireki:
-        specifier: link:../../packages/hekireki
+        specifier: workspace:^
         version: link:../../packages/hekireki
 
   fixtures/better-auth-prisma-drizzle-postgresql-base:
@@ -268,7 +265,7 @@ importers:
         version: 7.5.0(@types/react@19.2.14)(better-sqlite3@12.8.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3)
     devDependencies:
       hekireki:
-        specifier: link:../../packages/hekireki
+        specifier: workspace:^
         version: link:../../packages/hekireki
 
   fixtures/better-auth-prisma-drizzle-postgresql-full:
@@ -293,7 +290,7 @@ importers:
         version: 7.5.0(@types/react@19.2.14)(better-sqlite3@12.8.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3)
     devDependencies:
       hekireki:
-        specifier: link:../../packages/hekireki
+        specifier: workspace:^
         version: link:../../packages/hekireki
 
   fixtures/better-auth-prisma-drizzle-postgresql-jwt:
@@ -318,7 +315,7 @@ importers:
         version: 7.5.0(@types/react@19.2.14)(better-sqlite3@12.8.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3)
     devDependencies:
       hekireki:
-        specifier: link:../../packages/hekireki
+        specifier: workspace:^
         version: link:../../packages/hekireki
 
   fixtures/better-auth-prisma-drizzle-postgresql-org:
@@ -343,7 +340,7 @@ importers:
         version: 7.5.0(@types/react@19.2.14)(better-sqlite3@12.8.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3)
     devDependencies:
       hekireki:
-        specifier: link:../../packages/hekireki
+        specifier: workspace:^
         version: link:../../packages/hekireki
 
   fixtures/better-auth-prisma-drizzle-sqlite-2fa:
@@ -368,7 +365,7 @@ importers:
         version: 7.5.0(@types/react@19.2.14)(better-sqlite3@12.8.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3)
     devDependencies:
       hekireki:
-        specifier: link:../../packages/hekireki
+        specifier: workspace:^
         version: link:../../packages/hekireki
 
   fixtures/better-auth-prisma-drizzle-sqlite-admin:
@@ -393,7 +390,7 @@ importers:
         version: 7.5.0(@types/react@19.2.14)(better-sqlite3@12.8.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3)
     devDependencies:
       hekireki:
-        specifier: link:../../packages/hekireki
+        specifier: workspace:^
         version: link:../../packages/hekireki
 
   fixtures/better-auth-prisma-drizzle-sqlite-base:
@@ -418,7 +415,7 @@ importers:
         version: 7.5.0(@types/react@19.2.14)(better-sqlite3@12.8.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3)
     devDependencies:
       hekireki:
-        specifier: link:../../packages/hekireki
+        specifier: workspace:^
         version: link:../../packages/hekireki
 
   fixtures/better-auth-prisma-drizzle-sqlite-full:
@@ -443,7 +440,7 @@ importers:
         version: 7.5.0(@types/react@19.2.14)(better-sqlite3@12.8.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3)
     devDependencies:
       hekireki:
-        specifier: link:../../packages/hekireki
+        specifier: workspace:^
         version: link:../../packages/hekireki
 
   fixtures/better-auth-prisma-drizzle-sqlite-jwt:
@@ -468,7 +465,7 @@ importers:
         version: 7.5.0(@types/react@19.2.14)(better-sqlite3@12.8.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3)
     devDependencies:
       hekireki:
-        specifier: link:../../packages/hekireki
+        specifier: workspace:^
         version: link:../../packages/hekireki
 
   fixtures/better-auth-prisma-drizzle-sqlite-org:
@@ -493,7 +490,7 @@ importers:
         version: 7.5.0(@types/react@19.2.14)(better-sqlite3@12.8.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3)
     devDependencies:
       hekireki:
-        specifier: link:../../packages/hekireki
+        specifier: workspace:^
         version: link:../../packages/hekireki
 
   fixtures/drizzle:
@@ -515,7 +512,7 @@ importers:
         version: 7.5.0(@types/react@19.2.14)(better-sqlite3@12.8.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3)
     devDependencies:
       hekireki:
-        specifier: link:../../packages/hekireki
+        specifier: workspace:^
         version: link:../../packages/hekireki
 
   fixtures/example:
@@ -549,7 +546,7 @@ importers:
         specifier: 7.0.0-dev.20260130.1
         version: 7.0.0-dev.20260130.1
       hekireki:
-        specifier: link:../../packages/hekireki
+        specifier: workspace:^
         version: link:../../packages/hekireki
 
   fixtures/jwt-auth:
@@ -604,7 +601,7 @@ importers:
         specifier: ^3.19.15
         version: 3.21.0
       hekireki:
-        specifier: link:../../packages/hekireki
+        specifier: workspace:*
         version: link:../../packages/hekireki
       json-schema-to-ts:
         specifier: ^3.1.1
@@ -654,7 +651,7 @@ importers:
         specifier: 7.0.0-dev.20260130.1
         version: 7.0.0-dev.20260130.1
       hekireki:
-        specifier: link:../../packages/hekireki
+        specifier: workspace:^
         version: link:../../packages/hekireki
 
   fixtures/rbac:
@@ -675,7 +672,7 @@ importers:
         specifier: ^3.19.15
         version: 3.21.0
       hekireki:
-        specifier: link:../../packages/hekireki
+        specifier: workspace:*
         version: link:../../packages/hekireki
       json-schema-to-ts:
         specifier: ^3.1.1
@@ -712,7 +709,7 @@ importers:
         specifier: ^3.19.15
         version: 3.21.0
       hekireki:
-        specifier: link:../../packages/hekireki
+        specifier: workspace:*
         version: link:../../packages/hekireki
       json-schema-to-ts:
         specifier: ^3.1.1
@@ -753,7 +750,7 @@ importers:
         version: 4.3.6
     devDependencies:
       hekireki:
-        specifier: link:../../packages/hekireki
+        specifier: workspace:^
         version: link:../../packages/hekireki
 
   packages/hekireki:
