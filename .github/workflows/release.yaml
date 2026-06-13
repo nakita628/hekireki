@@ -19,18 +19,11 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
-      - name: Check published and untagged version
-        id: ver
-        run: |
-          CUR=$(jq -r .version packages/hekireki/package.json)
-          npm view "hekireki@$CUR" version >/dev/null 2>&1 || { echo "hekireki@$CUR is not published to npm; skip release"; exit 0; }
-          git fetch --tags --depth=1 --quiet origin "refs/tags/v$CUR" 2>/dev/null || true
-          git rev-parse -q --verify "refs/tags/v$CUR" >/dev/null || echo "version=$CUR" >> $GITHUB_OUTPUT
-
       - name: Create release
-        if: steps.ver.outputs.version
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.ver.outputs.version }}
           TARGET: ${{ github.event.workflow_run.head_sha }}
-        run: gh release create "v$VERSION" --generate-notes --target "$TARGET"
+        run: |
+          VERSION=$(jq -r .version packages/hekireki/package.json)
+          gh release view "v$VERSION" >/dev/null 2>&1 && { echo "release v$VERSION already exists; skip"; exit 0; }
+          gh release create "v$VERSION" --generate-notes --target "$TARGET"

@@ -206,6 +206,7 @@ export function makeRelations(models: readonly DMMF.Model[], mapToDbSchema = fal
           toColumn,
           type: operator,
           onDelete: field.relationOnDelete,
+          onUpdate: field.relationOnUpdate,
         })
       }),
   )

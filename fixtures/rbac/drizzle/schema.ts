@@ -1,4 +1,3 @@
-import { relations, sql } from 'drizzle-orm'
 import {
   datetime,
   index,
@@ -10,6 +9,7 @@ import {
   unique,
   varchar,
 } from 'drizzle-orm/mysql-core'
+import { relations, sql } from 'drizzle-orm'
 
 export const organization = mysqlTable('organizations', {
   id: int('id').primaryKey().autoincrement(),

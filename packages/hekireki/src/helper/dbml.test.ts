@@ -1459,6 +1459,275 @@ describe('helper/dbml', () => {
       ]
       expect(makeRelations(models)).toStrictEqual([])
     })
+
+    it('converts all Prisma referential actions in onUpdate to DBML lowercase values', () => {
+      const models = [
+        makeModel({
+          name: 'User',
+          fields: [
+            makeField({ name: 'id', type: 'String', isId: true }),
+            makeField({
+              name: 'posts',
+              type: 'Post',
+              kind: 'object',
+              isList: true,
+              isRequired: false,
+              relationName: 'PostToUser',
+            }),
+          ],
+        }),
+        makeModel({
+          name: 'Post',
+          fields: [
+            makeField({ name: 'id', type: 'String', isId: true }),
+            makeField({ name: 'cascadeUserId', type: 'String' }),
+            makeField({ name: 'setNullUserId', type: 'String' }),
+            makeField({ name: 'setDefaultUserId', type: 'String' }),
+            makeField({ name: 'noActionUserId', type: 'String' }),
+            makeField({ name: 'restrictUserId', type: 'String' }),
+            makeField({
+              name: 'cascadeUser',
+              type: 'User',
+              kind: 'object',
+              relationName: 'CascadePostToUser',
+              relationFromFields: ['cascadeUserId'],
+              relationToFields: ['id'],
+              relationOnUpdate: 'Cascade',
+            }),
+            makeField({
+              name: 'setNullUser',
+              type: 'User',
+              kind: 'object',
+              relationName: 'SetNullPostToUser',
+              relationFromFields: ['setNullUserId'],
+              relationToFields: ['id'],
+              relationOnUpdate: 'SetNull',
+            }),
+            makeField({
+              name: 'setDefaultUser',
+              type: 'User',
+              kind: 'object',
+              relationName: 'SetDefaultPostToUser',
+              relationFromFields: ['setDefaultUserId'],
+              relationToFields: ['id'],
+              relationOnUpdate: 'SetDefault',
+            }),
+            makeField({
+              name: 'noActionUser',
+              type: 'User',
+              kind: 'object',
+              relationName: 'NoActionPostToUser',
+              relationFromFields: ['noActionUserId'],
+              relationToFields: ['id'],
+              relationOnUpdate: 'NoAction',
+            }),
+            makeField({
+              name: 'restrictUser',
+              type: 'User',
+              kind: 'object',
+              relationName: 'RestrictPostToUser',
+              relationFromFields: ['restrictUserId'],
+              relationToFields: ['id'],
+              relationOnUpdate: 'Restrict',
+            }),
+          ],
+        }),
+      ]
+      expect(makeRelations(models)).toStrictEqual([
+        'Ref Post_cascadeUserId_fk: Post.cascadeUserId > User.id [update: cascade]',
+        'Ref Post_setNullUserId_fk: Post.setNullUserId > User.id [update: set null]',
+        'Ref Post_setDefaultUserId_fk: Post.setDefaultUserId > User.id [update: set default]',
+        'Ref Post_noActionUserId_fk: Post.noActionUserId > User.id [update: no action]',
+        'Ref Post_restrictUserId_fk: Post.restrictUserId > User.id [update: restrict]',
+      ])
+    })
+
+    it('emits both delete and update actions in one Ref', () => {
+      const models = [
+        makeModel({
+          name: 'User',
+          fields: [
+            makeField({ name: 'id', type: 'String', isId: true }),
+            makeField({
+              name: 'posts',
+              type: 'Post',
+              kind: 'object',
+              isList: true,
+              isRequired: false,
+              relationName: 'PostToUser',
+            }),
+          ],
+        }),
+        makeModel({
+          name: 'Post',
+          fields: [
+            makeField({ name: 'id', type: 'String', isId: true }),
+            makeField({ name: 'userId', type: 'String' }),
+            makeField({
+              name: 'user',
+              type: 'User',
+              kind: 'object',
+              relationName: 'PostToUser',
+              relationFromFields: ['userId'],
+              relationToFields: ['id'],
+              relationOnDelete: 'Cascade',
+              relationOnUpdate: 'Restrict',
+            }),
+          ],
+        }),
+      ]
+      expect(makeRelations(models)).toStrictEqual([
+        'Ref Post_userId_fk: Post.userId > User.id [delete: cascade, update: restrict]',
+      ])
+    })
+
+    it('emits only the update action when onDelete is absent', () => {
+      const models = [
+        makeModel({
+          name: 'User',
+          fields: [
+            makeField({ name: 'id', type: 'String', isId: true }),
+            makeField({
+              name: 'posts',
+              type: 'Post',
+              kind: 'object',
+              isList: true,
+              isRequired: false,
+              relationName: 'PostToUser',
+            }),
+          ],
+        }),
+        makeModel({
+          name: 'Post',
+          fields: [
+            makeField({ name: 'id', type: 'String', isId: true }),
+            makeField({ name: 'userId', type: 'String' }),
+            makeField({
+              name: 'user',
+              type: 'User',
+              kind: 'object',
+              relationName: 'PostToUser',
+              relationFromFields: ['userId'],
+              relationToFields: ['id'],
+              relationOnUpdate: 'SetNull',
+            }),
+          ],
+        }),
+      ]
+      expect(makeRelations(models)).toStrictEqual([
+        'Ref Post_userId_fk: Post.userId > User.id [update: set null]',
+      ])
+    })
+
+    it('passes an unrecognized referential action through verbatim', () => {
+      const models = [
+        makeModel({
+          name: 'User',
+          fields: [
+            makeField({ name: 'id', type: 'String', isId: true }),
+            makeField({
+              name: 'posts',
+              type: 'Post',
+              kind: 'object',
+              isList: true,
+              isRequired: false,
+              relationName: 'PostToUser',
+            }),
+          ],
+        }),
+        makeModel({
+          name: 'Post',
+          fields: [
+            makeField({ name: 'id', type: 'String', isId: true }),
+            makeField({ name: 'userId', type: 'String' }),
+            makeField({
+              name: 'user',
+              type: 'User',
+              kind: 'object',
+              relationName: 'PostToUser',
+              relationFromFields: ['userId'],
+              relationToFields: ['id'],
+              relationOnDelete: 'FutureAction',
+            }),
+          ],
+        }),
+      ]
+      expect(makeRelations(models)).toStrictEqual([
+        'Ref Post_userId_fk: Post.userId > User.id [delete: FutureAction]',
+      ])
+    })
+
+    it('emits a composite foreign key with a referential action', () => {
+      const models = [
+        makeModel({
+          name: 'User',
+          fields: [
+            makeField({ name: 'tenantId', type: 'String' }),
+            makeField({ name: 'id', type: 'String', isId: true }),
+            makeField({
+              name: 'memberships',
+              type: 'Membership',
+              kind: 'object',
+              isList: true,
+              isRequired: false,
+              relationName: 'MembershipToUser',
+            }),
+          ],
+        }),
+        makeModel({
+          name: 'Membership',
+          fields: [
+            makeField({ name: 'tenantId', type: 'String' }),
+            makeField({ name: 'userId', type: 'String' }),
+            makeField({
+              name: 'user',
+              type: 'User',
+              kind: 'object',
+              relationName: 'MembershipToUser',
+              relationFromFields: ['tenantId', 'userId'],
+              relationToFields: ['tenantId', 'id'],
+              relationOnDelete: 'Cascade',
+            }),
+          ],
+        }),
+      ]
+      expect(makeRelations(models)).toStrictEqual([
+        'Ref Membership_(tenantId, userId)_fk: Membership.(tenantId, userId) > User.(tenantId, id) [delete: cascade]',
+      ])
+    })
+
+    it('emits a self-relation with a referential action', () => {
+      const models = [
+        makeModel({
+          name: 'Employee',
+          fields: [
+            makeField({ name: 'id', type: 'String', isId: true }),
+            makeField({ name: 'managerId', type: 'String', isRequired: false }),
+            makeField({
+              name: 'manager',
+              type: 'Employee',
+              kind: 'object',
+              isRequired: false,
+              relationName: 'EmployeeToManager',
+              relationFromFields: ['managerId'],
+              relationToFields: ['id'],
+              relationOnDelete: 'SetNull',
+            }),
+            makeField({
+              name: 'reports',
+              type: 'Employee',
+              kind: 'object',
+              isList: true,
+              isRequired: false,
+              relationName: 'EmployeeToManager',
+            }),
+          ],
+        }),
+      ]
+      expect(makeRelations(models)).toStrictEqual([
+        'Ref Employee_managerId_fk: Employee.managerId - Employee.id [delete: set null]',
+      ])
+    })
   })
 
   describe('annotatedDbmlRefs', () => {

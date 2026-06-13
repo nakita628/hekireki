@@ -19,7 +19,7 @@ jobs:
 
       - run: vp install
 
-      - run: vp run build
+      - run: vp run hekireki#build
 
       - run: vp link ./packages/hekireki
 
