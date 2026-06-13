@@ -54,8 +54,8 @@ Table password_histories {
   Note: 'Password change history'
 }
 
-Ref sessions_userId_fk: sessions.userId > users.id [delete: Cascade]
+Ref sessions_userId_fk: sessions.userId > users.id [delete: cascade]
 
-Ref login_histories_userId_fk: login_histories.userId > users.id [delete: Cascade]
+Ref login_histories_userId_fk: login_histories.userId > users.id [delete: cascade]
 
-Ref password_histories_userId_fk: password_histories.userId > users.id [delete: Cascade]
+Ref password_histories_userId_fk: password_histories.userId > users.id [delete: cascade]

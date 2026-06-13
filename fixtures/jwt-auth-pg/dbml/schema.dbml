@@ -111,12 +111,12 @@ Table password_resets {
   Note: 'Password reset token'
 }
 
-Ref oauth_accounts_userId_fk: oauth_accounts.userId > users.id [delete: Cascade]
+Ref oauth_accounts_userId_fk: oauth_accounts.userId > users.id [delete: cascade]
 
-Ref two_factor_settings_userId_fk: two_factor_settings.userId - users.id [delete: Cascade]
+Ref two_factor_settings_userId_fk: two_factor_settings.userId - users.id [delete: cascade]
 
-Ref refresh_tokens_userId_fk: refresh_tokens.userId > users.id [delete: Cascade]
+Ref refresh_tokens_userId_fk: refresh_tokens.userId > users.id [delete: cascade]
 
-Ref email_verifications_userId_fk: email_verifications.userId > users.id [delete: Cascade]
+Ref email_verifications_userId_fk: email_verifications.userId > users.id [delete: cascade]
 
-Ref password_resets_userId_fk: password_resets.userId > users.id [delete: Cascade]
+Ref password_resets_userId_fk: password_resets.userId > users.id [delete: cascade]
