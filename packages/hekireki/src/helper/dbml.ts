@@ -54,6 +54,15 @@ function makeIndex(index: {
   return `    ${columns}${formatConstraints(constraints)}`
 }
 
+function toDbmlAction(action: string) {
+  if (action === 'Cascade') return 'cascade'
+  if (action === 'SetNull') return 'set null'
+  if (action === 'SetDefault') return 'set default'
+  if (action === 'NoAction') return 'no action'
+  if (action === 'Restrict') return 'restrict'
+  return action
+}
+
 function makeRef(ref: {
   readonly name?: string
   readonly fromTable: string
@@ -68,8 +77,8 @@ function makeRef(ref: {
   const operator = ref.type ?? '>'
 
   const actions = [
-    ref.onDelete && `delete: ${ref.onDelete}`,
-    ref.onUpdate && `update: ${ref.onUpdate}`,
+    ref.onDelete && `delete: ${toDbmlAction(ref.onDelete)}`,
+    ref.onUpdate && `update: ${toDbmlAction(ref.onUpdate)}`,
   ].filter((a): a is string => Boolean(a))
 
   const actionStr = actions.length > 0 ? ` [${actions.join(', ')}]` : ''
@@ -201,6 +210,7 @@ export function makeRelations(models: readonly DMMF.Model[], mapToDbSchema = fal
           toColumn,
           type: operator,
           onDelete: field.relationOnDelete,
+          onUpdate: field.relationOnUpdate,
         })
       }),
   )

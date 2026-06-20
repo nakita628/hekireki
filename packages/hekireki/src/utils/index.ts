@@ -6,7 +6,7 @@ export type Relation = {
   readonly type: string
 }
 
-export function parseRelation(line: string): Relation | null {
+export function parseRelation(line: string) {
   const match = line.trim().match(/^@relation\s+(\w+)\.(\w+)\s+(\w+)\.(\w+)\s+(\w+-to-\w+)$/)
   if (!match) return null
   const [, fromModel, fromField, toModel, toField, type] = match
