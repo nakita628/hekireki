@@ -29,8 +29,12 @@ export function combineKeys(keys: readonly string[]) {
   return keys.length > 1 ? `(${keys.join(', ')})` : keys[0]
 }
 
-function quote(value: string) {
-  return `'${escapeNote(value)}'`
+function escapeTriple(str: string) {
+  return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+}
+
+function noteLiteral(value: string) {
+  return value.includes('\n') ? `'''${escapeTriple(value)}'''` : `'${escapeNote(value)}'`
 }
 
 function makeIndex(index: {
@@ -89,7 +93,7 @@ function makePrismaColumn(column: {
     column.defaultValue !== undefined && `default: ${column.defaultValue}`,
     column.isUnique && 'unique',
     column.isNotNull && 'not null',
-    column.note && `note: ${quote(column.note)}`,
+    column.note && `note: ${noteLiteral(column.note)}`,
   ].filter((c): c is string => Boolean(c))
 
   return `  ${column.name} ${column.type}${formatConstraints(constraints)}`
@@ -151,7 +155,7 @@ export function makeTables(models: readonly DMMF.Model[], mapToDbSchema = false)
       indexes.length > 0 ? `\n\n  indexes {\n${indexes.map(makeIndex).join('\n')}\n  }` : ''
 
     const strippedNote = stripAnnotations(model.documentation)
-    const noteBlock = strippedNote ? `\n\n  Note: ${quote(escapeNote(strippedNote))}` : ''
+    const noteBlock = strippedNote ? `\n\n  Note: ${noteLiteral(strippedNote)}` : ''
 
     return `Table ${modelName} {\n${columnLines}${indexBlock}${noteBlock}\n}`
   })

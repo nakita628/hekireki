@@ -74,18 +74,18 @@ Table Notification {
   user User [not null, note: 'User who receives the notification']
 }
 
-Ref Post_userId_fk: Post.userId > User.id [delete: Cascade]
+Ref Post_userId_fk: Post.userId > User.id [delete: cascade]
 
-Ref Follow_followerId_fk: Follow.followerId > User.id [delete: Cascade]
+Ref Follow_followerId_fk: Follow.followerId > User.id [delete: cascade]
 
-Ref Follow_followingId_fk: Follow.followingId > User.id [delete: Cascade]
+Ref Follow_followingId_fk: Follow.followingId > User.id [delete: cascade]
 
-Ref Like_userId_fk: Like.userId > User.id [delete: Cascade]
+Ref Like_userId_fk: Like.userId > User.id [delete: cascade]
 
-Ref Like_postId_fk: Like.postId > Post.id [delete: Cascade]
+Ref Like_postId_fk: Like.postId > Post.id [delete: cascade]
 
-Ref Comment_userId_fk: Comment.userId > User.id [delete: Cascade]
+Ref Comment_userId_fk: Comment.userId > User.id [delete: cascade]
 
-Ref Comment_postId_fk: Comment.postId > Post.id [delete: Cascade]
+Ref Comment_postId_fk: Comment.postId > Post.id [delete: cascade]
 
-Ref Notification_userId_fk: Notification.userId > User.id [delete: Cascade]
+Ref Notification_userId_fk: Notification.userId > User.id [delete: cascade]
