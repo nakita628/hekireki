@@ -43,7 +43,7 @@ function makeField(overrides: Partial<DMMF.Field> & { name: string; type: string
 }
 
 describe('helper/dbml', () => {
-  describe('quote', () => {
+  describe('noteLiteral', () => {
     it('wraps and escapes via makePrismaColumn note', () => {
       const tables = makeTables([
         {
@@ -1838,6 +1838,219 @@ describe('helper/dbml', () => {
           'Ref Post_userId_User_id: Post.userId > User.id',
         ].join('\n\n'),
       )
+    })
+  })
+  describe('multiline notes', () => {
+    it('emits a triple-quoted column note when the note contains a newline', () => {
+      const tables = makeTables([
+        {
+          name: 'User',
+          dbName: null,
+          fields: [
+            {
+              name: 'bio',
+              kind: 'scalar',
+              isList: false,
+              isRequired: true,
+              isUnique: false,
+              isId: false,
+              isReadOnly: false,
+              hasDefaultValue: false,
+              type: 'String',
+              isGenerated: false,
+              isUpdatedAt: false,
+              documentation: 'line1\nline2',
+            },
+          ],
+          primaryKey: null,
+          uniqueFields: [],
+          uniqueIndexes: [],
+          isGenerated: false,
+        } as DMMF.Model,
+      ])
+      expect(tables[0]).toBe("Table User {\n  bio String [not null, note: '''line1\nline2''']\n}")
+    })
+
+    it('keeps a single-quoted column note when the note is single line', () => {
+      const tables = makeTables([
+        {
+          name: 'User',
+          dbName: null,
+          fields: [
+            {
+              name: 'bio',
+              kind: 'scalar',
+              isList: false,
+              isRequired: true,
+              isUnique: false,
+              isId: false,
+              isReadOnly: false,
+              hasDefaultValue: false,
+              type: 'String',
+              isGenerated: false,
+              isUpdatedAt: false,
+              documentation: 'a single line',
+            },
+          ],
+          primaryKey: null,
+          uniqueFields: [],
+          uniqueIndexes: [],
+          isGenerated: false,
+        } as DMMF.Model,
+      ])
+      expect(tables[0]).toBe("Table User {\n  bio String [not null, note: 'a single line']\n}")
+    })
+
+    it('escapes backslash before apostrophe in a triple-quoted column note', () => {
+      const tables = makeTables([
+        {
+          name: 'User',
+          dbName: null,
+          fields: [
+            {
+              name: 'bio',
+              kind: 'scalar',
+              isList: false,
+              isRequired: true,
+              isUnique: false,
+              isId: false,
+              isReadOnly: false,
+              hasDefaultValue: false,
+              type: 'String',
+              isGenerated: false,
+              isUpdatedAt: false,
+              documentation: 'a\\nb\nc',
+            },
+          ],
+          primaryKey: null,
+          uniqueFields: [],
+          uniqueIndexes: [],
+          isGenerated: false,
+        } as DMMF.Model,
+      ])
+      expect(tables[0]).toBe("Table User {\n  bio String [not null, note: '''a\\\\nb\nc''']\n}")
+    })
+
+    it('escapes embedded triple quotes in a multiline column note', () => {
+      const tables = makeTables([
+        {
+          name: 'User',
+          dbName: null,
+          fields: [
+            {
+              name: 'bio',
+              kind: 'scalar',
+              isList: false,
+              isRequired: true,
+              isUnique: false,
+              isId: false,
+              isReadOnly: false,
+              hasDefaultValue: false,
+              type: 'String',
+              isGenerated: false,
+              isUpdatedAt: false,
+              documentation: "x'''y\nz",
+            },
+          ],
+          primaryKey: null,
+          uniqueFields: [],
+          uniqueIndexes: [],
+          isGenerated: false,
+        } as DMMF.Model,
+      ])
+      expect(tables[0]).toBe("Table User {\n  bio String [not null, note: '''x\\'\\'\\'y\nz''']\n}")
+    })
+
+    it('emits a triple-quoted table Note when the model documentation contains a newline', () => {
+      const tables = makeTables([
+        {
+          name: 'User',
+          dbName: null,
+          fields: [
+            {
+              name: 'id',
+              kind: 'scalar',
+              isList: false,
+              isRequired: true,
+              isUnique: false,
+              isId: true,
+              isReadOnly: false,
+              hasDefaultValue: false,
+              type: 'String',
+              isGenerated: false,
+              isUpdatedAt: false,
+            },
+          ],
+          primaryKey: null,
+          uniqueFields: [],
+          uniqueIndexes: [],
+          isGenerated: false,
+          documentation: 'Account\nmulti line note',
+        } as DMMF.Model,
+      ])
+      expect(tables[0]).toBe(
+        "Table User {\n  id String [pk]\n\n  Note: '''Account\nmulti line note'''\n}",
+      )
+    })
+
+    it('escapes an apostrophe once in a multiline table Note', () => {
+      const tables = makeTables([
+        {
+          name: 'User',
+          dbName: null,
+          fields: [
+            {
+              name: 'id',
+              kind: 'scalar',
+              isList: false,
+              isRequired: true,
+              isUnique: false,
+              isId: true,
+              isReadOnly: false,
+              hasDefaultValue: false,
+              type: 'String',
+              isGenerated: false,
+              isUpdatedAt: false,
+            },
+          ],
+          primaryKey: null,
+          uniqueFields: [],
+          uniqueIndexes: [],
+          isGenerated: false,
+          documentation: "user's\nnote",
+        } as DMMF.Model,
+      ])
+      expect(tables[0]).toBe("Table User {\n  id String [pk]\n\n  Note: '''user\\'s\nnote'''\n}")
+    })
+
+    it('keeps a single-quoted table Note when the model documentation is single line', () => {
+      const tables = makeTables([
+        {
+          name: 'User',
+          dbName: null,
+          fields: [
+            {
+              name: 'id',
+              kind: 'scalar',
+              isList: false,
+              isRequired: true,
+              isUnique: false,
+              isId: true,
+              isReadOnly: false,
+              hasDefaultValue: false,
+              type: 'String',
+              isGenerated: false,
+              isUpdatedAt: false,
+            },
+          ],
+          primaryKey: null,
+          uniqueFields: [],
+          uniqueIndexes: [],
+          isGenerated: false,
+          documentation: 'Account note',
+        } as DMMF.Model,
+      ])
+      expect(tables[0]).toBe("Table User {\n  id String [pk]\n\n  Note: 'Account note'\n}")
     })
   })
 })
