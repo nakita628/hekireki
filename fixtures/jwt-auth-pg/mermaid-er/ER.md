@@ -1,11 +1,11 @@
 ```mermaid
 erDiagram
-    User ||--}| OAuthAccount : "(id) - (userId)"
-    User ||--|| TwoFactorSetting : "(id) - (userId)"
-    User ||--}| RefreshToken : "(id) - (userId)"
-    User ||--}| EmailVerification : "(id) - (userId)"
-    User ||--}| PasswordReset : "(id) - (userId)"
-    User {
+    users ||--}| oauth_accounts : "(id) - (userId)"
+    users ||--|| two_factor_settings : "(id) - (userId)"
+    users ||--}| refresh_tokens : "(id) - (userId)"
+    users ||--}| email_verifications : "(id) - (userId)"
+    users ||--}| password_resets : "(id) - (userId)"
+    users {
         string id PK "User ID"
         string email "Email address"
         string passwordHash "Hashed password (null for OAuth-only users)"
@@ -19,7 +19,7 @@ erDiagram
         datetime updatedAt "Last update timestamp"
         datetime lastLoginAt "Last login timestamp"
     }
-    OAuthAccount {
+    oauth_accounts {
         string id PK "OAuth account ID"
         string userId FK "User ID"
         oauthprovider provider "OAuth provider"
@@ -29,7 +29,7 @@ erDiagram
         datetime expiresAt "Token expiration timestamp"
         datetime createdAt "Account creation timestamp"
     }
-    TwoFactorSetting {
+    two_factor_settings {
         string id PK "2FA setting ID"
         string userId FK "User ID"
         boolean enabled "2FA enabled status"
@@ -41,7 +41,7 @@ erDiagram
         datetime createdAt "Creation timestamp"
         datetime updatedAt "Last update timestamp"
     }
-    RefreshToken {
+    refresh_tokens {
         string id PK "Refresh token ID"
         string userId FK "User ID"
         string tokenHash "Token hash (SHA-256)"
@@ -51,14 +51,14 @@ erDiagram
         datetime createdAt "Token creation timestamp"
         boolean revoked "Revocation status"
     }
-    EmailVerification {
+    email_verifications {
         string id PK "Verification ID"
         string userId FK "User ID"
         string tokenHash "Verification token (hashed)"
         datetime expiresAt "Token expiration timestamp"
         datetime createdAt "Creation timestamp"
     }
-    PasswordReset {
+    password_resets {
         string id PK "Reset ID"
         string userId FK "User ID"
         string tokenHash "Reset token (hashed)"

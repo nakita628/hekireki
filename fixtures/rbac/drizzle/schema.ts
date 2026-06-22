@@ -1,4 +1,3 @@
-import { relations, sql } from 'drizzle-orm'
 import {
   datetime,
   index,
@@ -10,8 +9,9 @@ import {
   unique,
   varchar,
 } from 'drizzle-orm/mysql-core'
+import { relations, sql } from 'drizzle-orm'
 
-export const organization = mysqlTable('organizations', {
+export const organizations = mysqlTable('organizations', {
   id: int('id').primaryKey().autoincrement(),
   name: varchar('name', { length: 200 }).notNull(),
   slug: varchar('slug', { length: 100 }).notNull().unique(),
@@ -25,13 +25,13 @@ export const organization = mysqlTable('organizations', {
     .$onUpdate(() => new Date()),
 })
 
-export const user = mysqlTable(
+export const users = mysqlTable(
   'users',
   {
     id: int('id').primaryKey().autoincrement(),
     organizationId: int('organization_id')
       .notNull()
-      .references(() => organization.id),
+      .references(() => organizations.id),
     email: varchar('email', { length: 255 }).notNull().unique(),
     name: varchar('name', { length: 100 }).notNull(),
     createdAt: datetime('created_at', { fsp: 3 })
@@ -45,7 +45,7 @@ export const user = mysqlTable(
   (table) => [index('idx_users_organizationId').on(table.organizationId)],
 )
 
-export const role = mysqlTable('roles', {
+export const roles = mysqlTable('roles', {
   id: int('id').primaryKey().autoincrement(),
   name: varchar('name', { length: 100 }).notNull().unique(),
   description: varchar('description', { length: 500 }),
@@ -58,7 +58,7 @@ export const role = mysqlTable('roles', {
     .$onUpdate(() => new Date()),
 })
 
-export const permission = mysqlTable(
+export const permissions = mysqlTable(
   'permissions',
   {
     id: int('id').primaryKey().autoincrement(),
@@ -72,15 +72,15 @@ export const permission = mysqlTable(
   (table) => [unique().on(table.resource, table.action)],
 )
 
-export const userRole = mysqlTable(
+export const userRoles = mysqlTable(
   'user_roles',
   {
     userId: int('user_id')
       .notNull()
-      .references(() => user.id),
+      .references(() => users.id),
     roleId: int('role_id')
       .notNull()
-      .references(() => role.id),
+      .references(() => roles.id),
     assignedAt: datetime('assigned_at', { fsp: 3 })
       .notNull()
       .default(sql`CURRENT_TIMESTAMP(3)`),
@@ -88,15 +88,15 @@ export const userRole = mysqlTable(
   (table) => [primaryKey({ columns: [table.userId, table.roleId] })],
 )
 
-export const rolePermission = mysqlTable(
+export const rolePermissions = mysqlTable(
   'role_permissions',
   {
     roleId: int('role_id')
       .notNull()
-      .references(() => role.id),
+      .references(() => roles.id),
     permissionId: int('permission_id')
       .notNull()
-      .references(() => permission.id),
+      .references(() => permissions.id),
     assignedAt: datetime('assigned_at', { fsp: 3 })
       .notNull()
       .default(sql`CURRENT_TIMESTAMP(3)`),
@@ -104,13 +104,13 @@ export const rolePermission = mysqlTable(
   (table) => [primaryKey({ columns: [table.roleId, table.permissionId] })],
 )
 
-export const auditLog = mysqlTable(
+export const auditLogs = mysqlTable(
   'audit_logs',
   {
     id: int('id').primaryKey().autoincrement(),
     userId: int('user_id')
       .notNull()
-      .references(() => user.id),
+      .references(() => users.id),
     action: varchar('action', { length: 50 }).notNull(),
     resource: varchar('resource', { length: 100 }).notNull(),
     detail: text('detail'),
@@ -125,36 +125,41 @@ export const auditLog = mysqlTable(
   ],
 )
 
-export const organizationRelations = relations(organization, ({ many }) => ({ users: many(user) }))
-
-export const userRelations = relations(user, ({ one, many }) => ({
-  organization: one(organization, { fields: [user.organizationId], references: [organization.id] }),
-  userRoles: many(userRole),
-  auditLogs: many(auditLog),
+export const organizationsRelations = relations(organizations, ({ many }) => ({
+  users: many(users),
 }))
 
-export const roleRelations = relations(role, ({ many }) => ({
-  userRoles: many(userRole),
-  rolePermissions: many(rolePermission),
+export const usersRelations = relations(users, ({ one, many }) => ({
+  organization: one(organizations, {
+    fields: [users.organizationId],
+    references: [organizations.id],
+  }),
+  userRoles: many(userRoles),
+  auditLogs: many(auditLogs),
 }))
 
-export const permissionRelations = relations(permission, ({ many }) => ({
-  rolePermissions: many(rolePermission),
+export const rolesRelations = relations(roles, ({ many }) => ({
+  userRoles: many(userRoles),
+  rolePermissions: many(rolePermissions),
 }))
 
-export const userRoleRelations = relations(userRole, ({ one }) => ({
-  user: one(user, { fields: [userRole.userId], references: [user.id] }),
-  role: one(role, { fields: [userRole.roleId], references: [role.id] }),
+export const permissionsRelations = relations(permissions, ({ many }) => ({
+  rolePermissions: many(rolePermissions),
 }))
 
-export const rolePermissionRelations = relations(rolePermission, ({ one }) => ({
-  role: one(role, { fields: [rolePermission.roleId], references: [role.id] }),
-  permission: one(permission, {
-    fields: [rolePermission.permissionId],
-    references: [permission.id],
+export const userRolesRelations = relations(userRoles, ({ one }) => ({
+  user: one(users, { fields: [userRoles.userId], references: [users.id] }),
+  role: one(roles, { fields: [userRoles.roleId], references: [roles.id] }),
+}))
+
+export const rolePermissionsRelations = relations(rolePermissions, ({ one }) => ({
+  role: one(roles, { fields: [rolePermissions.roleId], references: [roles.id] }),
+  permission: one(permissions, {
+    fields: [rolePermissions.permissionId],
+    references: [permissions.id],
   }),
 }))
 
-export const auditLogRelations = relations(auditLog, ({ one }) => ({
-  user: one(user, { fields: [auditLog.userId], references: [user.id] }),
+export const auditLogsRelations = relations(auditLogs, ({ one }) => ({
+  user: one(users, { fields: [auditLogs.userId], references: [users.id] }),
 }))

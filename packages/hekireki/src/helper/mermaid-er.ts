@@ -10,7 +10,10 @@ const RELATIONSHIPS = {
   many: '}|',
 } as const satisfies Record<Cardinality, string>
 
-export function erRelationLine(relation: ERRelation, resolveName: (model: string) => string = (model) => model) {
+export function erRelationLine(
+  relation: ERRelation,
+  resolveName: (model: string) => string = (model) => model,
+) {
   return `    ${resolveName(relation.from.model)} ${RELATIONSHIPS[relation.from.cardinality]}--${RELATIONSHIPS[relation.to.cardinality]} ${resolveName(relation.to.model)} : "(${relation.from.field}) - (${relation.to.field})"`
 }
 
