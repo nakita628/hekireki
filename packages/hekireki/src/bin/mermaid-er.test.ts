@@ -327,4 +327,59 @@ erDiagram
 
     expect(result).toBe(expected)
   }, 30000)
+
+  it('hekireki-mermaid-er uses @@map names', async () => {
+    const prisma = `generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+generator Hekireki-ER {
+  provider = "hekireki-mermaid-er"
+  output   = "mermaid-er"
+}
+
+model User {
+  id    String @id @default(uuid())
+  name  String
+  posts Post[]
+
+  @@map("users")
+}
+
+model Post {
+  id     String @id @default(uuid())
+  title  String
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@map("posts")
+}
+`
+
+    fs.mkdirSync('./prisma-mermaid-er', { recursive: true })
+    fs.writeFileSync('./prisma-mermaid-er/schema.prisma', prisma, { encoding: 'utf-8' })
+    await promisify(exec)('npx prisma generate --schema=./prisma-mermaid-er/schema.prisma')
+    const result = fs.readFileSync('./prisma-mermaid-er/mermaid-er/ER.md', {
+      encoding: 'utf-8',
+    })
+    const expected = `\`\`\`mermaid
+erDiagram
+    users ||--}| posts : "(id) - (userId)"
+    users {
+        string id PK
+        string name
+    }
+    posts {
+        string id PK
+        string title
+        string userId FK
+    }
+\`\`\``
+
+    expect(result).toBe(expected)
+  }, 30000)
 })

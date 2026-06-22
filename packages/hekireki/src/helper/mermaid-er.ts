@@ -10,8 +10,8 @@ const RELATIONSHIPS = {
   many: '}|',
 } as const satisfies Record<Cardinality, string>
 
-export function erRelationLine(relation: ERRelation) {
-  return `    ${relation.from.model} ${RELATIONSHIPS[relation.from.cardinality]}--${RELATIONSHIPS[relation.to.cardinality]} ${relation.to.model} : "(${relation.from.field}) - (${relation.to.field})"`
+export function erRelationLine(relation: ERRelation, resolveName: (model: string) => string = (model) => model) {
+  return `    ${resolveName(relation.from.model)} ${RELATIONSHIPS[relation.from.cardinality]}--${RELATIONSHIPS[relation.to.cardinality]} ${resolveName(relation.to.model)} : "(${relation.from.field}) - (${relation.to.field})"`
 }
 
 export function modelFields(model: DMMF.Model) {
@@ -33,5 +33,6 @@ export function modelFields(model: DMMF.Model) {
 }
 
 export function modelInfo(model: DMMF.Model) {
-  return [`    ${model.name} {`, ...modelFields(model), '    }']
+  const entity = model.dbName ?? model.name
+  return [`    ${entity} {`, ...modelFields(model), '    }']
 }
