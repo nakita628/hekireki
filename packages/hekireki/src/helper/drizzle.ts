@@ -210,8 +210,21 @@ export function generateImports(
 // Helpers
 // ============================================================================
 
-function toCamelCase(name: string): string {
-  return name.charAt(0).toLowerCase() + name.slice(1)
+function snakeToCamel(name: string): string {
+  return name.replace(/_+([a-zA-Z0-9])/g, (_, c) => c.toUpperCase())
+}
+
+function resolveTableName(model: DMMF.Model): string {
+  return model.dbName ?? makeSnakeCase(model.name)
+}
+
+function resolveVarName(model: DMMF.Model): string {
+  return snakeToCamel(resolveTableName(model))
+}
+
+function resolveVarNameByType(type: string, models: readonly DMMF.Model[]): string {
+  const target = models.find((m) => m.name === type)
+  return snakeToCamel(target ? resolveTableName(target) : makeSnakeCase(type))
 }
 
 function isFieldDefault(v: unknown): v is DMMF.FieldDefault {
@@ -360,7 +373,11 @@ const PRISMA_ACTION_MAP: { [k: string]: string } = {
   SetDefault: 'set default',
 }
 
-function makeFkReference(field: DMMF.Field, model: DMMF.Model): string {
+function makeFkReference(
+  field: DMMF.Field,
+  model: DMMF.Model,
+  models: readonly DMMF.Model[],
+): string {
   const relField = model.fields.find(
     (f) => f.kind === 'object' && f.relationFromFields && f.relationFromFields.includes(field.name),
   )
@@ -369,7 +386,7 @@ function makeFkReference(field: DMMF.Field, model: DMMF.Model): string {
   // Skip inline .references() for self-referencing FKs to avoid TypeScript circular inference error
   if (relField.type === model.name) return ''
 
-  const targetVar = toCamelCase(relField.type)
+  const targetVar = resolveVarNameByType(relField.type, models)
   const toCol = relField.relationToFields[0] ?? 'id'
   const onDelete = relField.relationOnDelete
   const drizzleAction = onDelete ? PRISMA_ACTION_MAP[onDelete] : undefined
@@ -380,6 +397,7 @@ function makeFkReference(field: DMMF.Field, model: DMMF.Model): string {
 function makeColumn(
   field: DMMF.Field,
   model: DMMF.Model,
+  models: readonly DMMF.Model[],
   provider: DbProvider,
   imports: { core: Set<string>; orm: Set<string>; ext: Map<string, Set<string>> },
   enums: readonly DMMF.DatamodelEnum[],
@@ -401,7 +419,7 @@ function makeColumn(
       ? '.notNull()'
       : '',
     field.isUnique ? '.unique()' : '',
-    makeFkReference(field, model),
+    makeFkReference(field, model, models),
     isAutoincrement
       ? provider === 'mysql'
         ? '.autoincrement()'
@@ -463,6 +481,7 @@ function makeCompositeConstraints(
 
 export function makeTable(
   model: DMMF.Model,
+  models: readonly DMMF.Model[],
   provider: DbProvider,
   imports: { core: Set<string>; orm: Set<string>; ext: Map<string, Set<string>> },
   enums: readonly DMMF.DatamodelEnum[],
@@ -472,10 +491,10 @@ export function makeTable(
     provider === 'postgresql' ? 'pgTable' : provider === 'mysql' ? 'mysqlTable' : 'sqliteTable'
   imports.core.add(tableFunc)
 
-  const varName = toCamelCase(model.name)
-  const tableName = model.dbName ?? makeSnakeCase(model.name)
+  const varName = resolveVarName(model)
+  const tableName = resolveTableName(model)
   const columns = model.fields
-    .map((field) => makeColumn(field, model, provider, imports, enums))
+    .map((field) => makeColumn(field, model, models, provider, imports, enums))
     .filter((c): c is string => c !== null)
     .join(', ')
   const constraints = makeCompositeConstraints(model, imports, indexes, tableName)
@@ -492,11 +511,11 @@ export function makeTable(
 function makeRelationField(
   field: DMMF.Field,
   model: DMMF.Model,
-  _models: readonly DMMF.Model[],
+  models: readonly DMMF.Model[],
   relFields: readonly DMMF.Field[],
 ): string {
-  const targetVar = toCamelCase(field.type)
-  const modelVar = toCamelCase(model.name)
+  const targetVar = resolveVarNameByType(field.type, models)
+  const modelVar = resolveVarName(model)
   const needsAlias = relFields.filter((f) => f.type === field.type).length > 1 && field.relationName
 
   if (field.relationFromFields && field.relationFromFields.length > 0) {
@@ -533,7 +552,7 @@ export function makeRelations(
     const fieldLines = relFields
       .map((field) => makeRelationField(field, model, models, relFields))
       .join(', ')
-    const modelVar = toCamelCase(model.name)
+    const modelVar = resolveVarName(model)
     const needsOne = relFields.some(
       (f) => (f.relationFromFields && f.relationFromFields.length > 0) || !f.isList,
     )

@@ -17,7 +17,7 @@ export function drizzleSchema(
   const imports = createImports()
 
   const tableLines = datamodel.models.map((model) =>
-    makeTable(model, db, imports, datamodel.enums, indexes),
+    makeTable(model, datamodel.models, db, imports, datamodel.enums, indexes),
   )
   const relationsLines = makeRelations(datamodel.models, imports)
 
