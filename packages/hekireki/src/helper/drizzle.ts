@@ -166,28 +166,32 @@ function mysqlNativeType(name: string, args: readonly string[]): string | null {
   }
 }
 
+type ImportReq = { readonly pkg: string; readonly kind: 'named' | 'default'; readonly name: string }
+
 export function createImports() {
   return {
     core: new Set<string>(),
     orm: new Set<string>(),
-    ext: new Map<string, Set<string>>(),
+    ext: new Map<string, { named: Set<string>; default?: string }>(),
   }
 }
 
-function addExternal(
-  imports: { core: Set<string>; orm: Set<string>; ext: Map<string, Set<string>> },
-  pkg: string,
-  fn: string,
-) {
-  const fns = imports.ext.get(pkg) ?? new Set<string>()
-  fns.add(fn)
-  imports.ext.set(pkg, fns)
+type DrizzleImports = ReturnType<typeof createImports>
+
+function applyImport(imports: DrizzleImports, req: ImportReq) {
+  if (req.pkg === 'drizzle-orm') {
+    imports.orm.add(req.name)
+    return
+  }
+  const entry = imports.ext.get(req.pkg) ?? { named: new Set<string>() }
+  const next =
+    req.kind === 'default'
+      ? { named: entry.named, default: req.name }
+      : { named: entry.named.add(req.name), default: entry.default }
+  imports.ext.set(req.pkg, next)
 }
 
-export function generateImports(
-  imports: { core: Set<string>; orm: Set<string>; ext: Map<string, Set<string>> },
-  provider: DbProvider,
-) {
+export function generateImports(imports: DrizzleImports, provider: DbProvider) {
   const mod =
     provider === 'postgresql'
       ? 'drizzle-orm/pg-core'
@@ -200,9 +204,15 @@ export function generateImports(
     imports.orm.size > 0
       ? `import { ${[...imports.orm].sort().join(', ')} } from 'drizzle-orm'`
       : ''
-  const extImports = [...imports.ext.entries()].map(
-    ([pkg, fns]) => `import { ${[...fns].sort().join(', ')} } from '${pkg}'`,
-  )
+  const extImports = [...imports.ext.entries()].map(([pkg, entry]) => {
+    const clause = [
+      entry.default,
+      entry.named.size > 0 ? `{ ${[...entry.named].sort().join(', ')} }` : undefined,
+    ]
+      .filter((c): c is string => c !== undefined)
+      .join(', ')
+    return `import ${clause} from '${pkg}'`
+  })
   return [coreImport, ormImport, ...extImports].filter(Boolean).join('\n')
 }
 
@@ -256,7 +266,7 @@ function resolveScalarType(field: DMMF.Field, provider: DbProvider): string {
 function makeColumnExpr(
   field: DMMF.Field,
   provider: DbProvider,
-  imports: { core: Set<string>; orm: Set<string>; ext: Map<string, Set<string>> },
+  imports: DrizzleImports,
   enums: readonly DMMF.DatamodelEnum[],
 ): string {
   const colName = field.dbName ?? field.name
@@ -293,55 +303,61 @@ function makeColumnExpr(
   return rest === ')' ? `${baseFnName}('${colName}')` : `${baseFnName}('${colName}', ${rest}`
 }
 
+const SQL_IMPORT = { pkg: 'drizzle-orm', kind: 'named', name: 'sql' } as const
+
 function resolveDefaultValue(
   dflt: DMMF.Field['default'],
   fieldType: string,
   provider: DbProvider,
-): { chain: string; needsSql: boolean; needsCuid: boolean } {
-  if (dflt === undefined || dflt === null) return { chain: '', needsSql: false, needsCuid: false }
+): { chain: string; imports: readonly ImportReq[] } {
+  if (dflt === undefined || dflt === null) return { chain: '', imports: [] }
   if (isFieldDefault(dflt)) {
     switch (dflt.name) {
       case 'autoincrement':
-        return { chain: '', needsSql: false, needsCuid: false }
+        return { chain: '', imports: [] }
       case 'now':
         if (provider === 'sqlite')
-          return { chain: '.default(sql`(unixepoch() * 1000)`)', needsSql: true, needsCuid: false }
+          return { chain: '.default(sql`(unixepoch() * 1000)`)', imports: [SQL_IMPORT] }
         if (provider === 'mysql')
-          return {
-            chain: '.default(sql`CURRENT_TIMESTAMP(3)`)',
-            needsSql: true,
-            needsCuid: false,
-          }
-        return { chain: '.defaultNow()', needsSql: false, needsCuid: false }
+          return { chain: '.default(sql`CURRENT_TIMESTAMP(3)`)', imports: [SQL_IMPORT] }
+        return { chain: '.defaultNow()', imports: [] }
       case 'uuid':
-        return {
-          chain: '.$defaultFn(() => crypto.randomUUID())',
-          needsSql: false,
-          needsCuid: false,
-        }
+        return { chain: '.$defaultFn(() => crypto.randomUUID())', imports: [] }
       case 'cuid':
-        return { chain: '.$defaultFn(() => createId())', needsSql: false, needsCuid: true }
+        return dflt.args[0] === 2
+          ? {
+              chain: '.$defaultFn(() => createId())',
+              imports: [{ pkg: '@paralleldrive/cuid2', kind: 'named', name: 'createId' }],
+            }
+          : {
+              chain: '.$defaultFn(() => cuid())',
+              imports: [{ pkg: 'cuid', kind: 'default', name: 'cuid' }],
+            }
+      case 'nanoid':
+        return {
+          chain: '.$defaultFn(() => nanoid())',
+          imports: [{ pkg: 'nanoid', kind: 'named', name: 'nanoid' }],
+        }
+      case 'ulid':
+        return {
+          chain: '.$defaultFn(() => ulid())',
+          imports: [{ pkg: 'ulidx', kind: 'named', name: 'ulid' }],
+        }
       case 'dbgenerated':
         if (typeof dflt.args[0] === 'string')
-          return {
-            chain: `.default(sql\`${dflt.args[0]}\`)`,
-            needsSql: true,
-            needsCuid: false,
-          }
-        return { chain: '', needsSql: false, needsCuid: false }
+          return { chain: `.default(sql\`${dflt.args[0]}\`)`, imports: [SQL_IMPORT] }
+        return { chain: '', imports: [] }
       default:
-        return { chain: '', needsSql: false, needsCuid: false }
+        return { chain: '', imports: [] }
     }
   }
-  if (typeof dflt === 'string')
-    return { chain: `.default('${dflt}')`, needsSql: false, needsCuid: false }
+  if (typeof dflt === 'string') return { chain: `.default('${dflt}')`, imports: [] }
   if (typeof dflt === 'number') {
     const chain = fieldType === 'Decimal' ? `.default('${dflt}')` : `.default(${dflt})`
-    return { chain, needsSql: false, needsCuid: false }
+    return { chain, imports: [] }
   }
-  if (typeof dflt === 'boolean')
-    return { chain: `.default(${dflt})`, needsSql: false, needsCuid: false }
-  return { chain: '', needsSql: false, needsCuid: false }
+  if (typeof dflt === 'boolean') return { chain: `.default(${dflt})`, imports: [] }
+  return { chain: '', imports: [] }
 }
 
 function resolveUpdatedAtDefault(provider: DbProvider): {
@@ -357,11 +373,12 @@ function makeDefaultChain(
   dflt: DMMF.Field['default'],
   fieldType: string,
   provider: DbProvider,
-  imports: { core: Set<string>; orm: Set<string>; ext: Map<string, Set<string>> },
+  imports: DrizzleImports,
 ): string {
   const result = resolveDefaultValue(dflt, fieldType, provider)
-  if (result.needsSql) imports.orm.add('sql')
-  if (result.needsCuid) addExternal(imports, '@paralleldrive/cuid2', 'createId')
+  for (const req of result.imports) {
+    applyImport(imports, req)
+  }
   return result.chain
 }
 
@@ -399,7 +416,7 @@ function makeColumn(
   model: DMMF.Model,
   models: readonly DMMF.Model[],
   provider: DbProvider,
-  imports: { core: Set<string>; orm: Set<string>; ext: Map<string, Set<string>> },
+  imports: DrizzleImports,
   enums: readonly DMMF.DatamodelEnum[],
 ): string | null {
   if (field.kind === 'object') return null
@@ -444,7 +461,7 @@ function makeColumn(
 
 function makeCompositeConstraints(
   model: DMMF.Model,
-  imports: { core: Set<string>; orm: Set<string>; ext: Map<string, Set<string>> },
+  imports: DrizzleImports,
   indexes: readonly DMMF.Index[],
   tableName: string,
 ): string | null {
@@ -483,7 +500,7 @@ export function makeTable(
   model: DMMF.Model,
   models: readonly DMMF.Model[],
   provider: DbProvider,
-  imports: { core: Set<string>; orm: Set<string>; ext: Map<string, Set<string>> },
+  imports: DrizzleImports,
   enums: readonly DMMF.DatamodelEnum[],
   indexes: readonly DMMF.Index[],
 ): string {
@@ -540,7 +557,7 @@ function makeRelationField(
 
 export function makeRelations(
   models: readonly DMMF.Model[],
-  imports: { core: Set<string>; orm: Set<string>; ext: Map<string, Set<string>> },
+  imports: DrizzleImports,
 ): readonly string[] {
   const modelsWithRels = models.filter((model) => model.fields.some((f) => f.kind === 'object'))
   if (modelsWithRels.length === 0) return []
