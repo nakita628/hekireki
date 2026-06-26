@@ -13,7 +13,7 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core'
 
-export const user = pgTable('users', {
+export const users = pgTable('users', {
   id: uuid('id')
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
@@ -33,7 +33,7 @@ export const user = pgTable('users', {
   lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
 })
 
-export const oAuthAccount = pgTable(
+export const oauthAccounts = pgTable(
   'oauth_accounts',
   {
     id: uuid('id')
@@ -41,7 +41,7 @@ export const oAuthAccount = pgTable(
       .$defaultFn(() => crypto.randomUUID()),
     userId: uuid('user_id')
       .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
+      .references(() => users.id, { onDelete: 'cascade' }),
     provider: pgEnum('OAuthProvider', ['GOOGLE', 'GITHUB', 'FACEBOOK', 'TWITTER', 'APPLE'])(
       'provider',
     ).notNull(),
@@ -57,14 +57,14 @@ export const oAuthAccount = pgTable(
   ],
 )
 
-export const twoFactorSetting = pgTable('two_factor_settings', {
+export const twoFactorSettings = pgTable('two_factor_settings', {
   id: uuid('id')
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
   userId: uuid('user_id')
     .notNull()
     .unique()
-    .references(() => user.id, { onDelete: 'cascade' }),
+    .references(() => users.id, { onDelete: 'cascade' }),
   enabled: boolean('enabled').notNull().default(false),
   method: pgEnum('TwoFactorMethod', ['TOTP', 'SMS', 'EMAIL'])('method'),
   totpSecret: text('totp_secret'),
@@ -78,7 +78,7 @@ export const twoFactorSetting = pgTable('two_factor_settings', {
     .$onUpdate(() => new Date()),
 })
 
-export const refreshToken = pgTable(
+export const refreshTokens = pgTable(
   'refresh_tokens',
   {
     id: text('id')
@@ -86,7 +86,7 @@ export const refreshToken = pgTable(
       .$defaultFn(() => createId()),
     userId: uuid('user_id')
       .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
+      .references(() => users.id, { onDelete: 'cascade' }),
     tokenHash: text('token_hash').notNull().unique(),
     deviceInfo: text('device_info'),
     ipAddress: varchar('ip_address', { length: 45 }),
@@ -97,7 +97,7 @@ export const refreshToken = pgTable(
   (table) => [index('idx_refresh_tokens_userId').on(table.userId)],
 )
 
-export const emailVerification = pgTable(
+export const emailVerifications = pgTable(
   'email_verifications',
   {
     id: uuid('id')
@@ -105,7 +105,7 @@ export const emailVerification = pgTable(
       .$defaultFn(() => crypto.randomUUID()),
     userId: uuid('user_id')
       .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
+      .references(() => users.id, { onDelete: 'cascade' }),
     tokenHash: text('token_hash').notNull().unique(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -113,7 +113,7 @@ export const emailVerification = pgTable(
   (table) => [index('idx_email_verifications_userId').on(table.userId)],
 )
 
-export const passwordReset = pgTable(
+export const passwordResets = pgTable(
   'password_resets',
   {
     id: uuid('id')
@@ -121,7 +121,7 @@ export const passwordReset = pgTable(
       .$defaultFn(() => crypto.randomUUID()),
     userId: uuid('user_id')
       .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
+      .references(() => users.id, { onDelete: 'cascade' }),
     tokenHash: text('token_hash').notNull().unique(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     used: boolean('used').notNull().default(false),
@@ -130,30 +130,30 @@ export const passwordReset = pgTable(
   (table) => [index('idx_password_resets_userId').on(table.userId)],
 )
 
-export const userRelations = relations(user, ({ one, many }) => ({
-  oauthAccounts: many(oAuthAccount),
-  twoFactorSetting: one(twoFactorSetting),
-  refreshTokens: many(refreshToken),
-  emailVerifications: many(emailVerification),
-  passwordResets: many(passwordReset),
+export const usersRelations = relations(users, ({ one, many }) => ({
+  oauthAccounts: many(oauthAccounts),
+  twoFactorSetting: one(twoFactorSettings),
+  refreshTokens: many(refreshTokens),
+  emailVerifications: many(emailVerifications),
+  passwordResets: many(passwordResets),
 }))
 
-export const oAuthAccountRelations = relations(oAuthAccount, ({ one }) => ({
-  user: one(user, { fields: [oAuthAccount.userId], references: [user.id] }),
+export const oauthAccountsRelations = relations(oauthAccounts, ({ one }) => ({
+  user: one(users, { fields: [oauthAccounts.userId], references: [users.id] }),
 }))
 
-export const twoFactorSettingRelations = relations(twoFactorSetting, ({ one }) => ({
-  user: one(user, { fields: [twoFactorSetting.userId], references: [user.id] }),
+export const twoFactorSettingsRelations = relations(twoFactorSettings, ({ one }) => ({
+  user: one(users, { fields: [twoFactorSettings.userId], references: [users.id] }),
 }))
 
-export const refreshTokenRelations = relations(refreshToken, ({ one }) => ({
-  user: one(user, { fields: [refreshToken.userId], references: [user.id] }),
+export const refreshTokensRelations = relations(refreshTokens, ({ one }) => ({
+  user: one(users, { fields: [refreshTokens.userId], references: [users.id] }),
 }))
 
-export const emailVerificationRelations = relations(emailVerification, ({ one }) => ({
-  user: one(user, { fields: [emailVerification.userId], references: [user.id] }),
+export const emailVerificationsRelations = relations(emailVerifications, ({ one }) => ({
+  user: one(users, { fields: [emailVerifications.userId], references: [users.id] }),
 }))
 
-export const passwordResetRelations = relations(passwordReset, ({ one }) => ({
-  user: one(user, { fields: [passwordReset.userId], references: [user.id] }),
+export const passwordResetsRelations = relations(passwordResets, ({ one }) => ({
+  user: one(users, { fields: [passwordResets.userId], references: [users.id] }),
 }))

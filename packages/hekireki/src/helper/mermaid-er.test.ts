@@ -74,6 +74,19 @@ describe('helper/mermaid-er', () => {
       expect(result).toBe('    User ||--|o Profile : "(id) - (userId)"')
     })
 
+    it('maps endpoint model names through the resolver', () => {
+      const result = erRelationLine(
+        {
+          from: { model: 'User', field: 'id', cardinality: 'one' },
+          to: { model: 'Post', field: 'userId', cardinality: 'many' },
+          identifying: true,
+          origin: 'inferred',
+        },
+        (model) => (model === 'User' ? 'users' : model === 'Post' ? 'posts' : model),
+      )
+      expect(result).toBe('    users ||--}| posts : "(id) - (userId)"')
+    })
+
     it('renders the from-side cardinality (many-to-many)', () => {
       const result = erRelationLine({
         from: { model: 'Post', field: 'id', cardinality: 'many' },
@@ -184,6 +197,24 @@ describe('helper/mermaid-er', () => {
       const result = modelInfo(model)
       expect(result).toStrictEqual(['    Empty {', '    }'])
     })
+
+    it('uses the @@map name as the entity name', () => {
+      const model = makeModel({
+        name: 'User',
+        dbName: 'users',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({ name: 'name', type: 'String' }),
+        ],
+      })
+      const result = modelInfo(model)
+      expect(result).toStrictEqual([
+        '    users {',
+        '        int id PK',
+        '        string name',
+        '    }',
+      ])
+    })
   })
 
   describe('erContent', () => {
@@ -230,6 +261,59 @@ describe('helper/mermaid-er', () => {
         '        string name',
         '    }',
         '    Post {',
+        '        int id PK',
+        '        string title',
+        '        int userId FK',
+        '    }',
+        '```',
+      ])
+    })
+
+    it('uses @@map names for entities and relation endpoints', () => {
+      const models = [
+        makeModel({
+          name: 'User',
+          dbName: 'users',
+          fields: [
+            makeField({ name: 'id', type: 'Int', isId: true }),
+            makeField({ name: 'name', type: 'String' }),
+            makeField({
+              name: 'posts',
+              type: 'Post',
+              kind: 'object',
+              isList: true,
+              relationName: 'PostToUser',
+            }),
+          ],
+        }),
+        makeModel({
+          name: 'Post',
+          dbName: 'posts',
+          fields: [
+            makeField({ name: 'id', type: 'Int', isId: true }),
+            makeField({ name: 'title', type: 'String' }),
+            makeField({ name: 'userId', type: 'Int' }),
+            makeField({
+              name: 'author',
+              type: 'User',
+              kind: 'object',
+              relationName: 'PostToUser',
+              relationFromFields: ['userId'],
+              relationToFields: ['id'],
+            }),
+          ],
+        }),
+      ]
+      const result = erContent(models)
+      expect(result).toStrictEqual([
+        '```mermaid',
+        'erDiagram',
+        '    users ||--}| posts : "(id) - (userId)"',
+        '    users {',
+        '        int id PK',
+        '        string name',
+        '    }',
+        '    posts {',
         '        int id PK',
         '        string title',
         '        int userId FK',

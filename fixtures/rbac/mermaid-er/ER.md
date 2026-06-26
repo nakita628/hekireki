@@ -1,12 +1,12 @@
 ```mermaid
 erDiagram
-    Organization ||--}| User : "(id) - (organizationId)"
-    User ||--}| UserRole : "(id) - (userId)"
-    Role ||--}| UserRole : "(id) - (roleId)"
-    Role ||--}| RolePermission : "(id) - (roleId)"
-    Permission ||--}| RolePermission : "(id) - (permissionId)"
-    User ||--}| AuditLog : "(id) - (userId)"
-    Organization {
+    organizations ||--}| users : "(id) - (organizationId)"
+    users ||--}| user_roles : "(id) - (userId)"
+    roles ||--}| user_roles : "(id) - (roleId)"
+    roles ||--}| role_permissions : "(id) - (roleId)"
+    permissions ||--}| role_permissions : "(id) - (permissionId)"
+    users ||--}| audit_logs : "(id) - (userId)"
+    organizations {
         int id PK "Organization ID"
         string name "Organization name"
         string slug "URL-safe slug"
@@ -14,7 +14,7 @@ erDiagram
         datetime createdAt "Creation timestamp"
         datetime updatedAt "Last update timestamp"
     }
-    User {
+    users {
         int id PK "User ID"
         int organizationId FK "Organization ID"
         string email "Email address"
@@ -22,31 +22,31 @@ erDiagram
         datetime createdAt "Creation timestamp"
         datetime updatedAt "Last update timestamp"
     }
-    Role {
+    roles {
         int id PK "Role ID"
         string name "Role name"
         string description "Role description"
         datetime createdAt "Creation timestamp"
         datetime updatedAt "Last update timestamp"
     }
-    Permission {
+    permissions {
         int id PK "Permission ID"
         string resource "Resource name"
         string action "Action name"
         string description "Permission description"
         datetime createdAt "Creation timestamp"
     }
-    UserRole {
+    user_roles {
         int userId FK "User ID"
         int roleId FK "Role ID"
         datetime assignedAt "Assignment timestamp"
     }
-    RolePermission {
+    role_permissions {
         int roleId FK "Role ID"
         int permissionId FK "Permission ID"
         datetime assignedAt "Assignment timestamp"
     }
-    AuditLog {
+    audit_logs {
         int id PK "Audit log ID"
         int userId FK "User ID"
         string action "Action performed"
