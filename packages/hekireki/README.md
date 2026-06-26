@@ -530,6 +530,26 @@ export const postRelations = relations(post, ({ one }) => ({
 }))
 ```
 
+#### ID default functions
+
+For Drizzle, Prisma `@default(...)` ID generators are emitted as client-side `$defaultFn` calls. Some require an extra package — install it in your project:
+
+| Prisma default                           | Generated call        | Package to install                             |
+| ---------------------------------------- | --------------------- | ---------------------------------------------- |
+| `@default(uuid())` / `@default(uuid(4))` | `crypto.randomUUID()` | — (Node/Web built-in)                          |
+| `@default(cuid())` / `@default(cuid(1))` | `cuid()`              | `npm i cuid`                                   |
+| `@default(cuid(2))`                      | `createId()`          | `npm i @paralleldrive/cuid2`                   |
+| `@default(nanoid())`                     | `nanoid()`            | `npm i nanoid` (>= 5.0.9, or >= 3.3.8 for CJS) |
+| `@default(ulid())`                       | `ulid()`              | `npm i ulidx`                                  |
+
+Notes:
+
+- **`cuid()` uses cuid v1**, which its author has deprecated in favor of cuid v2 ([npm `cuid`](https://www.npmjs.com/package/cuid)). It is emitted only when you explicitly write `@default(cuid())`; for new schemas prefer `@default(cuid(2))`.
+- **`ulid()` maps to [`ulidx`](https://www.npmjs.com/package/ulidx)** (an actively maintained, crypto-backed drop-in for `ulid`).
+- `@default(uuid(7))` is currently emitted as `crypto.randomUUID()` (UUID v4); native v7 support is planned.
+- `@default(nanoid(n))` length argument is not yet applied — the default length is used.
+- Inserts that bypass the ORM (raw SQL, bulk load) won't run `$defaultFn`; add a database-level `DEFAULT` for those paths.
+
 ### Mermaid
 
 ```mermaid

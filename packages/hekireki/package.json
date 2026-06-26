@@ -1,6 +1,6 @@
 {
   "name": "hekireki",
-  "version": "0.8.5",
+  "version": "0.8.6",
   "description": "Hekireki is a tool that generates validation schemas for Zod, Valibot, ArkType, and Effect Schema, as well as ER diagrams and DBML, from Prisma schemas annotated with comments.",
   "keywords": [
     "ajv",
@@ -61,28 +61,28 @@
     "release": "npm pkg fix && pnpm build && npm publish"
   },
   "dependencies": {
-    "@hono/node-server": "^2.0.4",
+    "@hono/node-server": "^2.0.6",
     "@prisma/generator-helper": "^7.8.0",
     "@resvg/resvg-js": "^2.6.2",
     "@softwaretechnik/dbml-renderer": "^1.0.31",
-    "hono": "^4.12.25",
-    "oxfmt": "^0.54.0"
+    "hono": "^4.12.27",
+    "oxfmt": "^0.56.0"
   },
   "devDependencies": {
     "@paralleldrive/cuid2": "^3.3.0",
     "@prisma/client": "^7.8.0",
     "@sinclair/typebox": "^0.34.49",
-    "@types/node": "^25.9.3",
-    "@typescript/native-preview": "7.0.0-dev.20260611.2",
+    "@types/node": "^26.0.1",
+    "@typescript/native-preview": "7.0.0-dev.20260624.1",
     "ajv": "^8.20.0",
-    "arktype": "^2.2.0",
-    "better-auth": "^1.6.17",
+    "arktype": "^2.2.1",
+    "better-auth": "^1.6.20",
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
-    "effect": "^3.21.3",
+    "effect": "^3.21.4",
     "json-schema-to-ts": "^3.1.1",
     "prisma": "^7.8.0",
-    "tsdown": "^0.22.2",
+    "tsdown": "^0.22.3",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
     "valibot": "1.4.1",

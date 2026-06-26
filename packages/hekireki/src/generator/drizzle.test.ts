@@ -418,5 +418,143 @@ describe('drizzleSchema', () => {
         "import { boolean, pgTable, serial } from 'drizzle-orm/pg-core'\n\nexport const feature = pgTable('feature', { id: serial('id').primaryKey(), enabled: boolean('enabled').notNull().default(false) })",
       )
     })
+
+    it('should use the cuid package (v1) for cuid() with args [1]', () => {
+      const datamodel = makeDatamodel([
+        makeModel({
+          name: 'User',
+          fields: [
+            makeField({
+              name: 'id',
+              type: 'String',
+              isId: true,
+              hasDefaultValue: true,
+              default: { name: 'cuid', args: [1] },
+            }),
+          ],
+        }),
+      ])
+
+      const result = drizzleSchema(datamodel, 'postgresql', [])
+
+      expect(result).toBe(
+        "import { pgTable, text } from 'drizzle-orm/pg-core'\nimport cuid from 'cuid'\n\nexport const user = pgTable('user', { id: text('id').primaryKey().$defaultFn(() => cuid()) })",
+      )
+    })
+
+    it('should treat cuid() with empty args as v1 (Prisma version resilience)', () => {
+      const datamodel = makeDatamodel([
+        makeModel({
+          name: 'User',
+          fields: [
+            makeField({
+              name: 'id',
+              type: 'String',
+              isId: true,
+              hasDefaultValue: true,
+              default: { name: 'cuid', args: [] },
+            }),
+          ],
+        }),
+      ])
+
+      const result = drizzleSchema(datamodel, 'postgresql', [])
+
+      expect(result).toBe(
+        "import { pgTable, text } from 'drizzle-orm/pg-core'\nimport cuid from 'cuid'\n\nexport const user = pgTable('user', { id: text('id').primaryKey().$defaultFn(() => cuid()) })",
+      )
+    })
+
+    it('should use @paralleldrive/cuid2 for cuid(2) with args [2]', () => {
+      const datamodel = makeDatamodel([
+        makeModel({
+          name: 'User',
+          fields: [
+            makeField({
+              name: 'id',
+              type: 'String',
+              isId: true,
+              hasDefaultValue: true,
+              default: { name: 'cuid', args: [2] },
+            }),
+          ],
+        }),
+      ])
+
+      const result = drizzleSchema(datamodel, 'postgresql', [])
+
+      expect(result).toBe(
+        "import { pgTable, text } from 'drizzle-orm/pg-core'\nimport { createId } from '@paralleldrive/cuid2'\n\nexport const user = pgTable('user', { id: text('id').primaryKey().$defaultFn(() => createId()) })",
+      )
+    })
+
+    it('should use the nanoid package for nanoid()', () => {
+      const datamodel = makeDatamodel([
+        makeModel({
+          name: 'User',
+          fields: [
+            makeField({
+              name: 'id',
+              type: 'String',
+              isId: true,
+              hasDefaultValue: true,
+              default: { name: 'nanoid', args: [] },
+            }),
+          ],
+        }),
+      ])
+
+      const result = drizzleSchema(datamodel, 'postgresql', [])
+
+      expect(result).toBe(
+        "import { pgTable, text } from 'drizzle-orm/pg-core'\nimport { nanoid } from 'nanoid'\n\nexport const user = pgTable('user', { id: text('id').primaryKey().$defaultFn(() => nanoid()) })",
+      )
+    })
+
+    it('should use the ulidx package for ulid()', () => {
+      const datamodel = makeDatamodel([
+        makeModel({
+          name: 'User',
+          fields: [
+            makeField({
+              name: 'id',
+              type: 'String',
+              isId: true,
+              hasDefaultValue: true,
+              default: { name: 'ulid', args: [] },
+            }),
+          ],
+        }),
+      ])
+
+      const result = drizzleSchema(datamodel, 'postgresql', [])
+
+      expect(result).toBe(
+        "import { pgTable, text } from 'drizzle-orm/pg-core'\nimport { ulid } from 'ulidx'\n\nexport const user = pgTable('user', { id: text('id').primaryKey().$defaultFn(() => ulid()) })",
+      )
+    })
+
+    it('should use crypto.randomUUID() for uuid() without extra imports', () => {
+      const datamodel = makeDatamodel([
+        makeModel({
+          name: 'User',
+          fields: [
+            makeField({
+              name: 'id',
+              type: 'String',
+              isId: true,
+              hasDefaultValue: true,
+              default: { name: 'uuid', args: [4] },
+            }),
+          ],
+        }),
+      ])
+
+      const result = drizzleSchema(datamodel, 'postgresql', [])
+
+      expect(result).toBe(
+        "import { pgTable, text } from 'drizzle-orm/pg-core'\n\nexport const user = pgTable('user', { id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()) })",
+      )
+    })
   })
 })
