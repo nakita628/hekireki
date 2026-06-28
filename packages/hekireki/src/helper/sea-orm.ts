@@ -365,11 +365,14 @@ function generateRelatedImpls(
 ) {
   const impls: string[] = []
 
-  // Track models with M2M to avoid duplicate Related impls
-  const m2mTargets = new Set(associations.manyToMany.map((a) => a.targetModel))
+  // Rust allows at most one `impl Related<Target>` per (Self, Target). When several
+  // relations point at the same target (self-referential FKs), emit only the first
+  // to avoid E0119; the inverse side's `has_many` still resolves against this impl.
+  const emittedTargets = new Set<string>()
 
   for (const assoc of associations.belongsTo) {
-    if (m2mTargets.has(assoc.targetModel)) continue
+    if (emittedTargets.has(assoc.targetModel)) continue
+    emittedTargets.add(assoc.targetModel)
     const targetModule = toModuleName(assoc.targetModel)
     impls.push(
       [
@@ -383,7 +386,8 @@ function generateRelatedImpls(
   }
 
   for (const assoc of associations.hasMany) {
-    if (m2mTargets.has(assoc.targetModel)) continue
+    if (emittedTargets.has(assoc.targetModel)) continue
+    emittedTargets.add(assoc.targetModel)
     const targetModule = toModuleName(assoc.targetModel)
     impls.push(
       [
@@ -397,7 +401,8 @@ function generateRelatedImpls(
   }
 
   for (const assoc of associations.hasOne) {
-    if (m2mTargets.has(assoc.targetModel)) continue
+    if (emittedTargets.has(assoc.targetModel)) continue
+    emittedTargets.add(assoc.targetModel)
     const targetModule = toModuleName(assoc.targetModel)
     impls.push(
       [
@@ -412,6 +417,8 @@ function generateRelatedImpls(
 
   // M2M: impl Related with via()
   for (const assoc of associations.manyToMany) {
+    if (emittedTargets.has(assoc.targetModel)) continue
+    emittedTargets.add(assoc.targetModel)
     const targetModule = toModuleName(assoc.targetModel)
     const [leftName, rightName] =
       model.name < assoc.targetModel
@@ -479,7 +486,17 @@ export function generateEntityFile(
   const relationEnum = generateRelationEnum(model, associations)
   const relatedImpls = generateRelatedImpls(model, associations)
 
-  const useLines = ['use sea_orm::entity::prelude::*;', 'use serde::{Deserialize, Serialize};']
+  const enumImports = [
+    ...new Set(scalarFields.filter((f) => enumNames.has(f.type)).map((f) => f.type)),
+  ]
+    .sort()
+    .map((name) => `use super::${toSnakeCase(name)}::${name};`)
+
+  const useLines = [
+    'use sea_orm::entity::prelude::*;',
+    'use serde::{Deserialize, Serialize};',
+    ...enumImports,
+  ]
 
   const eq = canDeriveEq(scalarFields)
   const deriveModel = eq

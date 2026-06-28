@@ -8,7 +8,7 @@ type User struct {
 	PasswordHash *string `gorm:"column:password_hash" json:"password_hash"`
 	Name string `gorm:"column:name;type:varchar(100);not null" json:"name"`
 	AvatarURL *string `gorm:"column:avatar_url" json:"avatar_url"`
-	Role string `gorm:"column:role;default:USER;not null" json:"role"`
+	Role string `gorm:"column:role;default:'USER';not null" json:"role"`
 	CreditBalance float64 `gorm:"column:credit_balance;type:decimal(10,2);default:0;not null" json:"credit_balance"`
 	EmailVerified bool `gorm:"column:email_verified;default:false;not null" json:"email_verified"`
 	IsActive bool `gorm:"column:is_active;default:true;not null" json:"is_active"`
@@ -28,9 +28,9 @@ func (User) TableName() string {
 
 type OAuthAccount struct {
 	ID string `gorm:"column:id;primaryKey;type:char(36)" json:"id"`
-	UserID string `gorm:"column:user_id;index:idx_user_id;type:char(36);not null" json:"user_id"`
-	Provider string `gorm:"column:provider;uniqueIndex:idx_provider_provider_account_id_unique;not null" json:"provider"`
-	ProviderAccountID string `gorm:"column:provider_account_id;uniqueIndex:idx_provider_provider_account_id_unique;type:varchar(255);not null" json:"provider_account_id"`
+	UserID string `gorm:"column:user_id;index:idx_oauth_accounts_user_id;type:char(36);not null" json:"user_id"`
+	Provider string `gorm:"column:provider;uniqueIndex:idx_oauth_accounts_provider_provider_account_id_unique;not null" json:"provider"`
+	ProviderAccountID string `gorm:"column:provider_account_id;uniqueIndex:idx_oauth_accounts_provider_provider_account_id_unique;type:varchar(255);not null" json:"provider_account_id"`
 	AccessToken *string `gorm:"column:access_token" json:"access_token"`
 	RefreshToken *string `gorm:"column:refresh_token" json:"refresh_token"`
 	ExpiresAt *time.Time `gorm:"column:expires_at;type:timestamp" json:"expires_at"`
@@ -62,7 +62,7 @@ func (TwoFactorSetting) TableName() string {
 
 type RefreshToken struct {
 	ID string `gorm:"column:id;primaryKey" json:"id"`
-	UserID string `gorm:"column:user_id;index:idx_user_id;type:char(36);not null" json:"user_id"`
+	UserID string `gorm:"column:user_id;index:idx_refresh_tokens_user_id;type:char(36);not null" json:"user_id"`
 	TokenHash string `gorm:"column:token_hash;uniqueIndex;not null" json:"token_hash"`
 	DeviceInfo *string `gorm:"column:device_info" json:"device_info"`
 	IPAddress *string `gorm:"column:ip_address;type:varchar(45)" json:"ip_address"`
@@ -78,7 +78,7 @@ func (RefreshToken) TableName() string {
 
 type EmailVerification struct {
 	ID string `gorm:"column:id;primaryKey;type:char(36)" json:"id"`
-	UserID string `gorm:"column:user_id;index:idx_user_id;type:char(36);not null" json:"user_id"`
+	UserID string `gorm:"column:user_id;index:idx_email_verifications_user_id;type:char(36);not null" json:"user_id"`
 	TokenHash string `gorm:"column:token_hash;uniqueIndex;not null" json:"token_hash"`
 	ExpiresAt time.Time `gorm:"column:expires_at;type:timestamp;not null" json:"expires_at"`
 	CreatedAt time.Time `gorm:"column:created_at;type:timestamp;autoCreateTime;not null" json:"created_at"`
@@ -91,7 +91,7 @@ func (EmailVerification) TableName() string {
 
 type PasswordReset struct {
 	ID string `gorm:"column:id;primaryKey;type:char(36)" json:"id"`
-	UserID string `gorm:"column:user_id;index:idx_user_id;type:char(36);not null" json:"user_id"`
+	UserID string `gorm:"column:user_id;index:idx_password_resets_user_id;type:char(36);not null" json:"user_id"`
 	TokenHash string `gorm:"column:token_hash;uniqueIndex;not null" json:"token_hash"`
 	ExpiresAt time.Time `gorm:"column:expires_at;type:timestamp;not null" json:"expires_at"`
 	Used bool `gorm:"column:used;default:false;not null" json:"used"`

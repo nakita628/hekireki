@@ -144,6 +144,7 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
   }[] = []
   const hasMany: { name: string; targetModel: string; foreignKey: string }[] = []
   const hasOne: { name: string; targetModel: string; foreignKey: string }[] = []
+  const manyToMany: { name: string; targetModel: string; joinThrough: string }[] = []
 
   for (const field of model.fields) {
     if (field.kind !== 'object') continue
@@ -166,7 +167,16 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
       const otherSide = targetModel.fields.find(
         (f) => f.relationName === field.relationName && f.kind === 'object',
       )
-      if (otherSide?.isList) continue
+      if (otherSide?.isList) {
+        const [left, right] =
+          model.name < field.type ? [model.name, field.type] : [field.type, model.name]
+        manyToMany.push({
+          name: field.name,
+          targetModel: field.type,
+          joinThrough: `_${left}To${right}`,
+        })
+        continue
+      }
     }
 
     const fkField = targetModel.fields.find(
@@ -185,7 +195,7 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
     }
   }
 
-  return { belongsTo, hasMany, hasOne }
+  return { belongsTo, hasMany, hasOne, manyToMany }
 }
 
 export function ectoSchemas(
@@ -270,6 +280,9 @@ export function ectoSchemas(
         ...associations.hasMany.map(
           (a) => `${makeSnakeCase(a.name)}: [${appName}.${a.targetModel}.t()]`,
         ),
+        ...associations.manyToMany.map(
+          (a) => `${makeSnakeCase(a.name)}: [${appName}.${a.targetModel}.t()]`,
+        ),
       ]
 
       const typeSpecLines = [
@@ -351,6 +364,11 @@ export function ectoSchemas(
         return `    has_many(:${snakeAssocName}, ${appName}.${a.targetModel}, foreign_key: :${snakeFk})`
       })
 
+      const manyToManyLines = associations.manyToMany.map((a) => {
+        const snakeAssocName = makeSnakeCase(a.name)
+        return `    many_to_many(:${snakeAssocName}, ${appName}.${a.targetModel}, join_through: "${a.joinThrough}")`
+      })
+
       const lines = [
         `defmodule ${appName}.${model.name} do`,
         '  use Ecto.Schema',
@@ -369,6 +387,7 @@ export function ectoSchemas(
         ...belongsToLines,
         ...hasOneLines,
         ...hasManyLines,
+        ...manyToManyLines,
         ...(timestampsLine ? [timestampsLine] : []),
         '  end',
         'end',

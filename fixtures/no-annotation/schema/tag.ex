@@ -7,10 +7,12 @@ defmodule DBSchema.Tag do
 
   @type t :: %__MODULE__{
           id: Ecto.UUID.t(),
-          name: String.t()
+          name: String.t(),
+          posts: [DBSchema.Post.t()]
         }
 
   schema "tag" do
     field(:name, :string)
+    many_to_many(:posts, DBSchema.Post, join_through: "_PostToTag")
   end
 end

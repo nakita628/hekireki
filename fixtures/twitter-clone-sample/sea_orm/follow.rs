@@ -33,10 +33,4 @@ impl Related<super::user::Entity> for Entity {
     }
 }
 
-impl Related<super::user::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Following.def()
-    }
-}
-
 impl ActiveModelBehavior for ActiveModel {}

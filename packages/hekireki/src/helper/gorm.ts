@@ -167,7 +167,9 @@ function formatGoDefault(def: DMMF.Field['default']) {
   if (def === undefined || def === null) return null
   if (typeof def === 'boolean') return def ? 'true' : 'false'
   if (typeof def === 'number') return String(def)
-  if (typeof def === 'string') return def
+  // String/enum literals must be SQL-quoted: bare `default:USER` is read as the
+  // identifier/reserved word `USER` (CURRENT_USER), not the literal 'USER'.
+  if (typeof def === 'string') return `'${def}'`
   return null
 }
 
@@ -208,6 +210,10 @@ export function buildGormTags(
 }
 
 function collectCompositeIndexTags(model: DMMF.Model, indexes: readonly DMMF.Index[]) {
+  // Index names are global (per-schema) in PostgreSQL, so qualify with the table
+  // name to avoid `idx_user_id` colliding across tables during AutoMigrate.
+  const tableName = model.dbName ?? makeSnakeCase(model.name)
+
   // @@unique([a, b]) → uniqueIndex:idx_name on each field
   const uniqueTags = model.uniqueFields
     .filter((fields) => fields.length > 1)
@@ -216,7 +222,7 @@ function collectCompositeIndexTags(model: DMMF.Model, indexes: readonly DMMF.Ind
         const fo = model.fields.find((mf) => mf.name === f)
         return fo?.dbName ?? makeSnakeCase(f)
       })
-      const idxName = `idx_${cols.join('_')}_unique`
+      const idxName = `idx_${tableName}_${cols.join('_')}_unique`
       return fields.map((f): [string, string] => [f, `uniqueIndex:${idxName}`])
     })
 
@@ -225,7 +231,9 @@ function collectCompositeIndexTags(model: DMMF.Model, indexes: readonly DMMF.Ind
     .filter((idx) => idx.model === model.name && (idx.type === 'normal' || idx.type === 'fulltext'))
     .flatMap((idx) => {
       const idxName =
-        idx.dbName ?? idx.name ?? `idx_${idx.fields.map((f) => makeSnakeCase(f.name)).join('_')}`
+        idx.dbName ??
+        idx.name ??
+        `idx_${tableName}_${idx.fields.map((f) => makeSnakeCase(f.name)).join('_')}`
       return idx.fields.map((f): [string, string] => [f.name, `index:${idxName}`])
     })
 
