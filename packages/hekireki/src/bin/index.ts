@@ -32,23 +32,7 @@ const GENERATORS = {
   zod: { prettyName: 'Hekireki-Zod', handler: zod },
 } as const
 
-export function registerGenerator(
-  name:
-    | 'ajv'
-    | 'arktype'
-    | 'dbml'
-    | 'docs'
-    | 'drizzle'
-    | 'ecto'
-    | 'effect'
-    | 'gorm'
-    | 'mermaid-er'
-    | 'sea-orm'
-    | 'sqlalchemy'
-    | 'typebox'
-    | 'valibot'
-    | 'zod',
-) {
+export function registerGenerator(name: keyof typeof GENERATORS) {
   const { prettyName, handler } = GENERATORS[name]
   pkg.generatorHandler({
     onManifest() {

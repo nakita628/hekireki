@@ -32,7 +32,7 @@ export function modelFields(model: DMMF.Model) {
       const keyPart = keyMarker ? ` ${keyMarker}` : ''
       return `        ${field.type.toLowerCase()} ${field.name}${keyPart}${commentPart ? ` "${commentPart}"` : ''}`
     })
-    .filter((field): field is string => field !== null)
+    .filter((field) => field !== null)
 }
 
 export function modelInfo(model: DMMF.Model) {

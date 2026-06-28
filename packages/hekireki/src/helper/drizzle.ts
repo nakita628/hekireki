@@ -62,7 +62,7 @@ function makeDecimalOpts(args: readonly string[]): string {
   const opts = [
     args[0] ? `precision: ${args[0]}` : null,
     args[1] ? `scale: ${args[1]}` : null,
-  ].filter((o): o is string => o !== null)
+  ].filter((o) => o !== null)
   return opts.length > 0 ? `{ ${opts.join(', ')} }` : ''
 }
 
@@ -94,7 +94,7 @@ function pgNativeType(name: string, args: readonly string[]): string | null {
       return args[0] ? `timestamp({ precision: ${args[0]} })` : 'timestamp()'
     case 'Timestamptz': {
       const opts = ['withTimezone: true', args[0] ? `precision: ${args[0]}` : null].filter(
-        (o): o is string => o !== null,
+        (o) => o !== null,
       )
       return `timestamp({ ${opts.join(', ')} })`
     }
@@ -209,7 +209,7 @@ export function generateImports(imports: DrizzleImports, provider: DbProvider) {
       entry.default,
       entry.named.size > 0 ? `{ ${[...entry.named].sort().join(', ')} }` : undefined,
     ]
-      .filter((c): c is string => c !== undefined)
+      .filter((c) => c !== undefined)
       .join(', ')
     return `import ${clause} from '${pkg}'`
   })
@@ -488,7 +488,7 @@ function makeCompositeConstraints(
       return `index('${idxName}').on(${idx.fields.map((f) => `table.${f.name}`).join(', ')})`
     })
 
-  const all = [pkLine, ...uniqueLines, ...indexLines].filter((l): l is string => l !== null)
+  const all = [pkLine, ...uniqueLines, ...indexLines].filter((l) => l !== null)
   return all.length > 0 ? all.join(', ') : null
 }
 
@@ -512,7 +512,7 @@ export function makeTable(
   const tableName = resolveTableName(model)
   const columns = model.fields
     .map((field) => makeColumn(field, model, models, provider, imports, enums))
-    .filter((c): c is string => c !== null)
+    .filter((c) => c !== null)
     .join(', ')
   const constraints = makeCompositeConstraints(model, imports, indexes, tableName)
 

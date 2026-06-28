@@ -202,7 +202,7 @@ export function buildGormTags(
     defaultVal !== null ? `default:${defaultVal}` : null,
     field.isUpdatedAt ? 'autoUpdateTime' : null,
     field.isRequired && !isPk ? 'not null' : null,
-  ].filter((p): p is string => p !== null)
+  ].filter((p) => p !== null)
 
   return `\`gorm:"${parts.join(';')}" json:"${columnName}"\``
 }
@@ -359,7 +359,7 @@ function generateRelationFields(
     const tagParts = [
       isAmbiguous ? `foreignKey:${fkFieldName}` : null,
       needsReferencesTag(assoc.references) ? `references:${refsFieldName}` : null,
-    ].filter((p): p is string => p !== null)
+    ].filter((p) => p !== null)
     return tagParts.length > 0
       ? `\t${fieldName} ${assoc.targetModel} ${buildRelationTag(tagParts)}`
       : `\t${fieldName} ${assoc.targetModel}`
@@ -446,7 +446,7 @@ export function collectImports(models: readonly DMMF.Model[]) {
     m.fields.some((f) => f.kind !== 'object' && f.type === 'Json'),
   )
   return [needsTime ? '"time"' : null, needsDatatypes ? '"gorm.io/datatypes"' : null].filter(
-    (i): i is string => i !== null,
+    (i) => i !== null,
   )
 }
 

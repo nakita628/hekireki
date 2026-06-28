@@ -12,7 +12,7 @@ export function generateGormModels(
 
   const modelBodies = models
     .map((model) => generateModelStruct(model, models, enums, idx))
-    .filter((body): body is string => body !== null)
+    .filter((body) => body !== null)
 
   return [
     `package ${packageName}`,
