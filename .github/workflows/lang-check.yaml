@@ -1,0 +1,140 @@
+name: Lang Check
+
+# Validity checks for hekireki's generated foreign-language code: each language
+# is generated from conformance/schema.prisma and then checked in its own
+# toolchain — it parses (syntax) and compiles against the real GORM / sea-orm /
+# SQLAlchemy / Ecto API (type). This is separate from Test (test.yaml), which
+# owns the byte-equality codegen contract and stays toolchain-free.
+#
+# One matrix leg per language; each sets up only its own toolchain. Runs on PRs
+# that touch the generators or the harness, and on demand. Action tags are
+# pinned to @vX.Y.Z and tracked by Renovate (no SHA pinning, per org policy).
+
+on:
+  pull_request:
+    paths:
+      - packages/hekireki/src/generator/**
+      - packages/hekireki/src/core/**
+      - packages/hekireki/src/helper/**
+      - packages/hekireki/conformance/**
+      - .github/workflows/lang-check.yaml
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lang-check-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: packages/hekireki
+
+jobs:
+  conformance:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        lang: [gorm, sea-orm, sqlalchemy, ecto]
+    steps:
+      - uses: actions/checkout@v5.0.1
+      - uses: voidzero-dev/setup-vp@v1.12.0
+        with:
+          node-version: '22'
+          cache: true
+      - run: vp install
+        working-directory: .
+      - run: vp run hekireki#build
+        working-directory: .
+
+      - if: matrix.lang == 'gorm'
+        uses: actions/setup-go@v5.5.0
+        with:
+          go-version: '1.23.6'
+      - if: matrix.lang == 'sqlalchemy'
+        uses: actions/setup-python@v5.6.0
+        with:
+          python-version: '3.12.4'
+      - if: matrix.lang == 'sea-orm'
+        uses: actions-rust-lang/setup-rust-toolchain@v1.13.0
+        with:
+          toolchain: '1.83.0'
+          components: rustfmt
+      - if: matrix.lang == 'ecto'
+        uses: erlef/setup-beam@v1.20.4
+        with:
+          otp-version: '27.2'
+          elixir-version: '1.18.1'
+
+      # prisma resolves a generator `provider = "hekireki-gorm"` by name on PATH;
+      # link the built bins and add them to PATH, then generate from the schema.
+      - name: Generate foreign-language code
+        run: |
+          for g in gorm sea-orm sqlalchemy ecto; do
+            ln -sf "../../dist/bin/$g.js" "node_modules/.bin/hekireki-$g"
+          done
+          rm -rf conformance/harness/gorm/model/models.go \
+                 conformance/harness/sea-orm/src/entities \
+                 conformance/harness/sqlalchemy/models.py \
+                 conformance/harness/ecto/lib
+          PATH="$PWD/node_modules/.bin:$PATH" DATABASE_URL=postgresql://localhost/conformance \
+            prisma generate --schema conformance/schema.prisma
+
+      - name: Go (GORM) conformance
+        if: matrix.lang == 'gorm'
+        working-directory: packages/hekireki/conformance/harness/gorm
+        run: |
+          gofmt -e model/models.go > /dev/null   # syntax
+          CGO_ENABLED=0 go build ./model/        # type: real GORM API
+          CGO_ENABLED=0 go vet ./model/
+
+      - name: Rust (Sea-ORM) conformance
+        if: matrix.lang == 'sea-orm'
+        working-directory: packages/hekireki/conformance/harness/sea-orm
+        run: |
+          rustfmt --edition 2021 --emit=stdout src/entities/*.rs > /dev/null  # syntax
+          cargo check --locked --quiet                                        # type: real sea-orm API
+
+      - name: Python (SQLAlchemy) conformance
+        if: matrix.lang == 'sqlalchemy'
+        working-directory: packages/hekireki/conformance/harness/sqlalchemy
+        run: |
+          python3 -m py_compile models.py        # syntax
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet -r requirements.txt
+          .venv/bin/mypy --config-file mypy.ini models.py smoke.py   # type: real SQLAlchemy API + invariants
+
+      - name: Elixir (Ecto) conformance
+        if: matrix.lang == 'ecto'
+        working-directory: packages/hekireki/conformance/harness/ecto
+        run: |
+          elixir -e 'for f <- Path.wildcard("lib/*.ex"), do: Code.string_to_quoted!(File.read!(f), file: f)'  # syntax
+          mix local.hex --force
+          mix deps.get
+          mix compile --force                    # type: real Ecto API
+
+  # Prove the published tarball still ships dist/ only — the conformance harness
+  # (Go/Rust/Python/Elixir files) must never leak into npm.
+  pack-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5.0.1
+      - uses: voidzero-dev/setup-vp@v1.12.0
+        with:
+          node-version: '22'
+          cache: true
+      - run: vp install
+        working-directory: .
+      - run: vp run hekireki#build
+        working-directory: .
+      - name: Assert tarball contains dist/ only
+        run: |
+          npm pack --dry-run --json > pack.json
+          node -e '
+            const files = require("./pack.json")[0].files.map((f) => f.path)
+            const leaked = files.filter((p) => !/^(dist\/|package\.json$|README|LICENSE)/.test(p))
+            if (leaked.length) { console.error("tarball leaks non-dist files:\n" + leaked.join("\n")); process.exit(1) }
+            console.log("ok: tarball ships dist/ only (" + files.length + " files)")
+          '

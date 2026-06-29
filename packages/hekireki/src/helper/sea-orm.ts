@@ -22,6 +22,72 @@ export function prismaTypeToRustType(type: string, isRequired: boolean) {
   return base
 }
 
+const RUST_KEYWORDS = new Set([
+  'as',
+  'break',
+  'const',
+  'continue',
+  'crate',
+  'dyn',
+  'else',
+  'enum',
+  'extern',
+  'false',
+  'fn',
+  'for',
+  'if',
+  'impl',
+  'in',
+  'let',
+  'loop',
+  'match',
+  'mod',
+  'move',
+  'mut',
+  'pub',
+  'ref',
+  'return',
+  'self',
+  'Self',
+  'static',
+  'struct',
+  'super',
+  'trait',
+  'true',
+  'type',
+  'unsafe',
+  'use',
+  'where',
+  'while',
+  'async',
+  'await',
+  'abstract',
+  'become',
+  'box',
+  'do',
+  'final',
+  'macro',
+  'override',
+  'priv',
+  'typeof',
+  'unsized',
+  'virtual',
+  'yield',
+  'try',
+  'gen',
+])
+// These four keywords cannot be written as raw identifiers (`r#self` is illegal),
+// so a field named after one is renamed and its column preserved via column_name.
+const RUST_NON_RAW = new Set(['self', 'Self', 'crate', 'super'])
+
+// Maps a snake_case field name to a valid Rust struct-field identifier, plus the
+// column name sea-orm will derive from that identifier (it strips a leading r#).
+function rustFieldIdent(snake: string) {
+  if (!RUST_KEYWORDS.has(snake)) return { ident: snake, derivedColumn: snake }
+  if (RUST_NON_RAW.has(snake)) return { ident: `${snake}_`, derivedColumn: `${snake}_` }
+  return { ident: `r#${snake}`, derivedColumn: snake }
+}
+
 export function resolveSeaOrmColumnType(field: DMMF.Field) {
   if (!field.nativeType) return null
 
@@ -84,7 +150,12 @@ function formatRustDefault(def: DMMF.Field['default']) {
   return null
 }
 
-export function buildSeaOrmAttributes(field: DMMF.Field, isPk: boolean, isCompositePk: boolean) {
+export function buildSeaOrmAttributes(
+  field: DMMF.Field,
+  isPk: boolean,
+  isCompositePk: boolean,
+  derivedColumn?: string,
+) {
   const attrs: string[] = []
 
   if (isPk) {
@@ -101,9 +172,10 @@ export function buildSeaOrmAttributes(field: DMMF.Field, isPk: boolean, isCompos
 
   const columnParts: string[] = []
 
-  // column_name
+  // column_name: emit when the real column differs from the one sea-orm derives
+  // from the (possibly keyword-escaped) Rust field identifier.
   const columnName = field.dbName ?? makeSnakeCase(field.name)
-  const snakeName = makeSnakeCase(field.name)
+  const snakeName = derivedColumn ?? makeSnakeCase(field.name)
   if (columnName !== snakeName) {
     columnParts.push(`column_name = "${columnName}"`)
   }
@@ -467,15 +539,17 @@ export function generateEntityFile(
 
   for (const field of scalarFields) {
     const isPk = field.isId || compositePkFieldNames.has(field.name)
-    const attrs = buildSeaOrmAttributes(field, isPk, isCompositePk)
+    const { ident: fieldName, derivedColumn } = rustFieldIdent(toSnakeCase(field.name))
+    const attrs = buildSeaOrmAttributes(field, isPk, isCompositePk, derivedColumn)
 
-    const rustType = enumNames.has(field.type)
-      ? field.isRequired
-        ? field.type
-        : `Option<${field.type}>`
-      : prismaTypeToRustType(field.type, field.isRequired)
-
-    const fieldName = toSnakeCase(field.name)
+    const elemType = enumNames.has(field.type) ? field.type : prismaTypeToRustType(field.type, true)
+    const rustType = field.isList
+      ? `Vec<${elemType}>`
+      : enumNames.has(field.type)
+        ? field.isRequired
+          ? field.type
+          : `Option<${field.type}>`
+        : prismaTypeToRustType(field.type, field.isRequired)
 
     for (const attr of attrs) {
       fieldLines.push(`    ${attr}`)

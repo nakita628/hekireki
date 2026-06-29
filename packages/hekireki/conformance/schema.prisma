@@ -1,0 +1,97 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator Hekireki-GORM {
+  provider = "hekireki-gorm"
+  output   = "harness/gorm/model"
+}
+
+generator Hekireki-SeaORM {
+  provider = "hekireki-sea-orm"
+  output   = "harness/sea-orm/src/entities"
+}
+
+generator Hekireki-SQLAlchemy {
+  provider = "hekireki-sqlalchemy"
+  output   = "harness/sqlalchemy"
+}
+
+generator Hekireki-Ecto {
+  provider = "hekireki-ecto"
+  output   = "harness/ecto/lib"
+  app      = "DBSchema"
+}
+
+enum Status {
+  ACTIVE
+  INACTIVE
+  PENDING_REVIEW
+}
+
+// Every scalar type + enum default + scalar list (array) + @map/@@map +
+// two relations to the same model (follower/following).
+model Account {
+  id        String   @id @default(uuid())
+  bigNum    BigInt
+  price     Decimal
+  data      Json
+  raw       Bytes
+  ratio     Float
+  flag      Boolean
+  count     Int
+  createdAt DateTime @default(now()) @map("created_at")
+  status    Status   @default(ACTIVE)
+  tags      String[]
+  posts     Post[]
+  followers Follow[] @relation("following")
+  following Follow[] @relation("follower")
+
+  @@map("accounts")
+}
+
+// Self-relation (adjacency-list tree): parent must be a pointer/remote_side.
+model Category {
+  id       Int        @id @default(autoincrement())
+  name     String
+  parentId Int?
+  parent   Category?  @relation("tree", fields: [parentId], references: [id])
+  children Category[] @relation("tree")
+}
+
+// Composite PK + two foreign keys to the same model.
+model Follow {
+  followerId  String
+  followingId String
+  follower    Account @relation("follower", fields: [followerId], references: [id])
+  following   Account @relation("following", fields: [followingId], references: [id])
+
+  @@id([followerId, followingId])
+}
+
+// Implicit many-to-many (Prisma _PostToTag join table).
+model Post {
+  id       String @id @default(uuid())
+  title    String
+  authorId String
+  author   Account @relation(fields: [authorId], references: [id])
+  tags     Tag[]
+}
+
+model Tag {
+  id    String @id @default(uuid())
+  label String @unique
+  posts Post[]
+}
+
+// Field names that are reserved words in Rust (type/match/self) and Python
+// (async/yield); the generators must escape or rename them. These are not
+// Elixir keywords, so Ecto is unaffected.
+model Keyword {
+  id    String @id @default(uuid())
+  type  String
+  match String
+  async String
+  yield String
+  self  String
+}

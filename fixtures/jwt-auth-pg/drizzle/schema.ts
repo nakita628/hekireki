@@ -11,7 +11,7 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
-import { createId } from '@paralleldrive/cuid2'
+import cuid from 'cuid'
 
 export const users = pgTable('users', {
   id: uuid('id')
@@ -83,7 +83,7 @@ export const refreshTokens = pgTable(
   {
     id: text('id')
       .primaryKey()
-      .$defaultFn(() => createId()),
+      .$defaultFn(() => cuid()),
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),

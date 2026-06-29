@@ -200,6 +200,9 @@ export function buildGormTags(
     field.isUnique ? 'uniqueIndex' : null,
     ...compositeIndexTags,
     includeNativeType ? `type:${nativeType}` : null,
+    // Scalar lists need a serializer so GORM can persist the slice; the built-in
+    // json serializer works on every dialect without extra deps.
+    field.isList && field.kind !== 'object' ? 'serializer:json' : null,
     includeAutoCreate ? 'autoCreateTime' : null,
     defaultVal !== null ? `default:${defaultVal}` : null,
     field.isUpdatedAt ? 'autoUpdateTime' : null,
@@ -315,12 +318,17 @@ function generateStructField(
   _enumNames: ReadonlySet<string>,
 ) {
   const fieldName = goFieldName(field.name)
-  const goType =
+  const scalarType =
     field.kind === 'enum'
       ? field.isRequired
         ? 'string'
         : '*string'
       : prismaTypeToGoType(field.type, field.isRequired)
+  // A scalar list (e.g. `tags String[]`) is a collection, not a scalar; collapse
+  // it to a single value loses data. Emit a slice of the element type.
+  const goType = field.isList
+    ? `[]${field.kind === 'enum' ? 'string' : prismaTypeToGoType(field.type, true)}`
+    : scalarType
 
   const tag = buildGormTags(field, isPk, isCompositePk, compositeIndexTags)
   const tagStr = tag ? ` ${tag}` : ''
@@ -368,9 +376,13 @@ function generateRelationFields(
       isAmbiguous ? `foreignKey:${fkFieldName}` : null,
       needsReferencesTag(assoc.references) ? `references:${refsFieldName}` : null,
     ].filter((p) => p !== null)
+    // A relation back to the owning model must be a pointer: a struct that
+    // embeds itself by value is an illegal recursive type in Go.
+    const targetType =
+      assoc.targetModel === model.name ? `*${assoc.targetModel}` : assoc.targetModel
     return tagParts.length > 0
-      ? `\t${fieldName} ${assoc.targetModel} ${buildRelationTag(tagParts)}`
-      : `\t${fieldName} ${assoc.targetModel}`
+      ? `\t${fieldName} ${targetType} ${buildRelationTag(tagParts)}`
+      : `\t${fieldName} ${targetType}`
   })
 
   const hasManyLines = associations.hasMany.map((assoc) => {
@@ -390,7 +402,9 @@ function generateRelationFields(
         ? [`references:${goFieldName(assoc.references)}`]
         : []),
     ]
-    return `\t${goFieldName(assoc.name)} ${assoc.targetModel} ${buildRelationTag(tagParts)}`
+    const targetType =
+      assoc.targetModel === model.name ? `*${assoc.targetModel}` : assoc.targetModel
+    return `\t${goFieldName(assoc.name)} ${targetType} ${buildRelationTag(tagParts)}`
   })
 
   const manyToManyLines = associations.manyToMany.map((assoc) => {
