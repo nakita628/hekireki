@@ -3,7 +3,11 @@
 // / DeriveRelation macro against the real sea-orm API, so a generated file that
 // is syntactically valid but semantically wrong (bad column type, malformed
 // relation) fails the build.
-mod entities;
+//
+// `pub` matters: the check runs with -D warnings, and in a private module tree
+// the prelude re-exports and entities no smoke function touches would count as
+// unused_imports / dead_code. Public items are API surface, not dead code.
+pub mod entities;
 
 // Pins the scalar-list invariant in the type system: `tags` must stay a Vec,
 // not collapse to a scalar (which would compile but silently drop the array).

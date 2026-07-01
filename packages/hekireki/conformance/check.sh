@@ -102,7 +102,9 @@ for lang in "${runnable[@]}"; do
       (
         cd "$harness/sea-orm"
         rustfmt --edition 2021 --emit=stdout src/entities/*.rs > /dev/null # syntax
-        cargo check --locked --quiet                                       # type: real sea-orm API
+        # -D warnings matches CI (setup-rust-toolchain injects it) so a lint in
+        # generated code fails locally too, e.g. non_camel_case enum variants.
+        RUSTFLAGS='-D warnings' cargo check --locked --quiet # type: real sea-orm API
       )
       ;;
     sqlalchemy)
