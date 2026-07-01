@@ -77,6 +77,7 @@
     "ajv": "^8.20.0",
     "arktype": "^2.2.1",
     "better-auth": "^1.6.20",
+    "cuid": "^3.0.0",
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
     "effect": "^3.21.4",

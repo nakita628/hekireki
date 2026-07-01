@@ -4,6 +4,7 @@ harness/gorm/model/models.go
 harness/sea-orm/src/entities/
 harness/sqlalchemy/models.py
 harness/ecto/lib/
+harness/drizzle/schema.ts
 
 # Toolchain build artifacts.
 harness/gorm/.cache/

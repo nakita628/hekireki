@@ -23,6 +23,11 @@ generator Hekireki-Ecto {
   app      = "DBSchema"
 }
 
+generator Hekireki-Drizzle {
+  provider = "hekireki-drizzle"
+  output   = "harness/drizzle/schema.ts"
+}
+
 enum Status {
   ACTIVE
   INACTIVE

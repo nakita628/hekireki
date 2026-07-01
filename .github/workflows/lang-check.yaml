@@ -42,7 +42,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        lang: [gorm, sea-orm, sqlalchemy, ecto]
+        # drizzle needs no extra toolchain step: setup-vp's node runs
+        # tsc + drizzle-kit from the workspace's devDependencies.
+        lang: [gorm, sea-orm, sqlalchemy, ecto, drizzle]
     steps:
       - uses: actions/checkout@v5.0.1
       - uses: voidzero-dev/setup-vp@v1.12.0
@@ -65,7 +67,9 @@ jobs:
       - if: matrix.lang == 'sea-orm'
         uses: actions-rust-lang/setup-rust-toolchain@v1.13.0
         with:
-          toolchain: '1.83.0'
+          # Locked crates (zeroize 1.9+) use edition2024, which needs
+          # cargo >= 1.85 just to parse their manifests.
+          toolchain: '1.96.0'
           components: rustfmt
       - if: matrix.lang == 'ecto'
         uses: erlef/setup-beam@v1.20.4

@@ -11,6 +11,7 @@
 #                                              # toolchain is skipped with a note
 #   bash conformance/check.sh gorm sqlalchemy  # only these; a missing toolchain
 #                                              # is a hard error (CI mode)
+#   languages: gorm | sea-orm | sqlalchemy | ecto | drizzle
 #
 # Requires dist/ to be built first (`pnpm build`); the `pnpm conformance`
 # script chains the two.
@@ -28,15 +29,15 @@ if [ "$#" -gt 0 ]; then
   langs=("$@")
   strict=1
 else
-  langs=(gorm sea-orm sqlalchemy ecto)
+  langs=(gorm sea-orm sqlalchemy ecto drizzle)
   strict=0
 fi
 
 for lang in "${langs[@]}"; do
   case "$lang" in
-    gorm | sea-orm | sqlalchemy | ecto) ;;
+    gorm | sea-orm | sqlalchemy | ecto | drizzle) ;;
     *)
-      echo "error: unknown language '$lang' (expected gorm | sea-orm | sqlalchemy | ecto)" >&2
+      echo "error: unknown language '$lang' (expected gorm | sea-orm | sqlalchemy | ecto | drizzle)" >&2
       exit 1
       ;;
   esac
@@ -50,6 +51,7 @@ toolchain_of() {
     sea-orm) echo cargo ;;
     sqlalchemy) echo python3 ;;
     ecto) echo mix ;;
+    drizzle) echo node ;;
   esac
 }
 
@@ -74,13 +76,14 @@ fi
 # prisma resolves `provider = "hekireki-gorm"` by name on PATH: link the built
 # bins, drop stale output, regenerate everything from the conformance schema.
 mkdir -p node_modules/.bin
-for g in gorm sea-orm sqlalchemy ecto; do
+for g in gorm sea-orm sqlalchemy ecto drizzle; do
   ln -sf "../../dist/bin/$g.js" "node_modules/.bin/hekireki-$g"
 done
 rm -rf "$harness/gorm/model/models.go" \
   "$harness/sea-orm/src/entities" \
   "$harness/sqlalchemy/models.py" \
-  "$harness/ecto/lib"
+  "$harness/ecto/lib" \
+  "$harness/drizzle/schema.ts"
 PATH="$PWD/node_modules/.bin:$PATH" DATABASE_URL=postgresql://localhost/conformance \
   npx prisma generate --schema conformance/schema.prisma
 
@@ -127,6 +130,17 @@ for lang in "${runnable[@]}"; do
         mix hex.audit || true
         mix compile --force # type: real Ecto API
       )
+      ;;
+    drizzle)
+      # tsc --strict covers syntax + type against the real drizzle-orm API and
+      # the smoke.ts invariants; drizzle-kit generate proves the schema is
+      # structurally sound as migration DDL (an inline pgEnum type-checks but
+      # emits a migration that references a type it never creates).
+      npx tsc --noEmit -p "$harness/drizzle"
+      dk_out="$(mktemp -d)"
+      npx drizzle-kit generate --dialect=postgresql \
+        --schema="$harness/drizzle/schema.ts" --out="$dk_out" > /dev/null
+      rm -rf "$dk_out"
       ;;
   esac
   echo "ok: $lang"
