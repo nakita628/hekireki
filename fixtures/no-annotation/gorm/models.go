@@ -12,7 +12,7 @@ type User struct {
 	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime;not null" json:"created_at"`
 	UpdatedAt time.Time `gorm:"column:updated_at;autoUpdateTime;not null" json:"updated_at"`
 	Posts []Post `gorm:"foreignKey:AuthorID"`
-	Profile Profile `gorm:"foreignKey:UserID"`
+	Profile *Profile `gorm:"foreignKey:UserID"`
 }
 
 type Post struct {

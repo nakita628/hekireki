@@ -1,6 +1,6 @@
 {
   "name": "hekireki",
-  "version": "0.8.7",
+  "version": "0.8.8",
   "description": "Hekireki is a tool that generates validation schemas for Zod, Valibot, ArkType, and Effect Schema, as well as ER diagrams and DBML, from Prisma schemas annotated with comments.",
   "keywords": [
     "ajv",
@@ -57,7 +57,8 @@
   "scripts": {
     "generate": "prisma generate",
     "deps": "rm -rf node_modules && pnpm install",
-    "build": "tsdown"
+    "build": "tsdown",
+    "conformance": "pnpm build && bash conformance/check.sh"
   },
   "dependencies": {
     "@hono/node-server": "^2.0.6",

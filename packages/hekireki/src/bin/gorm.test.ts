@@ -111,7 +111,7 @@ model Profile {
 type User struct {
 \tID string \`gorm:"column:id;primaryKey;type:char(36)" json:"id"\`
 \tName string \`gorm:"column:name;not null" json:"name"\`
-\tProfile Profile \`gorm:"foreignKey:UserID"\`
+\tProfile *Profile \`gorm:"foreignKey:UserID"\`
 }
 
 type Profile struct {
@@ -709,7 +709,7 @@ type User struct {
 \tCreatedAt time.Time \`gorm:"column:created_at;autoCreateTime;not null" json:"created_at"\`
 \tUpdatedAt time.Time \`gorm:"column:updated_at;autoUpdateTime;not null" json:"updated_at"\`
 \tPosts []Post \`gorm:"foreignKey:AuthorID"\`
-\tProfile Profile \`gorm:"foreignKey:UserID"\`
+\tProfile *Profile \`gorm:"foreignKey:UserID"\`
 }
 
 type Post struct {
@@ -771,7 +771,7 @@ type User struct {
 \tRefreshTokens []RefreshToken \`gorm:"foreignKey:UserID"\`
 \tEmailVerifications []EmailVerification \`gorm:"foreignKey:UserID"\`
 \tPasswordResets []PasswordReset \`gorm:"foreignKey:UserID"\`
-\tTwoFactorSetting TwoFactorSetting \`gorm:"foreignKey:UserID"\`
+\tTwoFactorSetting *TwoFactorSetting \`gorm:"foreignKey:UserID"\`
 }
 
 func (User) TableName() string {

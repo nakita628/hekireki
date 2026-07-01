@@ -11,3 +11,10 @@ mod entities;
 fn _smoke_tags_is_list(m: entities::account::Model) -> Vec<String> {
     m.tags
 }
+
+// Pins the optional invariants: a `?` scalar must stay Option, and an optional
+// enum must resolve to Option of the generated DeriveActiveEnum type.
+#[allow(dead_code)]
+fn _smoke_optionals(m: entities::profile::Model) -> (Option<String>, Option<entities::status::Status>) {
+    (m.bio, m.mood)
+}

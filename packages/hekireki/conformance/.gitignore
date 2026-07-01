@@ -1,4 +1,4 @@
-# Generated schema output (regenerated from schema.prisma by generate.mjs;
+# Generated schema output (regenerated from schema.prisma by check.sh;
 # the byte-for-byte golden masters live in src/bin/*.test.ts).
 harness/gorm/model/models.go
 harness/sea-orm/src/entities/

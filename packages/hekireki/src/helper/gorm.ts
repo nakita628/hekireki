@@ -402,9 +402,10 @@ function generateRelationFields(
         ? [`references:${goFieldName(assoc.references)}`]
         : []),
     ]
-    const targetType =
-      assoc.targetModel === model.name ? `*${assoc.targetModel}` : assoc.targetModel
-    return `\t${goFieldName(assoc.name)} ${targetType} ${buildRelationTag(tagParts)}`
+    // A has-one is always a pointer: the paired belongs_to embeds this model
+    // by value, so a value here is an illegal mutually recursive type in Go,
+    // and Prisma requires the 1:1 back side to be optional anyway.
+    return `\t${goFieldName(assoc.name)} *${assoc.targetModel} ${buildRelationTag(tagParts)}`
   })
 
   const manyToManyLines = associations.manyToMany.map((assoc) => {

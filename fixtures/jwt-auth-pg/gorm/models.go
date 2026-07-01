@@ -19,7 +19,7 @@ type User struct {
 	RefreshTokens []RefreshToken `gorm:"foreignKey:UserID"`
 	EmailVerifications []EmailVerification `gorm:"foreignKey:UserID"`
 	PasswordResets []PasswordReset `gorm:"foreignKey:UserID"`
-	TwoFactorSetting TwoFactorSetting `gorm:"foreignKey:UserID"`
+	TwoFactorSetting *TwoFactorSetting `gorm:"foreignKey:UserID"`
 }
 
 func (User) TableName() string {

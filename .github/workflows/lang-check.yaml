@@ -13,9 +13,11 @@ name: Lang Check
 on:
   pull_request:
     paths:
-      - packages/hekireki/src/generator/**
-      - packages/hekireki/src/core/**
-      - packages/hekireki/src/helper/**
+      # All of src/ — the generators' entrypoints (src/bin) and shared codegen
+      # layers (utils/emit/format/fsp) affect generated output too; a false
+      # positive here is a cheap matrix run, a false negative is an unverified
+      # generator change.
+      - packages/hekireki/src/**
       - packages/hekireki/conformance/**
       - .github/workflows/lang-check.yaml
   workflow_dispatch: {}
@@ -34,6 +36,9 @@ defaults:
 jobs:
   conformance:
     runs-on: ubuntu-latest
+    # Backstop against toolchain prompts hanging a leg (mix once blocked on a
+    # rebar3 install prompt); the default job timeout is 6 hours.
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -67,53 +72,15 @@ jobs:
         with:
           otp-version: '27.2'
           elixir-version: '1.18.1'
+          # Pinned so check.sh's `mix local.rebar --if-missing` never falls
+          # back to an unpinned network fetch of the rebar3 escript.
+          rebar3-version: '3.24.0'
 
-      # prisma resolves a generator `provider = "hekireki-gorm"` by name on PATH;
-      # link the built bins and add them to PATH, then generate from the schema.
-      - name: Generate foreign-language code
-        run: |
-          for g in gorm sea-orm sqlalchemy ecto; do
-            ln -sf "../../dist/bin/$g.js" "node_modules/.bin/hekireki-$g"
-          done
-          rm -rf conformance/harness/gorm/model/models.go \
-                 conformance/harness/sea-orm/src/entities \
-                 conformance/harness/sqlalchemy/models.py \
-                 conformance/harness/ecto/lib
-          PATH="$PWD/node_modules/.bin:$PATH" DATABASE_URL=postgresql://localhost/conformance \
-            prisma generate --schema conformance/schema.prisma
-
-      - name: Go (GORM) conformance
-        if: matrix.lang == 'gorm'
-        working-directory: packages/hekireki/conformance/harness/gorm
-        run: |
-          gofmt -e model/models.go > /dev/null   # syntax
-          CGO_ENABLED=0 go build ./model/        # type: real GORM API
-          CGO_ENABLED=0 go vet ./model/
-
-      - name: Rust (Sea-ORM) conformance
-        if: matrix.lang == 'sea-orm'
-        working-directory: packages/hekireki/conformance/harness/sea-orm
-        run: |
-          rustfmt --edition 2021 --emit=stdout src/entities/*.rs > /dev/null  # syntax
-          cargo check --locked --quiet                                        # type: real sea-orm API
-
-      - name: Python (SQLAlchemy) conformance
-        if: matrix.lang == 'sqlalchemy'
-        working-directory: packages/hekireki/conformance/harness/sqlalchemy
-        run: |
-          python3 -m py_compile models.py        # syntax
-          python3 -m venv .venv
-          .venv/bin/pip install --quiet -r requirements.txt
-          .venv/bin/mypy --config-file mypy.ini models.py smoke.py   # type: real SQLAlchemy API + invariants
-
-      - name: Elixir (Ecto) conformance
-        if: matrix.lang == 'ecto'
-        working-directory: packages/hekireki/conformance/harness/ecto
-        run: |
-          elixir -e 'for f <- Path.wildcard("lib/*.ex"), do: Code.string_to_quoted!(File.read!(f), file: f)'  # syntax
-          mix local.hex --force
-          mix deps.get
-          mix compile --force                    # type: real Ecto API
+      # conformance/check.sh is the single source of truth for generate + check:
+      # the same script runs locally via `pnpm -F hekireki conformance`. Passing
+      # the language makes a missing toolchain a hard error instead of a skip.
+      - name: Conformance (generate + syntax + type check)
+        run: bash conformance/check.sh ${{ matrix.lang }}
 
   # Prove the published tarball still ships dist/ only — the conformance harness
   # (Go/Rust/Python/Elixir files) must never leak into npm.

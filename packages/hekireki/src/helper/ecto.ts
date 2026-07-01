@@ -314,7 +314,14 @@ export function ectoSchemas(
         const defaultOpt = ((def: DMMF.Field['default']): string | null => {
           if (def === undefined || def === null) return null
           if (typeof def === 'string') return `default: "${def}"`
-          if (typeof def === 'number' || typeof def === 'boolean') return `default: ${def}`
+          // Ecto rejects an integer default on a :float field
+          // ("value 0 is invalid for type :float"): emit a float literal.
+          if (typeof def === 'number') {
+            return type === 'float' && Number.isInteger(def)
+              ? `default: ${def}.0`
+              : `default: ${def}`
+          }
+          if (typeof def === 'boolean') return `default: ${def}`
           return null
         })(f.default)
         const defaultClause = defaultOpt ? `, ${defaultOpt}` : ''
