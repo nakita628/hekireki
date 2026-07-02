@@ -51,9 +51,6 @@
     "dist"
   ],
   "type": "module",
-  "publishConfig": {
-    "access": "public"
-  },
   "scripts": {
     "generate": "prisma generate",
     "deps": "rm -rf node_modules && pnpm install",
@@ -66,17 +63,17 @@
     "@resvg/resvg-js": "^2.6.2",
     "@softwaretechnik/dbml-renderer": "^1.0.31",
     "hono": "^4.12.27",
-    "oxfmt": "^0.56.0"
+    "oxfmt": "^0.57.0"
   },
   "devDependencies": {
     "@paralleldrive/cuid2": "^3.3.0",
     "@prisma/client": "^7.8.0",
     "@sinclair/typebox": "^0.34.49",
-    "@types/node": "^26.0.1",
-    "@typescript/native-preview": "7.0.0-dev.20260624.1",
+    "@types/node": "^26.1.0",
+    "@typescript/native-preview": "7.0.0-dev.20260701.1",
     "ajv": "^8.20.0",
-    "arktype": "^2.2.1",
-    "better-auth": "^1.6.20",
+    "arktype": "^2.2.2",
+    "better-auth": "^1.6.23",
     "cuid": "^3.0.0",
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
@@ -86,7 +83,7 @@
     "tsdown": "^0.22.3",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
-    "valibot": "1.4.1",
+    "valibot": "1.4.2",
     "zod": "^4.4.3"
   }
 }
