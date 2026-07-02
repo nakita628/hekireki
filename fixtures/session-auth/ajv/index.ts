@@ -4,51 +4,35 @@ export const UserSchema = {
   type: 'object' as const,
   properties: {
     /**
-
      * User ID
-
      */
     id: { type: 'string' as const },
     /**
-
      * Email address
-
      */
     email: { type: 'string' as const },
     /**
-
      * Hashed password
-
      */
     passwordHash: { type: 'string' as const },
     /**
-
      * Display name
-
      */
     name: { type: 'string' as const },
     /**
-
      * User role
-
      */
     role: { enum: ['ADMIN', 'USER'] as const },
     /**
-
      * Account active status
-
      */
     isActive: { type: 'boolean' as const },
     /**
-
      * Account creation timestamp
-
      */
     createdAt: { type: 'string' as const, format: 'date-time' as const },
     /**
-
      * Last update timestamp
-
      */
     updatedAt: { type: 'string' as const, format: 'date-time' as const },
   },
@@ -71,45 +55,31 @@ export const SessionSchema = {
   type: 'object' as const,
   properties: {
     /**
-
      * Session ID
-
      */
     id: { type: 'string' as const },
     /**
-
      * Session token
-
      */
     token: { type: 'string' as const },
     /**
-
      * User ID
-
      */
     userId: { type: 'string' as const },
     /**
-
      * Session expiration
-
      */
     expiresAt: { type: 'string' as const, format: 'date-time' as const },
     /**
-
      * Client IP address
-
      */
     ipAddress: { type: 'string' as const },
     /**
-
      * Client user agent
-
      */
     userAgent: { type: 'string' as const },
     /**
-
      * Session creation timestamp
-
      */
     createdAt: { type: 'string' as const, format: 'date-time' as const },
   },
@@ -123,39 +93,27 @@ export const LoginHistorySchema = {
   type: 'object' as const,
   properties: {
     /**
-
      * Login history ID
-
      */
     id: { type: 'string' as const },
     /**
-
      * User ID
-
      */
     userId: { type: 'string' as const },
     /**
-
      * Client IP address
-
      */
     ipAddress: { type: 'string' as const },
     /**
-
      * Client user agent
-
      */
     userAgent: { type: 'string' as const },
     /**
-
      * Login success status
-
      */
     success: { type: 'boolean' as const },
     /**
-
      * Login timestamp
-
      */
     createdAt: { type: 'string' as const, format: 'date-time' as const },
   },
@@ -169,27 +127,19 @@ export const PasswordHistorySchema = {
   type: 'object' as const,
   properties: {
     /**
-
      * Password history ID
-
      */
     id: { type: 'string' as const },
     /**
-
      * User ID
-
      */
     userId: { type: 'string' as const },
     /**
-
      * Hashed password
-
      */
     passwordHash: { type: 'string' as const },
     /**
-
      * Change timestamp
-
      */
     createdAt: { type: 'string' as const, format: 'date-time' as const },
   },

@@ -13,6 +13,16 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core'
 
+export const roleEnum = pgEnum('Role', ['ADMIN', 'USER', 'GUEST'])
+export const oauthProviderEnum = pgEnum('OAuthProvider', [
+  'GOOGLE',
+  'GITHUB',
+  'FACEBOOK',
+  'TWITTER',
+  'APPLE',
+])
+export const twoFactorMethodEnum = pgEnum('TwoFactorMethod', ['TOTP', 'SMS', 'EMAIL'])
+
 export const users = pgTable('users', {
   id: uuid('id')
     .primaryKey()
@@ -21,7 +31,7 @@ export const users = pgTable('users', {
   passwordHash: text('password_hash'),
   name: varchar('name', { length: 100 }).notNull(),
   avatarUrl: text('avatar_url'),
-  role: pgEnum('Role', ['ADMIN', 'USER', 'GUEST'])('role').notNull().default('USER'),
+  role: roleEnum('role').notNull().default('USER'),
   creditBalance: numeric('credit_balance', { precision: 10, scale: 2 }).notNull().default('0'),
   emailVerified: boolean('email_verified').notNull().default(false),
   isActive: boolean('is_active').notNull().default(true),
@@ -42,9 +52,7 @@ export const oauthAccounts = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    provider: pgEnum('OAuthProvider', ['GOOGLE', 'GITHUB', 'FACEBOOK', 'TWITTER', 'APPLE'])(
-      'provider',
-    ).notNull(),
+    provider: oauthProviderEnum('provider').notNull(),
     providerAccountId: varchar('provider_account_id', { length: 255 }).notNull(),
     accessToken: text('access_token'),
     refreshToken: text('refresh_token'),
@@ -66,7 +74,7 @@ export const twoFactorSettings = pgTable('two_factor_settings', {
     .unique()
     .references(() => users.id, { onDelete: 'cascade' }),
   enabled: boolean('enabled').notNull().default(false),
-  method: pgEnum('TwoFactorMethod', ['TOTP', 'SMS', 'EMAIL'])('method'),
+  method: twoFactorMethodEnum('method'),
   totpSecret: text('totp_secret'),
   phoneNumber: varchar('phone_number', { length: 20 }),
   backupCodes: text('backup_codes'),

@@ -14,32 +14,35 @@ export const user = sqliteTable('user', {
     .default('USER'),
   emailVerified: integer('emailVerified', { mode: 'boolean' }).notNull().default(false),
   isActive: integer('isActive', { mode: 'boolean' }).notNull().default(true),
-  createdAt: integer('createdAt', { mode: 'timestamp' })
+  createdAt: integer('createdAt', { mode: 'timestamp_ms' })
     .notNull()
-    .default(sql`(unixepoch())`),
-  updatedAt: integer('updatedAt', { mode: 'timestamp' })
+    .default(sql`(unixepoch() * 1000)`),
+  updatedAt: integer('updatedAt', { mode: 'timestamp_ms' })
     .notNull()
+    .default(sql`(unixepoch() * 1000)`)
     .$onUpdate(() => new Date()),
-  lastLoginAt: integer('lastLoginAt', { mode: 'timestamp' }),
+  lastLoginAt: integer('lastLoginAt', { mode: 'timestamp_ms' }),
 })
 
-export const oAuthAccount = sqliteTable(
+export const oauthAccount = sqliteTable(
   'oauth_account',
   {
     id: text('id')
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
-    userId: text('userId').notNull(),
+    userId: text('userId')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
     provider: text('provider', {
       enum: ['GOOGLE', 'GITHUB', 'FACEBOOK', 'TWITTER', 'APPLE'],
     }).notNull(),
     providerAccountId: text('providerAccountId').notNull(),
     accessToken: text('accessToken'),
     refreshToken: text('refreshToken'),
-    expiresAt: integer('expiresAt', { mode: 'timestamp' }),
-    createdAt: integer('createdAt', { mode: 'timestamp' })
+    expiresAt: integer('expiresAt', { mode: 'timestamp_ms' }),
+    createdAt: integer('createdAt', { mode: 'timestamp_ms' })
       .notNull()
-      .default(sql`(unixepoch())`),
+      .default(sql`(unixepoch() * 1000)`),
   },
   (table) => [unique().on(table.provider, table.providerAccountId)],
 )
@@ -48,18 +51,22 @@ export const twoFactorSetting = sqliteTable('two_factor_setting', {
   id: text('id')
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
-  userId: text('userId').notNull().unique(),
+  userId: text('userId')
+    .notNull()
+    .unique()
+    .references(() => user.id, { onDelete: 'cascade' }),
   enabled: integer('enabled', { mode: 'boolean' }).notNull().default(false),
   method: text('method', { enum: ['TOTP', 'SMS', 'EMAIL'] }),
   totpSecret: text('totpSecret'),
   phoneNumber: text('phoneNumber'),
   backupCodes: text('backupCodes'),
-  verifiedAt: integer('verifiedAt', { mode: 'timestamp' }),
-  createdAt: integer('createdAt', { mode: 'timestamp' })
+  verifiedAt: integer('verifiedAt', { mode: 'timestamp_ms' }),
+  createdAt: integer('createdAt', { mode: 'timestamp_ms' })
     .notNull()
-    .default(sql`(unixepoch())`),
-  updatedAt: integer('updatedAt', { mode: 'timestamp' })
+    .default(sql`(unixepoch() * 1000)`),
+  updatedAt: integer('updatedAt', { mode: 'timestamp_ms' })
     .notNull()
+    .default(sql`(unixepoch() * 1000)`)
     .$onUpdate(() => new Date()),
 })
 
@@ -67,14 +74,16 @@ export const refreshToken = sqliteTable('refresh_token', {
   id: text('id')
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
-  userId: text('userId').notNull(),
+  userId: text('userId')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
   tokenHash: text('tokenHash').notNull().unique(),
   deviceInfo: text('deviceInfo'),
   ipAddress: text('ipAddress'),
-  expiresAt: integer('expiresAt', { mode: 'timestamp' }).notNull(),
-  createdAt: integer('createdAt', { mode: 'timestamp' })
+  expiresAt: integer('expiresAt', { mode: 'timestamp_ms' }).notNull(),
+  createdAt: integer('createdAt', { mode: 'timestamp_ms' })
     .notNull()
-    .default(sql`(unixepoch())`),
+    .default(sql`(unixepoch() * 1000)`),
   revoked: integer('revoked', { mode: 'boolean' }).notNull().default(false),
 })
 
@@ -82,37 +91,41 @@ export const emailVerification = sqliteTable('email_verification', {
   id: text('id')
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
-  userId: text('userId').notNull(),
-  tokenHash: text('tokenHash').notNull().unique(),
-  expiresAt: integer('expiresAt', { mode: 'timestamp' }).notNull(),
-  createdAt: integer('createdAt', { mode: 'timestamp' })
+  userId: text('userId')
     .notNull()
-    .default(sql`(unixepoch())`),
+    .references(() => user.id, { onDelete: 'cascade' }),
+  tokenHash: text('tokenHash').notNull().unique(),
+  expiresAt: integer('expiresAt', { mode: 'timestamp_ms' }).notNull(),
+  createdAt: integer('createdAt', { mode: 'timestamp_ms' })
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`),
 })
 
 export const passwordReset = sqliteTable('password_reset', {
   id: text('id')
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
-  userId: text('userId').notNull(),
-  tokenHash: text('tokenHash').notNull().unique(),
-  expiresAt: integer('expiresAt', { mode: 'timestamp' }).notNull(),
-  used: integer('used', { mode: 'boolean' }).notNull().default(false),
-  createdAt: integer('createdAt', { mode: 'timestamp' })
+  userId: text('userId')
     .notNull()
-    .default(sql`(unixepoch())`),
+    .references(() => user.id, { onDelete: 'cascade' }),
+  tokenHash: text('tokenHash').notNull().unique(),
+  expiresAt: integer('expiresAt', { mode: 'timestamp_ms' }).notNull(),
+  used: integer('used', { mode: 'boolean' }).notNull().default(false),
+  createdAt: integer('createdAt', { mode: 'timestamp_ms' })
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`),
 })
 
 export const userRelations = relations(user, ({ one, many }) => ({
-  oauthAccounts: many(oAuthAccount),
+  oauthAccounts: many(oauthAccount),
   twoFactorSetting: one(twoFactorSetting),
   refreshTokens: many(refreshToken),
   emailVerifications: many(emailVerification),
   passwordResets: many(passwordReset),
 }))
 
-export const oAuthAccountRelations = relations(oAuthAccount, ({ one }) => ({
-  user: one(user, { fields: [oAuthAccount.userId], references: [user.id] }),
+export const oauthAccountRelations = relations(oauthAccount, ({ one }) => ({
+  user: one(user, { fields: [oauthAccount.userId], references: [user.id] }),
 }))
 
 export const twoFactorSettingRelations = relations(twoFactorSetting, ({ one }) => ({

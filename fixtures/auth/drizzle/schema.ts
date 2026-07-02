@@ -1,11 +1,11 @@
-import { createId } from '@paralleldrive/cuid2'
+import cuid from 'cuid'
 import { relations } from 'drizzle-orm'
 import { integer, sqliteTable, text, unique } from 'drizzle-orm/sqlite-core'
 
 export const user = sqliteTable('user', {
   id: text('id')
     .primaryKey()
-    .$defaultFn(() => createId()),
+    .$defaultFn(() => cuid()),
   name: text('name'),
   email: text('email').unique(),
   emailVerified: integer('emailVerified', { mode: 'timestamp_ms' }),
@@ -22,7 +22,7 @@ export const account = sqliteTable(
   {
     id: text('id')
       .primaryKey()
-      .$defaultFn(() => createId()),
+      .$defaultFn(() => cuid()),
     userId: text('userId')
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
@@ -45,7 +45,7 @@ export const verificationToken = sqliteTable(
   {
     id: text('id')
       .primaryKey()
-      .$defaultFn(() => createId()),
+      .$defaultFn(() => cuid()),
     email: text('email').notNull(),
     token: text('token').notNull().unique(),
     expires: integer('expires', { mode: 'timestamp_ms' }).notNull(),
@@ -58,7 +58,7 @@ export const passwordResetToken = sqliteTable(
   {
     id: text('id')
       .primaryKey()
-      .$defaultFn(() => createId()),
+      .$defaultFn(() => cuid()),
     email: text('email').notNull(),
     token: text('token').notNull().unique(),
     expires: integer('expires', { mode: 'timestamp_ms' }).notNull(),
@@ -71,7 +71,7 @@ export const twoFactorToken = sqliteTable(
   {
     id: text('id')
       .primaryKey()
-      .$defaultFn(() => createId()),
+      .$defaultFn(() => cuid()),
     email: text('email').notNull(),
     token: text('token').notNull().unique(),
     expires: integer('expires', { mode: 'timestamp_ms' }).notNull(),
@@ -82,7 +82,7 @@ export const twoFactorToken = sqliteTable(
 export const twoFactorConfirmation = sqliteTable('two_factor_confirmation', {
   id: text('id')
     .primaryKey()
-    .$defaultFn(() => createId()),
+    .$defaultFn(() => cuid()),
   userId: text('userId')
     .notNull()
     .unique()
