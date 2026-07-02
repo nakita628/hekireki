@@ -233,6 +233,26 @@ describe('generateEnum', () => {
     expect(result).toContain('    Admin,')
   })
 
+  it('converts SCREAMING_SNAKE values to UpperCamelCase variants', () => {
+    const e = {
+      name: 'Status',
+      values: [{ name: 'ACTIVE' }, { name: 'PENDING_REVIEW' }],
+    } as any
+
+    expect(generateEnum(e)).toBe(
+      [
+        '#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]',
+        '#[sea_orm(rs_type = "String", db_type = "String(StringLen::None)")]',
+        'pub enum Status {',
+        '    #[sea_orm(string_value = "ACTIVE")]',
+        '    Active,',
+        '    #[sea_orm(string_value = "PENDING_REVIEW")]',
+        '    PendingReview,',
+        '}',
+      ].join('\n'),
+    )
+  })
+
   it('generates serde rename_all attribute when renameAll is set', () => {
     const e = {
       name: 'Role',

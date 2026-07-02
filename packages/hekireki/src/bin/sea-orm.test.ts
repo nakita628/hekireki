@@ -367,6 +367,7 @@ pub enum Role {
     const userResult = fs.readFileSync('./prisma-sea-orm/sea_orm/user.rs', { encoding: 'utf-8' })
     expect(userResult).toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
+use super::role::Role;
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "user")]
@@ -690,6 +691,7 @@ model Post {
     const userResult = fs.readFileSync('./prisma-sea-orm/sea_orm/user.rs', { encoding: 'utf-8' })
     expect(userResult).toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
+use super::role::Role;
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -855,12 +857,6 @@ impl Related<super::follow::Entity> for Entity {
     }
 }
 
-impl Related<super::follow::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Following.def()
-    }
-}
-
 impl Related<super::like::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Likes.def()
@@ -905,12 +901,6 @@ impl Related<super::user::Entity> for Entity {
     }
 }
 
-impl Related<super::user::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Following.def()
-    }
-}
-
 impl ActiveModelBehavior for ActiveModel {}`)
 
     expect(fs.readFileSync('../../fixtures/twitter-clone-sample/sea_orm/mod.rs', 'utf-8'))
@@ -936,6 +926,7 @@ describe('fixture: rbac', () => {
     expect(fs.readFileSync('../../fixtures/rbac/sea_orm/organization.rs', 'utf-8'))
       .toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
+use super::org_status::OrgStatus;
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "organizations")]
@@ -1078,6 +1069,7 @@ describe('fixture: no-annotation (M2M implicit)', () => {
     expect(fs.readFileSync('../../fixtures/no-annotation/sea_orm/user.rs', 'utf-8'))
       .toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
+use super::role::Role;
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "user")]
@@ -1244,6 +1236,7 @@ describe('fixture: jwt-auth-pg', () => {
     expect(fs.readFileSync('../../fixtures/jwt-auth-pg/sea_orm/user.rs', 'utf-8'))
       .toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
+use super::role::Role;
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "users")]
@@ -1323,6 +1316,7 @@ impl ActiveModelBehavior for ActiveModel {}`)
     expect(fs.readFileSync('../../fixtures/jwt-auth-pg/sea_orm/oauth_account.rs', 'utf-8'))
       .toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
+use super::oauth_provider::OAuthProvider;
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "oauth_accounts")]
@@ -1364,6 +1358,7 @@ impl ActiveModelBehavior for ActiveModel {}`)
     expect(fs.readFileSync('../../fixtures/jwt-auth-pg/sea_orm/two_factor_setting.rs', 'utf-8'))
       .toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
+use super::two_factor_method::TwoFactorMethod;
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "two_factor_settings")]

@@ -1,0 +1,13 @@
+[package]
+name = "conformance"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+# postgres-array enables Vec<T> columns for Prisma scalar lists (String[]).
+sea-orm = { version = "1.1.0", features = ["postgres-array"] }
+serde = { version = "1", features = ["derive"] }
+
+[lib]
+path = "src/lib.rs"

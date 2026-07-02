@@ -113,7 +113,7 @@ generator Hekireki-Ecto {
 // Options:
 //   output - Output directory (required)
 generator Hekireki-Docs {
-    provider = "node /workspaces/npm/hekireki/packages/hekireki/dist/generator/docs/index.js"
+    provider = "hekireki-docs"
     output   = "docs"
 }
 

@@ -64,12 +64,6 @@ impl Related<super::follow::Entity> for Entity {
     }
 }
 
-impl Related<super::follow::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Following.def()
-    }
-}
-
 impl Related<super::like::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Likes.def()

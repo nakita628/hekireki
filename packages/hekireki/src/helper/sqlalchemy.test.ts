@@ -82,8 +82,8 @@ describe('prismaTypeToPythonType', () => {
     expect(prismaTypeToPythonType('DateTime')).toStrictEqual('datetime')
   })
 
-  it('maps Json to dict', () => {
-    expect(prismaTypeToPythonType('Json')).toStrictEqual('dict')
+  it('maps Json to dict[str, Any]', () => {
+    expect(prismaTypeToPythonType('Json')).toStrictEqual('dict[str, Any]')
   })
 
   it('maps Bytes to bytes', () => {
@@ -1011,6 +1011,7 @@ class Schedule(Base):
 
     expect(generateSingleFile(models)).toBe(
       `from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from typing import Any
 
 
 class Base(DeclarativeBase):
@@ -1021,7 +1022,7 @@ class Doc(Base):
     __tablename__ = "doc"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    data: Mapped[dict]
+    data: Mapped[dict[str, Any]]
 `,
     )
   })
@@ -1318,6 +1319,7 @@ class Post(Base):
 
     expect(generateSingleFile(models)).toBe(
       `from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from typing import Any
 
 
 class Base(DeclarativeBase):
@@ -1329,7 +1331,7 @@ class Blob(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     data: Mapped[bytes]
-    meta: Mapped[dict]
+    meta: Mapped[dict[str, Any]]
 `,
     )
   })

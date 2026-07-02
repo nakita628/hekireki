@@ -167,7 +167,9 @@ function formatGoDefault(def: DMMF.Field['default']) {
   if (def === undefined || def === null) return null
   if (typeof def === 'boolean') return def ? 'true' : 'false'
   if (typeof def === 'number') return String(def)
-  if (typeof def === 'string') return def
+  // String/enum literals must be SQL-quoted: bare `default:USER` is read as the
+  // identifier/reserved word `USER` (CURRENT_USER), not the literal 'USER'.
+  if (typeof def === 'string') return `'${def}'`
   return null
 }
 
@@ -198,16 +200,23 @@ export function buildGormTags(
     field.isUnique ? 'uniqueIndex' : null,
     ...compositeIndexTags,
     includeNativeType ? `type:${nativeType}` : null,
+    // Scalar lists need a serializer so GORM can persist the slice; the built-in
+    // json serializer works on every dialect without extra deps.
+    field.isList && field.kind !== 'object' ? 'serializer:json' : null,
     includeAutoCreate ? 'autoCreateTime' : null,
     defaultVal !== null ? `default:${defaultVal}` : null,
     field.isUpdatedAt ? 'autoUpdateTime' : null,
     field.isRequired && !isPk ? 'not null' : null,
-  ].filter((p): p is string => p !== null)
+  ].filter((p) => p !== null)
 
   return `\`gorm:"${parts.join(';')}" json:"${columnName}"\``
 }
 
 function collectCompositeIndexTags(model: DMMF.Model, indexes: readonly DMMF.Index[]) {
+  // Index names are global (per-schema) in PostgreSQL, so qualify with the table
+  // name to avoid `idx_user_id` colliding across tables during AutoMigrate.
+  const tableName = model.dbName ?? makeSnakeCase(model.name)
+
   // @@unique([a, b]) → uniqueIndex:idx_name on each field
   const uniqueTags = model.uniqueFields
     .filter((fields) => fields.length > 1)
@@ -216,7 +225,7 @@ function collectCompositeIndexTags(model: DMMF.Model, indexes: readonly DMMF.Ind
         const fo = model.fields.find((mf) => mf.name === f)
         return fo?.dbName ?? makeSnakeCase(f)
       })
-      const idxName = `idx_${cols.join('_')}_unique`
+      const idxName = `idx_${tableName}_${cols.join('_')}_unique`
       return fields.map((f): [string, string] => [f, `uniqueIndex:${idxName}`])
     })
 
@@ -225,7 +234,9 @@ function collectCompositeIndexTags(model: DMMF.Model, indexes: readonly DMMF.Ind
     .filter((idx) => idx.model === model.name && (idx.type === 'normal' || idx.type === 'fulltext'))
     .flatMap((idx) => {
       const idxName =
-        idx.dbName ?? idx.name ?? `idx_${idx.fields.map((f) => makeSnakeCase(f.name)).join('_')}`
+        idx.dbName ??
+        idx.name ??
+        `idx_${tableName}_${idx.fields.map((f) => makeSnakeCase(f.name)).join('_')}`
       return idx.fields.map((f): [string, string] => [f.name, `index:${idxName}`])
     })
 
@@ -307,12 +318,17 @@ function generateStructField(
   _enumNames: ReadonlySet<string>,
 ) {
   const fieldName = goFieldName(field.name)
-  const goType =
+  const scalarType =
     field.kind === 'enum'
       ? field.isRequired
         ? 'string'
         : '*string'
       : prismaTypeToGoType(field.type, field.isRequired)
+  // A scalar list (e.g. `tags String[]`) is a collection, not a scalar; collapse
+  // it to a single value loses data. Emit a slice of the element type.
+  const goType = field.isList
+    ? `[]${field.kind === 'enum' ? 'string' : prismaTypeToGoType(field.type, true)}`
+    : scalarType
 
   const tag = buildGormTags(field, isPk, isCompositePk, compositeIndexTags)
   const tagStr = tag ? ` ${tag}` : ''
@@ -359,10 +375,14 @@ function generateRelationFields(
     const tagParts = [
       isAmbiguous ? `foreignKey:${fkFieldName}` : null,
       needsReferencesTag(assoc.references) ? `references:${refsFieldName}` : null,
-    ].filter((p): p is string => p !== null)
+    ].filter((p) => p !== null)
+    // A relation back to the owning model must be a pointer: a struct that
+    // embeds itself by value is an illegal recursive type in Go.
+    const targetType =
+      assoc.targetModel === model.name ? `*${assoc.targetModel}` : assoc.targetModel
     return tagParts.length > 0
-      ? `\t${fieldName} ${assoc.targetModel} ${buildRelationTag(tagParts)}`
-      : `\t${fieldName} ${assoc.targetModel}`
+      ? `\t${fieldName} ${targetType} ${buildRelationTag(tagParts)}`
+      : `\t${fieldName} ${targetType}`
   })
 
   const hasManyLines = associations.hasMany.map((assoc) => {
@@ -382,7 +402,10 @@ function generateRelationFields(
         ? [`references:${goFieldName(assoc.references)}`]
         : []),
     ]
-    return `\t${goFieldName(assoc.name)} ${assoc.targetModel} ${buildRelationTag(tagParts)}`
+    // A has-one is always a pointer: the paired belongs_to embeds this model
+    // by value, so a value here is an illegal mutually recursive type in Go,
+    // and Prisma requires the 1:1 back side to be optional anyway.
+    return `\t${goFieldName(assoc.name)} *${assoc.targetModel} ${buildRelationTag(tagParts)}`
   })
 
   const manyToManyLines = associations.manyToMany.map((assoc) => {
@@ -446,7 +469,7 @@ export function collectImports(models: readonly DMMF.Model[]) {
     m.fields.some((f) => f.kind !== 'object' && f.type === 'Json'),
   )
   return [needsTime ? '"time"' : null, needsDatatypes ? '"gorm.io/datatypes"' : null].filter(
-    (i): i is string => i !== null,
+    (i) => i !== null,
   )
 }
 

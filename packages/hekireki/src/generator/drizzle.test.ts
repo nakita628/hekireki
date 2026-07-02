@@ -197,7 +197,68 @@ describe('drizzleSchema', () => {
       const result = drizzleSchema(datamodel, 'postgresql', [])
 
       expect(result).toBe(
-        "import { pgEnum, pgTable, serial } from 'drizzle-orm/pg-core'\n\nexport const user = pgTable('user', { id: serial('id').primaryKey(), role: pgEnum('Role', ['ADMIN', 'USER'])('role').notNull() })",
+        "import { pgEnum, pgTable, serial } from 'drizzle-orm/pg-core'\n\nexport const roleEnum = pgEnum('Role', ['ADMIN', 'USER'])\n\nexport const user = pgTable('user', { id: serial('id').primaryKey(), role: roleEnum('role').notNull() })",
+      )
+    })
+
+    it('declares a shared PostgreSQL enum once for multiple columns', () => {
+      const datamodel = makeDatamodel(
+        [
+          makeModel({
+            name: 'User',
+            fields: [
+              makeField({
+                name: 'id',
+                type: 'Int',
+                isId: true,
+                hasDefaultValue: true,
+                default: { name: 'autoincrement', args: [] },
+              }),
+              makeField({ name: 'role', type: 'Role', kind: 'enum' }),
+              makeField({ name: 'backupRole', type: 'Role', kind: 'enum', isRequired: false }),
+            ],
+          }),
+        ],
+        [
+          {
+            name: 'Role',
+            values: [
+              { name: 'ADMIN', dbName: null },
+              { name: 'USER', dbName: null },
+            ],
+            dbName: null,
+          },
+        ],
+      )
+
+      const result = drizzleSchema(datamodel, 'postgresql', [])
+
+      expect(result).toBe(
+        "import { pgEnum, pgTable, serial } from 'drizzle-orm/pg-core'\n\nexport const roleEnum = pgEnum('Role', ['ADMIN', 'USER'])\n\nexport const user = pgTable('user', { id: serial('id').primaryKey(), role: roleEnum('role').notNull(), backupRole: roleEnum('backupRole') })",
+      )
+    })
+
+    it('wraps a scalar list with array() before notNull()', () => {
+      const datamodel = makeDatamodel([
+        makeModel({
+          name: 'Account',
+          fields: [
+            makeField({
+              name: 'id',
+              type: 'Int',
+              isId: true,
+              hasDefaultValue: true,
+              default: { name: 'autoincrement', args: [] },
+            }),
+            makeField({ name: 'tags', type: 'String', isList: true }),
+          ],
+        }),
+      ])
+
+      const result = drizzleSchema(datamodel, 'postgresql', [])
+
+      expect(result).toBe(
+        "import { pgTable, serial, text } from 'drizzle-orm/pg-core'\n\nexport const account = pgTable('account', { id: serial('id').primaryKey(), tags: text('tags').array().notNull() })",
       )
     })
 

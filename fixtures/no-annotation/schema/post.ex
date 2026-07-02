@@ -10,7 +10,8 @@ defmodule DBSchema.Post do
           title: String.t(),
           content: String.t(),
           published: boolean(),
-          author: DBSchema.User.t() | nil
+          author: DBSchema.User.t() | nil,
+          tags: [DBSchema.Tag.t()]
         }
 
   schema "post" do
@@ -19,6 +20,7 @@ defmodule DBSchema.Post do
     field(:published, :boolean, default: false)
     field(:author_id, :binary_id, source: :authorId)
     belongs_to(:author, DBSchema.User, foreign_key: :author_id, define_field: false)
+    many_to_many(:tags, DBSchema.Tag, join_through: "_PostToTag")
     timestamps(type: :utc_datetime, inserted_at_source: :createdAt, updated_at_source: :updatedAt)
   end
 end

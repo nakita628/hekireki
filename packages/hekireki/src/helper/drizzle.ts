@@ -62,7 +62,7 @@ function makeDecimalOpts(args: readonly string[]): string {
   const opts = [
     args[0] ? `precision: ${args[0]}` : null,
     args[1] ? `scale: ${args[1]}` : null,
-  ].filter((o): o is string => o !== null)
+  ].filter((o) => o !== null)
   return opts.length > 0 ? `{ ${opts.join(', ')} }` : ''
 }
 
@@ -94,7 +94,7 @@ function pgNativeType(name: string, args: readonly string[]): string | null {
       return args[0] ? `timestamp({ precision: ${args[0]} })` : 'timestamp()'
     case 'Timestamptz': {
       const opts = ['withTimezone: true', args[0] ? `precision: ${args[0]}` : null].filter(
-        (o): o is string => o !== null,
+        (o) => o !== null,
       )
       return `timestamp({ ${opts.join(', ')} })`
     }
@@ -209,7 +209,7 @@ export function generateImports(imports: DrizzleImports, provider: DbProvider) {
       entry.default,
       entry.named.size > 0 ? `{ ${[...entry.named].sort().join(', ')} }` : undefined,
     ]
-      .filter((c): c is string => c !== undefined)
+      .filter((c) => c !== undefined)
       .join(', ')
     return `import ${clause} from '${pkg}'`
   })
@@ -239,6 +239,29 @@ function resolveVarNameByType(type: string, models: readonly DMMF.Model[]): stri
 
 function isFieldDefault(v: unknown): v is DMMF.FieldDefault {
   return typeof v === 'object' && v !== null && 'name' in v
+}
+
+function enumIdentifier(enumName: string): string {
+  return `${snakeToCamel(makeSnakeCase(enumName))}Enum`
+}
+
+export function makeEnumDeclarations(
+  models: readonly DMMF.Model[],
+  enums: readonly DMMF.DatamodelEnum[],
+  provider: DbProvider,
+  imports: DrizzleImports,
+) {
+  if (provider !== 'postgresql') return []
+  const usedEnumNames = new Set(
+    models.flatMap((m) => m.fields.filter((f) => f.kind === 'enum').map((f) => f.type)),
+  )
+  return enums
+    .filter((e) => usedEnumNames.has(e.name))
+    .map((e) => {
+      imports.core.add('pgEnum')
+      const values = e.values.map((v) => `'${v.name}'`).join(', ')
+      return `export const ${enumIdentifier(e.name)} = pgEnum('${e.dbName ?? e.name}', [${values}])`
+    })
 }
 
 // ============================================================================
@@ -276,9 +299,10 @@ function makeColumnExpr(
     const enumDef = enums.find((e) => e.name === field.type)
     const enumValues = enumDef ? enumDef.values.map((v) => `'${v.name}'`).join(', ') : ''
     if (provider === 'postgresql') {
-      imports.core.add('pgEnum')
-      const enumDbName = enumDef?.dbName ?? field.type
-      return `pgEnum('${enumDbName}', [${enumValues}])('${colName}')`
+      // References the top-level declaration from makeEnumDeclarations: an
+      // inline pgEnum(...) per column is invisible to drizzle-kit, so the
+      // migration uses the type without ever emitting CREATE TYPE.
+      return `${enumIdentifier(field.type)}('${colName}')`
     }
     if (provider === 'mysql') {
       imports.core.add('mysqlEnum')
@@ -427,6 +451,9 @@ function makeColumn(
   const colExpr = makeColumnExpr(field, provider, imports, enums)
 
   const chain = [
+    // .array() must wrap the base column before any modifier: chained after
+    // .notNull() it produces a nullable array column (string[] | null).
+    field.isList && field.kind === 'scalar' && provider === 'postgresql' ? '.array()' : '',
     field.isId && !hasCompositePK
       ? isAutoincrement && provider === 'sqlite'
         ? '.primaryKey({ autoIncrement: true })'
@@ -449,7 +476,6 @@ function makeColumn(
           })()
         : makeDefaultChain(field.default, field.type, provider, imports),
     field.isUpdatedAt ? '.$onUpdate(() => new Date())' : '',
-    field.isList && field.kind === 'scalar' && provider === 'postgresql' ? '.array()' : '',
   ].join('')
 
   return `${field.name}: ${colExpr}${chain}`
@@ -488,7 +514,7 @@ function makeCompositeConstraints(
       return `index('${idxName}').on(${idx.fields.map((f) => `table.${f.name}`).join(', ')})`
     })
 
-  const all = [pkLine, ...uniqueLines, ...indexLines].filter((l): l is string => l !== null)
+  const all = [pkLine, ...uniqueLines, ...indexLines].filter((l) => l !== null)
   return all.length > 0 ? all.join(', ') : null
 }
 
@@ -512,7 +538,7 @@ export function makeTable(
   const tableName = resolveTableName(model)
   const columns = model.fields
     .map((field) => makeColumn(field, model, models, provider, imports, enums))
-    .filter((c): c is string => c !== null)
+    .filter((c) => c !== null)
     .join(', ')
   const constraints = makeCompositeConstraints(model, imports, indexes, tableName)
 

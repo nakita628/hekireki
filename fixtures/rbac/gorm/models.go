@@ -6,7 +6,7 @@ type Organization struct {
 	ID int `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
 	Name string `gorm:"column:name;type:varchar(200);not null" json:"name"`
 	Slug string `gorm:"column:slug;uniqueIndex;type:varchar(100);not null" json:"slug"`
-	Status string `gorm:"column:status;default:ACTIVE;not null" json:"status"`
+	Status string `gorm:"column:status;default:'ACTIVE';not null" json:"status"`
 	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime;not null" json:"created_at"`
 	UpdatedAt time.Time `gorm:"column:updated_at;autoUpdateTime;not null" json:"updated_at"`
 	Users []User `gorm:"foreignKey:OrganizationID"`
@@ -18,7 +18,7 @@ func (Organization) TableName() string {
 
 type User struct {
 	ID int `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	OrganizationID int `gorm:"column:organization_id;index:idx_organization_id;not null" json:"organization_id"`
+	OrganizationID int `gorm:"column:organization_id;index:idx_users_organization_id;not null" json:"organization_id"`
 	Email string `gorm:"column:email;uniqueIndex;type:varchar(255);not null" json:"email"`
 	Name string `gorm:"column:name;type:varchar(100);not null" json:"name"`
 	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime;not null" json:"created_at"`
@@ -48,8 +48,8 @@ func (Role) TableName() string {
 
 type Permission struct {
 	ID int `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	Resource string `gorm:"column:resource;uniqueIndex:idx_resource_action_unique;type:varchar(100);not null" json:"resource"`
-	Action string `gorm:"column:action;uniqueIndex:idx_resource_action_unique;type:varchar(100);not null" json:"action"`
+	Resource string `gorm:"column:resource;uniqueIndex:idx_permissions_resource_action_unique;type:varchar(100);not null" json:"resource"`
+	Action string `gorm:"column:action;uniqueIndex:idx_permissions_resource_action_unique;type:varchar(100);not null" json:"action"`
 	Description *string `gorm:"column:description;type:varchar(500)" json:"description"`
 	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime;not null" json:"created_at"`
 	RolePermissions []RolePermission `gorm:"foreignKey:PermissionID"`
@@ -85,12 +85,12 @@ func (RolePermission) TableName() string {
 
 type AuditLog struct {
 	ID int `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	UserID int `gorm:"column:user_id;index:idx_user_id;not null" json:"user_id"`
+	UserID int `gorm:"column:user_id;index:idx_audit_logs_user_id;not null" json:"user_id"`
 	Action string `gorm:"column:action;type:varchar(50);not null" json:"action"`
 	Resource string `gorm:"column:resource;type:varchar(100);not null" json:"resource"`
 	Detail *string `gorm:"column:detail" json:"detail"`
 	IPAddress *string `gorm:"column:ip_address;type:varchar(45)" json:"ip_address"`
-	CreatedAt time.Time `gorm:"column:created_at;index:idx_created_at;autoCreateTime;not null" json:"created_at"`
+	CreatedAt time.Time `gorm:"column:created_at;index:idx_audit_logs_created_at;autoCreateTime;not null" json:"created_at"`
 	User User
 }
 

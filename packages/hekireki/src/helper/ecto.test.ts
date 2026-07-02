@@ -205,6 +205,39 @@ end`)
       )
     })
 
+    it('generates float literal for integer-valued default on Float field', () => {
+      const model = makeModel({
+        name: 'Profile',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'String',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'uuid', args: [4] },
+          }),
+          makeField({
+            name: 'score',
+            type: 'Float',
+            hasDefaultValue: true,
+            default: 0,
+          }),
+          makeField({
+            name: 'ratio',
+            type: 'Float',
+            hasDefaultValue: true,
+            default: 0.5,
+          }),
+        ],
+      })
+
+      const result = ectoSchemas([model], 'App')
+
+      expect(result).toBe(
+        'defmodule App.Profile do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          score: float(),\n          ratio: float()\n        }\n\n  schema "profile" do\n    field(:score, :float, default: 0.0)\n    field(:ratio, :float, default: 0.5)\n  end\nend',
+      )
+    })
+
     it('generates string default', () => {
       const model = makeModel({
         name: 'Config',

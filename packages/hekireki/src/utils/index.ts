@@ -1,11 +1,3 @@
-export type Relation = {
-  readonly fromModel: string
-  readonly fromField: string
-  readonly toModel: string
-  readonly toField: string
-  readonly type: string
-}
-
 export function parseRelation(line: string) {
   const match = line.trim().match(/^@relation\s+(\w+)\.(\w+)\s+(\w+)\.(\w+)\s+(\w+-to-\w+)$/)
   if (!match) return null

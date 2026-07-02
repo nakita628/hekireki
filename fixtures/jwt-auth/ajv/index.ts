@@ -4,69 +4,47 @@ export const UserSchema = {
   type: 'object' as const,
   properties: {
     /**
-
      * User ID
-
      */
     id: { type: 'string' as const },
     /**
-
      * Email address
-
      */
     email: { type: 'string' as const },
     /**
-
      * Hashed password (null for OAuth-only users)
-
      */
     passwordHash: { type: 'string' as const },
     /**
-
      * Display name
-
      */
     name: { type: 'string' as const },
     /**
-
      * Profile image URL
-
      */
     avatarUrl: { type: 'string' as const },
     /**
-
      * User role
-
      */
     role: { enum: ['ADMIN', 'USER', 'GUEST'] as const },
     /**
-
      * Email verification status
-
      */
     emailVerified: { type: 'boolean' as const },
     /**
-
      * Account active status
-
      */
     isActive: { type: 'boolean' as const },
     /**
-
      * Account creation timestamp
-
      */
     createdAt: { type: 'string' as const, format: 'date-time' as const },
     /**
-
      * Last update timestamp
-
      */
     updatedAt: { type: 'string' as const, format: 'date-time' as const },
     /**
-
      * Last login timestamp
-
      */
     lastLoginAt: { type: 'string' as const, format: 'date-time' as const },
   },
@@ -89,51 +67,35 @@ export const OAuthAccountSchema = {
   type: 'object' as const,
   properties: {
     /**
-
      * OAuth account ID
-
      */
     id: { type: 'string' as const },
     /**
-
      * User ID
-
      */
     userId: { type: 'string' as const },
     /**
-
      * OAuth provider
-
      */
     provider: { enum: ['GOOGLE', 'GITHUB', 'FACEBOOK', 'TWITTER', 'APPLE'] as const },
     /**
-
      * Provider account ID
-
      */
     providerAccountId: { type: 'string' as const },
     /**
-
      * Access token from provider
-
      */
     accessToken: { type: 'string' as const },
     /**
-
      * Refresh token from provider
-
      */
     refreshToken: { type: 'string' as const },
     /**
-
      * Token expiration timestamp
-
      */
     expiresAt: { type: 'string' as const, format: 'date-time' as const },
     /**
-
      * Account creation timestamp
-
      */
     createdAt: { type: 'string' as const, format: 'date-time' as const },
   },
@@ -147,63 +109,43 @@ export const TwoFactorSettingSchema = {
   type: 'object' as const,
   properties: {
     /**
-
      * 2FA setting ID
-
      */
     id: { type: 'string' as const },
     /**
-
      * User ID
-
      */
     userId: { type: 'string' as const },
     /**
-
      * 2FA enabled status
-
      */
     enabled: { type: 'boolean' as const },
     /**
-
      * 2FA method
-
      */
     method: { enum: ['TOTP', 'SMS', 'EMAIL'] as const },
     /**
-
      * TOTP secret (encrypted)
-
      */
     totpSecret: { type: 'string' as const },
     /**
-
      * Phone number for SMS (E.164 format)
-
      */
     phoneNumber: { type: 'string' as const },
     /**
-
      * Backup codes (hashed, JSON array)
-
      */
     backupCodes: { type: 'string' as const },
     /**
-
      * Last verified timestamp
-
      */
     verifiedAt: { type: 'string' as const, format: 'date-time' as const },
     /**
-
      * Creation timestamp
-
      */
     createdAt: { type: 'string' as const, format: 'date-time' as const },
     /**
-
      * Last update timestamp
-
      */
     updatedAt: { type: 'string' as const, format: 'date-time' as const },
   },
@@ -217,51 +159,35 @@ export const RefreshTokenSchema = {
   type: 'object' as const,
   properties: {
     /**
-
      * Refresh token ID
-
      */
     id: { type: 'string' as const },
     /**
-
      * User ID
-
      */
     userId: { type: 'string' as const },
     /**
-
      * Token hash (SHA-256)
-
      */
     tokenHash: { type: 'string' as const },
     /**
-
      * Device/client identifier
-
      */
     deviceInfo: { type: 'string' as const },
     /**
-
      * IP address at creation
-
      */
     ipAddress: { type: 'string' as const },
     /**
-
      * Token expiration timestamp
-
      */
     expiresAt: { type: 'string' as const, format: 'date-time' as const },
     /**
-
      * Token creation timestamp
-
      */
     createdAt: { type: 'string' as const, format: 'date-time' as const },
     /**
-
      * Revocation status
-
      */
     revoked: { type: 'boolean' as const },
   },
@@ -275,33 +201,23 @@ export const EmailVerificationSchema = {
   type: 'object' as const,
   properties: {
     /**
-
      * Verification ID
-
      */
     id: { type: 'string' as const },
     /**
-
      * User ID
-
      */
     userId: { type: 'string' as const },
     /**
-
      * Verification token (hashed)
-
      */
     tokenHash: { type: 'string' as const },
     /**
-
      * Token expiration timestamp
-
      */
     expiresAt: { type: 'string' as const, format: 'date-time' as const },
     /**
-
      * Creation timestamp
-
      */
     createdAt: { type: 'string' as const, format: 'date-time' as const },
   },
@@ -315,39 +231,27 @@ export const PasswordResetSchema = {
   type: 'object' as const,
   properties: {
     /**
-
      * Reset ID
-
      */
     id: { type: 'string' as const },
     /**
-
      * User ID
-
      */
     userId: { type: 'string' as const },
     /**
-
      * Reset token (hashed)
-
      */
     tokenHash: { type: 'string' as const },
     /**
-
      * Token expiration timestamp
-
      */
     expiresAt: { type: 'string' as const, format: 'date-time' as const },
     /**
-
      * Used status
-
      */
     used: { type: 'boolean' as const },
     /**
-
      * Creation timestamp
-
      */
     createdAt: { type: 'string' as const, format: 'date-time' as const },
   },
