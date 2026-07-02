@@ -1,6 +1,6 @@
 ```mermaid
 erDiagram
-    User ||--}| Account : "(id) - (userId)"
+    User }|--|| Account : "(id) - (userId)"
     User ||--|| TwoFactorConfirmation : "(id) - (userId)"
     User {
         string id PK "Unique user ID"

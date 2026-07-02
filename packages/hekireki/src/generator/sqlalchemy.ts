@@ -26,7 +26,7 @@ export function generateSingleFile(
 
   const modelBodies = models
     .map((model) => generateModelBody(model, models, enums, idx, m2mTables))
-    .filter((body): body is string => body !== null)
+    .filter((body) => body !== null)
 
   return [
     ...importLines,

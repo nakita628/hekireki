@@ -1,0 +1,17 @@
+# Generated schema output (regenerated from schema.prisma by check.sh;
+# the byte-for-byte golden masters live in src/bin/*.test.ts).
+harness/gorm/model/models.go
+harness/sea-orm/src/entities/
+harness/sqlalchemy/models.py
+harness/ecto/lib/
+harness/drizzle/schema.ts
+
+# Toolchain build artifacts.
+harness/gorm/.cache/
+harness/sea-orm/target/
+harness/sqlalchemy/.venv/
+harness/sqlalchemy/.deps/
+harness/sqlalchemy/.mypy_cache/
+harness/sqlalchemy/__pycache__/
+harness/ecto/_build/
+harness/ecto/deps/

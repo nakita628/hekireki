@@ -111,7 +111,7 @@ model Profile {
 type User struct {
 \tID string \`gorm:"column:id;primaryKey;type:char(36)" json:"id"\`
 \tName string \`gorm:"column:name;not null" json:"name"\`
-\tProfile Profile \`gorm:"foreignKey:UserID"\`
+\tProfile *Profile \`gorm:"foreignKey:UserID"\`
 }
 
 type Profile struct {
@@ -174,7 +174,7 @@ type User struct {
 \tID string \`gorm:"column:id;primaryKey" json:"id"\`
 \tName string \`gorm:"column:name;not null" json:"name"\`
 \tBio *string \`gorm:"column:bio" json:"bio"\`
-\tRole string \`gorm:"column:role;default:USER;not null" json:"role"\`
+\tRole string \`gorm:"column:role;default:'USER';not null" json:"role"\`
 \tPosts []Post \`gorm:"foreignKey:UserID"\`
 }
 
@@ -506,7 +506,7 @@ type User struct {
 \tID string \`gorm:"column:id;primaryKey;type:char(36)" json:"id"\`
 \tName string \`gorm:"column:name;not null" json:"name"\`
 \tUsername string \`gorm:"column:username;uniqueIndex;not null" json:"username"\`
-\tBio *string \`gorm:"column:bio;default:" json:"bio"\`
+\tBio *string \`gorm:"column:bio;default:''" json:"bio"\`
 \tEmail string \`gorm:"column:email;uniqueIndex;not null" json:"email"\`
 \tEmailVerified *time.Time \`gorm:"column:email_verified" json:"email_verified"\`
 \tImage *string \`gorm:"column:image" json:"image"\`
@@ -556,8 +556,8 @@ type Comment struct {
 \tBody string \`gorm:"column:body;not null" json:"body"\`
 \tCreatedAt time.Time \`gorm:"column:created_at;autoCreateTime;not null" json:"created_at"\`
 \tUpdatedAt time.Time \`gorm:"column:updated_at;autoUpdateTime;not null" json:"updated_at"\`
-\tUserID string \`gorm:"column:user_id;index:idx_user_id;not null" json:"user_id"\`
-\tPostID string \`gorm:"column:post_id;index:idx_post_id;not null" json:"post_id"\`
+\tUserID string \`gorm:"column:user_id;index:idx_comment_user_id;not null" json:"user_id"\`
+\tPostID string \`gorm:"column:post_id;index:idx_comment_post_id;not null" json:"post_id"\`
 \tUser User
 \tPost Post
 }
@@ -565,7 +565,7 @@ type Comment struct {
 type Notification struct {
 \tID string \`gorm:"column:id;primaryKey;type:char(36)" json:"id"\`
 \tBody string \`gorm:"column:body;not null" json:"body"\`
-\tUserID string \`gorm:"column:user_id;index:idx_user_id;not null" json:"user_id"\`
+\tUserID string \`gorm:"column:user_id;index:idx_notification_user_id;not null" json:"user_id"\`
 \tCreatedAt time.Time \`gorm:"column:created_at;autoCreateTime;not null" json:"created_at"\`
 \tUser User
 }
@@ -590,7 +590,7 @@ type Organization struct {
 \tID int \`gorm:"column:id;primaryKey;autoIncrement" json:"id"\`
 \tName string \`gorm:"column:name;type:varchar(200);not null" json:"name"\`
 \tSlug string \`gorm:"column:slug;uniqueIndex;type:varchar(100);not null" json:"slug"\`
-\tStatus string \`gorm:"column:status;default:ACTIVE;not null" json:"status"\`
+\tStatus string \`gorm:"column:status;default:'ACTIVE';not null" json:"status"\`
 \tCreatedAt time.Time \`gorm:"column:created_at;autoCreateTime;not null" json:"created_at"\`
 \tUpdatedAt time.Time \`gorm:"column:updated_at;autoUpdateTime;not null" json:"updated_at"\`
 \tUsers []User \`gorm:"foreignKey:OrganizationID"\`
@@ -602,7 +602,7 @@ func (Organization) TableName() string {
 
 type User struct {
 \tID int \`gorm:"column:id;primaryKey;autoIncrement" json:"id"\`
-\tOrganizationID int \`gorm:"column:organization_id;index:idx_organization_id;not null" json:"organization_id"\`
+\tOrganizationID int \`gorm:"column:organization_id;index:idx_users_organization_id;not null" json:"organization_id"\`
 \tEmail string \`gorm:"column:email;uniqueIndex;type:varchar(255);not null" json:"email"\`
 \tName string \`gorm:"column:name;type:varchar(100);not null" json:"name"\`
 \tCreatedAt time.Time \`gorm:"column:created_at;autoCreateTime;not null" json:"created_at"\`
@@ -632,8 +632,8 @@ func (Role) TableName() string {
 
 type Permission struct {
 \tID int \`gorm:"column:id;primaryKey;autoIncrement" json:"id"\`
-\tResource string \`gorm:"column:resource;uniqueIndex:idx_resource_action_unique;type:varchar(100);not null" json:"resource"\`
-\tAction string \`gorm:"column:action;uniqueIndex:idx_resource_action_unique;type:varchar(100);not null" json:"action"\`
+\tResource string \`gorm:"column:resource;uniqueIndex:idx_permissions_resource_action_unique;type:varchar(100);not null" json:"resource"\`
+\tAction string \`gorm:"column:action;uniqueIndex:idx_permissions_resource_action_unique;type:varchar(100);not null" json:"action"\`
 \tDescription *string \`gorm:"column:description;type:varchar(500)" json:"description"\`
 \tCreatedAt time.Time \`gorm:"column:created_at;autoCreateTime;not null" json:"created_at"\`
 \tRolePermissions []RolePermission \`gorm:"foreignKey:PermissionID"\`
@@ -669,12 +669,12 @@ func (RolePermission) TableName() string {
 
 type AuditLog struct {
 \tID int \`gorm:"column:id;primaryKey;autoIncrement" json:"id"\`
-\tUserID int \`gorm:"column:user_id;index:idx_user_id;not null" json:"user_id"\`
+\tUserID int \`gorm:"column:user_id;index:idx_audit_logs_user_id;not null" json:"user_id"\`
 \tAction string \`gorm:"column:action;type:varchar(50);not null" json:"action"\`
 \tResource string \`gorm:"column:resource;type:varchar(100);not null" json:"resource"\`
 \tDetail *string \`gorm:"column:detail" json:"detail"\`
 \tIPAddress *string \`gorm:"column:ip_address;type:varchar(45)" json:"ip_address"\`
-\tCreatedAt time.Time \`gorm:"column:created_at;index:idx_created_at;autoCreateTime;not null" json:"created_at"\`
+\tCreatedAt time.Time \`gorm:"column:created_at;index:idx_audit_logs_created_at;autoCreateTime;not null" json:"created_at"\`
 \tUser User
 }
 
@@ -705,11 +705,11 @@ type User struct {
 \tName *string \`gorm:"column:name" json:"name"\`
 \tAge *int \`gorm:"column:age" json:"age"\`
 \tIsActive bool \`gorm:"column:is_active;default:true;not null" json:"is_active"\`
-\tRole string \`gorm:"column:role;default:MEMBER;not null" json:"role"\`
+\tRole string \`gorm:"column:role;default:'MEMBER';not null" json:"role"\`
 \tCreatedAt time.Time \`gorm:"column:created_at;autoCreateTime;not null" json:"created_at"\`
 \tUpdatedAt time.Time \`gorm:"column:updated_at;autoUpdateTime;not null" json:"updated_at"\`
 \tPosts []Post \`gorm:"foreignKey:AuthorID"\`
-\tProfile Profile \`gorm:"foreignKey:UserID"\`
+\tProfile *Profile \`gorm:"foreignKey:UserID"\`
 }
 
 type Post struct {
@@ -760,7 +760,7 @@ type User struct {
 \tPasswordHash *string \`gorm:"column:password_hash" json:"password_hash"\`
 \tName string \`gorm:"column:name;type:varchar(100);not null" json:"name"\`
 \tAvatarURL *string \`gorm:"column:avatar_url" json:"avatar_url"\`
-\tRole string \`gorm:"column:role;default:USER;not null" json:"role"\`
+\tRole string \`gorm:"column:role;default:'USER';not null" json:"role"\`
 \tCreditBalance float64 \`gorm:"column:credit_balance;type:decimal(10,2);default:0;not null" json:"credit_balance"\`
 \tEmailVerified bool \`gorm:"column:email_verified;default:false;not null" json:"email_verified"\`
 \tIsActive bool \`gorm:"column:is_active;default:true;not null" json:"is_active"\`
@@ -771,7 +771,7 @@ type User struct {
 \tRefreshTokens []RefreshToken \`gorm:"foreignKey:UserID"\`
 \tEmailVerifications []EmailVerification \`gorm:"foreignKey:UserID"\`
 \tPasswordResets []PasswordReset \`gorm:"foreignKey:UserID"\`
-\tTwoFactorSetting TwoFactorSetting \`gorm:"foreignKey:UserID"\`
+\tTwoFactorSetting *TwoFactorSetting \`gorm:"foreignKey:UserID"\`
 }
 
 func (User) TableName() string {
@@ -780,9 +780,9 @@ func (User) TableName() string {
 
 type OAuthAccount struct {
 \tID string \`gorm:"column:id;primaryKey;type:char(36)" json:"id"\`
-\tUserID string \`gorm:"column:user_id;index:idx_user_id;type:char(36);not null" json:"user_id"\`
-\tProvider string \`gorm:"column:provider;uniqueIndex:idx_provider_provider_account_id_unique;not null" json:"provider"\`
-\tProviderAccountID string \`gorm:"column:provider_account_id;uniqueIndex:idx_provider_provider_account_id_unique;type:varchar(255);not null" json:"provider_account_id"\`
+\tUserID string \`gorm:"column:user_id;index:idx_oauth_accounts_user_id;type:char(36);not null" json:"user_id"\`
+\tProvider string \`gorm:"column:provider;uniqueIndex:idx_oauth_accounts_provider_provider_account_id_unique;not null" json:"provider"\`
+\tProviderAccountID string \`gorm:"column:provider_account_id;uniqueIndex:idx_oauth_accounts_provider_provider_account_id_unique;type:varchar(255);not null" json:"provider_account_id"\`
 \tAccessToken *string \`gorm:"column:access_token" json:"access_token"\`
 \tRefreshToken *string \`gorm:"column:refresh_token" json:"refresh_token"\`
 \tExpiresAt *time.Time \`gorm:"column:expires_at;type:timestamp" json:"expires_at"\`
@@ -814,7 +814,7 @@ func (TwoFactorSetting) TableName() string {
 
 type RefreshToken struct {
 \tID string \`gorm:"column:id;primaryKey" json:"id"\`
-\tUserID string \`gorm:"column:user_id;index:idx_user_id;type:char(36);not null" json:"user_id"\`
+\tUserID string \`gorm:"column:user_id;index:idx_refresh_tokens_user_id;type:char(36);not null" json:"user_id"\`
 \tTokenHash string \`gorm:"column:token_hash;uniqueIndex;not null" json:"token_hash"\`
 \tDeviceInfo *string \`gorm:"column:device_info" json:"device_info"\`
 \tIPAddress *string \`gorm:"column:ip_address;type:varchar(45)" json:"ip_address"\`
@@ -830,7 +830,7 @@ func (RefreshToken) TableName() string {
 
 type EmailVerification struct {
 \tID string \`gorm:"column:id;primaryKey;type:char(36)" json:"id"\`
-\tUserID string \`gorm:"column:user_id;index:idx_user_id;type:char(36);not null" json:"user_id"\`
+\tUserID string \`gorm:"column:user_id;index:idx_email_verifications_user_id;type:char(36);not null" json:"user_id"\`
 \tTokenHash string \`gorm:"column:token_hash;uniqueIndex;not null" json:"token_hash"\`
 \tExpiresAt time.Time \`gorm:"column:expires_at;type:timestamp;not null" json:"expires_at"\`
 \tCreatedAt time.Time \`gorm:"column:created_at;type:timestamp;autoCreateTime;not null" json:"created_at"\`
@@ -843,7 +843,7 @@ func (EmailVerification) TableName() string {
 
 type PasswordReset struct {
 \tID string \`gorm:"column:id;primaryKey;type:char(36)" json:"id"\`
-\tUserID string \`gorm:"column:user_id;index:idx_user_id;type:char(36);not null" json:"user_id"\`
+\tUserID string \`gorm:"column:user_id;index:idx_password_resets_user_id;type:char(36);not null" json:"user_id"\`
 \tTokenHash string \`gorm:"column:token_hash;uniqueIndex;not null" json:"token_hash"\`
 \tExpiresAt time.Time \`gorm:"column:expires_at;type:timestamp;not null" json:"expires_at"\`
 \tUsed bool \`gorm:"column:used;default:false;not null" json:"used"\`

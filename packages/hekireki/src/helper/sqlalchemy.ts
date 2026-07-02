@@ -10,7 +10,9 @@ const PRISMA_TO_PYTHON: { [k: string]: string } = {
   Decimal: 'Decimal',
   Boolean: 'bool',
   DateTime: 'datetime',
-  Json: 'dict',
+  // Bare `dict` is `dict[Unknown, Unknown]` under mypy --strict; a JSON column is
+  // an object with string keys and arbitrary values.
+  Json: 'dict[str, Any]',
   Bytes: 'bytes',
 }
 
@@ -32,6 +34,52 @@ export function prismaTypeToSQLAlchemyType(type: string) {
 
 export function prismaTypeToPythonType(type: string) {
   return PRISMA_TO_PYTHON[type] ?? 'str'
+}
+
+// Python hard keywords cannot be attribute names (`async`/`yield` etc. are a
+// syntax error). Soft keywords (match/case/type/_) are valid names and excluded.
+const PYTHON_KEYWORDS = new Set([
+  'False',
+  'None',
+  'True',
+  'and',
+  'as',
+  'assert',
+  'async',
+  'await',
+  'break',
+  'class',
+  'continue',
+  'def',
+  'del',
+  'elif',
+  'else',
+  'except',
+  'finally',
+  'for',
+  'from',
+  'global',
+  'if',
+  'import',
+  'in',
+  'is',
+  'lambda',
+  'nonlocal',
+  'not',
+  'or',
+  'pass',
+  'raise',
+  'return',
+  'try',
+  'while',
+  'with',
+  'yield',
+])
+
+// A keyword column name is mapped to a `<name>_` attribute; the real column is
+// then preserved via the first positional argument to mapped_column.
+export function pythonAttrName(columnName: string) {
+  return PYTHON_KEYWORDS.has(columnName) ? `${columnName}_` : columnName
 }
 
 function resolveNativeType(field: DMMF.Field) {
@@ -260,22 +308,32 @@ function findBackPopulates(
   sourceModelName: string,
   foreignKey: string,
   allModels: readonly DMMF.Model[],
+  sourceFieldName?: string,
 ) {
   const targetModel = allModels.find((m) => m.name === targetModelName)
+  const sourceModel = allModels.find((m) => m.name === sourceModelName)
   if (!targetModel) return makeSnakeCase(sourceModelName)
+
+  // Prisma pairs the two sides of a relation by relationName; matching on it is
+  // the disambiguator (it also handles multiple relations between the same two
+  // models). Exclude the source field itself so a self-relation pairs its two
+  // ends (parent↔children) instead of back-populating onto itself.
+  const sourceField = sourceModel?.fields.find(
+    (f) => f.kind === 'object' && f.name === sourceFieldName,
+  )
+  const relationName = sourceField?.relationName
 
   const backField = targetModel.fields.find((f) => {
     if (f.kind !== 'object') return false
     if (f.type !== sourceModelName) return false
+    if (targetModelName === sourceModelName && f.name === sourceFieldName) return false
+    if (relationName !== undefined) return f.relationName === relationName
     if (f.relationFromFields?.includes(foreignKey)) return true
-    const sourceModel = allModels.find((m) => m.name === sourceModelName)
-    if (!sourceModel) return false
-    return sourceModel.fields.some(
-      (sf) =>
-        sf.relationName === f.relationName &&
-        sf.relationFromFields &&
-        sf.relationFromFields.includes(foreignKey),
-    )
+    return sourceModel
+      ? sourceModel.fields.some(
+          (sf) => sf.relationName === f.relationName && sf.relationFromFields?.includes(foreignKey),
+        )
+      : false
   })
 
   return backField ? makeSnakeCase(backField.name) : makeSnakeCase(sourceModelName)
@@ -309,16 +367,28 @@ function generateColumn(
   allModels: readonly DMMF.Model[],
   enumMap: ReadonlyMap<string, readonly string[]>,
 ) {
-  const snakeName = field.dbName ?? makeSnakeCase(field.name)
-  const pythonType = field.kind === 'enum' ? 'str' : pythonTypeForNative(field)
-  const typeHint = field.isRequired ? pythonType : `Optional[${pythonType}]`
+  const columnName = field.dbName ?? makeSnakeCase(field.name)
+  const attrName = pythonAttrName(columnName)
+  const elemPythonType = field.kind === 'enum' ? 'str' : pythonTypeForNative(field)
+  // A scalar list is a collection; collapsing it to its element type silently
+  // drops the array. Lists are non-Optional (an empty array, not None).
+  const pythonType = field.isList ? `list[${elemPythonType}]` : elemPythonType
+  const typeHint = field.isList || field.isRequired ? pythonType : `Optional[${pythonType}]`
 
   const colArgs: string[] = []
+
+  // Keyword column renamed to `<name>_`: pin the real column name positionally.
+  if (attrName !== columnName) {
+    colArgs.push(`"${columnName}"`)
+  }
 
   if (field.kind === 'enum') {
     const values = enumMap.get(field.type)
     const valuesStr = values ? values.map((v) => `"${v}"`).join(', ') : ''
-    colArgs.push(`Enum(${valuesStr}, name="${makeSnakeCase(field.type)}")`)
+    const enumType = `Enum(${valuesStr}, name="${makeSnakeCase(field.type)}")`
+    colArgs.push(field.isList ? `ARRAY(${enumType})` : enumType)
+  } else if (field.isList) {
+    colArgs.push(`ARRAY(${prismaTypeToSQLAlchemyType(field.type)})`)
   } else if (needsExplicitSaType(field)) {
     colArgs.push(resolveNativeType(field))
   }
@@ -355,10 +425,10 @@ function generateColumn(
   }
 
   if (colArgs.length === 0) {
-    return `    ${snakeName}: Mapped[${typeHint}]`
+    return `    ${attrName}: Mapped[${typeHint}]`
   }
 
-  return `    ${snakeName}: Mapped[${typeHint}] = mapped_column(${colArgs.join(', ')})`
+  return `    ${attrName}: Mapped[${typeHint}] = mapped_column(${colArgs.join(', ')})`
 }
 
 function generateTableArgs(model: DMMF.Model, indexes: readonly DMMF.Index[]) {
@@ -402,10 +472,23 @@ function generateBelongsToRelationships(
     const snakeName = makeSnakeCase(assoc.name)
     const fkFieldObj = model.fields.find((f) => f.name === assoc.foreignKey)
     const snakeFk = fkFieldObj?.dbName ?? makeSnakeCase(assoc.foreignKey)
-    const backPop = findBackPopulates(assoc.targetModel, model.name, assoc.foreignKey, allModels)
+    const backPop = findBackPopulates(
+      assoc.targetModel,
+      model.name,
+      assoc.foreignKey,
+      allModels,
+      assoc.name,
+    )
     const needsFkParam = needsForeignKeysParam(assoc.targetModel, associations.belongsTo)
     const fkClause = needsFkParam ? `foreign_keys=[${snakeFk}], ` : ''
-    return `    ${snakeName}: Mapped["${assoc.targetModel}"] = relationship(${fkClause}back_populates="${backPop}")`
+    // A self-referential many-to-one needs remote_side (the PK side) so the ORM
+    // can tell which end is "one"; without it mapper configuration fails.
+    const pkField = model.fields.find((f) => f.isId)
+    const remoteClause =
+      assoc.targetModel === model.name && pkField
+        ? `remote_side=[${pkField.dbName ?? makeSnakeCase(pkField.name)}], `
+        : ''
+    return `    ${snakeName}: Mapped["${assoc.targetModel}"] = relationship(${remoteClause}${fkClause}back_populates="${backPop}")`
   })
 }
 
@@ -421,7 +504,13 @@ function generateHasManyRelationships(
 ) {
   return associations.hasMany.map((assoc) => {
     const snakeName = makeSnakeCase(assoc.name)
-    const backPop = findBackPopulates(assoc.targetModel, model.name, assoc.foreignKey, allModels)
+    const backPop = findBackPopulates(
+      assoc.targetModel,
+      model.name,
+      assoc.foreignKey,
+      allModels,
+      assoc.name,
+    )
     const targetModel = allModels.find((m) => m.name === assoc.targetModel)
     const needsFkParam = targetModel
       ? needsForeignKeysParam(model.name, getAssociations(targetModel, allModels).belongsTo)
@@ -444,7 +533,13 @@ function generateHasOneRelationships(
 ) {
   return associations.hasOne.map((assoc) => {
     const snakeName = makeSnakeCase(assoc.name)
-    const backPop = findBackPopulates(assoc.targetModel, model.name, assoc.foreignKey, allModels)
+    const backPop = findBackPopulates(
+      assoc.targetModel,
+      model.name,
+      assoc.foreignKey,
+      allModels,
+      assoc.name,
+    )
     const targetModel = allModels.find((m) => m.name === assoc.targetModel)
     const needsFkParam = targetModel
       ? needsForeignKeysParam(model.name, getAssociations(targetModel, allModels).belongsTo)
@@ -583,6 +678,8 @@ export function collectGlobalImports(
         f.isUpdatedAt,
     ),
   )
+  const needsAny = models.some((m) => m.fields.some((f) => f.type === 'Json'))
+  const needsArray = models.some((m) => m.fields.some((f) => f.kind !== 'object' && f.isList))
   const needsDecimal = models.some((m) => m.fields.some((f) => f.type === 'Decimal'))
   const needsDatetime = models.some((m) => m.fields.some((f) => f.type === 'DateTime'))
   const needsUuid = models.some((m) =>
@@ -614,6 +711,11 @@ export function collectGlobalImports(
       if (field.kind === 'enum') {
         saImports.add('Enum')
         continue
+      }
+      // A scalar list wraps its element SA type in ARRAY(...), so that element
+      // type needs importing too (e.g. ARRAY(String) needs String).
+      if (field.isList) {
+        saImports.add(prismaTypeToSQLAlchemyType(field.type))
       }
       if (needsExplicitSaType(field)) {
         const resolved = resolveNativeType(field)
@@ -655,6 +757,7 @@ export function collectGlobalImports(
   }
 
   if (needsFunc) saImports.add('func')
+  if (needsArray) saImports.add('ARRAY')
 
   const lines: string[] = []
 
@@ -670,8 +773,11 @@ export function collectGlobalImports(
   lines.push(`from sqlalchemy.orm import ${ormImports.sort().join(', ')}`)
 
   // typing imports
-  if (needsOptional) {
-    lines.push('from typing import Optional')
+  const typingImports = [needsAny ? 'Any' : null, needsOptional ? 'Optional' : null].filter(
+    (i) => i !== null,
+  )
+  if (typingImports.length > 0) {
+    lines.push(`from typing import ${typingImports.join(', ')}`)
   }
 
   // stdlib imports

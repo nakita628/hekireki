@@ -4,15 +4,11 @@ export const UserSchema = {
   type: 'object' as const,
   properties: {
     /**
-
      * Primary key
-
      */
     id: { type: 'string' as const },
     /**
-
      * Display name
-
      */
     name: { type: 'string' as const },
   },
@@ -26,27 +22,19 @@ export const PostSchema = {
   type: 'object' as const,
   properties: {
     /**
-
      * Primary key
-
      */
     id: { type: 'string' as const },
     /**
-
      * Article title
-
      */
     title: { type: 'string' as const },
     /**
-
      * Body content (no length limit)
-
      */
     content: { type: 'string' as const },
     /**
-
      * Foreign key referencing User.id
-
      */
     userId: { type: 'string' as const },
   },

@@ -3,6 +3,7 @@ import type { DMMF } from '@prisma/generator-helper'
 import {
   createImports,
   generateImports,
+  makeEnumDeclarations,
   makeRelations,
   makeTable,
   resolveDbProvider,
@@ -16,6 +17,7 @@ export function drizzleSchema(
   const db = resolveDbProvider(provider)
   const imports = createImports()
 
+  const enumLines = makeEnumDeclarations(datamodel.models, datamodel.enums, db, imports)
   const tableLines = datamodel.models.map((model) =>
     makeTable(model, datamodel.models, db, imports, datamodel.enums, indexes),
   )
@@ -31,6 +33,7 @@ export function drizzleSchema(
   return [
     generateImports(imports, db),
     '',
+    ...(enumLines.length > 0 ? [...enumLines, ''] : []),
     ...tableLinesWithGap,
     ...(relationsLinesWithGap.length > 0 ? ['', ...relationsLinesWithGap] : []),
   ].join('\n')

@@ -1,0 +1,10 @@
+# Locked transitive tree for the SQLAlchemy conformance harness.
+# Exact == pins keep the dependency set deterministic across runs while staying
+# portable across platforms (CI is linux/x86_64, dev machines vary), which
+# cross-platform wheel --hash pinning cannot. Bumps go through Renovate.
+SQLAlchemy==2.0.51
+greenlet==3.5.3
+mypy==1.18.2
+mypy_extensions==1.1.0
+pathspec==1.1.1
+typing_extensions==4.15.0

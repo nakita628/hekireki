@@ -14,7 +14,9 @@ export const post = sqliteTable('post', {
     .$defaultFn(() => crypto.randomUUID()),
   title: text('title').notNull(),
   content: text('content').notNull(),
-  userId: text('userId').notNull(),
+  userId: text('userId')
+    .notNull()
+    .references(() => user.id),
 })
 
 export const userRelations = relations(user, ({ many }) => ({ posts: many(post) }))

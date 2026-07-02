@@ -1,0 +1,111 @@
+name: Lang Check
+
+# Validity checks for hekireki's generated foreign-language code: each language
+# is generated from conformance/schema.prisma and then checked in its own
+# toolchain — it parses (syntax) and compiles against the real GORM / sea-orm /
+# SQLAlchemy / Ecto API (type). This is separate from Test (test.yaml), which
+# owns the byte-equality codegen contract and stays toolchain-free.
+#
+# One matrix leg per language; each sets up only its own toolchain. Runs on PRs
+# that touch the generators or the harness, and on demand. Action tags are
+# pinned to @vX.Y.Z and tracked by Renovate (no SHA pinning, per org policy).
+
+on:
+  pull_request:
+    paths:
+      # All of src/ — the generators' entrypoints (src/bin) and shared codegen
+      # layers (utils/emit/format/fsp) affect generated output too; a false
+      # positive here is a cheap matrix run, a false negative is an unverified
+      # generator change.
+      - packages/hekireki/src/**
+      - packages/hekireki/conformance/**
+      - .github/workflows/lang-check.yaml
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lang-check-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: packages/hekireki
+
+jobs:
+  conformance:
+    runs-on: ubuntu-latest
+    # Backstop against toolchain prompts hanging a leg (mix once blocked on a
+    # rebar3 install prompt); the default job timeout is 6 hours.
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # drizzle needs no extra toolchain step: setup-vp's node runs
+        # tsc + drizzle-kit from the workspace's devDependencies.
+        lang: [gorm, sea-orm, sqlalchemy, ecto, drizzle]
+    steps:
+      - uses: actions/checkout@v5.0.1
+      - uses: voidzero-dev/setup-vp@v1.12.0
+        with:
+          node-version: '22'
+          cache: true
+      - run: vp install
+        working-directory: .
+      - run: vp run hekireki#build
+        working-directory: .
+
+      - if: matrix.lang == 'gorm'
+        uses: actions/setup-go@v5.5.0
+        with:
+          go-version: '1.23.6'
+      - if: matrix.lang == 'sqlalchemy'
+        uses: actions/setup-python@v5.6.0
+        with:
+          python-version: '3.12.4'
+      - if: matrix.lang == 'sea-orm'
+        uses: actions-rust-lang/setup-rust-toolchain@v1.13.0
+        with:
+          # Locked crates (zeroize 1.9+) use edition2024, which needs
+          # cargo >= 1.85 just to parse their manifests.
+          toolchain: '1.96.0'
+          components: rustfmt
+      - if: matrix.lang == 'ecto'
+        uses: erlef/setup-beam@v1.20.4
+        with:
+          otp-version: '27.2'
+          elixir-version: '1.18.1'
+          # Pinned so check.sh's `mix local.rebar --if-missing` never falls
+          # back to an unpinned network fetch of the rebar3 escript.
+          rebar3-version: '3.24.0'
+
+      # conformance/check.sh is the single source of truth for generate + check:
+      # the same script runs locally via `pnpm -F hekireki conformance`. Passing
+      # the language makes a missing toolchain a hard error instead of a skip.
+      - name: Conformance (generate + syntax + type check)
+        run: bash conformance/check.sh ${{ matrix.lang }}
+
+  # Prove the published tarball still ships dist/ only — the conformance harness
+  # (Go/Rust/Python/Elixir files) must never leak into npm.
+  pack-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5.0.1
+      - uses: voidzero-dev/setup-vp@v1.12.0
+        with:
+          node-version: '22'
+          cache: true
+      - run: vp install
+        working-directory: .
+      - run: vp run hekireki#build
+        working-directory: .
+      - name: Assert tarball contains dist/ only
+        run: |
+          npm pack --dry-run --json > pack.json
+          node -e '
+            const files = require("./pack.json")[0].files.map((f) => f.path)
+            const leaked = files.filter((p) => !/^(dist\/|package\.json$|README|LICENSE)/.test(p))
+            if (leaked.length) { console.error("tarball leaks non-dist files:\n" + leaked.join("\n")); process.exit(1) }
+            console.log("ok: tarball ships dist/ only (" + files.length + " files)")
+          '
