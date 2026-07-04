@@ -10,6 +10,10 @@ const RELATIONSHIPS = {
   many: '}|',
 } as const satisfies Record<Cardinality, string>
 
+export function escapeComment(comment: string) {
+  return comment.replace(/\r?\n/g, ' ').replace(/"/g, '#quot;')
+}
+
 export function erRelationLine(
   relation: ERRelation,
   resolveName: (model: string) => string = (model) => model,
@@ -30,7 +34,7 @@ export function modelFields(model: DMMF.Model) {
       const commentPart = stripAnnotations(field.documentation) ?? ''
       const keyMarker = field.isId ? 'PK' : fkFields.has(field.name) ? 'FK' : ''
       const keyPart = keyMarker ? ` ${keyMarker}` : ''
-      return `        ${field.type.toLowerCase()} ${field.name}${keyPart}${commentPart ? ` "${commentPart}"` : ''}`
+      return `        ${field.type.toLowerCase()} ${field.name}${keyPart}${commentPart ? ` "${escapeComment(commentPart)}"` : ''}`
     })
     .filter((field) => field !== null)
 }

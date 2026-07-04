@@ -2,7 +2,7 @@ import type { DMMF } from '@prisma/generator-helper'
 import { describe, expect, it } from 'vite-plus/test'
 
 import { erContent } from '../generator/mermaid-er.js'
-import { erRelationLine, modelFields, modelInfo } from './mermaid-er.js'
+import { erRelationLine, escapeComment, modelFields, modelInfo } from './mermaid-er.js'
 
 function makeModel(overrides: Partial<DMMF.Model> & { name: string }): DMMF.Model {
   return {
@@ -33,6 +33,32 @@ function makeField(overrides: Partial<DMMF.Field> & { name: string; type: string
 }
 
 describe('helper/mermaid-er', () => {
+  describe('escapeComment', () => {
+    it('replaces double quotes with the #quot; entity code', () => {
+      expect(escapeComment('name is "dm:{a}:{b}" composite')).toBe(
+        'name is #quot;dm:{a}:{b}#quot; composite',
+      )
+    })
+
+    it('collapses newlines into spaces', () => {
+      expect(escapeComment('first line\nsecond line')).toBe('first line second line')
+    })
+
+    it('collapses CRLF newlines into spaces', () => {
+      expect(escapeComment('first line\r\nsecond line')).toBe('first line second line')
+    })
+
+    it('escapes quotes and newlines together', () => {
+      expect(escapeComment('unique. DM is "dm:{x}:{y}" of the\ncomposite name')).toBe(
+        'unique. DM is #quot;dm:{x}:{y}#quot; of the composite name',
+      )
+    })
+
+    it('leaves plain text untouched', () => {
+      expect(escapeComment('Email address')).toBe('Email address')
+    })
+  })
+
   describe('erRelationLine', () => {
     it('renders a one-to-many relation', () => {
       const result = erRelationLine({
@@ -162,6 +188,24 @@ describe('helper/mermaid-er', () => {
       })
       const result = modelFields(model)
       expect(result).toStrictEqual(['        string email "Email address"'])
+    })
+
+    it('escapes double quotes and newlines in documentation', () => {
+      const model = makeModel({
+        name: 'Channel',
+        fields: [
+          makeField({
+            name: 'name',
+            type: 'String',
+            documentation:
+              'Channel name, globally unique. DM stores the "dm:{smallerUserId}:{largerUserId}"\ncomposite name',
+          }),
+        ],
+      })
+      const result = modelFields(model)
+      expect(result).toStrictEqual([
+        '        string name "Channel name, globally unique. DM stores the #quot;dm:{smallerUserId}:{largerUserId}#quot; composite name"',
+      ])
     })
 
     it('handles field with no documentation', () => {
