@@ -12,12 +12,6 @@ Table User {
   createdAt DateTime [default: `now()`, not null, note: 'Timestamp when the user was created']
   updatedAt DateTime [not null, note: 'Timestamp when the user was last updated']
   hasNotification Boolean [default: false, note: 'Flag indicating if user has unread notifications']
-  posts Post [not null, note: 'Posts created by the user']
-  comments Comment [not null, note: 'Comments created by the user']
-  notifications Notification [not null, note: 'Notifications received by the user']
-  followers Follow [not null, note: 'Followers of the user']
-  following Follow [not null, note: 'Users the user is following']
-  likes Like [not null, note: 'Likes created by the user']
 }
 
 Table Post {
@@ -26,17 +20,12 @@ Table Post {
   createdAt DateTime [default: `now()`, not null, note: 'Timestamp when the post was created']
   updatedAt DateTime [not null, note: 'Timestamp when the post was last updated']
   userId String [not null, note: 'ID of the user who created the post']
-  user User [not null, note: 'User who created the post']
-  comments Comment [not null, note: 'Comments on the post']
-  likes Like [not null, note: 'Likes on the post']
 }
 
 Table Follow {
   followerId String [not null, note: 'ID of the user who is following']
   followingId String [not null, note: 'ID of the user being followed']
   createdAt DateTime [default: `now()`, not null, note: 'Timestamp when the follow relationship was created']
-  follower User [not null, note: 'User who created the follow relationship (the follower)']
-  following User [not null, note: 'User being followed']
 
   indexes {
     (followerId, followingId) [pk]
@@ -47,8 +36,6 @@ Table Like {
   userId String [not null, note: 'ID of the user who liked the post']
   postId String [not null, note: 'ID of the post that was liked']
   createdAt DateTime [default: `now()`, not null, note: 'Timestamp when the like was created']
-  user User [not null, note: 'User who liked the post']
-  post Post [not null, note: 'Post that was liked']
 
   indexes {
     (userId, postId) [pk]
@@ -62,8 +49,6 @@ Table Comment {
   updatedAt DateTime [not null, note: 'Timestamp when the comment was last updated']
   userId String [not null, note: 'ID of the user who created the comment']
   postId String [not null, note: 'ID of the post this comment belongs to']
-  user User [not null, note: 'User who created the comment']
-  post Post [not null, note: 'Post that was commented on']
 }
 
 Table Notification {
@@ -71,7 +56,6 @@ Table Notification {
   body String [not null, note: 'Content of the notification message']
   userId String [not null, note: 'ID of the user who receives the notification']
   createdAt DateTime [default: `now()`, not null, note: 'Timestamp when the notification was created']
-  user User [not null, note: 'User who receives the notification']
 }
 
 Ref Post_userId_fk: Post.userId > User.id [delete: cascade]

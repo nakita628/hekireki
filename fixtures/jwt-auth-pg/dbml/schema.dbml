@@ -31,11 +31,6 @@ Table users {
   createdAt DateTime [default: `now()`, not null, note: 'Account creation timestamp']
   updatedAt DateTime [not null, note: 'Last update timestamp']
   lastLoginAt DateTime [note: 'Last login timestamp']
-  oauthAccounts oauth_accounts [not null, note: 'OAuth accounts']
-  twoFactorSetting two_factor_settings [note: 'Two-factor authentication setting']
-  refreshTokens refresh_tokens [not null, note: 'Refresh tokens']
-  emailVerifications email_verifications [not null, note: 'Email verifications']
-  passwordResets password_resets [not null, note: 'Password resets']
 
   Note: 'User account'
 }
@@ -49,7 +44,6 @@ Table oauth_accounts {
   refreshToken String [note: 'Refresh token from provider']
   expiresAt DateTime [note: 'Token expiration timestamp']
   createdAt DateTime [default: `now()`, not null, note: 'Account creation timestamp']
-  user users [not null, note: 'User relation']
 
   indexes {
     (provider, providerAccountId) [unique]
@@ -69,7 +63,6 @@ Table two_factor_settings {
   verifiedAt DateTime [note: 'Last verified timestamp']
   createdAt DateTime [default: `now()`, not null, note: 'Creation timestamp']
   updatedAt DateTime [not null, note: 'Last update timestamp']
-  user users [not null, note: 'User relation']
 
   Note: 'Two-factor authentication settings'
 }
@@ -83,7 +76,6 @@ Table refresh_tokens {
   expiresAt DateTime [not null, note: 'Token expiration timestamp']
   createdAt DateTime [default: `now()`, not null, note: 'Token creation timestamp']
   revoked Boolean [default: false, not null, note: 'Revocation status']
-  user users [not null, note: 'User relation']
 
   Note: 'JWT refresh token for session management'
 }
@@ -94,7 +86,6 @@ Table email_verifications {
   tokenHash String [unique, not null, note: 'Verification token (hashed)']
   expiresAt DateTime [not null, note: 'Token expiration timestamp']
   createdAt DateTime [default: `now()`, not null, note: 'Creation timestamp']
-  user users [not null, note: 'User relation']
 
   Note: 'Email verification token'
 }
@@ -106,7 +97,6 @@ Table password_resets {
   expiresAt DateTime [not null, note: 'Token expiration timestamp']
   used Boolean [default: false, not null, note: 'Used status']
   createdAt DateTime [default: `now()`, not null, note: 'Creation timestamp']
-  user users [not null, note: 'User relation']
 
   Note: 'Password reset token'
 }

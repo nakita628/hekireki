@@ -11,9 +11,7 @@ Table User {
   image String [note: 'Profile image URL']
   password String [note: 'Hashed password']
   role UserRole [default: 'USER', not null, note: 'Role of the user (ADMIN or USER)']
-  accounts Account [not null, note: 'Linked accounts']
   isTwoFactorEnabled Boolean [default: false, note: 'Whether 2FA is enabled']
-  twoFactorConfirmation TwoFactorConfirmation [note: '2FA confirmation']
 }
 
 Table Account {
@@ -29,7 +27,6 @@ Table Account {
   scope String [note: 'OAuth scope']
   id_token String [note: 'ID token']
   session_state String [note: 'Session state']
-  user User [not null, note: 'Belongs to user']
 
   indexes {
     (provider, providerAccountId) [unique]
@@ -76,7 +73,6 @@ Table TwoFactorToken {
 Table TwoFactorConfirmation {
   id String [pk, note: 'Confirmation ID']
   userId String [unique, not null, note: 'Reference to user']
-  user User [not null, note: 'The user who confirmed 2FA']
 }
 
 Ref Account_userId_fk: Account.userId > User.id [delete: cascade]
