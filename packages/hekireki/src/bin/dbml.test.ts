@@ -96,59 +96,47 @@ model TagOwner {
     const expected = `Table User {
   id String [pk]
   name String [not null]
-  posts Post [not null]
-  comments Comment [not null]
-  profiles Profile [not null]
-  auditLogs AuditLog [not null]
-  sessions Session [not null]
 }
 
 Table Post {
   id String [pk]
   title String [not null]
   userId String [not null]
-  user User [not null]
 }
 
 Table Comment {
   id String [pk]
   body String [not null]
   userId String
-  user User
 }
 
 Table Profile {
   id String [pk]
   bio String [not null]
   userId String [not null]
-  user User [not null]
 }
 
 Table AuditLog {
   id String [pk]
   action String [not null]
   userId String [not null]
-  user User [not null]
 }
 
 Table Session {
   id String [pk]
   token String [not null]
   userId String [not null]
-  user User [not null]
 }
 
 Table Tag {
   id String [pk]
   label String [not null]
   ownerId String [not null]
-  owner TagOwner [not null]
 }
 
 Table TagOwner {
   id String [pk]
   name String [not null]
-  tags Tag [not null]
 }
 
 Ref Post_userId_fk: Post.userId > User.id [delete: cascade]
@@ -207,20 +195,16 @@ model Tag {
     })
     const expected = `Table User {
   id String [pk]
-  posts Post [not null]
-  tags Tag [not null]
 }
 
 Table Post {
   id String [pk]
   userId String [not null]
-  user User [not null]
 }
 
 Table Tag {
   id String [pk]
   userId String [not null]
-  user User [not null]
 }
 
 Ref Post_userId_fk: Post.userId > User.id [delete: cascade, update: restrict]
@@ -269,7 +253,6 @@ model Membership {
     const expected = `Table User {
   tenantId String [not null]
   id String [not null]
-  memberships Membership [not null]
 
   indexes {
     (tenantId, id) [pk]
@@ -280,7 +263,6 @@ Table Membership {
   id String [pk]
   tenantId String [not null]
   userId String [not null]
-  user User [not null]
 }
 
 Ref Membership_(tenantId, userId)_fk: Membership.(tenantId, userId) > User.(tenantId, id) [delete: cascade, update: cascade]`
@@ -319,8 +301,6 @@ model Employee {
     const expected = `Table Employee {
   id String [pk]
   managerId String
-  manager Employee
-  reports Employee [not null]
 }
 
 Ref Employee_managerId_fk: Employee.managerId - Employee.id [delete: set null]`

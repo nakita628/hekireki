@@ -12,9 +12,6 @@ Table users {
   isActive Boolean [default: true, not null, note: 'Account active status']
   createdAt DateTime [default: `now()`, not null, note: 'Account creation timestamp']
   updatedAt DateTime [not null, note: 'Last update timestamp']
-  sessions sessions [not null, note: 'Sessions']
-  loginHistories login_histories [not null, note: 'Login history']
-  passwordHistories password_histories [not null, note: 'Password history']
 
   Note: 'User account'
 }
@@ -27,7 +24,6 @@ Table sessions {
   ipAddress String [note: 'Client IP address']
   userAgent String [note: 'Client user agent']
   createdAt DateTime [default: `now()`, not null, note: 'Session creation timestamp']
-  user users [not null, note: 'User relation']
 
   Note: 'Server-side session'
 }
@@ -39,7 +35,6 @@ Table login_histories {
   userAgent String [note: 'Client user agent']
   success Boolean [not null, note: 'Login success status']
   createdAt DateTime [default: `now()`, not null, note: 'Login timestamp']
-  user users [not null, note: 'User relation']
 
   Note: 'Login history record'
 }
@@ -49,7 +44,6 @@ Table password_histories {
   userId String [not null, note: 'User ID']
   passwordHash String [not null, note: 'Hashed password']
   createdAt DateTime [default: `now()`, not null, note: 'Change timestamp']
-  user users [not null, note: 'User relation']
 
   Note: 'Password change history'
 }

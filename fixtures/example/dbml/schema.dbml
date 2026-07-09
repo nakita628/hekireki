@@ -1,7 +1,6 @@
 Table User {
   id String [pk, note: 'Primary key']
   name String [not null, note: 'Display name']
-  posts Post [not null, note: 'One-to-many relation to Post']
 }
 
 Table Post {
@@ -9,7 +8,6 @@ Table Post {
   title String [not null, note: 'Article title']
   content String [not null, note: 'Body content (no length limit)']
   userId String [not null, note: 'Foreign key referencing User.id']
-  user User [not null, note: 'Prisma relation definition']
 }
 
 Ref Post_userId_fk: Post.userId > User.id

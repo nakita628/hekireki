@@ -1,5 +1,3 @@
-import cuid from 'cuid'
-import { relations } from 'drizzle-orm'
 import {
   boolean,
   index,
@@ -12,6 +10,8 @@ import {
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core'
+import { relations } from 'drizzle-orm'
+import cuid from 'cuid'
 
 export const roleEnum = pgEnum('Role', ['ADMIN', 'USER', 'GUEST'])
 export const oauthProviderEnum = pgEnum('OAuthProvider', [

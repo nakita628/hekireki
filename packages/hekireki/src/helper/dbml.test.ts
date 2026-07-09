@@ -13,6 +13,7 @@ import {
   makeRelations,
   makeTables,
 } from './dbml.js'
+import { modelFields } from './mermaid-er.js'
 
 function makeModel(overrides: Partial<DMMF.Model> & { name: string }): DMMF.Model {
   return {
@@ -497,7 +498,7 @@ describe('helper/dbml', () => {
       }
       const result = dbmlContent(datamodel)
       expect(result).toBe(
-        'Table Post {\n  id String [pk]\n  userId String [not null]\n  user User [not null]\n}\n\nTable User {\n  id String [pk]\n  posts Post\n}\n\nRef Post_userId_fk: Post.userId > User.id',
+        'Table Post {\n  id String [pk]\n  userId String [not null]\n}\n\nTable User {\n  id String [pk]\n}\n\nRef Post_userId_fk: Post.userId > User.id',
       )
     })
 
@@ -761,14 +762,14 @@ describe('helper/dbml', () => {
     it('generates Order table with note and FK', () => {
       const tables = makeTables([orderModel])
       expect(tables[0]).toBe(
-        "Table Order {\n  id String [pk, note: 'Order ID']\n  totalAmount Int [not null, note: 'Total amount in cents']\n  customerId String [not null]\n  customer Customer [not null]\n}",
+        "Table Order {\n  id String [pk, note: 'Order ID']\n  totalAmount Int [not null, note: 'Total amount in cents']\n  customerId String [not null]\n}",
       )
     })
 
     it('uses dbName when mapToDbSchema is true', () => {
       const tables = makeTables([orderModel], true)
       expect(tables[0]).toBe(
-        "Table orders {\n  id String [pk, note: 'Order ID']\n  totalAmount Int [not null, note: 'Total amount in cents']\n  customerId String [not null]\n  customer Customer [not null]\n}",
+        "Table orders {\n  id String [pk, note: 'Order ID']\n  totalAmount Int [not null, note: 'Total amount in cents']\n  customerId String [not null]\n}",
       )
     })
 
@@ -796,7 +797,7 @@ describe('helper/dbml', () => {
       }
       const result = dbmlContent(datamodel)
       expect(result).toBe(
-        "Enum OrderStatus {\n  PENDING\n  CONFIRMED\n  SHIPPED\n  DELIVERED\n  CANCELLED\n}\n\nTable Order {\n  id String [pk, note: 'Order ID']\n  totalAmount Int [not null, note: 'Total amount in cents']\n  customerId String [not null]\n  customer Customer [not null]\n}\n\nTable Customer {\n  id String [pk]\n  email String [unique, not null, note: 'Unique email address']\n  orders Order\n}\n\nRef Order_customerId_fk: Order.customerId > Customer.id",
+        "Enum OrderStatus {\n  PENDING\n  CONFIRMED\n  SHIPPED\n  DELIVERED\n  CANCELLED\n}\n\nTable Order {\n  id String [pk, note: 'Order ID']\n  totalAmount Int [not null, note: 'Total amount in cents']\n  customerId String [not null]\n}\n\nTable Customer {\n  id String [pk]\n  email String [unique, not null, note: 'Unique email address']\n}\n\nRef Order_customerId_fk: Order.customerId > Customer.id",
       )
     })
   })
@@ -2051,6 +2052,119 @@ describe('helper/dbml', () => {
         } as DMMF.Model,
       ])
       expect(tables[0]).toBe("Table User {\n  id String [pk]\n\n  Note: 'Account note'\n}")
+    })
+  })
+
+  describe('relation field exclusion', () => {
+    it('drops object relation navigation fields but keeps the FK scalar column and Ref', () => {
+      const result = dbmlContent({
+        models: [
+          makeModel({
+            name: 'Reservation',
+            fields: [
+              makeField({ name: 'id', type: 'String', isId: true }),
+              makeField({ name: 'roomId', type: 'String' }),
+              makeField({
+                name: 'room',
+                type: 'Room',
+                kind: 'object',
+                relationName: 'ReservationToRoom',
+                relationFromFields: ['roomId'],
+                relationToFields: ['id'],
+              }),
+            ],
+          }),
+          makeModel({
+            name: 'Room',
+            fields: [
+              makeField({ name: 'id', type: 'String', isId: true }),
+              makeField({
+                name: 'reservations',
+                type: 'Reservation',
+                kind: 'object',
+                isList: true,
+                isRequired: false,
+                relationName: 'ReservationToRoom',
+              }),
+            ],
+          }),
+        ],
+        enums: [],
+        types: [],
+      })
+      expect(result).toBe(
+        'Table Reservation {\n  id String [pk]\n  roomId String [not null]\n}\n\nTable Room {\n  id String [pk]\n}\n\nRef Reservation_roomId_fk: Reservation.roomId > Room.id',
+      )
+    })
+
+    it('keeps scalar list columns (exclusion is by relationName, not isList)', () => {
+      const tables = makeTables([
+        makeModel({
+          name: 'Post',
+          fields: [
+            makeField({ name: 'id', type: 'String', isId: true }),
+            makeField({ name: 'tags', type: 'String', isList: true }),
+            makeField({ name: 'userId', type: 'String' }),
+            makeField({
+              name: 'user',
+              type: 'User',
+              kind: 'object',
+              relationName: 'PostToUser',
+              relationFromFields: ['userId'],
+              relationToFields: ['id'],
+            }),
+          ],
+        }),
+      ])
+      expect(tables[0]).toBe(
+        'Table Post {\n  id String [pk]\n  tags String[] [not null]\n  userId String [not null]\n}',
+      )
+    })
+
+    it('keeps both scalar columns of a composite-key relation and drops the navigation field', () => {
+      const tables = makeTables([
+        makeModel({
+          name: 'ReservationParticipant',
+          fields: [
+            makeField({ name: 'reservationId', type: 'String' }),
+            makeField({ name: 'userId', type: 'String' }),
+            makeField({
+              name: 'reservation',
+              type: 'Reservation',
+              kind: 'object',
+              relationName: 'ReservationParticipantToReservation',
+              relationFromFields: ['reservationId'],
+              relationToFields: ['id'],
+            }),
+          ],
+          primaryKey: { fields: ['reservationId', 'userId'], name: null },
+        }),
+      ])
+      expect(tables[0]).toBe(
+        'Table ReservationParticipant {\n  reservationId String [not null]\n  userId String [not null]\n\n  indexes {\n    (reservationId, userId) [pk]\n  }\n}',
+      )
+    })
+
+    it('excludes the same navigation fields as the Mermaid-ER generator', () => {
+      const post = makeModel({
+        name: 'Post',
+        fields: [
+          makeField({ name: 'id', type: 'String', isId: true }),
+          makeField({ name: 'userId', type: 'String' }),
+          makeField({
+            name: 'user',
+            type: 'User',
+            kind: 'object',
+            relationName: 'PostToUser',
+            relationFromFields: ['userId'],
+            relationToFields: ['id'],
+          }),
+        ],
+      })
+      expect(makeTables([post])[0]).toBe(
+        'Table Post {\n  id String [pk]\n  userId String [not null]\n}',
+      )
+      expect(modelFields(post)).toStrictEqual(['        string id PK', '        string userId FK'])
     })
   })
 })

@@ -11,7 +11,6 @@ Table organizations {
   status OrgStatus [default: 'ACTIVE', not null, note: 'Organization status']
   createdAt DateTime [default: `now()`, not null, note: 'Creation timestamp']
   updatedAt DateTime [not null, note: 'Last update timestamp']
-  users users [not null, note: 'Users']
 
   Note: 'Organization / tenant'
 }
@@ -23,9 +22,6 @@ Table users {
   name String [not null, note: 'Display name']
   createdAt DateTime [default: `now()`, not null, note: 'Creation timestamp']
   updatedAt DateTime [not null, note: 'Last update timestamp']
-  organization organizations [not null, note: 'Organization relation']
-  userRoles user_roles [not null, note: 'User-Role assignments']
-  auditLogs audit_logs [not null, note: 'Audit logs']
 
   Note: 'User account'
 }
@@ -36,8 +32,6 @@ Table roles {
   description String [note: 'Role description']
   createdAt DateTime [default: `now()`, not null, note: 'Creation timestamp']
   updatedAt DateTime [not null, note: 'Last update timestamp']
-  userRoles user_roles [not null, note: 'User-Role assignments']
-  rolePermissions role_permissions [not null, note: 'Role-Permission assignments']
 
   Note: 'Role definition'
 }
@@ -48,7 +42,6 @@ Table permissions {
   action String [not null, note: 'Action name']
   description String [note: 'Permission description']
   createdAt DateTime [default: `now()`, not null, note: 'Creation timestamp']
-  rolePermissions role_permissions [not null, note: 'Role-Permission assignments']
 
   indexes {
     (resource, action) [unique]
@@ -61,8 +54,6 @@ Table user_roles {
   userId Int [not null, note: 'User ID']
   roleId Int [not null, note: 'Role ID']
   assignedAt DateTime [default: `now()`, not null, note: 'Assignment timestamp']
-  user users [not null, note: 'User relation']
-  role roles [not null, note: 'Role relation']
 
   indexes {
     (userId, roleId) [pk]
@@ -75,8 +66,6 @@ Table role_permissions {
   roleId Int [not null, note: 'Role ID']
   permissionId Int [not null, note: 'Permission ID']
   assignedAt DateTime [default: `now()`, not null, note: 'Assignment timestamp']
-  role roles [not null, note: 'Role relation']
-  permission permissions [not null, note: 'Permission relation']
 
   indexes {
     (roleId, permissionId) [pk]
@@ -93,7 +82,6 @@ Table audit_logs {
   detail String [note: 'Action detail']
   ipAddress String [note: 'Client IP address']
   createdAt DateTime [default: `now()`, not null, note: 'Action timestamp']
-  user users [not null, note: 'User relation']
 
   Note: 'Audit log'
 }

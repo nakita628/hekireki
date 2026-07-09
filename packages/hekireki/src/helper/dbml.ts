@@ -149,7 +149,9 @@ export function makeTables(models: readonly DMMF.Model[], mapToDbSchema = false)
   return models.map((model) => {
     const modelName = mapToDbSchema && model.dbName ? model.dbName : model.name
 
-    const columns = model.fields.map((field) => toDBMLColumn(field, models, mapToDbSchema))
+    const columns = model.fields
+      .filter((field) => !field.relationName)
+      .map((field) => toDBMLColumn(field, models, mapToDbSchema))
     const columnLines = columns.map(makePrismaColumn).join('\n')
 
     const indexes = [
