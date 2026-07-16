@@ -140,9 +140,11 @@ export function eloquentModels(
       const pkColumn = idField ? (idField.dbName ?? idField.name) : null
       const pkUuidTrait = (() => {
         const def = idField?.default
-        if (!(def && typeof def === 'object' && 'name' in def && def.name === 'uuid')) return null
+        if (!(def && typeof def === 'object' && 'name' in def)) return null
         // Laravel 12: HasUuids generates UUIDv7, HasVersion4Uuids generates
-        // ordered UUIDv4 (Laravel 11.35+).
+        // ordered UUIDv4 (Laravel 11.35+), HasUlids generates ULIDs.
+        if (def.name === 'ulid') return 'HasUlids'
+        if (def.name !== 'uuid') return null
         return 'args' in def && def.args[0] === 7 ? 'HasUuids' : 'HasVersion4Uuids'
       })()
       const pkDefault = idField?.default

@@ -301,6 +301,10 @@ function uuidDefaultVersion(field: DMMF.Field) {
   return field.default.args[0] === 7 ? 7 : 4
 }
 
+function isUlidDefault(field: DMMF.Field) {
+  return isFunctionDefault(field.default) && field.default.name === 'ulid'
+}
+
 function needsForeignKeysParam(
   targetModel: string,
   assocs: readonly { readonly targetModel: string }[],
@@ -431,6 +435,8 @@ function generateColumn(
           ? 'default=lambda: str(uuid6.uuid7())'
           : 'default=lambda: str(uuid_mod.uuid4())',
     )
+  } else if (isUlidDefault(field)) {
+    colArgs.push('default=lambda: str(ULID())')
   } else if (!isPk || isAutoincrement(field)) {
     const defaultVal = formatDefault(field.default)
     if (defaultVal !== null && !isPk) {
@@ -709,6 +715,7 @@ export function collectGlobalImports(
     }),
   )
   const needsUuid7 = models.some((m) => m.fields.some((f) => uuidDefaultVersion(f) === 7))
+  const needsUlid = models.some((m) => m.fields.some((f) => isUlidDefault(f)))
   const needsDate = models.some((m) =>
     m.fields.some((f) => {
       if (!f.nativeType) return false
@@ -809,6 +816,7 @@ export function collectGlobalImports(
   if (dtParts.length > 0) lines.push(`from datetime import ${dtParts.join(', ')}`)
   if (needsUuid) lines.push('import uuid as uuid_mod')
   if (needsUuid7) lines.push('import uuid6')
+  if (needsUlid) lines.push('from ulid import ULID')
 
   return lines
 }

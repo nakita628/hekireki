@@ -25,7 +25,8 @@ defmodule Conformance.MixProject do
   defp deps do
     [
       {:ecto, "== 3.14.1"},
-      {:ecto_sql, "== 3.14.0"}
+      {:ecto_sql, "== 3.14.0"},
+      {:ecto_ulid_next, "== 1.0.2"}
     ]
   end
 end

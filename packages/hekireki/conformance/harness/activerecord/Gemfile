@@ -5,3 +5,5 @@
 source "https://rubygems.org"
 
 gem "activerecord", "~> 7.2.0"
+# Generated ulid() attribute defaults call ULID.generate.
+gem "ulid", "~> 1.4"

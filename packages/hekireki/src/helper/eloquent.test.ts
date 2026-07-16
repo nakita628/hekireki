@@ -1200,3 +1200,45 @@ class Event extends Model
 }`)
   })
 })
+
+describe('ulid primary key', () => {
+  it('uses the HasUlids trait for ulid() primary keys', () => {
+    const ticket = makeModel({
+      name: 'Ticket',
+      fields: [
+        makeField({
+          name: 'id',
+          type: 'String',
+          isId: true,
+          hasDefaultValue: true,
+          default: { name: 'ulid', args: [] },
+        }),
+        makeField({ name: 'label', type: 'String' }),
+      ],
+    })
+
+    expect(eloquentModels([ticket], 'App\\Models')).toBe(`<?php
+
+namespace App\\Models;
+
+use Illuminate\\Database\\Eloquent\\Concerns\\HasUlids;
+use Illuminate\\Database\\Eloquent\\Model;
+
+class Ticket extends Model
+{
+    use HasUlids;
+
+    protected $table = 'ticket';
+
+    protected $keyType = 'string';
+
+    public $incrementing = false;
+
+    public $timestamps = false;
+
+    protected $fillable = [
+        'label',
+    ];
+}`)
+  })
+})

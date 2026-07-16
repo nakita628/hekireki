@@ -1769,3 +1769,86 @@ describe('uuid v7 primary key', () => {
 end`)
   })
 })
+
+describe('ulid primary key', () => {
+  it('generates Ecto.ULID with autogenerate and module foreign key types', () => {
+    const ticket = makeModel({
+      name: 'Ticket',
+      fields: [
+        makeField({
+          name: 'id',
+          type: 'String',
+          isId: true,
+          hasDefaultValue: true,
+          default: { name: 'ulid', args: [] },
+        }),
+        makeField({ name: 'label', type: 'String' }),
+        makeField({
+          name: 'stubs',
+          type: 'Stub',
+          kind: 'object',
+          isList: true,
+          relationName: 'StubToTicket',
+        }),
+      ],
+    })
+    const stub = makeModel({
+      name: 'Stub',
+      fields: [
+        makeField({
+          name: 'id',
+          type: 'String',
+          isId: true,
+          hasDefaultValue: true,
+          default: { name: 'uuid', args: [4] },
+        }),
+        makeField({ name: 'ticketId', type: 'String', isReadOnly: true }),
+        makeField({
+          name: 'ticket',
+          type: 'Ticket',
+          kind: 'object',
+          relationName: 'StubToTicket',
+          relationFromFields: ['ticketId'],
+          relationToFields: ['id'],
+        }),
+      ],
+    })
+
+    expect(ectoSchemas([ticket], 'App', [ticket, stub])).toBe(`defmodule App.Ticket do
+  use Ecto.Schema
+  @moduledoc false
+
+  @primary_key {:id, Ecto.ULID, autogenerate: true}
+  @foreign_key_type Ecto.ULID
+
+  @type t :: %__MODULE__{
+          id: Ecto.ULID.t(),
+          label: String.t(),
+          stubs: [App.Stub.t()]
+        }
+
+  schema "ticket" do
+    field(:label, :string)
+    has_many(:stubs, App.Stub, foreign_key: :ticket_id)
+  end
+end`)
+
+    expect(ectoSchemas([stub], 'App', [ticket, stub])).toBe(`defmodule App.Stub do
+  use Ecto.Schema
+  @moduledoc false
+
+  @primary_key {:id, :binary_id, autogenerate: true}
+  @foreign_key_type :binary_id
+
+  @type t :: %__MODULE__{
+          id: Ecto.UUID.t(),
+          ticket: App.Ticket.t() | nil
+        }
+
+  schema "stub" do
+    field(:ticket_id, Ecto.ULID, source: :ticketId)
+    belongs_to(:ticket, App.Ticket, foreign_key: :ticket_id, define_field: false, type: Ecto.ULID)
+  end
+end`)
+  })
+})

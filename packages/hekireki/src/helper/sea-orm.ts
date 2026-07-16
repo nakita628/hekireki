@@ -142,9 +142,16 @@ function isAutoincrement(field: DMMF.Field) {
   return isFunctionDefault(field.default) && field.default.name === 'autoincrement'
 }
 
-function uuidDefaultVersion(field: DMMF.Field) {
-  if (!(isFunctionDefault(field.default) && field.default.name === 'uuid')) return null
-  return field.default.args[0] === 7 ? 7 : 4
+function generatedIdExpr(field: DMMF.Field) {
+  if (!isFunctionDefault(field.default)) return null
+  if (field.default.name === 'uuid') {
+    return field.default.args[0] === 7
+      ? 'uuid::Uuid::now_v7().to_string()'
+      : 'uuid::Uuid::new_v4().to_string()'
+  }
+  // Ulid::generate is the ulid crate 3.x API (1.x/2.x had Ulid::new).
+  if (field.default.name === 'ulid') return 'ulid::Ulid::generate().to_string()'
+  return null
 }
 
 function formatRustDefault(def: DMMF.Field['default']) {
@@ -578,30 +585,27 @@ export function generateEntityFile(
     .sort()
     .map((name) => `use super::${toSnakeCase(name)}::${name};`)
 
-  const uuidFields = scalarFields.filter(
-    (f) => f.type === 'String' && !f.isList && uuidDefaultVersion(f) !== null,
+  const generatedIdFields = scalarFields.filter(
+    (f) => f.type === 'String' && !f.isList && generatedIdExpr(f) !== null,
   )
 
   const useLines = [
     'use sea_orm::entity::prelude::*;',
-    ...(uuidFields.length > 0 ? ['use sea_orm::Set;'] : []),
+    ...(generatedIdFields.length > 0 ? ['use sea_orm::Set;'] : []),
     'use serde::{Deserialize, Serialize};',
     ...enumImports,
   ]
 
   const behaviorImpl =
-    uuidFields.length === 0
+    generatedIdFields.length === 0
       ? 'impl ActiveModelBehavior for ActiveModel {}'
       : [
           'impl ActiveModelBehavior for ActiveModel {',
           '    fn new() -> Self {',
           '        Self {',
-          ...uuidFields.map((field) => {
+          ...generatedIdFields.map((field) => {
             const { ident } = rustFieldIdent(toSnakeCase(field.name))
-            const generate =
-              uuidDefaultVersion(field) === 7
-                ? 'uuid::Uuid::now_v7().to_string()'
-                : 'uuid::Uuid::new_v4().to_string()'
+            const generate = generatedIdExpr(field)
             const value = field.isRequired ? generate : `Some(${generate})`
             return `            ${ident}: Set(${value}),`
           }),

@@ -518,3 +518,53 @@ impl ActiveModelBehavior for ActiveModel {
 }`)
   })
 })
+
+describe('ulid default generation', () => {
+  it('generates ActiveModelBehavior::new with a ULID for ulid() primary keys', () => {
+    const model = {
+      name: 'Ticket',
+      dbName: null,
+      fields: [
+        {
+          name: 'id',
+          kind: 'scalar',
+          type: 'String',
+          isRequired: true,
+          isId: true,
+          isUnique: false,
+          isList: false,
+          isUpdatedAt: false,
+          hasDefaultValue: true,
+          default: { name: 'ulid', args: [] },
+          nativeType: null,
+        },
+      ],
+      uniqueFields: [],
+      uniqueIndexes: [],
+      primaryKey: null,
+    } as DMMF.Model
+
+    expect(generateEntityFile(model, [model], [])).toBe(`use sea_orm::entity::prelude::*;
+use sea_orm::Set;
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
+#[sea_orm(table_name = "ticket")]
+pub struct Model {
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub id: String,
+}
+
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+pub enum Relation {}
+
+impl ActiveModelBehavior for ActiveModel {
+    fn new() -> Self {
+        Self {
+            id: Set(ulid::Ulid::new().to_string()),
+            ..ActiveModelTrait::default()
+        }
+    }
+}`)
+  })
+})

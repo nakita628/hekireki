@@ -318,3 +318,52 @@ func (m *Event) BeforeCreate(_ *gorm.DB) error {
 `)
   })
 })
+
+describe('generateGormModels ulid defaults', () => {
+  it('generates a BeforeCreate hook with ulid.Make for ulid() defaults', () => {
+    const ticket: DMMF.Model = {
+      name: 'Ticket',
+      dbName: null,
+      fields: [
+        {
+          name: 'id',
+          kind: 'scalar',
+          type: 'String',
+          isRequired: true,
+          isUnique: false,
+          isId: true,
+          isReadOnly: false,
+          isGenerated: false,
+          isUpdatedAt: false,
+          isList: false,
+          hasDefaultValue: true,
+          default: { name: 'ulid', args: [] },
+        },
+      ],
+      uniqueFields: [],
+      uniqueIndexes: [],
+      primaryKey: null,
+      isGenerated: false,
+      schema: null,
+    }
+
+    expect(generateGormModels([ticket])).toBe(`package model
+
+import (
+	"github.com/oklog/ulid/v2"
+	"gorm.io/gorm"
+)
+
+type Ticket struct {
+	ID string \`gorm:"column:id;primaryKey;type:char(26)" json:"id"\`
+}
+
+func (m *Ticket) BeforeCreate(_ *gorm.DB) error {
+	if m.ID == "" {
+		m.ID = ulid.Make().String()
+	}
+	return nil
+}
+`)
+  })
+})

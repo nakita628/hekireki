@@ -1489,3 +1489,37 @@ class Event(Base):
     )
   })
 })
+
+describe('ulid default generation', () => {
+  it('generates a client-side ULID default for ulid() primary keys', () => {
+    const models = [
+      makeModel('Ticket', [
+        makeField({
+          name: 'id',
+          type: 'String',
+          isId: true,
+          hasDefaultValue: true,
+          default: { name: 'ulid', args: [] },
+        }),
+        makeField({ name: 'label', type: 'String' }),
+      ]),
+    ]
+
+    expect(generateSingleFile(models)).toBe(
+      `from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from ulid import ULID
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class Ticket(Base):
+    __tablename__ = "ticket"
+
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(ULID()))
+    label: Mapped[str]
+`,
+    )
+  })
+})

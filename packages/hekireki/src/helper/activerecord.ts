@@ -110,12 +110,20 @@ export function activeRecordModels(
         .filter((f) => f.kind === 'scalar' && f.type === 'String')
         .flatMap((f) => {
           const def = f.default
-          if (!(def && typeof def === 'object' && 'name' in def && def.name === 'uuid')) return []
-          // SecureRandom.uuid_v7 requires Ruby 3.4+. No cast type is passed:
-          // a symbol type resolves through the connection adapter at class
-          // load, while a bare default keeps the column type untouched.
+          if (!(def && typeof def === 'object' && 'name' in def)) return []
+          // SecureRandom.uuid_v7 requires Ruby 3.4+; ULID.generate requires the
+          // ulid gem. No cast type is passed: a symbol type resolves through
+          // the connection adapter at class load, while a bare default keeps
+          // the column type untouched.
           const generator =
-            'args' in def && def.args[0] === 7 ? 'SecureRandom.uuid_v7' : 'SecureRandom.uuid'
+            def.name === 'uuid'
+              ? 'args' in def && def.args[0] === 7
+                ? 'SecureRandom.uuid_v7'
+                : 'SecureRandom.uuid'
+              : def.name === 'ulid'
+                ? 'ULID.generate'
+                : null
+          if (generator === null) return []
           return [`  attribute :${f.dbName ?? f.name}, default: -> { ${generator} }`]
         })
 

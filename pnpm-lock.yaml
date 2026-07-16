@@ -803,6 +803,9 @@ importers:
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
+      ulidx:
+        specifier: ^2.4.1
+        version: 2.4.1
       uuid:
         specifier: ^14.0.1
         version: 14.0.1
@@ -3071,6 +3074,9 @@ packages:
     resolution: {integrity: sha512-s6WVJyEZrbm6jhBpiKHsGHyePMrVQKJ85wZCFCr9W4QHv6WTjWIrdvTmO9hDEA3bNK0xkrE2DqrHsXMLWuZpQg==}
     engines: {node: '>=22.0.0'}
 
+  layerr@3.0.0:
+    resolution: {integrity: sha512-tv754Ki2dXpPVApOrjTyRo4/QegVb9eVFq4mjqp4+NM5NaX7syQvN5BBNfV/ZpAHCEHV24XdUVrBAoka4jt3pA==}
+
   lightningcss-android-arm64@1.32.0:
     resolution: {integrity: sha512-YK7/ClTt4kAK0vo6w3X+Pnm0D2cf2vPHbhOXdoNti1Ga0al1P4TBZhwjATvjNwLEBCnKvjJc2jQgHXH0NEwlAg==}
     engines: {node: '>= 12.0.0'}
@@ -3637,6 +3643,10 @@ packages:
     resolution: {integrity: sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==}
     engines: {node: '>=14.17'}
     hasBin: true
+
+  ulidx@2.4.1:
+    resolution: {integrity: sha512-xY7c8LPyzvhvew0Fn+Ek3wBC9STZAuDI/Y5andCKi9AX6/jvfaX45PhsDX8oxgPL0YFp0Jhr8qWMbS/p9375Xg==}
+    engines: {node: '>=16'}
 
   unconfig-core@7.5.0:
     resolution: {integrity: sha512-Su3FauozOGP44ZmKdHy2oE6LPjk51M/TRRjHv2HNCWiDvfvCoxC2lno6jevMA91MYAdCdwP05QnWdWpSbncX/w==}
@@ -5390,6 +5400,8 @@ snapshots:
 
   kysely@0.29.2: {}
 
+  layerr@3.0.0: {}
+
   lightningcss-android-arm64@1.32.0:
     optional: true
 
@@ -5953,6 +5965,10 @@ snapshots:
       safe-buffer: 5.2.1
 
   typescript@6.0.3: {}
+
+  ulidx@2.4.1:
+    dependencies:
+      layerr: 3.0.0
 
   unconfig-core@7.5.0:
     dependencies:

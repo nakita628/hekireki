@@ -29,6 +29,8 @@ export function ectoTypeToTypespec(type: string) {
       return 'boolean()'
     case 'binary_id':
       return 'Ecto.UUID.t()'
+    case 'Ecto.ULID':
+      return 'Ecto.ULID.t()'
     case 'naive_datetime':
       return 'NaiveDateTime.t()'
     case 'utc_datetime':
@@ -42,6 +44,11 @@ export function ectoTypeToTypespec(type: string) {
     default:
       return 'term()'
   }
+}
+
+// Ecto type references are atoms (:binary_id) or modules (Ecto.ULID).
+function formatEctoType(type: string) {
+  return /^[A-Z]/.test(type) ? type : `:${type}`
 }
 
 function getPrimaryKeyConfig(field: DMMF.Field) {
@@ -58,7 +65,17 @@ function getPrimaryKeyConfig(field: DMMF.Field) {
         : '@primary_key {:id, :binary_id, autogenerate: true}',
       typeSpec: 'Ecto.UUID.t()',
       omitIdFieldInSchema: true,
-      useBinaryForeignKey: true,
+      foreignKeyType: 'binary_id',
+    }
+  }
+
+  // ULID PK: String + @default(ulid()) — requires the ecto_ulid_next package.
+  if (field.type === 'String' && isFunctionDefault && def.name === 'ulid') {
+    return {
+      line: '@primary_key {:id, Ecto.ULID, autogenerate: true}',
+      typeSpec: 'Ecto.ULID.t()',
+      omitIdFieldInSchema: true,
+      foreignKeyType: 'Ecto.ULID',
     }
   }
 
@@ -68,7 +85,7 @@ function getPrimaryKeyConfig(field: DMMF.Field) {
       line: '@primary_key {:id, :id, autogenerate: true}',
       typeSpec: 'integer()',
       omitIdFieldInSchema: true,
-      useBinaryForeignKey: false,
+      foreignKeyType: null,
     }
   }
 
@@ -77,7 +94,7 @@ function getPrimaryKeyConfig(field: DMMF.Field) {
     line: '@primary_key false',
     typeSpec: 'String.t()',
     omitIdFieldInSchema: false,
-    useBinaryForeignKey: false,
+    foreignKeyType: null,
   }
 }
 
@@ -124,8 +141,8 @@ function getBelongsToFkType(allModels: readonly DMMF.Model[], targetModelName: s
 
   const pkConfig = getPrimaryKeyConfig(targetPk)
 
-  // UUID PK → binary_id FK type
-  if (pkConfig.useBinaryForeignKey) return 'binary_id'
+  // UUID PK → binary_id FK type / ULID PK → Ecto.ULID FK type
+  if (pkConfig.foreignKeyType) return pkConfig.foreignKeyType
 
   // Autoincrement integer PK → no explicit FK type needed (Ecto default :id)
   if (pkConfig.line.includes(':id, autogenerate')) return null
@@ -224,9 +241,8 @@ export function ectoSchemas(
             line: '@primary_key false',
             typeSpec: '',
             omitIdFieldInSchema: false,
-            useBinaryForeignKey: false,
+            foreignKeyType: null,
           }
-      const useBinaryId = pk.useBinaryForeignKey
       const fields = model.fields.map((f) => ({ ...f }))
       const { line: timestampsLine, exclude: timestampsExclude } = makeTimestampsLine(fields)
       const associations = getAssociations(model, contextModels)
@@ -343,7 +359,7 @@ export function ectoSchemas(
           const fkType = a.fkType ?? 'id'
           const pkOpt = isPkField ? ', primary_key: true' : ''
           const sourceOpt = needsSource ? `, source: :${fkDbName}` : ''
-          fkFieldLines.push(`    field(:${snakeFk}, :${fkType}${pkOpt}${sourceOpt})`)
+          fkFieldLines.push(`    field(:${snakeFk}, ${formatEctoType(fkType)}${pkOpt}${sourceOpt})`)
         }
       }
 
@@ -356,8 +372,8 @@ export function ectoSchemas(
         const isPkField = compositePkFieldNames.has(a.foreignKey)
         const opts: string[] = [`foreign_key: :${snakeFk}`]
         if (needsSource || isPkField) opts.push('define_field: false')
-        if (a.fkType && (!useBinaryId || a.fkType !== 'binary_id')) {
-          opts.push(`type: :${a.fkType}`)
+        if (a.fkType && a.fkType !== pk.foreignKeyType) {
+          opts.push(`type: ${formatEctoType(a.fkType)}`)
         }
         if (a.references !== 'id') opts.push(`references: :${a.references}`)
         return `    belongs_to(:${snakeAssocName}, ${appName}.${a.targetModel}, ${opts.join(', ')})`
@@ -388,7 +404,9 @@ export function ectoSchemas(
           : ['  @moduledoc false']),
         '',
         `  ${pk.line}`,
-        ...(useBinaryId ? ['  @foreign_key_type :binary_id'] : []),
+        ...(pk.foreignKeyType
+          ? [`  @foreign_key_type ${formatEctoType(pk.foreignKeyType)}`]
+          : []),
         '',
         ...typeSpecLines,
         '',

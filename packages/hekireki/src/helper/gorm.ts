@@ -181,6 +181,7 @@ export function buildGormTags(
 ) {
   const columnName = field.dbName ?? makeSnakeCase(field.name)
   const isUuidDefault = isFunctionDefault(field.default) && field.default.name === 'uuid'
+  const isUlidDefault = isFunctionDefault(field.default) && field.default.name === 'ulid'
   const isNowDefault =
     field.type === 'DateTime' && isFunctionDefault(field.default) && field.default.name === 'now'
   const nativeType = resolveNativeType(field)
@@ -197,6 +198,7 @@ export function buildGormTags(
     isPk ? 'primaryKey' : null,
     isPk && isAutoincrement(field) ? 'autoIncrement' : null,
     isPk && isUuidDefault ? 'type:char(36)' : null,
+    isPk && isUlidDefault ? 'type:char(26)' : null,
     field.isUnique ? 'uniqueIndex' : null,
     ...compositeIndexTags,
     includeNativeType ? `type:${nativeType}` : null,
@@ -310,25 +312,27 @@ export function goFieldName(name: string) {
   return splitGoWords(name).join('')
 }
 
-function uuidDefaultVersion(field: DMMF.Field) {
-  if (!(isFunctionDefault(field.default) && field.default.name === 'uuid')) return null
-  return field.default.args[0] === 7 ? 7 : 4
+function generatedIdExpr(field: DMMF.Field) {
+  if (!isFunctionDefault(field.default)) return null
+  if (field.default.name === 'uuid') {
+    return field.default.args[0] === 7 ? 'uuid.Must(uuid.NewV7()).String()' : 'uuid.NewString()'
+  }
+  if (field.default.name === 'ulid') return 'ulid.Make().String()'
+  return null
 }
 
-function uuidDefaultFields(model: DMMF.Model) {
+function generatedIdFields(model: DMMF.Model) {
   return model.fields.filter(
-    (f) =>
-      f.kind === 'scalar' && f.type === 'String' && !f.isList && uuidDefaultVersion(f) !== null,
+    (f) => f.kind === 'scalar' && f.type === 'String' && !f.isList && generatedIdExpr(f) !== null,
   )
 }
 
 function generateBeforeCreateHook(model: DMMF.Model) {
-  const uuidFields = uuidDefaultFields(model)
-  if (uuidFields.length === 0) return []
-  const assignments = uuidFields.flatMap((field) => {
+  const idFields = generatedIdFields(model)
+  if (idFields.length === 0) return []
+  const assignments = idFields.flatMap((field) => {
     const fieldName = goFieldName(field.name)
-    const expr =
-      uuidDefaultVersion(field) === 7 ? 'uuid.Must(uuid.NewV7()).String()' : 'uuid.NewString()'
+    const expr = generatedIdExpr(field)
     return field.isRequired
       ? [`\tif m.${fieldName} == "" {`, `\t\tm.${fieldName} = ${expr}`, '\t}']
       : [
@@ -506,12 +510,18 @@ export function collectImports(models: readonly DMMF.Model[]) {
   const needsDatatypes = models.some((m) =>
     m.fields.some((f) => f.kind !== 'object' && f.type === 'Json'),
   )
-  const needsUuid = models.some((m) => uuidDefaultFields(m).length > 0)
+  const needsUuid = models.some((m) =>
+    generatedIdFields(m).some((f) => isFunctionDefault(f.default) && f.default.name === 'uuid'),
+  )
+  const needsUlid = models.some((m) =>
+    generatedIdFields(m).some((f) => isFunctionDefault(f.default) && f.default.name === 'ulid'),
+  )
   return [
     needsTime ? '"time"' : null,
     needsUuid ? '"github.com/google/uuid"' : null,
+    needsUlid ? '"github.com/oklog/ulid/v2"' : null,
     needsDatatypes ? '"gorm.io/datatypes"' : null,
-    needsUuid ? '"gorm.io/gorm"' : null,
+    needsUuid || needsUlid ? '"gorm.io/gorm"' : null,
   ].filter((i) => i !== null)
 }
 

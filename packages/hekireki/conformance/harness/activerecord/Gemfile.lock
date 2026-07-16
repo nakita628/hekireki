@@ -33,6 +33,7 @@ GEM
     timeout (0.6.1)
     tzinfo (2.0.6)
       concurrent-ruby (~> 1.0)
+    ulid (1.4.0)
 
 PLATFORMS
   aarch64-linux
@@ -41,6 +42,7 @@ PLATFORMS
 
 DEPENDENCIES
   activerecord (~> 7.2.0)
+  ulid (~> 1.4)
 
 BUNDLED WITH
    2.6.9

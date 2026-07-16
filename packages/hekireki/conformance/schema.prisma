@@ -130,6 +130,14 @@ model Event {
   happens DateTime
 }
 
+// ULID primary key: client-side ULID generation in every ORM
+// (ulidx / python-ulid / oklog/ulid / ulid crate / Ecto.ULID / ulid gem /
+// HasUlids).
+model Ticket {
+  id    String @id @default(ulid())
+  label String
+}
+
 // Field names that are reserved words in Rust (type/match/self) and Python
 // (async/yield); the generators must escape or rename them. These are not
 // Elixir keywords, so Ecto is unaffected.

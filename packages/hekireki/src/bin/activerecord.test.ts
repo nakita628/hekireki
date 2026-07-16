@@ -54,7 +54,7 @@ model Post {
     const userExpected = `class User < ApplicationRecord
   self.table_name = "user"
 
-  attribute :id, :string, default: -> { SecureRandom.uuid }
+  attribute :id, default: -> { SecureRandom.uuid }
 
   has_many :posts, class_name: "Post", foreign_key: "userId"
 end`
@@ -67,7 +67,7 @@ end`
     const postExpected = `class Post < ApplicationRecord
   self.table_name = "post"
 
-  attribute :id, :string, default: -> { SecureRandom.uuid }
+  attribute :id, default: -> { SecureRandom.uuid }
 
   belongs_to :user, class_name: "User", foreign_key: "userId"
 end`
@@ -133,7 +133,7 @@ model Tag {
     const userExpected = `class User < ApplicationRecord
   self.table_name = "user"
 
-  attribute :id, :string, default: -> { SecureRandom.uuid }
+  attribute :id, default: -> { SecureRandom.uuid }
 
   has_many :followers, class_name: "Follow", foreign_key: "followingId"
   has_many :following, class_name: "Follow", foreign_key: "followerId"
@@ -148,7 +148,7 @@ end`
     const groupExpected = `class Group < ApplicationRecord
   self.table_name = "group"
 
-  attribute :id, :string, default: -> { SecureRandom.uuid }
+  attribute :id, default: -> { SecureRandom.uuid }
 
   has_and_belongs_to_many :members, class_name: "User", join_table: "_GroupToUser", foreign_key: "A", association_foreign_key: "B"
 end`
@@ -174,7 +174,7 @@ end`
     const postExpected = `class Post < ApplicationRecord
   self.table_name = "post"
 
-  attribute :id, :string, default: -> { SecureRandom.uuid }
+  attribute :id, default: -> { SecureRandom.uuid }
 
   has_and_belongs_to_many :tags, class_name: "Tag", join_table: "_PostTags", foreign_key: "A", association_foreign_key: "B"
 end`
@@ -187,7 +187,7 @@ end`
     const tagExpected = `class Tag < ApplicationRecord
   self.table_name = "tag"
 
-  attribute :id, :string, default: -> { SecureRandom.uuid }
+  attribute :id, default: -> { SecureRandom.uuid }
 
   has_and_belongs_to_many :posts, class_name: "Post", join_table: "_PostTags", foreign_key: "B", association_foreign_key: "A"
 end`
@@ -247,7 +247,7 @@ model Like {
     const userExpected = `class User < ApplicationRecord
   self.table_name = "user"
 
-  attribute :id, :string, default: -> { SecureRandom.uuid }
+  attribute :id, default: -> { SecureRandom.uuid }
 
   enum :role, { ADMIN: "ADMIN", USER: "USER" }
 
