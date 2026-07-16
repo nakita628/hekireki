@@ -28,6 +28,16 @@ generator Hekireki-Drizzle {
   output   = "harness/drizzle/schema.ts"
 }
 
+generator Hekireki-ActiveRecord {
+  provider = "hekireki-activerecord"
+  output   = "harness/activerecord/models"
+}
+
+generator Hekireki-Eloquent {
+  provider = "hekireki-eloquent"
+  output   = "harness/eloquent/models"
+}
+
 enum Status {
   ACTIVE
   INACTIVE

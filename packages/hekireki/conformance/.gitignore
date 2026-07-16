@@ -5,6 +5,8 @@ harness/sea-orm/src/entities/
 harness/sqlalchemy/models.py
 harness/ecto/lib/
 harness/drizzle/schema.ts
+harness/activerecord/models/
+harness/eloquent/models/
 
 # Toolchain build artifacts.
 harness/gorm/.cache/
@@ -15,3 +17,6 @@ harness/sqlalchemy/.mypy_cache/
 harness/sqlalchemy/__pycache__/
 harness/ecto/_build/
 harness/ecto/deps/
+harness/activerecord/.bundle/
+harness/activerecord/vendor/
+harness/eloquent/vendor/

@@ -17,6 +17,8 @@ export default defineConfig({
     'bin/sqlalchemy': './src/bin/sqlalchemy.ts',
     'bin/gorm': './src/bin/gorm.ts',
     'bin/sea-orm': './src/bin/sea-orm.ts',
+    'bin/activerecord': './src/bin/activerecord.ts',
+    'bin/eloquent': './src/bin/eloquent.ts',
   },
   format: 'esm',
   dts: true,

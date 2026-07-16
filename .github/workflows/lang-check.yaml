@@ -2,9 +2,10 @@ name: Lang Check
 
 # Validity checks for hekireki's generated foreign-language code: each language
 # is generated from conformance/schema.prisma and then checked in its own
-# toolchain — it parses (syntax) and compiles against the real GORM / sea-orm /
-# SQLAlchemy / Ecto API (type). This is separate from Test (test.yaml), which
-# owns the byte-equality codegen contract and stays toolchain-free.
+# toolchain — it parses (syntax) and compiles or loads against the real GORM /
+# sea-orm / SQLAlchemy / Ecto / Active Record / Eloquent API (type). This is
+# separate from Test (test.yaml), which owns the byte-equality codegen contract
+# and stays toolchain-free.
 #
 # One matrix leg per language; each sets up only its own toolchain. Runs on PRs
 # that touch the generators or the harness, and on demand. Action tags are
@@ -44,7 +45,7 @@ jobs:
       matrix:
         # drizzle needs no extra toolchain step: setup-vp's node runs
         # tsc + drizzle-kit from the workspace's devDependencies.
-        lang: [gorm, sea-orm, sqlalchemy, ecto, drizzle]
+        lang: [gorm, sea-orm, sqlalchemy, ecto, drizzle, activerecord, eloquent]
     steps:
       - uses: actions/checkout@v5.0.1
       - uses: voidzero-dev/setup-vp@v1.12.0
@@ -79,6 +80,18 @@ jobs:
           # Pinned so check.sh's `mix local.rebar --if-missing` never falls
           # back to an unpinned network fetch of the rebar3 escript.
           rebar3-version: '3.24.0'
+      - if: matrix.lang == 'activerecord'
+        uses: ruby/setup-ruby@v1.319.0
+        with:
+          ruby-version: '3.3.12'
+          # Installs the harness bundle from its Gemfile.lock and caches
+          # vendor/bundle; check.sh's own `bundle install` becomes a no-op.
+          bundler-cache: true
+          working-directory: packages/hekireki/conformance/harness/activerecord
+      - if: matrix.lang == 'eloquent'
+        uses: shivammathur/setup-php@2.37.2
+        with:
+          php-version: '8.3'
 
       # conformance/check.sh is the single source of truth for generate + check:
       # the same script runs locally via `pnpm -F hekireki conformance`. Passing
@@ -87,7 +100,7 @@ jobs:
         run: bash conformance/check.sh ${{ matrix.lang }}
 
   # Prove the published tarball still ships dist/ only — the conformance harness
-  # (Go/Rust/Python/Elixir files) must never leak into npm.
+  # (Go/Rust/Python/Elixir/Ruby/PHP files) must never leak into npm.
   pack-guard:
     runs-on: ubuntu-latest
     steps:

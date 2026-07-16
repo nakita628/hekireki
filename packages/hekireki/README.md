@@ -2,7 +2,7 @@
 
 # Hekireki
 
-**[Hekireki](https://www.npmjs.com/package/hekireki)** is a tool that generates validation schemas, ORM models, and ER diagrams from [Prisma](https://www.prisma.io/) schemas — supporting TypeScript, Python, Go, Rust, and Elixir.
+**[Hekireki](https://www.npmjs.com/package/hekireki)** is a tool that generates validation schemas, ORM models, and ER diagrams from [Prisma](https://www.prisma.io/) schemas — supporting TypeScript, Python, Go, Rust, Elixir, Ruby, and PHP.
 
 ## Features
 
@@ -22,6 +22,8 @@
 - 🐹 Automatically generates [GORM](https://gorm.io/) models (Go) — with struct tags, JSON tags, relationships, enums, composite keys, and index support
 - 🦀 Automatically generates [Sea-ORM](https://www.sea-ql.org/SeaORM/) entities (Rust) — with `DeriveEntityModel`, relations, enums, serde support, and `rename_all`
 - 🧪 Generates [Ecto](https://hexdocs.pm/ecto/Ecto.Schema.html) schemas (Elixir) — with associations (`belongs_to`, `has_many`, `has_one`), composite primary keys, `@type t` typespecs, array fields, `@@map`/`@map` support, and `@moduledoc`
+- 💎 Generates [Active Record](https://guides.rubyonrails.org/active_record_basics.html) models (Ruby on Rails) — with associations (`belongs_to`, `has_one`, `has_many`, `has_and_belongs_to_many`), enums, composite primary keys, and `@@map`/`@map` support
+- 🐘 Generates [Eloquent](https://laravel.com/docs/eloquent) models (Laravel / PHP) — with relations (`belongsTo`, `hasOne`, `hasMany`, `belongsToMany`), `$fillable`, `$casts`, string-backed PHP enums, timestamp constants, and `@@map`/`@map` support
 
 ### Diagrams & Documentation
 
@@ -114,6 +116,17 @@ generator Hekireki-Ecto {
     provider = "hekireki-ecto"
     output = "./ecto"
     app = "DBSchema"
+}
+
+generator Hekireki-ActiveRecord {
+    provider = "hekireki-activerecord"
+    output   = "./activerecord"
+}
+
+generator Hekireki-Eloquent {
+    provider  = "hekireki-eloquent"
+    output    = "./eloquent"
+    namespace = "App.Models"
 }
 
 generator Hekireki-DBML {
@@ -616,6 +629,90 @@ defmodule DBSchema.Post do
 end
 ```
 
+### Active Record
+
+Each model is output as a separate `.rb` file (1 model = 1 file), following Rails conventions. `class_name` and `foreign_key` are always spelled out so the generated associations never rely on Rails inflection. The generated code targets Rails 7.1+ (positional `enum` syntax, composite primary keys) and is continuously syntax-checked (`ruby -c`) and loaded against the real `activerecord` gem in CI.
+
+```ruby
+class User < ApplicationRecord
+  self.table_name = "user"
+
+  has_many :posts, class_name: "Post", foreign_key: "userId"
+end
+```
+
+```ruby
+class Post < ApplicationRecord
+  self.table_name = "post"
+
+  belongs_to :user, class_name: "User", foreign_key: "userId"
+end
+```
+
+### Eloquent
+
+Each model is output as a separate `.php` file (1 model = 1 file, PSR-4 friendly). Prisma enums become string-backed PHP enums with matching `$casts` entries. The generated code targets PHP 8.1+ (backed enums) with Laravel 9+ and is continuously syntax-checked (`php -l`) and loaded against the real `illuminate/database` package in CI. Composite primary keys are emitted as `protected $primaryKey = null;` because Eloquent has no native composite key support.
+
+```php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class User extends Model
+{
+    protected $table = 'user';
+
+    protected $keyType = 'string';
+
+    public $incrementing = false;
+
+    public $timestamps = false;
+
+    protected $fillable = [
+        'name',
+    ];
+
+    public function posts(): HasMany
+    {
+        return $this->hasMany(Post::class, 'userId');
+    }
+}
+```
+
+```php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class Post extends Model
+{
+    protected $table = 'post';
+
+    protected $keyType = 'string';
+
+    public $incrementing = false;
+
+    public $timestamps = false;
+
+    protected $fillable = [
+        'title',
+        'content',
+        'userId',
+    ];
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'userId');
+    }
+}
+```
+
 ### SQLAlchemy
 
 ```python
@@ -857,6 +954,19 @@ generator Hekireki-Ecto {
     provider = "hekireki-ecto"
     output   = "./ecto"      // Output directory (default: ./ecto/)
     app      = "MyApp"       // App name (default: MyApp)
+}
+
+// Active Record Generator (Ruby on Rails)
+generator Hekireki-ActiveRecord {
+    provider = "hekireki-activerecord"
+    output   = "./activerecord"    // Output directory for .rb files
+}
+
+// Eloquent Generator (Laravel / PHP)
+generator Hekireki-Eloquent {
+    provider  = "hekireki-eloquent"
+    output    = "./eloquent"       // Output directory for .php files
+    namespace = "App.Models"       // PHP namespace, "." becomes "\" (default: App\Models)
 }
 
 // DBML Generator (output extension determines format: .dbml or .png)

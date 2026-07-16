@@ -1,0 +1,7 @@
+# Deterministic dependency set for the Active Record conformance harness;
+# Gemfile.lock pins the transitive tree and bumps go through Renovate.
+# 7.2 is the newest series that still supports the Ruby 3.1 floor of local
+# dev machines; composite primary keys (7.1+) are covered.
+source "https://rubygems.org"
+
+gem "activerecord", "~> 7.2.0"
