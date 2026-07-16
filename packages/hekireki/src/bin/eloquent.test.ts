@@ -55,11 +55,14 @@ model Post {
 
 namespace App\\Models;
 
+use Illuminate\\Database\\Eloquent\\Concerns\\HasVersion4Uuids;
 use Illuminate\\Database\\Eloquent\\Model;
 use Illuminate\\Database\\Eloquent\\Relations\\HasMany;
 
 class User extends Model
 {
+    use HasVersion4Uuids;
+
     protected $table = 'user';
 
     protected $keyType = 'string';
@@ -87,11 +90,14 @@ class User extends Model
 
 namespace App\\Models;
 
+use Illuminate\\Database\\Eloquent\\Concerns\\HasVersion4Uuids;
 use Illuminate\\Database\\Eloquent\\Model;
 use Illuminate\\Database\\Eloquent\\Relations\\BelongsTo;
 
 class Post extends Model
 {
+    use HasVersion4Uuids;
+
     protected $table = 'post';
 
     protected $keyType = 'string';
@@ -164,12 +170,15 @@ model Follow {
 
 namespace App\\Models;
 
+use Illuminate\\Database\\Eloquent\\Concerns\\HasVersion4Uuids;
 use Illuminate\\Database\\Eloquent\\Model;
 use Illuminate\\Database\\Eloquent\\Relations\\BelongsToMany;
 use Illuminate\\Database\\Eloquent\\Relations\\HasMany;
 
 class User extends Model
 {
+    use HasVersion4Uuids;
+
     protected $table = 'user';
 
     protected $keyType = 'string';
@@ -207,11 +216,14 @@ class User extends Model
 
 namespace App\\Models;
 
+use Illuminate\\Database\\Eloquent\\Concerns\\HasVersion4Uuids;
 use Illuminate\\Database\\Eloquent\\Model;
 use Illuminate\\Database\\Eloquent\\Relations\\BelongsToMany;
 
 class Group extends Model
 {
+    use HasVersion4Uuids;
+
     protected $table = 'group';
 
     protected $keyType = 'string';

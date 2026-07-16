@@ -1442,3 +1442,50 @@ class Article(Base):
     )
   })
 })
+
+describe('uuid default generation', () => {
+  it('generates client-side defaults for uuid() and uuid(7) primary keys', () => {
+    const models = [
+      makeModel('User', [
+        makeField({
+          name: 'id',
+          type: 'String',
+          isId: true,
+          hasDefaultValue: true,
+          default: { name: 'uuid', args: [4] },
+        }),
+      ]),
+      makeModel('Event', [
+        makeField({
+          name: 'id',
+          type: 'String',
+          isId: true,
+          hasDefaultValue: true,
+          default: { name: 'uuid', args: [7] },
+        }),
+      ]),
+    ]
+
+    expect(generateSingleFile(models)).toBe(
+      `from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+import uuid as uuid_mod
+import uuid6
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class User(Base):
+    __tablename__ = "user"
+
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid_mod.uuid4()))
+
+class Event(Base):
+    __tablename__ = "event"
+
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid6.uuid7()))
+`,
+    )
+  })
+})

@@ -1734,3 +1734,38 @@ end`)
     })
   })
 })
+
+describe('uuid v7 primary key', () => {
+  it('generates Ecto.UUID with autogenerate version 7', () => {
+    const model = makeModel({
+      name: 'Event',
+      fields: [
+        makeField({
+          name: 'id',
+          type: 'String',
+          isId: true,
+          hasDefaultValue: true,
+          default: { name: 'uuid', args: [7] },
+        }),
+        makeField({ name: 'name', type: 'String' }),
+      ],
+    })
+
+    expect(ectoSchemas([model], 'App')).toBe(`defmodule App.Event do
+  use Ecto.Schema
+  @moduledoc false
+
+  @primary_key {:id, Ecto.UUID, autogenerate: [version: 7]}
+  @foreign_key_type :binary_id
+
+  @type t :: %__MODULE__{
+          id: Ecto.UUID.t(),
+          name: String.t()
+        }
+
+  schema "event" do
+    field(:name, :string)
+  end
+end`)
+  })
+})

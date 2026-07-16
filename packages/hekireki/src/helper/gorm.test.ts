@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vite-plus/test'
 
+import type { DMMF } from '@prisma/generator-helper'
+
+import { generateGormModels } from '../generator/gorm.js'
 import { buildGormTags, goFieldName, prismaTypeToGoType } from './gorm.js'
 
 // Test run
@@ -251,5 +254,67 @@ describe('buildGormTags', () => {
     expect(buildGormTags(field, false, false, ['index:idx_user_id'])).toStrictEqual(
       '`gorm:"column:user_id;index:idx_user_id;not null" json:"user_id"`',
     )
+  })
+})
+
+describe('generateGormModels uuid defaults', () => {
+  const makeUuidModel = (name: string, version: number): DMMF.Model => ({
+    name,
+    dbName: null,
+    fields: [
+      {
+        name: 'id',
+        kind: 'scalar',
+        type: 'String',
+        isRequired: true,
+        isUnique: false,
+        isId: true,
+        isReadOnly: false,
+        isGenerated: false,
+        isUpdatedAt: false,
+        isList: false,
+        hasDefaultValue: true,
+        default: { name: 'uuid', args: [version] },
+      },
+    ],
+    uniqueFields: [],
+    uniqueIndexes: [],
+    primaryKey: null,
+    isGenerated: false,
+    schema: null,
+  })
+
+  it('generates BeforeCreate hooks for uuid() and uuid(7) defaults', () => {
+    const models = [makeUuidModel('User', 4), makeUuidModel('Event', 7)]
+
+    expect(generateGormModels(models)).toBe(`package model
+
+import (
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+)
+
+type User struct {
+	ID string \`gorm:"column:id;primaryKey;type:char(36)" json:"id"\`
+}
+
+func (m *User) BeforeCreate(_ *gorm.DB) error {
+	if m.ID == "" {
+		m.ID = uuid.NewString()
+	}
+	return nil
+}
+
+type Event struct {
+	ID string \`gorm:"column:id;primaryKey;type:char(36)" json:"id"\`
+}
+
+func (m *Event) BeforeCreate(_ *gorm.DB) error {
+	if m.ID == "" {
+		m.ID = uuid.Must(uuid.NewV7()).String()
+	}
+	return nil
+}
+`)
   })
 })

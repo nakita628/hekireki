@@ -48,10 +48,14 @@ function getPrimaryKeyConfig(field: DMMF.Field) {
   const def = field.default
   const isFunctionDefault = def && typeof def === 'object' && 'name' in def
 
-  // UUID PK: String + @default(uuid())
+  // UUID PK: String + @default(uuid()) / @default(uuid(7))
   if (field.type === 'String' && isFunctionDefault && def.name === 'uuid') {
+    const isV7 = 'args' in def && def.args[0] === 7
     return {
-      line: '@primary_key {:id, :binary_id, autogenerate: true}',
+      // UUIDv7 autogeneration requires Ecto 3.14+.
+      line: isV7
+        ? '@primary_key {:id, Ecto.UUID, autogenerate: [version: 7]}'
+        : '@primary_key {:id, :binary_id, autogenerate: true}',
       typeSpec: 'Ecto.UUID.t()',
       omitIdFieldInSchema: true,
       useBinaryForeignKey: true,

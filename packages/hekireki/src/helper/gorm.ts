@@ -310,6 +310,43 @@ export function goFieldName(name: string) {
   return splitGoWords(name).join('')
 }
 
+function uuidDefaultVersion(field: DMMF.Field) {
+  if (!(isFunctionDefault(field.default) && field.default.name === 'uuid')) return null
+  return field.default.args[0] === 7 ? 7 : 4
+}
+
+function uuidDefaultFields(model: DMMF.Model) {
+  return model.fields.filter(
+    (f) =>
+      f.kind === 'scalar' && f.type === 'String' && !f.isList && uuidDefaultVersion(f) !== null,
+  )
+}
+
+function generateBeforeCreateHook(model: DMMF.Model) {
+  const uuidFields = uuidDefaultFields(model)
+  if (uuidFields.length === 0) return []
+  const assignments = uuidFields.flatMap((field) => {
+    const fieldName = goFieldName(field.name)
+    const expr =
+      uuidDefaultVersion(field) === 7 ? 'uuid.Must(uuid.NewV7()).String()' : 'uuid.NewString()'
+    return field.isRequired
+      ? [`\tif m.${fieldName} == "" {`, `\t\tm.${fieldName} = ${expr}`, '\t}']
+      : [
+          `\tif m.${fieldName} == nil {`,
+          `\t\tgenerated := ${expr}`,
+          `\t\tm.${fieldName} = &generated`,
+          '\t}',
+        ]
+  })
+  return [
+    '',
+    `func (m *${model.name}) BeforeCreate(_ *gorm.DB) error {`,
+    ...assignments,
+    '\treturn nil',
+    '}',
+  ]
+}
+
 function generateStructField(
   field: DMMF.Field,
   isPk: boolean,
@@ -458,6 +495,7 @@ export function generateModelStruct(
     ...relationLines,
     '}',
     ...tableNameMethod,
+    ...generateBeforeCreateHook(model),
   ].join('\n')
 }
 
@@ -468,9 +506,13 @@ export function collectImports(models: readonly DMMF.Model[]) {
   const needsDatatypes = models.some((m) =>
     m.fields.some((f) => f.kind !== 'object' && f.type === 'Json'),
   )
-  return [needsTime ? '"time"' : null, needsDatatypes ? '"gorm.io/datatypes"' : null].filter(
-    (i) => i !== null,
-  )
+  const needsUuid = models.some((m) => uuidDefaultFields(m).length > 0)
+  return [
+    needsTime ? '"time"' : null,
+    needsUuid ? '"github.com/google/uuid"' : null,
+    needsDatatypes ? '"gorm.io/datatypes"' : null,
+    needsUuid ? '"gorm.io/gorm"' : null,
+  ].filter((i) => i !== null)
 }
 
 export function formatImports(imports: readonly string[]) {

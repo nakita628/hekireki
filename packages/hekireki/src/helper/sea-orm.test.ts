@@ -426,3 +426,95 @@ describe('generateEntityFile Eq derive', () => {
     expect(result).not.toContain('PartialEq, Eq')
   })
 })
+
+describe('uuid default generation', () => {
+  const makeModel = (name: string, fields: DMMF.Field[]): DMMF.Model =>
+    ({
+      name,
+      dbName: null,
+      fields,
+      uniqueFields: [],
+      uniqueIndexes: [],
+      primaryKey: null,
+    }) as DMMF.Model
+
+  it('generates ActiveModelBehavior::new for uuid() and uuid(7) primary keys', () => {
+    const v4Model = makeModel('User', [
+      {
+        name: 'id',
+        kind: 'scalar',
+        type: 'String',
+        isRequired: true,
+        isId: true,
+        isUnique: false,
+        isList: false,
+        isUpdatedAt: false,
+        hasDefaultValue: true,
+        default: { name: 'uuid', args: [4] },
+        nativeType: null,
+      },
+    ])
+
+    expect(generateEntityFile(v4Model, [v4Model], [])).toBe(`use sea_orm::entity::prelude::*;
+use sea_orm::Set;
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
+#[sea_orm(table_name = "user")]
+pub struct Model {
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub id: String,
+}
+
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+pub enum Relation {}
+
+impl ActiveModelBehavior for ActiveModel {
+    fn new() -> Self {
+        Self {
+            id: Set(uuid::Uuid::new_v4().to_string()),
+            ..ActiveModelTrait::default()
+        }
+    }
+}`)
+
+    const v7Model = makeModel('Event', [
+      {
+        name: 'id',
+        kind: 'scalar',
+        type: 'String',
+        isRequired: true,
+        isId: true,
+        isUnique: false,
+        isList: false,
+        isUpdatedAt: false,
+        hasDefaultValue: true,
+        default: { name: 'uuid', args: [7] },
+        nativeType: null,
+      },
+    ])
+
+    expect(generateEntityFile(v7Model, [v7Model], [])).toBe(`use sea_orm::entity::prelude::*;
+use sea_orm::Set;
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
+#[sea_orm(table_name = "event")]
+pub struct Model {
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub id: String,
+}
+
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+pub enum Relation {}
+
+impl ActiveModelBehavior for ActiveModel {
+    fn new() -> Self {
+        Self {
+            id: Set(uuid::Uuid::now_v7().to_string()),
+            ..ActiveModelTrait::default()
+        }
+    }
+}`)
+  })
+})

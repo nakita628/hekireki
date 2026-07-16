@@ -138,6 +138,13 @@ export function eloquentModels(
       const timestamps = findTimestamps(model.fields)
 
       const pkColumn = idField ? (idField.dbName ?? idField.name) : null
+      const pkUuidTrait = (() => {
+        const def = idField?.default
+        if (!(def && typeof def === 'object' && 'name' in def && def.name === 'uuid')) return null
+        // Laravel 12: HasUuids generates UUIDv7, HasVersion4Uuids generates
+        // ordered UUIDv4 (Laravel 11.35+).
+        return 'args' in def && def.args[0] === 7 ? 'HasUuids' : 'HasVersion4Uuids'
+      })()
       const pkDefault = idField?.default
       const isAutoincrement =
         idField !== undefined &&
@@ -191,6 +198,7 @@ export function eloquentModels(
         castEntries.length > 0 ? ['    protected $casts = [', ...castEntries, '    ];'] : []
 
       const propertyBlocks = [
+        ...(pkUuidTrait !== null ? [[`    use ${pkUuidTrait};`]] : []),
         ...(timestampConstLines.length > 0 ? [timestampConstLines] : []),
         [`    protected $table = '${tableName}';`],
         ...(pkColumn !== null && pkColumn !== 'id'
@@ -264,6 +272,9 @@ export function eloquentModels(
         '',
         `namespace ${namespace};`,
         '',
+        ...(pkUuidTrait !== null
+          ? [`use Illuminate\\Database\\Eloquent\\Concerns\\${pkUuidTrait};`]
+          : []),
         'use Illuminate\\Database\\Eloquent\\Model;',
         ...relationImports.map((r) => `use Illuminate\\Database\\Eloquent\\Relations\\${r};`),
         '',

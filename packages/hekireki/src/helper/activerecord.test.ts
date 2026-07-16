@@ -79,11 +79,15 @@ describe('activeRecordModels', () => {
     expect(activeRecordModels([user], [user, post])).toBe(`class User < ApplicationRecord
   self.table_name = "user"
 
+  attribute :id, :string, default: -> { SecureRandom.uuid }
+
   has_many :posts, class_name: "Post", foreign_key: "userId"
 end`)
 
     expect(activeRecordModels([post], [user, post])).toBe(`class Post < ApplicationRecord
   self.table_name = "post"
+
+  attribute :id, :string, default: -> { SecureRandom.uuid }
 
   belongs_to :user, class_name: "User", foreign_key: "userId"
 end`)
@@ -134,6 +138,8 @@ end`)
     expect(activeRecordModels([user], [user, profile])).toBe(`class User < ApplicationRecord
   self.table_name = "user"
 
+  attribute :id, :string, default: -> { SecureRandom.uuid }
+
   has_one :profile, class_name: "Profile", foreign_key: "userId"
 end`)
   })
@@ -177,6 +183,8 @@ end`)
     expect(activeRecordModels([post], [user, post])).toBe(`class Post < ApplicationRecord
   self.table_name = "post"
 
+  attribute :id, :string, default: -> { SecureRandom.uuid }
+
   belongs_to :user, class_name: "User", foreign_key: "userId", optional: true
 end`)
   })
@@ -208,6 +216,8 @@ end`)
 
     expect(activeRecordModels([user], [user], enums)).toBe(`class User < ApplicationRecord
   self.table_name = "user"
+
+  attribute :id, :string, default: -> { SecureRandom.uuid }
 
   enum :role, { ADMIN: "ADMIN", USER: "USER" }
 end`)
@@ -276,6 +286,8 @@ end`)
     expect(activeRecordModels([user])).toBe(`class User < ApplicationRecord
   self.table_name = "user"
   self.primary_key = "userId"
+
+  attribute :userId, :string, default: -> { SecureRandom.uuid }
 end`)
   })
 
@@ -322,11 +334,15 @@ end`)
     expect(activeRecordModels([post], [post, tag])).toBe(`class Post < ApplicationRecord
   self.table_name = "post"
 
+  attribute :id, :string, default: -> { SecureRandom.uuid }
+
   has_and_belongs_to_many :tags, class_name: "Tag", join_table: "_PostToTag", foreign_key: "A", association_foreign_key: "B"
 end`)
 
     expect(activeRecordModels([tag], [post, tag])).toBe(`class Tag < ApplicationRecord
   self.table_name = "tag"
+
+  attribute :id, :string, default: -> { SecureRandom.uuid }
 
   has_and_belongs_to_many :posts, class_name: "Post", join_table: "_PostToTag", foreign_key: "B", association_foreign_key: "A"
 end`)
@@ -374,6 +390,8 @@ end`)
 
     expect(activeRecordModels([post], [post, tag])).toBe(`class Post < ApplicationRecord
   self.table_name = "post"
+
+  attribute :id, :string, default: -> { SecureRandom.uuid }
 
   has_and_belongs_to_many :tags, class_name: "Tag", join_table: "_PostTags", foreign_key: "A", association_foreign_key: "B"
 end`)
@@ -426,11 +444,15 @@ end`)
     expect(activeRecordModels([user], [user, post])).toBe(`class User < ApplicationRecord
   self.table_name = "users"
 
+  attribute :id, :string, default: -> { SecureRandom.uuid }
+
   has_many :posts, class_name: "Post", foreign_key: "user_id"
 end`)
 
     expect(activeRecordModels([post], [user, post])).toBe(`class Post < ApplicationRecord
   self.table_name = "posts"
+
+  attribute :id, :string, default: -> { SecureRandom.uuid }
 
   belongs_to :user, class_name: "User", foreign_key: "user_id"
 end`)
@@ -475,6 +497,8 @@ end`)
     expect(activeRecordModels([post], [user, post])).toBe(`class Post < ApplicationRecord
   self.table_name = "post"
 
+  attribute :id, :string, default: -> { SecureRandom.uuid }
+
   belongs_to :user, class_name: "User", foreign_key: "userEmail", primary_key: "email"
 end`)
   })
@@ -497,6 +521,8 @@ end`)
     expect(activeRecordModels([user])).toBe(`# Application user account.
 class User < ApplicationRecord
   self.table_name = "user"
+
+  attribute :id, :string, default: -> { SecureRandom.uuid }
 end`)
   })
 
@@ -561,12 +587,16 @@ end`)
     expect(activeRecordModels([follow], [user, follow])).toBe(`class Follow < ApplicationRecord
   self.table_name = "follow"
 
+  attribute :id, :string, default: -> { SecureRandom.uuid }
+
   belongs_to :follower, class_name: "User", foreign_key: "followerId"
   belongs_to :following, class_name: "User", foreign_key: "followingId"
 end`)
 
     expect(activeRecordModels([user], [user, follow])).toBe(`class User < ApplicationRecord
   self.table_name = "user"
+
+  attribute :id, :string, default: -> { SecureRandom.uuid }
 
   has_many :followers, class_name: "Follow", foreign_key: "followingId"
   has_many :following, class_name: "Follow", foreign_key: "followerId"
@@ -600,6 +630,8 @@ end`)
 
     expect(activeRecordModels([user], [user], enums)).toBe(`class User < ApplicationRecord
   self.table_name = "user"
+
+  attribute :id, :string, default: -> { SecureRandom.uuid }
 
   enum :user_role, { ADMIN: "admin", USER: "user" }
 end`)
@@ -645,6 +677,8 @@ end`)
     expect(activeRecordModels([post], [user, post])).toBe(`class Post < ApplicationRecord
   self.table_name = "post"
 
+  attribute :id, :string, default: -> { SecureRandom.uuid }
+
   belongs_to :user, class_name: "User", foreign_key: "userEmail", primary_key: "email", optional: true
 end`)
   })
@@ -668,6 +702,8 @@ end`)
     expect(activeRecordModels([user])).toBe(`class User < ApplicationRecord
   self.table_name = "user"
   self.primary_key = "user_id"
+
+  attribute :user_id, :string, default: -> { SecureRandom.uuid }
 end`)
   })
 
@@ -716,7 +752,33 @@ end`)
     expect(activeRecordModels([agent], [agent, assignment])).toBe(`class Agent < ApplicationRecord
   self.table_name = "agent"
 
+  attribute :id, :string, default: -> { SecureRandom.uuid }
+
   has_many :mission_assignments, class_name: "MissionAssignment", foreign_key: "agentId"
+end`)
+  })
+})
+
+describe('uuid v7 primary key', () => {
+  it('generates a SecureRandom.uuid_v7 attribute default', () => {
+    const event = makeModel({
+      name: 'Event',
+      fields: [
+        makeField({
+          name: 'id',
+          type: 'String',
+          isId: true,
+          hasDefaultValue: true,
+          default: { name: 'uuid', args: [7] },
+        }),
+        makeField({ name: 'name', type: 'String' }),
+      ],
+    })
+
+    expect(activeRecordModels([event])).toBe(`class Event < ApplicationRecord
+  self.table_name = "event"
+
+  attribute :id, :string, default: -> { SecureRandom.uuid_v7 }
 end`)
   })
 })

@@ -296,6 +296,11 @@ function isAutoincrement(field: DMMF.Field) {
   return isFunctionDefault(field.default) && field.default.name === 'autoincrement'
 }
 
+function uuidDefaultVersion(field: DMMF.Field) {
+  if (!(isFunctionDefault(field.default) && field.default.name === 'uuid')) return null
+  return field.default.args[0] === 7 ? 7 : 4
+}
+
 function needsForeignKeysParam(
   targetModel: string,
   assocs: readonly { readonly targetModel: string }[],
@@ -407,12 +412,25 @@ function generateColumn(
   if (isPk && isAutoincrement(field)) colArgs.push('autoincrement=True')
   if (field.isUnique) colArgs.push('unique=True')
 
+  const uuidVersion = uuidDefaultVersion(field)
   if (
     field.type === 'DateTime' &&
     isFunctionDefault(field.default) &&
     field.default.name === 'now'
   ) {
     colArgs.push('server_default=func.now()')
+  } else if (uuidVersion !== null) {
+    // uuid6.uuid7 covers Python < 3.14 (stdlib uuid gains uuid7 in 3.14).
+    const isNativeUuid = field.nativeType?.[0] === 'Uuid'
+    colArgs.push(
+      isNativeUuid
+        ? uuidVersion === 7
+          ? 'default=uuid6.uuid7'
+          : 'default=uuid_mod.uuid4'
+        : uuidVersion === 7
+          ? 'default=lambda: str(uuid6.uuid7())'
+          : 'default=lambda: str(uuid_mod.uuid4())',
+    )
   } else if (!isPk || isAutoincrement(field)) {
     const defaultVal = formatDefault(field.default)
     if (defaultVal !== null && !isPk) {
@@ -684,11 +702,13 @@ export function collectGlobalImports(
   const needsDatetime = models.some((m) => m.fields.some((f) => f.type === 'DateTime'))
   const needsUuid = models.some((m) =>
     m.fields.some((f) => {
+      if (uuidDefaultVersion(f) === 4) return true
       if (!f.nativeType) return false
       const [n] = f.nativeType as [string, readonly (string | number)[]]
       return n === 'Uuid'
     }),
   )
+  const needsUuid7 = models.some((m) => m.fields.some((f) => uuidDefaultVersion(f) === 7))
   const needsDate = models.some((m) =>
     m.fields.some((f) => {
       if (!f.nativeType) return false
@@ -788,6 +808,7 @@ export function collectGlobalImports(
   if (needsTime) dtParts.push('time as time_type')
   if (dtParts.length > 0) lines.push(`from datetime import ${dtParts.join(', ')}`)
   if (needsUuid) lines.push('import uuid as uuid_mod')
+  if (needsUuid7) lines.push('import uuid6')
 
   return lines
 }

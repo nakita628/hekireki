@@ -617,5 +617,28 @@ describe('drizzleSchema', () => {
         "import { pgTable, text } from 'drizzle-orm/pg-core'\n\nexport const user = pgTable('user', { id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()) })",
       )
     })
+
+    it('should generate a uuid v7 default with a named import for uuid(7)', () => {
+      const datamodel = makeDatamodel([
+        makeModel({
+          name: 'User',
+          fields: [
+            makeField({
+              name: 'id',
+              type: 'String',
+              isId: true,
+              hasDefaultValue: true,
+              default: { name: 'uuid', args: [7] },
+            }),
+          ],
+        }),
+      ])
+
+      const result = drizzleSchema(datamodel, 'postgresql', [])
+
+      expect(result).toBe(
+        "import { pgTable, text } from 'drizzle-orm/pg-core'\nimport { v7 as uuidv7 } from 'uuid'\n\nexport const user = pgTable('user', { id: text('id').primaryKey().$defaultFn(() => uuidv7()) })",
+      )
+    })
   })
 })

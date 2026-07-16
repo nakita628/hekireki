@@ -346,7 +346,12 @@ function resolveDefaultValue(
           return { chain: '.default(sql`CURRENT_TIMESTAMP(3)`)', imports: [SQL_IMPORT] }
         return { chain: '.defaultNow()', imports: [] }
       case 'uuid':
-        return { chain: '.$defaultFn(() => crypto.randomUUID())', imports: [] }
+        return dflt.args[0] === 7
+          ? {
+              chain: '.$defaultFn(() => uuidv7())',
+              imports: [{ pkg: 'uuid', kind: 'named', name: 'v7 as uuidv7' }],
+            }
+          : { chain: '.$defaultFn(() => crypto.randomUUID())', imports: [] }
       case 'cuid':
         return dflt.args[0] === 2
           ? {

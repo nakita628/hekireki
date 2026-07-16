@@ -106,6 +106,19 @@ export function activeRecordModels(
           ? [`  self.primary_key = [${compositePkColumns.map((c) => `"${c}"`).join(', ')}]`]
           : []
 
+      const attributeLines = model.fields
+        .filter((f) => f.kind === 'scalar' && f.type === 'String')
+        .flatMap((f) => {
+          const def = f.default
+          if (!(def && typeof def === 'object' && 'name' in def && def.name === 'uuid')) return []
+          // SecureRandom.uuid_v7 requires Ruby 3.4+. No cast type is passed:
+          // a symbol type resolves through the connection adapter at class
+          // load, while a bare default keeps the column type untouched.
+          const generator =
+            'args' in def && def.args[0] === 7 ? 'SecureRandom.uuid_v7' : 'SecureRandom.uuid'
+          return [`  attribute :${f.dbName ?? f.name}, default: -> { ${generator} }`]
+        })
+
       const enumLines = model.fields
         .filter((f) => f.kind === 'enum')
         .map((f) => {
@@ -146,6 +159,7 @@ export function activeRecordModels(
         `class ${model.name} < ApplicationRecord`,
         `  self.table_name = "${tableName}"`,
         ...primaryKeyLines,
+        ...(attributeLines.length > 0 ? ['', ...attributeLines] : []),
         ...(enumLines.length > 0 ? ['', ...enumLines] : []),
         ...(associationLines.length > 0 ? ['', ...associationLines] : []),
         'end',

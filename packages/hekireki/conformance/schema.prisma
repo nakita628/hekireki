@@ -122,6 +122,14 @@ model Tag {
   posts Post[]
 }
 
+// UUIDv7 primary key: every ORM must emit version-aware client-side
+// generation (uuid(7) is silently distinct from uuid() in DMMF args).
+model Event {
+  id      String   @id @default(uuid(7))
+  name    String
+  happens DateTime
+}
+
 // Field names that are reserved words in Rust (type/match/self) and Python
 // (async/yield); the generators must escape or rename them. These are not
 // Elixir keywords, so Ecto is unaffected.

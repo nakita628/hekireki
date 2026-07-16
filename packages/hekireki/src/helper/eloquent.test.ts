@@ -140,11 +140,14 @@ describe('eloquentModels', () => {
 
 namespace App\\Models;
 
+use Illuminate\\Database\\Eloquent\\Concerns\\HasVersion4Uuids;
 use Illuminate\\Database\\Eloquent\\Model;
 use Illuminate\\Database\\Eloquent\\Relations\\HasMany;
 
 class User extends Model
 {
+    use HasVersion4Uuids;
+
     protected $table = 'user';
 
     protected $keyType = 'string';
@@ -167,11 +170,14 @@ class User extends Model
 
 namespace App\\Models;
 
+use Illuminate\\Database\\Eloquent\\Concerns\\HasVersion4Uuids;
 use Illuminate\\Database\\Eloquent\\Model;
 use Illuminate\\Database\\Eloquent\\Relations\\BelongsTo;
 
 class Post extends Model
 {
+    use HasVersion4Uuids;
+
     protected $table = 'post';
 
     protected $keyType = 'string';
@@ -251,10 +257,13 @@ class User extends Model
 
 namespace App\\Models;
 
+use Illuminate\\Database\\Eloquent\\Concerns\\HasVersion4Uuids;
 use Illuminate\\Database\\Eloquent\\Model;
 
 class Agent extends Model
 {
+    use HasVersion4Uuids;
+
     const CREATED_AT = 'createdAt';
     const UPDATED_AT = 'updatedAt';
 
@@ -295,10 +304,13 @@ class Agent extends Model
 
 namespace App\\Models;
 
+use Illuminate\\Database\\Eloquent\\Concerns\\HasVersion4Uuids;
 use Illuminate\\Database\\Eloquent\\Model;
 
 class Agent extends Model
 {
+    use HasVersion4Uuids;
+
     protected $table = 'agent';
 
     protected $keyType = 'string';
@@ -331,10 +343,13 @@ class Agent extends Model
 
 namespace App\\Models;
 
+use Illuminate\\Database\\Eloquent\\Concerns\\HasVersion4Uuids;
 use Illuminate\\Database\\Eloquent\\Model;
 
 class Log extends Model
 {
+    use HasVersion4Uuids;
+
     const CREATED_AT = 'createdAt';
     const UPDATED_AT = null;
 
@@ -371,10 +386,13 @@ class Log extends Model
 
 namespace App\\Models;
 
+use Illuminate\\Database\\Eloquent\\Concerns\\HasVersion4Uuids;
 use Illuminate\\Database\\Eloquent\\Model;
 
 class Mission extends Model
 {
+    use HasVersion4Uuids;
+
     protected $table = 'mission';
 
     protected $keyType = 'string';
@@ -433,10 +451,13 @@ class Mission extends Model
 
 namespace App\\Models;
 
+use Illuminate\\Database\\Eloquent\\Concerns\\HasVersion4Uuids;
 use Illuminate\\Database\\Eloquent\\Model;
 
 class User extends Model
 {
+    use HasVersion4Uuids;
+
     protected $table = 'user';
 
     protected $keyType = 'string';
@@ -565,11 +586,14 @@ class Like extends Model
 
 namespace App\\Models;
 
+use Illuminate\\Database\\Eloquent\\Concerns\\HasVersion4Uuids;
 use Illuminate\\Database\\Eloquent\\Model;
 use Illuminate\\Database\\Eloquent\\Relations\\BelongsToMany;
 
 class Post extends Model
 {
+    use HasVersion4Uuids;
+
     protected $table = 'post';
 
     protected $keyType = 'string';
@@ -588,11 +612,14 @@ class Post extends Model
 
 namespace App\\Models;
 
+use Illuminate\\Database\\Eloquent\\Concerns\\HasVersion4Uuids;
 use Illuminate\\Database\\Eloquent\\Model;
 use Illuminate\\Database\\Eloquent\\Relations\\BelongsToMany;
 
 class Tag extends Model
 {
+    use HasVersion4Uuids;
+
     protected $table = 'tag';
 
     protected $keyType = 'string';
@@ -652,11 +679,14 @@ class Tag extends Model
 
 namespace App\\Models;
 
+use Illuminate\\Database\\Eloquent\\Concerns\\HasVersion4Uuids;
 use Illuminate\\Database\\Eloquent\\Model;
 use Illuminate\\Database\\Eloquent\\Relations\\BelongsToMany;
 
 class Tag extends Model
 {
+    use HasVersion4Uuids;
+
     protected $table = 'tag';
 
     protected $keyType = 'string';
@@ -722,11 +752,14 @@ class Tag extends Model
 
 namespace App\\Models;
 
+use Illuminate\\Database\\Eloquent\\Concerns\\HasVersion4Uuids;
 use Illuminate\\Database\\Eloquent\\Model;
 use Illuminate\\Database\\Eloquent\\Relations\\HasMany;
 
 class User extends Model
 {
+    use HasVersion4Uuids;
+
     protected $table = 'users';
 
     protected $primaryKey = 'user_id';
@@ -751,11 +784,14 @@ class User extends Model
 
 namespace App\\Models;
 
+use Illuminate\\Database\\Eloquent\\Concerns\\HasVersion4Uuids;
 use Illuminate\\Database\\Eloquent\\Model;
 use Illuminate\\Database\\Eloquent\\Relations\\BelongsTo;
 
 class Post extends Model
 {
+    use HasVersion4Uuids;
+
     protected $table = 'posts';
 
     protected $keyType = 'string';
@@ -794,6 +830,7 @@ class Post extends Model
 
 namespace App\\Models;
 
+use Illuminate\\Database\\Eloquent\\Concerns\\HasVersion4Uuids;
 use Illuminate\\Database\\Eloquent\\Model;
 
 /**
@@ -801,6 +838,8 @@ use Illuminate\\Database\\Eloquent\\Model;
  */
 class User extends Model
 {
+    use HasVersion4Uuids;
+
     protected $table = 'user';
 
     protected $keyType = 'string';
@@ -873,11 +912,14 @@ class User extends Model
 
 namespace App\\Models;
 
+use Illuminate\\Database\\Eloquent\\Concerns\\HasVersion4Uuids;
 use Illuminate\\Database\\Eloquent\\Model;
 use Illuminate\\Database\\Eloquent\\Relations\\BelongsTo;
 
 class Follow extends Model
 {
+    use HasVersion4Uuids;
+
     protected $table = 'follow';
 
     protected $keyType = 'string';
@@ -906,11 +948,14 @@ class Follow extends Model
 
 namespace App\\Models;
 
+use Illuminate\\Database\\Eloquent\\Concerns\\HasVersion4Uuids;
 use Illuminate\\Database\\Eloquent\\Model;
 use Illuminate\\Database\\Eloquent\\Relations\\HasMany;
 
 class User extends Model
 {
+    use HasVersion4Uuids;
+
     protected $table = 'user';
 
     protected $keyType = 'string';
@@ -950,10 +995,13 @@ class User extends Model
 
 namespace App\\Models;
 
+use Illuminate\\Database\\Eloquent\\Concerns\\HasVersion4Uuids;
 use Illuminate\\Database\\Eloquent\\Model;
 
 class Revision extends Model
 {
+    use HasVersion4Uuids;
+
     const CREATED_AT = null;
     const UPDATED_AT = 'updatedAt';
 
@@ -990,10 +1038,13 @@ class Revision extends Model
 
 namespace App\\Models;
 
+use Illuminate\\Database\\Eloquent\\Concerns\\HasVersion4Uuids;
 use Illuminate\\Database\\Eloquent\\Model;
 
 class Document extends Model
 {
+    use HasVersion4Uuids;
+
     const CREATED_AT = 'createdAt';
     const UPDATED_AT = 'revisedAt';
 
@@ -1084,11 +1135,14 @@ class Counter extends Model
 
 namespace App\\Models;
 
+use Illuminate\\Database\\Eloquent\\Concerns\\HasVersion4Uuids;
 use Illuminate\\Database\\Eloquent\\Model;
 use Illuminate\\Database\\Eloquent\\Relations\\HasOne;
 
 class User extends Model
 {
+    use HasVersion4Uuids;
+
     protected $table = 'user';
 
     protected $keyType = 'string';
@@ -1101,6 +1155,48 @@ class User extends Model
     {
         return $this->hasOne(Profile::class, 'userId');
     }
+}`)
+  })
+})
+
+describe('uuid v7 primary key', () => {
+  it('uses the HasUuids trait for uuid(7) primary keys', () => {
+    const event = makeModel({
+      name: 'Event',
+      fields: [
+        makeField({
+          name: 'id',
+          type: 'String',
+          isId: true,
+          hasDefaultValue: true,
+          default: { name: 'uuid', args: [7] },
+        }),
+        makeField({ name: 'name', type: 'String' }),
+      ],
+    })
+
+    expect(eloquentModels([event], 'App\\Models')).toBe(`<?php
+
+namespace App\\Models;
+
+use Illuminate\\Database\\Eloquent\\Concerns\\HasUuids;
+use Illuminate\\Database\\Eloquent\\Model;
+
+class Event extends Model
+{
+    use HasUuids;
+
+    protected $table = 'event';
+
+    protected $keyType = 'string';
+
+    public $incrementing = false;
+
+    public $timestamps = false;
+
+    protected $fillable = [
+        'name',
+    ];
 }`)
   })
 })

@@ -142,6 +142,11 @@ function isAutoincrement(field: DMMF.Field) {
   return isFunctionDefault(field.default) && field.default.name === 'autoincrement'
 }
 
+function uuidDefaultVersion(field: DMMF.Field) {
+  if (!(isFunctionDefault(field.default) && field.default.name === 'uuid')) return null
+  return field.default.args[0] === 7 ? 7 : 4
+}
+
 function formatRustDefault(def: DMMF.Field['default']) {
   if (def === undefined || def === null) return null
   if (typeof def === 'boolean') return def ? 'true' : 'false'
@@ -573,11 +578,38 @@ export function generateEntityFile(
     .sort()
     .map((name) => `use super::${toSnakeCase(name)}::${name};`)
 
+  const uuidFields = scalarFields.filter(
+    (f) => f.type === 'String' && !f.isList && uuidDefaultVersion(f) !== null,
+  )
+
   const useLines = [
     'use sea_orm::entity::prelude::*;',
+    ...(uuidFields.length > 0 ? ['use sea_orm::Set;'] : []),
     'use serde::{Deserialize, Serialize};',
     ...enumImports,
   ]
+
+  const behaviorImpl =
+    uuidFields.length === 0
+      ? 'impl ActiveModelBehavior for ActiveModel {}'
+      : [
+          'impl ActiveModelBehavior for ActiveModel {',
+          '    fn new() -> Self {',
+          '        Self {',
+          ...uuidFields.map((field) => {
+            const { ident } = rustFieldIdent(toSnakeCase(field.name))
+            const generate =
+              uuidDefaultVersion(field) === 7
+                ? 'uuid::Uuid::now_v7().to_string()'
+                : 'uuid::Uuid::new_v4().to_string()'
+            const value = field.isRequired ? generate : `Some(${generate})`
+            return `            ${ident}: Set(${value}),`
+          }),
+          '            ..ActiveModelTrait::default()',
+          '        }',
+          '    }',
+          '}',
+        ].join('\n')
 
   const eq = canDeriveEq(scalarFields)
   const deriveModel = eq
@@ -599,7 +631,7 @@ export function generateEntityFile(
     relationEnum,
     '',
     ...relatedImpls.map((impl) => `${impl}\n`),
-    'impl ActiveModelBehavior for ActiveModel {}',
+    behaviorImpl,
   ]
 
   return lines.join('\n')
