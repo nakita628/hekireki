@@ -317,7 +317,9 @@ function generatedIdExpr(field: DMMF.Field) {
   if (field.default.name === 'uuid') {
     return field.default.args[0] === 7 ? 'uuid.Must(uuid.NewV7()).String()' : 'uuid.NewString()'
   }
-  if (field.default.name === 'ulid') return 'ulid.Make().String()'
+  // ulid.Make() draws from time-seeded math/rand; feed crypto/rand instead so
+  // generated IDs are unpredictable like every other language target.
+  if (field.default.name === 'ulid') return 'ulid.MustNew(ulid.Now(), rand.Reader).String()'
   return null
 }
 
@@ -517,6 +519,7 @@ export function collectImports(models: readonly DMMF.Model[]) {
     generatedIdFields(m).some((f) => isFunctionDefault(f.default) && f.default.name === 'ulid'),
   )
   return [
+    needsUlid ? '"crypto/rand"' : null,
     needsTime ? '"time"' : null,
     needsUuid ? '"github.com/google/uuid"' : null,
     needsUlid ? '"github.com/oklog/ulid/v2"' : null,

@@ -561,7 +561,7 @@ pub enum Relation {}
 impl ActiveModelBehavior for ActiveModel {
     fn new() -> Self {
         Self {
-            id: Set(ulid::Ulid::new().to_string()),
+            id: Set(ulid::Ulid::generate().to_string()),
             ..ActiveModelTrait::default()
         }
     }

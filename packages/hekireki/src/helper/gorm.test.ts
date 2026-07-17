@@ -1,6 +1,5 @@
-import { describe, expect, it } from 'vite-plus/test'
-
 import type { DMMF } from '@prisma/generator-helper'
+import { describe, expect, it } from 'vite-plus/test'
 
 import { generateGormModels } from '../generator/gorm.js'
 import { buildGormTags, goFieldName, prismaTypeToGoType } from './gorm.js'
@@ -320,7 +319,7 @@ func (m *Event) BeforeCreate(_ *gorm.DB) error {
 })
 
 describe('generateGormModels ulid defaults', () => {
-  it('generates a BeforeCreate hook with ulid.Make for ulid() defaults', () => {
+  it('generates a BeforeCreate hook with crypto/rand-fed ulid.MustNew for ulid() defaults', () => {
     const ticket: DMMF.Model = {
       name: 'Ticket',
       dbName: null,
@@ -350,6 +349,7 @@ describe('generateGormModels ulid defaults', () => {
     expect(generateGormModels([ticket])).toBe(`package model
 
 import (
+	"crypto/rand"
 	"github.com/oklog/ulid/v2"
 	"gorm.io/gorm"
 )
@@ -360,7 +360,7 @@ type Ticket struct {
 
 func (m *Ticket) BeforeCreate(_ *gorm.DB) error {
 	if m.ID == "" {
-		m.ID = ulid.Make().String()
+		m.ID = ulid.MustNew(ulid.Now(), rand.Reader).String()
 	}
 	return nil
 }

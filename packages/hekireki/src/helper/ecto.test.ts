@@ -1852,3 +1852,39 @@ end`)
 end`)
   })
 })
+
+describe('@map-ped primary key', () => {
+  it('maps the :id primary key to the actual column via :source', () => {
+    const model = makeModel({
+      name: 'Device',
+      fields: [
+        makeField({
+          name: 'id',
+          type: 'String',
+          dbName: 'device_id',
+          isId: true,
+          hasDefaultValue: true,
+          default: { name: 'uuid', args: [4] },
+        }),
+        makeField({ name: 'name', type: 'String' }),
+      ],
+    })
+
+    expect(ectoSchemas([model], 'App')).toBe(`defmodule App.Device do
+  use Ecto.Schema
+  @moduledoc false
+
+  @primary_key {:id, :binary_id, autogenerate: true, source: :device_id}
+  @foreign_key_type :binary_id
+
+  @type t :: %__MODULE__{
+          id: Ecto.UUID.t(),
+          name: String.t()
+        }
+
+  schema "device" do
+    field(:name, :string)
+  end
+end`)
+  })
+})

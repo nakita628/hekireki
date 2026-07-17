@@ -54,6 +54,10 @@ function formatEctoType(type: string) {
 function getPrimaryKeyConfig(field: DMMF.Field) {
   const def = field.default
   const isFunctionDefault = def && typeof def === 'object' && 'name' in def
+  // @primary_key always declares the :id field; when the actual column
+  // (@map / a differently named @id field) is not "id", map it via :source.
+  const pkColumn = field.dbName ?? field.name
+  const sourceOpt = pkColumn === 'id' ? '' : `, source: :${pkColumn}`
 
   // UUID PK: String + @default(uuid()) / @default(uuid(7))
   if (field.type === 'String' && isFunctionDefault && def.name === 'uuid') {
@@ -61,8 +65,8 @@ function getPrimaryKeyConfig(field: DMMF.Field) {
     return {
       // UUIDv7 autogeneration requires Ecto 3.14+.
       line: isV7
-        ? '@primary_key {:id, Ecto.UUID, autogenerate: [version: 7]}'
-        : '@primary_key {:id, :binary_id, autogenerate: true}',
+        ? `@primary_key {:id, Ecto.UUID, autogenerate: [version: 7]${sourceOpt}}`
+        : `@primary_key {:id, :binary_id, autogenerate: true${sourceOpt}}`,
       typeSpec: 'Ecto.UUID.t()',
       omitIdFieldInSchema: true,
       foreignKeyType: 'binary_id',
@@ -72,7 +76,7 @@ function getPrimaryKeyConfig(field: DMMF.Field) {
   // ULID PK: String + @default(ulid()) — requires the ecto_ulid_next package.
   if (field.type === 'String' && isFunctionDefault && def.name === 'ulid') {
     return {
-      line: '@primary_key {:id, Ecto.ULID, autogenerate: true}',
+      line: `@primary_key {:id, Ecto.ULID, autogenerate: true${sourceOpt}}`,
       typeSpec: 'Ecto.ULID.t()',
       omitIdFieldInSchema: true,
       foreignKeyType: 'Ecto.ULID',
@@ -82,7 +86,7 @@ function getPrimaryKeyConfig(field: DMMF.Field) {
   // Autoincrement PK: Int + @default(autoincrement())
   if (field.type === 'Int' && isFunctionDefault && def.name === 'autoincrement') {
     return {
-      line: '@primary_key {:id, :id, autogenerate: true}',
+      line: `@primary_key {:id, :id, autogenerate: true${sourceOpt}}`,
       typeSpec: 'integer()',
       omitIdFieldInSchema: true,
       foreignKeyType: null,
@@ -404,9 +408,7 @@ export function ectoSchemas(
           : ['  @moduledoc false']),
         '',
         `  ${pk.line}`,
-        ...(pk.foreignKeyType
-          ? [`  @foreign_key_type ${formatEctoType(pk.foreignKeyType)}`]
-          : []),
+        ...(pk.foreignKeyType ? [`  @foreign_key_type ${formatEctoType(pk.foreignKeyType)}`] : []),
         '',
         ...typeSpecLines,
         '',
