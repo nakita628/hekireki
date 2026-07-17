@@ -1,0 +1,41 @@
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "sqlite"
+}
+
+generator HekirekiEffect {
+    provider = "hekireki-effect"
+    output   = "effect"
+    type     = true
+    comment  = true
+    relation = true
+}
+
+model User {
+    /// Primary key
+    /// @e.Schema.UUID
+    id    String @id @default(uuid())
+    /// Display name
+    /// @e.Schema.String
+    name  String
+    posts Post[]
+}
+
+model Post {
+    /// Primary key
+    /// @e.Schema.UUID
+    id String @id @default(uuid())
+    /// Article title
+    /// @e.Schema.String
+    title String
+    /// Body content
+    /// @e.Schema.String
+    content String
+    /// Foreign key
+    /// @e.Schema.UUID
+    userId  String
+    user    User   @relation(fields: [userId], references: [id])
+}
