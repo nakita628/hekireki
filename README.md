@@ -1051,6 +1051,10 @@ hekireki docs serve -p 3000
 
 > **Note:** Run `prisma generate` first to generate the `docs/` directory with `index.html`.
 
+## Contributing
+
+Contributions are welcome! Bug reports, docs fixes, new generator targets — see [CONTRIBUTING.md](./CONTRIBUTING.md) for how to set up the repo, the coding and testing rules, and the PR process.
+
 ## License
 
 Distributed under the MIT License. See [LICENSE](https://github.com/nakita628/hekireki?tab=MIT-1-ov-file) for more information.
