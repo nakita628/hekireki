@@ -132,7 +132,7 @@ class User(Base):
     id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid_mod.uuid4()))
     name: Mapped[str]
 
-    profile: Mapped["Profile"] = relationship(back_populates="user", uselist=False)
+    profile: Mapped[Optional["Profile"]] = relationship(back_populates="user")
 
 class Profile(Base):
     __tablename__ = "profile"
@@ -799,7 +799,7 @@ class User(Base):
     profile_image: Mapped[Optional[str]]
     hashed_password: Mapped[Optional[str]]
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(default=func.now(), onupdate=func.now())
     has_notification: Mapped[Optional[bool]] = mapped_column(default=False)
 
     posts: Mapped[list["Post"]] = relationship(back_populates="user")
@@ -815,7 +815,7 @@ class Post(Base):
     id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid_mod.uuid4()))
     body: Mapped[str]
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(default=func.now(), onupdate=func.now())
     user_id: Mapped[str] = mapped_column(ForeignKey("user.id"))
 
     user: Mapped["User"] = relationship(back_populates="posts")
@@ -848,13 +848,13 @@ class Comment(Base):
     id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid_mod.uuid4()))
     body: Mapped[str]
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(default=func.now(), onupdate=func.now())
     user_id: Mapped[str] = mapped_column(ForeignKey("user.id"))
     post_id: Mapped[str] = mapped_column(ForeignKey("post.id"))
 
     __table_args__ = (
-        Index("idx_user_id", "user_id"),
-        Index("idx_post_id", "post_id"),
+        Index("idx_comment_user_id", "user_id"),
+        Index("idx_comment_post_id", "post_id"),
     )
 
     user: Mapped["User"] = relationship(back_populates="comments")
@@ -869,7 +869,7 @@ class Notification(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     __table_args__ = (
-        Index("idx_user_id", "user_id"),
+        Index("idx_notification_user_id", "user_id"),
     )
 
     user: Mapped["User"] = relationship(back_populates="notifications")
@@ -904,7 +904,7 @@ class Organization(Base):
     slug: Mapped[str] = mapped_column(String(100), unique=True)
     status: Mapped[str] = mapped_column(Enum("ACTIVE", "INACTIVE", "SUSPENDED", name="org_status"), default="ACTIVE")
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(default=func.now(), onupdate=func.now())
 
     users: Mapped[list["User"]] = relationship(back_populates="organization")
 
@@ -916,10 +916,10 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True)
     name: Mapped[str] = mapped_column(String(100))
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(default=func.now(), onupdate=func.now())
 
     __table_args__ = (
-        Index("idx_organization_id", "organization_id"),
+        Index("idx_users_organization_id", "organization_id"),
     )
 
     organization: Mapped["Organization"] = relationship(back_populates="users")
@@ -933,7 +933,7 @@ class Role(Base):
     name: Mapped[str] = mapped_column(String(100), unique=True)
     description: Mapped[Optional[str]] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(default=func.now(), onupdate=func.now())
 
     user_roles: Mapped[list["UserRole"]] = relationship(back_populates="role")
     role_permissions: Mapped[list["RolePermission"]] = relationship(back_populates="role")
@@ -985,8 +985,8 @@ class AuditLog(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     __table_args__ = (
-        Index("idx_user_id", "user_id"),
-        Index("idx_created_at", "created_at"),
+        Index("idx_audit_logs_user_id", "user_id"),
+        Index("idx_audit_logs_created_at", "created_at"),
     )
 
     user: Mapped["User"] = relationship(back_populates="audit_logs")
@@ -1032,10 +1032,10 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(default=True)
     role: Mapped[str] = mapped_column(Enum("ADMIN", "MEMBER", "GUEST", name="role"), default="MEMBER")
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(default=func.now(), onupdate=func.now())
 
     posts: Mapped[list["Post"]] = relationship(back_populates="author")
-    profile: Mapped["Profile"] = relationship(back_populates="user", uselist=False)
+    profile: Mapped[Optional["Profile"]] = relationship(back_populates="user")
 
 class Post(Base):
     __tablename__ = "post"
@@ -1045,7 +1045,7 @@ class Post(Base):
     content: Mapped[str]
     published: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(default=func.now(), onupdate=func.now())
     author_id: Mapped[str] = mapped_column(ForeignKey("user.id"))
 
     author: Mapped["User"] = relationship(back_populates="posts")
@@ -1081,7 +1081,7 @@ describe('fixture: jwt-auth-pg', () => {
     await promisify(exec)('npx prisma generate --schema=../../fixtures/jwt-auth-pg/schema.prisma')
 
     expect(fs.readFileSync('../../fixtures/jwt-auth-pg/sqlalchemy/models.py', 'utf-8')).toBe(
-      `from sqlalchemy import Enum, ForeignKey, Index, Numeric, String, UniqueConstraint, Uuid, func
+      `from sqlalchemy import DateTime, Enum, ForeignKey, Index, Numeric, String, UniqueConstraint, Uuid, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from typing import Optional
 from decimal import Decimal as DecimalType
@@ -1105,15 +1105,15 @@ class User(Base):
     credit_balance: Mapped[DecimalType] = mapped_column(Numeric(precision=10, scale=2), default=0)
     email_verified: Mapped[bool] = mapped_column(default=False)
     is_active: Mapped[bool] = mapped_column(default=True)
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(onupdate=func.now())
-    last_login_at: Mapped[Optional[datetime]]
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     oauth_accounts: Mapped[list["OAuthAccount"]] = relationship(back_populates="user")
     refresh_tokens: Mapped[list["RefreshToken"]] = relationship(back_populates="user")
     email_verifications: Mapped[list["EmailVerification"]] = relationship(back_populates="user")
     password_resets: Mapped[list["PasswordReset"]] = relationship(back_populates="user")
-    two_factor_setting: Mapped["TwoFactorSetting"] = relationship(back_populates="user", uselist=False)
+    two_factor_setting: Mapped[Optional["TwoFactorSetting"]] = relationship(back_populates="user")
 
 class OAuthAccount(Base):
     __tablename__ = "oauth_accounts"
@@ -1124,12 +1124,12 @@ class OAuthAccount(Base):
     provider_account_id: Mapped[str] = mapped_column(String(255))
     access_token: Mapped[Optional[str]]
     refresh_token: Mapped[Optional[str]]
-    expires_at: Mapped[Optional[datetime]]
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
         UniqueConstraint("provider", "provider_account_id"),
-        Index("idx_user_id", "user_id"),
+        Index("idx_oauth_accounts_user_id", "user_id"),
     )
 
     user: Mapped["User"] = relationship(back_populates="oauth_accounts")
@@ -1144,9 +1144,9 @@ class TwoFactorSetting(Base):
     totp_secret: Mapped[Optional[str]]
     phone_number: Mapped[Optional[str]] = mapped_column(String(20))
     backup_codes: Mapped[Optional[str]]
-    verified_at: Mapped[Optional[datetime]]
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(onupdate=func.now())
+    verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
 
     user: Mapped["User"] = relationship(back_populates="two_factor_setting")
 
@@ -1158,12 +1158,12 @@ class RefreshToken(Base):
     token_hash: Mapped[str] = mapped_column(unique=True)
     device_info: Mapped[Optional[str]]
     ip_address: Mapped[Optional[str]] = mapped_column(String(45))
-    expires_at: Mapped[datetime]
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     revoked: Mapped[bool] = mapped_column(default=False)
 
     __table_args__ = (
-        Index("idx_user_id", "user_id"),
+        Index("idx_refresh_tokens_user_id", "user_id"),
     )
 
     user: Mapped["User"] = relationship(back_populates="refresh_tokens")
@@ -1174,11 +1174,11 @@ class EmailVerification(Base):
     id: Mapped[uuid_mod.UUID] = mapped_column(Uuid, primary_key=True, default=uuid_mod.uuid4)
     user_id: Mapped[uuid_mod.UUID] = mapped_column(Uuid, ForeignKey("users.id"))
     token_hash: Mapped[str] = mapped_column(unique=True)
-    expires_at: Mapped[datetime]
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
-        Index("idx_user_id", "user_id"),
+        Index("idx_email_verifications_user_id", "user_id"),
     )
 
     user: Mapped["User"] = relationship(back_populates="email_verifications")
@@ -1189,12 +1189,12 @@ class PasswordReset(Base):
     id: Mapped[uuid_mod.UUID] = mapped_column(Uuid, primary_key=True, default=uuid_mod.uuid4)
     user_id: Mapped[uuid_mod.UUID] = mapped_column(Uuid, ForeignKey("users.id"))
     token_hash: Mapped[str] = mapped_column(unique=True)
-    expires_at: Mapped[datetime]
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     used: Mapped[bool] = mapped_column(default=False)
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
-        Index("idx_user_id", "user_id"),
+        Index("idx_password_resets_user_id", "user_id"),
     )
 
     user: Mapped["User"] = relationship(back_populates="password_resets")

@@ -385,7 +385,7 @@ model Post {
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
-#[sea_orm(rs_type = "String", db_type = "String(StringLen::None)")]
+#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "Role")]
 pub enum Role {
     #[sea_orm(string_value = "ADMIN")]
     Admin,
@@ -620,9 +620,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "_PostToTag")]
 pub struct Model {
-    #[sea_orm(primary_key, auto_increment = false)]
+    #[sea_orm(primary_key, auto_increment = false, column_name = "A")]
     pub post_id: String,
-    #[sea_orm(primary_key, auto_increment = false)]
+    #[sea_orm(primary_key, auto_increment = false, column_name = "B")]
     pub tag_id: String,
 }
 
@@ -830,8 +830,8 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: String,
     pub name: String,
-    pub created_at: DateTimeUtc,
-    pub updated_at: DateTimeUtc,
+    pub created_at: DateTime,
+    pub updated_at: DateTime,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -879,13 +879,13 @@ pub struct Model {
     pub bio: Option<String>,
     #[sea_orm(unique)]
     pub email: String,
-    pub email_verified: Option<DateTimeUtc>,
+    pub email_verified: Option<DateTime>,
     pub image: Option<String>,
     pub cover_image: Option<String>,
     pub profile_image: Option<String>,
     pub hashed_password: Option<String>,
-    pub created_at: DateTimeUtc,
-    pub updated_at: DateTimeUtc,
+    pub created_at: DateTime,
+    pub updated_at: DateTime,
     #[sea_orm(default_value = false)]
     pub has_notification: Option<bool>,
 }
@@ -898,9 +898,17 @@ pub enum Relation {
     Comments,
     #[sea_orm(has_many = "super::notification::Entity")]
     Notifications,
-    #[sea_orm(has_many = "super::follow::Entity")]
+    #[sea_orm(
+        has_many = "super::follow::Entity",
+        from = "Column::Id",
+        to = "super::follow::Column::FollowingId"
+    )]
     Followers,
-    #[sea_orm(has_many = "super::follow::Entity")]
+    #[sea_orm(
+        has_many = "super::follow::Entity",
+        from = "Column::Id",
+        to = "super::follow::Column::FollowerId"
+    )]
     Following,
     #[sea_orm(has_many = "super::like::Entity")]
     Likes,
@@ -956,7 +964,7 @@ pub struct Model {
     pub follower_id: String,
     #[sea_orm(primary_key, auto_increment = false)]
     pub following_id: String,
-    pub created_at: DateTimeUtc,
+    pub created_at: DateTime,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -1020,8 +1028,8 @@ pub struct Model {
     pub slug: String,
     #[sea_orm(default_value = "ACTIVE")]
     pub status: OrgStatus,
-    pub created_at: DateTimeUtc,
-    pub updated_at: DateTimeUtc,
+    pub created_at: DateTime,
+    pub updated_at: DateTime,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -1049,7 +1057,7 @@ pub struct Model {
     pub user_id: i32,
     #[sea_orm(primary_key, auto_increment = false)]
     pub role_id: i32,
-    pub assigned_at: DateTimeUtc,
+    pub assigned_at: DateTime,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -1099,7 +1107,7 @@ pub struct Model {
     pub detail: Option<String>,
     #[sea_orm(column_type = "String(StringLen::N(45))")]
     pub ip_address: Option<String>,
-    pub created_at: DateTimeUtc,
+    pub created_at: DateTime,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -1125,7 +1133,7 @@ impl ActiveModelBehavior for ActiveModel {}`)
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
-#[sea_orm(rs_type = "String", db_type = "String(StringLen::None)")]
+#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "OrgStatus")]
 pub enum OrgStatus {
     #[sea_orm(string_value = "ACTIVE")]
     Active,
@@ -1165,8 +1173,8 @@ pub struct Model {
     pub is_active: bool,
     #[sea_orm(default_value = "MEMBER")]
     pub role: Role,
-    pub created_at: DateTimeUtc,
-    pub updated_at: DateTimeUtc,
+    pub created_at: DateTime,
+    pub updated_at: DateTime,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -1212,8 +1220,8 @@ pub struct Model {
     pub content: String,
     #[sea_orm(default_value = false)]
     pub published: bool,
-    pub created_at: DateTimeUtc,
-    pub updated_at: DateTimeUtc,
+    pub created_at: DateTime,
+    pub updated_at: DateTime,
     pub author_id: String,
 }
 
@@ -1293,9 +1301,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "_PostToTag")]
 pub struct Model {
-    #[sea_orm(primary_key, auto_increment = false)]
+    #[sea_orm(primary_key, auto_increment = false, column_name = "A")]
     pub post_id: String,
-    #[sea_orm(primary_key, auto_increment = false)]
+    #[sea_orm(primary_key, auto_increment = false, column_name = "B")]
     pub tag_id: String,
 }
 
@@ -1365,11 +1373,11 @@ pub struct Model {
     #[sea_orm(default_value = true)]
     pub is_active: bool,
     #[sea_orm(column_type = "TimestampWithTimeZone")]
-    pub created_at: DateTimeUtc,
+    pub created_at: DateTimeWithTimeZone,
     #[sea_orm(column_type = "TimestampWithTimeZone")]
-    pub updated_at: DateTimeUtc,
+    pub updated_at: DateTimeWithTimeZone,
     #[sea_orm(column_type = "TimestampWithTimeZone")]
-    pub last_login_at: Option<DateTimeUtc>,
+    pub last_login_at: Option<DateTimeWithTimeZone>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -1445,9 +1453,9 @@ pub struct Model {
     pub access_token: Option<String>,
     pub refresh_token: Option<String>,
     #[sea_orm(column_type = "TimestampWithTimeZone")]
-    pub expires_at: Option<DateTimeUtc>,
+    pub expires_at: Option<DateTimeWithTimeZone>,
     #[sea_orm(column_type = "TimestampWithTimeZone")]
-    pub created_at: DateTimeUtc,
+    pub created_at: DateTimeWithTimeZone,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -1498,11 +1506,11 @@ pub struct Model {
     pub phone_number: Option<String>,
     pub backup_codes: Option<String>,
     #[sea_orm(column_type = "TimestampWithTimeZone")]
-    pub verified_at: Option<DateTimeUtc>,
+    pub verified_at: Option<DateTimeWithTimeZone>,
     #[sea_orm(column_type = "TimestampWithTimeZone")]
-    pub created_at: DateTimeUtc,
+    pub created_at: DateTimeWithTimeZone,
     #[sea_orm(column_type = "TimestampWithTimeZone")]
-    pub updated_at: DateTimeUtc,
+    pub updated_at: DateTimeWithTimeZone,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -1535,7 +1543,7 @@ impl ActiveModelBehavior for ActiveModel {
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
-#[sea_orm(rs_type = "String", db_type = "String(StringLen::None)")]
+#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "Role")]
 pub enum Role {
     #[sea_orm(string_value = "ADMIN")]
     Admin,
