@@ -92,7 +92,7 @@ const MainContent: FC<{
   </div>
 )
 
-export const generateHTML = (data: DMMFDocument): string => {
+export const generateHTML = async (data: DMMFDocument) => {
   const element = (
     <Layout>
       <div class={containerClass}>
@@ -102,6 +102,8 @@ export const generateHTML = (data: DMMFDocument): string => {
     </Layout>
   )
 
-  // eslint-disable-next-line @typescript-eslint/no-base-to-string -- HtmlEscapedString implements toString()
-  return `<!DOCTYPE html>${element.toString()}`
+  // hono/css renders <Style /> asynchronously, so node.toString() resolves to a Promise at
+  // runtime even though its static type is string. Awaiting via then() keeps it type-safe.
+  const html = await Promise.resolve(element).then((node) => node.toString())
+  return `<!DOCTYPE html>${html}`
 }

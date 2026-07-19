@@ -14,6 +14,6 @@ export async function docs(options: GeneratorOptions) {
     } as const
   }
   const output = options.generator.output.value
-  const html = docsHTML(options.dmmf)
+  const html = await docsHTML(options.dmmf)
   return emitRaw(html, output, path.join(output, 'index.html'))
 }
