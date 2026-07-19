@@ -4,18 +4,13 @@ import { promisify } from 'node:util'
 
 import { afterAll, afterEach, describe, expect, it } from 'vite-plus/test'
 
-// Test run
-// pnpm vitest run ./src/generator/valibot/index.test.ts
-
 describe('prisma generate', () => {
   afterEach(() => {
-    // Clean up generated files
     fs.rmSync('./prisma-valibot/schema.prisma', { force: true })
     fs.rmSync('./prisma-valibot/valibot', { recursive: true, force: true })
     fs.rmSync('./prisma-valibot/valibot-test', { recursive: true, force: true })
   })
   afterAll(() => {
-    // Clean up the directory itself
     fs.rmSync('./prisma-valibot', { recursive: true, force: true })
   })
   it('hekireki-valibot', async () => {

@@ -4,9 +4,6 @@ import { promisify } from 'node:util'
 
 import { afterAll, afterEach, describe, expect, it } from 'vite-plus/test'
 
-// Test run
-// pnpm vitest run ./src/generator/sqlalchemy/index.test.ts
-
 describe('prisma generate', () => {
   afterEach(() => {
     fs.rmSync('./prisma-sqlalchemy/sqlalchemy', { recursive: true, force: true })
@@ -758,10 +755,6 @@ class Category(Base):
     expect(result).toBe(expected)
   }, 30000)
 })
-
-// ============================================================================
-// Fixture-based integration tests — strict toBe matching
-// ============================================================================
 
 describe('fixture: twitter-clone-sample', () => {
   afterAll(() => {

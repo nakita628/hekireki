@@ -4,9 +4,6 @@ import { promisify } from 'node:util'
 
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
-// Test run
-// pnpm vitest run ./src/generator/ajv/index.test.ts
-
 const command = async () => {
   await promisify(exec)('npx prisma generate --schema=./prisma-ajv/schema.prisma')
 }
@@ -16,7 +13,6 @@ describe('prisma generate ajv', () => {
     fs.rmSync('./prisma-ajv', { recursive: true, force: true })
   })
 
-  // default
   it('hekireki-ajv', async () => {
     const prisma = `datasource db {
     provider = "sqlite"
@@ -87,7 +83,6 @@ export const PostSchema = {
     expect(result).toBe(expected)
   }, 30000)
 
-  // comment true, type true
   it('hekireki-ajv comment true type true', async () => {
     const prisma = `datasource db {
     provider = "sqlite"
@@ -183,7 +178,6 @@ export type Post = FromSchema<typeof PostSchema>
     expect(result).toBe(expected)
   }, 30000)
 
-  // no annotation
   it('hekireki-ajv no annotation', async () => {
     const prisma = `datasource db {
     provider = "sqlite"
@@ -241,7 +235,6 @@ export const PostSchema = {
     expect(result).toBe(expected)
   }, 30000)
 
-  // relation true, type true
   it('hekireki-ajv relation true type true', async () => {
     const prisma = `datasource db {
     provider = "sqlite"
@@ -335,7 +328,6 @@ export type PostRelations = FromSchema<typeof PostRelationsSchema>
     expect(result).toBe(expected)
   }, 30000)
 
-  // custom output path
   it('hekireki-ajv output ajv-test/test.ts', async () => {
     const prisma = `datasource db {
     provider = "sqlite"
@@ -374,7 +366,6 @@ model User {
     expect(result).toBe(expected)
   }, 30000)
 
-  // no annotation relation true
   it('hekireki-ajv no annotation relation true', async () => {
     const prisma = `datasource db {
     provider = "sqlite"

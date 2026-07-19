@@ -4,26 +4,19 @@ import { promisify } from 'node:util'
 
 import { afterAll, afterEach, describe, expect, it } from 'vite-plus/test'
 
-// Test run
-// pnpm vitest run ./src/generator/zod/index.test.ts
-
 const command = async () => {
   await promisify(exec)('npx prisma generate --schema=./prisma/schema.prisma')
 }
 
-// zod
 describe('prisma generate zod', () => {
   afterEach(() => {
-    // Clean up generated files
     fs.rmSync('./prisma/schema.prisma', { force: true })
     fs.rmSync('./prisma/zod', { recursive: true, force: true })
     fs.rmSync('./prisma/zod-test', { recursive: true, force: true })
   })
   afterAll(() => {
-    // Clean up the directory itself
     fs.rmSync('./prisma-zod', { recursive: true, force: true })
   })
-  // default
   it('hekireki-zod', async () => {
     const prisma = `generator client {
       provider = "prisma-client-js"
@@ -77,7 +70,6 @@ describe('prisma generate zod', () => {
     fs.mkdirSync('./prisma', { recursive: true })
     fs.writeFileSync('./prisma/schema.prisma', prisma, { encoding: 'utf-8' })
     await command()
-    // await promisify(exec)('npx prisma generate --schema=./prisma-zod/schema.prisma')
     const result = fs.readFileSync('./prisma/zod/index.ts', {
       encoding: 'utf-8',
     })
@@ -98,7 +90,6 @@ export const PostSchema = z.object({
 `
     expect(result).toBe(expected)
   }, 30000)
-  // comment true
   it('hekireki-zod comment true', async () => {
     const prisma = `generator client {
       provider = "prisma-client-js"
@@ -191,7 +182,6 @@ export const PostSchema = z.object({
     expect(result).toBe(expected)
   }, 30000)
 
-  // type true
   it('hekireki-zod type true', async () => {
     const prisma = `generator client {
       provider = "prisma-client-js"
@@ -269,7 +259,6 @@ export type Post = z.infer<typeof PostSchema>
 `
     expect(result).toBe(expected)
   })
-  // output zod-test/test.ts
   it('hekireki-zod output zod-test/test.ts', async () => {
     const prisma = `generator client {
       provider = "prisma-client-js"
@@ -704,7 +693,6 @@ export type PostRelations = z.infer<typeof PostRelationsSchema>
   })
 })
 
-// no annotation
 describe('prisma generate zod (no annotation)', () => {
   afterEach(() => {
     fs.rmSync('./prisma/schema.prisma', { force: true })
@@ -829,20 +817,15 @@ export const PostRelationsSchema = z.object({
   }, 30000)
 })
 
-// valibot
 describe('prisma generate valibot', () => {
   afterEach(() => {
-    // Clean up generated files
     fs.rmSync('./prisma/schema.prisma', { force: true })
     fs.rmSync('./prisma/valibot', { recursive: true, force: true })
     fs.rmSync('./prisma/valibot-test', { recursive: true, force: true })
   })
   afterAll(() => {
-    // Clean up the directory itself
     fs.rmSync('./prisma-valibot', { recursive: true, force: true })
   })
-  // zod
-  // default
   it('hekireki-valibot', async () => {
     const prisma = `generator client {
       provider = "prisma-client-js"
@@ -896,7 +879,6 @@ describe('prisma generate valibot', () => {
     fs.mkdirSync('./prisma', { recursive: true })
     fs.writeFileSync('./prisma/schema.prisma', prisma, { encoding: 'utf-8' })
     await command()
-    // await promisify(exec)('npx prisma generate --schema=./prisma-zod/schema.prisma')
     const result = fs.readFileSync('./prisma/valibot/index.ts', {
       encoding: 'utf-8',
     })
@@ -917,7 +899,6 @@ export const PostSchema = v.object({
 `
     expect(result).toBe(expected)
   })
-  // comment true
   it('hekireki-valibot comment true', async () => {
     const prisma = `generator client {
       provider = "prisma-client-js"
@@ -1011,7 +992,6 @@ export const PostSchema = v.object({
     expect(result).toBe(expected)
   })
 
-  // type true
   it('hekireki-valibot type true', async () => {
     const prisma = `generator client {
       provider = "prisma-client-js"
@@ -1089,7 +1069,6 @@ export type Post = v.InferOutput<typeof PostSchema>
 `
     expect(result).toBe(expected)
   }, 30000)
-  // output valibot-test/test.ts
   it('hekireki-valibot output valibot-test/test.ts', async () => {
     const prisma = `generator client {
       provider = "prisma-client-js"
@@ -1381,7 +1360,6 @@ export type PostRelations = v.InferOutput<typeof PostRelationsSchema>
   })
 })
 
-// no annotation valibot
 describe('prisma generate valibot (no annotation)', () => {
   afterEach(() => {
     fs.rmSync('./prisma/schema.prisma', { force: true })

@@ -4,17 +4,12 @@ import { promisify } from 'node:util'
 
 import { afterAll, afterEach, describe, expect, it } from 'vite-plus/test'
 
-// Test run
-// pnpm vitest run ./src/generator/ecto/index.test.ts
-
 describe('prisma generate', () => {
   afterEach(() => {
-    // Clean up generated files
     fs.rmSync('./prisma-ecto/schema.prisma', { force: true })
     fs.rmSync('./prisma-ecto/ecto', { recursive: true, force: true })
   })
   afterAll(() => {
-    // Clean up the directory itself
     fs.rmSync('./prisma-ecto', { recursive: true, force: true })
   })
   it('hekireki-ecto', async () => {
@@ -550,7 +545,6 @@ end`
 
     expect(likeResult).toBe(likeExpected)
 
-    // Verify parent models still generate has_many to composite PK models
     const userResult = fs.readFileSync('./prisma-ecto/ecto/user.ex', { encoding: 'utf-8' })
     const userExpected = `defmodule DBSchema.User do
   use Ecto.Schema

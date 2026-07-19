@@ -4,13 +4,6 @@ import { describe, expect, it } from 'vite-plus/test'
 import { generateSingleFile } from '../generator/sqlalchemy.js'
 import { prismaTypeToPythonType, prismaTypeToSQLAlchemyType } from './sqlalchemy.js'
 
-// Test run
-// pnpm vitest run ./src/helper/sqlalchemy.test.ts
-
-// ============================================================================
-// Type Mapping Tests
-// ============================================================================
-
 describe('prismaTypeToSQLAlchemyType', () => {
   it('maps String to String', () => {
     expect(prismaTypeToSQLAlchemyType('String')).toStrictEqual('String')
@@ -95,10 +88,6 @@ describe('prismaTypeToPythonType', () => {
   })
 })
 
-// ============================================================================
-// Helper: create minimal DMMF.Field / DMMF.Model
-// ============================================================================
-
 function makeField(overrides: Partial<DMMF.Field> & { name: string; type: string }): DMMF.Field {
   return {
     kind: 'scalar',
@@ -129,10 +118,6 @@ function makeModel(
     ...overrides,
   } as DMMF.Model
 }
-
-// ============================================================================
-// generateSingleFile — strict toBe tests
-// ============================================================================
 
 describe('generateSingleFile', () => {
   it('generates a simple model with id and string field', () => {

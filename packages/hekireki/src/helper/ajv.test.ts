@@ -295,10 +295,6 @@ export type User = FromSchema<typeof UserSchema>`
     })
   })
 
-  // ============================================================================
-  // Real-world use case tests
-  // ============================================================================
-
   describe('E-Commerce order pattern', () => {
     it('generates Order JSON Schema with enum and type', () => {
       const models = [
@@ -441,10 +437,6 @@ export type OrderRelations = FromSchema<typeof OrderRelationsSchema>`)
     })
   })
 
-  // ============================================================================
-  // Edge case tests
-  // ============================================================================
-
   describe('edge cases', () => {
     it('all Prisma scalar types produce valid JSON Schema', () => {
       const allTypes = [
@@ -579,10 +571,6 @@ export type OrderRelations = FromSchema<typeof OrderRelationsSchema>`)
       expect(result).toContain('export const UserRelationsSchema')
     })
   })
-
-  // ============================================================================
-  // Session auth pattern
-  // ============================================================================
 
   describe('Session auth pattern', () => {
     it('generates Session schema with mixed required/optional and DateTime', () => {

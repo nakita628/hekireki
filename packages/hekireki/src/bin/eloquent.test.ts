@@ -4,9 +4,6 @@ import { promisify } from 'node:util'
 
 import { afterAll, afterEach, describe, expect, it } from 'vite-plus/test'
 
-// Test run
-// pnpm vitest run ./src/bin/eloquent.test.ts
-
 describe('prisma generate', () => {
   afterEach(() => {
     fs.rmSync('./prisma-eloquent/schema.prisma', { force: true })

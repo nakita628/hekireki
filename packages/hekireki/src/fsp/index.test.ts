@@ -6,9 +6,6 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 
 import { mkdir, readFileSync, writeFile, writeFileBinary } from '.'
 
-// Test run
-// pnpm vitest run ./src/fsp/index.test.ts
-
 const TEST_DIR = path.join(process.cwd(), 'test-tmp-fsp-dir')
 
 describe('fsp', () => {

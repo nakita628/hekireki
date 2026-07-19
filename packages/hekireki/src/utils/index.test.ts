@@ -14,10 +14,6 @@ import {
 } from '.'
 
 describe('utils', () => {
-  // ============================================================================
-  // Config Utilities
-  // ============================================================================
-
   describe('getString', () => {
     it('returns string when given a string', () => {
       expect(getString('hello')).toBe('hello')
@@ -57,10 +53,6 @@ describe('utils', () => {
     })
   })
 
-  // ============================================================================
-  // String Utilities
-  // ============================================================================
-
   describe('makeSnakeCase', () => {
     it('converts PascalCase to snake_case', () => {
       expect(makeSnakeCase('TodoTag')).toBe('todo_tag')
@@ -88,10 +80,6 @@ describe('utils', () => {
       expect(makeSnakeCase('user_profile')).toBe('user_profile')
     })
   })
-
-  // ============================================================================
-  // Annotation Utilities
-  // ============================================================================
 
   describe('makeValidationExtractor', () => {
     it.concurrent('extracts Zod validation', () => {
@@ -217,10 +205,6 @@ describe('utils', () => {
     })
   })
 
-  // ============================================================================
-  // JSDoc Comment Block
-  // ============================================================================
-
   describe('makeCommentBlock', () => {
     it('generates multi-line JSDoc with 2-space indent', () => {
       expect(makeCommentBlock(['Primary key'], 2)).toBe('  /**\n   * Primary key\n   */\n')
@@ -252,10 +236,6 @@ describe('utils', () => {
       expect(indent4).toContain(' */')
     })
   })
-
-  // ============================================================================
-  // Schema Utilities
-  // ============================================================================
 
   describe('groupByModel', () => {
     it('groups fields by model name', () => {
@@ -418,10 +398,6 @@ describe('utils', () => {
     })
   })
 })
-
-// ============================================================================
-// extractObjectType
-// ============================================================================
 
 import { extractObjectType, parseRelation } from './index.js'
 

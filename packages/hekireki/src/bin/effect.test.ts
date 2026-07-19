@@ -4,14 +4,10 @@ import { promisify } from 'node:util'
 
 import { afterAll, afterEach, describe, expect, it } from 'vite-plus/test'
 
-// Test run
-// pnpm vitest run ./src/generator/effect/index.test.ts
-
 const command = async () => {
   await promisify(exec)('npx prisma generate --schema=./prisma-effect/schema.prisma')
 }
 
-// effect
 describe('prisma generate effect', () => {
   afterEach(() => {
     fs.rmSync('./prisma-effect/schema.prisma', { force: true })
@@ -21,7 +17,6 @@ describe('prisma generate effect', () => {
   afterAll(() => {
     fs.rmSync('./prisma-effect', { recursive: true, force: true })
   })
-  // default
   it('hekireki-effect', async () => {
     const prisma = `generator client {
     provider = "prisma-client-js"
@@ -108,7 +103,6 @@ export const PostSchema = Schema.Struct({
     expect(result).toBe(expected)
   }, 30000)
 
-  // comment true
   it('hekireki-effect comment true', async () => {
     const prisma = `generator client {
     provider = "prisma-client-js"
@@ -193,7 +187,6 @@ export const PostSchema = Schema.Struct({
     expect(result).toBe(expected)
   }, 30000)
 
-  // type true
   it('hekireki-effect type true', async () => {
     const prisma = `generator client {
     provider = "prisma-client-js"
@@ -258,7 +251,6 @@ export type Post = typeof PostSchema.Type
     expect(result).toBe(expected)
   }, 30000)
 
-  // type + comment + relation
   it('hekireki-effect type true comment true relation true', async () => {
     const prisma = `generator client {
     provider = "prisma-client-js"
@@ -360,7 +352,6 @@ export type PostRelations = typeof PostRelationsSchema.Type
     expect(result).toBe(expected)
   }, 30000)
 
-  // custom output path
   it('hekireki-effect output effect-test/test.ts', async () => {
     const prisma = `generator client {
     provider = "prisma-client-js"
@@ -401,7 +392,6 @@ export const UserSchema = Schema.Struct({
   }, 30000)
 })
 
-// no annotation
 describe('prisma generate effect (no annotation)', () => {
   afterEach(() => {
     fs.rmSync('./prisma-effect/schema.prisma', { force: true })
@@ -526,7 +516,6 @@ export const PostRelationsSchema = Schema.Struct({ ...PostSchema.fields, user: U
   }, 30000)
 })
 
-// edge cases
 describe('prisma generate effect (edge cases)', () => {
   afterEach(() => {
     fs.rmSync('./prisma-effect/schema.prisma', { force: true })

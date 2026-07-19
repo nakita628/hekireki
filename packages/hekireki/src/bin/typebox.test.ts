@@ -4,9 +4,6 @@ import { promisify } from 'node:util'
 
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
-// Test run
-// pnpm vitest run ./src/generator/typebox/index.test.ts
-
 const command = async () => {
   await promisify(exec)('npx prisma generate --schema=./prisma-typebox/schema.prisma')
 }
@@ -16,7 +13,6 @@ describe('prisma generate typebox', () => {
     fs.rmSync('./prisma-typebox', { recursive: true, force: true })
   })
 
-  // default
   it('hekireki-typebox', async () => {
     const prisma = `datasource db {
     provider = "sqlite"
@@ -79,7 +75,6 @@ export const PostSchema = Type.Object({
     expect(result).toBe(expected)
   }, 30000)
 
-  // comment true
   it('hekireki-typebox comment true', async () => {
     const prisma = `datasource db {
     provider = "sqlite"
@@ -160,7 +155,6 @@ export const PostSchema = Type.Object({
     expect(result).toBe(expected)
   }, 30000)
 
-  // type true
   it('hekireki-typebox type true', async () => {
     const prisma = `datasource db {
     provider = "sqlite"
@@ -221,7 +215,6 @@ export type Post = Static<typeof PostSchema>
     expect(result).toBe(expected)
   }, 30000)
 
-  // type true comment true relation true
   it('hekireki-typebox type true comment true relation true', async () => {
     const prisma = `datasource db {
     provider = "sqlite"
@@ -322,7 +315,6 @@ export type PostRelations = Static<typeof PostRelationsSchema>
     expect(result).toBe(expected)
   }, 30000)
 
-  // no annotation
   it('hekireki-typebox no annotation', async () => {
     const prisma = `datasource db {
     provider = "sqlite"
@@ -372,7 +364,6 @@ export const PostSchema = Type.Object({
     expect(result).toBe(expected)
   }, 30000)
 
-  // custom output path
   it('hekireki-typebox output typebox-test/test.ts', async () => {
     const prisma = `datasource db {
     provider = "sqlite"
@@ -408,7 +399,6 @@ export const UserSchema = Type.Object({
     expect(result).toBe(expected)
   }, 30000)
 
-  // no annotation relation true
   it('hekireki-typebox no annotation relation true', async () => {
     const prisma = `datasource db {
     provider = "sqlite"

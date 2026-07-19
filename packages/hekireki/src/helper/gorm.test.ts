@@ -4,9 +4,6 @@ import { describe, expect, it } from 'vite-plus/test'
 import { generateGormModels } from '../generator/gorm.js'
 import { buildGormTags, goFieldName, prismaTypeToGoType } from './gorm.js'
 
-// Test run
-// pnpm vitest run ./src/helper/gorm.test.ts
-
 describe('prismaTypeToGoType', () => {
   it('maps String to string', () => {
     expect(prismaTypeToGoType('String', true)).toStrictEqual('string')

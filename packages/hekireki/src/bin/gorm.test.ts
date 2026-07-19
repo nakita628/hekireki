@@ -4,9 +4,6 @@ import { promisify } from 'node:util'
 
 import { afterAll, afterEach, describe, expect, it } from 'vite-plus/test'
 
-// Test run
-// pnpm vitest run ./src/generator/gorm/index.test.ts
-
 describe('prisma generate', () => {
   afterEach(() => {
     fs.rmSync('./prisma-gorm/gorm', { recursive: true, force: true })
@@ -593,10 +590,6 @@ func (m *User) BeforeCreate(_ *gorm.DB) error {
     expect(result).toStrictEqual(expected)
   }, 30000)
 })
-
-// ============================================================================
-// Fixture-based integration tests — strict toStrictEqual matching
-// ============================================================================
 
 describe('fixture: twitter-clone-sample', () => {
   afterAll(() => {

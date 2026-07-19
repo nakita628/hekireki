@@ -59,7 +59,6 @@ function getPrimaryKeyConfig(field: DMMF.Field) {
   const pkColumn = field.dbName ?? field.name
   const sourceOpt = pkColumn === 'id' ? '' : `, source: :${pkColumn}`
 
-  // UUID PK: String + @default(uuid()) / @default(uuid(7))
   if (field.type === 'String' && isFunctionDefault && def.name === 'uuid') {
     const isV7 = 'args' in def && def.args[0] === 7
     return {
@@ -83,7 +82,6 @@ function getPrimaryKeyConfig(field: DMMF.Field) {
     }
   }
 
-  // Autoincrement PK: Int + @default(autoincrement())
   if (field.type === 'Int' && isFunctionDefault && def.name === 'autoincrement') {
     return {
       line: `@primary_key {:id, :id, autogenerate: true${sourceOpt}}`,
@@ -93,7 +91,6 @@ function getPrimaryKeyConfig(field: DMMF.Field) {
     }
   }
 
-  // CUID or other string PK (no special Ecto type)
   return {
     line: '@primary_key false',
     typeSpec: 'String.t()',
@@ -149,13 +146,11 @@ function getBelongsToFkType(allModels: readonly DMMF.Model[], targetModelName: s
 
   const pkConfig = getPrimaryKeyConfig(targetPk)
 
-  // UUID PK → binary_id FK type / ULID PK → Ecto.ULID FK type
   if (pkConfig.foreignKeyType) return pkConfig.foreignKeyType
 
   // Autoincrement integer PK → no explicit FK type needed (Ecto default :id)
   if (pkConfig.line.includes(':id, autogenerate')) return null
 
-  // CUID or other string PK → string FK type
   if (targetPk.type === 'String') return 'string'
 
   const ectoType = prismaTypeToEctoType(targetPk.type)

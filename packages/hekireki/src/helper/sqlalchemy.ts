@@ -791,7 +791,6 @@ export function collectGlobalImports(
     }),
   )
 
-  // Collect SA types that need explicit import
   for (const model of models) {
     for (const field of model.fields) {
       if (field.kind === 'object') continue
@@ -810,11 +809,9 @@ export function collectGlobalImports(
       }
     }
 
-    // ForeignKey from belongsTo
     const associations = getAssociations(model, models)
     if (associations.belongsTo.length > 0) saImports.add('ForeignKey')
 
-    // Composite PK with FK
     const idField = model.fields.find((f) => f.isId)
     if (!idField && (model.primaryKey?.fields ?? []).length > 0) {
       if (associations.belongsTo.length > 0) saImports.add('ForeignKey')
@@ -848,18 +845,15 @@ export function collectGlobalImports(
 
   const lines: string[] = []
 
-  // sqlalchemy imports
   const sortedSa = [...saImports].sort()
   if (sortedSa.length > 0) {
     lines.push(`from sqlalchemy import ${sortedSa.join(', ')}`)
   }
 
-  // orm imports
   const ormImports = ['DeclarativeBase', 'Mapped', 'mapped_column']
   if (hasRelationship) ormImports.push('relationship')
   lines.push(`from sqlalchemy.orm import ${ormImports.sort().join(', ')}`)
 
-  // typing imports
   const typingImports = [needsAny ? 'Any' : null, needsOptional ? 'Optional' : null].filter(
     (i) => i !== null,
   )
@@ -867,7 +861,6 @@ export function collectGlobalImports(
     lines.push(`from typing import ${typingImports.join(', ')}`)
   }
 
-  // stdlib imports
   if (needsDecimal) lines.push('from decimal import Decimal as DecimalType')
   const dtParts: string[] = []
   if (needsDatetime) dtParts.push('datetime')

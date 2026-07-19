@@ -219,7 +219,6 @@ function collectCompositeIndexTags(model: DMMF.Model, indexes: readonly DMMF.Ind
   // name to avoid `idx_user_id` colliding across tables during AutoMigrate.
   const tableName = model.dbName ?? makeSnakeCase(model.name)
 
-  // @@unique([a, b]) → uniqueIndex:idx_name on each field
   const uniqueTags = model.uniqueFields
     .filter((fields) => fields.length > 1)
     .flatMap((fields) => {
@@ -231,7 +230,6 @@ function collectCompositeIndexTags(model: DMMF.Model, indexes: readonly DMMF.Ind
       return fields.map((f): [string, string] => [f, `uniqueIndex:${idxName}`])
     })
 
-  // @@index([a, b]) → index:idx_name on each field
   const indexTags = indexes
     .filter((idx) => idx.model === model.name && (idx.type === 'normal' || idx.type === 'fulltext'))
     .flatMap((idx) => {
@@ -291,11 +289,6 @@ const GO_INITIALISMS = new Set([
   'xss',
 ])
 
-/**
- * Split a camelCase/PascalCase name into words, applying Go initialism rules.
- * e.g. "userId" -> ["User", "ID"], "avatarUrl" -> ["Avatar", "URL"],
- *      "ipAddress" -> ["IP", "Address"], "createdAt" -> ["Created", "At"]
- */
 function splitGoWords(name: string) {
   return name
     .replace(/([a-z0-9])([A-Z])/g, '$1\0$2')

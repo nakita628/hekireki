@@ -4,9 +4,6 @@ import { promisify } from 'node:util'
 
 import { afterAll, afterEach, describe, expect, it } from 'vite-plus/test'
 
-// Test run
-// pnpm vitest run ./src/generator/sea-orm/index.test.ts
-
 describe('prisma generate', () => {
   afterEach(() => {
     fs.rmSync('./prisma-sea-orm/sea_orm', { recursive: true, force: true })
@@ -123,14 +120,12 @@ impl ActiveModelBehavior for ActiveModel {
     }
 }`)
 
-    // Check mod.rs
     const modResult = fs.readFileSync('./prisma-sea-orm/sea_orm/mod.rs', { encoding: 'utf-8' })
     expect(modResult).toStrictEqual(`pub mod post;
 pub mod prelude;
 pub mod user;
 `)
 
-    // Check prelude.rs
     const preludeResult = fs.readFileSync('./prisma-sea-orm/sea_orm/prelude.rs', {
       encoding: 'utf-8',
     })
@@ -379,7 +374,6 @@ model Post {
     fs.writeFileSync('./prisma-sea-orm/schema.prisma', prisma, { encoding: 'utf-8' })
     await promisify(exec)('npx prisma generate --schema=./prisma-sea-orm/schema.prisma')
 
-    // Check enum file
     const roleResult = fs.readFileSync('./prisma-sea-orm/sea_orm/role.rs', { encoding: 'utf-8' })
     expect(roleResult).toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -610,7 +604,6 @@ impl ActiveModelBehavior for ActiveModel {
     }
 }`)
 
-    // Check junction table
     const junctionResult = fs.readFileSync('./prisma-sea-orm/sea_orm/post_to_tag.rs', {
       encoding: 'utf-8',
     })
@@ -644,7 +637,6 @@ pub enum Relation {
 
 impl ActiveModelBehavior for ActiveModel {}`)
 
-    // Check mod.rs includes junction table
     const modResult = fs.readFileSync('./prisma-sea-orm/sea_orm/mod.rs', { encoding: 'utf-8' })
     expect(modResult).toContain('pub mod post_to_tag;')
   }, 30000)
@@ -785,7 +777,6 @@ impl ActiveModelBehavior for ActiveModel {
     const postResult = fs.readFileSync('./prisma-sea-orm/sea_orm/post.rs', { encoding: 'utf-8' })
     expect(postResult).toContain('#[serde(rename_all = "camelCase")]')
 
-    // Check enum also gets rename_all
     const roleResult = fs.readFileSync('./prisma-sea-orm/sea_orm/role.rs', { encoding: 'utf-8' })
     expect(roleResult).toContain('#[serde(rename_all = "camelCase")]')
     expect(roleResult).toContain(
@@ -847,10 +838,6 @@ impl ActiveModelBehavior for ActiveModel {
 }`)
   }, 30000)
 })
-
-// ============================================================================
-// Fixture-based integration tests — strict toStrictEqual matching
-// ============================================================================
 
 describe('fixture: twitter-clone-sample', () => {
   afterAll(() => {

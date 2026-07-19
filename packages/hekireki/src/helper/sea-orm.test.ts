@@ -10,9 +10,6 @@ import {
   resolveSeaOrmColumnType,
 } from './sea-orm.js'
 
-// Test run
-// pnpm vitest run ./src/helper/sea-orm.test.ts
-
 describe('prismaTypeToRustType', () => {
   it('maps String to String', () => {
     expect(prismaTypeToRustType('String', true)).toStrictEqual('String')

@@ -204,13 +204,11 @@ export function buildSeaOrmAttributes(
     columnParts.push(`column_name = "${columnName}"`)
   }
 
-  // column_type from native type
   const colType = resolveSeaOrmColumnType(field)
   if (colType) {
     columnParts.push(`column_type = "${colType}"`)
   }
 
-  // default_value
   if (!isPk || isCompositePk) {
     if (
       !(
@@ -532,7 +530,6 @@ function generateRelatedImpls(
     )
   }
 
-  // M2M: impl Related with via()
   for (const assoc of associations.manyToMany) {
     if (emittedTargets.has(assoc.targetModel)) continue
     emittedTargets.add(assoc.targetModel)
@@ -578,7 +575,6 @@ export function generateEntityFile(
   const associations = getAssociations(model, allModels)
   const enumNames = new Set(enums.map((e) => e.name))
 
-  // Build scalar fields
   const scalarFields = model.fields.filter((f) => f.kind !== 'object')
   const fieldLines: string[] = []
 

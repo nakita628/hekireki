@@ -35,10 +35,6 @@ function makeDatamodel(models: DMMF.Model[], enums: DMMF.DatamodelEnum[] = []): 
   return { models, enums, types: [] }
 }
 
-// ============================================================================
-// drizzleSchema — PostgreSQL
-// ============================================================================
-
 describe('drizzleSchema', () => {
   describe('postgresql', () => {
     it('should generate basic User + Post schema', () => {
@@ -98,10 +94,6 @@ describe('drizzleSchema', () => {
     })
   })
 
-  // ============================================================================
-  // drizzleSchema — SQLite
-  // ============================================================================
-
   describe('sqlite', () => {
     it('should generate SQLite schema with correct type functions', () => {
       const datamodel = makeDatamodel([
@@ -130,10 +122,6 @@ describe('drizzleSchema', () => {
     })
   })
 
-  // ============================================================================
-  // drizzleSchema — MySQL
-  // ============================================================================
-
   describe('mysql', () => {
     it('should generate MySQL schema', () => {
       const datamodel = makeDatamodel([
@@ -159,10 +147,6 @@ describe('drizzleSchema', () => {
       )
     })
   })
-
-  // ============================================================================
-  // Enum fields
-  // ============================================================================
 
   describe('enum fields', () => {
     it('should generate PostgreSQL enum', () => {
@@ -299,10 +283,6 @@ describe('drizzleSchema', () => {
     })
   })
 
-  // ============================================================================
-  // Optional / nullable fields
-  // ============================================================================
-
   describe('optional fields', () => {
     it('should not add .notNull() for optional fields', () => {
       const datamodel = makeDatamodel([
@@ -329,10 +309,6 @@ describe('drizzleSchema', () => {
       )
     })
   })
-
-  // ============================================================================
-  // Default values
-  // ============================================================================
 
   describe('default values', () => {
     it('should handle string default', () => {
