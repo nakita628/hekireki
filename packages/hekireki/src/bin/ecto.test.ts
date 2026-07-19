@@ -4,17 +4,12 @@ import { promisify } from 'node:util'
 
 import { afterAll, afterEach, describe, expect, it } from 'vite-plus/test'
 
-// Test run
-// pnpm vitest run ./src/generator/ecto/index.test.ts
-
 describe('prisma generate', () => {
   afterEach(() => {
-    // Clean up generated files
     fs.rmSync('./prisma-ecto/schema.prisma', { force: true })
     fs.rmSync('./prisma-ecto/ecto', { recursive: true, force: true })
   })
   afterAll(() => {
-    // Clean up the directory itself
     fs.rmSync('./prisma-ecto', { recursive: true, force: true })
   })
   it('hekireki-ecto', async () => {
@@ -328,7 +323,7 @@ model Post {
     field(:id, :string, primary_key: true)
     field(:name, :string)
     field(:bio, :string)
-    field(:role, Ecto.Enum, values: [:ADMIN, :USER, :MODERATOR])
+    field(:role, Ecto.Enum, values: [:ADMIN, :USER, :MODERATOR], default: :USER)
     has_many(:posts, DBSchema.Post, foreign_key: :user_id)
   end
 end`
@@ -416,7 +411,7 @@ model Post {
 
   schema "user" do
     field(:name, :string)
-    field(:status, Ecto.Enum, values: [:ACTIVE, :INACTIVE])
+    field(:status, Ecto.Enum, values: [:ACTIVE, :INACTIVE], default: :ACTIVE)
     has_many(:posts, DBSchema.Post, foreign_key: :user_id)
   end
 end`
@@ -519,7 +514,7 @@ model Like {
     field(:following_id, :binary_id, primary_key: true, source: :followingId)
     belongs_to(:follower, DBSchema.User, foreign_key: :follower_id, define_field: false, type: :binary_id)
     belongs_to(:following, DBSchema.User, foreign_key: :following_id, define_field: false, type: :binary_id)
-    timestamps(type: :utc_datetime, inserted_at_source: :createdAt)
+    timestamps(type: :utc_datetime, inserted_at_source: :createdAt, updated_at: false)
   end
 end`
 
@@ -544,13 +539,12 @@ end`
     field(:post_id, :binary_id, primary_key: true, source: :postId)
     belongs_to(:user, DBSchema.User, foreign_key: :user_id, define_field: false, type: :binary_id)
     belongs_to(:post, DBSchema.Post, foreign_key: :post_id, define_field: false, type: :binary_id)
-    timestamps(type: :utc_datetime, inserted_at_source: :createdAt)
+    timestamps(type: :utc_datetime, inserted_at_source: :createdAt, updated_at: false)
   end
 end`
 
     expect(likeResult).toBe(likeExpected)
 
-    // Verify parent models still generate has_many to composite PK models
     const userResult = fs.readFileSync('./prisma-ecto/ecto/user.ex', { encoding: 'utf-8' })
     const userExpected = `defmodule DBSchema.User do
   use Ecto.Schema

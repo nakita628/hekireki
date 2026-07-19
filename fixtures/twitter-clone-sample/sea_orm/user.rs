@@ -1,4 +1,5 @@
 use sea_orm::entity::prelude::*;
+use sea_orm::Set;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
@@ -13,13 +14,13 @@ pub struct Model {
     pub bio: Option<String>,
     #[sea_orm(unique)]
     pub email: String,
-    pub email_verified: Option<DateTimeUtc>,
+    pub email_verified: Option<DateTime>,
     pub image: Option<String>,
     pub cover_image: Option<String>,
     pub profile_image: Option<String>,
     pub hashed_password: Option<String>,
-    pub created_at: DateTimeUtc,
-    pub updated_at: DateTimeUtc,
+    pub created_at: DateTime,
+    pub updated_at: DateTime,
     #[sea_orm(default_value = false)]
     pub has_notification: Option<bool>,
 }
@@ -32,9 +33,17 @@ pub enum Relation {
     Comments,
     #[sea_orm(has_many = "super::notification::Entity")]
     Notifications,
-    #[sea_orm(has_many = "super::follow::Entity")]
+    #[sea_orm(
+        has_many = "super::follow::Entity",
+        from = "Column::Id",
+        to = "super::follow::Column::FollowingId"
+    )]
     Followers,
-    #[sea_orm(has_many = "super::follow::Entity")]
+    #[sea_orm(
+        has_many = "super::follow::Entity",
+        from = "Column::Id",
+        to = "super::follow::Column::FollowerId"
+    )]
     Following,
     #[sea_orm(has_many = "super::like::Entity")]
     Likes,
@@ -70,4 +79,11 @@ impl Related<super::like::Entity> for Entity {
     }
 }
 
-impl ActiveModelBehavior for ActiveModel {}
+impl ActiveModelBehavior for ActiveModel {
+    fn new() -> Self {
+        Self {
+            id: Set(uuid::Uuid::new_v4().to_string()),
+            ..ActiveModelTrait::default()
+        }
+    }
+}

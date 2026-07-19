@@ -21,7 +21,7 @@ defmodule DBSchema.User do
     field(:name, :string)
     field(:age, :integer)
     field(:is_active, :boolean, default: true, source: :isActive)
-    field(:role, Ecto.Enum, values: [:ADMIN, :MEMBER, :GUEST])
+    field(:role, Ecto.Enum, values: [:ADMIN, :MEMBER, :GUEST], default: :MEMBER)
     has_one(:profile, DBSchema.Profile, foreign_key: :user_id)
     has_many(:posts, DBSchema.Post, foreign_key: :author_id)
     timestamps(type: :utc_datetime, inserted_at_source: :createdAt, updated_at_source: :updatedAt)

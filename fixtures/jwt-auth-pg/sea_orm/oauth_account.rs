@@ -1,4 +1,5 @@
 use sea_orm::entity::prelude::*;
+use sea_orm::Set;
 use serde::{Deserialize, Serialize};
 use super::oauth_provider::OAuthProvider;
 
@@ -16,9 +17,9 @@ pub struct Model {
     pub access_token: Option<String>,
     pub refresh_token: Option<String>,
     #[sea_orm(column_type = "TimestampWithTimeZone")]
-    pub expires_at: Option<DateTimeUtc>,
+    pub expires_at: Option<DateTimeWithTimeZone>,
     #[sea_orm(column_type = "TimestampWithTimeZone")]
-    pub created_at: DateTimeUtc,
+    pub created_at: DateTimeWithTimeZone,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -37,4 +38,11 @@ impl Related<super::user::Entity> for Entity {
     }
 }
 
-impl ActiveModelBehavior for ActiveModel {}
+impl ActiveModelBehavior for ActiveModel {
+    fn new() -> Self {
+        Self {
+            id: Set(uuid::Uuid::new_v4().to_string()),
+            ..ActiveModelTrait::default()
+        }
+    }
+}

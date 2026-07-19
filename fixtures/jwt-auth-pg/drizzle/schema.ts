@@ -14,6 +14,7 @@ import {
 } from 'drizzle-orm/pg-core'
 
 export const roleEnum = pgEnum('Role', ['ADMIN', 'USER', 'GUEST'])
+
 export const oauthProviderEnum = pgEnum('OAuthProvider', [
   'GOOGLE',
   'GITHUB',
@@ -21,6 +22,7 @@ export const oauthProviderEnum = pgEnum('OAuthProvider', [
   'TWITTER',
   'APPLE',
 ])
+
 export const twoFactorMethodEnum = pgEnum('TwoFactorMethod', ['TOTP', 'SMS', 'EMAIL'])
 
 export const users = pgTable('users', {

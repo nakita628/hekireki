@@ -8,6 +8,10 @@ publish = false
 # postgres-array enables Vec<T> columns for Prisma scalar lists (String[]).
 sea-orm = { version = "1.1.0", features = ["postgres-array"] }
 serde = { version = "1", features = ["derive"] }
+# Client-side primary key generation emitted in ActiveModelBehavior::new for
+# Prisma @default(uuid()) / @default(uuid(7)) / @default(ulid()).
+uuid = { version = "1", features = ["v4", "v7"] }
+ulid = "3"
 
 [lib]
 path = "src/lib.rs"

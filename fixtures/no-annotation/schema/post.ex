@@ -20,7 +20,7 @@ defmodule DBSchema.Post do
     field(:published, :boolean, default: false)
     field(:author_id, :binary_id, source: :authorId)
     belongs_to(:author, DBSchema.User, foreign_key: :author_id, define_field: false)
-    many_to_many(:tags, DBSchema.Tag, join_through: "_PostToTag")
+    many_to_many(:tags, DBSchema.Tag, join_through: "_PostToTag", join_keys: [A: :id, B: :id])
     timestamps(type: :utc_datetime, inserted_at_source: :createdAt, updated_at_source: :updatedAt)
   end
 end

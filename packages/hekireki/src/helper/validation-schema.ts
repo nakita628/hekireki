@@ -1,4 +1,43 @@
-import { extractObjectType, groupByModel, isFields } from '../utils/index.js'
+import { extractObjectType, groupByModel, isFields, makeCommentBlock } from '../utils/index.js'
+
+export function makePropertiesGenerator(
+  libraryPrefix: string,
+  wrapCardinality?: (expr: string, isRequired: boolean) => string,
+) {
+  return function makeProperties(
+    modelFields: readonly {
+      readonly documentation: string
+      readonly modelName: string
+      readonly fieldName: string
+      readonly validation: string | null
+      readonly isRequired: boolean
+      readonly comment: readonly string[]
+    }[],
+    includeComments: boolean,
+  ) {
+    return modelFields
+      .filter((field) => field.validation)
+      .map((field) => {
+        const cleanLines = field.comment.filter(
+          (line) =>
+            !(
+              line.includes('@relation') ||
+              line.includes('@z') ||
+              line.includes('@v') ||
+              line.includes('@a') ||
+              line.includes('@e') ||
+              line.includes('@t') ||
+              line.includes('@j')
+            ),
+        )
+        const docComment = includeComments ? makeCommentBlock(cleanLines, 2) : ''
+        const base = `${libraryPrefix}.${field.validation}`
+        const wrapped = wrapCardinality ? wrapCardinality(base, field.isRequired) : base
+        return `${docComment}  ${field.fieldName}: ${wrapped}`
+      })
+      .join(',\n')
+  }
+}
 
 export function validationSchemas(
   models: readonly {

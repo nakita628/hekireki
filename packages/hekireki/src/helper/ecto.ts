@@ -29,6 +29,8 @@ export function ectoTypeToTypespec(type: string) {
       return 'boolean()'
     case 'binary_id':
       return 'Ecto.UUID.t()'
+    case 'Ecto.ULID':
+      return 'Ecto.ULID.t()'
     case 'naive_datetime':
       return 'NaiveDateTime.t()'
     case 'utc_datetime':
@@ -44,36 +46,56 @@ export function ectoTypeToTypespec(type: string) {
   }
 }
 
+// Ecto type references are atoms (:binary_id) or modules (Ecto.ULID).
+function formatEctoType(type: string) {
+  return /^[A-Z]/.test(type) ? type : `:${type}`
+}
+
 function getPrimaryKeyConfig(field: DMMF.Field) {
   const def = field.default
   const isFunctionDefault = def && typeof def === 'object' && 'name' in def
+  // @primary_key always declares the :id field; when the actual column
+  // (@map / a differently named @id field) is not "id", map it via :source.
+  const pkColumn = field.dbName ?? field.name
+  const sourceOpt = pkColumn === 'id' ? '' : `, source: :${pkColumn}`
 
-  // UUID PK: String + @default(uuid())
   if (field.type === 'String' && isFunctionDefault && def.name === 'uuid') {
+    const isV7 = 'args' in def && def.args[0] === 7
     return {
-      line: '@primary_key {:id, :binary_id, autogenerate: true}',
+      // UUIDv7 autogeneration requires Ecto 3.14+.
+      line: isV7
+        ? `@primary_key {:id, Ecto.UUID, autogenerate: [version: 7]${sourceOpt}}`
+        : `@primary_key {:id, :binary_id, autogenerate: true${sourceOpt}}`,
       typeSpec: 'Ecto.UUID.t()',
       omitIdFieldInSchema: true,
-      useBinaryForeignKey: true,
+      foreignKeyType: 'binary_id',
     }
   }
 
-  // Autoincrement PK: Int + @default(autoincrement())
+  // ULID PK: String + @default(ulid()) — requires the ecto_ulid_next package.
+  if (field.type === 'String' && isFunctionDefault && def.name === 'ulid') {
+    return {
+      line: `@primary_key {:id, Ecto.ULID, autogenerate: true${sourceOpt}}`,
+      typeSpec: 'Ecto.ULID.t()',
+      omitIdFieldInSchema: true,
+      foreignKeyType: 'Ecto.ULID',
+    }
+  }
+
   if (field.type === 'Int' && isFunctionDefault && def.name === 'autoincrement') {
     return {
-      line: '@primary_key {:id, :id, autogenerate: true}',
+      line: `@primary_key {:id, :id, autogenerate: true${sourceOpt}}`,
       typeSpec: 'integer()',
       omitIdFieldInSchema: true,
-      useBinaryForeignKey: false,
+      foreignKeyType: null,
     }
   }
 
-  // CUID or other string PK (no special Ecto type)
   return {
     line: '@primary_key false',
     typeSpec: 'String.t()',
     omitIdFieldInSchema: false,
-    useBinaryForeignKey: false,
+    foreignKeyType: null,
   }
 }
 
@@ -98,12 +120,16 @@ function makeTimestampsLine(fields: DMMF.Field[]): { line: string | null; exclud
     if (source !== 'inserted_at') {
       opts.push(`inserted_at_source: :${source}`)
     }
+  } else {
+    opts.push('inserted_at: false')
   }
   if (updated) {
     const source = updated.dbName ?? updated.name
     if (source !== 'updated_at') {
       opts.push(`updated_at_source: :${source}`)
     }
+  } else {
+    opts.push('updated_at: false')
   }
 
   return {
@@ -120,13 +146,11 @@ function getBelongsToFkType(allModels: readonly DMMF.Model[], targetModelName: s
 
   const pkConfig = getPrimaryKeyConfig(targetPk)
 
-  // UUID PK → binary_id FK type
-  if (pkConfig.useBinaryForeignKey) return 'binary_id'
+  if (pkConfig.foreignKeyType) return pkConfig.foreignKeyType
 
   // Autoincrement integer PK → no explicit FK type needed (Ecto default :id)
   if (pkConfig.line.includes(':id, autogenerate')) return null
 
-  // CUID or other string PK → string FK type
   if (targetPk.type === 'String') return 'string'
 
   const ectoType = prismaTypeToEctoType(targetPk.type)
@@ -144,7 +168,15 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
   }[] = []
   const hasMany: { name: string; targetModel: string; foreignKey: string }[] = []
   const hasOne: { name: string; targetModel: string; foreignKey: string }[] = []
-  const manyToMany: { name: string; targetModel: string; joinThrough: string }[] = []
+  const manyToMany: {
+    name: string
+    targetModel: string
+    joinThrough: string
+    ownJoinColumn: string
+    ownKey: string
+    relatedJoinColumn: string
+    relatedKey: string
+  }[] = []
 
   for (const field of model.fields) {
     if (field.kind !== 'object') continue
@@ -170,10 +202,16 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
       if (otherSide?.isList) {
         const [left, right] =
           model.name < field.type ? [model.name, field.type] : [field.type, model.name]
+        const ownIdField = model.fields.find((f) => f.isId)
+        const relatedIdField = targetModel.fields.find((f) => f.isId)
         manyToMany.push({
           name: field.name,
           targetModel: field.type,
-          joinThrough: `_${left}To${right}`,
+          joinThrough: `_${field.relationName ?? `${left}To${right}`}`,
+          ownJoinColumn: model.name === left ? 'A' : 'B',
+          ownKey: makeSnakeCase(ownIdField?.name ?? 'id'),
+          relatedJoinColumn: model.name === left ? 'B' : 'A',
+          relatedKey: makeSnakeCase(relatedIdField?.name ?? 'id'),
         })
         continue
       }
@@ -220,9 +258,8 @@ export function ectoSchemas(
             line: '@primary_key false',
             typeSpec: '',
             omitIdFieldInSchema: false,
-            useBinaryForeignKey: false,
+            foreignKeyType: null,
           }
-      const useBinaryId = pk.useBinaryForeignKey
       const fields = model.fields.map((f) => ({ ...f }))
       const { line: timestampsLine, exclude: timestampsExclude } = makeTimestampsLine(fields)
       const associations = getAssociations(model, contextModels)
@@ -306,7 +343,8 @@ export function ectoSchemas(
         if (f.kind === 'enum') {
           const values = enumMap.get(f.type)
           const valuesStr = values ? values.map((v) => `:${v}`).join(', ') : ''
-          return `    field(:${snakeName}, Ecto.Enum, values: [${valuesStr}]${sourceOpt})`
+          const enumDefault = typeof f.default === 'string' ? `, default: :${f.default}` : ''
+          return `    field(:${snakeName}, Ecto.Enum, values: [${valuesStr}]${enumDefault}${sourceOpt})`
         }
 
         const type = prismaTypeToEctoType(f.type)
@@ -339,7 +377,7 @@ export function ectoSchemas(
           const fkType = a.fkType ?? 'id'
           const pkOpt = isPkField ? ', primary_key: true' : ''
           const sourceOpt = needsSource ? `, source: :${fkDbName}` : ''
-          fkFieldLines.push(`    field(:${snakeFk}, :${fkType}${pkOpt}${sourceOpt})`)
+          fkFieldLines.push(`    field(:${snakeFk}, ${formatEctoType(fkType)}${pkOpt}${sourceOpt})`)
         }
       }
 
@@ -352,8 +390,8 @@ export function ectoSchemas(
         const isPkField = compositePkFieldNames.has(a.foreignKey)
         const opts: string[] = [`foreign_key: :${snakeFk}`]
         if (needsSource || isPkField) opts.push('define_field: false')
-        if (a.fkType && (!useBinaryId || a.fkType !== 'binary_id')) {
-          opts.push(`type: :${a.fkType}`)
+        if (a.fkType && a.fkType !== pk.foreignKeyType) {
+          opts.push(`type: ${formatEctoType(a.fkType)}`)
         }
         if (a.references !== 'id') opts.push(`references: :${a.references}`)
         return `    belongs_to(:${snakeAssocName}, ${appName}.${a.targetModel}, ${opts.join(', ')})`
@@ -373,7 +411,10 @@ export function ectoSchemas(
 
       const manyToManyLines = associations.manyToMany.map((a) => {
         const snakeAssocName = makeSnakeCase(a.name)
-        return `    many_to_many(:${snakeAssocName}, ${appName}.${a.targetModel}, join_through: "${a.joinThrough}")`
+        // Prisma implicit m2m join tables use columns "A"/"B" (models in
+        // alphabetical order), not Ecto's inflected <schema>_id defaults.
+        const joinKeys = `join_keys: [${a.ownJoinColumn}: :${a.ownKey}, ${a.relatedJoinColumn}: :${a.relatedKey}]`
+        return `    many_to_many(:${snakeAssocName}, ${appName}.${a.targetModel}, join_through: "${a.joinThrough}", ${joinKeys})`
       })
 
       const lines = [
@@ -384,7 +425,7 @@ export function ectoSchemas(
           : ['  @moduledoc false']),
         '',
         `  ${pk.line}`,
-        ...(useBinaryId ? ['  @foreign_key_type :binary_id'] : []),
+        ...(pk.foreignKeyType ? [`  @foreign_key_type ${formatEctoType(pk.foreignKeyType)}`] : []),
         '',
         ...typeSpecLines,
         '',

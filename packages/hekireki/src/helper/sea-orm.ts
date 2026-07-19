@@ -9,9 +9,20 @@ const PRISMA_TO_RUST: { [k: string]: string } = {
   Float: 'f64',
   Decimal: 'Decimal',
   Boolean: 'bool',
-  DateTime: 'DateTimeUtc',
+  // Prisma DateTime is timestamp without time zone on PostgreSQL; sqlx only
+  // decodes that as NaiveDateTime (sea-orm's DateTime), not DateTime<Utc>.
+  DateTime: 'DateTime',
   Json: 'Json',
   Bytes: 'Vec<u8>',
+}
+
+// Native @db.* types whose Rust type differs from the Prisma-scalar default.
+function rustTypeForNative(field: DMMF.Field) {
+  const nativeName = field.nativeType?.[0]
+  if (nativeName === 'Timestamptz') return 'DateTimeWithTimeZone'
+  if (nativeName === 'Date') return 'Date'
+  if (nativeName === 'Time' || nativeName === 'Timetz') return 'Time'
+  return null
 }
 
 export function prismaTypeToRustType(type: string, isRequired: boolean) {
@@ -118,6 +129,7 @@ export function resolveSeaOrmColumnType(field: DMMF.Field) {
     case 'Uuid':
       return 'Uuid'
     case 'Timestamp':
+      return null
     case 'Timestamptz':
       return 'TimestampWithTimeZone'
     case 'Date':
@@ -140,6 +152,18 @@ function isFunctionDefault(
 
 function isAutoincrement(field: DMMF.Field) {
   return isFunctionDefault(field.default) && field.default.name === 'autoincrement'
+}
+
+function generatedIdExpr(field: DMMF.Field) {
+  if (!isFunctionDefault(field.default)) return null
+  if (field.default.name === 'uuid') {
+    return field.default.args[0] === 7
+      ? 'uuid::Uuid::now_v7().to_string()'
+      : 'uuid::Uuid::new_v4().to_string()'
+  }
+  // Ulid::generate is the ulid crate 3.x API (1.x/2.x had Ulid::new).
+  if (field.default.name === 'ulid') return 'ulid::Ulid::generate().to_string()'
+  return null
 }
 
 function formatRustDefault(def: DMMF.Field['default']) {
@@ -180,13 +204,11 @@ export function buildSeaOrmAttributes(
     columnParts.push(`column_name = "${columnName}"`)
   }
 
-  // column_type from native type
   const colType = resolveSeaOrmColumnType(field)
   if (colType) {
     columnParts.push(`column_type = "${colType}"`)
   }
 
-  // default_value
   if (!isPk || isCompositePk) {
     if (
       !(
@@ -295,20 +317,14 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
   return { belongsTo, hasMany, hasOne, manyToMany }
 }
 
-export function toSnakeCase(name: string) {
-  return makeSnakeCase(name)
-}
-
+// UpperCamelCase the way sea-orm's derive macro names Column variants: split on
+// underscores, capitalize each part, keep inner camelCase capitals.
 function toPascalCase(name: string) {
-  return name.charAt(0).toUpperCase() + name.slice(1)
-}
-
-export function toModuleName(modelName: string) {
-  return toSnakeCase(modelName)
-}
-
-export interface SerdeOptions {
-  readonly renameAll?: string
+  return name
+    .split('_')
+    .filter((part) => part !== '')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join('')
 }
 
 // Types that do NOT implement Eq in Rust (f64: NaN != NaN)
@@ -318,7 +334,7 @@ export function canDeriveEq(fields: readonly DMMF.Field[]) {
   return fields.filter((f) => f.kind !== 'object').every((f) => !NON_EQ_PRISMA_TYPES.has(f.type))
 }
 
-function buildSerdeAttributes(opts: SerdeOptions) {
+function buildSerdeAttributes(opts: { readonly renameAll?: string }) {
   const parts: string[] = []
   if (opts.renameAll) {
     parts.push(`rename_all = "${opts.renameAll}"`)
@@ -327,7 +343,7 @@ function buildSerdeAttributes(opts: SerdeOptions) {
   return [`#[serde(${parts.join(', ')})]`]
 }
 
-export function generateEnum(e: DMMF.DatamodelEnum, serde: SerdeOptions = {}) {
+export function generateEnum(e: DMMF.DatamodelEnum, serde: { readonly renameAll?: string } = {}) {
   const variants = e.values.map((v) => {
     // SCREAMING_SNAKE values must become UpperCamelCase variants, or
     // `Pending_review`-style names trip the non_camel_case_types lint on
@@ -348,7 +364,7 @@ export function generateEnum(e: DMMF.DatamodelEnum, serde: SerdeOptions = {}) {
   return [
     derives,
     ...serdeAttrs,
-    '#[sea_orm(rs_type = "String", db_type = "String(StringLen::None)")]',
+    `#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "${e.dbName ?? e.name}")]`,
     `pub enum ${e.name} {`,
     ...variants,
     '}',
@@ -389,9 +405,23 @@ function generateRelationEnum(
 
   const variants: string[] = []
 
+  // A bare has_many/has_one derives its join from the target's single
+  // Related<Self> impl. With two relations to the same target (Follow
+  // follower/following) every variant would resolve to that one impl's
+  // columns, so ambiguous variants pin their join with explicit from/to.
+  const targetCount = new Map<string, number>()
+  for (const assoc of [
+    ...associations.belongsTo,
+    ...associations.hasMany,
+    ...associations.hasOne,
+  ]) {
+    targetCount.set(assoc.targetModel, (targetCount.get(assoc.targetModel) ?? 0) + 1)
+  }
+  const isAmbiguous = (targetModel: string) => (targetCount.get(targetModel) ?? 0) > 1
+
   for (const assoc of associations.belongsTo) {
     const variantName = toPascalCase(assoc.name)
-    const targetModule = toModuleName(assoc.targetModel)
+    const targetModule = makeSnakeCase(assoc.targetModel)
     const fromCol = toPascalCase(assoc.foreignKey)
     const toCol = toPascalCase(assoc.references)
     variants.push(
@@ -401,16 +431,22 @@ function generateRelationEnum(
 
   for (const assoc of associations.hasMany) {
     const variantName = toPascalCase(assoc.name)
-    const targetModule = toModuleName(assoc.targetModel)
+    const targetModule = makeSnakeCase(assoc.targetModel)
     variants.push(
-      `    #[sea_orm(has_many = "super::${targetModule}::Entity")]\n    ${variantName},`,
+      isAmbiguous(assoc.targetModel)
+        ? `    #[sea_orm(\n        has_many = "super::${targetModule}::Entity",\n        from = "Column::${toPascalCase(assoc.references)}",\n        to = "super::${targetModule}::Column::${toPascalCase(assoc.foreignKey)}"\n    )]\n    ${variantName},`
+        : `    #[sea_orm(has_many = "super::${targetModule}::Entity")]\n    ${variantName},`,
     )
   }
 
   for (const assoc of associations.hasOne) {
     const variantName = toPascalCase(assoc.name)
-    const targetModule = toModuleName(assoc.targetModel)
-    variants.push(`    #[sea_orm(has_one = "super::${targetModule}::Entity")]\n    ${variantName},`)
+    const targetModule = makeSnakeCase(assoc.targetModel)
+    variants.push(
+      isAmbiguous(assoc.targetModel)
+        ? `    #[sea_orm(\n        has_one = "super::${targetModule}::Entity",\n        from = "Column::${toPascalCase(assoc.references)}",\n        to = "super::${targetModule}::Column::${toPascalCase(assoc.foreignKey)}"\n    )]\n    ${variantName},`
+        : `    #[sea_orm(has_one = "super::${targetModule}::Entity")]\n    ${variantName},`,
+    )
   }
 
   return [
@@ -452,7 +488,7 @@ function generateRelatedImpls(
   for (const assoc of associations.belongsTo) {
     if (emittedTargets.has(assoc.targetModel)) continue
     emittedTargets.add(assoc.targetModel)
-    const targetModule = toModuleName(assoc.targetModel)
+    const targetModule = makeSnakeCase(assoc.targetModel)
     impls.push(
       [
         `impl Related<super::${targetModule}::Entity> for Entity {`,
@@ -467,7 +503,7 @@ function generateRelatedImpls(
   for (const assoc of associations.hasMany) {
     if (emittedTargets.has(assoc.targetModel)) continue
     emittedTargets.add(assoc.targetModel)
-    const targetModule = toModuleName(assoc.targetModel)
+    const targetModule = makeSnakeCase(assoc.targetModel)
     impls.push(
       [
         `impl Related<super::${targetModule}::Entity> for Entity {`,
@@ -482,7 +518,7 @@ function generateRelatedImpls(
   for (const assoc of associations.hasOne) {
     if (emittedTargets.has(assoc.targetModel)) continue
     emittedTargets.add(assoc.targetModel)
-    const targetModule = toModuleName(assoc.targetModel)
+    const targetModule = makeSnakeCase(assoc.targetModel)
     impls.push(
       [
         `impl Related<super::${targetModule}::Entity> for Entity {`,
@@ -494,16 +530,15 @@ function generateRelatedImpls(
     )
   }
 
-  // M2M: impl Related with via()
   for (const assoc of associations.manyToMany) {
     if (emittedTargets.has(assoc.targetModel)) continue
     emittedTargets.add(assoc.targetModel)
-    const targetModule = toModuleName(assoc.targetModel)
+    const targetModule = makeSnakeCase(assoc.targetModel)
     const [leftName, rightName] =
       model.name < assoc.targetModel
         ? [model.name, assoc.targetModel]
         : [assoc.targetModel, model.name]
-    const junctionModule = toSnakeCase(`${leftName}To${rightName}`)
+    const junctionModule = makeSnakeCase(`${leftName}To${rightName}`)
     const junctionRelToTarget = toPascalCase(assoc.targetModel)
     const junctionRelToSelf = toPascalCase(model.name)
 
@@ -528,7 +563,7 @@ export function generateEntityFile(
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
   enums: readonly DMMF.DatamodelEnum[],
-  serde: SerdeOptions = {},
+  serde: { readonly renameAll?: string } = {},
 ) {
   const idField = model.fields.find((f) => f.isId)
   const compositePkFieldNames = new Set(model.primaryKey?.fields ?? [])
@@ -536,26 +571,28 @@ export function generateEntityFile(
 
   if (!(idField || isCompositePk)) return ''
 
-  const tableName = model.dbName ?? toSnakeCase(model.name)
+  const tableName = model.dbName ?? makeSnakeCase(model.name)
   const associations = getAssociations(model, allModels)
   const enumNames = new Set(enums.map((e) => e.name))
 
-  // Build scalar fields
   const scalarFields = model.fields.filter((f) => f.kind !== 'object')
   const fieldLines: string[] = []
 
   for (const field of scalarFields) {
     const isPk = field.isId || compositePkFieldNames.has(field.name)
-    const { ident: fieldName, derivedColumn } = rustFieldIdent(toSnakeCase(field.name))
+    const { ident: fieldName, derivedColumn } = rustFieldIdent(makeSnakeCase(field.name))
     const attrs = buildSeaOrmAttributes(field, isPk, isCompositePk, derivedColumn)
 
-    const elemType = enumNames.has(field.type) ? field.type : prismaTypeToRustType(field.type, true)
+    const nativeOverride = rustTypeForNative(field)
+    const elemType = enumNames.has(field.type)
+      ? field.type
+      : (nativeOverride ?? prismaTypeToRustType(field.type, true))
     const rustType = field.isList
       ? `Vec<${elemType}>`
-      : enumNames.has(field.type)
+      : enumNames.has(field.type) || nativeOverride !== null
         ? field.isRequired
-          ? field.type
-          : `Option<${field.type}>`
+          ? elemType
+          : `Option<${elemType}>`
         : prismaTypeToRustType(field.type, field.isRequired)
 
     for (const attr of attrs) {
@@ -571,13 +608,37 @@ export function generateEntityFile(
     ...new Set(scalarFields.filter((f) => enumNames.has(f.type)).map((f) => f.type)),
   ]
     .sort()
-    .map((name) => `use super::${toSnakeCase(name)}::${name};`)
+    .map((name) => `use super::${makeSnakeCase(name)}::${name};`)
+
+  const generatedIdFields = scalarFields.filter(
+    (f) => f.type === 'String' && !f.isList && generatedIdExpr(f) !== null,
+  )
 
   const useLines = [
     'use sea_orm::entity::prelude::*;',
+    ...(generatedIdFields.length > 0 ? ['use sea_orm::Set;'] : []),
     'use serde::{Deserialize, Serialize};',
     ...enumImports,
   ]
+
+  const behaviorImpl =
+    generatedIdFields.length === 0
+      ? 'impl ActiveModelBehavior for ActiveModel {}'
+      : [
+          'impl ActiveModelBehavior for ActiveModel {',
+          '    fn new() -> Self {',
+          '        Self {',
+          ...generatedIdFields.map((field) => {
+            const { ident } = rustFieldIdent(makeSnakeCase(field.name))
+            const generate = generatedIdExpr(field)
+            const value = field.isRequired ? generate : `Some(${generate})`
+            return `            ${ident}: Set(${value}),`
+          }),
+          '            ..ActiveModelTrait::default()',
+          '        }',
+          '    }',
+          '}',
+        ].join('\n')
 
   const eq = canDeriveEq(scalarFields)
   const deriveModel = eq
@@ -599,7 +660,7 @@ export function generateEntityFile(
     relationEnum,
     '',
     ...relatedImpls.map((impl) => `${impl}\n`),
-    'impl ActiveModelBehavior for ActiveModel {}',
+    behaviorImpl,
   ]
 
   return lines.join('\n')
@@ -609,18 +670,18 @@ export function generateM2MEntity(
   leftModel: string,
   rightModel: string,
   _allModels: readonly DMMF.Model[],
-  serde: SerdeOptions = {},
+  serde: { readonly renameAll?: string } = {},
 ) {
   const [sortedLeft, sortedRight] =
     leftModel < rightModel ? [leftModel, rightModel] : [rightModel, leftModel]
 
   const tableName = `_${sortedLeft}To${sortedRight}`
-  const leftModule = toModuleName(sortedLeft)
-  const rightModule = toModuleName(sortedRight)
-  const leftFk = `${toSnakeCase(sortedLeft)}_id`
-  const rightFk = `${toSnakeCase(sortedRight)}_id`
-  const leftCol = toPascalCase(`${toSnakeCase(sortedLeft)}Id`)
-  const rightCol = toPascalCase(`${toSnakeCase(sortedRight)}Id`)
+  const leftModule = makeSnakeCase(sortedLeft)
+  const rightModule = makeSnakeCase(sortedRight)
+  const leftFk = `${makeSnakeCase(sortedLeft)}_id`
+  const rightFk = `${makeSnakeCase(sortedRight)}_id`
+  const leftCol = toPascalCase(`${makeSnakeCase(sortedLeft)}Id`)
+  const rightCol = toPascalCase(`${makeSnakeCase(sortedRight)}Id`)
 
   const useLines = ['use sea_orm::entity::prelude::*;', 'use serde::{Deserialize, Serialize};']
 
@@ -636,9 +697,11 @@ export function generateM2MEntity(
     ...serdeAttrs,
     `#[sea_orm(table_name = "${tableName}")]`,
     'pub struct Model {',
-    '    #[sea_orm(primary_key, auto_increment = false)]',
+    // Prisma's implicit join table stores its FKs in columns "A"/"B" (models
+    // in alphabetical order), not <model>_id.
+    '    #[sea_orm(primary_key, auto_increment = false, column_name = "A")]',
     `    pub ${leftFk}: String,`,
-    '    #[sea_orm(primary_key, auto_increment = false)]',
+    '    #[sea_orm(primary_key, auto_increment = false, column_name = "B")]',
     `    pub ${rightFk}: String,`,
     '}',
     '',
@@ -669,7 +732,7 @@ export function generateModRs(moduleNames: readonly string[]) {
 export function generatePreludeRs(models: readonly DMMF.Model[]) {
   return `${models
     .map((m) => {
-      const moduleName = toModuleName(m.name)
+      const moduleName = makeSnakeCase(m.name)
       return `pub use super::${moduleName}::Entity as ${m.name};`
     })
     .join('\n')}\n`

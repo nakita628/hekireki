@@ -1,6 +1,10 @@
 package model
 
-import "time"
+import (
+	"time"
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+)
 
 type User struct {
 	ID string `gorm:"column:id;primaryKey;type:char(36)" json:"id"`
@@ -24,6 +28,13 @@ type User struct {
 	Likes []Like `gorm:"foreignKey:UserID"`
 }
 
+func (m *User) BeforeCreate(_ *gorm.DB) error {
+	if m.ID == "" {
+		m.ID = uuid.NewString()
+	}
+	return nil
+}
+
 type Post struct {
 	ID string `gorm:"column:id;primaryKey;type:char(36)" json:"id"`
 	Body string `gorm:"column:body;not null" json:"body"`
@@ -33,6 +44,13 @@ type Post struct {
 	User User
 	Comments []Comment `gorm:"foreignKey:PostID"`
 	Likes []Like `gorm:"foreignKey:PostID"`
+}
+
+func (m *Post) BeforeCreate(_ *gorm.DB) error {
+	if m.ID == "" {
+		m.ID = uuid.NewString()
+	}
+	return nil
 }
 
 type Follow struct {
@@ -62,10 +80,24 @@ type Comment struct {
 	Post Post
 }
 
+func (m *Comment) BeforeCreate(_ *gorm.DB) error {
+	if m.ID == "" {
+		m.ID = uuid.NewString()
+	}
+	return nil
+}
+
 type Notification struct {
 	ID string `gorm:"column:id;primaryKey;type:char(36)" json:"id"`
 	Body string `gorm:"column:body;not null" json:"body"`
 	UserID string `gorm:"column:user_id;index:idx_notification_user_id;not null" json:"user_id"`
 	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime;not null" json:"created_at"`
 	User User
+}
+
+func (m *Notification) BeforeCreate(_ *gorm.DB) error {
+	if m.ID == "" {
+		m.ID = uuid.NewString()
+	}
+	return nil
 }

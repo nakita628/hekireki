@@ -18,10 +18,6 @@ export function resolveDbProvider(
   }
 }
 
-// ============================================================================
-// Type Maps
-// ============================================================================
-
 const PG_SCALAR_MAP: { [k: string]: string } = {
   String: 'text()',
   Int: 'integer()',
@@ -216,10 +212,6 @@ export function generateImports(imports: DrizzleImports, provider: DbProvider) {
   return [coreImport, ormImport, ...extImports].filter(Boolean).join('\n')
 }
 
-// ============================================================================
-// Helpers
-// ============================================================================
-
 function snakeToCamel(name: string): string {
   return name.replace(/_+([a-zA-Z0-9])/g, (_, c) => c.toUpperCase())
 }
@@ -263,10 +255,6 @@ export function makeEnumDeclarations(
       return `export const ${enumIdentifier(e.name)} = pgEnum('${e.dbName ?? e.name}', [${values}])`
     })
 }
-
-// ============================================================================
-// Column
-// ============================================================================
 
 function resolveScalarType(field: DMMF.Field, provider: DbProvider): string {
   if (field.nativeType && provider !== 'sqlite') {
@@ -346,7 +334,12 @@ function resolveDefaultValue(
           return { chain: '.default(sql`CURRENT_TIMESTAMP(3)`)', imports: [SQL_IMPORT] }
         return { chain: '.defaultNow()', imports: [] }
       case 'uuid':
-        return { chain: '.$defaultFn(() => crypto.randomUUID())', imports: [] }
+        return dflt.args[0] === 7
+          ? {
+              chain: '.$defaultFn(() => uuidv7())',
+              imports: [{ pkg: 'uuid', kind: 'named', name: 'v7 as uuidv7' }],
+            }
+          : { chain: '.$defaultFn(() => crypto.randomUUID())', imports: [] }
       case 'cuid':
         return dflt.args[0] === 2
           ? {
@@ -481,10 +474,6 @@ function makeColumn(
   return `${field.name}: ${colExpr}${chain}`
 }
 
-// ============================================================================
-// Composite Constraints
-// ============================================================================
-
 function makeCompositeConstraints(
   model: DMMF.Model,
   imports: DrizzleImports,
@@ -518,10 +507,6 @@ function makeCompositeConstraints(
   return all.length > 0 ? all.join(', ') : null
 }
 
-// ============================================================================
-// Table
-// ============================================================================
-
 export function makeTable(
   model: DMMF.Model,
   models: readonly DMMF.Model[],
@@ -546,10 +531,6 @@ export function makeTable(
     ? `export const ${varName} = ${tableFunc}('${tableName}', { ${columns} }, (table) => [${constraints}])`
     : `export const ${varName} = ${tableFunc}('${tableName}', { ${columns} })`
 }
-
-// ============================================================================
-// Relations
-// ============================================================================
 
 function makeRelationField(
   field: DMMF.Field,
@@ -606,7 +587,3 @@ export function makeRelations(
     return `export const ${modelVar}Relations = relations(${modelVar}, ({ ${destructured} }) => ({ ${fieldLines} }))`
   })
 }
-
-// ============================================================================
-// Main
-// ============================================================================

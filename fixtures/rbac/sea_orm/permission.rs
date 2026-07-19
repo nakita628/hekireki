@@ -12,7 +12,7 @@ pub struct Model {
     pub action: String,
     #[sea_orm(column_type = "String(StringLen::N(500))")]
     pub description: Option<String>,
-    pub created_at: DateTimeUtc,
+    pub created_at: DateTime,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

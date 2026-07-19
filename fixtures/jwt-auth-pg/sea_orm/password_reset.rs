@@ -1,4 +1,5 @@
 use sea_orm::entity::prelude::*;
+use sea_orm::Set;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
@@ -12,11 +13,11 @@ pub struct Model {
     #[sea_orm(unique)]
     pub token_hash: String,
     #[sea_orm(column_type = "TimestampWithTimeZone")]
-    pub expires_at: DateTimeUtc,
+    pub expires_at: DateTimeWithTimeZone,
     #[sea_orm(default_value = false)]
     pub used: bool,
     #[sea_orm(column_type = "TimestampWithTimeZone")]
-    pub created_at: DateTimeUtc,
+    pub created_at: DateTimeWithTimeZone,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -35,4 +36,11 @@ impl Related<super::user::Entity> for Entity {
     }
 }
 
-impl ActiveModelBehavior for ActiveModel {}
+impl ActiveModelBehavior for ActiveModel {
+    fn new() -> Self {
+        Self {
+            id: Set(uuid::Uuid::new_v4().to_string()),
+            ..ActiveModelTrait::default()
+        }
+    }
+}

@@ -86,45 +86,6 @@ export function makeCommentBlock(lines: readonly string[], indent: number) {
   return `${prefix}/**\n${lines.map((c) => `${prefix} * ${c}`).join('\n')}\n${prefix} */\n`
 }
 
-export function makePropertiesGenerator(
-  libraryPrefix: string,
-  wrapCardinality?: (expr: string, isRequired: boolean) => string,
-) {
-  return function makeProperties(
-    modelFields: readonly {
-      readonly documentation: string
-      readonly modelName: string
-      readonly fieldName: string
-      readonly validation: string | null
-      readonly isRequired: boolean
-      readonly comment: readonly string[]
-    }[],
-    includeComments: boolean,
-  ) {
-    return modelFields
-      .filter((field) => field.validation)
-      .map((field) => {
-        const cleanLines = field.comment.filter(
-          (line) =>
-            !(
-              line.includes('@relation') ||
-              line.includes('@z') ||
-              line.includes('@v') ||
-              line.includes('@a') ||
-              line.includes('@e') ||
-              line.includes('@t') ||
-              line.includes('@j')
-            ),
-        )
-        const docComment = includeComments ? makeCommentBlock(cleanLines, 2) : ''
-        const base = `${libraryPrefix}.${field.validation}`
-        const wrapped = wrapCardinality ? wrapCardinality(base, field.isRequired) : base
-        return `${docComment}  ${field.fieldName}: ${wrapped}`
-      })
-      .join(',\n')
-  }
-}
-
 export function groupByModel(
   validFields: readonly {
     readonly documentation: string

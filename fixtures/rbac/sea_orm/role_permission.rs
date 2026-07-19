@@ -8,7 +8,7 @@ pub struct Model {
     pub role_id: i32,
     #[sea_orm(primary_key, auto_increment = false)]
     pub permission_id: i32,
-    pub assigned_at: DateTimeUtc,
+    pub assigned_at: DateTime,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

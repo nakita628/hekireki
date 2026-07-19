@@ -14,9 +14,9 @@ pub struct Model {
     #[sea_orm(column_type = "String(StringLen::N(45))")]
     pub ip_address: Option<String>,
     #[sea_orm(column_type = "TimestampWithTimeZone")]
-    pub expires_at: DateTimeUtc,
+    pub expires_at: DateTimeWithTimeZone,
     #[sea_orm(column_type = "TimestampWithTimeZone")]
-    pub created_at: DateTimeUtc,
+    pub created_at: DateTimeWithTimeZone,
     #[sea_orm(default_value = false)]
     pub revoked: bool,
 }

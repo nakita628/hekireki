@@ -1,6 +1,5 @@
 import { css } from 'hono/css'
 
-// Global CSS - CSS Custom Properties + resets
 // :-hono-global prevents css`` from scoping selectors under a generated class,
 // so :root, body, *, a selectors apply globally as intended.
 export const globalCss = css`
@@ -50,7 +49,6 @@ export const globalCss = css`
   }
 `
 
-// Layout
 export const containerClass = css`
   display: flex;
   min-height: 100vh;
@@ -74,7 +72,6 @@ export const mainContentClass = css`
   overflow-x: hidden;
 `
 
-// Header
 export const headerClass = css`
   margin-bottom: 2rem;
 `
@@ -100,12 +97,10 @@ export const darkModeToggleLabelClass = css`
   margin-left: 0.5rem;
 `
 
-// Icon
 export const iconClass = css`
   color: var(--icon-color);
 `
 
-// Typography
 export const h1Class = css`
   font-size: 1.875rem;
   font-weight: 700;
@@ -138,7 +133,6 @@ export const textClass = css`
   color: var(--text-primary);
 `
 
-// Table
 export const tableClass = css`
   border-collapse: collapse;
   table-layout: auto;
@@ -156,7 +150,6 @@ export const tableClass = css`
   }
 `
 
-// TOC
 export const tocSectionClass = css`
   margin-bottom: 0.5rem;
   margin-left: 0.25rem;
@@ -202,7 +195,6 @@ export const tocHeadingClass = css`
   color: var(--text-primary);
 `
 
-// Code block
 export const codeBlockClass = css`
   background: var(--code-bg);
   color: var(--code-color);
@@ -216,7 +208,6 @@ export const codeBlockClass = css`
   margin: 0;
 `
 
-// Section
 export const sectionClass = css`
   margin-bottom: 2rem;
 `
@@ -240,7 +231,6 @@ export const operationItemClass = css`
   margin-top: 1rem;
 `
 
-// Dividers
 export const hrClass = css`
   margin: 2rem 0;
   border: none;
@@ -253,12 +243,10 @@ export const hrSmallClass = css`
   border-top: 1px solid var(--border-color);
 `
 
-// List
 export const listItemClass = css`
   margin-bottom: 1rem;
 `
 
-// Spacing utilities
 export const mb2Class = css`
   margin-bottom: 0.5rem;
 `

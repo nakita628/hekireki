@@ -4,14 +4,10 @@ import { promisify } from 'node:util'
 
 import { afterAll, afterEach, describe, expect, it } from 'vite-plus/test'
 
-// Test run
-// pnpm vitest run ./src/generator/arktype/index.test.ts
-
 const command = async () => {
   await promisify(exec)('npx prisma generate --schema=./prisma-arktype/schema.prisma')
 }
 
-// arktype
 describe('prisma generate arktype', () => {
   afterEach(() => {
     fs.rmSync('./prisma-arktype/schema.prisma', { force: true })
@@ -21,7 +17,6 @@ describe('prisma generate arktype', () => {
   afterAll(() => {
     fs.rmSync('./prisma-arktype', { recursive: true, force: true })
   })
-  // default
   it('hekireki-arktype', async () => {
     const prisma = `generator client {
     provider = "prisma-client-js"
@@ -108,7 +103,6 @@ export const PostSchema = type({
     expect(result).toBe(expected)
   }, 30000)
 
-  // comment true
   it('hekireki-arktype comment true', async () => {
     const prisma = `generator client {
     provider = "prisma-client-js"
@@ -193,7 +187,6 @@ export const PostSchema = type({
     expect(result).toBe(expected)
   }, 30000)
 
-  // type true
   it('hekireki-arktype type true', async () => {
     const prisma = `generator client {
     provider = "prisma-client-js"
@@ -258,7 +251,6 @@ export type Post = typeof PostSchema.infer
     expect(result).toBe(expected)
   }, 30000)
 
-  // type + comment + relation
   it('hekireki-arktype type true comment true relation true', async () => {
     const prisma = `generator client {
     provider = "prisma-client-js"
@@ -357,7 +349,6 @@ export type PostRelations = typeof PostRelationsSchema.infer
     expect(result).toBe(expected)
   }, 30000)
 
-  // custom output path
   it('hekireki-arktype output arktype-test/test.ts', async () => {
     const prisma = `generator client {
     provider = "prisma-client-js"
@@ -398,7 +389,6 @@ export const UserSchema = type({
   }, 30000)
 })
 
-// no annotation
 describe('prisma generate arktype (no annotation)', () => {
   afterEach(() => {
     fs.rmSync('./prisma-arktype/schema.prisma', { force: true })
@@ -520,7 +510,6 @@ export const PostRelationsSchema = type({ ...PostSchema.t, user: UserSchema })
   }, 30000)
 })
 
-// edge cases
 describe('prisma generate arktype (edge cases)', () => {
   afterEach(() => {
     fs.rmSync('./prisma-arktype/schema.prisma', { force: true })

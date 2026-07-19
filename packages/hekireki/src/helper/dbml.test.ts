@@ -634,10 +634,6 @@ describe('helper/dbml', () => {
     })
   })
 
-  // ============================================================================
-  // Real-world use case tests
-  // ============================================================================
-
   describe('E-Commerce schema', () => {
     const orderModel: DMMF.Model = {
       name: 'Order',

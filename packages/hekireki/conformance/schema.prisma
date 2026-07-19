@@ -28,6 +28,16 @@ generator Hekireki-Drizzle {
   output   = "harness/drizzle/schema.ts"
 }
 
+generator Hekireki-ActiveRecord {
+  provider = "hekireki-activerecord"
+  output   = "harness/activerecord/models"
+}
+
+generator Hekireki-Eloquent {
+  provider = "hekireki-eloquent"
+  output   = "harness/eloquent/models"
+}
+
 enum Status {
   ACTIVE
   INACTIVE
@@ -110,6 +120,22 @@ model Tag {
   id    String @id @default(uuid())
   label String @unique
   posts Post[]
+}
+
+// UUIDv7 primary key: every ORM must emit version-aware client-side
+// generation (uuid(7) is silently distinct from uuid() in DMMF args).
+model Event {
+  id      String   @id @default(uuid(7))
+  name    String
+  happens DateTime
+}
+
+// ULID primary key: client-side ULID generation in every ORM
+// (ulidx / python-ulid / oklog/ulid / ulid crate / Ecto.ULID / ulid gem /
+// HasUlids).
+model Ticket {
+  id    String @id @default(ulid())
+  label String
 }
 
 // Field names that are reserved words in Rust (type/match/self) and Python

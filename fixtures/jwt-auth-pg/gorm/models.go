@@ -1,6 +1,10 @@
 package model
 
-import "time"
+import (
+	"time"
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+)
 
 type User struct {
 	ID string `gorm:"column:id;primaryKey;type:char(36)" json:"id"`
@@ -26,6 +30,13 @@ func (User) TableName() string {
 	return "users"
 }
 
+func (m *User) BeforeCreate(_ *gorm.DB) error {
+	if m.ID == "" {
+		m.ID = uuid.NewString()
+	}
+	return nil
+}
+
 type OAuthAccount struct {
 	ID string `gorm:"column:id;primaryKey;type:char(36)" json:"id"`
 	UserID string `gorm:"column:user_id;index:idx_oauth_accounts_user_id;type:char(36);not null" json:"user_id"`
@@ -40,6 +51,13 @@ type OAuthAccount struct {
 
 func (OAuthAccount) TableName() string {
 	return "oauth_accounts"
+}
+
+func (m *OAuthAccount) BeforeCreate(_ *gorm.DB) error {
+	if m.ID == "" {
+		m.ID = uuid.NewString()
+	}
+	return nil
 }
 
 type TwoFactorSetting struct {
@@ -58,6 +76,13 @@ type TwoFactorSetting struct {
 
 func (TwoFactorSetting) TableName() string {
 	return "two_factor_settings"
+}
+
+func (m *TwoFactorSetting) BeforeCreate(_ *gorm.DB) error {
+	if m.ID == "" {
+		m.ID = uuid.NewString()
+	}
+	return nil
 }
 
 type RefreshToken struct {
@@ -89,6 +114,13 @@ func (EmailVerification) TableName() string {
 	return "email_verifications"
 }
 
+func (m *EmailVerification) BeforeCreate(_ *gorm.DB) error {
+	if m.ID == "" {
+		m.ID = uuid.NewString()
+	}
+	return nil
+}
+
 type PasswordReset struct {
 	ID string `gorm:"column:id;primaryKey;type:char(36)" json:"id"`
 	UserID string `gorm:"column:user_id;index:idx_password_resets_user_id;type:char(36);not null" json:"user_id"`
@@ -101,4 +133,11 @@ type PasswordReset struct {
 
 func (PasswordReset) TableName() string {
 	return "password_resets"
+}
+
+func (m *PasswordReset) BeforeCreate(_ *gorm.DB) error {
+	if m.ID == "" {
+		m.ID = uuid.NewString()
+	}
+	return nil
 }

@@ -6,9 +6,6 @@ import { afterEach, describe, expect, it } from 'vite-plus/test'
 
 import { emit, emitMany, emitRaw } from './index.js'
 
-// Test run
-// pnpm vitest run ./src/emit/index.test.ts
-
 const TEST_DIR = path.join(process.cwd(), 'test-tmp-emit-dir')
 
 afterEach(async () => {

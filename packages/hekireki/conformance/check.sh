@@ -11,7 +11,7 @@
 #                                              # toolchain is skipped with a note
 #   bash conformance/check.sh gorm sqlalchemy  # only these; a missing toolchain
 #                                              # is a hard error (CI mode)
-#   languages: gorm | sea-orm | sqlalchemy | ecto | drizzle
+#   languages: gorm | sea-orm | sqlalchemy | ecto | drizzle | activerecord | eloquent
 #
 # Requires dist/ to be built first (`pnpm build`); the `pnpm conformance`
 # script chains the two.
@@ -29,15 +29,15 @@ if [ "$#" -gt 0 ]; then
   langs=("$@")
   strict=1
 else
-  langs=(gorm sea-orm sqlalchemy ecto drizzle)
+  langs=(gorm sea-orm sqlalchemy ecto drizzle activerecord eloquent)
   strict=0
 fi
 
 for lang in "${langs[@]}"; do
   case "$lang" in
-    gorm | sea-orm | sqlalchemy | ecto | drizzle) ;;
+    gorm | sea-orm | sqlalchemy | ecto | drizzle | activerecord | eloquent) ;;
     *)
-      echo "error: unknown language '$lang' (expected gorm | sea-orm | sqlalchemy | ecto | drizzle)" >&2
+      echo "error: unknown language '$lang' (expected gorm | sea-orm | sqlalchemy | ecto | drizzle | activerecord | eloquent)" >&2
       exit 1
       ;;
   esac
@@ -52,6 +52,8 @@ toolchain_of() {
     sqlalchemy) echo python3 ;;
     ecto) echo mix ;;
     drizzle) echo node ;;
+    activerecord) echo ruby ;;
+    eloquent) echo php ;;
   esac
 }
 
@@ -76,14 +78,16 @@ fi
 # prisma resolves `provider = "hekireki-gorm"` by name on PATH: link the built
 # bins, drop stale output, regenerate everything from the conformance schema.
 mkdir -p node_modules/.bin
-for g in gorm sea-orm sqlalchemy ecto drizzle; do
+for g in gorm sea-orm sqlalchemy ecto drizzle activerecord eloquent; do
   ln -sf "../../dist/bin/$g.js" "node_modules/.bin/hekireki-$g"
 done
 rm -rf "$harness/gorm/model/models.go" \
   "$harness/sea-orm/src/entities" \
   "$harness/sqlalchemy/models.py" \
   "$harness/ecto/lib" \
-  "$harness/drizzle/schema.ts"
+  "$harness/drizzle/schema.ts" \
+  "$harness/activerecord/models" \
+  "$harness/eloquent/models"
 PATH="$PWD/node_modules/.bin:$PATH" DATABASE_URL=postgresql://localhost/conformance \
   npx prisma generate --schema conformance/schema.prisma
 
@@ -114,6 +118,7 @@ for lang in "${runnable[@]}"; do
         if [ ! -d .venv ]; then python3 -m venv .venv; fi
         .venv/bin/pip install --quiet -r requirements.txt
         .venv/bin/mypy --config-file mypy.ini models.py smoke.py # type: real SQLAlchemy API + invariants
+        .venv/bin/python smoke.py # runtime: mapper resolution + pg ddl + sqlite insert
       )
       ;;
     ecto)
@@ -131,6 +136,27 @@ for lang in "${runnable[@]}"; do
         # compile-only harness, no untrusted input, not shipped to npm).
         mix hex.audit || true
         mix compile --force # type: real Ecto API
+      )
+      ;;
+    activerecord)
+      (
+        cd "$harness/activerecord"
+        for f in models/*.rb; do
+          ruby -c "$f" > /dev/null # syntax
+        done
+        bundle config set --local path vendor/bundle
+        bundle install --quiet
+        bundle exec ruby smoke.rb # real Active Record API: load + reflection
+      )
+      ;;
+    eloquent)
+      (
+        cd "$harness/eloquent"
+        for f in models/*.php; do
+          php -l "$f" > /dev/null # syntax
+        done
+        composer install --quiet --no-interaction
+        php smoke.php # real Eloquent API: load + instantiate + cast resolution
       )
       ;;
     drizzle)

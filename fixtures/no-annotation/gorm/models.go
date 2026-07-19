@@ -1,6 +1,10 @@
 package model
 
-import "time"
+import (
+	"time"
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+)
 
 type User struct {
 	ID string `gorm:"column:id;primaryKey;type:char(36)" json:"id"`
@@ -15,6 +19,13 @@ type User struct {
 	Profile *Profile `gorm:"foreignKey:UserID"`
 }
 
+func (m *User) BeforeCreate(_ *gorm.DB) error {
+	if m.ID == "" {
+		m.ID = uuid.NewString()
+	}
+	return nil
+}
+
 type Post struct {
 	ID string `gorm:"column:id;primaryKey;type:char(36)" json:"id"`
 	Title string `gorm:"column:title;not null" json:"title"`
@@ -27,6 +38,13 @@ type Post struct {
 	Tags []Tag `gorm:"many2many:_PostToTag;"`
 }
 
+func (m *Post) BeforeCreate(_ *gorm.DB) error {
+	if m.ID == "" {
+		m.ID = uuid.NewString()
+	}
+	return nil
+}
+
 type Profile struct {
 	ID string `gorm:"column:id;primaryKey;type:char(36)" json:"id"`
 	Bio *string `gorm:"column:bio" json:"bio"`
@@ -35,8 +53,22 @@ type Profile struct {
 	User User
 }
 
+func (m *Profile) BeforeCreate(_ *gorm.DB) error {
+	if m.ID == "" {
+		m.ID = uuid.NewString()
+	}
+	return nil
+}
+
 type Tag struct {
 	ID string `gorm:"column:id;primaryKey;type:char(36)" json:"id"`
 	Name string `gorm:"column:name;uniqueIndex;not null" json:"name"`
 	Posts []Post `gorm:"many2many:_PostToTag;"`
+}
+
+func (m *Tag) BeforeCreate(_ *gorm.DB) error {
+	if m.ID == "" {
+		m.ID = uuid.NewString()
+	}
+	return nil
 }

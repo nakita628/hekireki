@@ -1,4 +1,5 @@
 use sea_orm::entity::prelude::*;
+use sea_orm::Set;
 use serde::{Deserialize, Serialize};
 use super::two_factor_method::TwoFactorMethod;
 
@@ -19,11 +20,11 @@ pub struct Model {
     pub phone_number: Option<String>,
     pub backup_codes: Option<String>,
     #[sea_orm(column_type = "TimestampWithTimeZone")]
-    pub verified_at: Option<DateTimeUtc>,
+    pub verified_at: Option<DateTimeWithTimeZone>,
     #[sea_orm(column_type = "TimestampWithTimeZone")]
-    pub created_at: DateTimeUtc,
+    pub created_at: DateTimeWithTimeZone,
     #[sea_orm(column_type = "TimestampWithTimeZone")]
-    pub updated_at: DateTimeUtc,
+    pub updated_at: DateTimeWithTimeZone,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -42,4 +43,11 @@ impl Related<super::user::Entity> for Entity {
     }
 }
 
-impl ActiveModelBehavior for ActiveModel {}
+impl ActiveModelBehavior for ActiveModel {
+    fn new() -> Self {
+        Self {
+            id: Set(uuid::Uuid::new_v4().to_string()),
+            ..ActiveModelTrait::default()
+        }
+    }
+}

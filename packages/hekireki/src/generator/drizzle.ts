@@ -23,6 +23,9 @@ export function drizzleSchema(
   )
   const relationsLines = makeRelations(datamodel.models, imports)
 
+  const enumLinesWithGap = enumLines.flatMap((line, i) =>
+    i < enumLines.length - 1 ? [line, ''] : [line],
+  )
   const tableLinesWithGap = tableLines.flatMap((line, i) =>
     i < tableLines.length - 1 ? [line, ''] : [line],
   )
@@ -33,7 +36,7 @@ export function drizzleSchema(
   return [
     generateImports(imports, db),
     '',
-    ...(enumLines.length > 0 ? [...enumLines, ''] : []),
+    ...(enumLinesWithGap.length > 0 ? [...enumLinesWithGap, ''] : []),
     ...tableLinesWithGap,
     ...(relationsLinesWithGap.length > 0 ? ['', ...relationsLinesWithGap] : []),
   ].join('\n')

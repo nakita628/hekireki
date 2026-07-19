@@ -222,10 +222,6 @@ describe('helper/effect', () => {
     })
   })
 
-  // ============================================================================
-  // Real-world use case tests
-  // ============================================================================
-
   describe('E-Commerce order pattern', () => {
     it('generates Order schema with comments and nullable field', () => {
       const orderFields = [

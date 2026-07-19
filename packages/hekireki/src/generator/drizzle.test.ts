@@ -35,10 +35,6 @@ function makeDatamodel(models: DMMF.Model[], enums: DMMF.DatamodelEnum[] = []): 
   return { models, enums, types: [] }
 }
 
-// ============================================================================
-// drizzleSchema — PostgreSQL
-// ============================================================================
-
 describe('drizzleSchema', () => {
   describe('postgresql', () => {
     it('should generate basic User + Post schema', () => {
@@ -98,10 +94,6 @@ describe('drizzleSchema', () => {
     })
   })
 
-  // ============================================================================
-  // drizzleSchema — SQLite
-  // ============================================================================
-
   describe('sqlite', () => {
     it('should generate SQLite schema with correct type functions', () => {
       const datamodel = makeDatamodel([
@@ -130,10 +122,6 @@ describe('drizzleSchema', () => {
     })
   })
 
-  // ============================================================================
-  // drizzleSchema — MySQL
-  // ============================================================================
-
   describe('mysql', () => {
     it('should generate MySQL schema', () => {
       const datamodel = makeDatamodel([
@@ -159,10 +147,6 @@ describe('drizzleSchema', () => {
       )
     })
   })
-
-  // ============================================================================
-  // Enum fields
-  // ============================================================================
 
   describe('enum fields', () => {
     it('should generate PostgreSQL enum', () => {
@@ -299,10 +283,6 @@ describe('drizzleSchema', () => {
     })
   })
 
-  // ============================================================================
-  // Optional / nullable fields
-  // ============================================================================
-
   describe('optional fields', () => {
     it('should not add .notNull() for optional fields', () => {
       const datamodel = makeDatamodel([
@@ -329,10 +309,6 @@ describe('drizzleSchema', () => {
       )
     })
   })
-
-  // ============================================================================
-  // Default values
-  // ============================================================================
 
   describe('default values', () => {
     it('should handle string default', () => {
@@ -615,6 +591,66 @@ describe('drizzleSchema', () => {
 
       expect(result).toBe(
         "import { pgTable, text } from 'drizzle-orm/pg-core'\n\nexport const user = pgTable('user', { id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()) })",
+      )
+    })
+
+    it('should separate multiple enum declarations with blank lines', () => {
+      const datamodel = makeDatamodel(
+        [
+          makeModel({
+            name: 'User',
+            fields: [
+              makeField({
+                name: 'id',
+                type: 'Int',
+                isId: true,
+                hasDefaultValue: true,
+                default: { name: 'autoincrement', args: [] },
+              }),
+              makeField({ name: 'role', type: 'Role', kind: 'enum' }),
+              makeField({ name: 'status', type: 'Status', kind: 'enum' }),
+            ],
+          }),
+        ],
+        [
+          { name: 'Role', values: [{ name: 'ADMIN' }, { name: 'USER' }], dbName: null },
+          { name: 'Status', values: [{ name: 'ACTIVE' }, { name: 'INACTIVE' }], dbName: null },
+        ] as DMMF.DatamodelEnum[],
+      )
+
+      const result = drizzleSchema(datamodel, 'postgresql', [])
+
+      expect(result).toBe(
+        `import { pgEnum, pgTable, serial } from 'drizzle-orm/pg-core'
+
+export const roleEnum = pgEnum('Role', ['ADMIN', 'USER'])
+
+export const statusEnum = pgEnum('Status', ['ACTIVE', 'INACTIVE'])
+
+export const user = pgTable('user', { id: serial('id').primaryKey(), role: roleEnum('role').notNull(), status: statusEnum('status').notNull() })`,
+      )
+    })
+
+    it('should generate a uuid v7 default with a named import for uuid(7)', () => {
+      const datamodel = makeDatamodel([
+        makeModel({
+          name: 'User',
+          fields: [
+            makeField({
+              name: 'id',
+              type: 'String',
+              isId: true,
+              hasDefaultValue: true,
+              default: { name: 'uuid', args: [7] },
+            }),
+          ],
+        }),
+      ])
+
+      const result = drizzleSchema(datamodel, 'postgresql', [])
+
+      expect(result).toBe(
+        "import { pgTable, text } from 'drizzle-orm/pg-core'\nimport { v7 as uuidv7 } from 'uuid'\n\nexport const user = pgTable('user', { id: text('id').primaryKey().$defaultFn(() => uuidv7()) })",
       )
     })
   })

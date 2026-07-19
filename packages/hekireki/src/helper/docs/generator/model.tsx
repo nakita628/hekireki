@@ -118,7 +118,6 @@ const escapeHtml = (str: string): string =>
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;')
 
-// Components
 const DirectiveRow: FC<{ directive: MGModelDirective }> = ({ directive }) => (
   <tr>
     <td>
@@ -313,7 +312,6 @@ const ModelsSection: FC<{ data: ModelGeneratorStructure }> = ({ data }) => (
   </div>
 )
 
-// Data transformation functions
 const getModelDirective = (model: DMMF.Model): readonly MGModelDirective[] => {
   const directiveValue: MGModelDirective[] = []
 

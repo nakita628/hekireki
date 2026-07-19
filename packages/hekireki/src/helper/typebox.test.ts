@@ -270,10 +270,6 @@ describe('helper/typebox', () => {
     })
   })
 
-  // ============================================================================
-  // Real-world use case tests
-  // ============================================================================
-
   describe('E-Commerce order pattern', () => {
     it('generates Order schema with enum and type', () => {
       const models = [
@@ -386,10 +382,6 @@ describe('helper/typebox', () => {
     })
   })
 
-  // ============================================================================
-  // Edge case tests
-  // ============================================================================
-
   describe('edge cases', () => {
     it('generates schema with all optional fields', () => {
       const result = makeTypeBoxSchemas(
@@ -488,10 +480,6 @@ describe('helper/typebox', () => {
       expect(result).toContain('export const UserRelationsSchema')
     })
   })
-
-  // ============================================================================
-  // Session auth pattern
-  // ============================================================================
 
   describe('Session auth pattern', () => {
     it('generates Session schema with mixed required/optional and Date', () => {

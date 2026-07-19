@@ -4,9 +4,6 @@ import { promisify } from 'node:util'
 
 import { afterAll, afterEach, describe, expect, it } from 'vite-plus/test'
 
-// Test run
-// pnpm vitest run ./src/generator/sqlalchemy/index.test.ts
-
 describe('prisma generate', () => {
   afterEach(() => {
     fs.rmSync('./prisma-sqlalchemy/sqlalchemy', { recursive: true, force: true })
@@ -54,6 +51,7 @@ model Post {
     })
     const expected = `from sqlalchemy import ForeignKey
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+import uuid as uuid_mod
 
 
 class Base(DeclarativeBase):
@@ -63,7 +61,7 @@ class Base(DeclarativeBase):
 class User(Base):
     __tablename__ = "user"
 
-    id: Mapped[str] = mapped_column(primary_key=True)
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid_mod.uuid4()))
     name: Mapped[str]
 
     posts: Mapped[list["Post"]] = relationship(back_populates="user")
@@ -71,7 +69,7 @@ class User(Base):
 class Post(Base):
     __tablename__ = "post"
 
-    id: Mapped[str] = mapped_column(primary_key=True)
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid_mod.uuid4()))
     title: Mapped[str]
     content: Mapped[str]
     user_id: Mapped[str] = mapped_column(ForeignKey("user.id"))
@@ -118,6 +116,7 @@ model Profile {
     })
     const expected = `from sqlalchemy import ForeignKey
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+import uuid as uuid_mod
 
 
 class Base(DeclarativeBase):
@@ -127,15 +126,15 @@ class Base(DeclarativeBase):
 class User(Base):
     __tablename__ = "user"
 
-    id: Mapped[str] = mapped_column(primary_key=True)
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid_mod.uuid4()))
     name: Mapped[str]
 
-    profile: Mapped["Profile"] = relationship(back_populates="user", uselist=False)
+    profile: Mapped[Optional["Profile"]] = relationship(back_populates="user")
 
 class Profile(Base):
     __tablename__ = "profile"
 
-    id: Mapped[str] = mapped_column(primary_key=True)
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid_mod.uuid4()))
     bio: Mapped[str]
     user_id: Mapped[str] = mapped_column(ForeignKey("user.id"), unique=True)
 
@@ -183,6 +182,7 @@ model Follow {
     })
     const expected = `from sqlalchemy import ForeignKey
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+import uuid as uuid_mod
 
 
 class Base(DeclarativeBase):
@@ -192,7 +192,7 @@ class Base(DeclarativeBase):
 class User(Base):
     __tablename__ = "user"
 
-    id: Mapped[str] = mapped_column(primary_key=True)
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid_mod.uuid4()))
     name: Mapped[str]
 
     followers: Mapped[list["Follow"]] = relationship(foreign_keys="Follow.following_id", back_populates="following")
@@ -201,7 +201,7 @@ class User(Base):
 class Follow(Base):
     __tablename__ = "follow"
 
-    id: Mapped[str] = mapped_column(primary_key=True)
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid_mod.uuid4()))
     follower_id: Mapped[str] = mapped_column(ForeignKey("user.id"))
     following_id: Mapped[str] = mapped_column(ForeignKey("user.id"))
 
@@ -395,6 +395,7 @@ model Like {
     })
     const expected = `from sqlalchemy import ForeignKey
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+import uuid as uuid_mod
 
 
 class Base(DeclarativeBase):
@@ -404,7 +405,7 @@ class Base(DeclarativeBase):
 class User(Base):
     __tablename__ = "user"
 
-    id: Mapped[str] = mapped_column(primary_key=True)
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid_mod.uuid4()))
     name: Mapped[str]
 
     likes: Mapped[list["Like"]] = relationship(back_populates="user")
@@ -412,7 +413,7 @@ class User(Base):
 class Post(Base):
     __tablename__ = "post"
 
-    id: Mapped[str] = mapped_column(primary_key=True)
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid_mod.uuid4()))
     title: Mapped[str]
 
     likes: Mapped[list["Like"]] = relationship(back_populates="post")
@@ -459,6 +460,7 @@ model Agent {
       encoding: 'utf-8',
     })
     const expected = `from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+import uuid as uuid_mod
 
 
 class Base(DeclarativeBase):
@@ -468,7 +470,7 @@ class Base(DeclarativeBase):
 class Agent(Base):
     __tablename__ = "agent"
 
-    id: Mapped[str] = mapped_column(primary_key=True)
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid_mod.uuid4()))
     code_name: Mapped[str]
     active: Mapped[bool] = mapped_column(default=True)
     priority: Mapped[int] = mapped_column(default=1)
@@ -512,6 +514,7 @@ model Tag {
     })
     const expected = `from sqlalchemy import Column, ForeignKey, String, Table
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+import uuid as uuid_mod
 
 
 class Base(DeclarativeBase):
@@ -528,7 +531,7 @@ post_to_tag = Table(
 class Post(Base):
     __tablename__ = "post"
 
-    id: Mapped[str] = mapped_column(primary_key=True)
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid_mod.uuid4()))
     title: Mapped[str]
 
     tags: Mapped[list["Tag"]] = relationship(secondary=post_to_tag, back_populates="posts")
@@ -536,7 +539,7 @@ class Post(Base):
 class Tag(Base):
     __tablename__ = "tag"
 
-    id: Mapped[str] = mapped_column(primary_key=True)
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid_mod.uuid4()))
     name: Mapped[str]
 
     posts: Mapped[list["Post"]] = relationship(secondary=post_to_tag, back_populates="tags")
@@ -576,6 +579,7 @@ model Account {
     })
     const expected = `from sqlalchemy import UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+import uuid as uuid_mod
 
 
 class Base(DeclarativeBase):
@@ -585,7 +589,7 @@ class Base(DeclarativeBase):
 class Account(Base):
     __tablename__ = "account"
 
-    id: Mapped[str] = mapped_column(primary_key=True)
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid_mod.uuid4()))
     provider: Mapped[str]
     provider_account_id: Mapped[str]
 
@@ -625,6 +629,7 @@ model User {
     })
     const expected = `from sqlalchemy import String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+import uuid as uuid_mod
 
 
 class Base(DeclarativeBase):
@@ -634,7 +639,7 @@ class Base(DeclarativeBase):
 class User(Base):
     __tablename__ = "user"
 
-    id: Mapped[str] = mapped_column(primary_key=True)
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid_mod.uuid4()))
     name: Mapped[str] = mapped_column(String(191))
 `
     expect(result).toBe(expected)
@@ -691,6 +696,7 @@ model Category {
     })
     const expected = `from sqlalchemy import Column, ForeignKey, String, Table
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+import uuid as uuid_mod
 
 
 class Base(DeclarativeBase):
@@ -714,7 +720,7 @@ category_to_post = Table(
 class User(Base):
     __tablename__ = "user"
 
-    id: Mapped[str] = mapped_column(primary_key=True)
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid_mod.uuid4()))
     name: Mapped[str]
 
     posts: Mapped[list["Post"]] = relationship(back_populates="user")
@@ -722,7 +728,7 @@ class User(Base):
 class Post(Base):
     __tablename__ = "post"
 
-    id: Mapped[str] = mapped_column(primary_key=True)
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid_mod.uuid4()))
     title: Mapped[str]
     user_id: Mapped[str] = mapped_column(ForeignKey("user.id"))
 
@@ -733,7 +739,7 @@ class Post(Base):
 class Tag(Base):
     __tablename__ = "tag"
 
-    id: Mapped[str] = mapped_column(primary_key=True)
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid_mod.uuid4()))
     name: Mapped[str]
 
     posts: Mapped[list["Post"]] = relationship(secondary=post_to_tag, back_populates="tags")
@@ -741,7 +747,7 @@ class Tag(Base):
 class Category(Base):
     __tablename__ = "category"
 
-    id: Mapped[str] = mapped_column(primary_key=True)
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid_mod.uuid4()))
     name: Mapped[str]
 
     posts: Mapped[list["Post"]] = relationship(secondary=category_to_post, back_populates="categories")
@@ -749,10 +755,6 @@ class Category(Base):
     expect(result).toBe(expected)
   }, 30000)
 })
-
-// ============================================================================
-// Fixture-based integration tests — strict toBe matching
-// ============================================================================
 
 describe('fixture: twitter-clone-sample', () => {
   afterAll(() => {
@@ -769,6 +771,7 @@ describe('fixture: twitter-clone-sample', () => {
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from typing import Optional
 from datetime import datetime
+import uuid as uuid_mod
 
 
 class Base(DeclarativeBase):
@@ -778,7 +781,7 @@ class Base(DeclarativeBase):
 class User(Base):
     __tablename__ = "user"
 
-    id: Mapped[str] = mapped_column(primary_key=True)
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid_mod.uuid4()))
     name: Mapped[str]
     username: Mapped[str] = mapped_column(unique=True)
     bio: Mapped[Optional[str]] = mapped_column(default="")
@@ -789,7 +792,7 @@ class User(Base):
     profile_image: Mapped[Optional[str]]
     hashed_password: Mapped[Optional[str]]
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(default=func.now(), onupdate=func.now())
     has_notification: Mapped[Optional[bool]] = mapped_column(default=False)
 
     posts: Mapped[list["Post"]] = relationship(back_populates="user")
@@ -802,10 +805,10 @@ class User(Base):
 class Post(Base):
     __tablename__ = "post"
 
-    id: Mapped[str] = mapped_column(primary_key=True)
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid_mod.uuid4()))
     body: Mapped[str]
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(default=func.now(), onupdate=func.now())
     user_id: Mapped[str] = mapped_column(ForeignKey("user.id"))
 
     user: Mapped["User"] = relationship(back_populates="posts")
@@ -835,16 +838,16 @@ class Like(Base):
 class Comment(Base):
     __tablename__ = "comment"
 
-    id: Mapped[str] = mapped_column(primary_key=True)
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid_mod.uuid4()))
     body: Mapped[str]
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(default=func.now(), onupdate=func.now())
     user_id: Mapped[str] = mapped_column(ForeignKey("user.id"))
     post_id: Mapped[str] = mapped_column(ForeignKey("post.id"))
 
     __table_args__ = (
-        Index("idx_user_id", "user_id"),
-        Index("idx_post_id", "post_id"),
+        Index("idx_comment_user_id", "user_id"),
+        Index("idx_comment_post_id", "post_id"),
     )
 
     user: Mapped["User"] = relationship(back_populates="comments")
@@ -853,13 +856,13 @@ class Comment(Base):
 class Notification(Base):
     __tablename__ = "notification"
 
-    id: Mapped[str] = mapped_column(primary_key=True)
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid_mod.uuid4()))
     body: Mapped[str]
     user_id: Mapped[str] = mapped_column(ForeignKey("user.id"))
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     __table_args__ = (
-        Index("idx_user_id", "user_id"),
+        Index("idx_notification_user_id", "user_id"),
     )
 
     user: Mapped["User"] = relationship(back_populates="notifications")
@@ -894,7 +897,7 @@ class Organization(Base):
     slug: Mapped[str] = mapped_column(String(100), unique=True)
     status: Mapped[str] = mapped_column(Enum("ACTIVE", "INACTIVE", "SUSPENDED", name="org_status"), default="ACTIVE")
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(default=func.now(), onupdate=func.now())
 
     users: Mapped[list["User"]] = relationship(back_populates="organization")
 
@@ -906,10 +909,10 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True)
     name: Mapped[str] = mapped_column(String(100))
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(default=func.now(), onupdate=func.now())
 
     __table_args__ = (
-        Index("idx_organization_id", "organization_id"),
+        Index("idx_users_organization_id", "organization_id"),
     )
 
     organization: Mapped["Organization"] = relationship(back_populates="users")
@@ -923,7 +926,7 @@ class Role(Base):
     name: Mapped[str] = mapped_column(String(100), unique=True)
     description: Mapped[Optional[str]] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(default=func.now(), onupdate=func.now())
 
     user_roles: Mapped[list["UserRole"]] = relationship(back_populates="role")
     role_permissions: Mapped[list["RolePermission"]] = relationship(back_populates="role")
@@ -975,8 +978,8 @@ class AuditLog(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     __table_args__ = (
-        Index("idx_user_id", "user_id"),
-        Index("idx_created_at", "created_at"),
+        Index("idx_audit_logs_user_id", "user_id"),
+        Index("idx_audit_logs_created_at", "created_at"),
     )
 
     user: Mapped["User"] = relationship(back_populates="audit_logs")
@@ -998,6 +1001,7 @@ describe('fixture: no-annotation (M2M implicit)', () => {
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from typing import Optional
 from datetime import datetime
+import uuid as uuid_mod
 
 
 class Base(DeclarativeBase):
@@ -1014,27 +1018,27 @@ post_to_tag = Table(
 class User(Base):
     __tablename__ = "user"
 
-    id: Mapped[str] = mapped_column(primary_key=True)
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid_mod.uuid4()))
     email: Mapped[str] = mapped_column(unique=True)
     name: Mapped[Optional[str]]
     age: Mapped[Optional[int]]
     is_active: Mapped[bool] = mapped_column(default=True)
     role: Mapped[str] = mapped_column(Enum("ADMIN", "MEMBER", "GUEST", name="role"), default="MEMBER")
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(default=func.now(), onupdate=func.now())
 
     posts: Mapped[list["Post"]] = relationship(back_populates="author")
-    profile: Mapped["Profile"] = relationship(back_populates="user", uselist=False)
+    profile: Mapped[Optional["Profile"]] = relationship(back_populates="user")
 
 class Post(Base):
     __tablename__ = "post"
 
-    id: Mapped[str] = mapped_column(primary_key=True)
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid_mod.uuid4()))
     title: Mapped[str]
     content: Mapped[str]
     published: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(default=func.now(), onupdate=func.now())
     author_id: Mapped[str] = mapped_column(ForeignKey("user.id"))
 
     author: Mapped["User"] = relationship(back_populates="posts")
@@ -1043,7 +1047,7 @@ class Post(Base):
 class Profile(Base):
     __tablename__ = "profile"
 
-    id: Mapped[str] = mapped_column(primary_key=True)
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid_mod.uuid4()))
     bio: Mapped[Optional[str]]
     avatar: Mapped[Optional[str]]
     user_id: Mapped[str] = mapped_column(ForeignKey("user.id"), unique=True)
@@ -1053,7 +1057,7 @@ class Profile(Base):
 class Tag(Base):
     __tablename__ = "tag"
 
-    id: Mapped[str] = mapped_column(primary_key=True)
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid_mod.uuid4()))
     name: Mapped[str] = mapped_column(unique=True)
 
     posts: Mapped[list["Post"]] = relationship(secondary=post_to_tag, back_populates="tags")
@@ -1070,7 +1074,7 @@ describe('fixture: jwt-auth-pg', () => {
     await promisify(exec)('npx prisma generate --schema=../../fixtures/jwt-auth-pg/schema.prisma')
 
     expect(fs.readFileSync('../../fixtures/jwt-auth-pg/sqlalchemy/models.py', 'utf-8')).toBe(
-      `from sqlalchemy import Enum, ForeignKey, Index, Numeric, String, UniqueConstraint, Uuid, func
+      `from sqlalchemy import DateTime, Enum, ForeignKey, Index, Numeric, String, UniqueConstraint, Uuid, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from typing import Optional
 from decimal import Decimal as DecimalType
@@ -1085,7 +1089,7 @@ class Base(DeclarativeBase):
 class User(Base):
     __tablename__ = "users"
 
-    id: Mapped[uuid_mod.UUID] = mapped_column(Uuid, primary_key=True)
+    id: Mapped[uuid_mod.UUID] = mapped_column(Uuid, primary_key=True, default=uuid_mod.uuid4)
     email: Mapped[str] = mapped_column(String(255), unique=True)
     password_hash: Mapped[Optional[str]]
     name: Mapped[str] = mapped_column(String(100))
@@ -1094,31 +1098,31 @@ class User(Base):
     credit_balance: Mapped[DecimalType] = mapped_column(Numeric(precision=10, scale=2), default=0)
     email_verified: Mapped[bool] = mapped_column(default=False)
     is_active: Mapped[bool] = mapped_column(default=True)
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(onupdate=func.now())
-    last_login_at: Mapped[Optional[datetime]]
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     oauth_accounts: Mapped[list["OAuthAccount"]] = relationship(back_populates="user")
     refresh_tokens: Mapped[list["RefreshToken"]] = relationship(back_populates="user")
     email_verifications: Mapped[list["EmailVerification"]] = relationship(back_populates="user")
     password_resets: Mapped[list["PasswordReset"]] = relationship(back_populates="user")
-    two_factor_setting: Mapped["TwoFactorSetting"] = relationship(back_populates="user", uselist=False)
+    two_factor_setting: Mapped[Optional["TwoFactorSetting"]] = relationship(back_populates="user")
 
 class OAuthAccount(Base):
     __tablename__ = "oauth_accounts"
 
-    id: Mapped[uuid_mod.UUID] = mapped_column(Uuid, primary_key=True)
+    id: Mapped[uuid_mod.UUID] = mapped_column(Uuid, primary_key=True, default=uuid_mod.uuid4)
     user_id: Mapped[uuid_mod.UUID] = mapped_column(Uuid, ForeignKey("users.id"))
     provider: Mapped[str] = mapped_column(Enum("GOOGLE", "GITHUB", "FACEBOOK", "TWITTER", "APPLE", name="oauth_provider"))
     provider_account_id: Mapped[str] = mapped_column(String(255))
     access_token: Mapped[Optional[str]]
     refresh_token: Mapped[Optional[str]]
-    expires_at: Mapped[Optional[datetime]]
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
         UniqueConstraint("provider", "provider_account_id"),
-        Index("idx_user_id", "user_id"),
+        Index("idx_oauth_accounts_user_id", "user_id"),
     )
 
     user: Mapped["User"] = relationship(back_populates="oauth_accounts")
@@ -1126,16 +1130,16 @@ class OAuthAccount(Base):
 class TwoFactorSetting(Base):
     __tablename__ = "two_factor_settings"
 
-    id: Mapped[uuid_mod.UUID] = mapped_column(Uuid, primary_key=True)
+    id: Mapped[uuid_mod.UUID] = mapped_column(Uuid, primary_key=True, default=uuid_mod.uuid4)
     user_id: Mapped[uuid_mod.UUID] = mapped_column(Uuid, ForeignKey("users.id"), unique=True)
     enabled: Mapped[bool] = mapped_column(default=False)
     method: Mapped[Optional[str]] = mapped_column(Enum("TOTP", "SMS", "EMAIL", name="two_factor_method"))
     totp_secret: Mapped[Optional[str]]
     phone_number: Mapped[Optional[str]] = mapped_column(String(20))
     backup_codes: Mapped[Optional[str]]
-    verified_at: Mapped[Optional[datetime]]
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(onupdate=func.now())
+    verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
 
     user: Mapped["User"] = relationship(back_populates="two_factor_setting")
 
@@ -1147,12 +1151,12 @@ class RefreshToken(Base):
     token_hash: Mapped[str] = mapped_column(unique=True)
     device_info: Mapped[Optional[str]]
     ip_address: Mapped[Optional[str]] = mapped_column(String(45))
-    expires_at: Mapped[datetime]
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     revoked: Mapped[bool] = mapped_column(default=False)
 
     __table_args__ = (
-        Index("idx_user_id", "user_id"),
+        Index("idx_refresh_tokens_user_id", "user_id"),
     )
 
     user: Mapped["User"] = relationship(back_populates="refresh_tokens")
@@ -1160,14 +1164,14 @@ class RefreshToken(Base):
 class EmailVerification(Base):
     __tablename__ = "email_verifications"
 
-    id: Mapped[uuid_mod.UUID] = mapped_column(Uuid, primary_key=True)
+    id: Mapped[uuid_mod.UUID] = mapped_column(Uuid, primary_key=True, default=uuid_mod.uuid4)
     user_id: Mapped[uuid_mod.UUID] = mapped_column(Uuid, ForeignKey("users.id"))
     token_hash: Mapped[str] = mapped_column(unique=True)
-    expires_at: Mapped[datetime]
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
-        Index("idx_user_id", "user_id"),
+        Index("idx_email_verifications_user_id", "user_id"),
     )
 
     user: Mapped["User"] = relationship(back_populates="email_verifications")
@@ -1175,15 +1179,15 @@ class EmailVerification(Base):
 class PasswordReset(Base):
     __tablename__ = "password_resets"
 
-    id: Mapped[uuid_mod.UUID] = mapped_column(Uuid, primary_key=True)
+    id: Mapped[uuid_mod.UUID] = mapped_column(Uuid, primary_key=True, default=uuid_mod.uuid4)
     user_id: Mapped[uuid_mod.UUID] = mapped_column(Uuid, ForeignKey("users.id"))
     token_hash: Mapped[str] = mapped_column(unique=True)
-    expires_at: Mapped[datetime]
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     used: Mapped[bool] = mapped_column(default=False)
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
-        Index("idx_user_id", "user_id"),
+        Index("idx_password_resets_user_id", "user_id"),
     )
 
     user: Mapped["User"] = relationship(back_populates="password_resets")

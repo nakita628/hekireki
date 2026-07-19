@@ -4,13 +4,6 @@ import { describe, expect, it } from 'vite-plus/test'
 import { generateSingleFile } from '../generator/sqlalchemy.js'
 import { prismaTypeToPythonType, prismaTypeToSQLAlchemyType } from './sqlalchemy.js'
 
-// Test run
-// pnpm vitest run ./src/helper/sqlalchemy.test.ts
-
-// ============================================================================
-// Type Mapping Tests
-// ============================================================================
-
 describe('prismaTypeToSQLAlchemyType', () => {
   it('maps String to String', () => {
     expect(prismaTypeToSQLAlchemyType('String')).toStrictEqual('String')
@@ -95,10 +88,6 @@ describe('prismaTypeToPythonType', () => {
   })
 })
 
-// ============================================================================
-// Helper: create minimal DMMF.Field / DMMF.Model
-// ============================================================================
-
 function makeField(overrides: Partial<DMMF.Field> & { name: string; type: string }): DMMF.Field {
   return {
     kind: 'scalar',
@@ -129,10 +118,6 @@ function makeModel(
     ...overrides,
   } as DMMF.Model
 }
-
-// ============================================================================
-// generateSingleFile — strict toBe tests
-// ============================================================================
 
 describe('generateSingleFile', () => {
   it('generates a simple model with id and string field', () => {
@@ -304,7 +289,7 @@ class Record(Base):
     __tablename__ = "record"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    updated_at: Mapped[datetime] = mapped_column(onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(default=func.now(), onupdate=func.now())
 `,
     )
   })
@@ -607,7 +592,7 @@ class User(Base):
     id: Mapped[str] = mapped_column(primary_key=True)
     name: Mapped[str]
 
-    profile: Mapped["Profile"] = relationship(back_populates="user", uselist=False)
+    profile: Mapped[Optional["Profile"]] = relationship(back_populates="user")
 
 class Profile(Base):
     __tablename__ = "profile"
@@ -1010,7 +995,8 @@ class Schedule(Base):
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+      `from sqlalchemy import JSON
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from typing import Any
 
 
@@ -1022,7 +1008,7 @@ class Doc(Base):
     __tablename__ = "doc"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    data: Mapped[dict[str, Any]]
+    data: Mapped[dict[str, Any]] = mapped_column(JSON)
 `,
     )
   })
@@ -1318,7 +1304,8 @@ class Post(Base):
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+      `from sqlalchemy import JSON
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from typing import Any
 
 
@@ -1331,7 +1318,7 @@ class Blob(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     data: Mapped[bytes]
-    meta: Mapped[dict[str, Any]]
+    meta: Mapped[dict[str, Any]] = mapped_column(JSON)
 `,
     )
   })
@@ -1437,8 +1424,186 @@ class Article(Base):
     body: Mapped[Optional[str]]
     published: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(default=func.now(), onupdate=func.now())
 `,
     )
+  })
+})
+
+describe('uuid default generation', () => {
+  it('generates client-side defaults for uuid() and uuid(7) primary keys', () => {
+    const models = [
+      makeModel('User', [
+        makeField({
+          name: 'id',
+          type: 'String',
+          isId: true,
+          hasDefaultValue: true,
+          default: { name: 'uuid', args: [4] },
+        }),
+      ]),
+      makeModel('Event', [
+        makeField({
+          name: 'id',
+          type: 'String',
+          isId: true,
+          hasDefaultValue: true,
+          default: { name: 'uuid', args: [7] },
+        }),
+      ]),
+    ]
+
+    expect(generateSingleFile(models)).toBe(
+      `from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+import uuid as uuid_mod
+import uuid6
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class User(Base):
+    __tablename__ = "user"
+
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid_mod.uuid4()))
+
+class Event(Base):
+    __tablename__ = "event"
+
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid6.uuid7()))
+`,
+    )
+  })
+})
+
+describe('ulid default generation', () => {
+  it('generates a client-side ULID default for ulid() primary keys', () => {
+    const models = [
+      makeModel('Ticket', [
+        makeField({
+          name: 'id',
+          type: 'String',
+          isId: true,
+          hasDefaultValue: true,
+          default: { name: 'ulid', args: [] },
+        }),
+        makeField({ name: 'label', type: 'String' }),
+      ]),
+    ]
+
+    expect(generateSingleFile(models)).toBe(
+      `from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from ulid import ULID
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class Ticket(Base):
+    __tablename__ = "ticket"
+
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(ULID()))
+    label: Mapped[str]
+`,
+    )
+  })
+})
+
+describe('named implicit many-to-many', () => {
+  it('names the association table after the Prisma relation name', () => {
+    const models = [
+      makeModel('Post', [
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({
+          name: 'tags',
+          type: 'Tag',
+          kind: 'object',
+          isList: true,
+          relationName: 'PostTags',
+        }),
+      ]),
+      makeModel('Tag', [
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({
+          name: 'posts',
+          type: 'Post',
+          kind: 'object',
+          isList: true,
+          relationName: 'PostTags',
+        }),
+      ]),
+    ]
+
+    expect(generateSingleFile(models))
+      .toBe(`from sqlalchemy import Column, ForeignKey, String, Table
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+
+class Base(DeclarativeBase):
+    pass
+
+post_tags = Table(
+    "_PostTags",
+    Base.metadata,
+    Column("A", String, ForeignKey("post.id"), primary_key=True),
+    Column("B", String, ForeignKey("tag.id"), primary_key=True),
+)
+
+
+class Post(Base):
+    __tablename__ = "post"
+
+    id: Mapped[str] = mapped_column(primary_key=True)
+
+    tags: Mapped[list["Tag"]] = relationship(secondary=post_tags, back_populates="posts")
+
+class Tag(Base):
+    __tablename__ = "tag"
+
+    id: Mapped[str] = mapped_column(primary_key=True)
+
+    posts: Mapped[list["Post"]] = relationship(secondary=post_tags, back_populates="tags")
+`)
+  })
+})
+
+describe('timestamptz native type', () => {
+  it('emits DateTime(timezone=True) for @db.Timestamptz', () => {
+    const models = [
+      makeModel('Sensor', [
+        makeField({
+          name: 'id',
+          type: 'Int',
+          isId: true,
+          hasDefaultValue: true,
+          default: { name: 'autoincrement', args: [] },
+        }),
+        makeField({
+          name: 'seenAt',
+          type: 'DateTime',
+          isRequired: false,
+          nativeType: ['Timestamptz', ['6']],
+        }),
+      ]),
+    ]
+
+    expect(generateSingleFile(models)).toBe(`from sqlalchemy import DateTime
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from typing import Optional
+from datetime import datetime
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class Sensor(Base):
+    __tablename__ = "sensor"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+`)
   })
 })

@@ -222,10 +222,6 @@ describe('helper/arktype', () => {
     })
   })
 
-  // ============================================================================
-  // Real-world use case tests
-  // ============================================================================
-
   describe('E-Commerce order pattern', () => {
     it('generates Order schema with enum and type', () => {
       const models = [
@@ -333,10 +329,6 @@ describe('helper/arktype', () => {
     })
   })
 
-  // ============================================================================
-  // Edge case tests
-  // ============================================================================
-
   describe('edge cases', () => {
     it('all Prisma scalar types produce valid ArkType expressions', () => {
       const allTypes = [
@@ -442,10 +434,6 @@ describe('helper/arktype', () => {
       expect(result).toBe('  payload: "unknown",')
     })
   })
-
-  // ============================================================================
-  // Session auth pattern
-  // ============================================================================
 
   describe('Session auth pattern', () => {
     it('generates Session schema with DateTime and type', () => {

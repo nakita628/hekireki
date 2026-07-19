@@ -1,6 +1,7 @@
 import { Style } from 'hono/css'
 import { raw } from 'hono/html'
 import type { FC, PropsWithChildren } from 'hono/jsx'
+import { HtmlEscapedCallbackPhase, resolveCallback } from 'hono/utils/html'
 
 import { createTypes } from '../generator/apitypes.js'
 import { createModels } from '../generator/model.js'
@@ -20,14 +21,7 @@ import {
 } from '../styles.js'
 
 const HekirekiLogo: FC = () => (
-  <svg
-    width="40"
-    height="40"
-    viewBox="0 0 40 40"
-    fill="currentColor"
-    xmlns="http://www.w3.org/2000/svg"
-    class={iconClass}
-  >
+  <svg width="40" height="40" viewBox="0 0 40 40" fill="currentColor" class={iconClass}>
     <circle cx="20" cy="20" r="18" stroke="currentColor" stroke-width="2" fill="none" />
     <path d="M12 20 L20 12 L28 20 L20 28 Z" fill="currentColor" />
   </svg>
@@ -111,6 +105,9 @@ export const generateHTML = async (data: DMMFDocument) => {
 
   // hono/css renders <Style /> asynchronously, so node.toString() resolves to a Promise at
   // runtime even though its static type is string. Awaiting via then() keeps it type-safe.
-  const html = await Promise.resolve(element).then((node) => node.toString())
+  const rendered = await Promise.resolve(element).then((node) => node.toString())
+  // The collected css rules are injected into #hono-css only by the escape-callback
+  // resolution that c.html() runs internally; without it the style tag stays empty.
+  const html = await resolveCallback(rendered, HtmlEscapedCallbackPhase.Stringify, false, {})
   return `<!DOCTYPE html>${html}`
 }

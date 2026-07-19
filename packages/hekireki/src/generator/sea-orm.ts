@@ -7,36 +7,32 @@ import {
   generateM2MEntity,
   generateModRs,
   generatePreludeRs,
-  type SerdeOptions,
-  toModuleName,
-  toSnakeCase,
 } from '../helper/sea-orm.js'
-
-export type { SerdeOptions }
+import { makeSnakeCase } from '../utils/index.js'
 
 export function seaOrmFiles(
   models: readonly DMMF.Model[],
   enums: readonly DMMF.DatamodelEnum[],
-  serde: SerdeOptions = {},
+  serde: { readonly renameAll?: string } = {},
 ) {
   const useLines = ['use sea_orm::entity::prelude::*;', 'use serde::{Deserialize, Serialize};']
 
   const enumFiles = enums.map((e) => ({
-    fileName: `${toSnakeCase(e.name)}.rs`,
-    moduleName: toSnakeCase(e.name),
+    fileName: `${makeSnakeCase(e.name)}.rs`,
+    moduleName: makeSnakeCase(e.name),
     code: [...useLines, '', generateEnum(e, serde), ''].join('\n'),
   }))
 
   const entityFiles = models
     .map((model) => ({
-      fileName: `${toModuleName(model.name)}.rs`,
-      moduleName: toModuleName(model.name),
+      fileName: `${makeSnakeCase(model.name)}.rs`,
+      moduleName: makeSnakeCase(model.name),
       code: generateEntityFile(model, models, enums, serde),
     }))
     .filter((entry) => entry.code.trim().length > 0)
 
   const m2mFiles = collectM2MPairs(models).map((pair) => {
-    const moduleName = toSnakeCase(`${pair.left}To${pair.right}`)
+    const moduleName = makeSnakeCase(`${pair.left}To${pair.right}`)
     return {
       fileName: `${moduleName}.rs`,
       moduleName,

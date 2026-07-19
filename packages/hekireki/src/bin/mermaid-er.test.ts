@@ -4,18 +4,13 @@ import { promisify } from 'node:util'
 
 import { afterAll, afterEach, describe, expect, it } from 'vite-plus/test'
 
-// Test run
-// pnpm vitest run ./src/generator/mermaid-er/index.test.ts
-
 describe('prisma generate', () => {
   afterEach(() => {
-    // Clean up generated files
     fs.rmSync('./prisma-mermaid-er/schema.prisma', { force: true })
     fs.rmSync('./prisma-mermaid-er/mermaid-er', { recursive: true, force: true })
     fs.rmSync('./prisma-mermaid-er/mermaid-er2', { recursive: true, force: true })
   })
   afterAll(() => {
-    // Clean up the directory itself
     fs.rmSync('./prisma-mermaid-er', { recursive: true, force: true })
   })
   it('hekireki-mermaid-er', async () => {

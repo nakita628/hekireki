@@ -4,9 +4,6 @@ import { promisify } from 'node:util'
 
 import { afterAll, afterEach, describe, expect, it } from 'vite-plus/test'
 
-// Test run
-// pnpm vitest run ./src/generator/gorm/index.test.ts
-
 describe('prisma generate', () => {
   afterEach(() => {
     fs.rmSync('./prisma-gorm/gorm', { recursive: true, force: true })
@@ -54,10 +51,22 @@ model Post {
     })
     const expected = `package model
 
+import (
+\t"github.com/google/uuid"
+\t"gorm.io/gorm"
+)
+
 type User struct {
 \tID string \`gorm:"column:id;primaryKey;type:char(36)" json:"id"\`
 \tName string \`gorm:"column:name;not null" json:"name"\`
 \tPosts []Post \`gorm:"foreignKey:UserID"\`
+}
+
+func (m *User) BeforeCreate(_ *gorm.DB) error {
+\tif m.ID == "" {
+\t\tm.ID = uuid.NewString()
+\t}
+\treturn nil
 }
 
 type Post struct {
@@ -66,6 +75,13 @@ type Post struct {
 \tContent string \`gorm:"column:content;not null" json:"content"\`
 \tUserID string \`gorm:"column:user_id;not null" json:"user_id"\`
 \tUser User
+}
+
+func (m *Post) BeforeCreate(_ *gorm.DB) error {
+\tif m.ID == "" {
+\t\tm.ID = uuid.NewString()
+\t}
+\treturn nil
 }
 `
     expect(result).toStrictEqual(expected)
@@ -108,10 +124,22 @@ model Profile {
     })
     const expected = `package model
 
+import (
+\t"github.com/google/uuid"
+\t"gorm.io/gorm"
+)
+
 type User struct {
 \tID string \`gorm:"column:id;primaryKey;type:char(36)" json:"id"\`
 \tName string \`gorm:"column:name;not null" json:"name"\`
 \tProfile *Profile \`gorm:"foreignKey:UserID"\`
+}
+
+func (m *User) BeforeCreate(_ *gorm.DB) error {
+\tif m.ID == "" {
+\t\tm.ID = uuid.NewString()
+\t}
+\treturn nil
 }
 
 type Profile struct {
@@ -119,6 +147,13 @@ type Profile struct {
 \tBio string \`gorm:"column:bio;not null" json:"bio"\`
 \tUserID string \`gorm:"column:user_id;uniqueIndex;not null" json:"user_id"\`
 \tUser User
+}
+
+func (m *Profile) BeforeCreate(_ *gorm.DB) error {
+\tif m.ID == "" {
+\t\tm.ID = uuid.NewString()
+\t}
+\treturn nil
 }
 `
     expect(result).toStrictEqual(expected)
@@ -287,16 +322,35 @@ model Like {
     })
     const expected = `package model
 
+import (
+\t"github.com/google/uuid"
+\t"gorm.io/gorm"
+)
+
 type User struct {
 \tID string \`gorm:"column:id;primaryKey;type:char(36)" json:"id"\`
 \tName string \`gorm:"column:name;not null" json:"name"\`
 \tLikes []Like \`gorm:"foreignKey:UserID"\`
 }
 
+func (m *User) BeforeCreate(_ *gorm.DB) error {
+\tif m.ID == "" {
+\t\tm.ID = uuid.NewString()
+\t}
+\treturn nil
+}
+
 type Post struct {
 \tID string \`gorm:"column:id;primaryKey;type:char(36)" json:"id"\`
 \tTitle string \`gorm:"column:title;not null" json:"title"\`
 \tLikes []Like \`gorm:"foreignKey:PostID"\`
+}
+
+func (m *Post) BeforeCreate(_ *gorm.DB) error {
+\tif m.ID == "" {
+\t\tm.ID = uuid.NewString()
+\t}
+\treturn nil
 }
 
 type Like struct {
@@ -345,16 +399,35 @@ model Tag {
     })
     const expected = `package model
 
+import (
+\t"github.com/google/uuid"
+\t"gorm.io/gorm"
+)
+
 type Post struct {
 \tID string \`gorm:"column:id;primaryKey;type:char(36)" json:"id"\`
 \tTitle string \`gorm:"column:title;not null" json:"title"\`
 \tTags []Tag \`gorm:"many2many:_PostToTag;"\`
 }
 
+func (m *Post) BeforeCreate(_ *gorm.DB) error {
+\tif m.ID == "" {
+\t\tm.ID = uuid.NewString()
+\t}
+\treturn nil
+}
+
 type Tag struct {
 \tID string \`gorm:"column:id;primaryKey;type:char(36)" json:"id"\`
 \tName string \`gorm:"column:name;not null" json:"name"\`
 \tPosts []Post \`gorm:"many2many:_PostToTag;"\`
+}
+
+func (m *Tag) BeforeCreate(_ *gorm.DB) error {
+\tif m.ID == "" {
+\t\tm.ID = uuid.NewString()
+\t}
+\treturn nil
 }
 `
     expect(result).toStrictEqual(expected)
@@ -391,11 +464,23 @@ model Agent {
     })
     const expected = `package model
 
+import (
+\t"github.com/google/uuid"
+\t"gorm.io/gorm"
+)
+
 type Agent struct {
 \tID string \`gorm:"column:id;primaryKey;type:char(36)" json:"id"\`
 \tCodeName string \`gorm:"column:code_name;not null" json:"code_name"\`
 \tActive bool \`gorm:"column:active;default:true;not null" json:"active"\`
 \tPriority int \`gorm:"column:priority;default:1;not null" json:"priority"\`
+}
+
+func (m *Agent) BeforeCreate(_ *gorm.DB) error {
+\tif m.ID == "" {
+\t\tm.ID = uuid.NewString()
+\t}
+\treturn nil
 }
 `
     expect(result).toStrictEqual(expected)
@@ -432,13 +517,24 @@ model User {
     })
     const expected = `package model
 
-import "time"
+import (
+\t"time"
+\t"github.com/google/uuid"
+\t"gorm.io/gorm"
+)
 
 type User struct {
 \tID string \`gorm:"column:id;primaryKey;type:char(36)" json:"id"\`
 \tName string \`gorm:"column:name;not null" json:"name"\`
 \tCreatedAt time.Time \`gorm:"column:created_at;autoCreateTime;not null" json:"created_at"\`
 \tUpdatedAt time.Time \`gorm:"column:updated_at;autoUpdateTime;not null" json:"updated_at"\`
+}
+
+func (m *User) BeforeCreate(_ *gorm.DB) error {
+\tif m.ID == "" {
+\t\tm.ID = uuid.NewString()
+\t}
+\treturn nil
 }
 `
     expect(result).toStrictEqual(expected)
@@ -474,18 +570,26 @@ model User {
     })
     const expected = `package entity
 
+import (
+\t"github.com/google/uuid"
+\t"gorm.io/gorm"
+)
+
 type User struct {
 \tID string \`gorm:"column:id;primaryKey;type:char(36)" json:"id"\`
 \tName string \`gorm:"column:name;not null" json:"name"\`
+}
+
+func (m *User) BeforeCreate(_ *gorm.DB) error {
+\tif m.ID == "" {
+\t\tm.ID = uuid.NewString()
+\t}
+\treturn nil
 }
 `
     expect(result).toStrictEqual(expected)
   }, 30000)
 })
-
-// ============================================================================
-// Fixture-based integration tests — strict toStrictEqual matching
-// ============================================================================
 
 describe('fixture: twitter-clone-sample', () => {
   afterAll(() => {
@@ -500,7 +604,11 @@ describe('fixture: twitter-clone-sample', () => {
     expect(fs.readFileSync('../../fixtures/twitter-clone-sample/gorm/models.go', 'utf-8'))
       .toStrictEqual(`package model
 
-import "time"
+import (
+\t"time"
+\t"github.com/google/uuid"
+\t"gorm.io/gorm"
+)
 
 type User struct {
 \tID string \`gorm:"column:id;primaryKey;type:char(36)" json:"id"\`
@@ -524,6 +632,13 @@ type User struct {
 \tLikes []Like \`gorm:"foreignKey:UserID"\`
 }
 
+func (m *User) BeforeCreate(_ *gorm.DB) error {
+\tif m.ID == "" {
+\t\tm.ID = uuid.NewString()
+\t}
+\treturn nil
+}
+
 type Post struct {
 \tID string \`gorm:"column:id;primaryKey;type:char(36)" json:"id"\`
 \tBody string \`gorm:"column:body;not null" json:"body"\`
@@ -533,6 +648,13 @@ type Post struct {
 \tUser User
 \tComments []Comment \`gorm:"foreignKey:PostID"\`
 \tLikes []Like \`gorm:"foreignKey:PostID"\`
+}
+
+func (m *Post) BeforeCreate(_ *gorm.DB) error {
+\tif m.ID == "" {
+\t\tm.ID = uuid.NewString()
+\t}
+\treturn nil
 }
 
 type Follow struct {
@@ -562,12 +684,26 @@ type Comment struct {
 \tPost Post
 }
 
+func (m *Comment) BeforeCreate(_ *gorm.DB) error {
+\tif m.ID == "" {
+\t\tm.ID = uuid.NewString()
+\t}
+\treturn nil
+}
+
 type Notification struct {
 \tID string \`gorm:"column:id;primaryKey;type:char(36)" json:"id"\`
 \tBody string \`gorm:"column:body;not null" json:"body"\`
 \tUserID string \`gorm:"column:user_id;index:idx_notification_user_id;not null" json:"user_id"\`
 \tCreatedAt time.Time \`gorm:"column:created_at;autoCreateTime;not null" json:"created_at"\`
 \tUser User
+}
+
+func (m *Notification) BeforeCreate(_ *gorm.DB) error {
+\tif m.ID == "" {
+\t\tm.ID = uuid.NewString()
+\t}
+\treturn nil
 }
 `)
   }, 60000)
@@ -697,7 +833,11 @@ describe('fixture: no-annotation (M2M implicit)', () => {
     expect(fs.readFileSync('../../fixtures/no-annotation/gorm/models.go', 'utf-8'))
       .toStrictEqual(`package model
 
-import "time"
+import (
+\t"time"
+\t"github.com/google/uuid"
+\t"gorm.io/gorm"
+)
 
 type User struct {
 \tID string \`gorm:"column:id;primaryKey;type:char(36)" json:"id"\`
@@ -712,6 +852,13 @@ type User struct {
 \tProfile *Profile \`gorm:"foreignKey:UserID"\`
 }
 
+func (m *User) BeforeCreate(_ *gorm.DB) error {
+\tif m.ID == "" {
+\t\tm.ID = uuid.NewString()
+\t}
+\treturn nil
+}
+
 type Post struct {
 \tID string \`gorm:"column:id;primaryKey;type:char(36)" json:"id"\`
 \tTitle string \`gorm:"column:title;not null" json:"title"\`
@@ -724,6 +871,13 @@ type Post struct {
 \tTags []Tag \`gorm:"many2many:_PostToTag;"\`
 }
 
+func (m *Post) BeforeCreate(_ *gorm.DB) error {
+\tif m.ID == "" {
+\t\tm.ID = uuid.NewString()
+\t}
+\treturn nil
+}
+
 type Profile struct {
 \tID string \`gorm:"column:id;primaryKey;type:char(36)" json:"id"\`
 \tBio *string \`gorm:"column:bio" json:"bio"\`
@@ -732,10 +886,24 @@ type Profile struct {
 \tUser User
 }
 
+func (m *Profile) BeforeCreate(_ *gorm.DB) error {
+\tif m.ID == "" {
+\t\tm.ID = uuid.NewString()
+\t}
+\treturn nil
+}
+
 type Tag struct {
 \tID string \`gorm:"column:id;primaryKey;type:char(36)" json:"id"\`
 \tName string \`gorm:"column:name;uniqueIndex;not null" json:"name"\`
 \tPosts []Post \`gorm:"many2many:_PostToTag;"\`
+}
+
+func (m *Tag) BeforeCreate(_ *gorm.DB) error {
+\tif m.ID == "" {
+\t\tm.ID = uuid.NewString()
+\t}
+\treturn nil
 }
 `)
   }, 60000)
@@ -752,7 +920,11 @@ describe('fixture: jwt-auth-pg', () => {
     expect(fs.readFileSync('../../fixtures/jwt-auth-pg/gorm/models.go', 'utf-8')).toStrictEqual(
       `package model
 
-import "time"
+import (
+\t"time"
+\t"github.com/google/uuid"
+\t"gorm.io/gorm"
+)
 
 type User struct {
 \tID string \`gorm:"column:id;primaryKey;type:char(36)" json:"id"\`
@@ -778,6 +950,13 @@ func (User) TableName() string {
 \treturn "users"
 }
 
+func (m *User) BeforeCreate(_ *gorm.DB) error {
+\tif m.ID == "" {
+\t\tm.ID = uuid.NewString()
+\t}
+\treturn nil
+}
+
 type OAuthAccount struct {
 \tID string \`gorm:"column:id;primaryKey;type:char(36)" json:"id"\`
 \tUserID string \`gorm:"column:user_id;index:idx_oauth_accounts_user_id;type:char(36);not null" json:"user_id"\`
@@ -792,6 +971,13 @@ type OAuthAccount struct {
 
 func (OAuthAccount) TableName() string {
 \treturn "oauth_accounts"
+}
+
+func (m *OAuthAccount) BeforeCreate(_ *gorm.DB) error {
+\tif m.ID == "" {
+\t\tm.ID = uuid.NewString()
+\t}
+\treturn nil
 }
 
 type TwoFactorSetting struct {
@@ -810,6 +996,13 @@ type TwoFactorSetting struct {
 
 func (TwoFactorSetting) TableName() string {
 \treturn "two_factor_settings"
+}
+
+func (m *TwoFactorSetting) BeforeCreate(_ *gorm.DB) error {
+\tif m.ID == "" {
+\t\tm.ID = uuid.NewString()
+\t}
+\treturn nil
 }
 
 type RefreshToken struct {
@@ -841,6 +1034,13 @@ func (EmailVerification) TableName() string {
 \treturn "email_verifications"
 }
 
+func (m *EmailVerification) BeforeCreate(_ *gorm.DB) error {
+\tif m.ID == "" {
+\t\tm.ID = uuid.NewString()
+\t}
+\treturn nil
+}
+
 type PasswordReset struct {
 \tID string \`gorm:"column:id;primaryKey;type:char(36)" json:"id"\`
 \tUserID string \`gorm:"column:user_id;index:idx_password_resets_user_id;type:char(36);not null" json:"user_id"\`
@@ -853,6 +1053,13 @@ type PasswordReset struct {
 
 func (PasswordReset) TableName() string {
 \treturn "password_resets"
+}
+
+func (m *PasswordReset) BeforeCreate(_ *gorm.DB) error {
+\tif m.ID == "" {
+\t\tm.ID = uuid.NewString()
+\t}
+\treturn nil
 }
 `,
     )

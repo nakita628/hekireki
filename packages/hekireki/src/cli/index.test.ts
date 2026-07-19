@@ -2,10 +2,6 @@ import { describe, expect, it } from 'vite-plus/test'
 
 import { DOCS_HELP_TEXT, HELP_TEXT, handleDocs, hekireki, parsePort } from './index.js'
 
-// =============================================================================
-// HELP_TEXT / DOCS_HELP_TEXT
-// =============================================================================
-
 describe('HELP_TEXT', () => {
   it('contains usage, commands, options, examples sections', () => {
     expect(HELP_TEXT).toBe(`⚡️ hekireki - Prisma schema tools
@@ -45,10 +41,6 @@ Examples:
   hekireki docs serve -p 3000`)
   })
 })
-
-// =============================================================================
-// parsePort
-// =============================================================================
 
 describe('parsePort', () => {
   it('returns default 5858 when no port flag', () => {
@@ -111,10 +103,6 @@ describe('parsePort', () => {
   })
 })
 
-// =============================================================================
-// handleDocs
-// =============================================================================
-
 describe('handleDocs', () => {
   it('returns DOCS_HELP_TEXT when no subcommand', () => {
     expect(handleDocs([])).toStrictEqual({ ok: true, value: DOCS_HELP_TEXT })
@@ -150,10 +138,6 @@ describe('handleDocs', () => {
     })
   })
 })
-
-// =============================================================================
-// hekireki
-// =============================================================================
 
 describe('hekireki', () => {
   it('returns HELP_TEXT when no args', () => {

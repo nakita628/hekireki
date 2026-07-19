@@ -1,4 +1,5 @@
 use sea_orm::entity::prelude::*;
+use sea_orm::Set;
 use serde::{Deserialize, Serialize};
 use super::role::Role;
 
@@ -24,11 +25,11 @@ pub struct Model {
     #[sea_orm(default_value = true)]
     pub is_active: bool,
     #[sea_orm(column_type = "TimestampWithTimeZone")]
-    pub created_at: DateTimeUtc,
+    pub created_at: DateTimeWithTimeZone,
     #[sea_orm(column_type = "TimestampWithTimeZone")]
-    pub updated_at: DateTimeUtc,
+    pub updated_at: DateTimeWithTimeZone,
     #[sea_orm(column_type = "TimestampWithTimeZone")]
-    pub last_login_at: Option<DateTimeUtc>,
+    pub last_login_at: Option<DateTimeWithTimeZone>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -75,4 +76,11 @@ impl Related<super::two_factor_setting::Entity> for Entity {
     }
 }
 
-impl ActiveModelBehavior for ActiveModel {}
+impl ActiveModelBehavior for ActiveModel {
+    fn new() -> Self {
+        Self {
+            id: Set(uuid::Uuid::new_v4().to_string()),
+            ..ActiveModelTrait::default()
+        }
+    }
+}

@@ -8,3 +8,5 @@ mypy==1.18.2
 mypy_extensions==1.1.0
 pathspec==1.1.1
 typing_extensions==4.15.0
+python-ulid==3.1.0
+uuid6==2025.0.1
