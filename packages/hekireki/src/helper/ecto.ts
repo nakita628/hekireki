@@ -123,12 +123,16 @@ function makeTimestampsLine(fields: DMMF.Field[]): { line: string | null; exclud
     if (source !== 'inserted_at') {
       opts.push(`inserted_at_source: :${source}`)
     }
+  } else {
+    opts.push('inserted_at: false')
   }
   if (updated) {
     const source = updated.dbName ?? updated.name
     if (source !== 'updated_at') {
       opts.push(`updated_at_source: :${source}`)
     }
+  } else {
+    opts.push('updated_at: false')
   }
 
   return {
@@ -169,7 +173,15 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
   }[] = []
   const hasMany: { name: string; targetModel: string; foreignKey: string }[] = []
   const hasOne: { name: string; targetModel: string; foreignKey: string }[] = []
-  const manyToMany: { name: string; targetModel: string; joinThrough: string }[] = []
+  const manyToMany: {
+    name: string
+    targetModel: string
+    joinThrough: string
+    ownJoinColumn: string
+    ownKey: string
+    relatedJoinColumn: string
+    relatedKey: string
+  }[] = []
 
   for (const field of model.fields) {
     if (field.kind !== 'object') continue
@@ -195,10 +207,16 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
       if (otherSide?.isList) {
         const [left, right] =
           model.name < field.type ? [model.name, field.type] : [field.type, model.name]
+        const ownIdField = model.fields.find((f) => f.isId)
+        const relatedIdField = targetModel.fields.find((f) => f.isId)
         manyToMany.push({
           name: field.name,
           targetModel: field.type,
-          joinThrough: `_${left}To${right}`,
+          joinThrough: `_${field.relationName ?? `${left}To${right}`}`,
+          ownJoinColumn: model.name === left ? 'A' : 'B',
+          ownKey: makeSnakeCase(ownIdField?.name ?? 'id'),
+          relatedJoinColumn: model.name === left ? 'B' : 'A',
+          relatedKey: makeSnakeCase(relatedIdField?.name ?? 'id'),
         })
         continue
       }
@@ -330,7 +348,8 @@ export function ectoSchemas(
         if (f.kind === 'enum') {
           const values = enumMap.get(f.type)
           const valuesStr = values ? values.map((v) => `:${v}`).join(', ') : ''
-          return `    field(:${snakeName}, Ecto.Enum, values: [${valuesStr}]${sourceOpt})`
+          const enumDefault = typeof f.default === 'string' ? `, default: :${f.default}` : ''
+          return `    field(:${snakeName}, Ecto.Enum, values: [${valuesStr}]${enumDefault}${sourceOpt})`
         }
 
         const type = prismaTypeToEctoType(f.type)
@@ -397,7 +416,10 @@ export function ectoSchemas(
 
       const manyToManyLines = associations.manyToMany.map((a) => {
         const snakeAssocName = makeSnakeCase(a.name)
-        return `    many_to_many(:${snakeAssocName}, ${appName}.${a.targetModel}, join_through: "${a.joinThrough}")`
+        // Prisma implicit m2m join tables use columns "A"/"B" (models in
+        // alphabetical order), not Ecto's inflected <schema>_id defaults.
+        const joinKeys = `join_keys: [${a.ownJoinColumn}: :${a.ownKey}, ${a.relatedJoinColumn}: :${a.relatedKey}]`
+        return `    many_to_many(:${snakeAssocName}, ${appName}.${a.targetModel}, join_through: "${a.joinThrough}", ${joinKeys})`
       })
 
       const lines = [

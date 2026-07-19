@@ -25,11 +25,11 @@ pub struct Model {
     #[sea_orm(default_value = true)]
     pub is_active: bool,
     #[sea_orm(column_type = "TimestampWithTimeZone")]
-    pub created_at: DateTimeUtc,
+    pub created_at: DateTimeWithTimeZone,
     #[sea_orm(column_type = "TimestampWithTimeZone")]
-    pub updated_at: DateTimeUtc,
+    pub updated_at: DateTimeWithTimeZone,
     #[sea_orm(column_type = "TimestampWithTimeZone")]
-    pub last_login_at: Option<DateTimeUtc>,
+    pub last_login_at: Option<DateTimeWithTimeZone>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

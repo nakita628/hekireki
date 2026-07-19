@@ -16,6 +16,6 @@ defmodule DBSchema.Like do
     field(:post_id, :binary_id, primary_key: true, source: :postId)
     belongs_to(:user, DBSchema.User, foreign_key: :user_id, define_field: false, type: :binary_id)
     belongs_to(:post, DBSchema.Post, foreign_key: :post_id, define_field: false, type: :binary_id)
-    timestamps(type: :utc_datetime, inserted_at_source: :createdAt)
+    timestamps(type: :utc_datetime, inserted_at_source: :createdAt, updated_at: false)
   end
 end

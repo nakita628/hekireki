@@ -106,6 +106,14 @@ export function activeRecordModels(
           ? [`  self.primary_key = [${compositePkColumns.map((c) => `"${c}"`).join(', ')}]`]
           : []
 
+      // A column named "type" triggers Rails single-table inheritance: reading
+      // rows whose value is not a class name raises ActiveRecord::SubclassNotFound.
+      const inheritanceColumnLines = model.fields.some(
+        (f) => (f.kind === 'scalar' || f.kind === 'enum') && (f.dbName ?? f.name) === 'type',
+      )
+        ? ['  self.inheritance_column = nil']
+        : []
+
       const attributeLines = model.fields
         .filter((f) => f.kind === 'scalar' && f.type === 'String')
         .flatMap((f) => {
@@ -167,6 +175,7 @@ export function activeRecordModels(
         `class ${model.name} < ApplicationRecord`,
         `  self.table_name = "${tableName}"`,
         ...primaryKeyLines,
+        ...inheritanceColumnLines,
         ...(attributeLines.length > 0 ? ['', ...attributeLines] : []),
         ...(enumLines.length > 0 ? ['', ...enumLines] : []),
         ...(associationLines.length > 0 ? ['', ...associationLines] : []),

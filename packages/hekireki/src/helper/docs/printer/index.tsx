@@ -20,14 +20,7 @@ import {
 } from '../styles.js'
 
 const HekirekiLogo: FC = () => (
-  <svg
-    width="40"
-    height="40"
-    viewBox="0 0 40 40"
-    fill="currentColor"
-    xmlns="http://www.w3.org/2000/svg"
-    class={iconClass}
-  >
+  <svg width="40" height="40" viewBox="0 0 40 40" fill="currentColor" class={iconClass}>
     <circle cx="20" cy="20" r="18" stroke="currentColor" stroke-width="2" fill="none" />
     <path d="M12 20 L20 12 L28 20 L20 28 Z" fill="currentColor" />
   </svg>

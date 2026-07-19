@@ -14,8 +14,8 @@ pub struct Model {
     pub slug: String,
     #[sea_orm(default_value = "ACTIVE")]
     pub status: OrgStatus,
-    pub created_at: DateTimeUtc,
-    pub updated_at: DateTimeUtc,
+    pub created_at: DateTime,
+    pub updated_at: DateTime,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

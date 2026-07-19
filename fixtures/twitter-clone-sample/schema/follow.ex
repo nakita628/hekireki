@@ -16,6 +16,6 @@ defmodule DBSchema.Follow do
     field(:following_id, :binary_id, primary_key: true, source: :followingId)
     belongs_to(:follower, DBSchema.User, foreign_key: :follower_id, define_field: false, type: :binary_id)
     belongs_to(:following, DBSchema.User, foreign_key: :following_id, define_field: false, type: :binary_id)
-    timestamps(type: :utc_datetime, inserted_at_source: :createdAt)
+    timestamps(type: :utc_datetime, inserted_at_source: :createdAt, updated_at: false)
   end
 end

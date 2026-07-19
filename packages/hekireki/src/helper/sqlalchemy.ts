@@ -76,10 +76,18 @@ const PYTHON_KEYWORDS = new Set([
   'yield',
 ])
 
-// A keyword column name is mapped to a `<name>_` attribute; the real column is
-// then preserved via the first positional argument to mapped_column.
+// Not keywords, but unusable as declarative attribute names: `self`/`cls`
+// collide with the default __init__ signature and `metadata`/`registry` are
+// reserved by DeclarativeBase.
+const DECLARATIVE_RESERVED = new Set(['self', 'cls', 'metadata', 'registry'])
+
+// A keyword or reserved column name is mapped to a `<name>_` attribute; the
+// real column is then preserved via the first positional argument to
+// mapped_column.
 export function pythonAttrName(columnName: string) {
-  return PYTHON_KEYWORDS.has(columnName) ? `${columnName}_` : columnName
+  return PYTHON_KEYWORDS.has(columnName) || DECLARATIVE_RESERVED.has(columnName)
+    ? `${columnName}_`
+    : columnName
 }
 
 function resolveNativeType(field: DMMF.Field) {
@@ -105,8 +113,9 @@ function resolveNativeType(field: DMMF.Field) {
       return 'Integer'
     case 'DoublePrecision':
     case 'Double':
-    case 'Real':
       return 'Double'
+    case 'Real':
+      return 'REAL'
     case 'Decimal':
     case 'Money':
       return args.length >= 2 ? `Numeric(precision=${args[0]}, scale=${args[1]})` : 'Numeric'
@@ -114,10 +123,14 @@ function resolveNativeType(field: DMMF.Field) {
       return 'Uuid'
     case 'Timestamp':
       return 'DateTime'
+    case 'Timestamptz':
+      return 'DateTime(timezone=True)'
     case 'Date':
       return 'Date'
     case 'Time':
       return 'Time'
+    case 'Timetz':
+      return 'Time(timezone=True)'
     case 'JsonB':
       return 'JSON'
     case 'Xml':
@@ -129,6 +142,9 @@ function resolveNativeType(field: DMMF.Field) {
 
 function needsExplicitSaType(field: DMMF.Field) {
   if (field.kind === 'enum') return true
+  // dict is not in SQLAlchemy's default type_annotation_map: a bare
+  // Mapped[dict[str, Any]] raises MappedAnnotationError at import time.
+  if (field.type === 'Json') return true
   if (field.nativeType) {
     const resolved = resolveNativeType(field)
     if (resolved !== prismaTypeToSQLAlchemyType(field.type)) return true
@@ -144,7 +160,7 @@ function pythonTypeForNative(field: DMMF.Field) {
   const [nativeName] = field.nativeType
   if (nativeName === 'Uuid') return 'uuid_mod.UUID'
   if (nativeName === 'Date') return 'date'
-  if (nativeName === 'Time') return 'time_type'
+  if (nativeName === 'Time' || nativeName === 'Timetz') return 'time_type'
   const raw = prismaTypeToPythonType(field.type)
   return raw === 'Decimal' ? 'DecimalType' : raw
 }
@@ -155,9 +171,16 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
     targetModel: string
     foreignKey: string
     references: string
+    optional: boolean
   }[] = []
   const hasMany: { name: string; targetModel: string; foreignKey: string; isList: boolean }[] = []
-  const hasOne: { name: string; targetModel: string; foreignKey: string; isList: boolean }[] = []
+  const hasOne: {
+    name: string
+    targetModel: string
+    foreignKey: string
+    isList: boolean
+    optional: boolean
+  }[] = []
   const manyToMany: { name: string; targetModel: string; relationName: string }[] = []
 
   for (const field of model.fields) {
@@ -169,6 +192,7 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
         targetModel: field.type,
         foreignKey: field.relationFromFields[0],
         references: field.relationToFields?.[0] ?? 'id',
+        optional: !field.isRequired,
       })
       continue
     }
@@ -202,7 +226,13 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
     if (field.isList) {
       hasMany.push({ name: field.name, targetModel: field.type, foreignKey, isList: true })
     } else {
-      hasOne.push({ name: field.name, targetModel: field.type, foreignKey, isList: false })
+      hasOne.push({
+        name: field.name,
+        targetModel: field.type,
+        foreignKey,
+        isList: false,
+        optional: !field.isRequired,
+      })
     }
   }
 
@@ -225,12 +255,16 @@ export function collectManyToManyTables(allModels: readonly DMMF.Model[]) {
       const leftModelObj = allModels.find((m) => m.name === leftName)
       const rightModelObj = allModels.find((m) => m.name === rightName)
 
+      // Prisma names the implicit join table `_<relationName>` (default
+      // relationName is the two model names alphabetically joined by "To").
+      const relationName = field.relationName ?? `${leftName}To${rightName}`
       return [
         {
-          relationName: field.relationName ?? `${model.name}To${field.type}`,
+          relationName,
           info: {
-            tableName: `_${leftName}To${rightName}`,
-            varName: `${makeSnakeCase(leftName)}_to_${makeSnakeCase(rightName)}`,
+            relationName,
+            tableName: `_${relationName}`,
+            varName: makeSnakeCase(relationName),
             leftModel: leftName,
             leftTable: leftModelObj?.dbName ?? makeSnakeCase(leftName),
             leftPkField: leftModelObj?.fields.find((f) => f.isId),
@@ -444,7 +478,14 @@ function generateColumn(
     }
   }
 
+  // Prisma's @updatedAt also sets the value on create; without an insert
+  // default the NOT NULL column fails on the first INSERT.
   if (field.isUpdatedAt) {
+    const hasNowServerDefault =
+      field.type === 'DateTime' && isFunctionDefault(field.default) && field.default.name === 'now'
+    if (!hasNowServerDefault) {
+      colArgs.push('default=func.now()')
+    }
     colArgs.push('onupdate=func.now()')
   }
 
@@ -467,8 +508,12 @@ function generateTableArgs(model: DMMF.Model, indexes: readonly DMMF.Index[]) {
   const indexConstraints = indexes
     .filter((idx) => idx.model === model.name && (idx.type === 'normal' || idx.type === 'fulltext'))
     .map((idx) => {
+      // Index names are schema-global in PostgreSQL: the fallback includes the
+      // table name so two models indexing the same column don't collide.
       const idxName =
-        idx.dbName ?? idx.name ?? `idx_${idx.fields.map((f) => makeSnakeCase(f.name)).join('_')}`
+        idx.dbName ??
+        idx.name ??
+        `idx_${model.dbName ?? makeSnakeCase(model.name)}_${idx.fields.map((f) => makeSnakeCase(f.name)).join('_')}`
       const cols = idx.fields.map((f) => {
         const fieldObj = model.fields.find((mf) => mf.name === f.name)
         return `"${fieldObj?.dbName ?? makeSnakeCase(f.name)}"`
@@ -484,7 +529,13 @@ function generateTableArgs(model: DMMF.Model, indexes: readonly DMMF.Index[]) {
 
 function generateBelongsToRelationships(
   associations: {
-    belongsTo: { name: string; targetModel: string; foreignKey: string; references: string }[]
+    belongsTo: {
+      name: string
+      targetModel: string
+      foreignKey: string
+      references: string
+      optional: boolean
+    }[]
     hasMany: { name: string; targetModel: string; foreignKey: string; isList: boolean }[]
     hasOne: { name: string; targetModel: string; foreignKey: string; isList: boolean }[]
     manyToMany: { name: string; targetModel: string; relationName: string }[]
@@ -512,7 +563,10 @@ function generateBelongsToRelationships(
       assoc.targetModel === model.name && pkField
         ? `remote_side=[${pkField.dbName ?? makeSnakeCase(pkField.name)}], `
         : ''
-    return `    ${snakeName}: Mapped["${assoc.targetModel}"] = relationship(${remoteClause}${fkClause}back_populates="${backPop}")`
+    const mappedType = assoc.optional
+      ? `Optional["${assoc.targetModel}"]`
+      : `"${assoc.targetModel}"`
+    return `    ${snakeName}: Mapped[${mappedType}] = relationship(${remoteClause}${fkClause}back_populates="${backPop}")`
   })
 }
 
@@ -549,7 +603,13 @@ function generateHasOneRelationships(
   associations: {
     belongsTo: { name: string; targetModel: string; foreignKey: string; references: string }[]
     hasMany: { name: string; targetModel: string; foreignKey: string; isList: boolean }[]
-    hasOne: { name: string; targetModel: string; foreignKey: string; isList: boolean }[]
+    hasOne: {
+      name: string
+      targetModel: string
+      foreignKey: string
+      isList: boolean
+      optional: boolean
+    }[]
     manyToMany: { name: string; targetModel: string; relationName: string }[]
   },
   model: DMMF.Model,
@@ -570,7 +630,10 @@ function generateHasOneRelationships(
       : false
     const targetFkSnake = makeSnakeCase(assoc.foreignKey)
     const fkClause = needsFkParam ? `foreign_keys="${assoc.targetModel}.${targetFkSnake}", ` : ''
-    return `    ${snakeName}: Mapped["${assoc.targetModel}"] = relationship(${fkClause}back_populates="${backPop}", uselist=False)`
+    const mappedType = assoc.optional
+      ? `Optional["${assoc.targetModel}"]`
+      : `"${assoc.targetModel}"`
+    return `    ${snakeName}: Mapped[${mappedType}] = relationship(${fkClause}back_populates="${backPop}")`
   })
 }
 
@@ -584,6 +647,7 @@ function generateManyToManyRelationships(
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
   m2mTables: readonly {
+    relationName: string
     tableName: string
     varName: string
     leftModel: string
@@ -603,13 +667,8 @@ function generateManyToManyRelationships(
       allModels,
     )
 
-    const [leftName, rightName] =
-      model.name < assoc.targetModel
-        ? [model.name, assoc.targetModel]
-        : [assoc.targetModel, model.name]
-    const table = m2mTables.find((t) => t.leftModel === leftName && t.rightModel === rightName)
-    const secondaryVar =
-      table?.varName ?? `${makeSnakeCase(leftName)}_to_${makeSnakeCase(rightName)}`
+    const table = m2mTables.find((t) => t.relationName === assoc.relationName)
+    const secondaryVar = table?.varName ?? makeSnakeCase(assoc.relationName)
 
     return `    ${snakeName}: Mapped[list["${assoc.targetModel}"]] = relationship(secondary=${secondaryVar}, back_populates="${backPop}")`
   })
@@ -621,6 +680,7 @@ export function generateModelBody(
   enums: readonly DMMF.DatamodelEnum[] | undefined,
   indexes: readonly DMMF.Index[],
   m2mTables: readonly {
+    relationName: string
     tableName: string
     varName: string
     leftModel: string
@@ -710,7 +770,7 @@ export function collectGlobalImports(
     m.fields.some((f) => {
       if (uuidDefaultVersion(f) === 4) return true
       if (!f.nativeType) return false
-      const [n] = f.nativeType as [string, readonly (string | number)[]]
+      const [n] = f.nativeType
       return n === 'Uuid'
     }),
   )
@@ -719,14 +779,14 @@ export function collectGlobalImports(
   const needsDate = models.some((m) =>
     m.fields.some((f) => {
       if (!f.nativeType) return false
-      const [n] = f.nativeType as [string, readonly (string | number)[]]
+      const [n] = f.nativeType
       return n === 'Date'
     }),
   )
   const needsTime = models.some((m) =>
     m.fields.some((f) => {
       if (!f.nativeType) return false
-      const [n] = f.nativeType as [string, readonly (string | number)[]]
+      const [n] = f.nativeType
       return n === 'Time'
     }),
   )

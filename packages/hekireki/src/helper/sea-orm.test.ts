@@ -5,6 +5,7 @@ import {
   canDeriveEq,
   generateEntityFile,
   generateEnum,
+  generateM2MEntity,
   prismaTypeToRustType,
   resolveSeaOrmColumnType,
 } from './sea-orm.js'
@@ -49,12 +50,12 @@ describe('prismaTypeToRustType', () => {
     expect(prismaTypeToRustType('Boolean', false)).toStrictEqual('Option<bool>')
   })
 
-  it('maps DateTime to DateTimeUtc', () => {
-    expect(prismaTypeToRustType('DateTime', true)).toStrictEqual('DateTimeUtc')
+  it('maps DateTime to DateTime', () => {
+    expect(prismaTypeToRustType('DateTime', true)).toStrictEqual('DateTime')
   })
 
-  it('maps optional DateTime to Option<DateTimeUtc>', () => {
-    expect(prismaTypeToRustType('DateTime', false)).toStrictEqual('Option<DateTimeUtc>')
+  it('maps optional DateTime to Option<DateTime>', () => {
+    expect(prismaTypeToRustType('DateTime', false)).toStrictEqual('Option<DateTime>')
   })
 
   it('maps Json to Json', () => {
@@ -242,7 +243,7 @@ describe('generateEnum', () => {
     expect(generateEnum(e)).toBe(
       [
         '#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]',
-        '#[sea_orm(rs_type = "String", db_type = "String(StringLen::None)")]',
+        '#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "Status")]',
         'pub enum Status {',
         '    #[sea_orm(string_value = "ACTIVE")]',
         '    Active,',
@@ -562,6 +563,157 @@ impl ActiveModelBehavior for ActiveModel {
     fn new() -> Self {
         Self {
             id: Set(ulid::Ulid::generate().to_string()),
+            ..ActiveModelTrait::default()
+        }
+    }
+}`)
+  })
+})
+
+describe('implicit many-to-many entity', () => {
+  it('pins the Prisma A/B join table columns via column_name', () => {
+    expect(generateM2MEntity('Post', 'Tag', [])).toBe(`use sea_orm::entity::prelude::*;
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
+#[sea_orm(table_name = "_PostToTag")]
+pub struct Model {
+    #[sea_orm(primary_key, auto_increment = false, column_name = "A")]
+    pub post_id: String,
+    #[sea_orm(primary_key, auto_increment = false, column_name = "B")]
+    pub tag_id: String,
+}
+
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::post::Entity",
+        from = "Column::PostId",
+        to = "super::post::Column::Id"
+    )]
+    Post,
+    #[sea_orm(
+        belongs_to = "super::tag::Entity",
+        from = "Column::TagId",
+        to = "super::tag::Column::Id"
+    )]
+    Tag,
+}
+
+impl ActiveModelBehavior for ActiveModel {}`)
+  })
+})
+
+describe('two relations to the same target', () => {
+  it('pins each has_many join with explicit from/to instead of the shared Related impl', () => {
+    const makeField = (o: Record<string, unknown>): any => ({
+      kind: 'scalar',
+      isList: false,
+      isRequired: true,
+      isUnique: false,
+      isId: false,
+      isReadOnly: false,
+      isGenerated: false,
+      isUpdatedAt: false,
+      hasDefaultValue: false,
+      ...o,
+    })
+    const account: any = {
+      name: 'Account',
+      dbName: null,
+      primaryKey: null,
+      uniqueFields: [],
+      uniqueIndexes: [],
+      fields: [
+        makeField({
+          name: 'id',
+          type: 'String',
+          isId: true,
+          hasDefaultValue: true,
+          default: { name: 'uuid', args: [4] },
+        }),
+        makeField({
+          name: 'followers',
+          type: 'Follow',
+          kind: 'object',
+          isList: true,
+          relationName: 'following',
+        }),
+        makeField({
+          name: 'following',
+          type: 'Follow',
+          kind: 'object',
+          isList: true,
+          relationName: 'follower',
+        }),
+      ],
+    }
+    const follow: any = {
+      name: 'Follow',
+      dbName: null,
+      primaryKey: { name: null, fields: ['followerId', 'followingId'] },
+      uniqueFields: [],
+      uniqueIndexes: [],
+      fields: [
+        makeField({ name: 'followerId', type: 'String' }),
+        makeField({ name: 'followingId', type: 'String' }),
+        makeField({
+          name: 'follower',
+          type: 'Account',
+          kind: 'object',
+          relationName: 'follower',
+          relationFromFields: ['followerId'],
+          relationToFields: ['id'],
+        }),
+        makeField({
+          name: 'following',
+          type: 'Account',
+          kind: 'object',
+          relationName: 'following',
+          relationFromFields: ['followingId'],
+          relationToFields: ['id'],
+        }),
+      ],
+    }
+
+    expect(generateEntityFile(account, [account, follow], []))
+      .toBe(`use sea_orm::entity::prelude::*;
+use sea_orm::Set;
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
+#[sea_orm(table_name = "account")]
+pub struct Model {
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub id: String,
+}
+
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(
+        has_many = "super::follow::Entity",
+        from = "Column::Id",
+        to = "super::follow::Column::FollowingId"
+    )]
+    Followers,
+    #[sea_orm(
+        has_many = "super::follow::Entity",
+        from = "Column::Id",
+        to = "super::follow::Column::FollowerId"
+    )]
+    Following,
+}
+
+impl Related<super::follow::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Followers.def()
+    }
+}
+
+impl ActiveModelBehavior for ActiveModel {
+    fn new() -> Self {
+        Self {
+            id: Set(uuid::Uuid::new_v4().to_string()),
             ..ActiveModelTrait::default()
         }
     }

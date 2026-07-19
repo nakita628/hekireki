@@ -16,8 +16,8 @@ pub struct Model {
     pub is_active: bool,
     #[sea_orm(default_value = "MEMBER")]
     pub role: Role,
-    pub created_at: DateTimeUtc,
-    pub updated_at: DateTimeUtc,
+    pub created_at: DateTime,
+    pub updated_at: DateTime,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

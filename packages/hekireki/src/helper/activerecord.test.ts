@@ -806,3 +806,28 @@ describe('ulid primary key', () => {
 end`)
   })
 })
+
+describe('single-table inheritance guard', () => {
+  it('disables the inheritance column when a scalar column is named type', () => {
+    const keyword = makeModel({
+      name: 'Keyword',
+      fields: [
+        makeField({
+          name: 'id',
+          type: 'String',
+          isId: true,
+          hasDefaultValue: true,
+          default: { name: 'uuid', args: [4] },
+        }),
+        makeField({ name: 'type', type: 'String' }),
+      ],
+    })
+
+    expect(activeRecordModels([keyword])).toBe(`class Keyword < ApplicationRecord
+  self.table_name = "keyword"
+  self.inheritance_column = nil
+
+  attribute :id, default: -> { SecureRandom.uuid }
+end`)
+  })
+})

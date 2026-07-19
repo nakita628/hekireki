@@ -14,7 +14,7 @@ pub struct Model {
     pub detail: Option<String>,
     #[sea_orm(column_type = "String(StringLen::N(45))")]
     pub ip_address: Option<String>,
-    pub created_at: DateTimeUtc,
+    pub created_at: DateTime,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

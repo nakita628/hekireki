@@ -13,6 +13,6 @@ defmodule DBSchema.Tag do
 
   schema "tag" do
     field(:name, :string)
-    many_to_many(:posts, DBSchema.Post, join_through: "_PostToTag")
+    many_to_many(:posts, DBSchema.Post, join_through: "_PostToTag", join_keys: [B: :id, A: :id])
   end
 end

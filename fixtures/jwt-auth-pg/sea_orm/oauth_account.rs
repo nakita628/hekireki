@@ -17,9 +17,9 @@ pub struct Model {
     pub access_token: Option<String>,
     pub refresh_token: Option<String>,
     #[sea_orm(column_type = "TimestampWithTimeZone")]
-    pub expires_at: Option<DateTimeUtc>,
+    pub expires_at: Option<DateTimeWithTimeZone>,
     #[sea_orm(column_type = "TimestampWithTimeZone")]
-    pub created_at: DateTimeUtc,
+    pub created_at: DateTimeWithTimeZone,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

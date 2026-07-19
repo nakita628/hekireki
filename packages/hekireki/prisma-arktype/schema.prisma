@@ -9,9 +9,7 @@ datasource db {
 generator HekirekiArkType {
     provider = "hekireki-arktype"
     output   = "arktype"
-    type     = true
     comment  = true
-    relation = true
 }
 
 model User {

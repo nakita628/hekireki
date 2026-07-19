@@ -20,11 +20,11 @@ pub struct Model {
     pub phone_number: Option<String>,
     pub backup_codes: Option<String>,
     #[sea_orm(column_type = "TimestampWithTimeZone")]
-    pub verified_at: Option<DateTimeUtc>,
+    pub verified_at: Option<DateTimeWithTimeZone>,
     #[sea_orm(column_type = "TimestampWithTimeZone")]
-    pub created_at: DateTimeUtc,
+    pub created_at: DateTimeWithTimeZone,
     #[sea_orm(column_type = "TimestampWithTimeZone")]
-    pub updated_at: DateTimeUtc,
+    pub updated_at: DateTimeWithTimeZone,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

@@ -24,8 +24,18 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
     foreignKeyColumn: string
     ownerKeyColumn: string
   }[] = []
-  const hasMany: { name: string; targetModel: string; foreignKeyColumn: string }[] = []
-  const hasOne: { name: string; targetModel: string; foreignKeyColumn: string }[] = []
+  const hasMany: {
+    name: string
+    targetModel: string
+    foreignKeyColumn: string
+    localKeyColumn: string
+  }[] = []
+  const hasOne: {
+    name: string
+    targetModel: string
+    foreignKeyColumn: string
+    localKeyColumn: string
+  }[] = []
   const belongsToMany: {
     name: string
     targetModel: string
@@ -79,11 +89,12 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
     const foreignKey = fkField?.relationFromFields?.[0]
     if (!foreignKey) continue
     const foreignKeyColumn = fieldColumn(targetModel, foreignKey)
+    const localKeyColumn = fieldColumn(model, fkField?.relationToFields?.[0] ?? 'id')
 
     if (field.isList) {
-      hasMany.push({ name: field.name, targetModel: field.type, foreignKeyColumn })
+      hasMany.push({ name: field.name, targetModel: field.type, foreignKeyColumn, localKeyColumn })
     } else {
-      hasOne.push({ name: field.name, targetModel: field.type, foreignKeyColumn })
+      hasOne.push({ name: field.name, targetModel: field.type, foreignKeyColumn, localKeyColumn })
     }
   }
 
@@ -188,10 +199,13 @@ export function eloquentModels(
 
       const castEntries = attributeFields.flatMap((f) => {
         const column = f.dbName ?? f.name
+        // Prisma scalar lists are native arrays (e.g. text[] on PostgreSQL),
+        // not serialized JSON: Laravel's 'array' cast would json_decode/encode
+        // and break both reads and writes, so lists get no cast.
+        if (f.isList) return []
         if (f.kind === 'enum' && enumNames.has(f.type)) {
           return [`        '${column}' => ${f.type}::class,`]
         }
-        if (f.isList) return [`        '${column}' => 'array',`]
         const cast = prismaTypeToEloquentCast(f.type)
         return cast ? [`        '${column}' => '${cast}',`] : []
       })
@@ -229,19 +243,25 @@ export function eloquentModels(
         ]
       })
 
-      const hasOneMethods = associations.hasOne.map((a) => [
-        `    public function ${a.name}(): HasOne`,
-        '    {',
-        `        return $this->hasOne(${a.targetModel}::class, '${a.foreignKeyColumn}');`,
-        '    }',
-      ])
+      const hasOneMethods = associations.hasOne.map((a) => {
+        const localKeyArg = a.localKeyColumn === 'id' ? '' : `, '${a.localKeyColumn}'`
+        return [
+          `    public function ${a.name}(): HasOne`,
+          '    {',
+          `        return $this->hasOne(${a.targetModel}::class, '${a.foreignKeyColumn}'${localKeyArg});`,
+          '    }',
+        ]
+      })
 
-      const hasManyMethods = associations.hasMany.map((a) => [
-        `    public function ${a.name}(): HasMany`,
-        '    {',
-        `        return $this->hasMany(${a.targetModel}::class, '${a.foreignKeyColumn}');`,
-        '    }',
-      ])
+      const hasManyMethods = associations.hasMany.map((a) => {
+        const localKeyArg = a.localKeyColumn === 'id' ? '' : `, '${a.localKeyColumn}'`
+        return [
+          `    public function ${a.name}(): HasMany`,
+          '    {',
+          `        return $this->hasMany(${a.targetModel}::class, '${a.foreignKeyColumn}'${localKeyArg});`,
+          '    }',
+        ]
+      })
 
       const belongsToManyMethods = associations.belongsToMany.map((a) => [
         `    public function ${a.name}(): BelongsToMany`,

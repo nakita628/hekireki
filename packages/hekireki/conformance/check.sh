@@ -118,6 +118,7 @@ for lang in "${runnable[@]}"; do
         if [ ! -d .venv ]; then python3 -m venv .venv; fi
         .venv/bin/pip install --quiet -r requirements.txt
         .venv/bin/mypy --config-file mypy.ini models.py smoke.py # type: real SQLAlchemy API + invariants
+        .venv/bin/python smoke.py # runtime: mapper resolution + pg ddl + sqlite insert
       )
       ;;
     ecto)

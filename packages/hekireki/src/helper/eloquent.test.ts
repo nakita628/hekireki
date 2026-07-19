@@ -417,7 +417,6 @@ class Mission extends Model
         'completed' => 'boolean',
         'startedAt' => 'datetime',
         'metadata' => 'array',
-        'tags' => 'array',
     ];
 }`)
   })
@@ -776,7 +775,7 @@ class User extends Model
 
     public function posts(): HasMany
     {
-        return $this->hasMany(Post::class, 'author_id');
+        return $this->hasMany(Post::class, 'author_id', 'user_id');
     }
 }`)
 

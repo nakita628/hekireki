@@ -8,7 +8,7 @@ pub struct Model {
     pub follower_id: String,
     #[sea_orm(primary_key, auto_increment = false)]
     pub following_id: String,
-    pub created_at: DateTimeUtc,
+    pub created_at: DateTime,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

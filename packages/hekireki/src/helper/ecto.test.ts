@@ -1274,7 +1274,7 @@ end`)
       const result = ectoSchemas([likeModel], 'App', allModels)
 
       expect(result).toBe(
-        'defmodule App.Like do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key false\n\n  @type t :: %__MODULE__{\n          user_id: Ecto.UUID.t(),\n          post_id: Ecto.UUID.t(),\n          user: App.User.t() | nil,\n          post: App.Post.t() | nil\n        }\n\n  schema "like" do\n    field(:user_id, :binary_id, primary_key: true, source: :userId)\n    field(:post_id, :binary_id, primary_key: true, source: :postId)\n    belongs_to(:user, App.User, foreign_key: :user_id, define_field: false, type: :binary_id)\n    belongs_to(:post, App.Post, foreign_key: :post_id, define_field: false, type: :binary_id)\n    timestamps(type: :utc_datetime, inserted_at_source: :createdAt)\n  end\nend',
+        'defmodule App.Like do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key false\n\n  @type t :: %__MODULE__{\n          user_id: Ecto.UUID.t(),\n          post_id: Ecto.UUID.t(),\n          user: App.User.t() | nil,\n          post: App.Post.t() | nil\n        }\n\n  schema "like" do\n    field(:user_id, :binary_id, primary_key: true, source: :userId)\n    field(:post_id, :binary_id, primary_key: true, source: :postId)\n    belongs_to(:user, App.User, foreign_key: :user_id, define_field: false, type: :binary_id)\n    belongs_to(:post, App.Post, foreign_key: :post_id, define_field: false, type: :binary_id)\n    timestamps(type: :utc_datetime, inserted_at_source: :createdAt, updated_at: false)\n  end\nend',
       )
     })
 
@@ -1884,6 +1884,133 @@ describe('@map-ped primary key', () => {
 
   schema "device" do
     field(:name, :string)
+  end
+end`)
+  })
+})
+
+describe('implicit many-to-many', () => {
+  it('generates join_keys for the Prisma A/B join table columns on both sides', () => {
+    const post = makeModel({
+      name: 'Post',
+      fields: [
+        makeField({
+          name: 'id',
+          type: 'String',
+          isId: true,
+          hasDefaultValue: true,
+          default: { name: 'uuid', args: [4] },
+        }),
+        makeField({
+          name: 'tags',
+          type: 'Tag',
+          kind: 'object',
+          isList: true,
+          relationName: 'PostTags',
+        }),
+      ],
+    })
+    const tag = makeModel({
+      name: 'Tag',
+      fields: [
+        makeField({
+          name: 'id',
+          type: 'String',
+          isId: true,
+          hasDefaultValue: true,
+          default: { name: 'uuid', args: [4] },
+        }),
+        makeField({
+          name: 'posts',
+          type: 'Post',
+          kind: 'object',
+          isList: true,
+          relationName: 'PostTags',
+        }),
+      ],
+    })
+
+    expect(ectoSchemas([post], 'App', [post, tag])).toBe(`defmodule App.Post do
+  use Ecto.Schema
+  @moduledoc false
+
+  @primary_key {:id, :binary_id, autogenerate: true}
+  @foreign_key_type :binary_id
+
+  @type t :: %__MODULE__{
+          id: Ecto.UUID.t(),
+          tags: [App.Tag.t()]
+        }
+
+  schema "post" do
+    many_to_many(:tags, App.Tag, join_through: "_PostTags", join_keys: [A: :id, B: :id])
+  end
+end`)
+
+    expect(ectoSchemas([tag], 'App', [post, tag])).toBe(`defmodule App.Tag do
+  use Ecto.Schema
+  @moduledoc false
+
+  @primary_key {:id, :binary_id, autogenerate: true}
+  @foreign_key_type :binary_id
+
+  @type t :: %__MODULE__{
+          id: Ecto.UUID.t(),
+          posts: [App.Post.t()]
+        }
+
+  schema "tag" do
+    many_to_many(:posts, App.Post, join_through: "_PostTags", join_keys: [B: :id, A: :id])
+  end
+end`)
+  })
+})
+
+describe('enum default', () => {
+  it('carries @default on an enum field into the Ecto.Enum default option', () => {
+    const account = makeModel({
+      name: 'Account',
+      fields: [
+        makeField({
+          name: 'id',
+          type: 'Int',
+          isId: true,
+          hasDefaultValue: true,
+          default: { name: 'autoincrement', args: [] },
+        }),
+        makeField({
+          name: 'status',
+          type: 'Status',
+          kind: 'enum',
+          hasDefaultValue: true,
+          default: 'ACTIVE',
+        }),
+      ],
+    })
+    const enums = [
+      {
+        name: 'Status',
+        values: [
+          { name: 'ACTIVE', dbName: null },
+          { name: 'INACTIVE', dbName: null },
+        ],
+        dbName: null,
+      },
+    ] as unknown as DMMF.DatamodelEnum[]
+
+    expect(ectoSchemas([account], 'App', undefined, enums)).toBe(`defmodule App.Account do
+  use Ecto.Schema
+  @moduledoc false
+
+  @primary_key {:id, :id, autogenerate: true}
+
+  @type t :: %__MODULE__{
+          id: integer(),
+          status: atom()
+        }
+
+  schema "account" do
+    field(:status, Ecto.Enum, values: [:ACTIVE, :INACTIVE], default: :ACTIVE)
   end
 end`)
   })

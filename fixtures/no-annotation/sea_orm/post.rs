@@ -11,8 +11,8 @@ pub struct Model {
     pub content: String,
     #[sea_orm(default_value = false)]
     pub published: bool,
-    pub created_at: DateTimeUtc,
-    pub updated_at: DateTimeUtc,
+    pub created_at: DateTime,
+    pub updated_at: DateTime,
     pub author_id: String,
 }
 

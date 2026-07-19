@@ -15,6 +15,6 @@ defmodule DBSchema.Notification do
     field(:body, :string)
     field(:user_id, :binary_id, source: :userId)
     belongs_to(:user, DBSchema.User, foreign_key: :user_id, define_field: false)
-    timestamps(type: :utc_datetime, inserted_at_source: :createdAt)
+    timestamps(type: :utc_datetime, inserted_at_source: :createdAt, updated_at: false)
   end
 end

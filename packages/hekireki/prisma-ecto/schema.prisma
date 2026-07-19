@@ -1,0 +1,48 @@
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "postgresql"
+}
+
+generator Hekireki-Ecto {
+    provider = "hekireki-ecto"
+    output   = "ecto"
+    app      = "WISE"
+}
+
+model Agent {
+    id       String  @id @default(uuid())
+    codeName String
+    active   Boolean @default(true)
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    assignments MissionAssignment[]
+}
+
+model Mission {
+    id        String  @id @default(uuid())
+    name      String
+    priority  Int     @default(1)
+    completed Boolean @default(false)
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    assignments MissionAssignment[]
+}
+
+model MissionAssignment {
+    id   String @id @default(uuid())
+    role String
+
+    agentId   String
+    agent     Agent   @relation(fields: [agentId], references: [id])
+    missionId String
+    mission   Mission @relation(fields: [missionId], references: [id])
+
+    assignedAt DateTime @default(now())
+}
