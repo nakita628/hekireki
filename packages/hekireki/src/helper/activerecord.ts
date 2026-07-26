@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { makeSnakeCase, stripAnnotations } from '../utils/index.js'
+import { makePascalCase, makeSnakeCase, stripAnnotations } from '../utils/index.js'
 
 function fieldColumn(model: DMMF.Model, fieldName: string) {
   const field = model.fields.find((f) => f.name === fieldName)
@@ -13,10 +13,24 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
     targetModel: string
     foreignKeyColumn: string
     primaryKeyColumn: string
+    foreignKeyColumns: readonly string[]
+    primaryKeyColumns: readonly string[]
     optional: boolean
   }[] = []
-  const hasMany: { name: string; targetModel: string; foreignKeyColumn: string }[] = []
-  const hasOne: { name: string; targetModel: string; foreignKeyColumn: string }[] = []
+  const hasMany: {
+    name: string
+    targetModel: string
+    foreignKeyColumn: string
+    foreignKeyColumns: readonly string[]
+    primaryKeyColumns: readonly string[]
+  }[] = []
+  const hasOne: {
+    name: string
+    targetModel: string
+    foreignKeyColumn: string
+    foreignKeyColumns: readonly string[]
+    primaryKeyColumns: readonly string[]
+  }[] = []
   const habtm: {
     name: string
     targetModel: string
@@ -31,11 +45,16 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
     if (field.relationFromFields && field.relationFromFields.length > 0) {
       const targetModel = allModels.find((m) => m.name === field.type)
       const referencedField = field.relationToFields?.[0] ?? 'id'
+      const referencedFields = field.relationToFields ?? ['id']
       belongsTo.push({
         name: field.name,
         targetModel: field.type,
         foreignKeyColumn: fieldColumn(model, field.relationFromFields[0]),
         primaryKeyColumn: targetModel ? fieldColumn(targetModel, referencedField) : referencedField,
+        foreignKeyColumns: field.relationFromFields.map((c) => fieldColumn(model, c)),
+        primaryKeyColumns: referencedFields.map((c) =>
+          targetModel ? fieldColumn(targetModel, c) : c,
+        ),
         optional: !field.isRequired,
       })
       continue
@@ -71,11 +90,29 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
     const foreignKey = fkField?.relationFromFields?.[0]
     if (!foreignKey) continue
     const foreignKeyColumn = fieldColumn(targetModel, foreignKey)
+    const foreignKeyColumns = (fkField?.relationFromFields ?? [foreignKey]).map((c) =>
+      fieldColumn(targetModel, c),
+    )
+    const primaryKeyColumns = (fkField?.relationToFields ?? ['id']).map((c) =>
+      fieldColumn(model, c),
+    )
 
     if (field.isList) {
-      hasMany.push({ name: field.name, targetModel: field.type, foreignKeyColumn })
+      hasMany.push({
+        name: field.name,
+        targetModel: field.type,
+        foreignKeyColumn,
+        foreignKeyColumns,
+        primaryKeyColumns,
+      })
     } else {
-      hasOne.push({ name: field.name, targetModel: field.type, foreignKeyColumn })
+      hasOne.push({
+        name: field.name,
+        targetModel: field.type,
+        foreignKeyColumn,
+        foreignKeyColumns,
+        primaryKeyColumns,
+      })
     }
   }
 
@@ -135,34 +172,69 @@ export function activeRecordModels(
           return [`  attribute :${f.dbName ?? f.name}, default: -> { ${generator} }`]
         })
 
+      // Array enum columns get no `enum` DSL (it casts a scalar column), and a
+      // second enum sharing value names with an earlier one on the same model
+      // needs prefix: true — Active Record raises on the duplicate `VALUE?`
+      // methods otherwise.
       const enumLines = model.fields
-        .filter((f) => f.kind === 'enum')
-        .map((f) => {
-          const values = enumMap.get(f.type) ?? []
-          const pairs = values.map((v) => `${v.name}: "${v.dbName ?? v.name}"`).join(', ')
-          return `  enum :${f.dbName ?? f.name}, { ${pairs} }`
-        })
+        .filter((f) => f.kind === 'enum' && !f.isList)
+        .reduce<{ lines: string[]; seenValues: Set<string> }>(
+          (acc, f) => {
+            const values = enumMap.get(f.type) ?? []
+            const pairs = values.map((v) => `${v.name}: "${v.dbName ?? v.name}"`).join(', ')
+            const conflicts = values.some((v) => acc.seenValues.has(v.name))
+            const prefixOpt = conflicts ? ', prefix: true' : ''
+            for (const v of values) {
+              acc.seenValues.add(v.name)
+            }
+            return {
+              lines: [...acc.lines, `  enum :${f.dbName ?? f.name}, { ${pairs} }${prefixOpt}`],
+              seenValues: acc.seenValues,
+            }
+          },
+          { lines: [], seenValues: new Set() },
+        ).lines
+
+      // A composite FK uses Active Record 7.2's array form for
+      // foreign_key/primary_key; the single-column form stays a plain string.
+      const foreignKeyOpt = (columns: readonly string[]) =>
+        columns.length > 1
+          ? `foreign_key: [${columns.map((c) => `:${c}`).join(', ')}]`
+          : `foreign_key: "${columns[0]}"`
 
       const belongsToLines = associations.belongsTo.map((a) => {
         const primaryKeyOpt =
-          a.primaryKeyColumn === 'id' ? '' : `, primary_key: "${a.primaryKeyColumn}"`
+          a.primaryKeyColumns.length > 1
+            ? `, primary_key: [${a.primaryKeyColumns.map((c) => `:${c}`).join(', ')}]`
+            : a.primaryKeyColumn === 'id'
+              ? ''
+              : `, primary_key: "${a.primaryKeyColumn}"`
         const optionalOpt = a.optional ? ', optional: true' : ''
-        return `  belongs_to :${makeSnakeCase(a.name)}, class_name: "${a.targetModel}", foreign_key: "${a.foreignKeyColumn}"${primaryKeyOpt}${optionalOpt}`
+        return `  belongs_to :${makeSnakeCase(a.name)}, class_name: "${makePascalCase(a.targetModel)}", ${foreignKeyOpt(a.foreignKeyColumns)}${primaryKeyOpt}${optionalOpt}`
       })
+
+      // On the has side, primary_key names this model's own join column(s):
+      // without it a FK referencing a non-id unique column joins against id.
+      const hasPrimaryKeyOpt = (columns: readonly string[]) =>
+        columns.length > 1
+          ? `, primary_key: [${columns.map((c) => `:${c}`).join(', ')}]`
+          : columns[0] === 'id'
+            ? ''
+            : `, primary_key: "${columns[0]}"`
 
       const hasOneLines = associations.hasOne.map(
         (a) =>
-          `  has_one :${makeSnakeCase(a.name)}, class_name: "${a.targetModel}", foreign_key: "${a.foreignKeyColumn}"`,
+          `  has_one :${makeSnakeCase(a.name)}, class_name: "${makePascalCase(a.targetModel)}", ${foreignKeyOpt(a.foreignKeyColumns)}${hasPrimaryKeyOpt(a.primaryKeyColumns)}`,
       )
 
       const hasManyLines = associations.hasMany.map(
         (a) =>
-          `  has_many :${makeSnakeCase(a.name)}, class_name: "${a.targetModel}", foreign_key: "${a.foreignKeyColumn}"`,
+          `  has_many :${makeSnakeCase(a.name)}, class_name: "${makePascalCase(a.targetModel)}", ${foreignKeyOpt(a.foreignKeyColumns)}${hasPrimaryKeyOpt(a.primaryKeyColumns)}`,
       )
 
       const habtmLines = associations.habtm.map(
         (a) =>
-          `  has_and_belongs_to_many :${makeSnakeCase(a.name)}, class_name: "${a.targetModel}", join_table: "${a.joinTable}", foreign_key: "${a.foreignKey}", association_foreign_key: "${a.associationForeignKey}"`,
+          `  has_and_belongs_to_many :${makeSnakeCase(a.name)}, class_name: "${makePascalCase(a.targetModel)}", join_table: "${a.joinTable}", foreign_key: "${a.foreignKey}", association_foreign_key: "${a.associationForeignKey}"`,
       )
 
       const associationLines = [...belongsToLines, ...hasOneLines, ...hasManyLines, ...habtmLines]
@@ -172,7 +244,7 @@ export function activeRecordModels(
 
       const lines = [
         ...docLines,
-        `class ${model.name} < ApplicationRecord`,
+        `class ${makePascalCase(model.name)} < ApplicationRecord`,
         `  self.table_name = "${tableName}"`,
         ...primaryKeyLines,
         ...inheritanceColumnLines,

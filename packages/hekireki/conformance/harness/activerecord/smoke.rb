@@ -29,4 +29,13 @@ associations = models.sum do |model|
   model.reflect_on_all_associations.size
 end
 
+# Composite-FK reflection (Rails 7.2 array form) and enum @map values are the
+# corners a bare klass resolution cannot see.
+stock_fk = Array(Stock.reflect_on_association(:warehouse).foreign_key).map(&:to_s)
+raise "composite foreign_key expected, got #{stock_fk.inspect}" unless stock_fk == %w[country code]
+
+visibility = Board.defined_enums.fetch("visibility")
+expected = { "PUBLIC" => "public", "PRIVATE" => "private", "LINK_ONLY" => "link_only" }
+raise "enum @map values expected, got #{visibility.inspect}" unless visibility == expected
+
 puts "ok: #{models.size} models, #{associations} associations resolved"

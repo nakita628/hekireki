@@ -249,7 +249,7 @@ export function makeEnumDeclarations(
     .filter((e) => usedEnumNames.has(e.name))
     .map((e) => {
       imports.core.add('pgEnum')
-      const values = e.values.map((v) => `'${v.name}'`).join(', ')
+      const values = e.values.map((v) => `'${v.dbName ?? v.name}'`).join(', ')
       return `export const ${enumIdentifier(e.name)} = pgEnum('${e.dbName ?? e.name}', [${values}])`
     })
 }
@@ -283,7 +283,9 @@ function makeColumnExpr(
 
   if (field.kind === 'enum') {
     const enumDef = enums.find((e) => e.name === field.type)
-    const enumValues = enumDef ? enumDef.values.map((v) => `'${v.name}'`).join(', ') : ''
+    const enumValues = enumDef
+      ? enumDef.values.map((v) => `'${v.dbName ?? v.name}'`).join(', ')
+      : ''
     if (provider === 'postgresql') {
       // References the top-level declaration from makeEnumDeclarations: an
       // inline pgEnum(...) per column is invisible to drizzle-kit, so the
@@ -299,6 +301,10 @@ function makeColumnExpr(
   }
 
   if (isAutoincrement && provider === 'postgresql') {
+    if (field.type === 'BigInt') {
+      imports.core.add('bigserial')
+      return `bigserial('${colName}', { mode: 'bigint' })`
+    }
     imports.core.add('serial')
     return `serial('${colName}')`
   }
@@ -315,8 +321,36 @@ function makeColumnExpr(
 
 const SQL_IMPORT = { pkg: 'drizzle-orm', kind: 'named', name: 'sql' } as const
 
-function resolveDefaultValue(dflt: DMMF.Field['default'], fieldType: string, provider: DbProvider) {
+function toTsString(value: string) {
+  const escaped = value
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r')
+  return `'${escaped}'`
+}
+
+function resolveDefaultValue(
+  field: DMMF.Field,
+  provider: DbProvider,
+  enums: readonly DMMF.DatamodelEnum[],
+) {
+  const dflt = field.default
+  const fieldType = field.type
   if (dflt === undefined || dflt === null) return { chain: '', imports: [] }
+  // An enum default arrives as the Prisma-level value name; the column stores
+  // the @map-ped database value.
+  if (field.kind === 'enum' && typeof dflt === 'string') {
+    const enumDef = enums.find((e) => e.name === field.type)
+    const value = enumDef?.values.find((v) => v.name === dflt)
+    return { chain: `.default(${toTsString(value?.dbName ?? dflt)})`, imports: [] }
+  }
+  // A scalar-list default is a JSON-compatible array; emit it as a TS array
+  // literal.
+  if (Array.isArray(dflt)) {
+    const items = dflt.map((item) => (typeof item === 'string' ? toTsString(item) : String(item)))
+    return { chain: `.default([${items.join(', ')}])`, imports: [] }
+  }
   if (isFieldDefault(dflt)) {
     switch (dflt.name) {
       case 'autoincrement':
@@ -346,7 +380,7 @@ function resolveDefaultValue(dflt: DMMF.Field['default'], fieldType: string, pro
             }
       case 'nanoid':
         return {
-          chain: '.$defaultFn(() => nanoid())',
+          chain: `.$defaultFn(() => nanoid(${typeof dflt.args[0] === 'number' ? dflt.args[0] : ''}))`,
           imports: [{ pkg: 'nanoid', kind: 'named', name: 'nanoid' }],
         }
       case 'ulid':
@@ -362,7 +396,19 @@ function resolveDefaultValue(dflt: DMMF.Field['default'], fieldType: string, pro
         return { chain: '', imports: [] }
     }
   }
-  if (typeof dflt === 'string') return { chain: `.default('${dflt}')`, imports: [] }
+  if (typeof dflt === 'string') {
+    // DMMF carries BigInt defaults as digit strings, DateTime literals as ISO
+    // strings, and Json defaults as JSON text (already a valid TS expression);
+    // each needs its TypeScript shape, not a bare quoted string. A BigInt
+    // default must stay out of the schema snapshot as a bigint value:
+    // drizzle-kit serializes snapshots with JSON.stringify, which throws on
+    // bigint, so emit it as a raw SQL DDL literal instead of `${dflt}n`.
+    if (fieldType === 'BigInt') return { chain: `.default(sql\`${dflt}\`)`, imports: [SQL_IMPORT] }
+    if (fieldType === 'DateTime')
+      return { chain: `.default(new Date(${toTsString(dflt)}))`, imports: [] }
+    if (fieldType === 'Json') return { chain: `.default(${dflt})`, imports: [] }
+    return { chain: `.default(${toTsString(dflt)})`, imports: [] }
+  }
   if (typeof dflt === 'number') {
     const chain = fieldType === 'Decimal' ? `.default('${dflt}')` : `.default(${dflt})`
     return { chain, imports: [] }
@@ -378,12 +424,12 @@ function resolveUpdatedAtDefault(provider: DbProvider) {
 }
 
 function makeDefaultChain(
-  dflt: DMMF.Field['default'],
-  fieldType: string,
+  field: DMMF.Field,
   provider: DbProvider,
   imports: DrizzleImports,
+  enums: readonly DMMF.DatamodelEnum[],
 ) {
-  const result = resolveDefaultValue(dflt, fieldType, provider)
+  const result = resolveDefaultValue(field, provider, enums)
   for (const req of result.imports) {
     applyImport(imports, req)
   }
@@ -398,20 +444,31 @@ const PRISMA_ACTION_MAP: { [k: string]: string } = {
   SetDefault: 'set default',
 }
 
+function makeFkActionOpts(onDelete: string | undefined, onUpdate: string | undefined) {
+  const parts = [
+    onDelete && PRISMA_ACTION_MAP[onDelete] ? `onDelete: '${PRISMA_ACTION_MAP[onDelete]}'` : null,
+    onUpdate && PRISMA_ACTION_MAP[onUpdate] ? `onUpdate: '${PRISMA_ACTION_MAP[onUpdate]}'` : null,
+  ].filter((p) => p !== null)
+  return parts.length > 0 ? `, { ${parts.join(', ')} }` : ''
+}
+
 function makeFkReference(field: DMMF.Field, model: DMMF.Model, models: readonly DMMF.Model[]) {
   const relField = model.fields.find(
     (f) => f.kind === 'object' && f.relationFromFields && f.relationFromFields.includes(field.name),
   )
   if (!(relField?.relationFromFields && relField.relationToFields)) return ''
 
+  // A multi-column FK cannot be expressed per column: an inline .references()
+  // here would pair each local column with relationToFields[0] and emit a
+  // half-join; the table-level foreignKey() constraint covers it instead.
+  if (relField.relationFromFields.length > 1) return ''
+
   // Skip inline .references() for self-referencing FKs to avoid TypeScript circular inference error
   if (relField.type === model.name) return ''
 
   const targetVar = resolveVarNameByType(relField.type, models)
   const toCol = relField.relationToFields[0] ?? 'id'
-  const onDelete = relField.relationOnDelete
-  const drizzleAction = onDelete ? PRISMA_ACTION_MAP[onDelete] : undefined
-  const opts = drizzleAction ? `, { onDelete: '${drizzleAction}' }` : ''
+  const opts = makeFkActionOpts(relField.relationOnDelete, relField.relationOnUpdate)
   return `.references(() => ${targetVar}.${toCol}${opts})`
 }
 
@@ -433,7 +490,9 @@ function makeColumn(
   const chain = [
     // .array() must wrap the base column before any modifier: chained after
     // .notNull() it produces a nullable array column (string[] | null).
-    field.isList && field.kind === 'scalar' && provider === 'postgresql' ? '.array()' : '',
+    field.isList && (field.kind === 'scalar' || field.kind === 'enum') && provider === 'postgresql'
+      ? '.array()'
+      : '',
     field.isId && !hasCompositePK
       ? isAutoincrement && provider === 'sqlite'
         ? '.primaryKey({ autoIncrement: true })'
@@ -454,7 +513,7 @@ function makeColumn(
             if (r.needsSql) imports.orm.add('sql')
             return r.chain
           })()
-        : makeDefaultChain(field.default, field.type, provider, imports),
+        : makeDefaultChain(field, provider, imports, enums),
     field.isUpdatedAt ? '.$onUpdate(() => new Date())' : '',
   ].join('')
 
@@ -463,6 +522,7 @@ function makeColumn(
 
 function makeCompositeConstraints(
   model: DMMF.Model,
+  models: readonly DMMF.Model[],
   imports: DrizzleImports,
   indexes: readonly DMMF.Index[],
   tableName: string,
@@ -490,7 +550,32 @@ function makeCompositeConstraints(
       return `index('${idxName}').on(${idx.fields.map((f) => `table.${f.name}`).join(', ')})`
     })
 
-  const all = [pkLine, ...uniqueLines, ...indexLines].filter((l) => l !== null)
+  const compositeFkLines = model.fields
+    .filter(
+      (f) =>
+        f.kind === 'object' &&
+        f.relationFromFields &&
+        f.relationFromFields.length > 1 &&
+        f.relationToFields &&
+        f.type !== model.name,
+    )
+    .map((f) => {
+      imports.core.add('foreignKey')
+      const targetVar = resolveVarNameByType(f.type, models)
+      const columns = (f.relationFromFields ?? []).map((c) => `table.${c}`).join(', ')
+      const foreignColumns = (f.relationToFields ?? []).map((c) => `${targetVar}.${c}`).join(', ')
+      const onDelete =
+        f.relationOnDelete && PRISMA_ACTION_MAP[f.relationOnDelete]
+          ? `.onDelete('${PRISMA_ACTION_MAP[f.relationOnDelete]}')`
+          : ''
+      const onUpdate =
+        f.relationOnUpdate && PRISMA_ACTION_MAP[f.relationOnUpdate]
+          ? `.onUpdate('${PRISMA_ACTION_MAP[f.relationOnUpdate]}')`
+          : ''
+      return `foreignKey({ columns: [${columns}], foreignColumns: [${foreignColumns}] })${onDelete}${onUpdate}`
+    })
+
+  const all = [pkLine, ...uniqueLines, ...indexLines, ...compositeFkLines].filter((l) => l !== null)
   return all.length > 0 ? all.join(', ') : null
 }
 
@@ -512,11 +597,110 @@ export function makeTable(
     .map((field) => makeColumn(field, model, models, provider, imports, enums))
     .filter((c) => c !== null)
     .join(', ')
-  const constraints = makeCompositeConstraints(model, imports, indexes, tableName)
+  const constraints = makeCompositeConstraints(model, models, imports, indexes, tableName)
 
   return constraints
     ? `export const ${varName} = ${tableFunc}('${tableName}', { ${columns} }, (table) => [${constraints}])`
     : `export const ${varName} = ${tableFunc}('${tableName}', { ${columns} })`
+}
+
+function isImplicitM2M(field: DMMF.Field, models: readonly DMMF.Model[]) {
+  if (field.kind !== 'object' || !field.isList) return false
+  if (field.relationFromFields && field.relationFromFields.length > 0) return false
+  const target = models.find((m) => m.name === field.type)
+  const otherSide = target?.fields.find(
+    (f) => f.kind === 'object' && f.relationName === field.relationName,
+  )
+  return otherSide?.isList === true
+}
+
+function joinVarName(relationName: string) {
+  return snakeToCamel(makeSnakeCase(relationName))
+}
+
+export function collectM2MJoinTables(models: readonly DMMF.Model[]) {
+  const pairs = models.flatMap((model) =>
+    model.fields
+      .filter((field) => isImplicitM2M(field, models))
+      .map((field) => {
+        const [left, right] =
+          model.name < field.type ? [model.name, field.type] : [field.type, model.name]
+        return { left, right, relationName: field.relationName ?? `${left}To${right}` }
+      }),
+  )
+  const seen = new Set<string>()
+  return pairs.filter((pair) => {
+    if (seen.has(pair.relationName)) return false
+    seen.add(pair.relationName)
+    return true
+  })
+}
+
+function withColumnName(baseExpr: string, colName: string) {
+  const parenIdx = baseExpr.indexOf('(')
+  const fnName = baseExpr.slice(0, parenIdx)
+  const rest = baseExpr.slice(parenIdx + 1)
+  return rest === ')' ? `${fnName}('${colName}')` : `${fnName}('${colName}', ${rest}`
+}
+
+function pkColumnExpr(
+  modelName: string,
+  colName: string,
+  models: readonly DMMF.Model[],
+  provider: DbProvider,
+  imports: DrizzleImports,
+) {
+  const pkField = models.find((m) => m.name === modelName)?.fields.find((f) => f.isId)
+  const baseExpr = pkField ? resolveScalarType(pkField, provider) : 'text()'
+  const fnName = baseExpr.match(/^(\w+)/)?.[1]
+  if (fnName) imports.core.add(fnName)
+  return withColumnName(baseExpr, colName)
+}
+
+// Prisma's implicit join table: `_<relationName>`, FK columns "A"/"B" typed
+// after each side's PK (models in alphabetical order), composite PK (A, B),
+// both FKs ON DELETE CASCADE. Without this table the generated migration
+// would silently lack the m2m storage entirely.
+export function makeM2MJoinTables(
+  models: readonly DMMF.Model[],
+  provider: DbProvider,
+  imports: DrizzleImports,
+) {
+  const tableFunc =
+    provider === 'postgresql' ? 'pgTable' : provider === 'mysql' ? 'mysqlTable' : 'sqliteTable'
+  return collectM2MJoinTables(models).map((pair) => {
+    imports.core.add(tableFunc)
+    imports.core.add('primaryKey')
+    const varName = joinVarName(pair.relationName)
+    const leftVar = resolveVarNameByType(pair.left, models)
+    const rightVar = resolveVarNameByType(pair.right, models)
+    const leftPk = models.find((m) => m.name === pair.left)?.fields.find((f) => f.isId)
+    const rightPk = models.find((m) => m.name === pair.right)?.fields.find((f) => f.isId)
+    const leftCol = `A: ${pkColumnExpr(pair.left, 'A', models, provider, imports)}.notNull().references(() => ${leftVar}.${leftPk?.name ?? 'id'}, { onDelete: 'cascade' })`
+    const rightCol = `B: ${pkColumnExpr(pair.right, 'B', models, provider, imports)}.notNull().references(() => ${rightVar}.${rightPk?.name ?? 'id'}, { onDelete: 'cascade' })`
+    return `export const ${varName} = ${tableFunc}('_${pair.relationName}', { ${leftCol}, ${rightCol} }, (table) => [primaryKey({ columns: [table.A, table.B] })])`
+  })
+}
+
+export function makeM2MJoinRelations(models: readonly DMMF.Model[], imports: DrizzleImports) {
+  const pairs = collectM2MJoinTables(models)
+  if (pairs.length > 0) imports.orm.add('relations')
+  return pairs.map((pair) => {
+    const varName = joinVarName(pair.relationName)
+    const leftVar = resolveVarNameByType(pair.left, models)
+    const rightVar = resolveVarNameByType(pair.right, models)
+    const leftPk = models.find((m) => m.name === pair.left)?.fields.find((f) => f.isId)
+    const rightPk = models.find((m) => m.name === pair.right)?.fields.find((f) => f.isId)
+    const leftKey = uncapitalizeName(pair.left)
+    const rightKey =
+      pair.left === pair.right ? `${uncapitalizeName(pair.right)}_` : uncapitalizeName(pair.right)
+    return `export const ${varName}Relations = relations(${varName}, ({ one }) => ({ ${leftKey}: one(${leftVar}, { fields: [${varName}.A], references: [${leftVar}.${leftPk?.name ?? 'id'}] }), ${rightKey}: one(${rightVar}, { fields: [${varName}.B], references: [${rightVar}.${rightPk?.name ?? 'id'}] }) }))`
+  })
+}
+
+function uncapitalizeName(name: string) {
+  const camel = snakeToCamel(makeSnakeCase(name))
+  return camel.charAt(0).toLowerCase() + camel.slice(1)
 }
 
 function makeRelationField(
@@ -530,17 +714,29 @@ function makeRelationField(
   const needsAlias = relFields.filter((f) => f.type === field.type).length > 1 && field.relationName
 
   if (field.relationFromFields && field.relationFromFields.length > 0) {
-    const fromCol = field.relationFromFields[0]
-    const toCol = field.relationToFields?.[0] ?? 'id'
+    const fromCols = field.relationFromFields.map((c) => `${modelVar}.${c}`).join(', ')
+    const toCols = (
+      field.relationToFields && field.relationToFields.length > 0 ? field.relationToFields : ['id']
+    )
+      .map((c) => `${targetVar}.${c}`)
+      .join(', ')
     const configParts = [
-      `fields: [${modelVar}.${fromCol}]`,
-      `references: [${targetVar}.${toCol}]`,
+      `fields: [${fromCols}]`,
+      `references: [${toCols}]`,
       needsAlias ? `relationName: '${field.relationName}'` : '',
     ].filter(Boolean)
     return `${field.name}: one(${targetVar}, { ${configParts.join(', ')} })`
   }
 
   if (field.isList) {
+    // An implicit m2m side goes through the junction table: drizzle's
+    // relational API has no direct many-to-many, so `many(target)` here
+    // would fail to resolve at query time.
+    if (isImplicitM2M(field, models)) {
+      const [left, right] =
+        model.name < field.type ? [model.name, field.type] : [field.type, model.name]
+      return `${field.name}: many(${joinVarName(field.relationName ?? `${left}To${right}`)})`
+    }
     return needsAlias
       ? `${field.name}: many(${targetVar}, { relationName: '${field.relationName}' })`
       : `${field.name}: many(${targetVar})`

@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { makeSnakeCase, stripAnnotations } from '../utils/index.js'
+import { makePascalCase, makeSnakeCase, stripAnnotations } from '../utils/index.js'
 
 export function prismaTypeToEloquentCast(type: string) {
   if (type === 'Int') return 'integer'
@@ -47,6 +47,10 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
   for (const field of model.fields) {
     if (field.kind !== 'object') continue
 
+    // Eloquent has no composite-key relations: emitting one would silently
+    // half-join on the first column, so composite FKs produce no relation
+    // method (the scalar columns themselves are still generated).
+    if (field.relationFromFields && field.relationFromFields.length > 1) continue
     if (field.relationFromFields && field.relationFromFields.length > 0) {
       const targetModel = allModels.find((m) => m.name === field.type)
       const referencedField = field.relationToFields?.[0] ?? 'id'
@@ -86,6 +90,7 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
         f.relationFromFields &&
         f.relationFromFields.length > 0,
     )
+    if ((fkField?.relationFromFields?.length ?? 0) > 1) continue
     const foreignKey = fkField?.relationFromFields?.[0]
     if (!foreignKey) continue
     const foreignKeyColumn = fieldColumn(targetModel, foreignKey)
@@ -238,7 +243,7 @@ export function eloquentModels(
         return [
           `    public function ${a.name}(): BelongsTo`,
           '    {',
-          `        return $this->belongsTo(${a.targetModel}::class, '${a.foreignKeyColumn}'${ownerKeyArg});`,
+          `        return $this->belongsTo(${makePascalCase(a.targetModel)}::class, '${a.foreignKeyColumn}'${ownerKeyArg});`,
           '    }',
         ]
       })
@@ -248,7 +253,7 @@ export function eloquentModels(
         return [
           `    public function ${a.name}(): HasOne`,
           '    {',
-          `        return $this->hasOne(${a.targetModel}::class, '${a.foreignKeyColumn}'${localKeyArg});`,
+          `        return $this->hasOne(${makePascalCase(a.targetModel)}::class, '${a.foreignKeyColumn}'${localKeyArg});`,
           '    }',
         ]
       })
@@ -258,7 +263,7 @@ export function eloquentModels(
         return [
           `    public function ${a.name}(): HasMany`,
           '    {',
-          `        return $this->hasMany(${a.targetModel}::class, '${a.foreignKeyColumn}'${localKeyArg});`,
+          `        return $this->hasMany(${makePascalCase(a.targetModel)}::class, '${a.foreignKeyColumn}'${localKeyArg});`,
           '    }',
         ]
       })
@@ -266,7 +271,7 @@ export function eloquentModels(
       const belongsToManyMethods = associations.belongsToMany.map((a) => [
         `    public function ${a.name}(): BelongsToMany`,
         '    {',
-        `        return $this->belongsToMany(${a.targetModel}::class, '${a.joinTable}', '${a.foreignPivotKey}', '${a.relatedPivotKey}');`,
+        `        return $this->belongsToMany(${makePascalCase(a.targetModel)}::class, '${a.joinTable}', '${a.foreignPivotKey}', '${a.relatedPivotKey}');`,
         '    }',
       ])
 
@@ -301,7 +306,7 @@ export function eloquentModels(
         ...relationImports.map((r) => `use Illuminate\\Database\\Eloquent\\Relations\\${r};`),
         '',
         ...docLines,
-        `class ${model.name} extends Model`,
+        `class ${makePascalCase(model.name)} extends Model`,
         '{',
         ...bodyBlocks.flatMap((block, i) => (i === 0 ? block : ['', ...block])),
         '}',

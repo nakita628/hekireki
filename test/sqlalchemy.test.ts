@@ -821,7 +821,7 @@ class Post(Base):
     body: Mapped[str]
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(default=func.now(), onupdate=func.now())
-    user_id: Mapped[str] = mapped_column(ForeignKey("user.id"))
+    user_id: Mapped[str] = mapped_column(ForeignKey("user.id", ondelete="CASCADE"))
 
     user: Mapped["User"] = relationship(back_populates="posts")
     comments: Mapped[list["Comment"]] = relationship(back_populates="post")
@@ -830,8 +830,8 @@ class Post(Base):
 class Follow(Base):
     __tablename__ = "follow"
 
-    follower_id: Mapped[str] = mapped_column(ForeignKey("user.id"), primary_key=True)
-    following_id: Mapped[str] = mapped_column(ForeignKey("user.id"), primary_key=True)
+    follower_id: Mapped[str] = mapped_column(ForeignKey("user.id", ondelete="CASCADE"), primary_key=True)
+    following_id: Mapped[str] = mapped_column(ForeignKey("user.id", ondelete="CASCADE"), primary_key=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     follower: Mapped["User"] = relationship(foreign_keys=[follower_id], back_populates="following")
@@ -840,8 +840,8 @@ class Follow(Base):
 class Like(Base):
     __tablename__ = "like"
 
-    user_id: Mapped[str] = mapped_column(ForeignKey("user.id"), primary_key=True)
-    post_id: Mapped[str] = mapped_column(ForeignKey("post.id"), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("user.id", ondelete="CASCADE"), primary_key=True)
+    post_id: Mapped[str] = mapped_column(ForeignKey("post.id", ondelete="CASCADE"), primary_key=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     user: Mapped["User"] = relationship(back_populates="likes")
@@ -854,8 +854,8 @@ class Comment(Base):
     body: Mapped[str]
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(default=func.now(), onupdate=func.now())
-    user_id: Mapped[str] = mapped_column(ForeignKey("user.id"))
-    post_id: Mapped[str] = mapped_column(ForeignKey("post.id"))
+    user_id: Mapped[str] = mapped_column(ForeignKey("user.id", ondelete="CASCADE"))
+    post_id: Mapped[str] = mapped_column(ForeignKey("post.id", ondelete="CASCADE"))
 
     __table_args__ = (
         Index("idx_comment_user_id", "user_id"),
@@ -870,7 +870,7 @@ class Notification(Base):
 
     id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid_mod.uuid4()))
     body: Mapped[str]
-    user_id: Mapped[str] = mapped_column(ForeignKey("user.id"))
+    user_id: Mapped[str] = mapped_column(ForeignKey("user.id", ondelete="CASCADE"))
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     __table_args__ = (
@@ -1137,7 +1137,7 @@ class User(Base):
     name: Mapped[str] = mapped_column(String(100))
     avatar_url: Mapped[Optional[str]]
     role: Mapped[str] = mapped_column(Enum("ADMIN", "USER", "GUEST", name="role"), default="USER")
-    credit_balance: Mapped[DecimalType] = mapped_column(Numeric(precision=10, scale=2), default=0)
+    credit_balance: Mapped[DecimalType] = mapped_column(Numeric(precision=10, scale=2), default=DecimalType("0"))
     email_verified: Mapped[bool] = mapped_column(default=False)
     is_active: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -1154,7 +1154,7 @@ class OAuthAccount(Base):
     __tablename__ = "oauth_accounts"
 
     id: Mapped[uuid_mod.UUID] = mapped_column(Uuid, primary_key=True, default=uuid_mod.uuid4)
-    user_id: Mapped[uuid_mod.UUID] = mapped_column(Uuid, ForeignKey("users.id"))
+    user_id: Mapped[uuid_mod.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"))
     provider: Mapped[str] = mapped_column(Enum("GOOGLE", "GITHUB", "FACEBOOK", "TWITTER", "APPLE", name="oauth_provider"))
     provider_account_id: Mapped[str] = mapped_column(String(255))
     access_token: Mapped[Optional[str]]
@@ -1173,7 +1173,7 @@ class TwoFactorSetting(Base):
     __tablename__ = "two_factor_settings"
 
     id: Mapped[uuid_mod.UUID] = mapped_column(Uuid, primary_key=True, default=uuid_mod.uuid4)
-    user_id: Mapped[uuid_mod.UUID] = mapped_column(Uuid, ForeignKey("users.id"), unique=True)
+    user_id: Mapped[uuid_mod.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), unique=True)
     enabled: Mapped[bool] = mapped_column(default=False)
     method: Mapped[Optional[str]] = mapped_column(Enum("TOTP", "SMS", "EMAIL", name="two_factor_method"))
     totp_secret: Mapped[Optional[str]]
@@ -1189,7 +1189,7 @@ class RefreshToken(Base):
     __tablename__ = "refresh_tokens"
 
     id: Mapped[str] = mapped_column(primary_key=True)
-    user_id: Mapped[uuid_mod.UUID] = mapped_column(Uuid, ForeignKey("users.id"))
+    user_id: Mapped[uuid_mod.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"))
     token_hash: Mapped[str] = mapped_column(unique=True)
     device_info: Mapped[Optional[str]]
     ip_address: Mapped[Optional[str]] = mapped_column(String(45))
@@ -1207,7 +1207,7 @@ class EmailVerification(Base):
     __tablename__ = "email_verifications"
 
     id: Mapped[uuid_mod.UUID] = mapped_column(Uuid, primary_key=True, default=uuid_mod.uuid4)
-    user_id: Mapped[uuid_mod.UUID] = mapped_column(Uuid, ForeignKey("users.id"))
+    user_id: Mapped[uuid_mod.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"))
     token_hash: Mapped[str] = mapped_column(unique=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -1222,7 +1222,7 @@ class PasswordReset(Base):
     __tablename__ = "password_resets"
 
     id: Mapped[uuid_mod.UUID] = mapped_column(Uuid, primary_key=True, default=uuid_mod.uuid4)
-    user_id: Mapped[uuid_mod.UUID] = mapped_column(Uuid, ForeignKey("users.id"))
+    user_id: Mapped[uuid_mod.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"))
     token_hash: Mapped[str] = mapped_column(unique=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     used: Mapped[bool] = mapped_column(default=False)

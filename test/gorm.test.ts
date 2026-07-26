@@ -635,12 +635,12 @@ type User struct {
 \tCreatedAt time.Time \`gorm:"column:created_at;autoCreateTime;not null" json:"created_at"\`
 \tUpdatedAt time.Time \`gorm:"column:updated_at;autoUpdateTime;not null" json:"updated_at"\`
 \tHasNotification *bool \`gorm:"column:has_notification;default:false" json:"has_notification"\`
-\tPosts []Post \`gorm:"foreignKey:UserID"\`
-\tComments []Comment \`gorm:"foreignKey:UserID"\`
-\tNotifications []Notification \`gorm:"foreignKey:UserID"\`
-\tFollowers []Follow \`gorm:"foreignKey:FollowingID"\`
-\tFollowing []Follow \`gorm:"foreignKey:FollowerID"\`
-\tLikes []Like \`gorm:"foreignKey:UserID"\`
+\tPosts []Post \`gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE"\`
+\tComments []Comment \`gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE"\`
+\tNotifications []Notification \`gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE"\`
+\tFollowers []Follow \`gorm:"foreignKey:FollowingID;constraint:OnDelete:CASCADE"\`
+\tFollowing []Follow \`gorm:"foreignKey:FollowerID;constraint:OnDelete:CASCADE"\`
+\tLikes []Like \`gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE"\`
 }
 
 func (m *User) BeforeCreate(_ *gorm.DB) error {
@@ -657,8 +657,8 @@ type Post struct {
 \tUpdatedAt time.Time \`gorm:"column:updated_at;autoUpdateTime;not null" json:"updated_at"\`
 \tUserID string \`gorm:"column:user_id;not null" json:"user_id"\`
 \tUser User
-\tComments []Comment \`gorm:"foreignKey:PostID"\`
-\tLikes []Like \`gorm:"foreignKey:PostID"\`
+\tComments []Comment \`gorm:"foreignKey:PostID;constraint:OnDelete:CASCADE"\`
+\tLikes []Like \`gorm:"foreignKey:PostID;constraint:OnDelete:CASCADE"\`
 }
 
 func (m *Post) BeforeCreate(_ *gorm.DB) error {
@@ -974,11 +974,11 @@ type User struct {
 \tCreatedAt time.Time \`gorm:"column:created_at;type:timestamp;autoCreateTime;not null" json:"created_at"\`
 \tUpdatedAt time.Time \`gorm:"column:updated_at;type:timestamp;autoUpdateTime;not null" json:"updated_at"\`
 \tLastLoginAt *time.Time \`gorm:"column:last_login_at;type:timestamp" json:"last_login_at"\`
-\tOauthAccounts []OAuthAccount \`gorm:"foreignKey:UserID"\`
-\tRefreshTokens []RefreshToken \`gorm:"foreignKey:UserID"\`
-\tEmailVerifications []EmailVerification \`gorm:"foreignKey:UserID"\`
-\tPasswordResets []PasswordReset \`gorm:"foreignKey:UserID"\`
-\tTwoFactorSetting *TwoFactorSetting \`gorm:"foreignKey:UserID"\`
+\tOauthAccounts []OAuthAccount \`gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE"\`
+\tRefreshTokens []RefreshToken \`gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE"\`
+\tEmailVerifications []EmailVerification \`gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE"\`
+\tPasswordResets []PasswordReset \`gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE"\`
+\tTwoFactorSetting *TwoFactorSetting \`gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE"\`
 }
 
 func (User) TableName() string {

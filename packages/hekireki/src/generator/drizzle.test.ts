@@ -655,3 +655,222 @@ export const user = pgTable('user', { id: serial('id').primaryKey(), role: roleE
     })
   })
 })
+
+describe('torture corners', () => {
+  it('routes an implicit named m2m through a junction table with composite PK', () => {
+    const datamodel = makeDatamodel([
+      makeModel({
+        name: 'Actor',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'Int',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'autoincrement', args: [] },
+          }),
+          makeField({
+            name: 'films',
+            kind: 'object',
+            type: 'Film',
+            isList: true,
+            relationName: 'cast',
+            relationFromFields: [],
+            relationToFields: [],
+          }),
+        ],
+      }),
+      makeModel({
+        name: 'Film',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'Int',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'autoincrement', args: [] },
+          }),
+          makeField({
+            name: 'actors',
+            kind: 'object',
+            type: 'Actor',
+            isList: true,
+            relationName: 'cast',
+            relationFromFields: [],
+            relationToFields: [],
+          }),
+        ],
+      }),
+    ])
+
+    expect(drizzleSchema(datamodel, 'postgresql', [])).toBe(
+      `import { integer, pgTable, primaryKey, serial } from 'drizzle-orm/pg-core'
+import { relations } from 'drizzle-orm'
+
+export const actor = pgTable('actor', { id: serial('id').primaryKey() })
+
+export const film = pgTable('film', { id: serial('id').primaryKey() })
+
+export const cast = pgTable('_cast', { A: integer('A').notNull().references(() => actor.id, { onDelete: 'cascade' }), B: integer('B').notNull().references(() => film.id, { onDelete: 'cascade' }) }, (table) => [primaryKey({ columns: [table.A, table.B] })])
+
+export const actorRelations = relations(actor, ({ many }) => ({ films: many(cast) }))
+
+export const filmRelations = relations(film, ({ many }) => ({ actors: many(cast) }))
+
+export const castRelations = relations(cast, ({ one }) => ({ actor: one(actor, { fields: [cast.A], references: [actor.id] }), film: one(film, { fields: [cast.B], references: [film.id] }) }))`,
+    )
+  })
+
+  it('emits a composite FK as a table-level foreignKey() and a full-column one()', () => {
+    const datamodel = makeDatamodel([
+      makeModel({
+        name: 'Warehouse',
+        uniqueFields: [['country', 'code']],
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'Int',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'autoincrement', args: [] },
+          }),
+          makeField({ name: 'country', type: 'String' }),
+          makeField({ name: 'code', type: 'String' }),
+          makeField({
+            name: 'stocks',
+            kind: 'object',
+            type: 'Stock',
+            isList: true,
+            relationName: 'StockToWarehouse',
+            relationFromFields: [],
+            relationToFields: [],
+          }),
+        ],
+      }),
+      makeModel({
+        name: 'Stock',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'Int',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'autoincrement', args: [] },
+          }),
+          makeField({ name: 'country', type: 'String' }),
+          makeField({ name: 'code', type: 'String' }),
+          makeField({
+            name: 'warehouse',
+            kind: 'object',
+            type: 'Warehouse',
+            relationName: 'StockToWarehouse',
+            relationFromFields: ['country', 'code'],
+            relationToFields: ['country', 'code'],
+            relationOnDelete: 'Cascade',
+          }),
+        ],
+      }),
+    ])
+
+    expect(drizzleSchema(datamodel, 'postgresql', [])).toBe(
+      `import { foreignKey, pgTable, serial, text, unique } from 'drizzle-orm/pg-core'
+import { relations } from 'drizzle-orm'
+
+export const warehouse = pgTable('warehouse', { id: serial('id').primaryKey(), country: text('country').notNull(), code: text('code').notNull() }, (table) => [unique().on(table.country, table.code)])
+
+export const stock = pgTable('stock', { id: serial('id').primaryKey(), country: text('country').notNull(), code: text('code').notNull() }, (table) => [foreignKey({ columns: [table.country, table.code], foreignColumns: [warehouse.country, warehouse.code] }).onDelete('cascade')])
+
+export const warehouseRelations = relations(warehouse, ({ many }) => ({ stocks: many(stock) }))
+
+export const stockRelations = relations(stock, ({ one }) => ({ warehouse: one(warehouse, { fields: [stock.country, stock.code], references: [warehouse.country, warehouse.code] }) }))`,
+    )
+  })
+
+  it('maps @map enum values into pgEnum, arrays, and defaults', () => {
+    const datamodel = makeDatamodel(
+      [
+        makeModel({
+          name: 'Board',
+          fields: [
+            makeField({
+              name: 'id',
+              type: 'Int',
+              isId: true,
+              hasDefaultValue: true,
+              default: { name: 'autoincrement', args: [] },
+            }),
+            makeField({
+              name: 'visibility',
+              kind: 'enum',
+              type: 'Visibility',
+              hasDefaultValue: true,
+              default: 'LINK_ONLY',
+            }),
+            makeField({ name: 'audiences', kind: 'enum', type: 'Visibility', isList: true }),
+          ],
+        }),
+      ],
+      [
+        {
+          name: 'Visibility',
+          dbName: 'visibility_level',
+          values: [
+            { name: 'PUBLIC', dbName: 'public' },
+            { name: 'PRIVATE', dbName: 'private' },
+            { name: 'LINK_ONLY', dbName: 'link_only' },
+          ],
+        },
+      ],
+    )
+
+    expect(drizzleSchema(datamodel, 'postgresql', [])).toBe(
+      `import { pgEnum, pgTable, serial } from 'drizzle-orm/pg-core'
+
+export const visibilityEnum = pgEnum('visibility_level', ['public', 'private', 'link_only'])
+
+export const board = pgTable('board', { id: serial('id').primaryKey(), visibility: visibilityEnum('visibility').notNull().default('link_only'), audiences: visibilityEnum('audiences').array().notNull() })`,
+    )
+  })
+
+  it('keeps bigserial PKs, SQL-literal BigInt defaults, escaped strings, and Date defaults', () => {
+    const datamodel = makeDatamodel([
+      makeModel({
+        name: 'Torture',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'BigInt',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'autoincrement', args: [] },
+          }),
+          makeField({
+            name: 'big',
+            type: 'BigInt',
+            hasDefaultValue: true,
+            default: '9007199254740993',
+          }),
+          makeField({
+            name: 'quoted',
+            type: 'String',
+            hasDefaultValue: true,
+            default: 'it\'s a "quote" and a \\ backslash',
+          }),
+          makeField({
+            name: 'born',
+            type: 'DateTime',
+            hasDefaultValue: true,
+            default: '2020-02-29T23:59:59.999+00:00',
+          }),
+        ],
+      }),
+    ])
+
+    expect(drizzleSchema(datamodel, 'postgresql', [])).toBe(
+      `import { bigint, bigserial, pgTable, text, timestamp } from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
+
+export const torture = pgTable('torture', { id: bigserial('id', { mode: 'bigint' }).primaryKey(), big: bigint('big', { mode: 'bigint' }).notNull().default(sql\`9007199254740993\`), quoted: text('quoted').notNull().default('it\\'s a "quote" and a \\\\ backslash'), born: timestamp('born').notNull().default(new Date('2020-02-29T23:59:59.999+00:00')) })`,
+    )
+  })
+})

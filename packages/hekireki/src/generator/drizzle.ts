@@ -4,6 +4,8 @@ import {
   createImports,
   generateImports,
   makeEnumDeclarations,
+  makeM2MJoinRelations,
+  makeM2MJoinTables,
   makeRelations,
   makeTable,
   resolveDbProvider,
@@ -18,10 +20,16 @@ export function drizzleSchema(
   const imports = createImports()
 
   const enumLines = makeEnumDeclarations(datamodel.models, datamodel.enums, db, imports)
-  const tableLines = datamodel.models.map((model) =>
-    makeTable(model, datamodel.models, db, imports, datamodel.enums, indexes),
-  )
-  const relationsLines = makeRelations(datamodel.models, imports)
+  const tableLines = [
+    ...datamodel.models.map((model) =>
+      makeTable(model, datamodel.models, db, imports, datamodel.enums, indexes),
+    ),
+    ...makeM2MJoinTables(datamodel.models, db, imports),
+  ]
+  const relationsLines = [
+    ...makeRelations(datamodel.models, imports),
+    ...makeM2MJoinRelations(datamodel.models, imports),
+  ]
 
   const enumLinesWithGap = enumLines.flatMap((line, i) =>
     i < enumLines.length - 1 ? [line, ''] : [line],

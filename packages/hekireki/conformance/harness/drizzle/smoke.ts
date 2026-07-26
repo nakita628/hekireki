@@ -1,13 +1,18 @@
 // Pins semantic invariants in the type system so `tsc --strict` catches a
 // regression that would otherwise type-check: a scalar list must stay a
 // non-null array, an optional column must be `T | null`, a BigInt column must
-// infer `bigint`, and an enum column must stay a value union.
+// infer `bigint` (bigserial included), an enum column must stay a value union
+// of the @map-ped database values, and an enum array must stay a union array.
 import type { InferSelectModel } from 'drizzle-orm'
 
 import type * as schema from './schema'
 
 type Account = InferSelectModel<typeof schema.accounts>
 type Profile = InferSelectModel<typeof schema.profile>
+type Torture = InferSelectModel<typeof schema.torture>
+type Sequence = InferSelectModel<typeof schema.sequence>
+type Board = InferSelectModel<typeof schema.board>
+type Inventory = InferSelectModel<typeof schema.inventory>
 
 type Expect<T extends true> = T
 type Equal<A, B> =
@@ -19,4 +24,11 @@ export type Cases = [
   Expect<Equal<Account['status'], 'ACTIVE' | 'INACTIVE' | 'PENDING_REVIEW'>>,
   Expect<Equal<Profile['bio'], string | null>>,
   Expect<Equal<Profile['age'], number | null>>,
+  Expect<Equal<Torture['bigPos'], bigint>>,
+  Expect<Equal<Torture['born'], Date>>,
+  Expect<Equal<Sequence['id'], bigint>>,
+  Expect<Equal<Board['visibility'], 'public' | 'private' | 'link_only'>>,
+  Expect<Equal<Board['fallback'], 'public' | 'private' | 'link_only' | null>>,
+  Expect<Equal<Board['audiences'], ('public' | 'private' | 'link_only')[]>>,
+  Expect<Equal<Inventory['codes'], number[]>>,
 ]

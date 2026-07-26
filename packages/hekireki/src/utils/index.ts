@@ -17,6 +17,14 @@ export function makeSnakeCase(name: string) {
   return name.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase()
 }
 
+export function makePascalCase(name: string) {
+  return name
+    .split('_')
+    .filter((part) => part !== '')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join('')
+}
+
 export function makeValidationExtractor(annotationPrefix: `@${string}.`) {
   const escaped = annotationPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const regex = new RegExp(`${escaped}(.+?)(?:\\n|$)`)

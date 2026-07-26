@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { makeSnakeCase } from '../utils/index.js'
+import { makePascalCase, makeSnakeCase } from '../utils/index.js'
 
 const PRISMA_TO_PYTHON: { [k: string]: string } = {
   String: 'str',
@@ -145,6 +145,9 @@ function needsExplicitSaType(field: DMMF.Field) {
   // dict is not in SQLAlchemy's default type_annotation_map: a bare
   // Mapped[dict[str, Any]] raises MappedAnnotationError at import time.
   if (field.type === 'Json') return true
+  // A bare Mapped[int] maps to Integer; a Prisma BigInt column must stay
+  // BIGINT in the DDL.
+  if (field.type === 'BigInt') return true
   if (field.nativeType) {
     const resolved = resolveNativeType(field)
     if (resolved !== prismaTypeToSQLAlchemyType(field.type)) return true
@@ -171,7 +174,11 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
     targetModel: string
     foreignKey: string
     references: string
+    foreignKeys: readonly string[]
+    referencesList: readonly string[]
     optional: boolean
+    onDelete?: string
+    onUpdate?: string
   }[] = []
   const hasMany: { name: string; targetModel: string; foreignKey: string; isList: boolean }[] = []
   const hasOne: {
@@ -192,7 +199,11 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
         targetModel: field.type,
         foreignKey: field.relationFromFields[0],
         references: field.relationToFields?.[0] ?? 'id',
+        foreignKeys: field.relationFromFields,
+        referencesList: field.relationToFields ?? ['id'],
         optional: !field.isRequired,
+        onDelete: field.relationOnDelete,
+        onUpdate: field.relationOnUpdate,
       })
       continue
     }
@@ -312,11 +323,66 @@ export function generateAssociationTable(info: {
   ].join('\n')
 }
 
-function formatDefault(def: DMMF.Field['default']) {
+function toPythonString(value: string) {
+  const escaped = value
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r')
+  return `"${escaped}"`
+}
+
+function jsonToPythonLiteral(value: unknown): string {
+  if (value === null) return 'None'
+  if (value === true) return 'True'
+  if (value === false) return 'False'
+  if (typeof value === 'number') return String(value)
+  if (typeof value === 'string') return toPythonString(value)
+  if (Array.isArray(value)) return `[${value.map(jsonToPythonLiteral).join(', ')}]`
+  return `{${Object.entries(value as { [k: string]: unknown })
+    .map(([k, v]) => `${toPythonString(k)}: ${jsonToPythonLiteral(v)}`)
+    .join(', ')}}`
+}
+
+const SQL_ACTION: { [k: string]: string } = {
+  Cascade: 'CASCADE',
+  SetNull: 'SET NULL',
+  Restrict: 'RESTRICT',
+  NoAction: 'NO ACTION',
+  SetDefault: 'SET DEFAULT',
+}
+
+function formatDefault(field: DMMF.Field, enumDef?: DMMF.DatamodelEnum) {
+  const def = field.default
   if (def === undefined || def === null) return null
+  // An enum default arrives as the Prisma-level value name; the column stores
+  // the @map-ped database value.
+  if (field.kind === 'enum' && typeof def === 'string') {
+    const value = enumDef?.values.find((v) => v.name === def)
+    return toPythonString(value?.dbName ?? def)
+  }
+  // A scalar-list default is a JSON-compatible array; lambda avoids the
+  // shared-mutable-default pitfall.
+  if (Array.isArray(def)) {
+    return `lambda: ${jsonToPythonLiteral(def)}`
+  }
   if (typeof def === 'boolean') return def ? 'True' : 'False'
-  if (typeof def === 'number') return String(def)
-  if (typeof def === 'string') return `"${def}"`
+  if (typeof def === 'number')
+    return field.type === 'Decimal' ? `DecimalType("${def}")` : String(def)
+  if (typeof def === 'string') {
+    // DMMF carries BigInt defaults as digit strings, DateTime literals as ISO
+    // strings, and Json defaults as JSON text; each needs its Python shape,
+    // not a bare quoted string.
+    if (field.type === 'BigInt') return def
+    if (field.type === 'DateTime') return `datetime.fromisoformat(${toPythonString(def)})`
+    if (field.type === 'Json') {
+      const parsed: unknown = JSON.parse(def)
+      return typeof parsed === 'object' && parsed !== null
+        ? `lambda: ${jsonToPythonLiteral(parsed)}`
+        : jsonToPythonLiteral(parsed)
+    }
+    return toPythonString(def)
+  }
   return null
 }
 
@@ -408,7 +474,7 @@ function generateColumn(
     manyToMany: { name: string; targetModel: string; relationName: string }[]
   },
   allModels: readonly DMMF.Model[],
-  enumMap: ReadonlyMap<string, readonly string[]>,
+  enumMap: ReadonlyMap<string, DMMF.DatamodelEnum>,
 ) {
   const columnName = field.dbName ?? makeSnakeCase(field.name)
   const attrName = pythonAttrName(columnName)
@@ -426,9 +492,11 @@ function generateColumn(
   }
 
   if (field.kind === 'enum') {
-    const values = enumMap.get(field.type)
-    const valuesStr = values ? values.map((v) => `"${v}"`).join(', ') : ''
-    const enumType = `Enum(${valuesStr}, name="${makeSnakeCase(field.type)}")`
+    const enumDef = enumMap.get(field.type)
+    // The database stores the @map-ped values under the @@map-ped type name.
+    const valuesStr = enumDef ? enumDef.values.map((v) => `"${v.dbName ?? v.name}"`).join(', ') : ''
+    const enumName = enumDef?.dbName ?? makeSnakeCase(field.type)
+    const enumType = `Enum(${valuesStr}, name="${enumName}")`
     colArgs.push(field.isList ? `ARRAY(${enumType})` : enumType)
   } else if (field.isList) {
     colArgs.push(`ARRAY(${prismaTypeToSQLAlchemyType(field.type)})`)
@@ -438,11 +506,22 @@ function generateColumn(
 
   if (isFk) {
     const assoc = associations.belongsTo.find((a) => a.foreignKey === field.name)
-    if (assoc) {
+    // A composite FK is expressed as a table-level ForeignKeyConstraint; a
+    // per-column ForeignKey would pair this column with references[0] alone
+    // and emit a half-join against a non-unique column.
+    if (assoc && assoc.foreignKeys.length === 1) {
       const targetModelObj = allModels.find((m) => m.name === assoc.targetModel)
       const targetTable = targetModelObj?.dbName ?? makeSnakeCase(assoc.targetModel)
       const targetCol = makeSnakeCase(assoc.references)
-      colArgs.push(`ForeignKey("${targetTable}.${targetCol}")`)
+      const fkActions = [
+        assoc.onDelete && SQL_ACTION[assoc.onDelete]
+          ? `, ondelete="${SQL_ACTION[assoc.onDelete]}"`
+          : '',
+        assoc.onUpdate && SQL_ACTION[assoc.onUpdate]
+          ? `, onupdate="${SQL_ACTION[assoc.onUpdate]}"`
+          : '',
+      ].join('')
+      colArgs.push(`ForeignKey("${targetTable}.${targetCol}"${fkActions})`)
     }
   }
 
@@ -451,7 +530,16 @@ function generateColumn(
   if (field.isUnique) colArgs.push('unique=True')
 
   const uuidVersion = uuidDefaultVersion(field)
-  if (
+  const dbGeneratedExpr =
+    isFunctionDefault(field.default) &&
+    field.default.name === 'dbgenerated' &&
+    typeof field.default.args[0] === 'string'
+      ? field.default.args[0]
+      : null
+  if (dbGeneratedExpr !== null) {
+    // dbgenerated() is a raw DDL expression no client library can evaluate.
+    colArgs.push(`server_default=text(${toPythonString(dbGeneratedExpr)})`)
+  } else if (
     field.type === 'DateTime' &&
     isFunctionDefault(field.default) &&
     field.default.name === 'now'
@@ -472,7 +560,7 @@ function generateColumn(
   } else if (isUlidDefault(field)) {
     colArgs.push('default=lambda: str(ULID())')
   } else if (!isPk || isAutoincrement(field)) {
-    const defaultVal = formatDefault(field.default)
+    const defaultVal = formatDefault(field, enumMap.get(field.type))
     if (defaultVal !== null && !isPk) {
       colArgs.push(`default=${defaultVal}`)
     }
@@ -496,7 +584,11 @@ function generateColumn(
   return `    ${attrName}: Mapped[${typeHint}] = mapped_column(${colArgs.join(', ')})`
 }
 
-function generateTableArgs(model: DMMF.Model, indexes: readonly DMMF.Index[]) {
+function generateTableArgs(
+  model: DMMF.Model,
+  allModels: readonly DMMF.Model[],
+  indexes: readonly DMMF.Index[],
+) {
   const uniqueConstraints = model.uniqueFields.map((fields) => {
     const cols = fields.map((f) => {
       const fieldObj = model.fields.find((mf) => mf.name === f)
@@ -521,7 +613,37 @@ function generateTableArgs(model: DMMF.Model, indexes: readonly DMMF.Index[]) {
       return `Index("${idxName}", ${cols.join(', ')})`
     })
 
-  const allConstraints = [...uniqueConstraints, ...indexConstraints]
+  const fkConstraints = model.fields
+    .filter(
+      (f) =>
+        f.kind === 'object' &&
+        f.relationFromFields &&
+        f.relationFromFields.length > 1 &&
+        f.relationToFields,
+    )
+    .map((f) => {
+      const target = allModels.find((m) => m.name === f.type)
+      const targetTable = target?.dbName ?? makeSnakeCase(f.type)
+      const localCols = (f.relationFromFields ?? []).map((c) => {
+        const fieldObj = model.fields.find((mf) => mf.name === c)
+        return `"${fieldObj?.dbName ?? makeSnakeCase(c)}"`
+      })
+      const targetCols = (f.relationToFields ?? []).map((c) => {
+        const fieldObj = target?.fields.find((mf) => mf.name === c)
+        return `"${targetTable}.${fieldObj?.dbName ?? makeSnakeCase(c)}"`
+      })
+      const actions = [
+        f.relationOnDelete && SQL_ACTION[f.relationOnDelete]
+          ? `, ondelete="${SQL_ACTION[f.relationOnDelete]}"`
+          : '',
+        f.relationOnUpdate && SQL_ACTION[f.relationOnUpdate]
+          ? `, onupdate="${SQL_ACTION[f.relationOnUpdate]}"`
+          : '',
+      ].join('')
+      return `ForeignKeyConstraint([${localCols.join(', ')}], [${targetCols.join(', ')}]${actions})`
+    })
+
+  const allConstraints = [...uniqueConstraints, ...indexConstraints, ...fkConstraints]
   if (allConstraints.length === 0) return []
 
   return ['', '    __table_args__ = (', ...allConstraints.map((c) => `        ${c},`), '    )']
@@ -564,8 +686,8 @@ function generateBelongsToRelationships(
         ? `remote_side=[${pkField.dbName ?? makeSnakeCase(pkField.name)}], `
         : ''
     const mappedType = assoc.optional
-      ? `Optional["${assoc.targetModel}"]`
-      : `"${assoc.targetModel}"`
+      ? `Optional["${makePascalCase(assoc.targetModel)}"]`
+      : `"${makePascalCase(assoc.targetModel)}"`
     return `    ${snakeName}: Mapped[${mappedType}] = relationship(${remoteClause}${fkClause}back_populates="${backPop}")`
   })
 }
@@ -594,8 +716,10 @@ function generateHasManyRelationships(
       ? needsForeignKeysParam(model.name, getAssociations(targetModel, allModels).belongsTo)
       : false
     const targetFkSnake = makeSnakeCase(assoc.foreignKey)
-    const fkClause = needsFkParam ? `foreign_keys="${assoc.targetModel}.${targetFkSnake}", ` : ''
-    return `    ${snakeName}: Mapped[list["${assoc.targetModel}"]] = relationship(${fkClause}back_populates="${backPop}")`
+    const fkClause = needsFkParam
+      ? `foreign_keys="${makePascalCase(assoc.targetModel)}.${targetFkSnake}", `
+      : ''
+    return `    ${snakeName}: Mapped[list["${makePascalCase(assoc.targetModel)}"]] = relationship(${fkClause}back_populates="${backPop}")`
   })
 }
 
@@ -629,10 +753,12 @@ function generateHasOneRelationships(
       ? needsForeignKeysParam(model.name, getAssociations(targetModel, allModels).belongsTo)
       : false
     const targetFkSnake = makeSnakeCase(assoc.foreignKey)
-    const fkClause = needsFkParam ? `foreign_keys="${assoc.targetModel}.${targetFkSnake}", ` : ''
+    const fkClause = needsFkParam
+      ? `foreign_keys="${makePascalCase(assoc.targetModel)}.${targetFkSnake}", `
+      : ''
     const mappedType = assoc.optional
-      ? `Optional["${assoc.targetModel}"]`
-      : `"${assoc.targetModel}"`
+      ? `Optional["${makePascalCase(assoc.targetModel)}"]`
+      : `"${makePascalCase(assoc.targetModel)}"`
     return `    ${snakeName}: Mapped[${mappedType}] = relationship(${fkClause}back_populates="${backPop}")`
   })
 }
@@ -670,7 +796,7 @@ function generateManyToManyRelationships(
     const table = m2mTables.find((t) => t.relationName === assoc.relationName)
     const secondaryVar = table?.varName ?? makeSnakeCase(assoc.relationName)
 
-    return `    ${snakeName}: Mapped[list["${assoc.targetModel}"]] = relationship(secondary=${secondaryVar}, back_populates="${backPop}")`
+    return `    ${snakeName}: Mapped[list["${makePascalCase(assoc.targetModel)}"]] = relationship(secondary=${secondaryVar}, back_populates="${backPop}")`
   })
 }
 
@@ -700,9 +826,7 @@ export function generateModelBody(
   const associations = getAssociations(model, allModels)
   const belongsToFkFields = new Set(associations.belongsTo.map((a) => a.foreignKey))
 
-  const enumMap = new Map<string, readonly string[]>(
-    (enums ?? []).map((e) => [e.name, e.values.map((v) => v.name)]),
-  )
+  const enumMap = new Map<string, DMMF.DatamodelEnum>((enums ?? []).map((e) => [e.name, e]))
 
   const tableName = model.dbName ?? makeSnakeCase(model.name)
   const scalarFields = model.fields.filter((f) => f.kind !== 'object')
@@ -713,7 +837,7 @@ export function generateModelBody(
     return generateColumn(field, isPk, isFk, associations, allModels, enumMap)
   })
 
-  const tableArgsLines = generateTableArgs(model, indexes)
+  const tableArgsLines = generateTableArgs(model, allModels, indexes)
 
   const relationLines = [
     ...generateBelongsToRelationships(associations, model, allModels),
@@ -725,7 +849,7 @@ export function generateModelBody(
   const hasRelations = relationLines.length > 0
 
   return [
-    `class ${model.name}(Base):`,
+    `class ${makePascalCase(model.name)}(Base):`,
     `    __tablename__ = "${tableName}"`,
     '',
     ...columnLines,
@@ -819,6 +943,9 @@ export function collectGlobalImports(
 
     if (model.uniqueFields.length > 0) saImports.add('UniqueConstraint')
 
+    if (model.fields.some((f) => f.kind === 'object' && (f.relationFromFields?.length ?? 0) > 1))
+      saImports.add('ForeignKeyConstraint')
+
     if (
       indexes.some(
         (idx) => idx.model === model.name && (idx.type === 'normal' || idx.type === 'fulltext'),
@@ -842,6 +969,19 @@ export function collectGlobalImports(
 
   if (needsFunc) saImports.add('func')
   if (needsArray) saImports.add('ARRAY')
+  if (
+    models.some((m) =>
+      m.fields.some(
+        (f) =>
+          f.default !== undefined &&
+          f.default !== null &&
+          typeof f.default === 'object' &&
+          'name' in f.default &&
+          f.default.name === 'dbgenerated',
+      ),
+    )
+  )
+    saImports.add('text')
 
   const lines: string[] = []
 
