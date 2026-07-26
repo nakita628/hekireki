@@ -74,20 +74,32 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
     targetModel: string
     foreignKey: string
     references: string
+    foreignKeys: readonly string[]
+    referencesList: readonly string[]
+    onDelete?: string
+    onUpdate?: string
   }[] = []
   const hasMany: {
     name: string
     targetModel: string
     foreignKey: string
     references: string
+    foreignKeys: readonly string[]
+    referencesList: readonly string[]
     isList: boolean
+    onDelete?: string
+    onUpdate?: string
   }[] = []
   const hasOne: {
     name: string
     targetModel: string
     foreignKey: string
     references: string
+    foreignKeys: readonly string[]
+    referencesList: readonly string[]
     isList: boolean
+    onDelete?: string
+    onUpdate?: string
   }[] = []
   const manyToMany: { name: string; targetModel: string; relationName: string }[] = []
 
@@ -100,6 +112,10 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
         targetModel: field.type,
         foreignKey: field.relationFromFields[0],
         references: field.relationToFields?.[0] ?? 'id',
+        foreignKeys: field.relationFromFields,
+        referencesList: field.relationToFields ?? ['id'],
+        onDelete: field.relationOnDelete,
+        onUpdate: field.relationOnUpdate,
       })
       continue
     }
@@ -130,6 +146,8 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
     const foreignKey = fkField?.relationFromFields?.[0]
     if (!foreignKey) continue
     const references = fkField?.relationToFields?.[0] ?? 'id'
+    const foreignKeys = fkField?.relationFromFields ?? [foreignKey]
+    const referencesList = fkField?.relationToFields ?? ['id']
 
     if (field.isList) {
       hasMany.push({
@@ -137,7 +155,11 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
         targetModel: field.type,
         foreignKey,
         references,
+        foreignKeys,
+        referencesList,
         isList: true,
+        onDelete: fkField?.relationOnDelete,
+        onUpdate: fkField?.relationOnUpdate,
       })
     } else {
       hasOne.push({
@@ -145,7 +167,11 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
         targetModel: field.type,
         foreignKey,
         references,
+        foreignKeys,
+        referencesList,
         isList: false,
+        onDelete: fkField?.relationOnDelete,
+        onUpdate: fkField?.relationOnUpdate,
       })
     }
   }
@@ -169,7 +195,18 @@ function formatGoDefault(def: DMMF.Field['default']) {
   if (typeof def === 'number') return String(def)
   // String/enum literals must be SQL-quoted: bare `default:USER` is read as the
   // identifier/reserved word `USER` (CURRENT_USER), not the literal 'USER'.
-  if (typeof def === 'string') return `'${def}'`
+  // The value lives inside a backtick struct tag, so `"` and `\` are written
+  // as the two-character sequences \" and \\ (reflect.StructTag unquotes
+  // them); the SQL single quote doubles per the SQL standard.
+  if (typeof def === 'string') {
+    const escaped = def
+      .replace(/\\/g, '\\\\')
+      .replace(/"/g, '\\"')
+      .replace(/'/g, "''")
+      .replace(/\n/g, '\\n')
+      .replace(/\r/g, '\\r')
+    return `'${escaped}'`
+  }
   return null
 }
 
@@ -178,6 +215,7 @@ export function buildGormTags(
   isPk: boolean,
   isCompositePk: boolean,
   compositeIndexTags: readonly string[],
+  enums?: readonly DMMF.DatamodelEnum[],
 ) {
   const columnName = field.dbName ?? makeSnakeCase(field.name)
   const isUuidDefault = isFunctionDefault(field.default) && field.default.name === 'uuid'
@@ -188,10 +226,27 @@ export function buildGormTags(
   const includeNativeType =
     nativeType && (!isPk || !isFunctionDefault(field.default) || field.default.name !== 'uuid')
   const includeAutoCreate = isNowDefault && (!isPk || isCompositePk || !isCompositePk)
-  const defaultVal =
-    (!isPk || isCompositePk) && !isNowDefault && !field.isUpdatedAt
-      ? formatGoDefault(field.default)
+  // An enum default arrives as the Prisma-level value name; the column stores
+  // the @map-ped database value. dbgenerated() is a raw DDL expression, valid
+  // on any column including the PK.
+  const dbGeneratedExpr =
+    isFunctionDefault(field.default) &&
+    field.default.name === 'dbgenerated' &&
+    typeof field.default.args[0] === 'string'
+      ? field.default.args[0]
       : null
+  const enumMappedDefault = (() => {
+    if (!(field.kind === 'enum' && typeof field.default === 'string')) return null
+    const value = enums
+      ?.find((e) => e.name === field.type)
+      ?.values.find((v) => v.name === field.default)
+    return formatGoDefault(value?.dbName ?? field.default)
+  })()
+  const defaultVal =
+    dbGeneratedExpr ??
+    ((!isPk || isCompositePk) && !isNowDefault && !field.isUpdatedAt
+      ? (enumMappedDefault ?? formatGoDefault(field.default))
+      : null)
 
   const parts = [
     `column:${columnName}`,
@@ -292,7 +347,9 @@ const GO_INITIALISMS = new Set([
 function splitGoWords(name: string) {
   return name
     .replace(/([a-z0-9])([A-Z])/g, '$1\0$2')
+    .replace(/_+/g, '\0')
     .split('\0')
+    .filter((part) => part !== '')
     .map((part) => {
       const lower = part.toLowerCase()
       return GO_INITIALISMS.has(lower)
@@ -301,7 +358,16 @@ function splitGoWords(name: string) {
     })
 }
 
+// Struct methods this generator itself may emit: a column whose Go name
+// matches would be a field and a method with the same name (compile error).
+const GENERATED_METHOD_NAMES = new Set(['TableName', 'BeforeCreate'])
+
 export function goFieldName(name: string) {
+  const pascal = splitGoWords(name).join('')
+  return GENERATED_METHOD_NAMES.has(pascal) ? `${pascal}_` : pascal
+}
+
+export function goModelName(name: string) {
   return splitGoWords(name).join('')
 }
 
@@ -339,7 +405,7 @@ function generateBeforeCreateHook(model: DMMF.Model) {
   })
   return [
     '',
-    `func (m *${model.name}) BeforeCreate(_ *gorm.DB) error {`,
+    `func (m *${goModelName(model.name)}) BeforeCreate(_ *gorm.DB) error {`,
     ...assignments,
     '\treturn nil',
     '}',
@@ -351,7 +417,7 @@ function generateStructField(
   isPk: boolean,
   isCompositePk: boolean,
   compositeIndexTags: readonly string[],
-  _enumNames: ReadonlySet<string>,
+  enums?: readonly DMMF.DatamodelEnum[],
 ) {
   const fieldName = goFieldName(field.name)
   const scalarType =
@@ -366,7 +432,7 @@ function generateStructField(
     ? `[]${field.kind === 'enum' ? 'string' : prismaTypeToGoType(field.type, true)}`
     : scalarType
 
-  const tag = buildGormTags(field, isPk, isCompositePk, compositeIndexTags)
+  const tag = buildGormTags(field, isPk, isCompositePk, compositeIndexTags, enums)
   const tagStr = tag ? ` ${tag}` : ''
 
   return `\t${fieldName} ${goType}${tagStr}`
@@ -374,6 +440,22 @@ function generateStructField(
 
 function needsReferencesTag(references: string) {
   return references !== 'id'
+}
+
+const SQL_ACTION: { [k: string]: string } = {
+  Cascade: 'CASCADE',
+  SetNull: 'SET NULL',
+  Restrict: 'RESTRICT',
+  NoAction: 'NO ACTION',
+  SetDefault: 'SET DEFAULT',
+}
+
+function constraintTag(onDelete: string | undefined, onUpdate: string | undefined) {
+  const clauses = [
+    onUpdate && SQL_ACTION[onUpdate] ? `OnUpdate:${SQL_ACTION[onUpdate]}` : null,
+    onDelete && SQL_ACTION[onDelete] ? `OnDelete:${SQL_ACTION[onDelete]}` : null,
+  ].filter((c) => c !== null)
+  return clauses.length > 0 ? `constraint:${clauses.join(',')}` : null
 }
 
 function buildRelationTag(parts: string[]) {
@@ -403,19 +485,22 @@ function generateRelationFields(
 ) {
   const belongsToLines = associations.belongsTo.map((assoc) => {
     const fieldName = goFieldName(assoc.name)
-    const fkFieldName = goFieldName(assoc.foreignKey)
-    const refsFieldName = goFieldName(assoc.references)
+    const fkFieldName = assoc.foreignKeys.map(goFieldName).join(',')
+    const refsFieldName = assoc.referencesList.map(goFieldName).join(',')
+    const isComposite = assoc.foreignKeys.length > 1
     const isAmbiguous =
-      fieldName !== assoc.targetModel ||
+      fieldName !== goModelName(assoc.targetModel) ||
       associations.belongsTo.filter((a) => a.targetModel === assoc.targetModel).length > 1
     const tagParts = [
-      isAmbiguous ? `foreignKey:${fkFieldName}` : null,
-      needsReferencesTag(assoc.references) ? `references:${refsFieldName}` : null,
+      isAmbiguous || isComposite ? `foreignKey:${fkFieldName}` : null,
+      isComposite || needsReferencesTag(assoc.references) ? `references:${refsFieldName}` : null,
     ].filter((p) => p !== null)
     // A relation back to the owning model must be a pointer: a struct that
     // embeds itself by value is an illegal recursive type in Go.
     const targetType =
-      assoc.targetModel === model.name ? `*${assoc.targetModel}` : assoc.targetModel
+      assoc.targetModel === model.name
+        ? `*${goModelName(assoc.targetModel)}`
+        : goModelName(assoc.targetModel)
     return tagParts.length > 0
       ? `\t${fieldName} ${targetType} ${buildRelationTag(tagParts)}`
       : `\t${fieldName} ${targetType}`
@@ -423,34 +508,32 @@ function generateRelationFields(
 
   const hasManyLines = associations.hasMany.map((assoc) => {
     const tagParts = [
-      `foreignKey:${goFieldName(assoc.foreignKey)}`,
-      ...(needsReferencesTag(assoc.references)
-        ? [`references:${goFieldName(assoc.references)}`]
+      `foreignKey:${assoc.foreignKeys.map(goFieldName).join(',')}`,
+      ...(assoc.foreignKeys.length > 1 || needsReferencesTag(assoc.references)
+        ? [`references:${assoc.referencesList.map(goFieldName).join(',')}`]
         : []),
+      ...[constraintTag(assoc.onDelete, assoc.onUpdate)].filter((c) => c !== null),
     ]
-    return `\t${goFieldName(assoc.name)} []${assoc.targetModel} ${buildRelationTag(tagParts)}`
+    return `\t${goFieldName(assoc.name)} []${goModelName(assoc.targetModel)} ${buildRelationTag(tagParts)}`
   })
 
   const hasOneLines = associations.hasOne.map((assoc) => {
     const tagParts = [
-      `foreignKey:${goFieldName(assoc.foreignKey)}`,
-      ...(needsReferencesTag(assoc.references)
-        ? [`references:${goFieldName(assoc.references)}`]
+      `foreignKey:${assoc.foreignKeys.map(goFieldName).join(',')}`,
+      ...(assoc.foreignKeys.length > 1 || needsReferencesTag(assoc.references)
+        ? [`references:${assoc.referencesList.map(goFieldName).join(',')}`]
         : []),
+      ...[constraintTag(assoc.onDelete, assoc.onUpdate)].filter((c) => c !== null),
     ]
     // A has-one is always a pointer: the paired belongs_to embeds this model
     // by value, so a value here is an illegal mutually recursive type in Go,
     // and Prisma requires the 1:1 back side to be optional anyway.
-    return `\t${goFieldName(assoc.name)} *${assoc.targetModel} ${buildRelationTag(tagParts)}`
+    return `\t${goFieldName(assoc.name)} *${goModelName(assoc.targetModel)} ${buildRelationTag(tagParts)}`
   })
 
   const manyToManyLines = associations.manyToMany.map((assoc) => {
-    const [leftName, rightName] =
-      model.name < assoc.targetModel
-        ? [model.name, assoc.targetModel]
-        : [assoc.targetModel, model.name]
-    const joinTable = `_${leftName}To${rightName}`
-    return `\t${goFieldName(assoc.name)} []${assoc.targetModel} \`gorm:"many2many:${joinTable};"\``
+    const joinTable = `_${assoc.relationName}`
+    return `\t${goFieldName(assoc.name)} []${goModelName(assoc.targetModel)} \`gorm:"many2many:${joinTable};"\``
   })
 
   return [...belongsToLines, ...hasManyLines, ...hasOneLines, ...manyToManyLines]
@@ -469,7 +552,7 @@ export function generateModelStruct(
   if (!(idField || isCompositePk)) return null
 
   const associations = getAssociations(model, allModels)
-  const enumNames = new Set((enums ?? []).map((e) => e.name))
+
   const compositeTagMap = collectCompositeIndexTags(model, indexes)
 
   const tableName = model.dbName ?? makeSnakeCase(model.name)
@@ -478,18 +561,23 @@ export function generateModelStruct(
   const fieldLines = scalarFields.map((field) => {
     const isPk = field.isId || compositePkFieldNames.has(field.name)
     const fieldIndexTags = compositeTagMap.get(field.name) ?? []
-    return generateStructField(field, isPk, isCompositePk, fieldIndexTags, enumNames)
+    return generateStructField(field, isPk, isCompositePk, fieldIndexTags, enums)
   })
 
   const relationLines = generateRelationFields(model, associations)
 
   const tableNameMethod =
     tableName !== makeSnakeCase(model.name)
-      ? ['', `func (${model.name}) TableName() string {`, `\treturn "${tableName}"`, '}']
+      ? [
+          '',
+          `func (${goModelName(model.name)}) TableName() string {`,
+          `\treturn "${tableName}"`,
+          '}',
+        ]
       : []
 
   return [
-    `type ${model.name} struct {`,
+    `type ${goModelName(model.name)} struct {`,
     ...fieldLines,
     ...relationLines,
     '}',

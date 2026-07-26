@@ -168,6 +168,13 @@ for lang in "${runnable[@]}"; do
       dk_out="$(mktemp -d)"
       npx drizzle-kit generate --dialect=postgresql \
         --schema="$harness/drizzle/schema.ts" --out="$dk_out" > /dev/null
+      # drizzle-kit exits 0 even when snapshot serialization crashes (e.g. a
+      # bigint default), leaving no migration behind — require the .sql proof.
+      if ! ls "$dk_out"/*.sql > /dev/null 2>&1; then
+        echo "error: drizzle-kit generate produced no migration SQL" >&2
+        rm -rf "$dk_out"
+        exit 1
+      fi
       rm -rf "$dk_out"
       ;;
   esac

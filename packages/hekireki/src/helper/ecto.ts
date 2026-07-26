@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { makeSnakeCase } from '../utils/index.js'
+import { makePascalCase, makeSnakeCase } from '../utils/index.js'
 
 export function prismaTypeToEctoType(
   type: string,
@@ -182,6 +182,10 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
     if (field.kind !== 'object') continue
 
     if (field.relationFromFields && field.relationFromFields.length > 0) {
+      // Ecto's belongs_to takes a single foreign_key: a composite FK would
+      // half-join on the first column, so it emits no association and the FK
+      // columns stay plain fields.
+      if (field.relationFromFields.length > 1) continue
       belongsTo.push({
         name: field.name,
         targetModel: field.type,
@@ -225,6 +229,7 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
     )
     const foreignKey = fkField?.relationFromFields?.[0]
     if (!foreignKey) continue
+    if ((fkField?.relationFromFields?.length ?? 0) > 1) continue
 
     if (field.isList) {
       hasMany.push({ name: field.name, targetModel: field.type, foreignKey })
@@ -234,6 +239,28 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
   }
 
   return { belongsTo, hasMany, hasOne, manyToMany }
+}
+
+function toElixirString(value: string) {
+  const escaped = value
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/#\{/g, '\\#{')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r')
+  return `"${escaped}"`
+}
+
+function jsonToElixirLiteral(value: unknown): string {
+  if (value === null) return 'nil'
+  if (value === true) return 'true'
+  if (value === false) return 'false'
+  if (typeof value === 'number') return String(value)
+  if (typeof value === 'string') return toElixirString(value)
+  if (Array.isArray(value)) return `[${value.map(jsonToElixirLiteral).join(', ')}]`
+  return `%{${Object.entries(value as { [k: string]: unknown })
+    .map(([k, v]) => `${toElixirString(k)} => ${jsonToElixirLiteral(v)}`)
+    .join(', ')}}`
 }
 
 export function ectoSchemas(
@@ -266,13 +293,10 @@ export function ectoSchemas(
 
       const belongsToFkFields = new Set(associations.belongsTo.map((a) => a.foreignKey))
 
-      const enumMap = new Map<string, readonly string[]>()
+      const enumMap = new Map<string, readonly DMMF.DatamodelEnum['values'][number][]>()
       if (enums) {
         for (const e of enums) {
-          enumMap.set(
-            e.name,
-            e.values.map((v) => v.name),
-          )
+          enumMap.set(e.name, [...e.values])
         }
       }
 
@@ -309,16 +333,16 @@ export function ectoSchemas(
           return `${makeSnakeCase(f.name)}: ${typeSpec}${nullSuffix}`
         }),
         ...associations.belongsTo.map(
-          (a) => `${makeSnakeCase(a.name)}: ${appName}.${a.targetModel}.t() | nil`,
+          (a) => `${makeSnakeCase(a.name)}: ${appName}.${makePascalCase(a.targetModel)}.t() | nil`,
         ),
         ...associations.hasOne.map(
-          (a) => `${makeSnakeCase(a.name)}: ${appName}.${a.targetModel}.t() | nil`,
+          (a) => `${makeSnakeCase(a.name)}: ${appName}.${makePascalCase(a.targetModel)}.t() | nil`,
         ),
         ...associations.hasMany.map(
-          (a) => `${makeSnakeCase(a.name)}: [${appName}.${a.targetModel}.t()]`,
+          (a) => `${makeSnakeCase(a.name)}: [${appName}.${makePascalCase(a.targetModel)}.t()]`,
         ),
         ...associations.manyToMany.map(
-          (a) => `${makeSnakeCase(a.name)}: [${appName}.${a.targetModel}.t()]`,
+          (a) => `${makeSnakeCase(a.name)}: [${appName}.${makePascalCase(a.targetModel)}.t()]`,
         ),
       ]
 
@@ -341,20 +365,47 @@ export function ectoSchemas(
         const sourceOpt = snakeName !== dbColumnName ? `, source: :${dbColumnName}` : ''
 
         if (f.kind === 'enum') {
-          const values = enumMap.get(f.type)
-          const valuesStr = values ? values.map((v) => `:${v}`).join(', ') : ''
+          const values = enumMap.get(f.type) ?? []
+          // @map-ped values need the keyword form (atom -> dump value) so
+          // Ecto dumps the database value, not the atom's own name.
+          const hasMappedValue = values.some((v) => v.dbName && v.dbName !== v.name)
+          const valuesStr = hasMappedValue
+            ? values.map((v) => `${v.name}: "${v.dbName ?? v.name}"`).join(', ')
+            : values.map((v) => `:${v.name}`).join(', ')
+          const enumType = f.isList ? '{:array, Ecto.Enum}' : 'Ecto.Enum'
           const enumDefault = typeof f.default === 'string' ? `, default: :${f.default}` : ''
-          return `    field(:${snakeName}, Ecto.Enum, values: [${valuesStr}]${enumDefault}${sourceOpt})`
+          return `    field(:${snakeName}, ${enumType}, values: [${valuesStr}]${enumDefault}${sourceOpt})`
         }
 
         const type = prismaTypeToEctoType(f.type)
         const ectoType = f.isList ? `{:array, :${type}}` : `:${type}`
         const defaultOpt = ((def: DMMF.Field['default']) => {
           if (def === undefined || def === null) return null
-          if (typeof def === 'string') return `default: "${def}"`
+          if (typeof def === 'string') {
+            // DMMF carries BigInt defaults as digit strings, DateTime literals
+            // as ISO strings, and Json defaults as JSON text. Ecto validates
+            // :default against the field type at compile time: :utc_datetime
+            // takes a ~U sigil at second precision (Ecto truncates every
+            // write the same way), :map takes an Elixir map literal.
+            if (f.type === 'BigInt') return `default: ${def}`
+            if (f.type === 'DateTime') return `default: ~U[${def.slice(0, 19).replace('T', ' ')}Z]`
+            if (f.type === 'Json') {
+              // Ecto's :map only accepts a map default; an array or scalar
+              // Json default would fail schema compilation, so it stays a
+              // database-level concern and is not emitted here.
+              const parsed: unknown = JSON.parse(def)
+              return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+                ? `default: ${jsonToElixirLiteral(parsed)}`
+                : null
+            }
+            return `default: ${toElixirString(def)}`
+          }
           // Ecto rejects an integer default on a :float field
           // ("value 0 is invalid for type :float"): emit a float literal.
+          // A :decimal default likewise only dumps as %Decimal{}, never as a
+          // bare float.
           if (typeof def === 'number') {
+            if (type === 'decimal') return `default: Decimal.new("${def}")`
             return type === 'float' && Number.isInteger(def)
               ? `default: ${def}.0`
               : `default: ${def}`
@@ -394,19 +445,19 @@ export function ectoSchemas(
           opts.push(`type: ${formatEctoType(a.fkType)}`)
         }
         if (a.references !== 'id') opts.push(`references: :${a.references}`)
-        return `    belongs_to(:${snakeAssocName}, ${appName}.${a.targetModel}, ${opts.join(', ')})`
+        return `    belongs_to(:${snakeAssocName}, ${appName}.${makePascalCase(a.targetModel)}, ${opts.join(', ')})`
       })
 
       const hasOneLines = associations.hasOne.map((a) => {
         const snakeFk = makeSnakeCase(a.foreignKey)
         const snakeAssocName = makeSnakeCase(a.name)
-        return `    has_one(:${snakeAssocName}, ${appName}.${a.targetModel}, foreign_key: :${snakeFk})`
+        return `    has_one(:${snakeAssocName}, ${appName}.${makePascalCase(a.targetModel)}, foreign_key: :${snakeFk})`
       })
 
       const hasManyLines = associations.hasMany.map((a) => {
         const snakeFk = makeSnakeCase(a.foreignKey)
         const snakeAssocName = makeSnakeCase(a.name)
-        return `    has_many(:${snakeAssocName}, ${appName}.${a.targetModel}, foreign_key: :${snakeFk})`
+        return `    has_many(:${snakeAssocName}, ${appName}.${makePascalCase(a.targetModel)}, foreign_key: :${snakeFk})`
       })
 
       const manyToManyLines = associations.manyToMany.map((a) => {
@@ -414,11 +465,11 @@ export function ectoSchemas(
         // Prisma implicit m2m join tables use columns "A"/"B" (models in
         // alphabetical order), not Ecto's inflected <schema>_id defaults.
         const joinKeys = `join_keys: [${a.ownJoinColumn}: :${a.ownKey}, ${a.relatedJoinColumn}: :${a.relatedKey}]`
-        return `    many_to_many(:${snakeAssocName}, ${appName}.${a.targetModel}, join_through: "${a.joinThrough}", ${joinKeys})`
+        return `    many_to_many(:${snakeAssocName}, ${appName}.${makePascalCase(a.targetModel)}, join_through: "${a.joinThrough}", ${joinKeys})`
       })
 
       const lines = [
-        `defmodule ${appName}.${model.name} do`,
+        `defmodule ${appName}.${makePascalCase(model.name)} do`,
         '  use Ecto.Schema',
         ...(model.documentation
           ? [`  @moduledoc """`, ...model.documentation.split('\n').map((l) => `  ${l}`), '  """']

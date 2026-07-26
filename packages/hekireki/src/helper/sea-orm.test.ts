@@ -569,7 +569,7 @@ impl ActiveModelBehavior for ActiveModel {
 
 describe('implicit many-to-many entity', () => {
   it('pins the Prisma A/B join table columns via column_name', () => {
-    expect(generateM2MEntity('Post', 'Tag', [])).toBe(`use sea_orm::entity::prelude::*;
+    expect(generateM2MEntity('Post', 'Tag', 'PostToTag', [])).toBe(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]

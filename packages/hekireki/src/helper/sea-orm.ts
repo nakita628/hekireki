@@ -170,7 +170,14 @@ function formatRustDefault(def: DMMF.Field['default']) {
   if (def === undefined || def === null) return null
   if (typeof def === 'boolean') return def ? 'true' : 'false'
   if (typeof def === 'number') return String(def)
-  if (typeof def === 'string') return `"${def}"`
+  if (typeof def === 'string') {
+    const escaped = def
+      .replace(/\\/g, '\\\\')
+      .replace(/"/g, '\\"')
+      .replace(/\n/g, '\\n')
+      .replace(/\r/g, '\\r')
+    return `"${escaped}"`
+  }
   return null
 }
 
@@ -179,6 +186,7 @@ export function buildSeaOrmAttributes(
   isPk: boolean,
   isCompositePk: boolean,
   derivedColumn?: string,
+  enums?: readonly DMMF.DatamodelEnum[],
 ) {
   const attrs: string[] = []
 
@@ -218,7 +226,14 @@ export function buildSeaOrmAttributes(
         field.isUpdatedAt
       )
     ) {
-      const defaultVal = formatRustDefault(field.default)
+      // An enum default arrives as the Prisma-level value name; the column
+      // stores the @map-ped database value.
+      const enumMappedDefault =
+        field.kind === 'enum' && typeof field.default === 'string'
+          ? (enums?.find((e) => e.name === field.type)?.values.find((v) => v.name === field.default)
+              ?.dbName ?? null)
+          : null
+      const defaultVal = formatRustDefault(enumMappedDefault ?? field.default)
       if (defaultVal !== null) {
         columnParts.push(`default_value = ${defaultVal}`)
       }
@@ -238,6 +253,10 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
     targetModel: string
     foreignKey: string
     references: string
+    foreignKeys: readonly string[]
+    referencesList: readonly string[]
+    onDelete?: string
+    onUpdate?: string
   }[] = []
   const hasMany: {
     name: string
@@ -264,6 +283,10 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
         targetModel: field.type,
         foreignKey: field.relationFromFields[0],
         references: field.relationToFields?.[0] ?? 'id',
+        foreignKeys: field.relationFromFields,
+        referencesList: field.relationToFields ?? ['id'],
+        onDelete: field.relationOnDelete,
+        onUpdate: field.relationOnUpdate,
       })
       continue
     }
@@ -353,7 +376,7 @@ export function generateEnum(e: DMMF.DatamodelEnum, serde: { readonly renameAll?
       .filter((part) => part !== '')
       .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
       .join('')
-    return `    #[sea_orm(string_value = "${v.name}")]\n    ${pascalName},`
+    return `    #[sea_orm(string_value = "${v.dbName ?? v.name}")]\n    ${pascalName},`
   })
 
   const derives =
@@ -422,10 +445,24 @@ function generateRelationEnum(
   for (const assoc of associations.belongsTo) {
     const variantName = toPascalCase(assoc.name)
     const targetModule = makeSnakeCase(assoc.targetModel)
-    const fromCol = toPascalCase(assoc.foreignKey)
-    const toCol = toPascalCase(assoc.references)
+    // Composite FKs use sea-orm's tuple syntax: from = "(Column::A, Column::B)".
+    const fromCol =
+      assoc.foreignKeys.length > 1
+        ? `(${assoc.foreignKeys.map((c) => `Column::${toPascalCase(c)}`).join(', ')})`
+        : `Column::${toPascalCase(assoc.foreignKey)}`
+    const toCol =
+      assoc.referencesList.length > 1
+        ? `(${assoc.referencesList
+            .map((c) => `super::${targetModule}::Column::${toPascalCase(c)}`)
+            .join(', ')})`
+        : `super::${targetModule}::Column::${toPascalCase(assoc.references)}`
+    // Prisma action names match sea-orm's ForeignKeyAction variants verbatim.
+    const actionLines = [
+      assoc.onUpdate ? `        on_update = "${assoc.onUpdate}"` : null,
+      assoc.onDelete ? `        on_delete = "${assoc.onDelete}"` : null,
+    ].filter((l) => l !== null)
     variants.push(
-      `    #[sea_orm(\n        belongs_to = "super::${targetModule}::Entity",\n        from = "Column::${fromCol}",\n        to = "super::${targetModule}::Column::${toCol}"\n    )]\n    ${variantName},`,
+      `    #[sea_orm(\n${[`        belongs_to = "super::${targetModule}::Entity"`, `        from = "${fromCol}"`, `        to = "${toCol}"`, ...actionLines].join(',\n')}\n    )]\n    ${variantName},`,
     )
   }
 
@@ -534,11 +571,7 @@ function generateRelatedImpls(
     if (emittedTargets.has(assoc.targetModel)) continue
     emittedTargets.add(assoc.targetModel)
     const targetModule = makeSnakeCase(assoc.targetModel)
-    const [leftName, rightName] =
-      model.name < assoc.targetModel
-        ? [model.name, assoc.targetModel]
-        : [assoc.targetModel, model.name]
-    const junctionModule = makeSnakeCase(`${leftName}To${rightName}`)
+    const junctionModule = makeSnakeCase(assoc.relationName)
     const junctionRelToTarget = toPascalCase(assoc.targetModel)
     const junctionRelToSelf = toPascalCase(model.name)
 
@@ -581,7 +614,7 @@ export function generateEntityFile(
   for (const field of scalarFields) {
     const isPk = field.isId || compositePkFieldNames.has(field.name)
     const { ident: fieldName, derivedColumn } = rustFieldIdent(makeSnakeCase(field.name))
-    const attrs = buildSeaOrmAttributes(field, isPk, isCompositePk, derivedColumn)
+    const attrs = buildSeaOrmAttributes(field, isPk, isCompositePk, derivedColumn, enums)
 
     const nativeOverride = rustTypeForNative(field)
     const elemType = enumNames.has(field.type)
@@ -666,22 +699,30 @@ export function generateEntityFile(
   return lines.join('\n')
 }
 
+function pkRustType(modelName: string, models: readonly DMMF.Model[]) {
+  const pkField = models.find((m) => m.name === modelName)?.fields.find((f) => f.isId)
+  return pkField ? prismaTypeToRustType(pkField.type, true) : 'String'
+}
+
 export function generateM2MEntity(
   leftModel: string,
   rightModel: string,
-  _allModels: readonly DMMF.Model[],
+  relationName: string,
+  allModels: readonly DMMF.Model[],
   serde: { readonly renameAll?: string } = {},
 ) {
   const [sortedLeft, sortedRight] =
     leftModel < rightModel ? [leftModel, rightModel] : [rightModel, leftModel]
 
-  const tableName = `_${sortedLeft}To${sortedRight}`
+  const tableName = `_${relationName}`
   const leftModule = makeSnakeCase(sortedLeft)
   const rightModule = makeSnakeCase(sortedRight)
   const leftFk = `${makeSnakeCase(sortedLeft)}_id`
   const rightFk = `${makeSnakeCase(sortedRight)}_id`
   const leftCol = toPascalCase(`${makeSnakeCase(sortedLeft)}Id`)
   const rightCol = toPascalCase(`${makeSnakeCase(sortedRight)}Id`)
+  const leftType = pkRustType(sortedLeft, allModels)
+  const rightType = pkRustType(sortedRight, allModels)
 
   const useLines = ['use sea_orm::entity::prelude::*;', 'use serde::{Deserialize, Serialize};']
 
@@ -700,9 +741,9 @@ export function generateM2MEntity(
     // Prisma's implicit join table stores its FKs in columns "A"/"B" (models
     // in alphabetical order), not <model>_id.
     '    #[sea_orm(primary_key, auto_increment = false, column_name = "A")]',
-    `    pub ${leftFk}: String,`,
+    `    pub ${leftFk}: ${leftType},`,
     '    #[sea_orm(primary_key, auto_increment = false, column_name = "B")]',
-    `    pub ${rightFk}: String,`,
+    `    pub ${rightFk}: ${rightType},`,
     '}',
     '',
     '#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]',
@@ -745,12 +786,12 @@ export function collectM2MPairs(models: readonly DMMF.Model[]) {
         model.name < assoc.targetModel
           ? [model.name, assoc.targetModel]
           : [assoc.targetModel, model.name]
-      return { left, right }
+      return { left, right, relationName: assoc.relationName }
     }),
   )
   const seen = new Set<string>()
   return pairs.filter((pair) => {
-    const key = `${pair.left}_${pair.right}`
+    const key = pair.relationName
     if (seen.has(key)) return false
     seen.add(key)
     return true

@@ -1333,7 +1333,8 @@ class Blob(Base):
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+      `from sqlalchemy import BigInteger
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class Base(DeclarativeBase):
@@ -1344,7 +1345,7 @@ class Metric(Base):
     __tablename__ = "metric"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    counter: Mapped[int]
+    counter: Mapped[int] = mapped_column(BigInteger)
     rate: Mapped[float]
 `,
     )

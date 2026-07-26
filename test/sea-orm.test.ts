@@ -970,13 +970,15 @@ pub enum Relation {
     #[sea_orm(
         belongs_to = "super::user::Entity",
         from = "Column::FollowerId",
-        to = "super::user::Column::Id"
+        to = "super::user::Column::Id",
+        on_delete = "Cascade"
     )]
     Follower,
     #[sea_orm(
         belongs_to = "super::user::Entity",
         from = "Column::FollowingId",
-        to = "super::user::Column::Id"
+        to = "super::user::Column::Id",
+        on_delete = "Cascade"
     )]
     Following,
 }
@@ -1487,7 +1489,8 @@ pub enum Relation {
     #[sea_orm(
         belongs_to = "super::user::Entity",
         from = "Column::UserId",
-        to = "super::user::Column::Id"
+        to = "super::user::Column::Id",
+        on_delete = "Cascade"
     )]
     User,
 }
@@ -1542,7 +1545,8 @@ pub enum Relation {
     #[sea_orm(
         belongs_to = "super::user::Entity",
         from = "Column::UserId",
-        to = "super::user::Column::Id"
+        to = "super::user::Column::Id",
+        on_delete = "Cascade"
     )]
     User,
 }

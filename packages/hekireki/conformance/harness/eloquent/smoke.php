@@ -55,4 +55,10 @@ if ($models === 0) {
     fwrite(STDERR, "model files loaded but no Eloquent Model subclasses defined\n");
     exit(1);
 }
+
+// Enum @map: the backed case value must be the database value, not the name.
+if (\App\Models\Visibility::LINK_ONLY->value !== 'link_only') {
+    fwrite(STDERR, "enum @map value not honored by Visibility::LINK_ONLY\n");
+    exit(1);
+}
 echo "ok: {$models} models, {$enums} enums resolved\n";

@@ -44,6 +44,17 @@ enum Status {
   PENDING_REVIEW
 }
 
+// Enum with @map on every value and @@map on the enum itself: the database
+// stores the mapped values ("link_only"), while DMMF hands generators the
+// Prisma-level names ("LINK_ONLY") — including in @default.
+enum Visibility {
+  PUBLIC    @map("public")
+  PRIVATE   @map("private")
+  LINK_ONLY @map("link_only")
+
+  @@map("visibility_level")
+}
+
 // Every scalar type + enum default + scalar list (array) + @map/@@map +
 // two relations to the same model (follower/following).
 model Account {
@@ -148,4 +159,240 @@ model Keyword {
   async String
   yield String
   self  String
+}
+
+// Literal defaults at their extremes: negatives, BigInt beyond
+// Number.MAX_SAFE_INTEGER, DateTime ISO literal, Json object/array/scalar,
+// and string escaping (quote, backslash, unicode, empty). Float/Decimal stay
+// within exact double representation: Prisma's DMMF parses both into a JS
+// number, so -273.15 or a 30-digit Decimal reach the generators pre-mangled.
+model Torture {
+  id       Int      @id @default(autoincrement())
+  negInt   Int      @default(-42)
+  negFloat Float    @default(-2.5)
+  bigPos   BigInt   @default(9007199254740993)
+  bigNeg   BigInt   @default(-9007199254740993)
+  precise  Decimal  @default("12345.6789")
+  born     DateTime @default("2020-02-29T23:59:59.999Z")
+  jsonObj  Json     @default("{\"a\":1,\"b\":[true,null,\"x\"]}")
+  jsonArr  Json     @default("[]")
+  jsonStr  Json     @default("\"quoted\"")
+  quoted   String   @default("it's a \"quote\" and a \\ backslash")
+  unicode  String   @default("日本語と🔥絵文字")
+  empty    String   @default("")
+  zero     Int      @default(0)
+  offFlag  Boolean  @default(false)
+}
+
+// PostgreSQL native-type breadth: every @db.* attribute Prisma accepts for
+// these scalars must survive each generator (correct mapped type or a safe
+// fallback — never invalid output).
+model NativeGrid {
+  id       String   @id @default(uuid()) @db.Uuid
+  code     String   @db.Char(3)
+  label    String   @db.VarChar(32)
+  tiny     Int      @db.SmallInt
+  ordinary Int      @db.Integer
+  ident    Int      @db.Oid
+  single   Float    @db.Real
+  double   Float    @db.DoublePrecision
+  wealth   Decimal  @db.Money
+  exact    Decimal  @db.Decimal(38, 12)
+  blobby   Bytes    @db.ByteA
+  doc      Json     @db.JsonB
+  plain    Json     @db.Json
+  day      DateTime @db.Date
+  clock    DateTime @db.Time(3)
+  stamp    DateTime @db.Timestamp(0)
+  zoned    DateTime @db.Timestamptz(6)
+  address  String   @db.Inet
+  mask     String   @db.Bit(8)
+  varMask  String   @db.VarBit(16)
+  markup   String   @db.Xml
+  bigCount BigInt   @db.BigInt
+  flagged  Boolean  @db.Boolean
+}
+
+// BigInt autoincrement PK (bigserial): must surface as i64 / int64 / BIGINT
+// identity, not a string or i32.
+model Sequence {
+  id   BigInt @id @default(autoincrement())
+  name String
+}
+
+// snake_case model name: class/struct/module identifiers must be
+// PascalCased per language convention while the table name stays verbatim
+// (Ruby/Elixir reject lowercase class and module names outright).
+model order_line_item {
+  id       Int    @id @default(autoincrement())
+  sku_code String
+  qty      Int    @default(1)
+}
+
+// Every referential action Prisma accepts, five FKs to the same parent:
+// stresses both the action mapping and belongs-to disambiguation when one
+// model is referenced many times.
+model RefActionParent {
+  id        Int              @id @default(autoincrement())
+  cascades  RefActionChild[] @relation("cascade")
+  nulls     RefActionChild[] @relation("setnull")
+  restricts RefActionChild[] @relation("restrict")
+  noacts    RefActionChild[] @relation("noaction")
+  defaults  RefActionChild[] @relation("setdefault")
+}
+
+model RefActionChild {
+  id           Int              @id @default(autoincrement())
+  cascadeId    Int
+  cascade      RefActionParent  @relation("cascade", fields: [cascadeId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  setNullId    Int?
+  setNull      RefActionParent? @relation("setnull", fields: [setNullId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  restrictId   Int
+  restrict     RefActionParent  @relation("restrict", fields: [restrictId], references: [id], onDelete: Restrict)
+  noActionId   Int
+  noAction     RefActionParent  @relation("noaction", fields: [noActionId], references: [id], onDelete: NoAction)
+  setDefaultId Int              @default(1)
+  setDefault   RefActionParent  @relation("setdefault", fields: [setDefaultId], references: [id], onDelete: SetDefault)
+}
+
+// FK referencing a non-id unique column (references: [slug], not the PK).
+model Handle {
+  id     Int     @id @default(autoincrement())
+  slug   String  @unique
+  claims Claim[]
+}
+
+model Claim {
+  id     Int    @id @default(autoincrement())
+  slug   String
+  handle Handle @relation(fields: [slug], references: [slug], onDelete: Cascade)
+}
+
+// One-to-one self-relation: the FK side must be optional and unique, and the
+// ORM must distinguish the two sides of the same named relation.
+model Monarch {
+  id          Int      @id @default(autoincrement())
+  name        String
+  successorId Int?     @unique
+  successor   Monarch? @relation("succession", fields: [successorId], references: [id])
+  predecessor Monarch? @relation("succession")
+}
+
+// Named implicit many-to-many: the join table is `_cast` (relation name),
+// not `_ActorToFilm`.
+model Actor {
+  id    Int    @id @default(autoincrement())
+  films Film[] @relation("cast")
+}
+
+model Film {
+  id     Int     @id @default(autoincrement())
+  actors Actor[] @relation("cast")
+}
+
+// Composite FK: two columns referencing a composite @@unique that is not the
+// PK. ORMs with composite-FK support must join on both columns; ORMs without
+// it (Eloquent, Ecto) must fall back safely instead of emitting a half-join.
+model Warehouse {
+  id      Int     @id @default(autoincrement())
+  country String
+  code    String
+  stocks  Stock[]
+
+  @@unique([country, code])
+}
+
+model Stock {
+  id        Int       @id @default(autoincrement())
+  country   String
+  code      String
+  amount    Int
+  warehouse Warehouse @relation(fields: [country, code], references: [country, code], onDelete: Cascade)
+}
+
+// FK whose target is a composite-PK model (both columns of @@id).
+model GridCell {
+  x     Int
+  y     Int
+  marks Mark[]
+
+  @@id([x, y])
+}
+
+model Mark {
+  id   Int      @id @default(autoincrement())
+  x    Int
+  y    Int
+  cell GridCell @relation(fields: [x, y], references: [x, y])
+}
+
+// Mapped enum in every position: required with a mapped default, optional,
+// and as a PostgreSQL enum array.
+model Board {
+  id         Int          @id @default(autoincrement())
+  visibility Visibility   @default(LINK_ONLY)
+  fallback   Visibility?
+  audiences  Visibility[]
+}
+
+// Scalar list defaults (empty and populated) plus a list of every scalar
+// type — generators without a native list representation must still emit
+// valid code.
+model Inventory {
+  id      Int       @id @default(autoincrement())
+  tags    String[]  @default([])
+  codes   Int[]     @default([1, 2, 3])
+  labels  String[]  @default(["a", "b"])
+  weights Float[]
+  flags   Boolean[]
+  stamps  DateTime[]
+  bigs    BigInt[]
+  decs    Decimal[]
+}
+
+// dbgenerated() defaults: DB-side expressions that no client library can
+// evaluate — emit as a raw DDL default or skip, never as a string literal.
+model Computed {
+  id   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  when DateTime @default(dbgenerated("now() + interval '1 day'"))
+  code String   @default(dbgenerated("md5(random()::text)"))
+}
+
+// @ignore field and @@ignore model: both are absent from DMMF, so no
+// generator may emit them (Ghost keeps id/seen only; Phantom vanishes).
+model Ghost {
+  id     Int    @id @default(autoincrement())
+  seen   String
+  hidden String @ignore
+}
+
+model Phantom {
+  id Int @id @default(autoincrement())
+
+  @@ignore
+}
+
+// cuid(2) and nanoid(10) primary keys: client-side generation where the ORM
+// ecosystem has a library for it, a plain assignable PK otherwise.
+model Badge {
+  id   String @id @default(cuid(2))
+  name String
+}
+
+model Coupon {
+  id   String @id @default(nanoid(10))
+  name String
+}
+
+// Names that collide with ORM machinery rather than language keywords:
+// SQLAlchemy's DeclarativeBase reserves `metadata`/`registry`; GORM's Tabler
+// interface owns `TableName` (a `tableName` column in a @@map model would
+// otherwise generate a field and a method with the same name).
+model MachineWord {
+  id        Int    @id @default(autoincrement())
+  metadata  String
+  registry  String
+  tableName String
+
+  @@map("machine_words")
 }

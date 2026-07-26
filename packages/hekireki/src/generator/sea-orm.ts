@@ -32,11 +32,11 @@ export function seaOrmFiles(
     .filter((entry) => entry.code.trim().length > 0)
 
   const m2mFiles = collectM2MPairs(models).map((pair) => {
-    const moduleName = makeSnakeCase(`${pair.left}To${pair.right}`)
+    const moduleName = makeSnakeCase(pair.relationName)
     return {
       fileName: `${moduleName}.rs`,
       moduleName,
-      code: generateM2MEntity(pair.left, pair.right, models, serde),
+      code: generateM2MEntity(pair.left, pair.right, pair.relationName, models, serde),
     }
   })
 
