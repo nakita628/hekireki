@@ -110,7 +110,7 @@ const fieldDirectiveMap = new Map<string, string>([
   ['isUpdatedAt', '@updatedAt'],
 ])
 
-const escapeHtml = (str: string): string =>
+const escapeHtml = (str: string) =>
   str
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -312,7 +312,7 @@ const ModelsSection: FC<{ data: ModelGeneratorStructure }> = ({ data }) => (
   </div>
 )
 
-const getModelDirective = (model: DMMF.Model): readonly MGModelDirective[] => {
+const getModelDirective = (model: DMMF.Model) => {
   const directiveValue: MGModelDirective[] = []
 
   if (model.primaryKey) {
@@ -330,12 +330,12 @@ const getModelDirective = (model: DMMF.Model): readonly MGModelDirective[] => {
   return directiveValue
 }
 
-const getFieldType = (field: DMMF.Field): string => {
+const getFieldType = (field: DMMF.Field) => {
   const name = field.isRequired || field.isList ? field.type : `${field.type}?`
   return field.isList ? `${name.replace('?', '')}[]` : name
 }
 
-const getFieldDirectives = (field: DMMF.Field): readonly string[] => {
+const getFieldDirectives = (field: DMMF.Field) => {
   const filteredEntries = Object.entries(field).filter(([_, v]) => Boolean(v))
   const directives: string[] = []
 
@@ -365,7 +365,7 @@ const getFieldDirectives = (field: DMMF.Field): readonly string[] => {
   return directives
 }
 
-const getModelFields = (model: DMMF.Model): readonly MGModelField[] =>
+const getModelFields = (model: DMMF.Model) =>
   model.fields.map((field) => ({
     name: field.name,
     type: getFieldType(field),
@@ -375,9 +375,7 @@ const getModelFields = (model: DMMF.Model): readonly MGModelField[] =>
     required: field.isRequired,
   }))
 
-const mapArgs = (
-  args: readonly DMMF.SchemaArg[] | undefined,
-): readonly MGModelOperationKeys[] | undefined =>
+const mapArgs = (args: readonly DMMF.SchemaArg[] | undefined) =>
   args?.map((a) => ({
     name: a.name,
     types: a.inputTypes,
@@ -488,7 +486,7 @@ const getModelOperations = (
   model: DMMF.Model,
   mappings: DMMFMapping | undefined,
   schema: DMMF.Schema,
-): readonly MGModelOperation[] => {
+) => {
   if (!mappings) {
     throw new Error(`No operation mapping found for model: ${model.name}`)
   }
@@ -524,7 +522,7 @@ const getModelOperations = (
     .filter((op): op is MGModelOperation => op !== null)
 }
 
-const getModels = (dmmf: DMMFDocument): readonly MGModel[] =>
+const getModels = (dmmf: DMMFDocument) =>
   dmmf.datamodel.models.map((model) => ({
     name: model.name,
     documentation: model.documentation,
@@ -537,7 +535,7 @@ const getModels = (dmmf: DMMFDocument): readonly MGModel[] =>
     ),
   }))
 
-const getModelData = (d: DMMFDocument): ModelGeneratorStructure => ({
+const getModelData = (d: DMMFDocument) => ({
   models: getModels(d),
 })
 

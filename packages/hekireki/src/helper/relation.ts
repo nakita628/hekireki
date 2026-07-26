@@ -93,7 +93,7 @@ export function annotatedERRelations(models: readonly { readonly documentation?:
 // the entry's cardinality in place while keeping `origin: 'inferred'` (a physical
 // FK still exists); annotation-only pairs (no FK) append at the end with
 // `origin: 'annotated'`. Duplicate annotations are last-wins.
-export function mergeERRelations(models: readonly DMMF.Model[]): readonly ERRelation[] {
+export function mergeERRelations(models: readonly DMMF.Model[]) {
   const inferred = inferredERRelations(models)
   const annotated = annotatedERRelations(models)
   const inferredKeys = new Set(inferred.map(erKey))

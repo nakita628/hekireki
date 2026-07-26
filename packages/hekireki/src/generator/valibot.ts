@@ -8,7 +8,7 @@ export function valibotCode(
   type: boolean,
   comment: boolean,
   relation: boolean,
-): string {
+) {
   const base = valibotSchemaCode(dmmf.datamodel.models, type, comment, dmmf.datamodel.enums)
   const relations = relation ? makeRelationsOnly(dmmf, type, makeValibotRelations) : ''
   return [base, relations].filter(Boolean).join('\n\n')

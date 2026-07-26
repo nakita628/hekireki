@@ -17,10 +17,7 @@ export type DMMFDocument = Omit<ExternalDMMF.Document, 'mappings'> & {
   mappings: DMMFMapping[]
 }
 
-const getMappings = (
-  mappings: ExternalDMMF.Mappings,
-  datamodel: ExternalDMMF.Datamodel,
-): DMMFMapping[] => {
+const getMappings = (mappings: ExternalDMMF.Mappings, datamodel: ExternalDMMF.Datamodel) => {
   return (
     mappings.modelOperations
       .filter((mapping) => {
@@ -46,7 +43,7 @@ const getMappings = (
   )
 }
 
-export const transformDMMF = (dmmf: ExternalDMMF.Document): DMMFDocument => {
+export const transformDMMF = (dmmf: ExternalDMMF.Document) => {
   return {
     ...dmmf,
     datamodel: dmmf.datamodel,

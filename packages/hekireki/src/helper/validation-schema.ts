@@ -91,7 +91,7 @@ export function validationSchemas(
     readonly type: string
     readonly kind: string
     readonly documentation?: string
-  }): string | null => {
+  }) => {
     const annotation = config.extractValidation(field.documentation)
     if (annotation !== null) return annotation
     if (config.typeMapping) {

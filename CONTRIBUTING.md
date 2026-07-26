@@ -50,7 +50,7 @@ packages/hekireki/src/
 ├── emit/        # file-writing boundary (the only place with I/O side effects)
 └── format/      # oxfmt formatting for TypeScript output
 packages/hekireki/conformance/   # cross-language conformance harness
-fixtures/                        # end-to-end fixture schemas used by src/bin tests
+test/                            # per-language end-to-end tests (test/schemas/ holds shared schema.prisma inputs)
 ```
 
 Dependencies flow one way: `utils → helper → generator → core/bin`.
@@ -75,7 +75,7 @@ These are enforced in review, so following them up front saves a round-trip:
 ## Testing rules
 
 - **Codegen tests assert full equality**: `toBe` / `toStrictEqual` on the complete generated output. No `toContain` / `toMatch` partial matching — byte-for-byte output is the contract.
-- Test files are `*.test.ts`, co-located next to what they test.
+- Test files are `*.test.ts`. Unit tests are co-located next to what they test; per-language end-to-end tests live in `test/` at the repo root, with shared `schema.prisma` inputs in `test/schemas/`.
 - **Every bug fix needs a regression test** that fails without the fix.
 - Keep test logic inline — no shared extraction/transform helpers between tests (fixture setup and lifecycle hooks are fine). Tests are read as documentation.
 - Coverage targets: 90% lines / 90% functions / 85% branches. Don't let a PR lower them.
@@ -98,7 +98,7 @@ These are enforced in review, so following them up front saves a round-trip:
 New targets (a new ORM, validator, or language) are the biggest contributions we take — and the most design-sensitive. Please:
 
 1. **Open an issue first** describing the target, its official docs, and a sketch of the generated output for a small schema.
-2. Mirror the existing structure: `bin/<target>.ts` → `core/<target>.ts` → `generator/<target>.ts` → `helper/<target>.ts`, with unit tests at every layer and a `src/bin/<target>.test.ts` end-to-end test.
+2. Mirror the existing structure: `bin/<target>.ts` → `core/<target>.ts` → `generator/<target>.ts` → `helper/<target>.ts`, with unit tests at every layer and a `test/<target>.test.ts` end-to-end test.
 3. Cover the hard schema shapes — the conformance schema shows what every generator must survive: every scalar type, enum defaults, `@map`/`@@map`, self-relations, two relations to the same model, composite primary keys, implicit many-to-many join tables (Prisma's `A`/`B` columns), `uuid(7)`/`ulid()` defaults, and reserved-word field names.
 4. Add a conformance harness leg (`conformance/harness/<target>/` + a case in `conformance/check.sh` + a `Lang Check` matrix entry) so the generated code is compiled against the real toolchain in CI.
 

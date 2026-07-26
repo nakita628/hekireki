@@ -13,7 +13,7 @@ export function drizzleSchema(
   datamodel: DMMF.Datamodel,
   provider: 'postgresql' | 'cockroachdb' | 'mysql' | 'sqlite',
   indexes: readonly DMMF.Index[],
-): string {
+) {
   const db = resolveDbProvider(provider)
   const imports = createImports()
 

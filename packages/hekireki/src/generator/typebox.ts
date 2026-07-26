@@ -8,7 +8,7 @@ export function typeboxCode(
   type: boolean,
   comment: boolean,
   relation: boolean,
-): string {
+) {
   const base = typeboxSchemaCode(dmmf.datamodel.models, type, comment, dmmf.datamodel.enums)
   const relations = relation ? makeRelationsOnly(dmmf, type, makeTypeBoxRelations) : ''
   return [base, relations].filter(Boolean).join('\n\n')

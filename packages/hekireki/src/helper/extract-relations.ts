@@ -8,7 +8,7 @@ export function collectRelationProps(
       readonly isList: boolean
     }[]
   }[],
-): readonly { model: string; key: string; targetModel: string; isMany: boolean }[] {
+) {
   return models.flatMap((m) =>
     m.fields
       .filter((f) => f.kind === 'object')
