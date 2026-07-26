@@ -15,7 +15,7 @@ describe('prisma generate zod', () => {
     fs.rmSync('./prisma/zod-test', { recursive: true, force: true })
   })
   afterAll(() => {
-    fs.rmSync('./prisma-zod', { recursive: true, force: true })
+    fs.rmSync('./prisma', { recursive: true, force: true })
   })
   it('hekireki-zod', async () => {
     const prisma = `generator client {
@@ -824,7 +824,7 @@ describe('prisma generate valibot', () => {
     fs.rmSync('./prisma/valibot-test', { recursive: true, force: true })
   })
   afterAll(() => {
-    fs.rmSync('./prisma-valibot', { recursive: true, force: true })
+    fs.rmSync('./prisma', { recursive: true, force: true })
   })
   it('hekireki-valibot', async () => {
     const prisma = `generator client {

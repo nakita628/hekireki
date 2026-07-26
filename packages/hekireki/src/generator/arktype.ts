@@ -8,7 +8,7 @@ export function arktypeCode(
   type: boolean,
   comment: boolean,
   relation: boolean,
-): string {
+) {
   const base = arktypeSchemaCode(dmmf.datamodel.models, type, comment, dmmf.datamodel.enums)
   const relations = relation ? makeRelationsOnly(dmmf, type, makeArktypeRelations) : ''
   return [base, relations].filter(Boolean).join('\n\n')

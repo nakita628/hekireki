@@ -1,5 +1,6 @@
 import { exec } from 'node:child_process'
 import fs from 'node:fs'
+import { resolve } from 'node:path'
 import { promisify } from 'node:util'
 
 import { afterAll, afterEach, describe, expect, it } from 'vite-plus/test'
@@ -756,18 +757,29 @@ class Category(Base):
   }, 30000)
 })
 
-describe('fixture: twitter-clone-sample', () => {
+describe('schema: twitter-clone-sample', () => {
   afterAll(() => {
-    fs.rmSync('../../fixtures/twitter-clone-sample/sqlalchemy', { recursive: true, force: true })
+    fs.rmSync('./prisma-sqlalchemy-twitter-clone-sample', { recursive: true, force: true })
   })
 
   it('generates all models with self-ref, composite PK, @@index, @updatedAt', async () => {
+    const prisma = `generator Hekireki-SQLAlchemy {
+    provider = "hekireki-sqlalchemy"
+    output   = "sqlalchemy"
+}
+
+${fs.readFileSync(resolve(import.meta.dirname, 'schemas/twitter-clone-sample.prisma'), 'utf-8')}`
+    fs.mkdirSync('./prisma-sqlalchemy-twitter-clone-sample', { recursive: true })
+    fs.writeFileSync('./prisma-sqlalchemy-twitter-clone-sample/schema.prisma', prisma, {
+      encoding: 'utf-8',
+    })
     await promisify(exec)(
-      'npx prisma generate --schema=../../fixtures/twitter-clone-sample/schema.prisma',
+      'npx prisma generate --schema=./prisma-sqlalchemy-twitter-clone-sample/schema.prisma',
     )
 
-    expect(fs.readFileSync('../../fixtures/twitter-clone-sample/sqlalchemy/models.py', 'utf-8'))
-      .toBe(`from sqlalchemy import ForeignKey, Index, func
+    expect(
+      fs.readFileSync('./prisma-sqlalchemy-twitter-clone-sample/sqlalchemy/models.py', 'utf-8'),
+    ).toBe(`from sqlalchemy import ForeignKey, Index, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from typing import Optional
 from datetime import datetime
@@ -870,15 +882,23 @@ class Notification(Base):
   }, 60000)
 })
 
-describe('fixture: rbac', () => {
+describe('schema: rbac', () => {
   afterAll(() => {
-    fs.rmSync('../../fixtures/rbac/sqlalchemy', { recursive: true, force: true })
+    fs.rmSync('./prisma-sqlalchemy-rbac', { recursive: true, force: true })
   })
 
   it('generates RBAC models with @@map, @db.VarChar, @@unique, @@index, autoincrement, enum', async () => {
-    await promisify(exec)('npx prisma generate --schema=../../fixtures/rbac/schema.prisma')
+    const prisma = `generator Hekireki-SQLAlchemy {
+    provider = "hekireki-sqlalchemy"
+    output   = "sqlalchemy"
+}
 
-    expect(fs.readFileSync('../../fixtures/rbac/sqlalchemy/models.py', 'utf-8')).toBe(
+${fs.readFileSync(resolve(import.meta.dirname, 'schemas/rbac.prisma'), 'utf-8')}`
+    fs.mkdirSync('./prisma-sqlalchemy-rbac', { recursive: true })
+    fs.writeFileSync('./prisma-sqlalchemy-rbac/schema.prisma', prisma, { encoding: 'utf-8' })
+    await promisify(exec)('npx prisma generate --schema=./prisma-sqlalchemy-rbac/schema.prisma')
+
+    expect(fs.readFileSync('./prisma-sqlalchemy-rbac/sqlalchemy/models.py', 'utf-8')).toBe(
       `from sqlalchemy import Enum, ForeignKey, Index, String, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from typing import Optional
@@ -988,15 +1008,27 @@ class AuditLog(Base):
   }, 60000)
 })
 
-describe('fixture: no-annotation (M2M implicit)', () => {
+describe('schema: no-annotation (M2M implicit)', () => {
   afterAll(() => {
-    fs.rmSync('../../fixtures/no-annotation/sqlalchemy', { recursive: true, force: true })
+    fs.rmSync('./prisma-sqlalchemy-no-annotation', { recursive: true, force: true })
   })
 
   it('generates models with implicit M2M (Post <-> Tag), enum, one-to-one, @updatedAt', async () => {
-    await promisify(exec)('npx prisma generate --schema=../../fixtures/no-annotation/schema.prisma')
+    const prisma = `generator Hekireki-SQLAlchemy {
+    provider = "hekireki-sqlalchemy"
+    output   = "sqlalchemy"
+}
 
-    expect(fs.readFileSync('../../fixtures/no-annotation/sqlalchemy/models.py', 'utf-8'))
+${fs.readFileSync(resolve(import.meta.dirname, 'schemas/no-annotation.prisma'), 'utf-8')}`
+    fs.mkdirSync('./prisma-sqlalchemy-no-annotation', { recursive: true })
+    fs.writeFileSync('./prisma-sqlalchemy-no-annotation/schema.prisma', prisma, {
+      encoding: 'utf-8',
+    })
+    await promisify(exec)(
+      'npx prisma generate --schema=./prisma-sqlalchemy-no-annotation/schema.prisma',
+    )
+
+    expect(fs.readFileSync('./prisma-sqlalchemy-no-annotation/sqlalchemy/models.py', 'utf-8'))
       .toBe(`from sqlalchemy import Column, Enum, ForeignKey, String, Table, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from typing import Optional
@@ -1065,15 +1097,25 @@ class Tag(Base):
   }, 60000)
 })
 
-describe('fixture: jwt-auth-pg', () => {
+describe('schema: jwt-auth-pg', () => {
   afterAll(() => {
-    fs.rmSync('../../fixtures/jwt-auth-pg/sqlalchemy', { recursive: true, force: true })
+    fs.rmSync('./prisma-sqlalchemy-jwt-auth-pg', { recursive: true, force: true })
   })
 
   it('generates PostgreSQL models with @db.Uuid, @db.VarChar, @db.Decimal, @db.Timestamptz, @@unique, @@index, @@map, multiple enums', async () => {
-    await promisify(exec)('npx prisma generate --schema=../../fixtures/jwt-auth-pg/schema.prisma')
+    const prisma = `generator Hekireki-SQLAlchemy {
+    provider = "hekireki-sqlalchemy"
+    output   = "sqlalchemy"
+}
 
-    expect(fs.readFileSync('../../fixtures/jwt-auth-pg/sqlalchemy/models.py', 'utf-8')).toBe(
+${fs.readFileSync(resolve(import.meta.dirname, 'schemas/jwt-auth-pg.prisma'), 'utf-8')}`
+    fs.mkdirSync('./prisma-sqlalchemy-jwt-auth-pg', { recursive: true })
+    fs.writeFileSync('./prisma-sqlalchemy-jwt-auth-pg/schema.prisma', prisma, { encoding: 'utf-8' })
+    await promisify(exec)(
+      'npx prisma generate --schema=./prisma-sqlalchemy-jwt-auth-pg/schema.prisma',
+    )
+
+    expect(fs.readFileSync('./prisma-sqlalchemy-jwt-auth-pg/sqlalchemy/models.py', 'utf-8')).toBe(
       `from sqlalchemy import DateTime, Enum, ForeignKey, Index, Numeric, String, UniqueConstraint, Uuid, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from typing import Optional

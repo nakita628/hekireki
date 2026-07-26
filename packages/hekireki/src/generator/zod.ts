@@ -9,7 +9,7 @@ export function zodCode(
   comment: boolean,
   relation: boolean,
   version: string,
-): string {
+) {
   const base = zodSchemaCode(dmmf.datamodel.models, type, comment, version, dmmf.datamodel.enums)
   const relations = relation ? makeRelationsOnly(dmmf, type, makeZodRelations) : ''
   return [base, relations].filter(Boolean).join('\n\n')

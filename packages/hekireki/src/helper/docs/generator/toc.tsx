@@ -133,10 +133,7 @@ const TOCComponent: FC<{ data: TOCStructure }> = ({ data }) => (
   </div>
 )
 
-const getModels = (
-  dmmfModel: readonly DMMF.Model[],
-  mappings: readonly DMMFMapping[],
-): readonly TOCModel[] =>
+const getModels = (dmmfModel: readonly DMMF.Model[], mappings: readonly DMMFMapping[]) =>
   dmmfModel.map((model) => ({
     name: model.name,
     fields: model.fields.map((field) => field.name),
@@ -145,7 +142,7 @@ const getModels = (
     ),
   }))
 
-const getTypes = (dmmfSchema: DMMF.Schema): TOCTypes => {
+const getTypes = (dmmfSchema: DMMF.Schema) => {
   const prismaInputTypes = dmmfSchema.inputObjectTypes.prisma ?? []
   return {
     inputTypes: prismaInputTypes.map((inputType) => inputType.name),
@@ -158,7 +155,7 @@ const getTypes = (dmmfSchema: DMMF.Schema): TOCTypes => {
   }
 }
 
-const getTOCData = (d: DMMFDocument): TOCStructure => ({
+const getTOCData = (d: DMMFDocument) => ({
   models: getModels([...d.datamodel.models], d.mappings),
   types: getTypes(d.schema),
 })

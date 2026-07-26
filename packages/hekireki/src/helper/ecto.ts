@@ -99,7 +99,7 @@ function getPrimaryKeyConfig(field: DMMF.Field) {
   }
 }
 
-function makeTimestampsLine(fields: DMMF.Field[]): { line: string | null; exclude: Set<string> } {
+function makeTimestampsLine(fields: DMMF.Field[]) {
   const insertedAliases = ['inserted_at', 'created_at', 'createdAt']
   const updatedAliases = ['updated_at', 'modified_at', 'updatedAt', 'modifiedAt']
 
@@ -349,7 +349,7 @@ export function ectoSchemas(
 
         const type = prismaTypeToEctoType(f.type)
         const ectoType = f.isList ? `{:array, :${type}}` : `:${type}`
-        const defaultOpt = ((def: DMMF.Field['default']): string | null => {
+        const defaultOpt = ((def: DMMF.Field['default']) => {
           if (def === undefined || def === null) return null
           if (typeof def === 'string') return `default: "${def}"`
           // Ecto rejects an integer default on a :float field

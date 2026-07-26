@@ -4,9 +4,7 @@ import { makeSnakeCase } from '../utils/index.js'
 
 type DbProvider = 'postgresql' | 'mysql' | 'sqlite'
 
-export function resolveDbProvider(
-  provider: 'postgresql' | 'cockroachdb' | 'mysql' | 'sqlite',
-): DbProvider {
+export function resolveDbProvider(provider: 'postgresql' | 'cockroachdb' | 'mysql' | 'sqlite') {
   switch (provider) {
     case 'postgresql':
     case 'cockroachdb':
@@ -54,7 +52,7 @@ const SQLITE_SCALAR_MAP: { [k: string]: string } = {
   Bytes: 'blob()',
 }
 
-function makeDecimalOpts(args: readonly string[]): string {
+function makeDecimalOpts(args: readonly string[]) {
   const opts = [
     args[0] ? `precision: ${args[0]}` : null,
     args[1] ? `scale: ${args[1]}` : null,
@@ -62,7 +60,7 @@ function makeDecimalOpts(args: readonly string[]): string {
   return opts.length > 0 ? `{ ${opts.join(', ')} }` : ''
 }
 
-function pgNativeType(name: string, args: readonly string[]): string | null {
+function pgNativeType(name: string, args: readonly string[]) {
   switch (name) {
     case 'VarChar':
       return args[0] ? `varchar({ length: ${args[0]} })` : 'varchar()'
@@ -109,7 +107,7 @@ function pgNativeType(name: string, args: readonly string[]): string | null {
   }
 }
 
-function mysqlNativeType(name: string, args: readonly string[]): string | null {
+function mysqlNativeType(name: string, args: readonly string[]) {
   switch (name) {
     case 'VarChar':
       return args[0] ? `varchar({ length: ${args[0]} })` : 'varchar()'
@@ -212,28 +210,28 @@ export function generateImports(imports: DrizzleImports, provider: DbProvider) {
   return [coreImport, ormImport, ...extImports].filter(Boolean).join('\n')
 }
 
-function snakeToCamel(name: string): string {
+function snakeToCamel(name: string) {
   return name.replace(/_+([a-zA-Z0-9])/g, (_, c) => c.toUpperCase())
 }
 
-function resolveTableName(model: DMMF.Model): string {
+function resolveTableName(model: DMMF.Model) {
   return model.dbName ?? makeSnakeCase(model.name)
 }
 
-function resolveVarName(model: DMMF.Model): string {
+function resolveVarName(model: DMMF.Model) {
   return snakeToCamel(resolveTableName(model))
 }
 
-function resolveVarNameByType(type: string, models: readonly DMMF.Model[]): string {
+function resolveVarNameByType(type: string, models: readonly DMMF.Model[]) {
   const target = models.find((m) => m.name === type)
   return snakeToCamel(target ? resolveTableName(target) : makeSnakeCase(type))
 }
 
-function isFieldDefault(v: unknown): v is DMMF.FieldDefault {
+function isFieldDefault(v: unknown) {
   return typeof v === 'object' && v !== null && 'name' in v
 }
 
-function enumIdentifier(enumName: string): string {
+function enumIdentifier(enumName: string) {
   return `${snakeToCamel(makeSnakeCase(enumName))}Enum`
 }
 
@@ -256,7 +254,7 @@ export function makeEnumDeclarations(
     })
 }
 
-function resolveScalarType(field: DMMF.Field, provider: DbProvider): string {
+function resolveScalarType(field: DMMF.Field, provider: DbProvider) {
   if (field.nativeType && provider !== 'sqlite') {
     const [nativeName, nativeArgs] = field.nativeType
     const override =
@@ -279,7 +277,7 @@ function makeColumnExpr(
   provider: DbProvider,
   imports: DrizzleImports,
   enums: readonly DMMF.DatamodelEnum[],
-): string {
+) {
   const colName = field.dbName ?? field.name
   const isAutoincrement = isFieldDefault(field.default) && field.default.name === 'autoincrement'
 
@@ -317,11 +315,7 @@ function makeColumnExpr(
 
 const SQL_IMPORT = { pkg: 'drizzle-orm', kind: 'named', name: 'sql' } as const
 
-function resolveDefaultValue(
-  dflt: DMMF.Field['default'],
-  fieldType: string,
-  provider: DbProvider,
-): { chain: string; imports: readonly ImportReq[] } {
+function resolveDefaultValue(dflt: DMMF.Field['default'], fieldType: string, provider: DbProvider) {
   if (dflt === undefined || dflt === null) return { chain: '', imports: [] }
   if (isFieldDefault(dflt)) {
     switch (dflt.name) {
@@ -377,10 +371,7 @@ function resolveDefaultValue(
   return { chain: '', imports: [] }
 }
 
-function resolveUpdatedAtDefault(provider: DbProvider): {
-  chain: string
-  needsSql: boolean
-} {
+function resolveUpdatedAtDefault(provider: DbProvider) {
   if (provider === 'sqlite') return { chain: '.default(sql`(unixepoch() * 1000)`)', needsSql: true }
   if (provider === 'mysql') return { chain: '.default(sql`CURRENT_TIMESTAMP(3)`)', needsSql: true }
   return { chain: '.defaultNow()', needsSql: false }
@@ -391,7 +382,7 @@ function makeDefaultChain(
   fieldType: string,
   provider: DbProvider,
   imports: DrizzleImports,
-): string {
+) {
   const result = resolveDefaultValue(dflt, fieldType, provider)
   for (const req of result.imports) {
     applyImport(imports, req)
@@ -407,11 +398,7 @@ const PRISMA_ACTION_MAP: { [k: string]: string } = {
   SetDefault: 'set default',
 }
 
-function makeFkReference(
-  field: DMMF.Field,
-  model: DMMF.Model,
-  models: readonly DMMF.Model[],
-): string {
+function makeFkReference(field: DMMF.Field, model: DMMF.Model, models: readonly DMMF.Model[]) {
   const relField = model.fields.find(
     (f) => f.kind === 'object' && f.relationFromFields && f.relationFromFields.includes(field.name),
   )
@@ -435,7 +422,7 @@ function makeColumn(
   provider: DbProvider,
   imports: DrizzleImports,
   enums: readonly DMMF.DatamodelEnum[],
-): string | null {
+) {
   if (field.kind === 'object') return null
   if (field.kind === 'unsupported') return `// unsupported type: ${field.name}`
 
@@ -479,7 +466,7 @@ function makeCompositeConstraints(
   imports: DrizzleImports,
   indexes: readonly DMMF.Index[],
   tableName: string,
-): string | null {
+) {
   const pkLine = model.primaryKey
     ? (() => {
         imports.core.add('primaryKey')
@@ -514,7 +501,7 @@ export function makeTable(
   imports: DrizzleImports,
   enums: readonly DMMF.DatamodelEnum[],
   indexes: readonly DMMF.Index[],
-): string {
+) {
   const tableFunc =
     provider === 'postgresql' ? 'pgTable' : provider === 'mysql' ? 'mysqlTable' : 'sqliteTable'
   imports.core.add(tableFunc)
@@ -537,7 +524,7 @@ function makeRelationField(
   model: DMMF.Model,
   models: readonly DMMF.Model[],
   relFields: readonly DMMF.Field[],
-): string {
+) {
   const targetVar = resolveVarNameByType(field.type, models)
   const modelVar = resolveVarName(model)
   const needsAlias = relFields.filter((f) => f.type === field.type).length > 1 && field.relationName
@@ -562,10 +549,7 @@ function makeRelationField(
   return `${field.name}: one(${targetVar})`
 }
 
-export function makeRelations(
-  models: readonly DMMF.Model[],
-  imports: DrizzleImports,
-): readonly string[] {
+export function makeRelations(models: readonly DMMF.Model[], imports: DrizzleImports) {
   const modelsWithRels = models.filter((model) => model.fields.some((f) => f.kind === 'object'))
   if (modelsWithRels.length === 0) return []
 

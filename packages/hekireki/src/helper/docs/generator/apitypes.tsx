@@ -124,7 +124,7 @@ const TypesSection: FC<{ data: TypesGeneratorStructure }> = ({ data }) => (
   </div>
 )
 
-const getInputTypes = (dmmfInputType: readonly DMMF.InputType[]): readonly TGType[] =>
+const getInputTypes = (dmmfInputType: readonly DMMF.InputType[]) =>
   dmmfInputType.map((inputType) => ({
     name: inputType.name,
     fields: inputType.fields.map((ip) => ({
@@ -134,7 +134,7 @@ const getInputTypes = (dmmfInputType: readonly DMMF.InputType[]): readonly TGTyp
     })),
   }))
 
-const getOutputTypes = (dmmfOutputTypes: readonly DMMF.OutputType[]): readonly TGType[] =>
+const getOutputTypes = (dmmfOutputTypes: readonly DMMF.OutputType[]) =>
   dmmfOutputTypes.map((outputType) => ({
     name: outputType.name,
     fields: outputType.fields.map((op) => ({
@@ -149,7 +149,7 @@ const getOutputTypes = (dmmfOutputTypes: readonly DMMF.OutputType[]): readonly T
     })),
   }))
 
-const getTypesData = (d: DMMFDocument): TypesGeneratorStructure => {
+const getTypesData = (d: DMMFDocument) => {
   const prismaInputTypes = d.schema.inputObjectTypes.prisma ?? []
   return {
     inputTypes: getInputTypes(prismaInputTypes),

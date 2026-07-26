@@ -1,5 +1,6 @@
 import { exec } from 'node:child_process'
 import fs from 'node:fs'
+import { resolve } from 'node:path'
 import { promisify } from 'node:util'
 
 import { afterAll, afterEach, describe, expect, it } from 'vite-plus/test'
@@ -591,17 +592,27 @@ func (m *User) BeforeCreate(_ *gorm.DB) error {
   }, 30000)
 })
 
-describe('fixture: twitter-clone-sample', () => {
+describe('schema: twitter-clone-sample', () => {
   afterAll(() => {
-    fs.rmSync('../../fixtures/twitter-clone-sample/gorm', { recursive: true, force: true })
+    fs.rmSync('./prisma-gorm-twitter-clone-sample', { recursive: true, force: true })
   })
 
   it('generates all models with self-ref, composite PK, @updatedAt, @default(now())', async () => {
+    const prisma = `generator Hekireki-GORM {
+    provider = "hekireki-gorm"
+    output   = "gorm"
+}
+
+${fs.readFileSync(resolve(import.meta.dirname, 'schemas/twitter-clone-sample.prisma'), 'utf-8')}`
+    fs.mkdirSync('./prisma-gorm-twitter-clone-sample', { recursive: true })
+    fs.writeFileSync('./prisma-gorm-twitter-clone-sample/schema.prisma', prisma, {
+      encoding: 'utf-8',
+    })
     await promisify(exec)(
-      'npx prisma generate --schema=../../fixtures/twitter-clone-sample/schema.prisma',
+      'npx prisma generate --schema=./prisma-gorm-twitter-clone-sample/schema.prisma',
     )
 
-    expect(fs.readFileSync('../../fixtures/twitter-clone-sample/gorm/models.go', 'utf-8'))
+    expect(fs.readFileSync('./prisma-gorm-twitter-clone-sample/gorm/models.go', 'utf-8'))
       .toStrictEqual(`package model
 
 import (
@@ -709,15 +720,23 @@ func (m *Notification) BeforeCreate(_ *gorm.DB) error {
   }, 60000)
 })
 
-describe('fixture: rbac', () => {
+describe('schema: rbac', () => {
   afterAll(() => {
-    fs.rmSync('../../fixtures/rbac/gorm', { recursive: true, force: true })
+    fs.rmSync('./prisma-gorm-rbac', { recursive: true, force: true })
   })
 
   it('generates RBAC models with @@map, @db.VarChar, autoincrement, enum, composite PK', async () => {
-    await promisify(exec)('npx prisma generate --schema=../../fixtures/rbac/schema.prisma')
+    const prisma = `generator Hekireki-GORM {
+    provider = "hekireki-gorm"
+    output   = "gorm"
+}
 
-    expect(fs.readFileSync('../../fixtures/rbac/gorm/models.go', 'utf-8')).toStrictEqual(
+${fs.readFileSync(resolve(import.meta.dirname, 'schemas/rbac.prisma'), 'utf-8')}`
+    fs.mkdirSync('./prisma-gorm-rbac', { recursive: true })
+    fs.writeFileSync('./prisma-gorm-rbac/schema.prisma', prisma, { encoding: 'utf-8' })
+    await promisify(exec)('npx prisma generate --schema=./prisma-gorm-rbac/schema.prisma')
+
+    expect(fs.readFileSync('./prisma-gorm-rbac/gorm/models.go', 'utf-8')).toStrictEqual(
       `package model
 
 import "time"
@@ -822,15 +841,23 @@ func (AuditLog) TableName() string {
   }, 60000)
 })
 
-describe('fixture: no-annotation (M2M implicit)', () => {
+describe('schema: no-annotation (M2M implicit)', () => {
   afterAll(() => {
-    fs.rmSync('../../fixtures/no-annotation/gorm', { recursive: true, force: true })
+    fs.rmSync('./prisma-gorm-no-annotation', { recursive: true, force: true })
   })
 
   it('generates models with implicit M2M (Post <-> Tag), enum, one-to-one, @updatedAt', async () => {
-    await promisify(exec)('npx prisma generate --schema=../../fixtures/no-annotation/schema.prisma')
+    const prisma = `generator Hekireki-GORM {
+    provider = "hekireki-gorm"
+    output   = "gorm"
+}
 
-    expect(fs.readFileSync('../../fixtures/no-annotation/gorm/models.go', 'utf-8'))
+${fs.readFileSync(resolve(import.meta.dirname, 'schemas/no-annotation.prisma'), 'utf-8')}`
+    fs.mkdirSync('./prisma-gorm-no-annotation', { recursive: true })
+    fs.writeFileSync('./prisma-gorm-no-annotation/schema.prisma', prisma, { encoding: 'utf-8' })
+    await promisify(exec)('npx prisma generate --schema=./prisma-gorm-no-annotation/schema.prisma')
+
+    expect(fs.readFileSync('./prisma-gorm-no-annotation/gorm/models.go', 'utf-8'))
       .toStrictEqual(`package model
 
 import (
@@ -909,15 +936,23 @@ func (m *Tag) BeforeCreate(_ *gorm.DB) error {
   }, 60000)
 })
 
-describe('fixture: jwt-auth-pg', () => {
+describe('schema: jwt-auth-pg', () => {
   afterAll(() => {
-    fs.rmSync('../../fixtures/jwt-auth-pg/gorm', { recursive: true, force: true })
+    fs.rmSync('./prisma-gorm-jwt-auth-pg', { recursive: true, force: true })
   })
 
   it('generates PostgreSQL models with @db.Uuid, @db.VarChar, @db.Decimal, @db.Timestamptz, @@map', async () => {
-    await promisify(exec)('npx prisma generate --schema=../../fixtures/jwt-auth-pg/schema.prisma')
+    const prisma = `generator Hekireki-GORM {
+    provider = "hekireki-gorm"
+    output   = "gorm"
+}
 
-    expect(fs.readFileSync('../../fixtures/jwt-auth-pg/gorm/models.go', 'utf-8')).toStrictEqual(
+${fs.readFileSync(resolve(import.meta.dirname, 'schemas/jwt-auth-pg.prisma'), 'utf-8')}`
+    fs.mkdirSync('./prisma-gorm-jwt-auth-pg', { recursive: true })
+    fs.writeFileSync('./prisma-gorm-jwt-auth-pg/schema.prisma', prisma, { encoding: 'utf-8' })
+    await promisify(exec)('npx prisma generate --schema=./prisma-gorm-jwt-auth-pg/schema.prisma')
+
+    expect(fs.readFileSync('./prisma-gorm-jwt-auth-pg/gorm/models.go', 'utf-8')).toStrictEqual(
       `package model
 
 import (

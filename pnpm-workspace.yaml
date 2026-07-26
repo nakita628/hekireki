@@ -1,7 +1,6 @@
 packages:
   - apps/*
   - packages/*
-  - fixtures/*
 allowBuilds:
   '@prisma/engines': true
   better-sqlite3: true

@@ -1,5 +1,6 @@
 import { exec } from 'node:child_process'
 import fs from 'node:fs'
+import { resolve } from 'node:path'
 import { promisify } from 'node:util'
 
 import { afterAll, afterEach, describe, expect, it } from 'vite-plus/test'
@@ -839,17 +840,27 @@ impl ActiveModelBehavior for ActiveModel {
   }, 30000)
 })
 
-describe('fixture: twitter-clone-sample', () => {
+describe('schema: twitter-clone-sample', () => {
   afterAll(() => {
-    fs.rmSync('../../fixtures/twitter-clone-sample/sea_orm', { recursive: true, force: true })
+    fs.rmSync('./prisma-sea-orm-twitter-clone-sample', { recursive: true, force: true })
   })
 
   it('generates all entities with self-ref, composite PK, timestamps', async () => {
+    const prisma = `generator HekirekiSeaORM {
+    provider = "hekireki-sea-orm"
+    output   = "sea_orm"
+}
+
+${fs.readFileSync(resolve(import.meta.dirname, 'schemas/twitter-clone-sample.prisma'), 'utf-8')}`
+    fs.mkdirSync('./prisma-sea-orm-twitter-clone-sample', { recursive: true })
+    fs.writeFileSync('./prisma-sea-orm-twitter-clone-sample/schema.prisma', prisma, {
+      encoding: 'utf-8',
+    })
     await promisify(exec)(
-      'npx prisma generate --schema=../../fixtures/twitter-clone-sample/schema.prisma',
+      'npx prisma generate --schema=./prisma-sea-orm-twitter-clone-sample/schema.prisma',
     )
 
-    expect(fs.readFileSync('../../fixtures/twitter-clone-sample/sea_orm/user.rs', 'utf-8'))
+    expect(fs.readFileSync('./prisma-sea-orm-twitter-clone-sample/sea_orm/user.rs', 'utf-8'))
       .toStrictEqual(`use sea_orm::entity::prelude::*;
 use sea_orm::Set;
 use serde::{Deserialize, Serialize};
@@ -940,7 +951,7 @@ impl ActiveModelBehavior for ActiveModel {
     }
 }`)
 
-    expect(fs.readFileSync('../../fixtures/twitter-clone-sample/sea_orm/follow.rs', 'utf-8'))
+    expect(fs.readFileSync('./prisma-sea-orm-twitter-clone-sample/sea_orm/follow.rs', 'utf-8'))
       .toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -978,7 +989,7 @@ impl Related<super::user::Entity> for Entity {
 
 impl ActiveModelBehavior for ActiveModel {}`)
 
-    expect(fs.readFileSync('../../fixtures/twitter-clone-sample/sea_orm/mod.rs', 'utf-8'))
+    expect(fs.readFileSync('./prisma-sea-orm-twitter-clone-sample/sea_orm/mod.rs', 'utf-8'))
       .toStrictEqual(`pub mod comment;
 pub mod follow;
 pub mod like;
@@ -990,15 +1001,23 @@ pub mod user;
   }, 60000)
 })
 
-describe('fixture: rbac', () => {
+describe('schema: rbac', () => {
   afterAll(() => {
-    fs.rmSync('../../fixtures/rbac/sea_orm', { recursive: true, force: true })
+    fs.rmSync('./prisma-sea-orm-rbac', { recursive: true, force: true })
   })
 
   it('generates RBAC entities with @@map, @db.VarChar, autoincrement, enum, composite PK', async () => {
-    await promisify(exec)('npx prisma generate --schema=../../fixtures/rbac/schema.prisma')
+    const prisma = `generator HekirekiSeaORM {
+    provider = "hekireki-sea-orm"
+    output   = "sea_orm"
+}
 
-    expect(fs.readFileSync('../../fixtures/rbac/sea_orm/organization.rs', 'utf-8'))
+${fs.readFileSync(resolve(import.meta.dirname, 'schemas/rbac.prisma'), 'utf-8')}`
+    fs.mkdirSync('./prisma-sea-orm-rbac', { recursive: true })
+    fs.writeFileSync('./prisma-sea-orm-rbac/schema.prisma', prisma, { encoding: 'utf-8' })
+    await promisify(exec)('npx prisma generate --schema=./prisma-sea-orm-rbac/schema.prisma')
+
+    expect(fs.readFileSync('./prisma-sea-orm-rbac/sea_orm/organization.rs', 'utf-8'))
       .toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 use super::org_status::OrgStatus;
@@ -1033,7 +1052,7 @@ impl Related<super::user::Entity> for Entity {
 
 impl ActiveModelBehavior for ActiveModel {}`)
 
-    expect(fs.readFileSync('../../fixtures/rbac/sea_orm/user_role.rs', 'utf-8'))
+    expect(fs.readFileSync('./prisma-sea-orm-rbac/sea_orm/user_role.rs', 'utf-8'))
       .toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -1077,7 +1096,7 @@ impl Related<super::role::Entity> for Entity {
 
 impl ActiveModelBehavior for ActiveModel {}`)
 
-    expect(fs.readFileSync('../../fixtures/rbac/sea_orm/audit_log.rs', 'utf-8'))
+    expect(fs.readFileSync('./prisma-sea-orm-rbac/sea_orm/audit_log.rs', 'utf-8'))
       .toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -1115,7 +1134,7 @@ impl Related<super::user::Entity> for Entity {
 
 impl ActiveModelBehavior for ActiveModel {}`)
 
-    expect(fs.readFileSync('../../fixtures/rbac/sea_orm/org_status.rs', 'utf-8'))
+    expect(fs.readFileSync('./prisma-sea-orm-rbac/sea_orm/org_status.rs', 'utf-8'))
       .toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -1133,15 +1152,25 @@ pub enum OrgStatus {
   }, 60000)
 })
 
-describe('fixture: no-annotation (M2M implicit)', () => {
+describe('schema: no-annotation (M2M implicit)', () => {
   afterAll(() => {
-    fs.rmSync('../../fixtures/no-annotation/sea_orm', { recursive: true, force: true })
+    fs.rmSync('./prisma-sea-orm-no-annotation', { recursive: true, force: true })
   })
 
   it('generates entities with implicit M2M (Post <-> Tag), enum, one-to-one', async () => {
-    await promisify(exec)('npx prisma generate --schema=../../fixtures/no-annotation/schema.prisma')
+    const prisma = `generator HekirekiSeaORM {
+    provider = "hekireki-sea-orm"
+    output   = "sea_orm"
+}
 
-    expect(fs.readFileSync('../../fixtures/no-annotation/sea_orm/user.rs', 'utf-8'))
+${fs.readFileSync(resolve(import.meta.dirname, 'schemas/no-annotation.prisma'), 'utf-8')}`
+    fs.mkdirSync('./prisma-sea-orm-no-annotation', { recursive: true })
+    fs.writeFileSync('./prisma-sea-orm-no-annotation/schema.prisma', prisma, { encoding: 'utf-8' })
+    await promisify(exec)(
+      'npx prisma generate --schema=./prisma-sea-orm-no-annotation/schema.prisma',
+    )
+
+    expect(fs.readFileSync('./prisma-sea-orm-no-annotation/sea_orm/user.rs', 'utf-8'))
       .toStrictEqual(`use sea_orm::entity::prelude::*;
 use sea_orm::Set;
 use serde::{Deserialize, Serialize};
@@ -1193,7 +1222,7 @@ impl ActiveModelBehavior for ActiveModel {
     }
 }`)
 
-    expect(fs.readFileSync('../../fixtures/no-annotation/sea_orm/post.rs', 'utf-8'))
+    expect(fs.readFileSync('./prisma-sea-orm-no-annotation/sea_orm/post.rs', 'utf-8'))
       .toStrictEqual(`use sea_orm::entity::prelude::*;
 use sea_orm::Set;
 use serde::{Deserialize, Serialize};
@@ -1246,7 +1275,7 @@ impl ActiveModelBehavior for ActiveModel {
     }
 }`)
 
-    expect(fs.readFileSync('../../fixtures/no-annotation/sea_orm/tag.rs', 'utf-8'))
+    expect(fs.readFileSync('./prisma-sea-orm-no-annotation/sea_orm/tag.rs', 'utf-8'))
       .toStrictEqual(`use sea_orm::entity::prelude::*;
 use sea_orm::Set;
 use serde::{Deserialize, Serialize};
@@ -1281,7 +1310,7 @@ impl ActiveModelBehavior for ActiveModel {
     }
 }`)
 
-    expect(fs.readFileSync('../../fixtures/no-annotation/sea_orm/post_to_tag.rs', 'utf-8'))
+    expect(fs.readFileSync('./prisma-sea-orm-no-annotation/sea_orm/post_to_tag.rs', 'utf-8'))
       .toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -1312,7 +1341,7 @@ pub enum Relation {
 
 impl ActiveModelBehavior for ActiveModel {}`)
 
-    expect(fs.readFileSync('../../fixtures/no-annotation/sea_orm/mod.rs', 'utf-8'))
+    expect(fs.readFileSync('./prisma-sea-orm-no-annotation/sea_orm/mod.rs', 'utf-8'))
       .toStrictEqual(`pub mod post;
 pub mod post_to_tag;
 pub mod prelude;
@@ -1324,15 +1353,23 @@ pub mod user;
   }, 60000)
 })
 
-describe('fixture: jwt-auth-pg', () => {
+describe('schema: jwt-auth-pg', () => {
   afterAll(() => {
-    fs.rmSync('../../fixtures/jwt-auth-pg/sea_orm', { recursive: true, force: true })
+    fs.rmSync('./prisma-sea-orm-jwt-auth-pg', { recursive: true, force: true })
   })
 
   it('generates PostgreSQL entities with @db.Uuid, @db.VarChar, @db.Decimal, @db.Timestamptz, @@map', async () => {
-    await promisify(exec)('npx prisma generate --schema=../../fixtures/jwt-auth-pg/schema.prisma')
+    const prisma = `generator HekirekiSeaORM {
+    provider = "hekireki-sea-orm"
+    output   = "sea_orm"
+}
 
-    expect(fs.readFileSync('../../fixtures/jwt-auth-pg/sea_orm/user.rs', 'utf-8'))
+${fs.readFileSync(resolve(import.meta.dirname, 'schemas/jwt-auth-pg.prisma'), 'utf-8')}`
+    fs.mkdirSync('./prisma-sea-orm-jwt-auth-pg', { recursive: true })
+    fs.writeFileSync('./prisma-sea-orm-jwt-auth-pg/schema.prisma', prisma, { encoding: 'utf-8' })
+    await promisify(exec)('npx prisma generate --schema=./prisma-sea-orm-jwt-auth-pg/schema.prisma')
+
+    expect(fs.readFileSync('./prisma-sea-orm-jwt-auth-pg/sea_orm/user.rs', 'utf-8'))
       .toStrictEqual(`use sea_orm::entity::prelude::*;
 use sea_orm::Set;
 use serde::{Deserialize, Serialize};
@@ -1420,7 +1457,7 @@ impl ActiveModelBehavior for ActiveModel {
     }
 }`)
 
-    expect(fs.readFileSync('../../fixtures/jwt-auth-pg/sea_orm/oauth_account.rs', 'utf-8'))
+    expect(fs.readFileSync('./prisma-sea-orm-jwt-auth-pg/sea_orm/oauth_account.rs', 'utf-8'))
       .toStrictEqual(`use sea_orm::entity::prelude::*;
 use sea_orm::Set;
 use serde::{Deserialize, Serialize};
@@ -1470,7 +1507,7 @@ impl ActiveModelBehavior for ActiveModel {
     }
 }`)
 
-    expect(fs.readFileSync('../../fixtures/jwt-auth-pg/sea_orm/two_factor_setting.rs', 'utf-8'))
+    expect(fs.readFileSync('./prisma-sea-orm-jwt-auth-pg/sea_orm/two_factor_setting.rs', 'utf-8'))
       .toStrictEqual(`use sea_orm::entity::prelude::*;
 use sea_orm::Set;
 use serde::{Deserialize, Serialize};
@@ -1525,7 +1562,7 @@ impl ActiveModelBehavior for ActiveModel {
     }
 }`)
 
-    expect(fs.readFileSync('../../fixtures/jwt-auth-pg/sea_orm/role.rs', 'utf-8'))
+    expect(fs.readFileSync('./prisma-sea-orm-jwt-auth-pg/sea_orm/role.rs', 'utf-8'))
       .toStrictEqual(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -1541,7 +1578,7 @@ pub enum Role {
 }
 `)
 
-    expect(fs.readFileSync('../../fixtures/jwt-auth-pg/sea_orm/mod.rs', 'utf-8'))
+    expect(fs.readFileSync('./prisma-sea-orm-jwt-auth-pg/sea_orm/mod.rs', 'utf-8'))
       .toStrictEqual(`pub mod email_verification;
 pub mod oauth_account;
 pub mod oauth_provider;
