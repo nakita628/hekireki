@@ -18,7 +18,7 @@ This builds the generators, wipes `generated/`, runs `prisma generate`, and veri
 - Relations: 1:1, 1:n, self-relation tree, composite PK, two named relations to the same model, implicit m2m (`_PostToTag`) and named implicit m2m (`_cast`)
 - Referential actions (`Cascade`, `SetNull`), composite `@@unique`, `@@index`, `@updatedAt`
 - Validator annotations (`@z.` / `@v.` / `@a.` / `@e.` / `@t.` / `@j.` / `@p.`) on `User` and `Post`; the remaining models fall back to the built-in type mapping
-- Pydantic extra-key mode: `@p.strictObject` on `Profile` (`model_config = ConfigDict(extra="forbid")`)
+- Pydantic model config: `@p.ConfigDict(extra='forbid')` on `Profile` (passed through as `model_config = ConfigDict(extra='forbid')`)
 
 ## Outputs
 

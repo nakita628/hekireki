@@ -25,11 +25,11 @@ class User(BaseModel):
 
 class Profile(BaseModel):
     """One-to-one relation with native @db.* types, literal defaults,
-    and optional scalars of every flavour. strictObject: the Pydantic
-    model rejects unknown keys (extra="forbid").
+    and optional scalars of every flavour. ConfigDict passthrough: the
+    Pydantic model rejects unknown keys (extra='forbid').
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra='forbid')
 
     id: str
     userId: str
@@ -136,3 +136,58 @@ class Actor(BaseModel):
 class Film(BaseModel):
     id: int
     title: str
+
+
+class UserRelations(User):
+    profile: Profile
+    posts: list[Post]
+    comments: list[Comment]
+    orders: list[Order]
+    followers: list[Follow]
+    following: list[Follow]
+
+
+class ProfileRelations(Profile):
+    user: User
+
+
+class PostRelations(Post):
+    author: User
+    tags: list[Tag]
+    comments: list[Comment]
+
+
+class TagRelations(Tag):
+    posts: list[Post]
+
+
+class CommentRelations(Comment):
+    post: Post
+    author: User
+
+
+class FollowRelations(Follow):
+    follower: User
+    following: User
+
+
+class CategoryRelations(Category):
+    parent: Category
+    children: list[Category]
+
+
+class OrderRelations(Order):
+    user: User
+    items: list[OrderItem]
+
+
+class OrderItemRelations(OrderItem):
+    order: Order
+
+
+class ActorRelations(Actor):
+    films: list[Film]
+
+
+class FilmRelations(Film):
+    actors: list[Actor]

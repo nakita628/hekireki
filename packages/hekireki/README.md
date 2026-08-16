@@ -17,7 +17,7 @@
 
 ### Python Validation
 
-- 🐍 Automatically generates [Pydantic](https://docs.pydantic.dev/) v2 models from your Prisma schema — with `@p.` field annotations, `Literal` enums, and `@p.strictObject` / `@p.looseObject` extra-key modes (`extra="forbid"` / `extra="allow"`)
+- 🐍 Automatically generates [Pydantic](https://docs.pydantic.dev/) v2 models from your Prisma schema — with `@p.` field annotations, `Literal` enums, `@p.ConfigDict(...)` model config passthrough (`extra='forbid'` / `'ignore'` / `'allow'` and any other `ConfigDict` arguments), and `relation = true` for `<Model>Relations` subclasses
 
 ### ORM / Schema Generation (Multi-Language)
 
@@ -876,10 +876,10 @@ class Post(BaseModel):
     """Foreign key referencing User.id"""
 ```
 
-To control unknown keys — Zod's `strictObject` / `looseObject` equivalents — annotate the model itself. `@p.strictObject` rejects unknown keys (`extra="forbid"`), `@p.looseObject` keeps them (`extra="allow"`), and no annotation leaves pydantic's default (`extra="ignore"`):
+To configure the model itself, annotate it with pydantic's own `ConfigDict` — the expression is passed through verbatim as `model_config`. `@p.ConfigDict(extra='forbid')` rejects unknown keys, `@p.ConfigDict(extra='allow')` keeps them, `@p.ConfigDict(extra='ignore')` states pydantic's default explicitly, and any other `ConfigDict` arguments (e.g. `frozen=True`) work the same way. No annotation leaves pydantic's default (`extra="ignore"`):
 
 ```prisma
-/// @p.strictObject
+/// @p.ConfigDict(extra='forbid')
 model ApiKey {
   id String @id
 }
@@ -890,9 +890,16 @@ from pydantic import BaseModel, ConfigDict
 
 
 class ApiKey(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra='forbid')
 
     id: str
+```
+
+With `relation = true`, each model that has relation fields also gets a `<Model>Relations` subclass — the Pydantic counterpart of the validator generators' relation schemas. Relation fields reference the base classes, so a payload fetched with its relations validates in one call:
+
+```python
+class UserRelations(User):
+    posts: list[Post]
 ```
 
 ### GORM
@@ -1143,6 +1150,7 @@ generator Hekireki-Pydantic {
     provider = "hekireki-pydantic"
     output   = "./pydantic"        // Output path (default: ./pydantic/models.py)
     comment  = true                // Include docstrings from /// comments (default: false)
+    relation = true                // Generate <Model>Relations subclasses (default: false)
 }
 
 // GORM Generator (Go)

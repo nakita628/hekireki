@@ -1,7 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import {
-  extractObjectType,
   makePascalCase,
   makeValidationExtractor,
   parseDocumentWithoutAnnotations,
@@ -169,14 +168,18 @@ function makeDocstring(lines: readonly string[], indent: string) {
   ]
 }
 
-// zod strictObject / looseObject equivalents: `/// @p.strictObject` on the
-// model rejects unknown keys (extra="forbid"), `/// @p.looseObject` keeps
-// them (extra="allow"); no annotation is pydantic's default (extra="ignore").
+// Pydantic's own idiom instead of zod-style strictObject/looseObject:
+// `/// @p.ConfigDict(extra='forbid')` on the model passes the expression
+// through verbatim as `model_config`. Any ConfigDict arguments work; no
+// annotation leaves pydantic's default (extra="ignore").
+function extractConfigDict(documentation: string | undefined) {
+  const annotation = extractPydanticAnnotation(documentation)
+  return annotation !== null && annotation.startsWith('ConfigDict(') ? annotation : null
+}
+
 function makeConfigLine(model: DMMF.Model) {
-  const objectType = extractObjectType(model.documentation, '@p.')
-  if (objectType === 'strict') return '    model_config = ConfigDict(extra="forbid")'
-  if (objectType === 'loose') return '    model_config = ConfigDict(extra="allow")'
-  return null
+  const config = extractConfigDict(model.documentation)
+  return config === null ? null : `    model_config = ${config}`
 }
 
 export function makePydanticModel(
@@ -208,14 +211,45 @@ export function makePydanticModel(
   ].join('\n')
 }
 
-export function collectPydanticImports(
+function hasGeneratedFields(model: DMMF.Model, enums: readonly DMMF.DatamodelEnum[] | undefined) {
+  return model.fields.some((field) => makePydanticField(field, enums) !== null)
+}
+
+// zod's `relation = true` equivalent: a `<Model>Relations` subclass of the
+// base model whose relation fields reference the base classes (`Post`, not
+// `PostRelations`). Emitted after every base class, so no forward references
+// are needed. Targets that generate no class (all-relation models) are
+// skipped, matching what actually exists in the file.
+export function makePydanticRelations(
+  model: DMMF.Model,
   models: readonly DMMF.Model[],
   enums: readonly DMMF.DatamodelEnum[] | undefined,
 ) {
-  const included = models.filter((model) =>
-    model.fields.some((field) => makePydanticField(field, enums) !== null),
+  if (!hasGeneratedFields(model, enums)) return null
+  const relFields = model.fields.filter(
+    (field) =>
+      field.kind === 'object' &&
+      models.some((m) => m.name === field.type && hasGeneratedFields(m, enums)),
   )
-  const text = included
+  if (relFields.length === 0) return null
+  const lines = relFields.map((field) => {
+    const target = makePascalCase(field.type)
+    const typeExpr = field.isList ? `list[${target}]` : target
+    const attrName = pydanticFieldName(field.name)
+    const rhs = attrName !== field.name ? ` = Field(alias="${field.name}")` : ''
+    return `    ${attrName}: ${typeExpr}${rhs}`
+  })
+  const className = makePascalCase(model.name)
+  return [`class ${className}Relations(${className}):`, ...lines].join('\n')
+}
+
+export function collectPydanticImports(
+  models: readonly DMMF.Model[],
+  enums: readonly DMMF.DatamodelEnum[] | undefined,
+  relation = false,
+) {
+  const included = models.filter((model) => hasGeneratedFields(model, enums))
+  const fieldText = included
     .flatMap((model) =>
       model.fields.flatMap((field) => {
         const result = makePydanticField(field, enums)
@@ -223,12 +257,19 @@ export function collectPydanticImports(
       }),
     )
     .join('\n')
+  const relationText = relation
+    ? models
+        .flatMap((model) => {
+          const code = makePydanticRelations(model, models, enums)
+          return code === null ? [] : [code]
+        })
+        .join('\n')
+    : ''
+  const text = [fieldText, relationText].join('\n')
   const used = (names: readonly string[]) =>
     names.filter((name) => new RegExp(`\\b${name}\\b`).test(text))
 
-  const hasConfig = included.some(
-    (model) => extractObjectType(model.documentation, '@p.') !== undefined,
-  )
+  const hasConfig = included.some((model) => extractConfigDict(model.documentation) !== null)
   const pydanticNames = [
     'BaseModel',
     ...(hasConfig ? ['ConfigDict'] : []),

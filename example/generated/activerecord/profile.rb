@@ -1,6 +1,6 @@
 # One-to-one relation with native @db.* types, literal defaults,
-# and optional scalars of every flavour. strictObject: the Pydantic
-# model rejects unknown keys (extra="forbid").
+# and optional scalars of every flavour. ConfigDict passthrough: the
+# Pydantic model rejects unknown keys (extra='forbid').
 class Profile < ApplicationRecord
   self.table_name = "profile"
 

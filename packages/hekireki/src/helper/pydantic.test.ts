@@ -146,13 +146,13 @@ describe('collectPydanticImports', () => {
     ).toStrictEqual(['from pydantic import BaseModel'])
   })
 
-  it('should import ConfigDict only when a generated model is strict or loose', () => {
+  it('should import ConfigDict only when a generated model declares @p.ConfigDict', () => {
     expect(
       collectPydanticImports(
         [
           makeModel({
             name: 'Locked',
-            documentation: '@p.strictObject',
+            documentation: "@p.ConfigDict(extra='forbid')",
             fields: [makeField({ name: 'id', type: 'String', isId: true })],
           }),
         ],
@@ -164,7 +164,7 @@ describe('collectPydanticImports', () => {
         [
           makeModel({
             name: 'Skipped',
-            documentation: '@p.strictObject',
+            documentation: "@p.ConfigDict(extra='forbid')",
             fields: [makeField({ name: 'target', kind: 'object', type: 'Real' })],
           }),
           makeModel({

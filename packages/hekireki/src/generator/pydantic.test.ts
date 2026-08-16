@@ -220,11 +220,11 @@ class Keyword(BaseModel):
 `)
   })
 
-  it('should emit extra="forbid" for @p.strictObject', () => {
+  it("should pass @p.ConfigDict(extra='forbid') through as model_config", () => {
     const models = [
       makeModel({
         name: 'Locked',
-        documentation: '@p.strictObject',
+        documentation: "@p.ConfigDict(extra='forbid')",
         fields: [
           makeField({ name: 'id', type: 'Int', isId: true }),
           makeField({ name: 'name', type: 'String' }),
@@ -235,18 +235,18 @@ class Keyword(BaseModel):
 
 
 class Locked(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra='forbid')
 
     id: int
     name: str
 `)
   })
 
-  it('should emit extra="allow" for @p.looseObject', () => {
+  it("should pass @p.ConfigDict(extra='allow') through as model_config", () => {
     const models = [
       makeModel({
         name: 'Open',
-        documentation: '@p.looseObject',
+        documentation: "@p.ConfigDict(extra='allow')",
         fields: [
           makeField({ name: 'id', type: 'Int', isId: true }),
           makeField({ name: 'name', type: 'String' }),
@@ -257,10 +257,48 @@ class Locked(BaseModel):
 
 
 class Open(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra='allow')
 
     id: int
     name: str
+`)
+  })
+
+  it("should pass @p.ConfigDict(extra='ignore') through even though it is pydantic's default", () => {
+    const models = [
+      makeModel({
+        name: 'Plain',
+        documentation: "@p.ConfigDict(extra='ignore')",
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({ name: 'name', type: 'String' }),
+        ],
+      }),
+    ]
+    expect(pydanticCode(models, undefined, false)).toBe(`from pydantic import BaseModel, ConfigDict
+
+
+class Plain(BaseModel):
+    model_config = ConfigDict(extra='ignore')
+
+    id: int
+    name: str
+`)
+  })
+
+  it('should ignore @p. model annotations that are not a ConfigDict expression', () => {
+    const models = [
+      makeModel({
+        name: 'Bare',
+        documentation: '@p.strictObject',
+        fields: [makeField({ name: 'id', type: 'Int', isId: true })],
+      }),
+    ]
+    expect(pydanticCode(models, undefined, false)).toBe(`from pydantic import BaseModel
+
+
+class Bare(BaseModel):
+    id: int
 `)
   })
 
@@ -268,7 +306,7 @@ class Open(BaseModel):
     const models = [
       makeModel({
         name: 'User',
-        documentation: 'Application user.\n@p.strictObject',
+        documentation: "Application user.\n@p.ConfigDict(extra='forbid')",
         fields: [
           makeField({
             name: 'id',
@@ -287,7 +325,7 @@ class Open(BaseModel):
 class User(BaseModel):
     """Application user."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra='forbid')
 
     id: UUID4
     """Primary key"""
@@ -484,6 +522,160 @@ class User(BaseModel):
 
 class Post(BaseModel):
     id: str
+`)
+  })
+
+  it('should append <Model>Relations subclasses when relation is true', () => {
+    const models = [
+      makeModel({
+        name: 'User',
+        fields: [
+          makeField({ name: 'id', type: 'String', isId: true }),
+          makeField({ name: 'name', type: 'String' }),
+          makeField({
+            name: 'posts',
+            kind: 'object',
+            type: 'Post',
+            isList: true,
+            isRequired: false,
+          }),
+          makeField({
+            name: 'profile',
+            kind: 'object',
+            type: 'Profile',
+            isRequired: false,
+          }),
+        ],
+      }),
+      makeModel({
+        name: 'Post',
+        fields: [
+          makeField({ name: 'id', type: 'String', isId: true }),
+          makeField({ name: 'authorId', type: 'String' }),
+          makeField({ name: 'author', kind: 'object', type: 'User' }),
+        ],
+      }),
+      makeModel({
+        name: 'Profile',
+        fields: [
+          makeField({ name: 'id', type: 'String', isId: true }),
+          makeField({ name: 'user', kind: 'object', type: 'User' }),
+        ],
+      }),
+    ]
+    expect(pydanticCode(models, undefined, false, true)).toBe(`from pydantic import BaseModel
+
+
+class User(BaseModel):
+    id: str
+    name: str
+
+
+class Post(BaseModel):
+    id: str
+    authorId: str
+
+
+class Profile(BaseModel):
+    id: str
+
+
+class UserRelations(User):
+    posts: list[Post]
+    profile: Profile
+
+
+class PostRelations(Post):
+    author: User
+
+
+class ProfileRelations(Profile):
+    user: User
+`)
+  })
+
+  it('should not emit Relations classes when relation is false', () => {
+    const models = [
+      makeModel({
+        name: 'User',
+        fields: [
+          makeField({ name: 'id', type: 'String', isId: true }),
+          makeField({ name: 'posts', kind: 'object', type: 'Post', isList: true }),
+        ],
+      }),
+      makeModel({
+        name: 'Post',
+        fields: [makeField({ name: 'id', type: 'String', isId: true })],
+      }),
+    ]
+    expect(pydanticCode(models, undefined, false, false)).toBe(`from pydantic import BaseModel
+
+
+class User(BaseModel):
+    id: str
+
+
+class Post(BaseModel):
+    id: str
+`)
+  })
+
+  it('should reference base classes for self-relations and skip targets without a class', () => {
+    const models = [
+      makeModel({
+        name: 'Category',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({ name: 'parent', kind: 'object', type: 'Category', isRequired: false }),
+          makeField({ name: 'children', kind: 'object', type: 'Category', isList: true }),
+          makeField({ name: 'ghost', kind: 'object', type: 'Ghost' }),
+        ],
+      }),
+      makeModel({
+        name: 'Ghost',
+        fields: [makeField({ name: 'owner', kind: 'object', type: 'Category' })],
+      }),
+    ]
+    expect(pydanticCode(models, undefined, false, true)).toBe(`from pydantic import BaseModel
+
+
+class Category(BaseModel):
+    id: int
+
+
+class CategoryRelations(Category):
+    parent: Category
+    children: list[Category]
+`)
+  })
+
+  it('should alias Python-keyword relation field names in Relations classes', () => {
+    const models = [
+      makeModel({
+        name: 'Room',
+        fields: [
+          makeField({ name: 'id', type: 'String', isId: true }),
+          makeField({ name: 'import', kind: 'object', type: 'Item' }),
+        ],
+      }),
+      makeModel({
+        name: 'Item',
+        fields: [makeField({ name: 'id', type: 'String', isId: true })],
+      }),
+    ]
+    expect(pydanticCode(models, undefined, false, true)).toBe(`from pydantic import BaseModel, Field
+
+
+class Room(BaseModel):
+    id: str
+
+
+class Item(BaseModel):
+    id: str
+
+
+class RoomRelations(Room):
+    import_: Item = Field(alias="import")
 `)
   })
 })

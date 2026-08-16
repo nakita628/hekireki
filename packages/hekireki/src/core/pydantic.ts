@@ -20,6 +20,7 @@ export async function pydantic(options: GeneratorOptions) {
     options.dmmf.datamodel.models,
     options.dmmf.datamodel.enums,
     getBool(options.generator.config?.comment),
+    getBool(options.generator.config?.relation),
   )
   return emitRaw(code, path.dirname(outPath), outPath)
 }

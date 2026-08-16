@@ -4,9 +4,9 @@ regression that would otherwise type-check: a scalar list must stay list[str]
 Literal of its Prisma-level value names, and a `?` scalar must stay `| None`.
 
 Run as a script it also exercises validation at runtime — the half mypy cannot
-see: lax coercion (str → datetime/Decimal/UUID), @p.strictObject rejecting
-unknown keys (extra="forbid"), @p.looseObject keeping them (extra="allow"),
-the extra="ignore" default dropping them, Python-keyword columns validating
+see: lax coercion (str → datetime/Decimal/UUID), @p.ConfigDict(extra='forbid')
+rejecting unknown keys, @p.ConfigDict(extra='allow') keeping them, the
+extra="ignore" default dropping them, Python-keyword columns validating
 under their real names via Field(alias=...), and optional None defaults."""
 
 from datetime import date, datetime, time, timezone
@@ -16,7 +16,18 @@ from uuid import UUID
 
 from pydantic import JsonValue, ValidationError
 
-from models import Account, Board, Keyword, Locked, NativeGrid, Open, Profile, Tag
+from models import (
+    Account,
+    Board,
+    Category,
+    CategoryRelations,
+    Keyword,
+    Locked,
+    NativeGrid,
+    Open,
+    Profile,
+    Tag,
+)
 
 
 def _smoke(a: Account, p: Profile, b: Board, g: NativeGrid) -> None:
@@ -54,14 +65,14 @@ def _runtime_smoke() -> None:
     ignored = Tag.model_validate({"id": "t1", "label": "x", "unknown": 1})
     assert not hasattr(ignored, "unknown")
 
-    # @p.strictObject → extra="forbid": unknown keys are rejected.
+    # @p.ConfigDict(extra='forbid'): unknown keys are rejected.
     try:
         Locked.model_validate({"id": 1, "name": "n", "unknown": 1})
-        raise AssertionError("extra key accepted by strictObject model")
+        raise AssertionError("extra key accepted by extra='forbid' model")
     except ValidationError:
         pass
 
-    # @p.looseObject → extra="allow": unknown keys are kept. The EmailStr /
+    # @p.ConfigDict(extra='allow'): unknown keys are kept. The EmailStr /
     # HttpUrl / AwareDatetime annotations must import and validate at runtime
     # (EmailStr needs the email-validator package at class-definition time).
     opened = Open.model_validate(
@@ -147,6 +158,19 @@ def _runtime_smoke() -> None:
     )
     assert profile.bio is None
     assert profile.mood is None
+
+    # relation=true: <Model>Relations subclasses the base model and adds the
+    # relation fields as nested base-model payloads (self-relation included).
+    tree = CategoryRelations.model_validate(
+        {
+            "id": 1,
+            "name": "root",
+            "parent": {"id": 0, "name": "void", "parentId": None},
+            "children": [{"id": 2, "name": "leaf", "parentId": 1}],
+        }
+    )
+    assert isinstance(tree.parent, Category)
+    assert [child.id for child in tree.children] == [2]
 
     # Native @db.* refinements coerce str → UUID / date / time.
     grid = NativeGrid.model_validate(
