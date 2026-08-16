@@ -24,19 +24,24 @@ Lint, tests, and coverage always run **from the repo root**:
 
 ```bash
 pnpm check            # lint + format (vp check --fix)
-pnpm test             # unit tests (vitest via vite-plus)
-pnpm coverage         # tests with coverage
+pnpm test             # unit tests (the `unit` project — vitest via vite-plus)
+pnpm coverage         # unit tests with coverage
+pnpm lang             # build + language checks (the `lang` project)
 ```
 
-Building the generators and running the conformance harness happen **inside the package**:
+Building the generators happens **inside the package**:
 
 ```bash
 cd packages/hekireki
 pnpm build            # build dist/ (tsdown)
-pnpm conformance      # build + compile generated code in real toolchains
 ```
 
-The conformance run generates code from `packages/hekireki/conformance/schema.prisma` and verifies it against the **real** toolchains (currently Go, Rust, Python, Elixir, Ruby, PHP, and TypeScript). Toolchains you don't have installed are skipped locally with a note — CI runs the full matrix, so you don't need every language installed to contribute.
+The test suite is split into two Vitest projects:
+
+- **`unit`** — `packages/hekireki/src/**/*.test.ts`. Owns the byte-equality codegen contract (`toBe` / `toStrictEqual` exact matches). Needs no toolchain beyond Node.
+- **`lang`** — `test/lang/*.test.ts`. Regenerates `test/harness/*` from `test/schema.prisma` and verifies the output against the **real** toolchains (currently Go, Rust, Python, Elixir, Ruby, PHP, and TypeScript). This is what a string comparison cannot see: recursive struct embedding, bad column attributes, malformed associations.
+
+Toolchains you don't have installed are skipped locally with a note — CI runs the full matrix, so you don't need every language installed to contribute. Run a single language with `vp test --project lang test/lang/gorm.test.ts`.
 
 ## Project layout
 
@@ -49,8 +54,10 @@ packages/hekireki/src/
 ├── bin/         # CLI shims registered as prisma generator providers
 ├── emit/        # file-writing boundary (the only place with I/O side effects)
 └── format/      # oxfmt formatting for TypeScript output
-packages/hekireki/conformance/   # cross-language conformance harness
-test/                            # per-language end-to-end tests (test/schemas/ holds shared schema.prisma inputs)
+test/
+├── schema.prisma    # the one schema every language check generates from
+├── lang/            # per-language checks (setup.ts regenerates the harness)
+└── harness/         # per-language host projects (go.mod, Cargo.toml, mix.exs, …)
 ```
 
 Dependencies flow one way: `utils → helper → generator → core/bin`.
@@ -75,11 +82,11 @@ These are enforced in review, so following them up front saves a round-trip:
 ## Testing rules
 
 - **Codegen tests assert full equality**: `toBe` / `toStrictEqual` on the complete generated output. No `toContain` / `toMatch` partial matching — byte-for-byte output is the contract.
-- Test files are `*.test.ts`. Unit tests are co-located next to what they test; per-language end-to-end tests live in `test/` at the repo root, with shared `schema.prisma` inputs in `test/schemas/`.
+- Test files are `*.test.ts`. Unit tests are co-located next to what they test; the per-language toolchain checks live in `test/lang/`, generating from `test/schema.prisma`.
 - **Every bug fix needs a regression test** that fails without the fix.
 - Keep test logic inline — no shared extraction/transform helpers between tests (fixture setup and lifecycle hooks are fine). Tests are read as documentation.
 - Coverage targets: 90% lines / 90% functions / 85% branches. Don't let a PR lower them.
-- If your change affects generated foreign-language code, run `pnpm conformance` (inside `packages/hekireki`) for the languages you can, and rely on CI's `Lang Check` matrix for the rest. The unit tests own the byte-equality contract; conformance owns "does it actually compile and load against the real ORM API".
+- If your change affects generated foreign-language code, run `pnpm lang` for the languages you can, and rely on CI's `Lang Check` matrix for the rest. The `unit` project owns the byte-equality contract; `lang` owns "does it actually compile and load against the real ORM API".
 
 ## Pull request process
 
@@ -91,16 +98,16 @@ These are enforced in review, so following them up front saves a round-trip:
    - regression / new tests included
 4. Update user-facing docs in the same PR when behavior changes: README examples for new options, and note breaking changes explicitly.
 5. Versioning follows [SemVer](https://semver.org/) and the changelog follows [Keep a Changelog](https://keepachangelog.com/) — maintainers handle releases, but stating "patch / minor / breaking" in your PR description helps triage.
-6. CI must be green: `Test` (lint, unit tests, coverage) and, if you touched `src/` or `conformance/`, the per-language `Lang Check` matrix.
+6. CI must be green: `Test` (lint, unit tests, coverage) and, if you touched `src/` or `test/`, the per-language `Lang Check` matrix.
 
 ## Adding a new generator
 
 New targets (a new ORM, validator, or language) are the biggest contributions we take — and the most design-sensitive. Please:
 
 1. **Open an issue first** describing the target, its official docs, and a sketch of the generated output for a small schema.
-2. Mirror the existing structure: `bin/<target>.ts` → `core/<target>.ts` → `generator/<target>.ts` → `helper/<target>.ts`, with unit tests at every layer and a `test/<target>.test.ts` end-to-end test.
-3. Cover the hard schema shapes — the conformance schema shows what every generator must survive: every scalar type, enum defaults, `@map`/`@@map`, self-relations, two relations to the same model, composite primary keys, implicit many-to-many join tables (Prisma's `A`/`B` columns), `uuid(7)`/`ulid()` defaults, and reserved-word field names.
-4. Add a conformance harness leg (`conformance/harness/<target>/` + a case in `conformance/check.sh` + a `Lang Check` matrix entry) so the generated code is compiled against the real toolchain in CI.
+2. Mirror the existing structure: `bin/<target>.ts` → `core/<target>.ts` → `generator/<target>.ts` → `helper/<target>.ts`, with unit tests at every layer.
+3. Cover the hard schema shapes — `test/schema.prisma` shows what every generator must survive: every scalar type, enum defaults, `@map`/`@@map`, self-relations, two relations to the same model, composite primary keys, implicit many-to-many join tables (Prisma's `A`/`B` columns), `uuid(7)`/`ulid()` defaults, and reserved-word field names.
+4. Add a language check leg (a generator block in `test/schema.prisma` + `test/harness/<target>/` + `test/lang/<target>.test.ts` + a `Lang Check` matrix entry) so the generated code is compiled against the real toolchain in CI.
 
 ## License
 

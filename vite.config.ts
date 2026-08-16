@@ -10,7 +10,6 @@ export default defineConfig({
   },
   test: {
     setupFiles: [resolve(__dirname, 'vitest.setup.ts')],
-    include: ['packages/hekireki/src/**/*.test.ts', 'test/**/*.test.ts'],
     testTimeout: 30000,
     coverage: {
       provider: 'v8',
@@ -18,9 +17,37 @@ export default defineConfig({
       exclude: ['packages/hekireki/src/**/*.test.ts'],
       reporter: ['text', 'json', 'html'],
     },
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'unit',
+          include: ['packages/hekireki/src/**/*.test.ts'],
+        },
+      },
+      {
+        // Validity checks for the generated foreign-language code: each target
+        // is regenerated from test/schema.prisma and then checked in its own
+        // toolchain. A toolchain that is not installed skips rather than fails,
+        // so `vp test` stays runnable without every language present.
+        extends: true,
+        test: {
+          name: 'lang',
+          include: ['test/lang/*.test.ts'],
+          globalSetup: [resolve(__dirname, 'test/lang/setup.ts')],
+          // cargo check, bundle install and mix deps.get dominate; they share
+          // one harness tree per language, so the files run one at a time.
+          fileParallelism: false,
+          testTimeout: 900_000,
+          hookTimeout: 900_000,
+        },
+      },
+    ],
   },
   lint: {
-    ignorePatterns: ['dist/**'],
+    // test/harness/** is generator output plus foreign-toolchain scaffolding
+    // whose TypeScript (drizzle) resolves only through its own tsconfig.
+    ignorePatterns: ['dist/**', 'test/harness/**'],
     // Setting `plugins` replaces oxlint's default list — restate the defaults, then add import.
     plugins: ['typescript', 'unicorn', 'oxc', 'import'],
     options: {
@@ -66,14 +93,6 @@ export default defineConfig({
           'typescript/consistent-type-assertions': 'off',
           'typescript/no-unsafe-type-assertion': 'off',
           'typescript/no-explicit-any': 'off',
-        },
-      },
-      {
-        // `Equal<A, B>` is the standard conditional-type identity check; both
-        // `<T>() => ...` parameters are load-bearing.
-        files: ['packages/hekireki/conformance/**'],
-        rules: {
-          'typescript/no-unnecessary-type-parameters': 'off',
         },
       },
       {

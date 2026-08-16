@@ -28,4 +28,6 @@ jobs:
 
       - run: vp check
 
-      - run: vp test --coverage
+      # `unit` only: the `lang` project needs the Go / Rust / Python / Elixir /
+      # Ruby / PHP toolchains and is owned by the Lang Check matrix.
+      - run: vp test --project unit --coverage

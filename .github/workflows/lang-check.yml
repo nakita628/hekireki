@@ -1,11 +1,11 @@
 name: Lang Check
 
 # Validity checks for hekireki's generated foreign-language code: each language
-# is generated from conformance/schema.prisma and then checked in its own
-# toolchain — it parses (syntax) and compiles or loads against the real GORM /
-# sea-orm / SQLAlchemy / Ecto / Active Record / Eloquent API (type). This is
-# separate from Test (test.yml), which owns the byte-equality codegen contract
-# and stays toolchain-free.
+# is generated from test/schema.prisma and then checked in its own toolchain —
+# it parses (syntax) and compiles or loads against the real GORM / sea-orm /
+# SQLAlchemy / Ecto / Active Record / Eloquent API (type). This is separate
+# from Test (test.yml), which owns the byte-equality codegen contract and stays
+# toolchain-free.
 #
 # One matrix leg per language; each sets up only its own toolchain. Runs on PRs
 # that touch the generators or the harness, and on demand. Action versions are
@@ -20,7 +20,7 @@ on:
       # positive here is a cheap matrix run, a false negative is an unverified
       # generator change.
       - packages/hekireki/src/**
-      - packages/hekireki/conformance/**
+      - test/**
       - .github/workflows/lang-check.yml
   workflow_dispatch: {}
 
@@ -31,12 +31,8 @@ concurrency:
   group: lang-check-${{ github.ref }}
   cancel-in-progress: true
 
-defaults:
-  run:
-    working-directory: packages/hekireki
-
 jobs:
-  conformance:
+  lang:
     runs-on: ubuntu-latest
     # Backstop against toolchain prompts hanging a leg (mix once blocked on a
     # rebar3 install prompt); the default job timeout is 6 hours.
@@ -54,9 +50,7 @@ jobs:
           node-version: '22'
           cache: true
       - run: vp install
-        working-directory: .
       - run: vp run hekireki#build
-        working-directory: .
 
       - if: matrix.lang == 'gorm'
         uses: actions/setup-go@v5.5.0
@@ -78,7 +72,7 @@ jobs:
         with:
           otp-version: '27.2'
           elixir-version: '1.18.1'
-          # Pinned so check.sh's `mix local.rebar --if-missing` never falls
+          # Pinned so the harness's `mix local.rebar --if-missing` never falls
           # back to an unpinned network fetch of the rebar3 escript.
           rebar3-version: '3.24.0'
       - if: matrix.lang == 'activerecord'
@@ -86,24 +80,30 @@ jobs:
         with:
           ruby-version: '3.3.12'
           # Installs the harness bundle from its Gemfile.lock and caches
-          # vendor/bundle; check.sh's own `bundle install` becomes a no-op.
+          # vendor/bundle; the test's own `bundle install` becomes a no-op.
           bundler-cache: true
-          working-directory: packages/hekireki/conformance/harness/activerecord
+          working-directory: test/harness/activerecord
       - if: matrix.lang == 'eloquent'
         uses: shivammathur/setup-php@2.37.2
         with:
           php-version: '8.3'
 
-      # conformance/check.sh is the single source of truth for generate + check:
-      # the same script runs locally via `pnpm -F hekireki conformance`. Passing
-      # the language makes a missing toolchain a hard error instead of a skip.
-      - name: Conformance (generate + syntax + type check)
-        run: bash conformance/check.sh ${{ matrix.lang }}
+      # The `lang` project regenerates test/harness/* from test/schema.prisma
+      # in its globalSetup, then runs this language's checks. The same file runs
+      # locally via `pnpm lang`. CI is set on GitHub Actions, which turns each
+      # file's toolchain guard into a hard assertion — a leg whose setup step
+      # silently failed cannot pass by skipping.
+      - name: Lang check (generate + syntax + type check)
+        run: vp test --project lang test/lang/${{ matrix.lang }}.test.ts
 
-  # Prove the published tarball still ships dist/ only — the conformance harness
-  # (Go/Rust/Python/Elixir/Ruby/PHP files) must never leak into npm.
+  # Prove the published tarball still ships dist/ only. The language harnesses
+  # now live in test/ rather than inside the package, so nothing under
+  # packages/hekireki can leak them — this stays as the standing guard.
   pack-guard:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/hekireki
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: voidzero-dev/setup-vp@v1.17.0
