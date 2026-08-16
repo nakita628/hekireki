@@ -1,0 +1,322 @@
+// Complex example schema exercising every hekireki generator at once.
+// Run `pnpm example` from the repository root, then inspect example/generated/.
+
+datasource db {
+  provider = "postgresql"
+}
+
+generator Hekireki-Zod {
+  provider = "hekireki-zod"
+  output   = "generated/zod"
+  type     = true
+  comment  = true
+  relation = true
+}
+
+generator Hekireki-Valibot {
+  provider = "hekireki-valibot"
+  output   = "generated/valibot"
+  type     = true
+  comment  = true
+  relation = true
+}
+
+generator Hekireki-ArkType {
+  provider = "hekireki-arktype"
+  output   = "generated/arktype"
+  type     = true
+  comment  = true
+  relation = true
+}
+
+generator Hekireki-Effect {
+  provider = "hekireki-effect"
+  output   = "generated/effect"
+  type     = true
+  comment  = true
+  relation = true
+}
+
+generator Hekireki-TypeBox {
+  provider = "hekireki-typebox"
+  output   = "generated/typebox"
+  type     = true
+  comment  = true
+  relation = true
+}
+
+generator Hekireki-AJV {
+  provider = "hekireki-ajv"
+  output   = "generated/ajv"
+  type     = true
+  comment  = true
+  relation = true
+}
+
+generator Hekireki-Drizzle {
+  provider = "hekireki-drizzle"
+  output   = "generated/drizzle/schema.ts"
+}
+
+generator Hekireki-Kysely {
+  provider = "hekireki-kysely"
+  output   = "generated/kysely/types.ts"
+}
+
+generator Hekireki-SQLAlchemy {
+  provider = "hekireki-sqlalchemy"
+  output   = "generated/sqlalchemy"
+}
+
+generator Hekireki-GORM {
+  provider = "hekireki-gorm"
+  output   = "generated/gorm"
+  package  = "model"
+}
+
+generator Hekireki-SeaORM {
+  provider  = "hekireki-sea-orm"
+  output    = "generated/sea-orm"
+  renameAll = "camelCase"
+}
+
+generator Hekireki-Ecto {
+  provider = "hekireki-ecto"
+  output   = "generated/ecto"
+  app      = "Example"
+}
+
+generator Hekireki-ActiveRecord {
+  provider = "hekireki-activerecord"
+  output   = "generated/activerecord"
+}
+
+generator Hekireki-Eloquent {
+  provider  = "hekireki-eloquent"
+  output    = "generated/eloquent"
+  namespace = "App.Models"
+}
+
+generator Hekireki-ER {
+  provider = "hekireki-mermaid-er"
+  output   = "generated/mermaid-er"
+}
+
+generator Hekireki-DBML {
+  provider = "hekireki-dbml"
+  output   = "generated/dbml/schema.dbml"
+}
+
+generator Hekireki-PNG {
+  provider = "hekireki-dbml"
+  output   = "generated/dbml/er.png"
+}
+
+generator Hekireki-Docs {
+  provider = "hekireki-docs"
+  output   = "generated/docs"
+}
+
+/// User role. No @map: the value names are stored verbatim.
+enum Role {
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+/// Enum with @map on every value and @@map on the enum itself:
+/// the database stores the mapped values ("link_only"), while
+/// generators receive the Prisma-level names ("LINK_ONLY").
+enum Visibility {
+  PUBLIC    @map("public")
+  PRIVATE   @map("private")
+  LINK_ONLY @map("link_only")
+
+  @@map("visibility_level")
+}
+
+/// Application user. Fully annotated for every validator generator,
+/// with a UUIDv7 primary key, enum default, scalar list, @map columns,
+/// @updatedAt, and relations of every cardinality.
+model User {
+  /// Primary key (UUIDv7)
+  /// @z.uuid()
+  /// @v.pipe(v.string(), v.uuid())
+  /// @a."string.uuid"
+  /// @e.Schema.UUID
+  /// @t.Type.String({ format: 'uuid' })
+  /// @j.{ type: 'string' as const, format: 'uuid' as const }
+  id        String    @id @default(uuid(7))
+  /// Unique login email
+  /// @z.email()
+  /// @v.pipe(v.string(), v.email())
+  /// @a."string.email"
+  /// @e.Schema.String.pipe(Schema.pattern(/^[^@]+@[^@]+\.[^@]+$/))
+  /// @t.Type.String({ format: 'email' })
+  /// @j.{ type: 'string' as const, format: 'email' as const }
+  email     String    @unique
+  /// Display name
+  /// @z.string().min(1).max(50)
+  /// @v.pipe(v.string(), v.minLength(1), v.maxLength(50))
+  /// @a."1 <= string <= 50"
+  /// @e.Schema.String.pipe(Schema.minLength(1), Schema.maxLength(50))
+  /// @t.Type.String({ minLength: 1, maxLength: 50 })
+  /// @j.{ type: 'string' as const, minLength: 1, maxLength: 50 }
+  name      String
+  role      Role      @default(VIEWER)
+  interests String[]  @default([])
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  profile   Profile?
+  posts     Post[]
+  comments  Comment[]
+  orders    Order[]
+  followers Follow[]  @relation("following")
+  following Follow[]  @relation("follower")
+
+  @@map("users")
+}
+
+/// One-to-one relation with native @db.* types, literal defaults,
+/// and optional scalars of every flavour.
+model Profile {
+  id       String    @id @default(cuid(2))
+  userId   String    @unique @map("user_id")
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bio      String?   @db.Text
+  nickname String    @default("anonymous") @db.VarChar(64)
+  age      Int?      @db.SmallInt
+  balance  Decimal   @default(0) @db.Decimal(10, 2)
+  verified Boolean   @default(false)
+  meta     Json?
+  avatar   Bytes?
+  lastSeen DateTime? @map("last_seen") @db.Timestamptz(6)
+}
+
+/// @@map + @map column names, FK with a referential action,
+/// mapped-enum default, and an implicit many-to-many to Tag.
+model Post {
+  /// Primary key
+  /// @z.uuid()
+  /// @v.pipe(v.string(), v.uuid())
+  /// @a."string.uuid"
+  /// @e.Schema.UUID
+  /// @t.Type.String({ format: 'uuid' })
+  /// @j.{ type: 'string' as const, format: 'uuid' as const }
+  id         String     @id @default(uuid())
+  /// Article title
+  /// @z.string().min(1).max(100)
+  /// @v.pipe(v.string(), v.minLength(1), v.maxLength(100))
+  /// @a."1 <= string <= 100"
+  /// @e.Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100))
+  /// @t.Type.String({ minLength: 1, maxLength: 100 })
+  /// @j.{ type: 'string' as const, minLength: 1, maxLength: 100 }
+  title      String
+  content    String?
+  visibility Visibility @default(LINK_ONLY)
+  published  Boolean    @default(false)
+  viewCount  Int        @default(0) @map("view_count")
+  authorId   String     @map("author_id")
+  author     User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  tags       Tag[]
+  comments   Comment[]
+  createdAt  DateTime   @default(now()) @map("created_at")
+
+  @@index([authorId])
+  @@map("posts")
+}
+
+/// Implicit many-to-many partner of Post (join table `_PostToTag`).
+model Tag {
+  id    Int    @id @default(autoincrement())
+  label String @unique
+  posts Post[]
+}
+
+/// Two foreign keys with different referential actions
+/// (Cascade vs SetNull) and a composite index.
+model Comment {
+  id        Int      @id @default(autoincrement())
+  body      String
+  postId    String   @map("post_id")
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId  String?  @map("author_id")
+  author    User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([postId, createdAt])
+  @@map("comments")
+}
+
+/// Composite primary key + two named relations to the same model.
+model Follow {
+  followerId  String   @map("follower_id")
+  followingId String   @map("following_id")
+  follower    User     @relation("follower", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User     @relation("following", fields: [followingId], references: [id], onDelete: Cascade)
+  since       DateTime @default(now())
+
+  @@id([followerId, followingId])
+  @@map("follows")
+}
+
+/// Self-relation (adjacency-list tree) with a composite unique.
+model Category {
+  id       Int        @id @default(autoincrement())
+  name     String
+  parentId Int?       @map("parent_id")
+  parent   Category?  @relation("tree", fields: [parentId], references: [id])
+  children Category[] @relation("tree")
+
+  @@unique([parentId, name])
+}
+
+/// BigInt autoincrement primary key (bigserial) and money as Decimal.
+model Order {
+  id       BigInt      @id @default(autoincrement())
+  userId   String      @map("user_id")
+  user     User        @relation(fields: [userId], references: [id])
+  total    Decimal     @db.Decimal(12, 2)
+  placedAt DateTime    @default(now()) @map("placed_at")
+  items    OrderItem[]
+
+  @@map("orders")
+}
+
+/// Child of Order with a composite unique constraint.
+model OrderItem {
+  id      BigInt  @id @default(autoincrement())
+  orderId BigInt  @map("order_id")
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  sku     String  @db.VarChar(32)
+  qty     Int     @default(1)
+  price   Decimal @db.Decimal(12, 2)
+
+  @@unique([orderId, sku])
+  @@map("order_items")
+}
+
+/// DB-side generated defaults (dbgenerated) plus Json / Bytes payloads.
+model AuditLog {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  action    String
+  payload   Json     @default("{}")
+  signature Bytes?
+  loggedAt  DateTime @default(dbgenerated("now()")) @map("logged_at")
+
+  @@map("audit_logs")
+}
+
+/// Named implicit many-to-many: the join table is `_cast`,
+/// not `_ActorToFilm`.
+model Actor {
+  id    Int    @id @default(autoincrement())
+  name  String
+  films Film[] @relation("cast")
+}
+
+model Film {
+  id     Int     @id @default(autoincrement())
+  title  String
+  actors Actor[] @relation("cast")
+}

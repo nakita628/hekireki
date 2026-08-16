@@ -8,7 +8,8 @@
     "check": "vp check --fix",
     "test": "vp test --project unit",
     "coverage": "vp test --project unit --coverage",
-    "lang": "vp run hekireki#build && vp test --project lang"
+    "lang": "vp run hekireki#build && vp test --project lang",
+    "example": "vp run hekireki#build && node example/generate.mjs"
   },
   "dependencies": {
     "hekireki": "link:packages/hekireki"
