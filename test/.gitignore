@@ -3,6 +3,7 @@
 harness/gorm/model/models.go
 harness/sea-orm/src/entities/
 harness/sqlalchemy/models.py
+harness/pydantic/models.py
 harness/ecto/lib/
 harness/drizzle/schema.ts
 harness/kysely/types.ts
@@ -18,6 +19,9 @@ harness/sqlalchemy/.venv/
 harness/sqlalchemy/.deps/
 harness/sqlalchemy/.mypy_cache/
 harness/sqlalchemy/__pycache__/
+harness/pydantic/.venv/
+harness/pydantic/.mypy_cache/
+harness/pydantic/__pycache__/
 harness/ecto/_build/
 harness/ecto/deps/
 harness/activerecord/.bundle/

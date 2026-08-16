@@ -7,7 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * One-to-one relation with native @db.* types, literal defaults,
- * and optional scalars of every flavour.
+ * and optional scalars of every flavour. strictObject: the Pydantic
+ * model rejects unknown keys (extra="forbid").
  */
 class Profile extends Model
 {

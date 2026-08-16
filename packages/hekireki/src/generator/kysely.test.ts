@@ -115,6 +115,7 @@ describe('kyselySchema', () => {
           makeField({ name: 'bigNum', type: 'BigInt' }),
           makeField({ name: 'price', type: 'Decimal' }),
           makeField({ name: 'data', type: 'Json' }),
+          makeField({ name: 'meta', type: 'Json', isRequired: false }),
           makeField({ name: 'raw', type: 'Bytes' }),
           makeField({ name: 'ratio', type: 'Float' }),
           makeField({ name: 'flag', type: 'Boolean' }),
@@ -134,7 +135,7 @@ describe('kyselySchema', () => {
     const result = kyselySchema(datamodel)
 
     expect(result).toBe(
-      "import type { ColumnType } from 'kysely'\n\nexport type Generated<T> = T extends ColumnType<infer S, infer I, infer U>\n  ? ColumnType<S, I | undefined, U>\n  : ColumnType<T, T | undefined, T>\n\nexport type Timestamp = ColumnType<Date, Date | string, Date | string>\n\nexport interface Account {\n  id: Generated<string>\n  bigNum: bigint\n  price: string\n  data: unknown\n  raw: Buffer\n  ratio: number\n  flag: boolean\n  count: number\n  created_at: Generated<Timestamp>\n  tags: string[]\n}\n\nexport interface DB {\n  accounts: Account\n}",
+      "import type { ColumnType } from 'kysely'\n\nexport type Generated<T> = T extends ColumnType<infer S, infer I, infer U>\n  ? ColumnType<S, I | undefined, U>\n  : ColumnType<T, T | undefined, T>\n\nexport type Timestamp = ColumnType<Date, Date | string, Date | string>\n\nexport interface Account {\n  id: Generated<string>\n  bigNum: bigint\n  price: string\n  data: unknown\n  meta: unknown\n  raw: Buffer\n  ratio: number\n  flag: boolean\n  count: number\n  created_at: Generated<Timestamp>\n  tags: string[]\n}\n\nexport interface DB {\n  accounts: Account\n}",
     )
   })
 

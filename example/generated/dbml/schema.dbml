@@ -37,7 +37,8 @@ Table Profile {
   lastSeen DateTime
 
   Note: '''One-to-one relation with native @db.* types, literal defaults,
-and optional scalars of every flavour.'''
+and optional scalars of every flavour. strictObject: the Pydantic
+model rejects unknown keys (extra="forbid").'''
 }
 
 Table posts {

@@ -25,6 +25,7 @@ const GENERATORS = [
   'gorm',
   'kysely',
   'mermaid-er',
+  'pydantic',
   'sea-orm',
   'sqlalchemy',
   'typebox',
@@ -45,6 +46,7 @@ const EXPECTED = [
   { name: 'drizzle', kind: 'file', path: 'generated/drizzle/schema.ts' },
   { name: 'kysely', kind: 'file', path: 'generated/kysely/types.ts' },
   { name: 'sqlalchemy', kind: 'file', path: 'generated/sqlalchemy/models.py' },
+  { name: 'pydantic', kind: 'file', path: 'generated/pydantic/models.py' },
   { name: 'gorm', kind: 'file', path: 'generated/gorm/models.go' },
   { name: 'sea-orm', kind: 'dir', path: 'generated/sea-orm' },
   { name: 'ecto', kind: 'dir', path: 'generated/ecto' },
@@ -100,9 +102,7 @@ function describe(entry) {
     const ok = checkFile(abs)
     return { ok, detail: ok ? `${(statSync(abs).size / 1024).toFixed(1)} kB` : 'missing or empty' }
   }
-  const files = existsSync(abs)
-    ? readdirSync(abs).filter((f) => checkFile(join(abs, f)))
-    : []
+  const files = existsSync(abs) ? readdirSync(abs).filter((f) => checkFile(join(abs, f))) : []
   return {
     ok: files.length > 0,
     detail: files.length > 0 ? `${files.length} files` : 'missing or empty',

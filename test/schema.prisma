@@ -17,6 +17,11 @@ generator Hekireki-SQLAlchemy {
   output   = "harness/sqlalchemy"
 }
 
+generator Hekireki-Pydantic {
+  provider = "hekireki-pydantic"
+  output   = "harness/pydantic"
+}
+
 generator Hekireki-Ecto {
   provider = "hekireki-ecto"
   output   = "harness/ecto/lib"
@@ -386,6 +391,23 @@ model Badge {
 
 model Coupon {
   id   String @id @default(nanoid(10))
+  name String
+}
+
+// Pydantic extra-key modes (zod strictObject / looseObject equivalents):
+// @p.strictObject must reject unknown keys (extra="forbid"), @p.looseObject
+// must keep them (extra="allow"), and the @p. field annotation must be used
+// verbatim with its pydantic/typing imports resolved.
+/// @p.strictObject
+model Locked {
+  id   Int    @id @default(autoincrement())
+  /// @p.Annotated[str, StringConstraints(min_length=1, max_length=64)]
+  name String
+}
+
+/// @p.looseObject
+model Open {
+  id   Int    @id @default(autoincrement())
   name String
 }
 

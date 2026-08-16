@@ -15,6 +15,10 @@
 - 📦 Automatically generates [TypeBox](https://github.com/sinclairzx81/typebox) schemas from your Prisma schema
 - 📋 Automatically generates [AJV](https://ajv.js.org/)-compatible JSON Schema objects from your Prisma schema
 
+### Python Validation
+
+- 🐍 Automatically generates [Pydantic](https://docs.pydantic.dev/) v2 models from your Prisma schema — with `@p.` field annotations, `Literal` enums, and `@p.strictObject` / `@p.looseObject` extra-key modes (`extra="forbid"` / `extra="allow"`)
+
 ### ORM / Schema Generation (Multi-Language)
 
 - 🗄️ Automatically generates [Drizzle ORM](https://orm.drizzle.team/) table schemas and relations from your Prisma schema
@@ -88,6 +92,12 @@ generator Hekireki-AJV {
     relation = true
 }
 
+generator Hekireki-Pydantic {
+    provider = "hekireki-pydantic"
+    output   = "./pydantic"
+    comment  = true
+}
+
 generator Hekireki-Drizzle {
     provider = "hekireki-drizzle"
 }
@@ -153,6 +163,7 @@ model User {
     /// @e.Schema.UUID
     /// @t.Type.String({ format: 'uuid' })
     /// @j.{ type: 'string' as const, format: 'uuid' as const }
+    /// @p.UUID4
     id    String @id @default(uuid())
     /// Display name
     /// @z.string().min(1).max(50)
@@ -161,6 +172,7 @@ model User {
     /// @e.Schema.String.pipe(Schema.minLength(1), Schema.maxLength(50))
     /// @t.Type.String({ minLength: 1, maxLength: 50 })
     /// @j.{ type: 'string' as const, minLength: 1, maxLength: 50 }
+    /// @p.Annotated[str, StringConstraints(min_length=1, max_length=50)]
     name  String
     /// One-to-many relation to Post
     posts Post[]
@@ -174,6 +186,7 @@ model Post {
     /// @e.Schema.UUID
     /// @t.Type.String({ format: 'uuid' })
     /// @j.{ type: 'string' as const, format: 'uuid' as const }
+    /// @p.UUID4
     id String @id @default(uuid())
     /// Article title
     /// @z.string().min(1).max(100)
@@ -182,6 +195,7 @@ model Post {
     /// @e.Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100))
     /// @t.Type.String({ minLength: 1, maxLength: 100 })
     /// @j.{ type: 'string' as const, minLength: 1, maxLength: 100 }
+    /// @p.Annotated[str, StringConstraints(min_length=1, max_length=100)]
     title String
     /// Body content (no length limit)
     /// @z.string()
@@ -198,6 +212,7 @@ model Post {
     /// @e.Schema.UUID
     /// @t.Type.String({ format: 'uuid' })
     /// @j.{ type: 'string' as const, format: 'uuid' as const }
+    /// @p.UUID4
     userId  String
     /// Prisma relation definition
     user    User   @relation(fields: [userId], references: [id])
@@ -762,6 +777,52 @@ class Post(Base):
     user: Mapped["User"] = relationship(back_populates="posts")
 ```
 
+### Pydantic
+
+[Pydantic](https://docs.pydantic.dev/) v2 models (Python). `@p.` field annotations are used verbatim as the Python type annotation — imports for the pydantic / typing names they reference (`EmailStr`, `Annotated`, `StringConstraints`, …) are added automatically. Fields without an annotation fall back to the built-in Prisma → Python type mapping, enums become `Literal[...]` of their Prisma-level value names, and relation fields are omitted.
+
+```python
+from pydantic import BaseModel, StringConstraints, UUID4
+from typing import Annotated
+
+
+class User(BaseModel):
+    id: UUID4
+    """Primary key"""
+    name: Annotated[str, StringConstraints(min_length=1, max_length=50)]
+    """Display name"""
+
+
+class Post(BaseModel):
+    id: UUID4
+    """Primary key"""
+    title: Annotated[str, StringConstraints(min_length=1, max_length=100)]
+    """Article title"""
+    content: str
+    """Body content (no length limit)"""
+    userId: UUID4
+    """Foreign key referencing User.id"""
+```
+
+To control unknown keys — Zod's `strictObject` / `looseObject` equivalents — annotate the model itself. `@p.strictObject` rejects unknown keys (`extra="forbid"`), `@p.looseObject` keeps them (`extra="allow"`), and no annotation leaves pydantic's default (`extra="ignore"`):
+
+```prisma
+/// @p.strictObject
+model ApiKey {
+  id String @id
+}
+```
+
+```python
+from pydantic import BaseModel, ConfigDict
+
+
+class ApiKey(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+```
+
 ### GORM
 
 ```go
@@ -995,6 +1056,13 @@ generator Hekireki-Kysely {
 generator Hekireki-SQLAlchemy {
     provider = "hekireki-sqlalchemy"
     output   = "./sqlalchemy"      // Output path (default: ./sqlalchemy/models.py)
+}
+
+// Pydantic Generator (Python)
+generator Hekireki-Pydantic {
+    provider = "hekireki-pydantic"
+    output   = "./pydantic"        // Output path (default: ./pydantic/models.py)
+    comment  = true                // Include docstrings from /// comments (default: false)
 }
 
 // GORM Generator (Go)

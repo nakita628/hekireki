@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { makePascalCase, makeSnakeCase } from '../utils/index.js'
+import { makePascalCase, makeSnakeCase, stripAnnotations } from '../utils/index.js'
 
 export function prismaTypeToEctoType(
   type: string,
@@ -471,11 +471,12 @@ export function ectoSchemas(
         return `    many_to_many(:${snakeAssocName}, ${appName}.${makePascalCase(a.targetModel)}, join_through: "${a.joinThrough}", ${joinKeys})`
       })
 
+      const moduledoc = stripAnnotations(model.documentation)
       const lines = [
         `defmodule ${appName}.${makePascalCase(model.name)} do`,
         '  use Ecto.Schema',
-        ...(model.documentation
-          ? [`  @moduledoc """`, ...model.documentation.split('\n').map((l) => `  ${l}`), '  """']
+        ...(moduledoc
+          ? [`  @moduledoc """`, ...moduledoc.split('\n').map((l) => `  ${l}`), '  """']
           : ['  @moduledoc false']),
         '',
         `  ${pk.line}`,

@@ -29,7 +29,7 @@ export interface Profile {
   age: number | null
   balance: Generated<string>
   verified: Generated<boolean>
-  meta: unknown | null
+  meta: unknown
   avatar: Buffer | null
   last_seen: Timestamp | null
 }

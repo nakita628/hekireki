@@ -2,7 +2,8 @@ defmodule Example.Profile do
   use Ecto.Schema
   @moduledoc """
   One-to-one relation with native @db.* types, literal defaults,
-  and optional scalars of every flavour.
+  and optional scalars of every flavour. strictObject: the Pydantic
+  model rejects unknown keys (extra="forbid").
   """
 
   @primary_key false

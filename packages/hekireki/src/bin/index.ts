@@ -12,6 +12,7 @@ import { eloquent } from '../core/eloquent.js'
 import { gorm } from '../core/gorm.js'
 import { kysely } from '../core/kysely.js'
 import { mermaidEr } from '../core/mermaid-er.js'
+import { pydantic } from '../core/pydantic.js'
 import { seaOrm } from '../core/sea-orm.js'
 import { sqlalchemy } from '../core/sqlalchemy.js'
 import { typebox } from '../core/typebox.js'
@@ -31,6 +32,7 @@ const GENERATORS = {
   gorm: { prettyName: 'Hekireki-GORM', handler: gorm },
   kysely: { prettyName: 'Hekireki-Kysely', handler: kysely },
   'mermaid-er': { prettyName: 'Hekireki-ER', handler: mermaidEr },
+  pydantic: { prettyName: 'Hekireki-Pydantic', handler: pydantic },
   'sea-orm': { prettyName: 'Hekireki-SeaORM', handler: seaOrm },
   sqlalchemy: { prettyName: 'Hekireki-SQLAlchemy', handler: sqlalchemy },
   typebox: { prettyName: 'Hekireki-TypeBox', handler: typebox },

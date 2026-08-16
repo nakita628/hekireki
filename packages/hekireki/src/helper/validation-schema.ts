@@ -27,7 +27,8 @@ export function makePropertiesGenerator(
               line.includes('@a') ||
               line.includes('@e') ||
               line.includes('@t') ||
-              line.includes('@j')
+              line.includes('@j') ||
+              line.includes('@p')
             ),
         )
         const docComment = includeComments ? makeCommentBlock(cleanLines, 2) : ''

@@ -4,19 +4,20 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 // Regenerates test/harness/* from test/schema.prisma with the built generators
-// before the language checks run. One prisma run emits all seven targets, so
+// before the language checks run. One prisma run emits every target, so
 // running a single language's file still starts from fresh output.
 //
 // The generated files are gitignored: the byte-for-byte golden masters live in
 // packages/hekireki/src/**/*.test.ts, and these harnesses only answer the
 // question a string comparison cannot — does the output compile and load
-// against the real GORM / sea-orm / SQLAlchemy / Ecto / Drizzle / Active
-// Record / Eloquent API.
+// against the real GORM / sea-orm / SQLAlchemy / Pydantic / Ecto / Drizzle /
+// Kysely / Active Record / Eloquent API.
 
 const LANGS = [
   'gorm',
   'sea-orm',
   'sqlalchemy',
+  'pydantic',
   'ecto',
   'drizzle',
   'kysely',
@@ -28,6 +29,7 @@ const STALE_OUTPUT = [
   'gorm/model/models.go',
   'sea-orm/src/entities',
   'sqlalchemy/models.py',
+  'pydantic/models.py',
   'ecto/lib',
   'drizzle/schema.ts',
   'kysely/types.ts',

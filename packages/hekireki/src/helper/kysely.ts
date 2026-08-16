@@ -27,7 +27,8 @@ function scalarTsType(type: string) {
 function makeColumnType(field: DMMF.Field) {
   const base = field.kind === 'enum' ? field.type : scalarTsType(field.type)
   const listed = field.isList ? `${base}[]` : base
-  const nullable = field.isRequired ? listed : `${listed} | null`
+  // `unknown | null` collapses to `unknown`, so the union would be redundant.
+  const nullable = field.isRequired || listed === 'unknown' ? listed : `${listed} | null`
   return field.hasDefaultValue ? `Generated<${nullable}>` : nullable
 }
 

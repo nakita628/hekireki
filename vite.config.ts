@@ -45,9 +45,10 @@ export default defineConfig({
     ],
   },
   lint: {
-    // test/harness/** is generator output plus foreign-toolchain scaffolding
-    // whose TypeScript (drizzle) resolves only through its own tsconfig.
-    ignorePatterns: ['dist/**', 'test/harness/**'],
+    // test/harness/** and example/generated/** are generator output plus
+    // foreign-toolchain scaffolding whose TypeScript resolves only through
+    // its own tsconfig or not at all (kysely/zod live in packages/hekireki).
+    ignorePatterns: ['dist/**', 'test/harness/**', 'example/generated/**'],
     // Setting `plugins` replaces oxlint's default list — restate the defaults, then add import.
     plugins: ['typescript', 'unicorn', 'oxc', 'import'],
     options: {
@@ -183,7 +184,10 @@ export default defineConfig({
     ],
   },
   fmt: {
-    ignorePatterns: ['**/node_modules/**', '**/dist/**'],
+    // test/harness/** and example/generated/** are generator output whose
+    // bytes come from the generators' own oxfmt pass; reformatting (import
+    // sorting included) would make every regeneration a spurious diff.
+    ignorePatterns: ['**/node_modules/**', '**/dist/**', 'test/harness/**', 'example/generated/**'],
     printWidth: 100,
     singleQuote: true,
     semi: false,

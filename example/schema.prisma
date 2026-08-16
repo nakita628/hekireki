@@ -68,6 +68,12 @@ generator Hekireki-SQLAlchemy {
   output   = "generated/sqlalchemy"
 }
 
+generator Hekireki-Pydantic {
+  provider = "hekireki-pydantic"
+  output   = "generated/pydantic"
+  comment  = true
+}
+
 generator Hekireki-GORM {
   provider = "hekireki-gorm"
   output   = "generated/gorm"
@@ -146,6 +152,7 @@ model User {
   /// @e.Schema.UUID
   /// @t.Type.String({ format: 'uuid' })
   /// @j.{ type: 'string' as const, format: 'uuid' as const }
+  /// @p.UUID7
   id        String    @id @default(uuid(7))
   /// Unique login email
   /// @z.email()
@@ -154,6 +161,7 @@ model User {
   /// @e.Schema.String.pipe(Schema.pattern(/^[^@]+@[^@]+\.[^@]+$/))
   /// @t.Type.String({ format: 'email' })
   /// @j.{ type: 'string' as const, format: 'email' as const }
+  /// @p.EmailStr
   email     String    @unique
   /// Display name
   /// @z.string().min(1).max(50)
@@ -162,6 +170,7 @@ model User {
   /// @e.Schema.String.pipe(Schema.minLength(1), Schema.maxLength(50))
   /// @t.Type.String({ minLength: 1, maxLength: 50 })
   /// @j.{ type: 'string' as const, minLength: 1, maxLength: 50 }
+  /// @p.Annotated[str, StringConstraints(min_length=1, max_length=50)]
   name      String
   role      Role      @default(VIEWER)
   interests String[]  @default([])
@@ -178,7 +187,9 @@ model User {
 }
 
 /// One-to-one relation with native @db.* types, literal defaults,
-/// and optional scalars of every flavour.
+/// and optional scalars of every flavour. strictObject: the Pydantic
+/// model rejects unknown keys (extra="forbid").
+/// @p.strictObject
 model Profile {
   id       String    @id @default(cuid(2))
   userId   String    @unique @map("user_id")
@@ -203,6 +214,7 @@ model Post {
   /// @e.Schema.UUID
   /// @t.Type.String({ format: 'uuid' })
   /// @j.{ type: 'string' as const, format: 'uuid' as const }
+  /// @p.UUID4
   id         String     @id @default(uuid())
   /// Article title
   /// @z.string().min(1).max(100)
@@ -211,6 +223,7 @@ model Post {
   /// @e.Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100))
   /// @t.Type.String({ minLength: 1, maxLength: 100 })
   /// @j.{ type: 'string' as const, minLength: 1, maxLength: 100 }
+  /// @p.Annotated[str, StringConstraints(min_length=1, max_length=100)]
   title      String
   content    String?
   visibility Visibility @default(LINK_ONLY)
