@@ -28,6 +28,11 @@ generator Hekireki-Drizzle {
   output   = "harness/drizzle/schema.ts"
 }
 
+generator Hekireki-Kysely {
+  provider = "hekireki-kysely"
+  output   = "harness/kysely/types.ts"
+}
+
 generator Hekireki-ActiveRecord {
   provider = "hekireki-activerecord"
   output   = "harness/activerecord/models"

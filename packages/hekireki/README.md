@@ -18,6 +18,7 @@
 ### ORM / Schema Generation (Multi-Language)
 
 - 🗄️ Automatically generates [Drizzle ORM](https://orm.drizzle.team/) table schemas and relations from your Prisma schema
+- 🐟 Automatically generates [Kysely](https://kysely.dev/) type definitions (`DB` interface) from your Prisma schema — with `Generated` columns, enum value unions, `@map`/`@@map` support, and implicit m2m join tables
 - 🐍 Automatically generates [SQLAlchemy](https://www.sqlalchemy.org/) models (Python) — with `Mapped[T]` type hints, relationships, enums, composite keys, and index support
 - 🐹 Automatically generates [GORM](https://gorm.io/) models (Go) — with struct tags, JSON tags, relationships, enums, composite keys, and index support
 - 🦀 Automatically generates [Sea-ORM](https://www.sea-ql.org/SeaORM/) entities (Rust) — with `DeriveEntityModel`, relations, enums, serde support, and `rename_all`
@@ -89,6 +90,11 @@ generator Hekireki-AJV {
 
 generator Hekireki-Drizzle {
     provider = "hekireki-drizzle"
+}
+
+generator Hekireki-Kysely {
+    provider = "hekireki-kysely"
+    output   = "./kysely"
 }
 
 generator Hekireki-SQLAlchemy {
@@ -543,6 +549,45 @@ export const postRelations = relations(post, ({ one }) => ({
 }))
 ```
 
+### Kysely
+
+Pure type definitions for the [Kysely](https://kysely.dev/) query builder. The `DB` interface is keyed by the actual database table names (`@@map` respected), columns use `@map`-ped names, defaulted columns are wrapped in `Generated`, and enums become value unions of their `@map`-ped database values.
+
+```ts
+import type { ColumnType } from 'kysely'
+
+export type Generated<T> =
+  T extends ColumnType<infer S, infer I, infer U>
+    ? ColumnType<S, I | undefined, U>
+    : ColumnType<T, T | undefined, T>
+
+export interface User {
+  id: Generated<string>
+  name: string
+}
+
+export interface Post {
+  id: Generated<string>
+  title: string
+  content: string
+  userId: string
+}
+
+export interface DB {
+  User: User
+  Post: Post
+}
+```
+
+```ts
+import { Kysely } from 'kysely'
+import type { DB } from './kysely/types'
+
+declare const db: Kysely<DB>
+
+const posts = await db.selectFrom('Post').selectAll().execute()
+```
+
 ### Ecto
 
 Each model is output as a separate `.ex` file (1 model = 1 file), following Elixir conventions.
@@ -938,6 +983,12 @@ generator Hekireki-AJV {
 generator Hekireki-Drizzle {
     provider = "hekireki-drizzle"
     output   = "./drizzle"   // Output path (default: ./drizzle/schema.ts)
+}
+
+// Kysely Type Definitions Generator
+generator Hekireki-Kysely {
+    provider = "hekireki-kysely"
+    output   = "./kysely"    // Output path (default: ./kysely/types.ts)
 }
 
 // SQLAlchemy Generator (Python)

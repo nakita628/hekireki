@@ -19,6 +19,7 @@ const LANGS = [
   'sqlalchemy',
   'ecto',
   'drizzle',
+  'kysely',
   'activerecord',
   'eloquent',
 ] as const
@@ -29,6 +30,7 @@ const STALE_OUTPUT = [
   'sqlalchemy/models.py',
   'ecto/lib',
   'drizzle/schema.ts',
+  'kysely/types.ts',
   'activerecord/models',
   'eloquent/models',
 ]
@@ -54,13 +56,16 @@ export default function setup() {
     rmSync(join(root, 'test/harness', output), { recursive: true, force: true })
   }
 
-  // The drizzle harness imports drizzle-orm and the id-generator packages, all
-  // devDependencies of packages/hekireki. It sits outside that package, so
-  // upward node_modules resolution never reaches them — link the real tree in
-  // rather than remapping every specifier in its tsconfig.
-  const harnessModules = join(root, 'test/harness/drizzle/node_modules')
-  if (!existsSync(harnessModules)) {
-    symlinkSync(join(root, 'packages/hekireki/node_modules'), harnessModules)
+  // The drizzle and kysely harnesses import drizzle-orm / kysely and the
+  // id-generator packages, all devDependencies of packages/hekireki. They sit
+  // outside that package, so upward node_modules resolution never reaches
+  // them — link the real tree in rather than remapping every specifier in
+  // their tsconfigs.
+  for (const tsHarness of ['drizzle', 'kysely']) {
+    const harnessModules = join(root, `test/harness/${tsHarness}/node_modules`)
+    if (!existsSync(harnessModules)) {
+      symlinkSync(join(root, 'packages/hekireki/node_modules'), harnessModules)
+    }
   }
 
   execFileSync(

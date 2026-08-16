@@ -5,11 +5,13 @@ harness/sea-orm/src/entities/
 harness/sqlalchemy/models.py
 harness/ecto/lib/
 harness/drizzle/schema.ts
+harness/kysely/types.ts
 harness/activerecord/models/
 harness/eloquent/models/
 
 # Toolchain build artifacts.
 harness/drizzle/node_modules
+harness/kysely/node_modules
 harness/gorm/.cache/
 harness/sea-orm/target/
 harness/sqlalchemy/.venv/
