@@ -258,9 +258,12 @@ function jsonToElixirLiteral(value: unknown): string {
   if (typeof value === 'number') return String(value)
   if (typeof value === 'string') return toElixirString(value)
   if (Array.isArray(value)) return `[${value.map(jsonToElixirLiteral).join(', ')}]`
-  return `%{${Object.entries(value as { [k: string]: unknown })
-    .map(([k, v]) => `${toElixirString(k)} => ${jsonToElixirLiteral(v)}`)
-    .join(', ')}}`
+  if (typeof value === 'object') {
+    return `%{${Object.entries(value)
+      .map(([k, v]) => `${toElixirString(k)} => ${jsonToElixirLiteral(v)}`)
+      .join(', ')}}`
+  }
+  return 'nil'
 }
 
 export function ectoSchemas(

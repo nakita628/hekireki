@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test'
 
 import {
+  extractObjectType,
   getBool,
   getString,
   groupByModel,
@@ -9,9 +10,10 @@ import {
   makeSnakeCase,
   makeValidationExtractor,
   parseDocumentWithoutAnnotations,
+  parseRelation,
   schemaFromFields,
   stripAnnotations,
-} from '.'
+} from './index.js'
 
 describe('utils', () => {
   describe('getString', () => {
@@ -372,7 +374,7 @@ describe('utils', () => {
       const mockProps = (_fields: readonly { readonly fieldName: string }[], _comment: boolean) =>
         _fields.map((f) => f.fieldName).join(', ')
 
-      const result = schemaFromFields(fields, true, mockSchema, mockProps as any)
+      const result = schemaFromFields(fields, true, mockSchema, mockProps)
       expect(result).toBe('schema(User, id, name)')
     })
     it('passes comment flag to propertiesGenerator', () => {
@@ -393,13 +395,11 @@ describe('utils', () => {
         return 'props'
       }
 
-      schemaFromFields(fields, false, mockSchema, mockProps as any)
+      schemaFromFields(fields, false, mockSchema, mockProps)
       expect(receivedComment).toBe(false)
     })
   })
 })
-
-import { extractObjectType, parseRelation } from './index.js'
 
 describe('parseRelation', () => {
   it('parses a full @relation annotation', () => {

@@ -62,8 +62,7 @@
   "scripts": {
     "generate": "prisma generate",
     "deps": "rm -rf node_modules && pnpm install",
-    "build": "tsdown",
-    "conformance": "pnpm build && bash conformance/check.sh"
+    "build": "tsdown"
   },
   "dependencies": {
     "@hono/node-server": "^2.0.11",

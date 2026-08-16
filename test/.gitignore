@@ -1,5 +1,5 @@
-# Generated schema output (regenerated from schema.prisma by check.sh;
-# the byte-for-byte golden masters live in src/bin/*.test.ts).
+# Generated schema output (regenerated from schema.prisma by test/lang/setup.ts;
+# the byte-for-byte golden masters live in packages/hekireki/src/**/*.test.ts).
 harness/gorm/model/models.go
 harness/sea-orm/src/entities/
 harness/sqlalchemy/models.py
@@ -9,6 +9,7 @@ harness/activerecord/models/
 harness/eloquent/models/
 
 # Toolchain build artifacts.
+harness/drizzle/node_modules
 harness/gorm/.cache/
 harness/sea-orm/target/
 harness/sqlalchemy/.venv/

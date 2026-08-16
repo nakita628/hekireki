@@ -47,7 +47,7 @@ export function seaOrmFiles(
   }
 
   const allEntries = [...enumFiles, ...entityFiles, ...m2mFiles, preludeEntry]
-  const moduleNames = allEntries.map((e) => e.moduleName).sort()
+  const moduleNames = allEntries.map((e) => e.moduleName).toSorted()
   const modEntry = { fileName: 'mod.rs', code: generateModRs(moduleNames) }
 
   return [...allEntries.map(({ fileName, code }) => ({ fileName, code })), modEntry]

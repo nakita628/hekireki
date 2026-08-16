@@ -339,9 +339,12 @@ function jsonToPythonLiteral(value: unknown): string {
   if (typeof value === 'number') return String(value)
   if (typeof value === 'string') return toPythonString(value)
   if (Array.isArray(value)) return `[${value.map(jsonToPythonLiteral).join(', ')}]`
-  return `{${Object.entries(value as { [k: string]: unknown })
-    .map(([k, v]) => `${toPythonString(k)}: ${jsonToPythonLiteral(v)}`)
-    .join(', ')}}`
+  if (typeof value === 'object') {
+    return `{${Object.entries(value)
+      .map(([k, v]) => `${toPythonString(k)}: ${jsonToPythonLiteral(v)}`)
+      .join(', ')}}`
+  }
+  return 'None'
 }
 
 const SQL_ACTION: { [k: string]: string } = {
@@ -985,14 +988,14 @@ export function collectGlobalImports(
 
   const lines: string[] = []
 
-  const sortedSa = [...saImports].sort()
+  const sortedSa = [...saImports].toSorted()
   if (sortedSa.length > 0) {
     lines.push(`from sqlalchemy import ${sortedSa.join(', ')}`)
   }
 
   const ormImports = ['DeclarativeBase', 'Mapped', 'mapped_column']
   if (hasRelationship) ormImports.push('relationship')
-  lines.push(`from sqlalchemy.orm import ${ormImports.sort().join(', ')}`)
+  lines.push(`from sqlalchemy.orm import ${ormImports.toSorted().join(', ')}`)
 
   const typingImports = [needsAny ? 'Any' : null, needsOptional ? 'Optional' : null].filter(
     (i) => i !== null,

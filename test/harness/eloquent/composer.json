@@ -1,5 +1,5 @@
 {
-  "description": "Eloquent conformance harness: composer.lock pins the transitive tree and bumps go through Renovate.",
+  "description": "Eloquent language-check harness: composer.lock pins the transitive tree and bumps go through Renovate.",
   "require": {
     "php": ">=8.2",
     "illuminate/database": "~12.0"
