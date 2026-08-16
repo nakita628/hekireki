@@ -640,7 +640,7 @@ export function generateEntityFile(
   const enumImports = [
     ...new Set(scalarFields.filter((f) => enumNames.has(f.type)).map((f) => f.type)),
   ]
-    .sort()
+    .toSorted()
     .map((name) => `use super::${makeSnakeCase(name)}::${name};`)
 
   const generatedIdFields = scalarFields.filter(

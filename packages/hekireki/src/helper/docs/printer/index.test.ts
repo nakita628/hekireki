@@ -1,4 +1,3 @@
-import type { DMMF } from '@prisma/generator-helper'
 import { describe, expect, it } from 'vite-plus/test'
 
 import type { DMMFDocument } from '../generator/transformDMMF.js'
@@ -43,7 +42,7 @@ describe('generateHTML', () => {
         outputObjectTypes: { model: [], prisma: [] },
         enumTypes: { prisma: [] },
         fieldRefTypes: {},
-      } as unknown as DMMF.Schema,
+      },
       mappings: [{ model: 'User' }],
     }
 

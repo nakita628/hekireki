@@ -193,15 +193,17 @@ export function generateImports(imports: DrizzleImports, provider: DbProvider) {
         ? 'drizzle-orm/mysql-core'
         : 'drizzle-orm/sqlite-core'
   const coreImport =
-    imports.core.size > 0 ? `import { ${[...imports.core].sort().join(', ')} } from '${mod}'` : ''
+    imports.core.size > 0
+      ? `import { ${[...imports.core].toSorted().join(', ')} } from '${mod}'`
+      : ''
   const ormImport =
     imports.orm.size > 0
-      ? `import { ${[...imports.orm].sort().join(', ')} } from 'drizzle-orm'`
+      ? `import { ${[...imports.orm].toSorted().join(', ')} } from 'drizzle-orm'`
       : ''
   const extImports = [...imports.ext.entries()].map(([pkg, entry]) => {
     const clause = [
       entry.default,
-      entry.named.size > 0 ? `{ ${[...entry.named].sort().join(', ')} }` : undefined,
+      entry.named.size > 0 ? `{ ${[...entry.named].toSorted().join(', ')} }` : undefined,
     ]
       .filter((c) => c !== undefined)
       .join(', ')

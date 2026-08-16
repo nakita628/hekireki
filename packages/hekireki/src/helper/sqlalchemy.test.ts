@@ -100,7 +100,7 @@ function makeField(overrides: Partial<DMMF.Field> & { name: string; type: string
     isGenerated: false,
     isUpdatedAt: false,
     ...overrides,
-  } as DMMF.Field
+  }
 }
 
 function makeModel(
@@ -428,7 +428,7 @@ class Limit(Base):
           { name: 'ADMIN', dbName: null },
           { name: 'USER', dbName: null },
         ],
-      } as DMMF.DatamodelEnum,
+      },
     ]
 
     expect(generateSingleFile(models, enums)).toBe(
@@ -469,7 +469,7 @@ class User(Base):
           { name: 'ADMIN', dbName: null },
           { name: 'USER', dbName: null },
         ],
-      } as DMMF.DatamodelEnum,
+      },
     ]
 
     expect(generateSingleFile(models, enums)).toBe(

@@ -107,7 +107,7 @@ export function groupByModel(
   const raw = Object.groupBy(validFields, (f) => f.modelName)
   return Object.fromEntries(
     Object.entries(raw).filter(
-      (entry): entry is [string, (typeof validFields)[number][]] => entry[1] != null,
+      (entry): entry is [string, (typeof validFields)[number][]] => entry[1] !== undefined,
     ),
   )
 }
