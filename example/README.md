@@ -8,7 +8,7 @@ A single complex Prisma schema ([`schema.prisma`](./schema.prisma)) run through 
 pnpm example
 ```
 
-This builds the generators, wipes `generated/`, runs `prisma generate`, and verifies that all 19 outputs exist — printing a ✓/✗ table and exiting non-zero if any generator produced nothing.
+This builds the generators, wipes `generated/`, runs `prisma generate`, and verifies that all 20 outputs exist — printing a ✓/✗ table and exiting non-zero if any generator produced nothing.
 
 ## What the schema exercises
 
@@ -27,6 +27,7 @@ This builds the generators, wipes `generated/`, runs `prisma generate`, and veri
 | Zod / Valibot / ArkType / Effect / TypeBox / AJV | `generated/<name>/index.ts`                           |
 | Drizzle                                          | `generated/drizzle/schema.ts`                         |
 | Kysely                                           | `generated/kysely/types.ts`                           |
+| Atlas                                            | `generated/atlas/schema.hcl`                          |
 | SQLAlchemy                                       | `generated/sqlalchemy/models.py`                      |
 | Pydantic                                         | `generated/pydantic/models.py`                        |
 | GORM                                             | `generated/gorm/models.go`                            |

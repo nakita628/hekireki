@@ -42,7 +42,7 @@ jobs:
       matrix:
         # drizzle needs no extra toolchain step: setup-vp's node runs
         # tsc + drizzle-kit from the workspace's devDependencies.
-        lang: [gorm, sea-orm, sqlalchemy, ecto, drizzle, activerecord, eloquent]
+        lang: [gorm, sea-orm, sqlalchemy, ecto, drizzle, activerecord, eloquent, atlas]
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: voidzero-dev/setup-vp@v1.17.0
@@ -87,6 +87,15 @@ jobs:
         uses: shivammathur/setup-php@2.37.2
         with:
           php-version: '8.3'
+      # The atlas leg also uses the runner's Docker daemon: the test validates
+      # the generated HCL against a disposable postgres dev database via
+      # Atlas's docker:// dev-url. The CLI version is pinned: the action's
+      # installer ships no checksum verification, so floating `latest` would
+      # reinstall an unvetted binary on every run.
+      - if: matrix.lang == 'atlas'
+        uses: ariga/setup-atlas@v0.3
+        with:
+          version: v1.3.0
 
       # The `lang` project regenerates test/harness/* from test/schema.prisma
       # in its globalSetup, then runs this language's checks. The same file runs

@@ -20,6 +20,7 @@ generator Hekireki-SQLAlchemy {
 generator Hekireki-Pydantic {
   provider = "hekireki-pydantic"
   output   = "harness/pydantic"
+  comment  = true
 }
 
 generator Hekireki-Ecto {
@@ -46,6 +47,11 @@ generator Hekireki-ActiveRecord {
 generator Hekireki-Eloquent {
   provider = "hekireki-eloquent"
   output   = "harness/eloquent/models"
+}
+
+generator Hekireki-Atlas {
+  provider = "hekireki-atlas"
+  output   = "harness/atlas/schema.hcl"
 }
 
 enum Status {
@@ -146,6 +152,7 @@ model Tag {
 // UUIDv7 primary key: every ORM must emit version-aware client-side
 // generation (uuid(7) is silently distinct from uuid() in DMMF args).
 model Event {
+  /// @p.UUID7
   id      String   @id @default(uuid(7))
   name    String
   happens DateTime
@@ -397,18 +404,28 @@ model Coupon {
 // Pydantic extra-key modes (zod strictObject / looseObject equivalents):
 // @p.strictObject must reject unknown keys (extra="forbid"), @p.looseObject
 // must keep them (extra="allow"), and the @p. field annotation must be used
-// verbatim with its pydantic/typing imports resolved.
+// verbatim with its pydantic/typing imports resolved. The doc comments end in
+// a bare quote on purpose: with comment=true the emitted docstrings must not
+// fuse with their closing quotes into a Python SyntaxError.
+/// Payload the client said was "locked"
 /// @p.strictObject
 model Locked {
   id   Int    @id @default(autoincrement())
+  /// Name whose doc ends with a "quote"
   /// @p.Annotated[str, StringConstraints(min_length=1, max_length=64)]
   name String
 }
 
 /// @p.looseObject
 model Open {
-  id   Int    @id @default(autoincrement())
-  name String
+  id      Int      @id @default(autoincrement())
+  name    String
+  /// @p.EmailStr
+  contact String
+  /// @p.HttpUrl
+  site    String
+  /// @p.AwareDatetime
+  seenAt  DateTime
 }
 
 // Names that collide with ORM machinery rather than language keywords:

@@ -23,6 +23,7 @@ const LANGS = [
   'kysely',
   'activerecord',
   'eloquent',
+  'atlas',
 ] as const
 
 const STALE_OUTPUT = [
@@ -35,6 +36,7 @@ const STALE_OUTPUT = [
   'kysely/types.ts',
   'activerecord/models',
   'eloquent/models',
+  'atlas/schema.hcl',
 ]
 
 export default function setup() {

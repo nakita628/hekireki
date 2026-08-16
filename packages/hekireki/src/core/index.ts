@@ -1,6 +1,7 @@
 export * from './activerecord.js'
 export * from './ajv.js'
 export * from './arktype.js'
+export * from './atlas.js'
 export * from './dbml.js'
 export * from './docs.js'
 export * from './drizzle.js'

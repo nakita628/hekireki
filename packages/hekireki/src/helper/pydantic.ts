@@ -7,7 +7,7 @@ import {
   parseDocumentWithoutAnnotations,
 } from '../utils/index.js'
 
-export const PRISMA_TO_PYDANTIC: { [k: string]: string } = {
+const PRISMA_TO_PYDANTIC: { [k: string]: string } = {
   String: 'str',
   Int: 'int',
   BigInt: 'int',
@@ -66,9 +66,8 @@ export function pydanticFieldName(name: string) {
 }
 
 // Names an `@p.` annotation (or the built-in type mapping) may reference,
-// grouped by the module that exports them. Detection is word-boundary matching
-// over the field type expressions, mirroring how collectGlobalImports derives
-// the SQLAlchemy import list from the fields it is about to emit.
+// grouped by the module that exports them; imports are derived by
+// word-boundary matching over the field type expressions.
 const PYDANTIC_NAMES = [
   'AnyUrl',
   'AwareDatetime',
@@ -157,7 +156,12 @@ export function makePydanticField(
 function makeDocstring(lines: readonly string[], indent: string) {
   if (lines.length === 0) return []
   const escaped = lines.map((l) => l.replace(/\\/g, '\\\\').replace(/"""/g, '\\"\\"\\"'))
-  if (escaped.length === 1) return [`${indent}"""${escaped[0]}"""`]
+  // Text ending in `"` would fuse with an appended closing `"""` into four
+  // quotes (a Python SyntaxError), so those fall back to the multi-line form
+  // whose closing quotes sit on their own line.
+  if (escaped.length === 1 && !escaped[0].endsWith('"')) {
+    return [`${indent}"""${escaped[0]}"""`]
+  }
   return [
     `${indent}"""${escaped[0]}`,
     ...escaped.slice(1).map((l) => `${indent}${l}`),

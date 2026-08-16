@@ -3,6 +3,7 @@ import pkg from '@prisma/generator-helper'
 import { activerecord } from '../core/activerecord.js'
 import { ajv } from '../core/ajv.js'
 import { arktype } from '../core/arktype.js'
+import { atlas } from '../core/atlas.js'
 import { dbml } from '../core/dbml.js'
 import { docs } from '../core/docs.js'
 import { drizzle } from '../core/drizzle.js'
@@ -23,6 +24,7 @@ const GENERATORS = {
   activerecord: { prettyName: 'Hekireki-ActiveRecord', handler: activerecord },
   ajv: { prettyName: 'Hekireki-AJV', handler: ajv },
   arktype: { prettyName: 'Hekireki-ArkType', handler: arktype },
+  atlas: { prettyName: 'Hekireki-Atlas', handler: atlas },
   dbml: { prettyName: 'Hekireki-DBML', handler: dbml },
   docs: { prettyName: 'Hekireki-Docs', handler: docs },
   drizzle: { prettyName: 'Hekireki-Drizzle', handler: drizzle },

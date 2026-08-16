@@ -61,9 +61,54 @@ def _runtime_smoke() -> None:
     except ValidationError:
         pass
 
-    # @p.looseObject → extra="allow": unknown keys are kept.
-    opened = Open.model_validate({"id": 1, "name": "n", "unknown": 1})
+    # @p.looseObject → extra="allow": unknown keys are kept. The EmailStr /
+    # HttpUrl / AwareDatetime annotations must import and validate at runtime
+    # (EmailStr needs the email-validator package at class-definition time).
+    opened = Open.model_validate(
+        {
+            "id": 1,
+            "name": "n",
+            "contact": "user@example.com",
+            "site": "https://example.com",
+            "seenAt": "2026-01-01T00:00:00Z",
+            "unknown": 1,
+        }
+    )
     assert opened.model_extra == {"unknown": 1}
+    try:
+        Open.model_validate(
+            {
+                "id": 1,
+                "name": "n",
+                "contact": "not-an-email",
+                "site": "https://example.com",
+                "seenAt": "2026-01-01T00:00:00Z",
+            }
+        )
+        raise AssertionError("invalid email accepted")
+    except ValidationError:
+        pass
+
+    # Enum Literal rejects values outside the Prisma-level names.
+    try:
+        Account.model_validate(
+            {
+                "id": "a1",
+                "bigNum": 10,
+                "price": "9.99",
+                "data": {},
+                "raw": b"",
+                "ratio": 0.5,
+                "flag": True,
+                "count": 3,
+                "createdAt": "2026-01-01T00:00:00Z",
+                "status": "BOGUS",
+                "tags": [],
+            }
+        )
+        raise AssertionError("enum value outside the Literal accepted")
+    except ValidationError:
+        pass
 
     # @p. field annotation: StringConstraints(min_length=1) rejects "".
     try:
@@ -78,6 +123,15 @@ def _runtime_smoke() -> None:
     )
     assert keyword.async_ == "a"
     assert keyword.yield_ == "y"
+    # The alias is the only accepted input key: the escaped Python attribute
+    # name is not a valid payload key (populate_by_name is not emitted).
+    try:
+        Keyword.model_validate(
+            {"id": "k1", "type": "t", "match": "m", "async_": "a", "yield": "y", "self": "s"}
+        )
+        raise AssertionError("escaped attribute name accepted in place of the alias")
+    except ValidationError:
+        pass
 
     # Optional fields default to None.
     profile = Profile.model_validate(

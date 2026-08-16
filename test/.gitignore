@@ -9,6 +9,7 @@ harness/drizzle/schema.ts
 harness/kysely/types.ts
 harness/activerecord/models/
 harness/eloquent/models/
+harness/atlas/schema.hcl
 
 # Toolchain build artifacts.
 harness/drizzle/node_modules

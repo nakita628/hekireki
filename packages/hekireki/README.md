@@ -29,6 +29,7 @@
 - 🧪 Generates [Ecto](https://hexdocs.pm/ecto/Ecto.Schema.html) schemas (Elixir) — with associations (`belongs_to`, `has_many`, `has_one`), composite primary keys, `@type t` typespecs, array fields, `@@map`/`@map` support, and `@moduledoc`
 - 💎 Generates [Active Record](https://guides.rubyonrails.org/active_record_basics.html) models (Ruby on Rails) — with associations (`belongs_to`, `has_one`, `has_many`, `has_and_belongs_to_many`), enums, composite primary keys, and `@@map`/`@map` support
 - 🐘 Generates [Eloquent](https://laravel.com/docs/eloquent) models (Laravel / PHP) — with relations (`belongsTo`, `hasOne`, `hasMany`, `belongsToMany`), `$fillable`, `$casts`, string-backed PHP enums, timestamp constants, and `@@map`/`@map` support
+- 🌍 Generates [Atlas](https://atlasgo.io/) HCL database schemas — with native `@db.*` type mapping (PostgreSQL / MySQL / SQLite), enum blocks, defaults (including `dbgenerated(...)` and scalar-list defaults), foreign keys with Prisma's referential-action defaults, unique / descending / fulltext indexes, implicit m2m join tables, and `@@schema` support — output is `atlas schema fmt` canonical
 
 ### Diagrams & Documentation
 
@@ -105,6 +106,11 @@ generator Hekireki-Drizzle {
 generator Hekireki-Kysely {
     provider = "hekireki-kysely"
     output   = "./kysely"
+}
+
+generator Hekireki-Atlas {
+    provider = "hekireki-atlas"
+    output   = "./atlas"
 }
 
 generator Hekireki-SQLAlchemy {
@@ -603,6 +609,72 @@ declare const db: Kysely<DB>
 const posts = await db.selectFrom('Post').selectAll().execute()
 ```
 
+### Atlas
+
+A declarative [Atlas](https://atlasgo.io/) HCL schema (`schema.hcl`). Table and column names use their `@@map`/`@map` database names, foreign keys and indexes follow Prisma's naming conventions (`<table>_<columns>_fkey` / `_key` / `_idx`), referential actions fall back to Prisma's defaults (`onUpdate: Cascade`, `onDelete: Restrict` for required and `SetNull` for optional relations), and client-side defaults such as `uuid()` and `cuid()` emit no database `DEFAULT` — the file describes exactly what `prisma migrate` would create. The output is already `atlas schema fmt` canonical.
+
+The schema label defaults to `public` (PostgreSQL / MySQL) or `main` (SQLite); on MySQL, set `schemaName` to your database name since MySQL schemas are databases.
+
+> [!WARNING]
+> Declarative `atlas schema apply` drops whatever is missing from the HCL, and three things can never appear in it: Prisma's own `_prisma_migrations` table (exclude it with `--exclude '_prisma_migrations'`), and columns or tables marked `@ignore`/`@@ignore` or typed `Unsupported(...)` — Prisma omits those from the DMMF that hekireki reads. When applying to an existing database, always dry-run first and keep Atlas's destructive-change linting enabled.
+
+Known limitations: the implicit m2m primary key is an unnamed constraint (Prisma names it `_X_AB_pkey`; the column set is identical, so this only surfaces as a constraint rename if you later hand the database back to `prisma migrate`), all enum blocks land in the default schema under `multiSchema` (Prisma exposes no schema for enums), Prisma's 63-byte truncation of very long constraint names is not reproduced, and removing or renaming enum values is a type rebuild in Atlas, as in any PostgreSQL workflow.
+
+```hcl
+table "User" {
+  schema = schema.main
+  column "id" {
+    null = false
+    type = text
+  }
+  column "name" {
+    null = false
+    type = text
+  }
+  primary_key {
+    columns = [column.id]
+  }
+}
+
+table "Post" {
+  schema = schema.main
+  column "id" {
+    null = false
+    type = text
+  }
+  column "title" {
+    null = false
+    type = text
+  }
+  column "content" {
+    null = false
+    type = text
+  }
+  column "userId" {
+    null = false
+    type = text
+  }
+  primary_key {
+    columns = [column.id]
+  }
+  foreign_key "Post_userId_fkey" {
+    columns     = [column.userId]
+    ref_columns = [table.User.column.id]
+    on_update   = CASCADE
+    on_delete   = RESTRICT
+  }
+}
+
+schema "main" {}
+```
+
+```bash
+# Apply the schema declaratively (dry-run first), or diff versioned migrations from it
+atlas schema apply --url "$DATABASE_URL" --to file://atlas/schema.hcl --exclude '_prisma_migrations' --dry-run
+atlas schema apply --url "$DATABASE_URL" --to file://atlas/schema.hcl --exclude '_prisma_migrations'
+atlas migrate diff --dev-url "docker://postgres/17/dev" --to file://atlas/schema.hcl
+```
+
 ### Ecto
 
 Each model is output as a separate `.ex` file (1 model = 1 file), following Elixir conventions.
@@ -779,7 +851,7 @@ class Post(Base):
 
 ### Pydantic
 
-[Pydantic](https://docs.pydantic.dev/) v2 models (Python). `@p.` field annotations are used verbatim as the Python type annotation — imports for the pydantic / typing names they reference (`EmailStr`, `Annotated`, `StringConstraints`, …) are added automatically. Fields without an annotation fall back to the built-in Prisma → Python type mapping, enums become `Literal[...]` of their Prisma-level value names, and relation fields are omitted.
+[Pydantic](https://docs.pydantic.dev/) v2 models (Python). `@p.` field annotations are used verbatim as the base type — list fields wrap it in `list[...]` and optional fields append `| None = None` — and imports for the known pydantic / typing names they reference (`EmailStr`, `Annotated`, `StringConstraints`, …) are added automatically; names outside that set are emitted as-is without an import. Fields without an annotation fall back to the built-in Prisma → Python type mapping, enums become `Literal[...]` of their Prisma-level value names, and relation fields are omitted.
 
 ```python
 from pydantic import BaseModel, StringConstraints, UUID4
@@ -1050,6 +1122,14 @@ generator Hekireki-Drizzle {
 generator Hekireki-Kysely {
     provider = "hekireki-kysely"
     output   = "./kysely"    // Output path (default: ./kysely/types.ts)
+}
+
+// Atlas HCL Schema Generator
+generator Hekireki-Atlas {
+    provider   = "hekireki-atlas"
+    output     = "./atlas"     // Output path (default: ./atlas/schema.hcl)
+    schemaName = "public"      // Schema label (default: postgresql/mysql "public", sqlite "main")
+    comment    = true          // Emit /// docs as comment attributes (default: false)
 }
 
 // SQLAlchemy Generator (Python)

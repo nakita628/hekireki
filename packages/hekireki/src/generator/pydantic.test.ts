@@ -328,6 +328,71 @@ class Note(BaseModel):
 `)
   })
 
+  it('should close docstrings ending in a quote on their own line', () => {
+    const models = [
+      makeModel({
+        name: 'Quote',
+        documentation: 'He said "hi"',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'Int',
+            isId: true,
+            documentation: 'Ends with a "quote"',
+          }),
+        ],
+      }),
+    ]
+    expect(pydanticCode(models, undefined, true)).toBe(`from pydantic import BaseModel
+
+
+class Quote(BaseModel):
+    """He said "hi"
+    """
+
+    id: int
+    """Ends with a "quote"
+    """
+`)
+  })
+
+  it('should keep fields with Prisma defaults required', () => {
+    const models = [
+      makeModel({
+        name: 'Defaulted',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'Int',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'autoincrement', args: [] },
+          }),
+          makeField({
+            name: 'nickname',
+            type: 'String',
+            hasDefaultValue: true,
+            default: 'anonymous',
+          }),
+          makeField({
+            name: 'verified',
+            type: 'Boolean',
+            hasDefaultValue: true,
+            default: false,
+          }),
+        ],
+      }),
+    ]
+    expect(pydanticCode(models, undefined, false)).toBe(`from pydantic import BaseModel
+
+
+class Defaulted(BaseModel):
+    id: int
+    nickname: str
+    verified: bool
+`)
+  })
+
   it('should not emit docstrings when comment is false', () => {
     const models = [
       makeModel({

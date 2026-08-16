@@ -103,6 +103,11 @@ generator Hekireki-Eloquent {
   namespace = "App.Models"
 }
 
+generator Hekireki-Atlas {
+  provider = "hekireki-atlas"
+  output   = "generated/atlas/schema.hcl"
+}
+
 generator Hekireki-ER {
   provider = "hekireki-mermaid-er"
   output   = "generated/mermaid-er"

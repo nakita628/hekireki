@@ -3,6 +3,7 @@ import { defineConfig } from 'tsdown'
 export default defineConfig({
   entry: {
     'cli/index': './src/cli/index.ts',
+    'bin/atlas': './src/bin/atlas.ts',
     'bin/zod': './src/bin/zod.ts',
     'bin/valibot': './src/bin/valibot.ts',
     'bin/mermaid-er': './src/bin/mermaid-er.ts',
