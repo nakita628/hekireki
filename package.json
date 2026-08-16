@@ -13,8 +13,8 @@
     "hekireki": "link:packages/hekireki"
   },
   "devDependencies": {
-    "@vitest/coverage-v8": "^4.1.9",
-    "vite-plus": "^0.2.1"
+    "@vitest/coverage-v8": "^4.1.10",
+    "vite-plus": "^0.2.6"
   },
-  "packageManager": "pnpm@11.7.0"
+  "packageManager": "pnpm@11.22.0"
 }

@@ -4,12 +4,13 @@ name: Lang Check
 # is generated from conformance/schema.prisma and then checked in its own
 # toolchain — it parses (syntax) and compiles or loads against the real GORM /
 # sea-orm / SQLAlchemy / Ecto / Active Record / Eloquent API (type). This is
-# separate from Test (test.yaml), which owns the byte-equality codegen contract
+# separate from Test (test.yml), which owns the byte-equality codegen contract
 # and stays toolchain-free.
 #
 # One matrix leg per language; each sets up only its own toolchain. Runs on PRs
-# that touch the generators or the harness, and on demand. Action tags are
-# pinned to @vX.Y.Z and tracked by Renovate (no SHA pinning, per org policy).
+# that touch the generators or the harness, and on demand. Action versions are
+# tracked by Renovate, which pins each one to its digest
+# (helpers:pinGitHubActionDigests) and keeps the @vX.Y.Z tag as a comment.
 
 on:
   pull_request:
@@ -20,7 +21,7 @@ on:
       # generator change.
       - packages/hekireki/src/**
       - packages/hekireki/conformance/**
-      - .github/workflows/lang-check.yaml
+      - .github/workflows/lang-check.yml
   workflow_dispatch: {}
 
 permissions:
@@ -47,8 +48,8 @@ jobs:
         # tsc + drizzle-kit from the workspace's devDependencies.
         lang: [gorm, sea-orm, sqlalchemy, ecto, drizzle, activerecord, eloquent]
     steps:
-      - uses: actions/checkout@v5.0.1
-      - uses: voidzero-dev/setup-vp@v1.12.0
+      - uses: actions/checkout@v7.0.1
+      - uses: voidzero-dev/setup-vp@v1.17.0
         with:
           node-version: '22'
           cache: true
@@ -104,8 +105,8 @@ jobs:
   pack-guard:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5.0.1
-      - uses: voidzero-dev/setup-vp@v1.12.0
+      - uses: actions/checkout@v7.0.1
+      - uses: voidzero-dev/setup-vp@v1.17.0
         with:
           node-version: '22'
           cache: true
