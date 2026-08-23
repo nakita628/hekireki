@@ -22,7 +22,7 @@ export async function emitRaw(data: string | Buffer, dir: string, output: string
 }
 
 export async function emitMany(
-  files: ReadonlyArray<{ readonly fileName: string; readonly code: string }>,
+  files: readonly { readonly fileName: string; readonly code: string }[],
   dir: string,
 ) {
   const mkdirResult = await mkdir(dir)

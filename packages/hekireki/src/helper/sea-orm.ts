@@ -561,7 +561,7 @@ export function generateEntityFile(
   serde: { readonly renameAll?: string } = {},
 ) {
   const idField = model.fields.find((f) => f.isId)
-  const compositePkFieldNames = new Set(model.primaryKey?.fields ?? [])
+  const compositePkFieldNames = new Set(model.primaryKey?.fields)
   const isCompositePk = !idField && compositePkFieldNames.size > 0
 
   if (!(idField || isCompositePk)) return ''

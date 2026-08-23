@@ -53,6 +53,7 @@ datasource db {
 
 generator Hekireki-Zod {
     provider = "hekireki-zod"
+    output   = "./zod"
     type     = true
     comment  = true
     relation = true
@@ -60,6 +61,7 @@ generator Hekireki-Zod {
 
 generator Hekireki-Valibot {
     provider = "hekireki-valibot"
+    output   = "./valibot"
     type     = true
     comment  = true
     relation = true
@@ -67,6 +69,7 @@ generator Hekireki-Valibot {
 
 generator Hekireki-ArkType {
     provider = "hekireki-arktype"
+    output   = "./arktype"
     type     = true
     comment  = true
     relation = true
@@ -74,6 +77,7 @@ generator Hekireki-ArkType {
 
 generator Hekireki-Effect {
     provider = "hekireki-effect"
+    output   = "./effect"
     type     = true
     comment  = true
     relation = true
@@ -81,6 +85,7 @@ generator Hekireki-Effect {
 
 generator Hekireki-TypeBox {
     provider = "hekireki-typebox"
+    output   = "./typebox"
     type     = true
     comment  = true
     relation = true
@@ -88,6 +93,7 @@ generator Hekireki-TypeBox {
 
 generator Hekireki-AJV {
     provider = "hekireki-ajv"
+    output   = "./ajv"
     type     = true
     comment  = true
     relation = true
@@ -101,6 +107,7 @@ generator Hekireki-Pydantic {
 
 generator Hekireki-Drizzle {
     provider = "hekireki-drizzle"
+    output   = "./drizzle"
 }
 
 generator Hekireki-Kysely {
@@ -149,6 +156,7 @@ generator Hekireki-Eloquent {
 
 generator Hekireki-ER {
     provider = "hekireki-mermaid-er"
+    output   = "./mermaid-er"
 }
 
 generator Hekireki-DBML {
@@ -373,6 +381,14 @@ export const PostSchema = type({
 })
 
 export type Post = typeof PostSchema.infer
+
+export const UserRelationsSchema = type({ ...UserSchema.t, posts: PostSchema.array() })
+
+export type UserRelations = typeof UserRelationsSchema.infer
+
+export const PostRelationsSchema = type({ ...PostSchema.t, user: UserSchema })
+
+export type PostRelations = typeof PostRelationsSchema.infer
 ```
 
 ### Effect Schema
@@ -391,7 +407,7 @@ export const UserSchema = Schema.Struct({
   name: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(50)),
 })
 
-export type UserEncoded = typeof UserSchema.Encoded
+export type User = typeof UserSchema.Type
 
 export const PostSchema = Schema.Struct({
   /**
@@ -412,7 +428,18 @@ export const PostSchema = Schema.Struct({
   userId: Schema.UUID,
 })
 
-export type PostEncoded = typeof PostSchema.Encoded
+export type Post = typeof PostSchema.Type
+
+export const UserRelationsSchema = Schema.Struct({
+  ...UserSchema.fields,
+  posts: Schema.Array(PostSchema),
+})
+
+export type UserRelations = typeof UserRelationsSchema.Type
+
+export const PostRelationsSchema = Schema.Struct({ ...PostSchema.fields, user: UserSchema })
+
+export type PostRelations = typeof PostRelationsSchema.Type
 ```
 
 ### TypeBox
@@ -560,7 +587,9 @@ export const post = sqliteTable('post', {
     .$defaultFn(() => crypto.randomUUID()),
   title: text('title').notNull(),
   content: text('content').notNull(),
-  userId: text('userId').notNull(),
+  userId: text('userId')
+    .notNull()
+    .references(() => user.id),
 })
 
 export const userRelations = relations(user, ({ many }) => ({ posts: many(post) }))
@@ -1091,13 +1120,17 @@ generator Hekireki-Docs {
 
 ## Configuration
 
-Configure each generator directly in your `schema.prisma` file:
+Configure each generator directly in your `schema.prisma` file.
+
+> `output` is **required** for every generator — there is no implicit default directory.
+> Point it at a directory to get the file name shown below, or at a path with an
+> extension to choose the file name yourself.
 
 ```prisma
 // Zod Generator
 generator Hekireki-Zod {
     provider = "hekireki-zod"
-    output   = "./zod"       // Output path (default: ./zod/index.ts)
+    output   = "./zod"       // Required. A directory here yields ./zod/index.ts
     type     = true          // Generate TypeScript types (default: false)
     comment  = true          // Include schema documentation (default: false)
     zod      = "v4"          // Zod import: "v4", "mini", or "@hono/zod-openapi" (default: v4)
@@ -1107,7 +1140,7 @@ generator Hekireki-Zod {
 // Valibot Generator
 generator Hekireki-Valibot {
     provider = "hekireki-valibot"
-    output   = "./valibot"   // Output path (default: ./valibot/index.ts)
+    output   = "./valibot"   // Required. A directory here yields ./valibot/index.ts
     type     = true          // Generate TypeScript types (default: false)
     comment  = true          // Include schema documentation (default: false)
     relation = true          // Generate relation schemas (default: false)
@@ -1116,7 +1149,7 @@ generator Hekireki-Valibot {
 // ArkType Generator
 generator Hekireki-ArkType {
     provider = "hekireki-arktype"
-    output   = "./arktype"   // Output path (default: ./arktype/index.ts)
+    output   = "./arktype"   // Required. A directory here yields ./arktype/index.ts
     type     = true          // Generate TypeScript types (default: false)
     comment  = true          // Include schema documentation (default: false)
     relation = true          // Generate relation schemas (default: false)
@@ -1125,7 +1158,7 @@ generator Hekireki-ArkType {
 // Effect Schema Generator
 generator Hekireki-Effect {
     provider = "hekireki-effect"
-    output   = "./effect"    // Output path (default: ./effect/index.ts)
+    output   = "./effect"    // Required. A directory here yields ./effect/index.ts
     type     = true          // Generate TypeScript types (default: false)
     comment  = true          // Include schema documentation (default: false)
     relation = true          // Generate relation schemas (default: false)
@@ -1134,7 +1167,7 @@ generator Hekireki-Effect {
 // TypeBox Generator
 generator Hekireki-TypeBox {
     provider = "hekireki-typebox"
-    output   = "./typebox"   // Output path (default: ./typebox/index.ts)
+    output   = "./typebox"   // Required. A directory here yields ./typebox/index.ts
     type     = true          // Generate TypeScript types (default: false)
     comment  = true          // Include schema documentation (default: false)
     relation = true          // Generate relation schemas (default: false)
@@ -1143,7 +1176,7 @@ generator Hekireki-TypeBox {
 // AJV (JSON Schema) Generator
 generator Hekireki-AJV {
     provider = "hekireki-ajv"
-    output   = "./ajv"       // Output path (default: ./ajv/index.ts)
+    output   = "./ajv"       // Required. A directory here yields ./ajv/index.ts
     type     = true          // Generate TypeScript types (default: false)
     comment  = true          // Include schema documentation (default: false)
     relation = true          // Generate relation schemas (default: false)
@@ -1152,19 +1185,19 @@ generator Hekireki-AJV {
 // Drizzle ORM Schema Generator
 generator Hekireki-Drizzle {
     provider = "hekireki-drizzle"
-    output   = "./drizzle"   // Output path (default: ./drizzle/schema.ts)
+    output   = "./drizzle"   // Required. A directory here yields ./drizzle/schema.ts
 }
 
 // Kysely Type Definitions Generator
 generator Hekireki-Kysely {
     provider = "hekireki-kysely"
-    output   = "./kysely"    // Output path (default: ./kysely/types.ts)
+    output   = "./kysely"    // Required. A directory here yields ./kysely/types.ts
 }
 
 // Atlas HCL Schema Generator
 generator Hekireki-Atlas {
     provider   = "hekireki-atlas"
-    output     = "./atlas"     // Output path (default: ./atlas/schema.hcl)
+    output     = "./atlas"     // Required. A directory here yields ./atlas/schema.hcl
     schemaName = "public"      // Schema label (default: postgresql/mysql "public", sqlite "main")
     comment    = true          // Emit /// docs as comment attributes (default: false)
 }
@@ -1172,13 +1205,13 @@ generator Hekireki-Atlas {
 // SQLAlchemy Generator (Python)
 generator Hekireki-SQLAlchemy {
     provider = "hekireki-sqlalchemy"
-    output   = "./sqlalchemy"      // Output path (default: ./sqlalchemy/models.py)
+    output   = "./sqlalchemy"      // Required. A directory here yields ./sqlalchemy/models.py
 }
 
 // Pydantic Generator (Python)
 generator Hekireki-Pydantic {
     provider = "hekireki-pydantic"
-    output   = "./pydantic"        // Output path (default: ./pydantic/models.py)
+    output   = "./pydantic"        // Required. A directory here yields ./pydantic/models.py
     comment  = true                // Include docstrings from /// comments (default: false)
     relation = true                // Generate <Model>Relations subclasses (default: false)
 }
@@ -1186,61 +1219,61 @@ generator Hekireki-Pydantic {
 // GORM Generator (Go)
 generator Hekireki-GORM {
     provider = "hekireki-gorm"
-    output   = "./gorm"            // Output path (default: ./gorm/models.go)
+    output   = "./gorm"            // Required. A directory here yields ./gorm/models.go
     package  = "model"             // Go package name (default: model)
 }
 
 // Sea-ORM Generator (Rust)
 generator Hekireki-SeaORM {
     provider   = "hekireki-sea-orm"
-    output     = "./sea_orm"       // Output directory for .rs files
+    output     = "./sea_orm"       // Required. Output directory for .rs files
     renameAll  = "camelCase"       // #[serde(rename_all = "...")] attribute (optional)
 }
 
 // Ecto Generator (Elixir)
 generator Hekireki-Ecto {
     provider = "hekireki-ecto"
-    output   = "./ecto"      // Output directory (default: ./ecto/)
+    output   = "./ecto"      // Required. A directory here yields ./ecto/
     app      = "MyApp"       // App name (default: MyApp)
 }
 
 // Active Record Generator (Ruby on Rails)
 generator Hekireki-ActiveRecord {
     provider = "hekireki-activerecord"
-    output   = "./activerecord"    // Output directory for .rb files
+    output   = "./activerecord"    // Required. Output directory for .rb files
 }
 
 // Eloquent Generator (Laravel / PHP)
 generator Hekireki-Eloquent {
     provider  = "hekireki-eloquent"
-    output    = "./eloquent"       // Output directory for .php files
+    output    = "./eloquent"       // Required. Output directory for .php files
     namespace = "App.Models"       // PHP namespace, "." becomes "\" (default: App\Models)
 }
 
 // Mermaid ER Generator
 generator Hekireki-ER {
     provider = "hekireki-mermaid-er"
-    output   = "./mermaid-er" // Output path (default: ./mermaid-er/ER.md)
+    output   = "./mermaid-er" // Required. A directory here yields ./mermaid-er/ER.md
 }
 
 // DBML Generator (output extension determines format: .dbml or .png)
 generator Hekireki-DBML {
     provider = "hekireki-dbml"
-    output   = "docs/schema.dbml"    // File path ending in .dbml or .png
+    output   = "docs/schema.dbml"    // Required. File path ending in .dbml or .png
     mapToDbSchema = true             // Map to DB schema names (default: true)
 }
 
 // PNG output (same provider, different extension)
 generator Hekireki-PNG {
     provider = "hekireki-dbml"
-    output   = "docs/er-diagram.png" // .png extension → PNG output
+    output   = "docs/er-diagram.png" // Required. .png extension → PNG output
     mapToDbSchema = true             // Map to DB schema names (default: true)
 }
 
 // Docs Generator
 generator Hekireki-Docs {
     provider = "hekireki-docs"
-    output   = "./docs"              // Output directory (default: ./docs)
+    output   = "./docs"              // Required. A directory here yields ./docs
 }
 ```
 

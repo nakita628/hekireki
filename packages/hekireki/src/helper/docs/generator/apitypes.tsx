@@ -11,7 +11,7 @@ import {
   hrSmallClass,
 } from '../styles.js'
 import { isScalarType } from './helpers.js'
-import type { DMMFDocument } from './transformDMMF.js'
+import type { DMMFDocument } from './transform-dmmf.js'
 
 type TypesGeneratorStructure = {
   readonly inputTypes: readonly TGType[]

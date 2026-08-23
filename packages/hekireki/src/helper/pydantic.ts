@@ -174,7 +174,7 @@ function makeDocstring(lines: readonly string[], indent: string) {
 // annotation leaves pydantic's default (extra="ignore").
 function extractConfigDict(documentation: string | undefined) {
   const annotation = extractPydanticAnnotation(documentation)
-  return annotation !== null && annotation.startsWith('ConfigDict(') ? annotation : null
+  return annotation?.startsWith('ConfigDict(') ? annotation : null
 }
 
 function makeConfigLine(model: DMMF.Model) {

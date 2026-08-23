@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import type { DMMFDocument } from '../generator/transformDMMF.js'
+import type { DMMFDocument } from '../generator/transform-dmmf.js'
 import { generateHTML } from './index.js'
 
 describe('generateHTML', () => {

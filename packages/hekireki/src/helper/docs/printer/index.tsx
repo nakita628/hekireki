@@ -6,7 +6,7 @@ import { HtmlEscapedCallbackPhase, resolveCallback } from 'hono/utils/html'
 import { createTypes } from '../generator/apitypes.js'
 import { createModels } from '../generator/model.js'
 import { createTOC } from '../generator/toc.js'
-import type { DMMFDocument } from '../generator/transformDMMF.js'
+import type { DMMFDocument } from '../generator/transform-dmmf.js'
 import {
   globalCss,
   containerClass,

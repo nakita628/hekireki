@@ -20,7 +20,7 @@ import {
   sectionClass,
 } from '../styles.js'
 import { capitalize, isScalarType, lowerCase } from './helpers.js'
-import type { DMMFDocument, DMMFMapping } from './transformDMMF.js'
+import type { DMMFDocument, DMMFMapping } from './transform-dmmf.js'
 
 const ModelAction: {
   create: string

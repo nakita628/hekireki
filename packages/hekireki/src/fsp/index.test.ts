@@ -4,7 +4,7 @@ import path from 'node:path'
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vite-plus/test'
 
-import { mkdir, readFileSync, writeFile, writeFileBinary } from '.'
+import { mkdir, readFileSync, writeFile, writeFileBinary } from './index.js'
 
 const TEST_DIR = path.join(process.cwd(), 'test-tmp-fsp-dir')
 

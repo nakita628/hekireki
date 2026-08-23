@@ -1,6 +1,6 @@
 import type { DMMF as ExternalDMMF } from '@prisma/generator-helper'
 
-export interface DMMFMapping {
+export type DMMFMapping = {
   model: string
   findUnique?: string | null
   findFirst?: string | null
@@ -25,8 +25,8 @@ const legacyName = (mapping: object, key: string) => {
   return typeof value === 'string' ? value : undefined
 }
 
-const getMappings = (mappings: ExternalDMMF.Mappings, datamodel: ExternalDMMF.Datamodel) => {
-  return mappings.modelOperations
+const getMappings = (mappings: ExternalDMMF.Mappings, datamodel: ExternalDMMF.Datamodel) =>
+  mappings.modelOperations
     .filter((mapping) => {
       const model = datamodel.models.find((m) => m.name === mapping.model)
       if (!model) {
@@ -51,12 +51,9 @@ const getMappings = (mappings: ExternalDMMF.Mappings, datamodel: ExternalDMMF.Da
       upsert:
         legacyName(mapping, 'upsertOne') ?? legacyName(mapping, 'upsertSingle') ?? mapping.upsert,
     }))
-}
 
-export const transformDMMF = (dmmf: ExternalDMMF.Document) => {
-  return {
-    ...dmmf,
-    datamodel: dmmf.datamodel,
-    mappings: getMappings(dmmf.mappings, dmmf.datamodel),
-  }
-}
+export const transformDMMF = (dmmf: ExternalDMMF.Document) => ({
+  ...dmmf,
+  datamodel: dmmf.datamodel,
+  mappings: getMappings(dmmf.mappings, dmmf.datamodel),
+})

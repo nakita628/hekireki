@@ -350,10 +350,12 @@ function resolveDefaultValue(
       case 'autoincrement':
         return { chain: '', imports: [] }
       case 'now':
-        if (provider === 'sqlite')
+        if (provider === 'sqlite') {
           return { chain: '.default(sql`(unixepoch() * 1000)`)', imports: [SQL_IMPORT] }
-        if (provider === 'mysql')
+        }
+        if (provider === 'mysql') {
           return { chain: '.default(sql`CURRENT_TIMESTAMP(3)`)', imports: [SQL_IMPORT] }
+        }
         return { chain: '.defaultNow()', imports: [] }
       case 'uuid':
         return dflt.args[0] === 7
@@ -383,8 +385,9 @@ function resolveDefaultValue(
           imports: [{ pkg: 'ulidx', kind: 'named', name: 'ulid' } as const],
         }
       case 'dbgenerated':
-        if (typeof dflt.args[0] === 'string')
+        if (typeof dflt.args[0] === 'string') {
           return { chain: `.default(sql\`${dflt.args[0]}\`)`, imports: [SQL_IMPORT] }
+        }
         return { chain: '', imports: [] }
       default:
         return { chain: '', imports: [] }
@@ -398,8 +401,9 @@ function resolveDefaultValue(
     // drizzle-kit serializes snapshots with JSON.stringify, which throws on
     // bigint, so emit it as a raw SQL DDL literal instead of `${dflt}n`.
     if (fieldType === 'BigInt') return { chain: `.default(sql\`${dflt}\`)`, imports: [SQL_IMPORT] }
-    if (fieldType === 'DateTime')
+    if (fieldType === 'DateTime') {
       return { chain: `.default(new Date(${toTsString(dflt)}))`, imports: [] }
+    }
     if (fieldType === 'Json') return { chain: `.default(${dflt})`, imports: [] }
     return { chain: `.default(${toTsString(dflt)})`, imports: [] }
   }
@@ -448,7 +452,7 @@ function makeFkActionOpts(onDelete: string | undefined, onUpdate: string | undef
 
 function makeFkReference(field: DMMF.Field, model: DMMF.Model, models: readonly DMMF.Model[]) {
   const relField = model.fields.find(
-    (f) => f.kind === 'object' && f.relationFromFields && f.relationFromFields.includes(field.name),
+    (f) => f.kind === 'object' && f.relationFromFields?.includes(field.name),
   )
   if (!(relField?.relationFromFields && relField.relationToFields)) return ''
 
