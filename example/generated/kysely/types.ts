@@ -12,7 +12,7 @@ export type Role = 'ADMIN' | 'EDITOR' | 'VIEWER'
 export type Visibility = 'public' | 'private' | 'link_only'
 
 export interface User {
-  id: Generated<string>
+  id: string
   email: string
   name: string
   role: Generated<Role>
@@ -22,7 +22,7 @@ export interface User {
 }
 
 export interface Profile {
-  id: Generated<string>
+  id: string
   user_id: string
   bio: string | null
   nickname: Generated<string>
@@ -35,7 +35,7 @@ export interface Profile {
 }
 
 export interface Post {
-  id: Generated<string>
+  id: string
   title: string
   content: string | null
   visibility: Generated<Visibility>

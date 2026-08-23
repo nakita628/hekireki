@@ -2,6 +2,7 @@ import type { DMMF } from '@prisma/generator-helper'
 
 import {
   collectM2MJoinEntries,
+  isDbGenerated,
   makeDbInterface,
   makeEnumDeclarations,
   makeM2MJoinInterface,
@@ -26,7 +27,7 @@ export function kyselySchema(datamodel: DMMF.Datamodel) {
   const usesTimestamp =
     columnFields.some((field) => field.kind === 'scalar' && field.type === 'DateTime') ||
     joinEntries.some((entry) => entry.aType === 'Timestamp' || entry.bType === 'Timestamp')
-  const usesGenerated = columnFields.some((field) => field.hasDefaultValue)
+  const usesGenerated = columnFields.some((field) => isDbGenerated(field))
   return [
     ...(usesGenerated || usesTimestamp ? [`import type { ColumnType } from 'kysely'`] : []),
     ...(usesGenerated ? [GENERATED_ALIAS] : []),

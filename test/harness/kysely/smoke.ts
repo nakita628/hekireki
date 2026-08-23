@@ -1,6 +1,7 @@
 // Pins semantic invariants in the type system so `tsc --strict` catches a
 // regression that would otherwise type-check: Generated<T> must unwrap to T on
-// select and go optional on insert, a DateTime column must select as Date, an
+// select and go optional on insert, a database-side default must be the only
+// thing that becomes Generated<T>, a DateTime column must select as Date, an
 // optional column must be `T | null`, an enum column must stay a value union
 // of the @map-ped database values, the DB interface must be keyed by the
 // @@map-ped table names, and the implicit m2m join tables must exist.
@@ -46,7 +47,6 @@ type Board = Selectable<t.Board>
 type Sequence = Selectable<t.Sequence>
 type Torture = Selectable<t.Torture>
 type Inventory = Selectable<t.Inventory>
-type NewPost = Insertable<t.Post>
 
 type Expect<T extends true> = T
 type Equal<A, B> =
@@ -66,7 +66,20 @@ export type Cases = [
   Expect<Equal<Sequence['id'], bigint>>,
   Expect<Equal<Torture['born'], Date>>,
   Expect<Equal<Inventory['codes'], number[]>>,
-  Expect<Equal<NewPost['id'], string | undefined>>,
+
+  // autoincrement() and dbgenerated() are evaluated by the database, so the
+  // column carries a DDL default and the insert may omit it.
+  Expect<Equal<Insertable<t.Sequence>['id'], bigint | undefined>>,
+  Expect<Equal<Insertable<t.Computed>['id'], string | undefined>>,
+  // uuid()/uuid(7)/ulid()/cuid(2)/nanoid(10) are evaluated by prisma's client,
+  // which leaves the column without a DDL default — a raw kysely insert has to
+  // provide the value itself.
+  Expect<Equal<Insertable<t.Post>['id'], string>>,
+  Expect<Equal<Insertable<t.Event>['id'], string>>,
+  Expect<Equal<Insertable<t.Ticket>['id'], string>>,
+  Expect<Equal<Insertable<t.Badge>['id'], string>>,
+  Expect<Equal<Insertable<t.Coupon>['id'], string>>,
+
   // The generated Generated<T> must preserve the insert/update sides of a
   // nested ColumnType, not collapse them back to the select type.
   Expect<Equal<Insertable<t.Account>['created_at'], Date | string | undefined>>,

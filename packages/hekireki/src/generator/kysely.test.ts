@@ -135,7 +135,7 @@ describe('kyselySchema', () => {
     const result = kyselySchema(datamodel)
 
     expect(result).toBe(
-      "import type { ColumnType } from 'kysely'\n\nexport type Generated<T> = T extends ColumnType<infer S, infer I, infer U>\n  ? ColumnType<S, I | undefined, U>\n  : ColumnType<T, T | undefined, T>\n\nexport type Timestamp = ColumnType<Date, Date | string, Date | string>\n\nexport interface Account {\n  id: Generated<string>\n  bigNum: bigint\n  price: string\n  data: unknown\n  meta: unknown\n  raw: Buffer\n  ratio: number\n  flag: boolean\n  count: number\n  created_at: Generated<Timestamp>\n  tags: string[]\n}\n\nexport interface DB {\n  accounts: Account\n}",
+      "import type { ColumnType } from 'kysely'\n\nexport type Generated<T> = T extends ColumnType<infer S, infer I, infer U>\n  ? ColumnType<S, I | undefined, U>\n  : ColumnType<T, T | undefined, T>\n\nexport type Timestamp = ColumnType<Date, Date | string, Date | string>\n\nexport interface Account {\n  id: string\n  bigNum: bigint\n  price: string\n  data: unknown\n  meta: unknown\n  raw: Buffer\n  ratio: number\n  flag: boolean\n  count: number\n  created_at: Generated<Timestamp>\n  tags: string[]\n}\n\nexport interface DB {\n  accounts: Account\n}",
     )
   })
 
@@ -237,7 +237,7 @@ describe('kyselySchema', () => {
     const result = kyselySchema(datamodel)
 
     expect(result).toBe(
-      "import type { ColumnType } from 'kysely'\n\nexport type Generated<T> = T extends ColumnType<infer S, infer I, infer U>\n  ? ColumnType<S, I | undefined, U>\n  : ColumnType<T, T | undefined, T>\n\nexport interface Post {\n  id: Generated<string>\n  title: string\n}\n\nexport interface Tag {\n  id: Generated<string>\n  label: string\n}\n\nexport interface PostToTag {\n  A: string\n  B: string\n}\n\nexport interface DB {\n  Post: Post\n  Tag: Tag\n  _PostToTag: PostToTag\n}",
+      'export interface Post {\n  id: string\n  title: string\n}\n\nexport interface Tag {\n  id: string\n  label: string\n}\n\nexport interface PostToTag {\n  A: string\n  B: string\n}\n\nexport interface DB {\n  Post: Post\n  Tag: Tag\n  _PostToTag: PostToTag\n}',
     )
   })
 
@@ -464,6 +464,66 @@ describe('kyselySchema', () => {
 
     expect(result).toBe(
       'export interface Follow {\n  followerId: string\n  followingId: string\n}\n\nexport interface DB {\n  Follow: Follow\n}',
+    )
+  })
+
+  it('should wrap only database-side defaults in Generated, never client-side ones', () => {
+    const datamodel = makeDatamodel([
+      makeModel({
+        name: 'Token',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'String',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'uuid', args: [7] },
+          }),
+          makeField({
+            name: 'pub',
+            type: 'String',
+            hasDefaultValue: true,
+            default: { name: 'cuid', args: [2] },
+          }),
+          makeField({
+            name: 'sortKey',
+            type: 'String',
+            hasDefaultValue: true,
+            default: { name: 'ulid', args: [] },
+          }),
+          makeField({
+            name: 'shortId',
+            type: 'String',
+            hasDefaultValue: true,
+            default: { name: 'nanoid', args: [10] },
+          }),
+          makeField({
+            name: 'seq',
+            type: 'Int',
+            hasDefaultValue: true,
+            default: { name: 'autoincrement', args: [] },
+          }),
+          makeField({
+            name: 'issuedAt',
+            type: 'DateTime',
+            hasDefaultValue: true,
+            default: { name: 'now', args: [] },
+          }),
+          makeField({
+            name: 'serverId',
+            type: 'String',
+            hasDefaultValue: true,
+            default: { name: 'dbgenerated', args: ['gen_random_uuid()'] },
+          }),
+          makeField({ name: 'label', type: 'String', hasDefaultValue: true, default: 'anonymous' }),
+        ],
+      }),
+    ])
+
+    const result = kyselySchema(datamodel)
+
+    expect(result).toBe(
+      "import type { ColumnType } from 'kysely'\n\nexport type Generated<T> = T extends ColumnType<infer S, infer I, infer U>\n  ? ColumnType<S, I | undefined, U>\n  : ColumnType<T, T | undefined, T>\n\nexport type Timestamp = ColumnType<Date, Date | string, Date | string>\n\nexport interface Token {\n  id: string\n  pub: string\n  sortKey: string\n  shortId: string\n  seq: Generated<number>\n  issuedAt: Generated<Timestamp>\n  serverId: Generated<string>\n  label: Generated<string>\n}\n\nexport interface DB {\n  Token: Token\n}",
     )
   })
 })

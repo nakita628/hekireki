@@ -22,7 +22,7 @@
 ### ORM / Schema Generation (Multi-Language)
 
 - 🗄️ Automatically generates [Drizzle ORM](https://orm.drizzle.team/) table schemas and relations from your Prisma schema
-- 🐟 Automatically generates [Kysely](https://kysely.dev/) type definitions (`DB` interface) from your Prisma schema — with `Generated` columns, enum value unions, `@map`/`@@map` support, and implicit m2m join tables
+- 🐟 Automatically generates [Kysely](https://kysely.dev/) type definitions (`DB` interface) from your Prisma schema — with database-side-only `Generated` columns, enum value unions, `@map`/`@@map` support, and implicit m2m join tables
 - 🐍 Automatically generates [SQLAlchemy](https://www.sqlalchemy.org/) models (Python) — with `Mapped[T]` type hints, relationships, enums, composite keys, and index support
 - 🐹 Automatically generates [GORM](https://gorm.io/) models (Go) — with struct tags, JSON tags, relationships, enums, composite keys, and index support
 - 🦀 Automatically generates [Sea-ORM](https://www.sea-ql.org/SeaORM/) entities (Rust) — with `DeriveEntityModel`, relations, enums, serde support, and `rename_all`
@@ -572,23 +572,18 @@ export const postRelations = relations(post, ({ one }) => ({
 
 ### Kysely
 
-Pure type definitions for the [Kysely](https://kysely.dev/) query builder. The `DB` interface is keyed by the actual database table names (`@@map` respected), columns use `@map`-ped names, defaulted columns are wrapped in `Generated`, and enums become value unions of their `@map`-ped database values.
+Pure type definitions for the [Kysely](https://kysely.dev/) query builder. The `DB` interface is keyed by the actual database table names (`@@map` respected), columns use `@map`-ped names, and enums become value unions of their `@map`-ped database values. Reach for Kysely's own `Selectable` / `Insertable` / `Updateable` wrappers when you need to name a row type; query results are inferred and need no annotation.
+
+Only **database-side** defaults become `Generated<T>`. `autoincrement()`, `now()` and `dbgenerated(...)` are evaluated by the database, so they are optional on insert; `uuid()`, `cuid()`, `ulid()` and `nanoid()` are evaluated by the Prisma Client and leave the column without a DDL default, so a raw Kysely insert must still supply them.
 
 ```ts
-import type { ColumnType } from 'kysely'
-
-export type Generated<T> =
-  T extends ColumnType<infer S, infer I, infer U>
-    ? ColumnType<S, I | undefined, U>
-    : ColumnType<T, T | undefined, T>
-
 export interface User {
-  id: Generated<string>
+  id: string
   name: string
 }
 
 export interface Post {
-  id: Generated<string>
+  id: string
   title: string
   content: string
   userId: string
@@ -600,13 +595,48 @@ export interface DB {
 }
 ```
 
+Both ids above are `@default(uuid())`, which Prisma evaluates in the client — hence plain `string`, required on insert. A database-side default instead emits `Generated<T>` (and, for `DateTime`, the `Timestamp` alias), which Kysely makes optional on insert:
+
+```prisma
+model Comment {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+}
+```
+
 ```ts
-import { Kysely } from 'kysely'
-import type { DB } from './kysely/types'
+import type { ColumnType } from 'kysely'
+
+export type Generated<T> =
+  T extends ColumnType<infer S, infer I, infer U>
+    ? ColumnType<S, I | undefined, U>
+    : ColumnType<T, T | undefined, T>
+
+export type Timestamp = ColumnType<Date, Date | string, Date | string>
+
+export interface Comment {
+  id: Generated<number>
+  createdAt: Generated<Timestamp>
+}
+```
+
+```ts
+import { Kysely, type Insertable } from 'kysely'
+import type { DB, Post } from './kysely/types'
 
 declare const db: Kysely<DB>
+declare const userId: string
 
+// Query results are inferred — no annotation needed.
 const posts = await db.selectFrom('Post').selectAll().execute()
+
+const draft: Insertable<Post> = {
+  id: crypto.randomUUID(),
+  title: 'Hello',
+  content: '...',
+  userId,
+}
+await db.insertInto('Post').values(draft).execute()
 ```
 
 ### Atlas

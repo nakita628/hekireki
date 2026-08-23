@@ -14,6 +14,24 @@ const SCALAR_TYPE_MAP: { [k: string]: string } = {
   Bytes: 'Buffer',
 }
 
+// Prisma runs uuid()/cuid()/ulid()/nanoid()/auto() in the client, so migrate
+// emits no DDL DEFAULT for them and a raw kysely insert must still supply the
+// value. Only database-side defaults may become Generated<T>.
+const CLIENT_SIDE_DEFAULTS = new Set(['uuid', 'cuid', 'ulid', 'nanoid', 'auto'])
+
+function isFunctionDefault(
+  def: DMMF.Field['default'],
+): def is { readonly name: string; readonly args: readonly (string | number)[] } {
+  return def !== null && typeof def === 'object' && !Array.isArray(def) && 'name' in def
+}
+
+export function isDbGenerated(field: DMMF.Field) {
+  return (
+    field.hasDefaultValue &&
+    !(isFunctionDefault(field.default) && CLIENT_SIDE_DEFAULTS.has(field.default.name))
+  )
+}
+
 function makePropertyKey(name: string) {
   return /^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(name)
     ? name
@@ -29,7 +47,7 @@ function makeColumnType(field: DMMF.Field) {
   const listed = field.isList ? `${base}[]` : base
   // `unknown | null` collapses to `unknown`, so the union would be redundant.
   const nullable = field.isRequired || listed === 'unknown' ? listed : `${listed} | null`
-  return field.hasDefaultValue ? `Generated<${nullable}>` : nullable
+  return isDbGenerated(field) ? `Generated<${nullable}>` : nullable
 }
 
 export function makeTableInterface(model: DMMF.Model) {
