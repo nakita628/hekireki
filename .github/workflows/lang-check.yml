@@ -97,13 +97,13 @@ jobs:
         with:
           version: v1.3.0
 
-      # The `lang` project regenerates test/harness/* from test/schema.prisma
-      # in its globalSetup, then runs this language's checks. The same file runs
+      # The `test` package regenerates harness/* from schema.prisma in its
+      # globalSetup, then runs this language's checks. The same file runs
       # locally via `pnpm lang`. CI is set on GitHub Actions, which turns each
       # file's toolchain guard into a hard assertion — a leg whose setup step
       # silently failed cannot pass by skipping.
       - name: Lang check (generate + syntax + type check)
-        run: vp test --project lang test/lang/${{ matrix.lang }}.test.ts
+        run: vp run --filter ./test test lang/${{ matrix.lang }}.test.ts
 
   # Prove the published tarball still ships dist/ only. The language harnesses
   # now live in test/ rather than inside the package, so nothing under

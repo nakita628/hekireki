@@ -1,6 +1,8 @@
 packages:
   - apps/*
   - packages/*
+  - example
+  - test
 allowBuilds:
   '@prisma/engines': true
   better-sqlite3: true

@@ -5,17 +5,16 @@
   "type": "module",
   "scripts": {
     "deps": "mkdir -p /tmp/pnpm-store && pnpm config set store-dir /tmp/pnpm-store &&rm -rf node_modules && rm -rf pnpm-lock.yaml && rm -rf ~/.pnpm-store && pnpm store prune && pnpm install --no-prefer-frozen-lockfile",
-    "check": "vp check --fix",
-    "test": "vp test --project unit",
-    "coverage": "vp test --project unit --coverage",
-    "lang": "vp run hekireki#build && vp test --project lang",
-    "example": "vp run hekireki#build && node example/generate.mjs"
+    "check": "vp run -r check",
+    "fix": "vp run -r fix",
+    "test": "vp run --filter ./packages/hekireki test",
+    "lang": "vp run hekireki#build && vp run --filter ./test test",
+    "example": "vp run hekireki#build && vp run --filter ./example generate"
   },
   "dependencies": {
     "hekireki": "link:packages/hekireki"
   },
   "devDependencies": {
-    "@vitest/coverage-v8": "^4.1.10",
     "vite-plus": "^0.2.6"
   },
   "packageManager": "pnpm@11.22.0"

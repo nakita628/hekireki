@@ -1,0 +1,10 @@
+{
+  "name": "@hekireki/example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "vp check",
+    "fix": "vp check --fix",
+    "generate": "node generate.mjs"
+  }
+}

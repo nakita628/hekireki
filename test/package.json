@@ -1,0 +1,10 @@
+{
+  "name": "@hekireki/test",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "vp check",
+    "fix": "vp check --fix",
+    "test": "vp test"
+  }
+}

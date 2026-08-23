@@ -26,8 +26,8 @@ jobs:
 
       - run: vp link ./packages/hekireki
 
-      - run: vp check
+      - run: vp run -r check
 
-      # `unit` only: the `lang` project needs the Go / Rust / Python / Elixir /
-      # Ruby / PHP toolchains and is owned by the Lang Check matrix.
-      - run: vp test --project unit --coverage
+      # packages/hekireki only: the `test` package needs the Go / Rust / Python /
+      # Elixir / Ruby / PHP toolchains and is owned by the Lang Check matrix.
+      - run: vp run --filter ./packages/hekireki test
