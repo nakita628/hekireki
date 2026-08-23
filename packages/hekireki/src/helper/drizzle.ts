@@ -5,15 +5,7 @@ import { makeSnakeCase } from '../utils/index.js'
 type DbProvider = 'postgresql' | 'mysql' | 'sqlite'
 
 export function resolveDbProvider(provider: 'postgresql' | 'cockroachdb' | 'mysql' | 'sqlite') {
-  switch (provider) {
-    case 'postgresql':
-    case 'cockroachdb':
-      return 'postgresql'
-    case 'mysql':
-      return 'mysql'
-    case 'sqlite':
-      return 'sqlite'
-  }
+  return provider === 'cockroachdb' ? 'postgresql' : provider
 }
 
 const PG_SCALAR_MAP: { [k: string]: string } = {
@@ -213,7 +205,7 @@ export function generateImports(imports: DrizzleImports, provider: DbProvider) {
 }
 
 function snakeToCamel(name: string) {
-  return name.replace(/_+([a-zA-Z0-9])/g, (_, c) => c.toUpperCase())
+  return name.replaceAll(/_+([a-zA-Z0-9])/g, (_match: string, char: string) => char.toUpperCase())
 }
 
 function resolveTableName(model: DMMF.Model) {
@@ -325,10 +317,10 @@ const SQL_IMPORT = { pkg: 'drizzle-orm', kind: 'named', name: 'sql' } as const
 
 function toTsString(value: string) {
   const escaped = value
-    .replace(/\\/g, '\\\\')
-    .replace(/'/g, "\\'")
-    .replace(/\n/g, '\\n')
-    .replace(/\r/g, '\\r')
+    .replaceAll('\\', '\\\\')
+    .replaceAll("'", "\\'")
+    .replaceAll('\n', '\\n')
+    .replaceAll('\r', '\\r')
   return `'${escaped}'`
 }
 
@@ -367,28 +359,28 @@ function resolveDefaultValue(
         return dflt.args[0] === 7
           ? {
               chain: '.$defaultFn(() => uuidv7())',
-              imports: [{ pkg: 'uuid', kind: 'named', name: 'v7 as uuidv7' }],
+              imports: [{ pkg: 'uuid', kind: 'named', name: 'v7 as uuidv7' } as const],
             }
           : { chain: '.$defaultFn(() => crypto.randomUUID())', imports: [] }
       case 'cuid':
         return dflt.args[0] === 2
           ? {
               chain: '.$defaultFn(() => createId())',
-              imports: [{ pkg: '@paralleldrive/cuid2', kind: 'named', name: 'createId' }],
+              imports: [{ pkg: '@paralleldrive/cuid2', kind: 'named', name: 'createId' } as const],
             }
           : {
               chain: '.$defaultFn(() => cuid())',
-              imports: [{ pkg: 'cuid', kind: 'default', name: 'cuid' }],
+              imports: [{ pkg: 'cuid', kind: 'default', name: 'cuid' } as const],
             }
       case 'nanoid':
         return {
           chain: `.$defaultFn(() => nanoid(${typeof dflt.args[0] === 'number' ? dflt.args[0] : ''}))`,
-          imports: [{ pkg: 'nanoid', kind: 'named', name: 'nanoid' }],
+          imports: [{ pkg: 'nanoid', kind: 'named', name: 'nanoid' } as const],
         }
       case 'ulid':
         return {
           chain: '.$defaultFn(() => ulid())',
-          imports: [{ pkg: 'ulidx', kind: 'named', name: 'ulid' }],
+          imports: [{ pkg: 'ulidx', kind: 'named', name: 'ulid' } as const],
         }
       case 'dbgenerated':
         if (typeof dflt.args[0] === 'string')
@@ -759,12 +751,8 @@ export function makeRelations(models: readonly DMMF.Model[], imports: DrizzleImp
       .map((field) => makeRelationField(field, model, models, relFields))
       .join(', ')
     const modelVar = resolveVarName(model)
-    const needsOne = relFields.some(
-      (f) => (f.relationFromFields && f.relationFromFields.length > 0) || !f.isList,
-    )
-    const needsMany = relFields.some(
-      (f) => f.isList && !(f.relationFromFields && f.relationFromFields.length > 0),
-    )
+    const needsOne = relFields.some((f) => (f.relationFromFields?.length ?? 0) > 0 || !f.isList)
+    const needsMany = relFields.some((f) => f.isList && (f.relationFromFields?.length ?? 0) === 0)
     const destructured = [needsOne ? 'one' : '', needsMany ? 'many' : ''].filter(Boolean).join(', ')
     return `export const ${modelVar}Relations = relations(${modelVar}, ({ ${destructured} }) => ({ ${fieldLines} }))`
   })

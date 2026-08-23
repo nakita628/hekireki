@@ -468,4 +468,78 @@ schema "auth" {}
 `,
     )
   })
+
+  it('should emit a quote-wrapped string default as a raw SQL literal', () => {
+    const datamodel = makeDatamodel(
+      [
+        makeModel({
+          name: 'Torture',
+          fields: [
+            makeField({ name: 'id', type: 'Int', isId: true }),
+            makeField({
+              name: 'jsonStr',
+              type: 'Json',
+              hasDefaultValue: true,
+              default: '"quoted"',
+            }),
+            makeField({
+              name: 'jsonObj',
+              type: 'Json',
+              hasDefaultValue: true,
+              default: '{"a":1,"b":[true,null,"x"]}',
+            }),
+            makeField({
+              name: 'apostrophe',
+              type: 'String',
+              hasDefaultValue: true,
+              default: "'single'",
+            }),
+            makeField({
+              name: 'quoted',
+              type: 'String',
+              hasDefaultValue: true,
+              default: 'it\'s a "quote"',
+            }),
+          ],
+        }),
+      ],
+      [],
+      [{ model: 'Torture', type: 'id', isDefinedOnField: true, fields: [{ name: 'id' }] }],
+    )
+    expect(atlasSchema(datamodel, 'postgresql', {})).toBe(
+      `table "Torture" {
+  schema = schema.public
+  column "id" {
+    null = false
+    type = integer
+  }
+  column "jsonStr" {
+    null    = false
+    type    = jsonb
+    default = sql("'\\"quoted\\"'")
+  }
+  column "jsonObj" {
+    null    = false
+    type    = jsonb
+    default = "{\\"a\\":1,\\"b\\":[true,null,\\"x\\"]}"
+  }
+  column "apostrophe" {
+    null    = false
+    type    = text
+    default = sql("'''single'''")
+  }
+  column "quoted" {
+    null    = false
+    type    = text
+    default = "it's a \\"quote\\""
+  }
+  primary_key {
+    columns = [column.id]
+  }
+}
+
+schema "public" {}
+`,
+    )
+  })
 })

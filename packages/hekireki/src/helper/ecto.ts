@@ -100,12 +100,12 @@ function getPrimaryKeyConfig(field: DMMF.Field) {
 }
 
 function makeTimestampsLine(fields: DMMF.Field[]) {
-  const insertedAliases = ['inserted_at', 'created_at', 'createdAt']
-  const updatedAliases = ['updated_at', 'modified_at', 'updatedAt', 'modifiedAt']
+  const insertedAliases = new Set(['inserted_at', 'created_at', 'createdAt'])
+  const updatedAliases = new Set(['updated_at', 'modified_at', 'updatedAt', 'modifiedAt'])
 
-  const inserted = fields.find((f) => insertedAliases.includes(f.name))
+  const inserted = fields.find((f) => insertedAliases.has(f.name))
   const updated =
-    fields.find((f) => f.isUpdatedAt) ?? fields.find((f) => updatedAliases.includes(f.name))
+    fields.find((f) => f.isUpdatedAt) ?? fields.find((f) => updatedAliases.has(f.name))
 
   const exclude = new Set<string>()
   if (inserted) exclude.add(inserted.name)
@@ -243,11 +243,11 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
 
 function toElixirString(value: string) {
   const escaped = value
-    .replace(/\\/g, '\\\\')
-    .replace(/"/g, '\\"')
-    .replace(/#\{/g, '\\#{')
-    .replace(/\n/g, '\\n')
-    .replace(/\r/g, '\\r')
+    .replaceAll('\\', '\\\\')
+    .replaceAll('"', '\\"')
+    .replaceAll('#{', '\\#{')
+    .replaceAll('\n', '\\n')
+    .replaceAll('\r', '\\r')
   return `"${escaped}"`
 }
 
@@ -306,7 +306,7 @@ export function ectoSchemas(
       const schemaFieldsRaw = fields.filter(
         (f) =>
           !(
-            f.relationName ||
+            f.relationName !== undefined ||
             (f.isId && pk.omitIdFieldInSchema) ||
             timestampsExclude.has(f.name) ||
             belongsToFkFields.has(f.name)

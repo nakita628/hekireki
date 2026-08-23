@@ -4,7 +4,7 @@ import { stripAnnotations } from '../utils/index.js'
 import { type Cardinality, annotatedERRelations, erKey, inferredERRelations } from './relation.js'
 
 export function escapeNote(str: string) {
-  return str.replace(/'/g, "\\'")
+  return str.replaceAll("'", "\\'")
 }
 
 export function formatConstraints(constraints: readonly string[]) {
@@ -30,7 +30,7 @@ export function combineKeys(keys: readonly string[]) {
 }
 
 function escapeTriple(str: string) {
-  return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+  return str.replaceAll('\\', '\\\\').replaceAll("'", "\\'")
 }
 
 function noteLiteral(value: string) {

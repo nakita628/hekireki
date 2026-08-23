@@ -22,7 +22,7 @@ export async function zod(options: GeneratorOptions) {
     getBool(options.generator.config?.type),
     getBool(options.generator.config?.comment),
     getBool(options.generator.config?.relation),
-    getString(options.generator.config?.zod, 'v4'),
+    getString(options.generator.config?.zod) ?? 'v4',
   )
   return emit(code, resolved.dir, resolved.file)
 }

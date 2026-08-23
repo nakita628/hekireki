@@ -1,15 +1,42 @@
-import { resolve } from 'node:path'
-
 import { defineConfig } from 'vite-plus'
 
-const __dirname = import.meta.dirname
+// Architecture rules for packages/hekireki/src: each directory may import only the
+// siblings listed in its message. Regexes match relative specifiers only, so external
+// packages never collide with a banned directory name.
+const LAYERS = [
+  {
+    dirs: ['utils', 'format', 'fsp', 'cli'],
+    regex: '^\\.\\./',
+    message: 'leaf module: no project-internal imports allowed',
+  },
+  {
+    dirs: ['emit'],
+    regex: '^(\\.\\./)+(bin|cli|core|generator|helper|utils)(/.*)?$',
+    message: 'emit may only import format, fsp',
+  },
+  {
+    dirs: ['generator', 'helper'],
+    regex: '^(\\.\\./)+(bin|cli|core|emit|format|fsp)(/.*)?$',
+    message: 'generator and helper may only import utils and each other',
+  },
+  {
+    dirs: ['core'],
+    regex: '^(\\.\\./)+(bin|cli)(/.*)?$',
+    message: 'core may only import utils, generator, helper, emit, format, fsp',
+  },
+  {
+    dirs: ['bin'],
+    regex: '^(\\.\\./)+(cli|emit|format|fsp|generator|helper|utils)(/.*)?$',
+    message: 'bin may only import core',
+  },
+]
 
 export default defineConfig({
   build: {
     sourcemap: true,
   },
   test: {
-    setupFiles: [resolve(__dirname, 'vitest.setup.ts')],
+    setupFiles: ['./vitest.setup.ts'],
     testTimeout: 30000,
     coverage: {
       provider: 'v8',
@@ -34,7 +61,7 @@ export default defineConfig({
         test: {
           name: 'lang',
           include: ['test/lang/*.test.ts'],
-          globalSetup: [resolve(__dirname, 'test/lang/setup.ts')],
+          globalSetup: ['./test/lang/setup.ts'],
           // cargo check, bundle install and mix deps.get dominate; they share
           // one harness tree per language, so the files run one at a time.
           fileParallelism: false,
@@ -48,139 +75,124 @@ export default defineConfig({
     // test/harness/** and example/generated/** are generator output plus
     // foreign-toolchain scaffolding whose TypeScript resolves only through
     // its own tsconfig or not at all (kysely/zod live in packages/hekireki).
-    ignorePatterns: ['dist/**', 'test/harness/**', 'example/generated/**'],
+    ignorePatterns: ['**/node_modules/**', '**/dist/**', 'test/harness/**', 'example/generated/**'],
     // Setting `plugins` replaces oxlint's default list — restate the defaults, then add import.
     plugins: ['typescript', 'unicorn', 'oxc', 'import'],
     options: {
       typeAware: true,
+      typeCheck: true,
     },
     categories: {
+      correctness: 'error',
       suspicious: 'error',
+      perf: 'error',
     },
     rules: {
       eqeqeq: 'error',
       'no-var': 'error',
       'prefer-const': 'error',
-      'no-param-reassign': 'error',
-      // Codegen closures intentionally reuse names like `model` / `field`.
-      'no-shadow': 'off',
+      'no-param-reassign': ['error', { props: true }],
+      'no-shadow': 'error',
+      'no-underscore-dangle': 'error',
+      'no-console': 'error',
+      'no-plusplus': 'error',
+      'no-await-in-loop': 'error',
+      'no-unused-vars': 'error',
       'typescript/no-explicit-any': 'error',
       'typescript/no-non-null-assertion': 'error',
       'typescript/consistent-type-imports': 'error',
       'typescript/consistent-type-assertions': ['error', { assertionStyle: 'never' }],
+      'typescript/no-unsafe-type-assertion': 'error',
+      'typescript/no-unnecessary-type-assertion': 'error',
+      'typescript/no-unnecessary-type-arguments': 'error',
       'typescript/no-floating-promises': 'error',
       'typescript/await-thenable': 'error',
       'typescript/no-misused-promises': 'error',
-      // Per-generator emit helpers are defined inside the function they serve.
-      'unicorn/consistent-function-scoping': 'off',
-      // Guard-clause early returns (bare `return`) beside value returns are idiomatic here.
-      'typescript/consistent-return': 'off',
-      // `__dirname` here is the Node convention, not a private-member marker.
-      'no-underscore-dangle': 'off',
-      // generator ⇄ helper mutual recursion is by design.
-      'import/no-cycle': 'off',
+      'typescript/consistent-return': 'error',
+      'typescript/require-await': 'error',
+      'typescript/prefer-readonly': 'error',
+      'typescript/prefer-nullish-coalescing': 'error',
+      'typescript/switch-exhaustiveness-check': 'error',
+      'typescript/no-unsafe-argument': 'error',
+      'typescript/no-unsafe-assignment': 'error',
+      'typescript/no-unsafe-member-access': 'error',
+      'typescript/no-unsafe-call': 'error',
+      'typescript/no-unsafe-return': 'error',
+      'unicorn/consistent-function-scoping': 'error',
+      'unicorn/no-array-for-each': 'error',
+      'unicorn/no-array-sort': 'error',
+      'unicorn/prefer-array-some': 'error',
+      'unicorn/prefer-spread': 'error',
+      'unicorn/prefer-string-replace-all': 'error',
+      'import/no-cycle': 'error',
       'import/no-self-import': 'error',
       'import/no-duplicates': 'error',
     },
-    // Architecture rules for packages/hekireki/src: each directory may import only the
-    // siblings listed in its message. Regexes match relative specifiers only, so external
-    // packages never collide with a banned directory name.
     overrides: [
       {
-        // Tests build DMMF fixtures by hand; asserting them into the real
-        // ReadonlyDeep<DMMF.*> shapes is the sanctioned `as` exception.
-        files: ['**/*.test.ts'],
+        // The CLI entry and the example / lang-harness runners report to stdout:
+        // their console output is the product, not a stray debug statement.
+        files: ['packages/hekireki/src/cli/index.ts', 'example/**', 'test/lang/**'],
         rules: {
+          'no-console': 'off',
+        },
+      },
+      {
+        // Plain JS with no types: the type-aware rules only ever see `any` here.
+        files: ['example/**/*.mjs'],
+        rules: {
+          'typescript/no-unsafe-argument': 'off',
+          'typescript/no-unsafe-member-access': 'off',
+        },
+      },
+      {
+        // Tests build DMMF fixtures by hand; asserting them into the real
+        // ReadonlyDeep<DMMF.*> shapes is the sanctioned `as` exception
+        // (CLAUDE.md 型安全 #1). Only the rules that police those casts are
+        // scoped off here, nothing else is.
+        files: ['**/*.test.ts'],
+        plugins: ['vitest'],
+        rules: {
+          'typescript/no-explicit-any': 'off',
           'typescript/consistent-type-assertions': 'off',
           'typescript/no-unsafe-type-assertion': 'off',
-          'typescript/no-explicit-any': 'off',
+          'typescript/no-unsafe-argument': 'off',
+          'typescript/no-unsafe-assignment': 'off',
+          'typescript/no-unsafe-member-access': 'off',
+          'typescript/no-unsafe-call': 'off',
+          'typescript/no-unsafe-return': 'off',
+          // Fixtures and stubs are defined per test on purpose (CLAUDE.md テスト
+          // #5: no shared logic helpers), which is exactly what this rule flags.
+          'unicorn/consistent-function-scoping': 'off',
+          'vitest/no-focused-tests': 'error',
+          'vitest/no-disabled-tests': 'error',
+          // The Result-returning APIs are asserted by narrowing the union first
+          // (`if (!result.ok) expect(result.error)…`), which reads as conditional.
+          'vitest/no-conditional-expect': 'off',
+          'vitest/no-commented-out-tests': 'error',
+          'vitest/expect-expect': 'error',
+          'vitest/require-mock-type-parameters': 'error',
         },
       },
       {
-        files: [
-          'packages/hekireki/src/utils/**',
-          'packages/hekireki/src/format/**',
-          'packages/hekireki/src/fsp/**',
-          'packages/hekireki/src/cli/**',
-        ],
+        // The lang harness installs its toolchain in `beforeAll` and asserts
+        // that the install itself succeeded — a failed setup must fail loudly,
+        // not surface as an unrelated assertion further down.
+        files: ['test/lang/**'],
+        plugins: ['vitest'],
         rules: {
-          'no-restricted-imports': [
-            'error',
-            {
-              patterns: [
-                {
-                  regex: '^\\.\\./',
-                  message: 'leaf module: no project-internal imports allowed',
-                },
-              ],
-            },
-          ],
+          'vitest/no-standalone-expect': 'off',
         },
       },
-      {
-        files: ['packages/hekireki/src/emit/**'],
+      ...LAYERS.map(({ dirs, regex, message }) => ({
+        files: dirs.map((dir) => `packages/hekireki/src/${dir}/**`),
         rules: {
-          'no-restricted-imports': [
+          'no-restricted-imports': ['error', { patterns: [{ regex, message }] }] satisfies [
             'error',
-            {
-              patterns: [
-                {
-                  regex: '^(\\.\\./)+(bin|cli|core|generator|helper|utils)(/.*)?$',
-                  message: 'emit may only import format, fsp',
-                },
-              ],
-            },
+            { patterns: { regex: string; message: string }[] },
           ],
         },
-      },
-      {
-        files: ['packages/hekireki/src/generator/**', 'packages/hekireki/src/helper/**'],
-        rules: {
-          'no-restricted-imports': [
-            'error',
-            {
-              patterns: [
-                {
-                  regex: '^(\\.\\./)+(bin|cli|core|emit|format|fsp)(/.*)?$',
-                  message: 'generator and helper may only import utils and each other',
-                },
-              ],
-            },
-          ],
-        },
-      },
-      {
-        files: ['packages/hekireki/src/core/**'],
-        rules: {
-          'no-restricted-imports': [
-            'error',
-            {
-              patterns: [
-                {
-                  regex: '^(\\.\\./)+(bin|cli)(/.*)?$',
-                  message: 'core may only import utils, generator, helper, emit, format, fsp',
-                },
-              ],
-            },
-          ],
-        },
-      },
-      {
-        files: ['packages/hekireki/src/bin/**'],
-        rules: {
-          'no-restricted-imports': [
-            'error',
-            {
-              patterns: [
-                {
-                  regex: '^(\\.\\./)+(cli|emit|format|fsp|generator|helper|utils)(/.*)?$',
-                  message: 'bin may only import core',
-                },
-              ],
-            },
-          ],
-        },
-      },
+      })),
     ],
   },
   fmt: {

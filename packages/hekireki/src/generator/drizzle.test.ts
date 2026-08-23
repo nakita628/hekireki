@@ -32,7 +32,7 @@ function makeField(overrides: Partial<DMMF.Field> & { name: string; type: string
 }
 
 function makeDatamodel(models: DMMF.Model[], enums: DMMF.DatamodelEnum[] = []): DMMF.Datamodel {
-  return { models, enums, types: [] }
+  return { models, enums, types: [], indexes: [] }
 }
 
 describe('drizzleSchema', () => {
@@ -613,9 +613,23 @@ describe('drizzleSchema', () => {
           }),
         ],
         [
-          { name: 'Role', values: [{ name: 'ADMIN' }, { name: 'USER' }], dbName: null },
-          { name: 'Status', values: [{ name: 'ACTIVE' }, { name: 'INACTIVE' }], dbName: null },
-        ] as DMMF.DatamodelEnum[],
+          {
+            name: 'Role',
+            values: [
+              { name: 'ADMIN', dbName: null },
+              { name: 'USER', dbName: null },
+            ],
+            dbName: null,
+          },
+          {
+            name: 'Status',
+            values: [
+              { name: 'ACTIVE', dbName: null },
+              { name: 'INACTIVE', dbName: null },
+            ],
+            dbName: null,
+          },
+        ],
       )
 
       const result = drizzleSchema(datamodel, 'postgresql', [])

@@ -11,7 +11,7 @@ const RELATIONSHIPS = {
 } as const satisfies Record<Cardinality, string>
 
 export function escapeComment(comment: string) {
-  return comment.replace(/\r?\n/g, ' ').replace(/"/g, '#quot;')
+  return comment.replaceAll(/\r?\n/g, ' ').replaceAll('"', '#quot;')
 }
 
 export function erRelationLine(

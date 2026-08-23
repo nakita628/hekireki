@@ -21,7 +21,7 @@ export type DMMFDocument = Omit<ExternalDMMF.Document, 'mappings'> & {
 // Those keys are gone from the current ModelMapping type, so read them off the
 // object and keep only string hits.
 const legacyName = (mapping: object, key: string) => {
-  const value = Object.entries(mapping).find(([k]) => k === key)?.[1]
+  const value: unknown = Object.entries(mapping).find(([k]) => k === key)?.[1]
   return typeof value === 'string' ? value : undefined
 }
 
@@ -37,19 +37,19 @@ const getMappings = (mappings: ExternalDMMF.Mappings, datamodel: ExternalDMMF.Da
     .map((mapping) => ({
       model: mapping.model,
       findUnique:
-        legacyName(mapping, 'findSingle') || legacyName(mapping, 'findOne') || mapping.findUnique,
+        legacyName(mapping, 'findSingle') ?? legacyName(mapping, 'findOne') ?? mapping.findUnique,
       findFirst: mapping.findFirst,
       findMany: mapping.findMany,
       create:
-        legacyName(mapping, 'createOne') || legacyName(mapping, 'createSingle') || mapping.create,
+        legacyName(mapping, 'createOne') ?? legacyName(mapping, 'createSingle') ?? mapping.create,
       delete:
-        legacyName(mapping, 'deleteOne') || legacyName(mapping, 'deleteSingle') || mapping.delete,
+        legacyName(mapping, 'deleteOne') ?? legacyName(mapping, 'deleteSingle') ?? mapping.delete,
       update:
-        legacyName(mapping, 'updateOne') || legacyName(mapping, 'updateSingle') || mapping.update,
+        legacyName(mapping, 'updateOne') ?? legacyName(mapping, 'updateSingle') ?? mapping.update,
       deleteMany: mapping.deleteMany,
       updateMany: mapping.updateMany,
       upsert:
-        legacyName(mapping, 'upsertOne') || legacyName(mapping, 'upsertSingle') || mapping.upsert,
+        legacyName(mapping, 'upsertOne') ?? legacyName(mapping, 'upsertSingle') ?? mapping.upsert,
     }))
 }
 

@@ -18,12 +18,12 @@ import { modelFields } from './mermaid-er.js'
 function makeModel(overrides: Partial<DMMF.Model> & { name: string }): DMMF.Model {
   return {
     dbName: null,
+    schema: null,
     fields: [],
     uniqueFields: [],
     uniqueIndexes: [],
     primaryKey: null,
     isGenerated: false,
-    schema: null,
     ...overrides,
   }
 }
@@ -50,6 +50,7 @@ describe('helper/dbml', () => {
         {
           name: 'User',
           dbName: null,
+          schema: null,
           fields: [
             {
               name: 'id',
@@ -70,7 +71,7 @@ describe('helper/dbml', () => {
           uniqueFields: [],
           uniqueIndexes: [],
           isGenerated: false,
-        } as DMMF.Model,
+        },
       ])
       expect(tables[0]).toBe("Table User {\n  id String [pk, note: 'User\\'s ID']\n}")
     })
@@ -82,6 +83,7 @@ describe('helper/dbml', () => {
         {
           name: 'User',
           dbName: null,
+          schema: null,
           fields: [
             {
               name: 'id',
@@ -101,7 +103,7 @@ describe('helper/dbml', () => {
           uniqueFields: [],
           uniqueIndexes: [],
           isGenerated: false,
-        } as DMMF.Model,
+        },
       ])
       expect(tables[0]).toBe(
         'Table User {\n  id String [not null]\n\n  indexes {\n    (id, name) [pk]\n  }\n}',
@@ -112,6 +114,7 @@ describe('helper/dbml', () => {
         {
           name: 'User',
           dbName: null,
+          schema: null,
           fields: [
             {
               name: 'a',
@@ -144,7 +147,7 @@ describe('helper/dbml', () => {
           uniqueFields: [['a', 'b']],
           uniqueIndexes: [],
           isGenerated: false,
-        } as DMMF.Model,
+        },
       ])
       expect(tables[0]).toBe(
         'Table User {\n  a String [not null]\n  b String [not null]\n\n  indexes {\n    (a, b) [unique]\n  }\n}',
@@ -158,6 +161,7 @@ describe('helper/dbml', () => {
         {
           name: 'Post',
           dbName: null,
+          schema: null,
           fields: [
             {
               name: 'userId',
@@ -193,10 +197,11 @@ describe('helper/dbml', () => {
           uniqueFields: [],
           uniqueIndexes: [],
           isGenerated: false,
-        } as DMMF.Model,
+        },
         {
           name: 'User',
           dbName: null,
+          schema: null,
           fields: [
             {
               name: 'id',
@@ -230,7 +235,7 @@ describe('helper/dbml', () => {
           uniqueFields: [],
           uniqueIndexes: [],
           isGenerated: false,
-        } as DMMF.Model,
+        },
       ])
       expect(refs[0]).toBe('Ref Post_userId_fk: Post.userId > User.id')
     })
@@ -242,6 +247,7 @@ describe('helper/dbml', () => {
         {
           name: 'Test',
           dbName: null,
+          schema: null,
           fields: [
             {
               name: 'id',
@@ -261,7 +267,7 @@ describe('helper/dbml', () => {
           uniqueFields: [],
           uniqueIndexes: [],
           isGenerated: false,
-        } as DMMF.Model,
+        },
       ])
       expect(tables[0]).toBe('Table Test {\n  id String [pk]\n}')
     })
@@ -270,6 +276,7 @@ describe('helper/dbml', () => {
         {
           name: 'Test',
           dbName: null,
+          schema: null,
           fields: [
             {
               name: 'email',
@@ -290,7 +297,7 @@ describe('helper/dbml', () => {
           uniqueFields: [],
           uniqueIndexes: [],
           isGenerated: false,
-        } as DMMF.Model,
+        },
       ])
       expect(tables[0]).toBe(
         "Table Test {\n  email String [unique, not null, note: 'User\\'s email']\n}",
@@ -364,6 +371,7 @@ describe('helper/dbml', () => {
           {
             name: 'User',
             dbName: null,
+            schema: null,
             fields: [
               {
                 name: 'id',
@@ -383,7 +391,7 @@ describe('helper/dbml', () => {
             uniqueFields: [],
             uniqueIndexes: [],
             isGenerated: false,
-          } as DMMF.Model,
+          },
         ],
         enums: [
           {
@@ -395,6 +403,7 @@ describe('helper/dbml', () => {
           },
         ],
         types: [],
+        indexes: [],
       }
       const result = dbmlContent(datamodel)
       expect(result).toBe('Enum Role {\n  ADMIN\n  USER\n}\n\nTable User {\n  id String [pk]\n}')
@@ -406,6 +415,7 @@ describe('helper/dbml', () => {
           {
             name: 'Post',
             dbName: null,
+            schema: null,
             fields: [
               {
                 name: 'id',
@@ -454,10 +464,11 @@ describe('helper/dbml', () => {
             uniqueFields: [],
             uniqueIndexes: [],
             isGenerated: false,
-          } as DMMF.Model,
+          },
           {
             name: 'User',
             dbName: null,
+            schema: null,
             fields: [
               {
                 name: 'id',
@@ -491,10 +502,11 @@ describe('helper/dbml', () => {
             uniqueFields: [],
             uniqueIndexes: [],
             isGenerated: false,
-          } as DMMF.Model,
+          },
         ],
         enums: [],
         types: [],
+        indexes: [],
       }
       const result = dbmlContent(datamodel)
       expect(result).toBe(
@@ -508,6 +520,7 @@ describe('helper/dbml', () => {
           {
             name: 'User',
             dbName: 'users',
+            schema: null,
             fields: [
               {
                 name: 'id',
@@ -527,10 +540,11 @@ describe('helper/dbml', () => {
             uniqueFields: [],
             uniqueIndexes: [],
             isGenerated: false,
-          } as DMMF.Model,
+          },
         ],
         enums: [],
         types: [],
+        indexes: [],
       }
       const result = dbmlContent(datamodel, true)
       expect(result).toBe('Table users {\n  id String [pk]\n}')
@@ -542,6 +556,7 @@ describe('helper/dbml', () => {
           {
             name: 'User',
             dbName: null,
+            schema: null,
             fields: [
               {
                 name: 'id',
@@ -566,12 +581,13 @@ describe('helper/dbml', () => {
         ],
         enums: [],
         types: [],
+        indexes: [],
       }
       expect(dbmlContent(datamodel)).toBe('Table User {\n  id Int [pk, increment]\n}')
     })
 
     it('returns empty string for empty datamodel', () => {
-      expect(dbmlContent({ models: [], enums: [], types: [] })).toBe('')
+      expect(dbmlContent({ models: [], enums: [], types: [], indexes: [] })).toBe('')
     })
   })
 
@@ -638,6 +654,7 @@ describe('helper/dbml', () => {
     const orderModel: DMMF.Model = {
       name: 'Order',
       dbName: 'orders',
+      schema: null,
       fields: [
         {
           name: 'id',
@@ -701,11 +718,12 @@ describe('helper/dbml', () => {
       uniqueFields: [],
       uniqueIndexes: [],
       isGenerated: false,
-    } as DMMF.Model
+    }
 
     const customerModel: DMMF.Model = {
       name: 'Customer',
       dbName: 'customers',
+      schema: null,
       fields: [
         {
           name: 'id',
@@ -753,7 +771,7 @@ describe('helper/dbml', () => {
       uniqueFields: [],
       uniqueIndexes: [],
       isGenerated: false,
-    } as DMMF.Model
+    }
 
     it('generates Order table with note and FK', () => {
       const tables = makeTables([orderModel])
@@ -790,6 +808,7 @@ describe('helper/dbml', () => {
           },
         ],
         types: [],
+        indexes: [],
       }
       const result = dbmlContent(datamodel)
       expect(result).toBe(
@@ -818,6 +837,7 @@ describe('helper/dbml', () => {
         {
           name: 'User',
           dbName: null,
+          schema: null,
           fields: [
             {
               name: 'id',
@@ -850,6 +870,7 @@ describe('helper/dbml', () => {
         {
           name: 'User',
           dbName: null,
+          schema: null,
           fields: [
             {
               name: 'email',
@@ -882,6 +903,7 @@ describe('helper/dbml', () => {
         {
           name: 'User',
           dbName: null,
+          schema: null,
           fields: [
             {
               name: 'id',
@@ -912,6 +934,7 @@ describe('helper/dbml', () => {
         {
           name: 'User',
           dbName: null,
+          schema: null,
           fields: [
             {
               name: 'id',
@@ -957,6 +980,7 @@ describe('helper/dbml', () => {
         {
           name: 'Account',
           dbName: null,
+          schema: null,
           fields: [
             {
               name: 'id',
@@ -1016,6 +1040,7 @@ describe('helper/dbml', () => {
         {
           name: 'User',
           dbName: null,
+          schema: null,
           fields: [
             {
               name: 'id',
@@ -1054,6 +1079,7 @@ describe('helper/dbml', () => {
         {
           name: 'Post',
           dbName: null,
+          schema: null,
           fields: [
             {
               name: 'id',
@@ -1113,6 +1139,7 @@ describe('helper/dbml', () => {
         {
           name: 'User',
           dbName: null,
+          schema: null,
           fields: [
             {
               name: 'id',
@@ -1150,6 +1177,7 @@ describe('helper/dbml', () => {
         {
           name: 'Post',
           dbName: null,
+          schema: null,
           fields: [
             {
               name: 'id',
@@ -1211,6 +1239,7 @@ describe('helper/dbml', () => {
         {
           name: 'User',
           dbName: null,
+          schema: null,
           fields: [
             {
               name: 'id',
@@ -1248,6 +1277,7 @@ describe('helper/dbml', () => {
         {
           name: 'Post',
           dbName: null,
+          schema: null,
           fields: [
             {
               name: 'id',
@@ -1433,6 +1463,7 @@ describe('helper/dbml', () => {
         {
           name: 'User',
           dbName: null,
+          schema: null,
           fields: [
             {
               name: 'id',
@@ -1827,6 +1858,7 @@ describe('helper/dbml', () => {
         ],
         enums: [],
         types: [],
+        indexes: [],
       }
       expect(dbmlContent(datamodel)).toBe(
         [
@@ -1843,6 +1875,7 @@ describe('helper/dbml', () => {
         {
           name: 'User',
           dbName: null,
+          schema: null,
           fields: [
             {
               name: 'bio',
@@ -1863,7 +1896,7 @@ describe('helper/dbml', () => {
           uniqueFields: [],
           uniqueIndexes: [],
           isGenerated: false,
-        } as DMMF.Model,
+        },
       ])
       expect(tables[0]).toBe("Table User {\n  bio String [not null, note: '''line1\nline2''']\n}")
     })
@@ -1873,6 +1906,7 @@ describe('helper/dbml', () => {
         {
           name: 'User',
           dbName: null,
+          schema: null,
           fields: [
             {
               name: 'bio',
@@ -1893,7 +1927,7 @@ describe('helper/dbml', () => {
           uniqueFields: [],
           uniqueIndexes: [],
           isGenerated: false,
-        } as DMMF.Model,
+        },
       ])
       expect(tables[0]).toBe("Table User {\n  bio String [not null, note: 'a single line']\n}")
     })
@@ -1903,6 +1937,7 @@ describe('helper/dbml', () => {
         {
           name: 'User',
           dbName: null,
+          schema: null,
           fields: [
             {
               name: 'bio',
@@ -1923,7 +1958,7 @@ describe('helper/dbml', () => {
           uniqueFields: [],
           uniqueIndexes: [],
           isGenerated: false,
-        } as DMMF.Model,
+        },
       ])
       expect(tables[0]).toBe("Table User {\n  bio String [not null, note: '''a\\\\nb\nc''']\n}")
     })
@@ -1933,6 +1968,7 @@ describe('helper/dbml', () => {
         {
           name: 'User',
           dbName: null,
+          schema: null,
           fields: [
             {
               name: 'bio',
@@ -1953,7 +1989,7 @@ describe('helper/dbml', () => {
           uniqueFields: [],
           uniqueIndexes: [],
           isGenerated: false,
-        } as DMMF.Model,
+        },
       ])
       expect(tables[0]).toBe("Table User {\n  bio String [not null, note: '''x\\'\\'\\'y\nz''']\n}")
     })
@@ -1963,6 +1999,7 @@ describe('helper/dbml', () => {
         {
           name: 'User',
           dbName: null,
+          schema: null,
           fields: [
             {
               name: 'id',
@@ -1983,7 +2020,7 @@ describe('helper/dbml', () => {
           uniqueIndexes: [],
           isGenerated: false,
           documentation: 'Account\nmulti line note',
-        } as DMMF.Model,
+        },
       ])
       expect(tables[0]).toBe(
         "Table User {\n  id String [pk]\n\n  Note: '''Account\nmulti line note'''\n}",
@@ -1995,6 +2032,7 @@ describe('helper/dbml', () => {
         {
           name: 'User',
           dbName: null,
+          schema: null,
           fields: [
             {
               name: 'id',
@@ -2015,7 +2053,7 @@ describe('helper/dbml', () => {
           uniqueIndexes: [],
           isGenerated: false,
           documentation: "user's\nnote",
-        } as DMMF.Model,
+        },
       ])
       expect(tables[0]).toBe("Table User {\n  id String [pk]\n\n  Note: '''user\\'s\nnote'''\n}")
     })
@@ -2025,6 +2063,7 @@ describe('helper/dbml', () => {
         {
           name: 'User',
           dbName: null,
+          schema: null,
           fields: [
             {
               name: 'id',
@@ -2045,7 +2084,7 @@ describe('helper/dbml', () => {
           uniqueIndexes: [],
           isGenerated: false,
           documentation: 'Account note',
-        } as DMMF.Model,
+        },
       ])
       expect(tables[0]).toBe("Table User {\n  id String [pk]\n\n  Note: 'Account note'\n}")
     })
@@ -2087,6 +2126,7 @@ describe('helper/dbml', () => {
         ],
         enums: [],
         types: [],
+        indexes: [],
       })
       expect(result).toBe(
         'Table Reservation {\n  id String [pk]\n  roomId String [not null]\n}\n\nTable Room {\n  id String [pk]\n}\n\nRef Reservation_roomId_fk: Reservation.roomId > Room.id',

@@ -154,7 +154,7 @@ export function makePydanticField(
 
 function makeDocstring(lines: readonly string[], indent: string) {
   if (lines.length === 0) return []
-  const escaped = lines.map((l) => l.replace(/\\/g, '\\\\').replace(/"""/g, '\\"\\"\\"'))
+  const escaped = lines.map((l) => l.replaceAll('\\', '\\\\').replaceAll('"""', '\\"\\"\\"'))
   // Text ending in `"` would fuse with an appended closing `"""` into four
   // quotes (a Python SyntaxError), so those fall back to the multi-line form
   // whose closing quotes sit on their own line.
@@ -197,6 +197,7 @@ export function makePydanticModel(
     ? makeDocstring(parseDocumentWithoutAnnotations(model.documentation), '    ')
     : []
   const configLine = makeConfigLine(model)
+  // oxlint-disable-next-line oxc/no-map-spread -- one docstring per field, not an accumulator
   const fieldLines = built.flatMap(({ field, result }) => [
     result.line,
     ...(comment ? makeDocstring(parseDocumentWithoutAnnotations(field.documentation), '    ') : []),

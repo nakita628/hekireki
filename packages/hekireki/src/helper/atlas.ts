@@ -50,12 +50,12 @@ const SQLITE_SCALAR: { [k: string]: string } = {
 
 function hclString(value: string) {
   const escaped = value
-    .replace(/\\/g, '\\\\')
-    .replace(/"/g, '\\"')
-    .replace(/\n/g, '\\n')
-    .replace(/\r/g, '\\r')
-    .replace(/\$\{/g, () => '$${')
-    .replace(/%\{/g, () => '%%{')
+    .replaceAll('\\', '\\\\')
+    .replaceAll('"', '\\"')
+    .replaceAll('\n', '\\n')
+    .replaceAll('\r', '\\r')
+    .replaceAll('${', () => '$${')
+    .replaceAll('%{', () => '%%{')
   return `"${escaped}"`
 }
 
@@ -97,8 +97,8 @@ function schemaOf(model: DMMF.Model, defaultSchema: string) {
 
 function duplicateTableNames(models: readonly DMMF.Model[]) {
   const counts = models.reduce(
-    (acc: Map<string, number>, m) => acc.set(tableNameOf(m), (acc.get(tableNameOf(m)) ?? 0) + 1),
-    new Map(),
+    (acc, m) => acc.set(tableNameOf(m), (acc.get(tableNameOf(m)) ?? 0) + 1),
+    new Map<string, number>(),
   )
   return new Set([...counts.entries()].filter(([, n]) => n > 1).map(([name]) => name))
 }
@@ -291,7 +291,7 @@ function serialType(field: DMMF.Field) {
 // SQL type name for a list element / array cast: Atlas HCL type identifiers
 // use `_` where the SQL type name has a space (double_precision, bit_varying).
 function sqlTypeName(atlasType: string) {
-  return atlasType.replace(/_/g, ' ')
+  return atlasType.replaceAll('_', ' ')
 }
 
 function columnTypeInfo(
@@ -313,7 +313,23 @@ function columnTypeInfo(
 }
 
 function sqlStringLiteral(value: string) {
-  return `'${value.replace(/'/g, "''")}'`
+  return `'${value.replaceAll("'", "''")}'`
+}
+
+// Atlas reads a string default that opens and closes with the same quote
+// character as an already-quoted SQL literal and drops the pair, so the HCL
+// value `"quoted"` would reach the database as `quoted` — a syntax error on a
+// json column and a silently wrong value everywhere else. Handing Atlas the
+// SQL literal as a raw expression keeps the value verbatim.
+function isQuoteWrapped(value: string) {
+  const first = value[0]
+  return (
+    value.length > 1 && (first === '"' || first === "'" || first === '`') && value.at(-1) === first
+  )
+}
+
+function literalDefault(value: string) {
+  return isQuoteWrapped(value) ? sqlExpr(sqlStringLiteral(value)) : hclString(value)
 }
 
 function listDefault(
@@ -361,12 +377,12 @@ function resolveDefault(
   if (field.kind === 'enum' && typeof dflt === 'string') {
     const enumDef = enums.find((e) => e.name === field.type)
     const value = enumDef?.values.find((v) => v.name === dflt)
-    return hclString(value?.dbName ?? dflt)
+    return literalDefault(value?.dbName ?? dflt)
   }
   if (typeof dflt === 'string') {
     // DMMF carries BigInt defaults as digit strings; the column default is a
     // numeric literal, not a quoted string.
-    return field.type === 'BigInt' ? dflt : hclString(dflt)
+    return field.type === 'BigInt' ? dflt : literalDefault(dflt)
   }
   if (typeof dflt === 'number' || typeof dflt === 'boolean') return String(dflt)
   return undefined

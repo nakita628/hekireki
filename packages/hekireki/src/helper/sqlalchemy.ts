@@ -325,10 +325,10 @@ export function generateAssociationTable(info: {
 
 function toPythonString(value: string) {
   const escaped = value
-    .replace(/\\/g, '\\\\')
-    .replace(/"/g, '\\"')
-    .replace(/\n/g, '\\n')
-    .replace(/\r/g, '\\r')
+    .replaceAll('\\', '\\\\')
+    .replaceAll('"', '\\"')
+    .replaceAll('\n', '\\n')
+    .replaceAll('\r', '\\r')
   return `"${escaped}"`
 }
 
@@ -470,12 +470,7 @@ function generateColumn(
   field: DMMF.Field,
   isPk: boolean,
   isFk: boolean,
-  associations: {
-    belongsTo: { name: string; targetModel: string; foreignKey: string; references: string }[]
-    hasMany: { name: string; targetModel: string; foreignKey: string; isList: boolean }[]
-    hasOne: { name: string; targetModel: string; foreignKey: string; isList: boolean }[]
-    manyToMany: { name: string; targetModel: string; relationName: string }[]
-  },
+  associations: ReturnType<typeof getAssociations>,
   allModels: readonly DMMF.Model[],
   enumMap: ReadonlyMap<string, DMMF.DatamodelEnum>,
 ) {
@@ -653,18 +648,7 @@ function generateTableArgs(
 }
 
 function generateBelongsToRelationships(
-  associations: {
-    belongsTo: {
-      name: string
-      targetModel: string
-      foreignKey: string
-      references: string
-      optional: boolean
-    }[]
-    hasMany: { name: string; targetModel: string; foreignKey: string; isList: boolean }[]
-    hasOne: { name: string; targetModel: string; foreignKey: string; isList: boolean }[]
-    manyToMany: { name: string; targetModel: string; relationName: string }[]
-  },
+  associations: ReturnType<typeof getAssociations>,
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
 ) {
@@ -696,12 +680,7 @@ function generateBelongsToRelationships(
 }
 
 function generateHasManyRelationships(
-  associations: {
-    belongsTo: { name: string; targetModel: string; foreignKey: string; references: string }[]
-    hasMany: { name: string; targetModel: string; foreignKey: string; isList: boolean }[]
-    hasOne: { name: string; targetModel: string; foreignKey: string; isList: boolean }[]
-    manyToMany: { name: string; targetModel: string; relationName: string }[]
-  },
+  associations: ReturnType<typeof getAssociations>,
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
 ) {
@@ -727,18 +706,7 @@ function generateHasManyRelationships(
 }
 
 function generateHasOneRelationships(
-  associations: {
-    belongsTo: { name: string; targetModel: string; foreignKey: string; references: string }[]
-    hasMany: { name: string; targetModel: string; foreignKey: string; isList: boolean }[]
-    hasOne: {
-      name: string
-      targetModel: string
-      foreignKey: string
-      isList: boolean
-      optional: boolean
-    }[]
-    manyToMany: { name: string; targetModel: string; relationName: string }[]
-  },
+  associations: ReturnType<typeof getAssociations>,
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
 ) {
@@ -767,12 +735,7 @@ function generateHasOneRelationships(
 }
 
 function generateManyToManyRelationships(
-  associations: {
-    belongsTo: { name: string; targetModel: string; foreignKey: string; references: string }[]
-    hasMany: { name: string; targetModel: string; foreignKey: string; isList: boolean }[]
-    hasOne: { name: string; targetModel: string; foreignKey: string; isList: boolean }[]
-    manyToMany: { name: string; targetModel: string; relationName: string }[]
-  },
+  associations: ReturnType<typeof getAssociations>,
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
   m2mTables: readonly {

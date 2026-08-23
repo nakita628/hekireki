@@ -172,10 +172,10 @@ function formatRustDefault(def: DMMF.Field['default']) {
   if (typeof def === 'number') return String(def)
   if (typeof def === 'string') {
     const escaped = def
-      .replace(/\\/g, '\\\\')
-      .replace(/"/g, '\\"')
-      .replace(/\n/g, '\\n')
-      .replace(/\r/g, '\\r')
+      .replaceAll('\\', '\\\\')
+      .replaceAll('"', '\\"')
+      .replaceAll('\n', '\\n')
+      .replaceAll('\r', '\\r')
     return `"${escaped}"`
   }
   return null
@@ -396,24 +396,7 @@ export function generateEnum(e: DMMF.DatamodelEnum, serde: { readonly renameAll?
 
 function generateRelationEnum(
   _model: DMMF.Model,
-  associations: {
-    belongsTo: { name: string; targetModel: string; foreignKey: string; references: string }[]
-    hasMany: {
-      name: string
-      targetModel: string
-      foreignKey: string
-      references: string
-      isList: boolean
-    }[]
-    hasOne: {
-      name: string
-      targetModel: string
-      foreignKey: string
-      references: string
-      isList: boolean
-    }[]
-    manyToMany: { name: string; targetModel: string; relationName: string }[]
-  },
+  associations: ReturnType<typeof getAssociations>,
 ) {
   const hasAny =
     associations.belongsTo.length > 0 ||
@@ -494,27 +477,7 @@ function generateRelationEnum(
   ].join('\n')
 }
 
-function generateRelatedImpls(
-  model: DMMF.Model,
-  associations: {
-    belongsTo: { name: string; targetModel: string; foreignKey: string; references: string }[]
-    hasMany: {
-      name: string
-      targetModel: string
-      foreignKey: string
-      references: string
-      isList: boolean
-    }[]
-    hasOne: {
-      name: string
-      targetModel: string
-      foreignKey: string
-      references: string
-      isList: boolean
-    }[]
-    manyToMany: { name: string; targetModel: string; relationName: string }[]
-  },
-) {
+function generateRelatedImpls(model: DMMF.Model, associations: ReturnType<typeof getAssociations>) {
   const impls: string[] = []
 
   // Rust allows at most one `impl Related<Target>` per (Self, Target). When several

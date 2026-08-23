@@ -17,7 +17,7 @@ const SCALAR_TYPE_MAP: { [k: string]: string } = {
 function makePropertyKey(name: string) {
   return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name)
     ? name
-    : `'${name.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`
+    : `'${name.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`
 }
 
 function scalarTsType(type: string) {

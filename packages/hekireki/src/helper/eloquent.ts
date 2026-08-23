@@ -107,13 +107,13 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
 }
 
 function findTimestamps(fields: readonly DMMF.Field[]) {
-  const createdAliases = ['created_at', 'createdAt']
-  const updatedAliases = ['updated_at', 'updatedAt', 'modified_at', 'modifiedAt']
+  const createdAliases = new Set(['created_at', 'createdAt'])
+  const updatedAliases = new Set(['updated_at', 'updatedAt', 'modified_at', 'modifiedAt'])
 
-  const created = fields.find((f) => f.type === 'DateTime' && createdAliases.includes(f.name))
+  const created = fields.find((f) => f.type === 'DateTime' && createdAliases.has(f.name))
   const updated =
     fields.find((f) => f.isUpdatedAt) ??
-    fields.find((f) => f.type === 'DateTime' && updatedAliases.includes(f.name))
+    fields.find((f) => f.type === 'DateTime' && updatedAliases.has(f.name))
 
   const exclude = new Set([created?.name, updated?.name].filter((name) => name !== undefined))
 
@@ -308,6 +308,7 @@ export function eloquentModels(
         ...docLines,
         `class ${makePascalCase(model.name)} extends Model`,
         '{',
+        // oxlint-disable-next-line oxc/no-map-spread -- one blank separator per block, not an accumulator
         ...bodyBlocks.flatMap((block, i) => (i === 0 ? block : ['', ...block])),
         '}',
       ]
