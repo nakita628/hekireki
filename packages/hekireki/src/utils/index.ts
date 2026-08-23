@@ -1,12 +1,12 @@
 export function parseRelation(line: string) {
-  const match = line.trim().match(/^@relation\s+(\w+)\.(\w+)\s+(\w+)\.(\w+)\s+(\w+-to-\w+)$/)
+  const match = line.trim().match(/^@relation\s+(\w+)\.(\w+)\s+(\w+)\.(\w+)\s+(\w+-to-\w+)$/u)
   if (!match) return null
   const [, fromModel, fromField, toModel, toField, type] = match
   return { fromModel, fromField, toModel, toField, type }
 }
 
-export function getString(v: string | string[] | undefined, fallback?: string) {
-  return typeof v === 'string' ? v : Array.isArray(v) ? (v[0] ?? fallback) : fallback
+export function getString(v: string | string[] | undefined) {
+  return typeof v === 'string' ? v : Array.isArray(v) ? v[0] : undefined
 }
 
 export function getBool(v: unknown, fallback = false) {
@@ -14,7 +14,7 @@ export function getBool(v: unknown, fallback = false) {
 }
 
 export function makeSnakeCase(name: string) {
-  return name.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase()
+  return name.replaceAll(/([a-z0-9])([A-Z])/gu, '$1_$2').toLowerCase()
 }
 
 export function makePascalCase(name: string) {
@@ -26,8 +26,8 @@ export function makePascalCase(name: string) {
 }
 
 export function makeValidationExtractor(annotationPrefix: `@${string}.`) {
-  const escaped = annotationPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const regex = new RegExp(`${escaped}(.+?)(?:\\n|$)`)
+  const escaped = annotationPrefix.replaceAll(/[.*+?^${}()|[\]\\]/gu, '\\$&')
+  const regex = new RegExp(`${escaped}(.+?)(?:\\n|$)`, 'u')
   return function extractValidation(documentation: string | undefined) {
     if (!documentation) return null
     const match = documentation.match(regex)
@@ -37,8 +37,8 @@ export function makeValidationExtractor(annotationPrefix: `@${string}.`) {
 
 export function parseDocumentWithoutAnnotations(documentation: string | undefined) {
   if (!documentation) return []
-  const annotationPrefixes = ['@z.', '@v.', '@a.', '@e.', '@t.', '@j.']
-  const annotationExact = new Set(['@z', '@v', '@a', '@e', '@t', '@j'])
+  const annotationPrefixes = ['@z.', '@v.', '@a.', '@e.', '@t.', '@j.', '@p.']
+  const annotationExact = new Set(['@z', '@v', '@a', '@e', '@t', '@j', '@p'])
   return documentation
     .split('\n')
     .map((line) => line.trim())
@@ -52,8 +52,8 @@ export function parseDocumentWithoutAnnotations(documentation: string | undefine
 
 export function stripAnnotations(doc: string | undefined) {
   if (!doc) return undefined
-  const annotationPrefixes = ['@z.', '@v.', '@a.', '@e.', '@t.', '@j.']
-  const annotationExact = new Set(['@z', '@v', '@a', '@e', '@t', '@j'])
+  const annotationPrefixes = ['@z.', '@v.', '@a.', '@e.', '@t.', '@j.', '@p.']
+  const annotationExact = new Set(['@z', '@v', '@a', '@e', '@t', '@j', '@p'])
   const result = doc
     .split('\n')
     .filter((line) => {

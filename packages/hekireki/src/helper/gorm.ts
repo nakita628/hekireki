@@ -200,11 +200,11 @@ function formatGoDefault(def: DMMF.Field['default']) {
   // them); the SQL single quote doubles per the SQL standard.
   if (typeof def === 'string') {
     const escaped = def
-      .replace(/\\/g, '\\\\')
-      .replace(/"/g, '\\"')
-      .replace(/'/g, "''")
-      .replace(/\n/g, '\\n')
-      .replace(/\r/g, '\\r')
+      .replaceAll('\\', '\\\\')
+      .replaceAll('"', '\\"')
+      .replaceAll("'", "''")
+      .replaceAll('\n', '\\n')
+      .replaceAll('\r', '\\r')
     return `'${escaped}'`
   }
   return null
@@ -346,8 +346,8 @@ const GO_INITIALISMS = new Set([
 
 function splitGoWords(name: string) {
   return name
-    .replace(/([a-z0-9])([A-Z])/g, '$1\0$2')
-    .replace(/_+/g, '\0')
+    .replaceAll(/([a-z0-9])([A-Z])/gu, '$1\0$2')
+    .replaceAll(/_+/gu, '\0')
     .split('\0')
     .filter((part) => part !== '')
     .map((part) => {
@@ -464,24 +464,7 @@ function buildRelationTag(parts: string[]) {
 
 function generateRelationFields(
   model: DMMF.Model,
-  associations: {
-    belongsTo: { name: string; targetModel: string; foreignKey: string; references: string }[]
-    hasMany: {
-      name: string
-      targetModel: string
-      foreignKey: string
-      references: string
-      isList: boolean
-    }[]
-    hasOne: {
-      name: string
-      targetModel: string
-      foreignKey: string
-      references: string
-      isList: boolean
-    }[]
-    manyToMany: { name: string; targetModel: string; relationName: string }[]
-  },
+  associations: ReturnType<typeof getAssociations>,
 ) {
   const belongsToLines = associations.belongsTo.map((assoc) => {
     const fieldName = goFieldName(assoc.name)
@@ -546,7 +529,7 @@ export function generateModelStruct(
   indexes: readonly DMMF.Index[],
 ) {
   const idField = model.fields.find((f) => f.isId)
-  const compositePkFieldNames = new Set(model.primaryKey?.fields ?? [])
+  const compositePkFieldNames = new Set(model.primaryKey?.fields)
   const isCompositePk = !idField && compositePkFieldNames.size > 0
 
   if (!(idField || isCompositePk)) return null

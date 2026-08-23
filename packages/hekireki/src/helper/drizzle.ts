@@ -5,15 +5,7 @@ import { makeSnakeCase } from '../utils/index.js'
 type DbProvider = 'postgresql' | 'mysql' | 'sqlite'
 
 export function resolveDbProvider(provider: 'postgresql' | 'cockroachdb' | 'mysql' | 'sqlite') {
-  switch (provider) {
-    case 'postgresql':
-    case 'cockroachdb':
-      return 'postgresql'
-    case 'mysql':
-      return 'mysql'
-    case 'sqlite':
-      return 'sqlite'
-  }
+  return provider === 'cockroachdb' ? 'postgresql' : provider
 }
 
 const PG_SCALAR_MAP: { [k: string]: string } = {
@@ -213,7 +205,7 @@ export function generateImports(imports: DrizzleImports, provider: DbProvider) {
 }
 
 function snakeToCamel(name: string) {
-  return name.replace(/_+([a-zA-Z0-9])/g, (_, c) => c.toUpperCase())
+  return name.replaceAll(/_+([a-zA-Z0-9])/gu, (_match: string, char: string) => char.toUpperCase())
 }
 
 function resolveTableName(model: DMMF.Model) {
@@ -312,7 +304,7 @@ function makeColumnExpr(
   }
 
   const baseExpr = resolveScalarType(field, provider)
-  const fnName = baseExpr.match(/^(\w+)/)?.[1]
+  const fnName = baseExpr.match(/^(\w+)/u)?.[1]
   if (fnName) imports.core.add(fnName)
   const parenIdx = baseExpr.indexOf('(')
   if (parenIdx === -1) return baseExpr
@@ -325,10 +317,10 @@ const SQL_IMPORT = { pkg: 'drizzle-orm', kind: 'named', name: 'sql' } as const
 
 function toTsString(value: string) {
   const escaped = value
-    .replace(/\\/g, '\\\\')
-    .replace(/'/g, "\\'")
-    .replace(/\n/g, '\\n')
-    .replace(/\r/g, '\\r')
+    .replaceAll('\\', '\\\\')
+    .replaceAll("'", "\\'")
+    .replaceAll('\n', '\\n')
+    .replaceAll('\r', '\\r')
   return `'${escaped}'`
 }
 
@@ -358,41 +350,44 @@ function resolveDefaultValue(
       case 'autoincrement':
         return { chain: '', imports: [] }
       case 'now':
-        if (provider === 'sqlite')
+        if (provider === 'sqlite') {
           return { chain: '.default(sql`(unixepoch() * 1000)`)', imports: [SQL_IMPORT] }
-        if (provider === 'mysql')
+        }
+        if (provider === 'mysql') {
           return { chain: '.default(sql`CURRENT_TIMESTAMP(3)`)', imports: [SQL_IMPORT] }
+        }
         return { chain: '.defaultNow()', imports: [] }
       case 'uuid':
         return dflt.args[0] === 7
           ? {
               chain: '.$defaultFn(() => uuidv7())',
-              imports: [{ pkg: 'uuid', kind: 'named', name: 'v7 as uuidv7' }],
+              imports: [{ pkg: 'uuid', kind: 'named', name: 'v7 as uuidv7' } as const],
             }
           : { chain: '.$defaultFn(() => crypto.randomUUID())', imports: [] }
       case 'cuid':
         return dflt.args[0] === 2
           ? {
               chain: '.$defaultFn(() => createId())',
-              imports: [{ pkg: '@paralleldrive/cuid2', kind: 'named', name: 'createId' }],
+              imports: [{ pkg: '@paralleldrive/cuid2', kind: 'named', name: 'createId' } as const],
             }
           : {
               chain: '.$defaultFn(() => cuid())',
-              imports: [{ pkg: 'cuid', kind: 'default', name: 'cuid' }],
+              imports: [{ pkg: 'cuid', kind: 'default', name: 'cuid' } as const],
             }
       case 'nanoid':
         return {
           chain: `.$defaultFn(() => nanoid(${typeof dflt.args[0] === 'number' ? dflt.args[0] : ''}))`,
-          imports: [{ pkg: 'nanoid', kind: 'named', name: 'nanoid' }],
+          imports: [{ pkg: 'nanoid', kind: 'named', name: 'nanoid' } as const],
         }
       case 'ulid':
         return {
           chain: '.$defaultFn(() => ulid())',
-          imports: [{ pkg: 'ulidx', kind: 'named', name: 'ulid' }],
+          imports: [{ pkg: 'ulidx', kind: 'named', name: 'ulid' } as const],
         }
       case 'dbgenerated':
-        if (typeof dflt.args[0] === 'string')
+        if (typeof dflt.args[0] === 'string') {
           return { chain: `.default(sql\`${dflt.args[0]}\`)`, imports: [SQL_IMPORT] }
+        }
         return { chain: '', imports: [] }
       default:
         return { chain: '', imports: [] }
@@ -406,8 +401,9 @@ function resolveDefaultValue(
     // drizzle-kit serializes snapshots with JSON.stringify, which throws on
     // bigint, so emit it as a raw SQL DDL literal instead of `${dflt}n`.
     if (fieldType === 'BigInt') return { chain: `.default(sql\`${dflt}\`)`, imports: [SQL_IMPORT] }
-    if (fieldType === 'DateTime')
+    if (fieldType === 'DateTime') {
       return { chain: `.default(new Date(${toTsString(dflt)}))`, imports: [] }
+    }
     if (fieldType === 'Json') return { chain: `.default(${dflt})`, imports: [] }
     return { chain: `.default(${toTsString(dflt)})`, imports: [] }
   }
@@ -456,7 +452,7 @@ function makeFkActionOpts(onDelete: string | undefined, onUpdate: string | undef
 
 function makeFkReference(field: DMMF.Field, model: DMMF.Model, models: readonly DMMF.Model[]) {
   const relField = model.fields.find(
-    (f) => f.kind === 'object' && f.relationFromFields && f.relationFromFields.includes(field.name),
+    (f) => f.kind === 'object' && f.relationFromFields?.includes(field.name),
   )
   if (!(relField?.relationFromFields && relField.relationToFields)) return ''
 
@@ -654,7 +650,7 @@ function pkColumnExpr(
 ) {
   const pkField = models.find((m) => m.name === modelName)?.fields.find((f) => f.isId)
   const baseExpr = pkField ? resolveScalarType(pkField, provider) : 'text()'
-  const fnName = baseExpr.match(/^(\w+)/)?.[1]
+  const fnName = baseExpr.match(/^(\w+)/u)?.[1]
   if (fnName) imports.core.add(fnName)
   return withColumnName(baseExpr, colName)
 }
@@ -759,12 +755,8 @@ export function makeRelations(models: readonly DMMF.Model[], imports: DrizzleImp
       .map((field) => makeRelationField(field, model, models, relFields))
       .join(', ')
     const modelVar = resolveVarName(model)
-    const needsOne = relFields.some(
-      (f) => (f.relationFromFields && f.relationFromFields.length > 0) || !f.isList,
-    )
-    const needsMany = relFields.some(
-      (f) => f.isList && !(f.relationFromFields && f.relationFromFields.length > 0),
-    )
+    const needsOne = relFields.some((f) => (f.relationFromFields?.length ?? 0) > 0 || !f.isList)
+    const needsMany = relFields.some((f) => f.isList && (f.relationFromFields?.length ?? 0) === 0)
     const destructured = [needsOne ? 'one' : '', needsMany ? 'many' : ''].filter(Boolean).join(', ')
     return `export const ${modelVar}Relations = relations(${modelVar}, ({ ${destructured} }) => ({ ${fieldLines} }))`
   })

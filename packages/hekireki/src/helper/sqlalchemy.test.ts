@@ -716,7 +716,7 @@ class Article(Base):
         makeField({
           name: 'label',
           type: 'String',
-          nativeType: ['VarChar', [255]],
+          nativeType: ['VarChar', ['255']],
         }),
       ]),
     ]
@@ -746,7 +746,7 @@ class Tag(Base):
         makeField({
           name: 'code',
           type: 'String',
-          nativeType: ['Char', [6]],
+          nativeType: ['Char', ['6']],
         }),
       ]),
     ]
@@ -806,7 +806,7 @@ class Entity(Base):
         makeField({
           name: 'price',
           type: 'Decimal',
-          nativeType: ['Decimal', [10, 2]],
+          nativeType: ['Decimal', ['10', '2']],
         }),
       ]),
     ]

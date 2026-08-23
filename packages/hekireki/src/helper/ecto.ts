@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { makePascalCase, makeSnakeCase } from '../utils/index.js'
+import { makePascalCase, makeSnakeCase, stripAnnotations } from '../utils/index.js'
 
 export function prismaTypeToEctoType(
   type: string,
@@ -48,7 +48,7 @@ export function ectoTypeToTypespec(type: string) {
 
 // Ecto type references are atoms (:binary_id) or modules (Ecto.ULID).
 function formatEctoType(type: string) {
-  return /^[A-Z]/.test(type) ? type : `:${type}`
+  return /^[A-Z]/u.test(type) ? type : `:${type}`
 }
 
 function getPrimaryKeyConfig(field: DMMF.Field) {
@@ -100,12 +100,12 @@ function getPrimaryKeyConfig(field: DMMF.Field) {
 }
 
 function makeTimestampsLine(fields: DMMF.Field[]) {
-  const insertedAliases = ['inserted_at', 'created_at', 'createdAt']
-  const updatedAliases = ['updated_at', 'modified_at', 'updatedAt', 'modifiedAt']
+  const insertedAliases = new Set(['inserted_at', 'created_at', 'createdAt'])
+  const updatedAliases = new Set(['updated_at', 'modified_at', 'updatedAt', 'modifiedAt'])
 
-  const inserted = fields.find((f) => insertedAliases.includes(f.name))
+  const inserted = fields.find((f) => insertedAliases.has(f.name))
   const updated =
-    fields.find((f) => f.isUpdatedAt) ?? fields.find((f) => updatedAliases.includes(f.name))
+    fields.find((f) => f.isUpdatedAt) ?? fields.find((f) => updatedAliases.has(f.name))
 
   const exclude = new Set<string>()
   if (inserted) exclude.add(inserted.name)
@@ -243,11 +243,11 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
 
 function toElixirString(value: string) {
   const escaped = value
-    .replace(/\\/g, '\\\\')
-    .replace(/"/g, '\\"')
-    .replace(/#\{/g, '\\#{')
-    .replace(/\n/g, '\\n')
-    .replace(/\r/g, '\\r')
+    .replaceAll('\\', '\\\\')
+    .replaceAll('"', '\\"')
+    .replaceAll('#{', '\\#{')
+    .replaceAll('\n', '\\n')
+    .replaceAll('\r', '\\r')
   return `"${escaped}"`
 }
 
@@ -277,7 +277,7 @@ export function ectoSchemas(
   return models
     .map((model) => {
       const idField = model.fields.find((f) => f.isId)
-      const compositePkFieldNames = new Set(model.primaryKey?.fields ?? [])
+      const compositePkFieldNames = new Set(model.primaryKey?.fields)
       const isCompositePk = !idField && compositePkFieldNames.size > 0
 
       if (!(idField || isCompositePk)) return ''
@@ -306,7 +306,7 @@ export function ectoSchemas(
       const schemaFieldsRaw = fields.filter(
         (f) =>
           !(
-            f.relationName ||
+            f.relationName !== undefined ||
             (f.isId && pk.omitIdFieldInSchema) ||
             timestampsExclude.has(f.name) ||
             belongsToFkFields.has(f.name)
@@ -471,11 +471,12 @@ export function ectoSchemas(
         return `    many_to_many(:${snakeAssocName}, ${appName}.${makePascalCase(a.targetModel)}, join_through: "${a.joinThrough}", ${joinKeys})`
       })
 
+      const moduledoc = stripAnnotations(model.documentation)
       const lines = [
         `defmodule ${appName}.${makePascalCase(model.name)} do`,
         '  use Ecto.Schema',
-        ...(model.documentation
-          ? [`  @moduledoc """`, ...model.documentation.split('\n').map((l) => `  ${l}`), '  """']
+        ...(moduledoc
+          ? [`  @moduledoc """`, ...moduledoc.split('\n').map((l) => `  ${l}`), '  """']
           : ['  @moduledoc false']),
         '',
         `  ${pk.line}`,

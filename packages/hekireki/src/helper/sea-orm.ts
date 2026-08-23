@@ -172,10 +172,10 @@ function formatRustDefault(def: DMMF.Field['default']) {
   if (typeof def === 'number') return String(def)
   if (typeof def === 'string') {
     const escaped = def
-      .replace(/\\/g, '\\\\')
-      .replace(/"/g, '\\"')
-      .replace(/\n/g, '\\n')
-      .replace(/\r/g, '\\r')
+      .replaceAll('\\', '\\\\')
+      .replaceAll('"', '\\"')
+      .replaceAll('\n', '\\n')
+      .replaceAll('\r', '\\r')
     return `"${escaped}"`
   }
   return null
@@ -217,26 +217,25 @@ export function buildSeaOrmAttributes(
     columnParts.push(`column_type = "${colType}"`)
   }
 
-  if (!isPk || isCompositePk) {
-    if (
-      !(
-        (field.type === 'DateTime' &&
-          isFunctionDefault(field.default) &&
-          field.default.name === 'now') ||
-        field.isUpdatedAt
-      )
-    ) {
-      // An enum default arrives as the Prisma-level value name; the column
-      // stores the @map-ped database value.
-      const enumMappedDefault =
-        field.kind === 'enum' && typeof field.default === 'string'
-          ? (enums?.find((e) => e.name === field.type)?.values.find((v) => v.name === field.default)
-              ?.dbName ?? null)
-          : null
-      const defaultVal = formatRustDefault(enumMappedDefault ?? field.default)
-      if (defaultVal !== null) {
-        columnParts.push(`default_value = ${defaultVal}`)
-      }
+  if (
+    (!isPk || isCompositePk) &&
+    !(
+      (field.type === 'DateTime' &&
+        isFunctionDefault(field.default) &&
+        field.default.name === 'now') ||
+      field.isUpdatedAt
+    )
+  ) {
+    // An enum default arrives as the Prisma-level value name; the column
+    // stores the @map-ped database value.
+    const enumMappedDefault =
+      field.kind === 'enum' && typeof field.default === 'string'
+        ? (enums?.find((e) => e.name === field.type)?.values.find((v) => v.name === field.default)
+            ?.dbName ?? null)
+        : null
+    const defaultVal = formatRustDefault(enumMappedDefault ?? field.default)
+    if (defaultVal !== null) {
+      columnParts.push(`default_value = ${defaultVal}`)
     }
   }
 
@@ -396,24 +395,7 @@ export function generateEnum(e: DMMF.DatamodelEnum, serde: { readonly renameAll?
 
 function generateRelationEnum(
   _model: DMMF.Model,
-  associations: {
-    belongsTo: { name: string; targetModel: string; foreignKey: string; references: string }[]
-    hasMany: {
-      name: string
-      targetModel: string
-      foreignKey: string
-      references: string
-      isList: boolean
-    }[]
-    hasOne: {
-      name: string
-      targetModel: string
-      foreignKey: string
-      references: string
-      isList: boolean
-    }[]
-    manyToMany: { name: string; targetModel: string; relationName: string }[]
-  },
+  associations: ReturnType<typeof getAssociations>,
 ) {
   const hasAny =
     associations.belongsTo.length > 0 ||
@@ -494,27 +476,7 @@ function generateRelationEnum(
   ].join('\n')
 }
 
-function generateRelatedImpls(
-  model: DMMF.Model,
-  associations: {
-    belongsTo: { name: string; targetModel: string; foreignKey: string; references: string }[]
-    hasMany: {
-      name: string
-      targetModel: string
-      foreignKey: string
-      references: string
-      isList: boolean
-    }[]
-    hasOne: {
-      name: string
-      targetModel: string
-      foreignKey: string
-      references: string
-      isList: boolean
-    }[]
-    manyToMany: { name: string; targetModel: string; relationName: string }[]
-  },
-) {
+function generateRelatedImpls(model: DMMF.Model, associations: ReturnType<typeof getAssociations>) {
   const impls: string[] = []
 
   // Rust allows at most one `impl Related<Target>` per (Self, Target). When several
@@ -599,7 +561,7 @@ export function generateEntityFile(
   serde: { readonly renameAll?: string } = {},
 ) {
   const idField = model.fields.find((f) => f.isId)
-  const compositePkFieldNames = new Set(model.primaryKey?.fields ?? [])
+  const compositePkFieldNames = new Set(model.primaryKey?.fields)
   const isCompositePk = !idField && compositePkFieldNames.size > 0
 
   if (!(idField || isCompositePk)) return ''

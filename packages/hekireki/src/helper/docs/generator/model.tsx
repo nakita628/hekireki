@@ -20,7 +20,7 @@ import {
   sectionClass,
 } from '../styles.js'
 import { capitalize, isScalarType, lowerCase } from './helpers.js'
-import type { DMMFDocument, DMMFMapping } from './transformDMMF.js'
+import type { DMMFDocument, DMMFMapping } from './transform-dmmf.js'
 
 const ModelAction: {
   create: string
@@ -112,11 +112,11 @@ const fieldDirectiveMap = new Map<string, string>([
 
 const escapeHtml = (str: string) =>
   str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;')
 
 const DirectiveRow: FC<{ directive: MGModelDirective }> = ({ directive }) => (
   <tr>
@@ -319,13 +319,13 @@ const getModelDirective = (model: DMMF.Model) => {
     directiveValue.push({ name: '@@id', values: [...model.primaryKey.fields] })
   }
 
-  model.uniqueFields.forEach((uniqueField) => {
+  for (const uniqueField of model.uniqueFields) {
     directiveValue.push({ name: '@@unique', values: [...uniqueField] })
-  })
+  }
 
-  model.uniqueIndexes.forEach((uniqueIndex) => {
+  for (const uniqueIndex of model.uniqueIndexes) {
     directiveValue.push({ name: '@@index', values: [...uniqueIndex.fields] })
-  })
+  }
 
   return directiveValue
 }
@@ -336,10 +336,10 @@ const getFieldType = (field: DMMF.Field) => {
 }
 
 const getFieldDirectives = (field: DMMF.Field) => {
-  const filteredEntries = Object.entries(field).filter(([_, v]) => Boolean(v))
+  const filteredEntries = Object.entries(field).filter(([, v]) => Boolean(v))
   const directives: string[] = []
 
-  filteredEntries.forEach(([k]) => {
+  for (const [k] of filteredEntries) {
     const mappedDirectiveValue = fieldDirectiveMap.get(k)
     if (mappedDirectiveValue) {
       if (k === 'hasDefaultValue' && field.default !== undefined) {
@@ -360,7 +360,7 @@ const getFieldDirectives = (field: DMMF.Field) => {
         directives.push(mappedDirectiveValue)
       }
     }
-  })
+  }
 
   return directives
 }

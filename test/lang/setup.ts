@@ -4,33 +4,39 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 // Regenerates test/harness/* from test/schema.prisma with the built generators
-// before the language checks run. One prisma run emits all seven targets, so
+// before the language checks run. One prisma run emits every target, so
 // running a single language's file still starts from fresh output.
 //
 // The generated files are gitignored: the byte-for-byte golden masters live in
 // packages/hekireki/src/**/*.test.ts, and these harnesses only answer the
 // question a string comparison cannot — does the output compile and load
-// against the real GORM / sea-orm / SQLAlchemy / Ecto / Drizzle / Active
-// Record / Eloquent API.
+// against the real GORM / sea-orm / SQLAlchemy / Pydantic / Ecto / Drizzle /
+// Kysely / Active Record / Eloquent API.
 
 const LANGS = [
   'gorm',
   'sea-orm',
   'sqlalchemy',
+  'pydantic',
   'ecto',
   'drizzle',
+  'kysely',
   'activerecord',
   'eloquent',
+  'atlas',
 ] as const
 
 const STALE_OUTPUT = [
   'gorm/model/models.go',
   'sea-orm/src/entities',
   'sqlalchemy/models.py',
+  'pydantic/models.py',
   'ecto/lib',
   'drizzle/schema.ts',
+  'kysely/types.ts',
   'activerecord/models',
   'eloquent/models',
+  'atlas/schema.hcl',
 ]
 
 export default function setup() {
@@ -54,13 +60,16 @@ export default function setup() {
     rmSync(join(root, 'test/harness', output), { recursive: true, force: true })
   }
 
-  // The drizzle harness imports drizzle-orm and the id-generator packages, all
-  // devDependencies of packages/hekireki. It sits outside that package, so
-  // upward node_modules resolution never reaches them — link the real tree in
-  // rather than remapping every specifier in its tsconfig.
-  const harnessModules = join(root, 'test/harness/drizzle/node_modules')
-  if (!existsSync(harnessModules)) {
-    symlinkSync(join(root, 'packages/hekireki/node_modules'), harnessModules)
+  // The drizzle and kysely harnesses import drizzle-orm / kysely and the
+  // id-generator packages, all devDependencies of packages/hekireki. They sit
+  // outside that package, so upward node_modules resolution never reaches
+  // them — link the real tree in rather than remapping every specifier in
+  // their tsconfigs.
+  for (const tsHarness of ['drizzle', 'kysely']) {
+    const harnessModules = join(root, `test/harness/${tsHarness}/node_modules`)
+    if (!existsSync(harnessModules)) {
+      symlinkSync(join(root, 'packages/hekireki/node_modules'), harnessModules)
+    }
   }
 
   execFileSync(

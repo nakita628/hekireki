@@ -8,15 +8,15 @@ describe('collectRelationProps', () => {
       {
         name: 'User',
         fields: [
-          { name: 'id', type: 'String', kind: 'scalar', isRequired: true, isList: false },
-          { name: 'posts', kind: 'object', type: 'Post', isList: true, isRequired: false },
+          { name: 'id', type: 'String', kind: 'scalar', isList: false },
+          { name: 'posts', kind: 'object', type: 'Post', isList: true },
         ],
       },
       {
         name: 'Post',
         fields: [
-          { name: 'id', type: 'String', kind: 'scalar', isRequired: true, isList: false },
-          { name: 'user', kind: 'object', type: 'User', isList: false, isRequired: true },
+          { name: 'id', type: 'String', kind: 'scalar', isList: false },
+          { name: 'user', kind: 'object', type: 'User', isList: false },
         ],
       },
     ])
@@ -31,9 +31,9 @@ describe('collectRelationProps', () => {
       {
         name: 'Setting',
         fields: [
-          { name: 'id', type: 'Int', kind: 'scalar', isRequired: true, isList: false },
-          { name: 'key', type: 'String', kind: 'scalar', isRequired: true, isList: false },
-          { name: 'value', type: 'String', kind: 'scalar', isRequired: true, isList: false },
+          { name: 'id', type: 'Int', kind: 'scalar', isList: false },
+          { name: 'key', type: 'String', kind: 'scalar', isList: false },
+          { name: 'value', type: 'String', kind: 'scalar', isList: false },
         ],
       },
     ])
@@ -45,14 +45,13 @@ describe('collectRelationProps', () => {
       {
         name: 'Employee',
         fields: [
-          { name: 'id', type: 'Int', kind: 'scalar', isRequired: true, isList: false },
-          { name: 'manager', kind: 'object', type: 'Employee', isList: false, isRequired: false },
+          { name: 'id', type: 'Int', kind: 'scalar', isList: false },
+          { name: 'manager', kind: 'object', type: 'Employee', isList: false },
           {
             name: 'subordinates',
             kind: 'object',
             type: 'Employee',
             isList: true,
-            isRequired: false,
           },
         ],
       },
@@ -66,19 +65,8 @@ describe('collectRelationProps', () => {
 
 describe('makeRelationsOnly', () => {
   it('should call makeRelations for each model and join results', () => {
-    const mockMakeRelations = vi.fn(
-      (
-        model: { readonly name: string },
-        relProps: readonly {
-          readonly key: string
-          readonly targetModel: string
-          readonly isMany: boolean
-        }[],
-        _options: { readonly includeType: boolean },
-      ) => {
-        if (relProps.length === 0) return null
-        return `// relations for ${model.name}`
-      },
+    const mockMakeRelations = vi.fn<Parameters<typeof makeRelationsOnly>[2]>((model, relProps) =>
+      relProps.length === 0 ? null : `// relations for ${model.name}`,
     )
 
     const dmmf = {
@@ -109,7 +97,7 @@ describe('makeRelationsOnly', () => {
   })
 
   it('should filter out null results from makeRelations', () => {
-    const mockMakeRelations = vi.fn(() => null)
+    const mockMakeRelations = vi.fn<Parameters<typeof makeRelationsOnly>[2]>(() => null)
 
     const dmmf = {
       datamodel: {
@@ -128,20 +116,10 @@ describe('makeRelationsOnly', () => {
 
   it('should pass correct relProps to makeRelations', () => {
     const capturedRelProps: unknown[] = []
-    const mockMakeRelations = vi.fn(
-      (
-        _model: { readonly name: string },
-        relProps: readonly {
-          readonly key: string
-          readonly targetModel: string
-          readonly isMany: boolean
-        }[],
-        _options: { readonly includeType: boolean },
-      ) => {
-        capturedRelProps.push(relProps)
-        return null
-      },
-    )
+    const mockMakeRelations = vi.fn<Parameters<typeof makeRelationsOnly>[2]>((_model, relProps) => {
+      capturedRelProps.push(relProps)
+      return null
+    })
 
     const dmmf = {
       datamodel: {

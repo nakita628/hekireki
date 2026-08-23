@@ -7,6 +7,24 @@ function fieldColumn(model: DMMF.Model, fieldName: string) {
   return field?.dbName ?? fieldName
 }
 
+// A composite FK uses Active Record 7.2's array form for
+// foreign_key/primary_key; the single-column form stays a plain string.
+function foreignKeyOpt(columns: readonly string[]) {
+  return columns.length > 1
+    ? `foreign_key: [${columns.map((c) => `:${c}`).join(', ')}]`
+    : `foreign_key: "${columns[0]}"`
+}
+
+// On the has side, primary_key names this model's own join column(s): without
+// it a FK referencing a non-id unique column joins against id.
+function hasPrimaryKeyOpt(columns: readonly string[]) {
+  return columns.length > 1
+    ? `, primary_key: [${columns.map((c) => `:${c}`).join(', ')}]`
+    : columns[0] === 'id'
+      ? ''
+      : `, primary_key: "${columns[0]}"`
+}
+
 function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
   const belongsTo: {
     name: string
@@ -195,13 +213,6 @@ export function activeRecordModels(
           { lines: [], seenValues: new Set() },
         ).lines
 
-      // A composite FK uses Active Record 7.2's array form for
-      // foreign_key/primary_key; the single-column form stays a plain string.
-      const foreignKeyOpt = (columns: readonly string[]) =>
-        columns.length > 1
-          ? `foreign_key: [${columns.map((c) => `:${c}`).join(', ')}]`
-          : `foreign_key: "${columns[0]}"`
-
       const belongsToLines = associations.belongsTo.map((a) => {
         const primaryKeyOpt =
           a.primaryKeyColumns.length > 1
@@ -212,15 +223,6 @@ export function activeRecordModels(
         const optionalOpt = a.optional ? ', optional: true' : ''
         return `  belongs_to :${makeSnakeCase(a.name)}, class_name: "${makePascalCase(a.targetModel)}", ${foreignKeyOpt(a.foreignKeyColumns)}${primaryKeyOpt}${optionalOpt}`
       })
-
-      // On the has side, primary_key names this model's own join column(s):
-      // without it a FK referencing a non-id unique column joins against id.
-      const hasPrimaryKeyOpt = (columns: readonly string[]) =>
-        columns.length > 1
-          ? `, primary_key: [${columns.map((c) => `:${c}`).join(', ')}]`
-          : columns[0] === 'id'
-            ? ''
-            : `, primary_key: "${columns[0]}"`
 
       const hasOneLines = associations.hasOne.map(
         (a) =>

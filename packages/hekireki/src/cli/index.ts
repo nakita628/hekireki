@@ -47,7 +47,7 @@ export function parsePort(args: readonly string[]) {
   if (!portStr || portStr.startsWith('-')) {
     return { ok: false, error: '❌ Error: --port requires a number' } as const
   }
-  const port = parseInt(portStr, 10)
+  const port = Number.parseInt(portStr, 10)
   if (Number.isNaN(port)) {
     return { ok: false, error: `❌ Error: Invalid port number: ${portStr}` } as const
   }

@@ -23,14 +23,11 @@ describe('utils', () => {
     it('returns first element when given an array', () => {
       expect(getString(['first', 'second'])).toBe('first')
     })
-    it('returns fallback when given undefined', () => {
-      expect(getString(undefined, 'default')).toBe('default')
-    })
-    it('returns fallback when array is empty', () => {
-      expect(getString([], 'fallback')).toBe('fallback')
-    })
-    it('returns undefined when no value and no fallback', () => {
+    it('returns undefined when given undefined', () => {
       expect(getString(undefined)).toBeUndefined()
+    })
+    it('returns undefined when the array is empty', () => {
+      expect(getString([])).toBeUndefined()
     })
   })
 

@@ -325,10 +325,10 @@ export function generateAssociationTable(info: {
 
 function toPythonString(value: string) {
   const escaped = value
-    .replace(/\\/g, '\\\\')
-    .replace(/"/g, '\\"')
-    .replace(/\n/g, '\\n')
-    .replace(/\r/g, '\\r')
+    .replaceAll('\\', '\\\\')
+    .replaceAll('"', '\\"')
+    .replaceAll('\n', '\\n')
+    .replaceAll('\r', '\\r')
   return `"${escaped}"`
 }
 
@@ -370,8 +370,9 @@ function formatDefault(field: DMMF.Field, enumDef?: DMMF.DatamodelEnum) {
     return `lambda: ${jsonToPythonLiteral(def)}`
   }
   if (typeof def === 'boolean') return def ? 'True' : 'False'
-  if (typeof def === 'number')
+  if (typeof def === 'number') {
     return field.type === 'Decimal' ? `DecimalType("${def}")` : String(def)
+  }
   if (typeof def === 'string') {
     // DMMF carries BigInt defaults as digit strings, DateTime literals as ISO
     // strings, and Json defaults as JSON text; each needs its Python shape,
@@ -470,12 +471,7 @@ function generateColumn(
   field: DMMF.Field,
   isPk: boolean,
   isFk: boolean,
-  associations: {
-    belongsTo: { name: string; targetModel: string; foreignKey: string; references: string }[]
-    hasMany: { name: string; targetModel: string; foreignKey: string; isList: boolean }[]
-    hasOne: { name: string; targetModel: string; foreignKey: string; isList: boolean }[]
-    manyToMany: { name: string; targetModel: string; relationName: string }[]
-  },
+  associations: ReturnType<typeof getAssociations>,
   allModels: readonly DMMF.Model[],
   enumMap: ReadonlyMap<string, DMMF.DatamodelEnum>,
 ) {
@@ -512,7 +508,7 @@ function generateColumn(
     // A composite FK is expressed as a table-level ForeignKeyConstraint; a
     // per-column ForeignKey would pair this column with references[0] alone
     // and emit a half-join against a non-unique column.
-    if (assoc && assoc.foreignKeys.length === 1) {
+    if (assoc?.foreignKeys.length === 1) {
       const targetModelObj = allModels.find((m) => m.name === assoc.targetModel)
       const targetTable = targetModelObj?.dbName ?? makeSnakeCase(assoc.targetModel)
       const targetCol = makeSnakeCase(assoc.references)
@@ -653,18 +649,7 @@ function generateTableArgs(
 }
 
 function generateBelongsToRelationships(
-  associations: {
-    belongsTo: {
-      name: string
-      targetModel: string
-      foreignKey: string
-      references: string
-      optional: boolean
-    }[]
-    hasMany: { name: string; targetModel: string; foreignKey: string; isList: boolean }[]
-    hasOne: { name: string; targetModel: string; foreignKey: string; isList: boolean }[]
-    manyToMany: { name: string; targetModel: string; relationName: string }[]
-  },
+  associations: ReturnType<typeof getAssociations>,
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
 ) {
@@ -696,12 +681,7 @@ function generateBelongsToRelationships(
 }
 
 function generateHasManyRelationships(
-  associations: {
-    belongsTo: { name: string; targetModel: string; foreignKey: string; references: string }[]
-    hasMany: { name: string; targetModel: string; foreignKey: string; isList: boolean }[]
-    hasOne: { name: string; targetModel: string; foreignKey: string; isList: boolean }[]
-    manyToMany: { name: string; targetModel: string; relationName: string }[]
-  },
+  associations: ReturnType<typeof getAssociations>,
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
 ) {
@@ -727,18 +707,7 @@ function generateHasManyRelationships(
 }
 
 function generateHasOneRelationships(
-  associations: {
-    belongsTo: { name: string; targetModel: string; foreignKey: string; references: string }[]
-    hasMany: { name: string; targetModel: string; foreignKey: string; isList: boolean }[]
-    hasOne: {
-      name: string
-      targetModel: string
-      foreignKey: string
-      isList: boolean
-      optional: boolean
-    }[]
-    manyToMany: { name: string; targetModel: string; relationName: string }[]
-  },
+  associations: ReturnType<typeof getAssociations>,
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
 ) {
@@ -767,12 +736,7 @@ function generateHasOneRelationships(
 }
 
 function generateManyToManyRelationships(
-  associations: {
-    belongsTo: { name: string; targetModel: string; foreignKey: string; references: string }[]
-    hasMany: { name: string; targetModel: string; foreignKey: string; isList: boolean }[]
-    hasOne: { name: string; targetModel: string; foreignKey: string; isList: boolean }[]
-    manyToMany: { name: string; targetModel: string; relationName: string }[]
-  },
+  associations: ReturnType<typeof getAssociations>,
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
   m2mTables: readonly {
@@ -821,7 +785,7 @@ export function generateModelBody(
   }[],
 ) {
   const idField = model.fields.find((f) => f.isId)
-  const compositePkFieldNames = new Set(model.primaryKey?.fields ?? [])
+  const compositePkFieldNames = new Set(model.primaryKey?.fields)
   const isCompositePk = !idField && compositePkFieldNames.size > 0
 
   if (!(idField || isCompositePk)) return null
@@ -932,22 +896,18 @@ export function collectGlobalImports(
       }
       if (needsExplicitSaType(field)) {
         const resolved = resolveNativeType(field)
-        saImports.add(resolved.replace(/\(.*\)$/, ''))
+        saImports.add(resolved.replace(/\(.*\)$/u, ''))
       }
     }
 
     const associations = getAssociations(model, models)
     if (associations.belongsTo.length > 0) saImports.add('ForeignKey')
 
-    const idField = model.fields.find((f) => f.isId)
-    if (!idField && (model.primaryKey?.fields ?? []).length > 0) {
-      if (associations.belongsTo.length > 0) saImports.add('ForeignKey')
-    }
-
     if (model.uniqueFields.length > 0) saImports.add('UniqueConstraint')
 
-    if (model.fields.some((f) => f.kind === 'object' && (f.relationFromFields?.length ?? 0) > 1))
+    if (model.fields.some((f) => f.kind === 'object' && (f.relationFromFields?.length ?? 0) > 1)) {
       saImports.add('ForeignKeyConstraint')
+    }
 
     if (
       indexes.some(
@@ -965,8 +925,8 @@ export function collectGlobalImports(
     for (const info of m2mTables) {
       const leftType = info.leftPkField ? resolveNativeType(info.leftPkField) : 'String'
       const rightType = info.rightPkField ? resolveNativeType(info.rightPkField) : 'String'
-      saImports.add(leftType.replace(/\(.*\)$/, ''))
-      saImports.add(rightType.replace(/\(.*\)$/, ''))
+      saImports.add(leftType.replace(/\(.*\)$/u, ''))
+      saImports.add(rightType.replace(/\(.*\)$/u, ''))
     }
   }
 
@@ -983,8 +943,9 @@ export function collectGlobalImports(
           f.default.name === 'dbgenerated',
       ),
     )
-  )
+  ) {
     saImports.add('text')
+  }
 
   const lines: string[] = []
 

@@ -3,19 +3,26 @@
 harness/gorm/model/models.go
 harness/sea-orm/src/entities/
 harness/sqlalchemy/models.py
+harness/pydantic/models.py
 harness/ecto/lib/
 harness/drizzle/schema.ts
+harness/kysely/types.ts
 harness/activerecord/models/
 harness/eloquent/models/
+harness/atlas/schema.hcl
 
 # Toolchain build artifacts.
 harness/drizzle/node_modules
+harness/kysely/node_modules
 harness/gorm/.cache/
 harness/sea-orm/target/
 harness/sqlalchemy/.venv/
 harness/sqlalchemy/.deps/
 harness/sqlalchemy/.mypy_cache/
 harness/sqlalchemy/__pycache__/
+harness/pydantic/.venv/
+harness/pydantic/.mypy_cache/
+harness/pydantic/__pycache__/
 harness/ecto/_build/
 harness/ecto/deps/
 harness/activerecord/.bundle/

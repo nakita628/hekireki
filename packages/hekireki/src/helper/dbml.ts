@@ -1,10 +1,11 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { stripAnnotations } from '../utils/index.js'
-import { type Cardinality, annotatedERRelations, erKey, inferredERRelations } from './relation.js'
+import { annotatedERRelations, erKey, inferredERRelations } from './relation.js'
+import type { Cardinality } from './relation.js'
 
 export function escapeNote(str: string) {
-  return str.replace(/'/g, "\\'")
+  return str.replaceAll("'", "\\'")
 }
 
 export function formatConstraints(constraints: readonly string[]) {
@@ -30,7 +31,7 @@ export function combineKeys(keys: readonly string[]) {
 }
 
 function escapeTriple(str: string) {
-  return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+  return str.replaceAll('\\', '\\\\').replaceAll("'", "\\'")
 }
 
 function noteLiteral(value: string) {
@@ -173,12 +174,12 @@ export function makeTables(models: readonly DMMF.Model[], mapToDbSchema = false)
 }
 
 export function makeEnums(enums: readonly DMMF.DatamodelEnum[]) {
-  return enums.map((e) => {
-    return makeEnum({
+  return enums.map((e) =>
+    makeEnum({
       name: e.name,
       values: e.values.map((v) => v.name),
-    })
-  })
+    }),
+  )
 }
 
 export function makeRelations(models: readonly DMMF.Model[], mapToDbSchema = false) {

@@ -11,7 +11,7 @@ import {
   tocHeadingClass,
   listItemClass,
 } from '../styles.js'
-import type { DMMFDocument, DMMFMapping } from './transformDMMF.js'
+import type { DMMFDocument, DMMFMapping } from './transform-dmmf.js'
 
 type TOCStructure = {
   readonly models: readonly TOCModel[]

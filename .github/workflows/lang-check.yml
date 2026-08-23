@@ -42,7 +42,7 @@ jobs:
       matrix:
         # drizzle needs no extra toolchain step: setup-vp's node runs
         # tsc + drizzle-kit from the workspace's devDependencies.
-        lang: [gorm, sea-orm, sqlalchemy, ecto, drizzle, activerecord, eloquent]
+        lang: [gorm, sea-orm, sqlalchemy, ecto, drizzle, activerecord, eloquent, atlas]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: voidzero-dev/setup-vp@313600b80b104eadebb9111787d37a2e83e014ca # v1.17.0
@@ -87,14 +87,23 @@ jobs:
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
           php-version: '8.3'
+      # The atlas leg also uses the runner's Docker daemon: the test validates
+      # the generated HCL against a disposable postgres dev database via
+      # Atlas's docker:// dev-url. The CLI version is pinned: the action's
+      # installer ships no checksum verification, so floating `latest` would
+      # reinstall an unvetted binary on every run.
+      - if: matrix.lang == 'atlas'
+        uses: ariga/setup-atlas@v0.3
+        with:
+          version: v1.3.0
 
-      # The `lang` project regenerates test/harness/* from test/schema.prisma
-      # in its globalSetup, then runs this language's checks. The same file runs
+      # The `test` package regenerates harness/* from schema.prisma in its
+      # globalSetup, then runs this language's checks. The same file runs
       # locally via `pnpm lang`. CI is set on GitHub Actions, which turns each
       # file's toolchain guard into a hard assertion — a leg whose setup step
       # silently failed cannot pass by skipping.
       - name: Lang check (generate + syntax + type check)
-        run: vp test --project lang test/lang/${{ matrix.lang }}.test.ts
+        run: vp run --filter ./test test lang/${{ matrix.lang }}.test.ts
 
   # Prove the published tarball still ships dist/ only. The language harnesses
   # now live in test/ rather than inside the package, so nothing under

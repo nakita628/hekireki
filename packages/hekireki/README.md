@@ -15,15 +15,21 @@
 - 📦 Automatically generates [TypeBox](https://github.com/sinclairzx81/typebox) schemas from your Prisma schema
 - 📋 Automatically generates [AJV](https://ajv.js.org/)-compatible JSON Schema objects from your Prisma schema
 
+### Python Validation
+
+- 🐍 Automatically generates [Pydantic](https://docs.pydantic.dev/) v2 models from your Prisma schema — with `@p.` field annotations, `Literal` enums, `@p.ConfigDict(...)` model config passthrough (`extra='forbid'` / `'ignore'` / `'allow'` and any other `ConfigDict` arguments), and `relation = true` for `<Model>Relations` subclasses
+
 ### ORM / Schema Generation (Multi-Language)
 
 - 🗄️ Automatically generates [Drizzle ORM](https://orm.drizzle.team/) table schemas and relations from your Prisma schema
+- 🐟 Automatically generates [Kysely](https://kysely.dev/) type definitions (`DB` interface) from your Prisma schema — with database-side-only `Generated` columns, enum value unions, `@map`/`@@map` support, and implicit m2m join tables
 - 🐍 Automatically generates [SQLAlchemy](https://www.sqlalchemy.org/) models (Python) — with `Mapped[T]` type hints, relationships, enums, composite keys, and index support
 - 🐹 Automatically generates [GORM](https://gorm.io/) models (Go) — with struct tags, JSON tags, relationships, enums, composite keys, and index support
 - 🦀 Automatically generates [Sea-ORM](https://www.sea-ql.org/SeaORM/) entities (Rust) — with `DeriveEntityModel`, relations, enums, serde support, and `rename_all`
 - 🧪 Generates [Ecto](https://hexdocs.pm/ecto/Ecto.Schema.html) schemas (Elixir) — with associations (`belongs_to`, `has_many`, `has_one`), composite primary keys, `@type t` typespecs, array fields, `@@map`/`@map` support, and `@moduledoc`
 - 💎 Generates [Active Record](https://guides.rubyonrails.org/active_record_basics.html) models (Ruby on Rails) — with associations (`belongs_to`, `has_one`, `has_many`, `has_and_belongs_to_many`), enums, composite primary keys, and `@@map`/`@map` support
 - 🐘 Generates [Eloquent](https://laravel.com/docs/eloquent) models (Laravel / PHP) — with relations (`belongsTo`, `hasOne`, `hasMany`, `belongsToMany`), `$fillable`, `$casts`, string-backed PHP enums, timestamp constants, and `@@map`/`@map` support
+- 🌍 Generates [Atlas](https://atlasgo.io/) HCL database schemas — with native `@db.*` type mapping (PostgreSQL / MySQL / SQLite), enum blocks, defaults (including `dbgenerated(...)` and scalar-list defaults), foreign keys with Prisma's referential-action defaults, unique / descending / fulltext indexes, implicit m2m join tables, and `@@schema` support — output is `atlas schema fmt` canonical
 
 ### Diagrams & Documentation
 
@@ -47,6 +53,7 @@ datasource db {
 
 generator Hekireki-Zod {
     provider = "hekireki-zod"
+    output   = "./zod"
     type     = true
     comment  = true
     relation = true
@@ -54,6 +61,7 @@ generator Hekireki-Zod {
 
 generator Hekireki-Valibot {
     provider = "hekireki-valibot"
+    output   = "./valibot"
     type     = true
     comment  = true
     relation = true
@@ -61,6 +69,7 @@ generator Hekireki-Valibot {
 
 generator Hekireki-ArkType {
     provider = "hekireki-arktype"
+    output   = "./arktype"
     type     = true
     comment  = true
     relation = true
@@ -68,6 +77,7 @@ generator Hekireki-ArkType {
 
 generator Hekireki-Effect {
     provider = "hekireki-effect"
+    output   = "./effect"
     type     = true
     comment  = true
     relation = true
@@ -75,6 +85,7 @@ generator Hekireki-Effect {
 
 generator Hekireki-TypeBox {
     provider = "hekireki-typebox"
+    output   = "./typebox"
     type     = true
     comment  = true
     relation = true
@@ -82,13 +93,31 @@ generator Hekireki-TypeBox {
 
 generator Hekireki-AJV {
     provider = "hekireki-ajv"
+    output   = "./ajv"
     type     = true
     comment  = true
     relation = true
 }
 
+generator Hekireki-Pydantic {
+    provider = "hekireki-pydantic"
+    output   = "./pydantic"
+    comment  = true
+}
+
 generator Hekireki-Drizzle {
     provider = "hekireki-drizzle"
+    output   = "./drizzle"
+}
+
+generator Hekireki-Kysely {
+    provider = "hekireki-kysely"
+    output   = "./kysely"
+}
+
+generator Hekireki-Atlas {
+    provider = "hekireki-atlas"
+    output   = "./atlas"
 }
 
 generator Hekireki-SQLAlchemy {
@@ -127,6 +156,7 @@ generator Hekireki-Eloquent {
 
 generator Hekireki-ER {
     provider = "hekireki-mermaid-er"
+    output   = "./mermaid-er"
 }
 
 generator Hekireki-DBML {
@@ -147,6 +177,7 @@ model User {
     /// @e.Schema.UUID
     /// @t.Type.String({ format: 'uuid' })
     /// @j.{ type: 'string' as const, format: 'uuid' as const }
+    /// @p.UUID4
     id    String @id @default(uuid())
     /// Display name
     /// @z.string().min(1).max(50)
@@ -155,6 +186,7 @@ model User {
     /// @e.Schema.String.pipe(Schema.minLength(1), Schema.maxLength(50))
     /// @t.Type.String({ minLength: 1, maxLength: 50 })
     /// @j.{ type: 'string' as const, minLength: 1, maxLength: 50 }
+    /// @p.Annotated[str, StringConstraints(min_length=1, max_length=50)]
     name  String
     /// One-to-many relation to Post
     posts Post[]
@@ -168,6 +200,7 @@ model Post {
     /// @e.Schema.UUID
     /// @t.Type.String({ format: 'uuid' })
     /// @j.{ type: 'string' as const, format: 'uuid' as const }
+    /// @p.UUID4
     id String @id @default(uuid())
     /// Article title
     /// @z.string().min(1).max(100)
@@ -176,6 +209,7 @@ model Post {
     /// @e.Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100))
     /// @t.Type.String({ minLength: 1, maxLength: 100 })
     /// @j.{ type: 'string' as const, minLength: 1, maxLength: 100 }
+    /// @p.Annotated[str, StringConstraints(min_length=1, max_length=100)]
     title String
     /// Body content (no length limit)
     /// @z.string()
@@ -192,6 +226,7 @@ model Post {
     /// @e.Schema.UUID
     /// @t.Type.String({ format: 'uuid' })
     /// @j.{ type: 'string' as const, format: 'uuid' as const }
+    /// @p.UUID4
     userId  String
     /// Prisma relation definition
     user    User   @relation(fields: [userId], references: [id])
@@ -346,6 +381,14 @@ export const PostSchema = type({
 })
 
 export type Post = typeof PostSchema.infer
+
+export const UserRelationsSchema = type({ ...UserSchema.t, posts: PostSchema.array() })
+
+export type UserRelations = typeof UserRelationsSchema.infer
+
+export const PostRelationsSchema = type({ ...PostSchema.t, user: UserSchema })
+
+export type PostRelations = typeof PostRelationsSchema.infer
 ```
 
 ### Effect Schema
@@ -364,7 +407,7 @@ export const UserSchema = Schema.Struct({
   name: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(50)),
 })
 
-export type UserEncoded = typeof UserSchema.Encoded
+export type User = typeof UserSchema.Type
 
 export const PostSchema = Schema.Struct({
   /**
@@ -385,7 +428,18 @@ export const PostSchema = Schema.Struct({
   userId: Schema.UUID,
 })
 
-export type PostEncoded = typeof PostSchema.Encoded
+export type Post = typeof PostSchema.Type
+
+export const UserRelationsSchema = Schema.Struct({
+  ...UserSchema.fields,
+  posts: Schema.Array(PostSchema),
+})
+
+export type UserRelations = typeof UserRelationsSchema.Type
+
+export const PostRelationsSchema = Schema.Struct({ ...PostSchema.fields, user: UserSchema })
+
+export type PostRelations = typeof PostRelationsSchema.Type
 ```
 
 ### TypeBox
@@ -533,7 +587,9 @@ export const post = sqliteTable('post', {
     .$defaultFn(() => crypto.randomUUID()),
   title: text('title').notNull(),
   content: text('content').notNull(),
-  userId: text('userId').notNull(),
+  userId: text('userId')
+    .notNull()
+    .references(() => user.id),
 })
 
 export const userRelations = relations(user, ({ many }) => ({ posts: many(post) }))
@@ -541,6 +597,141 @@ export const userRelations = relations(user, ({ many }) => ({ posts: many(post) 
 export const postRelations = relations(post, ({ one }) => ({
   user: one(user, { fields: [post.userId], references: [user.id] }),
 }))
+```
+
+### Kysely
+
+Pure type definitions for the [Kysely](https://kysely.dev/) query builder. The `DB` interface is keyed by the actual database table names (`@@map` respected), columns use `@map`-ped names, and enums become value unions of their `@map`-ped database values. Reach for Kysely's own `Selectable` / `Insertable` / `Updateable` wrappers when you need to name a row type; query results are inferred and need no annotation.
+
+Only **database-side** defaults become `Generated<T>`. `autoincrement()`, `now()` and `dbgenerated(...)` are evaluated by the database, so they are optional on insert; `uuid()`, `cuid()`, `ulid()` and `nanoid()` are evaluated by the Prisma Client and leave the column without a DDL default, so a raw Kysely insert must still supply them.
+
+```ts
+export interface User {
+  id: string
+  name: string
+}
+
+export interface Post {
+  id: string
+  title: string
+  content: string
+  userId: string
+}
+
+export interface DB {
+  User: User
+  Post: Post
+}
+```
+
+Both ids above are `@default(uuid())`, which Prisma evaluates in the client — hence plain `string`, required on insert. A database-side default instead emits `Generated<T>` (and, for `DateTime`, the `Timestamp` alias), which Kysely makes optional on insert:
+
+```prisma
+model Comment {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+}
+```
+
+```ts
+import type { ColumnType } from 'kysely'
+
+export type Generated<T> =
+  T extends ColumnType<infer S, infer I, infer U>
+    ? ColumnType<S, I | undefined, U>
+    : ColumnType<T, T | undefined, T>
+
+export type Timestamp = ColumnType<Date, Date | string, Date | string>
+
+export interface Comment {
+  id: Generated<number>
+  createdAt: Generated<Timestamp>
+}
+```
+
+```ts
+import { Kysely, type Insertable } from 'kysely'
+import type { DB, Post } from './kysely/types'
+
+declare const db: Kysely<DB>
+declare const userId: string
+
+// Query results are inferred — no annotation needed.
+const posts = await db.selectFrom('Post').selectAll().execute()
+
+const draft: Insertable<Post> = {
+  id: crypto.randomUUID(),
+  title: 'Hello',
+  content: '...',
+  userId,
+}
+await db.insertInto('Post').values(draft).execute()
+```
+
+### Atlas
+
+A declarative [Atlas](https://atlasgo.io/) HCL schema (`schema.hcl`). Table and column names use their `@@map`/`@map` database names, foreign keys and indexes follow Prisma's naming conventions (`<table>_<columns>_fkey` / `_key` / `_idx`), referential actions fall back to Prisma's defaults (`onUpdate: Cascade`, `onDelete: Restrict` for required and `SetNull` for optional relations), and client-side defaults such as `uuid()` and `cuid()` emit no database `DEFAULT` — the file describes exactly what `prisma migrate` would create. The output is already `atlas schema fmt` canonical.
+
+The schema label defaults to `public` (PostgreSQL / MySQL) or `main` (SQLite); on MySQL, set `schemaName` to your database name since MySQL schemas are databases.
+
+> [!WARNING]
+> Declarative `atlas schema apply` drops whatever is missing from the HCL, and three things can never appear in it: Prisma's own `_prisma_migrations` table (exclude it with `--exclude '_prisma_migrations'`), and columns or tables marked `@ignore`/`@@ignore` or typed `Unsupported(...)` — Prisma omits those from the DMMF that hekireki reads. When applying to an existing database, always dry-run first and keep Atlas's destructive-change linting enabled.
+
+Known limitations: the implicit m2m primary key is an unnamed constraint (Prisma names it `_X_AB_pkey`; the column set is identical, so this only surfaces as a constraint rename if you later hand the database back to `prisma migrate`), all enum blocks land in the default schema under `multiSchema` (Prisma exposes no schema for enums), Prisma's 63-byte truncation of very long constraint names is not reproduced, and removing or renaming enum values is a type rebuild in Atlas, as in any PostgreSQL workflow.
+
+```hcl
+table "User" {
+  schema = schema.main
+  column "id" {
+    null = false
+    type = text
+  }
+  column "name" {
+    null = false
+    type = text
+  }
+  primary_key {
+    columns = [column.id]
+  }
+}
+
+table "Post" {
+  schema = schema.main
+  column "id" {
+    null = false
+    type = text
+  }
+  column "title" {
+    null = false
+    type = text
+  }
+  column "content" {
+    null = false
+    type = text
+  }
+  column "userId" {
+    null = false
+    type = text
+  }
+  primary_key {
+    columns = [column.id]
+  }
+  foreign_key "Post_userId_fkey" {
+    columns     = [column.userId]
+    ref_columns = [table.User.column.id]
+    on_update   = CASCADE
+    on_delete   = RESTRICT
+  }
+}
+
+schema "main" {}
+```
+
+```bash
+# Apply the schema declaratively (dry-run first), or diff versioned migrations from it
+atlas schema apply --url "$DATABASE_URL" --to file://atlas/schema.hcl --exclude '_prisma_migrations' --dry-run
+atlas schema apply --url "$DATABASE_URL" --to file://atlas/schema.hcl --exclude '_prisma_migrations'
+atlas migrate diff --dev-url "docker://postgres/17/dev" --to file://atlas/schema.hcl
 ```
 
 ### Ecto
@@ -717,6 +908,59 @@ class Post(Base):
     user: Mapped["User"] = relationship(back_populates="posts")
 ```
 
+### Pydantic
+
+[Pydantic](https://docs.pydantic.dev/) v2 models (Python). `@p.` field annotations are used verbatim as the base type — list fields wrap it in `list[...]` and optional fields append `| None = None` — and imports for the known pydantic / typing names they reference (`EmailStr`, `Annotated`, `StringConstraints`, …) are added automatically; names outside that set are emitted as-is without an import. Fields without an annotation fall back to the built-in Prisma → Python type mapping, enums become `Literal[...]` of their Prisma-level value names, and relation fields are omitted.
+
+```python
+from pydantic import BaseModel, StringConstraints, UUID4
+from typing import Annotated
+
+
+class User(BaseModel):
+    id: UUID4
+    """Primary key"""
+    name: Annotated[str, StringConstraints(min_length=1, max_length=50)]
+    """Display name"""
+
+
+class Post(BaseModel):
+    id: UUID4
+    """Primary key"""
+    title: Annotated[str, StringConstraints(min_length=1, max_length=100)]
+    """Article title"""
+    content: str
+    """Body content (no length limit)"""
+    userId: UUID4
+    """Foreign key referencing User.id"""
+```
+
+To configure the model itself, annotate it with pydantic's own `ConfigDict` — the expression is passed through verbatim as `model_config`. `@p.ConfigDict(extra='forbid')` rejects unknown keys, `@p.ConfigDict(extra='allow')` keeps them, `@p.ConfigDict(extra='ignore')` states pydantic's default explicitly, and any other `ConfigDict` arguments (e.g. `frozen=True`) work the same way. No annotation leaves pydantic's default (`extra="ignore"`):
+
+```prisma
+/// @p.ConfigDict(extra='forbid')
+model ApiKey {
+  id String @id
+}
+```
+
+```python
+from pydantic import BaseModel, ConfigDict
+
+
+class ApiKey(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    id: str
+```
+
+With `relation = true`, each model that has relation fields also gets a `<Model>Relations` subclass — the Pydantic counterpart of the validator generators' relation schemas. Relation fields reference the base classes, so a payload fetched with its relations validates in one call:
+
+```python
+class UserRelations(User):
+    posts: list[Post]
+```
+
 ### GORM
 
 ```go
@@ -876,13 +1120,17 @@ generator Hekireki-Docs {
 
 ## Configuration
 
-Configure each generator directly in your `schema.prisma` file:
+Configure each generator directly in your `schema.prisma` file.
+
+> `output` is **required** for every generator — there is no implicit default directory.
+> Point it at a directory to get the file name shown below, or at a path with an
+> extension to choose the file name yourself.
 
 ```prisma
 // Zod Generator
 generator Hekireki-Zod {
     provider = "hekireki-zod"
-    output   = "./zod"       // Output path (default: ./zod/index.ts)
+    output   = "./zod"       // Required. A directory here yields ./zod/index.ts
     type     = true          // Generate TypeScript types (default: false)
     comment  = true          // Include schema documentation (default: false)
     zod      = "v4"          // Zod import: "v4", "mini", or "@hono/zod-openapi" (default: v4)
@@ -892,7 +1140,7 @@ generator Hekireki-Zod {
 // Valibot Generator
 generator Hekireki-Valibot {
     provider = "hekireki-valibot"
-    output   = "./valibot"   // Output path (default: ./valibot/index.ts)
+    output   = "./valibot"   // Required. A directory here yields ./valibot/index.ts
     type     = true          // Generate TypeScript types (default: false)
     comment  = true          // Include schema documentation (default: false)
     relation = true          // Generate relation schemas (default: false)
@@ -901,7 +1149,7 @@ generator Hekireki-Valibot {
 // ArkType Generator
 generator Hekireki-ArkType {
     provider = "hekireki-arktype"
-    output   = "./arktype"   // Output path (default: ./arktype/index.ts)
+    output   = "./arktype"   // Required. A directory here yields ./arktype/index.ts
     type     = true          // Generate TypeScript types (default: false)
     comment  = true          // Include schema documentation (default: false)
     relation = true          // Generate relation schemas (default: false)
@@ -910,7 +1158,7 @@ generator Hekireki-ArkType {
 // Effect Schema Generator
 generator Hekireki-Effect {
     provider = "hekireki-effect"
-    output   = "./effect"    // Output path (default: ./effect/index.ts)
+    output   = "./effect"    // Required. A directory here yields ./effect/index.ts
     type     = true          // Generate TypeScript types (default: false)
     comment  = true          // Include schema documentation (default: false)
     relation = true          // Generate relation schemas (default: false)
@@ -919,7 +1167,7 @@ generator Hekireki-Effect {
 // TypeBox Generator
 generator Hekireki-TypeBox {
     provider = "hekireki-typebox"
-    output   = "./typebox"   // Output path (default: ./typebox/index.ts)
+    output   = "./typebox"   // Required. A directory here yields ./typebox/index.ts
     type     = true          // Generate TypeScript types (default: false)
     comment  = true          // Include schema documentation (default: false)
     relation = true          // Generate relation schemas (default: false)
@@ -928,7 +1176,7 @@ generator Hekireki-TypeBox {
 // AJV (JSON Schema) Generator
 generator Hekireki-AJV {
     provider = "hekireki-ajv"
-    output   = "./ajv"       // Output path (default: ./ajv/index.ts)
+    output   = "./ajv"       // Required. A directory here yields ./ajv/index.ts
     type     = true          // Generate TypeScript types (default: false)
     comment  = true          // Include schema documentation (default: false)
     relation = true          // Generate relation schemas (default: false)
@@ -937,73 +1185,95 @@ generator Hekireki-AJV {
 // Drizzle ORM Schema Generator
 generator Hekireki-Drizzle {
     provider = "hekireki-drizzle"
-    output   = "./drizzle"   // Output path (default: ./drizzle/schema.ts)
+    output   = "./drizzle"   // Required. A directory here yields ./drizzle/schema.ts
+}
+
+// Kysely Type Definitions Generator
+generator Hekireki-Kysely {
+    provider = "hekireki-kysely"
+    output   = "./kysely"    // Required. A directory here yields ./kysely/types.ts
+}
+
+// Atlas HCL Schema Generator
+generator Hekireki-Atlas {
+    provider   = "hekireki-atlas"
+    output     = "./atlas"     // Required. A directory here yields ./atlas/schema.hcl
+    schemaName = "public"      // Schema label (default: postgresql/mysql "public", sqlite "main")
+    comment    = true          // Emit /// docs as comment attributes (default: false)
 }
 
 // SQLAlchemy Generator (Python)
 generator Hekireki-SQLAlchemy {
     provider = "hekireki-sqlalchemy"
-    output   = "./sqlalchemy"      // Output path (default: ./sqlalchemy/models.py)
+    output   = "./sqlalchemy"      // Required. A directory here yields ./sqlalchemy/models.py
+}
+
+// Pydantic Generator (Python)
+generator Hekireki-Pydantic {
+    provider = "hekireki-pydantic"
+    output   = "./pydantic"        // Required. A directory here yields ./pydantic/models.py
+    comment  = true                // Include docstrings from /// comments (default: false)
+    relation = true                // Generate <Model>Relations subclasses (default: false)
 }
 
 // GORM Generator (Go)
 generator Hekireki-GORM {
     provider = "hekireki-gorm"
-    output   = "./gorm"            // Output path (default: ./gorm/models.go)
+    output   = "./gorm"            // Required. A directory here yields ./gorm/models.go
     package  = "model"             // Go package name (default: model)
 }
 
 // Sea-ORM Generator (Rust)
 generator Hekireki-SeaORM {
     provider   = "hekireki-sea-orm"
-    output     = "./sea_orm"       // Output directory for .rs files
+    output     = "./sea_orm"       // Required. Output directory for .rs files
     renameAll  = "camelCase"       // #[serde(rename_all = "...")] attribute (optional)
 }
 
 // Ecto Generator (Elixir)
 generator Hekireki-Ecto {
     provider = "hekireki-ecto"
-    output   = "./ecto"      // Output directory (default: ./ecto/)
+    output   = "./ecto"      // Required. A directory here yields ./ecto/
     app      = "MyApp"       // App name (default: MyApp)
 }
 
 // Active Record Generator (Ruby on Rails)
 generator Hekireki-ActiveRecord {
     provider = "hekireki-activerecord"
-    output   = "./activerecord"    // Output directory for .rb files
+    output   = "./activerecord"    // Required. Output directory for .rb files
 }
 
 // Eloquent Generator (Laravel / PHP)
 generator Hekireki-Eloquent {
     provider  = "hekireki-eloquent"
-    output    = "./eloquent"       // Output directory for .php files
+    output    = "./eloquent"       // Required. Output directory for .php files
     namespace = "App.Models"       // PHP namespace, "." becomes "\" (default: App\Models)
 }
 
 // Mermaid ER Generator
 generator Hekireki-ER {
     provider = "hekireki-mermaid-er"
-    output   = "./mermaid-er" // Output path (default: ./mermaid-er/ER.md)
+    output   = "./mermaid-er" // Required. A directory here yields ./mermaid-er/ER.md
 }
 
 // DBML Generator (output extension determines format: .dbml or .png)
 generator Hekireki-DBML {
     provider = "hekireki-dbml"
-    output   = "docs/schema.dbml"    // File path ending in .dbml or .png
+    output   = "docs/schema.dbml"    // Required. File path ending in .dbml or .png
     mapToDbSchema = true             // Map to DB schema names (default: true)
 }
 
 // PNG output (same provider, different extension)
 generator Hekireki-PNG {
     provider = "hekireki-dbml"
-    output   = "docs/er-diagram.png" // .png extension → PNG output
+    output   = "docs/er-diagram.png" // Required. .png extension → PNG output
     mapToDbSchema = true             // Map to DB schema names (default: true)
 }
 
 // Docs Generator
 generator Hekireki-Docs {
     provider = "hekireki-docs"
-    output   = "./docs"              // Output directory (default: ./docs)
+    output   = "./docs"              // Required. A directory here yields ./docs
 }
 ```
 

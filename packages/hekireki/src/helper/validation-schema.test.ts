@@ -191,7 +191,9 @@ describe('validationSchemas', () => {
       extractValidation: makeValidationExtractor('@z.'),
       inferType: makeZodInfer,
       schemas: makeZodSchemas,
-      onWarning: (msg) => warnings.push(msg),
+      onWarning: (msg) => {
+        warnings.push(msg)
+      },
     })
 
     expect(warnings).toStrictEqual([
@@ -224,7 +226,9 @@ describe('validationSchemas', () => {
       extractValidation: makeValidationExtractor('@z.'),
       inferType: makeZodInfer,
       schemas: makeZodSchemas,
-      onWarning: (msg) => warnings.push(msg),
+      onWarning: (msg) => {
+        warnings.push(msg)
+      },
     })
 
     expect(warnings).toStrictEqual([])

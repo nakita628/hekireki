@@ -7,10 +7,9 @@ export function eloquentModelFiles(
   namespace: string | string[],
   enums?: readonly DMMF.DatamodelEnum[],
 ) {
-  const resolvedNamespace = (Array.isArray(namespace) ? namespace.join('\\') : namespace).replace(
-    /\./g,
-    '\\',
-  )
+  const resolvedNamespace = (
+    Array.isArray(namespace) ? namespace.join('\\') : namespace
+  ).replaceAll('.', '\\')
   const modelFiles = models.map((model) => ({
     fileName: `${model.name}.php`,
     code: eloquentModels([model], resolvedNamespace, models, enums),

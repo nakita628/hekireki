@@ -1,3 +1,4 @@
+import type { DMMF } from '@prisma/generator-helper'
 import { describe, expect, it } from 'vite-plus/test'
 
 import {
@@ -285,6 +286,7 @@ describe('generateEntityFile with renameAll', () => {
         isRequired: true,
         isId: true,
         isUnique: false,
+        isReadOnly: false,
         isList: false,
         isUpdatedAt: false,
         hasDefaultValue: true,
@@ -322,6 +324,7 @@ describe('generateEntityFile with renameAll', () => {
         isRequired: true,
         isId: true,
         isUnique: false,
+        isReadOnly: false,
         isList: false,
         isUpdatedAt: false,
         hasDefaultValue: true,
@@ -380,6 +383,7 @@ describe('generateEntityFile Eq derive', () => {
         isRequired: true,
         isId: true,
         isUnique: false,
+        isReadOnly: false,
         isList: false,
         isUpdatedAt: false,
         hasDefaultValue: true,
@@ -400,6 +404,7 @@ describe('generateEntityFile Eq derive', () => {
         isRequired: true,
         isId: true,
         isUnique: false,
+        isReadOnly: false,
         isList: false,
         isUpdatedAt: false,
         hasDefaultValue: true,
@@ -426,15 +431,15 @@ describe('generateEntityFile Eq derive', () => {
 })
 
 describe('uuid default generation', () => {
-  const makeModel = (name: string, fields: DMMF.Field[]): DMMF.Model =>
-    ({
-      name,
-      dbName: null,
-      fields,
-      uniqueFields: [],
-      uniqueIndexes: [],
-      primaryKey: null,
-    }) as DMMF.Model
+  const makeModel = (name: string, fields: DMMF.Field[]): DMMF.Model => ({
+    name,
+    dbName: null,
+    schema: null,
+    fields,
+    uniqueFields: [],
+    uniqueIndexes: [],
+    primaryKey: null,
+  })
 
   it('generates ActiveModelBehavior::new for uuid() and uuid(7) primary keys', () => {
     const v4Model = makeModel('User', [
@@ -445,6 +450,7 @@ describe('uuid default generation', () => {
         isRequired: true,
         isId: true,
         isUnique: false,
+        isReadOnly: false,
         isList: false,
         isUpdatedAt: false,
         hasDefaultValue: true,
@@ -484,6 +490,7 @@ impl ActiveModelBehavior for ActiveModel {
         isRequired: true,
         isId: true,
         isUnique: false,
+        isReadOnly: false,
         isList: false,
         isUpdatedAt: false,
         hasDefaultValue: true,
@@ -519,9 +526,10 @@ impl ActiveModelBehavior for ActiveModel {
 
 describe('ulid default generation', () => {
   it('generates ActiveModelBehavior::new with a ULID for ulid() primary keys', () => {
-    const model = {
+    const model: DMMF.Model = {
       name: 'Ticket',
       dbName: null,
+      schema: null,
       fields: [
         {
           name: 'id',
@@ -530,6 +538,7 @@ describe('ulid default generation', () => {
           isRequired: true,
           isId: true,
           isUnique: false,
+          isReadOnly: false,
           isList: false,
           isUpdatedAt: false,
           hasDefaultValue: true,
@@ -540,7 +549,7 @@ describe('ulid default generation', () => {
       uniqueFields: [],
       uniqueIndexes: [],
       primaryKey: null,
-    } as DMMF.Model
+    }
 
     expect(generateEntityFile(model, [model], [])).toBe(`use sea_orm::entity::prelude::*;
 use sea_orm::Set;
