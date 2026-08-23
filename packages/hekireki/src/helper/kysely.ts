@@ -15,7 +15,7 @@ const SCALAR_TYPE_MAP: { [k: string]: string } = {
 }
 
 function makePropertyKey(name: string) {
-  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name)
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(name)
     ? name
     : `'${name.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`
 }

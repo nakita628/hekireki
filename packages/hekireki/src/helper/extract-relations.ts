@@ -70,6 +70,6 @@ export function makeRelationsOnly(
         { includeType },
       ),
     )
-    .filter((code) => Boolean(code))
+    .filter(Boolean)
     .join('\n\n')
 }

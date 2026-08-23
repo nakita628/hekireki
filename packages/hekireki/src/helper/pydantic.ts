@@ -268,7 +268,7 @@ export function collectPydanticImports(
     : ''
   const text = [fieldText, relationText].join('\n')
   const used = (names: readonly string[]) =>
-    names.filter((name) => new RegExp(`\\b${name}\\b`).test(text))
+    names.filter((name) => new RegExp(`\\b${name}\\b`, 'u').test(text))
 
   const hasConfig = included.some((model) => extractConfigDict(model.documentation) !== null)
   const pydanticNames = [
@@ -282,11 +282,11 @@ export function collectPydanticImports(
   if (typingNames.length > 0) {
     lines.push(`from typing import ${typingNames.join(', ')}`)
   }
-  if (/\bDecimal\b/.test(text)) lines.push('from decimal import Decimal')
+  if (/\bDecimal\b/u.test(text)) lines.push('from decimal import Decimal')
   const datetimeNames = used(DATETIME_NAMES)
   if (datetimeNames.length > 0) {
     lines.push(`from datetime import ${datetimeNames.join(', ')}`)
   }
-  if (/\bUUID\b/.test(text)) lines.push('from uuid import UUID')
+  if (/\bUUID\b/u.test(text)) lines.push('from uuid import UUID')
   return lines
 }

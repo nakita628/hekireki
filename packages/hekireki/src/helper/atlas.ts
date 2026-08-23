@@ -64,7 +64,7 @@ function sqlExpr(expression: string) {
 }
 
 function refPart(name: string) {
-  return /^[A-Za-z_][A-Za-z0-9_-]*$/.test(name) ? `.${name}` : `[${hclString(name)}]`
+  return /^[A-Za-z_][A-Za-z0-9_-]*$/u.test(name) ? `.${name}` : `[${hclString(name)}]`
 }
 
 function attr(key: string, value: string) {

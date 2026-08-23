@@ -895,17 +895,12 @@ export function collectGlobalImports(
       }
       if (needsExplicitSaType(field)) {
         const resolved = resolveNativeType(field)
-        saImports.add(resolved.replace(/\(.*\)$/, ''))
+        saImports.add(resolved.replace(/\(.*\)$/u, ''))
       }
     }
 
     const associations = getAssociations(model, models)
     if (associations.belongsTo.length > 0) saImports.add('ForeignKey')
-
-    const idField = model.fields.find((f) => f.isId)
-    if (!idField && (model.primaryKey?.fields ?? []).length > 0) {
-      if (associations.belongsTo.length > 0) saImports.add('ForeignKey')
-    }
 
     if (model.uniqueFields.length > 0) saImports.add('UniqueConstraint')
 
@@ -928,8 +923,8 @@ export function collectGlobalImports(
     for (const info of m2mTables) {
       const leftType = info.leftPkField ? resolveNativeType(info.leftPkField) : 'String'
       const rightType = info.rightPkField ? resolveNativeType(info.rightPkField) : 'String'
-      saImports.add(leftType.replace(/\(.*\)$/, ''))
-      saImports.add(rightType.replace(/\(.*\)$/, ''))
+      saImports.add(leftType.replace(/\(.*\)$/u, ''))
+      saImports.add(rightType.replace(/\(.*\)$/u, ''))
     }
   }
 

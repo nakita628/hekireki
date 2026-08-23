@@ -346,8 +346,8 @@ const GO_INITIALISMS = new Set([
 
 function splitGoWords(name: string) {
   return name
-    .replaceAll(/([a-z0-9])([A-Z])/g, '$1\0$2')
-    .replaceAll(/_+/g, '\0')
+    .replaceAll(/([a-z0-9])([A-Z])/gu, '$1\0$2')
+    .replaceAll(/_+/gu, '\0')
     .split('\0')
     .filter((part) => part !== '')
     .map((part) => {

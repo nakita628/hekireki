@@ -77,10 +77,16 @@ export default defineConfig({
     // its own tsconfig or not at all (kysely/zod live in packages/hekireki).
     ignorePatterns: ['**/node_modules/**', '**/dist/**', 'test/harness/**', 'example/generated/**'],
     // Setting `plugins` replaces oxlint's default list — restate the defaults, then add import.
-    plugins: ['typescript', 'unicorn', 'oxc', 'import'],
+    plugins: ['typescript', 'unicorn', 'oxc', 'import', 'promise', 'node'],
     options: {
       typeAware: true,
       typeCheck: true,
+      // A rule that stops firing must have its `oxlint-disable` comment deleted
+      // with it, otherwise the suppression silently outlives its reason.
+      reportUnusedDisableDirectives: 'deny',
+      // Nothing here is configured as a warning; this keeps a rule that defaults
+      // to `warn` from slipping through `vp check` unnoticed.
+      denyWarnings: true,
     },
     categories: {
       correctness: 'error',
@@ -124,9 +130,41 @@ export default defineConfig({
       'unicorn/prefer-array-some': 'error',
       'unicorn/prefer-spread': 'error',
       'unicorn/prefer-string-replace-all': 'error',
+      // Pedantic-category picks that fit a codegen library; the rest of that
+      // category (max-lines, strict-boolean-expressions, …) is not adopted.
+      'typescript/strict-void-return': 'error',
+      'unicorn/prefer-string-slice': 'error',
+      'unicorn/prefer-native-coercion-functions': 'error',
+      'unicorn/prefer-import-meta-properties': 'error',
+      'unicorn/no-lonely-if': 'error',
+      'require-unicode-regexp': 'error',
       'import/no-cycle': 'error',
       'import/no-self-import': 'error',
       'import/no-duplicates': 'error',
+      // promise / node rules sit outside the enabled categories, so the ones
+      // that matter for an async Node CLI are named explicitly.
+      'promise/param-names': 'error',
+      'promise/valid-params': 'error',
+      'promise/spec-only': 'error',
+      'promise/no-new-statics': 'error',
+      'promise/no-multiple-resolved': 'error',
+      'promise/no-return-wrap': 'error',
+      'promise/no-return-in-finally': 'error',
+      'promise/no-nesting': 'error',
+      'promise/no-promise-in-callback': 'error',
+      'promise/no-callback-in-promise': 'error',
+      'promise/catch-or-return': 'error',
+      'promise/always-return': 'error',
+      'promise/prefer-catch': 'error',
+      'promise/prefer-await-to-then': 'error',
+      'node/no-exports-assign': 'error',
+      'node/no-new-require': 'error',
+      'node/no-mixed-requires': 'error',
+      'node/global-require': 'error',
+      'node/no-path-concat': 'error',
+      'node/no-top-level-await': 'error',
+      'node/handle-callback-err': 'error',
+      'node/callback-return': 'error',
     },
     overrides: [
       {

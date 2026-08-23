@@ -54,9 +54,9 @@ describe('generateHTML', () => {
     expect(html.startsWith('<!DOCTYPE html><html')).toBe(true)
     // Regression: without the escape-callback resolution c.html() performs, the
     // style tag rendered empty and every class="css-*" element lost its rules.
-    const style = html.match(/<style id="hono-css">([\s\S]*?)<\/style>/)?.[1] ?? ''
+    const style = html.match(/<style id="hono-css">([\s\S]*?)<\/style>/u)?.[1] ?? ''
     expect(style.length > 0).toBe(true)
-    const usedClass = html.match(/class="(css-\d+)"/)?.[1] ?? ''
+    const usedClass = html.match(/class="(css-\d+)"/u)?.[1] ?? ''
     expect(usedClass.length > 0).toBe(true)
     expect(style.includes(`.${usedClass}`)).toBe(true)
     // The data traversed the render path.

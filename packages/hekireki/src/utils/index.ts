@@ -1,5 +1,5 @@
 export function parseRelation(line: string) {
-  const match = line.trim().match(/^@relation\s+(\w+)\.(\w+)\s+(\w+)\.(\w+)\s+(\w+-to-\w+)$/)
+  const match = line.trim().match(/^@relation\s+(\w+)\.(\w+)\s+(\w+)\.(\w+)\s+(\w+-to-\w+)$/u)
   if (!match) return null
   const [, fromModel, fromField, toModel, toField, type] = match
   return { fromModel, fromField, toModel, toField, type }
@@ -14,7 +14,7 @@ export function getBool(v: unknown, fallback = false) {
 }
 
 export function makeSnakeCase(name: string) {
-  return name.replaceAll(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase()
+  return name.replaceAll(/([a-z0-9])([A-Z])/gu, '$1_$2').toLowerCase()
 }
 
 export function makePascalCase(name: string) {
@@ -26,8 +26,8 @@ export function makePascalCase(name: string) {
 }
 
 export function makeValidationExtractor(annotationPrefix: `@${string}.`) {
-  const escaped = annotationPrefix.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const regex = new RegExp(`${escaped}(.+?)(?:\\n|$)`)
+  const escaped = annotationPrefix.replaceAll(/[.*+?^${}()|[\]\\]/gu, '\\$&')
+  const regex = new RegExp(`${escaped}(.+?)(?:\\n|$)`, 'u')
   return function extractValidation(documentation: string | undefined) {
     if (!documentation) return null
     const match = documentation.match(regex)

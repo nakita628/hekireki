@@ -48,7 +48,7 @@ export function ectoTypeToTypespec(type: string) {
 
 // Ecto type references are atoms (:binary_id) or modules (Ecto.ULID).
 function formatEctoType(type: string) {
-  return /^[A-Z]/.test(type) ? type : `:${type}`
+  return /^[A-Z]/u.test(type) ? type : `:${type}`
 }
 
 function getPrimaryKeyConfig(field: DMMF.Field) {

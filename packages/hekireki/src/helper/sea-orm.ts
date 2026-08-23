@@ -217,26 +217,25 @@ export function buildSeaOrmAttributes(
     columnParts.push(`column_type = "${colType}"`)
   }
 
-  if (!isPk || isCompositePk) {
-    if (
-      !(
-        (field.type === 'DateTime' &&
-          isFunctionDefault(field.default) &&
-          field.default.name === 'now') ||
-        field.isUpdatedAt
-      )
-    ) {
-      // An enum default arrives as the Prisma-level value name; the column
-      // stores the @map-ped database value.
-      const enumMappedDefault =
-        field.kind === 'enum' && typeof field.default === 'string'
-          ? (enums?.find((e) => e.name === field.type)?.values.find((v) => v.name === field.default)
-              ?.dbName ?? null)
-          : null
-      const defaultVal = formatRustDefault(enumMappedDefault ?? field.default)
-      if (defaultVal !== null) {
-        columnParts.push(`default_value = ${defaultVal}`)
-      }
+  if (
+    (!isPk || isCompositePk) &&
+    !(
+      (field.type === 'DateTime' &&
+        isFunctionDefault(field.default) &&
+        field.default.name === 'now') ||
+      field.isUpdatedAt
+    )
+  ) {
+    // An enum default arrives as the Prisma-level value name; the column
+    // stores the @map-ped database value.
+    const enumMappedDefault =
+      field.kind === 'enum' && typeof field.default === 'string'
+        ? (enums?.find((e) => e.name === field.type)?.values.find((v) => v.name === field.default)
+            ?.dbName ?? null)
+        : null
+    const defaultVal = formatRustDefault(enumMappedDefault ?? field.default)
+    if (defaultVal !== null) {
+      columnParts.push(`default_value = ${defaultVal}`)
     }
   }
 

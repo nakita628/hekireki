@@ -205,7 +205,7 @@ export function generateImports(imports: DrizzleImports, provider: DbProvider) {
 }
 
 function snakeToCamel(name: string) {
-  return name.replaceAll(/_+([a-zA-Z0-9])/g, (_match: string, char: string) => char.toUpperCase())
+  return name.replaceAll(/_+([a-zA-Z0-9])/gu, (_match: string, char: string) => char.toUpperCase())
 }
 
 function resolveTableName(model: DMMF.Model) {
@@ -304,7 +304,7 @@ function makeColumnExpr(
   }
 
   const baseExpr = resolveScalarType(field, provider)
-  const fnName = baseExpr.match(/^(\w+)/)?.[1]
+  const fnName = baseExpr.match(/^(\w+)/u)?.[1]
   if (fnName) imports.core.add(fnName)
   const parenIdx = baseExpr.indexOf('(')
   if (parenIdx === -1) return baseExpr
@@ -646,7 +646,7 @@ function pkColumnExpr(
 ) {
   const pkField = models.find((m) => m.name === modelName)?.fields.find((f) => f.isId)
   const baseExpr = pkField ? resolveScalarType(pkField, provider) : 'text()'
-  const fnName = baseExpr.match(/^(\w+)/)?.[1]
+  const fnName = baseExpr.match(/^(\w+)/u)?.[1]
   if (fnName) imports.core.add(fnName)
   return withColumnName(baseExpr, colName)
 }
