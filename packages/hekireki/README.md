@@ -24,6 +24,7 @@
 - 🗄️ Automatically generates [Drizzle ORM](https://orm.drizzle.team/) table schemas and relations from your Prisma schema
 - 🐟 Automatically generates [Kysely](https://kysely.dev/) type definitions (`DB` interface) from your Prisma schema — with database-side-only `Generated` columns, enum value unions, `@map`/`@@map` support, and implicit m2m join tables
 - 🐍 Automatically generates [SQLAlchemy](https://www.sqlalchemy.org/) models (Python) — with `Mapped[T]` type hints, relationships, enums, composite keys, and index support
+- 🎸 Automatically generates [Django ORM](https://www.djangoproject.com/) models (Python, Django ≥ 5.2) — with `ForeignKey` / `OneToOneField` / `ManyToManyField` relations (`related_name` from the Prisma back-relation), `TextChoices` enums, composite primary keys (`CompositePrimaryKey`), migration-serializable defaults, `db_default` for `now()` / `dbgenerated(...)`, and `Meta` constraints / indexes
 - 🐹 Automatically generates [GORM](https://gorm.io/) models (Go) — with struct tags, JSON tags, relationships, enums, composite keys, and index support
 - 🦀 Automatically generates [Sea-ORM](https://www.sea-ql.org/SeaORM/) entities (Rust) — with `DeriveEntityModel`, relations, enums, serde support, and `rename_all`
 - 🧪 Generates [Ecto](https://hexdocs.pm/ecto/Ecto.Schema.html) schemas (Elixir) — with associations (`belongs_to`, `has_many`, `has_one`), composite primary keys, `@type t` typespecs, array fields, `@@map`/`@map` support, and `@moduledoc`
@@ -123,6 +124,11 @@ generator Hekireki-Atlas {
 generator Hekireki-SQLAlchemy {
     provider = "hekireki-sqlalchemy"
     output   = "./sqlalchemy"
+}
+
+generator Hekireki-Django {
+    provider = "hekireki-django"
+    output   = "./django"
 }
 
 generator Hekireki-GORM {
@@ -908,6 +914,52 @@ class Post(Base):
     user: Mapped["User"] = relationship(back_populates="posts")
 ```
 
+### Django
+
+[Django ORM](https://www.djangoproject.com/) models (Python, Django ≥ 5.2). The foreign-key scalar and its relation field collapse into a single `ForeignKey` (a unique FK becomes `OneToOneField`, an implicit m2m becomes `ManyToManyField` plus an explicit through model over Prisma's `_Join` table), `related_name` comes from the Prisma back-relation, and Prisma's implicit referential actions apply when none is given (`RESTRICT` for required, `SET_NULL` for optional). Enums become `TextChoices` storing the `@map`-ped values, composite `@@id` becomes `CompositePrimaryKey`, `@default(now())` / `dbgenerated(...)` become `db_default`, `@updatedAt` becomes `auto_now=True`, and every generated default is migration-serializable (module-level helper functions, never lambdas).
+
+```python
+import uuid
+
+from django.db import models
+
+
+def uuid4_str() -> str:
+    return str(uuid.uuid4())
+
+
+class User(models.Model):
+    id = models.TextField(primary_key=True, default=uuid4_str)
+    name = models.TextField()
+
+    class Meta:
+        db_table = "user"
+
+
+class Post(models.Model):
+    id = models.TextField(primary_key=True, default=uuid4_str)
+    title = models.TextField()
+    content = models.TextField()
+    user = models.ForeignKey("User", on_delete=models.RESTRICT, related_name="posts", db_index=False)
+
+    class Meta:
+        db_table = "post"
+```
+
+Names follow the same rule as the other ORM generators: a table or column is `@@map` / `@map` when given, otherwise the `snake_case` of the Prisma name. Prisma itself leaves an unmapped name verbatim (`Profile`, `accountId`), so **map every model and field whose Prisma name is not already `snake_case`** if the models are to run against a database Prisma created. Attribute names stay `snake_case` for PEP 8 either way, with `db_column` carrying the real column.
+
+Things Django cannot express, and what is emitted instead:
+
+| Prisma                                            | Django                                      | Why                                                                                                                                                                                |
+| ------------------------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A foreign key to a composite `@@unique` or `@@id` | The scalar columns, no relation             | `CompositePrimaryKey` cannot be a `ForeignKey` target, and a half-join on one column would be wrong                                                                                |
+| `enum`                                            | `TextChoices` + `TextField(choices=…)`      | Django has no native PostgreSQL enum type. Reads work through the implicit cast; `OPTIONS={"server_side_binding": True}` and `__startswith`-style lookups on an enum column do not |
+| `@id @default(cuid())` / `nanoid()`               | `TextField(primary_key=True, default=None)` | No generator is emitted, so the value must be assigned. `None` is what makes an unassigned one raise on INSERT instead of overwriting the row whose key is `""`                    |
+| `onUpdate`                                        | dropped                                     | Django models referential actions in Python and has no `onUpdate` concept                                                                                                          |
+| Plain `DateTime`                                  | `DateTimeField`                             | Prisma maps it to `timestamp` (no zone) while Django expects `timestamptz`; annotate it `@db.Timestamptz` to keep `USE_TZ = True` reads aware                                      |
+
+The models are written for a database Prisma owns, so they are read and written through, not migrated from. `makemigrations` still runs, but its DDL differs from Prisma's: Django writes no `ON DELETE` clause (it cascades in Python), marks foreign keys `DEFERRABLE INITIALLY DEFERRED`, and adds a `text_pattern_ops` companion index beside every text primary key and unique column.
+
 ### Pydantic
 
 [Pydantic](https://docs.pydantic.dev/) v2 models (Python). `@p.` field annotations are used verbatim as the base type — list fields wrap it in `list[...]` and optional fields append `| None = None` — and imports for the known pydantic / typing names they reference (`EmailStr`, `Annotated`, `StringConstraints`, …) are added automatically; names outside that set are emitted as-is without an import. Fields without an annotation fall back to the built-in Prisma → Python type mapping, enums become `Literal[...]` of their Prisma-level value names, and relation fields are omitted.
@@ -1206,6 +1258,12 @@ generator Hekireki-Atlas {
 generator Hekireki-SQLAlchemy {
     provider = "hekireki-sqlalchemy"
     output   = "./sqlalchemy"      // Required. A directory here yields ./sqlalchemy/models.py
+}
+
+// Django Generator (Python, Django >= 5.2)
+generator Hekireki-Django {
+    provider = "hekireki-django"
+    output   = "./django"          // Required. A directory here yields ./django/models.py
 }
 
 // Pydantic Generator (Python)

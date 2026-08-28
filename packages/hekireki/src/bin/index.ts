@@ -5,6 +5,7 @@ import { ajv } from '../core/ajv.js'
 import { arktype } from '../core/arktype.js'
 import { atlas } from '../core/atlas.js'
 import { dbml } from '../core/dbml.js'
+import { django } from '../core/django.js'
 import { docs } from '../core/docs.js'
 import { drizzle } from '../core/drizzle.js'
 import { ecto } from '../core/ecto.js'
@@ -26,6 +27,7 @@ const GENERATORS = {
   arktype: { prettyName: 'Hekireki-ArkType', handler: arktype },
   atlas: { prettyName: 'Hekireki-Atlas', handler: atlas },
   dbml: { prettyName: 'Hekireki-DBML', handler: dbml },
+  django: { prettyName: 'Hekireki-Django', handler: django },
   docs: { prettyName: 'Hekireki-Docs', handler: docs },
   drizzle: { prettyName: 'Hekireki-Drizzle', handler: drizzle },
   ecto: { prettyName: 'Hekireki-Ecto', handler: ecto },

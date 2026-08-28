@@ -12,6 +12,7 @@ export default defineConfig({
       'bin/arktype': './src/bin/arktype.ts',
       'bin/effect': './src/bin/effect.ts',
       'bin/dbml': './src/bin/dbml.ts',
+      'bin/django': './src/bin/django.ts',
       'bin/docs': './src/bin/docs.ts',
       'bin/drizzle': './src/bin/drizzle.ts',
       'bin/typebox': './src/bin/typebox.ts',

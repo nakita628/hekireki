@@ -3,7 +3,7 @@ name: Lang Check
 # Validity checks for hekireki's generated foreign-language code: each language
 # is generated from test/schema.prisma and then checked in its own toolchain —
 # it parses (syntax) and compiles or loads against the real GORM / sea-orm /
-# SQLAlchemy / Ecto / Active Record / Eloquent API (type). This is separate
+# SQLAlchemy / Django / Ecto / Active Record / Eloquent API (type). This is separate
 # from Test (test.yml), which owns the byte-equality codegen contract and stays
 # toolchain-free.
 #
@@ -42,7 +42,7 @@ jobs:
       matrix:
         # drizzle needs no extra toolchain step: setup-vp's node runs
         # tsc + drizzle-kit from the workspace's devDependencies.
-        lang: [gorm, sea-orm, sqlalchemy, ecto, drizzle, activerecord, eloquent, atlas]
+        lang: [gorm, sea-orm, sqlalchemy, django, ecto, drizzle, activerecord, eloquent, atlas]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: voidzero-dev/setup-vp@313600b80b104eadebb9111787d37a2e83e014ca # v1.17.0
@@ -56,7 +56,7 @@ jobs:
         uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
           go-version: '1.23.6'
-      - if: matrix.lang == 'sqlalchemy'
+      - if: matrix.lang == 'sqlalchemy' || matrix.lang == 'django'
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: '3.12.4'
