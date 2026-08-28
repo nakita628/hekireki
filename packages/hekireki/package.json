@@ -1,6 +1,6 @@
 {
   "name": "hekireki",
-  "version": "0.10.1",
+  "version": "0.10.2",
   "description": "Generate validation schemas, ORM models, and ER diagrams from Prisma schemas.",
   "keywords": [
     "activerecord",
