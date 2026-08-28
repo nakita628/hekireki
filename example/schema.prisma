@@ -68,6 +68,11 @@ generator Hekireki-SQLAlchemy {
   output   = "generated/sqlalchemy"
 }
 
+generator Hekireki-Django {
+  provider = "hekireki-django"
+  output   = "generated/django"
+}
+
 generator Hekireki-Pydantic {
   provider = "hekireki-pydantic"
   output   = "generated/pydantic"

@@ -29,6 +29,7 @@ This builds the generators, wipes `generated/`, runs `prisma generate`, and veri
 | Kysely                                           | `generated/kysely/types.ts`                           |
 | Atlas                                            | `generated/atlas/schema.hcl`                          |
 | SQLAlchemy                                       | `generated/sqlalchemy/models.py`                      |
+| Django                                           | `generated/django/models.py`                          |
 | Pydantic                                         | `generated/pydantic/models.py`                        |
 | GORM                                             | `generated/gorm/models.go`                            |
 | Sea-ORM                                          | `generated/sea-orm/*.rs`                              |

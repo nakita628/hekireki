@@ -1,0 +1,20 @@
+# Locked transitive tree for the Django conformance harness.
+# Exact == pins keep the dependency set deterministic across runs while staying
+# portable across platforms (CI is linux/x86_64, dev machines vary), which
+# cross-platform wheel --hash pinning cannot. Bumps go through Renovate.
+# Django 5.2 LTS: the oldest release with CompositePrimaryKey, the newest that
+# still supports Python 3.11.
+Django==5.2.17
+asgiref==3.12.1
+sqlparse==0.6.0
+psycopg==3.2.13
+psycopg-binary==3.2.13
+django-stubs==5.2.9
+django-stubs-ext==5.2.9
+mypy==1.19.1
+mypy_extensions==1.1.0
+pathspec==1.1.1
+types-PyYAML==6.0.12.20260815
+typing_extensions==4.16.0
+python-ulid==4.0.1
+uuid6==2025.0.1
