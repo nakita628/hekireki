@@ -20,13 +20,13 @@ jobs:
           node-version: '22'
           cache: true
 
-      - run: vp install
+      - run: vp install --frozen-lockfile
 
       - run: vp run hekireki#build
 
       - run: vp link ./packages/hekireki
 
-      - run: vp run -r check
+      - run: vp run check
 
       # packages/hekireki only: the `test` package needs the Go / Rust / Python /
       # Elixir / Ruby / PHP toolchains and is owned by the Lang Check matrix.

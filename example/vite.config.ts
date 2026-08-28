@@ -22,28 +22,21 @@ export default defineConfig({
       suspicious: 'error',
       perf: 'error',
     },
+    // Rules in the correctness / suspicious / perf categories are already errors via
+    // `categories` above and are not restated; this list only adds rules from the
+    // pedantic / style / restriction / nursery categories, which no category enables.
     rules: {
       eqeqeq: 'error',
       'no-var': 'error',
       'prefer-const': 'error',
       'no-param-reassign': ['error', { props: true }],
-      'no-shadow': 'error',
-      'no-underscore-dangle': 'error',
       'no-console': 'error',
       'no-plusplus': 'error',
-      'no-await-in-loop': 'error',
-      'no-unused-vars': 'error',
       'typescript/no-explicit-any': 'error',
       'typescript/no-non-null-assertion': 'error',
       'typescript/consistent-type-imports': 'error',
       'typescript/consistent-type-assertions': ['error', { assertionStyle: 'never' }],
-      'typescript/no-unsafe-type-assertion': 'error',
-      'typescript/no-unnecessary-type-assertion': 'error',
-      'typescript/no-unnecessary-type-arguments': 'error',
-      'typescript/no-floating-promises': 'error',
-      'typescript/await-thenable': 'error',
       'typescript/no-misused-promises': 'error',
-      'typescript/consistent-return': 'error',
       'typescript/require-await': 'error',
       'typescript/prefer-readonly': 'error',
       'typescript/prefer-nullish-coalescing': 'error',
@@ -53,9 +46,7 @@ export default defineConfig({
       'typescript/no-unsafe-member-access': 'error',
       'typescript/no-unsafe-call': 'error',
       'typescript/no-unsafe-return': 'error',
-      'unicorn/consistent-function-scoping': 'error',
       'unicorn/no-array-for-each': 'error',
-      'unicorn/no-array-sort': 'error',
       'unicorn/prefer-array-some': 'error',
       'unicorn/prefer-spread': 'error',
       'unicorn/prefer-string-replace-all': 'error',
@@ -68,7 +59,6 @@ export default defineConfig({
       'unicorn/no-lonely-if': 'error',
       'require-unicode-regexp': 'error',
       'import/no-cycle': 'error',
-      'import/no-self-import': 'error',
       'import/no-duplicates': 'error',
       // promise / node rules sit outside the enabled categories, so the ones
       // that matter for an async Node CLI are named explicitly.
@@ -108,14 +98,11 @@ export default defineConfig({
       },
     ],
   },
+  // Style (printWidth / quotes / semicolons / import sorting) is inherited from the root
+  // vite.config.ts; only the paths this workspace skips are declared here.
   fmt: {
     // generated/** is generator output whose bytes come from the generators' own
     // oxfmt pass; reformatting would make every regeneration a spurious diff.
     ignorePatterns: ['**/node_modules/**', 'generated/**'],
-    printWidth: 100,
-    singleQuote: true,
-    semi: false,
-    sortPackageJson: true,
-    experimentalSortImports: {},
   },
 })
