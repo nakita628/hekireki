@@ -49,7 +49,7 @@ jobs:
         with:
           node-version: '22'
           cache: true
-      - run: vp install
+      - run: vp install --frozen-lockfile
       - run: vp run hekireki#build
 
       - if: matrix.lang == 'gorm'
@@ -119,7 +119,7 @@ jobs:
         with:
           node-version: '22'
           cache: true
-      - run: vp install
+      - run: vp install --frozen-lockfile
         working-directory: .
       - run: vp run hekireki#build
         working-directory: .

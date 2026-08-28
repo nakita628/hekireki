@@ -61,29 +61,22 @@ export default defineConfig({
       suspicious: 'error',
       perf: 'error',
     },
+    // Rules in the correctness / suspicious / perf categories are already errors via
+    // `categories` above and are not restated; this list only adds rules from the
+    // pedantic / style / restriction / nursery categories, which no category enables.
     rules: {
       eqeqeq: 'error',
       'no-var': 'error',
       'prefer-const': 'error',
       'no-param-reassign': ['error', { props: true }],
-      'no-shadow': 'error',
-      'no-underscore-dangle': 'error',
       'no-console': 'error',
       'no-plusplus': 'error',
-      'no-await-in-loop': 'error',
-      'no-unused-vars': 'error',
       'no-undef': 'error',
       'typescript/no-explicit-any': 'error',
       'typescript/no-non-null-assertion': 'error',
       'typescript/consistent-type-imports': 'error',
       'typescript/consistent-type-assertions': ['error', { assertionStyle: 'never' }],
-      'typescript/no-unsafe-type-assertion': 'error',
-      'typescript/no-unnecessary-type-assertion': 'error',
-      'typescript/no-unnecessary-type-arguments': 'error',
-      'typescript/no-floating-promises': 'error',
-      'typescript/await-thenable': 'error',
       'typescript/no-misused-promises': 'error',
-      'typescript/consistent-return': 'error',
       'typescript/require-await': 'error',
       'typescript/prefer-readonly': 'error',
       'typescript/prefer-nullish-coalescing': 'error',
@@ -93,9 +86,7 @@ export default defineConfig({
       'typescript/no-unsafe-member-access': 'error',
       'typescript/no-unsafe-call': 'error',
       'typescript/no-unsafe-return': 'error',
-      'unicorn/consistent-function-scoping': 'error',
       'unicorn/no-array-for-each': 'error',
-      'unicorn/no-array-sort': 'error',
       'unicorn/prefer-array-some': 'error',
       'unicorn/prefer-spread': 'error',
       'unicorn/prefer-string-replace-all': 'error',
@@ -108,7 +99,6 @@ export default defineConfig({
       'unicorn/no-lonely-if': 'error',
       'require-unicode-regexp': 'error',
       'import/no-cycle': 'error',
-      'import/no-self-import': 'error',
       'import/no-duplicates': 'error',
       // promise / node rules sit outside the enabled categories, so the ones
       // that matter for an async Node CLI are named explicitly.
@@ -342,14 +332,11 @@ export default defineConfig({
       'import/export': 'error',
       'import/unambiguous': 'error',
       'import/no-commonjs': 'error',
-      'import/no-absolute-path': 'error',
       'import/no-mutable-exports': 'error',
-      'import/no-empty-named-blocks': 'error',
       'import/no-named-default': 'error',
       'import/no-namespace': 'error',
       'import/no-unassigned-import': 'error',
       'import/no-named-as-default': 'error',
-      'import/no-named-as-default-member': 'error',
       'import/no-anonymous-default-export': 'error',
       'import/consistent-type-specifier-style': 'error',
       // 120+ of the 123 source files are already kebab-case; this stops the
@@ -391,17 +378,14 @@ export default defineConfig({
           // Fixtures and stubs are defined per test on purpose (CLAUDE.md テスト
           // #5: no shared logic helpers), which is exactly what this rule flags.
           'unicorn/consistent-function-scoping': 'off',
-          'vitest/no-focused-tests': 'error',
-          'vitest/no-disabled-tests': 'error',
+          // The other vitest rules this suite relies on (no-focused-tests, expect-expect, ...)
+          // sit in the correctness / suspicious categories, so enabling the plugin is enough.
           // The Result-returning APIs are asserted by narrowing the union first
           // (`if (!result.ok) expect(result.error)…`), which reads as conditional.
           'vitest/no-conditional-expect': 'off',
-          'vitest/no-commented-out-tests': 'error',
           // Fixtures feed and assert on source text that contains a literal
           // `${...}`; here that is the value under test, not a lost backtick.
           'no-template-curly-in-string': 'off',
-          'vitest/expect-expect': 'error',
-          'vitest/require-mock-type-parameters': 'error',
           'vitest/no-identical-title': 'error',
           'vitest/valid-expect': 'error',
           'vitest/valid-title': 'error',
@@ -570,12 +554,9 @@ export default defineConfig({
       },
     ],
   },
+  // Style (printWidth / quotes / semicolons / import sorting) is inherited from the root
+  // vite.config.ts; only the paths this workspace skips are declared here.
   fmt: {
     ignorePatterns: ['**/node_modules/**', '**/dist/**'],
-    printWidth: 100,
-    singleQuote: true,
-    semi: false,
-    sortPackageJson: true,
-    experimentalSortImports: {},
   },
 })
