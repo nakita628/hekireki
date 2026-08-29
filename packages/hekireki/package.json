@@ -88,7 +88,7 @@
     "@paralleldrive/cuid2": "^3.3.0",
     "@prisma/client": "^7.9.0",
     "@sinclair/typebox": "^0.34.52",
-    "@types/node": "^26.1.1",
+    "@types/node": "^26.2.0",
     "@typescript/native-preview": "7.0.0-dev.20260707.2",
     "ajv": "^8.20.0",
     "arktype": "^2.2.3",
