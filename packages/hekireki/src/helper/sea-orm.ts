@@ -366,16 +366,16 @@ function buildSerdeAttributes(opts: { readonly renameAll?: string }) {
 }
 
 export function generateEnum(e: DMMF.DatamodelEnum, serde: { readonly renameAll?: string } = {}) {
-  const variants = e.values.map((v) => {
+  const variants = e.values.map((value) => {
     // SCREAMING_SNAKE values must become UpperCamelCase variants, or
     // `Pending_review`-style names trip the non_camel_case_types lint on
     // every user build; the DB value stays intact in string_value.
-    const pascalName = v.name
+    const pascalName = value.name
       .split('_')
       .filter((part) => part !== '')
       .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
       .join('')
-    return `    #[sea_orm(string_value = "${v.dbName ?? v.name}")]\n    ${pascalName},`
+    return `    #[sea_orm(string_value = "${value.dbName ?? value.name}")]\n    ${pascalName},`
   })
 
   const derives =

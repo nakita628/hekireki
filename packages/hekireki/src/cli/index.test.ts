@@ -1,189 +1,210 @@
-import { describe, expect, it } from 'vite-plus/test'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 
-import { DOCS_HELP_TEXT, HELP_TEXT, handleDocs, hekireki, parsePort } from './index.js'
+import { NodeServices } from '@effect/platform-node'
+import { Effect, Exit } from 'effect'
+import { Command } from 'effect/unstable/cli'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 
-describe('HELP_TEXT', () => {
-  it('contains usage, commands, options, examples sections', () => {
-    expect(HELP_TEXT).toBe(`⚡️ hekireki - Prisma schema tools
+import { fileSystemLayer } from '../file/index.js'
+import {
+  DEFAULT_SCHEMA_PATHS,
+  docsBanner,
+  hekireki,
+  resolveSchemaPath,
+  studioBanner,
+} from './index.js'
 
-Usage:
-  hekireki <command> [options]
+const dirs: string[] = []
+const cwd = process.cwd()
 
-Commands:
-  docs serve    Start a local server to view the documentation
+afterEach(() => {
+  process.chdir(cwd)
+  vi.restoreAllMocks()
+  for (const dir of dirs.splice(0)) {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
 
-Options:
-  -p, --port <port>    Specify the port (default: 5858)
-  -h, --help           Show help
+function tmp() {
+  const dir = mkdtempSync(path.join(tmpdir(), 'hekireki-cli-'))
+  dirs.push(dir)
+  return dir
+}
 
-Examples:
-  hekireki docs serve
-  hekireki docs serve -p 3000`)
+/** Runs the command tree the way the bin does and captures what it printed. */
+async function cli(args: readonly string[]) {
+  const out: string[] = []
+  const err: string[] = []
+  vi.spyOn(console, 'log').mockImplementation((...parts: unknown[]) => {
+    out.push(parts.map(String).join(' '))
+  })
+  vi.spyOn(console, 'error').mockImplementation((...parts: unknown[]) => {
+    err.push(parts.map(String).join(' '))
+  })
+  const exit = await Effect.runPromiseExit(
+    Command.runWith(hekireki, { version: '0.0.0-test' })(args).pipe(
+      Effect.provide(NodeServices.layer),
+    ),
+  )
+  return { exit, out: out.join('\n'), err: err.join('\n') }
+}
+
+describe('hekireki --help', () => {
+  it('lists the studio and docs subcommands', async () => {
+    const { exit, out } = await cli(['--help'])
+    expect(Exit.isSuccess(exit)).toBe(true)
+    expect(out).toContain('USAGE')
+    expect(out).toContain('hekireki <subcommand>')
+    expect(out).toContain('studio')
+    expect(out).toContain('docs')
+  })
+
+  it('prints the version', async () => {
+    const { out } = await cli(['--version'])
+    expect(out).toContain('0.0.0-test')
+  })
+
+  it('rejects an unknown subcommand', async () => {
+    const { exit, err } = await cli(['wat'])
+    expect(Exit.isFailure(exit)).toBe(true)
+    expect(err).toContain('Unknown subcommand "wat"')
   })
 })
 
-describe('DOCS_HELP_TEXT', () => {
-  it('contains docs-specific usage, commands, options, examples', () => {
-    expect(DOCS_HELP_TEXT).toBe(`⚡️ hekireki docs - Documentation tools
+describe('hekireki studio', () => {
+  it('documents the schema, url and port flags', async () => {
+    const { out } = await cli(['studio', '--help'])
+    expect(out).toContain('--port, -p')
+    expect(out).toContain('--schema, -s')
+    expect(out).toContain('--url, -u')
+    expect(out).toContain('prisma/schema.prisma')
+  })
 
-Usage:
-  hekireki docs serve [options]
+  it('rejects a port that is not a number', async () => {
+    const { exit, err } = await cli(['studio', '-p', 'abc'])
+    expect(Exit.isFailure(exit)).toBe(true)
+    expect(err).toContain('Invalid value for flag --port')
+  })
 
-Commands:
-  serve    Start a local server to view the documentation
+  it('reports a missing explicit schema', async () => {
+    const { exit, err } = await cli(['studio', '--schema', '/nowhere/schema.prisma'])
+    expect(Exit.isFailure(exit)).toBe(true)
+    expect(err).toContain('Schema not found: /nowhere/schema.prisma')
+    expect(err).toContain('Check the path passed to --schema')
+  })
 
-Options:
-  -p, --port <port>    Specify the port (default: 5858)
-  -h, --help           Show help
-
-Examples:
-  hekireki docs serve
-  hekireki docs serve -p 3000`)
+  it('explains where it looked when no default schema exists', async () => {
+    process.chdir(tmp())
+    const { exit, err } = await cli(['studio'])
+    expect(Exit.isFailure(exit)).toBe(true)
+    expect(err).toContain('No Prisma schema found (looked for prisma/schema.prisma, schema.prisma)')
   })
 })
 
-describe('parsePort', () => {
-  it('returns default 5858 when no port flag', () => {
-    expect(parsePort([])).toStrictEqual({ ok: true, value: 5858 })
+describe('hekireki docs serve', () => {
+  it('shows the docs help without a subcommand', async () => {
+    const { out } = await cli(['docs'])
+    expect(out).toContain('hekireki docs <subcommand>')
+    expect(out).toContain('serve')
   })
 
-  it('parses -p flag', () => {
-    expect(parsePort(['-p', '3000'])).toStrictEqual({ ok: true, value: 3000 })
+  it('documents the schema and port flags', async () => {
+    const { out } = await cli(['docs', 'serve', '--help'])
+    expect(out).toContain('--port, -p')
+    expect(out).toContain('--schema, -s')
   })
 
-  it('parses --port flag', () => {
-    expect(parsePort(['--port', '4000'])).toStrictEqual({ ok: true, value: 4000 })
-  })
-
-  it('returns default when unrelated args only', () => {
-    expect(parsePort(['--verbose', 'true'])).toStrictEqual({ ok: true, value: 5858 })
-  })
-
-  it('parses port with other args before', () => {
-    expect(parsePort(['--verbose', '-p', '8080'])).toStrictEqual({ ok: true, value: 8080 })
-  })
-
-  it('parses port with other args after', () => {
-    expect(parsePort(['-p', '9090', '--verbose'])).toStrictEqual({ ok: true, value: 9090 })
-  })
-
-  it('returns error when -p has no value', () => {
-    expect(parsePort(['-p'])).toStrictEqual({
-      ok: false,
-      error: '❌ Error: --port requires a number',
-    })
-  })
-
-  it('returns error when --port has no value', () => {
-    expect(parsePort(['--port'])).toStrictEqual({
-      ok: false,
-      error: '❌ Error: --port requires a number',
-    })
-  })
-
-  it('returns error when -p followed by another flag', () => {
-    expect(parsePort(['-p', '--verbose'])).toStrictEqual({
-      ok: false,
-      error: '❌ Error: --port requires a number',
-    })
-  })
-
-  it('returns error when port is not a number', () => {
-    expect(parsePort(['-p', 'abc'])).toStrictEqual({
-      ok: false,
-      error: '❌ Error: Invalid port number: abc',
-    })
-  })
-
-  it('returns error when --port value is not a number', () => {
-    expect(parsePort(['--port', 'xyz'])).toStrictEqual({
-      ok: false,
-      error: '❌ Error: Invalid port number: xyz',
-    })
+  it('needs a schema, not generated HTML', async () => {
+    process.chdir(tmp())
+    const { exit, err } = await cli(['docs', 'serve'])
+    expect(Exit.isFailure(exit)).toBe(true)
+    expect(err).toContain('No Prisma schema found')
   })
 })
 
-describe('handleDocs', () => {
-  it('returns DOCS_HELP_TEXT when no subcommand', () => {
-    expect(handleDocs([])).toStrictEqual({ ok: true, value: DOCS_HELP_TEXT })
-  })
-
-  it('returns DOCS_HELP_TEXT for -h flag', () => {
-    expect(handleDocs(['-h'])).toStrictEqual({ ok: true, value: DOCS_HELP_TEXT })
-  })
-
-  it('returns DOCS_HELP_TEXT for --help flag', () => {
-    expect(handleDocs(['--help'])).toStrictEqual({ ok: true, value: DOCS_HELP_TEXT })
-  })
-
-  it('returns error for unknown subcommand', () => {
-    const result = handleDocs(['unknown'])
-    expect(result.ok).toBe(false)
-    if (!result.ok) {
-      expect(result.error).toBe(`❌ Unknown command: docs unknown\n\n${DOCS_HELP_TEXT}`)
-    }
-  })
-
-  it('returns error for serve with invalid port', () => {
-    expect(handleDocs(['serve', '-p', 'abc'])).toStrictEqual({
-      ok: false,
-      error: '❌ Error: Invalid port number: abc',
-    })
-  })
-
-  it('returns error for serve with missing port value', () => {
-    expect(handleDocs(['serve', '--port'])).toStrictEqual({
-      ok: false,
-      error: '❌ Error: --port requires a number',
-    })
+describe('docsBanner', () => {
+  it('points at the docs page and reports schema errors', () => {
+    expect(docsBanner({ port: 5858, schemaPath: '/tmp/schema.prisma', error: null })).toBe(
+      '⚡️ Hekireki Docs started at http://localhost:5858/docs\n📄 Schema: /tmp/schema.prisma (watching for changes)',
+    )
+    expect(docsBanner({ port: 5858, schemaPath: '/tmp/schema.prisma', error: 'boom' })).toBe(
+      '⚡️ Hekireki Docs started at http://localhost:5858/docs\n📄 Schema: /tmp/schema.prisma (watching for changes)\n⚠️  Schema has errors, fix them and the docs will reload:\nboom',
+    )
   })
 })
 
-describe('hekireki', () => {
-  it('returns HELP_TEXT when no args', () => {
-    expect(hekireki([])).toStrictEqual({ ok: true, value: HELP_TEXT })
+describe('resolveSchemaPath', () => {
+  const resolve = (explicit: string | null) =>
+    Effect.runPromise(
+      Effect.provide(
+        Effect.match(resolveSchemaPath(explicit), {
+          onSuccess: (value) => ({ ok: true, value }) as const,
+          onFailure: (error) => ({ ok: false, error: error.message }) as const,
+        }),
+        fileSystemLayer,
+      ),
+    )
+
+  it('exposes the default candidates in order', () => {
+    expect(DEFAULT_SCHEMA_PATHS).toStrictEqual(['prisma/schema.prisma', 'schema.prisma'])
   })
 
-  it('returns HELP_TEXT for -h', () => {
-    expect(hekireki(['-h'])).toStrictEqual({ ok: true, value: HELP_TEXT })
+  it('uses the explicit path when it exists', async () => {
+    const dir = tmp()
+    const file = path.join(dir, 'db.prisma')
+    writeFileSync(file, '')
+    expect(await resolve(file)).toStrictEqual({ ok: true, value: file })
   })
 
-  it('returns HELP_TEXT for --help', () => {
-    expect(hekireki(['--help'])).toStrictEqual({ ok: true, value: HELP_TEXT })
+  it('falls back to prisma/schema.prisma, then schema.prisma', async () => {
+    const dir = tmp()
+    process.chdir(dir)
+    writeFileSync(path.join(dir, 'schema.prisma'), '')
+    expect(await resolve(null)).toStrictEqual({ ok: true, value: 'schema.prisma' })
+    writeFileSync(path.join(dir, 'prisma.prisma'), '')
+    const nested = path.join(dir, 'prisma')
+    rmSync(nested, { recursive: true, force: true })
+    writeFileSync(path.join(dir, 'schema.prisma'), '')
+    expect(await resolve(null)).toStrictEqual({ ok: true, value: 'schema.prisma' })
   })
 
-  it('returns error for unknown command', () => {
-    const result = hekireki(['unknown'])
-    expect(result.ok).toBe(false)
-    if (!result.ok) {
-      expect(result.error).toBe(`❌ Unknown command: unknown\n\n${HELP_TEXT}`)
-    }
+  it('prefers prisma/schema.prisma when both exist', async () => {
+    const dir = tmp()
+    process.chdir(dir)
+    writeFileSync(path.join(dir, 'schema.prisma'), '')
+    const { mkdirSync } = await import('node:fs')
+    mkdirSync(path.join(dir, 'prisma'))
+    writeFileSync(path.join(dir, 'prisma', 'schema.prisma'), '')
+    expect(await resolve(null)).toStrictEqual({ ok: true, value: 'prisma/schema.prisma' })
+  })
+})
+
+describe('studioBanner', () => {
+  it('describes a connected database', () => {
+    expect(
+      studioBanner({
+        port: 5858,
+        schemaPath: 'prisma/schema.prisma',
+        error: null,
+        database: { connected: true, dialect: 'sqlite', url: 'file:./dev.db', error: null },
+      }),
+    ).toBe(
+      `⚡️ Hekireki Studio started at http://localhost:5858\n📄 Schema: ${path.resolve('prisma/schema.prisma')} (watching for changes)\n🗄️  Database: sqlite file:./dev.db`,
+    )
   })
 
-  it('dispatches docs subcommand to handleDocs', () => {
-    expect(hekireki(['docs'])).toStrictEqual({ ok: true, value: DOCS_HELP_TEXT })
-  })
-
-  it('dispatches docs -h to handleDocs', () => {
-    expect(hekireki(['docs', '-h'])).toStrictEqual({ ok: true, value: DOCS_HELP_TEXT })
-  })
-
-  it('dispatches docs --help to handleDocs', () => {
-    expect(hekireki(['docs', '--help'])).toStrictEqual({ ok: true, value: DOCS_HELP_TEXT })
-  })
-
-  it('returns error for docs serve with invalid port', () => {
-    expect(hekireki(['docs', 'serve', '-p', 'abc'])).toStrictEqual({
-      ok: false,
-      error: '❌ Error: Invalid port number: abc',
-    })
-  })
-
-  it('returns error for docs unknown subcommand', () => {
-    const result = hekireki(['docs', 'foo'])
-    expect(result.ok).toBe(false)
-    if (!result.ok) {
-      expect(result.error).toBe(`❌ Unknown command: docs foo\n\n${DOCS_HELP_TEXT}`)
-    }
+  it('explains a missing database and a broken schema', () => {
+    expect(
+      studioBanner({
+        port: 3000,
+        schemaPath: '/tmp/schema.prisma',
+        error: 'error: boom',
+        database: { connected: false, dialect: null, url: null, error: 'No database URL found.' },
+      }),
+    ).toBe(
+      '⚡️ Hekireki Studio started at http://localhost:3000\n📄 Schema: /tmp/schema.prisma (watching for changes)\n🗄️  Database: not connected (schema only)\n   No database URL found.\n⚠️  Schema has errors, fix them and Studio will reload:\nerror: boom',
+    )
   })
 })

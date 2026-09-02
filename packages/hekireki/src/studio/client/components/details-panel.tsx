@@ -1,0 +1,117 @@
+import { Link } from '@tanstack/react-router'
+
+import type { Model, Schema } from '../../server/routes/index.js'
+import { fieldTypeLabel } from '../lib/labels.js'
+import { FieldGlyph } from './fields-table.js'
+import { ArrowRightIcon } from './icons.js'
+
+const ATTRIBUTE = 'pl-5 font-mono text-xs break-all text-accent-text'
+
+export function DetailsPanel({
+  schema,
+  model,
+}: {
+  readonly schema: Schema
+  readonly model: Model
+}) {
+  const primaryKey = new Set(model.primaryKey)
+  const relations = schema.relations.filter(
+    (r) => r.from.model === model.name || r.to.model === model.name,
+  )
+  const indexAttributes = new Set(model.indexes.map((i) => i.attribute))
+  const modelAttributes = model.attributes.filter((a) => !indexAttributes.has(a))
+  return (
+    <aside className="overflow-y-auto border-l border-line bg-surface px-5 pt-4 pb-6 text-[13px]">
+      <div className="mb-[22px]">
+        <div className="heading">Fields · {model.fields.length}</div>
+        {model.fields.map((field) => (
+          <div key={field.name} className="mb-3">
+            <div className="flex items-center gap-1.5">
+              <FieldGlyph field={field} primaryKey={primaryKey} />
+              <span className="font-mono text-[13.5px] font-semibold">{field.name}</span>
+              <span className="font-mono text-[12.5px] text-muted">{fieldTypeLabel(field)}</span>
+            </div>
+            {field.attributes.map((a) => (
+              <div key={a} className={ATTRIBUTE}>
+                {a}
+              </div>
+            ))}
+            {field.documentation ? (
+              <div className="pl-5 whitespace-pre-wrap text-muted">{field.documentation}</div>
+            ) : null}
+          </div>
+        ))}
+      </div>
+      <div className="mb-[22px]">
+        <div className="heading">Relations · {relations.length}</div>
+        {relations.length === 0 ? <div className="text-muted">No relations</div> : null}
+        {relations.map((relation) => {
+          const outgoing = relation.from.model === model.name
+          const other = outgoing ? relation.to : relation.from
+          return (
+            <div
+              key={relation.id}
+              className="mb-1.5 flex flex-wrap items-center gap-1 font-mono text-[12.5px]"
+            >
+              <Link
+                className="font-semibold text-accent-text hover:underline"
+                to="/models/$name"
+                params={{ name: other.model }}
+                search={{}}
+              >
+                {other.model}
+              </Link>
+              .{other.field}
+              <ArrowRightIcon size={12} className="text-faint" />
+              {outgoing ? relation.from.field : relation.to.field}
+              {relation.onDelete ? (
+                <span className="text-muted"> · onDelete: {relation.onDelete}</span>
+              ) : null}
+              {relation.origin === 'implicit-many-to-many' ? (
+                <span className="text-muted"> · many-to-many</span>
+              ) : null}
+            </div>
+          )
+        })}
+      </div>
+      <div className="mb-[22px]">
+        <div className="heading">Indexes · {model.indexes.length}</div>
+        {model.indexes.length === 0 ? (
+          <div className="text-muted">No block-level indexes</div>
+        ) : null}
+        {model.indexes.map((index) => (
+          <div key={index.attribute} className={ATTRIBUTE}>
+            {index.attribute}
+          </div>
+        ))}
+      </div>
+      {modelAttributes.length > 0 ? (
+        <div className="mb-[22px]">
+          <div className="heading">Attributes · {modelAttributes.length}</div>
+          {modelAttributes.map((a) => (
+            <div key={a} className={ATTRIBUTE}>
+              {a}
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {model.annotations.length > 0 ? (
+        <div className="mb-[22px]">
+          <div className="heading">Annotations · {model.annotations.length}</div>
+          {model.annotations.map((a) => (
+            <div key={a} className={ATTRIBUTE}>
+              {a}
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <Link
+        className="inline-flex items-center gap-1 font-semibold text-accent-text hover:underline"
+        to="/prisma"
+        search={{ focus: model.name }}
+      >
+        Open the Prisma schema <ArrowRightIcon size={13} />
+      </Link>
+    </aside>
+  )
+}

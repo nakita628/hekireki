@@ -50,23 +50,29 @@ export function parseDocumentWithoutAnnotations(documentation: string | undefine
     )
 }
 
+const ANNOTATION_PREFIXES = ['@z.', '@v.', '@a.', '@e.', '@t.', '@j.', '@p.', '@relation']
+const ANNOTATION_EXACT = new Set(['@z', '@v', '@a', '@e', '@t', '@j', '@p'])
+
+export function isAnnotationLine(line: string) {
+  const trimmed = line.trim()
+  return ANNOTATION_PREFIXES.some((p) => trimmed.startsWith(p)) || ANNOTATION_EXACT.has(trimmed)
+}
+
 export function stripAnnotations(doc: string | undefined) {
   if (!doc) return undefined
-  const annotationPrefixes = ['@z.', '@v.', '@a.', '@e.', '@t.', '@j.', '@p.']
-  const annotationExact = new Set(['@z', '@v', '@a', '@e', '@t', '@j', '@p'])
   const result = doc
     .split('\n')
-    .filter((line) => {
-      const t = line.trim()
-      return (
-        !annotationPrefixes.some((p) => t.startsWith(p)) &&
-        !t.startsWith('@relation') &&
-        !annotationExact.has(t)
-      )
-    })
+    .filter((line) => !isAnnotationLine(line))
     .join('\n')
     .trim()
   return result.length > 0 ? result : undefined
+}
+
+export function isLoopbackHostname(hostname: string) {
+  const bare = hostname.replace(/^\[(.*)\]$/u, '$1').toLowerCase()
+  return (
+    bare === 'localhost' || bare.endsWith('.localhost') || bare === '127.0.0.1' || bare === '::1'
+  )
 }
 
 export function extractObjectType(

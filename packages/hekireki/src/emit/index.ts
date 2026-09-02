@@ -1,35 +1,36 @@
 import path from 'node:path'
 
+import { Effect } from 'effect'
+
+import { makeDirectory, writeFile } from '../file/index.js'
 import { fmt } from '../format/index.js'
-import { mkdir, writeFile, writeFileBinary } from '../fsp/index.js'
 
-export async function emit(code: string, dir: string, output: string) {
-  const [fmtResult, mkdirResult] = await Promise.all([fmt(code), mkdir(dir)])
-  if (!fmtResult.ok) return { ok: false, error: fmtResult.error } as const
-  if (!mkdirResult.ok) return { ok: false, error: mkdirResult.error } as const
-  const writeResult = await writeFile(output, fmtResult.value)
-  if (!writeResult.ok) return { ok: false, error: writeResult.error } as const
-  return { ok: true, value: undefined } as const
+/** Formats TypeScript source and writes it, creating the directory. */
+export function emit(code: string, dir: string, output: string) {
+  return Effect.gen(function* () {
+    const formatted = yield* fmt(code)
+    yield* makeDirectory(dir)
+    yield* writeFile(output, formatted)
+  })
 }
 
-export async function emitRaw(data: string | Buffer, dir: string, output: string) {
-  const mkdirResult = await mkdir(dir)
-  if (!mkdirResult.ok) return { ok: false, error: mkdirResult.error } as const
-  const writeResult =
-    typeof data === 'string' ? await writeFile(output, data) : await writeFileBinary(output, data)
-  if (!writeResult.ok) return { ok: false, error: writeResult.error } as const
-  return { ok: true, value: undefined } as const
+/** Writes text or bytes as they are, creating the directory. */
+export function emitRaw(data: string | Uint8Array, dir: string, output: string) {
+  return Effect.gen(function* () {
+    yield* makeDirectory(dir)
+    yield* writeFile(output, data)
+  })
 }
 
-export async function emitMany(
+/** Writes several files into one directory. */
+export function emitMany(
   files: readonly { readonly fileName: string; readonly code: string }[],
   dir: string,
 ) {
-  const mkdirResult = await mkdir(dir)
-  if (!mkdirResult.ok) return { ok: false, error: mkdirResult.error } as const
-  const results = await Promise.all(files.map((f) => writeFile(path.join(dir, f.fileName), f.code)))
-  for (const r of results) {
-    if (!r.ok) return { ok: false, error: r.error } as const
-  }
-  return { ok: true, value: undefined } as const
+  return Effect.gen(function* () {
+    yield* makeDirectory(dir)
+    yield* Effect.forEach(files, (f) => writeFile(path.join(dir, f.fileName), f.code), {
+      discard: true,
+    })
+  })
 }

@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ESNext",
-    "module": "NodeNext",
+    "module": "ESNext",
     "rootDir": "./src",
     "outDir": "./dist",
     "strict": true,
@@ -9,9 +9,8 @@
     "skipLibCheck": true,
     "types": ["node"],
     "declaration": true,
-    "jsx": "react-jsx",
-    "jsxImportSource": "hono/jsx"
+    "moduleResolution": "bundler"
   },
   "include": ["**/src/**/*"],
-  "exclude": ["**/src/**/*.test.ts"]
+  "exclude": ["**/src/**/*.test.ts", "src/studio/client/**/*"]
 }

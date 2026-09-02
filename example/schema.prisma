@@ -129,11 +129,6 @@ generator Hekireki-PNG {
   output   = "generated/dbml/er.png"
 }
 
-generator Hekireki-Docs {
-  provider = "hekireki-docs"
-  output   = "generated/docs"
-}
-
 /// User role. No @map: the value names are stored verbatim.
 enum Role {
   ADMIN

@@ -1,141 +1,165 @@
-#!/usr/bin/env node
-import fs from 'node:fs'
 import path from 'node:path'
 
-import { serve } from '@hono/node-server'
-import { serveStatic } from '@hono/node-server/serve-static'
-import { Hono } from 'hono'
+import { Console, Effect, Option } from 'effect'
+import { CliError, Command, Flag } from 'effect/unstable/cli'
 
-export const HELP_TEXT = `⚡️ hekireki - Prisma schema tools
+import { exists } from '../file/index.js'
+import { DEFAULT_PORT } from '../studio/server/constants/index.js'
+import { ServerListenError } from '../studio/server/errors/index.js'
+import { startStudioServer } from '../studio/server/start.js'
 
-Usage:
-  hekireki <command> [options]
+export const DEFAULT_SCHEMA_PATHS = ['prisma/schema.prisma', 'schema.prisma'] as const
 
-Commands:
-  docs serve    Start a local server to view the documentation
+const STATIC_DIR = path.resolve(import.meta.dirname, '../studio')
 
-Options:
-  -p, --port <port>    Specify the port (default: 5858)
-  -h, --help           Show help
-
-Examples:
-  hekireki docs serve
-  hekireki docs serve -p 3000`
-
-export const DOCS_HELP_TEXT = `⚡️ hekireki docs - Documentation tools
-
-Usage:
-  hekireki docs serve [options]
-
-Commands:
-  serve    Start a local server to view the documentation
-
-Options:
-  -p, --port <port>    Specify the port (default: 5858)
-  -h, --help           Show help
-
-Examples:
-  hekireki docs serve
-  hekireki docs serve -p 3000`
-
-export function parsePort(args: readonly string[]) {
-  const portIndex = args.findIndex((arg) => arg === '-p' || arg === '--port')
-  if (portIndex === -1) {
-    return { ok: true, value: 5858 } as const
-  }
-  const portStr = args[portIndex + 1]
-  if (!portStr || portStr.startsWith('-')) {
-    return { ok: false, error: '❌ Error: --port requires a number' } as const
-  }
-  const port = Number.parseInt(portStr, 10)
-  if (Number.isNaN(port)) {
-    return { ok: false, error: `❌ Error: Invalid port number: ${portStr}` } as const
-  }
-  return { ok: true, value: port } as const
+function userError(message: string) {
+  return new CliError.UserError({ cause: new Error(message), userMessage: message })
 }
 
-function parseDocsServeArgs(args: readonly string[]) {
-  const portResult = parsePort(args)
-  if (!portResult.ok) {
-    return portResult
-  }
-  return { ok: true, value: { port: portResult.value } } as const
-}
-
-function startDocsServer(options: { readonly port: number }) {
-  const docsPath = './docs'
-  const absolutePath = path.resolve(docsPath)
-  if (!fs.existsSync(absolutePath)) {
-    return {
-      ok: false,
-      error: `❌ Error: Directory not found: ${absolutePath}\n   Run "prisma generate" first to generate the documentation.`,
-    } as const
-  }
-  const indexPath = path.join(absolutePath, 'index.html')
-  if (!fs.existsSync(indexPath)) {
-    return {
-      ok: false,
-      error: `❌ Error: index.html not found in ${absolutePath}\n   Run "prisma generate" first to generate the documentation.`,
-    } as const
-  }
-  const app = new Hono()
-  app.get('/', (c) => {
-    const html = fs.readFileSync(indexPath, 'utf-8')
-    return c.html(html)
+/** The explicit schema when it exists, else the first default path that does. */
+export function resolveSchemaPath(explicit: string | null) {
+  return Effect.gen(function* () {
+    if (explicit !== null) {
+      if (yield* exists(explicit)) return explicit
+      return yield* userError(
+        `Schema not found: ${explicit}\n   Check the path passed to --schema.`,
+      )
+    }
+    for (const candidate of DEFAULT_SCHEMA_PATHS) {
+      if (yield* exists(candidate)) return candidate
+    }
+    return yield* userError(
+      `No Prisma schema found (looked for ${DEFAULT_SCHEMA_PATHS.join(', ')}).\n   Pass --schema <path> to point at your schema.prisma or a directory of .prisma files.`,
+    )
   })
-  app.use('/*', serveStatic({ root: absolutePath }))
-  const server = serve({
-    fetch: app.fetch,
-    port: options.port,
-  })
-  process.on('SIGTERM', () => {
-    server.close()
-    process.exit(0)
-  })
-  process.on('SIGINT', () => {
-    server.close()
-    process.exit(0)
-  })
-  return {
-    ok: true,
-    value: `⚡️ Hekireki Docs Server started at http://localhost:${options.port}\n📂 Serving documentation from: ${absolutePath}`,
-  } as const
 }
 
-export function handleDocs(args: readonly string[]) {
-  const subcommand = args[0]
-  if (!subcommand || subcommand === '-h' || subcommand === '--help') {
-    return { ok: true, value: DOCS_HELP_TEXT } as const
-  }
-  if (subcommand !== 'serve') {
-    return {
-      ok: false,
-      error: `❌ Unknown command: docs ${subcommand}\n\n${DOCS_HELP_TEXT}`,
-    } as const
-  }
-  const parseResult = parseDocsServeArgs(args.slice(1))
-  if (!parseResult.ok) {
-    return parseResult
-  }
-  return startDocsServer(parseResult.value)
+function startError(error: Effect.Error<ReturnType<typeof startStudioServer>>) {
+  return error instanceof ServerListenError && error.code === 'EADDRINUSE'
+    ? userError(`Port ${error.port} is already in use. Pass -p <port> to use another port.`)
+    : userError(error.message)
 }
 
-export function hekireki(args: readonly string[]) {
-  const command = args[0]
-  if (!command || command === '-h' || command === '--help') {
-    return { ok: true, value: HELP_TEXT } as const
+export function studioBanner(options: {
+  readonly port: number
+  readonly schemaPath: string
+  readonly error: string | null
+  readonly database: {
+    readonly connected: boolean
+    readonly dialect: string | null
+    readonly url: string | null
+    readonly error: string | null
   }
-  if (command === 'docs') {
-    return handleDocs(args.slice(1))
-  }
-  return { ok: false, error: `❌ Unknown command: ${command}\n\n${HELP_TEXT}` } as const
+}) {
+  const lines = [
+    `⚡️ Hekireki Studio started at http://localhost:${options.port}`,
+    `📄 Schema: ${path.resolve(options.schemaPath)} (watching for changes)`,
+    options.database.connected
+      ? `🗄️  Database: ${options.database.dialect ?? ''} ${options.database.url ?? ''}`.trimEnd()
+      : `🗄️  Database: not connected (schema only)\n   ${options.database.error ?? ''}`.trimEnd(),
+    ...(options.error === null
+      ? []
+      : [`⚠️  Schema has errors, fix them and Studio will reload:\n${options.error}`]),
+  ]
+  return lines.join('\n')
 }
 
-const result = hekireki(process.argv.slice(2))
-
-if (result.ok) {
-  console.log(result.value)
-} else {
-  console.error(result.error)
-  process.exit(1)
+export function docsBanner(options: {
+  readonly port: number
+  readonly schemaPath: string
+  readonly error: string | null
+}) {
+  const lines = [
+    `⚡️ Hekireki Docs started at http://localhost:${options.port}/docs`,
+    `📄 Schema: ${path.resolve(options.schemaPath)} (watching for changes)`,
+    ...(options.error === null
+      ? []
+      : [`⚠️  Schema has errors, fix them and the docs will reload:\n${options.error}`]),
+  ]
+  return lines.join('\n')
 }
+
+const port = Flag.integer('port').pipe(
+  Flag.withAlias('p'),
+  Flag.withDescription('Port to listen on'),
+  Flag.withDefault(DEFAULT_PORT),
+)
+
+const schema = Flag.string('schema').pipe(
+  Flag.withAlias('s'),
+  Flag.withDescription(
+    `Path to schema.prisma or a directory of .prisma files (default: ${DEFAULT_SCHEMA_PATHS.join(', then ')})`,
+  ),
+  Flag.optional,
+)
+
+const url = Flag.string('url').pipe(
+  Flag.withAlias('u'),
+  Flag.withDescription(
+    'Database connection URL for browsing and editing data (default: DATABASE_URL from the environment or .env, then datasource.url in prisma.config.ts)',
+  ),
+  Flag.optional,
+)
+
+function runStudio(config: {
+  readonly port: number
+  readonly schema: Option.Option<string>
+  readonly url: Option.Option<string>
+}) {
+  return Effect.gen(function* () {
+    const schemaPath = yield* resolveSchemaPath(Option.getOrNull(config.schema))
+    const started = yield* startStudioServer({
+      schemaPath,
+      port: config.port,
+      staticDir: STATIC_DIR,
+      databaseUrl: Option.getOrNull(config.url),
+    }).pipe(Effect.mapError(startError))
+    yield* Console.log(
+      studioBanner({
+        port: config.port,
+        schemaPath,
+        error: started.snapshot.error,
+        database: started.database,
+      }),
+    )
+    yield* Effect.never
+  }).pipe(Effect.scoped)
+}
+
+// Docs are Studio's /docs page served straight from the schema: nothing is generated and no
+// database is opened.
+function runDocs(config: { readonly port: number; readonly schema: Option.Option<string> }) {
+  return Effect.gen(function* () {
+    const schemaPath = yield* resolveSchemaPath(Option.getOrNull(config.schema))
+    const started = yield* startStudioServer({
+      schemaPath,
+      port: config.port,
+      staticDir: STATIC_DIR,
+      databaseUrl: null,
+      database: false,
+    }).pipe(Effect.mapError(startError))
+    yield* Console.log(docsBanner({ port: config.port, schemaPath, error: started.snapshot.error }))
+    yield* Effect.never
+  }).pipe(Effect.scoped)
+}
+
+const studio = Command.make('studio', { port, schema, url }, runStudio).pipe(
+  Command.withDescription(
+    'Open Hekireki Studio: ER diagram, model data and SQL for a Prisma schema',
+  ),
+)
+
+const docsServe = Command.make('serve', { port, schema }, runDocs).pipe(
+  Command.withDescription('Serve the schema documentation, live from schema.prisma'),
+)
+
+const docs = Command.make('docs').pipe(
+  Command.withDescription('Documentation tools'),
+  Command.withSubcommands([docsServe]),
+)
+
+/** The `hekireki` command tree; run it with `Command.run` / `Command.runWith`. */
+export const hekireki = Command.make('hekireki').pipe(
+  Command.withDescription('⚡️ Prisma schema tools'),
+  Command.withSubcommands([studio, docs]),
+)

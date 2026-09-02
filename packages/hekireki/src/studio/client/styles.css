@@ -1,0 +1,240 @@
+@import 'tailwindcss';
+@import '@xyflow/react/dist/style.css';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Semantic palette: light values on :root, dark values on .dark; Tailwind utilities read the
+   --color-* aliases, so every bg-canvas / text-muted / border-line switches with the theme. */
+:root {
+  --c-canvas: #f7f8fb;
+  --c-surface: #ffffff;
+  --c-surface-2: #fbfbfd;
+  --c-ink: #16181f;
+  --c-muted: #6b7084;
+  --c-faint: #9a9fb3;
+  --c-line: #e4e6ee;
+  --c-line-strong: #cfd3e0;
+  --c-accent: #4f46e5;
+  --c-accent-soft: #eef0ff;
+  --c-accent-text: #3f37c9;
+  --c-danger: #c2410c;
+  --c-danger-soft: #fff4ec;
+  --c-danger-line: #fed7aa;
+  --c-node: #1f2233;
+  --c-node-text: #f4f5fa;
+  --c-edge: #9095ab;
+  --c-dots: #d4d4dc;
+}
+
+.dark {
+  --c-canvas: #0f1117;
+  --c-surface: #171a23;
+  --c-surface-2: #1c202b;
+  --c-ink: #e6e8ef;
+  --c-muted: #9aa0b4;
+  --c-faint: #6b7189;
+  --c-line: #262b38;
+  --c-line-strong: #343a4a;
+  --c-accent: #7c74ff;
+  --c-accent-soft: #24264a;
+  --c-accent-text: #a5a0ff;
+  --c-danger: #fb923c;
+  --c-danger-soft: #2b1d14;
+  --c-danger-line: #5b3a1f;
+  --c-node: #2a2f45;
+  --c-node-text: #f4f5fa;
+  --c-edge: #6b7189;
+  --c-dots: #2a2f3d;
+}
+
+@theme inline {
+  --color-canvas: var(--c-canvas);
+  --color-surface: var(--c-surface);
+  --color-surface-2: var(--c-surface-2);
+  --color-ink: var(--c-ink);
+  --color-muted: var(--c-muted);
+  --color-faint: var(--c-faint);
+  --color-line: var(--c-line);
+  --color-line-strong: var(--c-line-strong);
+  --color-accent: var(--c-accent);
+  --color-accent-soft: var(--c-accent-soft);
+  --color-accent-text: var(--c-accent-text);
+  --color-danger: var(--c-danger);
+  --color-danger-soft: var(--c-danger-soft);
+  --color-danger-line: var(--c-danger-line);
+  --color-node: var(--c-node);
+  --color-node-text: var(--c-node-text);
+  --font-sans:
+    ui-sans-serif, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+  }
+
+  body {
+    @apply bg-canvas font-sans text-sm text-ink antialiased;
+  }
+}
+
+@layer components {
+  .toast {
+    border: 1px solid var(--c-line);
+    background: var(--c-surface);
+    color: var(--c-ink);
+  }
+  .btn {
+    @apply inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-3.5 text-sm font-medium whitespace-nowrap text-ink hover:bg-canvas disabled:cursor-default disabled:opacity-50;
+  }
+
+  .btn-ghost {
+    @apply border-transparent hover:border-line;
+  }
+
+  .btn-primary {
+    @apply border-accent bg-accent text-white hover:bg-accent-text;
+  }
+
+  .chip {
+    @apply rounded-md bg-accent-soft px-1.5 py-px font-mono text-[11.5px] whitespace-nowrap text-accent-text;
+  }
+
+  .tab {
+    @apply cursor-pointer border-0 border-b-2 border-transparent bg-transparent px-3 py-2 font-mono text-[12.5px] whitespace-nowrap text-muted hover:text-ink;
+  }
+
+  .tab-active {
+    @apply border-accent font-semibold text-accent-text;
+  }
+
+  .heading {
+    @apply mb-2 text-[11px] font-bold tracking-[0.08em] text-faint uppercase;
+  }
+
+  .cell-input {
+    @apply w-full min-w-24 rounded border border-accent bg-surface px-1.5 py-0.5 font-mono text-[12.5px] text-ink outline-none;
+  }
+
+  .error-box {
+    @apply rounded-[10px] border border-danger-line bg-danger-soft p-4 font-mono text-[12.5px] whitespace-pre-wrap text-ink;
+  }
+
+  .th {
+    @apply sticky top-0 border-b border-line bg-surface-2 px-3.5 py-2.5 text-left text-[12.5px] font-semibold whitespace-nowrap text-muted;
+  }
+}
+
+/* React Flow chrome */
+.react-flow__controls {
+  box-shadow: none;
+  border: 1px solid var(--c-line-strong);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.react-flow__controls-button {
+  border-bottom: 1px solid var(--c-line);
+  background: var(--c-surface);
+  color: var(--c-ink);
+  fill: var(--c-ink);
+  width: 30px;
+  height: 30px;
+}
+
+.react-flow__minimap {
+  border: 1px solid var(--c-line-strong);
+  border-radius: 8px;
+  background: var(--c-surface);
+}
+
+.react-flow__attribution {
+  display: none;
+}
+
+.model-handle.react-flow__handle {
+  width: 6px;
+  height: 6px;
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+.react-flow__edge.relation-edge .react-flow__edge-path {
+  stroke: var(--c-edge);
+  stroke-width: 1.4;
+}
+
+.react-flow__edge.relation-edge--annotated .react-flow__edge-path,
+.react-flow__edge.relation-edge--implicit-many-to-many .react-flow__edge-path {
+  stroke-dasharray: 5 4;
+}
+
+.react-flow__edge.is-highlighted .react-flow__edge-path {
+  stroke: var(--c-accent);
+  stroke-width: 2;
+}
+
+.react-flow__edge.is-dimmed {
+  opacity: 0.25;
+}
+
+.react-flow__edge-textbg {
+  fill: var(--c-surface);
+}
+
+.react-flow__edge-text {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  fill: var(--c-muted);
+}
+
+/* Syntax colours of the highlighted snippets (classHighlighter token classes). */
+.tok-keyword {
+  color: #7c3aed;
+}
+.tok-comment {
+  color: var(--c-muted);
+  font-style: italic;
+}
+.tok-string,
+.tok-string2 {
+  color: #0f766e;
+}
+.tok-number,
+.tok-bool,
+.tok-atom {
+  color: #b45309;
+}
+.tok-variableName,
+.tok-propertyName {
+  color: var(--c-ink);
+}
+.tok-definition {
+  color: #1d4ed8;
+}
+.tok-punctuation,
+.tok-operator {
+  color: var(--c-muted);
+}
+.dark .tok-keyword {
+  color: #c4b5fd;
+}
+.dark .tok-string,
+.dark .tok-string2 {
+  color: #5eead4;
+}
+.dark .tok-number,
+.dark .tok-bool,
+.dark .tok-atom {
+  color: #fcd34d;
+}
+.dark .tok-definition {
+  color: #93c5fd;
+}

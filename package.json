@@ -9,7 +9,8 @@
     "fix": "vp fmt && vp run -r check --fix",
     "test": "vp run --filter ./packages/hekireki test",
     "lang": "vp run hekireki#build && vp run --filter ./test test",
-    "example": "vp run hekireki#build && vp run --filter ./example generate"
+    "example": "vp run hekireki#build && vp run --filter ./example generate",
+    "studio": "vp run hekireki#build && hekireki studio --schema example/schema.prisma"
   },
   "dependencies": {
     "hekireki": "link:packages/hekireki"

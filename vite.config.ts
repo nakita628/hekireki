@@ -14,7 +14,21 @@ export default defineConfig({
     singleQuote: true,
     semi: false,
     sortPackageJson: true,
-    experimentalSortImports: {},
-    ignorePatterns: ['example/generated/**'],
+    sortImports: {},
+    // Tailwind classes are sorted the way prettier-plugin-tailwindcss would, against the Studio
+    // stylesheet (Tailwind v4 reads the theme from CSS). Only the root `fmt` block reaches oxfmt
+    // in a workspace, so the option lives here rather than in packages/hekireki.
+    sortTailwindcss: { stylesheet: './packages/hekireki/src/studio/client/styles.css' },
+    // hono-takibi output in packages/hekireki (formatted by the generator itself; see its
+    // hono-takibi.config.ts). Workspace-level `fmt.ignorePatterns` never reach oxfmt.
+    ignorePatterns: [
+      'example/generated/**',
+      'packages/hekireki/docs/studio-api.md',
+      'packages/hekireki/src/studio/client/hooks/index.ts',
+      'packages/hekireki/src/studio/client/routeTree.gen.ts',
+      'packages/hekireki/src/studio/server/handlers/index.ts',
+      'packages/hekireki/src/studio/server/index.ts',
+      'packages/hekireki/src/studio/server/routes/index.ts',
+    ],
   },
 })

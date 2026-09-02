@@ -19,7 +19,6 @@ const GENERATORS = [
   'atlas',
   'dbml',
   'django',
-  'docs',
   'drizzle',
   'ecto',
   'effect',
@@ -59,7 +58,6 @@ const EXPECTED = [
   { name: 'mermaid-er', kind: 'file', path: 'generated/mermaid-er/ER.md' },
   { name: 'dbml', kind: 'file', path: 'generated/dbml/schema.dbml' },
   { name: 'dbml (png)', kind: 'file', path: 'generated/dbml/er.png' },
-  { name: 'docs', kind: 'file', path: 'generated/docs/index.html' },
 ]
 
 if (!existsSync(join(dist, 'zod.js'))) {
