@@ -786,14 +786,35 @@ model Completions {
 // Documentation (the reference page `hekireki docs serve` renders)
 // ---------------------------------------------------------------------------
 
+/** Where a referenced type of the Prisma client API is declared, which decides what the page links to. */
+union DocsTypeLocation {
+  /** A scalar such as `String`, `Int`, `Decimal` or `Bytes`: shown as text */
+  `scalar`: "scalar",
+
+  /** An input type (`UserWhereInput`): linked to its section */
+  inputObjectTypes: "inputObjectTypes",
+
+  /** An output type (`User`, `AggregateUser`): linked to its section */
+  outputObjectTypes: "outputObjectTypes",
+
+  /** An enum (`Role`, `SortOrder`, `UserScalarFieldEnum`): linked to its section */
+  enumTypes: "enumTypes",
+
+  /** A field reference (`StringFieldRefInput`): shown as text */
+  fieldRefTypes: "fieldRefTypes",
+}
+
 /** A reference to a type in the Prisma client API. */
-@example(#{ type: "UserWhereInput", isList: false })
+@example(#{ type: "UserWhereInput", isList: false, location: "inputObjectTypes" })
 model DocsTypeRef {
-  /** The type name: a scalar, an input type or an output type */
+  /** The type name: a scalar, an enum, an input type or an output type */
   type: string;
 
   /** Whether the reference is a list of that type */
   isList: boolean;
+
+  /** Where the type is declared */
+  location: DocsTypeLocation;
 }
 
 /** A model-level attribute (`@@id`, `@@unique`, `@@index`) and the fields it covers. */
@@ -811,6 +832,7 @@ model DocsDirective {
   name: "email",
   type: "String",
   bareTypeName: "String",
+  kind: "scalar",
   directives: #["@unique"],
   documentation: "Sign-in address",
   required: true,
@@ -822,8 +844,11 @@ model DocsField {
   /** The type as written, with `?` for optional and `[]` for lists */
   type: string;
 
-  /** The type name without modifiers, used to link to the output type */
+  /** The type name without modifiers, used to link to the output type or enum */
   bareTypeName: string;
+
+  /** What the field holds: a relation links to the model's output type, an enum to its enum section */
+  kind: FieldKind;
 
   /** The field attributes (`@id`, `@unique`, `@default(...)`, `@updatedAt`) */
   directives: string[];
@@ -836,7 +861,11 @@ model DocsField {
 }
 
 /** One argument of a Prisma client operation. */
-@example(#{ name: "where", types: #[#{ type: "UserWhereUniqueInput", isList: false }], required: true })
+@example(#{
+  name: "where",
+  types: #[#{ type: "UserWhereUniqueInput", isList: false, location: "inputObjectTypes" }],
+  required: true,
+})
 model DocsOperationInput {
   /** The argument name */
   name: string;
@@ -866,7 +895,13 @@ model DocsOperationOutput {
   name: "findUnique",
   description: "Find zero or one User",
   usage: "// Get one User\nconst user = await prisma.user.findUnique({\n  where: {\n    // ... provide filter here\n  }\n})",
-  inputs: #[#{ name: "where", types: #[#{ type: "UserWhereUniqueInput", isList: false }], required: true }],
+  inputs: #[
+    #{
+      name: "where",
+      types: #[#{ type: "UserWhereUniqueInput", isList: false, location: "inputObjectTypes" }],
+      required: true,
+    }
+  ],
   output: #{ type: "User", required: false, list: false },
 })
 model DocsOperation {
@@ -912,7 +947,11 @@ model DocsModel {
 }
 
 /** One field of an input or output type of the Prisma client API. */
-@example(#{ name: "email", types: #[#{ type: "String", isList: false }], nullable: false })
+@example(#{
+  name: "email",
+  types: #[#{ type: "String", isList: false, location: "scalar" }],
+  nullable: false,
+})
 model DocsTypeField {
   /** The field name */
   name: string;
@@ -934,8 +973,18 @@ model DocsType {
   fields: DocsTypeField[];
 }
 
+/** One enum of the Prisma client API: a schema enum, or one Prisma derives (`SortOrder`, `UserScalarFieldEnum`). */
+@example(#{ name: "Role", values: #["ADMIN", "VIEWER"] })
+model DocsEnum {
+  /** The enum name */
+  name: string;
+
+  /** The values in declaration order */
+  values: string[];
+}
+
 /** Everything the documentation page shows: the models with their operations, then the client API types. */
-@example(#{ models: #[], inputTypes: #[], outputTypes: #[] })
+@example(#{ models: #[], inputTypes: #[], outputTypes: #[], enumTypes: #[] })
 @extension("x-brand", "Docs")
 model Docs {
   /** Every model in declaration order */
@@ -946,6 +995,9 @@ model Docs {
 
   /** The output types: the model types, then the aggregate / payload types */
   outputTypes: DocsType[];
+
+  /** The enums: the schema enums, then the ones Prisma derives (`SortOrder`, `UserScalarFieldEnum`, ...) */
+  enumTypes: DocsEnum[];
 }
 
 // ---------------------------------------------------------------------------

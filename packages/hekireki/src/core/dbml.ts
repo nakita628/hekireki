@@ -4,7 +4,7 @@ import type { GeneratorOptions } from '@prisma/generator-helper'
 import { Effect } from 'effect'
 
 import { emitRaw } from '../emit/index.js'
-import { dbmlContent, dbmlToPng } from '../generator/dbml.js'
+import { dbmlContent, erDiagramPng, erDiagramSvg } from '../generator/dbml.js'
 import { getString } from '../utils/index.js'
 import { GeneratorConfigError } from './errors.js'
 
@@ -22,9 +22,13 @@ export function dbml(options: GeneratorOptions) {
     }
     const output = options.generator.output.value
     const mapToDbSchema = getString(options.generator.config?.mapToDbSchema) !== 'false'
-    const content = dbmlContent(options.dmmf.datamodel, mapToDbSchema)
+    const theme = getString(options.generator.config?.theme) === 'dark' ? 'dark' : 'light'
     const outPath = resolveOutPath(output)
-    const payload = outPath.endsWith('.png') ? dbmlToPng(content) : content
+    const payload = outPath.endsWith('.png')
+      ? erDiagramPng(options.dmmf.datamodel, theme)
+      : outPath.endsWith('.svg')
+        ? erDiagramSvg(options.dmmf.datamodel, theme)
+        : dbmlContent(options.dmmf.datamodel, mapToDbSchema)
     return yield* emitRaw(payload, path.dirname(outPath), outPath)
   })
 }

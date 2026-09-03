@@ -4,30 +4,14 @@ import type * as z from 'zod'
 import { CodeBlock } from '@/components/code-block.js'
 
 import type { DocsSchema } from '../../../server/routes/index.js'
-import { isScalarType } from './scalar.js'
+import { fieldTypeAnchor, typeRefAnchor, typeSectionId } from './anchors.js'
+import { TypeLink } from './type-link.js'
 
 // The wire shape: the brand the server puts on checked Docs does not survive JSON.
 type Docs = z.input<typeof DocsSchema>
 type DocsModel = Docs['models'][number]
 
 const CELL = 'border-b border-line px-3.5 py-2.5 align-top text-[13px]'
-const LINK = 'font-mono text-[12.5px] font-semibold text-accent-text hover:underline'
-
-function TypeRef({
-  typeRef,
-  kind,
-}: {
-  readonly typeRef: { readonly type: string; readonly isList: boolean }
-  readonly kind: 'inputType' | 'outputType'
-}) {
-  const label = `${typeRef.type}${typeRef.isList ? '[]' : ''}`
-  if (isScalarType(typeRef.type)) return <span className="font-mono text-[12.5px]">{label}</span>
-  return (
-    <a className={LINK} href={`#type-${kind}-${typeRef.type}`}>
-      {label}
-    </a>
-  )
-}
 
 function FieldRow({
   field,
@@ -40,13 +24,7 @@ function FieldRow({
     <tr id={`model-${modelName}-${field.name}`} className="scroll-mt-4">
       <td className={`${CELL} font-mono font-semibold whitespace-nowrap`}>{field.name}</td>
       <td className={CELL}>
-        {isScalarType(field.bareTypeName) ? (
-          <span className="font-mono text-[12.5px]">{field.type}</span>
-        ) : (
-          <a className={LINK} href={`#type-outputType-${field.bareTypeName}`}>
-            {field.type}
-          </a>
-        )}
+        <TypeLink href={fieldTypeAnchor(field)} label={field.type} />
       </td>
       <td className={CELL}>
         <div className="flex flex-wrap gap-1">
@@ -98,7 +76,10 @@ function Operation({
                 {input.types.map((typeRef, index) => (
                   <Fragment key={`${typeRef.type}${typeRef.isList ? '[]' : ''}`}>
                     {index > 0 && <span className="text-faint"> | </span>}
-                    <TypeRef typeRef={typeRef} kind="inputType" />
+                    <TypeLink
+                      href={typeRefAnchor(typeRef)}
+                      label={`${typeRef.type}${typeRef.isList ? '[]' : ''}`}
+                    />
                   </Fragment>
                 ))}
               </td>
@@ -121,7 +102,10 @@ function Operation({
           {operation.output.type === null ? (
             <span className="text-faint">—</span>
           ) : (
-            <TypeRef typeRef={{ type: operation.output.type, isList: false }} kind="outputType" />
+            <TypeLink
+              href={`#${typeSectionId('outputType', operation.output.type)}`}
+              label={operation.output.type}
+            />
           )}
         </dd>
         <dt className="font-semibold">Required</dt>

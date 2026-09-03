@@ -1,8 +1,8 @@
 import * as v from 'valibot'
 
-export type Position = { readonly x: number; readonly y: number }
+import type { LayoutPositions } from '../../../diagram/layout.js'
 
-export type LayoutPositions = Readonly<Record<string, Position>>
+export type { LayoutPositions, Position } from '../../../diagram/layout.js'
 
 const PositionSchema = v.pipe(
   v.object({

@@ -14,12 +14,15 @@ import {
 } from '@xyflow/react'
 import type { Edge, OnSelectionChangeParams } from '@xyflow/react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { toast } from 'react-hot-toast'
 
 import type { Schema } from '../../../server/routes/index.js'
-import { LayoutIcon, RefreshIcon } from '../../components/icons.js'
+import { DownloadIcon, LayoutIcon, RefreshIcon } from '../../components/icons.js'
 import { ModelNode } from '../../components/model-node.js'
+import { errorMessage } from '../../lib/error.js'
 import { layoutStorageKey, loadLayout, saveLayout } from '../../lib/storage.js'
 import { useUiStore } from '../../lib/store.js'
+import { exportPng, exportSvg } from './export.js'
 import { buildEdges, buildNodes, highlightEdges } from './graph.js'
 import type { ModelNodeType } from './graph.js'
 import { autoLayout, positionsFor } from './layout.js'
@@ -107,6 +110,34 @@ function Canvas({
     setSelected(params.nodes.map((n) => n.id))
   }, [])
 
+  // The export draws the nodes where they are on the canvas, in the current theme.
+  const diagram = useCallback(
+    () => ({
+      models: schema.models,
+      relations: schema.relations,
+      positions: Object.fromEntries(nodes.map((n) => [n.id, n.position])),
+      theme,
+    }),
+    [schema, nodes, theme],
+  )
+  const [exporting, setExporting] = useState(false)
+  const onExportPng = useCallback(() => {
+    const run = async () => {
+      setExporting(true)
+      try {
+        await exportPng('schema.png', diagram())
+      } catch (e) {
+        toast.error(errorMessage(e))
+      } finally {
+        setExporting(false)
+      }
+    }
+    void run()
+  }, [diagram])
+  const onExportSvg = useCallback(() => {
+    exportSvg('schema.svg', diagram())
+  }, [diagram])
+
   const styledEdges = useMemo(() => highlightEdges(edges, selected), [edges, selected])
 
   return (
@@ -154,6 +185,30 @@ function Canvas({
               Refresh
             </button>
           ) : null}
+          {compact ? null : (
+            <>
+              <button
+                type="button"
+                className="btn"
+                onClick={onExportPng}
+                disabled={exporting || nodes.length === 0}
+                title="Download the diagram as a PNG image"
+              >
+                <DownloadIcon size={15} />
+                PNG
+              </button>
+              <button
+                type="button"
+                className="btn"
+                onClick={onExportSvg}
+                disabled={nodes.length === 0}
+                title="Download the diagram as an SVG image"
+              >
+                <DownloadIcon size={15} />
+                SVG
+              </button>
+            </>
+          )}
           <button
             type="button"
             className={`btn${compact ? ' h-8 px-2.5 text-xs' : ''}`}

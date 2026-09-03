@@ -124,9 +124,15 @@ generator Hekireki-DBML {
   output   = "generated/dbml/schema.dbml"
 }
 
+// The same provider draws the ER diagram when the output ends with .png or .svg.
 generator Hekireki-PNG {
   provider = "hekireki-dbml"
   output   = "generated/dbml/er.png"
+}
+
+generator Hekireki-SVG {
+  provider = "hekireki-dbml"
+  output   = "generated/dbml/er.svg"
 }
 
 /// User role. No @map: the value names are stored verbatim.

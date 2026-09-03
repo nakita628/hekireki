@@ -47,8 +47,13 @@ function studioApi(): Plugin {
       server.watcher.on('change', (file) => {
         if (file.endsWith('.prisma')) void Effect.runPromise(reload)
       })
-      server.middlewares.use('/api', (req, res) => {
-        void listener(req, res)
+      // Mounting on '/api' would strip the prefix the Hono app routes on, so the path is checked here.
+      server.middlewares.use((req, res, next) => {
+        if (req.url?.startsWith('/api/')) {
+          void listener(req, res)
+          return
+        }
+        next()
       })
     },
   }

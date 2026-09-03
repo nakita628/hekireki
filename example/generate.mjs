@@ -58,6 +58,7 @@ const EXPECTED = [
   { name: 'mermaid-er', kind: 'file', path: 'generated/mermaid-er/ER.md' },
   { name: 'dbml', kind: 'file', path: 'generated/dbml/schema.dbml' },
   { name: 'dbml (png)', kind: 'file', path: 'generated/dbml/er.png' },
+  { name: 'dbml (svg)', kind: 'file', path: 'generated/dbml/er.svg' },
 ]
 
 if (!existsSync(join(dist, 'zod.js'))) {

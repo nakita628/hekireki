@@ -35,7 +35,7 @@
 ### Diagrams & Documentation
 
 - 📊 Creates [Mermaid](https://mermaid.js.org/) ER diagrams with PK/FK markers
-- 📝 Generates [DBML](https://dbml.dbdiagram.io/) (Database Markup Language) files and **PNG** ER diagrams via [dbml-renderer](https://github.com/softwaretechnik-berlin/dbml-renderer) — output format is determined by the file extension (`.dbml` or `.png`)
+- 📝 Generates [DBML](https://dbml.dbdiagram.io/) (Database Markup Language) files and **PNG / SVG** ER diagrams drawn the way Hekireki Studio shows them — output format is determined by the file extension (`.dbml`, `.png` or `.svg`)
 
 ## Installation
 
@@ -1129,16 +1129,26 @@ Table Post {
 Ref Post_userId_fk: Post.userId > User.id
 ```
 
-### PNG
+### PNG / SVG
 
-The `hekireki-dbml` generator also outputs ER diagrams as PNG images when the `output` path ends with `.png`:
+The `hekireki-dbml` generator also draws the ER diagram when the `output` path ends with `.png` or `.svg`. The image is the same diagram Hekireki Studio shows: one card per model with its fields, keys and foreign keys, and a smoothstep edge per relation with its `onDelete` rule, laid out automatically. No external renderer is involved; the PNG is rasterised at 2x for crisp text.
 
 ```prisma
 generator Hekireki-PNG {
     provider = "hekireki-dbml"
     output   = "docs/er-diagram.png"
+    theme    = "light"            // Optional. "light" (default) or "dark"
+}
+
+generator Hekireki-SVG {
+    provider = "hekireki-dbml"
+    output   = "docs/er-diagram.svg"
 }
 ```
+
+Use `.svg` for files that live in the repository (small, crisp at any zoom, readable diffs) and `.png` for places that embed images (chat, wikis, slides); the PNG is rendered with the fonts of the machine that generated it, so it looks the same everywhere.
+
+Studio's Schema page has **PNG** / **SVG** buttons that export the same diagram with the models where you dragged them.
 
 ### Logical Relations (without a Foreign Key)
 
@@ -1314,18 +1324,18 @@ generator Hekireki-ER {
     output   = "./mermaid-er" // Required. A directory here yields ./mermaid-er/ER.md
 }
 
-// DBML Generator (output extension determines format: .dbml or .png)
+// DBML Generator (output extension determines format: .dbml, .png or .svg)
 generator Hekireki-DBML {
     provider = "hekireki-dbml"
-    output   = "docs/schema.dbml"    // Required. File path ending in .dbml or .png
+    output   = "docs/schema.dbml"    // Required. File path ending in .dbml, .png or .svg
     mapToDbSchema = true             // Map to DB schema names (default: true)
 }
 
-// PNG output (same provider, different extension)
+// PNG / SVG output (same provider, different extension): the ER diagram as Studio draws it
 generator Hekireki-PNG {
     provider = "hekireki-dbml"
-    output   = "docs/er-diagram.png" // Required. .png extension → PNG output
-    mapToDbSchema = true             // Map to DB schema names (default: true)
+    output   = "docs/er-diagram.png" // Required. .png → PNG image, .svg → SVG document
+    theme    = "light"               // "light" (default) or "dark"
 }
 
 // Docs Generator

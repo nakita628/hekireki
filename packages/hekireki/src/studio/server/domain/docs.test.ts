@@ -2,7 +2,7 @@ import { Effect } from 'effect'
 import { describe, expect, it } from 'vite-plus/test'
 
 import { parseSchemaFiles } from '../services/load.js'
-import { isScalarType, makeDocs } from './docs.js'
+import { makeDocs } from './docs.js'
 
 const SCHEMA = `datasource db {
   provider = "postgresql"
@@ -61,6 +61,16 @@ describe('makeDocs', () => {
       ['posts', 'Post[]', [], true],
     ])
     expect(user?.fields[1]?.documentation).toBe('Sign-in address')
+    // The kind decides what the page links to: relations to the output type, enums to the enum.
+    expect(user?.fields.map((f) => f.kind)).toStrictEqual([
+      'scalar',
+      'scalar',
+      'enum',
+      'scalar',
+      'scalar',
+      'scalar',
+      'object',
+    ])
     expect(user?.operations.map((op) => op.name)).toStrictEqual([
       'findUnique',
       'findFirst',
@@ -79,7 +89,7 @@ describe('makeDocs', () => {
     )
     expect(findUnique?.inputs?.map((i) => [i.name, i.required])).toStrictEqual([['where', true]])
     expect(findUnique?.inputs?.[0]?.types).toStrictEqual([
-      { type: 'UserWhereUniqueInput', isList: false },
+      { type: 'UserWhereUniqueInput', isList: false, location: 'inputObjectTypes' },
     ])
     expect(findUnique?.output).toStrictEqual({ type: 'User', required: false, list: false })
     const findMany = user?.operations[2]
@@ -91,19 +101,41 @@ describe('makeDocs', () => {
     expect(docs.inputTypes.some((t) => t.name === 'UserWhereInput')).toBe(true)
     const where = docs.inputTypes.find((t) => t.name === 'UserWhereUniqueInput')
     const email = where?.fields.find((f) => f.name === 'email')
-    expect(email?.types).toStrictEqual([{ type: 'String', isList: false }])
+    expect(email?.types).toStrictEqual([{ type: 'String', isList: false, location: 'scalar' }])
+    const role = docs.inputTypes
+      .find((t) => t.name === 'UserCreateInput')
+      ?.fields.find((f) => f.name === 'role')
+    expect(role?.types).toStrictEqual([{ type: 'Role', isList: false, location: 'enumTypes' }])
     expect(docs.outputTypes.slice(0, 2).map((t) => t.name)).toStrictEqual(['User', 'Post'])
     expect(docs.outputTypes.some((t) => t.name === 'Query' || t.name === 'Mutation')).toBe(false)
     const user = docs.outputTypes.find((t) => t.name === 'User')
     expect(user?.fields.find((f) => f.name === 'email')).toStrictEqual({
       name: 'email',
-      types: [{ type: 'String', isList: false }],
+      types: [{ type: 'String', isList: false, location: 'scalar' }],
       nullable: true,
     })
   })
 
-  it('tells scalars from client API types', () => {
-    expect(isScalarType('String')).toBe(true)
-    expect(isScalarType('UserWhereInput')).toBe(false)
+  it('lists the schema enums first, then the ones Prisma derives', () => {
+    const docs = docsOf(SCHEMA)
+    expect(docs.enumTypes[0]).toStrictEqual({ name: 'Role', values: ['ADMIN', 'VIEWER'] })
+    const names = docs.enumTypes.map((t) => t.name)
+    expect(names).toContain('SortOrder')
+    expect(names).toContain('UserScalarFieldEnum')
+    // Every non-scalar type the models and operations mention has a section to link to.
+    const sections = new Set([
+      ...docs.inputTypes.map((t) => t.name),
+      ...docs.outputTypes.map((t) => t.name),
+      ...names,
+    ])
+    const refs = [
+      ...docs.inputTypes.flatMap((t) => t.fields.flatMap((f) => f.types)),
+      ...docs.outputTypes.flatMap((t) => t.fields.flatMap((f) => f.types)),
+      ...docs.models
+        .flatMap((m) => m.operations.flatMap((op) => op.inputs ?? []))
+        .flatMap((i) => i.types),
+    ].filter((ref) => ref.location !== 'scalar' && ref.location !== 'fieldRefTypes')
+    expect(refs.length).toBeGreaterThan(0)
+    expect(refs.filter((ref) => !sections.has(ref.type))).toStrictEqual([])
   })
 })

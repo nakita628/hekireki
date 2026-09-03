@@ -1,6 +1,7 @@
 import type * as z from 'zod'
 
 import type { DocsSchema } from '../../../server/routes/index.js'
+import { typeSectionId } from './anchors.js'
 
 // The wire shape: the brand the server puts on checked Docs does not survive JSON.
 type Docs = z.input<typeof DocsSchema>
@@ -65,7 +66,7 @@ function TocModel({ model }: { readonly model: Docs['models'][number] }) {
   )
 }
 
-/** The table of contents: every model with its fields and operations, then the client API types. */
+/** The table of contents: every model with its fields and operations, then the client API types and enums. */
 export function Toc({ docs }: { readonly docs: Docs }) {
   return (
     <nav className="sticky top-0 hidden max-h-full w-64 shrink-0 overflow-y-auto border-r border-line px-4 py-5 lg:block">
@@ -94,7 +95,7 @@ export function Toc({ docs }: { readonly docs: Docs }) {
           </a>
           <TocList
             items={docs.inputTypes.map((t) => t.name)}
-            hrefOf={(t) => `#type-inputType-${t}`}
+            hrefOf={(t) => `#${typeSectionId('inputType', t)}`}
           />
         </li>
         <li className="mb-3">
@@ -106,7 +107,19 @@ export function Toc({ docs }: { readonly docs: Docs }) {
           </a>
           <TocList
             items={docs.outputTypes.map((t) => t.name)}
-            hrefOf={(t) => `#type-outputType-${t}`}
+            hrefOf={(t) => `#${typeSectionId('outputType', t)}`}
+          />
+        </li>
+        <li className="mb-3">
+          <a
+            className="block font-mono text-[13px] font-semibold hover:underline"
+            href="#enum-types"
+          >
+            Enum Types
+          </a>
+          <TocList
+            items={docs.enumTypes.map((t) => t.name)}
+            hrefOf={(t) => `#${typeSectionId('enum', t)}`}
           />
         </li>
       </ul>

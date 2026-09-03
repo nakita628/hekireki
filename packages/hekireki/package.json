@@ -85,7 +85,6 @@
     "@prisma/get-dmmf": "^7.10.0",
     "@prisma/prisma-schema-wasm": "7.10.0-4.0edf323efd1d98336f3f0a68684b56f689b900d3",
     "@resvg/resvg-js": "^2.6.2",
-    "@softwaretechnik/dbml-renderer": "^1.0.31",
     "effect": "^4.0.0-rc.112",
     "hono": "^4.12.32",
     "oxfmt": "^0.60.0",

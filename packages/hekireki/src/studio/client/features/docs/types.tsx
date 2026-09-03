@@ -2,38 +2,21 @@ import { Fragment } from 'react'
 import type * as z from 'zod'
 
 import type { DocsSchema } from '../../../server/routes/index.js'
-import { isScalarType } from './scalar.js'
+import { typeRefAnchor, typeSectionId } from './anchors.js'
+import { TypeLink } from './type-link.js'
 
 // The wire shape: the brand the server puts on checked Docs does not survive JSON.
 type Docs = z.input<typeof DocsSchema>
 type DocsType = Docs['inputTypes'][number]
+type DocsEnum = Docs['enumTypes'][number]
 type Kind = 'inputType' | 'outputType'
 
 const CELL = 'border-b border-line px-3.5 py-2.5 align-top text-[13px]'
 
-function TypeRef({
-  typeRef,
-  kind,
-}: {
-  readonly typeRef: DocsType['fields'][number]['types'][number]
-  readonly kind: Kind
-}) {
-  const label = `${typeRef.type}${typeRef.isList ? '[]' : ''}`
-  if (isScalarType(typeRef.type)) return <span className="font-mono text-[12.5px]">{label}</span>
-  return (
-    <a
-      className="font-mono text-[12.5px] font-semibold text-accent-text hover:underline"
-      href={`#type-${kind}-${typeRef.type}`}
-    >
-      {label}
-    </a>
-  )
-}
-
 function TypeSection({ type, kind }: { readonly type: DocsType; readonly kind: Kind }) {
   return (
     <section
-      id={`type-${kind}-${type.name}`}
+      id={typeSectionId(kind, type.name)}
       className="scroll-mt-4 border-b border-line px-6 py-5"
     >
       <h3 className="m-0 pb-2 font-mono text-[15px] font-bold">{type.name}</h3>
@@ -53,7 +36,10 @@ function TypeSection({ type, kind }: { readonly type: DocsType; readonly kind: K
                 {field.types.map((typeRef, index) => (
                   <Fragment key={`${typeRef.type}${typeRef.isList ? '[]' : ''}`}>
                     {index > 0 && <span className="text-faint"> | </span>}
-                    <TypeRef typeRef={typeRef} kind={kind} />
+                    <TypeLink
+                      href={typeRefAnchor(typeRef)}
+                      label={`${typeRef.type}${typeRef.isList ? '[]' : ''}`}
+                    />
                   </Fragment>
                 ))}
               </td>
@@ -66,7 +52,39 @@ function TypeSection({ type, kind }: { readonly type: DocsType; readonly kind: K
   )
 }
 
-/** The Types section: the input types, then the output types of the Prisma client API. */
+function EnumSection({ type }: { readonly type: DocsEnum }) {
+  return (
+    <section
+      id={typeSectionId('enum', type.name)}
+      className="scroll-mt-4 border-b border-line px-6 py-5"
+    >
+      <h3 className="m-0 pb-2 font-mono text-[15px] font-bold">{type.name}</h3>
+      <div className="flex flex-wrap gap-1.5">
+        {type.values.map((value) => (
+          <span key={value} className="chip">
+            {value}
+          </span>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function GroupHeading({
+  id,
+  children,
+}: {
+  readonly id: string
+  readonly children: React.ReactNode
+}) {
+  return (
+    <h2 id={id} className="m-0 scroll-mt-4 border-b border-line px-6 py-4 text-lg font-bold">
+      {children}
+    </h2>
+  )
+}
+
+/** The Types section: the input types, the output types, then the enums of the Prisma client API. */
 export function Types({ docs }: { readonly docs: Docs }) {
   return (
     <div>
@@ -76,23 +94,17 @@ export function Types({ docs }: { readonly docs: Docs }) {
       >
         Types
       </h1>
-      <h2
-        id="input-types"
-        className="m-0 scroll-mt-4 border-b border-line px-6 py-4 text-lg font-bold"
-      >
-        Input Types · {docs.inputTypes.length}
-      </h2>
+      <GroupHeading id="input-types">Input Types · {docs.inputTypes.length}</GroupHeading>
       {docs.inputTypes.map((type) => (
         <TypeSection key={type.name} type={type} kind="inputType" />
       ))}
-      <h2
-        id="output-types"
-        className="m-0 scroll-mt-4 border-b border-line px-6 py-4 text-lg font-bold"
-      >
-        Output Types · {docs.outputTypes.length}
-      </h2>
+      <GroupHeading id="output-types">Output Types · {docs.outputTypes.length}</GroupHeading>
       {docs.outputTypes.map((type) => (
         <TypeSection key={type.name} type={type} kind="outputType" />
+      ))}
+      <GroupHeading id="enum-types">Enum Types · {docs.enumTypes.length}</GroupHeading>
+      {docs.enumTypes.map((type) => (
+        <EnumSection key={type.name} type={type} />
       ))}
     </div>
   )

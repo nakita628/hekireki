@@ -25,7 +25,7 @@ export function createStudioState(input: z.infer<typeof CreateStudioStateInput>)
     docs: z.input<typeof DocsSchema>
   } = {
     snapshot: { schema: null, error: null, updatedAt: new Date(0).toISOString(), files: [] },
-    docs: { models: [], inputTypes: [], outputTypes: [] },
+    docs: { models: [], inputTypes: [], outputTypes: [], enumTypes: [] },
   }
   function load() {
     return Effect.gen(function* () {

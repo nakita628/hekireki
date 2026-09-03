@@ -1104,7 +1104,13 @@ export const DocsFieldSchema = z
       .openapi({ description: 'The type as written, with `?` for optional and `[]` for lists' }),
     bareTypeName: z
       .string()
-      .openapi({ description: 'The type name without modifiers, used to link to the output type' }),
+      .openapi({
+        description: 'The type name without modifiers, used to link to the output type or enum',
+      }),
+    kind: FieldKindSchema.openapi({
+      description:
+        "What the field holds: a relation links to the model's output type, an enum to its enum section",
+    }),
     directives: z
       .array(z.string())
       .openapi({
@@ -1114,12 +1120,13 @@ export const DocsFieldSchema = z
     required: z.boolean().openapi({ description: 'Whether the field is required' }),
   })
   .openapi({
-    required: ['name', 'type', 'bareTypeName', 'directives', 'documentation', 'required'],
+    required: ['name', 'type', 'bareTypeName', 'kind', 'directives', 'documentation', 'required'],
     description: 'One field of a model, as the documentation shows it.',
     example: {
       name: 'email',
       type: 'String',
       bareTypeName: 'String',
+      kind: 'scalar',
       directives: ['@unique'],
       documentation: 'Sign-in address',
       required: true,
@@ -1129,17 +1136,30 @@ export const DocsFieldSchema = z
 
 export type DocsField = z.infer<typeof DocsFieldSchema>
 
+export const DocsTypeLocationSchema = z
+  .enum(['scalar', 'inputObjectTypes', 'outputObjectTypes', 'enumTypes', 'fieldRefTypes'])
+  .openapi({
+    description:
+      'Where a referenced type of the Prisma client API is declared, which decides what the page links to.',
+  })
+  .openapi('DocsTypeLocation')
+
+export type DocsTypeLocation = z.infer<typeof DocsTypeLocationSchema>
+
 export const DocsTypeRefSchema = z
   .object({
     type: z
       .string()
-      .openapi({ description: 'The type name: a scalar, an input type or an output type' }),
+      .openapi({
+        description: 'The type name: a scalar, an enum, an input type or an output type',
+      }),
     isList: z.boolean().openapi({ description: 'Whether the reference is a list of that type' }),
+    location: DocsTypeLocationSchema.openapi({ description: 'Where the type is declared' }),
   })
   .openapi({
-    required: ['type', 'isList'],
+    required: ['type', 'isList', 'location'],
     description: 'A reference to a type in the Prisma client API.',
-    example: { type: 'UserWhereInput', isList: false },
+    example: { type: 'UserWhereInput', isList: false, location: 'inputObjectTypes' },
   })
   .openapi('DocsTypeRef')
 
@@ -1156,7 +1176,7 @@ export const DocsOperationInputSchema = z
     description: 'One argument of a Prisma client operation.',
     example: {
       name: 'where',
-      types: [{ type: 'UserWhereUniqueInput', isList: false }],
+      types: [{ type: 'UserWhereUniqueInput', isList: false, location: 'inputObjectTypes' }],
       required: true,
     },
   })
@@ -1202,7 +1222,11 @@ export const DocsOperationSchema = z
       usage:
         '// Get one User\nconst user = await prisma.user.findUnique({\n  where: {\n    // ... provide filter here\n  }\n})',
       inputs: [
-        { name: 'where', types: [{ type: 'UserWhereUniqueInput', isList: false }], required: true },
+        {
+          name: 'where',
+          types: [{ type: 'UserWhereUniqueInput', isList: false, location: 'inputObjectTypes' }],
+          required: true,
+        },
       ],
       output: { type: 'User', required: false, list: false },
     },
@@ -1250,7 +1274,11 @@ export const DocsTypeFieldSchema = z
   .openapi({
     required: ['name', 'types', 'nullable'],
     description: 'One field of an input or output type of the Prisma client API.',
-    example: { name: 'email', types: [{ type: 'String', isList: false }], nullable: false },
+    example: {
+      name: 'email',
+      types: [{ type: 'String', isList: false, location: 'scalar' }],
+      nullable: false,
+    },
   })
   .openapi('DocsTypeField')
 
@@ -1272,6 +1300,21 @@ export const DocsTypeSchema = z
 
 export type DocsType = z.infer<typeof DocsTypeSchema>
 
+export const DocsEnumSchema = z
+  .object({
+    name: z.string().openapi({ description: 'The enum name' }),
+    values: z.array(z.string()).openapi({ description: 'The values in declaration order' }),
+  })
+  .openapi({
+    required: ['name', 'values'],
+    description:
+      'One enum of the Prisma client API: a schema enum, or one Prisma derives (`SortOrder`, `UserScalarFieldEnum`).',
+    example: { name: 'Role', values: ['ADMIN', 'VIEWER'] },
+  })
+  .openapi('DocsEnum')
+
+export type DocsEnum = z.infer<typeof DocsEnumSchema>
+
 export const DocsSchema = z
   .object({
     models: z.array(DocsModelSchema).openapi({ description: 'Every model in declaration order' }),
@@ -1283,13 +1326,19 @@ export const DocsSchema = z
       .openapi({
         description: 'The output types: the model types, then the aggregate / payload types',
       }),
+    enumTypes: z
+      .array(DocsEnumSchema)
+      .openapi({
+        description:
+          'The enums: the schema enums, then the ones Prisma derives (`SortOrder`, `UserScalarFieldEnum`, ...)',
+      }),
   })
   .brand<'Docs'>()
   .openapi({
-    required: ['models', 'inputTypes', 'outputTypes'],
+    required: ['models', 'inputTypes', 'outputTypes', 'enumTypes'],
     description:
       'Everything the documentation page shows: the models with their operations, then the client API types.',
-    example: { models: [], inputTypes: [], outputTypes: [] },
+    example: { models: [], inputTypes: [], outputTypes: [], enumTypes: [] },
   })
   .openapi('Docs')
 

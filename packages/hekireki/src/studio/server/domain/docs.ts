@@ -64,8 +64,6 @@ const DefaultCall = z
   })
   .meta({ description: 'A `@default(fn(args))` value as DMMF encodes it' })
 
-const SCALAR_TYPES = new Set(['String', 'Boolean', 'Int', 'Float', 'Json', 'DateTime', 'Null'])
-
 const FIELD_DIRECTIVES = new Map<string, string>([
   ['isUnique', '@unique'],
   ['isId', '@id'],
@@ -171,9 +169,8 @@ function fieldType(field: DMMF.Field) {
   return field.isList ? `${name.replace('?', '')}[]` : name
 }
 
-/** Whether the type is a Prisma scalar rather than a client API type (which the page links to). */
-export function isScalarType(type: string) {
-  return SCALAR_TYPES.has(type)
+function typeRef(ref: DMMF.InputTypeRef | DMMF.OutputTypeRef) {
+  return { type: ref.type, isList: ref.isList, location: ref.location }
 }
 
 /** The documentation data of a parsed schema: models with their client operations, and the client API types. */
@@ -218,6 +215,7 @@ export function makeDocs(input: z.infer<typeof MakeDocsInput>) {
         name: field.name,
         type: fieldType(field),
         bareTypeName: field.type,
+        kind: field.kind,
         directives: fieldDirectives(field),
         documentation: field.documentation ?? null,
         required: field.isRequired,
@@ -234,7 +232,7 @@ export function makeDocs(input: z.infer<typeof MakeDocsInput>) {
           inputs:
             field?.args.map((arg) => ({
               name: arg.name,
-              types: arg.inputTypes.map((ref) => ({ type: ref.type, isList: ref.isList })),
+              types: arg.inputTypes.map(typeRef),
               required: arg.isRequired,
             })) ?? null,
           output: {
@@ -252,7 +250,7 @@ export function makeDocs(input: z.infer<typeof MakeDocsInput>) {
       name: type.name,
       fields: type.fields.map((field) => ({
         name: field.name,
-        types: field.inputTypes.map((ref) => ({ type: ref.type, isList: ref.isList })),
+        types: field.inputTypes.map(typeRef),
         nullable: field.isNullable,
       })),
     })),
@@ -265,10 +263,13 @@ export function makeDocs(input: z.infer<typeof MakeDocsInput>) {
       name: type.name,
       fields: type.fields.map((field) => ({
         name: field.name,
-        types: [{ type: field.outputType.type, isList: field.outputType.isList }],
+        types: [typeRef(field.outputType)],
         // The original page shows "Nullable: Yes" for non-null output fields; kept as it was.
         nullable: !field.isNullable,
       })),
     })),
+    enumTypes: [...(dmmf.schema.enumTypes.model ?? []), ...dmmf.schema.enumTypes.prisma].map(
+      (type) => ({ name: type.name, values: [...type.values] }),
+    ),
   }
 }

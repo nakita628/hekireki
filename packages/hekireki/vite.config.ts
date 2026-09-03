@@ -626,6 +626,31 @@ export default defineConfig({
         },
       },
       {
+        // The ER diagram renderer is shared by the generator (PNG output) and the studio client
+        // (export): pure layout and SVG text, with the resvg rasteriser as its only Node-side.
+        files: ['src/diagram/**'],
+        rules: {
+          'no-restricted-imports': [
+            'error',
+            {
+              paths: [
+                { name: 'node:fs', message: 'file I/O belongs in src/file' },
+                { name: 'node:fs/promises', message: 'file I/O belongs in src/file' },
+              ],
+              patterns: [
+                {
+                  regex:
+                    '^(\\.\\./)+(bin|cli|core|emit|format|file|generator|helper|utils|studio/client|studio/server)(/.*)?$',
+                  message:
+                    'diagram is pure: it only takes the contract types from studio/server/routes',
+                  allowTypeImports: true,
+                },
+              ],
+            },
+          ],
+        },
+      },
+      {
         files: ['src/emit/**'],
         rules: {
           'no-restricted-imports': [
@@ -697,7 +722,7 @@ export default defineConfig({
               ],
               patterns: [
                 {
-                  regex: '^(\\.\\./)+(emit|format|generator|helper|utils)(/.*)?$',
+                  regex: '^(\\.\\./)+(diagram|emit|format|generator|helper|utils)(/.*)?$',
                   message: 'bin may only import core, cli and file (the layer the entry provides)',
                 },
               ],
