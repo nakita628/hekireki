@@ -9,9 +9,9 @@ import { readFile } from '../../file/index.js'
 import { isLoopbackHostname } from '../../utils/index.js'
 import { FORBIDDEN_HOST_MESSAGE } from './constants/index.js'
 import { api } from './index.js'
-import type * as DatabaseService from './services/database.js'
-import * as RuntimeService from './services/runtime.js'
-import type * as StateService from './services/state.js'
+import type * as DatabaseService from './services/index.js'
+import * as RuntimeService from './services/index.js'
+import type * as StateService from './services/index.js'
 
 // The API is unauthenticated, so a page on another origin must not be able to read it even
 // when its DNS name resolves to this machine.

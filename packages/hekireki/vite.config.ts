@@ -141,7 +141,12 @@ export default defineConfig({
       'unicorn/no-lonely-if': 'error',
       'require-unicode-regexp': 'error',
       'import/no-cycle': 'error',
-      'import/no-duplicates': 'error',
+      // `custom/layer-namespace-import` has a usecases/services/domain module imported as a
+      // namespace through its layer barrel, so a file that uses several modules of one layer
+      // imports that barrel once per namespace (`import * as SqlDomain from '../domain/index.js'`
+      // beside `import * as ModelDomain from '../domain/index.js'`). Merging those is what the
+      // convention rejects, so this rule cannot apply.
+      'import/no-duplicates': 'off',
       // promise / node rules sit outside the enabled categories, so the ones
       // that matter for an async Node CLI are named explicitly.
       'promise/param-names': 'error',

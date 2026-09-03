@@ -8,9 +8,9 @@ import { isDirectory } from '../../file/index.js'
 import { createStudioApp } from './app.js'
 import { RELOAD_DEBOUNCE_MS, STUDIO_HOSTNAME } from './constants/index.js'
 import { SchemaLoadError, ServerListenError } from './errors/index.js'
-import * as DatabaseService from './services/database.js'
-import * as StateService from './services/state.js'
-import * as WatchService from './services/watch.js'
+import * as DatabaseService from './services/index.js'
+import * as StateService from './services/index.js'
+import * as WatchService from './services/index.js'
 
 /** Listens on loopback until the scope closes; a port already in use fails with ServerListenError. */
 export function listen(input: {

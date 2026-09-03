@@ -6,9 +6,9 @@ import { Effect } from 'effect'
 import * as z from 'zod'
 
 import { readFile } from '../../../file/index.js'
-import * as DatabaseErrorDomain from '../domain/database-error.js'
-import * as SqlDomain from '../domain/sql.js'
-import * as UrlDomain from '../domain/url.js'
+import * as DatabaseErrorDomain from '../domain/index.js'
+import * as SqlDomain from '../domain/index.js'
+import * as UrlDomain from '../domain/index.js'
 import { DatabaseError, DatabaseUnavailableError } from '../errors/index.js'
 
 type Statement = { readonly sql: string; readonly params: readonly unknown[] }

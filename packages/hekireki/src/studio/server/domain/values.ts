@@ -8,13 +8,13 @@ const Cell = z
   .union([z.string(), z.number(), z.boolean(), z.null()])
   .meta({ description: 'A JSON cell value as the UI sends and shows it' })
 
-const SerializeCellInput = z
+const MakeCellInput = z
   .object({ value: z.unknown().meta({ description: 'The raw driver value.' }) })
   .readonly()
   .meta({ description: 'Any value a database driver hands back' })
 
 /** Turns a driver value into a JSON cell: bigint and Date become strings, bytes base64, objects JSON text. */
-export function makeCell(input: z.infer<typeof SerializeCellInput>) {
+export function makeCell(input: z.infer<typeof MakeCellInput>) {
   const { value } = input
   if (value === null || value === undefined) return null
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
@@ -26,7 +26,7 @@ export function makeCell(input: z.infer<typeof SerializeCellInput>) {
   return JSON.stringify(value)
 }
 
-const ToDbValueInput = z
+const MakeDbValueInput = z
   .object({
     dialect: Dialect,
     field: z
@@ -45,7 +45,7 @@ const ToDbValueInput = z
   .meta({ description: 'A JSON cell from the UI and the Prisma field it is written to' })
 
 /** Converts a JSON cell into the value the driver binds for the field type and dialect. */
-export function makeDbValue(input: z.infer<typeof ToDbValueInput>): unknown {
+export function makeDbValue(input: z.infer<typeof MakeDbValueInput>): unknown {
   const { dialect, field, value } = input
   if (value === null) return null
   if (field.isList) {
@@ -86,17 +86,17 @@ export function makeDbValue(input: z.infer<typeof ToDbValueInput>): unknown {
   }
 }
 
-const RowFromDatabaseInput = z
+const MakeRowInput = z
   .object({
     row: z
       .record(z.string(), z.unknown())
       .readonly()
       .meta({ description: 'The driver row keyed by column.' }),
     columnToField: z
-      .custom<ReadonlyMap<string, string>>()
+      .map(z.string(), z.string())
       .meta({ description: 'Column name to Prisma field name.' }),
     columnToEnum: z
-      .custom<ReadonlyMap<string, ReadonlyMap<string, string>>>()
+      .map(z.string(), z.map(z.string(), z.string()))
       .optional()
       .meta({ description: 'Column name to the Prisma name of each stored enum value.' }),
   })
@@ -104,7 +104,7 @@ const RowFromDatabaseInput = z
   .meta({ description: 'A driver row and the column → field name mapping' })
 
 /** Renames columns back to field names, maps `@map`ped enum values back, and serializes every cell. */
-export function makeRow(input: z.infer<typeof RowFromDatabaseInput>) {
+export function makeRow(input: z.infer<typeof MakeRowInput>) {
   return Object.fromEntries(
     Object.entries(input.row).map(([column, value]) => {
       const named =

@@ -1,10 +1,10 @@
 import { Effect, Option } from 'effect'
 import * as z from 'zod'
 
-import * as DefaultsDomain from '../domain/defaults.js'
-import * as ModelDomain from '../domain/model.js'
-import * as SqlDomain from '../domain/sql.js'
-import * as ValuesDomain from '../domain/values.js'
+import * as DefaultsDomain from '../domain/index.js'
+import * as ModelDomain from '../domain/index.js'
+import * as SqlDomain from '../domain/index.js'
+import * as ValuesDomain from '../domain/index.js'
 import { ContractViolationError, InvalidInputError, UnknownModelError } from '../errors/index.js'
 import {
   AffectedSchema,
@@ -13,7 +13,7 @@ import {
   RowsSchema,
   SqlResultSchema,
 } from '../routes/index.js'
-import * as RuntimeService from '../services/runtime.js'
+import * as RuntimeService from '../services/index.js'
 
 /**
  * The connection status as the sidebar shows it.

@@ -8,27 +8,10 @@ import { Effect } from 'effect'
 import * as z from 'zod'
 
 import { isDirectory, readDirectory, readFile } from '../../../file/index.js'
-import * as DocsDomain from '../domain/docs.js'
-import * as SchemaDomain from '../domain/schema.js'
+import * as DocsDomain from '../domain/index.js'
+import * as SchemaDomain from '../domain/index.js'
 import { SchemaLoadError, SchemaParseError } from '../errors/index.js'
 import * as LanguageService from './language.js'
-
-const SchemaFileInput = z
-  .object({
-    path: z
-      .string()
-      .meta({ description: 'The file path as Studio loaded it.', example: 'prisma/schema.prisma' }),
-    content: z
-      .string()
-      .meta({ description: 'The whole file content.', example: 'model User {\n  id Int @id\n}\n' }),
-  })
-  .readonly()
-  .meta({ description: 'One schema file on disk' })
-
-function relativePath(file: string) {
-  const relative = path.relative(process.cwd(), file)
-  return relative === '' || relative.startsWith('..') ? file : relative
-}
 
 const ReadSchemaFilesInput = z
   .object({
@@ -72,7 +55,13 @@ export function readSchemaFiles(input: z.infer<typeof ReadSchemaFilesInput>) {
     }
     return yield* Effect.forEach(paths, (file) =>
       readFile(file).pipe(
-        Effect.map((content) => ({ path: relativePath(file), content })),
+        Effect.map((content) => {
+          // Paths are reported as Studio loaded them: relative to the working directory when the
+          // file lives under it, absolute otherwise.
+          const relative = path.relative(process.cwd(), file)
+          const loaded = relative === '' || relative.startsWith('..') ? file : relative
+          return { path: loaded, content }
+        }),
         Effect.mapError((error) => new SchemaLoadError({ message: error.message })),
       ),
     )
@@ -104,9 +93,25 @@ function prismaErrorMessage(error: Error) {
   }
 }
 
-const ParseSchemaFilesInput = z
+const ReadProviderInput = z
   .object({
-    files: z.array(SchemaFileInput).readonly().meta({ description: 'The loaded schema files.' }),
+    files: z
+      .array(
+        z
+          .object({
+            path: z.string().meta({
+              description: 'The file path as Studio loaded it.',
+              example: 'prisma/schema.prisma',
+            }),
+            content: z.string().meta({
+              description: 'The whole file content.',
+              example: 'model User {\n  id Int @id\n}\n',
+            }),
+          })
+          .readonly(),
+      )
+      .readonly()
+      .meta({ description: 'The loaded schema files.' }),
   })
   .readonly()
   .meta({ description: 'The schema files to parse together' })
@@ -131,7 +136,7 @@ const PrismaConfig = z
   .meta({ description: 'The get_config result of prisma-schema-wasm' })
 
 /** The provider of the first `datasource` block as Prisma parses it, or null without one. */
-function readProvider(input: z.infer<typeof ParseSchemaFilesInput>) {
+function readProvider(input: z.infer<typeof ReadProviderInput>) {
   return Effect.sync(() => {
     try {
       const result = PrismaConfig.safeParse(
@@ -151,6 +156,29 @@ function readProvider(input: z.infer<typeof ParseSchemaFilesInput>) {
     }
   })
 }
+
+const ParseSchemaFilesInput = z
+  .object({
+    files: z
+      .array(
+        z
+          .object({
+            path: z.string().meta({
+              description: 'The file path as Studio loaded it.',
+              example: 'prisma/schema.prisma',
+            }),
+            content: z.string().meta({
+              description: 'The whole file content.',
+              example: 'model User {\n  id Int @id\n}\n',
+            }),
+          })
+          .readonly(),
+      )
+      .readonly()
+      .meta({ description: 'The loaded schema files.' }),
+  })
+  .readonly()
+  .meta({ description: 'The schema files to parse together' })
 
 /**
  * Parses the files with the Prisma engine and maps the DMMF to the studio contract. The

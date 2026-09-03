@@ -9,13 +9,13 @@ import type {
   postSchemaReloadRoute,
   putSchemaFilesRoute,
 } from '../routes'
-import * as RuntimeService from '../services/runtime.js'
-import * as SchemaUseCase from '../usecases/schema.js'
+import * as RuntimeService from '../services/index.js'
+import * as SchemaUseCase from '../usecases/index.js'
 
 export const getSchemaRouteHandler: RouteHandler<typeof getSchemaRoute> = (c) =>
   RuntimeService.studioRuntime().runPromise(
     Effect.matchEffect(SchemaUseCase.readSnapshot(), {
-      onSuccess: (snapshot) => Effect.succeed(c.json(snapshot, 200)),
+      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           Match.tag('ContractViolationError', ({ message }) =>
@@ -43,7 +43,7 @@ export const getSchemaRouteHandler: RouteHandler<typeof getSchemaRoute> = (c) =>
 export const postSchemaReloadRouteHandler: RouteHandler<typeof postSchemaReloadRoute> = (c) =>
   RuntimeService.studioRuntime().runPromise(
     Effect.matchEffect(SchemaUseCase.reloadSnapshot(), {
-      onSuccess: (snapshot) => Effect.succeed(c.json(snapshot, 200)),
+      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           Match.tag('ContractViolationError', ({ message }) =>
@@ -72,7 +72,7 @@ export const putSchemaFilesRouteHandler: RouteHandler<typeof putSchemaFilesRoute
   const data = c.req.valid('json')
   return RuntimeService.studioRuntime().runPromise(
     Effect.matchEffect(SchemaUseCase.writeFile({ path: data.path, content: data.content }), {
-      onSuccess: (snapshot) => Effect.succeed(c.json(snapshot, 200)),
+      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           Match.tag('UnknownFileError', ({ path }) =>

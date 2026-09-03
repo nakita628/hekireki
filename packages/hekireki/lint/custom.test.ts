@@ -289,10 +289,10 @@ describe('layer import helpers', () => {
 tester.run('layer-namespace-import', rule('layer-namespace-import'), {
   valid: [
     tsCase(
-      `import * as PrismaUseCase from '../usecases/prisma.js'`,
+      `import * as PrismaUseCase from '../usecases/index.js'`,
       'src/studio/server/handlers/prisma.ts',
     ),
-    tsCase(`import type * as StateService from './services/state.js'`, 'src/studio/server/app.ts'),
+    tsCase(`import type * as StateService from './services/index.js'`, 'src/studio/server/app.ts'),
     tsCase(`import * as ValuesDomain from './values.js'`, 'src/studio/server/domain/model.ts'),
     tsCase(`import * as z from 'zod'`),
     tsCase(`import { Effect } from 'effect'`),
@@ -311,7 +311,7 @@ tester.run('layer-namespace-import', rule('layer-namespace-import'), {
   invalid: [
     {
       ...tsCase(
-        `import { formatText } from '../usecases/prisma.js'`,
+        `import * as PrismaUseCase from '../usecases/prisma.js'`,
         'src/studio/server/handlers/prisma.ts',
       ),
       errors: 1,
@@ -325,9 +325,13 @@ tester.run('layer-namespace-import', rule('layer-namespace-import'), {
     },
     {
       ...tsCase(
-        `import * as Prisma from '../usecases/prisma.js'`,
+        `import * as Prisma from '../usecases/index.js'`,
         'src/studio/server/handlers/prisma.ts',
       ),
+      errors: 1,
+    },
+    {
+      ...tsCase(`import * as LoadService from './index.js'`, 'src/studio/server/services/state.ts'),
       errors: 1,
     },
     {
@@ -336,7 +340,7 @@ tester.run('layer-namespace-import', rule('layer-namespace-import'), {
     },
     {
       ...tsCase(
-        `import { makeSchema } from '../domain/schema.js'`,
+        `import { makeSchema } from '../domain/index.js'`,
         'src/studio/server/services/load.ts',
       ),
       errors: 1,

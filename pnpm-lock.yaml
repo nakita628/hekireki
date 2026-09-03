@@ -35,6 +35,9 @@ importers:
       '@hono/zod-openapi':
         specifier: ^1.6.1
         version: 1.6.1(hono@4.12.34)(zod@4.4.3)
+      '@paralleldrive/cuid2':
+        specifier: ^3.3.0
+        version: 3.3.0
       '@prisma/generator-helper':
         specifier: ^7.9.0
         version: 7.9.0
@@ -50,15 +53,27 @@ importers:
       '@resvg/resvg-js':
         specifier: ^2.6.2
         version: 2.6.2
+      cuid:
+        specifier: ^3.0.0
+        version: 3.0.0
       effect:
         specifier: ^4.0.0-rc.112
         version: 4.0.0-rc.112
       hono:
         specifier: ^4.12.32
         version: 4.12.34
+      nanoid:
+        specifier: ^6.0.0
+        version: 6.0.0
       oxfmt:
         specifier: ^0.60.0
         version: 0.60.0(vite-plus@0.3.0(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(typescript@7.0.2)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))(yaml@2.9.0))
+      ulidx:
+        specifier: ^2.4.1
+        version: 2.4.1
+      uuid:
+        specifier: ^14.0.1
+        version: 14.0.1
       vscode-languageserver-textdocument:
         specifier: ^1.0.12
         version: 1.0.14
@@ -78,9 +93,6 @@ importers:
       '@monaco-editor/react':
         specifier: ^4.7.0
         version: 4.7.0(monaco-editor@0.56.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@paralleldrive/cuid2':
-        specifier: ^3.3.0
-        version: 3.3.0
       '@playwright/test':
         specifier: ^1.62.1
         version: 1.62.1
@@ -147,9 +159,6 @@ importers:
       better-auth:
         specifier: ^1.6.25
         version: 1.6.25(90e377c4f88407cfed2f6e2c101389eb)
-      cuid:
-        specifier: ^3.0.0
-        version: 3.0.0
       drizzle-kit:
         specifier: ^0.31.10
         version: 0.31.10
@@ -168,9 +177,6 @@ importers:
       monaco-editor:
         specifier: ^0.56.0
         version: 0.56.0
-      nanoid:
-        specifier: ^6.0.0
-        version: 6.0.0
       oxlint:
         specifier: 1.79.0
         version: 1.79.0(oxlint-tsgolint@7.0.2001)(vite-plus@0.3.0(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(typescript@7.0.2)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))(yaml@2.9.0))
@@ -195,12 +201,6 @@ importers:
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
-      ulidx:
-        specifier: ^2.4.1
-        version: 2.4.1
-      uuid:
-        specifier: ^14.0.1
-        version: 14.0.1
       valibot:
         specifier: 1.4.2
         version: 1.4.2(typescript@7.0.2)

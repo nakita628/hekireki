@@ -39,11 +39,14 @@
 //                                   are banned
 //   custom/predicate-is-name        a pure boolean predicate is `is*` (schema `Is*Input`),
 //                                   never `readIs*`
-//   custom/layer-namespace-import   a usecases/services/domain module is imported as a whole,
-//                                   `import * as PrismaUseCase from '../usecases/prisma.js'`
-//                                   (`*Service`, `*Domain` likewise), never through the barrel;
-//                                   the client imports lib through lib/index.js; every other
-//                                   namespace import stays banned (zod/valibot aside)
+//   custom/layer-namespace-import   a usecases/services/domain module is imported as a whole and
+//                                   through its layer barrel,
+//                                   `import * as PrismaUseCase from '../usecases/index.js'`
+//                                   (`*Service`, `*Domain` likewise) - the namespace names the
+//                                   module the path no longer does. A sibling of the same layer
+//                                   is imported directly (`./load.js`), the barrel would be a
+//                                   cycle; the client imports lib through lib/index.js; every
+//                                   other namespace import stays banned (zod/valibot aside)
 // Tests are exempt from the structural rules (effect-gen-return, function-declaration, no-let,
 // no-mutation): a test arranges and asserts imperatively when that is the clearest way to spell
 // the fixture out.
@@ -877,7 +880,7 @@ const plugin = {
       meta: {
         docs: {
           description:
-            'usecases/services/domain modules are imported as `import * as XxxUseCase|XxxService|XxxDomain`; the client imports lib through lib/index.js',
+            'usecases/services/domain modules are imported as `import * as XxxUseCase|XxxService|XxxDomain` through their layer barrel (a sibling of the same layer directly); the client imports lib through lib/index.js',
         },
       },
       create(context) {
@@ -910,25 +913,49 @@ const plugin = {
               }
               return
             }
-            if (target.module === 'index') {
+            // A sibling of the same layer keeps the direct import: its barrel re-exports the
+            // importing module, which would be a cycle.
+            const barrel = target.sibling ? source : source.replace(/[\w-]+\.js$/u, 'index.js')
+            if (!target.sibling && target.module !== 'index') {
               context.report({
                 node: node.source,
-                message: `Import the ${target.layer} module itself, not the barrel: \`import * as XxxUseCase from '../${target.layer}/xxx.js'\` says which module each call comes from.`,
+                message: `Import the ${target.layer} layer through its barrel: \`from '${barrel}'\`.`,
               })
               return
             }
-            const expected = layerNamespaceOf(target.layer, target.module)
+            if (target.sibling && target.module === 'index') {
+              context.report({
+                node: node.source,
+                message: `A ${target.layer} module imports its sibling directly, not the barrel it is part of: \`from './xxx.js'\`.`,
+              })
+              return
+            }
+            const suffix = LAYER_SUFFIXES[target.layer]
+            // A sibling is named after the module its path already names; through the barrel the
+            // path names none, so any `Xxx${suffix}` stands for the module it is used for.
+            const expected = target.sibling
+              ? layerNamespaceOf(target.layer, target.module)
+              : `Xxx${suffix}`
             if (!namespace || node.specifiers.length !== 1) {
               context.report({
                 node,
-                message: `Import the ${target.layer} module as a whole: \`import * as ${expected} from '${source}'\`, then call \`${expected}.fn(...)\`.`,
+                message: `Import the ${target.layer} module as a whole: \`import * as ${expected} from '${barrel}'\`, then call \`${expected}.fn(...)\`.`,
               })
               return
             }
-            if (namespace.local.name !== expected) {
+            if (target.sibling) {
+              if (namespace.local.name !== expected) {
+                context.report({
+                  node: namespace,
+                  message: `\`${namespace.local.name}\` must be named after its module and layer: \`${expected}\`.`,
+                })
+              }
+              return
+            }
+            if (!new RegExp(`^[A-Z][A-Za-z0-9]*${suffix}$`, 'u').test(namespace.local.name)) {
               context.report({
                 node: namespace,
-                message: `\`${namespace.local.name}\` must be named after its module and layer: \`${expected}\`.`,
+                message: `\`${namespace.local.name}\` must name the ${target.layer} module it stands for and end with \`${suffix}\` (\`import * as ${expected} from '${barrel}'\`).`,
               })
             }
           },

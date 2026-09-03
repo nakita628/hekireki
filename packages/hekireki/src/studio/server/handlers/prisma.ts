@@ -12,14 +12,14 @@ import type {
   postPrismaRenameRoute,
   postPrismaSymbolsRoute,
 } from '../routes'
-import * as RuntimeService from '../services/runtime.js'
-import * as PrismaUseCase from '../usecases/prisma.js'
+import * as RuntimeService from '../services/index.js'
+import * as PrismaUseCase from '../usecases/index.js'
 
 export const postPrismaFormatRouteHandler: RouteHandler<typeof postPrismaFormatRoute> = (c) => {
   const data = c.req.valid('json')
   return RuntimeService.studioRuntime().runPromise(
     Effect.matchEffect(PrismaUseCase.formatText({ text: data.text, path: data.path }), {
-      onSuccess: (formatted) => Effect.succeed(c.json(formatted, 200)),
+      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           Match.tag('FormatError', ({ cause }) =>
@@ -65,7 +65,7 @@ export const postPrismaLintRouteHandler: RouteHandler<typeof postPrismaLintRoute
   const data = c.req.valid('json')
   return RuntimeService.studioRuntime().runPromise(
     Effect.matchEffect(PrismaUseCase.lintText({ path: data.path, text: data.text }), {
-      onSuccess: (result) => Effect.succeed(c.json(result, 200)),
+      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           Match.tag('ContractViolationError', ({ message }) =>
@@ -103,7 +103,7 @@ export const postPrismaCompleteRouteHandler: RouteHandler<typeof postPrismaCompl
         triggerCharacter: data.triggerCharacter,
       }),
       {
-        onSuccess: (result) => Effect.succeed(c.json(result, 200)),
+        onSuccess: (value) => Effect.succeed(c.json(value, 200)),
         onFailure: (error) =>
           Match.value(error).pipe(
             Match.tag('ContractViolationError', ({ message }) =>
@@ -141,7 +141,7 @@ export const postPrismaHoverRouteHandler: RouteHandler<typeof postPrismaHoverRou
         character: data.character,
       }),
       {
-        onSuccess: (result) => Effect.succeed(c.json(result, 200)),
+        onSuccess: (value) => Effect.succeed(c.json(value, 200)),
         onFailure: (error) =>
           Match.value(error).pipe(
             Match.tag('ContractViolationError', ({ message }) =>
@@ -181,7 +181,7 @@ export const postPrismaDefinitionRouteHandler: RouteHandler<typeof postPrismaDef
         character: data.character,
       }),
       {
-        onSuccess: (result) => Effect.succeed(c.json(result, 200)),
+        onSuccess: (value) => Effect.succeed(c.json(value, 200)),
         onFailure: (error) =>
           Match.value(error).pipe(
             Match.tag('ContractViolationError', ({ message }) =>
@@ -220,7 +220,7 @@ export const postPrismaRenameRouteHandler: RouteHandler<typeof postPrismaRenameR
         newName: data.newName,
       }),
       {
-        onSuccess: (result) => Effect.succeed(c.json(result, 200)),
+        onSuccess: (value) => Effect.succeed(c.json(value, 200)),
         onFailure: (error) =>
           Match.value(error).pipe(
             Match.tag('ContractViolationError', ({ message }) =>
@@ -260,7 +260,7 @@ export const postPrismaCodeActionsRouteHandler: RouteHandler<typeof postPrismaCo
         diagnostics: data.diagnostics,
       }),
       {
-        onSuccess: (result) => Effect.succeed(c.json(result, 200)),
+        onSuccess: (value) => Effect.succeed(c.json(value, 200)),
         onFailure: (error) =>
           Match.value(error).pipe(
             Match.tag('ContractViolationError', ({ message }) =>
@@ -291,7 +291,7 @@ export const postPrismaSymbolsRouteHandler: RouteHandler<typeof postPrismaSymbol
   const data = c.req.valid('json')
   return RuntimeService.studioRuntime().runPromise(
     Effect.matchEffect(PrismaUseCase.symbolsOf({ text: data.text, path: data.path }), {
-      onSuccess: (result) => Effect.succeed(c.json(result, 200)),
+      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           Match.tag('ContractViolationError', ({ message }) =>
@@ -330,7 +330,7 @@ export const postPrismaReferencesRouteHandler: RouteHandler<typeof postPrismaRef
         character: data.character,
       }),
       {
-        onSuccess: (result) => Effect.succeed(c.json(result, 200)),
+        onSuccess: (value) => Effect.succeed(c.json(value, 200)),
         onFailure: (error) =>
           Match.value(error).pipe(
             Match.tag('ContractViolationError', ({ message }) =>

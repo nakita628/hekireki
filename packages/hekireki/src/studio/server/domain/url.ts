@@ -2,7 +2,7 @@ import path from 'node:path'
 
 import * as z from 'zod'
 
-const ParseDotenvInput = z
+const MakeDotenvInput = z
   .object({
     text: z
       .string()
@@ -16,7 +16,7 @@ const ParseDotenvInput = z
 
 /** Reads `KEY=value` lines (quoted or bare, `export` allowed, `#` comments stripped). */
 export function makeDotenv(
-  input: z.infer<typeof ParseDotenvInput>,
+  input: z.infer<typeof MakeDotenvInput>,
 ): Readonly<Record<string, string>> {
   return Object.fromEntries(
     input.text.split('\n').flatMap((line) => {
@@ -34,7 +34,7 @@ export function makeDotenv(
   )
 }
 
-const ConfigDatasourceUrlInput = z
+const MakeDatasourceUrlInput = z
   .object({
     configText: z.string().meta({
       description: 'The file text.',
@@ -46,7 +46,7 @@ const ConfigDatasourceUrlInput = z
 
 /** The `datasource.url` of prisma.config.ts, as `env("NAME")` or a literal; other shapes are not recognised. */
 export function makeDatasourceUrl(
-  input: z.infer<typeof ConfigDatasourceUrlInput>,
+  input: z.infer<typeof MakeDatasourceUrlInput>,
 ):
   | { readonly kind: 'env'; readonly name: string }
   | { readonly kind: 'literal'; readonly value: string }
@@ -59,7 +59,7 @@ export function makeDatasourceUrl(
   return literal ? { kind: 'literal', value: literal } : null
 }
 
-const ResolveDatabaseUrlInput = z
+const MakeDatabaseUrlInput = z
   .object({
     explicit: z
       .string()
@@ -82,7 +82,7 @@ const ResolveDatabaseUrlInput = z
   .meta({ description: 'Every place a database URL can come from, in precedence order' })
 
 /** `--url`, then DATABASE_URL (environment, then .env), then prisma.config.ts. */
-export function makeDatabaseUrl(input: z.infer<typeof ResolveDatabaseUrlInput>) {
+export function makeDatabaseUrl(input: z.infer<typeof MakeDatabaseUrlInput>) {
   if (input.explicit !== null) {
     return { ok: true, value: { url: input.explicit, source: 'flag' } } as const
   }
@@ -113,7 +113,7 @@ export function makeDatabaseUrl(input: z.infer<typeof ResolveDatabaseUrlInput>) 
   } as const
 }
 
-const DialectFromUrlInput = z
+const MakeDialectInput = z
   .object({
     url: z
       .string()
@@ -128,7 +128,7 @@ const DialectFromUrlInput = z
 
 /** The dialect from the URL scheme, falling back to the schema provider. */
 export function makeDialect(
-  input: z.infer<typeof DialectFromUrlInput>,
+  input: z.infer<typeof MakeDialectInput>,
 ): 'postgresql' | 'mysql' | 'sqlite' | null {
   const scheme = input.url.split(':')[0]?.toLowerCase() ?? ''
   if (scheme === 'postgres' || scheme === 'postgresql') return 'postgresql'
@@ -141,7 +141,7 @@ export function makeDialect(
   return null
 }
 
-const SqliteFilePathInput = z
+const MakeSqliteFilePathInput = z
   .object({
     url: z.string().meta({ description: 'The sqlite URL.', example: 'file:./dev.db' }),
     baseDir: z
@@ -152,13 +152,13 @@ const SqliteFilePathInput = z
   .meta({ description: 'A file: URL and the directory relative paths resolve against' })
 
 /** The database file for a `file:` URL, relative to the schema directory; `:memory:` stays as is. */
-export function makeSqliteFilePath(input: z.infer<typeof SqliteFilePathInput>) {
+export function makeSqliteFilePath(input: z.infer<typeof MakeSqliteFilePathInput>) {
   const target = input.url.replace(/^file:/u, '').split('?')[0] ?? ''
   if (target === ':memory:' || target === '') return ':memory:'
   return path.isAbsolute(target) ? target : path.resolve(input.baseDir, target)
 }
 
-const RedactUrlInput = z
+const MakeRedactedUrlInput = z
   .object({
     url: z.string().meta({
       description: 'The connection URL.',
@@ -172,11 +172,11 @@ const RedactUrlInput = z
   })
 
 /** Hides the password of a connection URL. */
-export function makeRedactedUrl(input: z.infer<typeof RedactUrlInput>) {
+export function makeRedactedUrl(input: z.infer<typeof MakeRedactedUrlInput>) {
   return input.url.replace(/(\/\/[^:/@]+:)[^@/]+@/u, '$1***@')
 }
 
-const PostgresSchemaInput = z
+const MakePostgresSchemaInput = z
   .object({
     url: z.string().meta({
       description: 'The PostgreSQL connection URL.',
@@ -193,7 +193,7 @@ const PostgresSchemaInput = z
  * The `?schema=` of a PostgreSQL URL, as Prisma spells the namespace to use. `pg` ignores the
  * parameter, so Studio sets the search path itself; `public` needs no setting.
  */
-export function makePostgresSchema(input: z.infer<typeof PostgresSchemaInput>) {
+export function makePostgresSchema(input: z.infer<typeof MakePostgresSchemaInput>) {
   try {
     const name = new URL(input.url).searchParams.get('schema')
     return name === null || name === '' || name === 'public' ? null : name

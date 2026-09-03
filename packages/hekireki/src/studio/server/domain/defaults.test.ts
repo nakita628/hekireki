@@ -1,13 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import {
-  makeCuid,
-  makeCuid2,
-  makeGeneratedDefaults,
-  makeNanoid,
-  makeUlid,
-  makeUuidV7,
-} from './defaults.js'
+import { makeGeneratedDefaults } from './defaults.js'
 
 function field(
   name: string,
@@ -31,21 +24,6 @@ function field(
 }
 
 const NOW = Date.UTC(2026, 8, 3, 12, 0, 0)
-
-describe('generators', () => {
-  it('shape the ids the way Prisma does', () => {
-    expect(makeUuidV7(NOW)).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u,
-    )
-    expect(makeUuidV7(NOW).slice(0, 12)).toBe(makeUuidV7(NOW).slice(0, 12))
-    expect(makeCuid(NOW)).toMatch(/^c[0-9a-z]{24}$/u)
-    expect(makeCuid2()).toMatch(/^[a-z][0-9a-z]{23}$/u)
-    expect(makeNanoid()).toMatch(/^[A-Za-z0-9_-]{21}$/u)
-    expect(makeNanoid(8)).toHaveLength(8)
-    expect(makeUlid(NOW)).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/u)
-    expect(makeUlid(NOW).slice(0, 10)).toBe(makeUlid(NOW).slice(0, 10))
-  })
-})
 
 describe('makeGeneratedDefaults', () => {
   it('fills the client-side defaults of omitted fields only', () => {

@@ -2,7 +2,7 @@ import { Effect } from 'effect'
 
 import { ContractViolationError } from '../errors/index.js'
 import { DocsSchema } from '../routes/index.js'
-import * as RuntimeService from '../services/runtime.js'
+import * as RuntimeService from '../services/index.js'
 
 /**
  * The documentation of the last schema that parsed: models with their client operations, and the client API types.

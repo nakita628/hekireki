@@ -3,8 +3,8 @@ import * as z from 'zod'
 
 import { ContractViolationError, UnknownFileError } from '../errors/index.js'
 import { SnapshotSchema } from '../routes/index.js'
-import * as RuntimeService from '../services/runtime.js'
-import * as SchemaService from '../services/schema.js'
+import * as RuntimeService from '../services/index.js'
+import * as SchemaService from '../services/index.js'
 
 /**
  * The current snapshot: the last valid schema, the current Prisma error and the files on disk.

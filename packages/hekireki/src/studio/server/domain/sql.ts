@@ -4,7 +4,7 @@ const Dialect = z
   .enum(['postgresql', 'mysql', 'sqlite'])
   .meta({ description: 'The SQL dialect of the connected database', example: 'postgresql' })
 
-const QuoteIdentifierInput = z
+const MakeIdentifierInput = z
   .object({
     dialect: Dialect,
     name: z.string().meta({ description: 'A table or column name.', example: 'users' }),
@@ -16,13 +16,13 @@ const QuoteIdentifierInput = z
   })
 
 /** Quotes a table or column name for the dialect, escaping embedded quotes. */
-export function makeIdentifier(input: z.infer<typeof QuoteIdentifierInput>) {
+export function makeIdentifier(input: z.infer<typeof MakeIdentifierInput>) {
   return input.dialect === 'mysql'
     ? `\`${input.name.replaceAll('`', '``')}\``
     : `"${input.name.replaceAll('"', '""')}"`
 }
 
-const StatementTextInput = z
+const IsReadStatementInput = z
   .object({
     sql: z.string().meta({ description: 'One SQL statement.', example: 'SELECT * FROM users' }),
   })
@@ -30,11 +30,11 @@ const StatementTextInput = z
   .meta({ description: 'A statement to classify', example: { sql: 'SELECT * FROM users' } })
 
 /** Whether the statement returns rows (SELECT and friends) rather than a change count. */
-export function isReadStatement(input: z.infer<typeof StatementTextInput>) {
+export function isReadStatement(input: z.infer<typeof IsReadStatementInput>) {
   return /^\s*(?:select|with|pragma|explain|show|describe|values)\b/iu.test(input.sql)
 }
 
-const PlaceholderInput = z
+const MakePlaceholderInput = z
   .object({
     dialect: Dialect,
     index: z
@@ -49,8 +49,8 @@ const PlaceholderInput = z
     example: { dialect: 'postgresql', index: 1 },
   })
 
-/** The bound-parameter makePlaceholder: `$n` for PostgreSQL, `?` elsewhere. */
-export function makePlaceholder(input: z.infer<typeof PlaceholderInput>) {
+/** The bound-parameter placeholder: `$n` for PostgreSQL, `?` elsewhere. */
+export function makePlaceholder(input: z.infer<typeof MakePlaceholderInput>) {
   return input.dialect === 'postgresql' ? `$${input.index}` : '?'
 }
 
@@ -72,7 +72,7 @@ function searchClause(
   return { sql: ` WHERE (${parts.join(' OR ')})`, params: columns.map(() => `%${term}%`) }
 }
 
-const SelectStatementInput = z
+const MakeSelectStatementInput = z
   .object({
     dialect: Dialect,
     table: z.string().meta({ description: 'The table to read.', example: 'users' }),
@@ -94,7 +94,7 @@ const SelectStatementInput = z
   .meta({ description: 'A paged, searched, ordered read of one table' })
 
 /** `SELECT ... FROM table [WHERE search] [ORDER BY key] LIMIT ? OFFSET ?` with its parameters. */
-export function makeSelectStatement(input: z.infer<typeof SelectStatementInput>) {
+export function makeSelectStatement(input: z.infer<typeof MakeSelectStatementInput>) {
   const { dialect } = input
   const where = searchClause(dialect, input.columns, input.search, 1)
   const order =
@@ -109,7 +109,7 @@ export function makeSelectStatement(input: z.infer<typeof SelectStatementInput>)
   }
 }
 
-const CountStatementInput = z
+const MakeCountStatementInput = z
   .object({
     dialect: Dialect,
     table: z.string().meta({ description: 'The table to count.', example: 'users' }),
@@ -126,7 +126,7 @@ const CountStatementInput = z
   .meta({ description: 'A count of one table, optionally narrowed by the same search' })
 
 /** `SELECT COUNT(*) AS "count" FROM table [WHERE search]`. */
-export function makeCountStatement(input: z.infer<typeof CountStatementInput>) {
+export function makeCountStatement(input: z.infer<typeof MakeCountStatementInput>) {
   const { dialect } = input
   const where = searchClause(dialect, input.columns, input.search, 1)
   return {
@@ -135,7 +135,7 @@ export function makeCountStatement(input: z.infer<typeof CountStatementInput>) {
   }
 }
 
-const InsertStatementInput = z
+const MakeInsertStatementInput = z
   .object({
     dialect: Dialect,
     table: z.string().meta({ description: 'The table to insert into.', example: 'users' }),
@@ -148,7 +148,7 @@ const InsertStatementInput = z
   .meta({ description: 'Column values to insert as one row' })
 
 /** `INSERT INTO table (cols) VALUES (...)`, or a defaults-only insert when no values are given. */
-export function makeInsertStatement(input: z.infer<typeof InsertStatementInput>) {
+export function makeInsertStatement(input: z.infer<typeof MakeInsertStatementInput>) {
   const { dialect } = input
   const table = makeIdentifier({ dialect, name: input.table })
   const entries = Object.entries(input.values)
@@ -184,7 +184,7 @@ function whereByKey(
   }
 }
 
-const UpdateStatementInput = z
+const MakeUpdateStatementInput = z
   .object({
     dialect: Dialect,
     table: z.string().meta({ description: 'The table to update.', example: 'users' }),
@@ -201,7 +201,7 @@ const UpdateStatementInput = z
   .meta({ description: 'Column values to set on the row identified by `where`' })
 
 /** `UPDATE table SET ... WHERE key = ? AND ...`. */
-export function makeUpdateStatement(input: z.infer<typeof UpdateStatementInput>) {
+export function makeUpdateStatement(input: z.infer<typeof MakeUpdateStatementInput>) {
   const { dialect } = input
   const sets = Object.entries(input.values)
   const where = whereByKey(dialect, input.where, sets.length + 1)
@@ -216,7 +216,7 @@ export function makeUpdateStatement(input: z.infer<typeof UpdateStatementInput>)
   }
 }
 
-const DeleteStatementInput = z
+const MakeDeleteStatementInput = z
   .object({
     dialect: Dialect,
     table: z.string().meta({ description: 'The table to delete from.', example: 'users' }),
@@ -229,7 +229,7 @@ const DeleteStatementInput = z
   .meta({ description: 'The key of the row to delete' })
 
 /** `DELETE FROM table WHERE key = ? AND ...`. */
-export function makeDeleteStatement(input: z.infer<typeof DeleteStatementInput>) {
+export function makeDeleteStatement(input: z.infer<typeof MakeDeleteStatementInput>) {
   const { dialect } = input
   const where = whereByKey(dialect, input.where, 1)
   return {

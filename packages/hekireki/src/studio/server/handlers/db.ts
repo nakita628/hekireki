@@ -10,13 +10,13 @@ import type {
   postDbRowsModelNameRoute,
   postDbSqlRoute,
 } from '../routes'
-import * as RuntimeService from '../services/runtime.js'
-import * as DatabaseUseCase from '../usecases/database.js'
+import * as RuntimeService from '../services/index.js'
+import * as DatabaseUseCase from '../usecases/index.js'
 
 export const getDbRouteHandler: RouteHandler<typeof getDbRoute> = (c) =>
   RuntimeService.studioRuntime().runPromise(
     Effect.matchEffect(DatabaseUseCase.readDbStatus(), {
-      onSuccess: (status) => Effect.succeed(c.json(status, 200)),
+      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           Match.tag('ContractViolationError', ({ message }) =>
@@ -44,7 +44,7 @@ export const getDbRouteHandler: RouteHandler<typeof getDbRoute> = (c) =>
 export const getDbCountsRouteHandler: RouteHandler<typeof getDbCountsRoute> = (c) =>
   RuntimeService.studioRuntime().runPromise(
     Effect.matchEffect(DatabaseUseCase.readCounts(), {
-      onSuccess: (counts) => Effect.succeed(c.json(counts, 200)),
+      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           Match.tag('DatabaseUnavailableError', ({ reason }) =>
@@ -96,7 +96,7 @@ export const getDbRowsModelNameRouteHandler: RouteHandler<typeof getDbRowsModelN
         search: query.search,
       }),
       {
-        onSuccess: (rows) => Effect.succeed(c.json(rows, 200)),
+        onSuccess: (value) => Effect.succeed(c.json(value, 200)),
         onFailure: (error) =>
           Match.value(error).pipe(
             Match.tag('UnknownModelError', ({ model }) =>
@@ -179,7 +179,7 @@ export const postDbRowsModelNameRouteHandler: RouteHandler<typeof postDbRowsMode
     Effect.matchEffect(
       DatabaseUseCase.insertRow({ modelName: param.modelName, values: data.values }),
       {
-        onSuccess: (result) => Effect.succeed(c.json(result, 200)),
+        onSuccess: (value) => Effect.succeed(c.json(value, 200)),
         onFailure: (error) =>
           Match.value(error).pipe(
             Match.tag('UnknownModelError', ({ model }) =>
@@ -266,7 +266,7 @@ export const patchDbRowsModelNameRouteHandler: RouteHandler<typeof patchDbRowsMo
         values: data.values,
       }),
       {
-        onSuccess: (result) => Effect.succeed(c.json(result, 200)),
+        onSuccess: (value) => Effect.succeed(c.json(value, 200)),
         onFailure: (error) =>
           Match.value(error).pipe(
             Match.tag('UnknownModelError', ({ model }) =>
@@ -365,7 +365,7 @@ export const deleteDbRowsModelNameRouteHandler: RouteHandler<typeof deleteDbRows
     Effect.matchEffect(
       DatabaseUseCase.deleteRow({ modelName: param.modelName, where: data.where }),
       {
-        onSuccess: (result) => Effect.succeed(c.json(result, 200)),
+        onSuccess: (value) => Effect.succeed(c.json(value, 200)),
         onFailure: (error) =>
           Match.value(error).pipe(
             Match.tag('UnknownModelError', ({ model }) =>
@@ -459,7 +459,7 @@ export const postDbSqlRouteHandler: RouteHandler<typeof postDbSqlRoute> = (c) =>
   const data = c.req.valid('json')
   return RuntimeService.studioRuntime().runPromise(
     Effect.matchEffect(DatabaseUseCase.runSql({ sql: data.sql }), {
-      onSuccess: (result) => Effect.succeed(c.json(result, 200)),
+      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           Match.tag('DatabaseUnavailableError', ({ reason }) =>
