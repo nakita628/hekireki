@@ -396,13 +396,11 @@ function workspaceEdits(changes: readonly LspFileEdit[]) {
     const model = editor.getModel(uri)
     return model === null
       ? []
-      : change.edits.map(
-          (edit): languages.IWorkspaceTextEdit => ({
-            resource: uri,
-            versionId: model.getVersionId(),
-            textEdit: { range: toRange(edit.range), text: edit.newText },
-          }),
-        )
+      : change.edits.map((edit): languages.IWorkspaceTextEdit => ({
+          resource: uri,
+          versionId: model.getVersionId(),
+          textEdit: { range: toRange(edit.range), text: edit.newText },
+        }))
   })
 }
 
@@ -445,20 +443,18 @@ const DIAGNOSTIC_SEVERITIES = {
 function codeActionProvider(): languages.CodeActionProvider {
   return {
     provideCodeActions: async (model, range, context) => {
-      const diagnostics = context.markers.map(
-        (marker): PlainDiagnostic => ({
-          range: fromRange(
-            new Range(
-              marker.startLineNumber,
-              marker.startColumn,
-              marker.endLineNumber,
-              marker.endColumn,
-            ),
+      const diagnostics = context.markers.map((marker): PlainDiagnostic => ({
+        range: fromRange(
+          new Range(
+            marker.startLineNumber,
+            marker.startColumn,
+            marker.endLineNumber,
+            marker.endColumn,
           ),
-          message: marker.message,
-          severity: DIAGNOSTIC_SEVERITIES[marker.severity],
-        }),
-      )
+        ),
+        message: marker.message,
+        severity: DIAGNOSTIC_SEVERITIES[marker.severity],
+      }))
       const actions =
         (await registry.services?.codeActions({
           text: model.getValue(),

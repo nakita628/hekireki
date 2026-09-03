@@ -566,18 +566,16 @@ export function completeSchema(input: z.infer<typeof CompleteSchemaInput>) {
               : { triggerKind: TRIGGER_CHARACTER, triggerCharacter: input.triggerCharacter },
         }),
       )
-      return (list?.items ?? []).map(
-        (item): Completion => ({
-          label: item.label,
-          kind: item.kind ?? null,
-          detail: item.detail ?? null,
-          documentation: item.documentation === undefined ? null : markdownOf(item.documentation),
-          insertText: item.insertText ?? item.label,
-          insertTextFormat:
-            item.insertTextFormat === SNIPPET ? ('snippet' as const) : ('plainText' as const),
-          sortText: item.sortText ?? null,
-        }),
-      )
+      return (list?.items ?? []).map((item): Completion => ({
+        label: item.label,
+        kind: item.kind ?? null,
+        detail: item.detail ?? null,
+        documentation: item.documentation === undefined ? null : markdownOf(item.documentation),
+        insertText: item.insertText ?? item.label,
+        insertTextFormat:
+          item.insertTextFormat === SNIPPET ? ('snippet' as const) : ('plainText' as const),
+        sortText: item.sortText ?? null,
+      }))
     } catch {
       return []
     }

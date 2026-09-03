@@ -92,7 +92,7 @@
     "effect": "^4.0.0-rc.112",
     "hono": "^4.12.32",
     "nanoid": "^6.0.0",
-    "oxfmt": "^0.60.0",
+    "oxfmt": "^0.64.0",
     "ulidx": "^2.4.1",
     "uuid": "^14.0.1",
     "vscode-languageserver-textdocument": "^1.0.12",
