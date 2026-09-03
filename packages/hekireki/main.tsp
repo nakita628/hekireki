@@ -171,13 +171,19 @@ union RelationOrigin {
   implicitManyToMany: "implicit-many-to-many",
 }
 
-/** How serious a Prisma diagnostic is. */
+/** How serious a diagnostic of the Prisma language server is (LSP `DiagnosticSeverity`). */
 union Severity {
   /** The schema does not parse until this is fixed */
   error: "error",
 
   /** The schema parses, but Prisma advises a change */
   warning: "warning",
+
+  /** A note about the schema */
+  information: "information",
+
+  /** A hint the editor shows faintly, such as an `@ignore`d field */
+  hint: "hint",
 }
 
 // ---------------------------------------------------------------------------
@@ -492,14 +498,44 @@ model Schema {
   relations: Relation[];
 }
 
+/** One diagnostic the Prisma language server reports for a file on disk. */
+@example(#{
+  path: "prisma/schema.prisma",
+  range: #{ start: #{ line: 1, character: 5 }, end: #{ line: 1, character: 9 } },
+  message: "Type \"Nope\" is neither a built-in type, nor refers to another model, composite type, or enum.",
+  severity: "error",
+})
+model FileDiagnostic {
+  /** The file, as Studio loaded it */
+  path: string;
+
+  /** Where it is (0-based, end exclusive) */
+  range: LspRange;
+
+  /** The Prisma message */
+  message: string;
+
+  /** How serious it is */
+  severity: Severity;
+}
+
 /**
- * The latest parse result. `schema` is the last schema that parsed (null until one does) and
- * `error` the current Prisma error, so a broken edit never blanks the UI. `files` always reflects
- * the disk, even while the schema is broken.
+ * The latest parse result. `schema` is the last schema that parsed (null until one does),
+ * `error` the current Prisma error and `diagnostics` the same errors as the language server
+ * places them, so a broken edit never blanks the UI. `files` always reflects the disk, even
+ * while the schema is broken.
  */
 @example(#{
   schema: null,
   error: "error: Type \"Nope\" is neither a built-in type, nor refers to another model, composite type, or enum.",
+  diagnostics: #[
+    #{
+      path: "prisma/schema.prisma",
+      range: #{ start: #{ line: 1, character: 5 }, end: #{ line: 1, character: 9 } },
+      message: "Type \"Nope\" is neither a built-in type, nor refers to another model, composite type, or enum.",
+      severity: "error",
+    }
+  ],
   updatedAt: utcDateTime.fromISO("2026-09-02T00:00:00.000Z"),
   files: #[#{ path: "prisma/schema.prisma", content: "model User {\n  id Nope @id\n}\n" }],
 })
@@ -508,8 +544,11 @@ model Snapshot {
   /** The last schema that parsed, or null before the first successful parse */
   schema: Schema | null;
 
-  /** The Prisma error of the latest parse, or null when it succeeded */
+  /** The Prisma error of the latest parse as the engine printed it, or null when it succeeded */
   error: string | null;
+
+  /** Every diagnostic the language server reports for the files on disk; empty when they parse */
+  diagnostics: FileDiagnostic[];
 
   /** When the files were last read (ISO 8601); the event stream announces every change of it */
   updatedAt: utcDateTime;
@@ -682,20 +721,142 @@ model SqlResult {
 // ---------------------------------------------------------------------------
 // Prisma language server
 // ---------------------------------------------------------------------------
+//
+// Every shape below is the LSP one the Prisma language server hands back (positions are 0-based,
+// ranges end-exclusive), with file URIs replaced by the paths Studio loaded; the editor turns
+// them into Monaco's own without further interpretation.
 
-/** Schema text to format. */
+/** A 0-based position in a document, as LSP counts it. */
+@example(#{ line: 4, character: 6 })
+model LspPosition {
+  /** The line */
+  line: line;
+
+  /** The column */
+  character: character;
+}
+
+/** A range between two positions, end exclusive. */
+@example(#{ start: #{ line: 4, character: 6 }, end: #{ line: 4, character: 10 } })
+model LspRange {
+  /** Where the range starts */
+  start: LspPosition;
+
+  /** Where the range ends */
+  end: LspPosition;
+}
+
+/** A place in one of the schema files. */
+@example(#{
+  path: "prisma/schema.prisma",
+  range: #{ start: #{ line: 10, character: 0 }, end: #{ line: 14, character: 1 } },
+  selection: #{ start: #{ line: 10, character: 6 }, end: #{ line: 10, character: 10 } },
+})
+model LspLocation {
+  /** The file, as Studio loaded it */
+  path: string;
+
+  /** The whole declaration */
+  range: LspRange;
+
+  /** The name inside it, to put the cursor on */
+  selection: LspRange;
+}
+
+/** One place a symbol is used. */
+@example(#{
+  path: "prisma/schema.prisma",
+  range: #{ start: #{ line: 21, character: 9 }, end: #{ line: 21, character: 13 } },
+})
+model LspReference {
+  /** The file, as Studio loaded it */
+  path: string;
+
+  /** The word that refers to the symbol */
+  range: LspRange;
+}
+
+/** One replacement in a document. */
+@example(#{ range: #{ start: #{ line: 4, character: 6 }, end: #{ line: 4, character: 10 } }, newText: "Account" })
+model LspTextEdit {
+  /** What to replace */
+  range: LspRange;
+
+  /** The replacement */
+  newText: string;
+}
+
+/** The edits of one file. */
+@example(#{ path: "prisma/schema.prisma", edits: #[] })
+model LspFileEdit {
+  /** The file, as Studio loaded it */
+  path: string;
+
+  /** The replacements, in document order */
+  edits: LspTextEdit[];
+}
+
+/** One diagnostic the Prisma language server reports, positioned as LSP does. */
+@example(#{
+  range: #{ start: #{ line: 7, character: 7 }, end: #{ line: 7, character: 8 } },
+  message: "Type \"R\" is neither a built-in type, nor refers to another model, composite type, or enum.",
+  severity: "error",
+})
+model LspDiagnostic {
+  /** Where it is */
+  range: LspRange;
+
+  /** The Prisma message */
+  message: string;
+
+  /** How serious it is */
+  severity: Severity;
+}
+
+/** A block of a schema file, as the language server's document outline lists it. */
+@example(#{
+  name: "User",
+  kind: 5,
+  range: #{ start: #{ line: 4, character: 0 }, end: #{ line: 9, character: 1 } },
+  selectionRange: #{ start: #{ line: 4, character: 6 }, end: #{ line: 4, character: 10 } },
+})
+model LspDocumentSymbol {
+  /** The declared name */
+  name: string;
+
+  /** The LSP `SymbolKind`: 5 = model or view, 10 = enum, 11 = composite type, 23 = datasource, 12 = generator */
+  kind: int32;
+
+  /** The whole block */
+  range: LspRange;
+
+  /** The name inside the block header */
+  selectionRange: LspRange;
+}
+
+/** Schema text and, when it belongs to a loaded file, that file, so the other loaded files are seen. */
 @example(#{ text: "model User {\nid Int @id\n}\n" })
 model TextBody {
   /** The text as typed */
   text: schemaText;
+
+  /** The file the text belongs to, as Studio loaded it; the first file when omitted */
+  path?: string;
 }
 
-/** Formatted schema text. */
-@example(#{ text: "model User {\n  id Int @id\n}\n" })
+/** The edits the Prisma formatter makes; the editor applies them as a minimal diff. */
+@example(#{
+  edits: #[
+    #{
+      range: #{ start: #{ line: 0, character: 0 }, end: #{ line: 3, character: 0 } },
+      newText: "model User {\n  id Int @id\n}\n",
+    }
+  ],
+})
 @extension("x-brand", "Formatted")
 model Formatted {
-  /** The text as the Prisma formatter lays it out */
-  text: string;
+  /** The replacements that lay the text out as the Prisma formatter does; empty when it already is */
+  edits: LspTextEdit[];
 }
 
 /** The buffer being edited, validated together with the other loaded files. */
@@ -711,33 +872,20 @@ model LintBody {
   text: schemaText;
 }
 
-/** One Prisma diagnostic, positioned by string offsets into the text. */
-@example(#{
-  from: 19,
-  to: 23,
-  message: "Type \"Nope\" is neither a built-in type, nor refers to another model, composite type, or enum.",
-  severity: "error",
-})
-model Diagnostic {
-  /** Start offset (inclusive) */
-  from: int32;
-
-  /** End offset (exclusive) */
-  to: int32;
-
-  /** The Prisma message */
-  message: string;
-
-  /** How serious it is */
-  severity: Severity;
-}
-
 /** The diagnostics of one file. */
 @example(#{ diagnostics: #[] })
 @extension("x-brand", "Diagnostics")
 model Diagnostics {
-  /** Every diagnostic Prisma reported for the file */
-  diagnostics: Diagnostic[];
+  /** Every diagnostic the language server reported for the file */
+  diagnostics: LspDiagnostic[];
+}
+
+/** The blocks of one file in declaration order, as the editor outline shows them. */
+@example(#{ symbols: #[] })
+@extension("x-brand", "Symbols")
+model Symbols {
+  /** Every block of the text */
+  symbols: LspDocumentSymbol[];
 }
 
 /** A completion request at a cursor position. */
@@ -746,32 +894,59 @@ model CompleteBody {
   /** The text as typed */
   text: schemaText;
 
+  /** The file the text belongs to, so the other loaded schema files are seen; the first file when omitted */
+  path?: string;
+
   /** The cursor line */
   line: line;
 
   /** The cursor column */
   character: character;
+
+  /** The character that opened the list (`@`, `"`, `.`), when one did rather than typing */
+  triggerCharacter?: string;
+}
+
+/** How the `insertText` of a completion is to be read. */
+union InsertTextFormat {
+  /** Insert the text as it is */
+  plainText: "plainText",
+
+  /** An LSP snippet: `$1`, `${2:name}` are tab stops the editor expands */
+  snippet: "snippet",
 }
 
 /** One completion the Prisma language server offers. */
 @example(#{
   label: "postgresql",
+  kind: 12,
   detail: null,
   documentation: "The PostgreSQL provider",
   insertText: "\"postgresql\"",
+  insertTextFormat: "plainText",
+  sortText: null,
 })
 model Completion {
   /** What the completion list shows */
   label: string;
 
+  /** The LSP `CompletionItemKind` (13 = enum value, 14 = keyword, 10 = property, ...), when the server gives one */
+  kind: int32 | null;
+
   /** A short type or kind, when the server gives one */
   detail: string | null;
 
-  /** The documentation text, when the server gives one */
+  /** The documentation text (Markdown), when the server gives one */
   documentation: string | null;
 
-  /** The text to insert, with LSP snippet placeholders stripped */
+  /** The text to insert; a snippet keeps its tab stops */
   insertText: string;
+
+  /** Whether `insertText` is plain text or a snippet */
+  insertTextFormat: InsertTextFormat;
+
+  /** The key the list is sorted by, when the server gives one */
+  sortText: string | null;
 }
 
 /** The completions at a position. */
@@ -782,6 +957,119 @@ model Completions {
   items: Completion[];
 }
 
+/** A request about the symbol at a cursor position (hover, definition, references). */
+@example(#{ text: "model User {\n  id Int @id\n}\n", line: 1, character: 3 })
+model PositionBody {
+  /** The text as typed */
+  text: schemaText;
+
+  /** The file the text belongs to, so the other loaded schema files are seen; the first file when omitted */
+  path?: string;
+
+  /** The cursor line */
+  line: line;
+
+  /** The cursor column */
+  character: character;
+}
+
+/** Where the symbol at a position is declared. */
+@example(#{ locations: #[] })
+@extension("x-brand", "Definition")
+model Definition {
+  /** The declarations, empty when the position holds no reference to one */
+  locations: LspLocation[];
+}
+
+/** Every place the symbol at a position is used, across the loaded files. */
+@example(#{ locations: #[] })
+@extension("x-brand", "References")
+model References {
+  /** The uses, including the declaration; empty when the position holds no symbol */
+  locations: LspReference[];
+}
+
+/** A rename request: the symbol at a position and its new name. */
+@example(#{ text: "model User {\n  id Int @id\n}\n", line: 0, character: 7, newName: "Account" })
+model RenameBody {
+  /** The text as typed */
+  text: schemaText;
+
+  /** The file the text belongs to, so the other loaded schema files are seen; the first file when omitted */
+  path?: string;
+
+  /** The cursor line */
+  line: line;
+
+  /** The cursor column */
+  character: character;
+
+  /** The new name */
+  newName: string;
+}
+
+/** The edits a rename makes, per file. */
+@example(#{ changes: #[] })
+@extension("x-brand", "Rename")
+model Rename {
+  /** The edits, grouped by file; empty when the position holds nothing to rename */
+  changes: LspFileEdit[];
+}
+
+/** A code action request: a range and the diagnostics the editor shows in it. */
+@example(#{
+  text: "model User {\n  role R\n}\n",
+  range: #{ start: #{ line: 1, character: 7 }, end: #{ line: 1, character: 8 } },
+  diagnostics: #[],
+})
+model CodeActionBody {
+  /** The text as typed */
+  text: schemaText;
+
+  /** The file the text belongs to, so the other loaded schema files are seen; the first file when omitted */
+  path?: string;
+
+  /** The range the actions are asked for */
+  range: LspRange;
+
+  /** The diagnostics in that range, as the lint route returned them */
+  diagnostics: LspDiagnostic[];
+}
+
+/** One quick fix the language server offers. */
+@example(#{ title: "Change spelling to 'Role'", changes: #[], isPreferred: true })
+model CodeAction {
+  /** What the fix does */
+  title: string;
+
+  /** The edits, grouped by file */
+  changes: LspFileEdit[];
+
+  /** Whether it is the fix to apply first */
+  isPreferred: boolean;
+}
+
+/** The quick fixes at a range. */
+@example(#{ actions: #[] })
+@extension("x-brand", "CodeActions")
+model CodeActions {
+  /** The offered fixes */
+  actions: CodeAction[];
+}
+
+/** What the Prisma language server says about the symbol under the cursor. */
+@example(#{
+  contents: "```prisma\nmodel User {\n\t...\n}\n```",
+  range: #{ start: #{ line: 4, character: 9 }, end: #{ line: 4, character: 13 } },
+})
+@extension("x-brand", "Hover")
+model Hover {
+  /** Markdown to show, or null when there is nothing to say about the position */
+  contents: string | null;
+
+  /** The word the hover is about, when the server names it */
+  range: LspRange | null;
+}
 // ---------------------------------------------------------------------------
 // Documentation (the reference page `hekireki docs serve` renders)
 // ---------------------------------------------------------------------------
@@ -1279,7 +1567,7 @@ namespace DbRoutes {
 @route("/prisma")
 @tag("prisma")
 namespace PrismaRoutes {
-  /** Format schema text with the Prisma formatter. */
+  /** The edits that lay the text out as the Prisma formatter does. */
   @post
   @route("/format")
   @operationId("formatSchemaText")
@@ -1297,12 +1585,66 @@ namespace PrismaRoutes {
     | ValidationProblemResponse
     | InternalServerProblemResponse;
 
+  /** The blocks of the text, as the language server's document outline lists them. */
+  @post
+  @route("/symbols")
+  @operationId("symbolsSchemaText")
+  op symbols(@body body: TextBody):
+    | Symbols
+    | ValidationProblemResponse
+    | InternalServerProblemResponse;
+
   /** Completions the Prisma language server offers at a cursor position. */
   @post
   @route("/complete")
   @operationId("completeSchemaText")
   op complete(@body body: CompleteBody):
     | Completions
+    | ValidationProblemResponse
+    | InternalServerProblemResponse;
+
+  /** What the Prisma language server says about the symbol at a cursor position. */
+  @post
+  @route("/hover")
+  @operationId("hoverSchemaText")
+  op hover(@body body: PositionBody):
+    | Hover
+    | ValidationProblemResponse
+    | InternalServerProblemResponse;
+
+  /** Where the model, enum or type referenced at a cursor position is declared. */
+  @post
+  @route("/definition")
+  @operationId("defineSchemaText")
+  op definition(@body body: PositionBody):
+    | Definition
+    | ValidationProblemResponse
+    | InternalServerProblemResponse;
+
+  /** Every place the symbol at a cursor position is used, across the loaded files. */
+  @post
+  @route("/references")
+  @operationId("referencesSchemaText")
+  op references(@body body: PositionBody):
+    | References
+    | ValidationProblemResponse
+    | InternalServerProblemResponse;
+
+  /** The edits that rename the model or enum at a cursor position everywhere it is used. */
+  @post
+  @route("/rename")
+  @operationId("renameSchemaText")
+  op rename(@body body: RenameBody):
+    | Rename
+    | ValidationProblemResponse
+    | InternalServerProblemResponse;
+
+  /** The quick fixes the Prisma language server offers for the diagnostics in a range. */
+  @post
+  @route("/code-actions")
+  @operationId("codeActionsSchemaText")
+  op codeActions(@body body: CodeActionBody):
+    | CodeActions
     | ValidationProblemResponse
     | InternalServerProblemResponse;
 }

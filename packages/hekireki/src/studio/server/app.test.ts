@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { fileSystemLayer } from '../../file/index.js'
 import { createStudioApp, missingAssetsMessage } from './app.js'
 import { FORBIDDEN_HOST_MESSAGE } from './constants/index.js'
-import { disconnectedDbState, createStudioState } from './services/index.js'
+import { disconnectedDatabase, createStudioState } from './services/index.js'
 
 const dirs: string[] = []
 
@@ -41,7 +41,7 @@ async function setup(options: { readonly schema?: string; readonly withIndex?: b
   const app = createStudioApp(
     state,
     (options.withIndex ?? true) ? dir : staticDir,
-    disconnectedDbState('No database URL found.'),
+    disconnectedDatabase('No database URL found.'),
   )
   return { app, state, schemaPath, staticDir }
 }
@@ -73,6 +73,15 @@ describe('createStudioApp', () => {
     expect(await reload.json()).toStrictEqual({
       schema: good.schema,
       error: brokenError(schemaPath),
+      diagnostics: [
+        {
+          path: schemaPath,
+          range: { start: { line: 1, character: 5 }, end: { line: 1, character: 9 } },
+          message:
+            'Type "Nope" is neither a built-in type, nor refers to another model, composite type, or enum.',
+          severity: 'error',
+        },
+      ],
       updatedAt: state.snapshot().updatedAt,
       files: [{ path: schemaPath, content: 'model User {\n  id Nope @id\n}\n' }],
     })
@@ -170,7 +179,13 @@ describe('createStudioApp', () => {
         '/api/db/sql',
         '/api/prisma/complete',
         '/api/prisma/format',
+        '/api/prisma/hover',
+        '/api/prisma/definition',
+        '/api/prisma/rename',
+        '/api/prisma/code-actions',
         '/api/prisma/lint',
+        '/api/prisma/symbols',
+        '/api/prisma/references',
         '/api/schema',
         '/api/schema/events',
         '/api/schema/files',

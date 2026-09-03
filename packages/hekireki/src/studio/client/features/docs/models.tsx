@@ -1,9 +1,8 @@
 import { Fragment } from 'react'
 import type * as z from 'zod'
 
-import { CodeBlock } from '@/components/code-block.js'
-
 import type { DocsSchema } from '../../../server/routes/index.js'
+import { CodeBlock } from '../../components/code-block.js'
 import { fieldTypeAnchor, typeRefAnchor, typeSectionId } from './anchors.js'
 import { TypeLink } from './type-link.js'
 

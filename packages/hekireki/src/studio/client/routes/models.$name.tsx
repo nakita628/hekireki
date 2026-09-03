@@ -1,9 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router'
 import * as v from 'valibot'
 
-import { NotFound } from '@/components/not-found.js'
-import { ModelView } from '@/features/data/model-view.js'
-import { SchemaGate } from '@/features/shell/schema-gate.js'
+import { NotFound } from '../components/not-found.js'
+import { ModelView } from '../features/data/model-view.js'
+import { SchemaGate } from '../features/shell/schema-gate.js'
 
 export const Route = createFileRoute('/models/$name')({
   validateSearch: v.object({

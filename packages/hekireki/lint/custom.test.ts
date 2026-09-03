@@ -6,6 +6,8 @@ import plugin, {
   isTestPath,
   isUseCaseModulePath,
   isUseCaseSpecifier,
+  layerModuleOf,
+  layerNamespaceOf,
 } from './custom.js'
 
 RuleTester.describe = (name, fn) => {
@@ -255,6 +257,97 @@ tester.run('no-usecase-to-usecase', rule('no-usecase-to-usecase'), {
   invalid: [
     { ...tsCase(`import { x } from './schema.js'`), errors: 1 },
     { ...tsCase(`export * from '../usecases/schema.js'`), errors: 1 },
+  ],
+})
+
+describe('layer import helpers', () => {
+  it('resolves layer modules from a layer directory and from the server root', () => {
+    expect(
+      layerModuleOf('src/studio/server/handlers/prisma.ts', '../usecases/index.js'),
+    ).toStrictEqual({ layer: 'usecases', module: 'index', sibling: false })
+    expect(layerModuleOf('src/studio/server/services/load.ts', './language.js')).toStrictEqual({
+      layer: 'services',
+      module: 'language',
+      sibling: true,
+    })
+    expect(layerModuleOf('src/studio/server/app.ts', './services/index.js')).toStrictEqual({
+      layer: 'services',
+      module: 'index',
+      sibling: false,
+    })
+    expect(layerModuleOf('src/studio/server/handlers/prisma.ts', '../routes/index.js')).toBeNull()
+    expect(layerModuleOf('src/studio/server/handlers/prisma.ts', 'effect')).toBeNull()
+  })
+
+  it('names the namespace after the module and its layer', () => {
+    expect(layerNamespaceOf('usecases', 'prisma')).toBe('PrismaUseCase')
+    expect(layerNamespaceOf('domain', 'database-error')).toBe('DatabaseErrorDomain')
+    expect(layerNamespaceOf('services', 'runtime')).toBe('RuntimeService')
+  })
+})
+
+tester.run('layer-namespace-import', rule('layer-namespace-import'), {
+  valid: [
+    tsCase(
+      `import * as PrismaUseCase from '../usecases/prisma.js'`,
+      'src/studio/server/handlers/prisma.ts',
+    ),
+    tsCase(`import type * as StateService from './services/state.js'`, 'src/studio/server/app.ts'),
+    tsCase(`import * as ValuesDomain from './values.js'`, 'src/studio/server/domain/model.ts'),
+    tsCase(`import * as z from 'zod'`),
+    tsCase(`import { Effect } from 'effect'`),
+    tsCase(`import { ContractViolationError } from '../errors/index.js'`),
+    tsCase(`import { x } from '../services/index.js'`, 'src/studio/server/usecases/x.test.ts'),
+    tsCase(`import { x } from '../services/index.js'`, 'src/other/place/x.ts'),
+    tsCase(
+      `import { client } from '../../lib/index.js'`,
+      'src/studio/client/features/sql/sql-view.tsx',
+    ),
+    tsCase(
+      `import { useUiStore } from '@/lib/index.js'`,
+      'src/studio/client/features/sidebar/sidebar.tsx',
+    ),
+  ],
+  invalid: [
+    {
+      ...tsCase(
+        `import { formatText } from '../usecases/prisma.js'`,
+        'src/studio/server/handlers/prisma.ts',
+      ),
+      errors: 1,
+    },
+    {
+      ...tsCase(
+        `import { studioRuntime } from '../services/index.js'`,
+        'src/studio/server/handlers/prisma.ts',
+      ),
+      errors: 1,
+    },
+    {
+      ...tsCase(
+        `import * as Prisma from '../usecases/prisma.js'`,
+        'src/studio/server/handlers/prisma.ts',
+      ),
+      errors: 1,
+    },
+    {
+      ...tsCase(`import * as path from 'node:path'`, 'src/studio/server/services/load.ts'),
+      errors: 1,
+    },
+    {
+      ...tsCase(
+        `import { makeSchema } from '../domain/schema.js'`,
+        'src/studio/server/services/load.ts',
+      ),
+      errors: 1,
+    },
+    {
+      ...tsCase(
+        `import { client } from '../../lib/client.js'`,
+        'src/studio/client/features/sql/sql-view.tsx',
+      ),
+      errors: 1,
+    },
   ],
 })
 

@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vite-plus/test'
 
 import {
+  makeDatabaseUrl,
   makeDatasourceUrl,
   makeDialect,
   makeDotenv,
+  makePostgresSchema,
   makeRedactedUrl,
-  makeDatabaseUrl,
   makeSqliteFilePath,
 } from './url.js'
 
@@ -153,5 +154,18 @@ describe('makeRedactedUrl', () => {
     expect(makeRedactedUrl({ url: 'mysql://root@localhost/app' })).toBe(
       'mysql://root@localhost/app',
     )
+  })
+})
+
+describe('makePostgresSchema', () => {
+  it('is the namespace Prisma names, when it is not the default', () => {
+    expect(makePostgresSchema({ url: 'postgresql://u:p@127.0.0.1:5432/app?schema=demo' })).toBe(
+      'demo',
+    )
+    expect(
+      makePostgresSchema({ url: 'postgresql://u:p@127.0.0.1:5432/app?schema=public' }),
+    ).toBeNull()
+    expect(makePostgresSchema({ url: 'postgresql://u:p@127.0.0.1:5432/app' })).toBeNull()
+    expect(makePostgresSchema({ url: 'not a url' })).toBeNull()
   })
 })

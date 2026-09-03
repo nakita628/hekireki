@@ -22,6 +22,18 @@ export function makeIdentifier(input: z.infer<typeof QuoteIdentifierInput>) {
     : `"${input.name.replaceAll('"', '""')}"`
 }
 
+const StatementTextInput = z
+  .object({
+    sql: z.string().meta({ description: 'One SQL statement.', example: 'SELECT * FROM users' }),
+  })
+  .readonly()
+  .meta({ description: 'A statement to classify', example: { sql: 'SELECT * FROM users' } })
+
+/** Whether the statement returns rows (SELECT and friends) rather than a change count. */
+export function isReadStatement(input: z.infer<typeof StatementTextInput>) {
+  return /^\s*(?:select|with|pragma|explain|show|describe|values)\b/iu.test(input.sql)
+}
+
 const PlaceholderInput = z
   .object({
     dialect: Dialect,

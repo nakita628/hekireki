@@ -2,12 +2,12 @@ import { Duration, Effect, Stream } from 'effect'
 import * as z from 'zod'
 
 import { watch } from '../../../file/index.js'
-import type { createStudioState } from './state.js'
+import type * as StateService from './state.js'
 
 const WatchSchemaInput = z
   .object({
     state: z
-      .custom<ReturnType<typeof createStudioState>>()
+      .custom<ReturnType<typeof StateService.createStudioState>>()
       .meta({ description: 'The snapshot store to reload.' }),
     dir: z.string().meta({ description: 'The directory to watch.', example: 'prisma' }),
     debounceMs: z

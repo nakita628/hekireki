@@ -5,7 +5,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Toaster } from 'react-hot-toast'
 
-import { routeTree } from '@/routeTree.gen.js'
+import { routeTree } from './routeTree.gen.js'
 
 export const queryClient = new QueryClient()
 

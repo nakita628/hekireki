@@ -6,8 +6,8 @@ import type { Field } from '../../server/routes/index.js'
 import { MODEL_HANDLE, sourceHandle, targetHandle } from '../features/schema/graph.js'
 import type { ModelNodeType } from '../features/schema/graph.js'
 import { fieldRowHeight } from '../features/schema/layout.js'
-import { fieldTypeLabel, firstLine } from '../lib/labels.js'
 import { KeyIcon, LinkIcon } from './icons.js'
+import { fieldTypeLabel, firstLine } from './labels.js'
 
 function FieldIcon({ field }: { readonly field: Field }) {
   if (field.isId) {

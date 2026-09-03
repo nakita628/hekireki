@@ -1,7 +1,6 @@
 export * from './database.js'
 export * from './language.js'
 export * from './load.js'
-export * from './query.js'
 export * from './runtime.js'
 export * from './schema.js'
 export * from './state.js'

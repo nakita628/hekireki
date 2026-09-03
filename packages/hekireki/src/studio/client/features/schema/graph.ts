@@ -2,10 +2,10 @@ import { MarkerType } from '@xyflow/react'
 import type { Edge, Node } from '@xyflow/react'
 
 import type { Model, Relation, Schema } from '../../../server/routes/index.js'
-import type { LayoutPositions } from '../../lib/storage.js'
+import type { LayoutPositions } from '../../lib/index.js'
 import { diagramFields } from './layout.js'
 
-export type ModelNodeData = {
+type ModelNodeData = {
   readonly model: Model
   readonly fields: ReturnType<typeof diagramFields>
 }

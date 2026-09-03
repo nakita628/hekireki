@@ -4,9 +4,9 @@ import { loadString, saveString } from './storage.js'
 import { nextTheme, resolveTheme, THEME_KEY } from './theme.js'
 import type { Theme } from './theme.js'
 
-export type Connection = 'connecting' | 'live' | 'offline'
+type Connection = 'connecting' | 'live' | 'offline'
 
-export type UiStore = {
+type UiStore = {
   readonly theme: Theme
   readonly connection: Connection
   readonly toggleTheme: () => void

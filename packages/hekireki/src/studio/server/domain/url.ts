@@ -175,3 +175,29 @@ const RedactUrlInput = z
 export function makeRedactedUrl(input: z.infer<typeof RedactUrlInput>) {
   return input.url.replace(/(\/\/[^:/@]+:)[^@/]+@/u, '$1***@')
 }
+
+const PostgresSchemaInput = z
+  .object({
+    url: z.string().meta({
+      description: 'The PostgreSQL connection URL.',
+      example: 'postgresql://user:pass@127.0.0.1:5432/app?schema=demo',
+    }),
+  })
+  .readonly()
+  .meta({
+    description: 'A PostgreSQL connection URL',
+    example: { url: 'postgresql://user:pass@127.0.0.1:5432/app?schema=demo' },
+  })
+
+/**
+ * The `?schema=` of a PostgreSQL URL, as Prisma spells the namespace to use. `pg` ignores the
+ * parameter, so Studio sets the search path itself; `public` needs no setting.
+ */
+export function makePostgresSchema(input: z.infer<typeof PostgresSchemaInput>) {
+  try {
+    const name = new URL(input.url).searchParams.get('schema')
+    return name === null || name === '' || name === 'public' ? null : name
+  } catch {
+    return null
+  }
+}

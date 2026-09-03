@@ -13,7 +13,7 @@ import type {
 } from '@tanstack/react-query'
 import type { ClientRequestOptions, InferRequestType } from 'hono/client'
 import { parseResponse } from 'hono/client'
-import { client } from '../lib/client.js'
+import { client } from '../lib/index.js'
 
 export function getDbKey() {
   return ['db'] as const
@@ -662,6 +662,40 @@ export function usePostPrismaLint<TError = unknown>(options?: {
   })
 }
 
+export function getPostPrismaSymbolsMutationOptions<TError = unknown>(
+  options?: ClientRequestOptions,
+) {
+  return mutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.symbols.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.prisma.symbols.$post>
+  >({
+    mutationKey: ['prisma', '/prisma/symbols', 'POST'] as const,
+    async mutationFn(args: InferRequestType<typeof client.prisma.symbols.$post>) {
+      return parseResponse(client.prisma.symbols.$post(args, options))
+    },
+  })
+}
+
+export function usePostPrismaSymbols<TError = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.symbols.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.prisma.symbols.$post>
+  >
+  options?: ClientRequestOptions
+}) {
+  const { mutation: mutationOptions, options: clientOptions } = options ?? {}
+  return useMutation({
+    ...mutationOptions,
+    ...getPostPrismaSymbolsMutationOptions<TError>(clientOptions),
+  })
+}
+
 export function getPostPrismaCompleteMutationOptions<TError = unknown>(
   options?: ClientRequestOptions,
 ) {
@@ -693,6 +727,180 @@ export function usePostPrismaComplete<TError = unknown>(options?: {
   return useMutation({
     ...mutationOptions,
     ...getPostPrismaCompleteMutationOptions<TError>(clientOptions),
+  })
+}
+
+export function getPostPrismaHoverMutationOptions<TError = unknown>(
+  options?: ClientRequestOptions,
+) {
+  return mutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.hover.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.prisma.hover.$post>
+  >({
+    mutationKey: ['prisma', '/prisma/hover', 'POST'] as const,
+    async mutationFn(args: InferRequestType<typeof client.prisma.hover.$post>) {
+      return parseResponse(client.prisma.hover.$post(args, options))
+    },
+  })
+}
+
+export function usePostPrismaHover<TError = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.hover.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.prisma.hover.$post>
+  >
+  options?: ClientRequestOptions
+}) {
+  const { mutation: mutationOptions, options: clientOptions } = options ?? {}
+  return useMutation({
+    ...mutationOptions,
+    ...getPostPrismaHoverMutationOptions<TError>(clientOptions),
+  })
+}
+
+export function getPostPrismaDefinitionMutationOptions<TError = unknown>(
+  options?: ClientRequestOptions,
+) {
+  return mutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.definition.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.prisma.definition.$post>
+  >({
+    mutationKey: ['prisma', '/prisma/definition', 'POST'] as const,
+    async mutationFn(args: InferRequestType<typeof client.prisma.definition.$post>) {
+      return parseResponse(client.prisma.definition.$post(args, options))
+    },
+  })
+}
+
+export function usePostPrismaDefinition<TError = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.definition.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.prisma.definition.$post>
+  >
+  options?: ClientRequestOptions
+}) {
+  const { mutation: mutationOptions, options: clientOptions } = options ?? {}
+  return useMutation({
+    ...mutationOptions,
+    ...getPostPrismaDefinitionMutationOptions<TError>(clientOptions),
+  })
+}
+
+export function getPostPrismaReferencesMutationOptions<TError = unknown>(
+  options?: ClientRequestOptions,
+) {
+  return mutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.references.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.prisma.references.$post>
+  >({
+    mutationKey: ['prisma', '/prisma/references', 'POST'] as const,
+    async mutationFn(args: InferRequestType<typeof client.prisma.references.$post>) {
+      return parseResponse(client.prisma.references.$post(args, options))
+    },
+  })
+}
+
+export function usePostPrismaReferences<TError = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.references.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.prisma.references.$post>
+  >
+  options?: ClientRequestOptions
+}) {
+  const { mutation: mutationOptions, options: clientOptions } = options ?? {}
+  return useMutation({
+    ...mutationOptions,
+    ...getPostPrismaReferencesMutationOptions<TError>(clientOptions),
+  })
+}
+
+export function getPostPrismaRenameMutationOptions<TError = unknown>(
+  options?: ClientRequestOptions,
+) {
+  return mutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.rename.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.prisma.rename.$post>
+  >({
+    mutationKey: ['prisma', '/prisma/rename', 'POST'] as const,
+    async mutationFn(args: InferRequestType<typeof client.prisma.rename.$post>) {
+      return parseResponse(client.prisma.rename.$post(args, options))
+    },
+  })
+}
+
+export function usePostPrismaRename<TError = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.rename.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.prisma.rename.$post>
+  >
+  options?: ClientRequestOptions
+}) {
+  const { mutation: mutationOptions, options: clientOptions } = options ?? {}
+  return useMutation({
+    ...mutationOptions,
+    ...getPostPrismaRenameMutationOptions<TError>(clientOptions),
+  })
+}
+
+export function getPostPrismaCodeActionsMutationOptions<TError = unknown>(
+  options?: ClientRequestOptions,
+) {
+  return mutationOptions<
+    Awaited<
+      ReturnType<
+        typeof parseResponse<Awaited<ReturnType<(typeof client.prisma)['code-actions']['$post']>>>
+      >
+    >,
+    TError,
+    InferRequestType<(typeof client.prisma)['code-actions']['$post']>
+  >({
+    mutationKey: ['prisma', '/prisma/code-actions', 'POST'] as const,
+    async mutationFn(args: InferRequestType<(typeof client.prisma)['code-actions']['$post']>) {
+      return parseResponse(client.prisma['code-actions'].$post(args, options))
+    },
+  })
+}
+
+export function usePostPrismaCodeActions<TError = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof parseResponse<Awaited<ReturnType<(typeof client.prisma)['code-actions']['$post']>>>
+      >
+    >,
+    TError,
+    InferRequestType<(typeof client.prisma)['code-actions']['$post']>
+  >
+  options?: ClientRequestOptions
+}) {
+  const { mutation: mutationOptions, options: clientOptions } = options ?? {}
+  return useMutation({
+    ...mutationOptions,
+    ...getPostPrismaCodeActionsMutationOptions<TError>(clientOptions),
   })
 }
 

@@ -23,13 +23,8 @@ import {
   usePatchDbRowsModelName,
   usePostDbRowsModelName,
 } from '../../hooks/index.js'
-import { errorMessage } from '../../lib/error.js'
 import { toCsv } from './cells.js'
 import { PAGE_SIZE } from './paging.js'
-
-function reportWriteError(error: unknown) {
-  toast.error(errorMessage(error))
-}
 
 function download(fileName: string, content: string, type: string) {
   const url = URL.createObjectURL(new Blob([content], { type }))
@@ -78,14 +73,26 @@ export function ModelView({
         setAdding(false)
         await invalidate()
       },
-      onError: reportWriteError,
+      onError: () => {
+        toast.error('The row could not be written.')
+      },
     },
   })
   const update = usePatchDbRowsModelName({
-    mutation: { onSuccess: invalidate, onError: reportWriteError },
+    mutation: {
+      onSuccess: invalidate,
+      onError: () => {
+        toast.error('The row could not be written.')
+      },
+    },
   })
   const remove = useDeleteDbRowsModelName({
-    mutation: { onSuccess: invalidate, onError: reportWriteError },
+    mutation: {
+      onSuccess: invalidate,
+      onError: () => {
+        toast.error('The row could not be written.')
+      },
+    },
   })
   const saving = insert.isPending || update.isPending || remove.isPending
   const page = rows.data ?? null
@@ -214,7 +221,7 @@ export function ModelView({
               </pre>
             </div>
           ) : rows.isError ? (
-            <div className="error-box m-6">{errorMessage(rows.error)}</div>
+            <div className="error-box m-6">The rows could not be loaded.</div>
           ) : page === null ? (
             <div className="p-6 text-muted">Loading rows…</div>
           ) : (

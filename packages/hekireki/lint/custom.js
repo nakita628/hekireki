@@ -39,6 +39,11 @@
 //                                   are banned
 //   custom/predicate-is-name        a pure boolean predicate is `is*` (schema `Is*Input`),
 //                                   never `readIs*`
+//   custom/layer-namespace-import   a usecases/services/domain module is imported as a whole,
+//                                   `import * as PrismaUseCase from '../usecases/prisma.js'`
+//                                   (`*Service`, `*Domain` likewise), never through the barrel;
+//                                   the client imports lib through lib/index.js; every other
+//                                   namespace import stays banned (zod/valibot aside)
 // Tests are exempt from the structural rules (effect-gen-return, function-declaration, no-let,
 // no-mutation): a test arranges and asserts imperatively when that is the clearest way to spell
 // the fixture out.
@@ -47,6 +52,16 @@ const CAMEL_CASE = /^[a-z][A-Za-z0-9]*$/u
 const UPPER_SNAKE = /^[A-Z][A-Z0-9_]*$/u
 const LAYER_SUFFIX = /(UseCase|Service|Domain)$/u
 const TEST_FILE = /\.test\.tsx?$/u
+
+const STUDIO_SERVER = /(^|[\\/])studio[\\/]server[\\/]/u
+const STUDIO_CLIENT = /(^|[\\/])studio[\\/]client[\\/]/u
+const CLIENT_LIB_IMPORT = /(^|\/)lib\/([\w-]+)\.js$/u
+const LAYER_DIRECTORY = /(^|[\\/])(usecases|services|domain)[\\/][^\\/]+\.tsx?$/u
+const LAYER_IMPORT = /^\.\.\/(usecases|services|domain)\/([\w-]+)\.js$/u
+const SIBLING_IMPORT = /^\.\/([\w-]+)\.js$/u
+const ROOT_LAYER_IMPORT = /^\.\/(usecases|services|domain)\/([\w-]+)\.js$/u
+const LAYER_SUFFIXES = { usecases: 'UseCase', services: 'Service', domain: 'Domain' }
+const NAMESPACE_ALLOWED = new Set(['zod', 'valibot'])
 
 const USECASE_MODULE = /(^|[\\/])usecases[\\/][^\\/]+\.tsx?$/u
 const USECASE_BARREL = /(^|[\\/])usecases[\\/]index\.tsx?$/u
@@ -99,6 +114,38 @@ export function isTestPath(filename) {
 
 function filenameOf(context) {
   return context.filename ?? context.getFilename?.() ?? ''
+}
+
+/**
+ * The layer module an import points at, seen from the file under lint.
+ *
+ * @param filename - path of the file under lint
+ * @param source - the module specifier of the import statement
+ * @returns the layer, the module name (`index` for the barrel) and whether it is a sibling in
+ *   the same layer, or null when the import is not a layer module
+ */
+export function layerModuleOf(filename, source) {
+  const layerImport = LAYER_IMPORT.exec(source) ?? ROOT_LAYER_IMPORT.exec(source)
+  if (layerImport) return { layer: layerImport[1], module: layerImport[2], sibling: false }
+  const directory = LAYER_DIRECTORY.exec(filename)
+  const sibling = SIBLING_IMPORT.exec(source)
+  if (directory && sibling) return { layer: directory[2], module: sibling[1], sibling: true }
+  return null
+}
+
+/**
+ * The namespace a layer module is imported as: the module name in PascalCase plus its layer suffix.
+ *
+ * @param layer - usecases, services or domain
+ * @param module - the file name without extension (`database-error`)
+ * @returns e.g. `DatabaseErrorDomain`
+ */
+export function layerNamespaceOf(layer, module) {
+  const pascal = module
+    .split('-')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join('')
+  return `${pascal}${LAYER_SUFFIXES[layer]}`
 }
 
 // Walk `a.b.c[k]` down to the base object (`a`).
@@ -822,6 +869,68 @@ const plugin = {
           },
           FunctionDeclaration(node) {
             if (node.id) check(node.id)
+          },
+        }
+      },
+    },
+    'layer-namespace-import': {
+      meta: {
+        docs: {
+          description:
+            'usecases/services/domain modules are imported as `import * as XxxUseCase|XxxService|XxxDomain`; the client imports lib through lib/index.js',
+        },
+      },
+      create(context) {
+        const filename = filenameOf(context)
+        if (isTestPath(filename)) return {}
+        const client = STUDIO_CLIENT.test(filename)
+        if (!client && !STUDIO_SERVER.test(filename)) return {}
+        return {
+          ImportDeclaration(node) {
+            const source = node.source?.value
+            if (typeof source !== 'string') return
+            if (client) {
+              const lib = CLIENT_LIB_IMPORT.exec(source)
+              if (lib && lib[2] !== 'index') {
+                context.report({
+                  node: node.source,
+                  message: `Import \`${lib[2]}\` through the barrel: \`from '${source.replace(/[\w-]+\.js$/u, 'index.js')}'\`.`,
+                })
+              }
+              return
+            }
+            const namespace = node.specifiers.find((s) => s.type === 'ImportNamespaceSpecifier')
+            const target = layerModuleOf(filename, source)
+            if (target === null) {
+              if (namespace && !NAMESPACE_ALLOWED.has(source)) {
+                context.report({
+                  node: namespace,
+                  message: `Namespace imports are for usecases/services/domain modules (and zod/valibot); import \`${source}\` by name.`,
+                })
+              }
+              return
+            }
+            if (target.module === 'index') {
+              context.report({
+                node: node.source,
+                message: `Import the ${target.layer} module itself, not the barrel: \`import * as XxxUseCase from '../${target.layer}/xxx.js'\` says which module each call comes from.`,
+              })
+              return
+            }
+            const expected = layerNamespaceOf(target.layer, target.module)
+            if (!namespace || node.specifiers.length !== 1) {
+              context.report({
+                node,
+                message: `Import the ${target.layer} module as a whole: \`import * as ${expected} from '${source}'\`, then call \`${expected}.fn(...)\`.`,
+              })
+              return
+            }
+            if (namespace.local.name !== expected) {
+              context.report({
+                node: namespace,
+                message: `\`${namespace.local.name}\` must be named after its module and layer: \`${expected}\`.`,
+              })
+            }
           },
         }
       },

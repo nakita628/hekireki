@@ -12,7 +12,7 @@ export function fmt(input: string) {
       format('<stdin>.ts', input, { printWidth: 100, singleQuote: true, semi: false }),
     )
     if (errors.length > 0) {
-      return yield* new FormatError({ message: errors.map((e) => e.message).join('\n') })
+      return yield* new FormatError({ message: errors.map((error) => error.message).join('\n') })
     }
     return code
   })

@@ -54,6 +54,8 @@ export default defineConfig({
       'src/studio/client/routeTree.gen.ts',
       'src/studio/server/index.ts',
       'src/studio/server/handlers/index.ts',
+      // An ambient wildcard module (Vite's `?worker`) has to be a script file, which import/unambiguous rejects.
+      'src/studio/client/vite-env.d.ts',
     ],
     // Setting `plugins` replaces oxlint's default list — restate the defaults, then add import.
     plugins: ['typescript', 'unicorn', 'oxc', 'import', 'promise', 'node'],
@@ -92,6 +94,7 @@ export default defineConfig({
       'custom/schema-example-type': 'error',
       'custom/logic-camel-case': 'error',
       'custom/layer-suffix-pascal-case': 'error',
+      'custom/layer-namespace-import': 'error',
       'custom/no-usecase-to-usecase': 'error',
       'custom/no-null-coercion-map': 'error',
       'custom/no-dual-absence': 'error',
@@ -389,9 +392,32 @@ export default defineConfig({
     overrides: [
       {
         // Vite's config contract is a default export; the ban stays on for src.
-        files: ['vite.config.ts', 'vite.studio.config.ts', 'hono-takibi.config.ts'],
+        files: [
+          'vite.config.ts',
+          'vite.studio.config.ts',
+          'hono-takibi.config.ts',
+          'playwright.config.ts',
+        ],
         rules: {
           'import/no-default-export': 'off',
+        },
+      },
+      {
+        // Playwright tests: `page.evaluate` callbacks run in the browser, and a test is a
+        // sequence of awaited steps by nature.
+        files: ['e2e/**/*.ts'],
+        globals: { document: 'readonly', window: 'readonly', HTMLElement: 'readonly' },
+        rules: {
+          'no-await-in-loop': 'off',
+        },
+      },
+      {
+        // The Studio server imports its usecases/services/domain modules as namespaces
+        // (`import * as PrismaUseCase from '../usecases/prisma.js'`); custom/layer-namespace-import
+        // takes over the ban on every other namespace import there.
+        files: ['src/studio/server/**/*.ts'],
+        rules: {
+          'import/no-namespace': 'off',
         },
       },
       {
@@ -728,14 +754,6 @@ export default defineConfig({
               ],
             },
           ],
-        },
-      },
-      {
-        // CodeMirror's StreamLanguage contract hands the tokenizer a per-line state object
-        // that it must mutate in place; there is no functional variant of that API.
-        files: ['src/studio/client/features/editor/prisma-language.ts'],
-        rules: {
-          'no-param-reassign': ['error', { props: false }],
         },
       },
       {

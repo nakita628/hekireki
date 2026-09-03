@@ -2,8 +2,8 @@ import { Link } from '@tanstack/react-router'
 import { useMemo } from 'react'
 
 import type { Field, Model, Schema } from '../../server/routes/index.js'
-import { fieldTypeLabel } from '../lib/labels.js'
 import { KeyIcon, LinkIcon } from './icons.js'
+import { fieldTypeLabel } from './labels.js'
 
 export function FieldGlyph({
   field,

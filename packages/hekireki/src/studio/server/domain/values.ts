@@ -95,16 +95,21 @@ const RowFromDatabaseInput = z
     columnToField: z
       .custom<ReadonlyMap<string, string>>()
       .meta({ description: 'Column name to Prisma field name.' }),
+    columnToEnum: z
+      .custom<ReadonlyMap<string, ReadonlyMap<string, string>>>()
+      .optional()
+      .meta({ description: 'Column name to the Prisma name of each stored enum value.' }),
   })
   .readonly()
   .meta({ description: 'A driver row and the column → field name mapping' })
 
-/** Renames columns back to field names and serializes every cell. */
+/** Renames columns back to field names, maps `@map`ped enum values back, and serializes every cell. */
 export function makeRow(input: z.infer<typeof RowFromDatabaseInput>) {
   return Object.fromEntries(
-    Object.entries(input.row).map(([column, value]) => [
-      input.columnToField.get(column) ?? column,
-      makeCell({ value }),
-    ]),
+    Object.entries(input.row).map(([column, value]) => {
+      const named =
+        typeof value === 'string' ? (input.columnToEnum?.get(column)?.get(value) ?? value) : value
+      return [input.columnToField.get(column) ?? column, makeCell({ value: named })]
+    }),
   )
 }

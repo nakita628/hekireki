@@ -1,9 +1,9 @@
 import { Link } from '@tanstack/react-router'
 
 import type { Model, Schema } from '../../server/routes/index.js'
-import { fieldTypeLabel } from '../lib/labels.js'
 import { FieldGlyph } from './fields-table.js'
 import { ArrowRightIcon } from './icons.js'
+import { fieldTypeLabel } from './labels.js'
 
 const ATTRIBUTE = 'pl-5 font-mono text-xs break-all text-accent-text'
 

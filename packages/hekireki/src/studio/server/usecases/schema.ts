@@ -3,7 +3,8 @@ import * as z from 'zod'
 
 import { ContractViolationError, UnknownFileError } from '../errors/index.js'
 import { SnapshotSchema } from '../routes/index.js'
-import { StudioStateTag, writeSchemaFile } from '../services/index.js'
+import * as RuntimeService from '../services/runtime.js'
+import * as SchemaService from '../services/schema.js'
 
 /**
  * The current snapshot: the last valid schema, the current Prisma error and the files on disk.
@@ -12,7 +13,7 @@ import { StudioStateTag, writeSchemaFile } from '../services/index.js'
  */
 export function readSnapshot() {
   return Effect.gen(function* () {
-    const state = yield* StudioStateTag
+    const state = yield* RuntimeService.StudioStateTag
     const result = SnapshotSchema.safeParse(state.snapshot())
     if (!result.success) {
       return yield* new ContractViolationError({ message: result.error.message })
@@ -28,7 +29,7 @@ export function readSnapshot() {
  */
 export function reloadSnapshot() {
   return Effect.gen(function* () {
-    const state = yield* StudioStateTag
+    const state = yield* RuntimeService.StudioStateTag
     const result = SnapshotSchema.safeParse(yield* state.reload())
     if (!result.success) {
       return yield* new ContractViolationError({ message: result.error.message })
@@ -66,7 +67,7 @@ const WriteFileInput = z
  *   alt path not among the loaded files
  *     U-->>U: UnknownFileError
  *   else
- *     U->>F: writeSchemaFile
+ *     U->>F: SchemaService.writeSchemaFile
  *     F-->>U: ok / FileWriteError
  *     U->>St: reload()
  *     St-->>U: snapshot
@@ -78,10 +79,10 @@ const WriteFileInput = z
  */
 export function writeFile(input: z.infer<typeof WriteFileInput>) {
   return Effect.gen(function* () {
-    const state = yield* StudioStateTag
+    const state = yield* RuntimeService.StudioStateTag
     const known = state.snapshot().files.find((f) => f.path === input.path)
     if (!known) return yield* new UnknownFileError({ path: input.path })
-    yield* writeSchemaFile({ path: known.path, content: input.content })
+    yield* SchemaService.writeSchemaFile({ path: known.path, content: input.content })
     const result = SnapshotSchema.safeParse(yield* state.reload())
     if (!result.success) {
       return yield* new ContractViolationError({ message: result.error.message })

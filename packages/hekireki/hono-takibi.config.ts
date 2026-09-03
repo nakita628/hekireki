@@ -13,7 +13,7 @@ export default defineConfig({
   },
   'tanstack-query': {
     output: 'src/studio/client/hooks/index.ts',
-    import: '../lib/client.js',
+    import: '../lib/index.js',
   },
   template: {
     routeHandler: true,

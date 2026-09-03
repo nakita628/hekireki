@@ -3,8 +3,8 @@ import { useState } from 'react'
 import type { Field, Model, Row, Schema } from '../../server/routes/index.js'
 import { displayCell, editableText, keyOf, parseCellInput } from '../features/data/cells.js'
 import { PAGE_SIZE } from '../features/data/paging.js'
-import { fieldTypeLabel } from '../lib/labels.js'
 import { CheckIcon, KeyIcon, LinkIcon, TrashIcon, XIcon } from './icons.js'
+import { fieldTypeLabel } from './labels.js'
 
 function enumValues(schema: Schema, field: Field) {
   return schema.enums.find((e) => e.name === field.type)?.values.map((value) => value.name) ?? []
@@ -173,7 +173,7 @@ function NewRowForm({
   )
 }
 
-export type DataGridProps = {
+type DataGridProps = {
   readonly schema: Schema
   readonly model: Model
   readonly rows: readonly Row[]

@@ -7,7 +7,7 @@ import type { FileSystem } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
 import { fileSystemLayer } from '../../../file/index.js'
-import { loadStudioSchema, parseSchemaFiles, readSchemaFiles } from './load.js'
+import { parseSchemaFiles, readSchemaFiles } from './load.js'
 
 const dirs: string[] = []
 
@@ -146,27 +146,24 @@ describe('parseSchemaFiles', () => {
   })
 })
 
-describe('loadStudioSchema', () => {
-  it('reads and parses a schema path', async () => {
-    const dir = mkdtempSync(path.join(tmpdir(), 'hekireki-studio-'))
-    dirs.push(dir)
-    const file = path.join(dir, 'schema.prisma')
-    writeFileSync(file, USER + POST)
-    const result = await run(loadStudioSchema({ schemaPath: file }))
+describe('parseSchemaFiles across files', () => {
+  it('reads the provider, the block locations and the diagnostics off the engine', async () => {
+    const files = [
+      { path: 'a.prisma', content: `datasource db {\n  provider = "mysql"\n}\n\n${USER}` },
+      { path: 'b.prisma', content: `${POST}\nenum Role {\n  ADMIN\n}\n` },
+    ]
+    const result = await run(parseSchemaFiles({ files }))
     expect(result.ok).toBe(true)
     if (result.ok) {
-      expect(result.value.schema.models.map((m) => m.name)).toStrictEqual(['User', 'Post'])
-      expect(result.value.schema.files).toStrictEqual([{ path: file, content: USER + POST }])
+      expect(result.value.schema.provider).toBe('mysql')
+      expect(result.value.schema.models.map((m) => [m.name, m.location])).toStrictEqual([
+        ['User', { file: 'a.prisma', line: 5 }],
+        ['Post', { file: 'b.prisma', line: 1 }],
+      ])
+      expect(result.value.schema.enums.map((e) => e.location)).toStrictEqual([
+        { file: 'b.prisma', line: 7 },
+      ])
+      expect(result.value.diagnostics).toStrictEqual([])
     }
-  })
-
-  it('propagates read errors', async () => {
-    expect(
-      await run(loadStudioSchema({ schemaPath: '/definitely/missing/schema.prisma' })),
-    ).toStrictEqual({
-      ok: false,
-      error:
-        'Schema not found: /definitely/missing/schema.prisma\n   Pass --schema <path> pointing at your schema.prisma or a directory of .prisma files.',
-    })
   })
 })

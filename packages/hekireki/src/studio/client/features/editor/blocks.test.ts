@@ -1,40 +1,32 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import { blockAtLine, blockRange } from './blocks.js'
+import { blockAtLine } from './blocks.js'
 
-const TEXT = `datasource db {
-  provider = "sqlite"
-}
-
-model User {
-  id Int @id
-}
-
-enum Role {
-  ADMIN
-}
-`
-
-describe('blockRange', () => {
-  it('spans from the header to the closing brace', () => {
-    const lines = ['model A {', '  id Int @id', '}', '', 'model B {', '  id Int @id', '}']
-    expect(blockRange(lines, 1)).toStrictEqual({ start: 1, end: 3 })
-    expect(blockRange(lines, 5)).toStrictEqual({ start: 5, end: 7 })
-  })
-
-  it('runs to the end of the text while the block is still open', () => {
-    expect(blockRange(['model A {', '  id Int'], 1)).toStrictEqual({ start: 1, end: 2 })
-  })
+const range = (start: number, end: number) => ({
+  start: { line: start, character: 0 },
+  end: { line: end, character: 1 },
 })
 
+// The outline the language server returns for a datasource, a model and an enum.
+const SYMBOLS = [
+  { name: 'db', kind: 23, range: range(0, 2), selectionRange: range(0, 0) },
+  { name: 'User', kind: 5, range: range(4, 6), selectionRange: range(4, 4) },
+  { name: 'Role', kind: 10, range: range(8, 10), selectionRange: range(8, 8) },
+]
+
 describe('blockAtLine', () => {
-  it('finds the model or enum surrounding a line', () => {
-    expect(blockAtLine(TEXT, 6)).toStrictEqual({ kind: 'model', name: 'User', start: 5, end: 7 })
-    expect(blockAtLine(TEXT, 9)).toStrictEqual({ kind: 'enum', name: 'Role', start: 9, end: 11 })
+  it('finds the model or enum surrounding a 1-based line', () => {
+    expect(blockAtLine(SYMBOLS, 6)).toStrictEqual({
+      kind: 'Class',
+      name: 'User',
+      start: 5,
+      end: 7,
+    })
+    expect(blockAtLine(SYMBOLS, 9)).toStrictEqual({ kind: 'Enum', name: 'Role', start: 9, end: 11 })
   })
 
-  it('returns null outside model and enum blocks', () => {
-    expect(blockAtLine(TEXT, 2)).toBeNull()
-    expect(blockAtLine(TEXT, 8)).toBeNull()
+  it('returns null between blocks and inside configuration blocks', () => {
+    expect(blockAtLine(SYMBOLS, 2)).toBeNull()
+    expect(blockAtLine(SYMBOLS, 8)).toBeNull()
   })
 })

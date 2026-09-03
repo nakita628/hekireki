@@ -1,23 +1,25 @@
-const BLOCK_HEADER = /^\s*(model|enum|type|view)\s+(\w+)\s*\{/u
+import type * as z from 'zod'
 
-export function blockRange(lines: readonly string[], startLine: number) {
-  const end = lines.findIndex((line, index) => index >= startLine - 1 && /^\}\s*$/u.test(line))
-  return { start: startLine, end: end === -1 ? lines.length : end + 1 }
-}
+import type { LspDocumentSymbolSchema } from '../../../server/routes/index.js'
+import { symbolKindName } from './lsp.js'
 
-// Name of the model or enum whose block contains the 1-based line, or null between blocks.
-export function blockAtLine(text: string, line: number) {
-  const lines = text.split('\n')
-  const headers = lines.flatMap((current, index) => {
-    const match = BLOCK_HEADER.exec(current)
-    return match ? [{ kind: match[1] ?? '', name: match[2] ?? '', start: index + 1 }] : []
-  })
+export type PlainSymbol = z.input<typeof LspDocumentSymbolSchema>
+
+// The blocks that hold data, as the language server's outline kinds them: models and views are
+// classes, enums enums, composite types interfaces; datasources and generators are neither.
+const DATA_KINDS = new Set(['Class', 'Enum', 'Interface'])
+
+/** The model, enum or type whose block contains the 1-based line, or null between blocks. */
+export function blockAtLine(symbols: readonly PlainSymbol[], line: number) {
   return (
-    headers
-      .map((header) => {
-        const range = blockRange(lines, header.start)
-        return { kind: header.kind, name: header.name, start: range.start, end: range.end }
-      })
+    symbols
+      .filter((symbol) => DATA_KINDS.has(symbolKindName(symbol.kind)))
+      .map((symbol) => ({
+        kind: symbolKindName(symbol.kind),
+        name: symbol.name,
+        start: symbol.range.start.line + 1,
+        end: symbol.range.end.line + 1,
+      }))
       .find((block) => line >= block.start && line <= block.end) ?? null
   )
 }

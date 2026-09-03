@@ -39,6 +39,7 @@ describe('createStudioState', () => {
     expect(state.snapshot()).toStrictEqual({
       schema: null,
       error: null,
+      diagnostics: [],
       updatedAt: '1970-01-01T00:00:00.000Z',
       files: [],
     })
@@ -52,6 +53,7 @@ describe('createStudioState', () => {
       schema: null,
       error:
         'Schema not found: /nowhere/schema.prisma\n   Pass --schema <path> pointing at your schema.prisma or a directory of .prisma files.',
+      diagnostics: [],
       updatedAt: snapshot.updatedAt,
       files: [],
     })
@@ -68,6 +70,15 @@ describe('createStudioState', () => {
     expect(broken).toStrictEqual({
       schema: good.schema,
       error: `error: Type "Nope" is neither a built-in type, nor refers to another model, composite type, or enum.\n  -->  ${schemaPath}:2\n   | \n 1 | model User {\n 2 |   id Nope @id\n   | \n\nValidation Error Count: 1`,
+      diagnostics: [
+        {
+          path: schemaPath,
+          range: { start: { line: 1, character: 5 }, end: { line: 1, character: 9 } },
+          message:
+            'Type "Nope" is neither a built-in type, nor refers to another model, composite type, or enum.',
+          severity: 'error',
+        },
+      ],
       updatedAt: broken.updatedAt,
       files: [{ path: schemaPath, content: 'model User {\n  id Nope @id\n}\n' }],
     })

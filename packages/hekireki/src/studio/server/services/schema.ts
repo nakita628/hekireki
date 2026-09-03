@@ -22,6 +22,6 @@ const WriteSchemaFileInput = z
 /** Writes the content to the file, resolved against the working directory. */
 export function writeSchemaFile(input: z.infer<typeof WriteSchemaFileInput>) {
   return writeFile(path.resolve(process.cwd(), input.path), input.content).pipe(
-    Effect.mapError((e) => new FileWriteError({ path: input.path, cause: e.message })),
+    Effect.mapError((error) => new FileWriteError({ path: input.path, cause: error.message })),
   )
 }

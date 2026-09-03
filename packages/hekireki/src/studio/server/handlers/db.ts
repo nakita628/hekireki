@@ -10,25 +10,17 @@ import type {
   postDbRowsModelNameRoute,
   postDbSqlRoute,
 } from '../routes'
-import { studioRuntime } from '../services/index.js'
-import {
-  deleteRow,
-  insertRow,
-  readCounts,
-  readDbStatus,
-  readRows,
-  runSql,
-  updateRow,
-} from '../usecases/index.js'
+import * as RuntimeService from '../services/runtime.js'
+import * as DatabaseUseCase from '../usecases/database.js'
 
 export const getDbRouteHandler: RouteHandler<typeof getDbRoute> = (c) =>
-  studioRuntime().runPromise(
-    Effect.matchEffect(readDbStatus(), {
+  RuntimeService.studioRuntime().runPromise(
+    Effect.matchEffect(DatabaseUseCase.readDbStatus(), {
       onSuccess: (status) => Effect.succeed(c.json(status, 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
-          Match.tag('ContractViolationError', (e) =>
-            Effect.logError('contract violation', e.message).pipe(
+          Match.tag('ContractViolationError', ({ message }) =>
+            Effect.logError('contract violation', message).pipe(
               Effect.as(
                 c.json(
                   {
@@ -50,19 +42,19 @@ export const getDbRouteHandler: RouteHandler<typeof getDbRoute> = (c) =>
   )
 
 export const getDbCountsRouteHandler: RouteHandler<typeof getDbCountsRoute> = (c) =>
-  studioRuntime().runPromise(
-    Effect.matchEffect(readCounts(), {
+  RuntimeService.studioRuntime().runPromise(
+    Effect.matchEffect(DatabaseUseCase.readCounts(), {
       onSuccess: (counts) => Effect.succeed(c.json(counts, 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
-          Match.tag('DatabaseUnavailableError', (e) =>
+          Match.tag('DatabaseUnavailableError', ({ reason }) =>
             Effect.succeed(
               c.json(
                 {
                   type: '/problems/service-unavailable' as const,
                   title: 'Service Unavailable' as const,
                   status: 503 as const,
-                  detail: e.reason,
+                  detail: reason,
                   instance: c.req.path,
                 },
                 503,
@@ -70,8 +62,8 @@ export const getDbCountsRouteHandler: RouteHandler<typeof getDbCountsRoute> = (c
               ),
             ),
           ),
-          Match.tag('ContractViolationError', (e) =>
-            Effect.logError('contract violation', e.message).pipe(
+          Match.tag('ContractViolationError', ({ message }) =>
+            Effect.logError('contract violation', message).pipe(
               Effect.as(
                 c.json(
                   {
@@ -95,9 +87,9 @@ export const getDbCountsRouteHandler: RouteHandler<typeof getDbCountsRoute> = (c
 export const getDbRowsModelNameRouteHandler: RouteHandler<typeof getDbRowsModelNameRoute> = (c) => {
   const param = c.req.valid('param')
   const query = c.req.valid('query')
-  return studioRuntime().runPromise(
+  return RuntimeService.studioRuntime().runPromise(
     Effect.matchEffect(
-      readRows({
+      DatabaseUseCase.readRows({
         modelName: param.modelName,
         skip: query.skip,
         take: query.take,
@@ -107,14 +99,14 @@ export const getDbRowsModelNameRouteHandler: RouteHandler<typeof getDbRowsModelN
         onSuccess: (rows) => Effect.succeed(c.json(rows, 200)),
         onFailure: (error) =>
           Match.value(error).pipe(
-            Match.tag('UnknownModelError', (e) =>
+            Match.tag('UnknownModelError', ({ model }) =>
               Effect.succeed(
                 c.json(
                   {
                     type: '/problems/not-found' as const,
                     title: 'Not Found' as const,
                     status: 404 as const,
-                    detail: `Unknown model "${e.model}".`,
+                    detail: `Unknown model "${model}".`,
                     instance: c.req.path,
                   },
                   404,
@@ -122,14 +114,14 @@ export const getDbRowsModelNameRouteHandler: RouteHandler<typeof getDbRowsModelN
                 ),
               ),
             ),
-            Match.tag('DatabaseUnavailableError', (e) =>
+            Match.tag('DatabaseUnavailableError', ({ reason }) =>
               Effect.succeed(
                 c.json(
                   {
                     type: '/problems/service-unavailable' as const,
                     title: 'Service Unavailable' as const,
                     status: 503 as const,
-                    detail: e.reason,
+                    detail: reason,
                     instance: c.req.path,
                   },
                   503,
@@ -137,15 +129,15 @@ export const getDbRowsModelNameRouteHandler: RouteHandler<typeof getDbRowsModelN
                 ),
               ),
             ),
-            Match.tag('DatabaseError', (e) =>
-              Effect.logError('database error', e.cause).pipe(
+            Match.tag('DatabaseError', ({ cause }) =>
+              Effect.logError('database error', cause).pipe(
                 Effect.as(
                   c.json(
                     {
                       type: '/problems/service-unavailable' as const,
                       title: 'Service Unavailable' as const,
                       status: 503 as const,
-                      detail: e.cause,
+                      detail: cause,
                       instance: c.req.path,
                     },
                     503,
@@ -154,8 +146,8 @@ export const getDbRowsModelNameRouteHandler: RouteHandler<typeof getDbRowsModelN
                 ),
               ),
             ),
-            Match.tag('ContractViolationError', (e) =>
-              Effect.logError('contract violation', e.message).pipe(
+            Match.tag('ContractViolationError', ({ message }) =>
+              Effect.logError('contract violation', message).pipe(
                 Effect.as(
                   c.json(
                     {
@@ -183,105 +175,21 @@ export const postDbRowsModelNameRouteHandler: RouteHandler<typeof postDbRowsMode
 ) => {
   const param = c.req.valid('param')
   const data = c.req.valid('json')
-  return studioRuntime().runPromise(
-    Effect.matchEffect(insertRow({ modelName: param.modelName, values: data.values }), {
-      onSuccess: (result) => Effect.succeed(c.json(result, 200)),
-      onFailure: (error) =>
-        Match.value(error).pipe(
-          Match.tag('UnknownModelError', (e) =>
-            Effect.succeed(
-              c.json(
-                {
-                  type: '/problems/not-found' as const,
-                  title: 'Not Found' as const,
-                  status: 404 as const,
-                  detail: `Unknown model "${e.model}".`,
-                  instance: c.req.path,
-                },
-                404,
-                { 'Content-Type': 'application/problem+json' },
-              ),
-            ),
-          ),
-          Match.tag('DatabaseUnavailableError', (e) =>
-            Effect.succeed(
-              c.json(
-                {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
-                  detail: e.reason,
-                  instance: c.req.path,
-                },
-                503,
-                { 'Content-Type': 'application/problem+json' },
-              ),
-            ),
-          ),
-          Match.tag('DatabaseError', (e) =>
-            Effect.logError('database error', e.cause).pipe(
-              Effect.as(
-                c.json(
-                  {
-                    type: '/problems/service-unavailable' as const,
-                    title: 'Service Unavailable' as const,
-                    status: 503 as const,
-                    detail: e.cause,
-                    instance: c.req.path,
-                  },
-                  503,
-                  { 'Content-Type': 'application/problem+json' },
-                ),
-              ),
-            ),
-          ),
-          Match.tag('ContractViolationError', (e) =>
-            Effect.logError('contract violation', e.message).pipe(
-              Effect.as(
-                c.json(
-                  {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
-                    detail: 'An unexpected error occurred.',
-                    instance: c.req.path,
-                  },
-                  500,
-                  { 'Content-Type': 'application/problem+json' },
-                ),
-              ),
-            ),
-          ),
-          Match.exhaustive,
-        ),
-    }),
-  )
-}
-
-export const patchDbRowsModelNameRouteHandler: RouteHandler<typeof patchDbRowsModelNameRoute> = (
-  c,
-) => {
-  const param = c.req.valid('param')
-  const data = c.req.valid('json')
-  return studioRuntime().runPromise(
+  return RuntimeService.studioRuntime().runPromise(
     Effect.matchEffect(
-      updateRow({
-        modelName: param.modelName,
-        where: data.where,
-        values: data.values,
-      }),
+      DatabaseUseCase.insertRow({ modelName: param.modelName, values: data.values }),
       {
         onSuccess: (result) => Effect.succeed(c.json(result, 200)),
         onFailure: (error) =>
           Match.value(error).pipe(
-            Match.tag('UnknownModelError', (e) =>
+            Match.tag('UnknownModelError', ({ model }) =>
               Effect.succeed(
                 c.json(
                   {
                     type: '/problems/not-found' as const,
                     title: 'Not Found' as const,
                     status: 404 as const,
-                    detail: `Unknown model "${e.model}".`,
+                    detail: `Unknown model "${model}".`,
                     instance: c.req.path,
                   },
                   404,
@@ -289,30 +197,14 @@ export const patchDbRowsModelNameRouteHandler: RouteHandler<typeof patchDbRowsMo
                 ),
               ),
             ),
-            Match.tag('InvalidInputError', (e) =>
-              Effect.succeed(
-                c.json(
-                  {
-                    type: '/problems/validation-failed' as const,
-                    title: 'Validation Failed' as const,
-                    status: 422 as const,
-                    detail: `${e.field} ${e.message}.`,
-                    instance: c.req.path,
-                    errors: [{ field: e.field, message: e.message }],
-                  },
-                  422,
-                  { 'Content-Type': 'application/problem+json' },
-                ),
-              ),
-            ),
-            Match.tag('DatabaseUnavailableError', (e) =>
+            Match.tag('DatabaseUnavailableError', ({ reason }) =>
               Effect.succeed(
                 c.json(
                   {
                     type: '/problems/service-unavailable' as const,
                     title: 'Service Unavailable' as const,
                     status: 503 as const,
-                    detail: e.reason,
+                    detail: reason,
                     instance: c.req.path,
                   },
                   503,
@@ -320,15 +212,15 @@ export const patchDbRowsModelNameRouteHandler: RouteHandler<typeof patchDbRowsMo
                 ),
               ),
             ),
-            Match.tag('DatabaseError', (e) =>
-              Effect.logError('database error', e.cause).pipe(
+            Match.tag('DatabaseError', ({ cause }) =>
+              Effect.logError('database error', cause).pipe(
                 Effect.as(
                   c.json(
                     {
                       type: '/problems/service-unavailable' as const,
                       title: 'Service Unavailable' as const,
                       status: 503 as const,
-                      detail: e.cause,
+                      detail: cause,
                       instance: c.req.path,
                     },
                     503,
@@ -337,8 +229,111 @@ export const patchDbRowsModelNameRouteHandler: RouteHandler<typeof patchDbRowsMo
                 ),
               ),
             ),
-            Match.tag('ContractViolationError', (e) =>
-              Effect.logError('contract violation', e.message).pipe(
+            Match.tag('ContractViolationError', ({ message }) =>
+              Effect.logError('contract violation', message).pipe(
+                Effect.as(
+                  c.json(
+                    {
+                      type: '/problems/internal-server-error' as const,
+                      title: 'Internal Server Error' as const,
+                      status: 500 as const,
+                      detail: 'An unexpected error occurred.',
+                      instance: c.req.path,
+                    },
+                    500,
+                    { 'Content-Type': 'application/problem+json' },
+                  ),
+                ),
+              ),
+            ),
+            Match.exhaustive,
+          ),
+      },
+    ),
+  )
+}
+
+export const patchDbRowsModelNameRouteHandler: RouteHandler<typeof patchDbRowsModelNameRoute> = (
+  c,
+) => {
+  const param = c.req.valid('param')
+  const data = c.req.valid('json')
+  return RuntimeService.studioRuntime().runPromise(
+    Effect.matchEffect(
+      DatabaseUseCase.updateRow({
+        modelName: param.modelName,
+        where: data.where,
+        values: data.values,
+      }),
+      {
+        onSuccess: (result) => Effect.succeed(c.json(result, 200)),
+        onFailure: (error) =>
+          Match.value(error).pipe(
+            Match.tag('UnknownModelError', ({ model }) =>
+              Effect.succeed(
+                c.json(
+                  {
+                    type: '/problems/not-found' as const,
+                    title: 'Not Found' as const,
+                    status: 404 as const,
+                    detail: `Unknown model "${model}".`,
+                    instance: c.req.path,
+                  },
+                  404,
+                  { 'Content-Type': 'application/problem+json' },
+                ),
+              ),
+            ),
+            Match.tag('InvalidInputError', ({ field, message }) =>
+              Effect.succeed(
+                c.json(
+                  {
+                    type: '/problems/validation-failed' as const,
+                    title: 'Validation Failed' as const,
+                    status: 422 as const,
+                    detail: `${field} ${message}.`,
+                    instance: c.req.path,
+                    errors: [{ field, message }],
+                  },
+                  422,
+                  { 'Content-Type': 'application/problem+json' },
+                ),
+              ),
+            ),
+            Match.tag('DatabaseUnavailableError', ({ reason }) =>
+              Effect.succeed(
+                c.json(
+                  {
+                    type: '/problems/service-unavailable' as const,
+                    title: 'Service Unavailable' as const,
+                    status: 503 as const,
+                    detail: reason,
+                    instance: c.req.path,
+                  },
+                  503,
+                  { 'Content-Type': 'application/problem+json' },
+                ),
+              ),
+            ),
+            Match.tag('DatabaseError', ({ cause }) =>
+              Effect.logError('database error', cause).pipe(
+                Effect.as(
+                  c.json(
+                    {
+                      type: '/problems/service-unavailable' as const,
+                      title: 'Service Unavailable' as const,
+                      status: 503 as const,
+                      detail: cause,
+                      instance: c.req.path,
+                    },
+                    503,
+                    { 'Content-Type': 'application/problem+json' },
+                  ),
+                ),
+              ),
+            ),
+            Match.tag('ContractViolationError', ({ message }) =>
+              Effect.logError('contract violation', message).pipe(
                 Effect.as(
                   c.json(
                     {
@@ -366,66 +361,52 @@ export const deleteDbRowsModelNameRouteHandler: RouteHandler<typeof deleteDbRows
 ) => {
   const param = c.req.valid('param')
   const data = c.req.valid('json')
-  return studioRuntime().runPromise(
-    Effect.matchEffect(deleteRow({ modelName: param.modelName, where: data.where }), {
-      onSuccess: (result) => Effect.succeed(c.json(result, 200)),
-      onFailure: (error) =>
-        Match.value(error).pipe(
-          Match.tag('UnknownModelError', (e) =>
-            Effect.succeed(
-              c.json(
-                {
-                  type: '/problems/not-found' as const,
-                  title: 'Not Found' as const,
-                  status: 404 as const,
-                  detail: `Unknown model "${e.model}".`,
-                  instance: c.req.path,
-                },
-                404,
-                { 'Content-Type': 'application/problem+json' },
+  return RuntimeService.studioRuntime().runPromise(
+    Effect.matchEffect(
+      DatabaseUseCase.deleteRow({ modelName: param.modelName, where: data.where }),
+      {
+        onSuccess: (result) => Effect.succeed(c.json(result, 200)),
+        onFailure: (error) =>
+          Match.value(error).pipe(
+            Match.tag('UnknownModelError', ({ model }) =>
+              Effect.succeed(
+                c.json(
+                  {
+                    type: '/problems/not-found' as const,
+                    title: 'Not Found' as const,
+                    status: 404 as const,
+                    detail: `Unknown model "${model}".`,
+                    instance: c.req.path,
+                  },
+                  404,
+                  { 'Content-Type': 'application/problem+json' },
+                ),
               ),
             ),
-          ),
-          Match.tag('InvalidInputError', (e) =>
-            Effect.succeed(
-              c.json(
-                {
-                  type: '/problems/validation-failed' as const,
-                  title: 'Validation Failed' as const,
-                  status: 422 as const,
-                  detail: `${e.field} ${e.message}.`,
-                  instance: c.req.path,
-                  errors: [{ field: e.field, message: e.message }],
-                },
-                422,
-                { 'Content-Type': 'application/problem+json' },
+            Match.tag('InvalidInputError', ({ field, message }) =>
+              Effect.succeed(
+                c.json(
+                  {
+                    type: '/problems/validation-failed' as const,
+                    title: 'Validation Failed' as const,
+                    status: 422 as const,
+                    detail: `${field} ${message}.`,
+                    instance: c.req.path,
+                    errors: [{ field, message }],
+                  },
+                  422,
+                  { 'Content-Type': 'application/problem+json' },
+                ),
               ),
             ),
-          ),
-          Match.tag('DatabaseUnavailableError', (e) =>
-            Effect.succeed(
-              c.json(
-                {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
-                  detail: e.reason,
-                  instance: c.req.path,
-                },
-                503,
-                { 'Content-Type': 'application/problem+json' },
-              ),
-            ),
-          ),
-          Match.tag('DatabaseError', (e) =>
-            Effect.logError('database error', e.cause).pipe(
-              Effect.as(
+            Match.tag('DatabaseUnavailableError', ({ reason }) =>
+              Effect.succeed(
                 c.json(
                   {
                     type: '/problems/service-unavailable' as const,
                     title: 'Service Unavailable' as const,
                     status: 503 as const,
-                    detail: e.cause,
+                    detail: reason,
                     instance: c.req.path,
                   },
                   503,
@@ -433,45 +414,62 @@ export const deleteDbRowsModelNameRouteHandler: RouteHandler<typeof deleteDbRows
                 ),
               ),
             ),
-          ),
-          Match.tag('ContractViolationError', (e) =>
-            Effect.logError('contract violation', e.message).pipe(
-              Effect.as(
-                c.json(
-                  {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
-                    detail: 'An unexpected error occurred.',
-                    instance: c.req.path,
-                  },
-                  500,
-                  { 'Content-Type': 'application/problem+json' },
+            Match.tag('DatabaseError', ({ cause }) =>
+              Effect.logError('database error', cause).pipe(
+                Effect.as(
+                  c.json(
+                    {
+                      type: '/problems/service-unavailable' as const,
+                      title: 'Service Unavailable' as const,
+                      status: 503 as const,
+                      detail: cause,
+                      instance: c.req.path,
+                    },
+                    503,
+                    { 'Content-Type': 'application/problem+json' },
+                  ),
                 ),
               ),
             ),
+            Match.tag('ContractViolationError', ({ message }) =>
+              Effect.logError('contract violation', message).pipe(
+                Effect.as(
+                  c.json(
+                    {
+                      type: '/problems/internal-server-error' as const,
+                      title: 'Internal Server Error' as const,
+                      status: 500 as const,
+                      detail: 'An unexpected error occurred.',
+                      instance: c.req.path,
+                    },
+                    500,
+                    { 'Content-Type': 'application/problem+json' },
+                  ),
+                ),
+              ),
+            ),
+            Match.exhaustive,
           ),
-          Match.exhaustive,
-        ),
-    }),
+      },
+    ),
   )
 }
 
 export const postDbSqlRouteHandler: RouteHandler<typeof postDbSqlRoute> = (c) => {
   const data = c.req.valid('json')
-  return studioRuntime().runPromise(
-    Effect.matchEffect(runSql({ sql: data.sql }), {
+  return RuntimeService.studioRuntime().runPromise(
+    Effect.matchEffect(DatabaseUseCase.runSql({ sql: data.sql }), {
       onSuccess: (result) => Effect.succeed(c.json(result, 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
-          Match.tag('DatabaseUnavailableError', (e) =>
+          Match.tag('DatabaseUnavailableError', ({ reason }) =>
             Effect.succeed(
               c.json(
                 {
                   type: '/problems/service-unavailable' as const,
                   title: 'Service Unavailable' as const,
                   status: 503 as const,
-                  detail: e.reason,
+                  detail: reason,
                   instance: c.req.path,
                 },
                 503,
@@ -479,24 +477,24 @@ export const postDbSqlRouteHandler: RouteHandler<typeof postDbSqlRoute> = (c) =>
               ),
             ),
           ),
-          Match.tag('DatabaseError', (e) =>
+          Match.tag('DatabaseError', ({ cause }) =>
             Effect.succeed(
               c.json(
                 {
                   type: '/problems/validation-failed' as const,
                   title: 'Validation Failed' as const,
                   status: 422 as const,
-                  detail: e.cause,
+                  detail: cause,
                   instance: c.req.path,
-                  errors: [{ field: 'sql', message: e.cause }],
+                  errors: [{ field: 'sql', message: cause }],
                 },
                 422,
                 { 'Content-Type': 'application/problem+json' },
               ),
             ),
           ),
-          Match.tag('ContractViolationError', (e) =>
-            Effect.logError('contract violation', e.message).pipe(
+          Match.tag('ContractViolationError', ({ message }) =>
+            Effect.logError('contract violation', message).pipe(
               Effect.as(
                 c.json(
                   {

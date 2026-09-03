@@ -4,9 +4,8 @@ import { describe, expect, it } from 'vite-plus/test'
 import { parseSchemaFiles } from '../services/load.js'
 import {
   makeRelationName,
-  detectProvider,
-  findBlockLocation,
   makeImplicitManyToManyRelations,
+  makeLocation,
   makeDefaultText,
   makeIndexAttribute,
   makeNativeTypeAttribute,
@@ -101,7 +100,15 @@ const field = (
 describe('makeSchema', () => {
   it('maps a Prisma datamodel to the studio contract', () => {
     const files = [{ path: 'schema.prisma', content: FIXTURE }]
-    expect(makeSchema({ dmmf: parse(FIXTURE).dmmf, files })).toStrictEqual({
+    const blocks = [
+      { type: 'model', name: 'User', file: 'schema.prisma', line: 7 },
+      { type: 'model', name: 'Post', file: 'schema.prisma', line: 18 },
+      { type: 'model', name: 'Tag', file: 'schema.prisma', line: 30 },
+      { type: 'enum', name: 'Role', file: 'schema.prisma', line: 35 },
+    ] as const
+    expect(
+      makeSchema({ dmmf: parse(FIXTURE).dmmf, files, provider: 'postgresql', blocks }),
+    ).toStrictEqual({
       files,
       provider: 'postgresql',
       models: [
@@ -328,6 +335,8 @@ model Member {
 }
 `).dmmf,
       files: [],
+      provider: null,
+      blocks: [],
     })
     const [category, follow, , member] = schema.models
     expect(category?.fields.map((f) => f.attributes)).toStrictEqual([
@@ -499,60 +508,22 @@ describe('makeIndexAttribute', () => {
   })
 })
 
-describe('findBlockLocation', () => {
-  it('finds the first file and line declaring the block', () => {
-    const files = [
-      { path: 'a.prisma', content: 'enum Role {\n  A\n}\n' },
-      { path: 'b.prisma', content: '\n\nmodel Role {\n  id Int @id\n}\n' },
-    ]
-    expect(findBlockLocation({ files, keyword: 'model', name: 'Role' })).toStrictEqual({
+describe('makeLocation', () => {
+  it('finds the first block of the kinds with the name, in file order', () => {
+    const blocks = [
+      { type: 'enum', name: 'Role', file: 'a.prisma', line: 1 },
+      { type: 'model', name: 'Role', file: 'b.prisma', line: 3 },
+      { type: 'view', name: 'Role', file: 'c.prisma', line: 9 },
+    ] as const
+    expect(makeLocation({ blocks, types: ['model', 'view'], name: 'Role' })).toStrictEqual({
       file: 'b.prisma',
       line: 3,
     })
-    expect(findBlockLocation({ files, keyword: 'enum', name: 'Role' })).toStrictEqual({
+    expect(makeLocation({ blocks, types: ['enum'], name: 'Role' })).toStrictEqual({
       file: 'a.prisma',
       line: 1,
     })
-    expect(findBlockLocation({ files, keyword: 'model', name: 'Missing' })).toBeNull()
-  })
-
-  it('escapes regex characters and does not match a model whose name is a prefix', () => {
-    expect(
-      findBlockLocation({
-        files: [{ path: 'a.prisma', content: 'model A {\n}\n' }],
-        keyword: 'model',
-        name: 'A+',
-      }),
-    ).toBeNull()
-    expect(
-      findBlockLocation({
-        files: [{ path: 'a.prisma', content: 'model A+ {\n}\n' }],
-        keyword: 'model',
-        name: 'A+',
-      }),
-    ).toStrictEqual({ file: 'a.prisma', line: 1 })
-    const files = [{ path: 'a.prisma', content: 'model UserProfile {\n}\nmodel User {\n}\n' }]
-    expect(findBlockLocation({ files, keyword: 'model', name: 'User' })).toStrictEqual({
-      file: 'a.prisma',
-      line: 3,
-    })
-  })
-})
-
-describe('detectProvider', () => {
-  it('reads the provider from the datasource block and ignores generator providers', () => {
-    expect(
-      detectProvider({
-        files: [{ path: 'a.prisma', content: 'datasource db {\n  provider = "mysql"\n}\n' }],
-      }),
-    ).toBe('mysql')
-    expect(
-      detectProvider({
-        files: [
-          { path: 'a.prisma', content: 'generator client {\n  provider = "prisma-client"\n}\n' },
-        ],
-      }),
-    ).toBeNull()
+    expect(makeLocation({ blocks, types: ['model'], name: 'Missing' })).toBeNull()
   })
 })
 

@@ -6,30 +6,39 @@ import { Effect } from 'effect'
 import * as z from 'zod'
 
 import { readFile } from '../../../file/index.js'
-import {
-  makeDatabaseUrl,
-  makeDialect,
-  makeDotenv,
-  makeRedactedUrl,
-  makeSqliteFilePath,
-} from '../domain/index.js'
+import * as DatabaseErrorDomain from '../domain/database-error.js'
+import * as SqlDomain from '../domain/sql.js'
+import * as UrlDomain from '../domain/url.js'
+import { DatabaseError, DatabaseUnavailableError } from '../errors/index.js'
 
-type Driver = {
-  readonly dialect: 'postgresql' | 'mysql' | 'sqlite'
-  readonly query: (
-    sql: string,
-    params: readonly unknown[],
-  ) => Promise<{
-    readonly columns: readonly string[]
-    readonly rows: readonly Readonly<Record<string, unknown>>[]
-    readonly rowCount: number
-  }>
-  readonly close: () => Promise<void>
+type Statement = { readonly sql: string; readonly params: readonly unknown[] }
+
+type QueryResult = {
+  readonly columns: readonly string[]
+  readonly rows: readonly Readonly<Record<string, unknown>>[]
+  readonly rowCount: number
 }
 
-type Result<T> =
-  | { readonly ok: true; readonly value: T }
-  | { readonly ok: false; readonly error: string }
+/** An open connection: every query is an Effect that fails with the driver's message. */
+type Driver = {
+  readonly dialect: 'postgresql' | 'mysql' | 'sqlite'
+  readonly query: (statement: Statement) => Effect.Effect<QueryResult, DatabaseError>
+  readonly close: Effect.Effect<void>
+}
+
+function messageOf(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function databaseError(error: unknown) {
+  return new DatabaseError({
+    cause: DatabaseErrorDomain.makeDatabaseErrorMessage({ message: messageOf(error) }),
+  })
+}
+
+function unavailable(error: unknown) {
+  return new DatabaseUnavailableError({ reason: messageOf(error) })
+}
 
 // Driver results as the packages return them, read through zod rather than hand-written guards.
 const DriverRows = z
@@ -46,23 +55,20 @@ const ModuleNamespace = z
   })
   .meta({ description: 'An imported module namespace' })
 
-function columnsOf(rows: readonly Readonly<Record<string, unknown>>[], fields: readonly string[]) {
-  return fields.length > 0 ? fields : Object.keys(rows[0] ?? {})
-}
-
-async function importFromProject(specifier: string, cwd: string): Promise<Result<unknown>> {
-  const resolver = createRequire(path.join(cwd, 'package.json'))
-  try {
-    const resolved = resolver.resolve(specifier)
-    const namespace: unknown = await import(pathToFileURL(resolved).href)
-    const result = ModuleNamespace.safeParse(namespace)
-    return { ok: true, value: result.success ? result.data.default : namespace }
-  } catch (e) {
-    return {
-      ok: false,
-      error: `Cannot load "${specifier}" from ${cwd}: ${e instanceof Error ? e.message : String(e)}\n   Install it in your project (npm install ${specifier}) so Hekireki Studio can connect to the database.`,
-    }
-  }
+/** The package as the user's project resolves it: Studio ships no database drivers of its own. */
+function importFromProject(specifier: string, cwd: string) {
+  return Effect.tryPromise({
+    try: async (): Promise<unknown> => {
+      const resolved = createRequire(path.join(cwd, 'package.json')).resolve(specifier)
+      const namespace: unknown = await import(pathToFileURL(resolved).href)
+      const parsed = ModuleNamespace.safeParse(namespace)
+      return parsed.success ? parsed.data.default : namespace
+    },
+    catch: (error) =>
+      new DatabaseUnavailableError({
+        reason: `Cannot load "${specifier}" from ${cwd}: ${messageOf(error)}\n   Install it in your project (npm install ${specifier}) so Hekireki Studio can connect to the database.`,
+      }),
+  })
 }
 
 type SqliteStatement = {
@@ -87,45 +93,46 @@ const SqliteRunInfo = z
   .object({ changes: z.number().meta({ description: 'Rows the statement changed.', example: 1 }) })
   .meta({ description: 'What node:sqlite returns from statement.run()' })
 
-function isReadStatement(sql: string) {
-  return /^\s*(?:select|with|pragma|explain|show|describe|values)\b/iu.test(sql)
-}
+const NO_SQLITE =
+  'SQLite support needs the built-in node:sqlite module (Node.js 22.13 or newer).\n   Upgrade Node.js or pass --url pointing at a PostgreSQL/MySQL database.'
 
-async function openSqlite(url: string, baseDir: string): Promise<Result<Driver>> {
-  const result = SqliteModule.safeParse(await import('node:sqlite').catch((e: unknown) => e))
-  if (!result.success) {
-    return {
-      ok: false,
-      error:
-        'SQLite support needs the built-in node:sqlite module (Node.js 22.13 or newer).\n   Upgrade Node.js or pass --url pointing at a PostgreSQL/MySQL database.',
-    }
-  }
-  try {
-    const db = new result.data.DatabaseSync(makeSqliteFilePath({ url, baseDir }))
-    return {
-      ok: true,
-      value: {
-        dialect: 'sqlite',
-        query: (sql, params) => {
-          const statement = db.prepare(sql)
-          if (isReadStatement(sql)) {
+function openSqlite(url: string, baseDir: string) {
+  return Effect.gen(function* () {
+    const sqlite = yield* Effect.tryPromise({
+      try: () => import('node:sqlite'),
+      catch: () => new DatabaseUnavailableError({ reason: NO_SQLITE }),
+    })
+    const parsed = SqliteModule.safeParse(sqlite)
+    if (!parsed.success) return yield* new DatabaseUnavailableError({ reason: NO_SQLITE })
+    const db = yield* Effect.try({
+      try: () => new parsed.data.DatabaseSync(UrlDomain.makeSqliteFilePath({ url, baseDir })),
+      catch: unavailable,
+    })
+    const driver: Driver = {
+      dialect: 'sqlite',
+      query: (statement) =>
+        Effect.try({
+          try: () => {
+            const prepared = db.prepare(statement.sql)
+            if (SqlDomain.isReadStatement({ sql: statement.sql })) {
+              // oxlint-disable-next-line promise/prefer-await-to-then -- zod's .catch(), not a promise
+              const rows = DriverRows.catch([]).parse(prepared.all(...statement.params))
+              return { columns: Object.keys(rows[0] ?? {}), rows, rowCount: rows.length }
+            }
             // oxlint-disable-next-line promise/prefer-await-to-then -- zod's .catch(), not a promise
-            const rows = DriverRows.catch([]).parse(statement.all(...params))
-            return Promise.resolve({ columns: columnsOf(rows, []), rows, rowCount: rows.length })
-          }
-          // oxlint-disable-next-line promise/prefer-await-to-then -- zod's .catch(), not a promise
-          const { changes } = SqliteRunInfo.catch({ changes: 0 }).parse(statement.run(...params))
-          return Promise.resolve({ columns: [], rows: [], rowCount: changes })
-        },
-        close: () => {
-          db.close()
-          return Promise.resolve()
-        },
-      },
+            const info = SqliteRunInfo.catch({ changes: 0 }).parse(
+              prepared.run(...statement.params),
+            )
+            return { columns: [], rows: [], rowCount: info.changes }
+          },
+          catch: databaseError,
+        }),
+      close: Effect.sync(() => {
+        db.close()
+      }),
     }
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) }
-  }
+    return driver
+  })
 }
 
 type PgClient = {
@@ -156,37 +163,51 @@ const PgResult = z
   })
   .meta({ description: 'What pg returns from client.query()' })
 
-async function openPostgres(url: string, cwd: string): Promise<Result<Driver>> {
-  const mod = await importFromProject('pg', cwd)
-  if (!mod.ok) return mod
-  const result = PgModule.safeParse(mod.value)
-  if (!result.success) {
-    return { ok: false, error: 'The "pg" package does not export Client.' }
-  }
-  try {
-    const client = new result.data.Client({ connectionString: url })
-    await client.connect()
-    return {
-      ok: true,
-      value: {
-        dialect: 'postgresql',
-        query: async (sql, params) => {
-          // oxlint-disable-next-line promise/prefer-await-to-then -- zod's .catch(), not a promise
-          const { rows, fields, rowCount } = PgResult.catch({ rows: [] }).parse(
-            await client.query(sql, params),
-          )
-          const columns = columnsOf(
-            rows,
-            (fields ?? []).map((f) => f.name),
-          )
-          return { columns, rows, rowCount: rowCount ?? rows.length }
-        },
-        close: () => client.end(),
-      },
+function openPostgres(url: string, cwd: string) {
+  return Effect.gen(function* () {
+    const parsed = PgModule.safeParse(yield* importFromProject('pg', cwd))
+    if (!parsed.success) {
+      return yield* new DatabaseUnavailableError({
+        reason: 'The "pg" package does not export Client.',
+      })
     }
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) }
-  }
+    const client = yield* Effect.tryPromise({
+      try: async () => {
+        const opened = new parsed.data.Client({ connectionString: url })
+        await opened.connect()
+        // `pg` ignores Prisma's `?schema=`; without this the tables of a non-public namespace are
+        // invisible and every query reports a missing relation.
+        const schema = UrlDomain.makePostgresSchema({ url })
+        if (schema !== null) {
+          const name = SqlDomain.makeIdentifier({ dialect: 'postgresql', name: schema })
+          await opened.query(`SET search_path TO ${name}, public`, [])
+        }
+        return opened
+      },
+      catch: unavailable,
+    })
+    const driver: Driver = {
+      dialect: 'postgresql',
+      query: (statement) =>
+        Effect.tryPromise({
+          try: async () => {
+            // oxlint-disable-next-line promise/prefer-await-to-then -- zod's .catch(), not a promise
+            const { rows, fields, rowCount } = PgResult.catch({ rows: [] }).parse(
+              await client.query(statement.sql, statement.params),
+            )
+            const columns = (fields ?? []).map((field) => field.name)
+            return {
+              columns: columns.length > 0 ? columns : Object.keys(rows[0] ?? {}),
+              rows,
+              rowCount: rowCount ?? rows.length,
+            }
+          },
+          catch: databaseError,
+        }),
+      close: Effect.promise(() => client.end()),
+    }
+    return driver
+  })
 }
 
 type MysqlConnection = {
@@ -214,73 +235,42 @@ const MysqlResult = z
   ])
   .meta({ description: 'What mysql2 returns from connection.query(): [rows or header, fields]' })
 
-async function openMysql(url: string, cwd: string): Promise<Result<Driver>> {
-  const mod = await importFromProject('mysql2/promise', cwd)
-  if (!mod.ok) return mod
-  const result = MysqlModule.safeParse(mod.value)
-  if (!result.success) {
-    return { ok: false, error: 'The "mysql2/promise" module does not export createConnection.' }
-  }
-  try {
-    const connection = await result.data.createConnection(url)
-    return {
-      ok: true,
-      value: {
-        dialect: 'mysql',
-        query: async (sql, params) => {
-          // oxlint-disable-next-line promise/prefer-await-to-then -- zod's .catch(), not a promise
-          const [data, fields] = MysqlResult.catch([[], undefined]).parse(
-            await connection.query(sql, params),
-          )
-          if (Array.isArray(data)) {
-            const names = (fields ?? []).map((f) => f.name)
-            return { columns: columnsOf(data, names), rows: data, rowCount: data.length }
-          }
-          return { columns: [], rows: [], rowCount: data.affectedRows }
-        },
-        close: () => connection.end(),
-      },
-    }
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) }
-  }
-}
-
-const OpenDriverInput = z
-  .object({
-    dialect: z
-      .enum(['postgresql', 'mysql', 'sqlite'])
-      .meta({ description: 'The driver to open.', example: 'sqlite' }),
-    url: z.string().meta({ description: 'The connection URL.', example: 'file:./dev.db' }),
-    cwd: z.string().meta({ description: 'Where pg / mysql2 are resolved from.', example: '/app' }),
-    schemaDir: z
-      .string()
-      .meta({ description: 'Where relative sqlite files resolve from.', example: '/app/prisma' }),
-  })
-  .readonly()
-  .meta({
-    description:
-      'The dialect to open, its URL, and the directories drivers and sqlite files resolve against',
-  })
-
-/** Opens sqlite through node:sqlite, or pg / mysql2 loaded from the project in cwd. */
-export function openDriver(options: z.infer<typeof OpenDriverInput>): Promise<Result<Driver>> {
-  switch (options.dialect) {
-    case 'sqlite':
-      return openSqlite(options.url, options.schemaDir)
-    case 'postgresql':
-      return openPostgres(options.url, options.cwd)
-    case 'mysql':
-      return openMysql(options.url, options.cwd)
-    default:
-      return Promise.resolve({
-        ok: false,
-        error: `Unsupported dialect: ${String(options.dialect)}`,
+function openMysql(url: string, cwd: string) {
+  return Effect.gen(function* () {
+    const parsed = MysqlModule.safeParse(yield* importFromProject('mysql2/promise', cwd))
+    if (!parsed.success) {
+      return yield* new DatabaseUnavailableError({
+        reason: 'The "mysql2/promise" module does not export createConnection.',
       })
-  }
+    }
+    const connection = yield* Effect.tryPromise({
+      try: () => parsed.data.createConnection(url),
+      catch: unavailable,
+    })
+    const driver: Driver = {
+      dialect: 'mysql',
+      query: (statement) =>
+        Effect.tryPromise({
+          try: async () => {
+            // oxlint-disable-next-line promise/prefer-await-to-then -- zod's .catch(), not a promise
+            const [data, fields] = MysqlResult.catch([[], undefined]).parse(
+              await connection.query(statement.sql, statement.params),
+            )
+            if (!Array.isArray(data)) return { columns: [], rows: [], rowCount: data.affectedRows }
+            const columns = (fields ?? []).map((field) => field.name)
+            return {
+              columns: columns.length > 0 ? columns : Object.keys(data[0] ?? {}),
+              rows: data,
+              rowCount: data.length,
+            }
+          },
+          catch: databaseError,
+        }),
+      close: Effect.promise(() => connection.end()),
+    }
+    return driver
+  })
 }
-
-const CLOSED = Promise.resolve()
 
 const DISCONNECTED = {
   connected: false,
@@ -290,21 +280,24 @@ const DISCONNECTED = {
   error: null,
 } as const
 
-export function disconnectedDbState(error: string | null = null): {
-  readonly status: () => {
+/** The database as the use cases see it: its status, the driver (or why there is none) and how to close it. */
+export function disconnectedDatabase(reason: string | null = null): {
+  readonly status: {
     readonly connected: boolean
     readonly dialect: 'postgresql' | 'mysql' | 'sqlite' | null
     readonly url: string | null
     readonly source: 'flag' | 'env' | 'config' | null
     readonly error: string | null
   }
-  readonly driver: () => Driver | null
-  readonly close: () => Promise<void>
+  readonly driver: Effect.Effect<Driver, DatabaseUnavailableError>
+  readonly close: Effect.Effect<void>
 } {
   return {
-    status: () => ({ ...DISCONNECTED, error }),
-    driver: () => null,
-    close: () => CLOSED,
+    status: { ...DISCONNECTED, error: reason },
+    driver: Effect.fail(
+      new DatabaseUnavailableError({ reason: reason ?? 'No database connected.' }),
+    ),
+    close: Effect.void,
   }
 }
 
@@ -335,52 +328,47 @@ const ConnectDatabaseInput = z
     description: 'Where to look for the database URL and how to resolve relative sqlite files',
   })
 
-/** Resolves the URL, picks the dialect and opens the driver; failures become a disconnected state with the reason. */
+/** Resolves the URL, picks the dialect and opens the driver; a failure is a disconnected database that says why. */
 export function connectDatabase(options: z.infer<typeof ConnectDatabaseInput>) {
   return Effect.gen(function* () {
     const dotenv = yield* readFile(path.join(options.cwd, '.env')).pipe(
-      Effect.map((text) => makeDotenv({ text })),
+      Effect.map((text) => UrlDomain.makeDotenv({ text })),
       Effect.orElseSucceed(() => ({})),
     )
     const configText = yield* readFile(path.join(options.cwd, 'prisma.config.ts')).pipe(
       Effect.orElseSucceed(() => null),
     )
-    const resolved = makeDatabaseUrl({
+    const resolved = UrlDomain.makeDatabaseUrl({
       explicit: options.explicitUrl,
       env: options.env,
       dotenv,
       configText,
     })
-    if (!resolved.ok) return disconnectedDbState(resolved.error)
-    const dialect = makeDialect({
+    if (!resolved.ok) return yield* new DatabaseUnavailableError({ reason: resolved.error })
+    const url = UrlDomain.makeRedactedUrl({ url: resolved.value.url })
+    const dialect = UrlDomain.makeDialect({
       url: resolved.value.url,
       schemaProvider: options.schemaProvider,
     })
     if (dialect === null) {
-      return disconnectedDbState(
-        `Cannot tell which database "${makeRedactedUrl({ url: resolved.value.url })}" points at.\n   Use a postgresql://, mysql:// or file: URL.`,
-      )
+      return yield* new DatabaseUnavailableError({
+        reason: `Cannot tell which database "${url}" points at.\n   Use a postgresql://, mysql:// or file: URL.`,
+      })
     }
-    const driver = yield* Effect.promise(() =>
-      openDriver({
-        dialect,
-        url: resolved.value.url,
-        cwd: options.cwd,
-        schemaDir: options.schemaDir,
-      }),
-    )
-    if (!driver.ok) return disconnectedDbState(driver.error)
-    const status = {
-      connected: true,
-      dialect,
-      url: makeRedactedUrl({ url: resolved.value.url }),
-      source: resolved.value.source,
-      error: null,
-    }
+    const driver =
+      dialect === 'sqlite'
+        ? yield* openSqlite(resolved.value.url, options.schemaDir)
+        : dialect === 'postgresql'
+          ? yield* openPostgres(resolved.value.url, options.cwd)
+          : yield* openMysql(resolved.value.url, options.cwd)
     return {
-      status: () => status,
-      driver: () => driver.value,
-      close: () => driver.value.close(),
+      status: { connected: true, dialect, url, source: resolved.value.source, error: null },
+      driver: Effect.succeed(driver),
+      close: driver.close,
     }
-  })
+  }).pipe(
+    Effect.catchTag('DatabaseUnavailableError', (error) =>
+      Effect.succeed(disconnectedDatabase(error.reason)),
+    ),
+  )
 }

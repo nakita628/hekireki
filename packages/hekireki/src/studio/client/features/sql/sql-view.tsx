@@ -4,8 +4,7 @@ import { useState } from 'react'
 import { PlayIcon } from '../../components/icons.js'
 import { ResultTable } from '../../components/result-table.js'
 import { getDbCountsQueryKey, useDb, usePostDbSql } from '../../hooks/index.js'
-import { errorMessage } from '../../lib/error.js'
-import { loadString, saveString } from '../../lib/storage.js'
+import { loadString, saveString } from '../../lib/index.js'
 
 const SQL_KEY = 'hekireki-studio:sql'
 
@@ -70,7 +69,7 @@ export function SqlView() {
         }}
       />
       {run.isError ? (
-        <div className="error-box m-6">{errorMessage(run.error)}</div>
+        <div className="error-box m-6">The statement could not be run.</div>
       ) : result === null ? (
         <div className="p-6 text-muted">Results will appear here.</div>
       ) : (

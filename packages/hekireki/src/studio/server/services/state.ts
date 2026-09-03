@@ -2,7 +2,7 @@ import { Effect } from 'effect'
 import * as z from 'zod'
 
 import type { DocsSchema, SnapshotSchema } from '../routes/index.js'
-import { parseSchemaFiles, readSchemaFiles } from './load.js'
+import * as LoadService from './load.js'
 
 const CreateStudioStateInput = z
   .object({
@@ -24,16 +24,27 @@ export function createStudioState(input: z.infer<typeof CreateStudioStateInput>)
     snapshot: z.input<typeof SnapshotSchema>
     docs: z.input<typeof DocsSchema>
   } = {
-    snapshot: { schema: null, error: null, updatedAt: new Date(0).toISOString(), files: [] },
+    snapshot: {
+      schema: null,
+      error: null,
+      diagnostics: [],
+      updatedAt: new Date(0).toISOString(),
+      files: [],
+    },
     docs: { models: [], inputTypes: [], outputTypes: [], enumTypes: [] },
   }
   function load() {
     return Effect.gen(function* () {
       const previous = store.snapshot
-      const files = yield* readSchemaFiles({ schemaPath })
-      const parsed = yield* parseSchemaFiles({ files }).pipe(
-        Effect.catchTag('SchemaParseError', (e) =>
-          Effect.succeed({ schema: previous.schema, docs: store.docs, error: e.message }),
+      const files = yield* LoadService.readSchemaFiles({ schemaPath })
+      const parsed = yield* LoadService.parseSchemaFiles({ files }).pipe(
+        Effect.catchTag('SchemaParseError', (error) =>
+          Effect.succeed({
+            schema: previous.schema,
+            docs: store.docs,
+            error: error.message,
+            diagnostics: [...error.diagnostics],
+          }),
         ),
       )
       return {
@@ -41,6 +52,7 @@ export function createStudioState(input: z.infer<typeof CreateStudioStateInput>)
         schema: parsed.schema,
         docs: parsed.docs,
         error: 'error' in parsed ? parsed.error : null,
+        diagnostics: parsed.diagnostics,
       }
     })
   }
@@ -48,12 +60,13 @@ export function createStudioState(input: z.infer<typeof CreateStudioStateInput>)
     return Effect.gen(function* () {
       const previous = store.snapshot
       const loaded = yield* load().pipe(
-        Effect.catchTag('SchemaLoadError', (e) =>
+        Effect.catchTag('SchemaLoadError', (error) =>
           Effect.succeed({
             files: previous.files,
             schema: previous.schema,
             docs: store.docs,
-            error: e.message,
+            error: error.message,
+            diagnostics: [],
           }),
         ),
       )

@@ -18,7 +18,12 @@ export function dbmlContent(datamodel: DMMF.Datamodel, mapToDbSchema = false) {
 
 /** The ER diagram as Studio draws it, laid out automatically, as an SVG document. */
 export function erDiagramSvg(datamodel: DMMF.Datamodel, theme: DiagramTheme = 'light') {
-  const schema = makeSchema({ dmmf: { datamodel }, files: [] })
+  const schema = makeSchema({
+    dmmf: { datamodel },
+    files: [],
+    provider: null,
+    blocks: [],
+  })
   const positions = autoLayout(schema.models, schema.relations)
   return renderDiagramSvg({
     models: schema.models,

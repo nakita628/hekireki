@@ -1,0 +1,18 @@
+datasource db {
+  provider = "sqlite"
+}
+
+/// A registered user
+model User {
+  id    Int    @id @default(autoincrement())
+  /// Login address
+  email String @unique
+  name  String?
+  role  Role   @default(VIEWER)
+  posts Post[]
+}
+
+enum Role {
+  ADMIN
+  VIEWER
+}

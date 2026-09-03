@@ -10,9 +10,15 @@ import {
   patchDbRowsModelNameRouteHandler,
   postDbRowsModelNameRouteHandler,
   postDbSqlRouteHandler,
+  postPrismaCodeActionsRouteHandler,
   postPrismaCompleteRouteHandler,
+  postPrismaDefinitionRouteHandler,
   postPrismaFormatRouteHandler,
+  postPrismaHoverRouteHandler,
   postPrismaLintRouteHandler,
+  postPrismaReferencesRouteHandler,
+  postPrismaRenameRouteHandler,
+  postPrismaSymbolsRouteHandler,
   postSchemaReloadRouteHandler,
   putSchemaFilesRouteHandler,
 } from './handlers'
@@ -27,9 +33,15 @@ import {
   patchDbRowsModelNameRoute,
   postDbRowsModelNameRoute,
   postDbSqlRoute,
+  postPrismaCodeActionsRoute,
   postPrismaCompleteRoute,
+  postPrismaDefinitionRoute,
   postPrismaFormatRoute,
+  postPrismaHoverRoute,
   postPrismaLintRoute,
+  postPrismaReferencesRoute,
+  postPrismaRenameRoute,
+  postPrismaSymbolsRoute,
   postSchemaReloadRoute,
   putSchemaFilesRoute,
 } from './routes'
@@ -50,7 +62,13 @@ export const api = app
   .openapi(postDbSqlRoute, postDbSqlRouteHandler)
   .openapi(postPrismaFormatRoute, postPrismaFormatRouteHandler)
   .openapi(postPrismaLintRoute, postPrismaLintRouteHandler)
+  .openapi(postPrismaSymbolsRoute, postPrismaSymbolsRouteHandler)
   .openapi(postPrismaCompleteRoute, postPrismaCompleteRouteHandler)
+  .openapi(postPrismaHoverRoute, postPrismaHoverRouteHandler)
+  .openapi(postPrismaDefinitionRoute, postPrismaDefinitionRouteHandler)
+  .openapi(postPrismaReferencesRoute, postPrismaReferencesRouteHandler)
+  .openapi(postPrismaRenameRoute, postPrismaRenameRouteHandler)
+  .openapi(postPrismaCodeActionsRoute, postPrismaCodeActionsRouteHandler)
   .openapi(getDocsRoute, getDocsRouteHandler)
 
 export default app

@@ -8,13 +8,13 @@ import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { fileSystemLayer } from '../../../file/index.js'
 import { createStudioApp } from '../app.js'
 import { connectDatabase, createStudioState } from '../services/index.js'
-import type { disconnectedDbState } from '../services/index.js'
+import type { disconnectedDatabase } from '../services/index.js'
 
 const dirs: string[] = []
-const states: ReturnType<typeof disconnectedDbState>[] = []
+const states: ReturnType<typeof disconnectedDatabase>[] = []
 
 afterEach(async () => {
-  await Promise.all(states.splice(0).map((db) => db.close()))
+  await Effect.runPromise(Effect.all(states.splice(0).map((db) => db.close)))
   for (const dir of dirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -40,7 +40,29 @@ model Post {
   authorId Int    @map("author_id")
   author   User   @relation(fields: [authorId], references: [id])
 }
+
+enum Visibility {
+  PUBLIC    @map("public")
+  LINK_ONLY @map("link_only")
+}
+
+model Note {
+  id         Int        @id @default(autoincrement())
+  title      String
+  visibility Visibility @default(PUBLIC)
+}
+
+model Session {
+  id        String   @id @default(uuid(7))
+  token     String   @unique @default(cuid())
+  startedAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
 `
+
+// The driver message, with the way out Studio appends to it.
+const MISSING_TABLE_HINT =
+  'no such table: missing — the database has not been migrated to this schema; run `prisma db push` (or `prisma migrate dev`) with the same DATABASE_URL, then reload.'
 
 const ROWS_META = { key: ['id'], columns: ['id', 'email', 'active', 'createdAt'] }
 
@@ -82,6 +104,13 @@ async function setup() {
   await call('/api/db/sql', 'POST', {
     sql: 'CREATE TABLE "Post" (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, author_id INTEGER NOT NULL)',
   })
+  await call('/api/db/sql', 'POST', {
+    sql: 'CREATE TABLE "Note" (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, visibility TEXT NOT NULL)',
+  })
+  // No database defaults: Prisma would generate these values in the client.
+  await call('/api/db/sql', 'POST', {
+    sql: 'CREATE TABLE "Session" (id TEXT PRIMARY KEY, token TEXT NOT NULL UNIQUE, startedAt TEXT NOT NULL, updatedAt TEXT NOT NULL)',
+  })
   return { call, dir }
 }
 
@@ -104,11 +133,13 @@ describe('data routes over sqlite', () => {
     const { call } = await setup()
     expect(
       await call('/api/db/rows/User', 'POST', {
-        values: { email: 'ann@example.com', active: false },
+        values: { email: 'ann@example.com', active: false, createdAt: '2026-01-01T00:00:00.000Z' },
       }),
     ).toStrictEqual({ status: 200, json: { affected: 1 } })
     expect(
-      await call('/api/db/rows/User', 'POST', { values: { email: 'bob@example.com' } }),
+      await call('/api/db/rows/User', 'POST', {
+        values: { email: 'bob@example.com', createdAt: '2026-01-01T00:00:00.000Z' },
+      }),
     ).toStrictEqual({
       status: 200,
       json: { affected: 1 },
@@ -159,8 +190,78 @@ describe('data routes over sqlite', () => {
     })
     expect(await call('/api/db/counts', 'GET')).toStrictEqual({
       status: 200,
-      json: { counts: { User: 1, Post: 0 } },
+      json: { counts: { User: 1, Post: 0, Session: 0, Note: 0 } },
     })
+  })
+
+  it('stores a mapped enum member under its database name and reads it back by its Prisma name', async () => {
+    const { call } = await setup()
+    expect(
+      await call('/api/db/rows/Note', 'POST', {
+        values: { title: 'Mapped', visibility: 'LINK_ONLY' },
+      }),
+    ).toStrictEqual({ status: 200, json: { affected: 1 } })
+    // The column holds the @map name...
+    expect(
+      await call('/api/db/sql', 'POST', { sql: 'SELECT visibility FROM "Note"' }),
+    ).toStrictEqual({
+      status: 200,
+      json: {
+        columns: ['visibility'],
+        rows: [{ visibility: 'link_only' }],
+        rowCount: 1,
+        durationMs: expect.any(Number),
+      },
+    })
+    // ...while the data browser shows the name written in the schema.
+    const listed = await call('/api/db/rows/Note', 'GET')
+    expect((listed.json as { rows: Record<string, string>[] }).rows).toStrictEqual([
+      { id: 1, title: 'Mapped', visibility: 'LINK_ONLY' },
+    ])
+    expect(
+      await call('/api/db/rows/Note', 'PATCH', {
+        where: { id: 1 },
+        values: { visibility: 'PUBLIC' },
+      }),
+    ).toStrictEqual({ status: 200, json: { affected: 1 } })
+    expect(
+      await call('/api/db/sql', 'POST', { sql: 'SELECT visibility FROM "Note"' }),
+    ).toStrictEqual({
+      status: 200,
+      json: {
+        columns: ['visibility'],
+        rows: [{ visibility: 'public' }],
+        rowCount: 1,
+        durationMs: expect.any(Number),
+      },
+    })
+  })
+
+  it('generates the client-side defaults Prisma would, so an empty row inserts', async () => {
+    const { call } = await setup()
+    expect(await call('/api/db/rows/Session', 'POST', { values: {} })).toStrictEqual({
+      status: 200,
+      json: { affected: 1 },
+    })
+    const listed = await call('/api/db/rows/Session', 'GET')
+    const row = (listed.json as { rows: Record<string, string>[] }).rows[0]
+    expect(row?.id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u,
+    )
+    expect(row?.token).toMatch(/^c[0-9a-z]{24}$/u)
+    expect(row?.startedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/u)
+    expect(row?.updatedAt).toBe(row?.startedAt)
+  })
+
+  it('explains a missing table and a missing value', async () => {
+    const { call } = await setup()
+    await call('/api/db/sql', 'POST', { sql: 'DROP TABLE "Post"' })
+    const missing = await call('/api/db/rows/Post', 'GET')
+    expect(missing.status).toBe(503)
+    expect((missing.json as { detail: string }).detail).toContain('prisma db push')
+    const noValue = await call('/api/db/rows/User', 'POST', { values: { active: true } })
+    expect(noValue.status).toBe(503)
+    expect((noValue.json as { detail: string }).detail).toContain('fill the field in')
   })
 
   it('answers problem+json for unknown models, empty keys and malformed bodies', async () => {
@@ -245,9 +346,9 @@ describe('data routes over sqlite', () => {
         type: '/problems/validation-failed',
         title: 'Validation Failed',
         status: 422,
-        detail: 'no such table: missing',
+        detail: MISSING_TABLE_HINT,
         instance: '/api/db/sql',
-        errors: [{ field: 'sql', message: 'no such table: missing' }],
+        errors: [{ field: 'sql', message: MISSING_TABLE_HINT }],
       },
     })
     const empty = await call('/api/db/sql', 'POST', { sql: '' })

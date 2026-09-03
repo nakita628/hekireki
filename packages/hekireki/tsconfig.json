@@ -9,7 +9,12 @@
     "skipLibCheck": true,
     "types": ["node"],
     "declaration": true,
-    "moduleResolution": "bundler"
+    "moduleResolution": "bundler",
+    // @prisma/language-server only exports its stdio entry; its request handlers are loaded from
+    // dist/lib at runtime (services/language.ts) and typed from the declarations shipped there.
+    "paths": {
+      "@prisma/language-server/dist/*": ["./node_modules/@prisma/language-server/dist/*"]
+    }
   },
   "include": ["**/src/**/*"],
   "exclude": ["**/src/**/*.test.ts", "src/studio/client/**/*"]

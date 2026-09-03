@@ -427,6 +427,90 @@ export const SchemaSchema = z
 
 export type Schema = z.infer<typeof SchemaSchema>
 
+export const LineSchema = z
+  .int32()
+  .min(0)
+  .brand<'Line'>()
+  .openapi({
+    description: 'A 0-based line number in the editor buffer.',
+    'x-minValue-message': 'line must be 0 or more',
+  })
+  .openapi('Line')
+
+export type Line = z.infer<typeof LineSchema>
+
+export const CharacterSchema = z
+  .int32()
+  .min(0)
+  .brand<'Character'>()
+  .openapi({
+    description: 'A 0-based column (UTF-16 code unit offset) in the editor buffer.',
+    'x-minValue-message': 'character must be 0 or more',
+  })
+  .openapi('Character')
+
+export type Character = z.infer<typeof CharacterSchema>
+
+export const LspPositionSchema = z
+  .object({
+    line: LineSchema.openapi({ description: 'The line' }),
+    character: CharacterSchema.openapi({ description: 'The column' }),
+  })
+  .openapi({
+    required: ['line', 'character'],
+    description: 'A 0-based position in a document, as LSP counts it.',
+    example: { line: 4, character: 6 },
+  })
+  .openapi('LspPosition')
+
+export type LspPosition = z.infer<typeof LspPositionSchema>
+
+export const LspRangeSchema = z
+  .object({
+    start: LspPositionSchema.openapi({ description: 'Where the range starts' }),
+    end: LspPositionSchema.openapi({ description: 'Where the range ends' }),
+  })
+  .openapi({
+    required: ['start', 'end'],
+    description: 'A range between two positions, end exclusive.',
+    example: { start: { line: 4, character: 6 }, end: { line: 4, character: 10 } },
+  })
+  .openapi('LspRange')
+
+export type LspRange = z.infer<typeof LspRangeSchema>
+
+export const SeveritySchema = z
+  .enum(['error', 'warning', 'information', 'hint'])
+  .openapi({
+    description:
+      'How serious a diagnostic of the Prisma language server is (LSP `DiagnosticSeverity`).',
+  })
+  .openapi('Severity')
+
+export type Severity = z.infer<typeof SeveritySchema>
+
+export const FileDiagnosticSchema = z
+  .object({
+    path: z.string().openapi({ description: 'The file, as Studio loaded it' }),
+    range: LspRangeSchema.openapi({ description: 'Where it is (0-based, end exclusive)' }),
+    message: z.string().openapi({ description: 'The Prisma message' }),
+    severity: SeveritySchema.openapi({ description: 'How serious it is' }),
+  })
+  .openapi({
+    required: ['path', 'range', 'message', 'severity'],
+    description: 'One diagnostic the Prisma language server reports for a file on disk.',
+    example: {
+      path: 'prisma/schema.prisma',
+      range: { start: { line: 1, character: 5 }, end: { line: 1, character: 9 } },
+      message:
+        'Type "Nope" is neither a built-in type, nor refers to another model, composite type, or enum.',
+      severity: 'error',
+    },
+  })
+  .openapi('FileDiagnostic')
+
+export type FileDiagnostic = z.infer<typeof FileDiagnosticSchema>
+
 export const SnapshotSchema = z
   .object({
     schema: SchemaSchema.nullable().openapi({
@@ -435,7 +519,16 @@ export const SnapshotSchema = z
     error: z
       .string()
       .nullable()
-      .openapi({ description: 'The Prisma error of the latest parse, or null when it succeeded' }),
+      .openapi({
+        description:
+          'The Prisma error of the latest parse as the engine printed it, or null when it succeeded',
+      }),
+    diagnostics: z
+      .array(FileDiagnosticSchema)
+      .openapi({
+        description:
+          'Every diagnostic the language server reports for the files on disk; empty when they parse',
+      }),
     updatedAt: z.iso
       .datetime()
       .openapi({
@@ -448,13 +541,22 @@ export const SnapshotSchema = z
   })
   .brand<'Snapshot'>()
   .openapi({
-    required: ['schema', 'error', 'updatedAt', 'files'],
+    required: ['schema', 'error', 'diagnostics', 'updatedAt', 'files'],
     description:
-      'The latest parse result. `schema` is the last schema that parsed (null until one does) and\n`error` the current Prisma error, so a broken edit never blanks the UI. `files` always reflects\nthe disk, even while the schema is broken.',
+      'The latest parse result. `schema` is the last schema that parsed (null until one does),\n`error` the current Prisma error and `diagnostics` the same errors as the language server\nplaces them, so a broken edit never blanks the UI. `files` always reflects the disk, even\nwhile the schema is broken.',
     example: {
       schema: null,
       error:
         'error: Type "Nope" is neither a built-in type, nor refers to another model, composite type, or enum.',
+      diagnostics: [
+        {
+          path: 'prisma/schema.prisma',
+          range: { start: { line: 1, character: 5 }, end: { line: 1, character: 9 } },
+          message:
+            'Type "Nope" is neither a built-in type, nor refers to another model, composite type, or enum.',
+          severity: 'error',
+        },
+      ],
       updatedAt: '2026-09-02T00:00:00.000Z',
       files: [{ path: 'prisma/schema.prisma', content: 'model User {\n  id Nope @id\n}\n' }],
     },
@@ -917,65 +1019,95 @@ export const SqlBodySchema = z
 
 export type SqlBody = z.infer<typeof SqlBodySchema>
 
+export const LspTextEditSchema = z
+  .object({
+    range: LspRangeSchema.openapi({ description: 'What to replace' }),
+    newText: z.string().openapi({ description: 'The replacement' }),
+  })
+  .openapi({
+    required: ['range', 'newText'],
+    description: 'One replacement in a document.',
+    example: {
+      range: { start: { line: 4, character: 6 }, end: { line: 4, character: 10 } },
+      newText: 'Account',
+    },
+  })
+  .openapi('LspTextEdit')
+
+export type LspTextEdit = z.infer<typeof LspTextEditSchema>
+
 export const FormattedSchema = z
   .object({
-    text: z.string().openapi({ description: 'The text as the Prisma formatter lays it out' }),
+    edits: z
+      .array(LspTextEditSchema)
+      .openapi({
+        description:
+          'The replacements that lay the text out as the Prisma formatter does; empty when it already is',
+      }),
   })
   .brand<'Formatted'>()
   .openapi({
-    required: ['text'],
-    description: 'Formatted schema text.',
-    example: { text: 'model User {\n  id Int @id\n}\n' },
+    required: ['edits'],
+    description: 'The edits the Prisma formatter makes; the editor applies them as a minimal diff.',
+    example: {
+      edits: [
+        {
+          range: { start: { line: 0, character: 0 }, end: { line: 3, character: 0 } },
+          newText: 'model User {\n  id Int @id\n}\n',
+        },
+      ],
+    },
   })
   .openapi('Formatted')
 
 export type Formatted = z.infer<typeof FormattedSchema>
 
 export const TextBodySchema = z
-  .object({ text: SchemaTextSchema.openapi({ description: 'The text as typed' }) })
+  .object({
+    text: SchemaTextSchema.openapi({ description: 'The text as typed' }),
+    path: z
+      .string()
+      .exactOptional()
+      .openapi({
+        description:
+          'The file the text belongs to, as Studio loaded it; the first file when omitted',
+      }),
+  })
   .openapi({
     required: ['text'],
-    description: 'Schema text to format.',
+    description:
+      'Schema text and, when it belongs to a loaded file, that file, so the other loaded files are seen.',
     example: { text: 'model User {\nid Int @id\n}\n' },
   })
   .openapi('TextBody')
 
 export type TextBody = z.infer<typeof TextBodySchema>
 
-export const SeveritySchema = z
-  .enum(['error', 'warning'])
-  .openapi({ description: 'How serious a Prisma diagnostic is.' })
-  .openapi('Severity')
-
-export type Severity = z.infer<typeof SeveritySchema>
-
-export const DiagnosticSchema = z
+export const LspDiagnosticSchema = z
   .object({
-    from: z.int32().openapi({ description: 'Start offset (inclusive)' }),
-    to: z.int32().openapi({ description: 'End offset (exclusive)' }),
+    range: LspRangeSchema.openapi({ description: 'Where it is' }),
     message: z.string().openapi({ description: 'The Prisma message' }),
     severity: SeveritySchema.openapi({ description: 'How serious it is' }),
   })
   .openapi({
-    required: ['from', 'to', 'message', 'severity'],
-    description: 'One Prisma diagnostic, positioned by string offsets into the text.',
+    required: ['range', 'message', 'severity'],
+    description: 'One diagnostic the Prisma language server reports, positioned as LSP does.',
     example: {
-      from: 19,
-      to: 23,
+      range: { start: { line: 7, character: 7 }, end: { line: 7, character: 8 } },
       message:
-        'Type "Nope" is neither a built-in type, nor refers to another model, composite type, or enum.',
+        'Type "R" is neither a built-in type, nor refers to another model, composite type, or enum.',
       severity: 'error',
     },
   })
-  .openapi('Diagnostic')
+  .openapi('LspDiagnostic')
 
-export type Diagnostic = z.infer<typeof DiagnosticSchema>
+export type LspDiagnostic = z.infer<typeof LspDiagnosticSchema>
 
 export const DiagnosticsSchema = z
   .object({
     diagnostics: z
-      .array(DiagnosticSchema)
-      .openapi({ description: 'Every diagnostic Prisma reported for the file' }),
+      .array(LspDiagnosticSchema)
+      .openapi({ description: 'Every diagnostic the language server reported for the file' }),
   })
   .brand<'Diagnostics'>()
   .openapi({
@@ -1001,9 +1133,63 @@ export const LintBodySchema = z
 
 export type LintBody = z.infer<typeof LintBodySchema>
 
+export const LspDocumentSymbolSchema = z
+  .object({
+    name: z.string().openapi({ description: 'The declared name' }),
+    kind: z
+      .int32()
+      .openapi({
+        description:
+          'The LSP `SymbolKind`: 5 = model or view, 10 = enum, 11 = composite type, 23 = datasource, 12 = generator',
+      }),
+    range: LspRangeSchema.openapi({ description: 'The whole block' }),
+    selectionRange: LspRangeSchema.openapi({ description: 'The name inside the block header' }),
+  })
+  .openapi({
+    required: ['name', 'kind', 'range', 'selectionRange'],
+    description: "A block of a schema file, as the language server's document outline lists it.",
+    example: {
+      name: 'User',
+      kind: 5,
+      range: { start: { line: 4, character: 0 }, end: { line: 9, character: 1 } },
+      selectionRange: { start: { line: 4, character: 6 }, end: { line: 4, character: 10 } },
+    },
+  })
+  .openapi('LspDocumentSymbol')
+
+export type LspDocumentSymbol = z.infer<typeof LspDocumentSymbolSchema>
+
+export const SymbolsSchema = z
+  .object({
+    symbols: z.array(LspDocumentSymbolSchema).openapi({ description: 'Every block of the text' }),
+  })
+  .brand<'Symbols'>()
+  .openapi({
+    required: ['symbols'],
+    description: 'The blocks of one file in declaration order, as the editor outline shows them.',
+    example: { symbols: [] },
+  })
+  .openapi('Symbols')
+
+export type Symbols = z.infer<typeof SymbolsSchema>
+
+export const InsertTextFormatSchema = z
+  .enum(['plainText', 'snippet'])
+  .openapi({ description: 'How the `insertText` of a completion is to be read.' })
+  .openapi('InsertTextFormat')
+
+export type InsertTextFormat = z.infer<typeof InsertTextFormatSchema>
+
 export const CompletionSchema = z
   .object({
     label: z.string().openapi({ description: 'What the completion list shows' }),
+    kind: z
+      .int32()
+      .nullable()
+      .openapi({
+        description:
+          'The LSP `CompletionItemKind` (13 = enum value, 14 = keyword, 10 = property, ...), when the server gives one',
+      }),
     detail: z
       .string()
       .nullable()
@@ -1011,19 +1197,37 @@ export const CompletionSchema = z
     documentation: z
       .string()
       .nullable()
-      .openapi({ description: 'The documentation text, when the server gives one' }),
+      .openapi({ description: 'The documentation text (Markdown), when the server gives one' }),
     insertText: z
       .string()
-      .openapi({ description: 'The text to insert, with LSP snippet placeholders stripped' }),
+      .openapi({ description: 'The text to insert; a snippet keeps its tab stops' }),
+    insertTextFormat: InsertTextFormatSchema.openapi({
+      description: 'Whether `insertText` is plain text or a snippet',
+    }),
+    sortText: z
+      .string()
+      .nullable()
+      .openapi({ description: 'The key the list is sorted by, when the server gives one' }),
   })
   .openapi({
-    required: ['label', 'detail', 'documentation', 'insertText'],
+    required: [
+      'label',
+      'kind',
+      'detail',
+      'documentation',
+      'insertText',
+      'insertTextFormat',
+      'sortText',
+    ],
     description: 'One completion the Prisma language server offers.',
     example: {
       label: 'postgresql',
+      kind: 12,
       detail: null,
       documentation: 'The PostgreSQL provider',
       insertText: '"postgresql"',
+      insertTextFormat: 'plainText',
+      sortText: null,
     },
   })
   .openapi('Completion')
@@ -1042,35 +1246,25 @@ export const CompletionsSchema = z
 
 export type Completions = z.infer<typeof CompletionsSchema>
 
-export const LineSchema = z
-  .int32()
-  .min(0)
-  .brand<'Line'>()
-  .openapi({
-    description: 'A 0-based line number in the editor buffer.',
-    'x-minValue-message': 'line must be 0 or more',
-  })
-  .openapi('Line')
-
-export type Line = z.infer<typeof LineSchema>
-
-export const CharacterSchema = z
-  .int32()
-  .min(0)
-  .brand<'Character'>()
-  .openapi({
-    description: 'A 0-based column (UTF-16 code unit offset) in the editor buffer.',
-    'x-minValue-message': 'character must be 0 or more',
-  })
-  .openapi('Character')
-
-export type Character = z.infer<typeof CharacterSchema>
-
 export const CompleteBodySchema = z
   .object({
     text: SchemaTextSchema.openapi({ description: 'The text as typed' }),
+    path: z
+      .string()
+      .exactOptional()
+      .openapi({
+        description:
+          'The file the text belongs to, so the other loaded schema files are seen; the first file when omitted',
+      }),
     line: LineSchema.openapi({ description: 'The cursor line' }),
     character: CharacterSchema.openapi({ description: 'The cursor column' }),
+    triggerCharacter: z
+      .string()
+      .exactOptional()
+      .openapi({
+        description:
+          'The character that opened the list (`@`, `"`, `.`), when one did rather than typing',
+      }),
   })
   .openapi({
     required: ['text', 'line', 'character'],
@@ -1080,6 +1274,237 @@ export const CompleteBodySchema = z
   .openapi('CompleteBody')
 
 export type CompleteBody = z.infer<typeof CompleteBodySchema>
+
+export const HoverSchema = z
+  .object({
+    contents: z
+      .string()
+      .nullable()
+      .openapi({
+        description: 'Markdown to show, or null when there is nothing to say about the position',
+      }),
+    range: LspRangeSchema.nullable().openapi({
+      description: 'The word the hover is about, when the server names it',
+    }),
+  })
+  .brand<'Hover'>()
+  .openapi({
+    required: ['contents', 'range'],
+    description: 'What the Prisma language server says about the symbol under the cursor.',
+    example: {
+      contents: '```prisma\nmodel User {\n\t...\n}\n```',
+      range: { start: { line: 4, character: 9 }, end: { line: 4, character: 13 } },
+    },
+  })
+  .openapi('Hover')
+
+export type Hover = z.infer<typeof HoverSchema>
+
+export const PositionBodySchema = z
+  .object({
+    text: SchemaTextSchema.openapi({ description: 'The text as typed' }),
+    path: z
+      .string()
+      .exactOptional()
+      .openapi({
+        description:
+          'The file the text belongs to, so the other loaded schema files are seen; the first file when omitted',
+      }),
+    line: LineSchema.openapi({ description: 'The cursor line' }),
+    character: CharacterSchema.openapi({ description: 'The cursor column' }),
+  })
+  .openapi({
+    required: ['text', 'line', 'character'],
+    description: 'A request about the symbol at a cursor position (hover, definition, references).',
+    example: { text: 'model User {\n  id Int @id\n}\n', line: 1, character: 3 },
+  })
+  .openapi('PositionBody')
+
+export type PositionBody = z.infer<typeof PositionBodySchema>
+
+export const LspLocationSchema = z
+  .object({
+    path: z.string().openapi({ description: 'The file, as Studio loaded it' }),
+    range: LspRangeSchema.openapi({ description: 'The whole declaration' }),
+    selection: LspRangeSchema.openapi({ description: 'The name inside it, to put the cursor on' }),
+  })
+  .openapi({
+    required: ['path', 'range', 'selection'],
+    description: 'A place in one of the schema files.',
+    example: {
+      path: 'prisma/schema.prisma',
+      range: { start: { line: 10, character: 0 }, end: { line: 14, character: 1 } },
+      selection: { start: { line: 10, character: 6 }, end: { line: 10, character: 10 } },
+    },
+  })
+  .openapi('LspLocation')
+
+export type LspLocation = z.infer<typeof LspLocationSchema>
+
+export const DefinitionSchema = z
+  .object({
+    locations: z
+      .array(LspLocationSchema)
+      .openapi({
+        description: 'The declarations, empty when the position holds no reference to one',
+      }),
+  })
+  .brand<'Definition'>()
+  .openapi({
+    required: ['locations'],
+    description: 'Where the symbol at a position is declared.',
+    example: { locations: [] },
+  })
+  .openapi('Definition')
+
+export type Definition = z.infer<typeof DefinitionSchema>
+
+export const LspReferenceSchema = z
+  .object({
+    path: z.string().openapi({ description: 'The file, as Studio loaded it' }),
+    range: LspRangeSchema.openapi({ description: 'The word that refers to the symbol' }),
+  })
+  .openapi({
+    required: ['path', 'range'],
+    description: 'One place a symbol is used.',
+    example: {
+      path: 'prisma/schema.prisma',
+      range: { start: { line: 21, character: 9 }, end: { line: 21, character: 13 } },
+    },
+  })
+  .openapi('LspReference')
+
+export type LspReference = z.infer<typeof LspReferenceSchema>
+
+export const ReferencesSchema = z
+  .object({
+    locations: z
+      .array(LspReferenceSchema)
+      .openapi({
+        description: 'The uses, including the declaration; empty when the position holds no symbol',
+      }),
+  })
+  .brand<'References'>()
+  .openapi({
+    required: ['locations'],
+    description: 'Every place the symbol at a position is used, across the loaded files.',
+    example: { locations: [] },
+  })
+  .openapi('References')
+
+export type References = z.infer<typeof ReferencesSchema>
+
+export const LspFileEditSchema = z
+  .object({
+    path: z.string().openapi({ description: 'The file, as Studio loaded it' }),
+    edits: z
+      .array(LspTextEditSchema)
+      .openapi({ description: 'The replacements, in document order' }),
+  })
+  .openapi({
+    required: ['path', 'edits'],
+    description: 'The edits of one file.',
+    example: { path: 'prisma/schema.prisma', edits: [] },
+  })
+  .openapi('LspFileEdit')
+
+export type LspFileEdit = z.infer<typeof LspFileEditSchema>
+
+export const RenameSchema = z
+  .object({
+    changes: z
+      .array(LspFileEditSchema)
+      .openapi({
+        description: 'The edits, grouped by file; empty when the position holds nothing to rename',
+      }),
+  })
+  .brand<'Rename'>()
+  .openapi({
+    required: ['changes'],
+    description: 'The edits a rename makes, per file.',
+    example: { changes: [] },
+  })
+  .openapi('Rename')
+
+export type Rename = z.infer<typeof RenameSchema>
+
+export const RenameBodySchema = z
+  .object({
+    text: SchemaTextSchema.openapi({ description: 'The text as typed' }),
+    path: z
+      .string()
+      .exactOptional()
+      .openapi({
+        description:
+          'The file the text belongs to, so the other loaded schema files are seen; the first file when omitted',
+      }),
+    line: LineSchema.openapi({ description: 'The cursor line' }),
+    character: CharacterSchema.openapi({ description: 'The cursor column' }),
+    newName: z.string().openapi({ description: 'The new name' }),
+  })
+  .openapi({
+    required: ['text', 'line', 'character', 'newName'],
+    description: 'A rename request: the symbol at a position and its new name.',
+    example: { text: 'model User {\n  id Int @id\n}\n', line: 0, character: 7, newName: 'Account' },
+  })
+  .openapi('RenameBody')
+
+export type RenameBody = z.infer<typeof RenameBodySchema>
+
+export const CodeActionSchema = z
+  .object({
+    title: z.string().openapi({ description: 'What the fix does' }),
+    changes: z.array(LspFileEditSchema).openapi({ description: 'The edits, grouped by file' }),
+    isPreferred: z.boolean().openapi({ description: 'Whether it is the fix to apply first' }),
+  })
+  .openapi({
+    required: ['title', 'changes', 'isPreferred'],
+    description: 'One quick fix the language server offers.',
+    example: { title: "Change spelling to 'Role'", changes: [], isPreferred: true },
+  })
+  .openapi('CodeAction')
+
+export type CodeAction = z.infer<typeof CodeActionSchema>
+
+export const CodeActionsSchema = z
+  .object({ actions: z.array(CodeActionSchema).openapi({ description: 'The offered fixes' }) })
+  .brand<'CodeActions'>()
+  .openapi({
+    required: ['actions'],
+    description: 'The quick fixes at a range.',
+    example: { actions: [] },
+  })
+  .openapi('CodeActions')
+
+export type CodeActions = z.infer<typeof CodeActionsSchema>
+
+export const CodeActionBodySchema = z
+  .object({
+    text: SchemaTextSchema.openapi({ description: 'The text as typed' }),
+    path: z
+      .string()
+      .exactOptional()
+      .openapi({
+        description:
+          'The file the text belongs to, so the other loaded schema files are seen; the first file when omitted',
+      }),
+    range: LspRangeSchema.openapi({ description: 'The range the actions are asked for' }),
+    diagnostics: z
+      .array(LspDiagnosticSchema)
+      .openapi({ description: 'The diagnostics in that range, as the lint route returned them' }),
+  })
+  .openapi({
+    required: ['text', 'range', 'diagnostics'],
+    description: 'A code action request: a range and the diagnostics the editor shows in it.',
+    example: {
+      text: 'model User {\n  role R\n}\n',
+      range: { start: { line: 1, character: 7 }, end: { line: 1, character: 8 } },
+      diagnostics: [],
+    },
+  })
+  .openapi('CodeActionBody')
+
+export type CodeActionBody = z.infer<typeof CodeActionBodySchema>
 
 export const DocsDirectiveSchema = z
   .object({
@@ -1709,7 +2134,7 @@ export const postPrismaFormatRoute = createRoute({
   method: 'post',
   path: '/prisma/format',
   tags: ['prisma'],
-  description: 'Format schema text with the Prisma formatter.',
+  description: 'The edits that lay the text out as the Prisma formatter does.',
   operationId: 'formatSchemaText',
   request: {
     body: { content: { 'application/json': { schema: TextBodySchema } }, required: true },
@@ -1756,6 +2181,31 @@ export const postPrismaLintRoute = createRoute({
   },
 })
 
+export const postPrismaSymbolsRoute = createRoute({
+  method: 'post',
+  path: '/prisma/symbols',
+  tags: ['prisma'],
+  description: "The blocks of the text, as the language server's document outline lists them.",
+  operationId: 'symbolsSchemaText',
+  request: {
+    body: { content: { 'application/json': { schema: TextBodySchema } }, required: true },
+  },
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: SymbolsSchema } },
+    },
+    422: {
+      description: '422 Unprocessable Content (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ValidationProblemSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+  },
+})
+
 export const postPrismaCompleteRoute = createRoute({
   method: 'post',
   path: '/prisma/complete',
@@ -1769,6 +2219,132 @@ export const postPrismaCompleteRoute = createRoute({
     200: {
       description: 'The request has succeeded.',
       content: { 'application/json': { schema: CompletionsSchema } },
+    },
+    422: {
+      description: '422 Unprocessable Content (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ValidationProblemSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+  },
+})
+
+export const postPrismaHoverRoute = createRoute({
+  method: 'post',
+  path: '/prisma/hover',
+  tags: ['prisma'],
+  description: 'What the Prisma language server says about the symbol at a cursor position.',
+  operationId: 'hoverSchemaText',
+  request: {
+    body: { content: { 'application/json': { schema: PositionBodySchema } }, required: true },
+  },
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: HoverSchema } },
+    },
+    422: {
+      description: '422 Unprocessable Content (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ValidationProblemSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+  },
+})
+
+export const postPrismaDefinitionRoute = createRoute({
+  method: 'post',
+  path: '/prisma/definition',
+  tags: ['prisma'],
+  description: 'Where the model, enum or type referenced at a cursor position is declared.',
+  operationId: 'defineSchemaText',
+  request: {
+    body: { content: { 'application/json': { schema: PositionBodySchema } }, required: true },
+  },
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: DefinitionSchema } },
+    },
+    422: {
+      description: '422 Unprocessable Content (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ValidationProblemSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+  },
+})
+
+export const postPrismaReferencesRoute = createRoute({
+  method: 'post',
+  path: '/prisma/references',
+  tags: ['prisma'],
+  description: 'Every place the symbol at a cursor position is used, across the loaded files.',
+  operationId: 'referencesSchemaText',
+  request: {
+    body: { content: { 'application/json': { schema: PositionBodySchema } }, required: true },
+  },
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: ReferencesSchema } },
+    },
+    422: {
+      description: '422 Unprocessable Content (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ValidationProblemSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+  },
+})
+
+export const postPrismaRenameRoute = createRoute({
+  method: 'post',
+  path: '/prisma/rename',
+  tags: ['prisma'],
+  description:
+    'The edits that rename the model or enum at a cursor position everywhere it is used.',
+  operationId: 'renameSchemaText',
+  request: {
+    body: { content: { 'application/json': { schema: RenameBodySchema } }, required: true },
+  },
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: RenameSchema } },
+    },
+    422: {
+      description: '422 Unprocessable Content (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ValidationProblemSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+  },
+})
+
+export const postPrismaCodeActionsRoute = createRoute({
+  method: 'post',
+  path: '/prisma/code-actions',
+  tags: ['prisma'],
+  description: 'The quick fixes the Prisma language server offers for the diagnostics in a range.',
+  operationId: 'codeActionsSchemaText',
+  request: {
+    body: { content: { 'application/json': { schema: CodeActionBodySchema } }, required: true },
+  },
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: CodeActionsSchema } },
     },
     422: {
       description: '422 Unprocessable Content (`application/problem+json`)',

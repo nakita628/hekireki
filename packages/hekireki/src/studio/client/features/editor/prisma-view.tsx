@@ -6,16 +6,15 @@ import type * as z from 'zod'
 
 import type { SnapshotSchema } from '../../../server/routes/index.js'
 import { CopyIcon, WandIcon } from '../../components/icons.js'
+import { SchemaErrorStatus } from '../../components/schema-error-status.js'
 import { useCopy } from '../../hooks/copy.js'
-import { getSchemaQueryKey, usePostPrismaFormat, usePutSchemaFiles } from '../../hooks/index.js'
-import { client } from '../../lib/client.js'
-import { errorMessage } from '../../lib/error.js'
-import { loadString, saveString } from '../../lib/storage.js'
-import { useUiStore } from '../../lib/store.js'
+import { getSchemaQueryKey, usePutSchemaFiles } from '../../hooks/index.js'
+import { useSteady } from '../../hooks/steady.js'
+import { client, loadString, saveString, useUiStore } from '../../lib/index.js'
 import { SchemaCanvas } from '../schema/schema-view.js'
 import { blockAtLine } from './blocks.js'
 import { CodeEditor } from './code-editor.js'
-import type { EditorServices } from './code-editor.js'
+import type { EditorServices, MonacoEditor, PlainSymbol } from './code-editor.js'
 import { saveStatus } from './save-status.js'
 
 const SAVE_DEBOUNCE_MS = 400
@@ -37,10 +36,17 @@ function initialSplit() {
 export function PrismaView({
   snapshot,
   focus,
+  file: requestedFile,
+  line: requestedLine,
 }: {
   // The wire shape: the brand the server puts on a checked Snapshot does not survive JSON.
   readonly snapshot: z.input<typeof SnapshotSchema>
+  /** A model or enum to open the editor at */
   readonly focus: string | null
+  /** A file to open, e.g. the one an error banner points at */
+  readonly file: string | null
+  /** The 1-based line to put the cursor on in that file */
+  readonly line: number | null
 }) {
   const schema = snapshot.schema
   const theme = useUiStore((s) => s.theme)
@@ -49,23 +55,31 @@ export function PrismaView({
     schema?.enums.find((e) => e.name === focus)?.location ??
     null
   const [chosenPath, setChosenPath] = useState<string | null>(null)
-  const activePath = chosenPath ?? location?.file ?? snapshot.files[0]?.path ?? ''
+  const activePath = chosenPath ?? requestedFile ?? location?.file ?? snapshot.files[0]?.path ?? ''
   const file = snapshot.files.find((f) => f.path === activePath) ?? snapshot.files[0]
   const [draft, setDraft] = useState<Draft | null>(null)
   const [cursorLine, setCursorLine] = useState(1)
+  const [symbols, setSymbols] = useState<readonly PlainSymbol[]>([])
+  const [revealLine, setRevealLine] = useState<number | null>(
+    requestedLine ?? location?.line ?? null,
+  )
   const [split, setSplit] = useState(initialSplit)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [editor, setEditor] = useState<MonacoEditor.IStandaloneCodeEditor | null>(null)
   const queryClient = useQueryClient()
   const save = usePutSchemaFiles({
     mutation: {
       onSuccess: (saved) => queryClient.setQueryData(getSchemaQueryKey(), saved),
-      onError: (error) => {
-        toast.error(errorMessage(error))
+      onError: () => {
+        toast.error('The schema file could not be saved.')
       },
     },
   })
-  const format = usePostPrismaFormat()
   const { copied, copy } = useCopy()
+  // While a line is being typed the schema is briefly invalid and every keystroke saves; the
+  // error chip and the "Saving…" dot only show once those states have held for a moment.
+  const steadyProblems = useSteady(snapshot.error === null ? null : snapshot, 700)
+  const steadySaving = useSteady(save.isPending ? true : null, 300)
 
   // While there is no unsaved draft the editor mirrors the file on disk, so changes made by
   // other tools show up on their own.
@@ -95,40 +109,108 @@ export function PrismaView({
   }
 
   const services: EditorServices = {
-    complete: async (source, line, character) => {
+    format: async (request) => {
+      try {
+        const body = await parseResponse(client.prisma.format.$post({ json: request }))
+        return body.edits
+      } catch {
+        toast.error('The schema could not be formatted.')
+        return []
+      }
+    },
+    symbols: async (request) => {
+      try {
+        const body = await parseResponse(client.prisma.symbols.$post({ json: request }))
+        return body.symbols
+      } catch {
+        return []
+      }
+    },
+    complete: async ({ triggerCharacter, ...request }) => {
       try {
         const body = await parseResponse(
-          client.prisma.complete.$post({ json: { text: source, line, character } }),
+          client.prisma.complete.$post({
+            json: triggerCharacter === null ? request : { ...request, triggerCharacter },
+          }),
         )
         return body.items
       } catch {
         return []
       }
     },
-    lint: async (source) => {
-      if (!file) return []
+    hover: async (request) => {
+      try {
+        return await parseResponse(client.prisma.hover.$post({ json: request }))
+      } catch {
+        return { contents: null, range: null }
+      }
+    },
+    definition: async (request) => {
+      try {
+        const body = await parseResponse(client.prisma.definition.$post({ json: request }))
+        return body.locations
+      } catch {
+        return []
+      }
+    },
+    references: async (request) => {
+      try {
+        const body = await parseResponse(client.prisma.references.$post({ json: request }))
+        return body.locations
+      } catch {
+        return []
+      }
+    },
+    rename: async (request) => {
+      try {
+        const body = await parseResponse(client.prisma.rename.$post({ json: request }))
+        return body.changes
+      } catch {
+        toast.error('The rename could not be computed.')
+        return []
+      }
+    },
+    codeActions: async (request) => {
       try {
         const body = await parseResponse(
-          client.prisma.lint.$post({ json: { path: file.path, text: source } }),
+          client.prisma['code-actions'].$post({
+            json: { ...request, diagnostics: [...request.diagnostics] },
+          }),
         )
+        return body.actions
+      } catch {
+        return []
+      }
+    },
+    openLocation: (path, line) => {
+      if (!snapshot.files.some((f) => f.path === path)) return
+      setChosenPath(path)
+      setDraft(null)
+      setRevealLine(line)
+    },
+    lint: async (request) => {
+      try {
+        const body = await parseResponse(client.prisma.lint.$post({ json: request }))
         return body.diagnostics
       } catch {
         return []
       }
     },
-    format: () => {
-      format.mutate(
-        { json: { text } },
-        {
-          onSuccess: (result) => {
-            if (result.text !== text) onChange(result.text)
-          },
-        },
-      )
+    save: (path, content) => {
+      if (!snapshot.files.some((f) => f.path === path)) return
+      save.mutate({ json: { path, content } })
     },
   }
 
-  const highlight = useMemo(() => blockAtLine(text, cursorLine)?.name ?? null, [text, cursorLine])
+  const highlight = useMemo(
+    () => blockAtLine(symbols, cursorLine)?.name ?? null,
+    [symbols, cursorLine],
+  )
+
+  // Monaco's own format command, backed by the Prisma formatter through the format provider.
+  const formatDocument = () => {
+    void editor?.getAction('editor.action.formatDocument')?.run()
+  }
 
   const startResize = (event: React.PointerEvent<HTMLDivElement>) => {
     const container = event.currentTarget.parentElement
@@ -152,7 +234,7 @@ export function PrismaView({
   if (!file) return <section className="p-6 text-muted">No schema files loaded.</section>
 
   const status = saveStatus({
-    pending: save.isPending,
+    pending: steadySaving === true,
     dirty,
     failed: save.isError,
     saved: save.isSuccess,
@@ -167,16 +249,21 @@ export function PrismaView({
           {text.split('\n').length} lines
           {schema?.provider ? ` · ${schema.provider}` : ''}
         </span>
-        <span className={`ml-auto flex items-center gap-2 text-[12.5px] ${statusClasses.text}`}>
-          <span className={`size-2 rounded-full ${statusClasses.dot}`} />
-          {status.label}
+        <span className="ml-auto flex min-w-0 items-center gap-3">
+          <SchemaErrorStatus
+            error={steadyProblems?.error ?? null}
+            diagnostics={steadyProblems?.diagnostics ?? []}
+          />
+          <span className={`flex shrink-0 items-center gap-2 text-[12.5px] ${statusClasses.text}`}>
+            <span className={`size-2 rounded-full ${statusClasses.dot}`} />
+            {status.label}
+          </span>
         </span>
         <button
           type="button"
           className="btn btn-ghost"
-          title="Format with the Prisma formatter (Shift+Alt+F)"
-          disabled={format.isPending}
-          onClick={services.format}
+          title="Format with the Prisma formatter: also adds missing relation fields, foreign keys and @relation attributes (Shift+Alt+F)"
+          onClick={formatDocument}
         >
           <WandIcon size={15} />
           Format
@@ -192,14 +279,6 @@ export function PrismaView({
           {copied ? 'Copied' : 'Copy'}
         </button>
       </header>
-      {snapshot.error ? (
-        <div className="border-b border-danger-line bg-danger-soft px-6 py-2 text-[13px] text-danger">
-          <strong>Schema has errors</strong> — the diagram shows the last valid version.
-          <pre className="mt-1 mb-0 font-mono text-xs whitespace-pre-wrap text-ink">
-            {snapshot.error}
-          </pre>
-        </div>
-      ) : null}
       {changedOnDisk ? (
         <div className="flex items-center gap-3 border-b border-danger-line bg-danger-soft px-6 py-2 text-xs text-ink">
           <span className="flex-1">
@@ -226,6 +305,7 @@ export function PrismaView({
               onClick={() => {
                 setChosenPath(f.path)
                 setDraft(null)
+                setRevealLine(null)
               }}
             >
               {f.path}
@@ -241,11 +321,15 @@ export function PrismaView({
           <CodeEditor
             key={file.path}
             value={text}
+            path={file.path}
+            files={snapshot.files}
             theme={theme}
-            schema={schema}
             services={services}
+            revealLine={revealLine}
+            onReady={setEditor}
             onChange={onChange}
             onCursorLine={setCursorLine}
+            onSymbols={setSymbols}
           />
         </div>
         <div

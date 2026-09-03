@@ -9,8 +9,9 @@ import { readFile } from '../../file/index.js'
 import { isLoopbackHostname } from '../../utils/index.js'
 import { FORBIDDEN_HOST_MESSAGE } from './constants/index.js'
 import { api } from './index.js'
-import { configureRuntime, studioRuntime } from './services/index.js'
-import type { createStudioState, disconnectedDbState } from './services/index.js'
+import type * as DatabaseService from './services/database.js'
+import * as RuntimeService from './services/runtime.js'
+import type * as StateService from './services/state.js'
 
 // The API is unauthenticated, so a page on another origin must not be able to read it even
 // when its DNS name resolves to this machine.
@@ -22,10 +23,10 @@ const loopbackOnly = createMiddleware((c, next) =>
 
 /** The generated API mounted under /api with the problem+json validation hook, error handler and Effect runtime. */
 export function createStudioApi(
-  state: ReturnType<typeof createStudioState>,
-  db: ReturnType<typeof disconnectedDbState>,
+  state: ReturnType<typeof StateService.createStudioState>,
+  db: ReturnType<typeof DatabaseService.disconnectedDatabase>,
 ) {
-  configureRuntime({ state, db })
+  RuntimeService.configureRuntime({ state, db })
   const app = new OpenAPIHono({
     defaultHook: (result, c) => {
       if (!result.success) {
@@ -63,12 +64,11 @@ export function createStudioApi(
       { 'Content-Type': 'application/problem+json' },
     )
   })
-  app.route('/api', api)
-  app.doc('/api/openapi.json', {
+  // The mounted routes and the document come back typed, which the client is built from.
+  return app.route('/api', api).doc('/api/openapi.json', {
     openapi: '3.1.0',
     info: { title: 'Hekireki Studio API', version: '1.0.0' },
   })
-  return app
 }
 
 export function missingAssetsMessage(staticDir: string) {
@@ -77,16 +77,16 @@ export function missingAssetsMessage(staticDir: string) {
 
 /** The API plus the built client. The client routes on the path (`/models/User`, `/docs`, ...), so every path that is neither an asset nor an API route gets index.html. */
 export function createStudioApp(
-  state: ReturnType<typeof createStudioState>,
+  state: ReturnType<typeof StateService.createStudioState>,
   staticDir: string,
-  db: ReturnType<typeof disconnectedDbState>,
+  db: ReturnType<typeof DatabaseService.disconnectedDatabase>,
 ) {
   const app = createStudioApi(state, db)
   app.use('/*', serveStatic({ root: staticDir }))
   app.get('/*', (c) =>
     c.req.path.startsWith('/api/')
       ? c.notFound()
-      : studioRuntime().runPromise(
+      : RuntimeService.studioRuntime().runPromise(
           Effect.match(readFile(path.join(staticDir, 'index.html')), {
             onSuccess: (html) => c.html(html),
             onFailure: () => c.text(missingAssetsMessage(staticDir), 500),

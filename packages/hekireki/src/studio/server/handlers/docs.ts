@@ -1,18 +1,18 @@
 import type { RouteHandler } from '@hono/zod-openapi'
 import { Effect, Match } from 'effect'
 
-import type { getDocsRoute } from '../routes/index.js'
-import { studioRuntime } from '../services/index.js'
-import { readDocs } from '../usecases/index.js'
+import type { getDocsRoute } from '../routes'
+import * as RuntimeService from '../services/runtime.js'
+import * as DocsUseCase from '../usecases/docs.js'
 
 export const getDocsRouteHandler: RouteHandler<typeof getDocsRoute> = (c) =>
-  studioRuntime().runPromise(
-    Effect.matchEffect(readDocs(), {
+  RuntimeService.studioRuntime().runPromise(
+    Effect.matchEffect(DocsUseCase.readDocs(), {
       onSuccess: (docs) => Effect.succeed(c.json(docs, 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
-          Match.tag('ContractViolationError', (e) =>
-            Effect.logError('contract violation', e.message).pipe(
+          Match.tag('ContractViolationError', ({ message }) =>
+            Effect.logError('contract violation', message).pipe(
               Effect.as(
                 c.json(
                   {

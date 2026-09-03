@@ -61,9 +61,8 @@ function studioApi(): Plugin {
 
 export default defineConfig({
   root: CLIENT_ROOT,
-  resolve: { alias: { '@': CLIENT_ROOT } },
   plugins: [
-    // File-based routes under src/studio/client/routes → routeTree.gen.ts (imported as @/routeTree.gen).
+    // File-based routes under src/studio/client/routes → routeTree.gen.ts (imported relatively).
     tanstackRouter({
       target: 'react',
       autoCodeSplitting: true,

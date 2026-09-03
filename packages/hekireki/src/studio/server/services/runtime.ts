@@ -3,27 +3,27 @@ import type { FileSystem } from 'effect'
 import * as z from 'zod'
 
 import { fileSystemLayer } from '../../../file/index.js'
-import type { disconnectedDbState } from './database.js'
-import type { createStudioState } from './state.js'
+import type * as DatabaseService from './database.js'
+import type * as StateService from './state.js'
 
 // The instances use cases read from the Effect context; the runtime below provides them.
 export class StudioStateTag extends Context.Service<
   StudioStateTag,
-  ReturnType<typeof createStudioState>
+  ReturnType<typeof StateService.createStudioState>
 >()('hekireki/StudioState') {}
 
 export class DatabaseTag extends Context.Service<
   DatabaseTag,
-  ReturnType<typeof disconnectedDbState>
+  ReturnType<typeof DatabaseService.disconnectedDatabase>
 >()('hekireki/Database') {}
 
 const ConfigureRuntimeInput = z
   .object({
     state: z
-      .custom<ReturnType<typeof createStudioState>>()
+      .custom<ReturnType<typeof StateService.createStudioState>>()
       .meta({ description: 'The snapshot store.' }),
     db: z
-      .custom<ReturnType<typeof disconnectedDbState>>()
+      .custom<ReturnType<typeof DatabaseService.disconnectedDatabase>>()
       .meta({ description: 'The database connection state.' }),
   })
   .readonly()

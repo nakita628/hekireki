@@ -1,8 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router'
 
-import { NotFound } from '@/components/not-found.js'
-import { EnumView } from '@/features/data/enum-view.js'
-import { SchemaGate } from '@/features/shell/schema-gate.js'
+import { NotFound } from '../components/not-found.js'
+import { EnumView } from '../features/data/enum-view.js'
+import { SchemaGate } from '../features/shell/schema-gate.js'
 
 export const Route = createFileRoute('/enums/$name')({ component: EnumPage })
 

@@ -1,19 +1,10 @@
 import { Effect, Option } from 'effect'
 import * as z from 'zod'
 
-import {
-  columnName,
-  keyFields,
-  makeColumnValues,
-  makeCountStatement,
-  makeDeleteStatement,
-  makeInsertStatement,
-  makeRow,
-  makeSelectStatement,
-  makeUpdateStatement,
-  tableColumns,
-  tableName,
-} from '../domain/index.js'
+import * as DefaultsDomain from '../domain/defaults.js'
+import * as ModelDomain from '../domain/model.js'
+import * as SqlDomain from '../domain/sql.js'
+import * as ValuesDomain from '../domain/values.js'
 import { ContractViolationError, InvalidInputError, UnknownModelError } from '../errors/index.js'
 import {
   AffectedSchema,
@@ -22,7 +13,7 @@ import {
   RowsSchema,
   SqlResultSchema,
 } from '../routes/index.js'
-import { DatabaseTag, requireDriver, runStatement, StudioStateTag } from '../services/index.js'
+import * as RuntimeService from '../services/runtime.js'
 
 /**
  * The connection status as the sidebar shows it.
@@ -31,8 +22,8 @@ import { DatabaseTag, requireDriver, runStatement, StudioStateTag } from '../ser
  */
 export function readDbStatus() {
   return Effect.gen(function* () {
-    const db = yield* DatabaseTag
-    const result = DbStatusSchema.safeParse(db.status())
+    const db = yield* RuntimeService.DatabaseTag
+    const result = DbStatusSchema.safeParse(db.status)
     if (!result.success) {
       return yield* new ContractViolationError({ message: result.error.message })
     }
@@ -47,33 +38,34 @@ export function readDbStatus() {
  */
 export function readCounts() {
   return Effect.gen(function* () {
-    const state = yield* StudioStateTag
-    const driver = yield* requireDriver({ db: yield* DatabaseTag })
+    const state = yield* RuntimeService.StudioStateTag
+    const db = yield* RuntimeService.DatabaseTag
+    const driver = yield* db.driver
     const models = state.snapshot().schema?.models ?? []
     const counted = yield* Effect.forEach(
       models,
       (model) =>
-        runStatement({
-          driver,
-          statement: makeCountStatement({
-            dialect: driver.dialect,
-            table: tableName({ model }),
-            columns: [],
-            search: '',
-          }),
-        }).pipe(Effect.option),
+        driver
+          .query(
+            SqlDomain.makeCountStatement({
+              dialect: driver.dialect,
+              table: ModelDomain.tableName({ model }),
+              columns: [],
+              search: '',
+            }),
+          )
+          .pipe(Effect.option),
       { concurrency: 4 },
     )
-    const result = CountsSchema.safeParse({
-      counts: Object.fromEntries(
-        models.flatMap((model, index) => {
-          const count = counted[index]
-          return count !== undefined && Option.isSome(count)
-            ? [[model.name, Number(count.value.rows[0]?.count ?? 0) || 0] as const]
-            : []
-        }),
-      ),
-    })
+    const counts = Object.fromEntries(
+      models.flatMap((model, index) => {
+        const count = counted[index]
+        return count !== undefined && Option.isSome(count)
+          ? [[model.name, Number(count.value.rows[0]?.count ?? 0) || 0] as const]
+          : []
+      }),
+    )
+    const result = CountsSchema.safeParse({ counts })
     if (!result.success) {
       return yield* new ContractViolationError({ message: result.error.message })
     }
@@ -129,7 +121,7 @@ const ReadRowsInput = z
  *     U->>D: COUNT(*)
  *   end
  *   D-->>U: rows, total
- *   Note over U: makeRow → validate against Rows
+ *   Note over U: ValuesDomain.makeRow → validate against Rows
  * ```
  *
  * @param input - the model and the raw paging parameters
@@ -137,46 +129,50 @@ const ReadRowsInput = z
  */
 export function readRows(input: z.infer<typeof ReadRowsInput>) {
   return Effect.gen(function* () {
-    const state = yield* StudioStateTag
+    const state = yield* RuntimeService.StudioStateTag
     const model = state.snapshot().schema?.models.find((m) => m.name === input.modelName)
     if (!model) return yield* new UnknownModelError({ model: input.modelName })
-    const driver = yield* requireDriver({ db: yield* DatabaseTag })
+    const db = yield* RuntimeService.DatabaseTag
+    const driver = yield* db.driver
     const page = { skip: input.skip, take: input.take, search: input.search ?? '' }
-    const fields = tableColumns({ model })
-    const columns = fields.map((field) => columnName({ field }))
-    const columnToField = new Map(fields.map((field) => [columnName({ field }), field.name]))
-    const key = keyFields({ model })
+    const fields = ModelDomain.tableColumns({ model })
+    const columns = fields.map((field) => ModelDomain.columnName({ field }))
+    const columnToField = new Map(
+      fields.map((field) => [ModelDomain.columnName({ field }), field.name]),
+    )
+    const enums = state.snapshot().schema?.enums ?? []
+    const columnToEnum = ModelDomain.makeEnumReadValues({ model, enums })
+    const key = ModelDomain.keyFields({ model })
     const orderBy = key.map((name) => fields.find((f) => f.name === name)?.dbName ?? name)
-    const table = tableName({ model })
+    const table = ModelDomain.tableName({ model })
     const [selected, counted] = yield* Effect.all([
-      runStatement({
-        driver,
-        statement: makeSelectStatement({
+      driver.query(
+        SqlDomain.makeSelectStatement({
           dialect: driver.dialect,
           table,
           columns,
           orderBy,
           ...page,
         }),
-      }),
-      runStatement({
-        driver,
-        statement: makeCountStatement({
+      ),
+      driver.query(
+        SqlDomain.makeCountStatement({
           dialect: driver.dialect,
           table,
           columns,
           search: page.search,
         }),
-      }),
+      ),
     ])
-    const result = RowsSchema.safeParse({
-      rows: selected.rows.map((row) => makeRow({ row, columnToField })),
+    const rows = {
+      rows: selected.rows.map((row) => ValuesDomain.makeRow({ row, columnToField, columnToEnum })),
       total: Number(counted.rows[0]?.count ?? 0) || 0,
       skip: page.skip,
       take: page.take,
       key,
       columns: fields.map((f) => f.name),
-    })
+    }
+    const result = RowsSchema.safeParse(rows)
     if (!result.success) {
       return yield* new ContractViolationError({ message: result.error.message })
     }
@@ -212,19 +208,29 @@ const InsertRowInput = z
  */
 export function insertRow(input: z.infer<typeof InsertRowInput>) {
   return Effect.gen(function* () {
-    const state = yield* StudioStateTag
+    const state = yield* RuntimeService.StudioStateTag
     const model = state.snapshot().schema?.models.find((m) => m.name === input.modelName)
     if (!model) return yield* new UnknownModelError({ model: input.modelName })
-    const driver = yield* requireDriver({ db: yield* DatabaseTag })
-    const written = yield* runStatement({
-      driver,
-      statement: makeInsertStatement({
+    const db = yield* RuntimeService.DatabaseTag
+    const driver = yield* db.driver
+    const written = yield* driver.query(
+      SqlDomain.makeInsertStatement({
         dialect: driver.dialect,
-        table: tableName({ model }),
-        values: makeColumnValues({ model, dialect: driver.dialect, row: input.values }),
+        table: ModelDomain.tableName({ model }),
+        values: ModelDomain.makeColumnValues({
+          model,
+          dialect: driver.dialect,
+          // Prisma generates uuid() / cuid() / now() in the client; Studio has to do the same.
+          row: {
+            ...DefaultsDomain.makeGeneratedDefaults({ model, row: input.values }),
+            ...input.values,
+          },
+          enums: state.snapshot().schema?.enums ?? [],
+        }),
       }),
-    })
-    const result = AffectedSchema.safeParse({ affected: written.rowCount })
+    )
+    const affected = { affected: written.rowCount }
+    const result = AffectedSchema.safeParse(affected)
     if (!result.success) {
       return yield* new ContractViolationError({ message: result.error.message })
     }
@@ -262,7 +268,7 @@ const UpdateRowInput = z
  */
 export function updateRow(input: z.infer<typeof UpdateRowInput>) {
   return Effect.gen(function* () {
-    const state = yield* StudioStateTag
+    const state = yield* RuntimeService.StudioStateTag
     const model = state.snapshot().schema?.models.find((m) => m.name === input.modelName)
     if (!model) return yield* new UnknownModelError({ model: input.modelName })
     if (Object.keys(input.where).length === 0) {
@@ -277,17 +283,29 @@ export function updateRow(input: z.infer<typeof UpdateRowInput>) {
         message: 'must name at least one field',
       })
     }
-    const driver = yield* requireDriver({ db: yield* DatabaseTag })
-    const written = yield* runStatement({
-      driver,
-      statement: makeUpdateStatement({
+    const db = yield* RuntimeService.DatabaseTag
+    const driver = yield* db.driver
+    const enums = state.snapshot().schema?.enums ?? []
+    const written = yield* driver.query(
+      SqlDomain.makeUpdateStatement({
         dialect: driver.dialect,
-        table: tableName({ model }),
-        where: makeColumnValues({ model, dialect: driver.dialect, row: input.where }),
-        values: makeColumnValues({ model, dialect: driver.dialect, row: input.values }),
+        table: ModelDomain.tableName({ model }),
+        where: ModelDomain.makeColumnValues({
+          model,
+          dialect: driver.dialect,
+          row: input.where,
+          enums,
+        }),
+        values: ModelDomain.makeColumnValues({
+          model,
+          dialect: driver.dialect,
+          row: input.values,
+          enums,
+        }),
       }),
-    })
-    const result = AffectedSchema.safeParse({ affected: written.rowCount })
+    )
+    const affected = { affected: written.rowCount }
+    const result = AffectedSchema.safeParse(affected)
     if (!result.success) {
       return yield* new ContractViolationError({ message: result.error.message })
     }
@@ -321,7 +339,7 @@ const DeleteRowInput = z
  */
 export function deleteRow(input: z.infer<typeof DeleteRowInput>) {
   return Effect.gen(function* () {
-    const state = yield* StudioStateTag
+    const state = yield* RuntimeService.StudioStateTag
     const model = state.snapshot().schema?.models.find((m) => m.name === input.modelName)
     if (!model) return yield* new UnknownModelError({ model: input.modelName })
     if (Object.keys(input.where).length === 0) {
@@ -330,16 +348,23 @@ export function deleteRow(input: z.infer<typeof DeleteRowInput>) {
         message: 'must name at least one key field',
       })
     }
-    const driver = yield* requireDriver({ db: yield* DatabaseTag })
-    const written = yield* runStatement({
-      driver,
-      statement: makeDeleteStatement({
+    const db = yield* RuntimeService.DatabaseTag
+    const driver = yield* db.driver
+    const enums = state.snapshot().schema?.enums ?? []
+    const written = yield* driver.query(
+      SqlDomain.makeDeleteStatement({
         dialect: driver.dialect,
-        table: tableName({ model }),
-        where: makeColumnValues({ model, dialect: driver.dialect, row: input.where }),
+        table: ModelDomain.tableName({ model }),
+        where: ModelDomain.makeColumnValues({
+          model,
+          dialect: driver.dialect,
+          row: input.where,
+          enums,
+        }),
       }),
-    })
-    const result = AffectedSchema.safeParse({ affected: written.rowCount })
+    )
+    const affected = { affected: written.rowCount }
+    const result = AffectedSchema.safeParse(affected)
     if (!result.success) {
       return yield* new ContractViolationError({ message: result.error.message })
     }
@@ -367,15 +392,17 @@ const RunSqlInput = z
  */
 export function runSql(input: z.infer<typeof RunSqlInput>) {
   return Effect.gen(function* () {
-    const driver = yield* requireDriver({ db: yield* DatabaseTag })
+    const db = yield* RuntimeService.DatabaseTag
+    const driver = yield* db.driver
     const started = performance.now()
-    const executed = yield* runStatement({ driver, statement: { sql: input.sql, params: [] } })
-    const result = SqlResultSchema.safeParse({
+    const executed = yield* driver.query({ sql: input.sql, params: [] })
+    const sqlResult = {
       columns: executed.columns,
-      rows: executed.rows.map((row) => makeRow({ row, columnToField: new Map() })),
+      rows: executed.rows.map((row) => ValuesDomain.makeRow({ row, columnToField: new Map() })),
       rowCount: executed.rowCount,
       durationMs: Math.round((performance.now() - started) * 10) / 10,
-    })
+    }
+    const result = SqlResultSchema.safeParse(sqlResult)
     if (!result.success) {
       return yield* new ContractViolationError({ message: result.error.message })
     }

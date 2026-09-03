@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 
-import { useUiStore } from '../lib/store.js'
+import { useUiStore } from '../lib/index.js'
 import { getDbCountsQueryKey, getDocsQueryKey, getSchemaQueryKey } from './index.js'
 
 // The one subscription in the app: the server announces schema changes over SSE and the

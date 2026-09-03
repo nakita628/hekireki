@@ -247,44 +247,65 @@ export function makeField(input: z.infer<typeof ToStudioFieldInput>) {
   }
 }
 
-const FindBlockLocationInput = z
+const Block = z
   .object({
-    files: z.array(SchemaFileInput).readonly().meta({ description: 'The loaded schema files.' }),
-    keyword: z.enum(['model', 'enum']).meta({ description: 'The block kind.', example: 'model' }),
+    type: z
+      .enum(['model', 'view', 'type', 'enum', 'datasource', 'generator'])
+      .meta({ description: 'The block keyword.', example: 'model' }),
+    name: z.string().meta({ description: 'The declared name.', example: 'User' }),
+    file: z
+      .string()
+      .meta({ description: 'The file as Studio loaded it.', example: 'prisma/schema.prisma' }),
+    line: z
+      .number()
+      .int()
+      .min(1)
+      .meta({ description: 'The 1-based line of the block header.', example: 7 }),
+  })
+  .readonly()
+  .meta({
+    description: 'A block as the language server outlines it: kind, name and where its header is',
+    example: { type: 'model', name: 'User', file: 'prisma/schema.prisma', line: 7 },
+  })
+
+const BlocksShape = z
+  .array(Block)
+  .readonly()
+  .meta({ description: 'Every block of the loaded files, as the language server lists them.' })
+
+const LocateBlockInput = z
+  .object({
+    blocks: BlocksShape,
+    types: z
+      .array(z.enum(['model', 'view', 'type', 'enum', 'datasource', 'generator']))
+      .readonly()
+      .meta({ description: 'The block kinds that count.', example: ['model', 'view'] }),
     name: z.string().meta({ description: 'The block name.', example: 'User' }),
   })
   .readonly()
   .meta({
-    description: 'Schema files and the block to locate',
-    example: { files: [], keyword: 'model', name: 'User' },
+    description: 'The outlined blocks and the one to locate',
+    example: { blocks: [], types: ['model', 'view'], name: 'User' },
   })
 
-/** Finds the file and 1-based line where `model Name {` / `enum Name {` is declared. */
-export function findBlockLocation(input: z.infer<typeof FindBlockLocationInput>) {
-  const escaped = input.name.replaceAll(/[.*+?^${}()|[\]\\]/gu, '\\$&')
-  const pattern = new RegExp(`^\\s*${input.keyword}\\s+${escaped}\\s*\\{`, 'u')
-  return (
-    input.files
-      .flatMap((file) => {
-        const index = file.content.split('\n').findIndex((line) => pattern.test(line))
-        return index === -1 ? [] : [{ file: file.path, line: index + 1 }]
-      })
-      .at(0) ?? null
-  )
+/** The file and 1-based line of the first block of one of the kinds with the name, or null. */
+export function makeLocation(input: z.infer<typeof LocateBlockInput>) {
+  const block = input.blocks.find((b) => input.types.includes(b.type) && b.name === input.name)
+  return block === undefined ? null : { file: block.file, line: block.line }
 }
 
 const ToStudioModelInput = z
   .object({
     model: Model,
     indexes: z.array(Index).readonly().meta({ description: 'Every index of the datamodel.' }),
-    files: z.array(SchemaFileInput).readonly().meta({ description: 'The loaded schema files.' }),
+    blocks: BlocksShape,
   })
   .readonly()
-  .meta({ description: 'A DMMF model, the datamodel indexes and the schema files' })
+  .meta({ description: 'A DMMF model, the datamodel indexes and the outlined blocks' })
 
 /** Maps a DMMF model to the studio contract, with block-level indexes and `@@` attributes rendered. */
 export function makeModel(input: z.infer<typeof ToStudioModelInput>) {
-  const { model, indexes, files } = input
+  const { model, indexes, blocks } = input
   const blockIndexes = indexes
     .filter((i) => i.model === model.name && !i.isDefinedOnField)
     .map((index) => makeIndex({ index }))
@@ -303,27 +324,24 @@ export function makeModel(input: z.infer<typeof ToStudioModelInput>) {
       ...(model.dbName ? [`@@map(${quote(model.dbName)})`] : []),
       ...(model.schema ? [`@@schema(${quote(model.schema)})`] : []),
     ],
-    location: findBlockLocation({ files, keyword: 'model', name: model.name }),
+    location: makeLocation({ blocks, types: ['model', 'view'], name: model.name }),
   }
 }
 
 const ToStudioEnumInput = z
-  .object({
-    value: DatamodelEnum,
-    files: z.array(SchemaFileInput).readonly().meta({ description: 'The loaded schema files.' }),
-  })
+  .object({ value: DatamodelEnum, blocks: BlocksShape })
   .readonly()
-  .meta({ description: 'A DMMF enum and the schema files' })
+  .meta({ description: 'A DMMF enum and the outlined blocks' })
 
 /** Maps a DMMF enum to the studio contract. */
 export function makeEnum(input: z.infer<typeof ToStudioEnumInput>) {
-  const { value, files } = input
+  const { value, blocks } = input
   return {
     name: value.name,
     dbName: value.dbName ?? null,
     documentation: makeDocumentation({ documentation: value.documentation }).documentation,
     values: value.values.map((v) => ({ name: v.name, dbName: v.dbName ?? null })),
-    location: findBlockLocation({ files, keyword: 'enum', name: value.name }),
+    location: makeLocation({ blocks, types: ['enum'], name: value.name }),
   }
 }
 
@@ -392,45 +410,33 @@ export function makeRelations(input: z.infer<typeof ModelsInput>) {
   return [...merged, ...makeImplicitManyToManyRelations(input)]
 }
 
-const FilesInput = z
-  .object({
-    files: z.array(SchemaFileInput).readonly().meta({ description: 'The loaded schema files.' }),
-  })
-  .readonly()
-  .meta({ description: 'The schema files' })
-
-/** The `provider` of the first `datasource` block, or null. */
-export function detectProvider(input: z.infer<typeof FilesInput>) {
-  return (
-    input.files
-      .flatMap((file) => {
-        const block = /datasource\s+\w+\s*\{([^}]*)\}/u.exec(file.content)
-        const provider = block?.[1] ? /provider\s*=\s*"([^"]+)"/u.exec(block[1]) : null
-        return provider?.[1] ? [provider[1]] : []
-      })
-      .at(0) ?? null
-  )
-}
-
 const ToStudioSchemaInput = z
   .object({
     dmmf: z
       .custom<{ readonly datamodel: DMMF.Datamodel }>()
       .meta({ description: 'The document Prisma parsed from the files.' }),
     files: z.array(SchemaFileInput).readonly().meta({ description: 'The loaded schema files.' }),
+    provider: z.string().nullable().meta({
+      description: 'The provider of the first datasource, as Prisma read it.',
+      example: 'postgresql',
+    }),
+    blocks: BlocksShape,
   })
   .readonly()
-  .meta({ description: 'A parsed DMMF document and the files it came from' })
+  .meta({
+    description:
+      'A parsed DMMF document, the files it came from, the datasource provider and the outlined blocks',
+  })
 
 /** The whole studio schema contract from a DMMF document. */
 export function makeSchema(input: z.infer<typeof ToStudioSchemaInput>) {
-  const { dmmf, files } = input
+  const { dmmf, files, provider, blocks } = input
   const { models, enums, indexes } = dmmf.datamodel
   return {
     files: files.map((f) => ({ path: f.path, content: f.content })),
-    provider: detectProvider({ files }),
-    models: models.map((model) => makeModel({ model, indexes, files })),
-    enums: enums.map((value) => makeEnum({ value, files })),
+    provider,
+    models: models.map((model) => makeModel({ model, indexes, blocks })),
+    enums: enums.map((value) => makeEnum({ value, blocks })),
     relations: makeRelations({ models }),
   }
 }

@@ -31,6 +31,23 @@ The current snapshot: the last valid schema, the current Prisma error and the fi
 {
   "schema": null,
   "error": "error: Type \"Nope\" is neither a built-in type, nor refers to another model, composite type, or enum.",
+  "diagnostics": [
+    {
+      "path": "prisma/schema.prisma",
+      "range": {
+        "start": {
+          "line": 1,
+          "character": 5
+        },
+        "end": {
+          "line": 1,
+          "character": 9
+        }
+      },
+      "message": "Type \"Nope\" is neither a built-in type, nor refers to another model, composite type, or enum.",
+      "severity": "error"
+    }
+  ],
   "updatedAt": "2026-09-02T00:00:00.000Z",
   "files": [
     {
@@ -76,6 +93,23 @@ Re-read and re-parse the schema from disk (the watcher does this on its own afte
 {
   "schema": null,
   "error": "error: Type \"Nope\" is neither a built-in type, nor refers to another model, composite type, or enum.",
+  "diagnostics": [
+    {
+      "path": "prisma/schema.prisma",
+      "range": {
+        "start": {
+          "line": 1,
+          "character": 5
+        },
+        "end": {
+          "line": 1,
+          "character": 9
+        }
+      },
+      "message": "Type \"Nope\" is neither a built-in type, nor refers to another model, composite type, or enum.",
+      "severity": "error"
+    }
+  ],
   "updatedAt": "2026-09-02T00:00:00.000Z",
   "files": [
     {
@@ -145,6 +179,23 @@ to write is reported as a validation problem on `path`.
 {
   "schema": null,
   "error": "error: Type \"Nope\" is neither a built-in type, nor refers to another model, composite type, or enum.",
+  "diagnostics": [
+    {
+      "path": "prisma/schema.prisma",
+      "range": {
+        "start": {
+          "line": 1,
+          "character": 5
+        },
+        "end": {
+          "line": 1,
+          "character": 9
+        }
+      },
+      "message": "Type \"Nope\" is neither a built-in type, nor refers to another model, composite type, or enum.",
+      "severity": "error"
+    }
+  ],
   "updatedAt": "2026-09-02T00:00:00.000Z",
   "files": [
     {
@@ -630,7 +681,7 @@ curl http://localhost:5858/prisma/format \
 
 `POST /prisma/format`
 
-Format schema text with the Prisma formatter.
+The edits that lay the text out as the Prisma formatter does.
 
 > Body parameter
 
@@ -646,6 +697,7 @@ Format schema text with the Prisma formatter.
 |---|---|---|---|---|
 |body|body|[TextBody](#schematextbody)|true|none|
 |» text|body|object|true|The text as typed|
+|» path|body|string|false|The file the text belongs to, as Studio loaded it; the first file when omitted|
 
 > Example responses
 
@@ -653,7 +705,21 @@ Format schema text with the Prisma formatter.
 
 ```json
 {
-  "text": "model User {\n  id Int @id\n}\n"
+  "edits": [
+    {
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 0
+        },
+        "end": {
+          "line": 3,
+          "character": 0
+        }
+      },
+      "newText": "model User {\n  id Int @id\n}\n"
+    }
+  ]
 }
 ```
 
@@ -729,6 +795,64 @@ Validate the buffer together with the other loaded files and return its diagnost
 This operation does not require authentication
 </aside>
 
+## symbolsSchemaText
+
+<a id="opIdsymbolsSchemaText"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5858/prisma/symbols \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{
+    "text": "model User {\nid Int @id\n}\n"
+  }'
+```
+
+`POST /prisma/symbols`
+
+The blocks of the text, as the language server's document outline lists them.
+
+> Body parameter
+
+```json
+{
+  "text": "model User {\nid Int @id\n}\n"
+}
+```
+
+<h3 id="symbolsschematext-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|
+|---|---|---|---|---|
+|body|body|[TextBody](#schematextbody)|true|none|
+|» text|body|object|true|The text as typed|
+|» path|body|string|false|The file the text belongs to, as Studio loaded it; the first file when omitted|
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "symbols": []
+}
+```
+
+<h3 id="symbolsschematext-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[Symbols](#schemasymbols)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
 ## completeSchemaText
 
 <a id="opIdcompleteSchemaText"></a>
@@ -767,8 +891,10 @@ Completions the Prisma language server offers at a cursor position.
 |---|---|---|---|---|
 |body|body|[CompleteBody](#schemacompletebody)|true|none|
 |» text|body|object|true|The text as typed|
+|» path|body|string|false|The file the text belongs to, so the other loaded schema files are seen; the first file when omitted|
 |» line|body|object|true|The cursor line|
 |» character|body|object|true|The cursor column|
+|» triggerCharacter|body|string|false|The character that opened the list (`@`, `"`, `.`), when one did rather than typing|
 
 > Example responses
 
@@ -785,6 +911,357 @@ Completions the Prisma language server offers at a cursor position.
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[Completions](#schemacompletions)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## hoverSchemaText
+
+<a id="opIdhoverSchemaText"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5858/prisma/hover \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{
+    "text": "model User {\n  id Int @id\n}\n",
+    "line": 1,
+    "character": 3
+  }'
+```
+
+`POST /prisma/hover`
+
+What the Prisma language server says about the symbol at a cursor position.
+
+> Body parameter
+
+```json
+{
+  "text": "model User {\n  id Int @id\n}\n",
+  "line": 1,
+  "character": 3
+}
+```
+
+<h3 id="hoverschematext-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|
+|---|---|---|---|---|
+|body|body|[PositionBody](#schemapositionbody)|true|none|
+|» text|body|object|true|The text as typed|
+|» path|body|string|false|The file the text belongs to, so the other loaded schema files are seen; the first file when omitted|
+|» line|body|object|true|The cursor line|
+|» character|body|object|true|The cursor column|
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "contents": "```prisma\nmodel User {\n\t...\n}\n```",
+  "range": {
+    "start": {
+      "line": 4,
+      "character": 9
+    },
+    "end": {
+      "line": 4,
+      "character": 13
+    }
+  }
+}
+```
+
+<h3 id="hoverschematext-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[Hover](#schemahover)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## defineSchemaText
+
+<a id="opIddefineSchemaText"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5858/prisma/definition \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{
+    "text": "model User {\n  id Int @id\n}\n",
+    "line": 1,
+    "character": 3
+  }'
+```
+
+`POST /prisma/definition`
+
+Where the model, enum or type referenced at a cursor position is declared.
+
+> Body parameter
+
+```json
+{
+  "text": "model User {\n  id Int @id\n}\n",
+  "line": 1,
+  "character": 3
+}
+```
+
+<h3 id="defineschematext-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|
+|---|---|---|---|---|
+|body|body|[PositionBody](#schemapositionbody)|true|none|
+|» text|body|object|true|The text as typed|
+|» path|body|string|false|The file the text belongs to, so the other loaded schema files are seen; the first file when omitted|
+|» line|body|object|true|The cursor line|
+|» character|body|object|true|The cursor column|
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "locations": []
+}
+```
+
+<h3 id="defineschematext-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[Definition](#schemadefinition)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## referencesSchemaText
+
+<a id="opIdreferencesSchemaText"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5858/prisma/references \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{
+    "text": "model User {\n  id Int @id\n}\n",
+    "line": 1,
+    "character": 3
+  }'
+```
+
+`POST /prisma/references`
+
+Every place the symbol at a cursor position is used, across the loaded files.
+
+> Body parameter
+
+```json
+{
+  "text": "model User {\n  id Int @id\n}\n",
+  "line": 1,
+  "character": 3
+}
+```
+
+<h3 id="referencesschematext-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|
+|---|---|---|---|---|
+|body|body|[PositionBody](#schemapositionbody)|true|none|
+|» text|body|object|true|The text as typed|
+|» path|body|string|false|The file the text belongs to, so the other loaded schema files are seen; the first file when omitted|
+|» line|body|object|true|The cursor line|
+|» character|body|object|true|The cursor column|
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "locations": []
+}
+```
+
+<h3 id="referencesschematext-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[References](#schemareferences)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## renameSchemaText
+
+<a id="opIdrenameSchemaText"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5858/prisma/rename \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{
+    "text": "model User {\n  id Int @id\n}\n",
+    "line": 0,
+    "character": 7,
+    "newName": "Account"
+  }'
+```
+
+`POST /prisma/rename`
+
+The edits that rename the model or enum at a cursor position everywhere it is used.
+
+> Body parameter
+
+```json
+{
+  "text": "model User {\n  id Int @id\n}\n",
+  "line": 0,
+  "character": 7,
+  "newName": "Account"
+}
+```
+
+<h3 id="renameschematext-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|
+|---|---|---|---|---|
+|body|body|[RenameBody](#schemarenamebody)|true|none|
+|» text|body|object|true|The text as typed|
+|» path|body|string|false|The file the text belongs to, so the other loaded schema files are seen; the first file when omitted|
+|» line|body|object|true|The cursor line|
+|» character|body|object|true|The cursor column|
+|» newName|body|string|true|The new name|
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "changes": []
+}
+```
+
+<h3 id="renameschematext-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[Rename](#schemarename)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## codeActionsSchemaText
+
+<a id="opIdcodeActionsSchemaText"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5858/prisma/code-actions \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{
+    "text": "model User {\n  role R\n}\n",
+    "range": {
+      "start": {
+        "line": 1,
+        "character": 7
+      },
+      "end": {
+        "line": 1,
+        "character": 8
+      }
+    },
+    "diagnostics": []
+  }'
+```
+
+`POST /prisma/code-actions`
+
+The quick fixes the Prisma language server offers for the diagnostics in a range.
+
+> Body parameter
+
+```json
+{
+  "text": "model User {\n  role R\n}\n",
+  "range": {
+    "start": {
+      "line": 1,
+      "character": 7
+    },
+    "end": {
+      "line": 1,
+      "character": 8
+    }
+  },
+  "diagnostics": []
+}
+```
+
+<h3 id="codeactionsschematext-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|
+|---|---|---|---|---|
+|body|body|[CodeActionBody](#schemacodeactionbody)|true|none|
+|» text|body|object|true|The text as typed|
+|» path|body|string|false|The file the text belongs to, so the other loaded schema files are seen; the first file when omitted|
+|» range|body|object|true|The range the actions are asked for|
+|» diagnostics|body|[[LspDiagnostic](#schemalspdiagnostic)]|true|The diagnostics in that range, as the lint route returned them|
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "actions": []
+}
+```
+
+<h3 id="codeactionsschematext-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[CodeActions](#schemacodeactions)|
 |422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
 |500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
 
@@ -1250,6 +1727,121 @@ This operation does not require authentication
 |enums|[[Enum](#schemaenum)]|true|none|Every enum in declaration order|
 |relations|[[Relation](#schemarelation)]|true|none|Every relation between the models|
 
+<h2 id="tocS_line">line</h2>
+<!-- backwards compatibility -->
+<a id="schemaline"></a>
+<a id="schema_line"></a>
+<a id="tocSline"></a>
+<a id="tocsline"></a>
+
+```json
+0
+```
+
+<h2 id="tocS_character">character</h2>
+<!-- backwards compatibility -->
+<a id="schemacharacter"></a>
+<a id="schema_character"></a>
+<a id="tocScharacter"></a>
+<a id="tocscharacter"></a>
+
+```json
+0
+```
+
+<h2 id="tocS_LspPosition">LspPosition</h2>
+<!-- backwards compatibility -->
+<a id="schemalspposition"></a>
+<a id="schema_LspPosition"></a>
+<a id="tocSlspposition"></a>
+<a id="tocslspposition"></a>
+
+```json
+{
+  "line": 4,
+  "character": 6
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|line|object|true|none|The line|
+|character|object|true|none|The column|
+
+<h2 id="tocS_LspRange">LspRange</h2>
+<!-- backwards compatibility -->
+<a id="schemalsprange"></a>
+<a id="schema_LspRange"></a>
+<a id="tocSlsprange"></a>
+<a id="tocslsprange"></a>
+
+```json
+{
+  "start": {
+    "line": 4,
+    "character": 6
+  },
+  "end": {
+    "line": 4,
+    "character": 10
+  }
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|start|object|true|none|Where the range starts|
+|end|object|true|none|Where the range ends|
+
+<h2 id="tocS_Severity">Severity</h2>
+<!-- backwards compatibility -->
+<a id="schemaseverity"></a>
+<a id="schema_Severity"></a>
+<a id="tocSseverity"></a>
+<a id="tocsseverity"></a>
+
+```json
+"error"
+```
+
+<h2 id="tocS_FileDiagnostic">FileDiagnostic</h2>
+<!-- backwards compatibility -->
+<a id="schemafilediagnostic"></a>
+<a id="schema_FileDiagnostic"></a>
+<a id="tocSfilediagnostic"></a>
+<a id="tocsfilediagnostic"></a>
+
+```json
+{
+  "path": "prisma/schema.prisma",
+  "range": {
+    "start": {
+      "line": 1,
+      "character": 5
+    },
+    "end": {
+      "line": 1,
+      "character": 9
+    }
+  },
+  "message": "Type \"Nope\" is neither a built-in type, nor refers to another model, composite type, or enum.",
+  "severity": "error"
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|path|string|true|none|The file, as Studio loaded it|
+|range|object|true|none|Where it is (0-based, end exclusive)|
+|message|string|true|none|The Prisma message|
+|severity|object|true|none|How serious it is|
+
 <h2 id="tocS_Snapshot">Snapshot</h2>
 <!-- backwards compatibility -->
 <a id="schemasnapshot"></a>
@@ -1261,6 +1853,23 @@ This operation does not require authentication
 {
   "schema": null,
   "error": "error: Type \"Nope\" is neither a built-in type, nor refers to another model, composite type, or enum.",
+  "diagnostics": [
+    {
+      "path": "prisma/schema.prisma",
+      "range": {
+        "start": {
+          "line": 1,
+          "character": 5
+        },
+        "end": {
+          "line": 1,
+          "character": 9
+        }
+      },
+      "message": "Type \"Nope\" is neither a built-in type, nor refers to another model, composite type, or enum.",
+      "severity": "error"
+    }
+  ],
   "updatedAt": "2026-09-02T00:00:00.000Z",
   "files": [
     {
@@ -1276,7 +1885,8 @@ This operation does not require authentication
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |schema|object|true|none|The last schema that parsed, or null before the first successful parse|
-|error|string|true|none|The Prisma error of the latest parse, or null when it succeeded|
+|error|string|true|none|The Prisma error of the latest parse as the engine printed it, or null when it succeeded|
+|diagnostics|[[FileDiagnostic](#schemafilediagnostic)]|true|none|Every diagnostic the language server reports for the files on disk; empty when they parse|
 |updatedAt|string(date-time)|true|none|When the files were last read (ISO 8601); the event stream announces every change of it|
 |files|[[SchemaFile](#schemaschemafile)]|true|none|The files on disk as of the latest read|
 
@@ -1814,6 +2424,36 @@ This operation does not require authentication
 |---|---|---|---|---|
 |sql|object|true|none|The statement|
 
+<h2 id="tocS_LspTextEdit">LspTextEdit</h2>
+<!-- backwards compatibility -->
+<a id="schemalsptextedit"></a>
+<a id="schema_LspTextEdit"></a>
+<a id="tocSlsptextedit"></a>
+<a id="tocslsptextedit"></a>
+
+```json
+{
+  "range": {
+    "start": {
+      "line": 4,
+      "character": 6
+    },
+    "end": {
+      "line": 4,
+      "character": 10
+    }
+  },
+  "newText": "Account"
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|range|object|true|none|What to replace|
+|newText|string|true|none|The replacement|
+
 <h2 id="tocS_Formatted">Formatted</h2>
 <!-- backwards compatibility -->
 <a id="schemaformatted"></a>
@@ -1823,7 +2463,21 @@ This operation does not require authentication
 
 ```json
 {
-  "text": "model User {\n  id Int @id\n}\n"
+  "edits": [
+    {
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 0
+        },
+        "end": {
+          "line": 3,
+          "character": 0
+        }
+      },
+      "newText": "model User {\n  id Int @id\n}\n"
+    }
+  ]
 }
 ```
 
@@ -1831,7 +2485,7 @@ This operation does not require authentication
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
-|text|string|true|none|The text as the Prisma formatter lays it out|
+|edits|[[LspTextEdit](#schemalsptextedit)]|true|none|The replacements that lay the text out as the Prisma formatter does; empty when it already is|
 
 <h2 id="tocS_TextBody">TextBody</h2>
 <!-- backwards compatibility -->
@@ -1851,30 +2505,28 @@ This operation does not require authentication
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |text|object|true|none|The text as typed|
+|path|string|false|none|The file the text belongs to, as Studio loaded it; the first file when omitted|
 
-<h2 id="tocS_Severity">Severity</h2>
+<h2 id="tocS_LspDiagnostic">LspDiagnostic</h2>
 <!-- backwards compatibility -->
-<a id="schemaseverity"></a>
-<a id="schema_Severity"></a>
-<a id="tocSseverity"></a>
-<a id="tocsseverity"></a>
-
-```json
-"error"
-```
-
-<h2 id="tocS_Diagnostic">Diagnostic</h2>
-<!-- backwards compatibility -->
-<a id="schemadiagnostic"></a>
-<a id="schema_Diagnostic"></a>
-<a id="tocSdiagnostic"></a>
-<a id="tocsdiagnostic"></a>
+<a id="schemalspdiagnostic"></a>
+<a id="schema_LspDiagnostic"></a>
+<a id="tocSlspdiagnostic"></a>
+<a id="tocslspdiagnostic"></a>
 
 ```json
 {
-  "from": 19,
-  "to": 23,
-  "message": "Type \"Nope\" is neither a built-in type, nor refers to another model, composite type, or enum.",
+  "range": {
+    "start": {
+      "line": 7,
+      "character": 7
+    },
+    "end": {
+      "line": 7,
+      "character": 8
+    }
+  },
+  "message": "Type \"R\" is neither a built-in type, nor refers to another model, composite type, or enum.",
   "severity": "error"
 }
 ```
@@ -1883,8 +2535,7 @@ This operation does not require authentication
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
-|from|integer(int32)|true|none|Start offset (inclusive)|
-|to|integer(int32)|true|none|End offset (exclusive)|
+|range|object|true|none|Where it is|
 |message|string|true|none|The Prisma message|
 |severity|object|true|none|How serious it is|
 
@@ -1905,7 +2556,7 @@ This operation does not require authentication
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
-|diagnostics|[[Diagnostic](#schemadiagnostic)]|true|none|Every diagnostic Prisma reported for the file|
+|diagnostics|[[LspDiagnostic](#schemalspdiagnostic)]|true|none|Every diagnostic the language server reported for the file|
 
 <h2 id="tocS_LintBody">LintBody</h2>
 <!-- backwards compatibility -->
@@ -1928,6 +2579,79 @@ This operation does not require authentication
 |path|object|true|none|The loaded file the text replaces|
 |text|object|true|none|The text being edited|
 
+<h2 id="tocS_LspDocumentSymbol">LspDocumentSymbol</h2>
+<!-- backwards compatibility -->
+<a id="schemalspdocumentsymbol"></a>
+<a id="schema_LspDocumentSymbol"></a>
+<a id="tocSlspdocumentsymbol"></a>
+<a id="tocslspdocumentsymbol"></a>
+
+```json
+{
+  "name": "User",
+  "kind": 5,
+  "range": {
+    "start": {
+      "line": 4,
+      "character": 0
+    },
+    "end": {
+      "line": 9,
+      "character": 1
+    }
+  },
+  "selectionRange": {
+    "start": {
+      "line": 4,
+      "character": 6
+    },
+    "end": {
+      "line": 4,
+      "character": 10
+    }
+  }
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|name|string|true|none|The declared name|
+|kind|integer(int32)|true|none|The LSP `SymbolKind`: 5 = model or view, 10 = enum, 11 = composite type, 23 = datasource, 12 = generator|
+|range|object|true|none|The whole block|
+|selectionRange|object|true|none|The name inside the block header|
+
+<h2 id="tocS_Symbols">Symbols</h2>
+<!-- backwards compatibility -->
+<a id="schemasymbols"></a>
+<a id="schema_Symbols"></a>
+<a id="tocSsymbols"></a>
+<a id="tocssymbols"></a>
+
+```json
+{
+  "symbols": []
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|symbols|[[LspDocumentSymbol](#schemalspdocumentsymbol)]|true|none|Every block of the text|
+
+<h2 id="tocS_InsertTextFormat">InsertTextFormat</h2>
+<!-- backwards compatibility -->
+<a id="schemainserttextformat"></a>
+<a id="schema_InsertTextFormat"></a>
+<a id="tocSinserttextformat"></a>
+<a id="tocsinserttextformat"></a>
+
+```json
+"plainText"
+```
+
 <h2 id="tocS_Completion">Completion</h2>
 <!-- backwards compatibility -->
 <a id="schemacompletion"></a>
@@ -1938,9 +2662,12 @@ This operation does not require authentication
 ```json
 {
   "label": "postgresql",
+  "kind": 12,
   "detail": null,
   "documentation": "The PostgreSQL provider",
-  "insertText": "\"postgresql\""
+  "insertText": "\"postgresql\"",
+  "insertTextFormat": "plainText",
+  "sortText": null
 }
 ```
 
@@ -1949,9 +2676,12 @@ This operation does not require authentication
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |label|string|true|none|What the completion list shows|
+|kind|integer(int32)|true|none|The LSP `CompletionItemKind` (13 = enum value, 14 = keyword, 10 = property, ...), when the server gives one|
 |detail|string|true|none|A short type or kind, when the server gives one|
-|documentation|string|true|none|The documentation text, when the server gives one|
-|insertText|string|true|none|The text to insert, with LSP snippet placeholders stripped|
+|documentation|string|true|none|The documentation text (Markdown), when the server gives one|
+|insertText|string|true|none|The text to insert; a snippet keeps its tab stops|
+|insertTextFormat|object|true|none|Whether `insertText` is plain text or a snippet|
+|sortText|string|true|none|The key the list is sorted by, when the server gives one|
 
 <h2 id="tocS_Completions">Completions</h2>
 <!-- backwards compatibility -->
@@ -1971,28 +2701,6 @@ This operation does not require authentication
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |items|[[Completion](#schemacompletion)]|true|none|The offered completions in the server's order|
-
-<h2 id="tocS_line">line</h2>
-<!-- backwards compatibility -->
-<a id="schemaline"></a>
-<a id="schema_line"></a>
-<a id="tocSline"></a>
-<a id="tocsline"></a>
-
-```json
-0
-```
-
-<h2 id="tocS_character">character</h2>
-<!-- backwards compatibility -->
-<a id="schemacharacter"></a>
-<a id="schema_character"></a>
-<a id="tocScharacter"></a>
-<a id="tocscharacter"></a>
-
-```json
-0
-```
 
 <h2 id="tocS_CompleteBody">CompleteBody</h2>
 <!-- backwards compatibility -->
@@ -2014,8 +2722,314 @@ This operation does not require authentication
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |text|object|true|none|The text as typed|
+|path|string|false|none|The file the text belongs to, so the other loaded schema files are seen; the first file when omitted|
 |line|object|true|none|The cursor line|
 |character|object|true|none|The cursor column|
+|triggerCharacter|string|false|none|The character that opened the list (`@`, `"`, `.`), when one did rather than typing|
+
+<h2 id="tocS_Hover">Hover</h2>
+<!-- backwards compatibility -->
+<a id="schemahover"></a>
+<a id="schema_Hover"></a>
+<a id="tocShover"></a>
+<a id="tocshover"></a>
+
+```json
+{
+  "contents": "```prisma\nmodel User {\n\t...\n}\n```",
+  "range": {
+    "start": {
+      "line": 4,
+      "character": 9
+    },
+    "end": {
+      "line": 4,
+      "character": 13
+    }
+  }
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|contents|string|true|none|Markdown to show, or null when there is nothing to say about the position|
+|range|object|true|none|The word the hover is about, when the server names it|
+
+<h2 id="tocS_PositionBody">PositionBody</h2>
+<!-- backwards compatibility -->
+<a id="schemapositionbody"></a>
+<a id="schema_PositionBody"></a>
+<a id="tocSpositionbody"></a>
+<a id="tocspositionbody"></a>
+
+```json
+{
+  "text": "model User {\n  id Int @id\n}\n",
+  "line": 1,
+  "character": 3
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|text|object|true|none|The text as typed|
+|path|string|false|none|The file the text belongs to, so the other loaded schema files are seen; the first file when omitted|
+|line|object|true|none|The cursor line|
+|character|object|true|none|The cursor column|
+
+<h2 id="tocS_LspLocation">LspLocation</h2>
+<!-- backwards compatibility -->
+<a id="schemalsplocation"></a>
+<a id="schema_LspLocation"></a>
+<a id="tocSlsplocation"></a>
+<a id="tocslsplocation"></a>
+
+```json
+{
+  "path": "prisma/schema.prisma",
+  "range": {
+    "start": {
+      "line": 10,
+      "character": 0
+    },
+    "end": {
+      "line": 14,
+      "character": 1
+    }
+  },
+  "selection": {
+    "start": {
+      "line": 10,
+      "character": 6
+    },
+    "end": {
+      "line": 10,
+      "character": 10
+    }
+  }
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|path|string|true|none|The file, as Studio loaded it|
+|range|object|true|none|The whole declaration|
+|selection|object|true|none|The name inside it, to put the cursor on|
+
+<h2 id="tocS_Definition">Definition</h2>
+<!-- backwards compatibility -->
+<a id="schemadefinition"></a>
+<a id="schema_Definition"></a>
+<a id="tocSdefinition"></a>
+<a id="tocsdefinition"></a>
+
+```json
+{
+  "locations": []
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|locations|[[LspLocation](#schemalsplocation)]|true|none|The declarations, empty when the position holds no reference to one|
+
+<h2 id="tocS_LspReference">LspReference</h2>
+<!-- backwards compatibility -->
+<a id="schemalspreference"></a>
+<a id="schema_LspReference"></a>
+<a id="tocSlspreference"></a>
+<a id="tocslspreference"></a>
+
+```json
+{
+  "path": "prisma/schema.prisma",
+  "range": {
+    "start": {
+      "line": 21,
+      "character": 9
+    },
+    "end": {
+      "line": 21,
+      "character": 13
+    }
+  }
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|path|string|true|none|The file, as Studio loaded it|
+|range|object|true|none|The word that refers to the symbol|
+
+<h2 id="tocS_References">References</h2>
+<!-- backwards compatibility -->
+<a id="schemareferences"></a>
+<a id="schema_References"></a>
+<a id="tocSreferences"></a>
+<a id="tocsreferences"></a>
+
+```json
+{
+  "locations": []
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|locations|[[LspReference](#schemalspreference)]|true|none|The uses, including the declaration; empty when the position holds no symbol|
+
+<h2 id="tocS_LspFileEdit">LspFileEdit</h2>
+<!-- backwards compatibility -->
+<a id="schemalspfileedit"></a>
+<a id="schema_LspFileEdit"></a>
+<a id="tocSlspfileedit"></a>
+<a id="tocslspfileedit"></a>
+
+```json
+{
+  "path": "prisma/schema.prisma",
+  "edits": []
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|path|string|true|none|The file, as Studio loaded it|
+|edits|[[LspTextEdit](#schemalsptextedit)]|true|none|The replacements, in document order|
+
+<h2 id="tocS_Rename">Rename</h2>
+<!-- backwards compatibility -->
+<a id="schemarename"></a>
+<a id="schema_Rename"></a>
+<a id="tocSrename"></a>
+<a id="tocsrename"></a>
+
+```json
+{
+  "changes": []
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|changes|[[LspFileEdit](#schemalspfileedit)]|true|none|The edits, grouped by file; empty when the position holds nothing to rename|
+
+<h2 id="tocS_RenameBody">RenameBody</h2>
+<!-- backwards compatibility -->
+<a id="schemarenamebody"></a>
+<a id="schema_RenameBody"></a>
+<a id="tocSrenamebody"></a>
+<a id="tocsrenamebody"></a>
+
+```json
+{
+  "text": "model User {\n  id Int @id\n}\n",
+  "line": 0,
+  "character": 7,
+  "newName": "Account"
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|text|object|true|none|The text as typed|
+|path|string|false|none|The file the text belongs to, so the other loaded schema files are seen; the first file when omitted|
+|line|object|true|none|The cursor line|
+|character|object|true|none|The cursor column|
+|newName|string|true|none|The new name|
+
+<h2 id="tocS_CodeAction">CodeAction</h2>
+<!-- backwards compatibility -->
+<a id="schemacodeaction"></a>
+<a id="schema_CodeAction"></a>
+<a id="tocScodeaction"></a>
+<a id="tocscodeaction"></a>
+
+```json
+{
+  "title": "Change spelling to 'Role'",
+  "changes": [],
+  "isPreferred": true
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|title|string|true|none|What the fix does|
+|changes|[[LspFileEdit](#schemalspfileedit)]|true|none|The edits, grouped by file|
+|isPreferred|boolean|true|none|Whether it is the fix to apply first|
+
+<h2 id="tocS_CodeActions">CodeActions</h2>
+<!-- backwards compatibility -->
+<a id="schemacodeactions"></a>
+<a id="schema_CodeActions"></a>
+<a id="tocScodeactions"></a>
+<a id="tocscodeactions"></a>
+
+```json
+{
+  "actions": []
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|actions|[[CodeAction](#schemacodeaction)]|true|none|The offered fixes|
+
+<h2 id="tocS_CodeActionBody">CodeActionBody</h2>
+<!-- backwards compatibility -->
+<a id="schemacodeactionbody"></a>
+<a id="schema_CodeActionBody"></a>
+<a id="tocScodeactionbody"></a>
+<a id="tocscodeactionbody"></a>
+
+```json
+{
+  "text": "model User {\n  role R\n}\n",
+  "range": {
+    "start": {
+      "line": 1,
+      "character": 7
+    },
+    "end": {
+      "line": 1,
+      "character": 8
+    }
+  },
+  "diagnostics": []
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|text|object|true|none|The text as typed|
+|path|string|false|none|The file the text belongs to, so the other loaded schema files are seen; the first file when omitted|
+|range|object|true|none|The range the actions are asked for|
+|diagnostics|[[LspDiagnostic](#schemalspdiagnostic)]|true|none|The diagnostics in that range, as the lint route returned them|
 
 <h2 id="tocS_DocsDirective">DocsDirective</h2>
 <!-- backwards compatibility -->

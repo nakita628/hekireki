@@ -40,6 +40,16 @@ export class SchemaLoadError extends Data.TaggedError('SchemaLoadError')<{
 
 export class SchemaParseError extends Data.TaggedError('SchemaParseError')<{
   readonly message: string
+  /** The same errors as the language server places them, so the UI can point at lines. */
+  readonly diagnostics: readonly {
+    readonly path: string
+    readonly range: {
+      readonly start: { readonly line: number; readonly character: number }
+      readonly end: { readonly line: number; readonly character: number }
+    }
+    readonly message: string
+    readonly severity: 'error' | 'warning' | 'information' | 'hint'
+  }[]
 }> {}
 
 export class ServerListenError extends Data.TaggedError('ServerListenError')<{

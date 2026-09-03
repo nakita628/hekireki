@@ -13,15 +13,13 @@ import {
   useStoreApi,
 } from '@xyflow/react'
 import type { Edge, OnSelectionChangeParams } from '@xyflow/react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'react-hot-toast'
 
 import type { Schema } from '../../../server/routes/index.js'
 import { DownloadIcon, LayoutIcon, RefreshIcon } from '../../components/icons.js'
 import { ModelNode } from '../../components/model-node.js'
-import { errorMessage } from '../../lib/error.js'
-import { layoutStorageKey, loadLayout, saveLayout } from '../../lib/storage.js'
-import { useUiStore } from '../../lib/store.js'
+import { layoutStorageKey, loadLayout, saveLayout, useUiStore } from '../../lib/index.js'
 import { exportPng, exportSvg } from './export.js'
 import { buildEdges, buildNodes, highlightEdges } from './graph.js'
 import type { ModelNodeType } from './graph.js'
@@ -53,11 +51,21 @@ function Canvas({
   const store = useStoreApi()
   const theme = useUiStore((s) => s.theme)
 
+  // Every autosave produces a new snapshot object; the nodes are rebuilt only when the models or
+  // relations actually changed, so typing in the editor does not redraw the diagram.
+  const structure = useMemo(
+    () =>
+      `${storageKey}\n${JSON.stringify({ models: schema.models, relations: schema.relations })}`,
+    [schema, storageKey],
+  )
+  const built = useRef<string | null>(null)
   useEffect(() => {
+    if (built.current === structure) return
+    built.current = structure
     const positions = positionsFor(schema, loadLayout(storageKey))
     setNodes([...buildNodes(schema, positions)])
     setEdges([...buildEdges(schema)])
-  }, [schema, storageKey, setNodes, setEdges])
+  }, [schema, structure, storageKey, setNodes, setEdges])
 
   useEffect(() => {
     if (focus === null || nodes.length === 0) return undefined
@@ -126,8 +134,8 @@ function Canvas({
       setExporting(true)
       try {
         await exportPng('schema.png', diagram())
-      } catch (e) {
-        toast.error(errorMessage(e))
+      } catch {
+        toast.error('The diagram could not be exported.')
       } finally {
         setExporting(false)
       }

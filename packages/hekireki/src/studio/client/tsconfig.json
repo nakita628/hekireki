@@ -11,7 +11,7 @@
     "skipLibCheck": true,
     "noEmit": true,
     "paths": {
-      "@/*": ["./*"]
+      "@prisma/language-server/dist/*": ["../../../node_modules/@prisma/language-server/dist/*"]
     }
   },
   "include": ["./**/*"]
