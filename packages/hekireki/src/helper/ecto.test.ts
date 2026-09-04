@@ -2015,3 +2015,69 @@ describe('enum default', () => {
 end`)
   })
 })
+
+// The two exported maps are the whole of Ecto's type vocabulary as this generator knows it, and
+// both fall back rather than emitting an Elixir type that does not exist.
+describe('prismaTypeToEctoType', () => {
+  it.each([
+    ['Int', 'integer'],
+    ['BigInt', 'integer'],
+    ['Float', 'float'],
+    ['Decimal', 'decimal'],
+    ['String', 'string'],
+    ['Boolean', 'boolean'],
+    ['DateTime', 'utc_datetime'],
+    ['Json', 'map'],
+    ['Bytes', 'binary'],
+    ['Role', 'string'],
+  ] as const)('maps %s to %s', (prisma, ecto) => {
+    expect(prismaTypeToEctoType(prisma)).toBe(ecto)
+  })
+})
+
+describe('ectoTypeToTypespec', () => {
+  it.each([
+    ['string', 'String.t()'],
+    ['integer', 'integer()'],
+    ['float', 'float()'],
+    ['boolean', 'boolean()'],
+    ['binary_id', 'Ecto.UUID.t()'],
+    ['Ecto.ULID', 'Ecto.ULID.t()'],
+    ['naive_datetime', 'NaiveDateTime.t()'],
+    ['utc_datetime', 'DateTime.t()'],
+    ['decimal', 'Decimal.t()'],
+    ['map', 'map()'],
+    ['binary', 'binary()'],
+    ['whatever', 'term()'],
+  ] as const)('spells %s as %s', (ecto, typespec) => {
+    expect(ectoTypeToTypespec(ecto)).toBe(typespec)
+  })
+})
+
+// A Json `@default` arrives as JSON text and has to come out as an Elixir literal, escapes and
+// all - `#{}` most of all, which Elixir would otherwise interpolate at compile time. Ecto's
+// `:map` only accepts a map, so an array or scalar default stays a database-level concern.
+describe('Json defaults', () => {
+  it.each([
+    ['{"a":1}', '    field(:meta, :map, default: %{"a" => 1})'],
+    [
+      '{"nested":{"k":[1,"two",null,true,false]}}',
+      '    field(:meta, :map, default: %{"nested" => %{"k" => [1, "two", nil, true, false]}})',
+    ],
+    ['{"k":"a\\"b\\n#{x}\\r"}', '    field(:meta, :map, default: %{"k" => "a\\"b\\n\\#{x}\\r"})'],
+    ['[1,2]', '    field(:meta, :map)'],
+    ['42', '    field(:meta, :map)'],
+  ])('renders the default %s', (json, expected) => {
+    const models = [
+      makeModel({
+        name: 'Row',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({ name: 'meta', type: 'Json', hasDefaultValue: true, default: json }),
+        ],
+      }),
+    ]
+    const lines = ectoSchemas(models, 'App', models).split('\n')
+    expect(lines.find((line) => line.includes(':meta'))).toBe(expected)
+  })
+})

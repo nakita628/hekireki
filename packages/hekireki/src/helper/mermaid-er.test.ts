@@ -64,28 +64,22 @@ describe('helper/mermaid-er', () => {
       const result = erRelationLine({
         from: { model: 'User', field: 'id', cardinality: 'one' },
         to: { model: 'Post', field: 'userId', cardinality: 'many' },
-        identifying: true,
-        origin: 'inferred',
       })
-      expect(result).toBe('    User ||--}| Post : "(id) - (userId)"')
+      expect(result).toBe('    User ||--|{ Post : "(id) - (userId)"')
     })
 
     it('renders a one-to-zero-many relation', () => {
       const result = erRelationLine({
         from: { model: 'User', field: 'id', cardinality: 'one' },
         to: { model: 'Post', field: 'userId', cardinality: 'zero-many' },
-        identifying: true,
-        origin: 'inferred',
       })
-      expect(result).toBe('    User ||--}o Post : "(id) - (userId)"')
+      expect(result).toBe('    User ||--o{ Post : "(id) - (userId)"')
     })
 
     it('renders a one-to-one relation', () => {
       const result = erRelationLine({
         from: { model: 'User', field: 'id', cardinality: 'one' },
         to: { model: 'Profile', field: 'userId', cardinality: 'one' },
-        identifying: true,
-        origin: 'inferred',
       })
       expect(result).toBe('    User ||--|| Profile : "(id) - (userId)"')
     })
@@ -94,10 +88,8 @@ describe('helper/mermaid-er', () => {
       const result = erRelationLine({
         from: { model: 'User', field: 'id', cardinality: 'one' },
         to: { model: 'Profile', field: 'userId', cardinality: 'zero-one' },
-        identifying: true,
-        origin: 'inferred',
       })
-      expect(result).toBe('    User ||--|o Profile : "(id) - (userId)"')
+      expect(result).toBe('    User ||--o| Profile : "(id) - (userId)"')
     })
 
     it('maps endpoint model names through the resolver', () => {
@@ -105,22 +97,18 @@ describe('helper/mermaid-er', () => {
         {
           from: { model: 'User', field: 'id', cardinality: 'one' },
           to: { model: 'Post', field: 'userId', cardinality: 'many' },
-          identifying: true,
-          origin: 'inferred',
         },
         (model) => (model === 'User' ? 'users' : model === 'Post' ? 'posts' : model),
       )
-      expect(result).toBe('    users ||--}| posts : "(id) - (userId)"')
+      expect(result).toBe('    users ||--|{ posts : "(id) - (userId)"')
     })
 
     it('renders the from-side cardinality (many-to-many)', () => {
       const result = erRelationLine({
         from: { model: 'Post', field: 'id', cardinality: 'many' },
         to: { model: 'Tag', field: 'id', cardinality: 'many' },
-        identifying: true,
-        origin: 'annotated',
       })
-      expect(result).toBe('    Post }|--}| Tag : "(id) - (id)"')
+      expect(result).toBe('    Post }|--|{ Tag : "(id) - (id)"')
     })
   })
 
@@ -206,6 +194,62 @@ describe('helper/mermaid-er', () => {
       expect(result).toStrictEqual([
         '        string name "Channel name, globally unique. DM stores the #quot;dm:{smallerUserId}:{largerUserId}#quot; composite name"',
       ])
+    })
+
+    it('marks every column of a composite primary key, and a key that is also a foreign key', () => {
+      const model = makeModel({
+        name: 'Follow',
+        primaryKey: { name: null, fields: ['followerId', 'followingId'] },
+        fields: [
+          makeField({ name: 'followerId', type: 'String' }),
+          makeField({ name: 'followingId', type: 'String' }),
+          makeField({
+            name: 'follower',
+            type: 'User',
+            kind: 'object',
+            relationName: 'follower',
+            relationFromFields: ['followerId'],
+            relationToFields: ['id'],
+          }),
+          makeField({
+            name: 'following',
+            type: 'User',
+            kind: 'object',
+            relationName: 'following',
+            relationFromFields: ['followingId'],
+            relationToFields: ['id'],
+          }),
+        ],
+      })
+      expect(modelFields(model)).toStrictEqual([
+        '        string followerId PK, FK',
+        '        string followingId PK, FK',
+      ])
+    })
+
+    it('marks every column of a composite unique, the closest Mermaid can come to one', () => {
+      const model = makeModel({
+        name: 'Category',
+        uniqueFields: [['parentId', 'name']],
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({ name: 'parentId', type: 'Int' }),
+          makeField({ name: 'name', type: 'String' }),
+        ],
+      })
+      expect(modelFields(model)).toStrictEqual([
+        '        int id PK',
+        '        int parentId UK',
+        '        string name UK',
+      ])
+    })
+
+    it('keeps the brackets of a scalar list', () => {
+      const model = makeModel({
+        name: 'User',
+        fields: [makeField({ name: 'interests', type: 'String', isList: true })],
+      })
+      expect(modelFields(model)).toStrictEqual(['        string[] interests'])
     })
 
     it('handles field with no documentation', () => {
@@ -299,7 +343,7 @@ describe('helper/mermaid-er', () => {
       expect(result).toStrictEqual([
         '```mermaid',
         'erDiagram',
-        '    User ||--}| Post : "(id) - (userId)"',
+        '    User ||--o{ Post : "(id) - (userId)"',
         '    User {',
         '        int id PK',
         '        string name',
@@ -352,7 +396,7 @@ describe('helper/mermaid-er', () => {
       expect(result).toStrictEqual([
         '```mermaid',
         'erDiagram',
-        '    users ||--}| posts : "(id) - (userId)"',
+        '    users ||--o{ posts : "(id) - (userId)"',
         '    users {',
         '        int id PK',
         '        string name',
@@ -388,6 +432,49 @@ describe('helper/mermaid-er', () => {
       ])
     })
 
+    it('draws the implicit many-to-many relation of a join table', () => {
+      const models = [
+        makeModel({
+          name: 'Post',
+          fields: [
+            makeField({ name: 'id', type: 'Int', isId: true }),
+            makeField({
+              name: 'tags',
+              type: 'Tag',
+              kind: 'object',
+              isList: true,
+              relationName: 'PostToTag',
+            }),
+          ],
+        }),
+        makeModel({
+          name: 'Tag',
+          fields: [
+            makeField({ name: 'id', type: 'Int', isId: true }),
+            makeField({
+              name: 'posts',
+              type: 'Post',
+              kind: 'object',
+              isList: true,
+              relationName: 'PostToTag',
+            }),
+          ],
+        }),
+      ]
+      expect(erContent(models)).toStrictEqual([
+        '```mermaid',
+        'erDiagram',
+        '    Post }o--o{ Tag : "(tags) - (posts)"',
+        '    Post {',
+        '        int id PK',
+        '    }',
+        '    Tag {',
+        '        int id PK',
+        '    }',
+        '```',
+      ])
+    })
+
     it('generates a relation from an annotation only (no physical FK)', () => {
       const models = [
         makeModel({
@@ -407,7 +494,7 @@ describe('helper/mermaid-er', () => {
       expect(result).toStrictEqual([
         '```mermaid',
         'erDiagram',
-        '    User ||--}| Post : "(id) - (userId)"',
+        '    User ||--|{ Post : "(id) - (userId)"',
         '    User {',
         '        int id PK',
         '    }',
@@ -489,11 +576,11 @@ describe('helper/mermaid-er', () => {
       expect(result).toStrictEqual([
         '```mermaid',
         'erDiagram',
-        '    Customer ||--}| Order : "(id) - (customerId)"',
-        '    Order ||--}| OrderItem : "(id) - (orderId)"',
+        '    Customer ||--o{ Order : "(id) - (customerId)"',
+        '    Order ||--o{ OrderItem : "(id) - (orderId)"',
         '    Customer {',
         '        string id PK',
-        '        string email "Email address"',
+        '        string email UK "Email address"',
         '        string name "Full name"',
         '    }',
         '    Order {',
@@ -515,7 +602,7 @@ describe('helper/mermaid-er', () => {
       const fields = modelFields(customerModel)
       expect(fields).toStrictEqual([
         '        string id PK',
-        '        string email "Email address"',
+        '        string email UK "Email address"',
         '        string name "Full name"',
       ])
     })

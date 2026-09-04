@@ -9,12 +9,15 @@
     "fix": "vp fmt && vp run -r check --fix",
     "test": "vp run --filter ./packages/hekireki test",
     "lang": "vp run hekireki#build && vp run --filter ./test test",
-    "example": "vp run hekireki#build && vp run --filter ./example generate"
+    "example": "vp run hekireki#build && vp run --filter ./example generate",
+    "studio": "vp run hekireki#build && hekireki studio --schema example/schema.prisma"
   },
   "dependencies": {
     "hekireki": "link:packages/hekireki"
   },
   "devDependencies": {
+    "mysql2": "^3.15.4",
+    "pg": "^8.16.3",
     "vite-plus": "0.3.0"
   },
   "packageManager": "pnpm@11.24.0"

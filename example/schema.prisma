@@ -114,24 +114,12 @@ generator Hekireki-Atlas {
   output   = "generated/atlas/schema.hcl"
 }
 
+// One generator, four renderings of the same ER model: the extension of each name in `outputs`
+// picks which, and `output` is the directory they are written into.
 generator Hekireki-ER {
-  provider = "hekireki-mermaid-er"
-  output   = "generated/mermaid-er"
-}
-
-generator Hekireki-DBML {
-  provider = "hekireki-dbml"
-  output   = "generated/dbml/schema.dbml"
-}
-
-generator Hekireki-PNG {
-  provider = "hekireki-dbml"
-  output   = "generated/dbml/er.png"
-}
-
-generator Hekireki-Docs {
-  provider = "hekireki-docs"
-  output   = "generated/docs"
+  provider = "hekireki-er"
+  output   = "generated/er"
+  outputs  = ["er.md", "schema.dbml", "er.png", "er.svg"]
 }
 
 /// User role. No @map: the value names are stored verbatim.

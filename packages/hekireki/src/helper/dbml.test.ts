@@ -1254,8 +1254,14 @@ describe('helper/dbml', () => {
               isGenerated: false,
               isUpdatedAt: false,
             },
-            {
-              name: 'posts',
+            ...[
+              'PostToUser',
+              'PostSetNullToUser',
+              'PostSetDefaultToUser',
+              'PostNoActionToUser',
+              'PostRestrictToUser',
+            ].map<DMMF.Field>((relationName, index) => ({
+              name: `posts${index}`,
               kind: 'object',
               isList: true,
               isRequired: false,
@@ -1264,10 +1270,10 @@ describe('helper/dbml', () => {
               isReadOnly: false,
               hasDefaultValue: false,
               type: 'Post',
-              relationName: 'PostToUser',
+              relationName,
               isGenerated: false,
               isUpdatedAt: false,
-            },
+            })),
           ],
           primaryKey: null,
           uniqueFields: [],
@@ -1487,21 +1493,28 @@ describe('helper/dbml', () => {
       ]
       expect(makeRelations(models)).toStrictEqual([])
     })
-
     it('converts all Prisma referential actions in onUpdate to DBML lowercase values', () => {
       const models = [
         makeModel({
           name: 'User',
           fields: [
             makeField({ name: 'id', type: 'String', isId: true }),
-            makeField({
-              name: 'posts',
-              type: 'Post',
-              kind: 'object',
-              isList: true,
-              isRequired: false,
-              relationName: 'PostToUser',
-            }),
+            ...[
+              'CascadePostToUser',
+              'SetNullPostToUser',
+              'SetDefaultPostToUser',
+              'NoActionPostToUser',
+              'RestrictPostToUser',
+            ].map((relationName, index) =>
+              makeField({
+                name: `posts${index}`,
+                type: 'Post',
+                kind: 'object',
+                isList: true,
+                isRequired: false,
+                relationName,
+              }),
+            ),
           ],
         }),
         makeModel({
@@ -1753,7 +1766,7 @@ describe('helper/dbml', () => {
         }),
       ]
       expect(makeRelations(models)).toStrictEqual([
-        'Ref Employee_managerId_fk: Employee.managerId - Employee.id [delete: set null]',
+        'Ref Employee_managerId_fk: Employee.managerId > Employee.id [delete: set null]',
       ])
     })
   })

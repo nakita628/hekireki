@@ -1,8 +1,11 @@
 import type { DMMF } from '@prisma/generator-helper'
-import { Resvg } from '@resvg/resvg-js'
-import { run } from '@softwaretechnik/dbml-renderer'
 
+import { autoLayout } from '../diagram/layout.js'
+import { svgToPng } from '../diagram/png.js'
+import { renderDiagramSvg } from '../diagram/svg.js'
+import type { DiagramTheme } from '../diagram/svg.js'
 import { annotatedDbmlRefs, makeEnums, makeRelations, makeTables } from '../helper/dbml.js'
+import { makeSchema } from '../studio/server/domain/schema.js'
 
 export function dbmlContent(datamodel: DMMF.Datamodel, mapToDbSchema = false) {
   const tables = makeTables(datamodel.models, mapToDbSchema)
@@ -13,12 +16,25 @@ export function dbmlContent(datamodel: DMMF.Datamodel, mapToDbSchema = false) {
   return [...enums, ...tables, ...refs, ...logicalRefs].join('\n\n')
 }
 
-export function dbmlToPng(dbml: string) {
-  const svg = run(dbml, 'svg')
-  const resvg = new Resvg(svg, {
-    font: {
-      loadSystemFonts: true,
-    },
+/** The ER diagram as Studio draws it, laid out automatically, as an SVG document. */
+export function erDiagramSvg(datamodel: DMMF.Datamodel, theme: DiagramTheme = 'light') {
+  const schema = makeSchema({
+    dmmf: { datamodel },
+    files: [],
+    provider: null,
+    blocks: [],
   })
-  return resvg.render().asPng()
+  const positions = autoLayout(schema)
+  return renderDiagramSvg({
+    models: schema.models,
+    relations: schema.relations,
+    enums: schema.enums,
+    positions,
+    theme,
+  })
+}
+
+/** The ER diagram as Studio draws it, rasterised to PNG at 2x. */
+export function erDiagramPng(datamodel: DMMF.Datamodel, theme: DiagramTheme = 'light') {
+  return svgToPng(erDiagramSvg(datamodel, theme))
 }

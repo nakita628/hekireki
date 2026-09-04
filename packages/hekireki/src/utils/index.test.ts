@@ -4,6 +4,7 @@ import {
   extractObjectType,
   getBool,
   getString,
+  getStrings,
   groupByModel,
   isFields,
   makeCommentBlock,
@@ -13,6 +14,8 @@ import {
   parseRelation,
   schemaFromFields,
   stripAnnotations,
+  isAnnotationLine,
+  isLoopbackHostname,
 } from './index.js'
 
 describe('utils', () => {
@@ -28,6 +31,19 @@ describe('utils', () => {
     })
     it('returns undefined when the array is empty', () => {
       expect(getString([])).toBeUndefined()
+    })
+  })
+
+  describe('getStrings', () => {
+    it('wraps a lone string in a list', () => {
+      expect(getStrings('er.md')).toStrictEqual(['er.md'])
+    })
+    it('returns the list it was given, empty or not', () => {
+      expect(getStrings(['er.md', 'er.svg'])).toStrictEqual(['er.md', 'er.svg'])
+      expect(getStrings([])).toStrictEqual([])
+    })
+    it('returns undefined when there is no value', () => {
+      expect(getStrings(undefined)).toBeUndefined()
     })
   })
 
@@ -471,5 +487,39 @@ describe('extractObjectType', () => {
 
   it('ignores other prefixes', () => {
     expect(extractObjectType('@v.strictObject', '@z.')).toBe(undefined)
+  })
+})
+
+describe('isAnnotationLine', () => {
+  it('recognises validator annotations, bare prefixes and @relation lines', () => {
+    expect(isAnnotationLine('@z.uuid()')).toBe(true)
+    expect(isAnnotationLine("  @p.ConfigDict(extra='forbid')")).toBe(true)
+    expect(isAnnotationLine('@z')).toBe(true)
+    expect(isAnnotationLine('@relation User.id Post.authorId one-to-many')).toBe(true)
+  })
+
+  it('treats everything else as prose', () => {
+    expect(isAnnotationLine('@@map + @map column names')).toBe(false)
+    expect(isAnnotationLine('@x.foo')).toBe(false)
+    expect(isAnnotationLine('@deprecated since v2')).toBe(false)
+    expect(isAnnotationLine('Primary key')).toBe(false)
+  })
+})
+
+describe('isLoopbackHostname', () => {
+  it('accepts localhost, its subdomains and loopback addresses', () => {
+    expect(isLoopbackHostname('localhost')).toBe(true)
+    expect(isLoopbackHostname('LOCALHOST')).toBe(true)
+    expect(isLoopbackHostname('app.localhost')).toBe(true)
+    expect(isLoopbackHostname('127.0.0.1')).toBe(true)
+    expect(isLoopbackHostname('[::1]')).toBe(true)
+    expect(isLoopbackHostname('::1')).toBe(true)
+  })
+
+  it('rejects every other host', () => {
+    expect(isLoopbackHostname('evil.example')).toBe(false)
+    expect(isLoopbackHostname('192.168.1.20')).toBe(false)
+    expect(isLoopbackHostname('localhost.example')).toBe(false)
+    expect(isLoopbackHostname('')).toBe(false)
   })
 })

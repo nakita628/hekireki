@@ -364,3 +364,148 @@ func (m *Ticket) BeforeCreate(_ *gorm.DB) error {
 `)
   })
 })
+
+/** Prisma type, the attribute as it is written, its DMMF nativeType and the tag GORM is given. */
+const NATIVE_TYPES: readonly (readonly [
+  string,
+  string,
+  readonly [string, readonly string[]],
+  string,
+])[] = [
+  [
+    'String',
+    '@db.VarChar(255)',
+    ['VarChar', ['255']],
+    '`gorm:"column:value;type:varchar(255);not null" json:"value"`',
+  ],
+  ['String', '@db.VarChar', ['VarChar', []], '`gorm:"column:value;not null" json:"value"`'],
+  [
+    'String',
+    '@db.Char(10)',
+    ['Char', ['10']],
+    '`gorm:"column:value;type:varchar(10);not null" json:"value"`',
+  ],
+  ['String', '@db.Char', ['Char', []], '`gorm:"column:value;not null" json:"value"`'],
+  ['String', '@db.Text', ['Text', []], '`gorm:"column:value;type:text;not null" json:"value"`'],
+  [
+    'String',
+    '@db.MediumText',
+    ['MediumText', []],
+    '`gorm:"column:value;type:text;not null" json:"value"`',
+  ],
+  [
+    'String',
+    '@db.LongText',
+    ['LongText', []],
+    '`gorm:"column:value;type:text;not null" json:"value"`',
+  ],
+  [
+    'String',
+    '@db.TinyText',
+    ['TinyText', []],
+    '`gorm:"column:value;type:text;not null" json:"value"`',
+  ],
+  [
+    'Int',
+    '@db.SmallInt',
+    ['SmallInt', []],
+    '`gorm:"column:value;type:smallint;not null" json:"value"`',
+  ],
+  [
+    'Int',
+    '@db.TinyInt',
+    ['TinyInt', []],
+    '`gorm:"column:value;type:smallint;not null" json:"value"`',
+  ],
+  [
+    'Int',
+    '@db.MediumInt',
+    ['MediumInt', []],
+    '`gorm:"column:value;type:mediumint;not null" json:"value"`',
+  ],
+  [
+    'Float',
+    '@db.DoublePrecision',
+    ['DoublePrecision', []],
+    '`gorm:"column:value;type:double precision;not null" json:"value"`',
+  ],
+  [
+    'Float',
+    '@db.Double',
+    ['Double', []],
+    '`gorm:"column:value;type:double precision;not null" json:"value"`',
+  ],
+  [
+    'Float',
+    '@db.Real',
+    ['Real', []],
+    '`gorm:"column:value;type:double precision;not null" json:"value"`',
+  ],
+  [
+    'Decimal',
+    '@db.Decimal(10, 2)',
+    ['Decimal', ['10', '2']],
+    '`gorm:"column:value;type:decimal(10,2);not null" json:"value"`',
+  ],
+  [
+    'Decimal',
+    '@db.Decimal(10)',
+    ['Decimal', ['10']],
+    '`gorm:"column:value;type:decimal;not null" json:"value"`',
+  ],
+  [
+    'Decimal',
+    '@db.Money(10, 2)',
+    ['Money', ['10', '2']],
+    '`gorm:"column:value;type:decimal(10,2);not null" json:"value"`',
+  ],
+  ['String', '@db.Uuid', ['Uuid', []], '`gorm:"column:value;type:char(36);not null" json:"value"`'],
+  [
+    'DateTime',
+    '@db.Timestamp',
+    ['Timestamp', []],
+    '`gorm:"column:value;type:timestamp;not null" json:"value"`',
+  ],
+  [
+    'DateTime',
+    '@db.Timestamptz',
+    ['Timestamptz', []],
+    '`gorm:"column:value;type:timestamp;not null" json:"value"`',
+  ],
+  ['DateTime', '@db.Date', ['Date', []], '`gorm:"column:value;type:date;not null" json:"value"`'],
+  ['DateTime', '@db.Time', ['Time', []], '`gorm:"column:value;type:time;not null" json:"value"`'],
+  [
+    'DateTime',
+    '@db.Timetz',
+    ['Timetz', []],
+    '`gorm:"column:value;type:time;not null" json:"value"`',
+  ],
+  ['Json', '@db.JsonB', ['JsonB', []], '`gorm:"column:value;type:jsonb;not null" json:"value"`'],
+  ['String', '@db.Xml', ['Xml', []], '`gorm:"column:value;type:xml;not null" json:"value"`'],
+  ['String', '@db.Nope', ['Nope', []], '`gorm:"column:value;not null" json:"value"`'],
+]
+
+// `@db.*` is the only way a schema pins a column type, and GORM reads it back out of the struct
+// tag. Nothing else covers this table, so a dropped case would silently widen a column.
+describe('buildGormTags native types', () => {
+  it.each(NATIVE_TYPES)(
+    'writes %s `%s` into the column type',
+    (type, _attribute, nativeType, tag) => {
+      const field: DMMF.Field = {
+        name: 'value',
+        type,
+        nativeType,
+        kind: 'scalar',
+        isList: false,
+        isRequired: true,
+        isUnique: false,
+        isId: false,
+        isReadOnly: false,
+        isGenerated: false,
+        isUpdatedAt: false,
+        hasDefaultValue: false,
+      }
+      expect(buildGormTags(field, false, false, [])).toBe(tag)
+    },
+  )
+})

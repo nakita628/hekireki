@@ -1,0 +1,67 @@
+// A small SQLite schema for looking at Hekireki Studio and Prisma Studio side by side.
+// Small on purpose: enough shapes to compare (an enum, a one-to-many, an optional relation,
+// a self relation, a compound unique) and few enough rows to read at a glance.
+//
+// The connection string is passed on the command line, not written here: Prisma 7's schema
+// parser rejects `url` inside a datasource block.
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum Role {
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+/// Someone who can sign in
+model User {
+  id        Int       @id @default(autoincrement())
+  /// Login address
+  email     String    @unique
+  name      String?
+  role      Role      @default(VIEWER)
+  createdAt DateTime  @default(now())
+  posts     Post[]
+  comments  Comment[]
+}
+
+/// An article, in a category
+model Post {
+  id         Int       @id @default(autoincrement())
+  title      String
+  body       String?
+  published  Boolean   @default(false)
+  views      Int       @default(0)
+  authorId   Int
+  categoryId Int?
+  author     User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  category   Category? @relation(fields: [categoryId], references: [id])
+  comments   Comment[]
+
+  @@index([published])
+}
+
+/// A comment, by a signed-in user or by nobody
+model Comment {
+  id        Int      @id @default(autoincrement())
+  body      String
+  createdAt DateTime @default(now())
+  postId    Int
+  authorId  Int?
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author    User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+}
+
+/// A tree of categories
+model Category {
+  id       Int        @id @default(autoincrement())
+  name     String
+  parentId Int?
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryTree")
+  posts    Post[]
+
+  @@unique([parentId, name])
+}

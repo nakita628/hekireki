@@ -72,6 +72,7 @@ These are enforced in review, so following them up front saves a round-trip:
 - **`utils/` stays single-responsibility.** Don't add functions that merely compose or alias other exported utils — composition belongs in `helper/` or the call site. `utils/index.ts` must not import project-internal modules.
 - **Descriptive names in generated code.** No new one-letter variables in emitted templates (`result`, not `r`).
 - **Comments are rare.** Write one only when the _why_ is not obvious from the code; never restate the _what_, and never reference PR numbers, dates, or discussions.
+- **Doc comments are TSDoc.** `/** … */` blocks are linted by oxlint's `jsdoc` plugin: a `@param` carries a name and a description, `@returns` carries a description, and no tag carries a `{type}` — the type is the signature's job. TSDoc tags (`@remarks`, `@typeParam`, `@defaultValue`, …) are allowed; JSDoc-only ones are not.
 
 ### Codegen principles
 

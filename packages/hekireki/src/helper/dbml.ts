@@ -190,17 +190,21 @@ export function makeRelations(models: readonly DMMF.Model[], mapToDbSchema = fal
           field.relationName && field.relationToFields?.length && field.relationFromFields?.length,
       )
       .map((field) => {
-        const relationFrom = model.name
         const relationTo = field.type
 
         const toModel = models.find((m) => m.name === relationTo)
-        const toField = toModel?.fields.find((f) => f.type === relationFrom)
+        // The back relation is the other field of the same relation, not merely the first field
+        // pointing back at this model: a model can hold several relations to the same one.
+        const toField = toModel?.fields.find(
+          (f) =>
+            f.kind === 'object' &&
+            f.relationName === field.relationName &&
+            !(toModel.name === model.name && f.name === field.name),
+        )
         const operator: '>' | '<' | '-' = toField?.isList ? '>' : '-'
 
         const relationFromName = mapToDbSchema && model.dbName ? model.dbName : model.name
-        const relatedModel = models.find((m) => m.name === relationTo)
-        const relationToName =
-          mapToDbSchema && relatedModel?.dbName ? relatedModel.dbName : relationTo
+        const relationToName = mapToDbSchema && toModel?.dbName ? toModel.dbName : relationTo
 
         const fromColumn = combineKeys(field.relationFromFields ?? [])
         const toColumn = combineKeys(field.relationToFields ?? [])

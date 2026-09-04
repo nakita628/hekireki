@@ -1,141 +1,222 @@
-#!/usr/bin/env node
-import fs from 'node:fs'
 import path from 'node:path'
 
-import { serve } from '@hono/node-server'
-import { serveStatic } from '@hono/node-server/serve-static'
-import { Hono } from 'hono'
+import { Config, Console, Effect, Option, Schema, Stdio } from 'effect'
+import { CliError, Command, Flag } from 'effect/unstable/cli'
 
-export const HELP_TEXT = `⚡️ hekireki - Prisma schema tools
+import { exists } from '../file/index.js'
+import { DEFAULT_PORT } from '../studio/server/constants/index.js'
+import { ServerListenError } from '../studio/server/errors/index.js'
+import type { startStudioServer } from '../studio/server/start.js'
 
-Usage:
-  hekireki <command> [options]
+const COMMAND_NAME = 'hekireki'
 
-Commands:
-  docs serve    Start a local server to view the documentation
+/** Where `--schema` looks when it is omitted, in order. */
+export const DEFAULT_SCHEMA_PATHS = ['prisma/schema.prisma', 'schema.prisma'] as const
 
-Options:
-  -p, --port <port>    Specify the port (default: 5858)
-  -h, --help           Show help
+// The schemes Studio opens a connection for; `makeDialect` reads the dialect from the same four.
+const DATABASE_URL_SCHEMES = ['postgres', 'postgresql', 'mysql', 'file'] as const
 
-Examples:
-  hekireki docs serve
-  hekireki docs serve -p 3000`
+const STATIC_DIR = path.resolve(import.meta.dirname, '../studio')
 
-export const DOCS_HELP_TEXT = `⚡️ hekireki docs - Documentation tools
+// `Schema.refine` rejects the value while the command line is still being read, so a URL Studio
+// has no driver for is answered by the sentence below rather than by whatever the driver says
+// when it is handed something it cannot dial.
+const databaseUrlSchema = Schema.String.pipe(
+  Schema.refine(
+    (value): value is string =>
+      DATABASE_URL_SCHEMES.some((scheme) => value.startsWith(`${scheme}:`)),
+    { message: 'a postgres://, postgresql://, mysql:// or file: connection string' },
+  ),
+)
 
-Usage:
-  hekireki docs serve [options]
-
-Commands:
-  serve    Start a local server to view the documentation
-
-Options:
-  -p, --port <port>    Specify the port (default: 5858)
-  -h, --help           Show help
-
-Examples:
-  hekireki docs serve
-  hekireki docs serve -p 3000`
-
-export function parsePort(args: readonly string[]) {
-  const portIndex = args.findIndex((arg) => arg === '-p' || arg === '--port')
-  if (portIndex === -1) {
-    return { ok: true, value: 5858 } as const
-  }
-  const portStr = args[portIndex + 1]
-  if (!portStr || portStr.startsWith('-')) {
-    return { ok: false, error: '❌ Error: --port requires a number' } as const
-  }
-  const port = Number.parseInt(portStr, 10)
-  if (Number.isNaN(port)) {
-    return { ok: false, error: `❌ Error: Invalid port number: ${portStr}` } as const
-  }
-  return { ok: true, value: port } as const
+function userError(message: string) {
+  return new CliError.UserError({ cause: new Error(message), userMessage: message })
 }
 
-function parseDocsServeArgs(args: readonly string[]) {
-  const portResult = parsePort(args)
-  if (!portResult.ok) {
-    return portResult
-  }
-  return { ok: true, value: { port: portResult.value } } as const
+/** The usage block, with the sentence that asked for it — what the runner renders for a bad line. */
+function showHelp(commandPath: readonly string[], message: string) {
+  return new CliError.ShowHelp({ commandPath: [...commandPath], errors: [userError(message)] })
 }
 
-function startDocsServer(options: { readonly port: number }) {
-  const docsPath = './docs'
-  const absolutePath = path.resolve(docsPath)
-  if (!fs.existsSync(absolutePath)) {
-    return {
-      ok: false,
-      error: `❌ Error: Directory not found: ${absolutePath}\n   Run "prisma generate" first to generate the documentation.`,
-    } as const
-  }
-  const indexPath = path.join(absolutePath, 'index.html')
-  if (!fs.existsSync(indexPath)) {
-    return {
-      ok: false,
-      error: `❌ Error: index.html not found in ${absolutePath}\n   Run "prisma generate" first to generate the documentation.`,
-    } as const
-  }
-  const app = new Hono()
-  app.get('/', (c) => {
-    const html = fs.readFileSync(indexPath, 'utf-8')
-    return c.html(html)
+/**
+ * The explicit schema when it exists, else the first default path that does.
+ *
+ * A path that was typed out and is not there names itself, and the usage block would only bury
+ * it. Nothing typed and nothing found is the other case — the command was run somewhere without
+ * a schema — and there the usage block is the answer.
+ */
+export function resolveSchemaPath(explicit: string | null, commandPath: readonly string[]) {
+  return Effect.gen(function* () {
+    if (explicit !== null) {
+      if (yield* exists(explicit)) return explicit
+      return yield* userError(
+        `Schema not found: ${explicit}\n   Check the path passed to --schema.`,
+      )
+    }
+    for (const candidate of DEFAULT_SCHEMA_PATHS) {
+      if (yield* exists(candidate)) return candidate
+    }
+    return yield* showHelp(
+      commandPath,
+      `No Prisma schema found (looked for ${DEFAULT_SCHEMA_PATHS.join(', ')}).\n   Pass --schema <path> to point at your schema.prisma or a directory of .prisma files.`,
+    )
   })
-  app.use('/*', serveStatic({ root: absolutePath }))
-  const server = serve({
-    fetch: app.fetch,
-    port: options.port,
-  })
-  process.on('SIGTERM', () => {
-    server.close()
-    process.exit(0)
-  })
-  process.on('SIGINT', () => {
-    server.close()
-    process.exit(0)
-  })
-  return {
-    ok: true,
-    value: `⚡️ Hekireki Docs Server started at http://localhost:${options.port}\n📂 Serving documentation from: ${absolutePath}`,
-  } as const
 }
 
-export function handleDocs(args: readonly string[]) {
-  const subcommand = args[0]
-  if (!subcommand || subcommand === '-h' || subcommand === '--help') {
-    return { ok: true, value: DOCS_HELP_TEXT } as const
-  }
-  if (subcommand !== 'serve') {
-    return {
-      ok: false,
-      error: `❌ Unknown command: docs ${subcommand}\n\n${DOCS_HELP_TEXT}`,
-    } as const
-  }
-  const parseResult = parseDocsServeArgs(args.slice(1))
-  if (!parseResult.ok) {
-    return parseResult
-  }
-  return startDocsServer(parseResult.value)
+/** Every way the server can refuse to start, as the one sentence the runner prints. */
+function startError(error: Effect.Error<ReturnType<typeof startStudioServer>>) {
+  return error instanceof ServerListenError && error.code === 'EADDRINUSE'
+    ? userError(`Port ${error.port} is already in use. Pass -p <port> to use another port.`)
+    : userError(error.message)
 }
 
-export function hekireki(args: readonly string[]) {
-  const command = args[0]
-  if (!command || command === '-h' || command === '--help') {
-    return { ok: true, value: HELP_TEXT } as const
+export function studioBanner(options: {
+  readonly port: number
+  readonly schemaPath: string
+  readonly error: string | null
+  readonly database: {
+    readonly connected: boolean
+    readonly dialect: string | null
+    readonly url: string | null
+    readonly error: string | null
   }
-  if (command === 'docs') {
-    return handleDocs(args.slice(1))
-  }
-  return { ok: false, error: `❌ Unknown command: ${command}\n\n${HELP_TEXT}` } as const
+}) {
+  const lines = [
+    `⚡️ Hekireki Studio started at http://localhost:${options.port}`,
+    `   Schema: ${path.resolve(options.schemaPath)} (watching for changes)`,
+    options.database.connected
+      ? `   Database: ${options.database.dialect ?? ''} ${options.database.url ?? ''}`.trimEnd()
+      : `   Database: not connected (schema only)\n   ${options.database.error ?? ''}`.trimEnd(),
+    ...(options.error === null
+      ? []
+      : [`   Schema has errors, fix them and Studio will reload:\n${options.error}`]),
+  ]
+  return lines.join('\n')
 }
 
-const result = hekireki(process.argv.slice(2))
+/**
+ * The command line itself: what Studio accepts, what each piece means, and the schema every
+ * value is decoded through before the handler below ever sees it.
+ */
+const studioFlags = {
+  // `Config.Port` is Effect's own port schema — an integer in 1–65535 — so a port no listener
+  // could bind is rejected while the command line is still being read.
+  port: Flag.integer('port').pipe(
+    Flag.withAlias('p'),
+    Flag.withSchema(Config.Port),
+    Flag.withDescription(`Port to listen on (default: ${DEFAULT_PORT})`),
+    Flag.withMetavar('port'),
+    Flag.withDefault(DEFAULT_PORT),
+  ),
+  // `Flag.string`, not `Flag.path`: the path primitive rewrites its value to an absolute one, and
+  // this flag also takes a directory and reports a missing path in its own words, next to the
+  // defaults it looked through.
+  schema: Flag.string('schema').pipe(
+    Flag.withAlias('s'),
+    Flag.withDescription(
+      `Path to schema.prisma or a directory of .prisma files (default: ${DEFAULT_SCHEMA_PATHS.join(', then ')})`,
+    ),
+    Flag.withMetavar('schema.prisma|dir'),
+    Flag.optional,
+  ),
+  url: Flag.string('url').pipe(
+    Flag.withAlias('u'),
+    Flag.withSchema(databaseUrlSchema),
+    Flag.withDescription(
+      'Database connection URL for browsing and editing data (default: DATABASE_URL from the environment or .env, then datasource.url in prisma.config.ts)',
+    ),
+    Flag.withMetavar('connection-string'),
+    Flag.optional,
+  ),
+}
 
-if (result.ok) {
-  console.log(result.value)
-} else {
-  console.error(result.error)
-  process.exit(1)
+/**
+ * Studio itself, listening until it is interrupted.
+ *
+ * It pulls in Hono, the Prisma schema engine and the database drivers. `--help`, `--version`,
+ * `--completions` and every rejected command line must not pay for that, so it is imported here
+ * rather than at module scope.
+ */
+function runStudio(args: Command.Command.Config.Infer<typeof studioFlags>) {
+  return Effect.gen(function* () {
+    const schemaPath = yield* resolveSchemaPath(Option.getOrNull(args.schema), [
+      COMMAND_NAME,
+      'studio',
+    ])
+    const { startStudioServer } = yield* Effect.promise(() => import('../studio/server/start.js'))
+    const started = yield* startStudioServer({
+      schemaPath,
+      port: args.port,
+      staticDir: STATIC_DIR,
+      databaseUrl: Option.getOrNull(args.url),
+    }).pipe(Effect.mapError(startError))
+    yield* Console.log(
+      studioBanner({
+        port: args.port,
+        schemaPath,
+        error: started.snapshot.error,
+        database: started.database,
+      }),
+    )
+    yield* Effect.never
+  }).pipe(Effect.scoped)
+}
+
+const studio = Command.make('studio', studioFlags, runStudio).pipe(
+  Command.withDescription(
+    'Open Hekireki Studio: ER diagram, docs, model data and SQL for a Prisma schema',
+  ),
+  Command.withExamples([
+    {
+      command: `${COMMAND_NAME} studio`,
+      description: `Open ./${DEFAULT_SCHEMA_PATHS[0]}, with the database URL from .env`,
+    },
+    {
+      command: `${COMMAND_NAME} studio --schema prisma/schema`,
+      description: 'Read a multi-file schema: every .prisma file of the directory, together',
+    },
+    {
+      command: `${COMMAND_NAME} studio --url file:./dev.db`,
+      description: 'Browse a SQLite file, resolved from the schema directory as Prisma resolves it',
+    },
+    { command: `${COMMAND_NAME} studio -p 3000`, description: 'Listen on another port' },
+  ]),
+)
+
+/** The `hekireki` command tree; run it with {@link hekirekiCli}. */
+const cli = Command.make(COMMAND_NAME).pipe(
+  Command.withDescription('⚡️ Prisma schema tools'),
+  Command.withSubcommands([studio]),
+)
+
+/**
+ * `help` spelled as Effect's own `--help` action, wherever it sits in the command path: `hekireki
+ * help`, `hekireki help studio` and `hekireki studio help` all render the document the CLI already
+ * builds, so there is no second copy of the help text to keep in step with the commands.
+ *
+ * Only the words before the first flag are a command path, so a value that happens to read `help`
+ * (`--schema help`) is left alone.
+ */
+export function helpAsFlag(args: readonly string[]): readonly string[] {
+  const flag = args.findIndex((arg) => arg.startsWith('-'))
+  const verbs = flag === -1 ? args : args.slice(0, flag)
+  const at = verbs.indexOf('help')
+  return at === -1 ? args : [...args.slice(0, at), ...args.slice(at + 1), '--help']
+}
+
+/**
+ * Runs `hekireki` against an argument list: parsing, validation, `--help`, `--version` and shell
+ * completions are owned by `effect/unstable/cli`, the commands above are the rest.
+ */
+export function hekirekiCli(argv: readonly string[], config: { readonly version: string }) {
+  return Command.runWith(cli, config)(helpAsFlag(argv))
+}
+
+/** The entry point the bin runs, reading its arguments the way `Command.run` does. */
+export function hekireki(config: { readonly version: string }) {
+  return Effect.gen(function* () {
+    const stdio = yield* Stdio.Stdio
+    const argv = yield* stdio.args
+    return yield* hekirekiCli(argv, config)
+  })
 }

@@ -1,7 +1,14 @@
 import type { DMMF } from '@prisma/generator-helper'
 import { describe, expect, it } from 'vite-plus/test'
 
-import { annotatedERRelations, erKey, inferredERRelations, mergeERRelations } from './relation.js'
+import {
+  annotatedERRelations,
+  erKey,
+  erRelations,
+  implicitManyToManyERRelations,
+  inferredERRelations,
+  mergeERRelations,
+} from './relation.js'
 
 function makeModel(overrides: Partial<DMMF.Model> & { name: string }): DMMF.Model {
   return {
@@ -31,6 +38,41 @@ function makeField(overrides: Partial<DMMF.Field> & { name: string; type: string
   }
 }
 
+/** User.id <- Post.userId, with the requiredness of the foreign key under test. */
+function oneToMany(fkRequired: boolean) {
+  return [
+    makeModel({
+      name: 'User',
+      fields: [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({
+          name: 'posts',
+          type: 'Post',
+          kind: 'object',
+          isList: true,
+          relationName: 'PostToUser',
+        }),
+      ],
+    }),
+    makeModel({
+      name: 'Post',
+      fields: [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'userId', type: 'Int', isRequired: fkRequired }),
+        makeField({
+          name: 'author',
+          type: 'User',
+          kind: 'object',
+          isRequired: fkRequired,
+          relationName: 'PostToUser',
+          relationFromFields: ['userId'],
+          relationToFields: ['id'],
+        }),
+      ],
+    }),
+  ]
+}
+
 describe('erKey', () => {
   it('builds a stable key from the from/to pair', () => {
     expect(
@@ -43,81 +85,12 @@ describe('erKey', () => {
 })
 
 describe('inferredERRelations', () => {
-  it('maps a required FK with a list inverse to one / many', () => {
-    const models = [
-      makeModel({
-        name: 'User',
-        fields: [
-          makeField({ name: 'id', type: 'Int', isId: true }),
-          makeField({
-            name: 'posts',
-            type: 'Post',
-            kind: 'object',
-            isList: true,
-            relationName: 'PostToUser',
-          }),
-        ],
-      }),
-      makeModel({
-        name: 'Post',
-        fields: [
-          makeField({ name: 'id', type: 'Int', isId: true }),
-          makeField({ name: 'userId', type: 'Int' }),
-          makeField({
-            name: 'author',
-            type: 'User',
-            kind: 'object',
-            relationName: 'PostToUser',
-            relationFromFields: ['userId'],
-            relationToFields: ['id'],
-          }),
-        ],
-      }),
-    ]
-    expect(inferredERRelations(models)).toStrictEqual([
+  // A required foreign key means every child has exactly one parent; a list back relation has no
+  // lower bound in Prisma, so the child end stays optional however the key is declared.
+  it('maps a required FK with a list inverse to one / zero-many', () => {
+    expect(inferredERRelations(oneToMany(true))).toStrictEqual([
       {
-        from: { model: 'User', field: 'id', cardinality: 'one' },
-        to: { model: 'Post', field: 'userId', cardinality: 'many' },
-        identifying: true,
-        origin: 'inferred',
-      },
-    ])
-  })
-
-  it('maps an optional FK with a list inverse to one / zero-many', () => {
-    const models = [
-      makeModel({
-        name: 'User',
-        fields: [
-          makeField({ name: 'id', type: 'Int', isId: true }),
-          makeField({
-            name: 'posts',
-            type: 'Post',
-            kind: 'object',
-            isList: true,
-            relationName: 'PostToUser',
-          }),
-        ],
-      }),
-      makeModel({
-        name: 'Post',
-        fields: [
-          makeField({ name: 'id', type: 'Int', isId: true }),
-          makeField({ name: 'userId', type: 'Int' }),
-          makeField({
-            name: 'author',
-            type: 'User',
-            kind: 'object',
-            isRequired: false,
-            relationName: 'PostToUser',
-            relationFromFields: ['userId'],
-            relationToFields: ['id'],
-          }),
-        ],
-      }),
-    ]
-    expect(inferredERRelations(models)).toStrictEqual([
-      {
+        name: 'PostToUser',
         from: { model: 'User', field: 'id', cardinality: 'one' },
         to: { model: 'Post', field: 'userId', cardinality: 'zero-many' },
         identifying: true,
@@ -126,7 +99,19 @@ describe('inferredERRelations', () => {
     ])
   })
 
-  it('maps a self-referencing optional FK to one / zero-many', () => {
+  it('maps an optional FK with a list inverse to zero-one / zero-many', () => {
+    expect(inferredERRelations(oneToMany(false))).toStrictEqual([
+      {
+        name: 'PostToUser',
+        from: { model: 'User', field: 'id', cardinality: 'zero-one' },
+        to: { model: 'Post', field: 'userId', cardinality: 'zero-many' },
+        identifying: true,
+        origin: 'inferred',
+      },
+    ])
+  })
+
+  it('maps a self-referencing optional FK to zero-one / zero-many', () => {
     const categoryModel = makeModel({
       name: 'Category',
       fields: [
@@ -152,7 +137,8 @@ describe('inferredERRelations', () => {
     })
     expect(inferredERRelations([categoryModel])).toStrictEqual([
       {
-        from: { model: 'Category', field: 'id', cardinality: 'one' },
+        name: 'CategoryToCategory',
+        from: { model: 'Category', field: 'id', cardinality: 'zero-one' },
         to: { model: 'Category', field: 'parentId', cardinality: 'zero-many' },
         identifying: true,
         origin: 'inferred',
@@ -160,7 +146,8 @@ describe('inferredERRelations', () => {
     ])
   })
 
-  it('maps a non-list inverse to one / one', () => {
+  // The back relation of a one-to-one is optional in Prisma: a user may have no profile.
+  it('maps an optional non-list inverse to one / zero-one', () => {
     const models = [
       makeModel({
         name: 'User',
@@ -194,8 +181,68 @@ describe('inferredERRelations', () => {
     ]
     expect(inferredERRelations(models)).toStrictEqual([
       {
+        name: 'ProfileToUser',
         from: { model: 'User', field: 'id', cardinality: 'one' },
-        to: { model: 'Profile', field: 'userId', cardinality: 'one' },
+        to: { model: 'Profile', field: 'userId', cardinality: 'zero-one' },
+        identifying: true,
+        origin: 'inferred',
+      },
+    ])
+  })
+
+  // Two relations between the same pair: each one must find its own back relation.
+  it('pairs every relation with the back relation of the same name', () => {
+    const models = [
+      makeModel({
+        name: 'User',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({
+            name: 'pinned',
+            type: 'Post',
+            kind: 'object',
+            isList: false,
+            isRequired: false,
+            relationName: 'pinned',
+          }),
+          makeField({
+            name: 'posts',
+            type: 'Post',
+            kind: 'object',
+            isList: true,
+            relationName: 'PostToUser',
+          }),
+        ],
+      }),
+      makeModel({
+        name: 'Post',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({ name: 'authorId', type: 'Int' }),
+          makeField({
+            name: 'author',
+            type: 'User',
+            kind: 'object',
+            relationName: 'PostToUser',
+            relationFromFields: ['authorId'],
+            relationToFields: ['id'],
+          }),
+          makeField({
+            name: 'pinnedBy',
+            type: 'User',
+            kind: 'object',
+            isList: false,
+            isRequired: false,
+            relationName: 'pinned',
+          }),
+        ],
+      }),
+    ]
+    expect(inferredERRelations(models)).toStrictEqual([
+      {
+        name: 'PostToUser',
+        from: { model: 'User', field: 'id', cardinality: 'one' },
+        to: { model: 'Post', field: 'authorId', cardinality: 'zero-many' },
         identifying: true,
         origin: 'inferred',
       },
@@ -213,6 +260,94 @@ describe('inferredERRelations', () => {
   })
 })
 
+describe('implicitManyToManyERRelations', () => {
+  const postAndTag = (reversed = false) => {
+    const models = [
+      makeModel({
+        name: 'Post',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({
+            name: 'tags',
+            type: 'Tag',
+            kind: 'object',
+            isList: true,
+            relationName: 'PostToTag',
+          }),
+        ],
+      }),
+      makeModel({
+        name: 'Tag',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({
+            name: 'posts',
+            type: 'Post',
+            kind: 'object',
+            isList: true,
+            relationName: 'PostToTag',
+          }),
+        ],
+      }),
+    ]
+    return reversed ? [models[1], models[0]].filter((m) => m !== undefined) : models
+  }
+
+  it('emits one relation per join table, both ends zero or many', () => {
+    expect(implicitManyToManyERRelations(postAndTag())).toStrictEqual([
+      {
+        name: 'PostToTag',
+        from: { model: 'Post', field: 'tags', cardinality: 'zero-many' },
+        to: { model: 'Tag', field: 'posts', cardinality: 'zero-many' },
+        identifying: false,
+        origin: 'implicit-many-to-many',
+      },
+    ])
+  })
+
+  it('does not emit the same pair twice when the models are declared the other way round', () => {
+    expect(implicitManyToManyERRelations(postAndTag(true))).toHaveLength(1)
+  })
+
+  it('emits a self many-to-many once', () => {
+    const models = [
+      makeModel({
+        name: 'User',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({
+            name: 'friendOf',
+            type: 'User',
+            kind: 'object',
+            isList: true,
+            relationName: 'friends',
+          }),
+          makeField({
+            name: 'friends',
+            type: 'User',
+            kind: 'object',
+            isList: true,
+            relationName: 'friends',
+          }),
+        ],
+      }),
+    ]
+    expect(implicitManyToManyERRelations(models)).toStrictEqual([
+      {
+        name: 'friends',
+        from: { model: 'User', field: 'friendOf', cardinality: 'zero-many' },
+        to: { model: 'User', field: 'friends', cardinality: 'zero-many' },
+        identifying: false,
+        origin: 'implicit-many-to-many',
+      },
+    ])
+  })
+
+  it('ignores a list that carries the foreign key of a one-to-many', () => {
+    expect(implicitManyToManyERRelations(oneToMany(true))).toStrictEqual([])
+  })
+})
+
 describe('annotatedERRelations', () => {
   it('parses a one-to-many annotation', () => {
     const models = [
@@ -220,6 +355,7 @@ describe('annotatedERRelations', () => {
     ]
     expect(annotatedERRelations(models)).toStrictEqual([
       {
+        name: null,
         from: { model: 'User', field: 'id', cardinality: 'one' },
         to: { model: 'Post', field: 'userId', cardinality: 'many' },
         identifying: true,
@@ -238,12 +374,14 @@ describe('annotatedERRelations', () => {
     ]
     expect(annotatedERRelations(models)).toStrictEqual([
       {
+        name: null,
         from: { model: 'User', field: 'id', cardinality: 'one' },
         to: { model: 'Post', field: 'userId', cardinality: 'many' },
         identifying: true,
         origin: 'annotated',
       },
       {
+        name: null,
         from: { model: 'User', field: 'id', cardinality: 'one' },
         to: { model: 'Profile', field: 'userId', cardinality: 'one' },
         identifying: true,
@@ -261,6 +399,7 @@ describe('annotatedERRelations', () => {
     ]
     expect(annotatedERRelations(models)).toStrictEqual([
       {
+        name: null,
         from: { model: 'User', field: 'id', cardinality: 'one' },
         to: { model: 'Post', field: 'userId', cardinality: 'many' },
         identifying: true,
@@ -297,49 +436,18 @@ describe('annotatedERRelations', () => {
 })
 
 describe('mergeERRelations', () => {
-  // C1: FK only / no annotation -> origin inferred, DMMF-derived cardinality (regression).
   it('keeps an inferred FK relation when there is no annotation', () => {
-    const models = [
-      makeModel({
-        name: 'User',
-        fields: [
-          makeField({ name: 'id', type: 'Int', isId: true }),
-          makeField({
-            name: 'posts',
-            type: 'Post',
-            kind: 'object',
-            isList: true,
-            relationName: 'PostToUser',
-          }),
-        ],
-      }),
-      makeModel({
-        name: 'Post',
-        fields: [
-          makeField({ name: 'id', type: 'Int', isId: true }),
-          makeField({ name: 'userId', type: 'Int' }),
-          makeField({
-            name: 'author',
-            type: 'User',
-            kind: 'object',
-            relationName: 'PostToUser',
-            relationFromFields: ['userId'],
-            relationToFields: ['id'],
-          }),
-        ],
-      }),
-    ]
-    expect(mergeERRelations(models)).toStrictEqual([
+    expect(mergeERRelations(oneToMany(true))).toStrictEqual([
       {
+        name: 'PostToUser',
         from: { model: 'User', field: 'id', cardinality: 'one' },
-        to: { model: 'Post', field: 'userId', cardinality: 'many' },
+        to: { model: 'Post', field: 'userId', cardinality: 'zero-many' },
         identifying: true,
         origin: 'inferred',
       },
     ])
   })
 
-  // C2: annotation only / no FK -> the relation appears, origin annotated.
   it('emits an annotation-only relation that has no physical FK', () => {
     const models = [
       makeModel({
@@ -357,6 +465,7 @@ describe('mergeERRelations', () => {
     ]
     expect(mergeERRelations(models)).toStrictEqual([
       {
+        name: null,
         from: { model: 'User', field: 'id', cardinality: 'one' },
         to: { model: 'Post', field: 'userId', cardinality: 'many' },
         identifying: true,
@@ -365,41 +474,19 @@ describe('mergeERRelations', () => {
     ])
   })
 
-  // C3: FK + same-pair annotation -> annotation overrides cardinality, origin stays inferred.
   it('lets an annotation override an inferred FK cardinality while keeping origin inferred', () => {
+    const [user, post] = oneToMany(true)
     const models = [
+      user,
       makeModel({
-        name: 'User',
-        fields: [
-          makeField({ name: 'id', type: 'Int', isId: true }),
-          makeField({
-            name: 'posts',
-            type: 'Post',
-            kind: 'object',
-            isList: true,
-            relationName: 'PostToUser',
-          }),
-        ],
-      }),
-      makeModel({
+        ...post,
         name: 'Post',
         documentation: '@relation User.id Post.userId one-to-one',
-        fields: [
-          makeField({ name: 'id', type: 'Int', isId: true }),
-          makeField({ name: 'userId', type: 'Int' }),
-          makeField({
-            name: 'author',
-            type: 'User',
-            kind: 'object',
-            relationName: 'PostToUser',
-            relationFromFields: ['userId'],
-            relationToFields: ['id'],
-          }),
-        ],
       }),
     ]
     expect(mergeERRelations(models)).toStrictEqual([
       {
+        name: 'PostToUser',
         from: { model: 'User', field: 'id', cardinality: 'one' },
         to: { model: 'Post', field: 'userId', cardinality: 'one' },
         identifying: true,
@@ -408,7 +495,6 @@ describe('mergeERRelations', () => {
     ])
   })
 
-  // C4: same annotation pair declared twice -> last-wins.
   it('keeps the last annotation when the same pair is declared twice', () => {
     const models = [
       makeModel({
@@ -420,6 +506,7 @@ describe('mergeERRelations', () => {
     ]
     expect(mergeERRelations(models)).toStrictEqual([
       {
+        name: null,
         from: { model: 'User', field: 'id', cardinality: 'one' },
         to: { model: 'Post', field: 'userId', cardinality: 'one' },
         identifying: true,
@@ -428,37 +515,9 @@ describe('mergeERRelations', () => {
     ])
   })
 
-  // C5: inferred relations come first in source order, annotation-only pairs append last.
   it('orders inferred relations first and annotation-only relations last', () => {
     const models = [
-      makeModel({
-        name: 'User',
-        fields: [
-          makeField({ name: 'id', type: 'Int', isId: true }),
-          makeField({
-            name: 'posts',
-            type: 'Post',
-            kind: 'object',
-            isList: true,
-            relationName: 'PostToUser',
-          }),
-        ],
-      }),
-      makeModel({
-        name: 'Post',
-        fields: [
-          makeField({ name: 'id', type: 'Int', isId: true }),
-          makeField({ name: 'userId', type: 'Int' }),
-          makeField({
-            name: 'author',
-            type: 'User',
-            kind: 'object',
-            relationName: 'PostToUser',
-            relationFromFields: ['userId'],
-            relationToFields: ['id'],
-          }),
-        ],
-      }),
+      ...oneToMany(true),
       makeModel({ name: 'Tag', fields: [makeField({ name: 'id', type: 'Int', isId: true })] }),
       makeModel({
         name: 'Article',
@@ -469,27 +528,56 @@ describe('mergeERRelations', () => {
         ],
       }),
     ]
-    expect(mergeERRelations(models)).toStrictEqual([
-      {
-        from: { model: 'User', field: 'id', cardinality: 'one' },
-        to: { model: 'Post', field: 'userId', cardinality: 'many' },
-        identifying: true,
-        origin: 'inferred',
-      },
-      {
-        from: { model: 'Tag', field: 'id', cardinality: 'one' },
-        to: { model: 'Article', field: 'tagId', cardinality: 'many' },
-        identifying: true,
-        origin: 'annotated',
-      },
+    expect(
+      mergeERRelations(models).map((relation) => [erKey(relation), relation.origin]),
+    ).toStrictEqual([
+      ['User.id->Post.userId', 'inferred'],
+      ['Tag.id->Article.tagId', 'annotated'],
     ])
   })
 
-  // C7: invalid / unsupported annotations are ignored; the FK still drives output.
   it('ignores invalid annotations and falls back to the inferred FK', () => {
+    const [user, post] = oneToMany(true)
+    const models = [
+      user,
+      makeModel({
+        ...post,
+        name: 'Post',
+        documentation: '@relation one-to-many\n@relation User.id Post.userId one-to-one-optional',
+      }),
+    ]
+    expect(mergeERRelations(models)).toStrictEqual([
+      {
+        name: 'PostToUser',
+        from: { model: 'User', field: 'id', cardinality: 'one' },
+        to: { model: 'Post', field: 'userId', cardinality: 'zero-many' },
+        identifying: true,
+        origin: 'inferred',
+      },
+    ])
+  })
+})
+
+describe('erRelations', () => {
+  it('lists the foreign keys, then the implicit many-to-many relations', () => {
+    const [user, post] = oneToMany(true)
     const models = [
       makeModel({
-        name: 'User',
+        ...post,
+        name: 'Post',
+        fields: [
+          ...(post?.fields ?? []),
+          makeField({
+            name: 'tags',
+            type: 'Tag',
+            kind: 'object',
+            isList: true,
+            relationName: 'PostToTag',
+          }),
+        ],
+      }),
+      makeModel({
+        name: 'Tag',
         fields: [
           makeField({ name: 'id', type: 'Int', isId: true }),
           makeField({
@@ -497,34 +585,17 @@ describe('mergeERRelations', () => {
             type: 'Post',
             kind: 'object',
             isList: true,
-            relationName: 'PostToUser',
+            relationName: 'PostToTag',
           }),
         ],
       }),
-      makeModel({
-        name: 'Post',
-        documentation: '@relation one-to-many\n@relation User.id Post.userId one-to-one-optional',
-        fields: [
-          makeField({ name: 'id', type: 'Int', isId: true }),
-          makeField({ name: 'userId', type: 'Int' }),
-          makeField({
-            name: 'author',
-            type: 'User',
-            kind: 'object',
-            relationName: 'PostToUser',
-            relationFromFields: ['userId'],
-            relationToFields: ['id'],
-          }),
-        ],
-      }),
+      ...(user ? [user] : []),
     ]
-    expect(mergeERRelations(models)).toStrictEqual([
-      {
-        from: { model: 'User', field: 'id', cardinality: 'one' },
-        to: { model: 'Post', field: 'userId', cardinality: 'many' },
-        identifying: true,
-        origin: 'inferred',
-      },
-    ])
+    expect(erRelations(models).map((relation) => [erKey(relation), relation.origin])).toStrictEqual(
+      [
+        ['User.id->Post.userId', 'inferred'],
+        ['Post.tags->Tag.posts', 'implicit-many-to-many'],
+      ],
+    )
   })
 })

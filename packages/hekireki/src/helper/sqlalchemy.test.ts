@@ -2,7 +2,7 @@ import type { DMMF } from '@prisma/generator-helper'
 import { describe, expect, it } from 'vite-plus/test'
 
 import { generateSingleFile } from '../generator/sqlalchemy.js'
-import { prismaTypeToPythonType, prismaTypeToSQLAlchemyType } from './sqlalchemy.js'
+import { prismaTypeToPythonType, prismaTypeToSQLAlchemyType, pythonAttrName } from './sqlalchemy.js'
 
 describe('prismaTypeToSQLAlchemyType', () => {
   it('maps String to String', () => {
@@ -1606,5 +1606,266 @@ class Sensor(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 `)
+  })
+})
+
+/**
+ * Prisma type, the attribute as written, its DMMF nativeType, everything the file carries above
+ * the column (the imports each type pulls in) and the mapped attribute line itself.
+ */
+const NATIVE_TYPES: readonly (readonly [
+  string,
+  string,
+  readonly [string, readonly string[]],
+  string,
+  string,
+])[] = [
+  [
+    'String',
+    '@db.VarChar(255)',
+    ['VarChar', ['255']],
+    'from sqlalchemy import String\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'Mapped[str] = mapped_column(String(255))\n',
+  ],
+  [
+    'String',
+    '@db.VarChar',
+    ['VarChar', []],
+    'from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'Mapped[str]\n',
+  ],
+  [
+    'String',
+    '@db.Char(10)',
+    ['Char', ['10']],
+    'from sqlalchemy import String\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'Mapped[str] = mapped_column(String(10))\n',
+  ],
+  [
+    'String',
+    '@db.Char',
+    ['Char', []],
+    'from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'Mapped[str]\n',
+  ],
+  [
+    'String',
+    '@db.Text',
+    ['Text', []],
+    'from sqlalchemy import Text\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'Mapped[str] = mapped_column(Text)\n',
+  ],
+  [
+    'String',
+    '@db.MediumText',
+    ['MediumText', []],
+    'from sqlalchemy import Text\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'Mapped[str] = mapped_column(Text)\n',
+  ],
+  [
+    'String',
+    '@db.LongText',
+    ['LongText', []],
+    'from sqlalchemy import Text\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'Mapped[str] = mapped_column(Text)\n',
+  ],
+  [
+    'String',
+    '@db.TinyText',
+    ['TinyText', []],
+    'from sqlalchemy import Text\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'Mapped[str] = mapped_column(Text)\n',
+  ],
+  [
+    'Int',
+    '@db.SmallInt',
+    ['SmallInt', []],
+    'from sqlalchemy import SmallInteger\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'Mapped[int] = mapped_column(SmallInteger)\n',
+  ],
+  [
+    'Int',
+    '@db.TinyInt',
+    ['TinyInt', []],
+    'from sqlalchemy import SmallInteger\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'Mapped[int] = mapped_column(SmallInteger)\n',
+  ],
+  [
+    'Int',
+    '@db.MediumInt',
+    ['MediumInt', []],
+    'from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'Mapped[int]\n',
+  ],
+  [
+    'Float',
+    '@db.DoublePrecision',
+    ['DoublePrecision', []],
+    'from sqlalchemy import Double\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'Mapped[float] = mapped_column(Double)\n',
+  ],
+  [
+    'Float',
+    '@db.Double',
+    ['Double', []],
+    'from sqlalchemy import Double\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'Mapped[float] = mapped_column(Double)\n',
+  ],
+  [
+    'Float',
+    '@db.Real',
+    ['Real', []],
+    'from sqlalchemy import REAL\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'Mapped[float] = mapped_column(REAL)\n',
+  ],
+  [
+    'Decimal',
+    '@db.Decimal(10, 2)',
+    ['Decimal', ['10', '2']],
+    'from sqlalchemy import Numeric\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom decimal import Decimal as DecimalType\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'Mapped[DecimalType] = mapped_column(Numeric(precision=10, scale=2))\n',
+  ],
+  [
+    'Decimal',
+    '@db.Decimal',
+    ['Decimal', []],
+    'from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom decimal import Decimal as DecimalType\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'Mapped[DecimalType]\n',
+  ],
+  [
+    'Decimal',
+    '@db.Money(10, 2)',
+    ['Money', ['10', '2']],
+    'from sqlalchemy import Numeric\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom decimal import Decimal as DecimalType\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'Mapped[DecimalType] = mapped_column(Numeric(precision=10, scale=2))\n',
+  ],
+  [
+    'String',
+    '@db.Uuid',
+    ['Uuid', []],
+    'from sqlalchemy import Uuid\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nimport uuid as uuid_mod\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'Mapped[uuid_mod.UUID] = mapped_column(Uuid)\n',
+  ],
+  [
+    'DateTime',
+    '@db.Timestamp',
+    ['Timestamp', []],
+    'from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import datetime\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'Mapped[datetime]\n',
+  ],
+  [
+    'DateTime',
+    '@db.Timestamptz',
+    ['Timestamptz', []],
+    'from sqlalchemy import DateTime\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import datetime\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'Mapped[datetime] = mapped_column(DateTime(timezone=True))\n',
+  ],
+  [
+    'DateTime',
+    '@db.Date',
+    ['Date', []],
+    'from sqlalchemy import Date\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import datetime, date\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'Mapped[date] = mapped_column(Date)\n',
+  ],
+  [
+    'DateTime',
+    '@db.Time',
+    ['Time', []],
+    'from sqlalchemy import Time\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import datetime, time as time_type\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'Mapped[time_type] = mapped_column(Time)\n',
+  ],
+  [
+    'DateTime',
+    '@db.Timetz',
+    ['Timetz', []],
+    'from sqlalchemy import Time\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import datetime\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'Mapped[time_type] = mapped_column(Time(timezone=True))\n',
+  ],
+  [
+    'Json',
+    '@db.JsonB',
+    ['JsonB', []],
+    'from sqlalchemy import JSON\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom typing import Any\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'Mapped[dict[str, Any]] = mapped_column(JSON)\n',
+  ],
+  [
+    'String',
+    '@db.Xml',
+    ['Xml', []],
+    'from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'Mapped[str]\n',
+  ],
+  [
+    'String',
+    '@db.Nope',
+    ['Nope', []],
+    'from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'Mapped[str]\n',
+  ],
+]
+
+// `@db.*` is the only way a Prisma schema pins a column type, and SQLAlchemy spells each one
+// differently again - some of them pulling an import of their own. Nothing else covers this
+// table, so a dropped case would silently widen the column the DDL creates.
+describe('native database types', () => {
+  it.each(NATIVE_TYPES)('maps %s `%s`', (type, _attribute, nativeType, header, column) => {
+    const models: DMMF.Model[] = [
+      {
+        name: 'Row',
+        dbName: null,
+        schema: null,
+        primaryKey: null,
+        uniqueFields: [],
+        uniqueIndexes: [],
+        isGenerated: false,
+        fields: [
+          {
+            name: 'id',
+            type: 'Int',
+            kind: 'scalar',
+            isId: true,
+            isList: false,
+            isRequired: true,
+            isUnique: false,
+            isReadOnly: false,
+            isGenerated: false,
+            isUpdatedAt: false,
+            hasDefaultValue: false,
+          },
+          {
+            name: 'value',
+            type,
+            nativeType,
+            kind: 'scalar',
+            isId: false,
+            isList: false,
+            isRequired: true,
+            isUnique: false,
+            isReadOnly: false,
+            isGenerated: false,
+            isUpdatedAt: false,
+            hasDefaultValue: false,
+          },
+        ],
+      },
+    ]
+    expect(generateSingleFile(models, [], [])).toBe(
+      `${header}    id: Mapped[int] = mapped_column(primary_key=True)\n    value: ${column}`,
+    )
+  })
+})
+
+// A column whose name is a Python keyword, or one DeclarativeBase already owns, cannot be the
+// attribute name; the real column travels in the first positional argument instead.
+describe('pythonAttrName', () => {
+  it.each(['class', 'def', 'import', 'from', 'lambda', 'None', 'metadata', 'registry', 'self'])(
+    'renames the reserved column %s',
+    (name) => {
+      expect(pythonAttrName(name)).toBe(`${name}_`)
+    },
+  )
+
+  it.each(['email', 'createdAt', 'Class', 'metadata_'])('leaves %s alone', (name) => {
+    expect(pythonAttrName(name)).toBe(name)
   })
 })

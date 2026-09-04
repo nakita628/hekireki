@@ -1,0 +1,329 @@
+@import 'tailwindcss';
+@import '@xyflow/react/dist/style.css';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Semantic palette: light values on :root, dark values on .dark; Tailwind utilities read the
+   --color-* aliases, so every bg-canvas / text-muted / border-line switches with the theme. */
+:root {
+  --c-canvas: #f7f8fb;
+  --c-surface: #ffffff;
+  --c-surface-2: #fbfbfd;
+  --c-ink: #16181f;
+  --c-muted: #6b7084;
+  --c-faint: #9a9fb3;
+  --c-line: #e4e6ee;
+  --c-line-strong: #cfd3e0;
+  --c-accent: #4f46e5;
+  --c-accent-soft: #eef0ff;
+  --c-accent-text: #3f37c9;
+  --c-danger: #c2410c;
+  --c-danger-soft: #fff4ec;
+  --c-danger-line: #fed7aa;
+  --c-node: #1f2233;
+  --c-node-text: #f4f5fa;
+  --c-edge: #9095ab;
+  --c-dots: #d4d4dc;
+  /* The three marks a card carries. One value each, because the exported drawing writes the same
+     colours literally (diagram/svg.ts) and a canvas that disagrees with its own download is the
+     bug this palette exists to prevent. */
+  --c-key: #b45309;
+  --c-unique: #0f766e;
+  --c-enum: #7c3aed;
+  /* What the status dots, the save tick and the save indicator say. */
+  --c-ok: #15803d;
+  --c-busy: #b45309;
+  /* Syntax colours of the highlighted snippets. Here with the rest of the palette rather than
+     beside the rules, so a theme is one block to read and `.dark` has nothing to override. */
+  --c-tok-keyword: #7c3aed;
+  --c-tok-string: #0f766e;
+  --c-tok-number: #b45309;
+  --c-tok-definition: #1d4ed8;
+}
+
+.dark {
+  --c-canvas: #0f1117;
+  --c-surface: #171a23;
+  --c-surface-2: #1c202b;
+  --c-ink: #e6e8ef;
+  --c-muted: #9aa0b4;
+  --c-faint: #6b7189;
+  --c-line: #262b38;
+  --c-line-strong: #343a4a;
+  --c-accent: #7c74ff;
+  --c-accent-soft: #24264a;
+  --c-accent-text: #a5a0ff;
+  --c-danger: #fb923c;
+  --c-danger-soft: #2b1d14;
+  --c-danger-line: #5b3a1f;
+  --c-node: #2a2f45;
+  --c-node-text: #f4f5fa;
+  --c-edge: #6b7189;
+  --c-dots: #2a2f3d;
+  --c-key: #fbbf24;
+  --c-unique: #5eead4;
+  --c-enum: #c4b5fd;
+  --c-ok: #4ade80;
+  --c-busy: #fbbf24;
+  --c-tok-keyword: #c4b5fd;
+  --c-tok-string: #5eead4;
+  --c-tok-number: #fcd34d;
+  --c-tok-definition: #93c5fd;
+}
+
+@theme inline {
+  --color-canvas: var(--c-canvas);
+  --color-surface: var(--c-surface);
+  --color-surface-2: var(--c-surface-2);
+  --color-ink: var(--c-ink);
+  --color-muted: var(--c-muted);
+  --color-faint: var(--c-faint);
+  --color-line: var(--c-line);
+  --color-line-strong: var(--c-line-strong);
+  --color-accent: var(--c-accent);
+  --color-accent-soft: var(--c-accent-soft);
+  --color-accent-text: var(--c-accent-text);
+  --color-danger: var(--c-danger);
+  --color-danger-soft: var(--c-danger-soft);
+  --color-danger-line: var(--c-danger-line);
+  --color-node: var(--c-node);
+  --color-node-text: var(--c-node-text);
+  --color-key: var(--c-key);
+  --color-unique: var(--c-unique);
+  --color-enum: var(--c-enum);
+  --color-edge: var(--c-edge);
+  --color-ok: var(--c-ok);
+  --color-busy: var(--c-busy);
+  --font-sans:
+    ui-sans-serif, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+
+  /* The type scale, named for what each step is for. Studio runs denser than Tailwind's default
+     ladder, so its t-shirt sizes are not used here: one scale, and a size that is not on it is a
+     mistake rather than a decision. The three steps that always set their leading carry it. */
+  --text-badge: 8.5px;
+  --text-badge--line-height: 11px;
+  --text-caption: 9.5px;
+  --text-caption--line-height: 13px;
+  --text-detail: 10.5px;
+  --text-detail--line-height: 14px;
+  --text-meta: 11px;
+  --text-code: 12.5px;
+  --text-body: 13px;
+  --text-ui: 14px;
+  --text-lead: 15px;
+  --text-section: 18px;
+  --text-heading: 20px;
+  --text-title: 22px;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+  }
+
+  body {
+    @apply bg-canvas font-sans text-ui text-ink antialiased;
+  }
+}
+
+@layer components {
+  .toast {
+    border: 1px solid var(--c-line);
+    background: var(--c-surface);
+    color: var(--c-ink);
+  }
+  .btn {
+    @apply inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-3.5 text-ui font-medium whitespace-nowrap text-ink hover:bg-canvas disabled:cursor-default disabled:opacity-50;
+  }
+
+  .btn-ghost {
+    @apply border-transparent hover:border-line;
+  }
+
+  .btn-primary {
+    @apply border-accent bg-accent text-white hover:bg-accent-text;
+  }
+
+  .chip {
+    @apply rounded-md bg-accent-soft px-1.5 py-px font-mono text-meta whitespace-nowrap text-accent-text;
+  }
+
+  .tab {
+    @apply cursor-pointer border-0 border-b-2 border-transparent bg-transparent px-3 py-2 font-mono text-code whitespace-nowrap text-muted hover:text-ink;
+  }
+
+  .tab-active {
+    @apply border-accent font-semibold text-accent-text;
+  }
+
+  /* The `h1` of a page, and the smaller button a toolbar packs in. Both were spelled out at every
+     call site before, which is how a scale drifts. */
+  .page-title {
+    @apply m-0 text-title font-bold tracking-tight;
+  }
+
+  .btn-sm {
+    @apply h-7 px-2.5 text-code;
+  }
+
+  .heading {
+    @apply mb-2 text-meta font-bold tracking-[0.08em] text-faint uppercase;
+  }
+
+  .cell-input {
+    @apply w-full min-w-24 rounded border border-accent bg-surface px-1.5 py-0.5 font-mono text-code text-ink outline-none;
+  }
+
+  .error-box {
+    @apply rounded-[10px] border border-danger-line bg-danger-soft p-4 font-mono text-code whitespace-pre-wrap text-ink;
+  }
+
+  .th {
+    @apply sticky top-0 border-b border-line bg-surface-2 px-3.5 py-2.5 text-left text-code font-semibold whitespace-nowrap text-muted;
+  }
+}
+
+/* React Flow chrome */
+.react-flow__controls {
+  box-shadow: none;
+  border: 1px solid var(--c-line-strong);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.react-flow__controls-button {
+  border-bottom: 1px solid var(--c-line);
+  background: var(--c-surface);
+  color: var(--c-ink);
+  fill: var(--c-ink);
+  width: 30px;
+  height: 30px;
+}
+
+.react-flow__minimap {
+  border: 1px solid var(--c-line-strong);
+  border-radius: 8px;
+  background: var(--c-surface);
+}
+
+.react-flow__attribution {
+  display: none;
+}
+
+.model-handle.react-flow__handle {
+  width: 6px;
+  height: 6px;
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+.react-flow__edge.relation-edge .react-flow__edge-path {
+  stroke: var(--c-edge);
+  stroke-width: 1.4;
+}
+
+/* Edge captions live in React Flow's label layer. That layer is painted under the models, so a
+   caption is lifted over them (1000 is what React Flow elevates a selected node to): the geometry
+   pass keeps a chip off the cards where it can, and where it cannot the label still reads. */
+.relation-label {
+  position: absolute;
+  z-index: 1001;
+  @apply rounded border border-line bg-surface px-[5px] py-px font-mono text-caption whitespace-nowrap text-muted;
+}
+
+.relation-label.is-dimmed {
+  opacity: 0.3;
+}
+
+/* An enum-typed field is linked to the card that lists its values, in the colour the type is
+   written in. The finer `2 4` dots are what tell this apart from the `5 4` dashes below: those
+   are relations, this is not one. */
+.react-flow__edge.enum-edge .react-flow__edge-path {
+  stroke: var(--c-enum);
+  stroke-width: 1.2;
+  stroke-dasharray: 2 4;
+  opacity: 0.75;
+}
+
+/* The crow's foot markers sit in a zero-sized svg; they take the colour of the edge that uses
+   them where `context-stroke` is supported, and the plain edge colour where it is not. */
+.er-markers {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+.er-symbol {
+  fill: none;
+  stroke: var(--c-edge);
+  stroke: context-stroke;
+  stroke-width: 1.4;
+}
+
+.er-symbol-open {
+  fill: var(--c-surface);
+}
+
+/* A relation no foreign key backs: declared in a `/// @relation` comment, or an implicit
+   many-to-many whose pairs live in a join table of Prisma's own. Dashed is about that, not about
+   cardinality — an explicit many-to-many written as a join model is two ordinary foreign keys and
+   stays solid. `RelationOrigin` (helper/relation.ts) is where the three origins are spelled out. */
+.react-flow__edge.relation-edge--annotated .react-flow__edge-path,
+.react-flow__edge.relation-edge--implicit-many-to-many .react-flow__edge-path {
+  stroke-dasharray: 5 4;
+}
+
+.react-flow__edge.is-highlighted .react-flow__edge-path {
+  stroke: var(--c-accent);
+  stroke-width: 2;
+}
+
+.react-flow__edge.is-dimmed {
+  opacity: 0.25;
+}
+
+.react-flow__edge-textbg {
+  fill: var(--c-surface);
+}
+
+.react-flow__edge-text {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  fill: var(--c-muted);
+}
+
+/* The classHighlighter token classes, painted from the palette above. */
+.tok-keyword {
+  color: var(--c-tok-keyword);
+}
+.tok-comment {
+  color: var(--c-muted);
+  font-style: italic;
+}
+.tok-string,
+.tok-string2 {
+  color: var(--c-tok-string);
+}
+.tok-number,
+.tok-bool,
+.tok-atom {
+  color: var(--c-tok-number);
+}
+.tok-variableName,
+.tok-propertyName {
+  color: var(--c-ink);
+}
+.tok-definition {
+  color: var(--c-tok-definition);
+}
+.tok-punctuation,
+.tok-operator {
+  color: var(--c-muted);
+}

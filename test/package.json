@@ -6,5 +6,8 @@
     "check": "vp check",
     "fix": "vp check --fix",
     "test": "vp test"
+  },
+  "devDependencies": {
+    "prisma": "^7.9.0"
   }
 }
