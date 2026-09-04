@@ -14,7 +14,7 @@ importers:
     devDependencies:
       mysql2:
         specifier: ^3.15.4
-        version: 3.22.5(@types/node@26.4.1)
+        version: 3.23.1(@types/node@26.4.1)
       pg:
         specifier: ^8.16.3
         version: 8.22.0
@@ -49,7 +49,7 @@ importers:
         version: 8.1.0-dev.6
       '@prisma/language-server':
         specifier: ^31.12.2
-        version: 31.12.2(magicast@0.5.3)
+        version: 31.12.5(magicast@0.5.3)
       '@prisma/prisma-schema-wasm':
         specifier: 8.1.0-2.59be4fda12412a79eeb9c2ae727b6aa723593323
         version: 8.1.0-2.59be4fda12412a79eeb9c2ae727b6aa723593323
@@ -158,7 +158,7 @@ importers:
         version: 0.31.10
       drizzle-orm:
         specifier: ^0.45.2
-        version: 0.45.2(@electric-sql/pglite@0.4.3)(@prisma/client@7.9.0(prisma@8.1.0-dev.6(@types/react-dom@19.2.5(@types/react@19.2.17))(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2))(typescript@7.0.2))(better-sqlite3@12.11.1)(kysely@0.29.5)(mysql2@3.22.5(@types/node@26.4.1))(pg@8.22.0)(postgres@3.4.7)(prisma@8.1.0-dev.6(@types/react-dom@19.2.5(@types/react@19.2.17))(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2))
+        version: 0.45.2(@electric-sql/pglite@0.4.3)(@prisma/client@7.9.0(prisma@8.1.0-dev.6(@types/react-dom@19.2.5(@types/react@19.2.17))(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2))(typescript@7.0.2))(better-sqlite3@12.11.1)(kysely@0.29.5)(mysql2@3.23.1(@types/node@26.4.1))(pg@8.22.0)(postgres@3.4.7)(prisma@8.1.0-dev.6(@types/react-dom@19.2.5(@types/react@19.2.17))(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2))
       hono-takibi:
         specifier: ^0.9.99998
         version: 0.9.99998(@types/node@26.4.1)(@typespec/http@1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1)))(@typespec/openapi@1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1))(@typespec/http@1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1))))(openapi-types@12.1.3)(vite-plus@0.3.0(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(typescript@7.0.2)(vite@8.1.2(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))(yaml@2.9.0))
@@ -1552,8 +1552,8 @@ packages:
   '@prisma/get-platform@8.1.0-dev.6':
     resolution: {integrity: sha512-yWWVUmcip1PIDm0qY1vAERWiN6yi9WSxisXsLLWvahpY2gASZ6E+jkkPsXYI0A4/2osc1OpG38XwMzWt6S/j5A==}
 
-  '@prisma/language-server@31.12.2':
-    resolution: {integrity: sha512-/9wMMF++e7EGrDPtFXOXUIR1UKd9a7hJ3dm5f5HDtZTXefRErE6Aofkch9MJZpwdTNwHu4UQl4WfGgLq3LnE4A==}
+  '@prisma/language-server@31.12.5':
+    resolution: {integrity: sha512-55vIkJMJAzxD5Vx0jH09+I30cT84WmiCgQgwu5e8tEhQPOoYGKWU6pDt343WJR8eh7UqwnsM2tX82lEnTWflzQ==}
     engines: {node: '>=20'}
     hasBin: true
 
@@ -3673,8 +3673,8 @@ packages:
     resolution: {integrity: sha512-FBrGau0IXmuqg4haEZRBfHNWB5mUARw6hNwPDXXGg0XzVJ50mr/9hb267lvpVMnhZ1FON3qNd4Xfcez1rbFwSg==}
     engines: {node: '>= 8.0'}
 
-  mysql2@3.22.5:
-    resolution: {integrity: sha512-95uZ2TrPWAZdwpB3vvvDbmEMcNG8yIeNCyu6GUcr/QnWEE/wXm7+mhOCsdQfWQDTV7qYT/PDUZ4U4UPP4AsXqQ==}
+  mysql2@3.23.1:
+    resolution: {integrity: sha512-tTuRnC7qCet2IOfSNMYZ5SwXuBnfvBPAcIA28P0gtruXyZlU1LMxA6uha32kYypoFgyYklMqhLWwt4laYwXR/Q==}
     engines: {node: '>= 8.0'}
     peerDependencies:
       '@types/node': '>= 8'
@@ -5470,7 +5470,7 @@ snapshots:
     dependencies:
       '@prisma/debug': 8.1.0-dev.6
 
-  '@prisma/language-server@31.12.2(magicast@0.5.3)':
+  '@prisma/language-server@31.12.5(magicast@0.5.3)':
     dependencies:
       '@prisma/config': 7.9.0-dev.4(magicast@0.5.3)
       '@prisma/prisma-schema-wasm': 7.8.0-6.3c6e192761c0362d496ed980de936e2f3cebcd3a
@@ -6743,13 +6743,13 @@ snapshots:
       esbuild: 0.25.12
       tsx: 4.23.1
 
-  drizzle-orm@0.45.2(@electric-sql/pglite@0.4.3)(@prisma/client@7.9.0(prisma@8.1.0-dev.6(@types/react-dom@19.2.5(@types/react@19.2.17))(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2))(typescript@7.0.2))(better-sqlite3@12.11.1)(kysely@0.29.5)(mysql2@3.22.5(@types/node@26.4.1))(pg@8.22.0)(postgres@3.4.7)(prisma@8.1.0-dev.6(@types/react-dom@19.2.5(@types/react@19.2.17))(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2)):
+  drizzle-orm@0.45.2(@electric-sql/pglite@0.4.3)(@prisma/client@7.9.0(prisma@8.1.0-dev.6(@types/react-dom@19.2.5(@types/react@19.2.17))(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2))(typescript@7.0.2))(better-sqlite3@12.11.1)(kysely@0.29.5)(mysql2@3.23.1(@types/node@26.4.1))(pg@8.22.0)(postgres@3.4.7)(prisma@8.1.0-dev.6(@types/react-dom@19.2.5(@types/react@19.2.17))(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2)):
     optionalDependencies:
       '@electric-sql/pglite': 0.4.3
       '@prisma/client': 7.9.0(prisma@8.1.0-dev.6(@types/react-dom@19.2.5(@types/react@19.2.17))(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2))(typescript@7.0.2)
       better-sqlite3: 12.11.1
       kysely: 0.29.5
-      mysql2: 3.22.5(@types/node@26.4.1)
+      mysql2: 3.23.1(@types/node@26.4.1)
       pg: 8.22.0
       postgres: 3.4.7
       prisma: 8.1.0-dev.6(@types/react-dom@19.2.5(@types/react@19.2.17))(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2)
@@ -7252,7 +7252,7 @@ snapshots:
       seq-queue: 0.0.5
       sqlstring: 2.3.3
 
-  mysql2@3.22.5(@types/node@26.4.1):
+  mysql2@3.23.1(@types/node@26.4.1):
     dependencies:
       '@types/node': 26.4.1
       aws-ssl-profiles: 1.1.2
