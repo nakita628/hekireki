@@ -8,6 +8,6 @@
     "test": "vp test"
   },
   "devDependencies": {
-    "prisma": "^7.9.0"
+    "prisma": "8.1.0-dev.6"
   }
 }
