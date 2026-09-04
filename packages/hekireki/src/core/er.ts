@@ -6,7 +6,7 @@ import { Effect } from 'effect'
 import { emitRaw } from '../emit/index.js'
 import { dbmlContent, erDiagramPng, erDiagramSvg } from '../generator/dbml.js'
 import { erContent } from '../generator/mermaid-er.js'
-import { getString } from '../utils/index.js'
+import { getString, getStrings } from '../utils/index.js'
 import { GeneratorConfigError } from './errors.js'
 
 function themeOf(options: GeneratorOptions) {
@@ -16,9 +16,9 @@ function themeOf(options: GeneratorOptions) {
 /**
  * The four ways the ER model of a schema is written out, each with the options it reads.
  *
- * The extension of `output` picks one, so the file the caller names is the file they get: an
- * extension with no format behind it, and an option the chosen format does not read, are both
- * errors rather than something silently ignored.
+ * The extension of each file picks one, so the file the caller names is the file they get: an
+ * extension with no format behind it, and an option no chosen format reads, are both errors
+ * rather than something silently ignored.
  */
 const FORMATS = {
   '.md': {
@@ -50,15 +50,62 @@ const FORMATS = {
   }
 >
 
+type Format = keyof typeof FORMATS
+
 const EXTENSIONS = Object.keys(FORMATS).join(', ')
 
-function isFormat(extension: string): extension is keyof typeof FORMATS {
+function isFormat(extension: string): extension is Format {
   return extension in FORMATS
 }
 
 /** What the chosen format accepts, as the sentence the error ends with. */
 function accepts(options: readonly string[]) {
   return options.length === 0 ? 'takes no options' : `takes ${options.join(', ')}`
+}
+
+/** How a path ends, as the error says it: an extension in quotes, or nothing at all. */
+function endsIn(name: string) {
+  const extension = path.extname(name)
+  return extension === '' ? 'nothing' : `"${extension}"`
+}
+
+/**
+ * The files to write, from `output` alone or from the names `outputs` lists inside it.
+ *
+ * One block writes as many files as it names, so a schema that wants the ER model in several
+ * formats declares `Hekireki-ER` once — `outputs` is the list, `output` the directory it fills.
+ */
+function filesOf(output: string, outputs: readonly string[] | undefined) {
+  return Effect.gen(function* () {
+    if (outputs === undefined) {
+      const extension = path.extname(output).toLowerCase()
+      if (!isFormat(extension)) {
+        return yield* new GeneratorConfigError({
+          message: `output for Hekireki-ER has to name a file ending in ${EXTENSIONS}; "${output}" ends in ${endsIn(output)}.`,
+        })
+      }
+      return [{ file: output, extension }]
+    }
+    if (outputs.length === 0) {
+      return yield* new GeneratorConfigError({
+        message: 'outputs for Hekireki-ER has to name at least one file.',
+      })
+    }
+    if (path.extname(output) !== '') {
+      return yield* new GeneratorConfigError({
+        message: `output for Hekireki-ER names the directory the files in outputs go in, so it cannot name a file; "${output}" ends in ${endsIn(output)}.`,
+      })
+    }
+    return yield* Effect.forEach(outputs, (name) => {
+      const extension = path.extname(name).toLowerCase()
+      if (!isFormat(extension)) {
+        return new GeneratorConfigError({
+          message: `outputs for Hekireki-ER has to name files ending in ${EXTENSIONS}; "${name}" ends in ${endsIn(name)}.`,
+        })
+      }
+      return Effect.succeed({ file: path.resolve(output, name), extension })
+    })
+  })
 }
 
 export function er(options: GeneratorOptions) {
@@ -69,23 +116,31 @@ export function er(options: GeneratorOptions) {
           'output is required for Hekireki-ER. Please specify output in your generator config.',
       })
     }
-    const output = options.generator.output.value
-    const extension = path.extname(output).toLowerCase()
-    if (!isFormat(extension)) {
-      return yield* new GeneratorConfigError({
-        message: `output for Hekireki-ER has to name a file ending in ${EXTENSIONS}; "${output}" ends in ${extension === '' ? 'nothing' : `"${extension}"`}.`,
-      })
+    const config = options.generator.config ?? {}
+    const outputs = getStrings(config.outputs)
+    const files = yield* filesOf(options.generator.output.value, outputs)
+    // Every option belongs to a format, so the options a block may carry are the ones the
+    // formats it writes read between them — and `outputs`, which picks those formats.
+    const read = new Set<string>(outputs === undefined ? [] : ['outputs'])
+    for (const { extension } of files) {
+      for (const option of FORMATS[extension].options) read.add(option)
     }
-    const format = FORMATS[extension]
-    const read: readonly string[] = format.options
-    const unread = Object.keys(options.generator.config ?? {}).filter(
-      (name) => !read.includes(name),
-    )
+    const unread = Object.keys(config).filter((name) => !read.has(name))
     if (unread.length > 0) {
+      const extensions = [...new Set(files.map(({ extension }) => extension))]
       return yield* new GeneratorConfigError({
-        message: `Hekireki-ER does not read ${unread.map((name) => `"${name}"`).join(', ')} for a ${extension} output; ${extension} ${accepts(format.options)}.`,
+        message: `Hekireki-ER does not read ${unread.map((name) => `"${name}"`).join(', ')} for ${
+          extensions.length === 1
+            ? `a ${extensions[0]} output`
+            : `the ${extensions.join(', ')} outputs`
+        }; ${extensions.map((extension) => `${extension} ${accepts(FORMATS[extension].options)}`).join(', ')}.`,
       })
     }
-    return yield* emitRaw(format.render(options), path.dirname(output), output)
+    return yield* Effect.forEach(
+      files,
+      ({ file, extension }) =>
+        emitRaw(FORMATS[extension].render(options), path.dirname(file), file),
+      { discard: true },
+    )
   })
 }

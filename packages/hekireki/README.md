@@ -34,7 +34,8 @@
 
 ### Diagrams & Documentation
 
-- 📊 Draws the ER model of the schema in whichever of four formats the `output` extension names: [Mermaid](https://mermaid.js.org/) (`.md`), [DBML](https://dbml.dbdiagram.io/) (`.dbml`), or a **PNG / SVG** drawn the way Hekireki Studio shows it — crow's-foot cardinality read from the schema, `PK` / `FK` / `UK` markers and implicit many-to-many relations throughout
+- 📊 Draws the ER model of the schema in any of four formats from **one** generator block — [Mermaid](https://mermaid.js.org/) (`.md`), [DBML](https://dbml.dbdiagram.io/) (`.dbml`), or a **PNG / SVG** drawn the way Hekireki Studio shows it — with crow's-foot cardinality read from the schema, `PK` / `FK` / `UK` markers and implicit many-to-many relations throughout
+- ⚡️ **[Hekireki Studio](#studio)** (`hekireki studio`) opens the schema in the browser: the ER diagram, a reference **docs** page, every model's data, the Prisma editor and a SQL console, all live from `schema.prisma`
 
 ## Installation
 
@@ -161,12 +162,8 @@ generator Hekireki-Eloquent {
 
 generator Hekireki-ER {
     provider = "hekireki-er"
-    output   = "docs/schema.dbml"
-}
-
-generator Hekireki-Docs {
-    provider = "hekireki-docs"
-    output   = "./docs"
+    output   = "docs"
+    outputs  = ["er.md", "schema.dbml", "er.svg"]
 }
 
 model User {
@@ -1090,26 +1087,33 @@ impl ActiveModelBehavior for ActiveModel {
 
 ### ER diagrams
 
-One generator, `hekireki-er`, writes the ER model of the schema in four formats. The extension of
-`output` picks which — `.md`, `.dbml`, `.png` or `.svg` — and an extension it has no format for is
-an error rather than a guess. A generator block writes one file, so a schema that wants several
-declares the generator once per file:
+One generator, `hekireki-er`, writes the ER model of the schema in four formats: `.md`, `.dbml`,
+`.png` and `.svg`. The extension picks which, so the file you name is the file you get, and an
+extension it has no format for is an error rather than a guess.
+
+One block writes as many of them as you ask for. `outputs` is the list of files and `output` the
+directory they go in:
 
 ```prisma
-generator Hekireki-ER-Markdown {
+generator Hekireki-ER {
     provider = "hekireki-er"
-    output   = "docs/er.md"
+    output   = "docs"
+    outputs  = ["er.md", "er.svg"]
 }
+```
 
-generator Hekireki-ER-SVG {
+For a single file, point `output` straight at it and leave `outputs` out:
+
+```prisma
+generator Hekireki-ER {
     provider = "hekireki-er"
     output   = "docs/er.svg"
 }
 ```
 
-Every option belongs to one format: `mapToDbSchema` to `.dbml`, `theme` to `.png` and `.svg`.
-Setting one on a format that does not read it is an error, so an option never looks like it did
-something it did not.
+Every option belongs to a format: `mapToDbSchema` to `.dbml`, `theme` to `.png` and `.svg`. A
+block may carry the options the formats it writes read between them, and setting one no chosen
+format reads is an error — so an option never looks like it did something it did not.
 
 #### `.md` — Mermaid
 
@@ -1188,14 +1192,9 @@ The relation is drawn in the Mermaid, DBML and image output — as a dashed edge
 
 ### Docs
 
-The `hekireki-docs` generator creates an HTML documentation page from your Prisma schema. Serve it locally with `hekireki docs serve`:
-
-```prisma
-generator Hekireki-Docs {
-    provider = "hekireki-docs"
-    output   = "./docs"
-}
-```
+The reference page for the schema — every model and enum with its fields, types, attributes and
+`///` comments — is [Hekireki Studio](#studio)'s **Docs** page. Nothing is generated for it: run
+`hekireki studio` and open `/docs`, and it follows every edit to `schema.prisma`.
 
 ## Configuration
 
@@ -1335,40 +1334,51 @@ generator Hekireki-Eloquent {
     namespace = "App.Models"       // PHP namespace, "." becomes "\" (default: App\Models)
 }
 
-// ER Generator. The extension of `output` picks the format; one block writes one file, so a
-// schema that wants several declares the generator once per file.
-generator Hekireki-ER-DBML {
+// ER Generator. The extension of each file picks its format; one block writes them all.
+generator Hekireki-ER {
     provider = "hekireki-er"
-    output   = "docs/schema.dbml"    // Required. .md, .dbml, .png or .svg
+    output   = "docs"                // Required. The directory `outputs` is written into
+    outputs  = ["schema.dbml", "er-diagram.png"]  // Optional. Files ending in .md, .dbml, .png or .svg
     mapToDbSchema = true             // .dbml only. Map to DB schema names (default: true)
-}
-
-generator Hekireki-ER-PNG {
-    provider = "hekireki-er"
-    output   = "docs/er-diagram.png"
     theme    = "light"               // .png / .svg only. "light" (default) or "dark"
 }
 
-// Docs Generator
-generator Hekireki-Docs {
-    provider = "hekireki-docs"
-    output   = "./docs"              // Required. A directory here yields ./docs
+// Without `outputs`, `output` names the one file to write and its extension picks the format.
+generator Hekireki-ER {
+    provider = "hekireki-er"
+    output   = "docs/er.svg"         // Required. .md, .dbml, .png or .svg
+    theme    = "dark"
 }
 ```
 
-## Docs Server
+## Studio
 
-Hekireki includes a built-in documentation server powered by [Hono](https://hono.dev/). After generating docs with `prisma generate`, you can preview them locally:
+`hekireki studio` opens the schema in the browser, served locally by [Hono](https://hono.dev/).
+Nothing is generated first — Studio reads `schema.prisma` itself and reloads on every edit to it:
 
 ```bash
-# Start the docs server (default: http://localhost:5858)
-hekireki docs serve
+# Open ./prisma/schema.prisma, then ./schema.prisma (default: http://localhost:5858)
+hekireki studio
 
-# Specify a custom port
-hekireki docs serve -p 3000
+# Read a directory of .prisma files, and browse a database of your choosing
+hekireki studio --schema prisma --url file:./prisma/dev.db
+
+# Listen on another port
+hekireki studio -p 3000
 ```
 
-> **Note:** Run `prisma generate` first to generate the `docs/` directory with `index.html`.
+| Page             | What it is                                                                        |
+| ---------------- | --------------------------------------------------------------------------------- |
+| `/` — Schema     | The ER diagram, laid out automatically, with **PNG** / **SVG** export             |
+| `/docs` — Docs   | The reference page: every model and enum with its fields, attributes and comments |
+| `/models/<name>` | A model's rows, editable, next to its fields                                      |
+| `/enums/<name>`  | An enum with its members and the fields that hold it                              |
+| `/prisma`        | The schema in a Prisma editor, with the language server's diagnostics             |
+| `/sql`           | A SQL console against the connected database                                      |
+
+The database is the one `--url` names, or `DATABASE_URL` from the environment or `.env`, then
+`datasource.url` in `prisma.config.ts`; `postgres://`, `mysql://` and `file:` are understood.
+Without one, Studio serves the schema alone — the diagram, the docs and the editor still work.
 
 ## License
 

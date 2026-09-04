@@ -63,7 +63,7 @@ describe('startStudioServer', () => {
     )
   })
 
-  it('serves the client for /docs in docs mode without opening a database', async () => {
+  it('serves the client for /docs with no database to open', async () => {
     const { dir, schemaPath } = setup()
     const result = await Effect.runPromise(
       Effect.scoped(
@@ -73,7 +73,6 @@ describe('startStudioServer', () => {
             port: 0,
             staticDir: dir,
             databaseUrl: null,
-            database: false,
           })
           const port = addressPort(started.server)
           const html = yield* Effect.promise(() =>
@@ -85,7 +84,6 @@ describe('startStudioServer', () => {
     )
     expect(result.html).toContain('<title>Studio</title>')
     expect(result.database.connected).toBe(false)
-    expect(result.database.error).toContain('Docs mode')
   })
 
   it('fails with ServerListenError when the port is taken', async () => {

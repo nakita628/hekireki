@@ -4,6 +4,7 @@ import {
   extractObjectType,
   getBool,
   getString,
+  getStrings,
   groupByModel,
   isFields,
   makeCommentBlock,
@@ -30,6 +31,19 @@ describe('utils', () => {
     })
     it('returns undefined when the array is empty', () => {
       expect(getString([])).toBeUndefined()
+    })
+  })
+
+  describe('getStrings', () => {
+    it('wraps a lone string in a list', () => {
+      expect(getStrings('er.md')).toStrictEqual(['er.md'])
+    })
+    it('returns the list it was given, empty or not', () => {
+      expect(getStrings(['er.md', 'er.svg'])).toStrictEqual(['er.md', 'er.svg'])
+      expect(getStrings([])).toStrictEqual([])
+    })
+    it('returns undefined when there is no value', () => {
+      expect(getStrings(undefined)).toBeUndefined()
     })
   })
 

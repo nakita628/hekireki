@@ -94,26 +94,11 @@ export function studioBanner(options: {
   return lines.join('\n')
 }
 
-export function docsBanner(options: {
-  readonly port: number
-  readonly schemaPath: string
-  readonly error: string | null
-}) {
-  const lines = [
-    `⚡️ Hekireki Docs started at http://localhost:${options.port}/docs`,
-    `   Schema: ${path.resolve(options.schemaPath)} (watching for changes)`,
-    ...(options.error === null
-      ? []
-      : [`   Schema has errors, fix them and the docs will reload:\n${options.error}`]),
-  ]
-  return lines.join('\n')
-}
-
 /**
- * The command line itself: what the two servers accept, what each piece means, and the schema
- * every value is decoded through before a handler below ever sees it.
+ * The command line itself: what Studio accepts, what each piece means, and the schema every
+ * value is decoded through before the handler below ever sees it.
  */
-const serverFlags = {
+const studioFlags = {
   // `Config.Port` is Effect's own port schema — an integer in 1–65535 — so a port no listener
   // could bind is rejected while the command line is still being read.
   port: Flag.integer('port').pipe(
@@ -134,10 +119,6 @@ const serverFlags = {
     Flag.withMetavar('schema.prisma|dir'),
     Flag.optional,
   ),
-}
-
-const studioFlags = {
-  ...serverFlags,
   url: Flag.string('url').pipe(
     Flag.withAlias('u'),
     Flag.withSchema(databaseUrlSchema),
@@ -150,71 +131,40 @@ const studioFlags = {
 }
 
 /**
- * The server both commands run, listening until it is interrupted.
+ * Studio itself, listening until it is interrupted.
  *
  * It pulls in Hono, the Prisma schema engine and the database drivers. `--help`, `--version`,
  * `--completions` and every rejected command line must not pay for that, so it is imported here
  * rather than at module scope.
  */
-function serve(options: {
-  readonly commandPath: readonly string[]
-  readonly port: number
-  readonly schema: Option.Option<string>
-  readonly databaseUrl: string | null
-  readonly database: boolean
-  readonly banner: (input: {
-    readonly port: number
-    readonly schemaPath: string
-    readonly started: Effect.Success<ReturnType<typeof startStudioServer>>
-  }) => string
-}) {
+function runStudio(args: Command.Command.Config.Infer<typeof studioFlags>) {
   return Effect.gen(function* () {
-    const schemaPath = yield* resolveSchemaPath(
-      Option.getOrNull(options.schema),
-      options.commandPath,
-    )
+    const schemaPath = yield* resolveSchemaPath(Option.getOrNull(args.schema), [
+      COMMAND_NAME,
+      'studio',
+    ])
     const { startStudioServer } = yield* Effect.promise(() => import('../studio/server/start.js'))
     const started = yield* startStudioServer({
       schemaPath,
-      port: options.port,
+      port: args.port,
       staticDir: STATIC_DIR,
-      databaseUrl: options.databaseUrl,
-      database: options.database,
+      databaseUrl: Option.getOrNull(args.url),
     }).pipe(Effect.mapError(startError))
-    yield* Console.log(options.banner({ port: options.port, schemaPath, started }))
+    yield* Console.log(
+      studioBanner({
+        port: args.port,
+        schemaPath,
+        error: started.snapshot.error,
+        database: started.database,
+      }),
+    )
     yield* Effect.never
   }).pipe(Effect.scoped)
 }
 
-function runStudio(args: Command.Command.Config.Infer<typeof studioFlags>) {
-  return serve({
-    commandPath: [COMMAND_NAME, 'studio'],
-    port: args.port,
-    schema: args.schema,
-    databaseUrl: Option.getOrNull(args.url),
-    database: true,
-    banner: ({ port, schemaPath, started }) =>
-      studioBanner({ port, schemaPath, error: started.snapshot.error, database: started.database }),
-  })
-}
-
-// Docs are Studio's /docs page served straight from the schema: nothing is generated and no
-// database is opened.
-function runDocs(args: Command.Command.Config.Infer<typeof serverFlags>) {
-  return serve({
-    commandPath: [COMMAND_NAME, 'docs', 'serve'],
-    port: args.port,
-    schema: args.schema,
-    databaseUrl: null,
-    database: false,
-    banner: ({ port, schemaPath, started }) =>
-      docsBanner({ port, schemaPath, error: started.snapshot.error }),
-  })
-}
-
 const studio = Command.make('studio', studioFlags, runStudio).pipe(
   Command.withDescription(
-    'Open Hekireki Studio: ER diagram, model data and SQL for a Prisma schema',
+    'Open Hekireki Studio: ER diagram, docs, model data and SQL for a Prisma schema',
   ),
   Command.withExamples([
     {
@@ -229,25 +179,10 @@ const studio = Command.make('studio', studioFlags, runStudio).pipe(
   ]),
 )
 
-const docsServe = Command.make('serve', serverFlags, runDocs).pipe(
-  Command.withDescription('Serve the schema documentation, live from schema.prisma'),
-  Command.withExamples([
-    {
-      command: `${COMMAND_NAME} docs serve`,
-      description: 'Serve the docs page, reloading on every edit to the schema',
-    },
-  ]),
-)
-
-const docs = Command.make('docs').pipe(
-  Command.withDescription('Documentation tools'),
-  Command.withSubcommands([docsServe]),
-)
-
 /** The `hekireki` command tree; run it with {@link hekirekiCli}. */
 const cli = Command.make(COMMAND_NAME).pipe(
   Command.withDescription('⚡️ Prisma schema tools'),
-  Command.withSubcommands([studio, docs]),
+  Command.withSubcommands([studio]),
 )
 
 /**

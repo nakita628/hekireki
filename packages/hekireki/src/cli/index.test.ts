@@ -11,7 +11,6 @@ import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { fileSystemLayer } from '../file/index.js'
 import {
   DEFAULT_SCHEMA_PATHS,
-  docsBanner,
   hekirekiCli,
   helpAsFlag,
   resolveSchemaPath,
@@ -67,13 +66,12 @@ async function cli(args: readonly string[]) {
 }
 
 describe('hekireki --help', () => {
-  it('lists the studio and docs subcommands', async () => {
+  it('lists the studio subcommand', async () => {
     const { exit, out } = await cli(['--help'])
     expect(Exit.isSuccess(exit)).toBe(true)
     expect(out).toContain('USAGE')
     expect(out).toContain('hekireki <subcommand>')
     expect(out).toContain('studio')
-    expect(out).toContain('docs')
   })
 
   it('prints the version', async () => {
@@ -81,10 +79,13 @@ describe('hekireki --help', () => {
     expect(out).toContain('0.0.0-test')
   })
 
-  it('rejects an unknown subcommand', async () => {
-    const { exit, err } = await cli(['wat'])
-    expect(Exit.isFailure(exit)).toBe(true)
-    expect(err).toContain('Unknown subcommand "wat"')
+  it('rejects an unknown subcommand, `docs` among them now that Studio serves the docs page', async () => {
+    const unknown = await cli(['wat'])
+    expect(Exit.isFailure(unknown.exit)).toBe(true)
+    expect(unknown.err).toContain('Unknown subcommand "wat"')
+    const docs = await cli(['docs', 'serve'])
+    expect(Exit.isFailure(docs.exit)).toBe(true)
+    expect(docs.err).toContain('Unknown subcommand "docs"')
   })
 })
 
@@ -102,9 +103,6 @@ describe('hekireki help', () => {
     const after = await cli(['studio', 'help'])
     expect(before.out).toBe(studio.out)
     expect(after.out).toBe(studio.out)
-    const serve = await cli(['docs', 'serve', '--help'])
-    const nested = await cli(['docs', 'help', 'serve'])
-    expect(nested.out).toBe(serve.out)
   })
 
   it('leaves a flag value that reads `help` alone', () => {
@@ -209,39 +207,6 @@ describe('hekireki studio', () => {
     } finally {
       taken.close()
     }
-  })
-})
-
-describe('hekireki docs serve', () => {
-  it('shows the docs help without a subcommand', async () => {
-    const { out } = await cli(['docs'])
-    expect(out).toContain('hekireki docs <subcommand>')
-    expect(out).toContain('serve')
-  })
-
-  it('documents the schema and port flags', async () => {
-    const { out } = await cli(['docs', 'serve', '--help'])
-    expect(out).toContain('--port, -p')
-    expect(out).toContain('--schema, -s')
-  })
-
-  it('needs a schema, not generated HTML', async () => {
-    process.chdir(tmp())
-    const { exit, printed } = await cli(['docs', 'serve'])
-    expect(Exit.isFailure(exit)).toBe(true)
-    expect(printed).toContain('No Prisma schema found')
-    expect(printed).toContain('hekireki docs serve [flags]')
-  })
-})
-
-describe('docsBanner', () => {
-  it('points at the docs page and reports schema errors', () => {
-    expect(docsBanner({ port: 5858, schemaPath: '/tmp/schema.prisma', error: null })).toBe(
-      '⚡️ Hekireki Docs started at http://localhost:5858/docs\n   Schema: /tmp/schema.prisma (watching for changes)',
-    )
-    expect(docsBanner({ port: 5858, schemaPath: '/tmp/schema.prisma', error: 'boom' })).toBe(
-      '⚡️ Hekireki Docs started at http://localhost:5858/docs\n   Schema: /tmp/schema.prisma (watching for changes)\n   Schema has errors, fix them and the docs will reload:\nboom',
-    )
   })
 })
 

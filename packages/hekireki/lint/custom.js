@@ -2,32 +2,32 @@
 // It reads the meaning of an initializer from the AST, which a glob cannot express:
 //   custom/effect-gen-return        every `Effect.gen` is written as
 //                                   `function name(...) { return Effect.gen(function* () { ... }) }`
-//                                   (a trailing `.pipe(...)` is allowed for scoping /u recovery)
-//   custom/no-effect-fn             `Effect.fn` /u `Effect.fnUntraced` never appear - the shape above
+//                                   (a trailing `.pipe(...)` is allowed for scoping / recovery)
+//   custom/no-effect-fn             `Effect.fn` / `Effect.fnUntraced` never appear - the shape above
 //                                   is the one way to write an Effect-returning function
-//   custom/no-effect-flatmap        `Effect.flatMap` /u `Effect.andThen` never appear - control
+//   custom/no-effect-flatmap        `Effect.flatMap` / `Effect.andThen` never appear - control
 //                                   flow is written as straight-line `Effect.gen`
-//   custom/usecase-gen-straight-line in usecases/u, `Effect.map` / `Effect.tap` are folded into the
+//   custom/usecase-gen-straight-line in usecases/, `Effect.map` / `Effect.tap` are folded into the
 //                                   gen block - a trailing `.pipe(...)` is for error recovery only
 //   custom/function-declaration     a module-level function is a `function` declaration, not an
 //                                   anonymous function bound to a const (an annotated const such as
 //                                   `const h: RouteHandler<...> = (c) => ...` keeps its contextual type)
-//   custom/schema-pascal-case       zod/valibot schemas (variables initialized by a `z.*` /u `v.*`
+//   custom/schema-pascal-case       zod/valibot schemas (variables initialized by a `z.*` / `v.*`
 //                                   call) are PascalCase - a schema names a shape
 //   custom/schema-meta              schemas document themselves - zod needs `.meta({...})` or
-//                                   `.describe()`, valibot needs `v.metadata()` /u `v.description()`
+//                                   `.describe()`, valibot needs `v.metadata()` / `v.description()`
 //                                   in the chain (same idea as `@example` in main.tsp)
 //   custom/schema-blank-line        schema declarations are separated by a blank line
 //   custom/schema-property-meta     properties of `z.object({...})` document themselves one by one -
 //                                   the property row is what a reader of the generated docs sees
-//   custom/schema-example           writable kinds (string /u number / boolean /u enum) show a real
+//   custom/schema-example           writable kinds (string / number / boolean / enum) show a real
 //                                   value via `.meta({ example })` - a description alone leaves the
 //                                   reader guessing
 //   custom/schema-example-type      that example must parse against its own schema
 //                                   (no `example: 1` on a `z.array(...)`)
 //   custom/logic-camel-case         everything else in application logic is camelCase
 //                                   (UPPER_SNAKE constants allowed)
-//   custom/layer-suffix-pascal-case names ending in *UseCase /u *Service / *Domain start uppercase
+//   custom/layer-suffix-pascal-case names ending in *UseCase / *Service / *Domain start uppercase
 //   custom/no-usecase-to-usecase    a usecase never imports another usecase
 //   custom/no-null-coercion-map     services return the driver's own absence value - no
 //                                   `.pipe(Effect.map((v) => v ?? null))` on a lookup result
@@ -35,7 +35,7 @@
 //   custom/no-let                   no `let` outside a `for` statement head - write the value as
 //                                   one const expression
 //   custom/no-mutation              no writing through a const binding - member assignment,
-//                                   `delete`, ++/u-- on a property, and the mutating array methods
+//                                   `delete`, ++/-- on a property, and the mutating array methods
 //                                   are banned
 //   custom/predicate-is-name        a pure boolean predicate is `is*` (schema `Is*Input`),
 //                                   never `readIs*`
@@ -157,7 +157,7 @@ function memberRootObject(node) {
 }
 
 // The Array methods that write the receiver in place. Their copying counterparts
-// (toSorted /u toReversed / with /u concat / spread) return a new array instead.
+// (toSorted / toReversed / with / concat / spread) return a new array instead.
 const MUTATING_ARRAY_METHODS = new Set([
   'push',
   'pop',
@@ -180,7 +180,7 @@ function effectMember(node) {
     : null
 }
 
-// Walk a chain such as `z.object({...})` /u `z.string().min(1)` / `v.pipe(...)` down to its
+// Walk a chain such as `z.object({...})` / `z.string().min(1)` / `v.pipe(...)` down to its
 // root and return the root identifier name (`z.coerce.number().int()` still reaches 'z').
 function rootIdentifier(node) {
   if (!node) return null
@@ -223,7 +223,7 @@ function chainCallArgument(node, name) {
   return null
 }
 
-// Operations called on z /u v that do not build a schema. `z.safeParse(S, x)` is the
+// Operations called on z / v that do not build a schema. `z.safeParse(S, x)` is the
 // contract-validation idiom, not a schema definition.
 const NON_FACTORY = new Set([
   'safeParse',
@@ -272,9 +272,9 @@ function isDerivedSchemaInit(init) {
   return chainMethodNames(init).some((name) => DERIVATION_METHODS.has(name))
 }
 
-// "Is this a zod/valibot schema definition" is decided by the initializer rooting at z /u v
+// "Is this a zod/valibot schema definition" is decided by the initializer rooting at z / v
 // with no non-factory operation (safeParse and friends) in the chain. This repo never
-// aliases z /u v (lint allows the namespace import only under those names).
+// aliases z / v (lint allows the namespace import only under those names).
 function isSchemaInit(init) {
   return (
     init?.type === 'CallExpression' &&
@@ -338,7 +338,7 @@ function objectShapeArgument(init) {
   return argument?.type === 'ObjectExpression' ? argument : null
 }
 
-// Whether one schema documents itself (zod's .meta/u.describe, valibot's
+// Whether one schema documents itself (zod's .meta / .describe, valibot's
 // v.metadata/v.description).
 function isDocumentedSchema(init) {
   if (rootIdentifier(init) === 'v') {
@@ -364,7 +364,7 @@ function hasBlankLineBetween(text, previous, current) {
   return between.slice(1, -1).some((line) => line.trim() === '')
 }
 
-// --- shared parts for inspecting example values (schema-example /u schema-example-type) ---
+// --- shared parts for inspecting example values (schema-example / schema-example-type) ---
 const STRING_FACTORIES = new Set([
   'string',
   'cuid',
@@ -647,7 +647,7 @@ const plugin = {
             if (name === 'map' || name === 'tap') {
               context.report({
                 node,
-                message: `\`Effect.${name}\` in a usecase belongs inside the \`Effect.gen\` block as a plain statement. A trailing \`.pipe(...)\` is for error recovery only (catchTag / orElseSucceed /u matchEffect).`,
+                message: `\`Effect.${name}\` in a usecase belongs inside the \`Effect.gen\` block as a plain statement. A trailing \`.pipe(...)\` is for error recovery only (catchTag / orElseSucceed / matchEffect).`,
               })
             }
           },
@@ -799,7 +799,7 @@ const plugin = {
                 return
               }
               const object = metaObject(init)
-              // A missing or unreadable .meta() belongs to schema-meta /u schema-property-meta.
+              // A missing or unreadable .meta() belongs to schema-meta / schema-property-meta.
               if (object === null) return
               if (metaProperty(object, 'example') || metaProperty(object, 'examples')) return
               context.report({
@@ -1104,7 +1104,7 @@ const plugin = {
           if (memberRootObject(target).type === 'ThisExpression') return
           context.report({
             node,
-            message: `${wrote} writes into an existing object. Build the changed value instead: spread (\`{ ...value, field }\` / \`[...values, entry]\`), toSorted/toReversed for ordering, Object.fromEntries for indexing. A deliberate mutable cell states its reason on a \`/u/ oxlint-disable-next-line custom/no-mutation -- <why>\` comment.`,
+            message: `${wrote} writes into an existing object. Build the changed value instead: spread (\`{ ...value, field }\` / \`[...values, entry]\`), toSorted/toReversed for ordering, Object.fromEntries for indexing. A deliberate mutable cell states its reason on a \`// oxlint-disable-next-line custom/no-mutation -- <why>\` comment.`,
           })
         }
         return {
@@ -1131,7 +1131,7 @@ const plugin = {
                 : ''
             context.report({
               node,
-              message: `\`.${callee.property.name}(...)\` writes the receiver in place. Build the changed value instead (\`[...values, entry]\`, toSorted/toReversed)${copyFirst}. A deliberate mutable cell states its reason on a \`/u/ oxlint-disable-next-line custom/no-mutation -- <why>\` comment.`,
+              message: `\`.${callee.property.name}(...)\` writes the receiver in place. Build the changed value instead (\`[...values, entry]\`, toSorted/toReversed)${copyFirst}. A deliberate mutable cell states its reason on a \`// oxlint-disable-next-line custom/no-mutation -- <why>\` comment.`,
             })
           },
         }

@@ -436,7 +436,6 @@ describe('annotatedERRelations', () => {
 })
 
 describe('mergeERRelations', () => {
-  // C1: FK only / no annotation -> origin inferred, DMMF-derived cardinality (regression).
   it('keeps an inferred FK relation when there is no annotation', () => {
     expect(mergeERRelations(oneToMany(true))).toStrictEqual([
       {
@@ -449,7 +448,6 @@ describe('mergeERRelations', () => {
     ])
   })
 
-  // C2: annotation only / no FK -> the relation appears, origin annotated.
   it('emits an annotation-only relation that has no physical FK', () => {
     const models = [
       makeModel({
@@ -476,7 +474,6 @@ describe('mergeERRelations', () => {
     ])
   })
 
-  // C3: FK + same-pair annotation -> annotation overrides cardinality, origin and name stay.
   it('lets an annotation override an inferred FK cardinality while keeping origin inferred', () => {
     const [user, post] = oneToMany(true)
     const models = [
@@ -498,7 +495,6 @@ describe('mergeERRelations', () => {
     ])
   })
 
-  // C4: same annotation pair declared twice -> last-wins.
   it('keeps the last annotation when the same pair is declared twice', () => {
     const models = [
       makeModel({
@@ -519,7 +515,6 @@ describe('mergeERRelations', () => {
     ])
   })
 
-  // C5: inferred relations come first in source order, annotation-only pairs append last.
   it('orders inferred relations first and annotation-only relations last', () => {
     const models = [
       ...oneToMany(true),
@@ -541,7 +536,6 @@ describe('mergeERRelations', () => {
     ])
   })
 
-  // C7: invalid / unsupported annotations are ignored; the FK still drives output.
   it('ignores invalid annotations and falls back to the inferred FK', () => {
     const [user, post] = oneToMany(true)
     const models = [

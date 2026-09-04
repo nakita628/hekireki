@@ -49,8 +49,6 @@ export function startStudioServer(options: {
   readonly port: number
   readonly staticDir: string
   readonly databaseUrl: string | null
-  /** `false` serves the schema alone (docs mode): no database is looked up or opened. */
-  readonly database?: boolean
 }) {
   return Effect.gen(function* () {
     const directory = yield* isDirectory(options.schemaPath).pipe(
@@ -64,16 +62,13 @@ export function startStudioServer(options: {
     const state = StateService.createStudioState({ schemaPath: options.schemaPath })
     const snapshot = yield* state.reload()
     const watchDir = directory ? options.schemaPath : path.dirname(options.schemaPath)
-    const db =
-      options.database === false
-        ? DatabaseService.disconnectedDatabase('Docs mode: the database is not opened.')
-        : yield* DatabaseService.connectDatabase({
-            explicitUrl: options.databaseUrl,
-            schemaProvider: snapshot.schema?.provider ?? null,
-            cwd: process.cwd(),
-            schemaDir: watchDir,
-            env: process.env,
-          })
+    const db = yield* DatabaseService.connectDatabase({
+      explicitUrl: options.databaseUrl,
+      schemaProvider: snapshot.schema?.provider ?? null,
+      cwd: process.cwd(),
+      schemaDir: watchDir,
+      env: process.env,
+    })
     yield* Effect.addFinalizer(() => db.close)
     yield* WatchService.watchSchema({ state, dir: watchDir, debounceMs: RELOAD_DEBOUNCE_MS })
     const app = createStudioApp(state, options.staticDir, db)

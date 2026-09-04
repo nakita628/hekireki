@@ -1071,7 +1071,7 @@ model Hover {
   range: LspRange | null;
 }
 // ---------------------------------------------------------------------------
-// Documentation (the reference page `hekireki docs serve` renders)
+// Documentation (the reference page Studio renders at /docs)
 // ---------------------------------------------------------------------------
 
 /** Where a referenced type of the Prisma client API is declared, which decides what the page links to. */

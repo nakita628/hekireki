@@ -48,7 +48,7 @@ const MODEL = {
 }
 
 /** The slice of `GeneratorOptions` this generator reads. */
-function options(output: string | null, config: Record<string, string> = {}) {
+function options(output: string | null, config: Record<string, string | string[]> = {}) {
   return {
     generator: {
       isCustomOutput: output !== null,
@@ -59,7 +59,7 @@ function options(output: string | null, config: Record<string, string> = {}) {
   } as unknown as GeneratorOptions
 }
 
-function run(output: string | null, config: Record<string, string> = {}) {
+function run(output: string | null, config: Record<string, string | string[]> = {}) {
   return Effect.runPromiseExit(Effect.provide(er(options(output, config)), fileSystemLayer))
 }
 
@@ -140,5 +140,65 @@ describe('er', () => {
   it('names every option it cannot read, not just the first', async () => {
     const message = failure(await run(path.join(tmp(), 'er.md'), { theme: 'dark', nope: '1' }))
     expect(message).toContain('"theme", "nope"')
+  })
+
+  // One ER model in several formats is one generator block: `outputs` is the list of files,
+  // `output` the directory they go in.
+  it('writes every file outputs names into the directory output points at', async () => {
+    const dir = tmp()
+    expect(
+      Exit.isSuccess(await run(dir, { outputs: ['er.md', 'schema.dbml', 'er.svg', 'er.png'] })),
+    ).toBe(true)
+    expect(readFileSync(path.join(dir, 'er.md'), 'utf8')).toContain('```mermaid')
+    expect(readFileSync(path.join(dir, 'schema.dbml'), 'utf8')).toContain('Table User {')
+    expect(readFileSync(path.join(dir, 'er.svg'), 'utf8')).toContain('<svg')
+    expect(readFileSync(path.join(dir, 'er.png'), 'latin1').slice(0, 8)).toContain('PNG')
+  })
+
+  it('takes outputs written as one name, and makes the directories under it', async () => {
+    const dir = tmp()
+    expect(Exit.isSuccess(await run(dir, { outputs: 'diagram/er.svg' }))).toBe(true)
+    expect(readFileSync(path.join(dir, 'diagram/er.svg'), 'utf8')).toContain('<svg')
+  })
+
+  it('reads an option for any format outputs names', async () => {
+    const dir = tmp()
+    expect(
+      Exit.isSuccess(
+        await run(dir, { outputs: ['er.md', 'er.svg'], theme: 'dark', mapToDbSchema: 'false' }),
+      ),
+    ).toBe(false)
+    expect(Exit.isSuccess(await run(dir, { outputs: ['er.md', 'er.svg'], theme: 'dark' }))).toBe(
+      true,
+    )
+    const light = tmp()
+    expect(Exit.isSuccess(await run(light, { outputs: ['er.svg'], theme: 'light' }))).toBe(true)
+    expect(readFileSync(path.join(dir, 'er.svg'), 'utf8')).not.toBe(
+      readFileSync(path.join(light, 'er.svg'), 'utf8'),
+    )
+  })
+
+  it('names every format when it refuses an option none of them reads', async () => {
+    const message = failure(await run(tmp(), { outputs: ['er.md', 'er.svg'], nope: '1' }))
+    expect(message).toContain('does not read "nope" for the .md, .svg outputs')
+    expect(message).toContain('.md takes no options, .svg takes theme')
+  })
+
+  it('refuses a file in outputs it has no format for', async () => {
+    const message = failure(await run(tmp(), { outputs: ['er.md', 'er.jpeg'] }))
+    expect(message).toContain('outputs for Hekireki-ER has to name files ending in')
+    expect(message).toContain('"er.jpeg" ends in ".jpeg"')
+  })
+
+  it('refuses an empty outputs, which would write nothing', async () => {
+    expect(failure(await run(tmp(), { outputs: [] }))).toContain(
+      'outputs for Hekireki-ER has to name at least one file',
+    )
+  })
+
+  it('refuses an output that names a file when outputs names the files', async () => {
+    const message = failure(await run(path.join(tmp(), 'er.md'), { outputs: ['er.svg'] }))
+    expect(message).toContain('names the directory the files in outputs go in')
+    expect(message).toContain('ends in ".md"')
   })
 })

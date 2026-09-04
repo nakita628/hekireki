@@ -11,101 +11,6 @@ import {
   resolveSeaOrmColumnType,
 } from './sea-orm.js'
 
-describe('prismaTypeToRustType', () => {
-  it('maps String to String', () => {
-    expect(prismaTypeToRustType('String', true)).toStrictEqual('String')
-  })
-
-  it('maps optional String to Option<String>', () => {
-    expect(prismaTypeToRustType('String', false)).toStrictEqual('Option<String>')
-  })
-
-  it('maps Int to i32', () => {
-    expect(prismaTypeToRustType('Int', true)).toStrictEqual('i32')
-  })
-
-  it('maps optional Int to Option<i32>', () => {
-    expect(prismaTypeToRustType('Int', false)).toStrictEqual('Option<i32>')
-  })
-
-  it('maps BigInt to i64', () => {
-    expect(prismaTypeToRustType('BigInt', true)).toStrictEqual('i64')
-  })
-
-  it('maps Float to f64', () => {
-    expect(prismaTypeToRustType('Float', true)).toStrictEqual('f64')
-  })
-
-  it('maps Decimal to Decimal', () => {
-    expect(prismaTypeToRustType('Decimal', true)).toStrictEqual('Decimal')
-  })
-
-  it('maps Boolean to bool', () => {
-    expect(prismaTypeToRustType('Boolean', true)).toStrictEqual('bool')
-  })
-
-  it('maps optional Boolean to Option<bool>', () => {
-    expect(prismaTypeToRustType('Boolean', false)).toStrictEqual('Option<bool>')
-  })
-
-  it('maps DateTime to DateTime', () => {
-    expect(prismaTypeToRustType('DateTime', true)).toStrictEqual('DateTime')
-  })
-
-  it('maps optional DateTime to Option<DateTime>', () => {
-    expect(prismaTypeToRustType('DateTime', false)).toStrictEqual('Option<DateTime>')
-  })
-
-  it('maps Json to Json', () => {
-    expect(prismaTypeToRustType('Json', true)).toStrictEqual('Json')
-  })
-
-  it('maps Bytes to Vec<u8>', () => {
-    expect(prismaTypeToRustType('Bytes', true)).toStrictEqual('Vec<u8>')
-  })
-
-  it('maps unknown type to String', () => {
-    expect(prismaTypeToRustType('Unknown', true)).toStrictEqual('String')
-  })
-})
-
-describe('resolveSeaOrmColumnType', () => {
-  it('returns null for field without nativeType', () => {
-    const field = { nativeType: null } as any
-    expect(resolveSeaOrmColumnType(field)).toBeNull()
-  })
-
-  it('resolves VarChar(255) to String(StringLen::N(255))', () => {
-    const field = { nativeType: ['VarChar', [255]] } as any
-    expect(resolveSeaOrmColumnType(field)).toStrictEqual('String(StringLen::N(255))')
-  })
-
-  it('resolves Text to Text', () => {
-    const field = { nativeType: ['Text', []] } as any
-    expect(resolveSeaOrmColumnType(field)).toStrictEqual('Text')
-  })
-
-  it('resolves Uuid to Uuid', () => {
-    const field = { nativeType: ['Uuid', []] } as any
-    expect(resolveSeaOrmColumnType(field)).toStrictEqual('Uuid')
-  })
-
-  it('resolves Decimal(10,2) to Decimal(Some((10, 2)))', () => {
-    const field = { nativeType: ['Decimal', [10, 2]] } as any
-    expect(resolveSeaOrmColumnType(field)).toStrictEqual('Decimal(Some((10, 2)))')
-  })
-
-  it('resolves Timestamptz to TimestampWithTimeZone', () => {
-    const field = { nativeType: ['Timestamptz', []] } as any
-    expect(resolveSeaOrmColumnType(field)).toStrictEqual('TimestampWithTimeZone')
-  })
-
-  it('resolves JsonB to JsonBinary', () => {
-    const field = { nativeType: ['JsonB', []] } as any
-    expect(resolveSeaOrmColumnType(field)).toStrictEqual('JsonBinary')
-  })
-})
-
 describe('buildSeaOrmAttributes', () => {
   it('generates primary_key + auto_increment = false for uuid PK', () => {
     const field = {
@@ -725,4 +630,105 @@ impl ActiveModelBehavior for ActiveModel {
     }
 }`)
   })
+})
+
+/** Prisma type, the attribute as written, its DMMF nativeType and the sea-orm ColumnType. */
+const NATIVE_TYPES: readonly (readonly [
+  string,
+  string,
+  readonly [string, readonly string[]],
+  string | null,
+])[] = [
+  ['String', '@db.VarChar(255)', ['VarChar', ['255']], 'String(StringLen::N(255))'],
+  ['String', '@db.VarChar', ['VarChar', []], null],
+  ['String', '@db.Char(10)', ['Char', ['10']], 'String(StringLen::N(10))'],
+  ['String', '@db.Char', ['Char', []], null],
+  ['String', '@db.Text', ['Text', []], 'Text'],
+  ['String', '@db.MediumText', ['MediumText', []], 'Text'],
+  ['String', '@db.LongText', ['LongText', []], 'Text'],
+  ['String', '@db.TinyText', ['TinyText', []], 'Text'],
+  ['Int', '@db.SmallInt', ['SmallInt', []], 'SmallInteger'],
+  ['Int', '@db.TinyInt', ['TinyInt', []], 'SmallInteger'],
+  ['Int', '@db.MediumInt', ['MediumInt', []], 'Integer'],
+  ['Float', '@db.DoublePrecision', ['DoublePrecision', []], 'Double'],
+  ['Float', '@db.Double', ['Double', []], 'Double'],
+  ['Float', '@db.Real', ['Real', []], 'Double'],
+  ['Decimal', '@db.Decimal(10, 2)', ['Decimal', ['10', '2']], 'Decimal(Some((10, 2)))'],
+  ['Decimal', '@db.Decimal', ['Decimal', []], 'Decimal(None)'],
+  ['Decimal', '@db.Money(10, 2)', ['Money', ['10', '2']], 'Decimal(Some((10, 2)))'],
+  ['String', '@db.Uuid', ['Uuid', []], 'Uuid'],
+  ['DateTime', '@db.Timestamp', ['Timestamp', []], null],
+  ['DateTime', '@db.Timestamptz', ['Timestamptz', []], 'TimestampWithTimeZone'],
+  ['DateTime', '@db.Date', ['Date', []], 'Date'],
+  ['DateTime', '@db.Time', ['Time', []], 'Time'],
+  ['DateTime', '@db.Timetz', ['Timetz', []], 'Time'],
+  ['Json', '@db.JsonB', ['JsonB', []], 'JsonBinary'],
+  ['String', '@db.Xml', ['Xml', []], null],
+]
+
+// `@db.*` is the only way a Prisma schema pins a column type. `null` means the Rust type already
+// says everything sea-orm needs, so no `column_type` attribute is written at all - which is a
+// different statement from "unmapped", and the one this table exists to keep honest.
+describe('resolveSeaOrmColumnType', () => {
+  it.each(NATIVE_TYPES)('maps %s `%s`', (type, _attribute, nativeType, columnType) => {
+    const field: DMMF.Field = {
+      name: 'value',
+      type,
+      nativeType,
+      kind: 'scalar',
+      isList: false,
+      isRequired: true,
+      isUnique: false,
+      isId: false,
+      isReadOnly: false,
+      isGenerated: false,
+      isUpdatedAt: false,
+      hasDefaultValue: false,
+    }
+    expect(resolveSeaOrmColumnType(field)).toBe(columnType)
+  })
+
+  it('writes no column type for a field the schema left unqualified', () => {
+    const field: DMMF.Field = {
+      name: 'value',
+      type: 'String',
+      kind: 'scalar',
+      isList: false,
+      isRequired: true,
+      isUnique: false,
+      isId: false,
+      isReadOnly: false,
+      isGenerated: false,
+      isUpdatedAt: false,
+      hasDefaultValue: false,
+    }
+    expect(resolveSeaOrmColumnType(field)).toBeNull()
+  })
+})
+
+// An optional column is an `Option<T>`; an unknown Prisma type falls back to String rather than
+// emitting a Rust type that does not exist.
+describe('prismaTypeToRustType', () => {
+  it.each([
+    ['String', true, 'String'],
+    ['String', false, 'Option<String>'],
+    ['Int', true, 'i32'],
+    ['Int', false, 'Option<i32>'],
+    ['BigInt', true, 'i64'],
+    ['Float', true, 'f64'],
+    ['Decimal', true, 'Decimal'],
+    ['Boolean', true, 'bool'],
+    ['Boolean', false, 'Option<bool>'],
+    ['DateTime', true, 'DateTime'],
+    ['DateTime', false, 'Option<DateTime>'],
+    ['Json', true, 'Json'],
+    ['Bytes', true, 'Vec<u8>'],
+    ['Unknown', true, 'String'],
+    ['Unknown', false, 'Option<String>'],
+  ] as readonly (readonly [string, boolean, string])[])(
+    'maps %s (required: %s)',
+    (type, isRequired, rust) => {
+      expect(prismaTypeToRustType(type, isRequired)).toBe(rust)
+    },
+  )
 })

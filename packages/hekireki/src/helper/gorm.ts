@@ -225,7 +225,6 @@ export function buildGormTags(
   const nativeType = resolveNativeType(field)
   const includeNativeType =
     nativeType && (!isPk || !isFunctionDefault(field.default) || field.default.name !== 'uuid')
-  const includeAutoCreate = isNowDefault && (!isPk || isCompositePk || !isCompositePk)
   // An enum default arrives as the Prisma-level value name; the column stores
   // the @map-ped database value. dbgenerated() is a raw DDL expression, valid
   // on any column including the PK.
@@ -260,7 +259,7 @@ export function buildGormTags(
     // Scalar lists need a serializer so GORM can persist the slice; the built-in
     // json serializer works on every dialect without extra deps.
     field.isList && field.kind !== 'object' ? 'serializer:json' : null,
-    includeAutoCreate ? 'autoCreateTime' : null,
+    isNowDefault ? 'autoCreateTime' : null,
     defaultVal !== null ? `default:${defaultVal}` : null,
     field.isUpdatedAt ? 'autoUpdateTime' : null,
     field.isRequired && !isPk ? 'not null' : null,

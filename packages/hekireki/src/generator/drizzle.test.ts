@@ -888,3 +888,294 @@ export const torture = pgTable('torture', { id: bigserial('id', { mode: 'bigint'
     )
   })
 })
+
+// Prisma's `@db.*` attributes pick the column type, and drizzle names each one differently per
+// dialect. Nothing but this table stands between a renamed helper and a schema that fails to
+// compile against drizzle-orm, so every attribute the generator claims to read is listed.
+/** Prisma type, the attribute as it is written, its DMMF nativeType, the drizzle imports and column. */
+const PG_NATIVE_TYPES: readonly (readonly [
+  string,
+  string,
+  readonly [string, readonly string[]],
+  string,
+  string,
+])[] = [
+  [
+    'String',
+    '@db.VarChar(255)',
+    ['VarChar', ['255']],
+    'integer, pgTable, varchar',
+    "varchar('value', { length: 255 })",
+  ],
+  ['String', '@db.VarChar', ['VarChar', []], 'integer, pgTable, varchar', "varchar('value')"],
+  [
+    'String',
+    '@db.Char(2)',
+    ['Char', ['2']],
+    'char, integer, pgTable',
+    "char('value', { length: 2 })",
+  ],
+  ['String', '@db.Char', ['Char', []], 'char, integer, pgTable', "char('value')"],
+  ['String', '@db.Text', ['Text', []], 'integer, pgTable, text', "text('value')"],
+  ['String', '@db.Uuid', ['Uuid', []], 'integer, pgTable, uuid', "uuid('value')"],
+  ['Int', '@db.SmallInt', ['SmallInt', []], 'integer, pgTable, smallint', "smallint('value')"],
+  ['Int', '@db.Integer', ['Integer', []], 'integer, pgTable', "integer('value')"],
+  [
+    'BigInt',
+    '@db.BigInt',
+    ['BigInt', []],
+    'bigint, integer, pgTable',
+    "bigint('value', { mode: 'bigint' })",
+  ],
+  ['Float', '@db.Real', ['Real', []], 'integer, pgTable, real', "real('value')"],
+  [
+    'Float',
+    '@db.DoublePrecision',
+    ['DoublePrecision', []],
+    'doublePrecision, integer, pgTable',
+    "doublePrecision('value')",
+  ],
+  [
+    'Decimal',
+    '@db.Decimal(10, 2)',
+    ['Decimal', ['10', '2']],
+    'integer, numeric, pgTable',
+    "numeric('value', { precision: 10, scale: 2 })",
+  ],
+  [
+    'Decimal',
+    '@db.Decimal(10)',
+    ['Decimal', ['10']],
+    'integer, numeric, pgTable',
+    "numeric('value', { precision: 10 })",
+  ],
+  ['Decimal', '@db.Decimal', ['Decimal', []], 'integer, numeric, pgTable', "numeric('value')"],
+  [
+    'DateTime',
+    '@db.Timestamp(3)',
+    ['Timestamp', ['3']],
+    'integer, pgTable, timestamp',
+    "timestamp('value', { precision: 3 })",
+  ],
+  [
+    'DateTime',
+    '@db.Timestamp',
+    ['Timestamp', []],
+    'integer, pgTable, timestamp',
+    "timestamp('value')",
+  ],
+  [
+    'DateTime',
+    '@db.Timestamptz(3)',
+    ['Timestamptz', ['3']],
+    'integer, pgTable, timestamp',
+    "timestamp('value', { withTimezone: true, precision: 3 })",
+  ],
+  [
+    'DateTime',
+    '@db.Timestamptz',
+    ['Timestamptz', []],
+    'integer, pgTable, timestamp',
+    "timestamp('value', { withTimezone: true })",
+  ],
+  ['DateTime', '@db.Date', ['Date', []], 'date, integer, pgTable', "date('value')"],
+  [
+    'DateTime',
+    '@db.Time(3)',
+    ['Time', ['3']],
+    'integer, pgTable, time',
+    "time('value', { precision: 3 })",
+  ],
+  ['DateTime', '@db.Time', ['Time', []], 'integer, pgTable, time', "time('value')"],
+  ['Json', '@db.Json', ['Json', []], 'integer, json, pgTable', "json('value')"],
+  ['Json', '@db.JsonB', ['JsonB', []], 'integer, jsonb, pgTable', "jsonb('value')"],
+  ['Bytes', '@db.ByteA', ['ByteA', []], 'integer, pgTable, text', "text('value')"],
+  ['String', '@db.Citext', ['Citext', []], 'integer, pgTable, text', "text('value')"],
+]
+
+/** Prisma type, the attribute as it is written, its DMMF nativeType, the drizzle imports and column. */
+const MYSQL_NATIVE_TYPES: readonly (readonly [
+  string,
+  string,
+  readonly [string, readonly string[]],
+  string,
+  string,
+])[] = [
+  [
+    'String',
+    '@db.VarChar(255)',
+    ['VarChar', ['255']],
+    'int, mysqlTable, varchar',
+    "varchar('value', { length: 255 })",
+  ],
+  ['String', '@db.VarChar', ['VarChar', []], 'int, mysqlTable, varchar', "varchar('value')"],
+  [
+    'String',
+    '@db.Char(2)',
+    ['Char', ['2']],
+    'char, int, mysqlTable',
+    "char('value', { length: 2 })",
+  ],
+  ['String', '@db.Char', ['Char', []], 'char, int, mysqlTable', "char('value')"],
+  ['String', '@db.Text', ['Text', []], 'int, mysqlTable, text', "text('value')"],
+  ['String', '@db.LongText', ['LongText', []], 'int, longtext, mysqlTable', "longtext('value')"],
+  [
+    'String',
+    '@db.MediumText',
+    ['MediumText', []],
+    'int, mediumtext, mysqlTable',
+    "mediumtext('value')",
+  ],
+  ['String', '@db.TinyText', ['TinyText', []], 'int, mysqlTable, tinytext', "tinytext('value')"],
+  ['Int', '@db.TinyInt', ['TinyInt', []], 'int, mysqlTable, tinyint', "tinyint('value')"],
+  ['Int', '@db.SmallInt', ['SmallInt', []], 'int, mysqlTable, smallint', "smallint('value')"],
+  ['Int', '@db.MediumInt', ['MediumInt', []], 'int, mediumint, mysqlTable', "mediumint('value')"],
+  ['Int', '@db.Int', ['Int', []], 'int, mysqlTable', "int('value')"],
+  [
+    'BigInt',
+    '@db.BigInt',
+    ['BigInt', []],
+    'bigint, int, mysqlTable',
+    "bigint('value', { mode: 'bigint' })",
+  ],
+  ['Float', '@db.Float', ['Float', []], 'float, int, mysqlTable', "float('value')"],
+  ['Float', '@db.Double', ['Double', []], 'double, int, mysqlTable', "double('value')"],
+  [
+    'Decimal',
+    '@db.Decimal(10, 2)',
+    ['Decimal', ['10', '2']],
+    'decimal, int, mysqlTable',
+    "decimal('value', { precision: 10, scale: 2 })",
+  ],
+  ['Decimal', '@db.Decimal', ['Decimal', []], 'decimal, int, mysqlTable', "decimal('value')"],
+  [
+    'DateTime',
+    '@db.DateTime(3)',
+    ['DateTime', ['3']],
+    'datetime, int, mysqlTable',
+    "datetime('value', { fsp: 3 })",
+  ],
+  [
+    'DateTime',
+    '@db.DateTime',
+    ['DateTime', []],
+    'datetime, int, mysqlTable',
+    "datetime('value', { fsp: 3 })",
+  ],
+  [
+    'DateTime',
+    '@db.Timestamp(3)',
+    ['Timestamp', ['3']],
+    'int, mysqlTable, timestamp',
+    "timestamp('value', { fsp: 3 })",
+  ],
+  [
+    'DateTime',
+    '@db.Timestamp',
+    ['Timestamp', []],
+    'int, mysqlTable, timestamp',
+    "timestamp('value', { fsp: 3 })",
+  ],
+  ['DateTime', '@db.Date', ['Date', []], 'date, int, mysqlTable', "date('value')"],
+  [
+    'DateTime',
+    '@db.Time(3)',
+    ['Time', ['3']],
+    'int, mysqlTable, time',
+    "time('value', { fsp: 3 })",
+  ],
+  ['DateTime', '@db.Time', ['Time', []], 'int, mysqlTable, time', "time('value')"],
+  [
+    'Bytes',
+    '@db.Binary(16)',
+    ['Binary', ['16']],
+    'binary, int, mysqlTable',
+    "binary('value', { length: 16 })",
+  ],
+  [
+    'Bytes',
+    '@db.VarBinary(16)',
+    ['VarBinary', ['16']],
+    'int, mysqlTable, varbinary',
+    "varbinary('value', { length: 16 })",
+  ],
+  ['Bytes', '@db.Blob', ['Blob', []], 'blob, int, mysqlTable', "blob('value')"],
+  ['Json', '@db.Json', ['Json', []], 'int, json, mysqlTable', "json('value')"],
+  ['String', '@db.Nope', ['Nope', []], 'int, mysqlTable, text', "text('value')"],
+]
+
+/** Prisma type, the attribute as it is written, its DMMF nativeType, the drizzle imports and column. */
+const SQLITE_NATIVE_TYPES: readonly (readonly [
+  string,
+  string,
+  readonly [string, readonly string[]],
+  string,
+  string,
+])[] = [
+  ['String', '@db.Text', ['Text', []], 'integer, sqliteTable, text', "text('value')"],
+  ['Int', '@db.Integer', ['Integer', []], 'integer, sqliteTable', "integer('value')"],
+  ['Float', '@db.Real', ['Real', []], 'integer, real, sqliteTable', "real('value')"],
+  ['String', '@db.Nope', ['Nope', []], 'integer, sqliteTable, text', "text('value')"],
+]
+
+describe('native database types', () => {
+  it.each(PG_NATIVE_TYPES)(
+    'maps %s `%s` on postgresql',
+    (type, _attribute, nativeType, imports, column) => {
+      const datamodel = makeDatamodel([
+        makeModel({
+          name: 'Row',
+          fields: [
+            makeField({ name: 'id', type: 'Int', isId: true }),
+            makeField({ name: 'value', type, nativeType }),
+          ],
+        }),
+      ])
+      expect(drizzleSchema(datamodel, 'postgresql', [])).toBe(
+        `import { ${imports} } from 'drizzle-orm/pg-core'
+
+export const row = pgTable('row', { id: integer('id').primaryKey(), value: ${column}.notNull() })`,
+      )
+    },
+  )
+
+  it.each(MYSQL_NATIVE_TYPES)(
+    'maps %s `%s` on mysql',
+    (type, _attribute, nativeType, imports, column) => {
+      const datamodel = makeDatamodel([
+        makeModel({
+          name: 'Row',
+          fields: [
+            makeField({ name: 'id', type: 'Int', isId: true }),
+            makeField({ name: 'value', type, nativeType }),
+          ],
+        }),
+      ])
+      expect(drizzleSchema(datamodel, 'mysql', [])).toBe(
+        `import { ${imports} } from 'drizzle-orm/mysql-core'
+
+export const row = mysqlTable('row', { id: int('id').primaryKey(), value: ${column}.notNull() })`,
+      )
+    },
+  )
+
+  it.each(SQLITE_NATIVE_TYPES)(
+    'maps %s `%s` on sqlite',
+    (type, _attribute, nativeType, imports, column) => {
+      const datamodel = makeDatamodel([
+        makeModel({
+          name: 'Row',
+          fields: [
+            makeField({ name: 'id', type: 'Int', isId: true }),
+            makeField({ name: 'value', type, nativeType }),
+          ],
+        }),
+      ])
+      expect(drizzleSchema(datamodel, 'sqlite', [])).toBe(
+        `import { ${imports} } from 'drizzle-orm/sqlite-core'
+
+export const row = sqliteTable('row', { id: integer('id').primaryKey(), value: ${column}.notNull() })`,
+      )
+    },
+  )
+})

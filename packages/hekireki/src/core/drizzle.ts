@@ -15,10 +15,13 @@ export function drizzle(options: GeneratorOptions) {
           'output is required for Hekireki-Drizzle. Please specify output in your generator config.',
       })
     }
-    const providerResult = parsePrismaProvider(
-      options.datasources[0]?.activeProvider ?? 'postgresql',
-    )
-    if (!providerResult.ok) return providerResult
+    const provider = options.datasources[0]?.activeProvider ?? 'postgresql'
+    const providerResult = parsePrismaProvider(provider)
+    if (!providerResult.ok) {
+      return yield* new GeneratorConfigError({
+        message: `Unsupported provider for Hekireki-Drizzle: ${provider}. Supported providers are postgresql, cockroachdb, mysql, and sqlite.`,
+      })
+    }
     const output = options.generator.output.value
     const resolved = path.extname(output)
       ? { dir: path.dirname(output), file: output }
