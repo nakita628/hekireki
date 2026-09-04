@@ -43,6 +43,17 @@ The test suite is split into two Vitest projects:
 
 Toolchains you don't have installed are skipped locally with a note — CI runs the full matrix, so you don't need every language installed to contribute. Run a single language with `vp test --project lang test/lang/gorm.test.ts`.
 
+Studio has a third suite on top of those, in Playwright:
+
+```bash
+cd packages/hekireki
+pnpm test:e2e         # build dist/, then drive the built CLI in Chromium
+```
+
+`packages/hekireki/e2e/` runs the **built** Studio: `e2e/serve.ts` rebuilds a throwaway workspace (a copy of `e2e/fixtures/prisma` plus a `node:sqlite` database) and starts `dist/bin/hekireki.js studio` on it, so a run never touches a real project. Tests fail on any browser console error, page error, or 5xx from `/api`, not just on a failed assertion. It needs Node 24 (`node:sqlite`, and `serve.ts` is executed as TypeScript) and the Chromium Playwright pins: `pnpm exec playwright install chromium`.
+
+The screenshot baselines in `e2e/__screenshots__` were taken in this repository's devcontainer. Fonts differ per machine, so regenerate them where the suite runs (`pnpm test:e2e --update-snapshots`) before trusting a pixel diff — and for the same reason CI runs the suite with `--ignore-snapshots`: the `E2E` workflow verifies behavior, and the visual baselines stay a local check.
+
 ## Project layout
 
 ```
@@ -61,6 +72,21 @@ test/
 ```
 
 Dependencies flow one way: `utils → helper → generator → core/bin`.
+
+## Studio's UI
+
+The Studio client is [HeroUI v3](https://heroui.com) (React Aria + Tailwind CSS v4) with
+[react-icons](https://react-icons.github.io/react-icons/) for the marks — Lucide, imported as
+`Lu*` from `react-icons/lu`. Nothing in `src/studio/client` draws its own buttons, tabs, chips,
+key caps, toasts, dialogs or SVG paths: reach for the component before writing one.
+
+`styles.css` keeps Studio's own palette (`--c-*`) and points HeroUI's variables at it, so both
+draw from one set of colours — the same one the ER diagram's PNG/SVG exporter writes literally
+(`diagram/svg.ts`). Change a colour there, in one place.
+
+Two `overrides` in `pnpm-workspace.yaml` pin `@react-types/color` and `@react-types/slider` below
+the versions HeroUI asks for: at those versions they depend on Adobe's Spectrum design system for
+declarations that are erased at build time, which lands thousands of files in `node_modules`.
 
 ## Coding rules
 
@@ -96,10 +122,11 @@ These are enforced in review, so following them up front saves a round-trip:
 3. Before pushing, make sure all of these pass locally:
    - `pnpm check` (clean, no diffs left behind)
    - `pnpm test`
+   - `cd packages/hekireki && pnpm test:e2e` if you touched Studio (`src/studio/`)
    - regression / new tests included
 4. Update user-facing docs in the same PR when behavior changes: README examples for new options, and note breaking changes explicitly.
 5. Versioning follows [SemVer](https://semver.org/) and the changelog follows [Keep a Changelog](https://keepachangelog.com/) — maintainers handle releases, but stating "patch / minor / breaking" in your PR description helps triage.
-6. CI must be green: `Test` (lint, unit tests, coverage) and, if you touched `src/` or `test/`, the per-language `Lang Check` matrix.
+6. CI must be green: `Test` (lint, unit tests, coverage), `E2E` (the Studio suite in Chromium) and, if you touched `src/` or `test/`, the per-language `Lang Check` matrix.
 
 ## Adding a new generator
 

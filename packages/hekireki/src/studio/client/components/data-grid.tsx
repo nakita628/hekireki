@@ -1,8 +1,17 @@
+import { Button, Pagination } from '@heroui/react'
 import { useState } from 'react'
+import {
+  LuCheck,
+  LuChevronsLeft,
+  LuChevronsRight,
+  LuKey,
+  LuLink,
+  LuTrash2,
+  LuX,
+} from 'react-icons/lu'
 
 import { displayCell, editableText, keyOf, parseCellInput } from '../features/data/cells.js'
 import { PAGE_SIZE } from '../features/data/paging.js'
-import { CheckIcon, KeyIcon, LinkIcon, TrashIcon, XIcon } from './icons.js'
 import { fieldTypeLabel } from './labels.js'
 
 type Row = Record<string, string | number | boolean | null>
@@ -131,25 +140,27 @@ function NewRowForm({
     <tr className="bg-accent-soft/60">
       <td className="border-b border-line px-2 py-1.5">
         <div className="flex gap-1">
-          <button
-            type="button"
-            className="rounded p-1 text-ok hover:bg-surface"
-            title="Save row"
+          <Button
+            variant="ghost"
+            size="sm"
+            isIconOnly
+            className="text-ok"
             aria-label="Save row"
-            disabled={saving}
-            onClick={submit}
+            isDisabled={saving}
+            onPress={submit}
           >
-            <CheckIcon size={14} />
-          </button>
-          <button
-            type="button"
-            className="rounded p-1 text-muted hover:bg-surface"
-            title="Cancel"
+            <LuCheck size={14} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            isIconOnly
+            className="text-muted"
             aria-label="Cancel"
-            onClick={onCancel}
+            onPress={onCancel}
           >
-            <XIcon size={14} />
-          </button>
+            <LuX size={14} />
+          </Button>
         </div>
       </td>
       {fields.map((field) => {
@@ -271,9 +282,9 @@ export function DataGrid({
                 <th key={field.name} className="th" title={field.documentation ?? undefined}>
                   <span className="inline-flex items-center gap-1.5">
                     {field.isId || primaryKey.has(field.name) ? (
-                      <KeyIcon size={12} className="text-key" />
+                      <LuKey size={12} className="text-key" />
                     ) : field.isForeignKey ? (
-                      <LinkIcon size={12} className="text-accent" />
+                      <LuLink size={12} className="text-accent" />
                     ) : null}
                     <span className="font-bold text-ink">{field.name}</span>
                     <span className="font-sans text-meta font-normal text-faint">
@@ -304,20 +315,21 @@ export function DataGrid({
                 className="group hover:bg-canvas"
               >
                 <td className="border-b border-line px-2 py-1 text-center">
-                  <button
-                    type="button"
-                    className="rounded p-1 text-faint opacity-60 group-hover:opacity-100 hover:bg-surface hover:text-danger disabled:opacity-20"
-                    title="Delete row"
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    isIconOnly
+                    className="text-faint opacity-60 group-hover:opacity-100 hover:text-danger"
                     aria-label="Delete row"
-                    disabled={!editable || saving}
-                    onClick={() => {
+                    isDisabled={!editable || saving}
+                    onPress={() => {
                       if (globalThis.confirm(`Delete this ${model.name} row?`)) {
                         onDelete(keyOf(row, rowKey))
                       }
                     }}
                   >
-                    <TrashIcon size={14} />
-                  </button>
+                    <LuTrash2 size={14} />
+                  </Button>
                 </td>
                 {fields.map((field) => {
                   const value = row[field.name] ?? null
@@ -368,63 +380,60 @@ export function DataGrid({
           </tbody>
         </table>
       </div>
-      <footer className="flex items-center gap-3 border-t border-line bg-surface px-6 py-2 text-code text-muted">
-        <span>
+      <Pagination
+        size="sm"
+        className="flex items-center gap-3 border-t border-line bg-surface px-6 py-2 text-code text-muted"
+      >
+        <Pagination.Summary>
           {from.toLocaleString()}–{to.toLocaleString()} of {total.toLocaleString()}{' '}
           {total === 1 ? 'row' : 'rows'}
-        </span>
-        {pages > 1 ? (
-          <span>
-            page {page.toLocaleString()} / {pages.toLocaleString()}
-          </span>
-        ) : null}
-        <span className="ml-auto flex gap-1">
-          <button
-            type="button"
-            className="btn btn-sm"
-            disabled={skip === 0}
-            aria-label="First page"
-            title="First page"
-            onClick={() => {
-              onPage(0)
-            }}
-          >
-            «
-          </button>
-          <button
-            type="button"
-            className="btn btn-sm"
-            disabled={skip === 0}
-            onClick={() => {
-              onPage(Math.max(0, skip - PAGE_SIZE))
-            }}
-          >
-            Previous
-          </button>
-          <button
-            type="button"
-            className="btn btn-sm"
-            disabled={to >= total}
-            onClick={() => {
-              onPage(skip + PAGE_SIZE)
-            }}
-          >
-            Next
-          </button>
-          <button
-            type="button"
-            className="btn btn-sm"
-            disabled={to >= total}
-            aria-label="Last page"
-            title="Last page"
-            onClick={() => {
-              onPage((pages - 1) * PAGE_SIZE)
-            }}
-          >
-            »
-          </button>
-        </span>
-      </footer>
+          {pages > 1 ? ` · page ${page.toLocaleString()} / ${pages.toLocaleString()}` : ''}
+        </Pagination.Summary>
+        <Pagination.Content className="ml-auto">
+          <Pagination.Item>
+            <Pagination.Link
+              isDisabled={skip === 0}
+              aria-label="First page"
+              onPress={() => {
+                onPage(0)
+              }}
+            >
+              <LuChevronsLeft />
+            </Pagination.Link>
+          </Pagination.Item>
+          <Pagination.Item>
+            <Pagination.Previous
+              isDisabled={skip === 0}
+              onPress={() => {
+                onPage(Math.max(0, skip - PAGE_SIZE))
+              }}
+            >
+              Previous
+            </Pagination.Previous>
+          </Pagination.Item>
+          <Pagination.Item>
+            <Pagination.Next
+              isDisabled={to >= total}
+              onPress={() => {
+                onPage(skip + PAGE_SIZE)
+              }}
+            >
+              Next
+            </Pagination.Next>
+          </Pagination.Item>
+          <Pagination.Item>
+            <Pagination.Link
+              isDisabled={to >= total}
+              aria-label="Last page"
+              onPress={() => {
+                onPage((pages - 1) * PAGE_SIZE)
+              }}
+            >
+              <LuChevronsRight />
+            </Pagination.Link>
+          </Pagination.Item>
+        </Pagination.Content>
+      </Pagination>
     </div>
   )
 }

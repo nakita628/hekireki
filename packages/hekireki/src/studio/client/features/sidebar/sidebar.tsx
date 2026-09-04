@@ -1,20 +1,22 @@
+import { Button } from '@heroui/react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-
 import {
-  BoltIcon,
-  BookIcon,
-  DiagramIcon,
-  FileIcon,
-  ListIcon,
-  MoonIcon,
-  PanelIcon,
-  SunIcon,
-  TableIcon,
-  TerminalIcon,
-} from '../../components/icons.js'
+  LuBook,
+  LuFileText,
+  LuGitCompare,
+  LuList,
+  LuMoon,
+  LuPanelLeft,
+  LuSun,
+  LuTable,
+  LuTerminal,
+  LuZap,
+} from 'react-icons/lu'
+
 import { getDbCountsQueryOptions, useDb } from '../../hooks/index.js'
 import { useUiStore } from '../../lib/index.js'
+import { PaletteButton } from '../palette/palette.js'
 import { diagramFields } from '../schema/layout.js'
 
 type Schema = {
@@ -98,28 +100,33 @@ export function Sidebar({
           search={{}}
         >
           <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-lg bg-accent text-white">
-            <BoltIcon size={18} />
+            <LuZap size={18} />
           </span>
           <span className="truncate">Hekireki Studio</span>
         </Link>
-        <button
-          type="button"
-          className="btn btn-ghost ml-auto size-7 shrink-0 px-0 text-muted"
+        <Button
+          variant="ghost"
+          size="sm"
+          isIconOnly
+          className="ml-auto size-7 shrink-0 text-muted"
           aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-          onClick={toggleTheme}
+          onPress={toggleTheme}
         >
-          {theme === 'dark' ? <SunIcon size={16} /> : <MoonIcon size={16} />}
-        </button>
-        <button
-          type="button"
-          className="btn btn-ghost size-7 shrink-0 px-0 text-muted"
+          {theme === 'dark' ? <LuSun /> : <LuMoon />}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          isIconOnly
+          className="size-7 shrink-0 text-muted"
           aria-label="Hide the sidebar"
-          title="Hide the sidebar"
-          onClick={toggleSidebar}
+          onPress={toggleSidebar}
         >
-          <PanelIcon size={16} />
-        </button>
+          <LuPanelLeft />
+        </Button>
+      </div>
+      <div className="px-2.5 pb-2">
+        <PaletteButton />
       </div>
       <nav className="flex flex-col gap-0.5 px-2.5 pb-3">
         <Link
@@ -130,25 +137,25 @@ export function Sidebar({
           inactiveProps={NAV_INACTIVE}
         >
           <span className="inline-flex opacity-85">
-            <DiagramIcon />
+            <LuGitCompare />
           </span>
           <span>Schema</span>
         </Link>
         <Link to="/prisma" search={{}} activeProps={NAV_ACTIVE} inactiveProps={NAV_INACTIVE}>
           <span className="inline-flex opacity-85">
-            <FileIcon />
+            <LuFileText />
           </span>
           <span>Prisma schema</span>
         </Link>
         <Link to="/sql" activeProps={NAV_ACTIVE} inactiveProps={NAV_INACTIVE}>
           <span className="inline-flex opacity-85">
-            <TerminalIcon />
+            <LuTerminal />
           </span>
           <span>SQL</span>
         </Link>
         <Link to="/docs" activeProps={NAV_ACTIVE} inactiveProps={NAV_INACTIVE}>
           <span className="inline-flex opacity-85">
-            <BookIcon />
+            <LuBook />
           </span>
           <span>Docs</span>
         </Link>
@@ -164,7 +171,7 @@ export function Sidebar({
               <EntityLink
                 to="/models/$name"
                 name={model.name}
-                icon={<TableIcon size={15} />}
+                icon={<LuTable size={15} />}
                 count={connected ? (counts?.[model.name] ?? null) : diagramFields(model).length}
               />
             </li>
@@ -180,7 +187,7 @@ export function Sidebar({
                 <EntityLink
                   to="/enums/$name"
                   name={value.name}
-                  icon={<ListIcon size={15} />}
+                  icon={<LuList size={15} />}
                   count={value.values.length}
                 />
               </li>

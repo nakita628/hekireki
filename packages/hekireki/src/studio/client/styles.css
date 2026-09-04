@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import '@heroui/react/styles';
 @import '@xyflow/react/dist/style.css';
 
 @custom-variant dark (&:where(.dark, .dark *));
@@ -71,6 +72,40 @@
   --c-tok-definition: #93c5fd;
 }
 
+/* HeroUI reads its own variables. They are pointed at the palette above rather than left on their
+   defaults, so its components are drawn in Studio's colours and follow the theme switch with
+   everything else — one palette, and the ER diagram's exported SVG still agrees with the canvas. */
+@layer base {
+  :root {
+    --background: var(--c-canvas);
+    --foreground: var(--c-ink);
+    --surface: var(--c-surface);
+    --surface-foreground: var(--c-ink);
+    --surface-secondary: var(--c-surface-2);
+    --surface-tertiary: var(--c-canvas);
+    --overlay: var(--c-surface);
+    --overlay-foreground: var(--c-ink);
+    --muted: var(--c-muted);
+    --accent: var(--c-accent);
+    --accent-foreground: #ffffff;
+    --default: var(--c-canvas);
+    --default-foreground: var(--c-ink);
+    --border: var(--c-line-strong);
+    --separator: var(--c-line);
+    --focus: var(--c-accent);
+    --link: var(--c-accent-text);
+    --danger: var(--c-danger);
+    --success: var(--c-ok);
+    --warning: var(--c-busy);
+    --field-background: var(--c-surface);
+    --field-foreground: var(--c-ink);
+    --field-border: var(--c-line-strong);
+    --field-border-width: 1px;
+    --field-radius: 0.5rem;
+    --radius: 0.5rem;
+  }
+}
+
 @theme inline {
   --color-canvas: var(--c-canvas);
   --color-surface: var(--c-surface);
@@ -131,43 +166,10 @@
 }
 
 @layer components {
-  .toast {
-    border: 1px solid var(--c-line);
-    background: var(--c-surface);
-    color: var(--c-ink);
-  }
-  .btn {
-    @apply inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-3.5 text-ui font-medium whitespace-nowrap text-ink hover:bg-canvas disabled:cursor-default disabled:opacity-50;
-  }
-
-  .btn-ghost {
-    @apply border-transparent hover:border-line;
-  }
-
-  .btn-primary {
-    @apply border-accent bg-accent text-white hover:bg-accent-text;
-  }
-
-  .chip {
-    @apply rounded-md bg-accent-soft px-1.5 py-px font-mono text-meta whitespace-nowrap text-accent-text;
-  }
-
-  .tab {
-    @apply cursor-pointer border-0 border-b-2 border-transparent bg-transparent px-3 py-2 font-mono text-code whitespace-nowrap text-muted hover:text-ink;
-  }
-
-  .tab-active {
-    @apply border-accent font-semibold text-accent-text;
-  }
-
-  /* The `h1` of a page, and the smaller button a toolbar packs in. Both were spelled out at every
-     call site before, which is how a scale drifts. */
+  /* The `h1` of a page: spelled out at every call site before, which is how a scale drifts.
+     Buttons, chips, tabs, key caps, pagination and toasts are HeroUI's now. */
   .page-title {
     @apply m-0 text-title font-bold tracking-tight;
-  }
-
-  .btn-sm {
-    @apply h-7 px-2.5 text-code;
   }
 
   .heading {

@@ -309,6 +309,10 @@ hekireki studio -p 3000
 | `/prisma`        | The schema in a Prisma editor, with the language server's diagnostics             |
 | `/sql`           | A SQL console against the connected database                                      |
 
+**⌘K** / **Ctrl+K** opens a search over the whole schema — every page, model, enum and field, by
+the letters of its name in order, so `usemail` finds `User.email`. Following a field opens its
+model on that row.
+
 `--schema` takes either a `schema.prisma` file or a directory — every `.prisma` file directly in the
 directory (subdirectories are not descended into) is read as one schema, which is how Prisma's
 [multi-file schema](https://www.prisma.io/docs/orm/prisma-schema/overview/location#multi-file-prisma-schema)

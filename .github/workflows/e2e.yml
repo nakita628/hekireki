@@ -1,0 +1,89 @@
+name: E2E
+
+# Studio's end-to-end suite (packages/hekireki/e2e): Playwright starts the *built* CLI through
+# e2e/serve.ts — it serves dist/web against a throwaway workspace (a copy of e2e/fixtures plus a
+# node:sqlite database) — and drives the real UI in Chromium. This is separate from Test
+# (test.yml), which owns the unit suite, and from Lang Check (lang-check.yml), which owns the
+# generated foreign-language code.
+#
+# Screenshot assertions run with `--ignore-snapshots`. The baselines under e2e/__screenshots__
+# were taken in this repository's devcontainer, and a hosted runner resolves `sans-serif` and
+# hints glyphs differently, so a pixel diff here would report the runner rather than a
+# regression. Everything else is a hard failure: the DOM assertions, the language-server
+# interactions, the writes the editor makes to disk, and the console-error / 5xx guard that
+# e2e/studio.ts installs on every page. Visual baselines stay owned by a local `pnpm test:e2e`.
+#
+# Action versions are tracked by Renovate, which pins each one to its digest
+# (helpers:pinGitHubActionDigests) and keeps the @vX.Y.Z tag as a comment.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    # The suite itself runs in well under a minute; this only bounds a hung browser or a web
+    # server that never answers, whose default would otherwise be 6 hours.
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: packages/hekireki
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: voidzero-dev/setup-vp@313600b80b104eadebb9111787d37a2e83e014ca # v1.17.0
+        with:
+          # Node 24, not the 22 the other workflows use: e2e/serve.ts is handed to node as
+          # TypeScript, and it and the Studio server both use node:sqlite, which is still behind
+          # --experimental-sqlite on 22.
+          node-version: '24'
+          cache: true
+      - run: vp install --frozen-lockfile
+        working-directory: .
+
+      # The suite runs the published entrypoint (dist/bin/hekireki.js) and the bundled client,
+      # so the build is part of the test setup rather than a separate check.
+      - run: vp run hekireki#build
+        working-directory: .
+
+      - name: Resolve the pinned Playwright version
+        id: playwright
+        run: echo "version=$(vp exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      # Chromium is ~150MB and is pinned per Playwright version, so it is cached under that
+      # version alone. The system libraries and fonts it needs are apt packages outside the
+      # cache, hence the separate install-deps step on a hit.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: browser
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+      - if: steps.browser.outputs.cache-hit != 'true'
+        run: vp exec playwright install --with-deps chromium
+      - if: steps.browser.outputs.cache-hit == 'true'
+        run: vp exec playwright install-deps chromium
+
+      # CI is set on GitHub Actions, which turns on the config's single retry and its `github`
+      # reporter (failures are annotated on the diff).
+      - name: E2E (Studio in Chromium)
+        run: vp exec playwright test --ignore-snapshots
+
+      # Traces of the failed attempts (trace: 'retain-on-failure'), so a failure that does not
+      # reproduce locally can still be replayed with `playwright show-trace`.
+      - if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-traces
+          path: packages/hekireki/e2e/.results
+          if-no-files-found: ignore
+          retention-days: 7

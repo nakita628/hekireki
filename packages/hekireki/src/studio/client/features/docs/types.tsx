@@ -1,3 +1,4 @@
+import { Chip } from '@heroui/react'
 import { Fragment } from 'react'
 
 import { typeRefAnchor, typeSectionId } from './anchors.js'
@@ -83,9 +84,9 @@ function EnumSection({ type }: { readonly type: DocsEnum }) {
       <h3 className="m-0 pb-2 font-mono text-lead font-bold">{type.name}</h3>
       <div className="flex flex-wrap gap-1.5">
         {type.values.map((value) => (
-          <span key={value} className="chip">
+          <Chip key={value} color="accent" variant="soft" size="sm" className="font-mono">
             {value}
-          </span>
+          </Chip>
         ))}
       </div>
     </section>
