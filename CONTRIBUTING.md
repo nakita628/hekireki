@@ -73,6 +73,21 @@ test/
 
 Dependencies flow one way: `utils → helper → generator → core/bin`.
 
+## Studio's UI
+
+The Studio client is [HeroUI v3](https://heroui.com) (React Aria + Tailwind CSS v4) with
+[react-icons](https://react-icons.github.io/react-icons/) for the marks — Lucide, imported as
+`Lu*` from `react-icons/lu`. Nothing in `src/studio/client` draws its own buttons, tabs, chips,
+key caps, toasts, dialogs or SVG paths: reach for the component before writing one.
+
+`styles.css` keeps Studio's own palette (`--c-*`) and points HeroUI's variables at it, so both
+draw from one set of colours — the same one the ER diagram's PNG/SVG exporter writes literally
+(`diagram/svg.ts`). Change a colour there, in one place.
+
+Two `overrides` in `pnpm-workspace.yaml` pin `@react-types/color` and `@react-types/slider` below
+the versions HeroUI asks for: at those versions they depend on Adobe's Spectrum design system for
+declarations that are erased at build time, which lands thousands of files in `node_modules`.
+
 ## Coding rules
 
 These are enforced in review, so following them up front saves a round-trip:

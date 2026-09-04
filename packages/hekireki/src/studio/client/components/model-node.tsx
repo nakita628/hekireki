@@ -1,6 +1,7 @@
 import { Handle, Position } from '@xyflow/react'
 import type { NodeProps } from '@xyflow/react'
 import { memo } from 'react'
+import { LuKey, LuLink } from 'react-icons/lu'
 
 import {
   loopTargetHandle,
@@ -16,7 +17,6 @@ import {
   NODE_CONSTRAINT_HEIGHT,
   NODE_ROW_HEIGHT,
 } from '../features/schema/layout.js'
-import { KeyIcon, LinkIcon } from './icons.js'
 import { BADGE, CONSTRAINT_STYLES, fieldTypeLabel, UNIQUE_BADGE } from './labels.js'
 import { OpenNodeLink } from './open-node-link.js'
 
@@ -38,9 +38,9 @@ const ROW_HANDLE = { top: NODE_ROW_HEIGHT / 2 }
 
 function FieldIcon({ field }: { readonly field: Field }) {
   if (field.isId) {
-    return <KeyIcon size={11} className="shrink-0 text-key" />
+    return <LuKey size={11} className="shrink-0 text-key" />
   }
-  if (field.isForeignKey) return <LinkIcon size={11} className="shrink-0 text-accent" />
+  if (field.isForeignKey) return <LuLink size={11} className="shrink-0 text-accent" />
   return <span className="inline-block size-[11px] shrink-0" />
 }
 

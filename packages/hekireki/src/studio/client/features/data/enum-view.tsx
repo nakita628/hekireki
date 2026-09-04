@@ -1,6 +1,6 @@
+import { buttonVariants } from '@heroui/react'
 import { Link } from '@tanstack/react-router'
-
-import { FileIcon } from '../../components/icons.js'
+import { LuFileText } from 'react-icons/lu'
 
 type Schema = {
   readonly models: readonly {
@@ -34,8 +34,12 @@ export function EnumView({ schema, value }: { readonly schema: Schema; readonly 
         <span className="text-lead text-muted">
           enum · {value.values.length} {value.values.length === 1 ? 'value' : 'values'}
         </span>
-        <Link className="btn btn-ghost" to="/prisma" search={{ focus: value.name }}>
-          <FileIcon size={15} />
+        <Link
+          className={buttonVariants({ variant: 'ghost' })}
+          to="/prisma"
+          search={{ focus: value.name }}
+        >
+          <LuFileText size={15} />
           Prisma schema
         </Link>
       </header>

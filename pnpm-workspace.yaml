@@ -10,3 +10,10 @@ allowBuilds:
   esbuild: true
   msgpackr-extract: false
   prisma: true
+# The two types packages @heroui/react reaches through were published at these versions with a
+# dependency on Adobe's Spectrum design system (@react-spectrum/color, @react-spectrum/slider,
+# and through them @adobe/react-spectrum with its thousands of icon files) — for declarations that
+# are erased at build time. The versions below are the same types without it.
+overrides:
+  '@react-types/color': 3.1.4
+  '@react-types/slider': 3.8.4

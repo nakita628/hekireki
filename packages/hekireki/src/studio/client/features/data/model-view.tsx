@@ -1,19 +1,12 @@
+import { Button, buttonVariants, SearchField, Tabs, toast, Tooltip } from '@heroui/react'
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
-import { toast } from 'react-hot-toast'
+import { LuDownload, LuFileText, LuGitCompare, LuInfo, LuPlus } from 'react-icons/lu'
 
 import { DataGrid } from '../../components/data-grid.js'
 import { DetailsPanel } from '../../components/details-panel.js'
 import { FieldsTable } from '../../components/fields-table.js'
-import {
-  DiagramIcon,
-  DownloadIcon,
-  FileIcon,
-  InfoIcon,
-  PlusIcon,
-  SearchIcon,
-} from '../../components/icons.js'
 import {
   getDbCountsQueryKey,
   getDbRowsModelNameQueryOptions,
@@ -91,15 +84,21 @@ export function ModelView({
   schema,
   model,
   tab,
+  field,
 }: {
   readonly schema: Schema
   readonly model: Model
   readonly tab: 'data' | 'fields' | null
+  /** A field to open on and point at, as the palette hands one over. */
+  readonly field: string | null
 }) {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const database = useDb().data ?? null
   const connected = database?.connected ?? false
-  const activeTab: 'data' | 'fields' = tab ?? (connected ? 'data' : 'fields')
+  // A link that names a field means the fields, whichever tab the database would have opened.
+  const activeTab: 'data' | 'fields' =
+    tab ?? (field !== null ? 'fields' : connected ? 'data' : 'fields')
   const [query, setQuery] = useState('')
   const [skip, setSkip] = useState(0)
   const [details, setDetails] = useState(true)
@@ -126,7 +125,7 @@ export function ModelView({
         await invalidate()
       },
       onError: () => {
-        toast.error('The row could not be written.')
+        toast.danger('The row could not be written.')
       },
     },
   })
@@ -134,7 +133,7 @@ export function ModelView({
     mutation: {
       onSuccess: invalidate,
       onError: () => {
-        toast.error('The row could not be written.')
+        toast.danger('The row could not be written.')
       },
     },
   })
@@ -142,7 +141,7 @@ export function ModelView({
     mutation: {
       onSuccess: invalidate,
       onError: () => {
-        toast.error('The row could not be written.')
+        toast.danger('The row could not be written.')
       },
     },
   })
@@ -172,97 +171,115 @@ export function ModelView({
               ? `${page.total} ${page.total === 1 ? 'row' : 'rows'}`
               : `${scalarCount} ${scalarCount === 1 ? 'field' : 'fields'}`}
           </span>
-          <label className="flex h-9 min-w-[260px] items-center gap-2 rounded-lg border border-line-strong bg-surface px-3 text-faint focus-within:border-accent focus-within:ring-[3px] focus-within:ring-accent-soft">
-            <SearchIcon size={15} />
-            <input
-              type="search"
-              className="flex-1 border-0 bg-transparent text-ink outline-none"
-              placeholder={activeTab === 'data' ? 'Search every column…' : 'Search every field…'}
-              value={query}
-              onChange={(event) => {
-                setQuery(event.target.value)
-                setSkip(0)
-              }}
-            />
-          </label>
+          <SearchField
+            className="min-w-[260px]"
+            aria-label={activeTab === 'data' ? 'Search every column' : 'Search every field'}
+            value={query}
+            onChange={(value) => {
+              setQuery(value)
+              setSkip(0)
+            }}
+          >
+            <SearchField.Group>
+              <SearchField.SearchIcon />
+              <SearchField.Input
+                placeholder={activeTab === 'data' ? 'Search every column…' : 'Search every field…'}
+              />
+              <SearchField.ClearButton />
+            </SearchField.Group>
+          </SearchField>
           {activeTab === 'data' ? (
             <>
-              <button
-                type="button"
-                className="btn"
-                disabled={!connected}
-                onClick={() => {
+              <Button
+                variant="outline"
+                isDisabled={!connected}
+                onPress={() => {
                   setAdding(true)
                 }}
               >
-                <PlusIcon size={15} />
+                <LuPlus size={15} />
                 Add row
-              </button>
-              <button
-                type="button"
-                className="btn"
-                disabled={!page}
-                onClick={() => {
-                  exportRows('csv')
-                }}
-              >
-                <DownloadIcon size={15} />
-                Export CSV
-              </button>
-              <button
-                type="button"
-                className="btn"
-                disabled={!page}
-                onClick={() => {
-                  exportRows('json')
-                }}
-              >
-                <DownloadIcon size={15} />
-                Export JSON
-              </button>
+              </Button>
+              <Tooltip>
+                <Button
+                  variant="outline"
+                  isDisabled={!page}
+                  onPress={() => {
+                    exportRows('csv')
+                  }}
+                >
+                  <LuDownload size={15} />
+                  CSV
+                </Button>
+                <Tooltip.Content>Download this page of rows as a CSV file</Tooltip.Content>
+              </Tooltip>
+              <Tooltip>
+                <Button
+                  variant="outline"
+                  isDisabled={!page}
+                  onPress={() => {
+                    exportRows('json')
+                  }}
+                >
+                  <LuDownload size={15} />
+                  JSON
+                </Button>
+                <Tooltip.Content>Download this page of rows as a JSON file</Tooltip.Content>
+              </Tooltip>
             </>
           ) : (
             <>
-              <Link className="btn btn-ghost" to="/" search={{ focus: model.name }}>
-                <DiagramIcon size={15} />
+              <Link
+                className={buttonVariants({ variant: 'ghost' })}
+                to="/"
+                search={{ focus: model.name }}
+              >
+                <LuGitCompare size={15} />
                 Show in diagram
               </Link>
-              <Link className="btn btn-ghost" to="/prisma" search={{ focus: model.name }}>
-                <FileIcon size={15} />
+              <Link
+                className={buttonVariants({ variant: 'ghost' })}
+                to="/prisma"
+                search={{ focus: model.name }}
+              >
+                <LuFileText size={15} />
                 Prisma schema
               </Link>
             </>
           )}
-          <button
-            type="button"
-            className={`btn btn-ghost ml-auto px-2 ${details ? 'bg-accent-soft text-accent-text' : ''}`}
-            title="Toggle details"
-            aria-label="Toggle details"
-            onClick={() => {
-              setDetails((d) => !d)
-            }}
-          >
-            <InfoIcon size={16} />
-          </button>
+          <Tooltip>
+            <Button
+              variant={details ? 'secondary' : 'ghost'}
+              isIconOnly
+              className="ml-auto"
+              aria-label="Toggle details"
+              onPress={() => {
+                setDetails((d) => !d)
+              }}
+            >
+              <LuInfo />
+            </Button>
+            <Tooltip.Content>Toggle details</Tooltip.Content>
+          </Tooltip>
         </header>
-        <div className="flex gap-1 border-b border-line bg-surface px-6">
-          <Link
-            className={`tab${activeTab === 'data' ? ' tab-active' : ''}`}
-            to="/models/$name"
-            params={{ name: model.name }}
-            search={{ tab: 'data' }}
-          >
-            Data
-          </Link>
-          <Link
-            className={`tab${activeTab === 'fields' ? ' tab-active' : ''}`}
-            to="/models/$name"
-            params={{ name: model.name }}
-            search={{ tab: 'fields' }}
-          >
-            Fields
-          </Link>
-        </div>
+        <Tabs
+          className="border-b border-line bg-surface px-6 py-2"
+          selectedKey={activeTab}
+          onSelectionChange={(key) => {
+            void navigate({
+              to: '/models/$name',
+              params: { name: model.name },
+              search: { tab: key === 'fields' ? 'fields' : 'data' },
+            })
+          }}
+        >
+          <Tabs.ListContainer className="w-fit">
+            <Tabs.List aria-label={`${model.name} views`}>
+              <Tabs.Tab id="data">Data</Tabs.Tab>
+              <Tabs.Tab id="fields">Fields</Tabs.Tab>
+            </Tabs.List>
+          </Tabs.ListContainer>
+        </Tabs>
         {activeTab === 'data' ? (
           !connected ? (
             <div className="m-6 rounded-[10px] border border-line bg-surface p-5 text-muted">
@@ -308,7 +325,7 @@ export function ModelView({
                 {model.documentation}
               </p>
             ) : null}
-            <FieldsTable schema={schema} model={model} query={query} />
+            <FieldsTable schema={schema} model={model} query={query} highlight={field} />
           </>
         )}
       </div>

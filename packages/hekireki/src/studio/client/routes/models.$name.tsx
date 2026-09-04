@@ -10,19 +10,26 @@ export const Route = createFileRoute('/models/$name')({
     tab: v.optional(
       v.pipe(v.picklist(['data', 'fields']), v.description('The tab of the model page')),
     ),
+    field: v.optional(v.pipe(v.string(), v.description('The field to open the page on'))),
   }),
   component: ModelPage,
 })
 
 function ModelPage() {
   const { name } = Route.useParams()
-  const { tab } = Route.useSearch()
+  const { tab, field } = Route.useSearch()
   return (
     <SchemaGate>
       {(schema) => {
         const model = schema.models.find((m) => m.name === name)
         return model ? (
-          <ModelView key={model.name} schema={schema} model={model} tab={tab ?? null} />
+          <ModelView
+            key={model.name}
+            schema={schema}
+            model={model}
+            tab={tab ?? null}
+            field={field ?? null}
+          />
         ) : (
           <NotFound what="model" name={name} />
         )

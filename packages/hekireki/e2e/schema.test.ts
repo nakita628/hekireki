@@ -90,7 +90,7 @@ test('a model page shows its fields and an enum page its values', async ({ page 
   await page.getByRole('complementary').getByRole('link', { name: /^User/u }).click()
   await expect(page).toHaveURL(/\/models\/User/u)
   await expect(page.getByRole('heading', { level: 1, name: 'User' })).toBeVisible()
-  await page.getByRole('link', { name: 'Fields' }).click()
+  await page.getByRole('tab', { name: 'Fields' }).click()
   const table = page.getByRole('table')
   await expectTexts(table, ['id', 'email', 'name', 'role', 'posts'])
   await expect(table).toContainText('Login address')
@@ -130,7 +130,7 @@ test('a broken schema keeps the last diagram and points at the editor', async ({
   // The link opens the file with the error at its line.
   await page.getByRole('link', { name: 'Fix it in the editor' }).click()
   await expect(page).toHaveURL(/\/prisma/u)
-  await expect(page.locator('.tab-active')).toHaveText(/base\.prisma$/u)
+  await expect(page.getByRole('tab', { selected: true })).toHaveText(/base\.prisma$/u)
   await expect(page.locator('.monaco-editor .squiggly-error').first()).toBeVisible()
   await expect(page.locator('.monaco-editor .current-line').first()).toBeVisible()
 })

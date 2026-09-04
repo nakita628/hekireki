@@ -1,6 +1,5 @@
 import { Link } from '@tanstack/react-router'
-
-import { ArrowRightIcon } from './icons.js'
+import { LuArrowRight } from 'react-icons/lu'
 
 /**
  * The way into a node's page: one click, on something you can see. The diagram used to open a node
@@ -26,7 +25,7 @@ export function OpenNodeLink({
         event.stopPropagation()
       }}
     >
-      <ArrowRightIcon size={11} />
+      <LuArrowRight size={11} />
     </Link>
   )
 }

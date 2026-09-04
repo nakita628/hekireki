@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router'
+import { LuArrowRight } from 'react-icons/lu'
 
 import { FieldGlyph } from './fields-table.js'
-import { ArrowRightIcon } from './icons.js'
 import { fieldTypeLabel } from './labels.js'
 
 type Cardinality = 'zero-one' | 'one' | 'zero-many' | 'many'
@@ -106,7 +106,7 @@ export function DetailsPanel({
                 {other.model}
               </Link>
               .{other.field}
-              <ArrowRightIcon size={12} className="text-faint" />
+              <LuArrowRight size={12} className="text-faint" />
               {outgoing ? relation.from.field : relation.to.field}
               <span className="text-muted">
                 {' · '}
@@ -160,7 +160,7 @@ export function DetailsPanel({
         to="/prisma"
         search={{ focus: model.name }}
       >
-        Open the Prisma schema <ArrowRightIcon size={13} />
+        Open the Prisma schema <LuArrowRight size={13} />
       </Link>
     </aside>
   )

@@ -1,7 +1,8 @@
+import { Chip } from '@heroui/react'
 import { Link } from '@tanstack/react-router'
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
+import { LuKey, LuLink } from 'react-icons/lu'
 
-import { KeyIcon, LinkIcon } from './icons.js'
 import { fieldTypeLabel } from './labels.js'
 
 type Field = {
@@ -40,10 +41,10 @@ export function FieldGlyph({
   readonly primaryKey: ReadonlySet<string>
 }) {
   if (field.isId || primaryKey.has(field.name)) {
-    return <KeyIcon size={13} className="inline-block align-middle text-key" />
+    return <LuKey size={13} className="inline-block align-middle text-key" />
   }
   if (field.isForeignKey) {
-    return <LinkIcon size={13} className="inline-block align-middle text-accent" />
+    return <LuLink size={13} className="inline-block align-middle text-accent" />
   }
   return <span className="inline-block size-[13px] align-middle" />
 }
@@ -80,12 +81,22 @@ export function FieldsTable({
   schema,
   model,
   query,
+  highlight = null,
 }: {
   readonly schema: Schema
   readonly model: Model
   readonly query: string
+  /** One field to point at, for a link that arrived naming it. */
+  readonly highlight?: string | null
 }) {
   const primaryKey = useMemo(() => new Set(model.primaryKey), [model])
+  const highlighted = useRef<HTMLTableRowElement>(null)
+  // A model of forty fields opens below the one that was asked for, so the row is brought up —
+  // again whenever another field is asked for, which does not remount the table.
+  useEffect(() => {
+    if (highlight === null) return
+    highlighted.current?.scrollIntoView({ block: 'center' })
+  }, [highlight])
   const fields = useMemo(() => {
     const q = query.trim().toLowerCase()
     return q === ''
@@ -112,7 +123,17 @@ export function FieldsTable({
         </thead>
         <tbody>
           {fields.map((field) => (
-            <tr key={field.name} className={field.kind === 'object' ? 'bg-surface-2' : ''}>
+            <tr
+              key={field.name}
+              ref={field.name === highlight ? highlighted : null}
+              className={
+                field.name === highlight
+                  ? 'bg-accent-soft'
+                  : field.kind === 'object'
+                    ? 'bg-surface-2'
+                    : ''
+              }
+            >
               <td className="w-9 border-b border-line py-2.5 pl-3.5">
                 <FieldGlyph field={field} primaryKey={primaryKey} />
               </td>
@@ -130,9 +151,15 @@ export function FieldsTable({
               <td className="border-b border-line px-3.5 py-2.5 align-top">
                 <div className="flex flex-wrap gap-1">
                   {field.attributes.map((attribute) => (
-                    <span key={attribute} className="chip">
+                    <Chip
+                      key={attribute}
+                      color="accent"
+                      variant="soft"
+                      size="sm"
+                      className="font-mono"
+                    >
                       {attribute}
-                    </span>
+                    </Chip>
                   ))}
                 </div>
               </td>

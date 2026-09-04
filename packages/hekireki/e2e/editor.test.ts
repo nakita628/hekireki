@@ -24,8 +24,8 @@ test('shows the file, the other file as a tab and the diagram beside it', async 
   await expect(page.getByRole('heading', { level: 1, name: 'Prisma schema' })).toBeVisible()
   await expect(page.getByText(/lines · sqlite/u)).toBeVisible()
   expect(await editor.lines()).toContain('model User {')
-  await expect(page.locator('.tab-active')).toHaveText(/base\.prisma$/u)
-  await expect(page.locator('.tab')).toHaveCount(2)
+  await expect(page.getByRole('tab', { selected: true })).toHaveText(/base\.prisma$/u)
+  await expect(page.getByRole('tab')).toHaveCount(2)
   await expectLaidOut(editor.root, { width: 400, height: 400 })
   await expectLaidOut(page.locator('.react-flow'), { width: 300, height: 400 })
   await expect(page.locator('.react-flow__node')).toHaveCount(3)
@@ -111,7 +111,7 @@ test('explains a relation on hover and jumps to its declaration in the other fil
   await page.keyboard.press('Escape')
 
   await page.keyboard.press('F12')
-  await expect(page.locator('.tab-active')).toHaveText(/post\.prisma$/u)
+  await expect(page.getByRole('tab', { selected: true })).toHaveText(/post\.prisma$/u)
   await expect.poll(() => editor.lines()).toContain('model Post {')
 })
 

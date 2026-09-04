@@ -1,3 +1,4 @@
+import { Chip } from '@heroui/react'
 import { Fragment } from 'react'
 
 import { CodeBlock } from '../../components/code-block.js'
@@ -68,9 +69,9 @@ function FieldRow({
         <div className="flex flex-wrap gap-1">
           {field.directives.length > 0 ? (
             field.directives.map((directive) => (
-              <span key={directive} className="chip">
+              <Chip key={directive} color="accent" variant="soft" size="sm" className="font-mono">
                 {directive}
-              </span>
+              </Chip>
             ))
           ) : (
             <span className="text-faint">—</span>

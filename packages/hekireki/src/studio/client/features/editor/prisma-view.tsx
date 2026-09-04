@@ -1,9 +1,9 @@
+import { Button, Tabs, toast, Tooltip } from '@heroui/react'
 import { useQueryClient } from '@tanstack/react-query'
 import { parseResponse } from 'hono/client'
 import { useMemo, useRef, useState } from 'react'
-import { toast } from 'react-hot-toast'
+import { LuCopy, LuWandSparkles } from 'react-icons/lu'
 
-import { CopyIcon, WandIcon } from '../../components/icons.js'
 import { SchemaErrorStatus } from '../../components/schema-error-status.js'
 import type { PlainFileDiagnostic } from '../../components/schema-problems.js'
 import { useCopy } from '../../hooks/copy.js'
@@ -129,7 +129,7 @@ export function PrismaView({
     mutation: {
       onSuccess: (saved) => queryClient.setQueryData(getSchemaQueryKey(), saved),
       onError: () => {
-        toast.error('The schema file could not be saved.')
+        toast.danger('The schema file could not be saved.')
       },
     },
   })
@@ -172,7 +172,7 @@ export function PrismaView({
         const body = await parseResponse(client.prisma.format.$post({ json: request }))
         return body.edits
       } catch {
-        toast.error('The schema could not be formatted.')
+        toast.danger('The schema could not be formatted.')
         return []
       }
     },
@@ -224,7 +224,7 @@ export function PrismaView({
         const body = await parseResponse(client.prisma.rename.$post({ json: request }))
         return body.changes
       } catch {
-        toast.error('The rename could not be computed.')
+        toast.danger('The rename could not be computed.')
         return []
       }
     },
@@ -317,59 +317,62 @@ export function PrismaView({
             {status.label}
           </span>
         </span>
-        <button
-          type="button"
-          className="btn btn-ghost"
-          title="Format with the Prisma formatter: also adds missing relation fields, foreign keys and @relation attributes (Shift+Alt+F)"
-          onClick={formatDocument}
-        >
-          <WandIcon size={15} />
-          Format
-        </button>
-        <button
-          type="button"
-          className="btn btn-ghost"
-          onClick={() => {
+        <Tooltip>
+          <Button variant="ghost" onPress={formatDocument}>
+            <LuWandSparkles size={15} />
+            Format
+          </Button>
+          <Tooltip.Content>
+            Format with the Prisma formatter: also adds missing relation fields, foreign keys and
+            @relation attributes (Shift+Alt+F)
+          </Tooltip.Content>
+        </Tooltip>
+        <Button
+          variant="ghost"
+          onPress={() => {
             copy(text)
           }}
         >
-          <CopyIcon size={15} />
+          <LuCopy size={15} />
           {copied ? 'Copied' : 'Copy'}
-        </button>
+        </Button>
       </header>
       {changedOnDisk ? (
         <div className="flex items-center gap-3 border-b border-danger-line bg-danger-soft px-6 py-2 text-code text-ink">
           <span className="flex-1">
             This file changed on disk while you were editing; your next save overwrites it.
           </span>
-          <button
-            type="button"
-            className="btn btn-sm"
-            onClick={() => {
+          <Button
+            variant="outline"
+            size="sm"
+            onPress={() => {
               setDraft(null)
             }}
           >
             Load the disk version
-          </button>
+          </Button>
         </div>
       ) : null}
       {snapshot.files.length > 1 ? (
-        <div className="flex gap-1 overflow-x-auto border-b border-line bg-surface px-6 pt-2">
-          {snapshot.files.map((f) => (
-            <button
-              key={f.path}
-              type="button"
-              className={`tab${f.path === file.path ? ' tab-active' : ''}`}
-              onClick={() => {
-                setChosenPath(f.path)
-                setDraft(null)
-                setRevealLine(null)
-              }}
-            >
-              {f.path}
-            </button>
-          ))}
-        </div>
+        <Tabs
+          className="overflow-x-auto border-b border-line bg-surface px-6 py-2"
+          selectedKey={file.path}
+          onSelectionChange={(key) => {
+            setChosenPath(String(key))
+            setDraft(null)
+            setRevealLine(null)
+          }}
+        >
+          <Tabs.ListContainer className="w-fit">
+            <Tabs.List aria-label="Schema files">
+              {snapshot.files.map((f) => (
+                <Tabs.Tab key={f.path} id={f.path} className="font-mono">
+                  {f.path}
+                </Tabs.Tab>
+              ))}
+            </Tabs.List>
+          </Tabs.ListContainer>
+        </Tabs>
       ) : null}
       <div
         className="grid min-h-0 flex-1"

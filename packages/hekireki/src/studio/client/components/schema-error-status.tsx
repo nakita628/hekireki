@@ -1,3 +1,4 @@
+import { Button } from '@heroui/react'
 import { useState } from 'react'
 
 import { schemaProblems } from './schema-problems.js'
@@ -30,16 +31,17 @@ export function SchemaErrorStatus({
         </strong>{' '}
         · {summary}
       </span>
-      <button
-        type="button"
-        className="btn h-7 shrink-0 px-2 text-code"
+      <Button
+        variant="outline"
+        size="sm"
+        className="shrink-0"
         aria-expanded={open}
-        onClick={() => {
+        onPress={() => {
           setOpen((current) => !current)
         }}
       >
         {open ? 'Hide' : 'Details'}
-      </button>
+      </Button>
       {open ? (
         <pre className="absolute top-full right-0 z-20 m-0 mt-2 max-h-72 w-[min(48rem,80vw)] overflow-auto rounded-lg border border-danger-line bg-surface p-3 font-mono text-code whitespace-pre-wrap text-ink shadow-lg">
           {error}

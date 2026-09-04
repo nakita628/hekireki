@@ -1,7 +1,8 @@
+import { Button, Kbd } from '@heroui/react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
+import { LuPlay } from 'react-icons/lu'
 
-import { PlayIcon } from '../../components/icons.js'
 import { ResultTable } from '../../components/result-table.js'
 import { getDbCountsQueryKey, useDb, usePostDbSql } from '../../hooks/index.js'
 import { loadString, saveString } from '../../lib/index.js'
@@ -45,16 +46,19 @@ export function SqlView() {
             ? `${database.dialect ?? ''} · ${database.url ?? ''}`
             : 'No database connected'}
         </span>
-        <span className="ml-auto text-code text-faint">⌘/Ctrl + Enter to run</span>
-        <button
-          type="button"
-          className="btn btn-primary"
-          disabled={run.isPending || !database?.connected}
-          onClick={execute}
+        <span className="ml-auto flex items-center gap-1.5 text-code text-faint">
+          <Kbd>⌘/Ctrl</Kbd>
+          <Kbd>Enter</Kbd>
+          to run
+        </span>
+        <Button
+          variant="primary"
+          isDisabled={run.isPending || !database?.connected}
+          onPress={execute}
         >
-          <PlayIcon size={14} />
+          <LuPlay size={14} />
           Run
-        </button>
+        </Button>
       </header>
       {database && !database.connected ? (
         <div className="error-box m-6">
