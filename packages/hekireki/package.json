@@ -1,6 +1,6 @@
 {
   "name": "hekireki",
-  "version": "0.20.0",
+  "version": "0.20.1",
   "description": "Hekireki is a code generator from Prisma schema to validation schemas, ORM models and ER diagrams, with a Studio for your schema and its data",
   "keywords": [
     "activerecord",

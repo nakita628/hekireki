@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-// Regenerates test/harness/* from test/schema.prisma with the built generators
+// Regenerates test/harness/* from test/prisma/schema.prisma with the built generators
 // before the language checks run. One prisma run emits every target, so
 // running a single language's file still starts from fresh output.
 //
@@ -76,7 +76,7 @@ export default function setup() {
 
   execFileSync(
     join(root, 'packages/hekireki/node_modules/.bin/prisma'),
-    ['generate', '--schema', join(root, 'test/schema.prisma')],
+    ['generate', '--schema', join(root, 'test/prisma/schema.prisma')],
     {
       cwd: root,
       env: {

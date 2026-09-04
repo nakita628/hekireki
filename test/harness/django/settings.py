@@ -1,5 +1,5 @@
 # Minimal settings: just enough for django.setup() to load the generated app.
-# The PostgreSQL backend matches the datasource of test/schema.prisma (the
+# The PostgreSQL backend matches the datasource of test/prisma/schema.prisma (the
 # harness never connects; DDL is compiled offline with collect_sql).
 SECRET_KEY = "hekireki-django-harness"
 INSTALLED_APPS = ["app"]

@@ -4,60 +4,60 @@ datasource db {
 
 generator Hekireki-GORM {
   provider = "hekireki-gorm"
-  output   = "harness/gorm/model"
+  output   = "../harness/gorm/model"
 }
 
 generator Hekireki-SeaORM {
   provider = "hekireki-sea-orm"
-  output   = "harness/sea-orm/src/entities"
+  output   = "../harness/sea-orm/src/entities"
 }
 
 generator Hekireki-SQLAlchemy {
   provider = "hekireki-sqlalchemy"
-  output   = "harness/sqlalchemy"
+  output   = "../harness/sqlalchemy"
 }
 
 generator Hekireki-Pydantic {
   provider = "hekireki-pydantic"
-  output   = "harness/pydantic"
+  output   = "../harness/pydantic"
   comment  = true
   relation = true
 }
 
 generator Hekireki-Ecto {
   provider = "hekireki-ecto"
-  output   = "harness/ecto/lib"
+  output   = "../harness/ecto/lib"
   app      = "DBSchema"
 }
 
 generator Hekireki-Django {
   provider = "hekireki-django"
-  output   = "harness/django/app"
+  output   = "../harness/django/app"
 }
 
 generator Hekireki-Drizzle {
   provider = "hekireki-drizzle"
-  output   = "harness/drizzle/schema.ts"
+  output   = "../harness/drizzle/schema.ts"
 }
 
 generator Hekireki-Kysely {
   provider = "hekireki-kysely"
-  output   = "harness/kysely/types.ts"
+  output   = "../harness/kysely/types.ts"
 }
 
 generator Hekireki-ActiveRecord {
   provider = "hekireki-activerecord"
-  output   = "harness/activerecord/models"
+  output   = "../harness/activerecord/models"
 }
 
 generator Hekireki-Eloquent {
   provider = "hekireki-eloquent"
-  output   = "harness/eloquent/models"
+  output   = "../harness/eloquent/models"
 }
 
 generator Hekireki-Atlas {
   provider = "hekireki-atlas"
-  output   = "harness/atlas/schema.hcl"
+  output   = "../harness/atlas/schema.hcl"
 }
 
 enum Status {

@@ -39,7 +39,7 @@ pnpm build            # build dist/ (tsdown)
 The test suite is split into two Vitest projects:
 
 - **`unit`** — `packages/hekireki/src/**/*.test.ts`. Owns the byte-equality codegen contract (`toBe` / `toStrictEqual` exact matches). Needs no toolchain beyond Node.
-- **`lang`** — `test/lang/*.test.ts`. Regenerates `test/harness/*` from `test/schema.prisma` and verifies the output against the **real** toolchains (currently Go, Rust, Python, Elixir, Ruby, PHP, and TypeScript). This is what a string comparison cannot see: recursive struct embedding, bad column attributes, malformed associations.
+- **`lang`** — `test/lang/*.test.ts`. Regenerates `test/harness/*` from `test/prisma/schema.prisma` and verifies the output against the **real** toolchains (currently Go, Rust, Python, Elixir, Ruby, PHP, and TypeScript). This is what a string comparison cannot see: recursive struct embedding, bad column attributes, malformed associations.
 
 Toolchains you don't have installed are skipped locally with a note — CI runs the full matrix, so you don't need every language installed to contribute. Run a single language with `vp test --project lang test/lang/gorm.test.ts`.
 
@@ -55,7 +55,7 @@ packages/hekireki/src/
 ├── emit/        # file-writing boundary (the only place with I/O side effects)
 └── format/      # oxfmt formatting for TypeScript output
 test/
-├── schema.prisma    # the one schema every language check generates from
+├── prisma/          # the one schema every language check generates from
 ├── lang/            # per-language checks (setup.ts regenerates the harness)
 └── harness/         # per-language host projects (go.mod, Cargo.toml, mix.exs, …)
 ```
@@ -83,7 +83,7 @@ These are enforced in review, so following them up front saves a round-trip:
 ## Testing rules
 
 - **Codegen tests assert full equality**: `toBe` / `toStrictEqual` on the complete generated output. No `toContain` / `toMatch` partial matching — byte-for-byte output is the contract.
-- Test files are `*.test.ts`. Unit tests are co-located next to what they test; the per-language toolchain checks live in `test/lang/`, generating from `test/schema.prisma`.
+- Test files are `*.test.ts`. Unit tests are co-located next to what they test; the per-language toolchain checks live in `test/lang/`, generating from `test/prisma/schema.prisma`.
 - **Every bug fix needs a regression test** that fails without the fix.
 - Keep test logic inline — no shared extraction/transform helpers between tests (fixture setup and lifecycle hooks are fine). Tests are read as documentation.
 - Coverage targets: 90% lines / 90% functions / 85% branches. Don't let a PR lower them.
@@ -107,8 +107,8 @@ New targets (a new ORM, validator, or language) are the biggest contributions we
 
 1. **Open an issue first** describing the target, its official docs, and a sketch of the generated output for a small schema.
 2. Mirror the existing structure: `bin/<target>.ts` → `core/<target>.ts` → `generator/<target>.ts` → `helper/<target>.ts`, with unit tests at every layer.
-3. Cover the hard schema shapes — `test/schema.prisma` shows what every generator must survive: every scalar type, enum defaults, `@map`/`@@map`, self-relations, two relations to the same model, composite primary keys, implicit many-to-many join tables (Prisma's `A`/`B` columns), `uuid(7)`/`ulid()` defaults, and reserved-word field names.
-4. Add a language check leg (a generator block in `test/schema.prisma` + `test/harness/<target>/` + `test/lang/<target>.test.ts` + a `Lang Check` matrix entry) so the generated code is compiled against the real toolchain in CI.
+3. Cover the hard schema shapes — `test/prisma/schema.prisma` shows what every generator must survive: every scalar type, enum defaults, `@map`/`@@map`, self-relations, two relations to the same model, composite primary keys, implicit many-to-many join tables (Prisma's `A`/`B` columns), `uuid(7)`/`ulid()` defaults, and reserved-word field names.
+4. Add a language check leg (a generator block in `test/prisma/schema.prisma` + `test/harness/<target>/` + `test/lang/<target>.test.ts` + a `Lang Check` matrix entry) so the generated code is compiled against the real toolchain in CI.
 
 ## License
 
