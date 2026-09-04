@@ -65,6 +65,26 @@ test('the theme toggle switches the palette without breaking the layout', async 
   await expect(html).not.toHaveClass(/dark/u)
 })
 
+test('a node carries a link to its page', async ({ page }) => {
+  await page.goto('/')
+  const nodes = page.locator('.react-flow__node')
+  await expect(nodes).toHaveCount(3)
+
+  // One click on the header link, the gesture nobody has to guess.
+  await nodes.filter({ hasText: 'User' }).first().getByLabel('Open User').click()
+  await expect(page).toHaveURL(/\/models\/User/u)
+  await expect(page.getByRole('heading', { level: 1, name: 'User' })).toBeVisible()
+
+  await page.goto('/')
+  await page.locator('.react-flow__node-enum').first().getByLabel('Open Role').click()
+  await expect(page).toHaveURL(/\/enums\/Role/u)
+
+  // The link opens in a new tab the way any link does, rather than swallowing the modifier.
+  await page.goto('/')
+  const link = nodes.filter({ hasText: 'Post' }).first().getByLabel('Open Post')
+  await expect(link).toHaveAttribute('href', '/models/Post')
+})
+
 test('a model page shows its fields and an enum page its values', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('complementary').getByRole('link', { name: /^User/u }).click()

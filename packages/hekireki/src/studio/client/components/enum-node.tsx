@@ -5,6 +5,7 @@ import { memo } from 'react'
 import { MODEL_HANDLE, targetHandle } from '../features/schema/graph.js'
 import type { EnumNodeType } from '../features/schema/graph.js'
 import { NODE_ROW_HEIGHT } from '../features/schema/layout.js'
+import { OpenNodeLink } from './open-node-link.js'
 
 function EnumNodeComponent({ data, selected }: NodeProps<EnumNodeType>) {
   const { value } = data
@@ -21,13 +22,14 @@ function EnumNodeComponent({ data, selected }: NodeProps<EnumNodeType>) {
           id={targetHandle(MODEL_HANDLE)}
           className="model-handle"
         />
-        <span className="text-body font-bold">{value.name}</span>
-        {value.dbName ? (
-          <span className="truncate text-meta opacity-60">{value.dbName}</span>
-        ) : null}
-        <span className="ml-auto rounded-full bg-surface/15 px-2 py-px font-sans text-meta">
-          enum
+        <span className="mr-auto flex min-w-0 items-center gap-2">
+          <span className="text-body font-bold">{value.name}</span>
+          {value.dbName ? (
+            <span className="truncate text-meta opacity-60">{value.dbName}</span>
+          ) : null}
         </span>
+        <span className="rounded-full bg-surface/15 px-2 py-px font-sans text-meta">enum</span>
+        <OpenNodeLink to="/enums/$name" name={value.name} />
       </div>
       <div className="py-2">
         {value.values.map((member) => (

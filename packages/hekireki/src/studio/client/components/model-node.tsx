@@ -18,6 +18,7 @@ import {
 } from '../features/schema/layout.js'
 import { KeyIcon, LinkIcon } from './icons.js'
 import { BADGE, CONSTRAINT_STYLES, fieldTypeLabel, UNIQUE_BADGE } from './labels.js'
+import { OpenNodeLink } from './open-node-link.js'
 
 type Field = {
   readonly name: string
@@ -60,10 +61,13 @@ function ModelNodeComponent({ data, selected }: NodeProps<ModelNodeType>) {
           id={targetHandle(MODEL_HANDLE)}
           className="model-handle"
         />
-        <span className="text-body font-bold">{model.name}</span>
-        {model.dbName ? (
-          <span className="mr-auto truncate text-meta opacity-60">{model.dbName}</span>
-        ) : null}
+        <span className="mr-auto flex min-w-0 items-center gap-2">
+          <span className="text-body font-bold">{model.name}</span>
+          {model.dbName ? (
+            <span className="truncate text-meta opacity-60">{model.dbName}</span>
+          ) : null}
+        </span>
+        <OpenNodeLink to="/models/$name" name={model.name} />
         <Handle
           type="source"
           position={Position.Right}

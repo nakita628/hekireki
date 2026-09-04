@@ -1,4 +1,3 @@
-import { useNavigate } from '@tanstack/react-router'
 import {
   Background,
   BackgroundVariant,
@@ -143,7 +142,6 @@ function Canvas({
   readonly compact: boolean
   readonly onRefresh: (() => void) | null
 }) {
-  const navigate = useNavigate()
   const storageKey = layoutStorageKey(schema.files[0]?.path ?? 'schema')
   const [nodes, setNodes, onNodesChange] = useNodesState(NO_NODES)
   const [edges, setEdges, onEdgesChange] = useEdgesState(NO_EDGES)
@@ -267,11 +265,6 @@ function Canvas({
           onNodeDragStop={() => {
             persist(nodes)
           }}
-          onNodeDoubleClick={(_event, node) => {
-            void (node.type === 'enum'
-              ? navigate({ to: '/enums/$name', params: { name: node.id } })
-              : navigate({ to: '/models/$name', params: { name: node.id }, search: {} }))
-          }}
           onSelectionChange={onSelectionChange}
           nodesConnectable={false}
           fitView
@@ -386,7 +379,6 @@ export function SchemaView({
           {schema.relations.length} {schema.relations.length === 1 ? 'relation' : 'relations'}
           {schema.enums.length > 0 ? ` · ${schema.enums.length} enums` : ''}
         </span>
-        <span className="ml-auto text-code text-faint">Double-click a model to open it</span>
       </header>
       <SchemaCanvas schema={schema} focus={focus} onRefresh={onRefresh} />
     </section>
