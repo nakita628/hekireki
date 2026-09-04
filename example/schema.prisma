@@ -114,25 +114,26 @@ generator Hekireki-Atlas {
   output   = "generated/atlas/schema.hcl"
 }
 
-generator Hekireki-ER {
-  provider = "hekireki-mermaid-er"
-  output   = "generated/mermaid-er"
+// One generator, four renderings of the same ER model: the extension of `output` picks which.
+// A block writes one file, so a schema that wants all four declares it four times.
+generator Hekireki-ER-Markdown {
+  provider = "hekireki-er"
+  output   = "generated/er/er.md"
 }
 
-generator Hekireki-DBML {
-  provider = "hekireki-dbml"
-  output   = "generated/dbml/schema.dbml"
+generator Hekireki-ER-DBML {
+  provider = "hekireki-er"
+  output   = "generated/er/schema.dbml"
 }
 
-// The same provider draws the ER diagram when the output ends with .png or .svg.
-generator Hekireki-PNG {
-  provider = "hekireki-dbml"
-  output   = "generated/dbml/er.png"
+generator Hekireki-ER-PNG {
+  provider = "hekireki-er"
+  output   = "generated/er/er.png"
 }
 
-generator Hekireki-SVG {
-  provider = "hekireki-dbml"
-  output   = "generated/dbml/er.svg"
+generator Hekireki-ER-SVG {
+  provider = "hekireki-er"
+  output   = "generated/er/er.svg"
 }
 
 /// User role. No @map: the value names are stored verbatim.

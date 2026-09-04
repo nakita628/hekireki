@@ -1,6 +1,7 @@
 import { Effect, Option } from 'effect'
 import * as z from 'zod'
 
+import { SQL_ROW_LIMIT } from '../constants/index.js'
 import * as DefaultsDomain from '../domain/index.js'
 import * as ModelDomain from '../domain/index.js'
 import * as SqlDomain from '../domain/index.js'
@@ -398,7 +399,11 @@ export function runSql(input: z.infer<typeof RunSqlInput>) {
     const executed = yield* driver.query({ sql: input.sql, params: [] })
     const sqlResult = {
       columns: executed.columns,
-      rows: executed.rows.map((row) => ValuesDomain.makeRow({ row, columnToField: new Map() })),
+      // Only the first page of a large result travels to the browser; `rowCount` still says how
+      // many rows the statement produced, which is how the page knows it is showing a slice.
+      rows: executed.rows
+        .slice(0, SQL_ROW_LIMIT)
+        .map((row) => ValuesDomain.makeRow({ row, columnToField: new Map() })),
       rowCount: executed.rowCount,
       durationMs: Math.round((performance.now() - started) * 10) / 10,
     }

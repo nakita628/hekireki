@@ -33,7 +33,7 @@ type Docs = {
 
 type Kind = 'inputType' | 'outputType'
 
-const CELL = 'border-b border-line px-3.5 py-2.5 align-top text-[13px]'
+const CELL = 'border-b border-line px-3.5 py-2.5 align-top text-body'
 
 function TypeSection({ type, kind }: { readonly type: DocsType; readonly kind: Kind }) {
   return (
@@ -41,7 +41,7 @@ function TypeSection({ type, kind }: { readonly type: DocsType; readonly kind: K
       id={typeSectionId(kind, type.name)}
       className="scroll-mt-4 border-b border-line px-6 py-5"
     >
-      <h3 className="m-0 pb-2 font-mono text-[15px] font-bold">{type.name}</h3>
+      <h3 className="m-0 pb-2 font-mono text-lead font-bold">{type.name}</h3>
       <table className="w-full border-collapse">
         <thead>
           <tr>
@@ -80,7 +80,7 @@ function EnumSection({ type }: { readonly type: DocsEnum }) {
       id={typeSectionId('enum', type.name)}
       className="scroll-mt-4 border-b border-line px-6 py-5"
     >
-      <h3 className="m-0 pb-2 font-mono text-[15px] font-bold">{type.name}</h3>
+      <h3 className="m-0 pb-2 font-mono text-lead font-bold">{type.name}</h3>
       <div className="flex flex-wrap gap-1.5">
         {type.values.map((value) => (
           <span key={value} className="chip">
@@ -100,7 +100,7 @@ function GroupHeading({
   readonly children: React.ReactNode
 }) {
   return (
-    <h2 id={id} className="m-0 scroll-mt-4 border-b border-line px-6 py-4 text-lg font-bold">
+    <h2 id={id} className="m-0 scroll-mt-4 border-b border-line px-6 py-4 text-section font-bold">
       {children}
     </h2>
   )
@@ -110,10 +110,7 @@ function GroupHeading({
 export function Types({ docs }: { readonly docs: Docs }) {
   return (
     <div>
-      <h1
-        id="types"
-        className="m-0 scroll-mt-4 border-b border-line px-6 py-5 text-[22px] font-bold tracking-tight"
-      >
+      <h1 id="types" className="page-title scroll-mt-4 border-b border-line px-6 py-5">
         Types
       </h1>
       <GroupHeading id="input-types">Input Types · {docs.inputTypes.length}</GroupHeading>

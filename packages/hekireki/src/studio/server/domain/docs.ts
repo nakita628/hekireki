@@ -222,7 +222,7 @@ export function makeDocs(input: z.infer<typeof MakeDocsInput>) {
       })),
       operations: OPERATIONS.map((name) => {
         const { description, queryType } = describeOperation(name, singular, plural)
-        const field = dmmf.schema.outputObjectTypes.prisma
+        const field = (dmmf.schema.outputObjectTypes.prisma ?? [])
           .find((t) => t.name === queryType)
           ?.fields.find((f) => f.name === names[name])
         return {
@@ -254,9 +254,11 @@ export function makeDocs(input: z.infer<typeof MakeDocsInput>) {
         nullable: field.isNullable,
       })),
     })),
+    // A schema with a datasource and no models parses, and Prisma leaves these out of its DMMF
+    // rather than answering with empty lists.
     outputTypes: [
-      ...dmmf.schema.outputObjectTypes.model,
-      ...dmmf.schema.outputObjectTypes.prisma.filter(
+      ...(dmmf.schema.outputObjectTypes.model ?? []),
+      ...(dmmf.schema.outputObjectTypes.prisma ?? []).filter(
         (t) => t.name !== 'Query' && t.name !== 'Mutation',
       ),
     ].map((type) => ({
@@ -268,8 +270,9 @@ export function makeDocs(input: z.infer<typeof MakeDocsInput>) {
         nullable: !field.isNullable,
       })),
     })),
-    enumTypes: [...(dmmf.schema.enumTypes.model ?? []), ...dmmf.schema.enumTypes.prisma].map(
-      (type) => ({ name: type.name, values: [...type.values] }),
-    ),
+    enumTypes: [
+      ...(dmmf.schema.enumTypes.model ?? []),
+      ...(dmmf.schema.enumTypes.prisma ?? []),
+    ].map((type) => ({ name: type.name, values: [...type.values] })),
   }
 }

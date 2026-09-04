@@ -34,8 +34,7 @@
 
 ### Diagrams & Documentation
 
-- 📊 Creates [Mermaid](https://mermaid.js.org/) ER diagrams — crow's-foot cardinality read from the schema, `PK` / `FK` / `UK` markers (every column of a `@@unique` included, as close as Mermaid's one-marker-per-column syntax gets to a composite constraint), and implicit many-to-many relations
-- 📝 Generates [DBML](https://dbml.dbdiagram.io/) (Database Markup Language) files and **PNG / SVG** ER diagrams drawn the way Hekireki Studio shows them — output format is determined by the file extension (`.dbml`, `.png` or `.svg`)
+- 📊 Draws the ER model of the schema in whichever of four formats the `output` extension names: [Mermaid](https://mermaid.js.org/) (`.md`), [DBML](https://dbml.dbdiagram.io/) (`.dbml`), or a **PNG / SVG** drawn the way Hekireki Studio shows it — crow's-foot cardinality read from the schema, `PK` / `FK` / `UK` markers and implicit many-to-many relations throughout
 
 ## Installation
 
@@ -161,12 +160,7 @@ generator Hekireki-Eloquent {
 }
 
 generator Hekireki-ER {
-    provider = "hekireki-mermaid-er"
-    output   = "./mermaid-er"
-}
-
-generator Hekireki-DBML {
-    provider = "hekireki-dbml"
+    provider = "hekireki-er"
     output   = "docs/schema.dbml"
 }
 
@@ -1094,7 +1088,30 @@ impl ActiveModelBehavior for ActiveModel {
 }
 ```
 
-### Mermaid
+### ER diagrams
+
+One generator, `hekireki-er`, writes the ER model of the schema in four formats. The extension of
+`output` picks which — `.md`, `.dbml`, `.png` or `.svg` — and an extension it has no format for is
+an error rather than a guess. A generator block writes one file, so a schema that wants several
+declares the generator once per file:
+
+```prisma
+generator Hekireki-ER-Markdown {
+    provider = "hekireki-er"
+    output   = "docs/er.md"
+}
+
+generator Hekireki-ER-SVG {
+    provider = "hekireki-er"
+    output   = "docs/er.svg"
+}
+```
+
+Every option belongs to one format: `mapToDbSchema` to `.dbml`, `theme` to `.png` and `.svg`.
+Setting one on a format that does not read it is an error, so an option never looks like it did
+something it did not.
+
+#### `.md` — Mermaid
 
 ```mermaid
 erDiagram
@@ -1111,7 +1128,9 @@ erDiagram
     }
 ```
 
-### DBML
+#### `.dbml` — DBML
+
+`mapToDbSchema` (default `true`) maps names to their `@@map` / `@map` counterparts.
 
 ```dbml
 Table User {
@@ -1129,9 +1148,9 @@ Table Post {
 Ref Post_userId_fk: Post.userId > User.id
 ```
 
-### PNG / SVG
+#### `.png` / `.svg` — the drawing
 
-The `hekireki-dbml` generator also draws the ER diagram when the `output` path ends with `.png` or `.svg`. The image is the same diagram Hekireki Studio shows, laid out automatically:
+The image is the same diagram Hekireki Studio shows, laid out automatically:
 
 - one card per model with its fields, primary keys (🔑), foreign keys (🔗) and `UK` unique marks
 - under each field, the attributes the drawing does not show another way — `@default(...)`, `@updatedAt`, `@db.*` — and the prose of its `///` comment
@@ -1139,22 +1158,10 @@ The `hekireki-dbml` generator also draws the ER diagram when the `output` path e
 - one card per enum with its members (and the values `@map` stores), linked to every field that holds one
 - an edge per relation in IE (crow's-foot) notation, captioned with what it is (`follower · one to many`) and what it does to a row (`on delete cascade`) — dashed when the relation has no foreign key behind it
 - the `///` comment of each model and enum on one line under its header
-- a key along the top naming every symbol the drawing uses
 
 No external renderer is involved; the PNG is rasterised at 2x for crisp text.
 
-```prisma
-generator Hekireki-PNG {
-    provider = "hekireki-dbml"
-    output   = "docs/er-diagram.png"
-    theme    = "light"            // Optional. "light" (default) or "dark"
-}
-
-generator Hekireki-SVG {
-    provider = "hekireki-dbml"
-    output   = "docs/er-diagram.svg"
-}
-```
+`theme` is `"light"` (default) or `"dark"`.
 
 Use `.svg` for files that live in the repository (small, crisp at any zoom, readable diffs) and `.png` for places that embed images (chat, wikis, slides); the PNG is rendered with the fonts of the machine that generated it, so it looks the same everywhere.
 
@@ -1328,24 +1335,18 @@ generator Hekireki-Eloquent {
     namespace = "App.Models"       // PHP namespace, "." becomes "\" (default: App\Models)
 }
 
-// Mermaid ER Generator
-generator Hekireki-ER {
-    provider = "hekireki-mermaid-er"
-    output   = "./mermaid-er" // Required. A directory here yields ./mermaid-er/ER.md
+// ER Generator. The extension of `output` picks the format; one block writes one file, so a
+// schema that wants several declares the generator once per file.
+generator Hekireki-ER-DBML {
+    provider = "hekireki-er"
+    output   = "docs/schema.dbml"    // Required. .md, .dbml, .png or .svg
+    mapToDbSchema = true             // .dbml only. Map to DB schema names (default: true)
 }
 
-// DBML Generator (output extension determines format: .dbml, .png or .svg)
-generator Hekireki-DBML {
-    provider = "hekireki-dbml"
-    output   = "docs/schema.dbml"    // Required. File path ending in .dbml, .png or .svg
-    mapToDbSchema = true             // Map to DB schema names (default: true)
-}
-
-// PNG / SVG output (same provider, different extension): the ER diagram as Studio draws it
-generator Hekireki-PNG {
-    provider = "hekireki-dbml"
-    output   = "docs/er-diagram.png" // Required. .png → PNG image, .svg → SVG document
-    theme    = "light"               // "light" (default) or "dark"
+generator Hekireki-ER-PNG {
+    provider = "hekireki-er"
+    output   = "docs/er-diagram.png"
+    theme    = "light"               // .png / .svg only. "light" (default) or "dark"
 }
 
 // Docs Generator

@@ -40,9 +40,7 @@ export function FieldGlyph({
   readonly primaryKey: ReadonlySet<string>
 }) {
   if (field.isId || primaryKey.has(field.name)) {
-    return (
-      <KeyIcon size={13} className="inline-block align-middle text-amber-600 dark:text-amber-400" />
-    )
+    return <KeyIcon size={13} className="inline-block align-middle text-key" />
   }
   if (field.isForeignKey) {
     return <LinkIcon size={13} className="inline-block align-middle text-accent" />
@@ -55,7 +53,7 @@ function TypeLink({ field, schema }: { readonly field: Field; readonly schema: S
   if (field.kind === 'object' && schema.models.some((m) => m.name === field.type)) {
     return (
       <Link
-        className="font-mono text-[12.5px] font-semibold text-accent-text hover:underline"
+        className="font-mono text-code font-semibold text-accent-text hover:underline"
         to="/models/$name"
         params={{ name: field.type }}
         search={{}}
@@ -67,7 +65,7 @@ function TypeLink({ field, schema }: { readonly field: Field; readonly schema: S
   if (field.kind === 'enum' && schema.enums.some((e) => e.name === field.type)) {
     return (
       <Link
-        className="font-mono text-[12.5px] font-semibold text-violet-600 hover:underline dark:text-violet-300"
+        className="font-mono text-code font-semibold text-enum hover:underline"
         to="/enums/$name"
         params={{ name: field.type }}
       >
@@ -75,7 +73,7 @@ function TypeLink({ field, schema }: { readonly field: Field; readonly schema: S
       </Link>
     )
   }
-  return <span className="font-mono text-[12.5px]">{label}</span>
+  return <span className="font-mono text-code">{label}</span>
 }
 
 export function FieldsTable({
@@ -118,10 +116,10 @@ export function FieldsTable({
               <td className="w-9 border-b border-line py-2.5 pl-3.5">
                 <FieldGlyph field={field} primaryKey={primaryKey} />
               </td>
-              <td className="border-b border-line px-3.5 py-2.5 align-top font-mono text-[12.5px] font-semibold whitespace-nowrap">
+              <td className="border-b border-line px-3.5 py-2.5 align-top font-mono text-code font-semibold whitespace-nowrap">
                 {field.name}
                 {field.dbName ? (
-                  <span className="mt-0.5 block text-[11.5px] font-normal text-faint">
+                  <span className="mt-0.5 block text-meta font-normal text-faint">
                     {field.dbName}
                   </span>
                 ) : null}
@@ -143,7 +141,7 @@ export function FieldsTable({
                 {field.annotations.length > 0 ? (
                   <div className="mt-1 flex flex-col gap-0.5">
                     {field.annotations.map((annotation) => (
-                      <code key={annotation} className="text-[11px] text-faint">
+                      <code key={annotation} className="text-meta text-faint">
                         {annotation}
                       </code>
                     ))}

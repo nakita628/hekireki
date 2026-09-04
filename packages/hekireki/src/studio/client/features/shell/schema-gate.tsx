@@ -78,9 +78,7 @@ export function SchemaGate({ children }: { readonly children: (schema: Schema) =
   if (snapshot.schema === null) {
     return (
       <section className="p-6">
-        <h1 className="m-0 mb-4 text-[22px] font-bold tracking-tight">
-          Schema could not be parsed
-        </h1>
+        <h1 className="page-title mb-4">Schema could not be parsed</h1>
         <pre className="error-box">{snapshot.error ?? 'Unknown error'}</pre>
         <Link className="btn mt-4" to="/prisma" search={{}}>
           Open the Prisma schema to fix it

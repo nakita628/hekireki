@@ -138,4 +138,15 @@ describe('makeDocs', () => {
     expect(refs.length).toBeGreaterThan(0)
     expect(refs.filter((ref) => !sections.has(ref.type))).toStrictEqual([])
   })
+
+  // A datasource with nothing declared under it parses, and Prisma leaves the type lists out of
+  // its DMMF rather than answering with empty ones.
+  it('has nothing to say about a schema with no models', () => {
+    const docs = docsOf('datasource db {\n  provider = "sqlite"\n}\n')
+    expect(docs.models).toStrictEqual([])
+    expect(docs.outputTypes).toStrictEqual([])
+    expect(docs.inputTypes).toStrictEqual([])
+    // Prisma still declares its own enums for a schema that declares none of its own.
+    expect(docs.enumTypes.map((type) => type.name)).toStrictEqual(['TransactionIsolationLevel'])
+  })
 })

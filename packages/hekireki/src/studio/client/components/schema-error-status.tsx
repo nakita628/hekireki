@@ -22,7 +22,7 @@ export function SchemaErrorStatus({
   return (
     <span className="relative flex min-w-0 items-center gap-2">
       <span
-        className="max-w-[28rem] min-w-0 truncate rounded-md bg-danger-soft px-2 py-0.5 text-[12.5px] text-danger"
+        className="max-w-[28rem] min-w-0 truncate rounded-md bg-danger-soft px-2 py-0.5 text-code text-danger"
         title={summary}
       >
         <strong>
@@ -32,7 +32,7 @@ export function SchemaErrorStatus({
       </span>
       <button
         type="button"
-        className="btn h-7 shrink-0 px-2 text-xs"
+        className="btn h-7 shrink-0 px-2 text-code"
         aria-expanded={open}
         onClick={() => {
           setOpen((current) => !current)
@@ -41,7 +41,7 @@ export function SchemaErrorStatus({
         {open ? 'Hide' : 'Details'}
       </button>
       {open ? (
-        <pre className="absolute top-full right-0 z-20 m-0 mt-2 max-h-72 w-[min(48rem,80vw)] overflow-auto rounded-lg border border-danger-line bg-surface p-3 font-mono text-xs whitespace-pre-wrap text-ink shadow-lg">
+        <pre className="absolute top-full right-0 z-20 m-0 mt-2 max-h-72 w-[min(48rem,80vw)] overflow-auto rounded-lg border border-danger-line bg-surface p-3 font-mono text-code whitespace-pre-wrap text-ink shadow-lg">
           {error}
         </pre>
       ) : null}

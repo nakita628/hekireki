@@ -15,5 +15,12 @@ export const SSE_POLL_MS = 300
 /** Keep-alive interval of the schema event stream. */
 export const SSE_PING_MS = 15_000
 
+/**
+ * How many rows of a SQL result reach the browser. A `SELECT` over a big table would otherwise
+ * put every row on the wire and in the DOM; the count of what matched is reported either way,
+ * so the page can say that it is showing the first slice.
+ */
+export const SQL_ROW_LIMIT = 500
+
 /** The URI the Prisma language server sees for the single in-memory schema document. */
 export const PRISMA_FILE_URI = 'file:///schema.prisma'

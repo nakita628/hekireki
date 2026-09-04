@@ -80,8 +80,8 @@ const SAVE_DEBOUNCE_MS = 400
 
 const STATUS_CLASSES = {
   danger: { text: 'text-danger', dot: 'bg-danger' },
-  busy: { text: 'text-amber-600 dark:text-amber-400', dot: 'bg-amber-500' },
-  ok: { text: 'text-faint', dot: 'bg-green-600' },
+  busy: { text: 'text-busy', dot: 'bg-busy' },
+  ok: { text: 'text-faint', dot: 'bg-ok' },
 } as const
 const SPLIT_KEY = 'hekireki-studio:split'
 
@@ -302,8 +302,8 @@ export function PrismaView({
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <header className="flex flex-wrap items-center gap-3.5 border-b border-line bg-surface px-6 py-3">
-        <h1 className="m-0 text-[22px] font-bold tracking-tight">Prisma schema</h1>
-        <span className="text-[15px] text-muted">
+        <h1 className="page-title">Prisma schema</h1>
+        <span className="text-lead text-muted">
           {text.split('\n').length} lines
           {schema?.provider ? ` · ${schema.provider}` : ''}
         </span>
@@ -312,7 +312,7 @@ export function PrismaView({
             error={steadyProblems?.error ?? null}
             diagnostics={steadyProblems?.diagnostics ?? []}
           />
-          <span className={`flex shrink-0 items-center gap-2 text-[12.5px] ${statusClasses.text}`}>
+          <span className={`flex shrink-0 items-center gap-2 text-code ${statusClasses.text}`}>
             <span className={`size-2 rounded-full ${statusClasses.dot}`} />
             {status.label}
           </span>
@@ -338,13 +338,13 @@ export function PrismaView({
         </button>
       </header>
       {changedOnDisk ? (
-        <div className="flex items-center gap-3 border-b border-danger-line bg-danger-soft px-6 py-2 text-xs text-ink">
+        <div className="flex items-center gap-3 border-b border-danger-line bg-danger-soft px-6 py-2 text-code text-ink">
           <span className="flex-1">
             This file changed on disk while you were editing; your next save overwrites it.
           </span>
           <button
             type="button"
-            className="btn h-7 px-2.5 text-xs"
+            className="btn btn-sm"
             onClick={() => {
               setDraft(null)
             }}

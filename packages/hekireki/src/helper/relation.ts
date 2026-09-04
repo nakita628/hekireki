@@ -4,6 +4,21 @@ import { parseRelation } from '../utils/index.js'
 
 export type Cardinality = 'zero-one' | 'one' | 'zero-many' | 'many'
 
+/**
+ * Where a relation came from, which is what the drawings dash an edge on — not its cardinality.
+ *
+ * - `inferred` — a real foreign key column. Drawn solid.
+ * - `annotated` — declared in a `/// @relation` comment and nowhere else, so no constraint backs
+ *   it. Drawn dashed.
+ * - `implicit-many-to-many` — both ends are lists without `@relation(fields:)`, so Prisma keeps
+ *   the pairs in a join table of its own and neither model has a column for the other. Drawn
+ *   dashed, and hung off the card headers rather than off a field row, because there is no
+ *   scalar field at either end to point at.
+ *
+ * So a dashed edge means "nothing in the database enforces this", not "many to many": an
+ * explicit many-to-many written as a join model is two `inferred` relations and draws solid,
+ * while an `annotated` one-to-many draws dashed.
+ */
 export type RelationOrigin = 'inferred' | 'annotated' | 'implicit-many-to-many'
 
 export type ERRelation = {

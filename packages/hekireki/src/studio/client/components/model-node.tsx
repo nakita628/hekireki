@@ -13,7 +13,6 @@ import {
   diagramConstraints,
   fieldDetail,
   fieldRowHeight,
-  firstLine,
   NODE_CONSTRAINT_HEIGHT,
   NODE_ROW_HEIGHT,
 } from '../features/schema/layout.js'
@@ -38,7 +37,7 @@ const ROW_HANDLE = { top: NODE_ROW_HEIGHT / 2 }
 
 function FieldIcon({ field }: { readonly field: Field }) {
   if (field.isId) {
-    return <KeyIcon size={11} className="shrink-0 text-amber-600 dark:text-amber-400" />
+    return <KeyIcon size={11} className="shrink-0 text-key" />
   }
   if (field.isForeignKey) return <LinkIcon size={11} className="shrink-0 text-accent" />
   return <span className="inline-block size-[11px] shrink-0" />
@@ -48,7 +47,6 @@ function ModelNodeComponent({ data, selected }: NodeProps<ModelNodeType>) {
   const { model, fields } = data
   const primaryKey = new Set(model.primaryKey)
   const constraints = diagramConstraints(model)
-  const note = firstLine(model.documentation)
   return (
     <div
       className={`model-node w-[340px] overflow-visible rounded-lg border bg-surface font-mono shadow-sm ${
@@ -62,13 +60,10 @@ function ModelNodeComponent({ data, selected }: NodeProps<ModelNodeType>) {
           id={targetHandle(MODEL_HANDLE)}
           className="model-handle"
         />
-        <span className="text-[13px] font-bold">{model.name}</span>
+        <span className="text-body font-bold">{model.name}</span>
         {model.dbName ? (
-          <span className="truncate text-[11px] opacity-60">{model.dbName}</span>
+          <span className="mr-auto truncate text-meta opacity-60">{model.dbName}</span>
         ) : null}
-        <span className="ml-auto rounded-full bg-surface/15 px-2 py-px font-sans text-[11px] whitespace-nowrap">
-          {fields.length} {fields.length === 1 ? 'field' : 'fields'}
-        </span>
         <Handle
           type="source"
           position={Position.Right}
@@ -82,11 +77,6 @@ function ModelNodeComponent({ data, selected }: NodeProps<ModelNodeType>) {
           className="model-handle"
         />
       </div>
-      {note ? (
-        <div className="h-4 truncate px-2.5 font-sans text-[10.5px] leading-4 text-faint">
-          {note}
-        </div>
-      ) : null}
       <div className="py-2">
         {fields.map((field) => {
           const detail = fieldDetail(field)
@@ -104,20 +94,20 @@ function ModelNodeComponent({ data, selected }: NodeProps<ModelNodeType>) {
                 className="model-handle"
                 style={ROW_HANDLE}
               />
-              <div className="flex h-[22px] items-center gap-1.5 text-xs">
+              <div className="flex h-[22px] items-center gap-1.5 text-code">
                 <FieldIcon field={{ ...field, isId: field.isId || primaryKey.has(field.name) }} />
                 <span className="min-w-0 flex-1 truncate">{field.name}</span>
                 {field.isUnique && !(field.isId || primaryKey.has(field.name)) ? (
                   <span className={`${BADGE} ${UNIQUE_BADGE} shrink-0`}>UK</span>
                 ) : null}
                 <span
-                  className={`shrink-0 text-[11px] ${field.kind === 'enum' ? 'text-violet-600 dark:text-violet-300' : 'text-muted'}`}
+                  className={`shrink-0 text-meta ${field.kind === 'enum' ? 'text-enum' : 'text-muted'}`}
                 >
                   {fieldTypeLabel(field)}
                 </span>
               </div>
               {detail ? (
-                <div className="-mt-[3px] truncate pl-[17px] font-sans text-[10.5px] leading-[14px] text-faint">
+                <div className="-mt-[3px] truncate pl-[17px] font-sans text-detail text-faint">
                   {detail}
                 </div>
               ) : null}
@@ -146,7 +136,7 @@ function ModelNodeComponent({ data, selected }: NodeProps<ModelNodeType>) {
             return (
               <div
                 key={`${constraint.type}:${constraint.fields.join(',')}`}
-                className="flex items-center gap-1.5 px-2.5 text-[10.5px]"
+                className="flex items-center gap-1.5 px-2.5 text-detail"
                 style={{ height: NODE_CONSTRAINT_HEIGHT }}
               >
                 <span className={`${BADGE} shrink-0 ${style.className}`}>{style.label}</span>

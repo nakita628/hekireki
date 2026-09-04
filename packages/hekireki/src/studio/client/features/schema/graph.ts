@@ -30,6 +30,8 @@ type Cardinality = 'zero-one' | 'one' | 'zero-many' | 'many'
 
 type Relation = {
   readonly id: string
+  /** What the edge is dashed on, and what decides the handle it hangs off; see `RelationOrigin`
+   *  (helper/relation.ts). Dashed is "no foreign key backs this", not "many to many". */
   readonly origin: 'inferred' | 'annotated' | 'implicit-many-to-many'
   readonly onDelete: string | null
   readonly onUpdate?: string | null
@@ -70,6 +72,14 @@ export type EnumNodeType = Node<{ readonly value: EnumBlock }, 'enum'>
 
 export type DiagramNodeType = ModelNodeType | EnumNodeType
 
+type RelationEdgeData = {
+  /** The caption lines, as the exported diagram writes them; empty for an enum link. */
+  readonly caption: readonly string[]
+  readonly dimmed?: boolean
+}
+
+export type RelationEdgeType = Edge<RelationEdgeData, 'relation'>
+
 export const MODEL_HANDLE = '__model'
 
 export function sourceHandle(field: string) {
@@ -107,13 +117,6 @@ export function cardinalityMarker(cardinality: Cardinality) {
   return `er-${cardinality}`
 }
 
-// What the canvas writes on an edge: the relation itself, the first line the export draws. The
-// referential actions stay off the canvas — a label there has to be short enough not to cover a
-// model — and are shown in the model panel and in the exported image.
-export function edgeLabel(relation: Relation) {
-  return edgeCaption(relation)[0]
-}
-
 /** A dotted link from every enum-typed field to the card that lists the values it may hold. */
 function enumEdges(schema: Schema): readonly Edge[] {
   const names = new Set(schema.enums.map((value) => value.name))
@@ -126,9 +129,10 @@ function enumEdges(schema: Schema): readonly Edge[] {
         target: field.type,
         sourceHandle: sourceHandle(field.name),
         targetHandle: targetHandle(MODEL_HANDLE),
-        type: 'smoothstep',
+        type: 'relation',
         className: 'enum-edge',
         selectable: false,
+        data: { caption: [] },
       })),
   )
 }
@@ -139,6 +143,9 @@ export function buildEdges(schema: Schema): readonly Edge[] {
   )
   const hasField = (model: string, field: string) => scalarFields.get(model)?.has(field) ?? false
   const relations = schema.relations.map((relation) => {
+    // An implicit many-to-many has no column at either end to meet, so both of its ends hang off
+    // the card header rather than off a field row — as does any relation naming a field the card
+    // does not list.
     const useHeader =
       relation.origin === 'implicit-many-to-many' ||
       !hasField(relation.from.model, relation.from.field) ||
@@ -151,12 +158,11 @@ export function buildEdges(schema: Schema): readonly Edge[] {
       sourceHandle: sourceHandle(useHeader ? MODEL_HANDLE : relation.from.field),
       targetHandle:
         relation.from.model === relation.to.model ? loopTargetHandle(target) : targetHandle(target),
-      type: 'smoothstep',
-      label: edgeLabel(relation),
+      type: 'relation',
       className: `relation-edge relation-edge--${relation.origin}`,
       markerStart: cardinalityMarker(relation.from.cardinality),
       markerEnd: cardinalityMarker(relation.to.cardinality),
-      data: { relation },
+      data: { relation, caption: edgeCaption(relation) },
     }
   })
   return [...relations, ...enumEdges(schema)]
@@ -164,13 +170,14 @@ export function buildEdges(schema: Schema): readonly Edge[] {
 
 export function highlightEdges(edges: readonly Edge[], selected: readonly string[]) {
   const focus = new Set(selected)
-  return edges.map((edge) => ({
-    ...edge,
-    className:
-      focus.size === 0
-        ? edge.className
-        : `${edge.className ?? ''}${
-            focus.has(edge.source) || focus.has(edge.target) ? ' is-highlighted' : ' is-dimmed'
-          }`,
-  }))
+  return edges.map((edge) => {
+    const touched = focus.has(edge.source) || focus.has(edge.target)
+    if (focus.size === 0) return edge
+    return {
+      ...edge,
+      className: `${edge.className ?? ''}${touched ? ' is-highlighted' : ' is-dimmed'}`,
+      // The caption is drawn outside the edge group, so it is dimmed through its own data.
+      data: { ...edge.data, dimmed: !touched },
+    }
+  })
 }

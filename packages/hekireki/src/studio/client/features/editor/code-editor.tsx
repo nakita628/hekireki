@@ -151,7 +151,7 @@ export function CodeEditor({
       theme={themeName(theme)}
       options={OPTIONS}
       keepCurrentModel
-      loading={<div className="p-4 text-[12.5px] text-muted">Loading editor…</div>}
+      loading={<div className="p-4 text-code text-muted">Loading editor…</div>}
       onMount={onMount}
       onChange={(text, event) => {
         if (text === undefined) return

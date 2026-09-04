@@ -9,14 +9,14 @@ type Connection = 'connecting' | 'live' | 'offline'
 type UiStore = {
   readonly theme: Theme
   readonly connection: Connection
-  readonly legendOpen: boolean
+  readonly sidebarOpen: boolean
   readonly toggleTheme: () => void
   readonly setConnection: (connection: Connection) => void
-  readonly setLegendOpen: (open: boolean) => void
+  readonly toggleSidebar: () => void
 }
 
-// The key to the diagram is open until someone folds it away, and then it stays folded.
-const LEGEND_KEY = 'hekireki-studio:legend'
+// The sidebar is open until someone folds it away, and then it stays folded.
+const SIDEBAR_KEY = 'hekireki-studio:sidebar'
 
 function applyTheme(theme: Theme) {
   if (typeof document === 'undefined') return
@@ -36,7 +36,7 @@ function initialTheme() {
 export const useUiStore = create<UiStore>()((set, get) => ({
   theme: initialTheme(),
   connection: 'connecting',
-  legendOpen: loadString(LEGEND_KEY) !== 'closed',
+  sidebarOpen: loadString(SIDEBAR_KEY) !== 'closed',
   toggleTheme: () => {
     const theme = nextTheme(get().theme)
     saveString(THEME_KEY, theme)
@@ -46,8 +46,9 @@ export const useUiStore = create<UiStore>()((set, get) => ({
   setConnection: (connection) => {
     set({ connection })
   },
-  setLegendOpen: (open) => {
-    saveString(LEGEND_KEY, open ? 'open' : 'closed')
-    set({ legendOpen: open })
+  toggleSidebar: () => {
+    const sidebarOpen = !get().sidebarOpen
+    saveString(SIDEBAR_KEY, sidebarOpen ? 'open' : 'closed')
+    set({ sidebarOpen })
   },
 }))

@@ -1,21 +1,31 @@
 import {
+  EDGE_LABEL_FONT_SIZE,
+  EDGE_LABEL_LINE_HEIGHT,
+  EDGE_LABEL_PADDING,
+  placeCaptions,
+  polylinePath,
+  round,
+  selfLoopPoints,
+  routePoints,
+} from './edge.js'
+import type { Box, Point } from './edge.js'
+import {
   diagramConstraints,
   diagramFields,
   ENUM_WIDTH,
   enumHeight,
   fieldDetail,
   fieldRowHeight,
-  firstLine,
   NODE_CONSTRAINT_HEIGHT,
   NODE_HEADER_HEIGHT,
-  NODE_NOTE_HEIGHT,
   NODE_PADDING,
   NODE_ROW_HEIGHT,
   NODE_WIDTH,
   nodeHeight,
-  noteHeight,
 } from './layout.js'
 import type { DiagramIndex, LayoutPositions, Position } from './layout.js'
+
+export { smoothStepPath } from './edge.js'
 
 export type DiagramTheme = 'light' | 'dark'
 
@@ -67,7 +77,10 @@ type Relation = {
   }
 }
 
-// The Studio palette (styles.css), so the export looks like the canvas it came from.
+// The Studio palette (client/styles.css), value for value, so the export looks like the canvas it
+// came from. `key`, `unique` and `enum` are the ones to watch: the canvas reads them from
+// `--c-key` / `--c-unique` / `--c-enum`, and a drawing that renders a mark in a different colour
+// from the page it was exported from is the failure this table exists to avoid.
 const PALETTES = {
   light: {
     canvas: '#f7f8fb',
@@ -81,8 +94,8 @@ const PALETTES = {
     nodeText: '#f4f5fa',
     edge: '#9095ab',
     dots: '#d4d4dc',
-    key: '#d97706',
-    unique: '#0d9488',
+    key: '#b45309',
+    unique: '#0f766e',
     enumeration: '#7c3aed',
   },
   dark: {
@@ -121,26 +134,9 @@ const BADGE_HEIGHT = 12
 const BADGE_FONT_SIZE = 8.5
 const BADGE_PADDING_X = 4
 const CONSTRAINT_FONT_SIZE = 10.5
-const EDGE_OFFSET = 20
-const EDGE_BEND_RADIUS = 5
-const EDGE_LABEL_FONT_SIZE = 9.5
-const EDGE_LABEL_LINE_HEIGHT = 12
-const EDGE_LABEL_PADDING = 4
-// How far a self relation reaches to the right of the node it loops back into.
-const SELF_LOOP_GAP = 34
 const DOT_GAP = 20
 const DOT_RADIUS = 0.7
 const PADDING = 40
-const LEGEND_HEIGHT = 30
-const LEGEND_GAP = 18
-const LEGEND_FONT_SIZE = 11
-const LEGEND_SAMPLE_WIDTH = 32
-const LEGEND_ITEM_GAP = 16
-const LEGEND_LABEL_GAP = 6
-const LEGEND_PADDING_X = 12
-// The room a caption keeps between itself and the wire it labels when it sits beside one.
-const CAPTION_GAP = 6
-
 // IE (crow's foot) notation as the canvas draws it (features/schema/schema-view.tsx): the inner
 // symbol is the maximum (a bar for one, the foot for many), the outer one the minimum (a bar for
 // mandatory, a circle for optional). The origin sits where the edge meets the node, the symbols
@@ -149,10 +145,10 @@ const CROW_FOOT = 'M0 -8 L-12 0 L0 8 M-12 0 L0 0'
 const MAX_ONE_BAR = 'M-6 -6 L-6 6'
 const MIN_ONE_BAR = 'M-15 -6 L-15 6'
 const CARDINALITY_SYMBOLS = {
-  one: { max: MAX_ONE_BAR, optional: false, label: 'exactly one' },
-  'zero-one': { max: MAX_ONE_BAR, optional: true, label: 'zero or one' },
-  many: { max: CROW_FOOT, optional: false, label: 'one or many' },
-  'zero-many': { max: CROW_FOOT, optional: true, label: 'zero or many' },
+  one: { max: MAX_ONE_BAR, optional: false },
+  'zero-one': { max: MAX_ONE_BAR, optional: true },
+  many: { max: CROW_FOOT, optional: false },
+  'zero-many': { max: CROW_FOOT, optional: true },
 } as const
 
 // The two field icons of the model node (components/icons.tsx), on a 24-unit grid.
@@ -162,6 +158,11 @@ const LINK_ICON =
   '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>'
 
 type Palette = (typeof PALETTES)[DiagramTheme]
+
+/** The colours a drawing is painted in, which are the Studio palette read back. */
+export function diagramPalette(theme: DiagramTheme): Palette {
+  return PALETTES[theme]
+}
 
 type PlacedNode = {
   readonly model: Model
@@ -175,15 +176,6 @@ type PlacedNode = {
 
 type PlacedEnum = {
   readonly value: EnumBlock
-  readonly x: number
-  readonly y: number
-  readonly width: number
-  readonly height: number
-}
-
-type Point = { readonly x: number; readonly y: number }
-
-type Box = {
   readonly x: number
   readonly y: number
   readonly width: number
@@ -204,10 +196,6 @@ function escapeXml(text: string) {
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
-}
-
-function round(value: number) {
-  return Math.round(value * 100) / 100
 }
 
 function monoWidth(text: string, fontSize: number) {
@@ -260,9 +248,9 @@ function placeEnums(
   })
 }
 
-/** Where the field rows of a card start: under the header, and under its note when it has one. */
-function fieldsTop(card: { readonly y: number; readonly model: Model }) {
-  return card.y + NODE_HEADER_HEIGHT + noteHeight(card.model) + NODE_PADDING
+/** Where the field rows of a card start. */
+function fieldsTop(card: { readonly y: number }) {
+  return card.y + NODE_HEADER_HEIGHT + NODE_PADDING
 }
 
 /** The vertical centre of a field name, or of the header when the field is not shown. */
@@ -328,76 +316,6 @@ export function edgeCaption(relation: Relation): readonly string[] {
     .filter((part) => part !== null)
     .join(' · ')
   return rules === '' ? [what] : [what, rules]
-}
-
-// A port of React Flow's smoothstep edge for a right-hand source and a left-hand target: the
-// edge leaves horizontally, bends once or twice with rounded corners, and enters horizontally.
-function bend(a: Point, b: Point, c: Point) {
-  const size = Math.min(
-    Math.hypot(a.x - b.x, a.y - b.y) / 2,
-    Math.hypot(b.x - c.x, b.y - c.y) / 2,
-    EDGE_BEND_RADIUS,
-  )
-  const { x, y } = b
-  if ((a.x === x && x === c.x) || (a.y === y && y === c.y)) return `L${round(x)} ${round(y)}`
-  if (a.y === y) {
-    const xDir = a.x < c.x ? -1 : 1
-    const yDir = a.y < c.y ? 1 : -1
-    return `L ${round(x + size * xDir)},${round(y)}Q ${round(x)},${round(y)} ${round(x)},${round(y + size * yDir)}`
-  }
-  const xDir = a.x < c.x ? 1 : -1
-  const yDir = a.y < c.y ? -1 : 1
-  return `L ${round(x)},${round(y + size * yDir)}Q ${round(x)},${round(y)} ${round(x + size * xDir)},${round(y)}`
-}
-
-/** The polyline through the points, with a rounded corner wherever it turns. */
-function polylinePath(points: readonly Point[]) {
-  return points
-    .map((point, index) => {
-      const previous = points[index - 1]
-      const next = points[index + 1]
-      if (previous && next) return bend(previous, point, next)
-      return `${index === 0 ? 'M' : 'L'}${round(point.x)} ${round(point.y)}`
-    })
-    .join('')
-}
-
-/** The corners of an edge from a source on the right of a node to a target on the left of another. */
-function smoothStepPoints(source: Point, target: Point): readonly Point[] {
-  const sourceGapped = { x: source.x + EDGE_OFFSET, y: source.y }
-  const targetGapped = { x: target.x - EDGE_OFFSET, y: target.y }
-  const center = { x: (source.x + target.x) / 2, y: (source.y + target.y) / 2 }
-  const forward = sourceGapped.x < targetGapped.x
-  const split = forward
-    ? [
-        { x: center.x, y: sourceGapped.y },
-        { x: center.x, y: targetGapped.y },
-      ]
-    : [
-        { x: sourceGapped.x, y: center.y },
-        { x: targetGapped.x, y: center.y },
-      ]
-  return [source, sourceGapped, ...split, targetGapped, target]
-}
-
-/** The path of an edge from a source on the right of a node to a target on the left of another, and its label point. */
-export function smoothStepPath(source: Point, target: Point) {
-  const points = smoothStepPoints(source, target)
-  return {
-    path: polylinePath(points),
-    label: { x: (source.x + target.x) / 2, y: (source.y + target.y) / 2 },
-    points,
-  }
-}
-
-// The corners of a relation that returns to the node it started from, looped off its right side.
-// Two ends of the same row would flatten the loop into an invisible line, so they are pulled a
-// row apart — a self many-to-many hangs both of its ends off the header.
-function selfLoopPoints(source: Point, target: Point): readonly Point[] {
-  const flat = Math.abs(target.y - source.y) < NODE_ROW_HEIGHT / 2
-  const end = { x: target.x, y: flat ? source.y + NODE_ROW_HEIGHT : target.y }
-  const turn = source.x + SELF_LOOP_GAP
-  return [source, { x: turn, y: source.y }, { x: turn, y: end.y }, end]
 }
 
 function fieldIcon(field: Field, primaryKey: ReadonlySet<string>, palette: Palette) {
@@ -495,29 +413,15 @@ function renderConstraint(
   return `${badge.svg}<text x="${round(columnsLeft)}" y="${round(centerY + CONSTRAINT_FONT_SIZE * 0.36)}" font-family="${FONT_MONO}" font-size="${CONSTRAINT_FONT_SIZE}" fill="${palette.muted}">${escapeXml(columns)}</text>`
 }
 
-/** The doc comment of a block, on one faint line under its header. */
-function renderNote(
-  card: { readonly x: number; readonly y: number; readonly width: number },
-  documentation: string | null | undefined,
-  palette: Palette,
-) {
-  const note = firstLine(documentation)
-  if (note === '') return ''
-  const left = card.x + HEADER_PADDING_X
-  const width = card.width - HEADER_PADDING_X * 2
-  const baseline = card.y + NODE_HEADER_HEIGHT + NODE_NOTE_HEIGHT / 2 + 10.5 * 0.36
-  return `<text x="${round(left)}" y="${round(baseline)}" font-family="${FONT_SANS}" font-size="10.5" fill="${palette.faint}">${escapeXml(truncateLabel(note, width, 10.5 * SANS_ADVANCE))}</text>`
-}
-
 /** The card behind a block: the rounded surface, its dark header band and the header text. */
 function renderCard(
   card: { readonly x: number; readonly y: number; readonly width: number; readonly height: number },
   id: string,
-  header: { readonly name: string; readonly dbName: string | null; readonly pill: string },
+  header: { readonly name: string; readonly dbName: string | null; readonly pill: string | null },
   palette: Palette,
 ) {
   const nameWidth = header.name.length * 13 * MONO_BOLD_ADVANCE
-  const pillWidth = sansWidth(header.pill, 11) + 16
+  const pillWidth = header.pill === null ? 0 : sansWidth(header.pill, 11) + 16
   const pillX = card.x + card.width - HEADER_PADDING_X - pillWidth
   const dbNameLeft = card.x + HEADER_PADDING_X + nameWidth + 8
   const dbName = header.dbName
@@ -534,14 +438,17 @@ function renderCard(
         ? `<tspan dx="8" font-size="11" font-weight="400" opacity="0.6">${escapeXml(dbName)}</tspan>`
         : ''
     }</text>`,
-    `<rect x="${round(pillX)}" y="${round(headerCenter - 8)}" width="${round(pillWidth)}" height="16" rx="8" fill="${palette.surface}" opacity="0.15"/>`,
-    `<text x="${round(pillX + pillWidth / 2)}" y="${round(headerCenter + 11 * 0.36)}" font-family="${FONT_SANS}" font-size="11" text-anchor="middle" fill="${palette.nodeText}">${escapeXml(header.pill)}</text>`,
+    ...(header.pill === null
+      ? []
+      : [
+          `<rect x="${round(pillX)}" y="${round(headerCenter - 8)}" width="${round(pillWidth)}" height="16" rx="8" fill="${palette.surface}" opacity="0.15"/>`,
+          `<text x="${round(pillX + pillWidth / 2)}" y="${round(headerCenter + 11 * 0.36)}" font-family="${FONT_SANS}" font-size="11" text-anchor="middle" fill="${palette.nodeText}">${escapeXml(header.pill)}</text>`,
+        ]),
   ].join('')
 }
 
 function renderNode(node: PlacedNode, index: number, palette: Palette) {
   const { model, fields } = node
-  const pill = `${fields.length} ${fields.length === 1 ? 'field' : 'fields'}`
   const rows = fields.reduce<{ readonly top: number; readonly svg: readonly string[] }>(
     (state, field) => ({
       top: state.top + fieldRowHeight(field),
@@ -554,10 +461,9 @@ function renderNode(node: PlacedNode, index: number, palette: Palette) {
     renderCard(
       node,
       `node-clip-${index}`,
-      { name: model.name, dbName: model.dbName, pill },
+      { name: model.name, dbName: model.dbName, pill: null },
       palette,
     ),
-    renderNote(node, model.documentation, palette),
     ...rows.svg,
     ...(node.constraints.length === 0
       ? []
@@ -581,7 +487,7 @@ function renderEnum(card: PlacedEnum, index: number, palette: Palette) {
   const { value } = card
   const left = card.x + HEADER_PADDING_X
   const right = card.x + card.width - HEADER_PADDING_X
-  const top = card.y + NODE_HEADER_HEIGHT + noteHeight(value) + NODE_PADDING
+  const top = fieldsTop(card)
   return [
     `<g class="enum-node">`,
     renderCard(
@@ -590,7 +496,6 @@ function renderEnum(card: PlacedEnum, index: number, palette: Palette) {
       { name: value.name, dbName: value.dbName, pill: 'enum' },
       palette,
     ),
-    renderNote(card, value.documentation, palette),
     ...value.values.map((member, position) => {
       const centerY = top + position * NODE_ROW_HEIGHT + NODE_ROW_HEIGHT / 2
       const stored = member.dbName
@@ -631,10 +536,17 @@ type Edge = {
 }
 
 /** Where an edge leaves and enters its models, and what it says along the way. */
-function edgeGeometry(relation: Relation, nodes: ReadonlyMap<string, PlacedNode>): Edge | null {
+function edgeGeometry(
+  relation: Relation,
+  nodes: ReadonlyMap<string, PlacedNode>,
+  cards: readonly Box[],
+): Edge | null {
   const from = nodes.get(relation.from.model)
   const to = nodes.get(relation.to.model)
   if (!(from && to)) return null
+  // An implicit many-to-many has no column at either end to meet, so both of its ends hang off
+  // the card header rather than off a field row — as does any relation naming a field the card
+  // does not list.
   const useHeader =
     relation.origin === 'implicit-many-to-many' ||
     !hasField(from, relation.from.field) ||
@@ -650,8 +562,9 @@ function edgeGeometry(relation: Relation, nodes: ReadonlyMap<string, PlacedNode>
   }
   return {
     relation,
-    points: loops ? selfLoopPoints(source, target) : smoothStepPoints(source, target),
+    points: loops ? selfLoopPoints(source, target) : routePoints(source, target, cards),
     caption: edgeCaption(relation),
+    // Dashed is "no foreign key backs this", not "many to many" — see `RelationOrigin`.
     dashed: relation.origin === 'annotated' || relation.origin === 'implicit-many-to-many',
     targetTowards: loops ? 'left' : 'right',
   }
@@ -670,17 +583,11 @@ function renderEdge(edge: Edge, palette: Palette) {
   ].join('')
 }
 
-function midpoint(points: readonly Point[]): Point {
-  return {
-    x: ((points[0]?.x ?? 0) + (points.at(-1)?.x ?? 0)) / 2,
-    y: ((points[0]?.y ?? 0) + (points.at(-1)?.y ?? 0)) / 2,
-  }
-}
-
 /** The dotted links from every enum-typed field to the card that lists its values. */
 function enumLinks(
   nodes: readonly PlacedNode[],
   enums: readonly PlacedEnum[],
+  cards: readonly Box[],
 ): readonly (readonly Point[])[] {
   return nodes.flatMap((node) =>
     node.fields.flatMap((field) => {
@@ -688,92 +595,13 @@ function enumLinks(
       if (field.kind !== 'enum' || card === undefined) return []
       const source = { x: node.x + node.width, y: anchorY(node, field.name) }
       const target = { x: card.x, y: card.y + NODE_HEADER_HEIGHT / 2 }
-      return [smoothStepPoints(source, target)]
+      return [routePoints(source, target, cards)]
     }),
   )
 }
 
 function renderEnumLink(points: readonly Point[], palette: Palette) {
   return `<g class="enum-edge"><path d="${polylinePath(points)}" fill="none" stroke="${palette.enumeration}" stroke-width="1.2" stroke-dasharray="2 4" opacity="0.75"/></g>`
-}
-
-function captionWidth(caption: readonly string[]) {
-  return Math.max(...caption.map((line) => monoWidth(line, EDGE_LABEL_FONT_SIZE))) + 10
-}
-
-function captionBox(caption: readonly string[], center: Point): Box {
-  const width = captionWidth(caption)
-  const height = caption.length * EDGE_LABEL_LINE_HEIGHT + EDGE_LABEL_PADDING
-  return { x: center.x - width / 2, y: center.y - height / 2, width, height }
-}
-
-/** How much of two boxes cover each other, counting the breathing room around them. */
-function overlapArea(a: Box, b: Box, margin: number) {
-  const width = Math.min(a.x + a.width, b.x + b.width + margin) - Math.max(a.x, b.x - margin)
-  const height = Math.min(a.y + a.height, b.y + b.height + margin) - Math.max(a.y, b.y - margin)
-  return width > 0 && height > 0 ? width * height : 0
-}
-
-// Where a caption may sit: along the segments of its own edge, the vertical ones first — they are
-// the part of a smoothstep edge that belongs to it alone, so the labels of a shared bus fan out.
-// Beside the wire counts too, for a label too wide to straddle it.
-function captionSpots(points: readonly Point[], width: number): readonly Point[] {
-  const segments = points
-    .slice(0, -1)
-    .map((a, index) => {
-      const b = points[index + 1] ?? a
-      return { a, b, vertical: a.x === b.x, length: Math.hypot(b.x - a.x, b.y - a.y) }
-    })
-    .filter((segment) => segment.length > 24)
-    .toSorted((a, b) =>
-      a.vertical === b.vertical ? b.length - a.length : Number(b.vertical) - Number(a.vertical),
-    )
-  const beside = width / 2 + CAPTION_GAP
-  return segments.flatMap((segment) =>
-    [0.5, 0.3, 0.7, 0.15, 0.85].flatMap((t) => {
-      const on = {
-        x: segment.a.x + (segment.b.x - segment.a.x) * t,
-        y: segment.a.y + (segment.b.y - segment.a.y) * t,
-      }
-      return segment.vertical
-        ? [on, { x: on.x + beside, y: on.y }, { x: on.x - beside, y: on.y }]
-        : [on]
-    }),
-  )
-}
-
-type PlacedCaption = { readonly caption: readonly string[]; readonly box: Box }
-
-// How much worse it is to cover a caption already placed than to cover a model: two labels on top
-// of each other read as neither, while a chip over a model still reads as itself.
-const CAPTION_CLASH = 4
-
-/** Puts every caption on the clearest stretch of its edge: off the models, off the other captions. */
-function placeCaptions(edges: readonly Edge[], cards: readonly Box[]): readonly PlacedCaption[] {
-  return edges.reduce<{ readonly placed: readonly PlacedCaption[] }>(
-    (state, edge) => {
-      const { caption } = edge
-      if (caption.length === 0) return state
-      const boxes = captionSpots(edge.points, captionWidth(caption)).map((spot) =>
-        captionBox(caption, spot),
-      )
-      const best = boxes.reduce<{ readonly box: Box; readonly cost: number } | null>(
-        (found, box) => {
-          const cost =
-            cards.reduce((sum, card) => sum + overlapArea(box, card, 4), 0) +
-            state.placed.reduce(
-              (sum, other) => sum + overlapArea(box, other.box, 2) * CAPTION_CLASH,
-              0,
-            )
-          return found === null || cost < found.cost ? { box, cost } : found
-        },
-        null,
-      )
-      const box = best?.box ?? captionBox(caption, midpoint(edge.points))
-      return { placed: [...state.placed, { caption, box }] }
-    },
-    { placed: [] },
-  ).placed
 }
 
 // The relation leads, in the plain colour; what it does to a row follows in the quiet one.
@@ -788,116 +616,6 @@ function renderCaption(caption: readonly string[], box: Box, palette: Palette) {
     return `<text x="${round(center)}" y="${round(baseline)}" font-family="${FONT_MONO}" font-size="${EDGE_LABEL_FONT_SIZE}" text-anchor="middle" fill="${index === 0 ? palette.muted : palette.faint}">${escapeXml(line)}</text>`
   })
   return `<g class="relation-label"><rect x="${round(box.x)}" y="${round(box.y)}" width="${round(box.width)}" height="${round(box.height)}" rx="3" fill="${palette.surface}" stroke="${palette.lineStrong}" stroke-width="0.8"/>${lines.join('')}</g>`
-}
-
-type LegendItem =
-  | { readonly kind: 'cardinality'; readonly cardinality: Cardinality; readonly label: string }
-  | { readonly kind: 'dashed'; readonly label: string }
-  | { readonly kind: 'icon'; readonly icon: string; readonly color: string; readonly label: string }
-  | {
-      readonly kind: 'badge'
-      readonly badge: string
-      readonly color: string
-      readonly label: string
-    }
-  | { readonly kind: 'dotted'; readonly color: string; readonly label: string }
-
-/** The key to the drawing: only the symbols this diagram actually uses. */
-function legendItems(
-  nodes: readonly PlacedNode[],
-  edges: readonly Edge[],
-  links: number,
-  palette: Palette,
-): readonly LegendItem[] {
-  const used = new Set(
-    edges.flatMap((edge) => [edge.relation.from.cardinality, edge.relation.to.cardinality]),
-  )
-  const hasKey = nodes.some((node) => {
-    const primaryKey = new Set(node.model.primaryKey)
-    return node.fields.some((field) => field.isId || primaryKey.has(field.name))
-  })
-  return [
-    ...(['one', 'zero-one', 'many', 'zero-many'] as const)
-      .filter((cardinality) => used.has(cardinality))
-      .map(
-        (cardinality) =>
-          ({
-            kind: 'cardinality',
-            cardinality,
-            label: CARDINALITY_SYMBOLS[cardinality].label,
-          }) as const,
-      ),
-    ...(edges.some((edge) => edge.dashed)
-      ? [{ kind: 'dashed', label: 'declared with @relation, or many to many' } as const]
-      : []),
-    ...(hasKey
-      ? [{ kind: 'icon', icon: KEY_ICON, color: palette.key, label: 'primary key' } as const]
-      : []),
-    ...(nodes.some((node) => node.fields.some((field) => field.isForeignKey))
-      ? [{ kind: 'icon', icon: LINK_ICON, color: palette.accent, label: 'foreign key' } as const]
-      : []),
-    ...(nodes.some((node) => {
-      const primaryKey = new Set(node.model.primaryKey)
-      return node.fields.some((field) => uniqueBadge(field, primaryKey) !== null)
-    })
-      ? [{ kind: 'badge', badge: 'UK', color: palette.unique, label: 'unique' } as const]
-      : []),
-    ...(links === 0
-      ? []
-      : [{ kind: 'dotted', color: palette.enumeration, label: 'enum values' } as const]),
-  ]
-}
-
-function legendSampleWidth(item: LegendItem) {
-  if (item.kind === 'icon') return ICON_SIZE
-  if (item.kind === 'badge') return badgeWidth(item.badge)
-  return LEGEND_SAMPLE_WIDTH
-}
-
-function legendItemWidth(item: LegendItem) {
-  return legendSampleWidth(item) + LEGEND_LABEL_GAP + sansWidth(item.label, LEGEND_FONT_SIZE)
-}
-
-function legendWidth(items: readonly LegendItem[]) {
-  if (items.length === 0) return 0
-  return (
-    LEGEND_PADDING_X * 2 +
-    items.reduce((sum, item) => sum + legendItemWidth(item), 0) +
-    LEGEND_ITEM_GAP * (items.length - 1)
-  )
-}
-
-function renderLegendItem(item: LegendItem, x: number, centerY: number, palette: Palette) {
-  const sample = legendSampleWidth(item)
-  const graphic =
-    item.kind === 'icon'
-      ? renderIcon(item.icon, item.color, x, centerY - ICON_SIZE / 2, ICON_SIZE)
-      : item.kind === 'badge'
-        ? renderBadge(item.badge, x, centerY, item.color).svg
-        : item.kind === 'dotted'
-          ? `<path d="M${round(x)} ${round(centerY)}H${round(x + sample)}" fill="none" stroke="${item.color}" stroke-width="1.2" stroke-dasharray="2 4" opacity="0.75"/>`
-          : item.kind === 'dashed'
-            ? `<path d="M${round(x)} ${round(centerY)}H${round(x + sample)}" fill="none" stroke="${palette.edge}" stroke-width="1.4" stroke-dasharray="5 4"/>`
-            : `<path d="M${round(x)} ${round(centerY)}H${round(x + sample)}" fill="none" stroke="${palette.edge}" stroke-width="1.4"/>${renderCardinality(item.cardinality, { x: x + sample, y: centerY }, 'right', palette)}`
-  return `${graphic}<text x="${round(x + sample + LEGEND_LABEL_GAP)}" y="${round(centerY + LEGEND_FONT_SIZE * 0.36)}" font-family="${FONT_SANS}" font-size="${LEGEND_FONT_SIZE}" fill="${palette.muted}">${escapeXml(item.label)}</text>`
-}
-
-function renderLegend(items: readonly LegendItem[], origin: Point, palette: Palette) {
-  if (items.length === 0) return ''
-  const centerY = origin.y + LEGEND_HEIGHT / 2
-  const rendered = items.reduce<{ readonly x: number; readonly svg: readonly string[] }>(
-    (state, item) => ({
-      x: state.x + legendItemWidth(item) + LEGEND_ITEM_GAP,
-      svg: [...state.svg, renderLegendItem(item, state.x, centerY, palette)],
-    }),
-    { x: origin.x + LEGEND_PADDING_X, svg: [] },
-  )
-  return [
-    `<g class="diagram-legend">`,
-    `<rect x="${round(origin.x)}" y="${round(origin.y)}" width="${round(legendWidth(items))}" height="${LEGEND_HEIGHT}" rx="6" fill="${palette.surface}" stroke="${palette.lineStrong}"/>`,
-    ...rendered.svg,
-    `</g>`,
-  ].join('')
 }
 
 function union(boxes: readonly Box[]): Box {
@@ -934,15 +652,17 @@ export function renderDiagramSvg(input: DiagramInput) {
   const nodes = placeNodes(input.models, input.positions)
   const enums = placeEnums(input.enums ?? [], input.positions)
   const byName = new Map(nodes.map((node) => [node.model.name, node]))
-  const edges = input.relations
-    .map((relation) => edgeGeometry(relation, byName))
-    .filter((edge) => edge !== null)
-  const links = enumLinks(nodes, enums)
   const cards = [...nodes, ...enums]
-  // The captions are laid out before the drawing is sized, so none of them falls outside it.
-  const captions = placeCaptions(edges, cards)
-  const items = legendItems(nodes, edges, links.length, palette)
-  const legend = legendWidth(items)
+  const edges = input.relations
+    .map((relation) => edgeGeometry(relation, byName, cards))
+    .filter((edge) => edge !== null)
+  const links = enumLinks(nodes, enums, cards)
+  // The captions are laid out before the drawing is sized, so none of them falls outside it. The
+  // enum links join in without a caption of their own: they are wires a caption has to stay off.
+  const captions = placeCaptions(
+    [...edges, ...links.map((points) => ({ caption: [], points }))],
+    cards,
+  )
   // The end symbols reach back along the edge, so an endpoint takes a little room of its own.
   const ends = [...edges.map((edge) => edge.points), ...links].flatMap((points) =>
     points.map((point) => ({ x: point.x, y: point.y, width: 0, height: 0 })),
@@ -955,13 +675,7 @@ export function renderDiagramSvg(input: DiagramInput) {
     ]),
     PADDING,
   )
-  const band = legend === 0 ? 0 : LEGEND_HEIGHT + LEGEND_GAP
-  const bounds = {
-    x: content.x,
-    y: content.y - band,
-    width: Math.max(content.width, legend + PADDING * 2),
-    height: content.height + band,
-  }
+  const bounds = content
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${round(bounds.width)}" height="${round(bounds.height)}" viewBox="${round(bounds.x)} ${round(bounds.y)} ${round(bounds.width)} ${round(bounds.height)}">`,
     `<defs>`,
@@ -976,7 +690,6 @@ export function renderDiagramSvg(input: DiagramInput) {
     ...enums.map((card, index) => renderEnum(card, index, palette)),
     // The captions go on top of the models: a label is worth more than the pixels it covers.
     ...captions.map((caption) => renderCaption(caption.caption, caption.box, palette)),
-    renderLegend(items, { x: bounds.x + PADDING, y: bounds.y + LEGEND_GAP }, palette),
     `</svg>`,
   ]
     .filter((line) => line !== '')

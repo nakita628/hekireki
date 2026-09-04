@@ -23,7 +23,7 @@ export function SchemaErrorBanner({
   const [open, setOpen] = useState(false)
   const { count, summary } = schemaProblems({ error, diagnostics })
   return (
-    <div className="border-b border-danger-line bg-danger-soft text-[13px] text-danger">
+    <div className="border-b border-danger-line bg-danger-soft text-body text-danger">
       <div className="flex min-w-0 items-center gap-3 px-6 py-1.5">
         <strong className="shrink-0">
           {count} {count === 1 ? 'error' : 'errors'}
@@ -35,7 +35,7 @@ export function SchemaErrorBanner({
         {action}
         <button
           type="button"
-          className="btn h-6 shrink-0 px-2 text-xs"
+          className="btn h-6 shrink-0 px-2 text-code"
           aria-expanded={open}
           onClick={() => {
             setOpen((current) => !current)
@@ -45,7 +45,7 @@ export function SchemaErrorBanner({
         </button>
       </div>
       {open ? (
-        <pre className="m-0 max-h-48 overflow-auto border-t border-danger-line px-6 py-2 font-mono text-xs whitespace-pre-wrap text-ink">
+        <pre className="m-0 max-h-48 overflow-auto border-t border-danger-line px-6 py-2 font-mono text-code whitespace-pre-wrap text-ink">
           {error}
         </pre>
       ) : null}

@@ -24,7 +24,21 @@
   --c-node-text: #f4f5fa;
   --c-edge: #9095ab;
   --c-dots: #d4d4dc;
+  /* The three marks a card carries. One value each, because the exported drawing writes the same
+     colours literally (diagram/svg.ts) and a canvas that disagrees with its own download is the
+     bug this palette exists to prevent. */
+  --c-key: #b45309;
+  --c-unique: #0f766e;
   --c-enum: #7c3aed;
+  /* What the status dots, the save tick and the save indicator say. */
+  --c-ok: #15803d;
+  --c-busy: #b45309;
+  /* Syntax colours of the highlighted snippets. Here with the rest of the palette rather than
+     beside the rules, so a theme is one block to read and `.dark` has nothing to override. */
+  --c-tok-keyword: #7c3aed;
+  --c-tok-string: #0f766e;
+  --c-tok-number: #b45309;
+  --c-tok-definition: #1d4ed8;
 }
 
 .dark {
@@ -46,7 +60,15 @@
   --c-node-text: #f4f5fa;
   --c-edge: #6b7189;
   --c-dots: #2a2f3d;
+  --c-key: #fbbf24;
+  --c-unique: #5eead4;
   --c-enum: #c4b5fd;
+  --c-ok: #4ade80;
+  --c-busy: #fbbf24;
+  --c-tok-keyword: #c4b5fd;
+  --c-tok-string: #5eead4;
+  --c-tok-number: #fcd34d;
+  --c-tok-definition: #93c5fd;
 }
 
 @theme inline {
@@ -66,9 +88,33 @@
   --color-danger-line: var(--c-danger-line);
   --color-node: var(--c-node);
   --color-node-text: var(--c-node-text);
+  --color-key: var(--c-key);
+  --color-unique: var(--c-unique);
+  --color-enum: var(--c-enum);
+  --color-edge: var(--c-edge);
+  --color-ok: var(--c-ok);
+  --color-busy: var(--c-busy);
   --font-sans:
     ui-sans-serif, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+
+  /* The type scale, named for what each step is for. Studio runs denser than Tailwind's default
+     ladder, so its t-shirt sizes are not used here: one scale, and a size that is not on it is a
+     mistake rather than a decision. The three steps that always set their leading carry it. */
+  --text-badge: 8.5px;
+  --text-badge--line-height: 11px;
+  --text-caption: 9.5px;
+  --text-caption--line-height: 13px;
+  --text-detail: 10.5px;
+  --text-detail--line-height: 14px;
+  --text-meta: 11px;
+  --text-code: 12.5px;
+  --text-body: 13px;
+  --text-ui: 14px;
+  --text-lead: 15px;
+  --text-section: 18px;
+  --text-heading: 20px;
+  --text-title: 22px;
 }
 
 @layer base {
@@ -80,7 +126,7 @@
   }
 
   body {
-    @apply bg-canvas font-sans text-sm text-ink antialiased;
+    @apply bg-canvas font-sans text-ui text-ink antialiased;
   }
 }
 
@@ -91,7 +137,7 @@
     color: var(--c-ink);
   }
   .btn {
-    @apply inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-3.5 text-sm font-medium whitespace-nowrap text-ink hover:bg-canvas disabled:cursor-default disabled:opacity-50;
+    @apply inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-3.5 text-ui font-medium whitespace-nowrap text-ink hover:bg-canvas disabled:cursor-default disabled:opacity-50;
   }
 
   .btn-ghost {
@@ -103,31 +149,41 @@
   }
 
   .chip {
-    @apply rounded-md bg-accent-soft px-1.5 py-px font-mono text-[11.5px] whitespace-nowrap text-accent-text;
+    @apply rounded-md bg-accent-soft px-1.5 py-px font-mono text-meta whitespace-nowrap text-accent-text;
   }
 
   .tab {
-    @apply cursor-pointer border-0 border-b-2 border-transparent bg-transparent px-3 py-2 font-mono text-[12.5px] whitespace-nowrap text-muted hover:text-ink;
+    @apply cursor-pointer border-0 border-b-2 border-transparent bg-transparent px-3 py-2 font-mono text-code whitespace-nowrap text-muted hover:text-ink;
   }
 
   .tab-active {
     @apply border-accent font-semibold text-accent-text;
   }
 
+  /* The `h1` of a page, and the smaller button a toolbar packs in. Both were spelled out at every
+     call site before, which is how a scale drifts. */
+  .page-title {
+    @apply m-0 text-title font-bold tracking-tight;
+  }
+
+  .btn-sm {
+    @apply h-7 px-2.5 text-code;
+  }
+
   .heading {
-    @apply mb-2 text-[11px] font-bold tracking-[0.08em] text-faint uppercase;
+    @apply mb-2 text-meta font-bold tracking-[0.08em] text-faint uppercase;
   }
 
   .cell-input {
-    @apply w-full min-w-24 rounded border border-accent bg-surface px-1.5 py-0.5 font-mono text-[12.5px] text-ink outline-none;
+    @apply w-full min-w-24 rounded border border-accent bg-surface px-1.5 py-0.5 font-mono text-code text-ink outline-none;
   }
 
   .error-box {
-    @apply rounded-[10px] border border-danger-line bg-danger-soft p-4 font-mono text-[12.5px] whitespace-pre-wrap text-ink;
+    @apply rounded-[10px] border border-danger-line bg-danger-soft p-4 font-mono text-code whitespace-pre-wrap text-ink;
   }
 
   .th {
-    @apply sticky top-0 border-b border-line bg-surface-2 px-3.5 py-2.5 text-left text-[12.5px] font-semibold whitespace-nowrap text-muted;
+    @apply sticky top-0 border-b border-line bg-surface-2 px-3.5 py-2.5 text-left text-code font-semibold whitespace-nowrap text-muted;
   }
 }
 
@@ -173,8 +229,22 @@
   stroke-width: 1.4;
 }
 
+/* Edge captions live in React Flow's label layer. That layer is painted under the models, so a
+   caption is lifted over them (1000 is what React Flow elevates a selected node to): the geometry
+   pass keeps a chip off the cards where it can, and where it cannot the label still reads. */
+.relation-label {
+  position: absolute;
+  z-index: 1001;
+  @apply rounded border border-line bg-surface px-[5px] py-px font-mono text-caption whitespace-nowrap text-muted;
+}
+
+.relation-label.is-dimmed {
+  opacity: 0.3;
+}
+
 /* An enum-typed field is linked to the card that lists its values, in the colour the type is
-   written in. */
+   written in. The finer `2 4` dots are what tell this apart from the `5 4` dashes below: those
+   are relations, this is not one. */
 .react-flow__edge.enum-edge .react-flow__edge-path {
   stroke: var(--c-enum);
   stroke-width: 1.2;
@@ -201,6 +271,10 @@
   fill: var(--c-surface);
 }
 
+/* A relation no foreign key backs: declared in a `/// @relation` comment, or an implicit
+   many-to-many whose pairs live in a join table of Prisma's own. Dashed is about that, not about
+   cardinality — an explicit many-to-many written as a join model is two ordinary foreign keys and
+   stays solid. `RelationOrigin` (helper/relation.ts) is where the three origins are spelled out. */
 .react-flow__edge.relation-edge--annotated .react-flow__edge-path,
 .react-flow__edge.relation-edge--implicit-many-to-many .react-flow__edge-path {
   stroke-dasharray: 5 4;
@@ -225,9 +299,9 @@
   fill: var(--c-muted);
 }
 
-/* Syntax colours of the highlighted snippets (classHighlighter token classes). */
+/* The classHighlighter token classes, painted from the palette above. */
 .tok-keyword {
-  color: #7c3aed;
+  color: var(--c-tok-keyword);
 }
 .tok-comment {
   color: var(--c-muted);
@@ -235,36 +309,21 @@
 }
 .tok-string,
 .tok-string2 {
-  color: #0f766e;
+  color: var(--c-tok-string);
 }
 .tok-number,
 .tok-bool,
 .tok-atom {
-  color: #b45309;
+  color: var(--c-tok-number);
 }
 .tok-variableName,
 .tok-propertyName {
   color: var(--c-ink);
 }
 .tok-definition {
-  color: #1d4ed8;
+  color: var(--c-tok-definition);
 }
 .tok-punctuation,
 .tok-operator {
   color: var(--c-muted);
-}
-.dark .tok-keyword {
-  color: #c4b5fd;
-}
-.dark .tok-string,
-.dark .tok-string2 {
-  color: #5eead4;
-}
-.dark .tok-number,
-.dark .tok-bool,
-.dark .tok-atom {
-  color: #fcd34d;
-}
-.dark .tok-definition {
-  color: #93c5fd;
 }

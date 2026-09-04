@@ -42,7 +42,7 @@ type Schema = {
   }[]
 }
 
-const ATTRIBUTE = 'pl-5 font-mono text-xs break-all text-accent-text'
+const ATTRIBUTE = 'pl-5 font-mono text-code break-all text-accent-text'
 
 const CARDINALITY_LABELS = {
   'zero-one': '0..1',
@@ -65,15 +65,15 @@ export function DetailsPanel({
   const indexAttributes = new Set(model.indexes.map((i) => i.attribute))
   const modelAttributes = model.attributes.filter((a) => !indexAttributes.has(a))
   return (
-    <aside className="overflow-y-auto border-l border-line bg-surface px-5 pt-4 pb-6 text-[13px]">
+    <aside className="overflow-y-auto border-l border-line bg-surface px-5 pt-4 pb-6 text-body">
       <div className="mb-[22px]">
         <div className="heading">Fields · {model.fields.length}</div>
         {model.fields.map((field) => (
           <div key={field.name} className="mb-3">
             <div className="flex items-center gap-1.5">
               <FieldGlyph field={field} primaryKey={primaryKey} />
-              <span className="font-mono text-[13.5px] font-semibold">{field.name}</span>
-              <span className="font-mono text-[12.5px] text-muted">{fieldTypeLabel(field)}</span>
+              <span className="font-mono text-body font-semibold">{field.name}</span>
+              <span className="font-mono text-code text-muted">{fieldTypeLabel(field)}</span>
             </div>
             {field.attributes.map((a) => (
               <div key={a} className={ATTRIBUTE}>
@@ -95,7 +95,7 @@ export function DetailsPanel({
           return (
             <div
               key={relation.id}
-              className="mb-1.5 flex flex-wrap items-center gap-1 font-mono text-[12.5px]"
+              className="mb-1.5 flex flex-wrap items-center gap-1 font-mono text-code"
             >
               <Link
                 className="font-semibold text-accent-text hover:underline"

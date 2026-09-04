@@ -23,7 +23,7 @@ function TocList({
       {items.map((item) => (
         <li key={item}>
           <a
-            className="block truncate py-0.5 font-mono text-[12px] hover:underline"
+            className="block truncate py-0.5 font-mono text-code hover:underline"
             href={hrefOf(item)}
           >
             {item}
@@ -38,14 +38,14 @@ function TocModel({ model }: { readonly model: Docs['models'][number] }) {
   return (
     <li className="mb-3">
       <a
-        className="block font-mono text-[13px] font-semibold hover:underline"
+        className="block font-mono text-body font-semibold hover:underline"
         href={`#model-${model.name}`}
       >
         {model.name}
       </a>
       <div className="mt-1 ml-2">
         <a
-          className="text-[12px] font-medium text-muted hover:underline"
+          className="text-code font-medium text-muted hover:underline"
           href={`#model-${model.name}-fields`}
         >
           Fields
@@ -57,7 +57,7 @@ function TocModel({ model }: { readonly model: Docs['models'][number] }) {
       </div>
       <div className="mt-1 ml-2">
         <a
-          className="text-[12px] font-medium text-muted hover:underline"
+          className="text-code font-medium text-muted hover:underline"
           href={`#model-${model.name}-operations`}
         >
           Operations
@@ -93,7 +93,7 @@ export function Toc({ docs }: { readonly docs: Docs }) {
       <ul className="m-0 list-none p-0">
         <li className="mb-3">
           <a
-            className="block font-mono text-[13px] font-semibold hover:underline"
+            className="block font-mono text-body font-semibold hover:underline"
             href="#input-types"
           >
             Input Types
@@ -105,7 +105,7 @@ export function Toc({ docs }: { readonly docs: Docs }) {
         </li>
         <li className="mb-3">
           <a
-            className="block font-mono text-[13px] font-semibold hover:underline"
+            className="block font-mono text-body font-semibold hover:underline"
             href="#output-types"
           >
             Output Types
@@ -116,10 +116,7 @@ export function Toc({ docs }: { readonly docs: Docs }) {
           />
         </li>
         <li className="mb-3">
-          <a
-            className="block font-mono text-[13px] font-semibold hover:underline"
-            href="#enum-types"
-          >
+          <a className="block font-mono text-body font-semibold hover:underline" href="#enum-types">
             Enum Types
           </a>
           <TocList

@@ -133,7 +133,7 @@ function NewRowForm({
         <div className="flex gap-1">
           <button
             type="button"
-            className="rounded p-1 text-green-700 hover:bg-surface dark:text-green-400"
+            className="rounded p-1 text-ok hover:bg-surface"
             title="Save row"
             aria-label="Save row"
             disabled={saving}
@@ -243,6 +243,10 @@ export function DataGrid({
   const editable = rowKey.length > 0
   const from = total === 0 ? 0 : skip + 1
   const to = Math.min(skip + rows.length, total)
+  // With a table of any size the two arrows matter more than the two steps: the last page is
+  // otherwise fifty clicks away.
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const page = Math.floor(skip / PAGE_SIZE) + 1
 
   const commitEdit = (row: Row, field: Field, text: string) => {
     setEditing(null)
@@ -254,12 +258,12 @@ export function DataGrid({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {!editable ? (
-        <div className="border-b border-line bg-surface-2 px-6 py-2 text-xs text-muted">
+        <div className="border-b border-line bg-surface-2 px-6 py-2 text-code text-muted">
           This model has no @id or @unique field, so rows are read-only.
         </div>
       ) : null}
       <div className={`min-h-0 flex-1 overflow-auto${loading ? ' opacity-60' : ''}`}>
-        <table className="w-full border-collapse font-mono text-[12.5px]">
+        <table className="w-full border-collapse font-mono text-code">
           <thead>
             <tr>
               <th className="th w-9" aria-label="Row actions" />
@@ -267,12 +271,12 @@ export function DataGrid({
                 <th key={field.name} className="th" title={field.documentation ?? undefined}>
                   <span className="inline-flex items-center gap-1.5">
                     {field.isId || primaryKey.has(field.name) ? (
-                      <KeyIcon size={12} className="text-amber-600 dark:text-amber-400" />
+                      <KeyIcon size={12} className="text-key" />
                     ) : field.isForeignKey ? (
                       <LinkIcon size={12} className="text-accent" />
                     ) : null}
                     <span className="font-bold text-ink">{field.name}</span>
-                    <span className="font-sans text-[11px] font-normal text-faint">
+                    <span className="font-sans text-meta font-normal text-faint">
                       {fieldTypeLabel(field)}
                     </span>
                   </span>
@@ -364,14 +368,32 @@ export function DataGrid({
           </tbody>
         </table>
       </div>
-      <footer className="flex items-center gap-3 border-t border-line bg-surface px-6 py-2 text-xs text-muted">
+      <footer className="flex items-center gap-3 border-t border-line bg-surface px-6 py-2 text-code text-muted">
         <span>
-          {from}–{to} of {total} {total === 1 ? 'row' : 'rows'}
+          {from.toLocaleString()}–{to.toLocaleString()} of {total.toLocaleString()}{' '}
+          {total === 1 ? 'row' : 'rows'}
         </span>
+        {pages > 1 ? (
+          <span>
+            page {page.toLocaleString()} / {pages.toLocaleString()}
+          </span>
+        ) : null}
         <span className="ml-auto flex gap-1">
           <button
             type="button"
-            className="btn h-7 px-2.5 text-xs"
+            className="btn btn-sm"
+            disabled={skip === 0}
+            aria-label="First page"
+            title="First page"
+            onClick={() => {
+              onPage(0)
+            }}
+          >
+            «
+          </button>
+          <button
+            type="button"
+            className="btn btn-sm"
             disabled={skip === 0}
             onClick={() => {
               onPage(Math.max(0, skip - PAGE_SIZE))
@@ -381,13 +403,25 @@ export function DataGrid({
           </button>
           <button
             type="button"
-            className="btn h-7 px-2.5 text-xs"
+            className="btn btn-sm"
             disabled={to >= total}
             onClick={() => {
               onPage(skip + PAGE_SIZE)
             }}
           >
             Next
+          </button>
+          <button
+            type="button"
+            className="btn btn-sm"
+            disabled={to >= total}
+            aria-label="Last page"
+            title="Last page"
+            onClick={() => {
+              onPage((pages - 1) * PAGE_SIZE)
+            }}
+          >
+            »
           </button>
         </span>
       </footer>

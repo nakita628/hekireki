@@ -18,21 +18,15 @@ import { toast } from 'react-hot-toast'
 
 import type { DiagramIndex } from '../../../../diagram/layout.js'
 import { EnumNode } from '../../components/enum-node.js'
-import {
-  ArrowRightIcon,
-  DownloadIcon,
-  KeyIcon,
-  LayoutIcon,
-  LinkIcon,
-  RefreshIcon,
-} from '../../components/icons.js'
-import { BADGE, CONSTRAINT_STYLES, UNIQUE_BADGE } from '../../components/labels.js'
+import { DownloadIcon, LayoutIcon, RefreshIcon } from '../../components/icons.js'
 import { ModelNode } from '../../components/model-node.js'
 import { layoutStorageKey, loadLayout, saveLayout, useUiStore } from '../../lib/index.js'
 import { exportPng, exportSvg } from './export.js'
+import { GeometryContext, useDiagramGeometry } from './geometry.js'
 import { buildEdges, buildNodes, highlightEdges } from './graph.js'
 import type { DiagramNodeType } from './graph.js'
 import { autoLayout, positionsFor } from './layout.js'
+import { RelationEdge } from './relation-edge.js'
 
 type Field = {
   readonly name: string
@@ -88,6 +82,7 @@ type Schema = {
 }
 
 const nodeTypes = { model: ModelNode, enum: EnumNode }
+const edgeTypes = { relation: RelationEdge }
 const NO_NODES: DiagramNodeType[] = []
 const NO_EDGES: Edge[] = []
 
@@ -98,14 +93,11 @@ const CROW_FOOT = 'M0 -8 L-12 0 L0 8 M-12 0 L0 0'
 const MAX_ONE_BAR = 'M-6 -6 L-6 6'
 const MIN_ONE_BAR = 'M-15 -6 L-15 6'
 
-// The block attributes a card lists under its fields, in the order the legend names them.
-const BLOCK_ATTRIBUTES = ['id', 'unique', 'normal'] as const
-
 const CARDINALITIES = [
-  { cardinality: 'one', many: false, optional: false, label: 'exactly one' },
-  { cardinality: 'zero-one', many: false, optional: true, label: 'zero or one' },
-  { cardinality: 'many', many: true, optional: false, label: 'one or many' },
-  { cardinality: 'zero-many', many: true, optional: true, label: 'zero or many' },
+  { cardinality: 'one', many: false, optional: false },
+  { cardinality: 'zero-one', many: false, optional: true },
+  { cardinality: 'many', many: true, optional: false },
+  { cardinality: 'zero-many', many: true, optional: true },
 ] as const
 
 /** The four end symbols, defined once per canvas; the edges name them through `cardinalityMarker`. */
@@ -135,107 +127,6 @@ function RelationMarkers() {
         ))}
       </defs>
     </svg>
-  )
-}
-
-/** A 34px sample of an edge, drawn the way the canvas draws that kind of edge. */
-function EdgeSample({
-  dash,
-  color = 'var(--c-edge)',
-  marker,
-  width = 1.4,
-  opacity = 1,
-}: {
-  readonly dash?: string
-  readonly color?: string
-  readonly marker?: string
-  readonly width?: number
-  readonly opacity?: number
-}) {
-  return (
-    <svg width="34" height="20" viewBox="-34 -10 34 20" aria-hidden="true">
-      <line
-        x1="-34"
-        y1="0"
-        x2="0"
-        y2="0"
-        stroke={color}
-        strokeWidth={width}
-        strokeDasharray={dash}
-        strokeOpacity={opacity}
-        markerEnd={marker}
-      />
-    </svg>
-  )
-}
-
-/** The key to the drawing: every symbol a card or an edge is marked with, foldable out of the way. */
-function Legend() {
-  const open = useUiStore((s) => s.legendOpen)
-  const setOpen = useUiStore((s) => s.setLegendOpen)
-  return (
-    <div className="max-w-[380px] rounded-lg border border-line bg-surface/90 text-[11px] text-muted">
-      <button
-        type="button"
-        aria-expanded={open}
-        className="heading flex w-full cursor-pointer items-center gap-1 px-3 py-2"
-        onClick={() => {
-          setOpen(!open)
-        }}
-      >
-        <ArrowRightIcon size={11} className={`transition-transform${open ? ' rotate-90' : ''}`} />
-        Legend
-      </button>
-      {open ? (
-        <div className="px-3 pb-2">
-          <div className="heading pb-1">Relations</div>
-          <ul className="m-0 grid list-none grid-cols-2 gap-x-4 gap-y-0.5 p-0">
-            {CARDINALITIES.map(({ cardinality, label }) => (
-              <li key={cardinality} className="flex items-center gap-1.5 whitespace-nowrap">
-                <EdgeSample marker={`url(#er-${cardinality})`} />
-                {label}
-              </li>
-            ))}
-          </ul>
-          <ul className="m-0 list-none p-0">
-            <li className="flex items-center gap-1.5 pt-0.5 whitespace-nowrap">
-              <EdgeSample dash="5 4" />
-              declared with @relation, or implicit many-to-many
-            </li>
-            <li className="flex items-center gap-1.5 whitespace-nowrap">
-              <EdgeSample dash="2 4" color="var(--c-enum)" width={1.2} opacity={0.75} />
-              the enum a field holds a value of
-            </li>
-          </ul>
-          <div className="heading pt-1.5 pb-1">Keys</div>
-          <ul className="m-0 flex list-none flex-wrap gap-x-4 gap-y-0.5 p-0">
-            <li className="flex items-center gap-1.5 whitespace-nowrap">
-              <KeyIcon size={11} className="text-amber-600 dark:text-amber-400" />
-              primary key
-            </li>
-            <li className="flex items-center gap-1.5 whitespace-nowrap">
-              <LinkIcon size={11} className="text-accent" />
-              foreign key
-            </li>
-            <li className="flex items-center gap-1.5 whitespace-nowrap">
-              <span className={`${BADGE} ${UNIQUE_BADGE}`}>UK</span>
-              unique column
-            </li>
-          </ul>
-          <div className="heading pt-1.5 pb-1">Under the fields</div>
-          <ul className="m-0 flex list-none flex-wrap gap-x-4 gap-y-0.5 p-0">
-            {BLOCK_ATTRIBUTES.map((type) => (
-              <li key={type} className="flex items-center gap-1.5 whitespace-nowrap">
-                <span className={`${BADGE} ${CONSTRAINT_STYLES[type].className}`}>
-                  {CONSTRAINT_STYLES[type].label}
-                </span>
-                {CONSTRAINT_STYLES[type].legend}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-    </div>
   )
 }
 
@@ -358,94 +249,95 @@ function Canvas({
   }, [diagram])
 
   const styledEdges = useMemo(() => highlightEdges(edges, selected), [edges, selected])
+  // Routed once for the whole canvas: an edge cannot place its caption clear of the others
+  // without knowing where they went.
+  const geometry = useDiagramGeometry(edges)
 
   return (
     <div className="relative min-h-0 flex-1">
       <RelationMarkers />
-      <ReactFlow
-        nodes={nodes}
-        edges={styledEdges}
-        nodeTypes={nodeTypes}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onNodeDragStop={() => {
-          persist(nodes)
-        }}
-        onNodeDoubleClick={(_event, node) => {
-          void (node.type === 'enum'
-            ? navigate({ to: '/enums/$name', params: { name: node.id } })
-            : navigate({ to: '/models/$name', params: { name: node.id }, search: {} }))
-        }}
-        onSelectionChange={onSelectionChange}
-        nodesConnectable={false}
-        fitView
-        fitViewOptions={{ padding: 0.1 }}
-        minZoom={0.1}
-        maxZoom={2}
-        proOptions={{ hideAttribution: true }}
-        colorMode={theme}
-      >
-        <Background
-          variant={BackgroundVariant.Dots}
-          gap={20}
-          size={1.2}
-          color={theme === 'dark' ? '#2a2f3d' : '#d4d4dc'}
-        />
-        <Controls showInteractive={false} position="bottom-left" />
-        {compact ? null : (
-          <Panel position="top-left">
-            <Legend />
-          </Panel>
-        )}
-        {compact ? null : (
-          <MiniMap
-            pannable
-            zoomable
-            position="bottom-right"
-            nodeColor={theme === 'dark' ? '#3b415a' : '#c7c9d9'}
+      <GeometryContext value={geometry}>
+        <ReactFlow
+          nodes={nodes}
+          edges={styledEdges}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onNodeDragStop={() => {
+            persist(nodes)
+          }}
+          onNodeDoubleClick={(_event, node) => {
+            void (node.type === 'enum'
+              ? navigate({ to: '/enums/$name', params: { name: node.id } })
+              : navigate({ to: '/models/$name', params: { name: node.id }, search: {} }))
+          }}
+          onSelectionChange={onSelectionChange}
+          nodesConnectable={false}
+          fitView
+          fitViewOptions={{ padding: 0.1 }}
+          minZoom={0.1}
+          maxZoom={2}
+          proOptions={{ hideAttribution: true }}
+          colorMode={theme}
+        >
+          <Background
+            variant={BackgroundVariant.Dots}
+            gap={20}
+            size={1.2}
+            color={theme === 'dark' ? '#2a2f3d' : '#d4d4dc'}
           />
-        )}
-        <Panel position="top-right" className="flex gap-2">
-          {onRefresh ? (
-            <button type="button" className="btn btn-ghost bg-surface" onClick={onRefresh}>
-              <RefreshIcon size={15} />
-              Refresh
-            </button>
-          ) : null}
+          <Controls showInteractive={false} position="bottom-left" />
           {compact ? null : (
-            <>
-              <button
-                type="button"
-                className="btn"
-                onClick={onExportPng}
-                disabled={exporting || nodes.length === 0}
-                title="Download the diagram as a PNG image"
-              >
-                <DownloadIcon size={15} />
-                PNG
-              </button>
-              <button
-                type="button"
-                className="btn"
-                onClick={onExportSvg}
-                disabled={nodes.length === 0}
-                title="Download the diagram as an SVG image"
-              >
-                <DownloadIcon size={15} />
-                SVG
-              </button>
-            </>
+            <MiniMap
+              pannable
+              zoomable
+              position="bottom-right"
+              nodeColor={theme === 'dark' ? '#3b415a' : '#c7c9d9'}
+            />
           )}
-          <button
-            type="button"
-            className={`btn${compact ? ' h-8 px-2.5 text-xs' : ''}`}
-            onClick={relayout}
-          >
-            <LayoutIcon size={15} />
-            Auto layout
-          </button>
-        </Panel>
-      </ReactFlow>
+          <Panel position="top-right" className="flex gap-2">
+            {onRefresh ? (
+              <button type="button" className="btn btn-ghost bg-surface" onClick={onRefresh}>
+                <RefreshIcon size={15} />
+                Refresh
+              </button>
+            ) : null}
+            {compact ? null : (
+              <>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={onExportPng}
+                  disabled={exporting || nodes.length === 0}
+                  title="Download the diagram as a PNG image"
+                >
+                  <DownloadIcon size={15} />
+                  PNG
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={onExportSvg}
+                  disabled={nodes.length === 0}
+                  title="Download the diagram as an SVG image"
+                >
+                  <DownloadIcon size={15} />
+                  SVG
+                </button>
+              </>
+            )}
+            <button
+              type="button"
+              className={`btn${compact ? ' h-8 px-2.5 text-code' : ''}`}
+              onClick={relayout}
+            >
+              <LayoutIcon size={15} />
+              Auto layout
+            </button>
+          </Panel>
+        </ReactFlow>
+      </GeometryContext>
     </div>
   )
 }
@@ -488,13 +380,13 @@ export function SchemaView({
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <header className="flex flex-wrap items-center gap-3.5 border-b border-line bg-surface px-6 py-3.5">
-        <h1 className="m-0 text-[22px] font-bold tracking-tight">Schema</h1>
-        <span className="text-[15px] text-muted">
+        <h1 className="page-title">Schema</h1>
+        <span className="text-lead text-muted">
           {schema.models.length} {schema.models.length === 1 ? 'model' : 'models'} ·{' '}
           {schema.relations.length} {schema.relations.length === 1 ? 'relation' : 'relations'}
           {schema.enums.length > 0 ? ` · ${schema.enums.length} enums` : ''}
         </span>
-        <span className="ml-auto text-[12.5px] text-faint">Double-click a model to open it</span>
+        <span className="ml-auto text-code text-faint">Double-click a model to open it</span>
       </header>
       <SchemaCanvas schema={schema} focus={focus} onRefresh={onRefresh} />
     </section>

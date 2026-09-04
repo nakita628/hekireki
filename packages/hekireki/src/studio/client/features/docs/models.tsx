@@ -49,7 +49,7 @@ type DocsModel = {
 
 type Docs = { readonly models: readonly DocsModel[] }
 
-const CELL = 'border-b border-line px-3.5 py-2.5 align-top text-[13px]'
+const CELL = 'border-b border-line px-3.5 py-2.5 align-top text-body'
 
 function FieldRow({
   field,
@@ -94,7 +94,7 @@ function Operation({
 }) {
   return (
     <div id={`model-${modelName}-${operation.name}`} className="scroll-mt-4 pt-4">
-      <h4 className="m-0 font-mono text-[15px] font-bold">{operation.name}</h4>
+      <h4 className="m-0 font-mono text-lead font-bold">{operation.name}</h4>
       <p className="m-0 pt-1 pb-3 text-muted">{operation.description}</p>
       <CodeBlock code={operation.usage} />
       <div className="heading pt-4 pb-1.5">Input</div>
@@ -134,7 +134,7 @@ function Operation({
         </tbody>
       </table>
       <div className="heading pt-4 pb-1.5">Output</div>
-      <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-[13px]">
+      <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-body">
         <dt className="font-semibold">Type</dt>
         <dd className="m-0">
           {operation.output.type === null ? (
@@ -158,7 +158,7 @@ function Operation({
 function ModelSection({ model }: { readonly model: DocsModel }) {
   return (
     <section id={`model-${model.name}`} className="scroll-mt-4 border-b border-line px-6 py-6">
-      <h2 className="m-0 font-mono text-xl font-bold tracking-tight">{model.name}</h2>
+      <h2 className="m-0 font-mono text-heading font-bold tracking-tight">{model.name}</h2>
       {model.documentation ? (
         <p className="m-0 pt-2 whitespace-pre-wrap text-muted">{model.documentation}</p>
       ) : null}
@@ -217,10 +217,7 @@ function ModelSection({ model }: { readonly model: DocsModel }) {
 export function Models({ docs }: { readonly docs: Docs }) {
   return (
     <div>
-      <h1
-        id="models"
-        className="m-0 scroll-mt-4 border-b border-line px-6 py-5 text-[22px] font-bold tracking-tight"
-      >
+      <h1 id="models" className="page-title scroll-mt-4 border-b border-line px-6 py-5">
         Models
       </h1>
       {docs.models.map((model) => (

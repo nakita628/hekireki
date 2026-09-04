@@ -35,22 +35,22 @@ test('the schema page lays out the sidebar and the diagram', async ({ page }) =>
   await expectNoHorizontalOverflow(page)
 })
 
-test('the legend names every mark the diagram uses, and stays folded once folded', async ({
-  page,
-}) => {
+test('the sidebar folds away to a rail and stays folded', async ({ page }) => {
   await page.goto('/')
-  const toggle = page.getByRole('button', { name: 'Legend' })
-  await expect(page.getByText('composite primary key')).toBeVisible()
-  await expect(page.getByText('unique together')).toBeVisible()
-  await expect(page.getByText('unique column')).toBeVisible()
-  await expect(page.getByText('the enum a field holds a value of')).toBeVisible()
+  const sidebar = page.getByRole('complementary')
+  await expect(sidebar).toBeVisible()
 
-  await toggle.click()
-  await expect(page.getByText('unique together')).toBeHidden()
-  // The choice is remembered, so the key does not come back over the diagram on every visit.
+  await page.getByRole('button', { name: 'Hide the sidebar' }).click()
+  await expect(sidebar).toBeHidden()
+  const reopen = page.getByRole('button', { name: 'Show the sidebar' })
+  await expect(reopen).toBeVisible()
+  // The diagram keeps its place: the rail is all the sidebar leaves behind.
+  await expect(page.locator('.react-flow')).toBeVisible()
+
   await page.reload()
-  await expect(toggle).toBeVisible()
-  await expect(page.getByText('unique together')).toBeHidden()
+  await expect(page.getByRole('button', { name: 'Show the sidebar' })).toBeVisible()
+  await page.getByRole('button', { name: 'Show the sidebar' }).click()
+  await expect(sidebar).toBeVisible()
 })
 
 test('the theme toggle switches the palette without breaking the layout', async ({ page }) => {

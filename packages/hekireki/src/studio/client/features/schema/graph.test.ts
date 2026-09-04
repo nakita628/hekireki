@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vite-plus/test'
 import {
   buildEdges,
   buildNodes,
-  edgeLabel,
   loopTargetHandle,
   MODEL_HANDLE,
   sourceHandle,
@@ -183,7 +182,6 @@ describe('buildEdges', () => {
         e.sourceHandle,
         e.target,
         e.targetHandle,
-        e.label,
         e.className,
       ]),
     ).toStrictEqual([
@@ -193,7 +191,6 @@ describe('buildEdges', () => {
         sourceHandle('id'),
         'Post',
         targetHandle('authorId'),
-        'one to many',
         'relation-edge relation-edge--inferred',
       ],
       [
@@ -202,7 +199,6 @@ describe('buildEdges', () => {
         sourceHandle(MODEL_HANDLE),
         'Tag',
         targetHandle(MODEL_HANDLE),
-        'many to many',
         'relation-edge relation-edge--implicit-many-to-many',
       ],
       [
@@ -211,7 +207,6 @@ describe('buildEdges', () => {
         sourceHandle(MODEL_HANDLE),
         'Post',
         targetHandle(MODEL_HANDLE),
-        'one to many',
         'relation-edge relation-edge--annotated',
       ],
     ])
@@ -226,11 +221,17 @@ describe('buildEdges', () => {
   })
 })
 
-describe('edgeLabel', () => {
-  // The canvas says what the relation is; what it does to a row is in the panel and the export.
-  it('names the relationship, and the name the schema gave it', () => {
-    expect(edgeLabel({ ...inferred, onDelete: 'Cascade' })).toBe('one to many')
-    expect(edgeLabel({ ...inferred, name: 'author' })).toBe('author \u00B7 one to many')
+describe('edge captions', () => {
+  // The caption travels as lines in the edge data; the label layer draws them over the models.
+  it('carries the caption of the relation', () => {
+    const captions = buildEdges({
+      ...schema,
+      relations: [inferred, { ...inferred, id: 'User.id->Post.editorId' }],
+    }).map((edge) => edge.data?.caption)
+    expect(captions).toStrictEqual([
+      ['one to many', 'on delete set null'],
+      ['one to many', 'on delete set null'],
+    ])
   })
 })
 

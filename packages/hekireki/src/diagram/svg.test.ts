@@ -1,8 +1,11 @@
+import { readFileSync } from 'node:fs'
+
 import { describe, expect, it } from 'vite-plus/test'
 
 import { NODE_HEADER_HEIGHT, NODE_PADDING, NODE_ROW_HEIGHT, NODE_WIDTH } from './layout.js'
 import {
   diagramBounds,
+  diagramPalette,
   edgeCaption,
   fieldTypeLabel,
   renderDiagramSvg,
@@ -282,43 +285,6 @@ function viewBox(svg: string) {
   return { x: x ?? 0, y: y ?? 0, width: width ?? 0, height: height ?? 0 }
 }
 
-describe('the key to the symbols', () => {
-  it('explains the ends the diagram actually draws, and nothing else', () => {
-    const svg = renderDiagramSvg({
-      models: [user, post],
-      relations: [relation({ from: { model: 'User', field: 'id', cardinality: 'zero-one' } })],
-      positions,
-    })
-    expect(svg).toContain('class="diagram-legend"')
-    expect(svg).toContain('>zero or one</text>')
-    expect(svg).toContain('>one or many</text>')
-    expect(svg).not.toContain('>exactly one</text>')
-    expect(svg).not.toContain('>zero or many</text>')
-    expect(svg).toContain('>primary key</text>')
-    expect(svg).toContain('>foreign key</text>')
-  })
-
-  it('names the dashed line only when one is drawn', () => {
-    const solid = renderDiagramSvg({ models: [user, post], relations: [relation()], positions })
-    const dashed = renderDiagramSvg({
-      models: [user, post],
-      relations: [relation({ origin: 'annotated' })],
-      positions,
-    })
-    expect(solid).not.toContain('@relation, or many to many</text>')
-    expect(dashed).toContain('@relation, or many to many</text>')
-  })
-
-  it('is left out of a diagram that has nothing to explain', () => {
-    const svg = renderDiagramSvg({
-      models: [model('Note', [field('body')])],
-      relations: [],
-      positions: { Note: { x: 0, y: 0 } },
-    })
-    expect(svg).not.toContain('class="diagram-legend"')
-  })
-})
-
 describe('edge captions', () => {
   it('keeps the caption clear of the models it runs between', () => {
     // Order sits directly between User and Post, over the middle of the edge.
@@ -445,8 +411,7 @@ describe('constraints', () => {
       relations: [],
       positions: { User: { x: 0, y: 0 } },
     })
-    expect(svg.match(/>UK</gu)).toHaveLength(2)
-    expect(svg).toContain('>unique</text>')
+    expect(svg.match(/>UK</gu)).toHaveLength(1)
   })
 
   it('leaves the unique mark out of the key when nothing carries one', () => {
@@ -456,7 +421,6 @@ describe('constraints', () => {
       positions: { User: { x: 0, y: 0 } },
     })
     expect(svg).not.toContain('>UK<')
-    expect(svg).not.toContain('>unique</text>')
   })
 })
 
@@ -498,29 +462,6 @@ describe('what a field carries besides its type', () => {
   })
 })
 
-describe('the doc comment of a block', () => {
-  it('goes on one line under the header, and pushes the fields down', () => {
-    const documented = renderDiagramSvg({
-      models: [
-        {
-          ...model('User', [field('id', { isId: true })]),
-          documentation: 'Someone who signed up\nand a second line',
-        },
-      ],
-      relations: [],
-      positions: { User: { x: 0, y: 0 } },
-    })
-    const plain = renderDiagramSvg({
-      models: [model('User', [field('id', { isId: true })])],
-      relations: [],
-      positions: { User: { x: 0, y: 0 } },
-    })
-    expect(documented).toContain('>Someone who signed up</text>')
-    expect(documented).not.toContain('and a second line')
-    expect(viewBox(documented).height - viewBox(plain).height).toBe(16)
-  })
-})
-
 describe('enums', () => {
   const role = {
     name: 'Role',
@@ -548,13 +489,11 @@ describe('enums', () => {
     expect(drawn).toContain('>ADMIN</text>')
     expect(drawn).toContain('>VIEWER</text>')
     expect(drawn).toContain('>viewer</text>')
-    expect(drawn).toContain('>Who someone is</text>')
   })
 
-  it('links the field that holds one to its card, and says so in the key', () => {
+  it('links the field that holds one to its card', () => {
     expect(drawn.match(/class="enum-edge"/gu)).toHaveLength(1)
     expect(drawn).toContain('stroke-dasharray="2 4"')
-    expect(drawn).toContain('>enum values</text>')
   })
 
   it('leaves a field whose enum is not on the canvas alone', () => {
@@ -564,6 +503,48 @@ describe('enums', () => {
       positions: { User: { x: 0, y: 0 } },
     })
     expect(svg).not.toContain('class="enum-edge"')
-    expect(svg).not.toContain('>enum values</text>')
+  })
+})
+
+// The stylesheet is the palette; this table copies it so a downloaded drawing looks like the page
+// it came from. Every entry is checked, because the ones that drifted last time (the card marks)
+// were the ones nobody was looking at.
+describe('the palette the export paints with', () => {
+  const NAMES = {
+    canvas: 'canvas',
+    surface: 'surface',
+    ink: 'ink',
+    muted: 'muted',
+    faint: 'faint',
+    lineStrong: 'line-strong',
+    accent: 'accent',
+    node: 'node',
+    nodeText: 'node-text',
+    edge: 'edge',
+    dots: 'dots',
+    key: 'key',
+    unique: 'unique',
+    enumeration: 'enum',
+  } as const
+
+  /** The `--c-*` values of one block of studio/client/styles.css. */
+  function tokensOf(theme: 'light' | 'dark') {
+    const css = readFileSync(
+      new URL('../studio/client/styles.css', import.meta.url).pathname,
+      'utf8',
+    )
+    const start = css.indexOf(theme === 'light' ? ':root {' : '.dark {')
+    const block = css.slice(start, css.indexOf('}', start))
+    return Object.fromEntries(
+      [...block.matchAll(/--c-([a-z0-9-]+):\s*(#[0-9a-f]+)/gu)].map((m) => [m[1], m[2]]),
+    )
+  }
+
+  it.each(['light', 'dark'] as const)('matches the stylesheet in %s', (theme) => {
+    const tokens = tokensOf(theme)
+    const palette = diagramPalette(theme)
+    expect(
+      Object.keys(NAMES).map((key) => [key, palette[key as keyof typeof NAMES]]),
+    ).toStrictEqual(Object.entries(NAMES).map(([key, token]) => [key, tokens[token]]))
   })
 })

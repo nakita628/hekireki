@@ -163,11 +163,11 @@ export function ModelView({
     >
       <div className="flex min-h-0 min-w-0 flex-col">
         <header className="flex flex-wrap items-center gap-3 border-b border-line bg-surface px-6 py-3">
-          <h1 className="m-0 text-[22px] font-bold tracking-tight">{model.name}</h1>
+          <h1 className="page-title">{model.name}</h1>
           {model.dbName ? (
-            <span className="font-mono text-sm text-muted">{model.dbName}</span>
+            <span className="font-mono text-ui text-muted">{model.dbName}</span>
           ) : null}
-          <span className="text-sm leading-tight text-muted">
+          <span className="text-ui leading-tight text-muted">
             {activeTab === 'data' && page
               ? `${page.total} ${page.total === 1 ? 'row' : 'rows'}`
               : `${scalarCount} ${scalarCount === 1 ? 'field' : 'fields'}`}
@@ -267,7 +267,7 @@ export function ModelView({
           !connected ? (
             <div className="m-6 rounded-[10px] border border-line bg-surface p-5 text-muted">
               <div className="mb-1 font-semibold text-ink">No database connected</div>
-              <pre className="m-0 font-mono text-xs whitespace-pre-wrap">
+              <pre className="m-0 font-mono text-code whitespace-pre-wrap">
                 {database?.error ??
                   'Start Studio with --url <connection string> or set DATABASE_URL.'}
               </pre>

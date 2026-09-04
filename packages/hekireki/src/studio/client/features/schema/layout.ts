@@ -12,13 +12,11 @@ export {
   enumHeight,
   NODE_CONSTRAINT_HEIGHT,
   NODE_DESCRIPTION_HEIGHT,
-  NODE_NOTE_HEIGHT,
   NODE_HEADER_HEIGHT,
   NODE_PADDING,
   NODE_ROW_HEIGHT,
   NODE_WIDTH,
   nodeHeight,
-  noteHeight,
 } from '../../../../diagram/layout.js'
 
 // Stored positions win; blocks the store does not know are placed by dagre and blocks that

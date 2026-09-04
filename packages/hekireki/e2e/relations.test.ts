@@ -4,12 +4,69 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 
+import type { Page } from '@playwright/test'
+
 import { expect, loadedFiles, resetSchema, test } from './studio.js'
 import { FIXTURES_DIR } from './workspace.js'
 
 test.afterEach(async ({ request }) => {
   await resetSchema(request)
 })
+
+/**
+ * What the drawing hides from a reader, read back off the rendered page: the wires that run
+ * behind a model, and the captions that sit on one. Both are empty in a diagram that can be
+ * followed.
+ */
+async function hidden(page: Page) {
+  return page.evaluate(() => {
+    const boxOf = (element: Element) => {
+      const rect = element.getBoundingClientRect()
+      return { x: rect.x, y: rect.y, right: rect.right, bottom: rect.bottom }
+    }
+    const overlaps = (a: ReturnType<typeof boxOf>, b: ReturnType<typeof boxOf>) =>
+      a.x < b.right && b.x < a.right && a.y < b.bottom && b.y < a.bottom
+    const cards = [...document.querySelectorAll('.react-flow__node')].map((node) => ({
+      id: node.getAttribute('data-id') ?? '',
+      box: boxOf(node),
+    }))
+    // A card's own border is where its edges begin, so the last few pixels do not count.
+    const inset = (box: ReturnType<typeof boxOf>) => ({
+      x: box.x + 3,
+      y: box.y + 3,
+      right: box.right - 3,
+      bottom: box.bottom - 3,
+    })
+    const wires = [...document.querySelectorAll('.react-flow__edge')].map((edge) => {
+      const wire = edge.querySelector('.react-flow__edge-path')
+      const geometry = wire as SVGPathElement | null
+      const length = geometry?.getTotalLength() ?? 0
+      const matrix = geometry?.getScreenCTM() ?? null
+      const points = Array.from({ length: 201 }, (_, step) => {
+        const at = geometry?.getPointAtLength((length * step) / 200) ?? { x: 0, y: 0 }
+        return {
+          x: at.x * (matrix?.a ?? 1) + (matrix?.e ?? 0),
+          y: at.y * (matrix?.d ?? 1) + (matrix?.f ?? 0),
+        }
+      })
+      return { id: edge.getAttribute('data-id') ?? '', points }
+    })
+    const inside = (point: { x: number; y: number }, box: ReturnType<typeof boxOf>) =>
+      point.x > box.x && point.x < box.right && point.y > box.y && point.y < box.bottom
+    return {
+      wiresBehindCards: wires.flatMap((wire) =>
+        cards
+          .filter((card) => wire.points.some((point) => inside(point, inset(card.box))))
+          .map((card) => `${wire.id} behind ${card.id}`),
+      ),
+      captionsOverCards: [...document.querySelectorAll('.relation-label')].flatMap((label) =>
+        cards
+          .filter((card) => overlaps(boxOf(label), card.box))
+          .map((card) => `${label.textContent ?? ''} over ${card.id}`),
+      ),
+    }
+  })
+}
 
 test('the diagram draws every cardinality in IE notation', async ({ page, request }) => {
   const files = await loadedFiles(request)
@@ -57,6 +114,15 @@ test('the diagram draws every cardinality in IE notation', async ({ page, reques
   // The dashed edges are the ones Prisma did not derive from a foreign key.
   await expect(page.locator('.relation-edge--implicit-many-to-many')).toHaveCount(1)
   await expect(page.locator('.relation-edge--annotated')).toHaveCount(1)
+
+  // Every relation says what it is, in the label layer that is lifted over the models, so a
+  // caption can no longer end up behind a card.
+  await expect(page.locator('.relation-label')).toHaveCount(8)
+  await expect(page.locator('.relation-label').first()).toBeVisible()
+
+  // What the diagram is for: every relation has to be followable. A wire that runs behind a card
+  // and a chip that sits across one both break that, and the screenshot alone would not say so.
+  expect(await hidden(page)).toStrictEqual({ wiresBehindCards: [], captionsOverCards: [] })
 
   // The enum is a card of its own, linked to the two fields that hold one of its values.
   await expect(page.locator('.enum-node')).toHaveCount(1)

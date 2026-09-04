@@ -21,7 +21,7 @@ export function CodeBlock({ code }: { readonly code: string }) {
     },
   )
   return (
-    <pre className="m-0 overflow-auto rounded-lg border border-line bg-surface-2 px-4 py-3 font-mono text-[12.5px] leading-relaxed text-ink">
+    <pre className="m-0 overflow-auto rounded-lg border border-line bg-surface-2 px-4 py-3 font-mono text-code leading-relaxed text-ink">
       <code>
         {tokens.map((token) =>
           token.className === '' ? (

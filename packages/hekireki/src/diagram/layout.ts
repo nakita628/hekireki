@@ -11,7 +11,6 @@ export const ENUM_WIDTH = 280
 export const NODE_HEADER_HEIGHT = 36
 export const NODE_ROW_HEIGHT = 22
 export const NODE_DESCRIPTION_HEIGHT = 14
-export const NODE_NOTE_HEIGHT = 16
 export const NODE_CONSTRAINT_HEIGHT = 20
 export const NODE_PADDING = 8
 
@@ -74,16 +73,10 @@ export function diagramConstraints(model: { readonly indexes?: readonly DiagramI
   return model.indexes ?? []
 }
 
-/** The height of the line a card gives to its doc comment, when it has one. */
-export function noteHeight(block: { readonly documentation?: string | null }) {
-  return firstLine(block.documentation) === '' ? 0 : NODE_NOTE_HEIGHT
-}
-
 export function nodeHeight(model: DiagramModel) {
   const constraints = diagramConstraints(model)
   return (
     NODE_HEADER_HEIGHT +
-    noteHeight(model) +
     NODE_PADDING +
     diagramFields(model).reduce((sum, field) => sum + fieldRowHeight(field), 0) +
     NODE_PADDING +
@@ -93,13 +86,7 @@ export function nodeHeight(model: DiagramModel) {
 
 /** An enum card is the same shape as a model card, one row per member. */
 export function enumHeight(value: DiagramEnum) {
-  return (
-    NODE_HEADER_HEIGHT +
-    noteHeight(value) +
-    NODE_PADDING +
-    value.values.length * NODE_ROW_HEIGHT +
-    NODE_PADDING
-  )
+  return NODE_HEADER_HEIGHT + NODE_PADDING + value.values.length * NODE_ROW_HEIGHT + NODE_PADDING
 }
 
 const LayoutNodeSchema = v.pipe(

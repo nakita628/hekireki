@@ -17,7 +17,7 @@ const GENERATORS = [
   'ajv',
   'arktype',
   'atlas',
-  'dbml',
+  'er',
   'django',
   'drizzle',
   'ecto',
@@ -25,7 +25,6 @@ const GENERATORS = [
   'eloquent',
   'gorm',
   'kysely',
-  'mermaid-er',
   'pydantic',
   'sea-orm',
   'sqlalchemy',
@@ -55,10 +54,10 @@ const EXPECTED = [
   { name: 'ecto', kind: 'dir', path: 'generated/ecto' },
   { name: 'activerecord', kind: 'dir', path: 'generated/activerecord' },
   { name: 'eloquent', kind: 'dir', path: 'generated/eloquent' },
-  { name: 'mermaid-er', kind: 'file', path: 'generated/mermaid-er/ER.md' },
-  { name: 'dbml', kind: 'file', path: 'generated/dbml/schema.dbml' },
-  { name: 'dbml (png)', kind: 'file', path: 'generated/dbml/er.png' },
-  { name: 'dbml (svg)', kind: 'file', path: 'generated/dbml/er.svg' },
+  { name: 'er (md)', kind: 'file', path: 'generated/er/er.md' },
+  { name: 'er (dbml)', kind: 'file', path: 'generated/er/schema.dbml' },
+  { name: 'er (png)', kind: 'file', path: 'generated/er/er.png' },
+  { name: 'er (svg)', kind: 'file', path: 'generated/er/er.svg' },
 ]
 
 if (!existsSync(join(dist, 'zod.js'))) {

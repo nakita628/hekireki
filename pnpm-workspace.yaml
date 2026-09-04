@@ -2,6 +2,7 @@ packages:
   - apps/*
   - packages/*
   - example
+  - sandbox/*
   - test
 allowBuilds:
   '@prisma/engines': true

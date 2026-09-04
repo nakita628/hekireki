@@ -11,7 +11,7 @@ export function ResultTable({
 }) {
   return (
     <div className="min-h-0 flex-1 overflow-auto">
-      <table className="w-full border-collapse font-mono text-[12.5px]">
+      <table className="w-full border-collapse font-mono text-code">
         <thead>
           <tr>
             {columns.map((column) => (

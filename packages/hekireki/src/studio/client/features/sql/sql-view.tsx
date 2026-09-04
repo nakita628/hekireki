@@ -8,6 +8,13 @@ import { loadString, saveString } from '../../lib/index.js'
 
 const SQL_KEY = 'hekireki-studio:sql'
 
+// The server sends only the first page of a large result, so the count of what matched and the
+// number of rows on screen can differ; say so rather than showing a wrong total.
+function rowSummary(shown: number, matched: number) {
+  const rows = `${matched.toLocaleString()} ${matched === 1 ? 'row' : 'rows'}`
+  return shown < matched ? `first ${shown.toLocaleString()} of ${rows}` : rows
+}
+
 export function SqlView() {
   const queryClient = useQueryClient()
   const database = useDb().data ?? null
@@ -32,13 +39,13 @@ export function SqlView() {
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <header className="flex flex-wrap items-center gap-3.5 border-b border-line bg-surface px-6 py-3.5">
-        <h1 className="m-0 text-[22px] font-bold tracking-tight">SQL</h1>
-        <span className="text-[15px] text-muted">
+        <h1 className="page-title">SQL</h1>
+        <span className="text-lead text-muted">
           {database?.connected
             ? `${database.dialect ?? ''} · ${database.url ?? ''}`
             : 'No database connected'}
         </span>
-        <span className="ml-auto text-[12.5px] text-faint">⌘/Ctrl + Enter to run</span>
+        <span className="ml-auto text-code text-faint">⌘/Ctrl + Enter to run</span>
         <button
           type="button"
           className="btn btn-primary"
@@ -55,7 +62,7 @@ export function SqlView() {
         </div>
       ) : null}
       <textarea
-        className="min-h-[160px] w-full resize-y border-b border-line bg-surface px-6 py-4 font-mono text-[13px] leading-[1.6] text-ink outline-none"
+        className="min-h-[160px] w-full resize-y border-b border-line bg-surface px-6 py-4 font-mono text-body leading-[1.6] text-ink outline-none"
         spellCheck={false}
         value={sql}
         onChange={(event) => {
@@ -74,9 +81,9 @@ export function SqlView() {
         <div className="p-6 text-muted">Results will appear here.</div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col">
-          <div className="border-b border-line bg-surface-2 px-6 py-2 text-xs text-muted">
+          <div className="border-b border-line bg-surface-2 px-6 py-2 text-code text-muted">
             {result.columns.length > 0
-              ? `${result.rowCount} ${result.rowCount === 1 ? 'row' : 'rows'}`
+              ? rowSummary(result.rows.length, result.rowCount)
               : `${result.rowCount} ${result.rowCount === 1 ? 'row' : 'rows'} affected`}{' '}
             · {result.durationMs} ms
           </div>

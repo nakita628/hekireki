@@ -8,6 +8,7 @@ import {
   FileIcon,
   ListIcon,
   MoonIcon,
+  PanelIcon,
   SunIcon,
   TableIcon,
   TerminalIcon,
@@ -24,11 +25,11 @@ type Schema = {
   readonly enums: readonly { readonly name: string; readonly values: readonly unknown[] }[]
 }
 
-const NAV = 'flex items-center gap-2.5 rounded-lg px-3 py-2 text-[14.5px]'
+const NAV = 'flex items-center gap-2.5 rounded-lg px-3 py-2 text-lead'
 const NAV_ACTIVE = { className: `${NAV} bg-accent-soft font-semibold text-accent-text` }
 const NAV_INACTIVE = { className: `${NAV} hover:bg-canvas` }
 
-const ENTITY = 'flex items-center gap-2 rounded-lg border px-3 py-[7px] font-mono text-[13px]'
+const ENTITY = 'flex items-center gap-2 rounded-lg border px-3 py-[7px] font-mono text-body'
 const ENTITY_ACTIVE = {
   className: `${ENTITY} border-accent bg-accent-soft font-semibold text-accent-text`,
 }
@@ -52,7 +53,7 @@ function EntityLink({
           <span className={`shrink-0 ${isActive ? 'text-accent' : 'text-faint'}`}>{icon}</span>
           <span className="flex-1 truncate">{name}</span>
           {count === null ? null : (
-            <span className="rounded-full border border-line bg-canvas px-2 py-px font-sans text-xs text-muted">
+            <span className="rounded-full border border-line bg-canvas px-2 py-px font-sans text-code text-muted">
               {count}
             </span>
           )}
@@ -65,7 +66,7 @@ function EntityLink({
 function StatusDot({ on, warn = false }: { readonly on: boolean; readonly warn?: boolean }) {
   return (
     <span
-      className={`size-2 shrink-0 rounded-full ${on ? 'bg-green-600 ring-[3px] ring-green-600/20' : warn ? 'bg-danger' : 'bg-faint'}`}
+      className={`size-2 shrink-0 rounded-full ${on ? 'bg-ok ring-[3px] ring-ok/20' : warn ? 'bg-danger' : 'bg-faint'}`}
     />
   )
 }
@@ -80,6 +81,7 @@ export function Sidebar({
   const connection = useUiStore((s) => s.connection)
   const theme = useUiStore((s) => s.theme)
   const toggleTheme = useUiStore((s) => s.toggleTheme)
+  const toggleSidebar = useUiStore((s) => s.toggleSidebar)
   const database = useDb().data ?? null
   const connected = database?.connected ?? false
   const counts = useQuery({ ...getDbCountsQueryOptions(), enabled: connected }).data?.counts ?? null
@@ -89,24 +91,34 @@ export function Sidebar({
     connection === 'live' ? 'Watching' : connection === 'offline' ? 'Disconnected' : 'Connecting'
   return (
     <aside className="flex min-h-0 flex-col overflow-y-auto border-r border-line bg-surface">
-      <div className="flex items-center gap-2.5 px-[18px] pt-[18px] pb-3.5">
+      <div className="flex items-center gap-1.5 px-[18px] pt-[18px] pb-3.5">
         <Link
-          className="flex items-center gap-2.5 text-[17px] font-bold tracking-tight"
+          className="flex min-w-0 items-center gap-2 text-lead font-bold tracking-tight"
           to="/"
           search={{}}
         >
-          <span className="inline-flex size-7 items-center justify-center rounded-lg bg-accent text-white">
+          <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-lg bg-accent text-white">
             <BoltIcon size={18} />
           </span>
-          <span>Hekireki Studio</span>
+          <span className="truncate">Hekireki Studio</span>
         </Link>
         <button
           type="button"
-          className="btn btn-ghost ml-auto h-8 px-2 text-muted"
+          className="btn btn-ghost ml-auto size-7 shrink-0 px-0 text-muted"
+          aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
           title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
           onClick={toggleTheme}
         >
           {theme === 'dark' ? <SunIcon size={16} /> : <MoonIcon size={16} />}
+        </button>
+        <button
+          type="button"
+          className="btn btn-ghost size-7 shrink-0 px-0 text-muted"
+          aria-label="Hide the sidebar"
+          title="Hide the sidebar"
+          onClick={toggleSidebar}
+        >
+          <PanelIcon size={16} />
         </button>
       </div>
       <nav className="flex flex-col gap-0.5 px-2.5 pb-3">
@@ -176,7 +188,7 @@ export function Sidebar({
           </ul>
         </div>
       ) : null}
-      <div className="mt-auto flex flex-col gap-1 border-t border-line px-[18px] py-3 text-xs text-muted">
+      <div className="mt-auto flex flex-col gap-1 border-t border-line px-[18px] py-3 text-code text-muted">
         <div className="flex items-center gap-2">
           <StatusDot on={connection === 'live'} warn={connection === 'offline'} />
           <span className="truncate">

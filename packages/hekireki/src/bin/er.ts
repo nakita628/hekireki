@@ -1,4 +1,4 @@
 #!/usr/bin/env node
 import { registerGenerator } from './index.js'
 
-registerGenerator('mermaid-er')
+registerGenerator('er')

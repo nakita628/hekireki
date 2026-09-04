@@ -5,15 +5,14 @@ import { activerecord } from '../core/activerecord.js'
 import { ajv } from '../core/ajv.js'
 import { arktype } from '../core/arktype.js'
 import { atlas } from '../core/atlas.js'
-import { dbml } from '../core/dbml.js'
 import { django } from '../core/django.js'
 import { drizzle } from '../core/drizzle.js'
 import { ecto } from '../core/ecto.js'
 import { effect } from '../core/effect.js'
 import { eloquent } from '../core/eloquent.js'
+import { er } from '../core/er.js'
 import { gorm } from '../core/gorm.js'
 import { kysely } from '../core/kysely.js'
-import { mermaidEr } from '../core/mermaid-er.js'
 import { pydantic } from '../core/pydantic.js'
 import { seaOrm } from '../core/sea-orm.js'
 import { sqlalchemy } from '../core/sqlalchemy.js'
@@ -27,7 +26,8 @@ const GENERATORS = {
   ajv: { prettyName: 'Hekireki-AJV', handler: ajv },
   arktype: { prettyName: 'Hekireki-ArkType', handler: arktype },
   atlas: { prettyName: 'Hekireki-Atlas', handler: atlas },
-  dbml: { prettyName: 'Hekireki-DBML', handler: dbml },
+  // One ER model, four renderings, picked by the extension of `output`.
+  er: { prettyName: 'Hekireki-ER', handler: er },
   django: { prettyName: 'Hekireki-Django', handler: django },
   drizzle: { prettyName: 'Hekireki-Drizzle', handler: drizzle },
   ecto: { prettyName: 'Hekireki-Ecto', handler: ecto },
@@ -35,7 +35,6 @@ const GENERATORS = {
   eloquent: { prettyName: 'Hekireki-Eloquent', handler: eloquent },
   gorm: { prettyName: 'Hekireki-GORM', handler: gorm },
   kysely: { prettyName: 'Hekireki-Kysely', handler: kysely },
-  'mermaid-er': { prettyName: 'Hekireki-ER', handler: mermaidEr },
   pydantic: { prettyName: 'Hekireki-Pydantic', handler: pydantic },
   'sea-orm': { prettyName: 'Hekireki-SeaORM', handler: seaOrm },
   sqlalchemy: { prettyName: 'Hekireki-SQLAlchemy', handler: sqlalchemy },

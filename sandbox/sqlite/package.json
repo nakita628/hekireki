@@ -1,0 +1,11 @@
+{
+  "name": "@hekireki/sandbox-sqlite",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "setup": "prisma validate && prisma db push --url file:./sandbox.db && node seed.mjs",
+    "studio": "hekireki studio --schema schema.prisma --url file:./sandbox.db",
+    "prisma-studio": "prisma studio --url file:./sandbox.db --port 5555 --browser none",
+    "reset": "rm -f sandbox.db && pnpm setup"
+  }
+}
