@@ -8,21 +8,37 @@ type Field = {
   readonly documentation: string | null
 }
 
-type Model = { readonly name: string; readonly fields: readonly Field[] }
+type Index = { readonly type: 'id' | 'normal' | 'unique' | 'fulltext'; readonly fields: string[] }
+
+type Model = {
+  readonly name: string
+  readonly fields: readonly Field[]
+  readonly indexes?: readonly Index[]
+}
 
 type Relation = {
   readonly from: { readonly model: string }
   readonly to: { readonly model: string }
 }
 
-type Schema = { readonly models: readonly Model[]; readonly relations: readonly Relation[] }
+type Enum = { readonly name: string; readonly values: readonly unknown[] }
+
+type Schema = {
+  readonly models: readonly Model[]
+  readonly relations: readonly Relation[]
+  readonly enums?: readonly Enum[]
+}
+
+function schema(models: Model[], relations: Relation[] = [], enums: Enum[] = []): Schema {
+  return { models, relations, enums }
+}
 
 function field(name: string, kind: Field['kind'] = 'scalar'): Field {
   return { name, kind, documentation: null }
 }
 
-function model(name: string, fields: Field[]): Model {
-  return { name, fields }
+function model(name: string, fields: Field[], indexes: Index[] = []): Model {
+  return { name, fields, indexes }
 }
 
 function relation(from: string, to: string): Relation {
@@ -41,10 +57,26 @@ describe('diagramFields', () => {
 
 describe('nodeHeight', () => {
   it('grows by one row per field and an extra line per description', () => {
-    expect(nodeHeight([])).toBe(52)
-    expect(nodeHeight([field('a'), field('b'), field('c')])).toBe(118)
-    expect(nodeHeight([{ ...field('a'), documentation: 'Primary key' }, field('b')])).toBe(110)
-    expect(nodeHeight([{ ...field('a'), documentation: '   ' }])).toBe(74)
+    expect(nodeHeight(model('A', []))).toBe(52)
+    expect(nodeHeight(model('A', [field('a'), field('b'), field('c')]))).toBe(118)
+    expect(
+      nodeHeight(model('A', [{ ...field('a'), documentation: 'Primary key' }, field('b')])),
+    ).toBe(110)
+    expect(nodeHeight(model('A', [{ ...field('a'), documentation: '   ' }]))).toBe(74)
+  })
+
+  it('adds a row per block constraint, under a padded rule', () => {
+    const one = model('A', [field('a')], [{ type: 'unique', fields: ['a'] }])
+    const two = model(
+      'A',
+      [field('a')],
+      [
+        { type: 'unique', fields: ['a'] },
+        { type: 'normal', fields: ['a'] },
+      ],
+    )
+    expect(nodeHeight(one)).toBe(74 + 20 + 8)
+    expect(nodeHeight(two)).toBe(74 + 40 + 8)
   })
 })
 
@@ -55,7 +87,9 @@ describe('autoLayout', () => {
       model('Post', [field('id'), field('authorId')]),
       model('Tag', [field('id')]),
     ]
-    const positions = autoLayout(models, [relation('User', 'Post'), relation('Post', 'Tag')])
+    const positions = autoLayout(
+      schema(models, [relation('User', 'Post'), relation('Post', 'Tag')]),
+    )
     expect(Object.keys(positions).toSorted()).toStrictEqual(['Post', 'Tag', 'User'])
     const user = positions.User
     const post = positions.Post
@@ -68,40 +102,51 @@ describe('autoLayout', () => {
   it('ignores self relations and relations to unknown models', () => {
     const models = [model('Category', [field('id'), field('parentId')])]
     expect(
-      autoLayout(models, [relation('Category', 'Category'), relation('Category', 'Ghost')]),
+      autoLayout(schema(models, [relation('Category', 'Category'), relation('Category', 'Ghost')])),
     ).toStrictEqual({ Category: { x: 40, y: 40 } })
   })
 
   it('places unrelated models in a single column', () => {
-    expect(autoLayout([model('A', [field('id')]), model('B', [field('id')])], [])).toStrictEqual({
+    expect(
+      autoLayout(schema([model('A', [field('id')]), model('B', [field('id')])])),
+    ).toStrictEqual({
       A: { x: 40, y: 40 },
-      B: { x: 40, y: 162 },
+      B: { x: 40, y: 170 },
     })
   })
 })
 
 describe('positionsFor', () => {
-  const schema: Schema = {
-    models: [model('User', [field('id')]), model('Post', [field('id'), field('authorId')])],
-    relations: [relation('User', 'Post')],
-  }
+  const canvas = schema(
+    [model('User', [field('id')]), model('Post', [field('id'), field('authorId')])],
+    [relation('User', 'Post')],
+  )
 
-  it('returns the stored positions untouched when every model has one', () => {
+  it('returns the stored positions untouched when every block has one', () => {
     const stored = { User: { x: 1, y: 2 }, Post: { x: 300, y: 2 } }
-    expect(positionsFor(schema, stored)).toStrictEqual(stored)
+    expect(positionsFor(canvas, stored)).toStrictEqual(stored)
   })
 
-  it('fills missing models from auto layout and keeps stored ones', () => {
-    const computed = autoLayout(schema.models, schema.relations)
-    expect(positionsFor(schema, { User: { x: 1, y: 2 } })).toStrictEqual({
+  it('fills missing blocks from auto layout and keeps stored ones', () => {
+    const computed = autoLayout(canvas)
+    expect(positionsFor(canvas, { User: { x: 1, y: 2 } })).toStrictEqual({
       User: { x: 1, y: 2 },
       Post: computed.Post,
     })
   })
 
-  it('drops positions of models that no longer exist', () => {
+  it('drops positions of blocks that no longer exist', () => {
     expect(
-      positionsFor(schema, { User: { x: 1, y: 2 }, Post: { x: 3, y: 4 }, Ghost: { x: 9, y: 9 } }),
+      positionsFor(canvas, { User: { x: 1, y: 2 }, Post: { x: 3, y: 4 }, Ghost: { x: 9, y: 9 } }),
     ).toStrictEqual({ User: { x: 1, y: 2 }, Post: { x: 3, y: 4 } })
+  })
+
+  it('places the enum cards too', () => {
+    const withEnum = schema(
+      [model('User', [{ name: 'role', kind: 'enum', documentation: null }])],
+      [],
+      [{ name: 'Role', values: ['ADMIN', 'VIEWER'] }],
+    )
+    expect(Object.keys(positionsFor(withEnum, {})).toSorted()).toStrictEqual(['Role', 'User'])
   })
 })

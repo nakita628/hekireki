@@ -1,7 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 import * as z from 'zod'
 
-import { erKey, mergeERRelations } from '../../../helper/relation.js'
+import { erKey, erRelations } from '../../../helper/relation.js'
 import { isAnnotationLine } from '../../../utils/index.js'
 
 const DefaultValue = z
@@ -508,49 +508,6 @@ export function makeEnum(input: z.infer<typeof MakeEnumInput>) {
   }
 }
 
-const MakeImplicitManyToManyRelationsInput = z
-  .object({
-    models: z.array(Model).readonly().meta({ description: 'Every model of the datamodel.' }),
-  })
-  .readonly()
-  .meta({ description: 'The DMMF models of a datamodel' })
-
-/** Implicit many-to-many relations: both sides are lists without `@relation(fields:)`; emitted once per pair. */
-export function makeImplicitManyToManyRelations(
-  input: z.infer<typeof MakeImplicitManyToManyRelationsInput>,
-) {
-  const { models } = input
-  return models.flatMap((model) =>
-    model.fields
-      .filter((f) => f.kind === 'object' && f.isList && (f.relationFromFields ?? []).length === 0)
-      .flatMap((field) => {
-        const other = models.find((m) => m.name === field.type)
-        const inverse = other?.fields.find(
-          (f) =>
-            f.kind === 'object' &&
-            f.relationName === field.relationName &&
-            f.type === model.name &&
-            !(other.name === model.name && f.name === field.name),
-        )
-        if (!(other && inverse?.isList)) return []
-        const key = `${model.name}.${field.name}`
-        const otherKey = `${other.name}.${inverse.name}`
-        if (key > otherKey) return []
-        return [
-          {
-            id: `${key}<->${otherKey}`,
-            name: field.relationName ?? null,
-            origin: 'implicit-many-to-many',
-            from: { model: model.name, field: field.name, cardinality: 'many' },
-            to: { model: other.name, field: inverse.name, cardinality: 'many' },
-            onDelete: null,
-            onUpdate: null,
-          } as const,
-        ]
-      }),
-  )
-}
-
 const MakeRelationsInput = z
   .object({
     models: z.array(Model).readonly().meta({ description: 'Every model of the datamodel.' }),
@@ -558,10 +515,10 @@ const MakeRelationsInput = z
   .readonly()
   .meta({ description: 'The DMMF models of a datamodel' })
 
-/** Foreign-key and `/// @relation` relations merged with the implicit many-to-many ones. */
+/** Foreign-key, `/// @relation` and implicit many-to-many relations in the studio contract. */
 export function makeRelations(input: z.infer<typeof MakeRelationsInput>) {
   const { models } = input
-  const merged = mergeERRelations(models).map((relation) => {
+  return erRelations(models).map((relation) => {
     const child = models.find((m) => m.name === relation.to.model)
     const fkField = child?.fields.find(
       (f) =>
@@ -571,7 +528,7 @@ export function makeRelations(input: z.infer<typeof MakeRelationsInput>) {
     )
     return {
       id: erKey(relation),
-      name: fkField?.relationName ?? null,
+      name: relation.name ?? fkField?.relationName ?? null,
       origin: relation.origin,
       from: relation.from,
       to: relation.to,
@@ -579,7 +536,6 @@ export function makeRelations(input: z.infer<typeof MakeRelationsInput>) {
       onUpdate: fkField?.relationOnUpdate ?? null,
     }
   })
-  return [...merged, ...makeImplicitManyToManyRelations(input)]
 }
 
 const MakeSchemaInput = z

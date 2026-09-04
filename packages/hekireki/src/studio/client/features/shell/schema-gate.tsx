@@ -12,6 +12,7 @@ type Field = {
   readonly isList: boolean
   readonly isRequired: boolean
   readonly isId: boolean
+  readonly isUnique: boolean
   readonly isForeignKey: boolean
   readonly default: string | null
   readonly documentation: string | null
@@ -26,7 +27,11 @@ type Model = {
   readonly annotations: readonly string[]
   readonly fields: readonly Field[]
   readonly primaryKey: readonly string[] | null
-  readonly indexes: readonly { readonly attribute: string }[]
+  readonly indexes: readonly {
+    readonly type: 'id' | 'normal' | 'unique' | 'fulltext'
+    readonly fields: readonly string[]
+    readonly attribute: string
+  }[]
   readonly attributes: readonly string[]
 }
 

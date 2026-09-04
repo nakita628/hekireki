@@ -34,7 +34,7 @@
 
 ### Diagrams & Documentation
 
-- 📊 Creates [Mermaid](https://mermaid.js.org/) ER diagrams with PK/FK markers
+- 📊 Creates [Mermaid](https://mermaid.js.org/) ER diagrams — crow's-foot cardinality read from the schema, `PK` / `FK` / `UK` markers (every column of a `@@unique` included, as close as Mermaid's one-marker-per-column syntax gets to a composite constraint), and implicit many-to-many relations
 - 📝 Generates [DBML](https://dbml.dbdiagram.io/) (Database Markup Language) files and **PNG / SVG** ER diagrams drawn the way Hekireki Studio shows them — output format is determined by the file extension (`.dbml`, `.png` or `.svg`)
 
 ## Installation
@@ -1098,7 +1098,7 @@ impl ActiveModelBehavior for ActiveModel {
 
 ```mermaid
 erDiagram
-    User ||--}| Post : "(id) - (userId)"
+    User ||--o{ Post : "(id) - (userId)"
     User {
         string id PK "Primary key"
         string name "Display name"
@@ -1131,7 +1131,17 @@ Ref Post_userId_fk: Post.userId > User.id
 
 ### PNG / SVG
 
-The `hekireki-dbml` generator also draws the ER diagram when the `output` path ends with `.png` or `.svg`. The image is the same diagram Hekireki Studio shows: one card per model with its fields, keys and foreign keys, and a smoothstep edge per relation with its `onDelete` rule, laid out automatically. No external renderer is involved; the PNG is rasterised at 2x for crisp text.
+The `hekireki-dbml` generator also draws the ER diagram when the `output` path ends with `.png` or `.svg`. The image is the same diagram Hekireki Studio shows, laid out automatically:
+
+- one card per model with its fields, primary keys (🔑), foreign keys (🔗) and `UK` unique marks
+- under each field, the attributes the drawing does not show another way — `@default(...)`, `@updatedAt`, `@db.*` — and the prose of its `///` comment
+- the `@@id` / `@@unique` / `@@index` block attributes listed under the fields, with the columns they cover
+- one card per enum with its members (and the values `@map` stores), linked to every field that holds one
+- an edge per relation in IE (crow's-foot) notation, captioned with what it is (`follower · one to many`) and what it does to a row (`on delete cascade`) — dashed when the relation has no foreign key behind it
+- the `///` comment of each model and enum on one line under its header
+- a key along the top naming every symbol the drawing uses
+
+No external renderer is involved; the PNG is rasterised at 2x for crisp text.
 
 ```prisma
 generator Hekireki-PNG {
@@ -1167,7 +1177,7 @@ model Post {
 }
 ```
 
-The relation is drawn in both the Mermaid and DBML output even though `Post.userId` has no `@relation(...)` foreign key. When a physical FK and an annotation describe the same pair, the annotation's cardinality wins in the Mermaid diagram.
+The relation is drawn in the Mermaid, DBML and image output — as a dashed edge in the drawing — even though `Post.userId` has no `@relation(...)` foreign key. When a physical FK and an annotation describe the same pair, the annotation's cardinality wins in the Mermaid diagram.
 
 ### Docs
 

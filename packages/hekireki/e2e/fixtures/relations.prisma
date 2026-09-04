@@ -1,6 +1,7 @@
 // Every relation shape the ER diagram draws, so one screenshot covers all four IE symbols:
-// exactly one (Profile), zero or one (Settings), one or many (Post), zero or many (Comment),
-// a self relation (Category) and an implicit many-to-many (Post ↔ Tag).
+// exactly one (the parent of a required foreign key), zero or one (Settings), zero or many (the
+// list side of a one-to-many), one or many (the `/// @relation` on Membership), a self relation
+// (Category) and an implicit many-to-many (Post ↔ Tag).
 datasource db {
   provider = "sqlite"
 }
@@ -78,7 +79,8 @@ model Category {
   children Category[] @relation("CategoryTree")
 }
 
-/// Keyed by two columns, related to nothing
+/// Keyed by two columns, with no foreign key: the relation is declared, not enforced
+/// @relation User.id Membership.userId one-to-many
 model Membership {
   userId Int
   teamId Int

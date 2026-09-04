@@ -16,12 +16,22 @@ import type { Edge, OnSelectionChangeParams } from '@xyflow/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'react-hot-toast'
 
-import { DownloadIcon, LayoutIcon, RefreshIcon } from '../../components/icons.js'
+import type { DiagramIndex } from '../../../../diagram/layout.js'
+import { EnumNode } from '../../components/enum-node.js'
+import {
+  ArrowRightIcon,
+  DownloadIcon,
+  KeyIcon,
+  LayoutIcon,
+  LinkIcon,
+  RefreshIcon,
+} from '../../components/icons.js'
+import { BADGE, CONSTRAINT_STYLES, UNIQUE_BADGE } from '../../components/labels.js'
 import { ModelNode } from '../../components/model-node.js'
 import { layoutStorageKey, loadLayout, saveLayout, useUiStore } from '../../lib/index.js'
 import { exportPng, exportSvg } from './export.js'
 import { buildEdges, buildNodes, highlightEdges } from './graph.js'
-import type { ModelNodeType } from './graph.js'
+import type { DiagramNodeType } from './graph.js'
 import { autoLayout, positionsFor } from './layout.js'
 
 type Field = {
@@ -31,6 +41,7 @@ type Field = {
   readonly isList: boolean
   readonly isRequired: boolean
   readonly isId: boolean
+  readonly isUnique: boolean
   readonly isForeignKey: boolean
   readonly documentation: string | null
 }
@@ -38,8 +49,10 @@ type Field = {
 type Model = {
   readonly name: string
   readonly dbName: string | null
+  readonly documentation: string | null
   readonly primaryKey: readonly string[] | null
   readonly fields: readonly Field[]
+  readonly indexes: readonly DiagramIndex[]
 }
 
 type Cardinality = 'zero-one' | 'one' | 'zero-many' | 'many'
@@ -60,15 +73,22 @@ type Relation = {
   }
 }
 
+type EnumBlock = {
+  readonly name: string
+  readonly dbName: string | null
+  readonly documentation: string | null
+  readonly values: readonly { readonly name: string; readonly dbName: string | null }[]
+}
+
 type Schema = {
   readonly files: readonly { readonly path: string }[]
   readonly models: readonly Model[]
-  readonly enums: readonly unknown[]
+  readonly enums: readonly EnumBlock[]
   readonly relations: readonly Relation[]
 }
 
-const nodeTypes = { model: ModelNode }
-const NO_NODES: ModelNodeType[] = []
+const nodeTypes = { model: ModelNode, enum: EnumNode }
+const NO_NODES: DiagramNodeType[] = []
 const NO_EDGES: Edge[] = []
 
 // IE (crow's foot) notation, drawn towards the model the end touches: the inner symbol is the
@@ -77,6 +97,9 @@ const NO_EDGES: Edge[] = []
 const CROW_FOOT = 'M0 -8 L-12 0 L0 8 M-12 0 L0 0'
 const MAX_ONE_BAR = 'M-6 -6 L-6 6'
 const MIN_ONE_BAR = 'M-15 -6 L-15 6'
+
+// The block attributes a card lists under its fields, in the order the legend names them.
+const BLOCK_ATTRIBUTES = ['id', 'unique', 'normal'] as const
 
 const CARDINALITIES = [
   { cardinality: 'one', many: false, optional: false, label: 'exactly one' },
@@ -115,42 +138,103 @@ function RelationMarkers() {
   )
 }
 
-function Legend() {
+/** A 34px sample of an edge, drawn the way the canvas draws that kind of edge. */
+function EdgeSample({
+  dash,
+  color = 'var(--c-edge)',
+  marker,
+  width = 1.4,
+  opacity = 1,
+}: {
+  readonly dash?: string
+  readonly color?: string
+  readonly marker?: string
+  readonly width?: number
+  readonly opacity?: number
+}) {
   return (
-    <div className="rounded-lg border border-line bg-surface/90 px-3 py-2 text-[11px] text-muted">
-      <div className="heading pb-1">Relations</div>
-      <ul className="m-0 grid list-none grid-cols-2 gap-x-4 gap-y-0.5 p-0">
-        {CARDINALITIES.map(({ cardinality, label }) => (
-          <li key={cardinality} className="flex items-center gap-1.5 whitespace-nowrap">
-            <svg width="34" height="20" viewBox="-34 -10 34 20" aria-hidden="true">
-              <line
-                x1="-34"
-                y1="0"
-                x2="0"
-                y2="0"
-                stroke="var(--c-edge)"
-                strokeWidth="1.4"
-                markerEnd={`url(#er-${cardinality})`}
-              />
-            </svg>
-            {label}
-          </li>
-        ))}
-      </ul>
-      <div className="flex items-center gap-1.5 pt-0.5 whitespace-nowrap">
-        <svg width="34" height="20" viewBox="-34 -10 34 20" aria-hidden="true">
-          <line
-            x1="-34"
-            y1="0"
-            x2="0"
-            y2="0"
-            stroke="var(--c-edge)"
-            strokeWidth="1.4"
-            strokeDasharray="5 4"
-          />
-        </svg>
-        declared with @relation, or implicit many-to-many
-      </div>
+    <svg width="34" height="20" viewBox="-34 -10 34 20" aria-hidden="true">
+      <line
+        x1="-34"
+        y1="0"
+        x2="0"
+        y2="0"
+        stroke={color}
+        strokeWidth={width}
+        strokeDasharray={dash}
+        strokeOpacity={opacity}
+        markerEnd={marker}
+      />
+    </svg>
+  )
+}
+
+/** The key to the drawing: every symbol a card or an edge is marked with, foldable out of the way. */
+function Legend() {
+  const open = useUiStore((s) => s.legendOpen)
+  const setOpen = useUiStore((s) => s.setLegendOpen)
+  return (
+    <div className="max-w-[380px] rounded-lg border border-line bg-surface/90 text-[11px] text-muted">
+      <button
+        type="button"
+        aria-expanded={open}
+        className="heading flex w-full cursor-pointer items-center gap-1 px-3 py-2"
+        onClick={() => {
+          setOpen(!open)
+        }}
+      >
+        <ArrowRightIcon size={11} className={`transition-transform${open ? ' rotate-90' : ''}`} />
+        Legend
+      </button>
+      {open ? (
+        <div className="px-3 pb-2">
+          <div className="heading pb-1">Relations</div>
+          <ul className="m-0 grid list-none grid-cols-2 gap-x-4 gap-y-0.5 p-0">
+            {CARDINALITIES.map(({ cardinality, label }) => (
+              <li key={cardinality} className="flex items-center gap-1.5 whitespace-nowrap">
+                <EdgeSample marker={`url(#er-${cardinality})`} />
+                {label}
+              </li>
+            ))}
+          </ul>
+          <ul className="m-0 list-none p-0">
+            <li className="flex items-center gap-1.5 pt-0.5 whitespace-nowrap">
+              <EdgeSample dash="5 4" />
+              declared with @relation, or implicit many-to-many
+            </li>
+            <li className="flex items-center gap-1.5 whitespace-nowrap">
+              <EdgeSample dash="2 4" color="var(--c-enum)" width={1.2} opacity={0.75} />
+              the enum a field holds a value of
+            </li>
+          </ul>
+          <div className="heading pt-1.5 pb-1">Keys</div>
+          <ul className="m-0 flex list-none flex-wrap gap-x-4 gap-y-0.5 p-0">
+            <li className="flex items-center gap-1.5 whitespace-nowrap">
+              <KeyIcon size={11} className="text-amber-600 dark:text-amber-400" />
+              primary key
+            </li>
+            <li className="flex items-center gap-1.5 whitespace-nowrap">
+              <LinkIcon size={11} className="text-accent" />
+              foreign key
+            </li>
+            <li className="flex items-center gap-1.5 whitespace-nowrap">
+              <span className={`${BADGE} ${UNIQUE_BADGE}`}>UK</span>
+              unique column
+            </li>
+          </ul>
+          <div className="heading pt-1.5 pb-1">Under the fields</div>
+          <ul className="m-0 flex list-none flex-wrap gap-x-4 gap-y-0.5 p-0">
+            {BLOCK_ATTRIBUTES.map((type) => (
+              <li key={type} className="flex items-center gap-1.5 whitespace-nowrap">
+                <span className={`${BADGE} ${CONSTRAINT_STYLES[type].className}`}>
+                  {CONSTRAINT_STYLES[type].label}
+                </span>
+                {CONSTRAINT_STYLES[type].legend}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -217,14 +301,14 @@ function Canvas({
   }, [highlight, store])
 
   const persist = useCallback(
-    (list: readonly ModelNodeType[]) => {
+    (list: readonly DiagramNodeType[]) => {
       saveLayout(storageKey, Object.fromEntries(list.map((n) => [n.id, n.position])))
     },
     [storageKey],
   )
 
   const relayout = useCallback(() => {
-    const positions = autoLayout(schema.models, schema.relations)
+    const positions = autoLayout(schema)
     const next = nodes.map((n) => ({ ...n, position: positions[n.id] ?? n.position }))
     setNodes(next)
     persist(next)
@@ -249,6 +333,7 @@ function Canvas({
     () => ({
       models: schema.models,
       relations: schema.relations,
+      enums: schema.enums,
       positions: Object.fromEntries(nodes.map((n) => [n.id, n.position])),
       theme,
     }),
@@ -287,7 +372,9 @@ function Canvas({
           persist(nodes)
         }}
         onNodeDoubleClick={(_event, node) => {
-          void navigate({ to: '/models/$name', params: { name: node.id }, search: {} })
+          void (node.type === 'enum'
+            ? navigate({ to: '/enums/$name', params: { name: node.id } })
+            : navigate({ to: '/models/$name', params: { name: node.id }, search: {} }))
         }}
         onSelectionChange={onSelectionChange}
         nodesConnectable={false}

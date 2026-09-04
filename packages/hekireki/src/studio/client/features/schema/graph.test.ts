@@ -4,6 +4,7 @@ import {
   buildEdges,
   buildNodes,
   edgeLabel,
+  loopTargetHandle,
   MODEL_HANDLE,
   sourceHandle,
   targetHandle,
@@ -17,15 +18,23 @@ type Field = {
   readonly isList: boolean
   readonly isRequired: boolean
   readonly isId: boolean
+  readonly isUnique: boolean
   readonly isForeignKey: boolean
   readonly documentation: string | null
+}
+
+type Index = {
+  readonly type: 'id' | 'normal' | 'unique' | 'fulltext'
+  readonly fields: readonly string[]
 }
 
 type Model = {
   readonly name: string
   readonly dbName: string | null
+  readonly documentation: string | null
   readonly primaryKey: readonly string[] | null
   readonly fields: readonly Field[]
+  readonly indexes: readonly Index[]
 }
 
 type Cardinality = 'zero-one' | 'one' | 'zero-many' | 'many'
@@ -46,7 +55,18 @@ type Relation = {
   }
 }
 
-type Schema = { readonly models: readonly Model[]; readonly relations: readonly Relation[] }
+type EnumBlock = {
+  readonly name: string
+  readonly dbName: string | null
+  readonly documentation: string | null
+  readonly values: readonly { readonly name: string; readonly dbName: string | null }[]
+}
+
+type Schema = {
+  readonly models: readonly Model[]
+  readonly relations: readonly Relation[]
+  readonly enums: readonly EnumBlock[]
+}
 
 function field(name: string, kind: Field['kind'] = 'scalar'): Field {
   return {
@@ -56,13 +76,14 @@ function field(name: string, kind: Field['kind'] = 'scalar'): Field {
     isList: false,
     isRequired: true,
     isId: name === 'id',
+    isUnique: false,
     isForeignKey: false,
     documentation: null,
   }
 }
 
-function model(name: string, fields: Field[]): Model {
-  return { name, dbName: null, primaryKey: null, fields }
+function model(name: string, fields: Field[], indexes: Model['indexes'] = []): Model {
+  return { name, dbName: null, documentation: null, primaryKey: null, fields, indexes }
 }
 
 const inferred: Relation = {
@@ -90,6 +111,7 @@ const annotated: Relation = {
 }
 
 const schema: Schema = {
+  enums: [],
   models: [
     model('User', [field('id'), field('posts', 'object')]),
     model('Post', [field('id'), field('authorId'), field('tags', 'object')]),
@@ -98,15 +120,57 @@ const schema: Schema = {
   relations: [inferred, manyToMany, annotated],
 }
 
+describe('buildEdges of a self relation', () => {
+  it('comes back into the right-hand side of the model it left', () => {
+    const edges = buildEdges({
+      enums: [],
+      models: [model('Category', [field('id'), field('parentId')])],
+      relations: [
+        {
+          id: 'Category.id->Category.parentId',
+          origin: 'inferred',
+          from: { model: 'Category', field: 'id', cardinality: 'zero-one' },
+          to: { model: 'Category', field: 'parentId', cardinality: 'zero-many' },
+          onDelete: null,
+        },
+      ],
+    })
+    expect(edges.map((e) => [e.sourceHandle, e.targetHandle])).toStrictEqual([
+      [sourceHandle('id'), loopTargetHandle('parentId')],
+    ])
+  })
+})
+
 describe('buildNodes', () => {
-  it('creates one model node per model with stored or zero positions', () => {
-    const nodes = buildNodes(schema, { User: { x: 10, y: 20 } })
+  it('creates one node per model and one per enum, at stored or zero positions', () => {
+    const nodes = buildNodes(
+      {
+        ...schema,
+        enums: [{ name: 'Role', dbName: null, documentation: null, values: [] }],
+      },
+      { User: { x: 10, y: 20 } },
+    )
     expect(nodes.map((n) => [n.id, n.type, n.position])).toStrictEqual([
       ['User', 'model', { x: 10, y: 20 }],
       ['Post', 'model', { x: 0, y: 0 }],
       ['Tag', 'model', { x: 0, y: 0 }],
+      ['Role', 'enum', { x: 0, y: 0 }],
     ])
-    expect(nodes[0]?.data.fields.map((f) => f.name)).toStrictEqual(['id'])
+    const first = nodes[0]
+    expect(first?.type === 'model' ? first.data.fields.map((f) => f.name) : []).toStrictEqual([
+      'id',
+    ])
+  })
+
+  it('links an enum-typed field to the card of its enum', () => {
+    const withEnum: Schema = {
+      relations: [],
+      enums: [{ name: 'Role', dbName: null, documentation: null, values: [] }],
+      models: [model('User', [field('id'), { ...field('role', 'enum'), type: 'Role' }])],
+    }
+    expect(
+      buildEdges(withEnum).map((e) => [e.id, e.source, e.sourceHandle, e.target, e.className]),
+    ).toStrictEqual([['User.role->Role', 'User', sourceHandle('role'), 'Role', 'enum-edge']])
   })
 })
 
@@ -129,7 +193,7 @@ describe('buildEdges', () => {
         sourceHandle('id'),
         'Post',
         targetHandle('authorId'),
-        'on delete set null',
+        'one to many',
         'relation-edge relation-edge--inferred',
       ],
       [
@@ -147,7 +211,7 @@ describe('buildEdges', () => {
         sourceHandle(MODEL_HANDLE),
         'Post',
         targetHandle(MODEL_HANDLE),
-        '@relation',
+        'one to many',
         'relation-edge relation-edge--annotated',
       ],
     ])
@@ -163,9 +227,10 @@ describe('buildEdges', () => {
 })
 
 describe('edgeLabel', () => {
-  it('omits the label when no referential action is set', () => {
-    expect(edgeLabel({ ...inferred, onDelete: null })).toBeUndefined()
-    expect(edgeLabel({ ...inferred, onDelete: 'Cascade' })).toBe('on delete cascade')
+  // The canvas says what the relation is; what it does to a row is in the panel and the export.
+  it('names the relationship, and the name the schema gave it', () => {
+    expect(edgeLabel({ ...inferred, onDelete: 'Cascade' })).toBe('one to many')
+    expect(edgeLabel({ ...inferred, name: 'author' })).toBe('author \u00B7 one to many')
   })
 })
 

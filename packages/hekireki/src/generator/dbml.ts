@@ -24,10 +24,11 @@ export function erDiagramSvg(datamodel: DMMF.Datamodel, theme: DiagramTheme = 'l
     provider: null,
     blocks: [],
   })
-  const positions = autoLayout(schema.models, schema.relations)
+  const positions = autoLayout(schema)
   return renderDiagramSvg({
     models: schema.models,
     relations: schema.relations,
+    enums: schema.enums,
     positions,
     theme,
   })

@@ -28,7 +28,7 @@ test('shows the file, the other file as a tab and the diagram beside it', async 
   await expect(page.locator('.tab')).toHaveCount(2)
   await expectLaidOut(editor.root, { width: 400, height: 400 })
   await expectLaidOut(page.locator('.react-flow'), { width: 300, height: 400 })
-  await expect(page.locator('.react-flow__node')).toHaveCount(2)
+  await expect(page.locator('.react-flow__node')).toHaveCount(3)
   await expectNoHorizontalOverflow(page)
 })
 

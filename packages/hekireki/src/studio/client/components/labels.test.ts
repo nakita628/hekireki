@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import { fieldTypeLabel, firstLine } from './labels.js'
+import { fieldTypeLabel } from './labels.js'
 
 type Field = {
   readonly type: string
@@ -23,15 +23,5 @@ describe('fieldTypeLabel', () => {
 
   it('prints a list with brackets and never as optional', () => {
     expect(fieldTypeLabel(field({ type: 'Int', isList: true, isRequired: false }))).toBe('Int[]')
-  })
-})
-
-describe('firstLine', () => {
-  it('returns the trimmed first line of a doc comment', () => {
-    expect(firstLine('  The title.  \nSecond line')).toBe('The title.')
-  })
-
-  it('returns an empty string when there is no documentation', () => {
-    expect(firstLine(null)).toBe('')
   })
 })

@@ -1,26 +1,28 @@
 ```mermaid
 erDiagram
-    users ||--|| Profile : "(id) - (userId)"
-    users ||--}| posts : "(id) - (authorId)"
-    posts ||--}| comments : "(id) - (postId)"
-    users ||--}o comments : "(id) - (authorId)"
-    users ||--}| follows : "(id) - (followerId)"
-    users ||--}| follows : "(id) - (followingId)"
-    Category ||--}o Category : "(id) - (parentId)"
-    users ||--}| orders : "(id) - (userId)"
-    orders ||--}| order_items : "(id) - (orderId)"
+    users ||--o| Profile : "(id) - (userId)"
+    users ||--o{ posts : "(id) - (authorId)"
+    posts ||--o{ comments : "(id) - (postId)"
+    users |o--o{ comments : "(id) - (authorId)"
+    users ||--o{ follows : "(id) - (followerId)"
+    users ||--o{ follows : "(id) - (followingId)"
+    Category |o--o{ Category : "(id) - (parentId)"
+    users ||--o{ orders : "(id) - (userId)"
+    orders ||--o{ order_items : "(id) - (orderId)"
+    posts }o--o{ Tag : "(tags) - (posts)"
+    Actor }o--o{ Film : "(films) - (actors)"
     users {
         string id PK "Primary key (UUIDv7)"
-        string email "Unique login email"
+        string email UK "Unique login email"
         string name "Display name"
         role role
-        string interests
+        string[] interests
         datetime createdAt
         datetime updatedAt
     }
     Profile {
         string id PK
-        string userId FK
+        string userId FK, UK
         string bio
         string nickname
         int age
@@ -42,7 +44,7 @@ erDiagram
     }
     Tag {
         int id PK
-        string label
+        string label UK
     }
     comments {
         int id PK
@@ -52,14 +54,14 @@ erDiagram
         datetime createdAt
     }
     follows {
-        string followerId FK
-        string followingId FK
+        string followerId PK, FK
+        string followingId PK, FK
         datetime since
     }
     Category {
         int id PK
-        string name
-        int parentId FK
+        string name UK
+        int parentId FK, UK
     }
     orders {
         bigint id PK
@@ -69,8 +71,8 @@ erDiagram
     }
     order_items {
         bigint id PK
-        bigint orderId FK
-        string sku
+        bigint orderId FK, UK
+        string sku UK
         int qty
         decimal price
     }

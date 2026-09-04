@@ -24,13 +24,33 @@ test('the schema page lays out the sidebar and the diagram', async ({ page }) =>
 
   await expect(page.getByRole('heading', { level: 1, name: 'Schema' })).toBeVisible()
   await expect(page.getByText('2 models · 1 relation · 1 enums')).toBeVisible()
+  // Two models and the enum one of them holds.
   const nodes = page.locator('.react-flow__node')
-  await expect(nodes).toHaveCount(2)
+  await expect(nodes).toHaveCount(3)
   await expectTexts(nodes.filter({ hasText: 'User' }), ['id', 'email', 'name', 'role'])
   await expectTexts(nodes.filter({ hasText: 'Post' }), ['title', 'published', 'authorId'])
-  await expect(page.locator('.react-flow__edge')).toHaveCount(1)
+  // The relation, and the link from User.role to the Role card.
+  await expect(page.locator('.react-flow__edge')).toHaveCount(2)
   await expectLaidOut(page.locator('.react-flow'), { width: 600, height: 400 })
   await expectNoHorizontalOverflow(page)
+})
+
+test('the legend names every mark the diagram uses, and stays folded once folded', async ({
+  page,
+}) => {
+  await page.goto('/')
+  const toggle = page.getByRole('button', { name: 'Legend' })
+  await expect(page.getByText('composite primary key')).toBeVisible()
+  await expect(page.getByText('unique together')).toBeVisible()
+  await expect(page.getByText('unique column')).toBeVisible()
+  await expect(page.getByText('the enum a field holds a value of')).toBeVisible()
+
+  await toggle.click()
+  await expect(page.getByText('unique together')).toBeHidden()
+  // The choice is remembered, so the key does not come back over the diagram on every visit.
+  await page.reload()
+  await expect(toggle).toBeVisible()
+  await expect(page.getByText('unique together')).toBeHidden()
 })
 
 test('the theme toggle switches the palette without breaking the layout', async ({ page }) => {
@@ -39,7 +59,7 @@ test('the theme toggle switches the palette without breaking the layout', async 
   await expect(html).not.toHaveClass(/dark/u)
   await page.getByRole('button', { name: 'Switch to dark mode' }).click()
   await expect(html).toHaveClass(/dark/u)
-  await expect(page.locator('.react-flow__node')).toHaveCount(2)
+  await expect(page.locator('.react-flow__node')).toHaveCount(3)
   await expectNoHorizontalOverflow(page)
   await page.getByRole('button', { name: 'Switch to light mode' }).click()
   await expect(html).not.toHaveClass(/dark/u)
@@ -75,7 +95,7 @@ test('a broken schema keeps the last diagram and points at the editor', async ({
   request,
 }) => {
   await page.goto('/')
-  await expect(page.locator('.react-flow__node')).toHaveCount(2)
+  await expect(page.locator('.react-flow__node')).toHaveCount(3)
   const files = await loadedFiles(request)
   const base = files.find((file) => file.path.endsWith('base.prisma'))
   if (base === undefined) throw new Error('base.prisma is not loaded')
@@ -86,7 +106,7 @@ test('a broken schema keeps the last diagram and points at the editor', async ({
   await expect(banner).toBeVisible()
   await expect(page.getByText(/Type "Nope" is neither a built-in type/u).first()).toBeVisible()
   // The diagram is the last valid one and still there.
-  await expect(page.locator('.react-flow__node')).toHaveCount(2)
+  await expect(page.locator('.react-flow__node')).toHaveCount(3)
   // The link opens the file with the error at its line.
   await page.getByRole('link', { name: 'Fix it in the editor' }).click()
   await expect(page).toHaveURL(/\/prisma/u)

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vite-plus/test'
 import { parseSchemaFiles } from '../services/load.js'
 import {
   makeRelationName,
-  makeImplicitManyToManyRelations,
+  makeRelations,
   makeLocation,
   makeDefaultText,
   makeIndexAttribute,
@@ -282,16 +282,16 @@ describe('makeSchema', () => {
           name: 'PostToUser',
           origin: 'inferred',
           from: { model: 'User', field: 'id', cardinality: 'one' },
-          to: { model: 'Post', field: 'authorId', cardinality: 'many' },
+          to: { model: 'Post', field: 'authorId', cardinality: 'zero-many' },
           onDelete: 'Cascade',
           onUpdate: null,
         },
         {
-          id: 'Post.tags<->Tag.posts',
+          id: 'Post.tags->Tag.posts',
           name: 'PostToTag',
           origin: 'implicit-many-to-many',
-          from: { model: 'Post', field: 'tags', cardinality: 'many' },
-          to: { model: 'Tag', field: 'posts', cardinality: 'many' },
+          from: { model: 'Post', field: 'tags', cardinality: 'zero-many' },
+          to: { model: 'Tag', field: 'posts', cardinality: 'zero-many' },
           onDelete: null,
           onUpdate: null,
         },
@@ -361,7 +361,7 @@ model Member {
       id: 'Category.id->Category.parentId',
       name: 'tree',
       origin: 'inferred',
-      from: { model: 'Category', field: 'id', cardinality: 'one' },
+      from: { model: 'Category', field: 'id', cardinality: 'zero-one' },
       to: { model: 'Category', field: 'parentId', cardinality: 'zero-many' },
       onDelete: null,
       onUpdate: 'NoAction',
@@ -527,7 +527,7 @@ describe('makeLocation', () => {
   })
 })
 
-describe('makeImplicitManyToManyRelations', () => {
+describe('makeRelations', () => {
   it('emits one relation per implicit join table, ordered by the lower key', () => {
     const { dmmf } = parse(`model Actor {
   id    Int    @id
@@ -539,13 +539,13 @@ model Film {
   actors Actor[] @relation("cast")
 }
 `)
-    expect(makeImplicitManyToManyRelations({ models: dmmf.datamodel.models })).toStrictEqual([
+    expect(makeRelations({ models: dmmf.datamodel.models })).toStrictEqual([
       {
-        id: 'Actor.films<->Film.actors',
+        id: 'Actor.films->Film.actors',
         name: 'cast',
         origin: 'implicit-many-to-many',
-        from: { model: 'Actor', field: 'films', cardinality: 'many' },
-        to: { model: 'Film', field: 'actors', cardinality: 'many' },
+        from: { model: 'Actor', field: 'films', cardinality: 'zero-many' },
+        to: { model: 'Film', field: 'actors', cardinality: 'zero-many' },
         onDelete: null,
         onUpdate: null,
       },
@@ -559,13 +559,13 @@ model Film {
   following User[] @relation("follows")
 }
 `)
-    expect(makeImplicitManyToManyRelations({ models: dmmf.datamodel.models })).toStrictEqual([
+    expect(makeRelations({ models: dmmf.datamodel.models })).toStrictEqual([
       {
-        id: 'User.followers<->User.following',
+        id: 'User.followers->User.following',
         name: 'follows',
         origin: 'implicit-many-to-many',
-        from: { model: 'User', field: 'followers', cardinality: 'many' },
-        to: { model: 'User', field: 'following', cardinality: 'many' },
+        from: { model: 'User', field: 'followers', cardinality: 'zero-many' },
+        to: { model: 'User', field: 'following', cardinality: 'zero-many' },
         onDelete: null,
         onUpdate: null,
       },

@@ -1,5 +1,7 @@
 import type { Edge, Node } from '@xyflow/react'
 
+import type { DiagramIndex } from '../../../../diagram/layout.js'
+import { edgeCaption } from '../../../../diagram/svg.js'
 import type { LayoutPositions } from '../../lib/index.js'
 import { diagramFields } from './layout.js'
 
@@ -10,6 +12,7 @@ type Field = {
   readonly isList: boolean
   readonly isRequired: boolean
   readonly isId: boolean
+  readonly isUnique: boolean
   readonly isForeignKey: boolean
   readonly documentation: string | null
 }
@@ -17,8 +20,10 @@ type Field = {
 type Model = {
   readonly name: string
   readonly dbName: string | null
+  readonly documentation: string | null
   readonly primaryKey: readonly string[] | null
   readonly fields: readonly Field[]
+  readonly indexes: readonly DiagramIndex[]
 }
 
 type Cardinality = 'zero-one' | 'one' | 'zero-many' | 'many'
@@ -27,6 +32,8 @@ type Relation = {
   readonly id: string
   readonly origin: 'inferred' | 'annotated' | 'implicit-many-to-many'
   readonly onDelete: string | null
+  readonly onUpdate?: string | null
+  readonly name?: string | null
   readonly from: {
     readonly model: string
     readonly field: string
@@ -39,9 +46,17 @@ type Relation = {
   }
 }
 
+type EnumBlock = {
+  readonly name: string
+  readonly dbName: string | null
+  readonly documentation: string | null
+  readonly values: readonly { readonly name: string; readonly dbName: string | null }[]
+}
+
 type Schema = {
   readonly models: readonly Model[]
   readonly relations: readonly Relation[]
+  readonly enums: readonly EnumBlock[]
 }
 
 type ModelNodeData = {
@@ -50,6 +65,10 @@ type ModelNodeData = {
 }
 
 export type ModelNodeType = Node<ModelNodeData, 'model'>
+
+export type EnumNodeType = Node<{ readonly value: EnumBlock }, 'enum'>
+
+export type DiagramNodeType = ModelNodeType | EnumNodeType
 
 export const MODEL_HANDLE = '__model'
 
@@ -61,20 +80,26 @@ export function targetHandle(field: string) {
   return `${field}-target`
 }
 
-export function buildNodes(schema: Schema, positions: LayoutPositions): readonly ModelNodeType[] {
-  return schema.models.map((model) => ({
-    id: model.name,
-    type: 'model',
-    position: positions[model.name] ?? { x: 0, y: 0 },
-    data: { model, fields: diagramFields(model) },
-  }))
+/** A self relation comes back into the right-hand side of the model it left, as a loop. */
+export function loopTargetHandle(field: string) {
+  return `${field}-loop`
 }
 
-function humanizeAction(action: string) {
-  return action
-    .replaceAll(/([A-Z])/gu, ' $1')
-    .trim()
-    .toLowerCase()
+export function buildNodes(schema: Schema, positions: LayoutPositions): readonly DiagramNodeType[] {
+  return [
+    ...schema.models.map<DiagramNodeType>((model) => ({
+      id: model.name,
+      type: 'model',
+      position: positions[model.name] ?? { x: 0, y: 0 },
+      data: { model, fields: diagramFields(model) },
+    })),
+    ...schema.enums.map<DiagramNodeType>((value) => ({
+      id: value.name,
+      type: 'enum',
+      position: positions[value.name] ?? { x: 0, y: 0 },
+      data: { value },
+    })),
+  ]
 }
 
 /** The id of the IE (crow's foot) marker an end is drawn with; React Flow turns it into `url(#id)`. */
@@ -82,10 +107,30 @@ export function cardinalityMarker(cardinality: Cardinality) {
   return `er-${cardinality}`
 }
 
+// What the canvas writes on an edge: the relation itself, the first line the export draws. The
+// referential actions stay off the canvas — a label there has to be short enough not to cover a
+// model — and are shown in the model panel and in the exported image.
 export function edgeLabel(relation: Relation) {
-  if (relation.origin === 'implicit-many-to-many') return 'many to many'
-  if (relation.origin === 'annotated') return '@relation'
-  return relation.onDelete === null ? undefined : `on delete ${humanizeAction(relation.onDelete)}`
+  return edgeCaption(relation)[0]
+}
+
+/** A dotted link from every enum-typed field to the card that lists the values it may hold. */
+function enumEdges(schema: Schema): readonly Edge[] {
+  const names = new Set(schema.enums.map((value) => value.name))
+  return schema.models.flatMap((model) =>
+    diagramFields(model)
+      .filter((field) => field.kind === 'enum' && names.has(field.type))
+      .map((field) => ({
+        id: `${model.name}.${field.name}->${field.type}`,
+        source: model.name,
+        target: field.type,
+        sourceHandle: sourceHandle(field.name),
+        targetHandle: targetHandle(MODEL_HANDLE),
+        type: 'smoothstep',
+        className: 'enum-edge',
+        selectable: false,
+      })),
+  )
 }
 
 export function buildEdges(schema: Schema): readonly Edge[] {
@@ -93,17 +138,19 @@ export function buildEdges(schema: Schema): readonly Edge[] {
     schema.models.map((m) => [m.name, new Set(diagramFields(m).map((f) => f.name))]),
   )
   const hasField = (model: string, field: string) => scalarFields.get(model)?.has(field) ?? false
-  return schema.relations.map((relation) => {
+  const relations = schema.relations.map((relation) => {
     const useHeader =
       relation.origin === 'implicit-many-to-many' ||
       !hasField(relation.from.model, relation.from.field) ||
       !hasField(relation.to.model, relation.to.field)
+    const target = useHeader ? MODEL_HANDLE : relation.to.field
     return {
       id: relation.id,
       source: relation.from.model,
       target: relation.to.model,
       sourceHandle: sourceHandle(useHeader ? MODEL_HANDLE : relation.from.field),
-      targetHandle: targetHandle(useHeader ? MODEL_HANDLE : relation.to.field),
+      targetHandle:
+        relation.from.model === relation.to.model ? loopTargetHandle(target) : targetHandle(target),
       type: 'smoothstep',
       label: edgeLabel(relation),
       className: `relation-edge relation-edge--${relation.origin}`,
@@ -112,6 +159,7 @@ export function buildEdges(schema: Schema): readonly Edge[] {
       data: { relation },
     }
   })
+  return [...relations, ...enumEdges(schema)]
 }
 
 export function highlightEdges(edges: readonly Edge[], selected: readonly string[]) {

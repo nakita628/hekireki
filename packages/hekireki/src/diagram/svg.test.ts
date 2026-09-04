@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vite-plus/test'
 import { NODE_HEADER_HEIGHT, NODE_PADDING, NODE_ROW_HEIGHT, NODE_WIDTH } from './layout.js'
 import {
   diagramBounds,
-  edgeLabel,
+  edgeCaption,
   fieldTypeLabel,
   renderDiagramSvg,
   smoothStepPath,
@@ -17,15 +17,24 @@ type Field = {
   readonly isList: boolean
   readonly isRequired: boolean
   readonly isId: boolean
+  readonly isUnique?: boolean
   readonly isForeignKey: boolean
   readonly documentation: string | null
+  readonly attributes?: readonly string[]
+}
+
+type Index = {
+  readonly type: 'id' | 'normal' | 'unique' | 'fulltext'
+  readonly fields: readonly string[]
 }
 
 type Model = {
   readonly name: string
   readonly dbName: string | null
+  readonly documentation?: string | null
   readonly primaryKey: readonly string[] | null
   readonly fields: readonly Field[]
+  readonly indexes?: readonly Index[]
 }
 
 type Cardinality = 'zero-one' | 'one' | 'zero-many' | 'many'
@@ -33,6 +42,8 @@ type Cardinality = 'zero-one' | 'one' | 'zero-many' | 'many'
 type Relation = {
   readonly origin: 'inferred' | 'annotated' | 'implicit-many-to-many'
   readonly onDelete: string | null
+  readonly onUpdate?: string | null
+  readonly name?: string | null
   readonly from: {
     readonly model: string
     readonly field: string
@@ -61,6 +72,10 @@ function field(name: string, overrides: Partial<Field> = {}): Field {
 
 function model(name: string, fields: Field[], dbName: string | null = null): Model {
   return { name, dbName, primaryKey: null, fields }
+}
+
+function constrained(name: string, fields: Field[], indexes: Index[]): Model {
+  return { name, dbName: null, primaryKey: null, fields, indexes }
 }
 
 function relation(overrides: Partial<Relation> = {}): Relation {
@@ -97,6 +112,7 @@ describe('renderDiagramSvg', () => {
     expect(svg).toContain('>authorId</text>')
     expect(svg).toContain('>Who wrote it</text>')
     expect(svg).not.toContain('>author</text>')
+    expect(svg).toContain('>one to many</text>')
     expect(svg).toContain('>on delete cascade</text>')
     expect(svg).toContain('scale(-1 1)')
   })
@@ -112,15 +128,15 @@ describe('renderDiagramSvg', () => {
       '<g transform="translate(340 55) scale(-1 1)" fill="none" stroke="#9095ab" stroke-width="1.4"><path d="M-6 -6 L-6 6"/><circle cx="-16" cy="0" r="3.2" fill="#ffffff"/></g>',
     )
     expect(svg).toContain(
-      '<g transform="translate(500 124)" fill="none" stroke="#9095ab" stroke-width="1.4"><path d="M0 -8 L-12 0 L0 8 M-12 0 L0 0"/><path d="M-15 -6 L-15 6"/></g>',
+      '<g transform="translate(500 117)" fill="none" stroke="#9095ab" stroke-width="1.4"><path d="M0 -8 L-12 0 L0 8 M-12 0 L0 0"/><path d="M-15 -6 L-15 6"/></g>',
     )
   })
 
-  it('leaves the source field row on the right and enters the target field row on the left', () => {
+  // A documented field is taller than its name; the edge still meets the name, not the row centre.
+  it('leaves the source field row on the right and enters the target field name on the left', () => {
     const svg = renderDiagramSvg({ models: [user, post], relations: [relation()], positions })
     const sourceY = NODE_HEADER_HEIGHT + NODE_PADDING + NODE_ROW_HEIGHT / 2
-    const targetY =
-      40 + NODE_HEADER_HEIGHT + NODE_PADDING + NODE_ROW_HEIGHT + (NODE_ROW_HEIGHT + 14) / 2
+    const targetY = 40 + NODE_HEADER_HEIGHT + NODE_PADDING + NODE_ROW_HEIGHT + NODE_ROW_HEIGHT / 2
     expect(svg).toContain(`d="M${NODE_WIDTH} ${sourceY}`)
     expect(svg).toContain(`L500 ${targetY}"`)
   })
@@ -196,15 +212,43 @@ describe('smoothStepPath', () => {
   })
 })
 
-describe('edgeLabel', () => {
-  it('names the relation kind or the delete rule', () => {
-    expect(edgeLabel(relation())).toBeNull()
-    expect(edgeLabel(relation({ onDelete: 'SetNull' }))).toBe('on delete set null')
-    expect(edgeLabel(relation({ origin: 'annotated' }))).toBe('@relation')
-    expect(edgeLabel(relation({ origin: 'implicit-many-to-many' }))).toBe('many to many')
+describe('edgeCaption', () => {
+  // Every edge says what it is, whatever else it has to say.
+  it('spells the relationship out, in the words it is spoken with', () => {
+    expect(edgeCaption(relation())).toStrictEqual(['one to many'])
+    expect(
+      edgeCaption(relation({ to: { model: 'Post', field: 'authorId', cardinality: 'zero-one' } })),
+    ).toStrictEqual(['one to one'])
+    expect(
+      edgeCaption(
+        relation({
+          origin: 'implicit-many-to-many',
+          from: { model: 'User', field: 'posts', cardinality: 'zero-many' },
+        }),
+      ),
+    ).toStrictEqual(['many to many'])
+  })
+
+  it('puts what happens to a row on a second line', () => {
+    expect(edgeCaption(relation({ onDelete: 'SetNull' }))).toStrictEqual([
+      'one to many',
+      'on delete set null',
+    ])
+    expect(edgeCaption(relation({ onDelete: 'Cascade', onUpdate: 'Restrict' }))).toStrictEqual([
+      'one to many',
+      'on delete cascade \u00B7 on update restrict',
+    ])
+  })
+
+  // Two relations between the same pair only differ by their name, so the name leads the caption.
+  it('leads with the name the schema gave the relation, and skips the one Prisma made up', () => {
+    expect(edgeCaption(relation({ name: 'follower', onDelete: 'Cascade' }))).toStrictEqual([
+      'follower \u00B7 one to many',
+      'on delete cascade',
+    ])
+    expect(edgeCaption(relation({ name: 'PostToUser' }))).toStrictEqual(['one to many'])
   })
 })
-
 describe('labels', () => {
   it('spells the type the way the node does', () => {
     expect(fieldTypeLabel(field('a'))).toBe('String')
@@ -216,5 +260,310 @@ describe('labels', () => {
     expect(truncateLabel('createdAt', 100, 7.2)).toBe('createdAt')
     expect(truncateLabel('averyveryverylongname', 72, 7.2)).toBe('averyvery…')
     expect(truncateLabel('ab', 5, 7.2)).toBe('…')
+  })
+})
+
+/** The label chips of a rendered diagram, as boxes. */
+function captionBoxes(svg: string) {
+  return [
+    ...svg.matchAll(
+      /<g class="relation-label"><rect x="(\S+?)" y="(\S+?)" width="(\S+?)" height="(\S+?)"/gu,
+    ),
+  ].map(([, x, y, width, height]) => ({
+    x: Number(x),
+    y: Number(y),
+    width: Number(width),
+    height: Number(height),
+  }))
+}
+
+function viewBox(svg: string) {
+  const [x, y, width, height] = (/viewBox="([^"]+)"/u.exec(svg)?.[1] ?? '').split(' ').map(Number)
+  return { x: x ?? 0, y: y ?? 0, width: width ?? 0, height: height ?? 0 }
+}
+
+describe('the key to the symbols', () => {
+  it('explains the ends the diagram actually draws, and nothing else', () => {
+    const svg = renderDiagramSvg({
+      models: [user, post],
+      relations: [relation({ from: { model: 'User', field: 'id', cardinality: 'zero-one' } })],
+      positions,
+    })
+    expect(svg).toContain('class="diagram-legend"')
+    expect(svg).toContain('>zero or one</text>')
+    expect(svg).toContain('>one or many</text>')
+    expect(svg).not.toContain('>exactly one</text>')
+    expect(svg).not.toContain('>zero or many</text>')
+    expect(svg).toContain('>primary key</text>')
+    expect(svg).toContain('>foreign key</text>')
+  })
+
+  it('names the dashed line only when one is drawn', () => {
+    const solid = renderDiagramSvg({ models: [user, post], relations: [relation()], positions })
+    const dashed = renderDiagramSvg({
+      models: [user, post],
+      relations: [relation({ origin: 'annotated' })],
+      positions,
+    })
+    expect(solid).not.toContain('@relation, or many to many</text>')
+    expect(dashed).toContain('@relation, or many to many</text>')
+  })
+
+  it('is left out of a diagram that has nothing to explain', () => {
+    const svg = renderDiagramSvg({
+      models: [model('Note', [field('body')])],
+      relations: [],
+      positions: { Note: { x: 0, y: 0 } },
+    })
+    expect(svg).not.toContain('class="diagram-legend"')
+  })
+})
+
+describe('edge captions', () => {
+  it('keeps the caption clear of the models it runs between', () => {
+    // Order sits directly between User and Post, over the middle of the edge.
+    const between = model('Order', [field('id', { isId: true })])
+    const svg = renderDiagramSvg({
+      models: [user, post, between],
+      relations: [relation({ onDelete: 'Cascade' })],
+      positions: { ...positions, Order: { x: 380, y: 0 } },
+    })
+    const boxes = captionBoxes(svg)
+    expect(boxes).toHaveLength(1)
+    const [box] = boxes
+    expect(box && box.x > 380 && box.x < 720).toBe(false)
+  })
+
+  it('draws the captions after the models, so a label is never hidden behind one', () => {
+    const svg = renderDiagramSvg({
+      models: [user, post],
+      relations: [relation({ onDelete: 'Cascade' })],
+      positions,
+    })
+    expect(svg.lastIndexOf('class="model-node"')).toBeLessThan(
+      svg.indexOf('class="relation-label"'),
+    )
+  })
+})
+
+describe('self relations', () => {
+  const category = model('Category', [
+    field('id', { isId: true }),
+    field('parentId', { isForeignKey: true, isRequired: false }),
+  ])
+  const selfRelation = relation({
+    from: { model: 'Category', field: 'id', cardinality: 'zero-one' },
+    to: { model: 'Category', field: 'parentId', cardinality: 'zero-many' },
+  })
+
+  it('loops off the right of the model instead of running around the canvas', () => {
+    const svg = renderDiagramSvg({
+      models: [category],
+      relations: [selfRelation],
+      positions: { Category: { x: 0, y: 0 } },
+    })
+    const sourceY = NODE_HEADER_HEIGHT + NODE_PADDING + NODE_ROW_HEIGHT / 2
+    expect(svg).toContain(`d="M${NODE_WIDTH} ${sourceY}`)
+    expect(svg).toContain(`L${NODE_WIDTH} ${sourceY + NODE_ROW_HEIGHT}"`)
+    // Both ends touch the right-hand side, so both symbols are mirrored.
+    expect(svg.match(/scale\(-1 1\)/gu)).toHaveLength(2)
+  })
+
+  it('leaves room for the loop in the drawing', () => {
+    const svg = renderDiagramSvg({
+      models: [category],
+      relations: [selfRelation],
+      positions: { Category: { x: 0, y: 0 } },
+    })
+    const box = viewBox(svg)
+    expect(box.x + box.width).toBeGreaterThan(NODE_WIDTH + 34)
+  })
+
+  it('pulls apart two ends that would land on the same row', () => {
+    const svg = renderDiagramSvg({
+      models: [model('User', [field('id', { isId: true })])],
+      relations: [
+        relation({
+          origin: 'implicit-many-to-many',
+          from: { model: 'User', field: 'friends', cardinality: 'zero-many' },
+          to: { model: 'User', field: 'friendOf', cardinality: 'zero-many' },
+        }),
+      ],
+      positions: { User: { x: 0, y: 0 } },
+    })
+    expect(svg).toContain(`d="M${NODE_WIDTH} ${NODE_HEADER_HEIGHT / 2}`)
+    expect(svg).toContain(`L${NODE_WIDTH} ${NODE_HEADER_HEIGHT / 2 + NODE_ROW_HEIGHT}"`)
+  })
+})
+
+describe('constraints', () => {
+  const follow = constrained(
+    'Follow',
+    [field('followerId', { isForeignKey: true }), field('followingId', { isForeignKey: true })],
+    [
+      { type: 'id', fields: ['followerId', 'followingId'] },
+      { type: 'unique', fields: ['followerId'] },
+      { type: 'normal', fields: ['followingId'] },
+    ],
+  )
+
+  it('lists every block attribute under the fields, named and with its columns', () => {
+    const svg = renderDiagramSvg({
+      models: [follow],
+      relations: [],
+      positions: { Follow: { x: 0, y: 0 } },
+    })
+    expect(svg).toContain('>KEY</text>')
+    expect(svg).toContain('>UNIQUE</text>')
+    expect(svg).toContain('>INDEX</text>')
+    expect(svg).toContain('>followerId, followingId</text>')
+  })
+
+  it('makes room for them in the card', () => {
+    const plain = renderDiagramSvg({
+      models: [model('Follow', [...follow.fields])],
+      relations: [],
+      positions: { Follow: { x: 0, y: 0 } },
+    })
+    const withConstraints = renderDiagramSvg({
+      models: [follow],
+      relations: [],
+      positions: { Follow: { x: 0, y: 0 } },
+    })
+    // Three constraint rows and the padding above them.
+    expect(viewBox(withConstraints).height - viewBox(plain).height).toBe(68)
+  })
+
+  it('marks a unique field, but not one that is already the key', () => {
+    const svg = renderDiagramSvg({
+      models: [
+        model('User', [
+          field('id', { isId: true, isUnique: true }),
+          field('email', { isUnique: true }),
+        ]),
+      ],
+      relations: [],
+      positions: { User: { x: 0, y: 0 } },
+    })
+    expect(svg.match(/>UK</gu)).toHaveLength(2)
+    expect(svg).toContain('>unique</text>')
+  })
+
+  it('leaves the unique mark out of the key when nothing carries one', () => {
+    const svg = renderDiagramSvg({
+      models: [model('User', [field('id', { isId: true })])],
+      relations: [],
+      positions: { User: { x: 0, y: 0 } },
+    })
+    expect(svg).not.toContain('>UK<')
+    expect(svg).not.toContain('>unique</text>')
+  })
+})
+
+describe('what a field carries besides its type', () => {
+  it('writes the attributes the drawing does not show, then the doc comment', () => {
+    const svg = renderDiagramSvg({
+      models: [
+        model('Profile', [
+          field('nickname', {
+            attributes: ['@default("anonymous")', '@db.VarChar(64)'],
+            documentation: 'What they go by',
+          }),
+          field('createdAt', { attributes: ['@default(now())', '@map("created_at")'] }),
+        ]),
+      ],
+      relations: [],
+      positions: { Profile: { x: 0, y: 0 } },
+    })
+    expect(svg).toContain(
+      '>@default(&quot;anonymous&quot;) @db.VarChar(64) · What they go by</text>',
+    )
+    expect(svg).toContain('>@default(now())</text>')
+    // @map is the column name, which the header already shows.
+    expect(svg).not.toContain('created_at')
+  })
+
+  it('gives the row a second line only when there is something to put on it', () => {
+    const bare = renderDiagramSvg({
+      models: [model('A', [field('x')])],
+      relations: [],
+      positions: { A: { x: 0, y: 0 } },
+    })
+    const detailed = renderDiagramSvg({
+      models: [model('A', [field('x', { attributes: ['@updatedAt'] })])],
+      relations: [],
+      positions: { A: { x: 0, y: 0 } },
+    })
+    expect(viewBox(detailed).height - viewBox(bare).height).toBe(14)
+  })
+})
+
+describe('the doc comment of a block', () => {
+  it('goes on one line under the header, and pushes the fields down', () => {
+    const documented = renderDiagramSvg({
+      models: [
+        {
+          ...model('User', [field('id', { isId: true })]),
+          documentation: 'Someone who signed up\nand a second line',
+        },
+      ],
+      relations: [],
+      positions: { User: { x: 0, y: 0 } },
+    })
+    const plain = renderDiagramSvg({
+      models: [model('User', [field('id', { isId: true })])],
+      relations: [],
+      positions: { User: { x: 0, y: 0 } },
+    })
+    expect(documented).toContain('>Someone who signed up</text>')
+    expect(documented).not.toContain('and a second line')
+    expect(viewBox(documented).height - viewBox(plain).height).toBe(16)
+  })
+})
+
+describe('enums', () => {
+  const role = {
+    name: 'Role',
+    dbName: null,
+    documentation: 'Who someone is',
+    values: [
+      { name: 'ADMIN', dbName: null },
+      { name: 'VIEWER', dbName: 'viewer' },
+    ],
+  }
+  const withRole = model('User', [
+    field('id', { isId: true }),
+    field('role', { kind: 'enum', type: 'Role' }),
+  ])
+  const drawn = renderDiagramSvg({
+    models: [withRole],
+    relations: [],
+    enums: [role],
+    positions: { User: { x: 0, y: 0 }, Role: { x: 500, y: 0 } },
+  })
+
+  it('draws a card per enum, with its members and the values the database stores', () => {
+    expect(drawn.match(/class="enum-node"/gu)).toHaveLength(1)
+    expect(drawn).toContain('>enum</text>')
+    expect(drawn).toContain('>ADMIN</text>')
+    expect(drawn).toContain('>VIEWER</text>')
+    expect(drawn).toContain('>viewer</text>')
+    expect(drawn).toContain('>Who someone is</text>')
+  })
+
+  it('links the field that holds one to its card, and says so in the key', () => {
+    expect(drawn.match(/class="enum-edge"/gu)).toHaveLength(1)
+    expect(drawn).toContain('stroke-dasharray="2 4"')
+    expect(drawn).toContain('>enum values</text>')
+  })
+
+  it('leaves a field whose enum is not on the canvas alone', () => {
+    const svg = renderDiagramSvg({
+      models: [withRole],
+      relations: [],
+      positions: { User: { x: 0, y: 0 } },
+    })
+    expect(svg).not.toContain('class="enum-edge"')
+    expect(svg).not.toContain('>enum values</text>')
   })
 })

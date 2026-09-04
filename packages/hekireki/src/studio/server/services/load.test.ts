@@ -123,7 +123,7 @@ describe('parseSchemaFiles', () => {
           name: 'PostToUser',
           origin: 'inferred',
           from: { model: 'User', field: 'id', cardinality: 'one' },
-          to: { model: 'Post', field: 'authorId', cardinality: 'many' },
+          to: { model: 'Post', field: 'authorId', cardinality: 'zero-many' },
           onDelete: null,
           onUpdate: null,
         },

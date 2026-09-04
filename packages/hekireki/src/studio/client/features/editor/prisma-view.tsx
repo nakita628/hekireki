@@ -28,6 +28,7 @@ type Snapshot = {
     readonly models: readonly {
       readonly name: string
       readonly dbName: string | null
+      readonly documentation: string | null
       readonly primaryKey: readonly string[] | null
       readonly fields: readonly {
         readonly name: string
@@ -36,12 +37,24 @@ type Snapshot = {
         readonly isList: boolean
         readonly isRequired: boolean
         readonly isId: boolean
+        readonly isUnique: boolean
         readonly isForeignKey: boolean
         readonly documentation: string | null
+        readonly attributes: readonly string[]
+      }[]
+      readonly indexes: readonly {
+        readonly type: 'id' | 'normal' | 'unique' | 'fulltext'
+        readonly fields: readonly string[]
       }[]
       readonly location: Location
     }[]
-    readonly enums: readonly { readonly name: string; readonly location: Location }[]
+    readonly enums: readonly {
+      readonly name: string
+      readonly dbName: string | null
+      readonly documentation: string | null
+      readonly values: readonly { readonly name: string; readonly dbName: string | null }[]
+      readonly location: Location
+    }[]
     readonly relations: readonly {
       readonly id: string
       readonly origin: 'inferred' | 'annotated' | 'implicit-many-to-many'

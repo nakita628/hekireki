@@ -155,7 +155,7 @@ Ref follows_followerId_fk: follows.followerId > users.id [delete: cascade]
 
 Ref follows_followingId_fk: follows.followingId > users.id [delete: cascade]
 
-Ref Category_parentId_fk: Category.parentId - Category.id
+Ref Category_parentId_fk: Category.parentId > Category.id
 
 Ref orders_userId_fk: orders.userId > users.id
 

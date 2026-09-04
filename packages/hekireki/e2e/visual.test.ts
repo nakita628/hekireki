@@ -7,15 +7,15 @@ const SCREENSHOT = { animations: 'disabled', maxDiffPixelRatio: 0.02 } as const
 
 test('schema page', async ({ page }) => {
   await page.goto('/')
-  await expect(page.locator('.react-flow__node')).toHaveCount(2)
-  await expect(page.locator('.react-flow__edge')).toHaveCount(1)
+  await expect(page.locator('.react-flow__node')).toHaveCount(3)
+  await expect(page.locator('.react-flow__edge')).toHaveCount(2)
   await expect(page).toHaveScreenshot('schema.png', SCREENSHOT)
 })
 
 test('prisma editor page', async ({ page }) => {
   await page.goto('/prisma')
   await editorOf(page).ready()
-  await expect(page.locator('.react-flow__node')).toHaveCount(2)
+  await expect(page.locator('.react-flow__node')).toHaveCount(3)
   await expect(page).toHaveScreenshot('editor.png', {
     ...SCREENSHOT,
     // The cursor and the current-line highlight depend on focus.

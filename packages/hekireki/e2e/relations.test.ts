@@ -25,14 +25,15 @@ test('the diagram draws every cardinality in IE notation', async ({ page, reques
   await write('base.prisma', readFileSync(path.join(FIXTURES_DIR, 'relations.prisma'), 'utf8'))
 
   await page.goto('/')
-  await expect(page.getByText('8 models · 7 relations · 1 enums')).toBeVisible()
-  await expect(page.locator('.react-flow__node')).toHaveCount(8)
-  await expect(page.locator('.react-flow__edge')).toHaveCount(7)
+  await expect(page.getByText('8 models · 8 relations · 1 enums')).toBeVisible()
+  // Eight models, the Role enum, and one edge per relation plus one per enum-typed field.
+  await expect(page.locator('.react-flow__node')).toHaveCount(9)
+  await expect(page.locator('.react-flow__edge')).toHaveCount(10)
 
-  // Both ends of every edge, as the browser resolved them: the parent end is always "exactly one"
-  // except for the implicit many-to-many, and the child end follows the foreign key.
+  // Both ends of every edge, as the browser resolved them: the parent end says whether the
+  // foreign key may be null, and the child end whether the back relation is a list.
   const ends = await page
-    .locator('.react-flow__edge')
+    .locator('.react-flow__edge.relation-edge')
     .evaluateAll((edges) =>
       edges
         .map((edge) => [
@@ -43,17 +44,24 @@ test('the diagram draws every cardinality in IE notation', async ({ page, reques
         .toSorted((a, b) => ((a[0] ?? '') < (b[0] ?? '') ? -1 : 1)),
     )
   expect(ends).toStrictEqual([
-    ['Category.id->Category.parentId', "url('#er-one')", "url('#er-zero-many')"],
-    ['Post.id->Comment.postId', "url('#er-one')", "url('#er-many')"],
-    ['Post.tags<->Tag.posts', "url('#er-many')", "url('#er-many')"],
-    ['User.id->Comment.authorId', "url('#er-one')", "url('#er-zero-many')"],
-    ['User.id->Post.authorId', "url('#er-one')", "url('#er-many')"],
-    ['User.id->Profile.userId', "url('#er-one')", "url('#er-one')"],
-    ['User.id->Settings.userId', "url('#er-one')", "url('#er-zero-one')"],
+    ['Category.id->Category.parentId', "url('#er-zero-one')", "url('#er-zero-many')"],
+    ['Post.id->Comment.postId', "url('#er-one')", "url('#er-zero-many')"],
+    ['Post.tags->Tag.posts', "url('#er-zero-many')", "url('#er-zero-many')"],
+    ['User.id->Comment.authorId', "url('#er-zero-one')", "url('#er-zero-many')"],
+    ['User.id->Membership.userId', "url('#er-one')", "url('#er-many')"],
+    ['User.id->Post.authorId', "url('#er-one')", "url('#er-zero-many')"],
+    ['User.id->Profile.userId', "url('#er-one')", "url('#er-zero-one')"],
+    ['User.id->Settings.userId', "url('#er-zero-one')", "url('#er-zero-one')"],
   ])
 
   // The dashed edges are the ones Prisma did not derive from a foreign key.
   await expect(page.locator('.relation-edge--implicit-many-to-many')).toHaveCount(1)
+  await expect(page.locator('.relation-edge--annotated')).toHaveCount(1)
+
+  // The enum is a card of its own, linked to the two fields that hold one of its values.
+  await expect(page.locator('.enum-node')).toHaveCount(1)
+  await expect(page.locator('.enum-node').getByText('VIEWER')).toBeVisible()
+  await expect(page.locator('.react-flow__edge.enum-edge')).toHaveCount(2)
 
   await expect(page).toHaveScreenshot('relations.png', {
     animations: 'disabled',

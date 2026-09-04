@@ -24,6 +24,7 @@
   --c-node-text: #f4f5fa;
   --c-edge: #9095ab;
   --c-dots: #d4d4dc;
+  --c-enum: #7c3aed;
 }
 
 .dark {
@@ -45,6 +46,7 @@
   --c-node-text: #f4f5fa;
   --c-edge: #6b7189;
   --c-dots: #2a2f3d;
+  --c-enum: #c4b5fd;
 }
 
 @theme inline {
@@ -169,6 +171,15 @@
 .react-flow__edge.relation-edge .react-flow__edge-path {
   stroke: var(--c-edge);
   stroke-width: 1.4;
+}
+
+/* An enum-typed field is linked to the card that lists its values, in the colour the type is
+   written in. */
+.react-flow__edge.enum-edge .react-flow__edge-path {
+  stroke: var(--c-enum);
+  stroke-width: 1.2;
+  stroke-dasharray: 2 4;
+  opacity: 0.75;
 }
 
 /* The crow's foot markers sit in a zero-sized svg; they take the colour of the edge that uses

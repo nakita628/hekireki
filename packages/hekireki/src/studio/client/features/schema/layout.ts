@@ -1,37 +1,33 @@
 import { autoLayout } from '../../../../diagram/layout.js'
-import type { LayoutPositions } from '../../../../diagram/layout.js'
+import type { DiagramSchema, LayoutPositions } from '../../../../diagram/layout.js'
 
 export {
   autoLayout,
+  diagramConstraints,
   diagramFields,
+  fieldDetail,
+  firstLine,
   fieldRowHeight,
-  hasDescription,
+  ENUM_WIDTH,
+  enumHeight,
+  NODE_CONSTRAINT_HEIGHT,
   NODE_DESCRIPTION_HEIGHT,
+  NODE_NOTE_HEIGHT,
   NODE_HEADER_HEIGHT,
   NODE_PADDING,
   NODE_ROW_HEIGHT,
   NODE_WIDTH,
   nodeHeight,
+  noteHeight,
 } from '../../../../diagram/layout.js'
 
-// Stored positions win; models the store does not know are placed by dagre and models that
+// Stored positions win; blocks the store does not know are placed by dagre and blocks that
 // left the schema are forgotten.
-export function positionsFor(
-  schema: {
-    readonly models: readonly {
-      readonly name: string
-      readonly fields: readonly { readonly kind: string; readonly documentation: string | null }[]
-    }[]
-    readonly relations: readonly {
-      readonly from: { readonly model: string }
-      readonly to: { readonly model: string }
-    }[]
-  },
-  stored: LayoutPositions,
-): LayoutPositions {
-  const complete = schema.models.every((m) => stored[m.name] !== undefined)
-  const computed = complete ? {} : autoLayout(schema.models, schema.relations)
+export function positionsFor(schema: DiagramSchema, stored: LayoutPositions): LayoutPositions {
+  const names = [...schema.models.map((m) => m.name), ...(schema.enums ?? []).map((e) => e.name)]
+  const complete = names.every((name) => stored[name] !== undefined)
+  const computed = complete ? {} : autoLayout(schema)
   return Object.fromEntries(
-    schema.models.map((m) => [m.name, stored[m.name] ?? computed[m.name] ?? { x: 0, y: 0 }]),
+    names.map((name) => [name, stored[name] ?? computed[name] ?? { x: 0, y: 0 }]),
   )
 }
