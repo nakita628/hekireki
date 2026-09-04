@@ -1,7 +1,7 @@
 {
   "name": "hekireki",
-  "version": "0.10.2",
-  "description": "Generate validation schemas, ORM models, and ER diagrams from Prisma schemas.",
+  "version": "0.20.0",
+  "description": "Generators and a Studio for your Prisma schema",
   "keywords": [
     "activerecord",
     "ajv",
@@ -73,11 +73,11 @@
     "test": "vp test",
     "test:e2e": "pnpm build && playwright test",
     "studio:dev": "vp dev -c vite.studio.config.ts",
-    "generate": "prisma generate",
     "deps": "rm -rf node_modules && pnpm install",
     "studio:api": "hono-takibi"
   },
   "dependencies": {
+    "@dagrejs/dagre": "^3.1.1",
     "@effect/platform-node": "^4.0.0-rc.112",
     "@hono/node-server": "^2.0.11",
     "@hono/zod-openapi": "^1.6.1",
@@ -94,16 +94,15 @@
     "oxfmt": "^0.64.0",
     "ulidx": "^2.4.1",
     "uuid": "^14.0.1",
+    "valibot": "1.4.2",
     "vscode-languageserver-textdocument": "^1.0.12",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@codemirror/lang-javascript": "^6.2.5",
-    "@dagrejs/dagre": "^3.1.1",
     "@lezer/highlight": "^1.2.3",
     "@monaco-editor/react": "^4.7.0",
     "@playwright/test": "^1.62.1",
-    "@prisma/client": "^7.9.0",
     "@sinclair/typebox": "^0.34.52",
     "@tailwindcss/vite": "^4.3.3",
     "@tanstack/react-query": "^5.102.8",
@@ -121,9 +120,7 @@
     "@typespec/openapi3": "^1.15.0",
     "@vitejs/plugin-react": "^6.1.1",
     "@xyflow/react": "^12.11.5",
-    "ajv": "^8.20.0",
     "arktype": "^2.2.3",
-    "better-auth": "^1.7.1",
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
     "hono-takibi": "^0.9.99998",
@@ -136,9 +133,7 @@
     "react-dom": "^19.2.8",
     "react-hot-toast": "2.6.0",
     "tailwindcss": "^4.3.3",
-    "tsx": "^4.23.1",
     "typescript": "^7.0.2",
-    "valibot": "1.4.2",
     "zustand": "^5.0.8"
   }
 }
