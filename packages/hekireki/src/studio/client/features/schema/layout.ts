@@ -1,6 +1,5 @@
 import { autoLayout } from '../../../../diagram/layout.js'
 import type { LayoutPositions } from '../../../../diagram/layout.js'
-import type { Schema } from '../../../server/routes/index.js'
 
 export {
   autoLayout,
@@ -17,7 +16,19 @@ export {
 
 // Stored positions win; models the store does not know are placed by dagre and models that
 // left the schema are forgotten.
-export function positionsFor(schema: Schema, stored: LayoutPositions): LayoutPositions {
+export function positionsFor(
+  schema: {
+    readonly models: readonly {
+      readonly name: string
+      readonly fields: readonly { readonly kind: string; readonly documentation: string | null }[]
+    }[]
+    readonly relations: readonly {
+      readonly from: { readonly model: string }
+      readonly to: { readonly model: string }
+    }[]
+  },
+  stored: LayoutPositions,
+): LayoutPositions {
   const complete = schema.models.every((m) => stored[m.name] !== undefined)
   const computed = complete ? {} : autoLayout(schema.models, schema.relations)
   return Object.fromEntries(

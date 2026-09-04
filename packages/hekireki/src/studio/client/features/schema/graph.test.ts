@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import type { Field, Model, Relation, Schema } from '../../../server/routes/index.js'
 import {
   buildEdges,
   buildNodes,
@@ -11,80 +10,91 @@ import {
   highlightEdges,
 } from './graph.js'
 
+type Field = {
+  readonly name: string
+  readonly kind: 'scalar' | 'object' | 'enum' | 'unsupported'
+  readonly type: string
+  readonly isList: boolean
+  readonly isRequired: boolean
+  readonly isId: boolean
+  readonly isForeignKey: boolean
+  readonly documentation: string | null
+}
+
+type Model = {
+  readonly name: string
+  readonly dbName: string | null
+  readonly primaryKey: readonly string[] | null
+  readonly fields: readonly Field[]
+}
+
+type Cardinality = 'zero-one' | 'one' | 'zero-many' | 'many'
+
+type Relation = {
+  readonly id: string
+  readonly origin: 'inferred' | 'annotated' | 'implicit-many-to-many'
+  readonly onDelete: string | null
+  readonly from: {
+    readonly model: string
+    readonly field: string
+    readonly cardinality: Cardinality
+  }
+  readonly to: {
+    readonly model: string
+    readonly field: string
+    readonly cardinality: Cardinality
+  }
+}
+
+type Schema = { readonly models: readonly Model[]; readonly relations: readonly Relation[] }
+
 function field(name: string, kind: Field['kind'] = 'scalar'): Field {
   return {
     name,
-    dbName: null,
     kind,
     type: 'String',
     isList: false,
     isRequired: true,
     isId: name === 'id',
-    isUnique: false,
-    isUpdatedAt: false,
     isForeignKey: false,
-    default: null,
-    nativeType: null,
     documentation: null,
-    annotations: [],
-    relation: null,
-    attributes: [],
   }
 }
 
 function model(name: string, fields: Field[]): Model {
-  return {
-    name,
-    dbName: null,
-    documentation: null,
-    annotations: [],
-    fields,
-    primaryKey: null,
-    indexes: [],
-    attributes: [],
-    location: null,
-  }
+  return { name, dbName: null, primaryKey: null, fields }
 }
 
 const inferred: Relation = {
   id: 'User.id->Post.authorId',
-  name: 'PostToUser',
   origin: 'inferred',
   from: { model: 'User', field: 'id', cardinality: 'one' },
   to: { model: 'Post', field: 'authorId', cardinality: 'many' },
   onDelete: 'SetNull',
-  onUpdate: null,
 }
 
 const manyToMany: Relation = {
   id: 'Post.tags<->Tag.posts',
-  name: 'PostToTag',
   origin: 'implicit-many-to-many',
   from: { model: 'Post', field: 'tags', cardinality: 'many' },
   to: { model: 'Tag', field: 'posts', cardinality: 'many' },
   onDelete: null,
-  onUpdate: null,
 }
 
 const annotated: Relation = {
   id: 'User.id->Post.ghost',
-  name: null,
   origin: 'annotated',
-  from: { model: 'User', field: 'id', cardinality: 'one' },
-  to: { model: 'Post', field: 'ghost', cardinality: 'many' },
+  from: { model: 'User', field: 'id', cardinality: 'zero-one' },
+  to: { model: 'Post', field: 'ghost', cardinality: 'zero-many' },
   onDelete: null,
-  onUpdate: null,
 }
 
 const schema: Schema = {
-  files: [],
-  provider: null,
   models: [
     model('User', [field('id'), field('posts', 'object')]),
     model('Post', [field('id'), field('authorId'), field('tags', 'object')]),
     model('Tag', [field('id')]),
   ],
-  enums: [],
   relations: [inferred, manyToMany, annotated],
 }
 
@@ -140,6 +150,14 @@ describe('buildEdges', () => {
         '@relation',
         'relation-edge relation-edge--annotated',
       ],
+    ])
+  })
+
+  it('marks both ends with the IE symbol of their cardinality', () => {
+    expect(buildEdges(schema).map((e) => [e.markerStart, e.markerEnd])).toStrictEqual([
+      ['er-one', 'er-many'],
+      ['er-many', 'er-many'],
+      ['er-zero-one', 'er-zero-many'],
     ])
   })
 })

@@ -1,53 +1,32 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import type { Field, Model, Relation, Schema } from '../../../server/routes/index.js'
 import { autoLayout, diagramFields, NODE_WIDTH, nodeHeight, positionsFor } from './layout.js'
 
+type Field = {
+  readonly name: string
+  readonly kind: 'scalar' | 'object' | 'enum'
+  readonly documentation: string | null
+}
+
+type Model = { readonly name: string; readonly fields: readonly Field[] }
+
+type Relation = {
+  readonly from: { readonly model: string }
+  readonly to: { readonly model: string }
+}
+
+type Schema = { readonly models: readonly Model[]; readonly relations: readonly Relation[] }
+
 function field(name: string, kind: Field['kind'] = 'scalar'): Field {
-  return {
-    name,
-    dbName: null,
-    kind,
-    type: kind === 'object' ? 'Other' : 'String',
-    isList: false,
-    isRequired: true,
-    isId: false,
-    isUnique: false,
-    isUpdatedAt: false,
-    isForeignKey: false,
-    default: null,
-    nativeType: null,
-    documentation: null,
-    annotations: [],
-    relation: null,
-    attributes: [],
-  }
+  return { name, kind, documentation: null }
 }
 
 function model(name: string, fields: Field[]): Model {
-  return {
-    name,
-    dbName: null,
-    documentation: null,
-    annotations: [],
-    fields,
-    primaryKey: null,
-    indexes: [],
-    attributes: [],
-    location: null,
-  }
+  return { name, fields }
 }
 
 function relation(from: string, to: string): Relation {
-  return {
-    id: `${from}.id->${to}.fk`,
-    name: null,
-    origin: 'inferred',
-    from: { model: from, field: 'id', cardinality: 'one' },
-    to: { model: to, field: 'fk', cardinality: 'many' },
-    onDelete: null,
-    onUpdate: null,
-  }
+  return { from: { model: from }, to: { model: to } }
 }
 
 describe('diagramFields', () => {
@@ -103,10 +82,7 @@ describe('autoLayout', () => {
 
 describe('positionsFor', () => {
   const schema: Schema = {
-    files: [],
-    provider: null,
     models: [model('User', [field('id')]), model('Post', [field('id'), field('authorId')])],
-    enums: [],
     relations: [relation('User', 'Post')],
   }
 

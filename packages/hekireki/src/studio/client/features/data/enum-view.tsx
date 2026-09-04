@@ -1,7 +1,24 @@
 import { Link } from '@tanstack/react-router'
 
-import type { Enum, Schema } from '../../../server/routes/index.js'
 import { FileIcon } from '../../components/icons.js'
+
+type Schema = {
+  readonly models: readonly {
+    readonly name: string
+    readonly fields: readonly {
+      readonly name: string
+      readonly kind: string
+      readonly type: string
+    }[]
+  }[]
+}
+
+type Enum = {
+  readonly name: string
+  readonly dbName: string | null
+  readonly documentation: string | null
+  readonly values: readonly { readonly name: string; readonly dbName: string | null }[]
+}
 
 export function EnumView({ schema, value }: { readonly schema: Schema; readonly value: Enum }) {
   const usedBy = schema.models.flatMap((model) =>

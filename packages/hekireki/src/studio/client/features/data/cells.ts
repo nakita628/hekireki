@@ -1,4 +1,12 @@
-import type { Field, Row } from '../../../server/routes/index.js'
+type Row = Record<string, string | number | boolean | null>
+
+type Field = {
+  readonly name: string
+  readonly kind: 'scalar' | 'object' | 'enum' | 'unsupported'
+  readonly type: string
+  readonly isList: boolean
+  readonly isRequired: boolean
+}
 
 export function displayCell(value: Row[string]) {
   if (value === null) return 'NULL'

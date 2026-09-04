@@ -1,5 +1,3 @@
-import type { DocsField, DocsTypeRef } from '../../../server/routes/index.js'
-
 /** The element id of an input type, output type or enum section. */
 export function typeSectionId(kind: 'inputType' | 'outputType' | 'enum', name: string) {
   return `type-${kind}-${name}`
@@ -9,7 +7,15 @@ export function typeSectionId(kind: 'inputType' | 'outputType' | 'enum', name: s
  * The page anchor a type reference links to, decided by where Prisma declares the type: scalars
  * and field references have no section and are shown as text.
  */
-export function typeRefAnchor(ref: Pick<DocsTypeRef, 'type' | 'location'>) {
+export function typeRefAnchor(ref: {
+  readonly type: string
+  readonly location:
+    | 'scalar'
+    | 'inputObjectTypes'
+    | 'outputObjectTypes'
+    | 'enumTypes'
+    | 'fieldRefTypes'
+}) {
   switch (ref.location) {
     case 'inputObjectTypes':
       return `#${typeSectionId('inputType', ref.type)}`
@@ -26,7 +32,10 @@ export function typeRefAnchor(ref: Pick<DocsTypeRef, 'type' | 'location'>) {
 }
 
 /** The page anchor a model field's type links to: relations open the model's output type, enums their section. */
-export function fieldTypeAnchor(field: Pick<DocsField, 'bareTypeName' | 'kind'>) {
+export function fieldTypeAnchor(field: {
+  readonly bareTypeName: string
+  readonly kind: 'scalar' | 'object' | 'enum' | 'unsupported'
+}) {
   switch (field.kind) {
     case 'object':
       return `#${typeSectionId('outputType', field.bareTypeName)}`

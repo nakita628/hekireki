@@ -2,12 +2,22 @@ import { Handle, Position } from '@xyflow/react'
 import type { NodeProps } from '@xyflow/react'
 import { memo } from 'react'
 
-import type { Field } from '../../server/routes/index.js'
 import { MODEL_HANDLE, sourceHandle, targetHandle } from '../features/schema/graph.js'
 import type { ModelNodeType } from '../features/schema/graph.js'
 import { fieldRowHeight } from '../features/schema/layout.js'
 import { KeyIcon, LinkIcon } from './icons.js'
 import { fieldTypeLabel, firstLine } from './labels.js'
+
+type Field = {
+  readonly name: string
+  readonly kind: 'scalar' | 'object' | 'enum' | 'unsupported'
+  readonly type: string
+  readonly isList: boolean
+  readonly isRequired: boolean
+  readonly isId: boolean
+  readonly isForeignKey: boolean
+  readonly documentation: string | null
+}
 
 function FieldIcon({ field }: { readonly field: Field }) {
   if (field.isId) {

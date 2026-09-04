@@ -2,11 +2,10 @@ import { useQueryClient } from '@tanstack/react-query'
 import { parseResponse } from 'hono/client'
 import { useMemo, useRef, useState } from 'react'
 import { toast } from 'react-hot-toast'
-import type * as z from 'zod'
 
-import type { SnapshotSchema } from '../../../server/routes/index.js'
 import { CopyIcon, WandIcon } from '../../components/icons.js'
 import { SchemaErrorStatus } from '../../components/schema-error-status.js'
+import type { PlainFileDiagnostic } from '../../components/schema-problems.js'
 import { useCopy } from '../../hooks/copy.js'
 import { getSchemaQueryKey, usePutSchemaFiles } from '../../hooks/index.js'
 import { useSteady } from '../../hooks/steady.js'
@@ -16,6 +15,53 @@ import { blockAtLine } from './blocks.js'
 import { CodeEditor } from './code-editor.js'
 import type { EditorServices, MonacoEditor, PlainSymbol } from './code-editor.js'
 import { saveStatus } from './save-status.js'
+
+type Cardinality = 'zero-one' | 'one' | 'zero-many' | 'many'
+
+type Location = { readonly file: string; readonly line: number } | null
+
+// The wire shape: the brand the server puts on a checked Snapshot does not survive JSON.
+type Snapshot = {
+  readonly schema: {
+    readonly files: readonly { readonly path: string }[]
+    readonly provider: string | null
+    readonly models: readonly {
+      readonly name: string
+      readonly dbName: string | null
+      readonly primaryKey: readonly string[] | null
+      readonly fields: readonly {
+        readonly name: string
+        readonly kind: 'scalar' | 'object' | 'enum' | 'unsupported'
+        readonly type: string
+        readonly isList: boolean
+        readonly isRequired: boolean
+        readonly isId: boolean
+        readonly isForeignKey: boolean
+        readonly documentation: string | null
+      }[]
+      readonly location: Location
+    }[]
+    readonly enums: readonly { readonly name: string; readonly location: Location }[]
+    readonly relations: readonly {
+      readonly id: string
+      readonly origin: 'inferred' | 'annotated' | 'implicit-many-to-many'
+      readonly onDelete: string | null
+      readonly from: {
+        readonly model: string
+        readonly field: string
+        readonly cardinality: Cardinality
+      }
+      readonly to: {
+        readonly model: string
+        readonly field: string
+        readonly cardinality: Cardinality
+      }
+    }[]
+  } | null
+  readonly error: string | null
+  readonly diagnostics: readonly PlainFileDiagnostic[]
+  readonly files: readonly { readonly path: string; readonly content: string }[]
+}
 
 const SAVE_DEBOUNCE_MS = 400
 
@@ -39,8 +85,7 @@ export function PrismaView({
   file: requestedFile,
   line: requestedLine,
 }: {
-  // The wire shape: the brand the server puts on a checked Snapshot does not survive JSON.
-  readonly snapshot: z.input<typeof SnapshotSchema>
+  readonly snapshot: Snapshot
   /** A model or enum to open the editor at */
   readonly focus: string | null
   /** A file to open, e.g. the one an error banner points at */

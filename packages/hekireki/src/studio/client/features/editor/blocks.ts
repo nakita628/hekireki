@@ -1,9 +1,14 @@
-import type * as z from 'zod'
-
-import type { LspDocumentSymbolSchema } from '../../../server/routes/index.js'
 import { symbolKindName } from './lsp.js'
 
-export type PlainSymbol = z.input<typeof LspDocumentSymbolSchema>
+/** A block of a schema file, as the language server's document outline lists it. */
+export type PlainSymbol = {
+  readonly name: string
+  readonly kind: number
+  readonly range: {
+    readonly start: { readonly line: number; readonly character: number }
+    readonly end: { readonly line: number; readonly character: number }
+  }
+}
 
 // The blocks that hold data, as the language server's outline kinds them: models and views are
 // classes, enums enums, composite types interfaces; datasources and generators are neither.

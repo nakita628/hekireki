@@ -1,28 +1,17 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import type { Field } from '../../../server/routes/index.js'
 import { displayCell, editableText, keyOf, parseCellInput, toCsv } from './cells.js'
 
+type Field = {
+  readonly name: string
+  readonly kind: 'scalar' | 'object' | 'enum' | 'unsupported'
+  readonly type: string
+  readonly isList: boolean
+  readonly isRequired: boolean
+}
+
 function field(type: string, overrides: Partial<Field> = {}): Field {
-  return {
-    name: 'f',
-    dbName: null,
-    kind: 'scalar',
-    type,
-    isList: false,
-    isRequired: true,
-    isId: false,
-    isUnique: false,
-    isUpdatedAt: false,
-    isForeignKey: false,
-    default: null,
-    nativeType: null,
-    documentation: null,
-    annotations: [],
-    relation: null,
-    attributes: [],
-    ...overrides,
-  }
+  return { name: 'f', kind: 'scalar', type, isList: false, isRequired: true, ...overrides }
 }
 
 describe('displayCell and editableText', () => {

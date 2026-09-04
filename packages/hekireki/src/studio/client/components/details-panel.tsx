@@ -1,11 +1,55 @@
 import { Link } from '@tanstack/react-router'
 
-import type { Model, Schema } from '../../server/routes/index.js'
 import { FieldGlyph } from './fields-table.js'
 import { ArrowRightIcon } from './icons.js'
 import { fieldTypeLabel } from './labels.js'
 
+type Cardinality = 'zero-one' | 'one' | 'zero-many' | 'many'
+
+type Model = {
+  readonly name: string
+  readonly primaryKey: readonly string[] | null
+  readonly fields: readonly {
+    readonly name: string
+    readonly type: string
+    readonly isList: boolean
+    readonly isRequired: boolean
+    readonly isId: boolean
+    readonly isForeignKey: boolean
+    readonly documentation: string | null
+    readonly attributes: readonly string[]
+  }[]
+  readonly indexes: readonly { readonly attribute: string }[]
+  readonly attributes: readonly string[]
+  readonly annotations: readonly string[]
+}
+
+type Schema = {
+  readonly relations: readonly {
+    readonly id: string
+    readonly origin: 'inferred' | 'annotated' | 'implicit-many-to-many'
+    readonly onDelete: string | null
+    readonly from: {
+      readonly model: string
+      readonly field: string
+      readonly cardinality: Cardinality
+    }
+    readonly to: {
+      readonly model: string
+      readonly field: string
+      readonly cardinality: Cardinality
+    }
+  }[]
+}
+
 const ATTRIBUTE = 'pl-5 font-mono text-xs break-all text-accent-text'
+
+const CARDINALITY_LABELS = {
+  'zero-one': '0..1',
+  one: '1',
+  'zero-many': '0..N',
+  many: '1..N',
+} as const
 
 export function DetailsPanel({
   schema,
@@ -64,6 +108,12 @@ export function DetailsPanel({
               .{other.field}
               <ArrowRightIcon size={12} className="text-faint" />
               {outgoing ? relation.from.field : relation.to.field}
+              <span className="text-muted">
+                {' · '}
+                {CARDINALITY_LABELS[outgoing ? relation.from.cardinality : relation.to.cardinality]}
+                {' → '}
+                {CARDINALITY_LABELS[other.cardinality]}
+              </span>
               {relation.onDelete ? (
                 <span className="text-muted"> · onDelete: {relation.onDelete}</span>
               ) : null}

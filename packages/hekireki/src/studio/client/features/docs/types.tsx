@@ -1,14 +1,36 @@
 import { Fragment } from 'react'
-import type * as z from 'zod'
 
-import type { DocsSchema } from '../../../server/routes/index.js'
 import { typeRefAnchor, typeSectionId } from './anchors.js'
 import { TypeLink } from './type-link.js'
 
-// The wire shape: the brand the server puts on checked Docs does not survive JSON.
-type Docs = z.input<typeof DocsSchema>
-type DocsType = Docs['inputTypes'][number]
-type DocsEnum = Docs['enumTypes'][number]
+type DocsTypeRef = {
+  readonly type: string
+  readonly isList: boolean
+  readonly location:
+    | 'scalar'
+    | 'inputObjectTypes'
+    | 'outputObjectTypes'
+    | 'enumTypes'
+    | 'fieldRefTypes'
+}
+
+type DocsType = {
+  readonly name: string
+  readonly fields: readonly {
+    readonly name: string
+    readonly types: readonly DocsTypeRef[]
+    readonly nullable: boolean
+  }[]
+}
+
+type DocsEnum = { readonly name: string; readonly values: readonly string[] }
+
+type Docs = {
+  readonly inputTypes: readonly DocsType[]
+  readonly outputTypes: readonly DocsType[]
+  readonly enumTypes: readonly DocsEnum[]
+}
+
 type Kind = 'inputType' | 'outputType'
 
 const CELL = 'border-b border-line px-3.5 py-2.5 align-top text-[13px]'

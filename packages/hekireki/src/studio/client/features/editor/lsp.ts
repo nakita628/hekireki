@@ -1,18 +1,27 @@
 // What the Studio server relays from the Prisma language server, named the way Monaco names it.
 // Nothing is interpreted here: LSP numbers become Monaco enum names, LSP severities Monaco's.
-import type * as z from 'zod'
-
-import type {
-  Completion,
-  LspDiagnosticSchema,
-  LspRangeSchema,
-} from '../../../server/routes/index.js'
-
 // The wire shapes: the brands the server puts on checked lines and columns do not apply to
 // what the editor sends and receives.
-export type PlainRange = z.input<typeof LspRangeSchema>
+export type PlainPosition = { readonly line: number; readonly character: number }
 
-export type PlainDiagnostic = z.input<typeof LspDiagnosticSchema>
+export type PlainRange = { readonly start: PlainPosition; readonly end: PlainPosition }
+
+export type PlainDiagnostic = {
+  readonly range: PlainRange
+  readonly message: string
+  readonly severity: 'error' | 'warning' | 'information' | 'hint'
+}
+
+/** One completion the Prisma language server offers. */
+export type Completion = {
+  readonly label: string
+  readonly kind: number | null
+  readonly detail: string | null
+  readonly documentation: string | null
+  readonly insertText: string
+  readonly insertTextFormat: 'plainText' | 'snippet'
+  readonly sortText: string | null
+}
 
 /** The LSP CompletionItemKind values by number, named as Monaco names them. */
 export const LSP_COMPLETION_KINDS = [

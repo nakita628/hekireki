@@ -20,21 +20,9 @@ import EditorWorker from 'monaco-editor/editor/editor.worker.js?worker'
 
 // oxlint-disable-next-line import/no-unassigned-import -- registers the editor features for their side effects
 import './monaco-features.js'
-import type * as z from 'zod'
-
-import type {
-  CodeAction,
-  Completion,
-  HoverSchema,
-  LspDocumentSymbolSchema,
-  LspFileEdit,
-  LspLocation,
-  LspReference,
-  LspTextEditSchema,
-} from '../../../server/routes/index.js'
 import type { Theme } from '../../lib/index.js'
 import { symbolKindName, toCompletions, toMarkers } from './lsp.js'
-import type { EditorMarker, PlainDiagnostic, PlainRange } from './lsp.js'
+import type { Completion, EditorMarker, PlainDiagnostic, PlainRange } from './lsp.js'
 import {
   PRISMA_LANGUAGE_CONFIGURATION,
   PRISMA_LANGUAGE_ID,
@@ -47,11 +35,36 @@ export type { PlainDiagnostic } from './lsp.js'
 export const monaco = { editor, languages, KeyCode, KeyMod, MarkerSeverity, Position, Range, Uri }
 
 // The wire shapes of what the server returns for a text: brands do not survive JSON.
-type PlainHover = z.input<typeof HoverSchema>
+type PlainHover = { readonly contents: string | null; readonly range: PlainRange | null }
 
-export type PlainSymbol = z.input<typeof LspDocumentSymbolSchema>
+export type PlainSymbol = {
+  readonly name: string
+  readonly kind: number
+  readonly range: PlainRange
+  readonly selectionRange: PlainRange
+}
 
-type PlainTextEdit = z.input<typeof LspTextEditSchema>
+type PlainTextEdit = { readonly range: PlainRange; readonly newText: string }
+
+/** A place in one of the schema files. */
+type LspLocation = {
+  readonly path: string
+  readonly range: PlainRange
+  readonly selection: PlainRange
+}
+
+/** One place a symbol is used. */
+type LspReference = { readonly path: string; readonly range: PlainRange }
+
+/** The edits of one file. */
+type LspFileEdit = { readonly path: string; readonly edits: readonly PlainTextEdit[] }
+
+/** One quick fix the language server offers. */
+type CodeAction = {
+  readonly title: string
+  readonly changes: readonly LspFileEdit[]
+  readonly isPreferred: boolean
+}
 
 /** A request about the text of a file. */
 type TextRequest = {

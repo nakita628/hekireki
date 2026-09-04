@@ -1,6 +1,8 @@
-import type { Field } from '../../server/routes/index.js'
-
-export function fieldTypeLabel(field: Field) {
+export function fieldTypeLabel(field: {
+  readonly type: string
+  readonly isList: boolean
+  readonly isRequired: boolean
+}) {
   return `${field.type}${field.isList ? '[]' : ''}${field.isRequired || field.isList ? '' : '?'}`
 }
 

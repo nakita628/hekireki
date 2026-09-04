@@ -1,10 +1,36 @@
 import { useState } from 'react'
 
-import type { Field, Model, Row, Schema } from '../../server/routes/index.js'
 import { displayCell, editableText, keyOf, parseCellInput } from '../features/data/cells.js'
 import { PAGE_SIZE } from '../features/data/paging.js'
 import { CheckIcon, KeyIcon, LinkIcon, TrashIcon, XIcon } from './icons.js'
 import { fieldTypeLabel } from './labels.js'
+
+type Row = Record<string, string | number | boolean | null>
+
+type Field = {
+  readonly name: string
+  readonly kind: 'scalar' | 'object' | 'enum' | 'unsupported'
+  readonly type: string
+  readonly isList: boolean
+  readonly isRequired: boolean
+  readonly isId: boolean
+  readonly isForeignKey: boolean
+  readonly default: string | null
+  readonly documentation: string | null
+}
+
+type Model = {
+  readonly name: string
+  readonly primaryKey: readonly string[] | null
+  readonly fields: readonly Field[]
+}
+
+type Schema = {
+  readonly enums: readonly {
+    readonly name: string
+    readonly values: readonly { readonly name: string }[]
+  }[]
+}
 
 function enumValues(schema: Schema, field: Field) {
   return schema.enums.find((e) => e.name === field.type)?.values.map((value) => value.name) ?? []

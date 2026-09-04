@@ -3,7 +3,6 @@ import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { toast } from 'react-hot-toast'
 
-import type { Model, Row, Schema } from '../../../server/routes/index.js'
 import { DataGrid } from '../../components/data-grid.js'
 import { DetailsPanel } from '../../components/details-panel.js'
 import { FieldsTable } from '../../components/fields-table.js'
@@ -25,6 +24,59 @@ import {
 } from '../../hooks/index.js'
 import { toCsv } from './cells.js'
 import { PAGE_SIZE } from './paging.js'
+
+type Cardinality = 'zero-one' | 'one' | 'zero-many' | 'many'
+
+type Row = Record<string, string | number | boolean | null>
+
+type Field = {
+  readonly name: string
+  readonly dbName: string | null
+  readonly kind: 'scalar' | 'object' | 'enum' | 'unsupported'
+  readonly type: string
+  readonly isList: boolean
+  readonly isRequired: boolean
+  readonly isId: boolean
+  readonly isForeignKey: boolean
+  readonly default: string | null
+  readonly documentation: string | null
+  readonly annotations: readonly string[]
+  readonly attributes: readonly string[]
+}
+
+type Model = {
+  readonly name: string
+  readonly dbName: string | null
+  readonly documentation: string | null
+  readonly annotations: readonly string[]
+  readonly fields: readonly Field[]
+  readonly primaryKey: readonly string[] | null
+  readonly indexes: readonly { readonly attribute: string }[]
+  readonly attributes: readonly string[]
+}
+
+type Schema = {
+  readonly models: readonly { readonly name: string }[]
+  readonly enums: readonly {
+    readonly name: string
+    readonly values: readonly { readonly name: string }[]
+  }[]
+  readonly relations: readonly {
+    readonly id: string
+    readonly origin: 'inferred' | 'annotated' | 'implicit-many-to-many'
+    readonly onDelete: string | null
+    readonly from: {
+      readonly model: string
+      readonly field: string
+      readonly cardinality: Cardinality
+    }
+    readonly to: {
+      readonly model: string
+      readonly field: string
+      readonly cardinality: Cardinality
+    }
+  }[]
+}
 
 function download(fileName: string, content: string, type: string) {
   const url = URL.createObjectURL(new Blob([content], { type }))

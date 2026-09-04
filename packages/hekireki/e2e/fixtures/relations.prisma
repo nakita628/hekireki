@@ -1,0 +1,88 @@
+// Every relation shape the ER diagram draws, so one screenshot covers all four IE symbols:
+// exactly one (Profile), zero or one (Settings), one or many (Post), zero or many (Comment),
+// a self relation (Category) and an implicit many-to-many (Post ↔ Tag).
+datasource db {
+  provider = "sqlite"
+}
+
+/// A registered user
+model User {
+  id       Int       @id @default(autoincrement())
+  /// Login address
+  email    String    @unique
+  name     String?
+  role     Role      @default(VIEWER)
+  profile  Profile?
+  settings Settings?
+  posts    Post[]
+  comments Comment[]
+}
+
+enum Role {
+  ADMIN
+  VIEWER
+}
+
+/// Exactly one profile per user
+model Profile {
+  id     Int     @id @default(autoincrement())
+  userId Int     @unique
+  bio    String?
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// Settings a user may have, and that may belong to nobody
+model Settings {
+  id     Int    @id @default(autoincrement())
+  userId Int?   @unique
+  theme  String
+  user   User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
+
+/// A blog post
+model Post {
+  id        Int       @id @default(autoincrement())
+  title     String
+  published Boolean   @default(false)
+  authorId  Int
+  author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  comments  Comment[]
+  tags      Tag[]
+
+  @@index([published])
+  @@map("posts")
+}
+
+/// A comment, by a signed-in user or by nobody
+model Comment {
+  id       Int    @id @default(autoincrement())
+  body     String
+  postId   Int
+  authorId Int?
+  post     Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author   User?  @relation(fields: [authorId], references: [id], onDelete: SetNull)
+}
+
+model Tag {
+  id    Int    @id @default(autoincrement())
+  label String @unique
+  posts Post[]
+}
+
+/// A tree of categories
+model Category {
+  id       Int        @id @default(autoincrement())
+  name     String
+  parentId Int?
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryTree")
+}
+
+/// Keyed by two columns, related to nothing
+model Membership {
+  userId Int
+  teamId Int
+  role   Role @default(VIEWER)
+
+  @@id([userId, teamId])
+}

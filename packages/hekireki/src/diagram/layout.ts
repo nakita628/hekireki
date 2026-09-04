@@ -1,8 +1,6 @@
 import { graphlib, layout } from '@dagrejs/dagre'
 import * as v from 'valibot'
 
-import type { Field, Model, Relation } from '../studio/server/routes/index.js'
-
 export type Position = { readonly x: number; readonly y: number }
 
 export type LayoutPositions = Readonly<Record<string, Position>>
@@ -14,19 +12,21 @@ export const NODE_DESCRIPTION_HEIGHT = 14
 export const NODE_PADDING = 8
 
 /** The fields a model node shows: everything but the relation fields. */
-export function diagramFields(model: Model) {
+export function diagramFields<Field extends { readonly kind: string }>(model: {
+  readonly fields: readonly Field[]
+}) {
   return model.fields.filter((f) => f.kind !== 'object')
 }
 
-export function hasDescription(field: Pick<Field, 'documentation'>) {
+export function hasDescription(field: { readonly documentation: string | null }) {
   return (field.documentation ?? '').trim() !== ''
 }
 
-export function fieldRowHeight(field: Pick<Field, 'documentation'>) {
+export function fieldRowHeight(field: { readonly documentation: string | null }) {
   return NODE_ROW_HEIGHT + (hasDescription(field) ? NODE_DESCRIPTION_HEIGHT : 0)
 }
 
-export function nodeHeight(fields: readonly Pick<Field, 'documentation'>[]) {
+export function nodeHeight(fields: readonly { readonly documentation: string | null }[]) {
   return (
     NODE_HEADER_HEIGHT +
     NODE_PADDING +
@@ -47,8 +47,14 @@ const LayoutNodeSchema = v.pipe(
 
 /** Places the models left to right along their relations, the way Studio lays a diagram out. */
 export function autoLayout(
-  models: readonly Model[],
-  relations: readonly Relation[],
+  models: readonly {
+    readonly name: string
+    readonly fields: readonly { readonly kind: string; readonly documentation: string | null }[]
+  }[],
+  relations: readonly {
+    readonly from: { readonly model: string }
+    readonly to: { readonly model: string }
+  }[],
 ): LayoutPositions {
   const graph = new graphlib.Graph()
   graph.setGraph({ rankdir: 'LR', nodesep: 48, ranksep: 110, marginx: 40, marginy: 40 })

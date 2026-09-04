@@ -171,6 +171,25 @@
   stroke-width: 1.4;
 }
 
+/* The crow's foot markers sit in a zero-sized svg; they take the colour of the edge that uses
+   them where `context-stroke` is supported, and the plain edge colour where it is not. */
+.er-markers {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+.er-symbol {
+  fill: none;
+  stroke: var(--c-edge);
+  stroke: context-stroke;
+  stroke-width: 1.4;
+}
+
+.er-symbol-open {
+  fill: var(--c-surface);
+}
+
 .react-flow__edge.relation-edge--annotated .react-flow__edge-path,
 .react-flow__edge.relation-edge--implicit-many-to-many .react-flow__edge-path {
   stroke-dasharray: 5 4;

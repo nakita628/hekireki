@@ -1,8 +1,13 @@
-import type * as z from 'zod'
-
-import type { FileDiagnosticSchema } from '../../server/routes/index.js'
-
-export type PlainFileDiagnostic = z.input<typeof FileDiagnosticSchema>
+/** One diagnostic of a schema file, as the server sends it (0-based, end exclusive). */
+export type PlainFileDiagnostic = {
+  readonly path: string
+  readonly range: {
+    readonly start: { readonly line: number; readonly character: number }
+    readonly end: { readonly line: number; readonly character: number }
+  }
+  readonly message: string
+  readonly severity: 'error' | 'warning' | 'information' | 'hint'
+}
 
 /**
  * The error state of the snapshot for a header line: how many errors the language server

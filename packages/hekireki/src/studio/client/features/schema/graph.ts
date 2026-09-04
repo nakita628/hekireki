@@ -1,13 +1,52 @@
-import { MarkerType } from '@xyflow/react'
 import type { Edge, Node } from '@xyflow/react'
 
-import type { Model, Relation, Schema } from '../../../server/routes/index.js'
 import type { LayoutPositions } from '../../lib/index.js'
 import { diagramFields } from './layout.js'
 
+type Field = {
+  readonly name: string
+  readonly kind: 'scalar' | 'object' | 'enum' | 'unsupported'
+  readonly type: string
+  readonly isList: boolean
+  readonly isRequired: boolean
+  readonly isId: boolean
+  readonly isForeignKey: boolean
+  readonly documentation: string | null
+}
+
+type Model = {
+  readonly name: string
+  readonly dbName: string | null
+  readonly primaryKey: readonly string[] | null
+  readonly fields: readonly Field[]
+}
+
+type Cardinality = 'zero-one' | 'one' | 'zero-many' | 'many'
+
+type Relation = {
+  readonly id: string
+  readonly origin: 'inferred' | 'annotated' | 'implicit-many-to-many'
+  readonly onDelete: string | null
+  readonly from: {
+    readonly model: string
+    readonly field: string
+    readonly cardinality: Cardinality
+  }
+  readonly to: {
+    readonly model: string
+    readonly field: string
+    readonly cardinality: Cardinality
+  }
+}
+
+type Schema = {
+  readonly models: readonly Model[]
+  readonly relations: readonly Relation[]
+}
+
 type ModelNodeData = {
   readonly model: Model
-  readonly fields: ReturnType<typeof diagramFields>
+  readonly fields: readonly Field[]
 }
 
 export type ModelNodeType = Node<ModelNodeData, 'model'>
@@ -38,6 +77,11 @@ function humanizeAction(action: string) {
     .toLowerCase()
 }
 
+/** The id of the IE (crow's foot) marker an end is drawn with; React Flow turns it into `url(#id)`. */
+export function cardinalityMarker(cardinality: Cardinality) {
+  return `er-${cardinality}`
+}
+
 export function edgeLabel(relation: Relation) {
   if (relation.origin === 'implicit-many-to-many') return 'many to many'
   if (relation.origin === 'annotated') return '@relation'
@@ -63,7 +107,8 @@ export function buildEdges(schema: Schema): readonly Edge[] {
       type: 'smoothstep',
       label: edgeLabel(relation),
       className: `relation-edge relation-edge--${relation.origin}`,
-      markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14 },
+      markerStart: cardinalityMarker(relation.from.cardinality),
+      markerEnd: cardinalityMarker(relation.to.cardinality),
       data: { relation },
     }
   })

@@ -1,14 +1,53 @@
 import { Fragment } from 'react'
-import type * as z from 'zod'
 
-import type { DocsSchema } from '../../../server/routes/index.js'
 import { CodeBlock } from '../../components/code-block.js'
 import { fieldTypeAnchor, typeRefAnchor, typeSectionId } from './anchors.js'
 import { TypeLink } from './type-link.js'
 
-// The wire shape: the brand the server puts on checked Docs does not survive JSON.
-type Docs = z.input<typeof DocsSchema>
-type DocsModel = Docs['models'][number]
+type DocsTypeRef = {
+  readonly type: string
+  readonly isList: boolean
+  readonly location:
+    | 'scalar'
+    | 'inputObjectTypes'
+    | 'outputObjectTypes'
+    | 'enumTypes'
+    | 'fieldRefTypes'
+}
+
+type DocsModel = {
+  readonly name: string
+  readonly documentation: string | null
+  readonly directives: readonly { readonly name: string; readonly values: readonly string[] }[]
+  readonly fields: readonly {
+    readonly name: string
+    readonly type: string
+    readonly bareTypeName: string
+    readonly kind: 'scalar' | 'object' | 'enum' | 'unsupported'
+    readonly directives: readonly string[]
+    readonly documentation: string | null
+    readonly required: boolean
+  }[]
+  readonly operations: readonly {
+    readonly name: string
+    readonly description: string
+    readonly usage: string
+    readonly inputs:
+      | readonly {
+          readonly name: string
+          readonly types: readonly DocsTypeRef[]
+          readonly required: boolean
+        }[]
+      | null
+    readonly output: {
+      readonly type: string | null
+      readonly required: boolean
+      readonly list: boolean
+    }
+  }[]
+}
+
+type Docs = { readonly models: readonly DocsModel[] }
 
 const CELL = 'border-b border-line px-3.5 py-2.5 align-top text-[13px]'
 

@@ -19,7 +19,6 @@ export default defineConfig({
     routeHandler: true,
   },
   exportSchemas: true,
-  exportSchemasTypes: true,
   docs: {
     output: 'docs/studio-api.md',
     curl: true,

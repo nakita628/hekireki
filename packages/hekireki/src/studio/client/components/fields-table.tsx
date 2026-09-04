@@ -1,15 +1,42 @@
 import { Link } from '@tanstack/react-router'
 import { useMemo } from 'react'
 
-import type { Field, Model, Schema } from '../../server/routes/index.js'
 import { KeyIcon, LinkIcon } from './icons.js'
 import { fieldTypeLabel } from './labels.js'
+
+type Field = {
+  readonly name: string
+  readonly dbName: string | null
+  readonly kind: 'scalar' | 'object' | 'enum' | 'unsupported'
+  readonly type: string
+  readonly isList: boolean
+  readonly isRequired: boolean
+  readonly isId: boolean
+  readonly isForeignKey: boolean
+  readonly documentation: string | null
+  readonly annotations: readonly string[]
+  readonly attributes: readonly string[]
+}
+
+type Model = {
+  readonly primaryKey: readonly string[] | null
+  readonly fields: readonly Field[]
+}
+
+type Schema = {
+  readonly models: readonly { readonly name: string }[]
+  readonly enums: readonly { readonly name: string }[]
+}
 
 export function FieldGlyph({
   field,
   primaryKey,
 }: {
-  readonly field: Field
+  readonly field: {
+    readonly name: string
+    readonly isId: boolean
+    readonly isForeignKey: boolean
+  }
   readonly primaryKey: ReadonlySet<string>
 }) {
   if (field.isId || primaryKey.has(field.name)) {

@@ -1,4 +1,3 @@
-import type { Field, Model, Relation } from '../studio/server/routes/index.js'
 import {
   diagramFields,
   fieldRowHeight,
@@ -10,6 +9,41 @@ import {
 import type { LayoutPositions, Position } from './layout.js'
 
 export type DiagramTheme = 'light' | 'dark'
+
+type Field = {
+  readonly name: string
+  readonly kind: 'scalar' | 'object' | 'enum' | 'unsupported'
+  readonly type: string
+  readonly isList: boolean
+  readonly isRequired: boolean
+  readonly isId: boolean
+  readonly isForeignKey: boolean
+  readonly documentation: string | null
+}
+
+type Model = {
+  readonly name: string
+  readonly dbName: string | null
+  readonly primaryKey: readonly string[] | null
+  readonly fields: readonly Field[]
+}
+
+type Cardinality = 'zero-one' | 'one' | 'zero-many' | 'many'
+
+type Relation = {
+  readonly origin: 'inferred' | 'annotated' | 'implicit-many-to-many'
+  readonly onDelete: string | null
+  readonly from: {
+    readonly model: string
+    readonly field: string
+    readonly cardinality: Cardinality
+  }
+  readonly to: {
+    readonly model: string
+    readonly field: string
+    readonly cardinality: Cardinality
+  }
+}
 
 // The Studio palette (styles.css), so the export looks like the canvas it came from.
 const PALETTES = {
@@ -65,6 +99,20 @@ const EDGE_LABEL_FONT_SIZE = 9.5
 const DOT_GAP = 20
 const DOT_RADIUS = 0.7
 const PADDING = 40
+
+// IE (crow's foot) notation as the canvas draws it (features/schema/schema-view.tsx): the inner
+// symbol is the maximum (a bar for one, the foot for many), the outer one the minimum (a bar for
+// mandatory, a circle for optional). The origin sits where the edge meets the node, the symbols
+// run back along the edge from there.
+const CROW_FOOT = 'M0 -8 L-12 0 L0 8 M-12 0 L0 0'
+const MAX_ONE_BAR = 'M-6 -6 L-6 6'
+const MIN_ONE_BAR = 'M-15 -6 L-15 6'
+const CARDINALITY_SYMBOLS = {
+  one: { max: MAX_ONE_BAR, optional: false },
+  'zero-one': { max: MAX_ONE_BAR, optional: true },
+  many: { max: CROW_FOOT, optional: false },
+  'zero-many': { max: CROW_FOOT, optional: true },
+} as const
 
 // The two field icons of the model node (components/icons.tsx), on a 24-unit grid.
 const KEY_ICON =
@@ -287,6 +335,21 @@ function hasField(node: PlacedNode, field: string) {
   return node.fields.some((f) => f.name === field)
 }
 
+/** One end of an edge in IE notation, drawn towards the node the end touches. */
+function renderCardinality(
+  cardinality: Cardinality,
+  point: Point,
+  towards: 'left' | 'right',
+  palette: Palette,
+) {
+  const { max, optional } = CARDINALITY_SYMBOLS[cardinality]
+  const flip = towards === 'left' ? ' scale(-1 1)' : ''
+  const minimum = optional
+    ? `<circle cx="-16" cy="0" r="3.2" fill="${palette.surface}"/>`
+    : `<path d="${MIN_ONE_BAR}"/>`
+  return `<g transform="translate(${round(point.x)} ${round(point.y)})${flip}" fill="none" stroke="${palette.edge}" stroke-width="1.4"><path d="${max}"/>${minimum}</g>`
+}
+
 function renderEdge(relation: Relation, nodes: ReadonlyMap<string, PlacedNode>, palette: Palette) {
   const from = nodes.get(relation.from.model)
   const to = nodes.get(relation.to.model)
@@ -310,7 +373,7 @@ function renderEdge(relation: Relation, nodes: ReadonlyMap<string, PlacedNode>, 
         return `<rect x="${round(label.x - width / 2)}" y="${round(label.y - height / 2)}" width="${round(width)}" height="${round(height)}" rx="2" fill="${palette.surface}"/><text x="${round(label.x)}" y="${round(label.y + EDGE_LABEL_FONT_SIZE * 0.36)}" font-family="${FONT_MONO}" font-size="${EDGE_LABEL_FONT_SIZE}" text-anchor="middle" fill="${palette.muted}">${escapeXml(caption)}</text>`
       })()
     : ''
-  return `<g class="relation-edge"><path d="${path}" fill="none" stroke="${palette.edge}" stroke-width="1.4"${dashed ? ' stroke-dasharray="5 4"' : ''} marker-end="url(#arrow)"/>${captionSvg}</g>`
+  return `<g class="relation-edge"><path d="${path}" fill="none" stroke="${palette.edge}" stroke-width="1.4"${dashed ? ' stroke-dasharray="5 4"' : ''}/>${renderCardinality(relation.from.cardinality, source, 'left', palette)}${renderCardinality(relation.to.cardinality, target, 'right', palette)}${captionSvg}</g>`
 }
 
 /** The bounding box of the diagram with the canvas margin around it. */
@@ -339,7 +402,6 @@ export function renderDiagramSvg(input: DiagramInput) {
     `<svg xmlns="http://www.w3.org/2000/svg" width="${round(bounds.width)}" height="${round(bounds.height)}" viewBox="${round(bounds.x)} ${round(bounds.y)} ${round(bounds.width)} ${round(bounds.height)}">`,
     `<defs>`,
     `<pattern id="dots" x="${round(bounds.x)}" y="${round(bounds.y)}" width="${DOT_GAP}" height="${DOT_GAP}" patternUnits="userSpaceOnUse"><circle cx="${DOT_RADIUS}" cy="${DOT_RADIUS}" r="${DOT_RADIUS}" fill="${palette.dots}"/></pattern>`,
-    `<marker id="arrow" viewBox="-10 -10 20 20" markerWidth="14" markerHeight="14" refX="0" refY="0" orient="auto-start-reverse" markerUnits="strokeWidth"><polyline points="-5,-4 0,0 -5,4 -5,-4" fill="${palette.edge}" stroke="${palette.edge}" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/></marker>`,
     `<filter id="node-shadow" x="-5%" y="-5%" width="110%" height="115%"><feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#000000" flood-opacity="0.08"/></filter>`,
     `</defs>`,
     `<rect x="${round(bounds.x)}" y="${round(bounds.y)}" width="${round(bounds.width)}" height="${round(bounds.height)}" fill="${palette.canvas}"/>`,

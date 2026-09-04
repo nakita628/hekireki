@@ -1,28 +1,15 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import type { Field } from '../../server/routes/index.js'
 import { fieldTypeLabel, firstLine } from './labels.js'
 
+type Field = {
+  readonly type: string
+  readonly isList: boolean
+  readonly isRequired: boolean
+}
+
 function field(overrides: Partial<Field>): Field {
-  return {
-    name: 'title',
-    dbName: null,
-    kind: 'scalar',
-    type: 'String',
-    isList: false,
-    isRequired: true,
-    isId: false,
-    isUnique: false,
-    isUpdatedAt: false,
-    isForeignKey: false,
-    default: null,
-    nativeType: null,
-    documentation: null,
-    annotations: [],
-    relation: null,
-    attributes: [],
-    ...overrides,
-  }
+  return { type: 'String', isList: false, isRequired: true, ...overrides }
 }
 
 describe('fieldTypeLabel', () => {

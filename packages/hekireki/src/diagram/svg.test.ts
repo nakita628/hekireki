@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import type { Field, Model, Relation } from '../studio/server/routes/index.js'
 import { NODE_HEADER_HEIGHT, NODE_PADDING, NODE_ROW_HEIGHT, NODE_WIDTH } from './layout.js'
 import {
   diagramBounds,
@@ -11,51 +10,65 @@ import {
   truncateLabel,
 } from './svg.js'
 
+type Field = {
+  readonly name: string
+  readonly kind: 'scalar' | 'object' | 'enum' | 'unsupported'
+  readonly type: string
+  readonly isList: boolean
+  readonly isRequired: boolean
+  readonly isId: boolean
+  readonly isForeignKey: boolean
+  readonly documentation: string | null
+}
+
+type Model = {
+  readonly name: string
+  readonly dbName: string | null
+  readonly primaryKey: readonly string[] | null
+  readonly fields: readonly Field[]
+}
+
+type Cardinality = 'zero-one' | 'one' | 'zero-many' | 'many'
+
+type Relation = {
+  readonly origin: 'inferred' | 'annotated' | 'implicit-many-to-many'
+  readonly onDelete: string | null
+  readonly from: {
+    readonly model: string
+    readonly field: string
+    readonly cardinality: Cardinality
+  }
+  readonly to: {
+    readonly model: string
+    readonly field: string
+    readonly cardinality: Cardinality
+  }
+}
+
 function field(name: string, overrides: Partial<Field> = {}): Field {
   return {
     name,
-    dbName: null,
     kind: 'scalar',
     type: 'String',
     isList: false,
     isRequired: true,
     isId: false,
-    isUnique: false,
-    isUpdatedAt: false,
     isForeignKey: false,
-    default: null,
-    nativeType: null,
     documentation: null,
-    annotations: [],
-    relation: null,
-    attributes: [],
     ...overrides,
   }
 }
 
 function model(name: string, fields: Field[], dbName: string | null = null): Model {
-  return {
-    name,
-    dbName,
-    documentation: null,
-    annotations: [],
-    fields,
-    primaryKey: null,
-    indexes: [],
-    attributes: [],
-    location: null,
-  }
+  return { name, dbName, primaryKey: null, fields }
 }
 
 function relation(overrides: Partial<Relation> = {}): Relation {
   return {
-    id: 'User.id->Post.authorId',
-    name: null,
     origin: 'inferred',
     from: { model: 'User', field: 'id', cardinality: 'one' },
     to: { model: 'Post', field: 'authorId', cardinality: 'many' },
     onDelete: null,
-    onUpdate: null,
     ...overrides,
   }
 }
@@ -85,7 +98,22 @@ describe('renderDiagramSvg', () => {
     expect(svg).toContain('>Who wrote it</text>')
     expect(svg).not.toContain('>author</text>')
     expect(svg).toContain('>on delete cascade</text>')
-    expect(svg).toContain('marker-end="url(#arrow)"')
+    expect(svg).toContain('scale(-1 1)')
+  })
+
+  it('ends each edge with the IE symbols of that end', () => {
+    const svg = renderDiagramSvg({
+      models: [user, post],
+      relations: [relation({ from: { model: 'User', field: 'id', cardinality: 'zero-one' } })],
+      positions,
+    })
+    // The parent end is mirrored so both feet open towards the model they touch.
+    expect(svg).toContain(
+      '<g transform="translate(340 55) scale(-1 1)" fill="none" stroke="#9095ab" stroke-width="1.4"><path d="M-6 -6 L-6 6"/><circle cx="-16" cy="0" r="3.2" fill="#ffffff"/></g>',
+    )
+    expect(svg).toContain(
+      '<g transform="translate(500 124)" fill="none" stroke="#9095ab" stroke-width="1.4"><path d="M0 -8 L-12 0 L0 8 M-12 0 L0 0"/><path d="M-15 -6 L-15 6"/></g>',
+    )
   })
 
   it('leaves the source field row on the right and enters the target field row on the left', () => {
@@ -102,7 +130,6 @@ describe('renderDiagramSvg', () => {
       models: [user, post],
       relations: [
         relation({
-          id: 'm2m',
           origin: 'implicit-many-to-many',
           from: { model: 'User', field: 'posts', cardinality: 'many' },
           to: { model: 'Post', field: 'users', cardinality: 'many' },

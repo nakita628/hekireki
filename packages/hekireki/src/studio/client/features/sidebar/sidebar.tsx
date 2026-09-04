@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 
-import type { Schema } from '../../../server/routes/index.js'
 import {
   BoltIcon,
   BookIcon,
@@ -16,6 +15,14 @@ import {
 import { getDbCountsQueryOptions, useDb } from '../../hooks/index.js'
 import { useUiStore } from '../../lib/index.js'
 import { diagramFields } from '../schema/layout.js'
+
+type Schema = {
+  readonly models: readonly {
+    readonly name: string
+    readonly fields: readonly { readonly kind: string }[]
+  }[]
+  readonly enums: readonly { readonly name: string; readonly values: readonly unknown[] }[]
+}
 
 const NAV = 'flex items-center gap-2.5 rounded-lg px-3 py-2 text-[14.5px]'
 const NAV_ACTIVE = { className: `${NAV} bg-accent-soft font-semibold text-accent-text` }

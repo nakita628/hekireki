@@ -1,10 +1,15 @@
-import type * as z from 'zod'
-
-import type { DocsSchema } from '../../../server/routes/index.js'
 import { typeSectionId } from './anchors.js'
 
-// The wire shape: the brand the server puts on checked Docs does not survive JSON.
-type Docs = z.input<typeof DocsSchema>
+type Docs = {
+  readonly models: readonly {
+    readonly name: string
+    readonly fields: readonly { readonly name: string }[]
+    readonly operations: readonly { readonly name: string }[]
+  }[]
+  readonly inputTypes: readonly { readonly name: string }[]
+  readonly outputTypes: readonly { readonly name: string }[]
+  readonly enumTypes: readonly { readonly name: string }[]
+}
 
 function TocList({
   items,

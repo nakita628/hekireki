@@ -17,14 +17,10 @@ export const SchemaFileSchema = z
   })
   .openapi('SchemaFile')
 
-export type SchemaFile = z.infer<typeof SchemaFileSchema>
-
 export const FieldKindSchema = z
   .enum(['scalar', 'object', 'enum', 'unsupported'])
   .openapi({ description: 'What a field holds, as Prisma classifies it.' })
   .openapi('FieldKind')
-
-export type FieldKind = z.infer<typeof FieldKindSchema>
 
 export const FieldRelationSchema = z
   .object({
@@ -60,8 +56,6 @@ export const FieldRelationSchema = z
     },
   })
   .openapi('FieldRelation')
-
-export type FieldRelation = z.infer<typeof FieldRelationSchema>
 
 export const FieldSchema = z
   .object({
@@ -150,14 +144,10 @@ export const FieldSchema = z
   })
   .openapi('Field')
 
-export type Field = z.infer<typeof FieldSchema>
-
 export const IndexTypeSchema = z
   .enum(['id', 'unique', 'normal', 'fulltext'])
   .openapi({ description: 'The kind of index a `@@` attribute declares.' })
   .openapi('IndexType')
-
-export type IndexType = z.infer<typeof IndexTypeSchema>
 
 export const IndexSchema = z
   .object({
@@ -186,8 +176,6 @@ export const IndexSchema = z
   })
   .openapi('Index')
 
-export type Index = z.infer<typeof IndexSchema>
-
 export const LocationSchema = z
   .object({
     file: z.string().openapi({ description: 'The file that declares the block' }),
@@ -199,8 +187,6 @@ export const LocationSchema = z
     example: { file: 'prisma/schema.prisma', line: 12 },
   })
   .openapi('Location')
-
-export type Location = z.infer<typeof LocationSchema>
 
 export const ModelSchema = z
   .object({
@@ -275,8 +261,6 @@ export const ModelSchema = z
   })
   .openapi('Model')
 
-export type Model = z.infer<typeof ModelSchema>
-
 export const EnumValueSchema = z
   .object({
     name: z.string().openapi({ description: 'The member name' }),
@@ -291,8 +275,6 @@ export const EnumValueSchema = z
     example: { name: 'ADMIN', dbName: 'admin' },
   })
   .openapi('EnumValue')
-
-export type EnumValue = z.infer<typeof EnumValueSchema>
 
 export const EnumSchema = z
   .object({
@@ -323,21 +305,15 @@ export const EnumSchema = z
   })
   .openapi('Enum')
 
-export type Enum = z.infer<typeof EnumSchema>
-
 export const RelationOriginSchema = z
   .enum(['inferred', 'annotated', 'implicit-many-to-many'])
   .openapi({ description: 'Where a relation came from.' })
   .openapi('RelationOrigin')
 
-export type RelationOrigin = z.infer<typeof RelationOriginSchema>
-
 export const CardinalitySchema = z
   .enum(['zero-one', 'one', 'zero-many', 'many'])
   .openapi({ description: 'How many rows one end of a relation points at.' })
   .openapi('Cardinality')
-
-export type Cardinality = z.infer<typeof CardinalitySchema>
 
 export const RelationEndSchema = z
   .object({
@@ -356,8 +332,6 @@ export const RelationEndSchema = z
     example: { model: 'Post', field: 'authorId', cardinality: 'many' },
   })
   .openapi('RelationEnd')
-
-export type RelationEnd = z.infer<typeof RelationEndSchema>
 
 export const RelationSchema = z
   .object({
@@ -395,8 +369,6 @@ export const RelationSchema = z
   })
   .openapi('Relation')
 
-export type Relation = z.infer<typeof RelationSchema>
-
 export const SchemaSchema = z
   .object({
     files: z
@@ -425,8 +397,6 @@ export const SchemaSchema = z
   })
   .openapi('Schema')
 
-export type Schema = z.infer<typeof SchemaSchema>
-
 export const LineSchema = z
   .int32()
   .min(0)
@@ -437,8 +407,6 @@ export const LineSchema = z
   })
   .openapi('Line')
 
-export type Line = z.infer<typeof LineSchema>
-
 export const CharacterSchema = z
   .int32()
   .min(0)
@@ -448,8 +416,6 @@ export const CharacterSchema = z
     'x-minValue-message': 'character must be 0 or more',
   })
   .openapi('Character')
-
-export type Character = z.infer<typeof CharacterSchema>
 
 export const LspPositionSchema = z
   .object({
@@ -463,8 +429,6 @@ export const LspPositionSchema = z
   })
   .openapi('LspPosition')
 
-export type LspPosition = z.infer<typeof LspPositionSchema>
-
 export const LspRangeSchema = z
   .object({
     start: LspPositionSchema.openapi({ description: 'Where the range starts' }),
@@ -477,8 +441,6 @@ export const LspRangeSchema = z
   })
   .openapi('LspRange')
 
-export type LspRange = z.infer<typeof LspRangeSchema>
-
 export const SeveritySchema = z
   .enum(['error', 'warning', 'information', 'hint'])
   .openapi({
@@ -486,8 +448,6 @@ export const SeveritySchema = z
       'How serious a diagnostic of the Prisma language server is (LSP `DiagnosticSeverity`).',
   })
   .openapi('Severity')
-
-export type Severity = z.infer<typeof SeveritySchema>
 
 export const FileDiagnosticSchema = z
   .object({
@@ -508,8 +468,6 @@ export const FileDiagnosticSchema = z
     },
   })
   .openapi('FileDiagnostic')
-
-export type FileDiagnostic = z.infer<typeof FileDiagnosticSchema>
 
 export const SnapshotSchema = z
   .object({
@@ -563,8 +521,6 @@ export const SnapshotSchema = z
   })
   .openapi('Snapshot')
 
-export type Snapshot = z.infer<typeof SnapshotSchema>
-
 export const InternalServerProblemSchema = z
   .object({
     type: z
@@ -596,8 +552,6 @@ export const InternalServerProblemSchema = z
     },
   })
   .openapi('InternalServerProblem')
-
-export type InternalServerProblem = z.infer<typeof InternalServerProblemSchema>
 
 export const NotFoundProblemSchema = z
   .object({
@@ -631,8 +585,6 @@ export const NotFoundProblemSchema = z
   })
   .openapi('NotFoundProblem')
 
-export type NotFoundProblem = z.infer<typeof NotFoundProblemSchema>
-
 export const FieldErrorSchema = z
   .object({
     field: z
@@ -646,8 +598,6 @@ export const FieldErrorSchema = z
     example: { field: 'take', message: 'take must be 1000 or fewer' },
   })
   .openapi('FieldError')
-
-export type FieldError = z.infer<typeof FieldErrorSchema>
 
 export const ValidationProblemSchema = z
   .object({
@@ -685,8 +635,6 @@ export const ValidationProblemSchema = z
   })
   .openapi('ValidationProblem')
 
-export type ValidationProblem = z.infer<typeof ValidationProblemSchema>
-
 export const SchemaFilePathSchema = z
   .string({ error: 'Path must be a non-empty string' })
   .min(1, { error: 'Path must not be empty' })
@@ -697,8 +645,6 @@ export const SchemaFilePathSchema = z
   })
   .openapi('SchemaFilePath')
 
-export type SchemaFilePath = z.infer<typeof SchemaFilePathSchema>
-
 export const SchemaTextSchema = z
   .string({ error: 'Schema text must be a string' })
   .brand<'SchemaText'>()
@@ -706,8 +652,6 @@ export const SchemaTextSchema = z
     description: 'Prisma schema source text (a whole file, or the editor buffer being typed).',
   })
   .openapi('SchemaText')
-
-export type SchemaText = z.infer<typeof SchemaTextSchema>
 
 export const FileWriteSchema = z
   .object({
@@ -723,21 +667,15 @@ export const FileWriteSchema = z
   })
   .openapi('FileWrite')
 
-export type FileWrite = z.infer<typeof FileWriteSchema>
-
 export const DialectSchema = z
   .enum(['postgresql', 'mysql', 'sqlite'])
   .openapi({ description: 'The SQL dialect of the connected database.' })
   .openapi('Dialect')
 
-export type Dialect = z.infer<typeof DialectSchema>
-
 export const UrlSourceSchema = z
   .enum(['flag', 'env', 'config'])
   .openapi({ description: 'Where the database URL was found, in precedence order.' })
   .openapi('UrlSource')
-
-export type UrlSource = z.infer<typeof UrlSourceSchema>
 
 export const DbStatusSchema = z
   .object({
@@ -767,8 +705,6 @@ export const DbStatusSchema = z
   })
   .openapi('DbStatus')
 
-export type DbStatus = z.infer<typeof DbStatusSchema>
-
 export const CountsSchema = z
   .object({
     counts: z.record(z.string(), z.int32()).openapi({ description: 'Model name → number of rows' }),
@@ -781,8 +717,6 @@ export const CountsSchema = z
     example: { counts: { User: 3, Post: 12 } },
   })
   .openapi('Counts')
-
-export type Counts = z.infer<typeof CountsSchema>
 
 export const ServiceUnavailableProblemSchema = z
   .object({
@@ -816,8 +750,6 @@ export const ServiceUnavailableProblemSchema = z
   })
   .openapi('ServiceUnavailableProblem')
 
-export type ServiceUnavailableProblem = z.infer<typeof ServiceUnavailableProblemSchema>
-
 export const ModelNameSchema = z
   .string({
     error:
@@ -834,8 +766,6 @@ export const ModelNameSchema = z
   })
   .openapi('ModelName')
 
-export type ModelName = z.infer<typeof ModelNameSchema>
-
 export const SkipSchema = z.coerce
   .number()
   .pipe(z.int32().min(0))
@@ -846,8 +776,6 @@ export const SkipSchema = z.coerce
     'x-minValue-message': 'skip must be 0 or more',
   })
   .openapi('Skip')
-
-export type Skip = z.infer<typeof SkipSchema>
 
 export const TakeSchema = z.coerce
   .number()
@@ -861,8 +789,6 @@ export const TakeSchema = z.coerce
   })
   .openapi('Take')
 
-export type Take = z.infer<typeof TakeSchema>
-
 export const SearchSchema = z
   .string()
   .trim()
@@ -874,8 +800,6 @@ export const SearchSchema = z
   })
   .openapi('Search')
 
-export type Search = z.infer<typeof SearchSchema>
-
 export const RowSchema = z
   .record(z.string(), z.union([z.string(), z.float64(), z.boolean()]).nullable())
   .openapi({
@@ -884,8 +808,6 @@ export const RowSchema = z
     example: { id: 1, email: 'ann@example.com', active: true, deletedAt: null },
   })
   .openapi('Row')
-
-export type Row = z.infer<typeof RowSchema>
 
 export const RowsSchema = z
   .object({
@@ -917,8 +839,6 @@ export const RowsSchema = z
   })
   .openapi('Rows')
 
-export type Rows = z.infer<typeof RowsSchema>
-
 export const AffectedSchema = z
   .object({ affected: z.int32().openapi({ description: "The driver's affected-row count" }) })
   .brand<'Affected'>()
@@ -928,8 +848,6 @@ export const AffectedSchema = z
     example: { affected: 1 },
   })
   .openapi('Affected')
-
-export type Affected = z.infer<typeof AffectedSchema>
 
 export const InsertBodySchema = z
   .object({
@@ -944,8 +862,6 @@ export const InsertBodySchema = z
   })
   .openapi('InsertBody')
 
-export type InsertBody = z.infer<typeof InsertBodySchema>
-
 export const UpdateBodySchema = z
   .object({
     where: RowSchema.openapi({ description: 'The key fields of the row to change' }),
@@ -958,14 +874,10 @@ export const UpdateBodySchema = z
   })
   .openapi('UpdateBody')
 
-export type UpdateBody = z.infer<typeof UpdateBodySchema>
-
 export const DeleteBodySchema = z
   .object({ where: RowSchema.openapi({ description: 'The key fields of the row to delete' }) })
   .openapi({ required: ['where'], description: 'A row to delete.', example: { where: { id: 1 } } })
   .openapi('DeleteBody')
-
-export type DeleteBody = z.infer<typeof DeleteBodySchema>
 
 export const SqlResultSchema = z
   .object({
@@ -993,8 +905,6 @@ export const SqlResultSchema = z
   })
   .openapi('SqlResult')
 
-export type SqlResult = z.infer<typeof SqlResultSchema>
-
 export const SqlSchema = z
   .string({ error: 'SQL must be a string' })
   .trim()
@@ -1006,8 +916,6 @@ export const SqlSchema = z
   })
   .openapi('Sql')
 
-export type Sql = z.infer<typeof SqlSchema>
-
 export const SqlBodySchema = z
   .object({ sql: SqlSchema.openapi({ description: 'The statement' }) })
   .openapi({
@@ -1016,8 +924,6 @@ export const SqlBodySchema = z
     example: { sql: 'SELECT id, email FROM users LIMIT 10' },
   })
   .openapi('SqlBody')
-
-export type SqlBody = z.infer<typeof SqlBodySchema>
 
 export const LspTextEditSchema = z
   .object({
@@ -1033,8 +939,6 @@ export const LspTextEditSchema = z
     },
   })
   .openapi('LspTextEdit')
-
-export type LspTextEdit = z.infer<typeof LspTextEditSchema>
 
 export const FormattedSchema = z
   .object({
@@ -1060,8 +964,6 @@ export const FormattedSchema = z
   })
   .openapi('Formatted')
 
-export type Formatted = z.infer<typeof FormattedSchema>
-
 export const TextBodySchema = z
   .object({
     text: SchemaTextSchema.openapi({ description: 'The text as typed' }),
@@ -1081,8 +983,6 @@ export const TextBodySchema = z
   })
   .openapi('TextBody')
 
-export type TextBody = z.infer<typeof TextBodySchema>
-
 export const LspDiagnosticSchema = z
   .object({
     range: LspRangeSchema.openapi({ description: 'Where it is' }),
@@ -1101,8 +1001,6 @@ export const LspDiagnosticSchema = z
   })
   .openapi('LspDiagnostic')
 
-export type LspDiagnostic = z.infer<typeof LspDiagnosticSchema>
-
 export const DiagnosticsSchema = z
   .object({
     diagnostics: z
@@ -1117,8 +1015,6 @@ export const DiagnosticsSchema = z
   })
   .openapi('Diagnostics')
 
-export type Diagnostics = z.infer<typeof DiagnosticsSchema>
-
 export const LintBodySchema = z
   .object({
     path: SchemaFilePathSchema.openapi({ description: 'The loaded file the text replaces' }),
@@ -1130,8 +1026,6 @@ export const LintBodySchema = z
     example: { path: 'prisma/schema.prisma', text: 'model User {\n  id Nope @id\n}\n' },
   })
   .openapi('LintBody')
-
-export type LintBody = z.infer<typeof LintBodySchema>
 
 export const LspDocumentSymbolSchema = z
   .object({
@@ -1157,8 +1051,6 @@ export const LspDocumentSymbolSchema = z
   })
   .openapi('LspDocumentSymbol')
 
-export type LspDocumentSymbol = z.infer<typeof LspDocumentSymbolSchema>
-
 export const SymbolsSchema = z
   .object({
     symbols: z.array(LspDocumentSymbolSchema).openapi({ description: 'Every block of the text' }),
@@ -1171,14 +1063,10 @@ export const SymbolsSchema = z
   })
   .openapi('Symbols')
 
-export type Symbols = z.infer<typeof SymbolsSchema>
-
 export const InsertTextFormatSchema = z
   .enum(['plainText', 'snippet'])
   .openapi({ description: 'How the `insertText` of a completion is to be read.' })
   .openapi('InsertTextFormat')
-
-export type InsertTextFormat = z.infer<typeof InsertTextFormatSchema>
 
 export const CompletionSchema = z
   .object({
@@ -1232,8 +1120,6 @@ export const CompletionSchema = z
   })
   .openapi('Completion')
 
-export type Completion = z.infer<typeof CompletionSchema>
-
 export const CompletionsSchema = z
   .object({
     items: z
@@ -1243,8 +1129,6 @@ export const CompletionsSchema = z
   .brand<'Completions'>()
   .openapi({ required: ['items'], description: 'The completions at a position.', example: {} })
   .openapi('Completions')
-
-export type Completions = z.infer<typeof CompletionsSchema>
 
 export const CompleteBodySchema = z
   .object({
@@ -1273,8 +1157,6 @@ export const CompleteBodySchema = z
   })
   .openapi('CompleteBody')
 
-export type CompleteBody = z.infer<typeof CompleteBodySchema>
-
 export const HoverSchema = z
   .object({
     contents: z
@@ -1298,8 +1180,6 @@ export const HoverSchema = z
   })
   .openapi('Hover')
 
-export type Hover = z.infer<typeof HoverSchema>
-
 export const PositionBodySchema = z
   .object({
     text: SchemaTextSchema.openapi({ description: 'The text as typed' }),
@@ -1320,8 +1200,6 @@ export const PositionBodySchema = z
   })
   .openapi('PositionBody')
 
-export type PositionBody = z.infer<typeof PositionBodySchema>
-
 export const LspLocationSchema = z
   .object({
     path: z.string().openapi({ description: 'The file, as Studio loaded it' }),
@@ -1339,8 +1217,6 @@ export const LspLocationSchema = z
   })
   .openapi('LspLocation')
 
-export type LspLocation = z.infer<typeof LspLocationSchema>
-
 export const DefinitionSchema = z
   .object({
     locations: z
@@ -1357,8 +1233,6 @@ export const DefinitionSchema = z
   })
   .openapi('Definition')
 
-export type Definition = z.infer<typeof DefinitionSchema>
-
 export const LspReferenceSchema = z
   .object({
     path: z.string().openapi({ description: 'The file, as Studio loaded it' }),
@@ -1373,8 +1247,6 @@ export const LspReferenceSchema = z
     },
   })
   .openapi('LspReference')
-
-export type LspReference = z.infer<typeof LspReferenceSchema>
 
 export const ReferencesSchema = z
   .object({
@@ -1392,8 +1264,6 @@ export const ReferencesSchema = z
   })
   .openapi('References')
 
-export type References = z.infer<typeof ReferencesSchema>
-
 export const LspFileEditSchema = z
   .object({
     path: z.string().openapi({ description: 'The file, as Studio loaded it' }),
@@ -1407,8 +1277,6 @@ export const LspFileEditSchema = z
     example: { path: 'prisma/schema.prisma', edits: [] },
   })
   .openapi('LspFileEdit')
-
-export type LspFileEdit = z.infer<typeof LspFileEditSchema>
 
 export const RenameSchema = z
   .object({
@@ -1425,8 +1293,6 @@ export const RenameSchema = z
     example: { changes: [] },
   })
   .openapi('Rename')
-
-export type Rename = z.infer<typeof RenameSchema>
 
 export const RenameBodySchema = z
   .object({
@@ -1449,8 +1315,6 @@ export const RenameBodySchema = z
   })
   .openapi('RenameBody')
 
-export type RenameBody = z.infer<typeof RenameBodySchema>
-
 export const CodeActionSchema = z
   .object({
     title: z.string().openapi({ description: 'What the fix does' }),
@@ -1464,8 +1328,6 @@ export const CodeActionSchema = z
   })
   .openapi('CodeAction')
 
-export type CodeAction = z.infer<typeof CodeActionSchema>
-
 export const CodeActionsSchema = z
   .object({ actions: z.array(CodeActionSchema).openapi({ description: 'The offered fixes' }) })
   .brand<'CodeActions'>()
@@ -1475,8 +1337,6 @@ export const CodeActionsSchema = z
     example: { actions: [] },
   })
   .openapi('CodeActions')
-
-export type CodeActions = z.infer<typeof CodeActionsSchema>
 
 export const CodeActionBodySchema = z
   .object({
@@ -1504,8 +1364,6 @@ export const CodeActionBodySchema = z
   })
   .openapi('CodeActionBody')
 
-export type CodeActionBody = z.infer<typeof CodeActionBodySchema>
-
 export const DocsDirectiveSchema = z
   .object({
     name: z.string().openapi({ description: 'The attribute name' }),
@@ -1518,8 +1376,6 @@ export const DocsDirectiveSchema = z
     example: { name: '@@unique', values: ['email'] },
   })
   .openapi('DocsDirective')
-
-export type DocsDirective = z.infer<typeof DocsDirectiveSchema>
 
 export const DocsFieldSchema = z
   .object({
@@ -1559,8 +1415,6 @@ export const DocsFieldSchema = z
   })
   .openapi('DocsField')
 
-export type DocsField = z.infer<typeof DocsFieldSchema>
-
 export const DocsTypeLocationSchema = z
   .enum(['scalar', 'inputObjectTypes', 'outputObjectTypes', 'enumTypes', 'fieldRefTypes'])
   .openapi({
@@ -1568,8 +1422,6 @@ export const DocsTypeLocationSchema = z
       'Where a referenced type of the Prisma client API is declared, which decides what the page links to.',
   })
   .openapi('DocsTypeLocation')
-
-export type DocsTypeLocation = z.infer<typeof DocsTypeLocationSchema>
 
 export const DocsTypeRefSchema = z
   .object({
@@ -1588,8 +1440,6 @@ export const DocsTypeRefSchema = z
   })
   .openapi('DocsTypeRef')
 
-export type DocsTypeRef = z.infer<typeof DocsTypeRefSchema>
-
 export const DocsOperationInputSchema = z
   .object({
     name: z.string().openapi({ description: 'The argument name' }),
@@ -1607,8 +1457,6 @@ export const DocsOperationInputSchema = z
   })
   .openapi('DocsOperationInput')
 
-export type DocsOperationInput = z.infer<typeof DocsOperationInputSchema>
-
 export const DocsOperationOutputSchema = z
   .object({
     type: z
@@ -1624,8 +1472,6 @@ export const DocsOperationOutputSchema = z
     example: { type: 'User', required: true, list: false },
   })
   .openapi('DocsOperationOutput')
-
-export type DocsOperationOutput = z.infer<typeof DocsOperationOutputSchema>
 
 export const DocsOperationSchema = z
   .object({
@@ -1658,8 +1504,6 @@ export const DocsOperationSchema = z
   })
   .openapi('DocsOperation')
 
-export type DocsOperation = z.infer<typeof DocsOperationSchema>
-
 export const DocsModelSchema = z
   .object({
     name: z.string().openapi({ description: 'The model name' }),
@@ -1683,8 +1527,6 @@ export const DocsModelSchema = z
   })
   .openapi('DocsModel')
 
-export type DocsModel = z.infer<typeof DocsModelSchema>
-
 export const DocsTypeFieldSchema = z
   .object({
     name: z.string().openapi({ description: 'The field name' }),
@@ -1707,8 +1549,6 @@ export const DocsTypeFieldSchema = z
   })
   .openapi('DocsTypeField')
 
-export type DocsTypeField = z.infer<typeof DocsTypeFieldSchema>
-
 export const DocsTypeSchema = z
   .object({
     name: z.string().openapi({ description: 'The type name' }),
@@ -1723,8 +1563,6 @@ export const DocsTypeSchema = z
   })
   .openapi('DocsType')
 
-export type DocsType = z.infer<typeof DocsTypeSchema>
-
 export const DocsEnumSchema = z
   .object({
     name: z.string().openapi({ description: 'The enum name' }),
@@ -1737,8 +1575,6 @@ export const DocsEnumSchema = z
     example: { name: 'Role', values: ['ADMIN', 'VIEWER'] },
   })
   .openapi('DocsEnum')
-
-export type DocsEnum = z.infer<typeof DocsEnumSchema>
 
 export const DocsSchema = z
   .object({
@@ -1766,8 +1602,6 @@ export const DocsSchema = z
     example: { models: [], inputTypes: [], outputTypes: [], enumTypes: [] },
   })
   .openapi('Docs')
-
-export type Docs = z.infer<typeof DocsSchema>
 
 const RowsQuerySkipParamsSchema = SkipSchema.openapi({
   param: {

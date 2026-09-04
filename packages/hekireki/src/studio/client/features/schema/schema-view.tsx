@@ -16,7 +16,6 @@ import type { Edge, OnSelectionChangeParams } from '@xyflow/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'react-hot-toast'
 
-import type { Schema } from '../../../server/routes/index.js'
 import { DownloadIcon, LayoutIcon, RefreshIcon } from '../../components/icons.js'
 import { ModelNode } from '../../components/model-node.js'
 import { layoutStorageKey, loadLayout, saveLayout, useUiStore } from '../../lib/index.js'
@@ -25,9 +24,136 @@ import { buildEdges, buildNodes, highlightEdges } from './graph.js'
 import type { ModelNodeType } from './graph.js'
 import { autoLayout, positionsFor } from './layout.js'
 
+type Field = {
+  readonly name: string
+  readonly kind: 'scalar' | 'object' | 'enum' | 'unsupported'
+  readonly type: string
+  readonly isList: boolean
+  readonly isRequired: boolean
+  readonly isId: boolean
+  readonly isForeignKey: boolean
+  readonly documentation: string | null
+}
+
+type Model = {
+  readonly name: string
+  readonly dbName: string | null
+  readonly primaryKey: readonly string[] | null
+  readonly fields: readonly Field[]
+}
+
+type Cardinality = 'zero-one' | 'one' | 'zero-many' | 'many'
+
+type Relation = {
+  readonly id: string
+  readonly origin: 'inferred' | 'annotated' | 'implicit-many-to-many'
+  readonly onDelete: string | null
+  readonly from: {
+    readonly model: string
+    readonly field: string
+    readonly cardinality: Cardinality
+  }
+  readonly to: {
+    readonly model: string
+    readonly field: string
+    readonly cardinality: Cardinality
+  }
+}
+
+type Schema = {
+  readonly files: readonly { readonly path: string }[]
+  readonly models: readonly Model[]
+  readonly enums: readonly unknown[]
+  readonly relations: readonly Relation[]
+}
+
 const nodeTypes = { model: ModelNode }
 const NO_NODES: ModelNodeType[] = []
 const NO_EDGES: Edge[] = []
+
+// IE (crow's foot) notation, drawn towards the model the end touches: the inner symbol is the
+// maximum (a bar for one, the foot for many), the outer one the minimum (a bar for mandatory,
+// a circle for optional). The marker box ends where the edge meets the node, at x = 0.
+const CROW_FOOT = 'M0 -8 L-12 0 L0 8 M-12 0 L0 0'
+const MAX_ONE_BAR = 'M-6 -6 L-6 6'
+const MIN_ONE_BAR = 'M-15 -6 L-15 6'
+
+const CARDINALITIES = [
+  { cardinality: 'one', many: false, optional: false, label: 'exactly one' },
+  { cardinality: 'zero-one', many: false, optional: true, label: 'zero or one' },
+  { cardinality: 'many', many: true, optional: false, label: 'one or many' },
+  { cardinality: 'zero-many', many: true, optional: true, label: 'zero or many' },
+] as const
+
+/** The four end symbols, defined once per canvas; the edges name them through `cardinalityMarker`. */
+function RelationMarkers() {
+  return (
+    <svg className="er-markers" aria-hidden="true">
+      <defs>
+        {CARDINALITIES.map(({ cardinality, many, optional }) => (
+          <marker
+            key={cardinality}
+            id={`er-${cardinality}`}
+            viewBox="-20 -10 20 20"
+            refX="0"
+            refY="0"
+            markerWidth="20"
+            markerHeight="20"
+            markerUnits="userSpaceOnUse"
+            orient="auto-start-reverse"
+          >
+            <path className="er-symbol" d={many ? CROW_FOOT : MAX_ONE_BAR} />
+            {optional ? (
+              <circle className="er-symbol er-symbol-open" cx="-16" cy="0" r="3.2" />
+            ) : (
+              <path className="er-symbol" d={MIN_ONE_BAR} />
+            )}
+          </marker>
+        ))}
+      </defs>
+    </svg>
+  )
+}
+
+function Legend() {
+  return (
+    <div className="rounded-lg border border-line bg-surface/90 px-3 py-2 text-[11px] text-muted">
+      <div className="heading pb-1">Relations</div>
+      <ul className="m-0 grid list-none grid-cols-2 gap-x-4 gap-y-0.5 p-0">
+        {CARDINALITIES.map(({ cardinality, label }) => (
+          <li key={cardinality} className="flex items-center gap-1.5 whitespace-nowrap">
+            <svg width="34" height="20" viewBox="-34 -10 34 20" aria-hidden="true">
+              <line
+                x1="-34"
+                y1="0"
+                x2="0"
+                y2="0"
+                stroke="var(--c-edge)"
+                strokeWidth="1.4"
+                markerEnd={`url(#er-${cardinality})`}
+              />
+            </svg>
+            {label}
+          </li>
+        ))}
+      </ul>
+      <div className="flex items-center gap-1.5 pt-0.5 whitespace-nowrap">
+        <svg width="34" height="20" viewBox="-34 -10 34 20" aria-hidden="true">
+          <line
+            x1="-34"
+            y1="0"
+            x2="0"
+            y2="0"
+            stroke="var(--c-edge)"
+            strokeWidth="1.4"
+            strokeDasharray="5 4"
+          />
+        </svg>
+        declared with @relation, or implicit many-to-many
+      </div>
+    </div>
+  )
+}
 
 function Canvas({
   schema,
@@ -150,6 +276,7 @@ function Canvas({
 
   return (
     <div className="relative min-h-0 flex-1">
+      <RelationMarkers />
       <ReactFlow
         nodes={nodes}
         edges={styledEdges}
@@ -178,6 +305,11 @@ function Canvas({
           color={theme === 'dark' ? '#2a2f3d' : '#d4d4dc'}
         />
         <Controls showInteractive={false} position="bottom-left" />
+        {compact ? null : (
+          <Panel position="top-left">
+            <Legend />
+          </Panel>
+        )}
         {compact ? null : (
           <MiniMap
             pannable

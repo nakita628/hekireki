@@ -1,5 +1,6 @@
-import type { Row } from '../../server/routes/index.js'
 import { displayCell } from '../features/data/cells.js'
+
+type Row = Record<string, string | number | boolean | null>
 
 export function ResultTable({
   columns,
