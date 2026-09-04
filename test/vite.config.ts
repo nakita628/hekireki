@@ -3,7 +3,7 @@ import { defineConfig } from 'vite-plus'
 export default defineConfig({
   test: {
     // Validity checks for the generated foreign-language code: each target is
-    // regenerated from schema.prisma and then checked in its own toolchain. A
+    // regenerated from prisma/schema.prisma and then checked in its own toolchain. A
     // toolchain that is not installed skips rather than fails, so `vp test`
     // stays runnable without every language present.
     include: ['lang/*.test.ts'],

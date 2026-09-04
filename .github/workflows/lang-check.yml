@@ -1,7 +1,7 @@
 name: Lang Check
 
 # Validity checks for hekireki's generated foreign-language code: each language
-# is generated from test/schema.prisma and then checked in its own toolchain —
+# is generated from test/prisma/schema.prisma and then checked in its own toolchain —
 # it parses (syntax) and compiles or loads against the real GORM / sea-orm /
 # SQLAlchemy / Django / Ecto / Active Record / Eloquent API (type). This is separate
 # from Test (test.yml), which owns the byte-equality codegen contract and stays
@@ -97,7 +97,7 @@ jobs:
         with:
           version: v1.3.0
 
-      # The `test` package regenerates harness/* from schema.prisma in its
+      # The `test` package regenerates harness/* from prisma/schema.prisma in its
       # globalSetup, then runs this language's checks. The same file runs
       # locally via `pnpm lang`. CI is set on GitHub Actions, which turns each
       # file's toolchain guard into a hard assertion — a leg whose setup step
