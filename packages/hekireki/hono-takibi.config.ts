@@ -22,6 +22,6 @@ export default defineConfig({
   docs: {
     output: 'docs/studio-api.md',
     curl: true,
-    baseUrl: 'http://localhost:5858',
+    baseUrl: 'http://localhost:5555',
   },
 })

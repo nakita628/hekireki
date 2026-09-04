@@ -223,10 +223,10 @@ describe('createStudioApp', () => {
 
   it('rejects API requests addressed to a non-loopback host', async () => {
     const { app } = await setup()
-    const response = await app.request('http://evil.example:5858/api/schema')
+    const response = await app.request('http://evil.example:5555/api/schema')
     expect(response.status).toBe(403)
     expect(await response.text()).toBe(FORBIDDEN_HOST_MESSAGE)
-    const loopback = await app.request('http://127.0.0.1:5858/api/schema')
+    const loopback = await app.request('http://127.0.0.1:5555/api/schema')
     expect(loopback.status).toBe(200)
   })
 

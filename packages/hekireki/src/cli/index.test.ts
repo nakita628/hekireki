@@ -158,7 +158,8 @@ describe('hekireki studio', () => {
 
   it('lists the examples in its help', async () => {
     const { out } = await cli(['studio', '--help'])
-    expect(out).toContain('hekireki studio --schema prisma --url file:./prisma/dev.db')
+    expect(out).toContain('hekireki studio --schema prisma/schema')
+    expect(out).toContain('hekireki studio --url file:./dev.db')
   })
 
   // Both values are read by a schema, so "accepted" means the command got past parsing and on to
@@ -283,13 +284,13 @@ describe('studioBanner', () => {
   it('describes a connected database', () => {
     expect(
       studioBanner({
-        port: 5858,
+        port: 5555,
         schemaPath: 'prisma/schema.prisma',
         error: null,
         database: { connected: true, dialect: 'sqlite', url: 'file:./dev.db', error: null },
       }),
     ).toBe(
-      `⚡️ Hekireki Studio started at http://localhost:5858\n   Schema: ${path.resolve('prisma/schema.prisma')} (watching for changes)\n   Database: sqlite file:./dev.db`,
+      `⚡️ Hekireki Studio started at http://localhost:5555\n   Schema: ${path.resolve('prisma/schema.prisma')} (watching for changes)\n   Database: sqlite file:./dev.db`,
     )
   })
 

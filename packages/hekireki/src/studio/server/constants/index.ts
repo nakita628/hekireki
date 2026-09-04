@@ -1,7 +1,7 @@
 /** Studio only listens on loopback: the API serves the raw schema and runs SQL without authentication. */
 export const STUDIO_HOSTNAME = '127.0.0.1'
 
-export const DEFAULT_PORT = 5858
+export const DEFAULT_PORT = 5555
 
 export const FORBIDDEN_HOST_MESSAGE =
   'Forbidden: Hekireki Studio only answers requests addressed to localhost.'

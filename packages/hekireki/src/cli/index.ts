@@ -104,7 +104,7 @@ const studioFlags = {
   port: Flag.integer('port').pipe(
     Flag.withAlias('p'),
     Flag.withSchema(Config.Port),
-    Flag.withDescription('Port to listen on'),
+    Flag.withDescription(`Port to listen on (default: ${DEFAULT_PORT})`),
     Flag.withMetavar('port'),
     Flag.withDefault(DEFAULT_PORT),
   ),
@@ -172,8 +172,12 @@ const studio = Command.make('studio', studioFlags, runStudio).pipe(
       description: `Open ./${DEFAULT_SCHEMA_PATHS[0]}, with the database URL from .env`,
     },
     {
-      command: `${COMMAND_NAME} studio --schema prisma --url file:./prisma/dev.db`,
-      description: 'Read a directory of .prisma files and browse a SQLite file',
+      command: `${COMMAND_NAME} studio --schema prisma/schema`,
+      description: 'Read a multi-file schema: every .prisma file of the directory, together',
+    },
+    {
+      command: `${COMMAND_NAME} studio --url file:./dev.db`,
+      description: 'Browse a SQLite file, resolved from the schema directory as Prisma resolves it',
     },
     { command: `${COMMAND_NAME} studio -p 3000`, description: 'Listen on another port' },
   ]),

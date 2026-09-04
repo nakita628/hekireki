@@ -7,7 +7,7 @@ side by side.
 cd sandbox/sqlite
 pnpm setup           # validate the schema, create sandbox.db, fill it
 
-pnpm studio          # Hekireki Studio  → http://localhost:5858
+pnpm studio          # Hekireki Studio  → http://localhost:5555
 pnpm prisma-studio   # Prisma Studio    → http://localhost:5555
 ```
 

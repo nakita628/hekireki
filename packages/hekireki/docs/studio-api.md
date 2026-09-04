@@ -15,7 +15,7 @@ has no authentication, so nothing here is reachable from another origin.
 > Code samples
 
 ```bash
-curl http://localhost:5858/schema \
+curl http://localhost:5555/schema \
   -H 'Accept: application/json'
 ```
 
@@ -76,7 +76,7 @@ This operation does not require authentication
 > Code samples
 
 ```bash
-curl http://localhost:5858/schema/reload \
+curl http://localhost:5555/schema/reload \
   -X POST \
   -H 'Accept: application/json'
 ```
@@ -138,7 +138,7 @@ This operation does not require authentication
 > Code samples
 
 ```bash
-curl http://localhost:5858/schema/files \
+curl http://localhost:5555/schema/files \
   -X PUT \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json' \
@@ -226,7 +226,7 @@ This operation does not require authentication
 > Code samples
 
 ```bash
-curl http://localhost:5858/schema/events
+curl http://localhost:5555/schema/events
 ```
 
 `GET /schema/events`
@@ -253,7 +253,7 @@ This operation does not require authentication
 > Code samples
 
 ```bash
-curl http://localhost:5858/db \
+curl http://localhost:5555/db \
   -H 'Accept: application/json'
 ```
 
@@ -293,7 +293,7 @@ This operation does not require authentication
 > Code samples
 
 ```bash
-curl http://localhost:5858/db/counts \
+curl http://localhost:5555/db/counts \
   -H 'Accept: application/json'
 ```
 
@@ -333,7 +333,7 @@ This operation does not require authentication
 > Code samples
 
 ```bash
-curl 'http://localhost:5858/db/rows/{modelName}' \
+curl 'http://localhost:5555/db/rows/{modelName}' \
   -H 'Accept: application/json'
 ```
 
@@ -400,7 +400,7 @@ This operation does not require authentication
 > Code samples
 
 ```bash
-curl 'http://localhost:5858/db/rows/{modelName}' \
+curl 'http://localhost:5555/db/rows/{modelName}' \
   -X POST \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json' \
@@ -464,7 +464,7 @@ This operation does not require authentication
 > Code samples
 
 ```bash
-curl 'http://localhost:5858/db/rows/{modelName}' \
+curl 'http://localhost:5555/db/rows/{modelName}' \
   -X DELETE \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json' \
@@ -528,7 +528,7 @@ This operation does not require authentication
 > Code samples
 
 ```bash
-curl 'http://localhost:5858/db/rows/{modelName}' \
+curl 'http://localhost:5555/db/rows/{modelName}' \
   -X PATCH \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json' \
@@ -599,7 +599,7 @@ This operation does not require authentication
 > Code samples
 
 ```bash
-curl http://localhost:5858/db/sql \
+curl http://localhost:5555/db/sql \
   -X POST \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json' \
@@ -670,7 +670,7 @@ This operation does not require authentication
 > Code samples
 
 ```bash
-curl http://localhost:5858/prisma/format \
+curl http://localhost:5555/prisma/format \
   -X POST \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json' \
@@ -742,7 +742,7 @@ This operation does not require authentication
 > Code samples
 
 ```bash
-curl http://localhost:5858/prisma/lint \
+curl http://localhost:5555/prisma/lint \
   -X POST \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json' \
@@ -802,7 +802,7 @@ This operation does not require authentication
 > Code samples
 
 ```bash
-curl http://localhost:5858/prisma/symbols \
+curl http://localhost:5555/prisma/symbols \
   -X POST \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json' \
@@ -860,7 +860,7 @@ This operation does not require authentication
 > Code samples
 
 ```bash
-curl http://localhost:5858/prisma/complete \
+curl http://localhost:5555/prisma/complete \
   -X POST \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json' \
@@ -925,7 +925,7 @@ This operation does not require authentication
 > Code samples
 
 ```bash
-curl http://localhost:5858/prisma/hover \
+curl http://localhost:5555/prisma/hover \
   -X POST \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json' \
@@ -999,7 +999,7 @@ This operation does not require authentication
 > Code samples
 
 ```bash
-curl http://localhost:5858/prisma/definition \
+curl http://localhost:5555/prisma/definition \
   -X POST \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json' \
@@ -1063,7 +1063,7 @@ This operation does not require authentication
 > Code samples
 
 ```bash
-curl http://localhost:5858/prisma/references \
+curl http://localhost:5555/prisma/references \
   -X POST \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json' \
@@ -1127,7 +1127,7 @@ This operation does not require authentication
 > Code samples
 
 ```bash
-curl http://localhost:5858/prisma/rename \
+curl http://localhost:5555/prisma/rename \
   -X POST \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json' \
@@ -1194,7 +1194,7 @@ This operation does not require authentication
 > Code samples
 
 ```bash
-curl http://localhost:5858/prisma/code-actions \
+curl http://localhost:5555/prisma/code-actions \
   -X POST \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json' \
@@ -1278,7 +1278,7 @@ This operation does not require authentication
 > Code samples
 
 ```bash
-curl http://localhost:5858/docs \
+curl http://localhost:5555/docs \
   -H 'Accept: application/json'
 ```
 
