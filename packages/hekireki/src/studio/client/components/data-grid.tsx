@@ -409,9 +409,17 @@ export function DataGrid({
       onMouseLeave={() => {
         setHovered(null)
       }}
-      onKeyDown={(event: React.KeyboardEvent) => {
+      // Taken on the way down: React Aria reads Enter on a cell as a press and stops it there, so
+      // a handler on the way back up never hears it. A key typed into a control — the cell editor,
+      // the new-row form, a menu button — is that control's own.
+      onKeyDownCapture={(event: React.KeyboardEvent) => {
+        const target = event.target instanceof HTMLElement ? event.target : null
+        if (target?.closest('input, select, textarea, button, [role="menuitem"]')) return
         if (event.key === 'Enter' && editing === null) {
-          if (openEditor(picked)) event.preventDefault()
+          if (openEditor(picked)) {
+            event.preventDefault()
+            event.stopPropagation()
+          }
           return
         }
         if (event.key !== 'c' || !(event.metaKey || event.ctrlKey)) return
@@ -601,6 +609,9 @@ export function DataGrid({
                         return (
                           <Table.Cell
                             key={field.name}
+                            // React Aria otherwise hands the cell's focus to its first button — the
+                            // copy button drawn on it — and Enter would then press that, not edit.
+                            focusMode="cell"
                             textValue={displayCell(value)}
                             className={`relative max-w-[360px] ${same(picked, at) ? 'ring-1 ring-accent ring-inset' : ''}`}
                           >

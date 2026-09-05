@@ -130,6 +130,96 @@ test('copies one cell and folds columns away', async ({ page }) => {
   await expect(grid.getByRole('columnheader')).toHaveCount(3)
 })
 
+test('the keyboard opens an edit, and Escape throws it away', async ({ page }) => {
+  await page.goto('/models/User?tab=data')
+  const grid = page.getByRole('grid')
+  const bob = grid.getByRole('row').filter({ hasText: 'bob@example.com' })
+  const editor = grid.locator('input.cell-input')
+
+  // Enter on the picked cell is the keyboard's pencil.
+  await bob.getByRole('gridcell', { name: 'Bob', exact: true }).click()
+  await page.keyboard.press('Enter')
+  await expect(editor).toHaveValue('Bob')
+
+  // What was typed and then abandoned never reaches the database.
+  await editor.fill('Nope')
+  await editor.press('Escape')
+  await expect(editor).toHaveCount(0)
+  await expect(bob).toContainText('Bob')
+  await expect(bob).not.toContainText('Nope')
+  await page.reload()
+  await expect(grid.getByRole('row').filter({ hasText: 'bob@example.com' })).toContainText('Bob')
+  await expect(grid).not.toContainText('Nope')
+})
+
+test('picks an enum value and clears an optional one back to NULL', async ({ page }) => {
+  await page.goto('/models/User?tab=data')
+  const grid = page.getByRole('grid')
+  const bob = grid.getByRole('row').filter({ hasText: 'bob@example.com' })
+  const cy = grid.getByRole('row').filter({ hasText: 'cy@example.com' })
+  const select = grid.locator('select.cell-input')
+  const input = grid.locator('input.cell-input')
+
+  // An enum is edited from a list of its values, not typed.
+  await bob.getByRole('gridcell', { name: /^VIEWER\b/u }).hover()
+  await bob.getByRole('button', { name: 'Edit role' }).click()
+  await expect(select).toHaveValue('VIEWER')
+  await select.selectOption('ADMIN')
+  await select.press('Enter')
+  await expect(select).toHaveCount(0)
+  await expect(bob).toContainText('ADMIN')
+
+  // An optional column takes a value, and an emptied editor puts NULL back.
+  await expect(cy.getByRole('gridcell', { name: 'NULL' })).toBeVisible()
+  await cy.getByRole('gridcell', { name: 'NULL' }).hover()
+  await cy.getByRole('button', { name: 'Edit name' }).click()
+  await expect(input).toHaveValue('')
+  await input.fill('Cy')
+  await input.press('Enter')
+  await expect(cy).toContainText('Cy')
+  // A picked cell carries its buttons in its name, and they overlay the text, so it is hovered
+  // as a cell rather than as text.
+  await cy.getByRole('gridcell', { name: /^Cy\b/u }).hover()
+  await cy.getByRole('button', { name: 'Edit name' }).click()
+  await input.fill('')
+  await input.press('Enter')
+  await expect(cy.getByRole('gridcell', { name: 'NULL' })).toBeVisible()
+
+  // Put Bob's role back for the other tests.
+  await bob.getByRole('gridcell', { name: /^ADMIN\b/u }).hover()
+  await bob.getByRole('button', { name: 'Edit role' }).click()
+  await select.selectOption('VIEWER')
+  await select.press('Enter')
+  await expect(bob).toContainText('VIEWER')
+})
+
+test('folded-away columns stay folded across a reload', async ({ page }) => {
+  await page.goto('/models/User?tab=data')
+  const grid = page.getByRole('grid')
+  // The checkbox column is a header too, so four fields are five headers.
+  const headers = grid.getByRole('columnheader')
+  await expect(headers).toHaveCount(5)
+
+  await page.getByRole('button', { name: /^Columns/u }).click()
+  await page.getByRole('menuitemcheckbox', { name: 'name' }).click()
+  await page.keyboard.press('Escape')
+  await expect(headers).toHaveCount(4)
+  await expect(grid).not.toContainText('Bob')
+
+  await page.reload()
+  await expect(grid.getByRole('columnheader')).toHaveCount(4)
+  await expect(grid).toContainText('bob@example.com')
+  await expect(grid).not.toContainText('Bob')
+
+  // Showing it again is remembered the same way.
+  await page.getByRole('button', { name: /^Columns/u }).click()
+  await page.getByRole('menuitemcheckbox', { name: 'name' }).click()
+  await page.keyboard.press('Escape')
+  await page.reload()
+  await expect(grid.getByRole('columnheader')).toHaveCount(5)
+  await expect(grid).toContainText('Bob')
+})
+
 test('the SQL page runs a query and tabulates the result', async ({ page }) => {
   await page.goto('/sql')
   await expect(page.getByRole('heading', { level: 1, name: 'SQL' })).toBeVisible()
