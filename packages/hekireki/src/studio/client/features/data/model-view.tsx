@@ -2,7 +2,6 @@ import { Button, buttonVariants, Dropdown, SearchField, Tabs, toast, Tooltip } f
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
-import type { Selection } from 'react-aria-components'
 import {
   LuCopy,
   LuDownload,
@@ -14,6 +13,7 @@ import {
   LuX,
 } from 'react-icons/lu'
 
+import { ColumnsPicker } from '../../components/columns-picker.js'
 import { ConfirmDialog } from '../../components/confirm-dialog.js'
 import { DataGrid } from '../../components/data-grid.js'
 import { DetailsPanel } from '../../components/details-panel.js'
@@ -29,6 +29,7 @@ import {
   usePostDbRowsModelName,
 } from '../../hooks/index.js'
 import { keyLabel, keyOf, rowId, toCsv, toJson, toTsv } from './cells.js'
+import { loadHiddenColumns, saveHiddenColumns } from './columns.js'
 import { PAGE_SIZE } from './paging.js'
 
 type Cardinality = 'zero-one' | 'one' | 'zero-many' | 'many'
@@ -123,8 +124,11 @@ export function ModelView({
   const [skip, setSkip] = useState(0)
   const [details, setDetails] = useState(true)
   const [adding, setAdding] = useState(false)
-  const [selected, setSelected] = useState<Selection>(new Set())
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
   const [pending, setPending] = useState<readonly Row[] | null>(null)
+  // Which columns are folded away, per model and remembered. Everything that copies or exports
+  // takes what is on screen, so this is also how a copy is narrowed to two columns of forty.
+  const [hidden, setHidden] = useState(() => loadHiddenColumns(model.name))
   const searchBox = useRef<HTMLInputElement>(null)
   // The box holds what is being typed; the query behind it settles first, so a table of a million
   // rows is read once per pause rather than once per letter.
@@ -192,15 +196,20 @@ export function ModelView({
   const saving = insert.isPending || update.isPending || remove.isPending
   const page = rows.data ?? null
   const rowKey = page?.key ?? []
-  const scalarCount = model.fields.filter((f) => f.kind !== 'object').length
-  const columns = model.fields.filter((f) => f.kind !== 'object').map((f) => f.name)
+  const scalars = model.fields.filter((f) => f.kind !== 'object').map((f) => f.name)
+  const scalarCount = scalars.length
+  const columns = scalars.filter((name) => !hidden.has(name))
   const param = { modelName: model.name }
   const pageRows = page?.rows ?? []
-  const chosen =
-    selected === 'all' ? pageRows : pageRows.filter((row) => selected.has(rowId(row, rowKey)))
+  const chosen = pageRows.filter((row) => selected.has(rowId(row, rowKey)))
 
   const clearSelection = () => {
     setSelected(new Set())
+  }
+
+  const hideColumns = (next: ReadonlySet<string>) => {
+    setHidden(next)
+    saveHiddenColumns(model.name, next)
   }
 
   const search = (value: string) => {
@@ -233,13 +242,13 @@ export function ModelView({
 
   const exportRows = (action: string | number) => {
     if (!page) return
-    if (action === 'csv') download(`${model.name}.csv`, toCsv(page.columns, page.rows), 'text/csv')
+    if (action === 'csv') download(`${model.name}.csv`, toCsv(columns, page.rows), 'text/csv')
     if (action === 'json') {
-      download(`${model.name}.json`, JSON.stringify(page.rows, null, 2), 'application/json')
+      download(`${model.name}.json`, toJson(columns, page.rows), 'application/json')
     }
-    if (action === 'copy-csv') copyText(toCsv(page.columns, page.rows), 'This page (CSV)')
-    if (action === 'copy-json') copyText(toJson(page.columns, page.rows), 'This page (JSON)')
-    if (action === 'copy-tsv') copyText(toTsv(page.columns, page.rows), 'This page')
+    if (action === 'copy-csv') copyText(toCsv(columns, page.rows), 'This page (CSV)')
+    if (action === 'copy-json') copyText(toJson(columns, page.rows), 'This page (JSON)')
+    if (action === 'copy-tsv') copyText(toTsv(columns, page.rows), 'This page')
   }
 
   return (
@@ -258,7 +267,7 @@ export function ModelView({
               : `${scalarCount} ${scalarCount === 1 ? 'field' : 'fields'}`}
           </span>
           <SearchField
-            className="min-w-[260px]"
+            className="min-w-[200px] flex-1"
             aria-label={activeTab === 'data' ? 'Search every column' : 'Search every field'}
             value={query}
             onChange={search}
@@ -314,6 +323,7 @@ export function ModelView({
                   </Dropdown.Menu>
                 </Dropdown.Popover>
               </Dropdown>
+              <ColumnsPicker columns={scalars} hidden={hidden} onHiddenChange={hideColumns} />
             </>
           ) : (
             <>
@@ -424,6 +434,7 @@ export function ModelView({
               model={model}
               rows={page.rows}
               rowKey={page.key}
+              hiddenColumns={hidden}
               total={page.total}
               skip={page.skip}
               search={applied}
@@ -431,7 +442,6 @@ export function ModelView({
               saving={saving}
               adding={adding}
               selected={selected}
-              selectedRows={chosen}
               onSelectedChange={setSelected}
               onAddingChange={setAdding}
               onPage={goToPage}

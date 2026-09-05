@@ -3,7 +3,6 @@ import { Link } from '@tanstack/react-router'
 import { useEffect, useMemo, useRef } from 'react'
 import { LuKey, LuLink } from 'react-icons/lu'
 
-import { CopyButton } from './copy-button.js'
 import { fieldTypeLabel } from './labels.js'
 import { MarkedText } from './marked-text.js'
 
@@ -121,7 +120,6 @@ export function FieldsTable({
             <Table.Column>Type</Table.Column>
             <Table.Column>Attributes</Table.Column>
             <Table.Column>Documentation</Table.Column>
-            <Table.Column className="w-9" aria-label="Copy" />
           </Table.Header>
           <Table.Body
             renderEmptyState={() => (
@@ -194,9 +192,6 @@ export function FieldsTable({
                       ))}
                     </div>
                   ) : null}
-                </Table.Cell>
-                <Table.Cell className="w-9">
-                  <CopyButton text={field.name} what={`field ${field.name}`} />
                 </Table.Cell>
               </Table.Row>
             ))}

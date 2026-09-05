@@ -314,12 +314,17 @@ the letters of its name in order, so `usemail` finds `User.email`. Following a f
 model on that row.
 
 On a model's page, **/** puts the cursor in the search box and every column is searched as you
-type, with what matched marked in the rows that come back. A cell is edited by clicking it. Tick
-rows to act on them together: **Copy** takes them as tab-separated text — what a spreadsheet
-pastes — and **Delete** asks first, naming the rows it is about to remove. **⌘C** / **Ctrl+C**
-copies the ticked rows, or the cell the keyboard is on when none are ticked, and **Export**
-downloads or copies the page as CSV or JSON. A SQL result is sorted and narrowed in the browser,
+type, with what matched marked in the rows that come back. Clicking a cell picks it and nothing
+more; the two buttons that appear on it copy just that value or open it for editing, and **⌘C** /
+**Ctrl+C** copies the picked cell. Tick rows to act on them together: **Copy** takes them as
+tab-separated text — what a spreadsheet pastes — and **Delete** asks first, naming the rows it is
+about to remove. **Export** downloads or copies the page as CSV or JSON. A SQL result is sorted and narrowed in the browser,
 without asking the database a second question.
+
+**Columns** in the toolbar says which columns the grid draws, remembered per model; what is on
+screen is what **Copy** and **Export** take, so a copy of two columns out of forty is two ticks
+away. A row is still written whole, so the Add row form brings every column back for as long as it
+is open.
 
 `--schema` takes either a `schema.prisma` file or a directory — every `.prisma` file directly in the
 directory (subdirectories are not descended into) is read as one schema, which is how Prisma's

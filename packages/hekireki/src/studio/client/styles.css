@@ -214,6 +214,17 @@
     @apply px-3 py-1.5 align-top text-code;
   }
 
+  /* The copy and edit buttons of the cell under the pointer sit at its right edge, over the row's
+     own colour, so a long value is covered by them rather than crossed out. The row is hovered
+     whenever they are drawn by the pointer; the picked cell can be in a row that is not. */
+  .studio-table .cell-actions {
+    background-color: color-mix(in srgb, var(--surface) 40%, var(--c-canvas));
+  }
+
+  .studio-table .table__row:not(:hover) .cell-actions {
+    background-color: var(--c-canvas);
+  }
+
   /* A cell holding controls rather than a value centres them on the row instead. */
   .studio-table .table__cell:has(> button),
   .studio-table .table__cell:has(> label),

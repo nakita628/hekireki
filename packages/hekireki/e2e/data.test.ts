@@ -22,8 +22,11 @@ test('searches, edits a cell, adds and deletes a row', async ({ page }) => {
   // What put the row on screen is marked in it, whichever column it was found in.
   await expect(grid.locator('mark')).toHaveText(['bob', 'Bob'])
 
-  // Editing a cell: click, type, Enter.
+  // Clicking a value picks it, and picks it only: no editor opens on a click that meant to read.
   await grid.getByRole('gridcell', { name: 'Bob', exact: true }).click()
+  await expect(grid.locator('input.cell-input')).toHaveCount(0)
+  // Editing a cell: the pencil on it, type, Enter.
+  await grid.getByRole('button', { name: 'Edit name' }).click()
   const cell = grid.locator('input.cell-input')
   await expect(cell).toHaveValue('Bob')
   await cell.fill('Robert')
@@ -52,7 +55,8 @@ test('searches, edits a cell, adds and deletes a row', async ({ page }) => {
   await expect(grid).not.toContainText('dee@example.com')
 
   // Put Bob's name back for the other tests.
-  await grid.getByRole('gridcell', { name: 'Robert', exact: true }).click()
+  await grid.getByRole('gridcell', { name: 'Robert', exact: true }).hover()
+  await grid.getByRole('button', { name: 'Edit name' }).click()
   await grid.locator('input.cell-input').fill('Bob')
   await grid.locator('input.cell-input').press('Enter')
   await expect(grid).toContainText('Bob')
@@ -82,6 +86,48 @@ test('ticking rows deletes them together', async ({ page }) => {
   await page.getByRole('button', { name: 'Delete 2 rows' }).click()
   await expect(page.getByText('3 rows', { exact: true })).toBeVisible()
   await expect(page.getByText('2 rows selected')).toBeHidden()
+})
+
+test('copies one cell and folds columns away', async ({ page }) => {
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+  const clipboard = () => page.evaluate(() => navigator.clipboard.readText())
+  await page.goto('/models/User?tab=data')
+  const grid = page.getByRole('grid')
+
+  // A cell's own copy button takes that one value, and so does ⌘C on the picked cell — even
+  // with a row ticked, the chord is the cell's, not the row's.
+  const bob = grid.getByRole('row').filter({ hasText: 'bob@example.com' })
+  await bob.getByRole('checkbox').check({ force: true })
+  await bob.getByRole('gridcell', { name: 'bob@example.com' }).click()
+  await page.keyboard.press('ControlOrMeta+c')
+  await expect.poll(clipboard).toBe('bob@example.com')
+  await bob.getByRole('gridcell', { name: 'Bob', exact: true }).hover()
+  await bob.getByRole('button', { name: 'Copy name' }).click()
+  await expect.poll(clipboard).toBe('Bob')
+  await page.getByRole('button', { name: 'Clear selection' }).click()
+
+  // What the picker leaves on screen is what every other copy takes.
+  await page.getByRole('button', { name: /^Columns/u }).click()
+  await page.getByRole('menuitemcheckbox', { name: 'name' }).click()
+  await page.getByRole('menuitemcheckbox', { name: 'role' }).click()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('menu')).toHaveCount(0)
+  await expect(grid.getByRole('columnheader')).toHaveCount(3)
+  await page.getByRole('button', { name: 'Export' }).click()
+  await page.getByRole('menuitem', { name: 'Copy this page', exact: true }).click()
+  await expect
+    .poll(async () => {
+      const copied = await clipboard()
+      return copied.split('\n')[0]
+    })
+    .toBe('id\temail')
+  await expect(page.getByRole('menu')).toHaveCount(0)
+
+  // A row is still written whole, so the form brings back the columns that are folded away.
+  await page.getByRole('button', { name: 'Add row' }).click()
+  await expect(grid.getByRole('columnheader')).toHaveCount(5)
+  await grid.getByRole('button', { name: 'Cancel' }).click()
+  await expect(grid.getByRole('columnheader')).toHaveCount(3)
 })
 
 test('the SQL page runs a query and tabulates the result', async ({ page }) => {

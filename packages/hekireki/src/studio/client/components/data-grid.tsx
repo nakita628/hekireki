@@ -1,6 +1,5 @@
 import { Button, Checkbox, Dropdown, Kbd, Pagination, Table } from '@heroui/react'
 import { useState } from 'react'
-import type { Selection } from 'react-aria-components'
 import {
   LuCheck,
   LuChevronsLeft,
@@ -9,6 +8,7 @@ import {
   LuEllipsis,
   LuKey,
   LuLink,
+  LuPencil,
   LuTrash2,
   LuX,
 } from 'react-icons/lu'
@@ -56,6 +56,13 @@ type Schema = {
 
 /** The key of the row being typed in, which is the one row that has no key of its own yet. */
 const NEW_ROW = '__new__'
+
+/** Where a cell sits on the page, which is how the grid says which one it means. */
+type CellAt = { readonly row: number; readonly column: number }
+
+function same(a: CellAt | null, b: CellAt | null) {
+  return a?.row === b?.row && a?.column === b?.column
+}
 
 function enumValues(schema: Schema, field: Field) {
   return schema.enums.find((e) => e.name === field.type)?.values.map((value) => value.name) ?? []
@@ -257,15 +264,16 @@ type DataGridProps = {
   readonly model: Model
   readonly rows: readonly Row[]
   readonly rowKey: readonly string[]
+  /** The columns folded away by the picker; the grid draws and copies the rest. */
+  readonly hiddenColumns: ReadonlySet<string>
   readonly total: number
   readonly skip: number
   readonly search: string
   readonly loading: boolean
   readonly saving: boolean
   readonly adding: boolean
-  readonly selected: Selection
-  readonly selectedRows: readonly Row[]
-  readonly onSelectedChange: (selected: Selection) => void
+  readonly selected: ReadonlySet<string>
+  readonly onSelectedChange: (selected: ReadonlySet<string>) => void
   readonly onAddingChange: (adding: boolean) => void
   readonly onPage: (skip: number) => void
   readonly onClearSearch: () => void
@@ -280,6 +288,7 @@ export function DataGrid({
   model,
   rows,
   rowKey,
+  hiddenColumns,
   total,
   skip,
   search,
@@ -287,7 +296,6 @@ export function DataGrid({
   saving,
   adding,
   selected,
-  selectedRows,
   onSelectedChange,
   onAddingChange,
   onPage,
@@ -299,20 +307,22 @@ export function DataGrid({
   const [editing, setEditing] = useState<{ readonly row: string; readonly field: string } | null>(
     null,
   )
-  // Which cell the keyboard is standing on. React Aria's `Cell` takes no focus handler of its
-  // own, so the cell is read back off the DOM — and where it sits in the table is all that is
-  // needed to say which value it holds.
-  const [focused, setFocused] = useState<{ readonly row: number; readonly column: number } | null>(
-    null,
-  )
+  // The cell that is picked, and the cell under the pointer. React Aria's `Cell` takes no mouse
+  // or focus handler of its own, so both are read back off the DOM at the table — and where a
+  // cell sits in the table is all that is needed to say which value it holds.
+  const [picked, setPicked] = useState<CellAt | null>(null)
+  const [hovered, setHovered] = useState<CellAt | null>(null)
   const [draft, setDraft] = useState<Readonly<Record<string, string>>>({})
-  const fields = model.fields.filter((f) => f.kind !== 'object')
+  const columns = model.fields.filter((f) => f.kind !== 'object')
+  // A row being typed in is a whole row, so the form shows every column while it is open: the
+  // one required field somebody folded away is not a row that cannot be saved.
+  const fields = adding ? columns : columns.filter((f) => !hiddenColumns.has(f.name))
   const names = fields.map((f) => f.name)
   const primaryKey = new Set(model.primaryKey)
   const editable = rowKey.length > 0
   // A model without a key still has to draw without two rows colliding, so it is identified by
   // everything it holds — enough for React and for the grid, not enough to write back through.
-  const identity = editable ? rowKey : names
+  const identity = editable ? rowKey : columns.map((f) => f.name)
   const from = total === 0 ? 0 : skip + 1
   const to = Math.min(skip + rows.length, total)
   // With a table of any size the two arrows matter more than the two steps: the last page is
@@ -343,48 +353,69 @@ export function DataGrid({
     onAddingChange(false)
   }
 
-  const trackFocus = (event: React.FocusEvent) => {
+  /** Where in the grid an event landed, in row and column of the page. */
+  const cellAt = (target: EventTarget | null) => {
     const cell =
-      event.target instanceof HTMLElement
-        ? event.target.closest('[role="gridcell"], [role="rowheader"]')
-        : null
-    const row = cell?.parentElement ?? null
-    const body = row?.parentElement ?? null
-    if (cell === null || row === null || body === null) {
-      setFocused(null)
-      return
-    }
-    const at = [...body.children].indexOf(row) - (adding ? 1 : 0)
-    const column = [...row.children].indexOf(cell) - (editable ? 1 : 0)
-    setFocused(at < 0 || column < 0 ? null : { row: at, column })
+      target instanceof HTMLElement ? target.closest('[role="gridcell"], [role="rowheader"]') : null
+    const line = cell?.parentElement ?? null
+    const body = line?.parentElement ?? null
+    if (cell === null || line === null || body === null) return null
+    const at = [...body.children].indexOf(line) - (adding ? 1 : 0)
+    const column = [...line.children].indexOf(cell) - (editable ? 1 : 0)
+    return at < 0 || column < 0 ? null : { row: at, column }
   }
 
-  // ⌘/Ctrl+C over the grid: the rows that are ticked if any are, and otherwise the one cell the
-  // keyboard is standing on. Neither is text the browser would have copied on its own, so the
-  // chord is only taken when there is something to take it for.
-  const copyFocused = () => {
-    if (selectedRows.length > 0) {
-      copyText(
-        toTsv(names, selectedRows),
-        `${selectedRows.length} ${selectedRows.length === 1 ? 'row' : 'rows'}`,
-      )
-      return true
-    }
-    const row = focused === null ? undefined : rows[focused.row]
-    const field = focused === null ? undefined : fields[focused.column]
+  // Pointing at a cell happens on every mouse move; returning the state unchanged is what keeps
+  // that from redrawing a page of a hundred rows to say nothing new.
+  const point = (target: EventTarget | null) => {
+    const next = cellAt(target)
+    setHovered((current) => (same(current, next) ? current : next))
+  }
+
+  const openEditor = (at: CellAt | null) => {
+    const row = at === null ? undefined : rows[at.row]
+    const field = at === null ? undefined : fields[at.column]
+    if (!editable || row === undefined || field === undefined) return false
+    setEditing({ row: rowId(row, identity), field: field.name })
+    return true
+  }
+
+  const copyCell = (at: CellAt) => {
+    const row = rows[at.row]
+    const field = fields[at.column]
     if (row === undefined || field === undefined) return false
     copyText(displayCell(row[field.name] ?? null), field.name)
     return true
   }
 
+  // ⌘/Ctrl+C over the grid takes the picked cell, one value and nothing around it. That is not
+  // text the browser would have copied on its own, so the chord is only taken when a cell is
+  // picked; the ticked rows have the selection bar's own Copy.
+  const copyPicked = () => picked !== null && copyCell(picked)
+
   return (
     <Table
       variant="secondary"
       className="studio-table min-h-0 flex-1 grid-rows-[minmax(0,1fr)_auto]"
-      onFocusCapture={trackFocus}
+      onFocusCapture={(event: React.FocusEvent) => {
+        setPicked(cellAt(event.target))
+      }}
+      onBlurCapture={(event: React.FocusEvent) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setPicked(null)
+      }}
+      onMouseOver={(event: React.MouseEvent) => {
+        point(event.target)
+      }}
+      onMouseLeave={() => {
+        setHovered(null)
+      }}
       onKeyDown={(event: React.KeyboardEvent) => {
+        if (event.key === 'Enter' && editing === null) {
+          if (openEditor(picked)) event.preventDefault()
+          return
+        }
         if (event.key !== 'c' || !(event.metaKey || event.ctrlKey)) return
-        if (copyFocused()) event.preventDefault()
+        if (copyPicked()) event.preventDefault()
       }}
     >
       <Table.ScrollContainer className={`min-h-0 overflow-auto${loading ? ' opacity-60' : ''}`}>
@@ -393,19 +424,27 @@ export function DataGrid({
             This model has no @id or @unique field, so rows are read-only.
           </div>
         ) : null}
-        <Table.Content
-          aria-label={`${model.name} rows`}
-          className="font-mono text-code"
-          selectionMode={editable ? 'multiple' : 'none'}
-          selectedKeys={selected}
-          onSelectionChange={onSelectedChange}
-        >
+        {/* The rows are not React Aria's to select: with a `selectionMode` it makes a click
+            anywhere on a row tick it, and a click here picks the value under the pointer. The
+            ticks are the checkbox column's alone, and its checkboxes step out of the table's
+            `selection` slot (`slot={null}`) since nothing is providing it. */}
+        <Table.Content aria-label={`${model.name} rows`} className="font-mono text-code">
           <Table.Header>
             {/* The checkbox and the row menu share one column, and it leads. A wide table scrolls
                 sideways, and what a row can have done to it has to stay where it can be reached. */}
             {editable ? (
               <Table.Column className="w-[72px]">
-                <Checkbox slot="selection" aria-label="Select every row on this page">
+                <Checkbox
+                  slot={null}
+                  aria-label="Select every row on this page"
+                  isSelected={selected.size > 0 && selected.size === rows.length}
+                  isIndeterminate={selected.size > 0 && selected.size < rows.length}
+                  onChange={(isSelected) => {
+                    onSelectedChange(
+                      isSelected ? new Set(rows.map((row) => rowId(row, identity))) : new Set(),
+                    )
+                  }}
+                >
                   <Checkbox.Content>
                     <Checkbox.Control>
                       <Checkbox.Indicator />
@@ -506,17 +545,32 @@ export function DataGrid({
                     </Table.Row>,
                   ]
                 : []),
-              ...rows.map((row) => {
+              ...rows.map((row, rowIndex) => {
                 const id = rowId(row, identity)
                 const label = `${model.name} ${rowId(row, editable ? rowKey : identity)}`
                 return (
-                  <Table.Row key={id} id={id}>
+                  <Table.Row
+                    key={id}
+                    id={id}
+                    className={selected.has(id) ? '[&>.table__cell]:bg-accent-soft/50' : ''}
+                  >
                     {[
                       ...(editable
                         ? [
                             <Table.Cell key="__row">
                               <div className="flex items-center gap-0.5">
-                                <Checkbox slot="selection" aria-label={`Select ${label}`}>
+                                <Checkbox
+                                  slot={null}
+                                  aria-label={`Select ${label}`}
+                                  isSelected={selected.has(id)}
+                                  onChange={(isSelected) => {
+                                    onSelectedChange(
+                                      isSelected
+                                        ? new Set([...selected, id])
+                                        : new Set([...selected].filter((key) => key !== id)),
+                                    )
+                                  }}
+                                >
                                   <Checkbox.Content>
                                     <Checkbox.Control>
                                       <Checkbox.Indicator />
@@ -536,17 +590,19 @@ export function DataGrid({
                             </Table.Cell>,
                           ]
                         : []),
-                      ...fields.map((field) => {
+                      ...fields.map((field, columnIndex) => {
+                        const at = { row: rowIndex, column: columnIndex }
                         const value = row[field.name] ?? null
                         const isEditing = editing?.row === id && editing.field === field.name
+                        // Clicking a value picks it out and nothing more: the editor opens from
+                        // the pencil (or Enter), never from the click that meant to read. The
+                        // pointer alone is enough to offer the buttons, and so is being picked.
+                        const shows = !isEditing && (same(hovered, at) || same(picked, at))
                         return (
                           <Table.Cell
                             key={field.name}
                             textValue={displayCell(value)}
-                            className={`max-w-[360px]${editable ? ' cursor-text' : ''}`}
-                            onClick={() => {
-                              if (editable && !isEditing) setEditing({ row: id, field: field.name })
-                            }}
+                            className={`relative max-w-[360px] ${same(picked, at) ? 'ring-1 ring-accent ring-inset' : ''}`}
                           >
                             {isEditing ? (
                               <CellEditor
@@ -568,6 +624,36 @@ export function DataGrid({
                                 <MarkedText text={displayCell(value)} query={search} />
                               </span>
                             )}
+                            {shows ? (
+                              <span className="cell-actions absolute inset-y-px right-px flex items-center gap-0.5 pl-3">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  isIconOnly
+                                  className="text-faint hover:text-accent-text"
+                                  aria-label={`Copy ${field.name}`}
+                                  onPress={() => {
+                                    copyCell(at)
+                                  }}
+                                >
+                                  <LuCopy size={13} />
+                                </Button>
+                                {editable ? (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    isIconOnly
+                                    className="text-faint hover:text-accent-text"
+                                    aria-label={`Edit ${field.name}`}
+                                    onPress={() => {
+                                      openEditor(at)
+                                    }}
+                                  >
+                                    <LuPencil size={13} />
+                                  </Button>
+                                ) : null}
+                              </span>
+                            ) : null}
                           </Table.Cell>
                         )
                       }),
@@ -589,7 +675,7 @@ export function DataGrid({
           <span className="hidden items-center gap-1.5 text-faint xl:flex">
             ·<Kbd>⌘/Ctrl</Kbd>
             <Kbd>C</Kbd>
-            copies the cell, or every ticked row
+            copies the picked cell
           </span>
           <Pagination.Content className="ml-auto">
             <Pagination.Item>
