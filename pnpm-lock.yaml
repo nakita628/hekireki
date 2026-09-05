@@ -124,10 +124,10 @@ importers:
         specifier: ^26.2.0
         version: 26.4.1
       '@types/react':
-        specifier: ^19.2.17
+        specifier: 19.2.17
         version: 19.2.17
       '@types/react-dom':
-        specifier: ^19.2.5
+        specifier: 19.2.5
         version: 19.2.5(@types/react@19.2.17)
       '@typescript/native-preview':
         specifier: 7.0.0-dev.20260707.2
