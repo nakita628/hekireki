@@ -16,8 +16,8 @@
     "hekireki": "link:packages/hekireki"
   },
   "devDependencies": {
-    "mysql2": "^3.23.1",
-    "pg": "^8.22.0",
+    "mysql2": "3.23.1",
+    "pg": "8.22.0",
     "vite-plus": "0.3.0"
   },
   "packageManager": "pnpm@11.24.0"
