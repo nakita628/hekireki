@@ -71,6 +71,17 @@ test('marks an unknown type, offers the quick fixes and clears once fixed', asyn
   await expect.poll(() => fileOnDisk(request, 'base.prisma')).toContain('role  Role')
 })
 
+test('the space bar reaches the editor', async ({ page }) => {
+  const editor = editorOf(page)
+  await editor.goto(10, 1)
+  await page.keyboard.press('End')
+  await page.keyboard.press('Enter')
+  await editor.type('nickname String?')
+  // Monaco's experimental EditContext took the key and inserted nothing, so this read
+  // `nicknameString?`; the textarea the editor is configured back onto does not.
+  await expect.poll(() => editor.lines()).toContain('  nickname String?')
+})
+
 test('completes attributes from the language server', async ({ page }) => {
   const editor = editorOf(page)
   await editor.goto(12, 1)

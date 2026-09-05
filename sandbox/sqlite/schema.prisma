@@ -25,7 +25,7 @@ model User {
   role      Role      @default(VIEWER)
   createdAt DateTime  @default(now())
   posts     Post[]
-  comments  Comment[]
+  comments Comment[]
 }
 
 /// An article, in a category

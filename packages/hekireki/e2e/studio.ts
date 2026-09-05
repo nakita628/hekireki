@@ -139,15 +139,9 @@ export function editorOf(page: Page) {
         })
         .toBeGreaterThan(1)
     },
-    /**
-     * Types like a user: key by key, so completion triggers fire. Chromium drops the Space key
-     * Playwright sends into Monaco's EditContext, so spaces go in as text.
-     */
+    /** Types like a user: key by key, so completion triggers fire. */
     async type(text: string) {
-      for (const [index, word] of text.split(' ').entries()) {
-        if (index > 0) await page.keyboard.insertText(' ')
-        if (word !== '') await page.keyboard.type(word)
-      }
+      await page.keyboard.type(text)
     },
     /** Puts the cursor at a 1-based line and column through the keyboard, like a user would. */
     async goto(line: number, column: number) {
