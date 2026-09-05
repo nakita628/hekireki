@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "setup": "prisma validate && prisma db push --url file:./sandbox.db && node seed.mjs",
+    "load": "node load.mjs",
     "studio": "hekireki studio --schema schema.prisma --url file:./sandbox.db",
     "prisma-studio": "prisma studio --url file://$PWD/sandbox.db --port 5556 --browser none",
     "reset": "rm -f sandbox.db && pnpm setup"

@@ -94,6 +94,11 @@ export async function expectNoHorizontalOverflow(page: Page) {
 }
 
 /** Every text appears somewhere inside the element (toContainText with an array counts elements instead). */
+/** The grid's column headers that name a field; the checkbox column's header has no name. */
+export function fieldHeaders(grid: Locator) {
+  return grid.getByRole('columnheader').filter({ hasText: /\S/u })
+}
+
 export async function expectTexts(locator: Locator, texts: readonly string[]) {
   await Promise.all(texts.map((text) => expect(locator).toContainText(text)))
 }

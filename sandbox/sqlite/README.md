@@ -14,6 +14,11 @@ pnpm prisma-studio   # Prisma Studio    → http://localhost:5555
 Run the two in separate terminals; they use different ports and neither locks the file, so both
 can be open at once. `pnpm reset` throws the database away and builds it again.
 
+`pnpm load` piles a large batch on top of the seed — five thousand users, twenty thousand posts,
+fifty thousand comments, a tree of five hundred categories — for looking at paging, search and
+scrolling on a table that has some weight to it. It can be run again; everything it adds is
+marked and cleared first, and `pnpm reset` takes it all away.
+
 The connection string is passed on the command line rather than written into `schema.prisma`:
 Prisma 7's schema parser rejects `url` inside a `datasource` block. `sandbox.db` is not committed.
 

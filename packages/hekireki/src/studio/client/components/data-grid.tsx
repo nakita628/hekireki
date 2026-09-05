@@ -60,8 +60,30 @@ const NEW_ROW = '__new__'
 /** Where a cell sits on the page, which is how the grid says which one it means. */
 type CellAt = { readonly row: number; readonly column: number }
 
-function same(a: CellAt | null, b: CellAt | null) {
-  return a?.row === b?.row && a?.column === b?.column
+/**
+ * One of the two buttons drawn on a value cell. A plain button rather than the design system's:
+ * a page draws two thousand of them, and they are shown and hidden by CSS alone (`.cell-actions`
+ * in styles.css) so that pointing at a cell never re-renders the table.
+ */
+function CellButton({
+  label,
+  onClick,
+  children,
+}: {
+  readonly label: string
+  readonly onClick: () => void
+  readonly children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      className="inline-flex h-5 w-5 items-center justify-center rounded text-faint hover:bg-accent-soft hover:text-accent-text focus-visible:bg-accent-soft focus-visible:text-accent-text focus-visible:outline-none"
+      aria-label={label}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  )
 }
 
 function enumValues(schema: Schema, field: Field) {
@@ -307,11 +329,9 @@ export function DataGrid({
   const [editing, setEditing] = useState<{ readonly row: string; readonly field: string } | null>(
     null,
   )
-  // The cell that is picked, and the cell under the pointer. React Aria's `Cell` takes no mouse
-  // or focus handler of its own, so both are read back off the DOM at the table — and where a
-  // cell sits in the table is all that is needed to say which value it holds.
-  const [picked, setPicked] = useState<CellAt | null>(null)
-  const [hovered, setHovered] = useState<CellAt | null>(null)
+  // Which cell is picked is never state: a page of a hundred rows is redrawn whole for every
+  // change of state here, and the pointer changes cells many times a second. The picked cell is
+  // the one holding the focus, read off the DOM when a key asks for it, and drawn by CSS.
   const [draft, setDraft] = useState<Readonly<Record<string, string>>>({})
   const columns = model.fields.filter((f) => f.kind !== 'object')
   // A row being typed in is a whole row, so the form shows every column while it is open: the
@@ -365,12 +385,8 @@ export function DataGrid({
     return at < 0 || column < 0 ? null : { row: at, column }
   }
 
-  // Pointing at a cell happens on every mouse move; returning the state unchanged is what keeps
-  // that from redrawing a page of a hundred rows to say nothing new.
-  const point = (target: EventTarget | null) => {
-    const next = cellAt(target)
-    setHovered((current) => (same(current, next) ? current : next))
-  }
+  /** The cell holding the focus — itself, or one of its buttons. */
+  const picked = () => cellAt(document.activeElement)
 
   const openEditor = (at: CellAt | null) => {
     const row = at === null ? undefined : rows[at.row]
@@ -391,32 +407,25 @@ export function DataGrid({
   // ⌘/Ctrl+C over the grid takes the picked cell, one value and nothing around it. That is not
   // text the browser would have copied on its own, so the chord is only taken when a cell is
   // picked; the ticked rows have the selection bar's own Copy.
-  const copyPicked = () => picked !== null && copyCell(picked)
+  const copyPicked = () => {
+    const at = picked()
+    return at !== null && copyCell(at)
+  }
 
   return (
     <Table
       variant="secondary"
       className="studio-table min-h-0 flex-1 grid-rows-[minmax(0,1fr)_auto]"
-      onFocusCapture={(event: React.FocusEvent) => {
-        setPicked(cellAt(event.target))
-      }}
-      onBlurCapture={(event: React.FocusEvent) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) setPicked(null)
-      }}
-      onMouseOver={(event: React.MouseEvent) => {
-        point(event.target)
-      }}
-      onMouseLeave={() => {
-        setHovered(null)
-      }}
       // Taken on the way down: React Aria reads Enter on a cell as a press and stops it there, so
-      // a handler on the way back up never hears it. A key typed into a control — the cell editor,
-      // the new-row form, a menu button — is that control's own.
+      // a handler on the way back up never hears it. A key typed into a text box — the cell
+      // editor, the new-row form — is that box's own, and Enter on a button presses the button;
+      // the arrow keys walk into a cell's own buttons, and ⌘C from one still copies its cell.
       onKeyDownCapture={(event: React.KeyboardEvent) => {
         const target = event.target instanceof HTMLElement ? event.target : null
-        if (target?.closest('input, select, textarea, button, [role="menuitem"]')) return
-        if (event.key === 'Enter' && editing === null) {
-          if (openEditor(picked)) {
+        if (target?.closest('input, select, textarea')) return
+        if (event.key === 'Enter') {
+          if (editing !== null || target?.closest('button, [role="menuitem"]')) return
+          if (openEditor(picked())) {
             event.preventDefault()
             event.stopPropagation()
           }
@@ -603,9 +612,7 @@ export function DataGrid({
                         const value = row[field.name] ?? null
                         const isEditing = editing?.row === id && editing.field === field.name
                         // Clicking a value picks it out and nothing more: the editor opens from
-                        // the pencil (or Enter), never from the click that meant to read. The
-                        // pointer alone is enough to offer the buttons, and so is being picked.
-                        const shows = !isEditing && (same(hovered, at) || same(picked, at))
+                        // the pencil (or Enter), never from the click that meant to read.
                         return (
                           <Table.Cell
                             key={field.name}
@@ -613,7 +620,13 @@ export function DataGrid({
                             // copy button drawn on it — and Enter would then press that, not edit.
                             focusMode="cell"
                             textValue={displayCell(value)}
-                            className={`relative max-w-[360px] ${same(picked, at) ? 'ring-1 ring-accent ring-inset' : ''}`}
+                            // The cell is named by its value alone, so the two buttons drawn on it
+                            // do not become part of what a screen reader (or a test) calls it.
+                            // React Aria's `Cell` drops an `aria-label` prop, so it goes on the DOM.
+                            ref={(element: HTMLTableCellElement | null) => {
+                              element?.setAttribute('aria-label', displayCell(value))
+                            }}
+                            className="max-w-[360px]"
                           >
                             {isEditing ? (
                               <CellEditor
@@ -628,43 +641,38 @@ export function DataGrid({
                                 }}
                               />
                             ) : (
-                              <span
-                                className={`block truncate ${value === null ? 'text-faint italic' : ''}`}
-                                title={value === null ? undefined : String(value)}
-                              >
-                                <MarkedText text={displayCell(value)} query={search} />
-                              </span>
-                            )}
-                            {shows ? (
-                              <span className="cell-actions absolute inset-y-px right-px flex items-center gap-0.5 pl-3">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  isIconOnly
-                                  className="text-faint hover:text-accent-text"
-                                  aria-label={`Copy ${field.name}`}
-                                  onPress={() => {
-                                    copyCell(at)
-                                  }}
+                              // The buttons have a slot of their own at the cell's end, kept
+                              // whether or not they are shown: a value is never covered by them,
+                              // and a column does not widen or a row grow when they appear.
+                              <span className="flex items-center gap-1">
+                                <span
+                                  className={`min-w-0 flex-1 truncate ${value === null ? 'text-faint italic' : ''}`}
+                                  title={value === null ? undefined : String(value)}
                                 >
-                                  <LuCopy size={13} />
-                                </Button>
-                                {editable ? (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    isIconOnly
-                                    className="text-faint hover:text-accent-text"
-                                    aria-label={`Edit ${field.name}`}
-                                    onPress={() => {
-                                      openEditor(at)
+                                  <MarkedText text={displayCell(value)} query={search} />
+                                </span>
+                                <span className="cell-actions flex h-5 w-11 shrink-0 items-center justify-end gap-0.5">
+                                  <CellButton
+                                    label={`Copy ${field.name}`}
+                                    onClick={() => {
+                                      copyCell(at)
                                     }}
                                   >
-                                    <LuPencil size={13} />
-                                  </Button>
-                                ) : null}
+                                    <LuCopy size={13} />
+                                  </CellButton>
+                                  {editable ? (
+                                    <CellButton
+                                      label={`Edit ${field.name}`}
+                                      onClick={() => {
+                                        openEditor(at)
+                                      }}
+                                    >
+                                      <LuPencil size={13} />
+                                    </CellButton>
+                                  ) : null}
+                                </span>
                               </span>
-                            ) : null}
+                            )}
                           </Table.Cell>
                         )
                       }),

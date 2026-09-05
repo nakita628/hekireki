@@ -214,15 +214,20 @@
     @apply px-3 py-1.5 align-top text-code;
   }
 
-  /* The copy and edit buttons of the cell under the pointer sit at its right edge, over the row's
-     own colour, so a long value is covered by them rather than crossed out. The row is hovered
-     whenever they are drawn by the pointer; the picked cell can be in a row that is not. */
-  .studio-table .cell-actions {
-    background-color: color-mix(in srgb, var(--surface) 40%, var(--c-canvas));
+  /* The picked cell is the one holding the focus — itself or one of its buttons — and it is
+     drawn by CSS rather than by state, so a page of a hundred rows is not redrawn for a click.
+     Its copy and edit buttons appear under the pointer or the focus, and nowhere else. */
+  .studio-table .table__cell:focus-within {
+    box-shadow: inset 0 0 0 1px var(--c-accent);
   }
 
-  .studio-table .table__row:not(:hover) .cell-actions {
-    background-color: var(--c-canvas);
+  .studio-table .cell-actions {
+    visibility: hidden;
+  }
+
+  .studio-table .table__cell:hover .cell-actions,
+  .studio-table .table__cell:focus-within .cell-actions {
+    visibility: visible;
   }
 
   /* A cell holding controls rather than a value centres them on the row instead. */
