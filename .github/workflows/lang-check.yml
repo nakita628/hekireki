@@ -78,7 +78,7 @@ jobs:
       - if: matrix.lang == 'activerecord'
         uses: ruby/setup-ruby@003a5c4d8d6321bd302e38f6f0ec593f77f06600 # v1.319.0
         with:
-          ruby-version: '3.3.12'
+          ruby-version: '3.4.10'
           # Installs the harness bundle from its Gemfile.lock and caches
           # vendor/bundle; the test's own `bundle install` becomes a no-op.
           bundler-cache: true
