@@ -16,7 +16,7 @@ importers:
         specifier: ^3.23.1
         version: 3.23.1(@types/node@26.4.1)
       pg:
-        specifier: ^8.16.3
+        specifier: ^8.22.0
         version: 8.22.0
       vite-plus:
         specifier: 0.3.0
