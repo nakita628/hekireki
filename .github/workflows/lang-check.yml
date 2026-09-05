@@ -76,7 +76,7 @@ jobs:
           # back to an unpinned network fetch of the rebar3 escript.
           rebar3-version: '3.24.0'
       - if: matrix.lang == 'activerecord'
-        uses: ruby/setup-ruby@003a5c4d8d6321bd302e38f6f0ec593f77f06600 # v1.319.0
+        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
         with:
           ruby-version: '3.3.12'
           # Installs the harness bundle from its Gemfile.lock and caches
