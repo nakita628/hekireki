@@ -91,14 +91,14 @@ test('a model page shows its fields and an enum page its values', async ({ page 
   await expect(page).toHaveURL(/\/models\/User/u)
   await expect(page.getByRole('heading', { level: 1, name: 'User' })).toBeVisible()
   await page.getByRole('tab', { name: 'Fields' }).click()
-  const table = page.getByRole('table')
+  const table = page.getByRole('grid')
   await expectTexts(table, ['id', 'email', 'name', 'role', 'posts'])
   await expect(table).toContainText('Login address')
   await expectNoHorizontalOverflow(page)
 
   await page.getByRole('complementary').getByRole('link', { name: /^Role/u }).click()
   await expect(page.getByRole('heading', { level: 1, name: 'Role' })).toBeVisible()
-  await expectTexts(page.getByRole('table'), ['ADMIN', 'VIEWER'])
+  await expectTexts(page.getByRole('grid'), ['ADMIN', 'VIEWER'])
 })
 
 test('the docs page renders every model and links its sections', async ({ page }) => {

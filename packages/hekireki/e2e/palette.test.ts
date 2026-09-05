@@ -71,7 +71,7 @@ test('the palette reaches a field and opens its model on it', async ({ page }) =
   await expect(page).toHaveURL(/\/models\/User\?(?=.*tab=fields)(?=.*field=email)/u)
   // The fields tab, opened on the row that was asked for and pointing at it.
   const row = page.getByRole('row').filter({ hasText: 'Login address' })
-  await expect(row.getByRole('cell').nth(1)).toHaveText('email')
+  await expect(row.getByRole('rowheader')).toHaveText('email')
   await expect(row).toHaveClass(/bg-accent-soft/u)
 })
 

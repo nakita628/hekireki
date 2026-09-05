@@ -1,6 +1,8 @@
-import { buttonVariants } from '@heroui/react'
+import { buttonVariants, Table } from '@heroui/react'
 import { Link } from '@tanstack/react-router'
 import { LuFileText } from 'react-icons/lu'
+
+import { CopyButton } from '../../components/copy-button.js'
 
 type Schema = {
   readonly models: readonly {
@@ -46,32 +48,30 @@ export function EnumView({ schema, value }: { readonly schema: Schema; readonly 
       {value.documentation ? (
         <p className="m-0 px-6 pt-3 whitespace-pre-wrap text-muted">{value.documentation}</p>
       ) : null}
-      <div className="overflow-auto">
-        <table className="w-full border-collapse">
-          <thead>
-            <tr>
-              <th className="sticky top-0 border-b border-line bg-surface-2 px-3.5 py-2.5 text-left text-code font-semibold text-muted">
-                Value
-              </th>
-              <th className="sticky top-0 border-b border-line bg-surface-2 px-3.5 py-2.5 text-left text-code font-semibold text-muted">
-                Database value
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {value.values.map((item) => (
-              <tr key={item.name}>
-                <td className="border-b border-line px-3.5 py-2.5 font-mono text-code">
-                  {item.name}
-                </td>
-                <td className="border-b border-line px-3.5 py-2.5 font-mono text-code text-muted">
-                  {item.dbName ?? item.name}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <Table variant="secondary" className="studio-table">
+        <Table.ScrollContainer className="overflow-auto">
+          <Table.Content aria-label={`${value.name} values`}>
+            <Table.Header>
+              <Table.Column isRowHeader>Value</Table.Column>
+              <Table.Column>Database value</Table.Column>
+              <Table.Column className="w-9" aria-label="Copy" />
+            </Table.Header>
+            <Table.Body>
+              {value.values.map((item) => (
+                <Table.Row key={item.name} id={item.name}>
+                  <Table.Cell className="py-2.5 font-mono text-code">{item.name}</Table.Cell>
+                  <Table.Cell className="py-2.5 font-mono text-code text-muted">
+                    {item.dbName ?? item.name}
+                  </Table.Cell>
+                  <Table.Cell className="w-9">
+                    <CopyButton text={item.name} what={`value ${item.name}`} />
+                  </Table.Cell>
+                </Table.Row>
+              ))}
+            </Table.Body>
+          </Table.Content>
+        </Table.ScrollContainer>
+      </Table>
       <div className="px-6 py-4">
         <div className="heading">Used by · {usedBy.length}</div>
         {usedBy.length === 0 ? <div className="text-muted">Not referenced by any model</div> : null}

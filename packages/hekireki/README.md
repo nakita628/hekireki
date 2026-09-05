@@ -313,6 +313,14 @@ hekireki studio -p 3000
 the letters of its name in order, so `usemail` finds `User.email`. Following a field opens its
 model on that row.
 
+On a model's page, **/** puts the cursor in the search box and every column is searched as you
+type, with what matched marked in the rows that come back. A cell is edited by clicking it. Tick
+rows to act on them together: **Copy** takes them as tab-separated text — what a spreadsheet
+pastes — and **Delete** asks first, naming the rows it is about to remove. **⌘C** / **Ctrl+C**
+copies the ticked rows, or the cell the keyboard is on when none are ticked, and **Export**
+downloads or copies the page as CSV or JSON. A SQL result is sorted and narrowed in the browser,
+without asking the database a second question.
+
 `--schema` takes either a `schema.prisma` file or a directory — every `.prisma` file directly in the
 directory (subdirectories are not descended into) is read as one schema, which is how Prisma's
 [multi-file schema](https://www.prisma.io/docs/orm/prisma-schema/overview/location#multi-file-prisma-schema)

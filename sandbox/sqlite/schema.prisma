@@ -17,6 +17,7 @@ enum Role {
 
 /// Someone who can sign in
 model User {
+  ///一意
   id        Int       @id @default(autoincrement())
   /// Login address
   email     String    @unique
