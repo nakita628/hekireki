@@ -11,7 +11,7 @@
     "lint:md": "markdownlint-cli2",
     "lint:text": "textlint '**/*.md'",
     "lint:spell": "cspell --no-progress .",
-    "lint:actions": "actionlint -ignore 'unexpected key \"queue\" for \"concurrency\"' && pnpm lint:actions:security",
+    "lint:actions": "node lint/actionlint.mjs && pnpm lint:actions:security",
     "lint:actions:security": "sh -c 'if command -v zizmor >/dev/null; then zizmor .github/workflows; else echo \"zizmor is not installed (pipx install zizmor); CI runs it\"; fi'",
     "test": "vp run --filter ./packages/hekireki test",
     "lang": "vp run hekireki#build && vp run --filter ./test test",

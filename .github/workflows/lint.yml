@@ -36,4 +36,5 @@ jobs:
       # pinned here by hand — it is not an npm dependency, so Renovate does not see it.
       - run: pipx install zizmor==1.30.0
 
-      - run: pnpm lint
+      # setup-vp puts `vp` on PATH, not `pnpm`; `vp run` runs the root script with both available.
+      - run: vp run lint
