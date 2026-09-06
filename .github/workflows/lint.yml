@@ -1,8 +1,9 @@
 name: Lint
 
-# The gates that do not need a build: the prose of the repository (markdownlint, textlint, cspell)
-# and the workflows themselves (actionlint for the syntax, zizmor for the security posture).
-# `pnpm check` runs the same set locally, except zizmor when it is not installed.
+# The gates that need no build, as `pnpm lint` runs them locally: the prose of the repository
+# (markdownlint, textlint, cspell) and the workflows themselves (actionlint for the syntax,
+# zizmor for the security posture). zizmor is installed first so that `pnpm lint` runs it here
+# rather than skipping it as it does on a machine without it.
 #
 # Action versions are tracked by Renovate, which pins each one to its digest
 # (helpers:pinGitHubActionDigests) and keeps the @vX.Y.Z tag as a comment.
@@ -17,7 +18,7 @@ permissions:
   contents: read
 
 jobs:
-  docs:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -30,30 +31,9 @@ jobs:
           cache: true
 
       - run: vp install --frozen-lockfile
-
-      - run: pnpm lint:md
-
-      - run: pnpm lint:text
-
-      - run: pnpm lint:spell
-
-  actions:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - uses: voidzero-dev/setup-vp@313600b80b104eadebb9111787d37a2e83e014ca # v1.17.0
-        with:
-          node-version: '22'
-          cache: true
-
-      - run: vp install --frozen-lockfile
-
-      # actionlint from npm is the WebAssembly build of the same linter.
-      - run: pnpm exec actionlint -ignore 'unexpected key "queue" for "concurrency"'
 
       # zizmor is a Rust tool published on PyPI; pipx is on the hosted runner. The version is
       # pinned here by hand — it is not an npm dependency, so Renovate does not see it.
-      - run: pipx run zizmor==1.30.0 .github/workflows
+      - run: pipx install zizmor==1.30.0
+
+      - run: pnpm lint

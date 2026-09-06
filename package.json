@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "deps": "rm -rf node_modules pnpm-lock.yaml && pnpm install",
-    "check": "vp fmt --check && vp run -r check && pnpm lint:md && pnpm lint:text && pnpm lint:spell && pnpm lint:actions",
+    "check": "vp fmt --check && vp run -r check && pnpm lint",
     "fix": "vp fmt && vp run -r check --fix",
+    "lint": "pnpm lint:md && pnpm lint:text && pnpm lint:spell && pnpm lint:actions",
     "lint:md": "markdownlint-cli2",
     "lint:text": "textlint '**/*.md'",
     "lint:spell": "cspell --no-progress .",

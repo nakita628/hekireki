@@ -23,7 +23,8 @@ pnpm install
 Lint, tests, and coverage always run **from the repo root**:
 
 ```bash
-pnpm check            # format, lint, type checks, then the docs and workflow linters below
+pnpm check            # format, lint, type checks, then `pnpm lint`
+pnpm lint             # the four linters below in one go — what the Lint workflow runs
 pnpm lint:md          # markdownlint over the repository's Markdown
 pnpm lint:text        # textlint: the spelling of product names (Prisma, PostgreSQL, Node.js, ...)
 pnpm lint:spell       # cspell, British English plus .cspell/words.txt; add a real word there, fix a typo
