@@ -43,7 +43,7 @@ pnpm build            # build dist/ (tsdown)
 
 The test suite is split into two Vitest projects:
 
-- **`unit`** — `packages/hekireki/src/**/*.test.ts`. Owns the byte-equality codegen contract (`toBe` / `toStrictEqual` exact matches). Needs no toolchain beyond Node.
+- **`unit`** — `packages/hekireki/src/**/*.test.ts`. Owns the byte-equality codegen contract (`toBe` / `toStrictEqual` exact matches). Needs no toolchain beyond Node. `src/core/example.test.ts` runs every generator on `example/schema.prisma` and compares against the committed `example/generated/` byte for byte, so a change to what a generator writes fails there until `pnpm example` refreshes the golden files and the diff is committed with the change.
 - **`lang`** — `test/lang/*.test.ts`. Regenerates `test/harness/*` from `test/prisma/schema.prisma` and verifies the output against the **real** toolchains (currently Go, Rust, Python, Elixir, Ruby, PHP, and TypeScript). This is what a string comparison cannot see: recursive struct embedding, bad column attributes, malformed associations.
 
 Toolchains you don't have installed are skipped locally with a note — CI runs the full matrix, so you don't need every language installed to contribute. Run a single language with `vp test --project lang test/lang/gorm.test.ts`.
