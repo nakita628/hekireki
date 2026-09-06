@@ -5,8 +5,13 @@
   "type": "module",
   "scripts": {
     "deps": "rm -rf node_modules pnpm-lock.yaml && pnpm install",
-    "check": "vp fmt --check && vp run -r check",
+    "check": "vp fmt --check && vp run -r check && pnpm lint:md && pnpm lint:text && pnpm lint:spell && pnpm lint:actions",
     "fix": "vp fmt && vp run -r check --fix",
+    "lint:md": "markdownlint-cli2",
+    "lint:text": "textlint '**/*.md'",
+    "lint:spell": "cspell --no-progress .",
+    "lint:actions": "actionlint -ignore 'unexpected key \"queue\" for \"concurrency\"' && pnpm lint:actions:security",
+    "lint:actions:security": "sh -c 'if command -v zizmor >/dev/null; then zizmor .github/workflows; else echo \"zizmor is not installed (pipx install zizmor); CI runs it\"; fi'",
     "test": "vp run --filter ./packages/hekireki test",
     "lang": "vp run hekireki#build && vp run --filter ./test test",
     "example": "vp run hekireki#build && vp run --filter ./example generate",
@@ -16,8 +21,13 @@
     "hekireki": "link:packages/hekireki"
   },
   "devDependencies": {
+    "actionlint": "^2.0.6",
+    "cspell": "^10.2.2",
+    "markdownlint-cli2": "^0.23.2",
     "mysql2": "^3.15.4",
     "pg": "^8.16.3",
+    "textlint": "^15.8.0",
+    "textlint-rule-terminology": "^5.2.16",
     "vite-plus": "0.3.0"
   },
   "packageManager": "pnpm@11.24.0"

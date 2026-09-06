@@ -1,0 +1,27 @@
+{
+  // Markdown of the repository: README, CONTRIBUTING, the issue and PR templates. The generated
+  // API reference and the generator output are written by tools and are not linted here.
+  "config": {
+    "default": true,
+    // oxfmt lays the text out; line length and the table shape are its call, not this linter's.
+    "MD013": false,
+    // A heading is repeated on purpose where two sections mirror each other (per-language notes).
+    "MD024": { "siblings_only": true },
+    // The README opens with a logo block, not a heading.
+    "MD041": false,
+    // Inline HTML carries the logo, the centered badges and the <details> blocks.
+    "MD033": false,
+  },
+  "globs": ["**/*.md"],
+  "ignores": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "test/harness/**",
+    "packages/hekireki/docs/studio-api.md",
+    "example/generated/**",
+    "sandbox/**",
+    // What a Playwright run leaves behind.
+    "**/e2e/.results/**",
+    "**/e2e/.workspace/**",
+  ],
+}

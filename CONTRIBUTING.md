@@ -23,7 +23,11 @@ pnpm install
 Lint, tests, and coverage always run **from the repo root**:
 
 ```bash
-pnpm check            # lint + format (vp check --fix)
+pnpm check            # format, lint, type checks, then the docs and workflow linters below
+pnpm lint:md          # markdownlint over the repository's Markdown
+pnpm lint:text        # textlint: the spelling of product names (Prisma, PostgreSQL, Node.js, ...)
+pnpm lint:spell       # cspell, British English plus .cspell/words.txt; add a real word there, fix a typo
+pnpm lint:actions     # actionlint (syntax) and, when installed, zizmor (security) over .github/workflows
 pnpm test             # unit tests (the `unit` project — vitest via vite-plus)
 pnpm coverage         # unit tests with coverage
 pnpm lang             # build + language checks (the `lang` project)
@@ -56,7 +60,7 @@ The screenshot baselines in `e2e/__screenshots__` were taken in this repository'
 
 ## Project layout
 
-```
+```text
 packages/hekireki/src/
 ├── utils/       # single-responsibility pure functions (no project-internal imports)
 ├── helper/      # composition of utils — the per-target codegen logic lives here
@@ -127,7 +131,7 @@ These are enforced in review, so following them up front saves a round-trip:
    - regression / new tests included
 5. Update user-facing docs in the same PR when behavior changes: README examples for new options, and note breaking changes explicitly.
 6. Versioning follows [SemVer](https://semver.org/) and the changelog follows [Keep a Changelog](https://keepachangelog.com/) — maintainers handle releases, but stating "patch / minor / breaking" under **When** in your PR description helps triage.
-7. CI must be green: `Test` (lint, unit tests, coverage), `E2E` (the Studio suite in Chromium) and, if you touched `src/` or `test/`, the per-language `Lang Check` matrix.
+7. CI must be green: `Test` (lint, unit tests, coverage), `Lint` (Markdown, spelling and the workflow files), `E2E` (the Studio suite in Chromium) and, if you touched `src/` or `test/`, the per-language `Lang Check` matrix.
 
 ## Adding a new generator
 

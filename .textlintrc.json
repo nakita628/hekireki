@@ -1,0 +1,21 @@
+{
+  "rules": {
+    "terminology": {
+      "defaultTerms": false,
+      "terms": [
+        "Prisma",
+        "TypeSpec",
+        "Playwright",
+        "PostgreSQL",
+        "MySQL",
+        "SQLite",
+        ["Node\\.?js", "Node.js"],
+        "GitHub",
+        "TypeScript",
+        "JavaScript",
+        "CodeMirror",
+        "Monaco"
+      ]
+    }
+  }
+}
