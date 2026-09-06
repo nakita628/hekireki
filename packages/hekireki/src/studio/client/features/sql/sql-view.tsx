@@ -13,7 +13,6 @@ import {
   usePostDbSql,
   useSchema,
 } from '../../hooks/index.js'
-import { loadString, saveString } from '../../lib/index.js'
 import { SchemaCanvas } from '../schema/schema-view.js'
 import type { SchemaHighlight } from '../schema/schema-view.js'
 import { useAnalysis } from './analysis.js'
@@ -29,7 +28,6 @@ import { SqlEditor } from './sql-editor.js'
 import type { EditorTable } from './sql-editor.js'
 import { TypeView } from './type-view.js'
 
-const SQL_KEY = 'hekireki-studio:sql'
 // How the page is shared out: the editor beside the schema, and the editor above the views.
 const PANES_KEY = 'hekireki-studio:sql-panes'
 const EDITOR_KEY = 'hekireki-studio:sql-editor-height'
@@ -80,8 +78,8 @@ export function SqlView() {
   const queryClient = useQueryClient()
   const database = useDb().data ?? null
   const schema = useSchema().data?.schema ?? null
-  // The editor starts empty; what was last typed comes back on the next visit.
-  const [sql, setSql] = useState(() => loadString(SQL_KEY) ?? '')
+  // The editor is empty on every visit: what is run here is typed here.
+  const [sql, setSql] = useState('')
   const [tab, setTab] = useState<Tab>('flow')
   const [statementIndex, setStatementIndex] = useState(0)
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
@@ -133,7 +131,6 @@ export function SqlView() {
 
   const execute = useCallback(() => {
     if (run.isPending || sql.trim() === '' || database?.connected !== true) return
-    saveString(SQL_KEY, sql)
     const text = statement === null || statements.length <= 1 ? sql : statement.text
     run.mutate({ json: { sql: text, params: [...params] } })
     setTab('result')
@@ -147,7 +144,6 @@ export function SqlView() {
 
   const onChange = useCallback((value: string) => {
     setSql(value)
-    saveString(SQL_KEY, value)
   }, [])
 
   // Completion and hovers offer the names the database knows — `@@map` / `@map` over the Prisma
