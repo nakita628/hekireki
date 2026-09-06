@@ -141,7 +141,19 @@ export function SqlEditor({
       }),
     })
     view.current = editor
+    // The document is a few lines in a tall pane: a click on the empty space under it, or on the
+    // gutter beside it, still lands the cursor in the text, at its end, so typing can start.
+    const focusOnClick = (event: MouseEvent) => {
+      const target = event.target instanceof Node ? event.target : null
+      if (target !== null && editor.contentDOM.contains(target)) return
+      event.preventDefault()
+      editor.dispatch({ selection: { anchor: editor.state.doc.length } })
+      editor.focus()
+    }
+    element.addEventListener('mousedown', focusOnClick)
+    editor.focus()
     return () => {
+      element.removeEventListener('mousedown', focusOnClick)
       editor.destroy()
       view.current = null
     }

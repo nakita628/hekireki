@@ -1,5 +1,5 @@
 // The Data tab and the SQL page against the SQLite workspace database.
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
 import { expect, expectNoHorizontalOverflow, expectTexts, fieldHeaders, test } from './studio.js'
 import { runSql } from './workspace.js'
@@ -373,4 +373,45 @@ test('the SQL page points at a mistake', async ({ page }) => {
   await sqlEditor(page).fill('SELECT nmae FROM "User"')
   await expect(page.getByRole('button', { name: 'Unknown column "nmae"' })).toBeVisible()
   await expect(page.getByText('1 table touched · the columns read are marked')).toBeVisible()
+})
+
+async function boxOf(locator: Locator) {
+  const box = await locator.boundingBox()
+  if (box === null) throw new Error('the element is not on screen')
+  return box
+}
+
+test('the SQL page is shared out by its handles, and a click anywhere in the editor starts typing', async ({
+  page,
+}) => {
+  await page.goto('/sql')
+  const editor = page.locator('.cm-editor')
+  const before = await boxOf(editor)
+
+  // Dragging the handle under the editor gives it more of the column, and the share is kept.
+  const handle = page.getByRole('button', { name: 'Resize the editor' })
+  const grip = await boxOf(handle)
+  await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2 + 150, { steps: 5 })
+  await page.mouse.up()
+  const taller = await boxOf(editor)
+  expect(taller.height).toBeGreaterThan(before.height + 100)
+  await page.reload()
+  const reloaded = await boxOf(editor)
+  expect(reloaded.height).toBeGreaterThan(before.height + 100)
+
+  // The editor is a few lines in a tall pane: a click on the empty space under them still
+  // puts the cursor in the text.
+  await page.getByRole('heading', { level: 1, name: 'SQL' }).click()
+  await expect(page.locator('.cm-content')).not.toBeFocused()
+  const area = await boxOf(editor)
+  await page.mouse.click(area.x + area.width / 2, area.y + area.height - 20)
+  await page.keyboard.type('SELECT 1')
+  await expect(page.locator('.cm-content')).toHaveText('SELECT 1')
+
+  // A double click on the handle puts the share back.
+  await handle.dblclick()
+  const reset = await boxOf(editor)
+  expect(reset.height).toBeLessThan(taller.height - 100)
 })
