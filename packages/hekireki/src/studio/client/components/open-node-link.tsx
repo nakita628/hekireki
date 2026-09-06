@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { LuArrowRight } from 'react-icons/lu'
+import { LuExternalLink } from 'react-icons/lu'
 
 /**
  * The way into a node's page: one click, on something you can see. The diagram used to open a node
@@ -20,12 +20,12 @@ export function OpenNodeLink({
       params={{ name }}
       title={`Open ${name}`}
       aria-label={`Open ${name}`}
-      className="nodrag nopan flex size-5 shrink-0 items-center justify-center rounded-full bg-surface/15 hover:bg-surface/35"
+      className="nodrag nopan inline-flex shrink-0 opacity-60 hover:opacity-100"
       onClick={(event) => {
         event.stopPropagation()
       }}
     >
-      <LuArrowRight size={11} />
+      <LuExternalLink size={13} />
     </Link>
   )
 }
