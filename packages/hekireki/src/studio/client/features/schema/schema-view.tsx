@@ -22,13 +22,16 @@ import { ModelNode } from '../../components/model-node.js'
 import { layoutStorageKey, loadLayout, saveLayout, useUiStore } from '../../lib/index.js'
 import { exportPng, exportSvg } from './export.js'
 import { GeometryContext, useDiagramGeometry } from './geometry.js'
-import { buildEdges, buildNodes, highlightEdges } from './graph.js'
-import type { DiagramNodeType } from './graph.js'
+import { buildEdges, buildNodes, highlightEdges, highlightOf } from './graph.js'
+import type { DiagramNodeType, SchemaHighlight } from './graph.js'
 import { autoLayout, positionsFor } from './layout.js'
 import { RelationEdge } from './relation-edge.js'
 
+export type { SchemaHighlight } from './graph.js'
+
 type Field = {
   readonly name: string
+  readonly dbName?: string | null
   readonly kind: 'scalar' | 'object' | 'enum' | 'unsupported'
   readonly type: string
   readonly isList: boolean
@@ -133,12 +136,14 @@ function Canvas({
   schema,
   focus,
   highlight,
+  touched,
   compact,
   onRefresh,
 }: {
   readonly schema: Schema
   readonly focus: string | null
   readonly highlight: string | null
+  readonly touched: SchemaHighlight | null
   readonly compact: boolean
   readonly onRefresh: (() => void) | null
 }) {
@@ -162,9 +167,21 @@ function Canvas({
     if (built.current === structure) return
     built.current = structure
     const positions = positionsFor(schema, loadLayout(storageKey))
-    setNodes([...buildNodes(schema, positions)])
+    setNodes([...buildNodes(schema, positions, touched)])
     setEdges([...buildEdges(schema)])
-  }, [schema, structure, storageKey, setNodes, setEdges])
+  }, [schema, structure, storageKey, setNodes, setEdges, touched])
+
+  // A statement's highlight is painted onto the cards there are, so drawing one never moves a
+  // card someone dragged into place.
+  useEffect(() => {
+    setNodes((current) =>
+      current.map((node) =>
+        node.type === 'model'
+          ? { ...node, data: { ...node.data, highlight: highlightOf(touched, node.data.model) } }
+          : node,
+      ),
+    )
+  }, [touched, setNodes])
 
   useEffect(() => {
     if (focus === null || nodes.length === 0) return undefined
@@ -333,12 +350,15 @@ export function SchemaCanvas({
   schema,
   focus,
   highlight = null,
+  touched = null,
   compact = false,
   onRefresh = null,
 }: {
   readonly schema: Schema
   readonly focus: string | null
   readonly highlight?: string | null
+  /** The tables a statement touches; the cards it leaves alone fade, the columns it reads are marked. */
+  readonly touched?: SchemaHighlight | null
   readonly compact?: boolean
   readonly onRefresh?: (() => void) | null
 }) {
@@ -348,6 +368,7 @@ export function SchemaCanvas({
         schema={schema}
         focus={focus}
         highlight={highlight}
+        touched={touched}
         compact={compact}
         onRefresh={onRefresh}
       />

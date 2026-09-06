@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import { makeRow, makeCell, makeDbValue } from './values.js'
+import { makeBindValue, makeCell, makeDbValue, makeRow } from './values.js'
 
 describe('makeCell', () => {
   it('passes JSON scalars through and converts the rest to strings', () => {
@@ -73,5 +73,15 @@ describe('makeRow', () => {
         ]),
       }),
     ).toStrictEqual({ userId: '1', createdAt: '1970-01-01T00:00:00.000Z', extra: null })
+  })
+})
+
+describe('makeBindValue', () => {
+  it('binds booleans as 0 / 1 for SQLite and passes everything else through', () => {
+    expect(makeBindValue({ dialect: 'sqlite', value: true })).toBe(1)
+    expect(makeBindValue({ dialect: 'sqlite', value: false })).toBe(0)
+    expect(makeBindValue({ dialect: 'postgresql', value: true })).toBe(true)
+    expect(makeBindValue({ dialect: 'mysql', value: null })).toBeNull()
+    expect(makeBindValue({ dialect: 'sqlite', value: 'ann' })).toBe('ann')
   })
 })

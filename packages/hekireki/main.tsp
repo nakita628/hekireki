@@ -66,7 +66,7 @@ scalar take extends int32;
 @extension("x-brand", "Search")
 scalar search extends string;
 
-/** One SQL statement, run as written (the Studio API is loopback-only; there is no sandbox). */
+/** SQL text: one or more statements, analyzed or run as written (the Studio API is loopback-only; there is no sandbox). */
 @minLength(1)
 @extension("x-trim", true)
 @extension("x-error-message", "SQL must be a string")
@@ -184,6 +184,98 @@ union Severity {
 
   /** A hint the editor shows faintly, such as an `@ignore`d field */
   hint: "hint",
+}
+
+/** What kind of statement was analyzed. */
+union StatementKind {
+  select: "select",
+  insert: "insert",
+  update: "update",
+  `delete`: "delete",
+
+  /** DDL, PRAGMA, EXPLAIN and the like: run as written, not drawn */
+  other: "other",
+
+  /** Text the parser could not read; `diagnostics` says where */
+  invalid: "invalid",
+}
+
+/** What a node of the data-flow graph stands for. */
+union NodeKind {
+  /** A table read from the schema */
+  table: "table",
+
+  /** A common table expression (`WITH name AS (...)`) */
+  cte: "cte",
+
+  /** A subquery in FROM, named by its alias */
+  subquery: "subquery",
+
+  /** A `VALUES` list */
+  values: "values",
+
+  /** A table-valued function in FROM */
+  `function`: "function",
+
+  /** A join of the two inputs */
+  join: "join",
+
+  /** `WHERE` */
+  filter: "filter",
+
+  /** `GROUP BY`, or an aggregate over the whole result */
+  aggregate: "aggregate",
+
+  /** `HAVING` */
+  having: "having",
+
+  /** The `SELECT` list: what comes out */
+  project: "project",
+
+  /** `DISTINCT` */
+  distinct: "distinct",
+
+  /** `ORDER BY` */
+  sort: "sort",
+
+  /** `LIMIT` / `OFFSET` */
+  limit: "limit",
+
+  /** `UNION`, `INTERSECT` or `EXCEPT` */
+  `union`: "union",
+
+  /** The `INSERT` target */
+  insert: "insert",
+
+  /** The `UPDATE` target */
+  update: "update",
+
+  /** The `DELETE` target */
+  `delete`: "delete",
+
+  /** `RETURNING` */
+  returning: "returning",
+}
+
+/** How rows travel along an edge. */
+union EdgeKind {
+  /** The rows of the source feed the target */
+  flow: "flow",
+
+  /** The source is a subquery evaluated inside an expression of the target */
+  lookup: "lookup",
+}
+
+/** How serious a problem the analysis found is. */
+union SqlSeverity {
+  /** The statement cannot run as written */
+  error: "error",
+
+  /** The statement runs, but something in it looks wrong */
+  warning: "warning",
+
+  /** A note about the statement */
+  info: "info",
 }
 
 // ---------------------------------------------------------------------------
@@ -692,8 +784,11 @@ model Affected {
 /** A statement to run. */
 @example(#{ sql: "SELECT id, email FROM users LIMIT 10" })
 model SqlBody {
-  /** The statement */
+  /** The statements; several are run one by one and the result belongs to the last */
   sql: sql;
+
+  /** The values bound to the placeholders, in order; omitted means none */
+  params?: (string | float64 | boolean | null)[];
 }
 
 /** What a statement returned. */
@@ -716,6 +811,249 @@ model SqlResult {
 
   /** Wall time of the statement in milliseconds */
   durationMs: float64;
+}
+
+/** Text to analyze. */
+@example(#{ sql: "SELECT id, email FROM users WHERE id = ?" })
+model AnalyzeBody {
+  /** The statements */
+  sql: sql;
+}
+
+/** Character offsets into the statement text, end exclusive. */
+@example(#{ start: 7, end: 12 })
+model TextRange {
+  /** The first character */
+  start: int32;
+
+  /** One past the last character */
+  end: int32;
+}
+
+/** A column a node produces. */
+@example(#{ name: "email", dataType: "TEXT", used: true })
+model NodeColumn {
+  /** The column name */
+  name: string;
+
+  /** The declared type, when known */
+  dataType: string | null;
+
+  /** Whether the statement reads the column (for a table), or always true for a result */
+  used: boolean;
+}
+
+/** A node of the data-flow graph. */
+@example(#{
+  id: "n3",
+  kind: "filter",
+  label: "WHERE",
+  details: #["u.id = ?"],
+  range: #{ start: 40, end: 48 },
+  scope: "main",
+  columns: #[],
+})
+model GraphNode {
+  /** The node id, unique within the statement */
+  id: string;
+
+  /** What the node stands for */
+  kind: NodeKind;
+
+  /** The caption (`users AS u`, `LEFT JOIN`, `WHERE`) */
+  label: string;
+
+  /** Lines under the caption: the condition, the grouped keys, the column names */
+  details: string[];
+
+  /** Where the node's clause sits in the text, when it has one */
+  range: TextRange | null;
+
+  /** `main`, or the CTE / subquery alias the node belongs to */
+  scope: string;
+
+  /** The columns the node produces (tables, CTEs, subqueries and projections) */
+  columns: NodeColumn[];
+}
+
+/** An edge of the data-flow graph. */
+@example(#{ id: "n1->n3:0", source: "n1", target: "n3", label: null, kind: "flow" })
+model GraphEdge {
+  /** The edge id, unique within the statement */
+  id: string;
+
+  /** The node rows come from */
+  source: string;
+
+  /** The node rows go to */
+  target: string;
+
+  /** A caption (`optional` for the outer side of a join, `scalar` for a scalar subquery) */
+  label: string | null;
+
+  /** How rows travel */
+  kind: EdgeKind;
+}
+
+/** A base-table column an output column derives from. */
+@example(#{ table: "users", column: "email" })
+model ColumnSource {
+  /** The base table */
+  table: string;
+
+  /** The column of that table */
+  column: string;
+}
+
+/** A column of the result, with its lineage and type. */
+@example(#{
+  name: "email",
+  expression: "u.email",
+  dataType: "TEXT",
+  tsType: "string",
+  nullable: true,
+  sources: #[#{ table: "users", column: "email" }],
+})
+model OutputColumn {
+  /** The name a driver keys the row with */
+  name: string;
+
+  /** The expression as written */
+  expression: string;
+
+  /** The declared type, when known */
+  dataType: string | null;
+
+  /** The TypeScript type of the value */
+  tsType: string;
+
+  /** Whether NULL can come back; null when the analysis cannot tell */
+  nullable: boolean | null;
+
+  /** The base-table columns the value derives from */
+  sources: ColumnSource[];
+}
+
+/** A table the statement reads or writes. */
+@example(#{
+  nodeId: "n1",
+  name: "users",
+  `alias`: "u",
+  scope: "main",
+  known: true,
+  columnsUsed: #["id", "email"],
+  range: #{ start: 20, end: 25 },
+})
+model TableRef {
+  /** The graph node of this reference */
+  nodeId: string;
+
+  /** The table name as written */
+  name: string;
+
+  /** The alias, when one was given */
+  `alias`: string | null;
+
+  /** `main`, or the CTE / subquery alias the reference sits in */
+  scope: string;
+
+  /** Whether the schema has the table */
+  known: boolean;
+
+  /** The columns the statement reads from this reference */
+  columnsUsed: string[];
+
+  /** Where the name sits in the text */
+  range: TextRange;
+}
+
+/** A placeholder and the type of what it stands beside. */
+@example(#{
+  index: 1,
+  placeholder: "?",
+  dataType: "INTEGER",
+  tsType: "number",
+  nullable: false,
+  context: "u.id = ?",
+})
+model SqlParameter {
+  /** The bind position (1-based), or the `$n` number */
+  index: int32;
+
+  /** The placeholder as written (`?`, `$1`, `:name`) */
+  placeholder: string;
+
+  /** The declared type of the column it is compared with, when known */
+  dataType: string | null;
+
+  /** The TypeScript type a value should have */
+  tsType: string;
+
+  /** Whether NULL is a valid value; null when the analysis cannot tell */
+  nullable: boolean | null;
+
+  /** The expression the placeholder sits in */
+  context: string;
+}
+
+/** A problem found in the statement. */
+@example(#{
+  severity: "warning",
+  message: "Unknown column \"nmae\"",
+  range: #{ start: 7, end: 11 },
+})
+model SqlDiagnostic {
+  /** How serious it is */
+  severity: SqlSeverity;
+
+  /** What is wrong */
+  message: string;
+
+  /** Where, when the analysis can point at it */
+  range: TextRange | null;
+}
+
+/** The analysis of one statement. */
+model StatementAnalysis {
+  /** What kind of statement it is */
+  kind: StatementKind;
+
+  /** The statement text */
+  text: string;
+
+  /** Where the statement sits in the submitted text */
+  range: TextRange;
+
+  /** The nodes of the data-flow graph */
+  nodes: GraphNode[];
+
+  /** The edges of the data-flow graph */
+  edges: GraphEdge[];
+
+  /** Every table the statement touches */
+  tables: TableRef[];
+
+  /** The columns of the result (empty for a write without RETURNING) */
+  columns: OutputColumn[];
+
+  /** The placeholders, in bind order */
+  parameters: SqlParameter[];
+
+  /** What was found wrong */
+  diagnostics: SqlDiagnostic[];
+
+  /** The row type as TypeScript (`{ id: number; email: string | null }`) */
+  rowType: string;
+
+  /** The parameter tuple (or object, for named placeholders) as TypeScript */
+  paramsType: string;
+}
+
+/** The analysis of every statement in the text. */
+@extension("x-brand", "Analysis")
+model Analysis {
+  /** One entry per statement, in order */
+  statements: StatementAnalysis[];
 }
 
 // ---------------------------------------------------------------------------
@@ -1553,7 +1891,7 @@ namespace DbRoutes {
     | ServiceUnavailableProblemResponse
     | InternalServerProblemResponse;
 
-  /** Run one statement and return its rows, or the affected count for a write, with the wall time. */
+  /** Run the statements one by one and return the rows of the last, or its affected count for a write, with the wall time of the whole. */
   @post
   @route("/sql")
   @operationId("runSql")
@@ -1561,6 +1899,15 @@ namespace DbRoutes {
     | SqlResult
     | ValidationProblemResponse
     | ServiceUnavailableProblemResponse
+    | InternalServerProblemResponse;
+
+  /** Analyze the statements against the Prisma schema's tables: data flow, lineage, row type, parameters and problems. */
+  @post
+  @route("/analyze")
+  @operationId("analyzeSql")
+  op analyze(@body body: AnalyzeBody):
+    | Analysis
+    | ValidationProblemResponse
     | InternalServerProblemResponse;
 }
 

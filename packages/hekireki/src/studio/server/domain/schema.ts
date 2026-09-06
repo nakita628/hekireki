@@ -615,3 +615,159 @@ export function makeSchema(input: z.infer<typeof MakeSchemaInput>) {
     relations: makeRelations({ models }),
   }
 }
+
+const AnalysisDialect = z
+  .enum(['postgresql', 'mysql', 'sqlite'])
+  .meta({ description: 'The SQL dialect the analysis reads types for', example: 'postgresql' })
+
+const MakeAnalysisSchemaInput = z
+  .object({
+    dialect: AnalysisDialect.nullable().meta({
+      description: 'The dialect of the connected database, or null while none is connected.',
+      example: 'sqlite',
+    }),
+    provider: z.string().nullable().meta({
+      description: 'The datasource provider of the schema, the fallback for the dialect.',
+      example: 'postgresql',
+    }),
+    models: z
+      .array(
+        z
+          .object({
+            name: z.string().meta({ description: 'The model name as declared.', example: 'User' }),
+            dbName: z
+              .string()
+              .nullable()
+              .meta({ description: 'The @@map table name, when set.', example: 'users' }),
+            fields: z
+              .array(
+                z
+                  .object({
+                    name: z
+                      .string()
+                      .meta({ description: 'The Prisma field name.', example: 'createdAt' }),
+                    dbName: z.string().nullable().meta({
+                      description: 'The @map column name, when set.',
+                      example: 'created_at',
+                    }),
+                    kind: z.string().meta({
+                      description: 'scalar, object, enum or unsupported.',
+                      example: 'scalar',
+                    }),
+                    type: z
+                      .string()
+                      .meta({ description: 'The declared type.', example: 'DateTime' }),
+                    isList: z
+                      .boolean()
+                      .meta({ description: 'Whether the field is a list.', example: false }),
+                    isRequired: z
+                      .boolean()
+                      .meta({ description: 'Whether the field is required.', example: true }),
+                    nativeType: z.string().nullable().meta({
+                      description: 'The `@db.*` attribute as written, when declared.',
+                      example: '@db.VarChar(255)',
+                    }),
+                  })
+                  .readonly(),
+              )
+              .readonly()
+              .meta({ description: 'The fields of the model, relations included.' }),
+          })
+          .readonly(),
+      )
+      .readonly()
+      .meta({ description: 'The models of the schema.' }),
+  })
+  .readonly()
+  .meta({
+    description: 'The Prisma models the SQL analysis reads its tables from',
+    example: { dialect: 'sqlite', provider: 'sqlite', models: [] },
+  })
+
+/** The column type Prisma migrates a scalar to when no `@db.*` attribute says otherwise. */
+const PRISMA_COLUMN_TYPES: Readonly<
+  Record<z.infer<typeof AnalysisDialect>, Readonly<Record<string, string>>>
+> = {
+  postgresql: {
+    Int: 'int4',
+    BigInt: 'int8',
+    Float: 'float8',
+    Decimal: 'numeric',
+    String: 'text',
+    Boolean: 'bool',
+    DateTime: 'timestamp',
+    Json: 'jsonb',
+    Bytes: 'bytea',
+  },
+  mysql: {
+    Int: 'int',
+    BigInt: 'bigint',
+    Float: 'double',
+    Decimal: 'decimal',
+    String: 'varchar',
+    Boolean: 'tinyint',
+    DateTime: 'datetime',
+    Json: 'json',
+    Bytes: 'longblob',
+  },
+  sqlite: {
+    Int: 'INTEGER',
+    BigInt: 'BIGINT',
+    Float: 'REAL',
+    Decimal: 'DECIMAL',
+    String: 'TEXT',
+    Boolean: 'BOOLEAN',
+    DateTime: 'DATETIME',
+    Json: 'JSONB',
+    Bytes: 'BLOB',
+  },
+}
+
+/** An enum column is stored as text everywhere; MySQL has its own `enum` type for it. */
+const ENUM_COLUMN_TYPES: Readonly<Record<z.infer<typeof AnalysisDialect>, string>> = {
+  postgresql: 'text',
+  mysql: 'enum',
+  sqlite: 'TEXT',
+}
+
+function analysisDialect(input: z.infer<typeof MakeAnalysisSchemaInput>) {
+  if (input.dialect !== null) return input.dialect
+  const provider = AnalysisDialect.safeParse(input.provider)
+  return provider.success ? provider.data : 'sqlite'
+}
+
+function columnDataType(
+  dialect: z.infer<typeof AnalysisDialect>,
+  field: z.infer<typeof MakeAnalysisSchemaInput>['models'][number]['fields'][number],
+) {
+  // `@db.VarChar(255)` is the type as PostgreSQL / MySQL spell it, minus the attribute prefix.
+  const native = field.nativeType === null ? null : field.nativeType.replace(/^@db\./u, '')
+  const base =
+    native ??
+    (field.kind === 'enum'
+      ? ENUM_COLUMN_TYPES[dialect]
+      : (PRISMA_COLUMN_TYPES[dialect][field.type] ?? 'unknown'))
+  return field.isList && dialect === 'postgresql' ? `${base}[]` : base
+}
+
+/**
+ * The tables the SQL analysis runs against, read off the Prisma models: `@@map` / `@map` give
+ * the names the database knows, relation fields are left out (they are not columns), and a
+ * scalar's column type is its `@db.*` attribute or the type Prisma migrates it to.
+ */
+export function makeAnalysisSchema(input: z.infer<typeof MakeAnalysisSchemaInput>) {
+  const dialect = analysisDialect(input)
+  return {
+    dialect,
+    tables: input.models.map((model) => ({
+      name: model.dbName ?? model.name,
+      columns: model.fields
+        .filter((field) => field.kind !== 'object')
+        .map((field) => ({
+          name: field.dbName ?? field.name,
+          dataType: columnDataType(dialect, field),
+          nullable: !field.isRequired,
+        })),
+    })),
+  }
+}

@@ -1,4 +1,6 @@
 // The Data tab and the SQL page against the SQLite workspace database.
+import type { Page } from '@playwright/test'
+
 import { expect, expectNoHorizontalOverflow, expectTexts, fieldHeaders, test } from './studio.js'
 import { runSql } from './workspace.js'
 
@@ -291,11 +293,16 @@ test('folded-away columns stay folded across a reload', async ({ page }) => {
   await expect(grid).toContainText('Bob')
 })
 
+// The SQL editor is CodeMirror: `fill` on its content replaces the whole buffer.
+function sqlEditor(page: Page) {
+  return page.locator('.cm-content')
+}
+
 test('the SQL page runs a query and tabulates the result', async ({ page }) => {
   await page.goto('/sql')
   await expect(page.getByRole('heading', { level: 1, name: 'SQL' })).toBeVisible()
   await expect(page.getByText(/sqlite ·/u).first()).toBeVisible()
-  const sql = page.getByRole('textbox')
+  const sql = sqlEditor(page)
   await sql.fill('SELECT title, published FROM "Post" ORDER BY id')
   await page.getByRole('button', { name: 'Run' }).click()
   const result = page.getByRole('grid')
@@ -316,4 +323,54 @@ test('the SQL page runs a query and tabulates the result', async ({ page }) => {
   await expect(result.getByRole('columnheader')).toHaveText(['n'])
   await expect(result).toContainText('3')
   await expectNoHorizontalOverflow(page)
+})
+
+test('the SQL page draws the statement, lights up the models it touches and types it', async ({
+  page,
+}) => {
+  await page.goto('/sql')
+  await sqlEditor(page).fill(
+    'SELECT u.email, p.title FROM "User" u LEFT JOIN "Post" p ON p."authorId" = u.id WHERE u.role = ?',
+  )
+
+  // Flow: one node per table, the join, the filter and the projection.
+  const flow = page.locator('.react-flow').first()
+  await expect(flow.getByText(/User.* AS u/u)).toBeVisible()
+  await expect(flow.getByText('LEFT JOIN')).toBeVisible()
+  await expect(flow.getByText('WHERE', { exact: true })).toBeVisible()
+  await expect(page.getByText('select · 5 nodes')).toBeVisible()
+
+  // The schema beside it says which tables the statement reads, and marks the columns.
+  await expect(page.getByText('2 tables touched · the columns read are marked')).toBeVisible()
+  const schema = page.locator('.react-flow').nth(1)
+  await expect(schema.getByTitle('Read by the statement')).toHaveCount(5)
+
+  // The placeholder is typed from the column it is compared with.
+  const parameter = page.getByLabel('Parameter ?')
+  await expect(parameter).toContainText('string')
+  await expect(parameter).toContainText('u.role = ?')
+
+  // Type: the LEFT JOIN makes the post title nullable.
+  await page.getByRole('tab', { name: 'Type' }).click()
+  await expect(page.locator('pre')).toContainText('title: string | null')
+  await expect(page.locator('pre')).toContainText('type Params = [string]')
+
+  // Columns: lineage back to the base tables, each one a link to its model page.
+  await page.getByRole('tab', { name: 'Columns' }).click()
+  await expect(page.getByRole('link', { name: 'User.email' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Post.title' })).toBeVisible()
+
+  // Run with the parameter filled in.
+  await parameter.getByRole('textbox').fill('ADMIN')
+  await page.getByRole('button', { name: 'Run' }).click()
+  await expect(page.getByText('2 rows · ')).toBeVisible()
+  await expect(page.getByRole('grid')).toContainText('ada@example.com')
+  await expectNoHorizontalOverflow(page)
+})
+
+test('the SQL page points at a mistake', async ({ page }) => {
+  await page.goto('/sql')
+  await sqlEditor(page).fill('SELECT nmae FROM "User"')
+  await expect(page.getByRole('button', { name: 'Unknown column "nmae"' })).toBeVisible()
+  await expect(page.getByText('1 table touched · the columns read are marked')).toBeVisible()
 })

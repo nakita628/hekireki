@@ -1,5 +1,7 @@
 import * as z from 'zod'
 
+import { splitStatements as splitSqlStatements } from '../../../sql/index.js'
+
 const Dialect = z
   .enum(['postgresql', 'mysql', 'sqlite'])
   .meta({ description: 'The SQL dialect of the connected database', example: 'postgresql' })
@@ -236,4 +238,19 @@ export function makeDeleteStatement(input: z.infer<typeof MakeDeleteStatementInp
     sql: `DELETE FROM ${makeIdentifier({ dialect, name: input.table })} WHERE ${where.sql}`,
     params: where.params,
   }
+}
+
+const SplitStatementsInput = z
+  .object({
+    sql: z.string().meta({ description: 'SQL text.', example: 'SELECT 1; SELECT 2' }),
+  })
+  .readonly()
+  .meta({ description: 'Text that may hold several statements', example: { sql: 'SELECT 1' } })
+
+/**
+ * The statements of the text, split at `;` outside quotes and comments. A driver runs one
+ * statement per call, and a result page belongs to the last one, as a console would show it.
+ */
+export function splitStatements(input: z.infer<typeof SplitStatementsInput>) {
+  return splitSqlStatements(input.sql)
 }

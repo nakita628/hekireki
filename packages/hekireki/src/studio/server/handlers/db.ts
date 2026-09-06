@@ -7,6 +7,7 @@ import type {
   getDbRoute,
   getDbRowsModelNameRoute,
   patchDbRowsModelNameRoute,
+  postDbAnalyzeRoute,
   postDbRowsModelNameRoute,
   postDbSqlRoute,
 } from '../routes'
@@ -458,10 +459,26 @@ export const deleteDbRowsModelNameRouteHandler: RouteHandler<typeof deleteDbRows
 export const postDbSqlRouteHandler: RouteHandler<typeof postDbSqlRoute> = (c) => {
   const data = c.req.valid('json')
   return RuntimeService.studioRuntime().runPromise(
-    Effect.matchEffect(DatabaseUseCase.runSql({ sql: data.sql }), {
+    Effect.matchEffect(DatabaseUseCase.runSql({ sql: data.sql, params: data.params ?? [] }), {
       onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
+          Match.tag('InvalidInputError', ({ field, message }) =>
+            Effect.succeed(
+              c.json(
+                {
+                  type: '/problems/validation-failed' as const,
+                  title: 'Validation Failed' as const,
+                  status: 422 as const,
+                  detail: `${field} ${message}.`,
+                  instance: c.req.path,
+                  errors: [{ field, message }],
+                },
+                422,
+                { 'Content-Type': 'application/problem+json' },
+              ),
+            ),
+          ),
           Match.tag('DatabaseUnavailableError', ({ reason }) =>
             Effect.succeed(
               c.json(
@@ -493,6 +510,36 @@ export const postDbSqlRouteHandler: RouteHandler<typeof postDbSqlRoute> = (c) =>
               ),
             ),
           ),
+          Match.tag('ContractViolationError', ({ message }) =>
+            Effect.logError('contract violation', message).pipe(
+              Effect.as(
+                c.json(
+                  {
+                    type: '/problems/internal-server-error' as const,
+                    title: 'Internal Server Error' as const,
+                    status: 500 as const,
+                    detail: 'An unexpected error occurred.',
+                    instance: c.req.path,
+                  },
+                  500,
+                  { 'Content-Type': 'application/problem+json' },
+                ),
+              ),
+            ),
+          ),
+          Match.exhaustive,
+        ),
+    }),
+  )
+}
+
+export const postDbAnalyzeRouteHandler: RouteHandler<typeof postDbAnalyzeRoute> = (c) => {
+  const data = c.req.valid('json')
+  return RuntimeService.studioRuntime().runPromise(
+    Effect.matchEffect(DatabaseUseCase.analyzeSql({ sql: data.sql }), {
+      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
+      onFailure: (error) =>
+        Match.value(error).pipe(
           Match.tag('ContractViolationError', ({ message }) =>
             Effect.logError('contract violation', message).pipe(
               Effect.as(

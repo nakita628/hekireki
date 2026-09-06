@@ -21,6 +21,8 @@
   --c-danger: #c2410c;
   --c-danger-soft: #fff4ec;
   --c-danger-line: #fed7aa;
+  --c-warn: #b45309;
+  --c-warn-soft: #fff7e6;
   --c-node: #1f2233;
   --c-node-text: #f4f5fa;
   --c-edge: #9095ab;
@@ -40,6 +42,17 @@
   --c-tok-string: #0f766e;
   --c-tok-number: #b45309;
   --c-tok-definition: #1d4ed8;
+  /* The nodes of a statement's data-flow picture: one hue per family, so it reads at a glance. */
+  --c-kind-source: #0f766e;
+  --c-kind-source-soft: #e6f6f3;
+  --c-kind-shape: #1d4ed8;
+  --c-kind-shape-soft: #e8efff;
+  --c-kind-filter: #b45309;
+  --c-kind-filter-soft: #fff4e5;
+  --c-kind-output: #7c3aed;
+  --c-kind-output-soft: #f1eaff;
+  --c-kind-write: #c2410c;
+  --c-kind-write-soft: #fff1ea;
 }
 
 .dark {
@@ -57,6 +70,8 @@
   --c-danger: #fb923c;
   --c-danger-soft: #2b1d14;
   --c-danger-line: #5b3a1f;
+  --c-warn: #fbbf24;
+  --c-warn-soft: #2b2414;
   --c-node: #2a2f45;
   --c-node-text: #f4f5fa;
   --c-edge: #6b7189;
@@ -70,6 +85,16 @@
   --c-tok-string: #5eead4;
   --c-tok-number: #fcd34d;
   --c-tok-definition: #93c5fd;
+  --c-kind-source: #5eead4;
+  --c-kind-source-soft: #12302c;
+  --c-kind-shape: #93c5fd;
+  --c-kind-shape-soft: #172445;
+  --c-kind-filter: #fcd34d;
+  --c-kind-filter-soft: #2e2611;
+  --c-kind-output: #c4b5fd;
+  --c-kind-output-soft: #26204a;
+  --c-kind-write: #fb923c;
+  --c-kind-write-soft: #3a2113;
 }
 
 /* HeroUI reads its own variables. They are pointed at the palette above rather than left on their
@@ -125,6 +150,8 @@
   --color-danger: var(--c-danger);
   --color-danger-soft: var(--c-danger-soft);
   --color-danger-line: var(--c-danger-line);
+  --color-warn: var(--c-warn);
+  --color-warn-soft: var(--c-warn-soft);
   --color-node: var(--c-node);
   --color-node-text: var(--c-node-text);
   --color-key: var(--c-key);
@@ -133,6 +160,16 @@
   --color-edge: var(--c-edge);
   --color-ok: var(--c-ok);
   --color-busy: var(--c-busy);
+  --color-kind-source: var(--c-kind-source);
+  --color-kind-source-soft: var(--c-kind-source-soft);
+  --color-kind-shape: var(--c-kind-shape);
+  --color-kind-shape-soft: var(--c-kind-shape-soft);
+  --color-kind-filter: var(--c-kind-filter);
+  --color-kind-filter-soft: var(--c-kind-filter-soft);
+  --color-kind-output: var(--c-kind-output);
+  --color-kind-output-soft: var(--c-kind-output-soft);
+  --color-kind-write: var(--c-kind-write);
+  --color-kind-write-soft: var(--c-kind-write-soft);
   --font-sans:
     ui-sans-serif, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
@@ -195,6 +232,16 @@
     @apply sticky top-0 border-b border-line bg-surface-2 px-3.5 py-2.5 text-left text-code font-semibold whitespace-nowrap text-muted;
   }
 
+  /* A body cell of those same plain tables: the SQL page's lineage and table lists. */
+  .td {
+    @apply border-b border-line px-3.5 py-2 align-top text-code;
+  }
+
+  /* A small pill naming a statement, a kind or a source column. */
+  .pill {
+    @apply inline-flex items-center rounded-full border px-2 py-px font-mono text-caption whitespace-nowrap;
+  }
+
   /* Those four — the data grid, a SQL result, a model's fields, an enum's values — in HeroUI's
      `secondary` variant, which is spaced for a dozen rows of prose. A page of a hundred database
      rows is read at the density of a spreadsheet and its header has to stay put while they scroll
@@ -238,6 +285,78 @@
   }
 }
 
+/* The SQL editor (CodeMirror) is drawn in the palette above. */
+.cm-editor {
+  height: 100%;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  background: var(--c-surface);
+  color: var(--c-ink);
+}
+
+.cm-editor.cm-focused {
+  outline: none;
+}
+
+.cm-editor .cm-scroller {
+  line-height: 1.6;
+}
+
+.cm-editor .cm-gutters {
+  background: var(--c-surface);
+  color: var(--c-faint);
+  border-right: 1px solid var(--c-line);
+}
+
+.cm-editor .cm-activeLine {
+  background: color-mix(in srgb, var(--c-accent) 6%, transparent);
+}
+
+.cm-editor .cm-activeLineGutter {
+  background: color-mix(in srgb, var(--c-accent) 8%, transparent);
+}
+
+.cm-editor .cm-selectionBackground,
+.cm-editor.cm-focused .cm-selectionBackground {
+  background: color-mix(in srgb, var(--c-accent) 22%, transparent) !important;
+}
+
+.cm-editor .cm-cursor {
+  border-left-color: var(--c-ink);
+}
+
+.cm-editor .cm-tooltip {
+  background: var(--c-surface);
+  border: 1px solid var(--c-line-strong);
+  color: var(--c-ink);
+  border-radius: 8px;
+}
+
+.cm-editor .cm-tooltip-autocomplete ul li[aria-selected] {
+  background: var(--c-accent-soft);
+  color: var(--c-accent-text);
+}
+
+/* The clause the picked node stands for, and the problems the analysis found. */
+.cm-node-range {
+  background: color-mix(in srgb, var(--c-accent) 18%, transparent);
+  border-radius: 3px;
+}
+
+.cm-diagnostic-error {
+  text-decoration: underline wavy var(--c-danger);
+  text-decoration-skip-ink: none;
+}
+
+.cm-diagnostic-warning {
+  text-decoration: underline wavy var(--c-warn);
+  text-decoration-skip-ink: none;
+}
+
+.cm-diagnostic-info {
+  text-decoration: underline dotted var(--c-faint);
+}
+
 /* React Flow chrome */
 .react-flow__controls {
   box-shadow: none;
@@ -273,6 +392,27 @@
   border: 0;
   background: transparent;
   pointer-events: none;
+}
+
+/* The data-flow picture of a statement: rows travel left to right along a solid edge, and a
+   subquery evaluated inside an expression feeds its clause along a dashed one. */
+.flow-handle.react-flow__handle {
+  width: 6px;
+  height: 6px;
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+.react-flow__edge.flow-edge .react-flow__edge-path {
+  stroke: var(--c-edge);
+  stroke-width: 1.6;
+}
+
+.react-flow__edge.flow-edge--lookup .react-flow__edge-path {
+  stroke-dasharray: 4 4;
 }
 
 .react-flow__edge.relation-edge .react-flow__edge-path {

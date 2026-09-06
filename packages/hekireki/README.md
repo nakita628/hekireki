@@ -307,7 +307,7 @@ hekireki studio -p 3000
 | `/models/<name>` | A model's rows, editable, next to its fields                                      |
 | `/enums/<name>`  | An enum with its members and the fields that hold it                              |
 | `/prisma`        | The schema in a Prisma editor, with the language server's diagnostics             |
-| `/sql`           | A SQL console against the connected database                                      |
+| `/sql`           | A SQL console: completion from the schema, a data-flow picture of the statement   |
 
 **⌘K** / **Ctrl+K** opens a search over the whole schema — every page, model, enum and field, by
 the letters of its name in order, so `usemail` finds `User.email`. Following a field opens its
@@ -320,6 +320,14 @@ more; the two buttons that appear on it copy just that value or open it for edit
 tab-separated text — what a spreadsheet pastes — and **Delete** asks first, naming the rows it is
 about to remove. **Export** downloads or copies the page as CSV or JSON. A SQL result is sorted and narrowed in the browser,
 without asking the database a second question.
+
+The SQL page completes table and column names from the schema — `@@map` / `@map` names, as the
+database knows them — and reads the statement as you type: **Flow** draws where its rows come from
+(every table, join, filter, grouping and the projection), **Columns** traces each result column back
+to the base tables and lists every table touched with its alias and the columns read, and **Type**
+shows the row and parameter types as TypeScript. The models the statement touches light up on the
+schema beside it, with the columns it reads marked; a `?` or `$1` placeholder gets a field typed
+from the column it is compared with, and a name the schema does not know is underlined.
 
 **Columns** in the toolbar says which columns the grid draws, remembered per model; what is on
 screen is what **Copy** and **Export** take, so a copy of two columns out of forty is two ticks

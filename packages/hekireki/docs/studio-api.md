@@ -610,7 +610,7 @@ curl http://localhost:5555/db/sql \
 
 `POST /db/sql`
 
-Run one statement and return its rows, or the affected count for a write, with the wall time.
+Run the statements one by one and return the rows of the last, or its affected count for a write, with the wall time of the whole.
 
 > Body parameter
 
@@ -625,7 +625,8 @@ Run one statement and return its rows, or the affected count for a write, with t
 |Name|In|Type|Required|Description|
 |---|---|---|---|---|
 |body|body|[SqlBody](#schemasqlbody)|true|none|
-|» sql|body|object|true|The statement|
+|» sql|body|object|true|The statements; several are run one by one and the result belongs to the last|
+|» params|body|[object]|false|The values bound to the placeholders, in order; omitted means none|
 
 > Example responses
 
@@ -656,6 +657,151 @@ Run one statement and return its rows, or the affected count for a write, with t
 |422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
 |500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
 |503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## analyzeSql
+
+<a id="opIdanalyzeSql"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/db/analyze \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{
+    "sql": "SELECT id, email FROM users WHERE id = ?"
+  }'
+```
+
+`POST /db/analyze`
+
+Analyze the statements against the Prisma schema's tables: data flow, lineage, row type, parameters and problems.
+
+> Body parameter
+
+```json
+{
+  "sql": "SELECT id, email FROM users WHERE id = ?"
+}
+```
+
+<h3 id="analyzesql-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|
+|---|---|---|---|---|
+|body|body|[AnalyzeBody](#schemaanalyzebody)|true|none|
+|» sql|body|object|true|The statements|
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "statements": [
+    {
+      "kind": {},
+      "text": "string",
+      "range": {
+        "start": 7,
+        "end": 12
+      },
+      "nodes": [
+        {
+          "id": "n3",
+          "kind": "filter",
+          "label": "WHERE",
+          "details": [
+            "u.id = ?"
+          ],
+          "range": {
+            "start": 40,
+            "end": 48
+          },
+          "scope": "main",
+          "columns": []
+        }
+      ],
+      "edges": [
+        {
+          "id": "n1->n3:0",
+          "source": "n1",
+          "target": "n3",
+          "label": null,
+          "kind": "flow"
+        }
+      ],
+      "tables": [
+        {
+          "nodeId": "n1",
+          "name": "users",
+          "alias": "u",
+          "scope": "main",
+          "known": true,
+          "columnsUsed": [
+            "id",
+            "email"
+          ],
+          "range": {
+            "start": 20,
+            "end": 25
+          }
+        }
+      ],
+      "columns": [
+        {
+          "name": "email",
+          "expression": "u.email",
+          "dataType": "TEXT",
+          "tsType": "string",
+          "nullable": true,
+          "sources": [
+            {
+              "table": "users",
+              "column": "email"
+            }
+          ]
+        }
+      ],
+      "parameters": [
+        {
+          "index": 1,
+          "placeholder": "?",
+          "dataType": "INTEGER",
+          "tsType": "number",
+          "nullable": false,
+          "context": "u.id = ?"
+        }
+      ],
+      "diagnostics": [
+        {
+          "severity": "warning",
+          "message": "Unknown column \"nmae\"",
+          "range": {
+            "start": 7,
+            "end": 11
+          }
+        }
+      ],
+      "rowType": "string",
+      "paramsType": "string"
+    }
+  ]
+}
+```
+
+<h3 id="analyzesql-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[Analysis](#schemaanalysis)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
 
 <aside class="success">
 This operation does not require authentication
@@ -2422,7 +2568,545 @@ This operation does not require authentication
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
-|sql|object|true|none|The statement|
+|sql|object|true|none|The statements; several are run one by one and the result belongs to the last|
+|params|[object]|false|none|The values bound to the placeholders, in order; omitted means none|
+
+<h2 id="tocS_StatementKind">StatementKind</h2>
+<!-- backwards compatibility -->
+<a id="schemastatementkind"></a>
+<a id="schema_StatementKind"></a>
+<a id="tocSstatementkind"></a>
+<a id="tocsstatementkind"></a>
+
+```json
+"select"
+```
+
+<h2 id="tocS_TextRange">TextRange</h2>
+<!-- backwards compatibility -->
+<a id="schematextrange"></a>
+<a id="schema_TextRange"></a>
+<a id="tocStextrange"></a>
+<a id="tocstextrange"></a>
+
+```json
+{
+  "start": 7,
+  "end": 12
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|start|integer(int32)|true|none|The first character|
+|end|integer(int32)|true|none|One past the last character|
+
+<h2 id="tocS_NodeKind">NodeKind</h2>
+<!-- backwards compatibility -->
+<a id="schemanodekind"></a>
+<a id="schema_NodeKind"></a>
+<a id="tocSnodekind"></a>
+<a id="tocsnodekind"></a>
+
+```json
+"table"
+```
+
+<h2 id="tocS_NodeColumn">NodeColumn</h2>
+<!-- backwards compatibility -->
+<a id="schemanodecolumn"></a>
+<a id="schema_NodeColumn"></a>
+<a id="tocSnodecolumn"></a>
+<a id="tocsnodecolumn"></a>
+
+```json
+{
+  "name": "email",
+  "dataType": "TEXT",
+  "used": true
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|name|string|true|none|The column name|
+|dataType|string|true|none|The declared type, when known|
+|used|boolean|true|none|Whether the statement reads the column (for a table), or always true for a result|
+
+<h2 id="tocS_GraphNode">GraphNode</h2>
+<!-- backwards compatibility -->
+<a id="schemagraphnode"></a>
+<a id="schema_GraphNode"></a>
+<a id="tocSgraphnode"></a>
+<a id="tocsgraphnode"></a>
+
+```json
+{
+  "id": "n3",
+  "kind": "filter",
+  "label": "WHERE",
+  "details": [
+    "u.id = ?"
+  ],
+  "range": {
+    "start": 40,
+    "end": 48
+  },
+  "scope": "main",
+  "columns": []
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|id|string|true|none|The node id, unique within the statement|
+|kind|object|true|none|What the node stands for|
+|label|string|true|none|The caption (`users AS u`, `LEFT JOIN`, `WHERE`)|
+|details|[string]|true|none|Lines under the caption: the condition, the grouped keys, the column names|
+|range|object|true|none|Where the node's clause sits in the text, when it has one|
+|scope|string|true|none|`main`, or the CTE / subquery alias the node belongs to|
+|columns|[[NodeColumn](#schemanodecolumn)]|true|none|The columns the node produces (tables, CTEs, subqueries and projections)|
+
+<h2 id="tocS_EdgeKind">EdgeKind</h2>
+<!-- backwards compatibility -->
+<a id="schemaedgekind"></a>
+<a id="schema_EdgeKind"></a>
+<a id="tocSedgekind"></a>
+<a id="tocsedgekind"></a>
+
+```json
+"flow"
+```
+
+<h2 id="tocS_GraphEdge">GraphEdge</h2>
+<!-- backwards compatibility -->
+<a id="schemagraphedge"></a>
+<a id="schema_GraphEdge"></a>
+<a id="tocSgraphedge"></a>
+<a id="tocsgraphedge"></a>
+
+```json
+{
+  "id": "n1->n3:0",
+  "source": "n1",
+  "target": "n3",
+  "label": null,
+  "kind": "flow"
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|id|string|true|none|The edge id, unique within the statement|
+|source|string|true|none|The node rows come from|
+|target|string|true|none|The node rows go to|
+|label|string|true|none|A caption (`optional` for the outer side of a join, `scalar` for a scalar subquery)|
+|kind|object|true|none|How rows travel|
+
+<h2 id="tocS_TableRef">TableRef</h2>
+<!-- backwards compatibility -->
+<a id="schematableref"></a>
+<a id="schema_TableRef"></a>
+<a id="tocStableref"></a>
+<a id="tocstableref"></a>
+
+```json
+{
+  "nodeId": "n1",
+  "name": "users",
+  "alias": "u",
+  "scope": "main",
+  "known": true,
+  "columnsUsed": [
+    "id",
+    "email"
+  ],
+  "range": {
+    "start": 20,
+    "end": 25
+  }
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|nodeId|string|true|none|The graph node of this reference|
+|name|string|true|none|The table name as written|
+|alias|string|true|none|The alias, when one was given|
+|scope|string|true|none|`main`, or the CTE / subquery alias the reference sits in|
+|known|boolean|true|none|Whether the schema has the table|
+|columnsUsed|[string]|true|none|The columns the statement reads from this reference|
+|range|object|true|none|Where the name sits in the text|
+
+<h2 id="tocS_ColumnSource">ColumnSource</h2>
+<!-- backwards compatibility -->
+<a id="schemacolumnsource"></a>
+<a id="schema_ColumnSource"></a>
+<a id="tocScolumnsource"></a>
+<a id="tocscolumnsource"></a>
+
+```json
+{
+  "table": "users",
+  "column": "email"
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|table|string|true|none|The base table|
+|column|string|true|none|The column of that table|
+
+<h2 id="tocS_OutputColumn">OutputColumn</h2>
+<!-- backwards compatibility -->
+<a id="schemaoutputcolumn"></a>
+<a id="schema_OutputColumn"></a>
+<a id="tocSoutputcolumn"></a>
+<a id="tocsoutputcolumn"></a>
+
+```json
+{
+  "name": "email",
+  "expression": "u.email",
+  "dataType": "TEXT",
+  "tsType": "string",
+  "nullable": true,
+  "sources": [
+    {
+      "table": "users",
+      "column": "email"
+    }
+  ]
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|name|string|true|none|The name a driver keys the row with|
+|expression|string|true|none|The expression as written|
+|dataType|string|true|none|The declared type, when known|
+|tsType|string|true|none|The TypeScript type of the value|
+|nullable|boolean|true|none|Whether NULL can come back; null when the analysis cannot tell|
+|sources|[[ColumnSource](#schemacolumnsource)]|true|none|The base-table columns the value derives from|
+
+<h2 id="tocS_SqlParameter">SqlParameter</h2>
+<!-- backwards compatibility -->
+<a id="schemasqlparameter"></a>
+<a id="schema_SqlParameter"></a>
+<a id="tocSsqlparameter"></a>
+<a id="tocssqlparameter"></a>
+
+```json
+{
+  "index": 1,
+  "placeholder": "?",
+  "dataType": "INTEGER",
+  "tsType": "number",
+  "nullable": false,
+  "context": "u.id = ?"
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|index|integer(int32)|true|none|The bind position (1-based), or the `$n` number|
+|placeholder|string|true|none|The placeholder as written (`?`, `$1`, `:name`)|
+|dataType|string|true|none|The declared type of the column it is compared with, when known|
+|tsType|string|true|none|The TypeScript type a value should have|
+|nullable|boolean|true|none|Whether NULL is a valid value; null when the analysis cannot tell|
+|context|string|true|none|The expression the placeholder sits in|
+
+<h2 id="tocS_SqlSeverity">SqlSeverity</h2>
+<!-- backwards compatibility -->
+<a id="schemasqlseverity"></a>
+<a id="schema_SqlSeverity"></a>
+<a id="tocSsqlseverity"></a>
+<a id="tocssqlseverity"></a>
+
+```json
+"error"
+```
+
+<h2 id="tocS_SqlDiagnostic">SqlDiagnostic</h2>
+<!-- backwards compatibility -->
+<a id="schemasqldiagnostic"></a>
+<a id="schema_SqlDiagnostic"></a>
+<a id="tocSsqldiagnostic"></a>
+<a id="tocssqldiagnostic"></a>
+
+```json
+{
+  "severity": "warning",
+  "message": "Unknown column \"nmae\"",
+  "range": {
+    "start": 7,
+    "end": 11
+  }
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|severity|object|true|none|How serious it is|
+|message|string|true|none|What is wrong|
+|range|object|true|none|Where, when the analysis can point at it|
+
+<h2 id="tocS_StatementAnalysis">StatementAnalysis</h2>
+<!-- backwards compatibility -->
+<a id="schemastatementanalysis"></a>
+<a id="schema_StatementAnalysis"></a>
+<a id="tocSstatementanalysis"></a>
+<a id="tocsstatementanalysis"></a>
+
+```json
+{
+  "kind": {},
+  "text": "string",
+  "range": {
+    "start": 7,
+    "end": 12
+  },
+  "nodes": [
+    {
+      "id": "n3",
+      "kind": "filter",
+      "label": "WHERE",
+      "details": [
+        "u.id = ?"
+      ],
+      "range": {
+        "start": 40,
+        "end": 48
+      },
+      "scope": "main",
+      "columns": []
+    }
+  ],
+  "edges": [
+    {
+      "id": "n1->n3:0",
+      "source": "n1",
+      "target": "n3",
+      "label": null,
+      "kind": "flow"
+    }
+  ],
+  "tables": [
+    {
+      "nodeId": "n1",
+      "name": "users",
+      "alias": "u",
+      "scope": "main",
+      "known": true,
+      "columnsUsed": [
+        "id",
+        "email"
+      ],
+      "range": {
+        "start": 20,
+        "end": 25
+      }
+    }
+  ],
+  "columns": [
+    {
+      "name": "email",
+      "expression": "u.email",
+      "dataType": "TEXT",
+      "tsType": "string",
+      "nullable": true,
+      "sources": [
+        {
+          "table": "users",
+          "column": "email"
+        }
+      ]
+    }
+  ],
+  "parameters": [
+    {
+      "index": 1,
+      "placeholder": "?",
+      "dataType": "INTEGER",
+      "tsType": "number",
+      "nullable": false,
+      "context": "u.id = ?"
+    }
+  ],
+  "diagnostics": [
+    {
+      "severity": "warning",
+      "message": "Unknown column \"nmae\"",
+      "range": {
+        "start": 7,
+        "end": 11
+      }
+    }
+  ],
+  "rowType": "string",
+  "paramsType": "string"
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|kind|object|true|none|What kind of statement it is|
+|text|string|true|none|The statement text|
+|range|object|true|none|Where the statement sits in the submitted text|
+|nodes|[[GraphNode](#schemagraphnode)]|true|none|The nodes of the data-flow graph|
+|edges|[[GraphEdge](#schemagraphedge)]|true|none|The edges of the data-flow graph|
+|tables|[[TableRef](#schematableref)]|true|none|Every table the statement touches|
+|columns|[[OutputColumn](#schemaoutputcolumn)]|true|none|The columns of the result (empty for a write without RETURNING)|
+|parameters|[[SqlParameter](#schemasqlparameter)]|true|none|The placeholders, in bind order|
+|diagnostics|[[SqlDiagnostic](#schemasqldiagnostic)]|true|none|What was found wrong|
+|rowType|string|true|none|The row type as TypeScript (`{ id: number; email: string | null }`)|
+|paramsType|string|true|none|The parameter tuple (or object, for named placeholders) as TypeScript|
+
+<h2 id="tocS_Analysis">Analysis</h2>
+<!-- backwards compatibility -->
+<a id="schemaanalysis"></a>
+<a id="schema_Analysis"></a>
+<a id="tocSanalysis"></a>
+<a id="tocsanalysis"></a>
+
+```json
+{
+  "statements": [
+    {
+      "kind": {},
+      "text": "string",
+      "range": {
+        "start": 7,
+        "end": 12
+      },
+      "nodes": [
+        {
+          "id": "n3",
+          "kind": "filter",
+          "label": "WHERE",
+          "details": [
+            "u.id = ?"
+          ],
+          "range": {
+            "start": 40,
+            "end": 48
+          },
+          "scope": "main",
+          "columns": []
+        }
+      ],
+      "edges": [
+        {
+          "id": "n1->n3:0",
+          "source": "n1",
+          "target": "n3",
+          "label": null,
+          "kind": "flow"
+        }
+      ],
+      "tables": [
+        {
+          "nodeId": "n1",
+          "name": "users",
+          "alias": "u",
+          "scope": "main",
+          "known": true,
+          "columnsUsed": [
+            "id",
+            "email"
+          ],
+          "range": {
+            "start": 20,
+            "end": 25
+          }
+        }
+      ],
+      "columns": [
+        {
+          "name": "email",
+          "expression": "u.email",
+          "dataType": "TEXT",
+          "tsType": "string",
+          "nullable": true,
+          "sources": [
+            {
+              "table": "users",
+              "column": "email"
+            }
+          ]
+        }
+      ],
+      "parameters": [
+        {
+          "index": 1,
+          "placeholder": "?",
+          "dataType": "INTEGER",
+          "tsType": "number",
+          "nullable": false,
+          "context": "u.id = ?"
+        }
+      ],
+      "diagnostics": [
+        {
+          "severity": "warning",
+          "message": "Unknown column \"nmae\"",
+          "range": {
+            "start": 7,
+            "end": 11
+          }
+        }
+      ],
+      "rowType": "string",
+      "paramsType": "string"
+    }
+  ]
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|statements|[[StatementAnalysis](#schemastatementanalysis)]|true|none|One entry per statement, in order|
+
+<h2 id="tocS_AnalyzeBody">AnalyzeBody</h2>
+<!-- backwards compatibility -->
+<a id="schemaanalyzebody"></a>
+<a id="schema_AnalyzeBody"></a>
+<a id="tocSanalyzebody"></a>
+<a id="tocsanalyzebody"></a>
+
+```json
+{
+  "sql": "SELECT id, email FROM users WHERE id = ?"
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|sql|object|true|none|The statements|
 
 <h2 id="tocS_LspTextEdit">LspTextEdit</h2>
 <!-- backwards compatibility -->

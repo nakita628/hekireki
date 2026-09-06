@@ -560,6 +560,28 @@ export default defineConfig({
         },
       },
       {
+        // `src/sql` is the pure SQL analyzer: text and a schema in, a picture out. It knows
+        // nothing about files, the server or the browser.
+        files: ['src/sql/**'],
+        rules: {
+          'no-restricted-imports': [
+            'error',
+            {
+              paths: [
+                { name: 'node:fs', message: 'file I/O belongs in src/file' },
+                { name: 'node:fs/promises', message: 'file I/O belongs in src/file' },
+              ],
+              patterns: [
+                {
+                  regex: '^\\.\\./',
+                  message: 'sql is pure: no project-internal imports allowed',
+                },
+              ],
+            },
+          ],
+        },
+      },
+      {
         // `src/file` owns node:fs.
         files: ['src/file/**'],
         rules: {
@@ -821,12 +843,16 @@ export default defineConfig({
           'src/core/**',
           'src/bin/**',
           'src/utils/**',
+          'src/sql/**',
           'src/studio/client/**',
         ],
         rules: {
           'custom/no-let': 'off',
           'custom/no-mutation': 'off',
           'custom/logic-camel-case': 'off',
+          // The SQL parser and analyzer advance a cursor object they are handed: writing through
+          // that parameter is the design, not an accident.
+          'no-param-reassign': ['error', { props: false }],
         },
       },
       {

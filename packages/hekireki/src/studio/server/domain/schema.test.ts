@@ -3,14 +3,15 @@ import { describe, expect, it } from 'vite-plus/test'
 
 import { parseSchemaFiles } from '../services/load.js'
 import {
-  makeRelationName,
-  makeRelations,
-  makeLocation,
+  makeAnalysisSchema,
   makeDefaultText,
+  makeDocumentation,
   makeIndexAttribute,
+  makeLocation,
   makeNativeTypeAttribute,
   makeRelationAttribute,
-  makeDocumentation,
+  makeRelationName,
+  makeRelations,
   makeSchema,
 } from './schema.js'
 
@@ -570,5 +571,110 @@ model Film {
         onUpdate: null,
       },
     ])
+  })
+})
+
+describe('makeAnalysisSchema', () => {
+  const models = [
+    {
+      name: 'User',
+      dbName: 'users',
+      fields: [
+        {
+          name: 'id',
+          dbName: null,
+          kind: 'scalar',
+          type: 'Int',
+          isList: false,
+          isRequired: true,
+          nativeType: null,
+        },
+        {
+          name: 'email',
+          dbName: null,
+          kind: 'scalar',
+          type: 'String',
+          isList: false,
+          isRequired: true,
+          nativeType: '@db.VarChar(255)',
+        },
+        {
+          name: 'deletedAt',
+          dbName: 'deleted_at',
+          kind: 'scalar',
+          type: 'DateTime',
+          isList: false,
+          isRequired: false,
+          nativeType: null,
+        },
+        {
+          name: 'role',
+          dbName: null,
+          kind: 'enum',
+          type: 'Role',
+          isList: false,
+          isRequired: true,
+          nativeType: null,
+        },
+        {
+          name: 'tags',
+          dbName: null,
+          kind: 'scalar',
+          type: 'String',
+          isList: true,
+          isRequired: true,
+          nativeType: null,
+        },
+        {
+          name: 'posts',
+          dbName: null,
+          kind: 'object',
+          type: 'Post',
+          isList: true,
+          isRequired: true,
+          nativeType: null,
+        },
+      ],
+    },
+  ] as const
+
+  it('names tables and columns as the database knows them and types the columns per dialect', () => {
+    expect(makeAnalysisSchema({ dialect: 'postgresql', provider: null, models })).toStrictEqual({
+      dialect: 'postgresql',
+      tables: [
+        {
+          name: 'users',
+          columns: [
+            { name: 'id', dataType: 'int4', nullable: false },
+            { name: 'email', dataType: 'VarChar(255)', nullable: false },
+            { name: 'deleted_at', dataType: 'timestamp', nullable: true },
+            { name: 'role', dataType: 'text', nullable: false },
+            { name: 'tags', dataType: 'text[]', nullable: false },
+          ],
+        },
+      ],
+    })
+  })
+
+  it('falls back to the datasource provider, then to SQLite, while no database is connected', () => {
+    expect(makeAnalysisSchema({ dialect: null, provider: 'mysql', models }).dialect).toBe('mysql')
+    expect(
+      makeAnalysisSchema({ dialect: null, provider: 'mysql', models }).tables[0]?.columns[3],
+    ).toStrictEqual({ name: 'role', dataType: 'enum', nullable: false })
+    expect(makeAnalysisSchema({ dialect: null, provider: 'mongodb', models })).toStrictEqual({
+      dialect: 'sqlite',
+      tables: [
+        {
+          name: 'users',
+          columns: [
+            { name: 'id', dataType: 'INTEGER', nullable: false },
+            { name: 'email', dataType: 'VarChar(255)', nullable: false },
+            { name: 'deleted_at', dataType: 'DATETIME', nullable: true },
+            { name: 'role', dataType: 'TEXT', nullable: false },
+            { name: 'tags', dataType: 'TEXT', nullable: false },
+          ],
+        },
+      ],
+    })
   })
 })
