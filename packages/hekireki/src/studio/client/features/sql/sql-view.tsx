@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useMemo, useState } from 'react'
 import { LuPlay } from 'react-icons/lu'
 
+import { fieldTypeLabel } from '../../components/labels.js'
 import { ResultTable } from '../../components/result-table.js'
 import { useDebounced } from '../../hooks/debounce.js'
 import { getDbCountsQueryKey, useDb, usePostDbSql, useSchema } from '../../hooks/index.js'
@@ -18,6 +19,7 @@ import { ParamsPanel } from './params-panel.js'
 import { bindValues } from './params.js'
 import { SplitPane } from './split-pane.js'
 import { SqlEditor } from './sql-editor.js'
+import type { EditorTable } from './sql-editor.js'
 import { TypeView } from './type-view.js'
 
 const SQL_KEY = 'hekireki-studio:sql'
@@ -132,17 +134,17 @@ export function SqlView() {
     saveString(SQL_KEY, value)
   }, [])
 
-  // Completion offers the names the database knows: `@@map` / `@map` over the Prisma names.
-  const completion = useMemo(
-    () =>
-      Object.fromEntries(
-        (schema?.models ?? []).map((model) => [
-          model.dbName ?? model.name,
-          model.fields
-            .filter((field) => field.kind !== 'object')
-            .map((field) => field.dbName ?? field.name),
-        ]),
-      ),
+  // Completion and hovers offer the names the database knows — `@@map` / `@map` over the Prisma
+  // names — with the Prisma type beside each one.
+  const tables = useMemo(
+    (): readonly EditorTable[] =>
+      (schema?.models ?? []).map((model) => ({
+        name: model.dbName ?? model.name,
+        detail: `model ${model.name}`,
+        columns: model.fields
+          .filter((field) => field.kind !== 'object')
+          .map((field) => ({ name: field.dbName ?? field.name, detail: fieldTypeLabel(field) })),
+      })),
     [schema],
   )
 
@@ -154,7 +156,7 @@ export function SqlView() {
           onChange={onChange}
           onRun={execute}
           dialect={database?.dialect ?? null}
-          schema={completion}
+          tables={tables}
           highlight={highlight}
           diagnostics={statement?.diagnostics ?? []}
         />

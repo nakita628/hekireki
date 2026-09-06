@@ -321,8 +321,89 @@
   background: color-mix(in srgb, var(--c-accent) 22%, transparent) !important;
 }
 
-.cm-editor .cm-cursor {
-  border-left-color: var(--c-ink);
+.cm-editor .cm-cursor,
+.cm-editor .cm-dropCursor {
+  border-left: 2px solid var(--c-ink);
+}
+
+.cm-editor .cm-content {
+  padding: 8px 0;
+  caret-color: var(--c-ink);
+}
+
+.cm-editor .cm-line {
+  padding: 0 12px;
+}
+
+.cm-editor .cm-placeholder {
+  color: var(--c-faint);
+  font-style: italic;
+}
+
+.cm-editor .cm-foldGutter {
+  color: var(--c-faint);
+}
+
+.cm-editor .cm-foldPlaceholder {
+  background: var(--c-accent-soft);
+  border: 1px solid var(--c-line-strong);
+  color: var(--c-accent-text);
+}
+
+.cm-editor .cm-matchingBracket,
+.cm-editor.cm-focused .cm-matchingBracket {
+  background: color-mix(in srgb, var(--c-accent) 14%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--c-accent) 50%, transparent);
+  border-radius: 2px;
+}
+
+.cm-editor .cm-nonmatchingBracket,
+.cm-editor.cm-focused .cm-nonmatchingBracket {
+  background: color-mix(in srgb, var(--c-danger) 18%, transparent);
+}
+
+/* The other places the picked text appears, as an IDE shows them. */
+.cm-editor .cm-selectionMatch {
+  background: color-mix(in srgb, var(--c-accent) 12%, transparent);
+  border-radius: 2px;
+}
+
+.cm-editor .cm-searchMatch {
+  background: color-mix(in srgb, var(--c-warn) 30%, transparent);
+  border-radius: 2px;
+}
+
+.cm-editor .cm-searchMatch.cm-searchMatch-selected {
+  background: color-mix(in srgb, var(--c-warn) 60%, transparent);
+}
+
+/* The search panel (⌘F / Ctrl+F) sits at the top of the editor. */
+.cm-editor .cm-panels {
+  background: var(--c-surface-2);
+  color: var(--c-ink);
+  border-bottom: 1px solid var(--c-line);
+  font-family: var(--font-sans);
+  font-size: 12px;
+}
+
+.cm-editor .cm-panels .cm-textfield {
+  background: var(--c-surface);
+  border: 1px solid var(--c-line-strong);
+  border-radius: 4px;
+  color: var(--c-ink);
+  font-family: var(--font-mono);
+}
+
+.cm-editor .cm-panels .cm-button {
+  background: var(--c-surface);
+  background-image: none;
+  border: 1px solid var(--c-line-strong);
+  border-radius: 4px;
+  color: var(--c-ink);
+}
+
+.cm-editor .cm-panels .cm-button:hover {
+  border-color: var(--c-accent);
 }
 
 .cm-editor .cm-tooltip {
@@ -332,9 +413,85 @@
   border-radius: 8px;
 }
 
+.cm-editor .cm-tooltip-autocomplete {
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--c-ink) 12%, transparent);
+}
+
+.cm-editor .cm-tooltip-autocomplete ul {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+.cm-editor .cm-tooltip-autocomplete ul li {
+  padding: 3px 8px;
+  line-height: 1.5;
+}
+
 .cm-editor .cm-tooltip-autocomplete ul li[aria-selected] {
   background: var(--c-accent-soft);
   color: var(--c-accent-text);
+}
+
+/* The kind of each completion, drawn as an IDE draws it: a table, a column, a keyword. */
+.cm-editor .cm-completionIcon {
+  width: 1.4em;
+  opacity: 0.8;
+}
+
+.cm-editor .cm-completionIcon-class::after {
+  content: '▦';
+  color: var(--c-kind-source);
+}
+
+.cm-editor .cm-completionIcon-type::after {
+  content: 'T';
+  font-size: 90%;
+  color: var(--c-tok-definition);
+}
+
+.cm-editor .cm-completionIcon-property::after {
+  content: '▪';
+  color: var(--c-kind-output);
+}
+
+.cm-editor .cm-completionIcon-keyword::after {
+  content: 'K';
+  font-size: 90%;
+  color: var(--c-tok-keyword);
+}
+
+.cm-editor .cm-completionDetail {
+  margin-left: 0.8em;
+  font-style: normal;
+  color: var(--c-muted);
+}
+
+.cm-editor .cm-completionMatchedText {
+  text-decoration: none;
+  font-weight: 700;
+  color: var(--c-accent-text);
+}
+
+/* The hover over a table or column. */
+.cm-schema-tooltip {
+  padding: 6px 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.cm-schema-tooltip-head {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  margin-bottom: 2px;
+}
+
+.cm-schema-tooltip-head span {
+  color: var(--c-muted);
 }
 
 /* The clause the picked node stands for, and the problems the analysis found. */

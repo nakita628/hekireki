@@ -415,3 +415,46 @@ test('the SQL page is shared out by its handles, and a click anywhere in the edi
   const reset = await boxOf(editor)
   expect(reset.height).toBeLessThan(taller.height - 100)
 })
+
+test('the SQL editor completes columns with their types after an alias, and explains a name on hover', async ({
+  page,
+}) => {
+  await page.goto('/sql')
+  const editor = sqlEditor(page)
+  await editor.fill('SELECT * FROM "User" u WHERE u.')
+  await page.keyboard.press('End')
+  await page.keyboard.type('r')
+  // After a dot only the columns of that table are offered, each with its Prisma type; Tab takes one.
+  const popup = page.locator('.cm-tooltip-autocomplete')
+  await expect(popup.locator('li[aria-selected]')).toContainText('role')
+  await expect(popup).toContainText('Role')
+  await expect(popup).not.toContainText('READ')
+  // A key that lands within CodeMirror's interaction delay (75 ms) of the popup opening is taken
+  // as typing, not as an answer to it; a person is slower than the runner.
+  await page.waitForTimeout(150)
+  await page.keyboard.press('Tab')
+  await expect(editor).toHaveText('SELECT * FROM "User" u WHERE u.role')
+
+  // Resting the pointer on a table names its model and lists its columns.
+  const word = await editor.evaluate((content) => {
+    // 4 is NodeFilter.SHOW_TEXT, a global the browser has and the lint environment does not.
+    const walker = document.createTreeWalker(content, 4)
+    for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+      const at = node.textContent?.indexOf('User') ?? -1
+      if (at < 0) continue
+      const range = document.createRange()
+      range.setStart(node, at)
+      range.setEnd(node, at + 4)
+      const rect = range.getBoundingClientRect()
+      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
+    }
+    return null
+  })
+  if (word === null) throw new Error('the table name is not in the editor')
+  // The hover watches the pointer travel, so it moves onto the word rather than appearing on it.
+  await page.mouse.move(word.x - 40, word.y)
+  await page.mouse.move(word.x, word.y, { steps: 6 })
+  const hover = page.locator('.cm-schema-tooltip')
+  await expect(hover).toContainText('model User')
+  await expect(hover).toContainText('email  String')
+})
