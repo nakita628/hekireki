@@ -117,16 +117,17 @@ These are enforced in review, so following them up front saves a round-trip:
 
 ## Pull request process
 
-1. Fork and create a topic branch from `main`.
+1. Fork and create a topic branch from `main`, named `type/topic` (`fix/zod-map-keys`, `feat/studio-plan-view`).
 2. Keep PRs focused — one bug fix or one feature per PR. Changes that alter generated output for existing users need an issue first.
-3. Before pushing, make sure all of these pass locally:
+3. Title the PR `type(scope): summary` — imperative mood, no trailing period; `type` is one of `feat | fix | perf | refactor | docs | test | build | ci | chore`, `scope` a generator name or `studio | server | client | api | cli | sql | diagram | e2e | example | docs | ci`. Fill in every heading of `.github/pull_request_template.md` (Why / What / Where / Who / When / How); write `None.` under one that does not apply rather than deleting it, and tick a box only for a command that ran and passed.
+4. Before pushing, make sure all of these pass locally:
    - `pnpm check` (clean, no diffs left behind)
    - `pnpm test`
    - `cd packages/hekireki && pnpm test:e2e` if you touched Studio (`src/studio/`)
    - regression / new tests included
-4. Update user-facing docs in the same PR when behavior changes: README examples for new options, and note breaking changes explicitly.
-5. Versioning follows [SemVer](https://semver.org/) and the changelog follows [Keep a Changelog](https://keepachangelog.com/) — maintainers handle releases, but stating "patch / minor / breaking" in your PR description helps triage.
-6. CI must be green: `Test` (lint, unit tests, coverage), `E2E` (the Studio suite in Chromium) and, if you touched `src/` or `test/`, the per-language `Lang Check` matrix.
+5. Update user-facing docs in the same PR when behavior changes: README examples for new options, and note breaking changes explicitly.
+6. Versioning follows [SemVer](https://semver.org/) and the changelog follows [Keep a Changelog](https://keepachangelog.com/) — maintainers handle releases, but stating "patch / minor / breaking" under **When** in your PR description helps triage.
+7. CI must be green: `Test` (lint, unit tests, coverage), `E2E` (the Studio suite in Chromium) and, if you touched `src/` or `test/`, the per-language `Lang Check` matrix.
 
 ## Adding a new generator
 
