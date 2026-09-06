@@ -19,6 +19,12 @@ export type { EditorServices, MonacoEditor, PlainSymbol } from './monaco.js'
 const ANALYZE_DEBOUNCE_MS = 400
 
 const OPTIONS: MonacoEditor.IStandaloneEditorConstructionOptions = {
+  // Monaco 0.56 defaults its input to the experimental `EditContext`, which drives a plain
+  // `<div class="native-edit-context">` — no `contenteditable`, no textarea. In Chromium a letter
+  // reaches it as a `beforeinput`, and the space bar does not: the key arrives, nothing cancels
+  // it, and no text is ever inserted. Typing `model User` in the schema editor writes `modelUser`.
+  // The textarea this turns back on is the input path Monaco used for a decade.
+  editContext: false,
   fontFamily: EDITOR_FONT,
   fontSize: 12.5,
   lineHeight: 20,

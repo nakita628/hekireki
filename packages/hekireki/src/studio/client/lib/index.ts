@@ -1,3 +1,4 @@
+export type * from './api-types.js'
 export * from './client.js'
 export * from './storage.js'
 export * from './store.js'

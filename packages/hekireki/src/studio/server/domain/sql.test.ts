@@ -3,11 +3,13 @@ import { describe, expect, it } from 'vite-plus/test'
 import {
   makeCountStatement,
   makeDeleteStatement,
+  makeExplainStatement,
+  makeIdentifier,
   makeInsertStatement,
   makePlaceholder,
-  makeIdentifier,
   makeSelectStatement,
   makeUpdateStatement,
+  splitStatements,
 } from './sql.js'
 
 describe('makeIdentifier and makePlaceholder', () => {
@@ -136,5 +138,30 @@ describe('makeUpdateStatement and makeDeleteStatement', () => {
       sql: 'DELETE FROM "users" WHERE "id" = ?',
       params: [7],
     })
+  })
+})
+
+describe('splitStatements', () => {
+  it('splits at semicolons outside quotes and comments and drops empty statements', () => {
+    expect(
+      splitStatements({
+        sql: "SELECT ';' AS a; SELECT 2 /* three; */ ;\n\n",
+      }),
+    ).toStrictEqual(["SELECT ';' AS a", 'SELECT 2 /* three; */'])
+    expect(splitStatements({ sql: '  ;; ' })).toStrictEqual([])
+  })
+})
+
+describe('makeExplainStatement', () => {
+  it('asks each database for its machine-readable plan, without the trailing semicolon', () => {
+    expect(makeExplainStatement({ dialect: 'sqlite', sql: 'SELECT 1;' })).toBe(
+      'EXPLAIN QUERY PLAN SELECT 1',
+    )
+    expect(makeExplainStatement({ dialect: 'postgresql', sql: ' SELECT 1 ' })).toBe(
+      'EXPLAIN (FORMAT JSON) SELECT 1',
+    )
+    expect(makeExplainStatement({ dialect: 'mysql', sql: 'SELECT 1' })).toBe(
+      'EXPLAIN FORMAT=JSON SELECT 1',
+    )
   })
 })

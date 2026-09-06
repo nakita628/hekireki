@@ -24,8 +24,8 @@ test('shows the file, the other file as a tab and the diagram beside it', async 
   await expect(page.getByRole('heading', { level: 1, name: 'Prisma schema' })).toBeVisible()
   await expect(page.getByText(/lines · sqlite/u)).toBeVisible()
   expect(await editor.lines()).toContain('model User {')
-  await expect(page.locator('.tab-active')).toHaveText(/base\.prisma$/u)
-  await expect(page.locator('.tab')).toHaveCount(2)
+  await expect(page.getByRole('tab', { selected: true })).toHaveText(/base\.prisma$/u)
+  await expect(page.getByRole('tab')).toHaveCount(2)
   await expectLaidOut(editor.root, { width: 400, height: 400 })
   await expectLaidOut(page.locator('.react-flow'), { width: 300, height: 400 })
   await expect(page.locator('.react-flow__node')).toHaveCount(3)
@@ -71,6 +71,17 @@ test('marks an unknown type, offers the quick fixes and clears once fixed', asyn
   await expect.poll(() => fileOnDisk(request, 'base.prisma')).toContain('role  Role')
 })
 
+test('the space bar reaches the editor', async ({ page }) => {
+  const editor = editorOf(page)
+  await editor.goto(10, 1)
+  await page.keyboard.press('End')
+  await page.keyboard.press('Enter')
+  await editor.type('nickname String?')
+  // Monaco's experimental EditContext took the key and inserted nothing, so this read
+  // `nicknameString?`; the textarea the editor is configured back onto does not.
+  await expect.poll(() => editor.lines()).toContain('  nickname String?')
+})
+
 test('completes attributes from the language server', async ({ page }) => {
   const editor = editorOf(page)
   await editor.goto(12, 1)
@@ -111,7 +122,7 @@ test('explains a relation on hover and jumps to its declaration in the other fil
   await page.keyboard.press('Escape')
 
   await page.keyboard.press('F12')
-  await expect(page.locator('.tab-active')).toHaveText(/post\.prisma$/u)
+  await expect(page.getByRole('tab', { selected: true })).toHaveText(/post\.prisma$/u)
   await expect.poll(() => editor.lines()).toContain('model Post {')
 })
 

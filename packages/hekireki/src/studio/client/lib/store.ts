@@ -10,9 +10,12 @@ type UiStore = {
   readonly theme: Theme
   readonly connection: Connection
   readonly sidebarOpen: boolean
+  readonly paletteOpen: boolean
   readonly toggleTheme: () => void
   readonly setConnection: (connection: Connection) => void
   readonly toggleSidebar: () => void
+  readonly openPalette: () => void
+  readonly closePalette: () => void
 }
 
 // The sidebar is open until someone folds it away, and then it stays folded.
@@ -37,6 +40,8 @@ export const useUiStore = create<UiStore>()((set, get) => ({
   theme: initialTheme(),
   connection: 'connecting',
   sidebarOpen: loadString(SIDEBAR_KEY) !== 'closed',
+  // The palette is a moment, not a setting: it opens on the shortcut and is gone again.
+  paletteOpen: false,
   toggleTheme: () => {
     const theme = nextTheme(get().theme)
     saveString(THEME_KEY, theme)
@@ -50,5 +55,11 @@ export const useUiStore = create<UiStore>()((set, get) => ({
     const sidebarOpen = !get().sidebarOpen
     saveString(SIDEBAR_KEY, sidebarOpen ? 'open' : 'closed')
     set({ sidebarOpen })
+  },
+  openPalette: () => {
+    set({ paletteOpen: true })
+  },
+  closePalette: () => {
+    set({ paletteOpen: false })
   },
 }))

@@ -12,6 +12,16 @@ export const DATABASE_FILE = path.join(WORKSPACE_DIR, 'studio.db')
 export const PORT = 5899
 export const BASE_URL = `http://127.0.0.1:${PORT}`
 
+/** Runs SQL against the workspace database while Studio is serving it, for seeding a test. */
+export function runSql(sql: string) {
+  const db = new DatabaseSync(DATABASE_FILE)
+  try {
+    db.exec(sql)
+  } finally {
+    db.close()
+  }
+}
+
 export function prepareWorkspace() {
   rmSync(WORKSPACE_DIR, { recursive: true, force: true })
   mkdirSync(WORKSPACE_DIR, { recursive: true })

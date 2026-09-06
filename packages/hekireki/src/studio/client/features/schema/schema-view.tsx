@@ -1,4 +1,4 @@
-import { useNavigate } from '@tanstack/react-router'
+import { Button, Tooltip, toast } from '@heroui/react'
 import {
   Background,
   BackgroundVariant,
@@ -14,22 +14,24 @@ import {
 } from '@xyflow/react'
 import type { Edge, OnSelectionChangeParams } from '@xyflow/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { toast } from 'react-hot-toast'
+import { LuDownload, LuLayoutGrid, LuRefreshCw } from 'react-icons/lu'
 
 import type { DiagramIndex } from '../../../../diagram/layout.js'
 import { EnumNode } from '../../components/enum-node.js'
-import { DownloadIcon, LayoutIcon, RefreshIcon } from '../../components/icons.js'
 import { ModelNode } from '../../components/model-node.js'
 import { layoutStorageKey, loadLayout, saveLayout, useUiStore } from '../../lib/index.js'
 import { exportPng, exportSvg } from './export.js'
 import { GeometryContext, useDiagramGeometry } from './geometry.js'
-import { buildEdges, buildNodes, highlightEdges } from './graph.js'
-import type { DiagramNodeType } from './graph.js'
+import { buildEdges, buildNodes, highlightEdges, highlightOf } from './graph.js'
+import type { DiagramNodeType, SchemaHighlight } from './graph.js'
 import { autoLayout, positionsFor } from './layout.js'
 import { RelationEdge } from './relation-edge.js'
 
+export type { SchemaHighlight } from './graph.js'
+
 type Field = {
   readonly name: string
+  readonly dbName?: string | null
   readonly kind: 'scalar' | 'object' | 'enum' | 'unsupported'
   readonly type: string
   readonly isList: boolean
@@ -134,16 +136,17 @@ function Canvas({
   schema,
   focus,
   highlight,
+  touched,
   compact,
   onRefresh,
 }: {
   readonly schema: Schema
   readonly focus: string | null
   readonly highlight: string | null
+  readonly touched: SchemaHighlight | null
   readonly compact: boolean
   readonly onRefresh: (() => void) | null
 }) {
-  const navigate = useNavigate()
   const storageKey = layoutStorageKey(schema.files[0]?.path ?? 'schema')
   const [nodes, setNodes, onNodesChange] = useNodesState(NO_NODES)
   const [edges, setEdges, onEdgesChange] = useEdgesState(NO_EDGES)
@@ -164,9 +167,21 @@ function Canvas({
     if (built.current === structure) return
     built.current = structure
     const positions = positionsFor(schema, loadLayout(storageKey))
-    setNodes([...buildNodes(schema, positions)])
+    setNodes([...buildNodes(schema, positions, touched)])
     setEdges([...buildEdges(schema)])
-  }, [schema, structure, storageKey, setNodes, setEdges])
+  }, [schema, structure, storageKey, setNodes, setEdges, touched])
+
+  // A statement's highlight is painted onto the cards there are, so drawing one never moves a
+  // card someone dragged into place.
+  useEffect(() => {
+    setNodes((current) =>
+      current.map((node) =>
+        node.type === 'model'
+          ? { ...node, data: { ...node.data, highlight: highlightOf(touched, node.data.model) } }
+          : node,
+      ),
+    )
+  }, [touched, setNodes])
 
   useEffect(() => {
     if (focus === null || nodes.length === 0) return undefined
@@ -237,7 +252,7 @@ function Canvas({
       try {
         await exportPng('schema.png', diagram())
       } catch {
-        toast.error('The diagram could not be exported.')
+        toast.danger('The diagram could not be exported.')
       } finally {
         setExporting(false)
       }
@@ -267,11 +282,6 @@ function Canvas({
           onNodeDragStop={() => {
             persist(nodes)
           }}
-          onNodeDoubleClick={(_event, node) => {
-            void (node.type === 'enum'
-              ? navigate({ to: '/enums/$name', params: { name: node.id } })
-              : navigate({ to: '/models/$name', params: { name: node.id }, search: {} }))
-          }}
           onSelectionChange={onSelectionChange}
           nodesConnectable={false}
           fitView
@@ -298,43 +308,37 @@ function Canvas({
           )}
           <Panel position="top-right" className="flex gap-2">
             {onRefresh ? (
-              <button type="button" className="btn btn-ghost bg-surface" onClick={onRefresh}>
-                <RefreshIcon size={15} />
+              <Button variant="ghost" className="bg-surface" onPress={onRefresh}>
+                <LuRefreshCw size={15} />
                 Refresh
-              </button>
+              </Button>
             ) : null}
             {compact ? null : (
               <>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={onExportPng}
-                  disabled={exporting || nodes.length === 0}
-                  title="Download the diagram as a PNG image"
-                >
-                  <DownloadIcon size={15} />
-                  PNG
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={onExportSvg}
-                  disabled={nodes.length === 0}
-                  title="Download the diagram as an SVG image"
-                >
-                  <DownloadIcon size={15} />
-                  SVG
-                </button>
+                <Tooltip>
+                  <Button
+                    variant="outline"
+                    onPress={onExportPng}
+                    isDisabled={exporting || nodes.length === 0}
+                  >
+                    <LuDownload size={15} />
+                    PNG
+                  </Button>
+                  <Tooltip.Content>Download the diagram as a PNG image</Tooltip.Content>
+                </Tooltip>
+                <Tooltip>
+                  <Button variant="outline" onPress={onExportSvg} isDisabled={nodes.length === 0}>
+                    <LuDownload size={15} />
+                    SVG
+                  </Button>
+                  <Tooltip.Content>Download the diagram as an SVG image</Tooltip.Content>
+                </Tooltip>
               </>
             )}
-            <button
-              type="button"
-              className={`btn${compact ? ' h-8 px-2.5 text-code' : ''}`}
-              onClick={relayout}
-            >
-              <LayoutIcon size={15} />
+            <Button variant="outline" size={compact ? 'sm' : 'md'} onPress={relayout}>
+              <LuLayoutGrid size={15} />
               Auto layout
-            </button>
+            </Button>
           </Panel>
         </ReactFlow>
       </GeometryContext>
@@ -346,12 +350,15 @@ export function SchemaCanvas({
   schema,
   focus,
   highlight = null,
+  touched = null,
   compact = false,
   onRefresh = null,
 }: {
   readonly schema: Schema
   readonly focus: string | null
   readonly highlight?: string | null
+  /** The tables a statement touches; the cards it leaves alone fade, the columns it reads are marked. */
+  readonly touched?: SchemaHighlight | null
   readonly compact?: boolean
   readonly onRefresh?: (() => void) | null
 }) {
@@ -361,6 +368,7 @@ export function SchemaCanvas({
         schema={schema}
         focus={focus}
         highlight={highlight}
+        touched={touched}
         compact={compact}
         onRefresh={onRefresh}
       />
@@ -386,7 +394,6 @@ export function SchemaView({
           {schema.relations.length} {schema.relations.length === 1 ? 'relation' : 'relations'}
           {schema.enums.length > 0 ? ` · ${schema.enums.length} enums` : ''}
         </span>
-        <span className="ml-auto text-code text-faint">Double-click a model to open it</span>
       </header>
       <SchemaCanvas schema={schema} focus={focus} onRefresh={onRefresh} />
     </section>

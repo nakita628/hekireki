@@ -1,8 +1,10 @@
+import { Chip, Table } from '@heroui/react'
 import { Link } from '@tanstack/react-router'
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
+import { LuKey, LuLink } from 'react-icons/lu'
 
-import { KeyIcon, LinkIcon } from './icons.js'
 import { fieldTypeLabel } from './labels.js'
+import { MarkedText } from './marked-text.js'
 
 type Field = {
   readonly name: string
@@ -40,10 +42,10 @@ export function FieldGlyph({
   readonly primaryKey: ReadonlySet<string>
 }) {
   if (field.isId || primaryKey.has(field.name)) {
-    return <KeyIcon size={13} className="inline-block align-middle text-key" />
+    return <LuKey size={13} className="inline-block align-middle text-key" />
   }
   if (field.isForeignKey) {
-    return <LinkIcon size={13} className="inline-block align-middle text-accent" />
+    return <LuLink size={13} className="inline-block align-middle text-accent" />
   }
   return <span className="inline-block size-[13px] align-middle" />
 }
@@ -80,12 +82,22 @@ export function FieldsTable({
   schema,
   model,
   query,
+  highlight = null,
 }: {
   readonly schema: Schema
   readonly model: Model
   readonly query: string
+  /** One field to point at, for a link that arrived naming it. */
+  readonly highlight?: string | null
 }) {
   const primaryKey = useMemo(() => new Set(model.primaryKey), [model])
+  const highlighted = useRef<HTMLTableRowElement>(null)
+  // A model of forty fields opens below the one that was asked for, so the row is brought up —
+  // again whenever another field is asked for, which does not remount the table.
+  useEffect(() => {
+    if (highlight === null) return
+    highlighted.current?.scrollIntoView({ block: 'center' })
+  }, [highlight])
   const fields = useMemo(() => {
     const q = query.trim().toLowerCase()
     return q === ''
@@ -99,66 +111,93 @@ export function FieldsTable({
         )
   }, [model, query])
   return (
-    <div className="min-h-0 flex-1 overflow-auto">
-      <table className="w-full border-collapse">
-        <thead>
-          <tr>
-            <th className="th w-9 pr-0" aria-label="Kind" />
-            <th className="th">Field</th>
-            <th className="th">Type</th>
-            <th className="th">Attributes</th>
-            <th className="th">Documentation</th>
-          </tr>
-        </thead>
-        <tbody>
-          {fields.map((field) => (
-            <tr key={field.name} className={field.kind === 'object' ? 'bg-surface-2' : ''}>
-              <td className="w-9 border-b border-line py-2.5 pl-3.5">
-                <FieldGlyph field={field} primaryKey={primaryKey} />
-              </td>
-              <td className="border-b border-line px-3.5 py-2.5 align-top font-mono text-code font-semibold whitespace-nowrap">
-                {field.name}
-                {field.dbName ? (
-                  <span className="mt-0.5 block text-meta font-normal text-faint">
-                    {field.dbName}
-                  </span>
-                ) : null}
-              </td>
-              <td className="border-b border-line px-3.5 py-2.5 align-top">
-                <TypeLink field={field} schema={schema} />
-              </td>
-              <td className="border-b border-line px-3.5 py-2.5 align-top">
-                <div className="flex flex-wrap gap-1">
-                  {field.attributes.map((attribute) => (
-                    <span key={attribute} className="chip">
-                      {attribute}
+    <Table variant="secondary" className="studio-table min-h-0 flex-1 grid-rows-[minmax(0,1fr)]">
+      <Table.ScrollContainer className="min-h-0 overflow-auto">
+        <Table.Content aria-label="Fields">
+          <Table.Header>
+            <Table.Column className="w-9 pr-0" aria-label="Kind" />
+            <Table.Column isRowHeader>Field</Table.Column>
+            <Table.Column>Type</Table.Column>
+            <Table.Column>Attributes</Table.Column>
+            <Table.Column>Documentation</Table.Column>
+          </Table.Header>
+          <Table.Body
+            renderEmptyState={() => (
+              <p className="m-0 px-6 py-8 text-center text-muted">
+                No field matches <span className="font-mono text-ink">{query}</span>.
+              </p>
+            )}
+          >
+            {fields.map((field) => (
+              <Table.Row
+                key={field.name}
+                id={field.name}
+                ref={field.name === highlight ? highlighted : null}
+                // The variant paints the cells, not the row, so a whole-row tint is asked of them.
+                className={
+                  field.name === highlight
+                    ? '[&>.table__cell]:bg-accent-soft'
+                    : field.kind === 'object'
+                      ? '[&>.table__cell]:bg-surface-2'
+                      : ''
+                }
+              >
+                <Table.Cell className="w-9 py-2.5 pr-0 pl-3.5">
+                  <FieldGlyph field={field} primaryKey={primaryKey} />
+                </Table.Cell>
+                <Table.Cell
+                  textValue={field.name}
+                  className="py-2.5 font-mono text-code font-semibold whitespace-nowrap"
+                >
+                  <MarkedText text={field.name} query={query} />
+                  {field.dbName ? (
+                    <span className="mt-0.5 block text-meta font-normal text-faint">
+                      {field.dbName}
                     </span>
-                  ))}
-                </div>
-              </td>
-              <td className="max-w-[420px] border-b border-line px-3.5 py-2.5 align-top text-muted">
-                {field.documentation ?? <span className="text-faint">—</span>}
-                {field.annotations.length > 0 ? (
-                  <div className="mt-1 flex flex-col gap-0.5">
-                    {field.annotations.map((annotation) => (
-                      <code key={annotation} className="text-meta text-faint">
-                        {annotation}
-                      </code>
+                  ) : null}
+                </Table.Cell>
+                <Table.Cell textValue={fieldTypeLabel(field)} className="py-2.5">
+                  <TypeLink field={field} schema={schema} />
+                </Table.Cell>
+                <Table.Cell textValue={field.attributes.join(' ')} className="py-2.5">
+                  <div className="flex flex-wrap gap-1">
+                    {field.attributes.map((attribute) => (
+                      <Chip
+                        key={attribute}
+                        color="accent"
+                        variant="soft"
+                        size="sm"
+                        className="font-mono"
+                      >
+                        {attribute}
+                      </Chip>
                     ))}
                   </div>
-                ) : null}
-              </td>
-            </tr>
-          ))}
-          {fields.length === 0 ? (
-            <tr>
-              <td colSpan={5} className="px-3.5 py-6 text-muted">
-                No field matches “{query}”.
-              </td>
-            </tr>
-          ) : null}
-        </tbody>
-      </table>
-    </div>
+                </Table.Cell>
+                <Table.Cell
+                  textValue={field.documentation ?? ''}
+                  className="max-w-[420px] py-2.5 text-muted"
+                >
+                  {field.documentation === null ? (
+                    <span className="text-faint">—</span>
+                  ) : (
+                    <MarkedText text={field.documentation} query={query} />
+                  )}
+                  {field.annotations.length > 0 ? (
+                    <div className="mt-1 flex flex-col gap-0.5">
+                      {field.annotations.map((annotation) => (
+                        <code key={annotation} className="text-meta text-faint">
+                          {annotation}
+                        </code>
+                      ))}
+                    </div>
+                  ) : null}
+                </Table.Cell>
+              </Table.Row>
+            ))}
+          </Table.Body>
+        </Table.Content>
+      </Table.ScrollContainer>
+    </Table>
   )
 }

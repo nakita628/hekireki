@@ -1,16 +1,20 @@
 import { Effect, Option } from 'effect'
 import * as z from 'zod'
 
+import { analyze } from '../../../sql/index.js'
 import { SQL_ROW_LIMIT } from '../constants/index.js'
 import * as DefaultsDomain from '../domain/index.js'
 import * as ModelDomain from '../domain/index.js'
+import * as SchemaDomain from '../domain/index.js'
 import * as SqlDomain from '../domain/index.js'
 import * as ValuesDomain from '../domain/index.js'
 import { ContractViolationError, InvalidInputError, UnknownModelError } from '../errors/index.js'
 import {
   AffectedSchema,
+  AnalysisSchema,
   CountsSchema,
   DbStatusSchema,
+  PlanSchema,
   RowsSchema,
   SqlResultSchema,
 } from '../routes/index.js'
@@ -373,6 +377,10 @@ export function deleteRow(input: z.infer<typeof DeleteRowInput>) {
   })
 }
 
+const Cell = z
+  .union([z.string(), z.number(), z.boolean(), z.null()])
+  .meta({ description: 'A JSON cell value as the UI sends and shows it' })
+
 const RunSqlInput = z
   .object({
     sql: z
@@ -380,23 +388,54 @@ const RunSqlInput = z
       .trim()
       .min(1)
       .brand<'Sql'>()
-      .meta({ description: 'One SQL statement, run as is.', example: 'SELECT 1' }),
+      .meta({ description: 'The statements to run.', example: 'SELECT 1' }),
+    params: z
+      .array(Cell)
+      .readonly()
+      .meta({ description: 'The values bound to the placeholders, in order.' }),
   })
   .readonly()
-  .meta({ description: 'Input for running SQL', example: { sql: 'SELECT * FROM users' } })
+  .meta({
+    description: 'Input for running SQL',
+    example: { sql: 'SELECT * FROM users', params: [] },
+  })
 
 /**
- * Runs one statement and returns its rows, or the affected count for writes, with the wall time.
+ * Runs the statements one by one and returns the rows of the last, or its affected count for a
+ * write, with the wall time of the whole.
  *
- * @param input - the statement
+ * ```mermaid
+ * sequenceDiagram
+ *   participant U as runSql
+ *   participant Db as Database
+ *   participant D as Driver
+ *   U->>Db: driver
+ *   Db-->>U: driver / DatabaseUnavailableError
+ *   Note over U: split the text into statements (domain)
+ *   loop each statement
+ *     U->>D: query(sql, params)
+ *   end
+ *   D-->>U: columns, rows, rowCount
+ *   Note over U: first SQL_ROW_LIMIT rows → validate against SqlResult
+ * ```
+ *
+ * @param input - the text and the parameter values
  * @returns columns, rows, rowCount and durationMs
  */
 export function runSql(input: z.infer<typeof RunSqlInput>) {
   return Effect.gen(function* () {
     const db = yield* RuntimeService.DatabaseTag
     const driver = yield* db.driver
+    const statements = SqlDomain.splitStatements({ sql: input.sql })
+    if (statements.length === 0) {
+      return yield* new InvalidInputError({ field: 'sql', message: 'holds no statement' })
+    }
+    const params = input.params.map((value) =>
+      ValuesDomain.makeBindValue({ dialect: driver.dialect, value }),
+    )
     const started = performance.now()
-    const executed = yield* driver.query({ sql: input.sql, params: [] })
+    const results = yield* Effect.forEach(statements, (sql) => driver.query({ sql, params }))
+    const executed = results.at(-1) ?? { columns: [], rows: [], rowCount: 0 }
     const sqlResult = {
       columns: executed.columns,
       // Only the first page of a large result travels to the browser; `rowCount` still says how
@@ -408,6 +447,73 @@ export function runSql(input: z.infer<typeof RunSqlInput>) {
       durationMs: Math.round((performance.now() - started) * 10) / 10,
     }
     const result = SqlResultSchema.safeParse(sqlResult)
+    if (!result.success) {
+      return yield* new ContractViolationError({ message: result.error.message })
+    }
+    return result.data
+  })
+}
+
+/**
+ * The execution plan the database chooses for the first statement of the text.
+ *
+ * @param input - the text and the parameter values
+ * @returns the plan steps, parents first, and the plan as the database printed it
+ */
+export function explainSql(input: z.infer<typeof RunSqlInput>) {
+  return Effect.gen(function* () {
+    const db = yield* RuntimeService.DatabaseTag
+    const driver = yield* db.driver
+    const [first] = SqlDomain.splitStatements({ sql: input.sql })
+    if (first === undefined) {
+      return yield* new InvalidInputError({ field: 'sql', message: 'holds no statement' })
+    }
+    const params = input.params.map((value) =>
+      ValuesDomain.makeBindValue({ dialect: driver.dialect, value }),
+    )
+    const explained = yield* driver.explain({ sql: first, params })
+    const plan = { dialect: driver.dialect, nodes: explained.nodes, raw: explained.raw }
+    const result = PlanSchema.safeParse(plan)
+    if (!result.success) {
+      return yield* new ContractViolationError({ message: result.error.message })
+    }
+    return result.data
+  })
+}
+
+const AnalyzeSqlInput = z
+  .object({
+    sql: z
+      .string()
+      .trim()
+      .min(1)
+      .brand<'Sql'>()
+      .meta({ description: 'The statements to analyze.', example: 'SELECT id FROM users' }),
+  })
+  .readonly()
+  .meta({ description: 'Input for analyzing SQL', example: { sql: 'SELECT id FROM users' } })
+
+/**
+ * Analyzes every statement of the text against the tables of the Prisma schema: the dialect is
+ * the connected database's, or the datasource provider's while none is connected.
+ *
+ * @param input - the text
+ * @returns the data-flow graph, lineage, row type, parameters and diagnostics of each statement
+ */
+export function analyzeSql(input: z.infer<typeof AnalyzeSqlInput>) {
+  return Effect.gen(function* () {
+    const state = yield* RuntimeService.StudioStateTag
+    const db = yield* RuntimeService.DatabaseTag
+    const schema = state.snapshot().schema
+    const analysis = analyze(
+      input.sql,
+      SchemaDomain.makeAnalysisSchema({
+        dialect: db.status.dialect,
+        provider: schema?.provider ?? null,
+        models: schema?.models ?? [],
+      }),
+    )
+    const result = AnalysisSchema.safeParse(analysis)
     if (!result.success) {
       return yield* new ContractViolationError({ message: result.error.message })
     }

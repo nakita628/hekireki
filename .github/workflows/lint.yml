@@ -1,0 +1,40 @@
+name: Lint
+
+# The gates that need no build, as `pnpm lint` runs them locally: the prose of the repository
+# (markdownlint, textlint, cspell) and the workflows themselves (actionlint for the syntax,
+# zizmor for the security posture). zizmor is installed first so that `pnpm lint` runs it here
+# rather than skipping it as it does on a machine without it.
+#
+# Action versions are tracked by Renovate, which pins each one to its digest
+# (helpers:pinGitHubActionDigests) and keeps the @vX.Y.Z tag as a comment.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: voidzero-dev/setup-vp@313600b80b104eadebb9111787d37a2e83e014ca # v1.17.0
+        with:
+          node-version: '22'
+          cache: true
+
+      - run: vp install --frozen-lockfile
+
+      # zizmor is a Rust tool published on PyPI; pipx is on the hosted runner. The version is
+      # pinned here by hand — it is not an npm dependency, so Renovate does not see it.
+      - run: pipx install zizmor==1.30.0
+
+      # setup-vp puts `vp` on PATH, not `pnpm`; `vp run` runs the root script with both available.
+      - run: vp run lint

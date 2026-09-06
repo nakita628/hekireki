@@ -1,3 +1,4 @@
+import { Button } from '@heroui/react'
 import { useState } from 'react'
 
 import { schemaProblems } from './schema-problems.js'
@@ -33,16 +34,17 @@ export function SchemaErrorBanner({
         </span>
         <span className="hidden shrink-0 text-muted md:inline">{note}</span>
         {action}
-        <button
-          type="button"
-          className="btn h-6 shrink-0 px-2 text-code"
+        <Button
+          variant="outline"
+          size="sm"
+          className="shrink-0"
           aria-expanded={open}
-          onClick={() => {
+          onPress={() => {
             setOpen((current) => !current)
           }}
         >
           {open ? 'Hide' : 'Details'}
-        </button>
+        </Button>
       </div>
       {open ? (
         <pre className="m-0 max-h-48 overflow-auto border-t border-danger-line px-6 py-2 font-mono text-code whitespace-pre-wrap text-ink">

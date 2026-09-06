@@ -1,6 +1,7 @@
 import { Handle, Position } from '@xyflow/react'
 import type { NodeProps } from '@xyflow/react'
 import { memo } from 'react'
+import { LuKey, LuLink } from 'react-icons/lu'
 
 import {
   loopTargetHandle,
@@ -16,8 +17,8 @@ import {
   NODE_CONSTRAINT_HEIGHT,
   NODE_ROW_HEIGHT,
 } from '../features/schema/layout.js'
-import { KeyIcon, LinkIcon } from './icons.js'
 import { BADGE, CONSTRAINT_STYLES, fieldTypeLabel, UNIQUE_BADGE } from './labels.js'
+import { OpenNodeLink } from './open-node-link.js'
 
 type Field = {
   readonly name: string
@@ -37,21 +38,26 @@ const ROW_HANDLE = { top: NODE_ROW_HEIGHT / 2 }
 
 function FieldIcon({ field }: { readonly field: Field }) {
   if (field.isId) {
-    return <KeyIcon size={11} className="shrink-0 text-key" />
+    return <LuKey size={11} className="shrink-0 text-key" />
   }
-  if (field.isForeignKey) return <LinkIcon size={11} className="shrink-0 text-accent" />
+  if (field.isForeignKey) return <LuLink size={11} className="shrink-0 text-accent" />
   return <span className="inline-block size-[11px] shrink-0" />
 }
 
 function ModelNodeComponent({ data, selected }: NodeProps<ModelNodeType>) {
-  const { model, fields } = data
+  const { model, fields, highlight } = data
   const primaryKey = new Set(model.primaryKey)
   const constraints = diagramConstraints(model)
+  const dim = highlight?.dim ?? false
   return (
     <div
-      className={`model-node w-[340px] overflow-visible rounded-lg border bg-surface font-mono shadow-sm ${
-        selected ? 'border-accent ring-[3px] ring-accent-soft' : 'border-line-strong'
-      }`}
+      className={`model-node w-[340px] overflow-visible rounded-lg border bg-surface font-mono shadow-sm transition-opacity ${
+        selected
+          ? 'border-accent ring-[3px] ring-accent-soft'
+          : highlight !== null && !dim
+            ? 'border-accent'
+            : 'border-line-strong'
+      } ${dim ? 'opacity-35' : ''}`}
     >
       <div className="relative flex h-9 items-center gap-2 rounded-t-[7px] bg-node px-2.5 text-node-text">
         <Handle
@@ -60,10 +66,13 @@ function ModelNodeComponent({ data, selected }: NodeProps<ModelNodeType>) {
           id={targetHandle(MODEL_HANDLE)}
           className="model-handle"
         />
-        <span className="text-body font-bold">{model.name}</span>
-        {model.dbName ? (
-          <span className="mr-auto truncate text-meta opacity-60">{model.dbName}</span>
-        ) : null}
+        <span className="mr-auto flex min-w-0 items-center gap-2">
+          <span className="text-body font-bold">{model.name}</span>
+          {model.dbName ? (
+            <span className="truncate text-meta opacity-60">{model.dbName}</span>
+          ) : null}
+        </span>
+        <OpenNodeLink to="/models/$name" name={model.name} />
         <Handle
           type="source"
           position={Position.Right}
@@ -80,6 +89,9 @@ function ModelNodeComponent({ data, selected }: NodeProps<ModelNodeType>) {
       <div className="py-2">
         {fields.map((field) => {
           const detail = fieldDetail(field)
+          // While a statement is drawn, the columns it reads from this table are marked and the
+          // rest step back; a card the statement leaves alone is dimmed whole instead.
+          const read = highlight !== null && !dim ? highlight.used.has(field.name) : null
           return (
             <div
               key={field.name}
@@ -94,9 +106,17 @@ function ModelNodeComponent({ data, selected }: NodeProps<ModelNodeType>) {
                 className="model-handle"
                 style={ROW_HANDLE}
               />
-              <div className="flex h-[22px] items-center gap-1.5 text-code">
+              <div
+                className={`flex h-[22px] items-center gap-1.5 text-code ${read === false ? 'text-faint' : ''}`}
+              >
                 <FieldIcon field={{ ...field, isId: field.isId || primaryKey.has(field.name) }} />
                 <span className="min-w-0 flex-1 truncate">{field.name}</span>
+                {read === true ? (
+                  <span
+                    className="size-1.5 shrink-0 rounded-full bg-accent"
+                    title="Read by the statement"
+                  />
+                ) : null}
                 {field.isUnique && !(field.isId || primaryKey.has(field.name)) ? (
                   <span className={`${BADGE} ${UNIQUE_BADGE} shrink-0`}>UK</span>
                 ) : null}

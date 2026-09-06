@@ -1,3 +1,4 @@
+import { buttonVariants } from '@heroui/react'
 import { Link } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 
@@ -80,7 +81,7 @@ export function SchemaGate({ children }: { readonly children: (schema: Schema) =
       <section className="p-6">
         <h1 className="page-title mb-4">Schema could not be parsed</h1>
         <pre className="error-box">{snapshot.error ?? 'Unknown error'}</pre>
-        <Link className="btn mt-4" to="/prisma" search={{}}>
+        <Link className={`${buttonVariants({ variant: 'outline' })} mt-4`} to="/prisma" search={{}}>
           Open the Prisma schema to fix it
         </Link>
       </section>

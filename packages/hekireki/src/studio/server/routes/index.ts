@@ -1,5 +1,301 @@
 import { createRoute, z } from '@hono/zod-openapi'
 
+export const StatementKindSchema = z
+  .enum(['select', 'insert', 'update', 'delete', 'other', 'invalid'])
+  .openapi({ description: 'What kind of statement was analyzed.' })
+  .openapi('StatementKind')
+
+export const TextRangeSchema = z
+  .object({
+    start: z.int32().openapi({ description: 'The first character' }),
+    end: z.int32().openapi({ description: 'One past the last character' }),
+  })
+  .openapi({
+    required: ['start', 'end'],
+    description: 'Character offsets into the statement text, end exclusive.',
+    example: { start: 7, end: 12 },
+  })
+  .openapi('TextRange')
+
+export const NodeKindSchema = z
+  .enum([
+    'table',
+    'cte',
+    'subquery',
+    'values',
+    'function',
+    'join',
+    'filter',
+    'aggregate',
+    'having',
+    'project',
+    'distinct',
+    'sort',
+    'limit',
+    'union',
+    'insert',
+    'update',
+    'delete',
+    'returning',
+  ])
+  .openapi({ description: 'What a node of the data-flow graph stands for.' })
+  .openapi('NodeKind')
+
+export const NodeColumnSchema = z
+  .object({
+    name: z.string().openapi({ description: 'The column name' }),
+    dataType: z.string().nullable().openapi({ description: 'The declared type, when known' }),
+    used: z
+      .boolean()
+      .openapi({
+        description:
+          'Whether the statement reads the column (for a table), or always true for a result',
+      }),
+  })
+  .openapi({
+    required: ['name', 'dataType', 'used'],
+    description: 'A column a node produces.',
+    example: { name: 'email', dataType: 'TEXT', used: true },
+  })
+  .openapi('NodeColumn')
+
+export const GraphNodeSchema = z
+  .object({
+    id: z.string().openapi({ description: 'The node id, unique within the statement' }),
+    kind: NodeKindSchema.openapi({ description: 'What the node stands for' }),
+    label: z.string().openapi({ description: 'The caption (`users AS u`, `LEFT JOIN`, `WHERE`)' }),
+    details: z
+      .array(z.string())
+      .openapi({
+        description: 'Lines under the caption: the condition, the grouped keys, the column names',
+      }),
+    range: TextRangeSchema.nullable().openapi({
+      description: "Where the node's clause sits in the text, when it has one",
+    }),
+    scope: z
+      .string()
+      .openapi({ description: '`main`, or the CTE / subquery alias the node belongs to' }),
+    columns: z
+      .array(NodeColumnSchema)
+      .openapi({
+        description: 'The columns the node produces (tables, CTEs, subqueries and projections)',
+      }),
+  })
+  .openapi({
+    required: ['id', 'kind', 'label', 'details', 'range', 'scope', 'columns'],
+    description: 'A node of the data-flow graph.',
+    example: {
+      id: 'n3',
+      kind: 'filter',
+      label: 'WHERE',
+      details: ['u.id = ?'],
+      range: { start: 40, end: 48 },
+      scope: 'main',
+      columns: [],
+    },
+  })
+  .openapi('GraphNode')
+
+export const EdgeKindSchema = z
+  .enum(['flow', 'lookup'])
+  .openapi({ description: 'How rows travel along an edge.' })
+  .openapi('EdgeKind')
+
+export const GraphEdgeSchema = z
+  .object({
+    id: z.string().openapi({ description: 'The edge id, unique within the statement' }),
+    source: z.string().openapi({ description: 'The node rows come from' }),
+    target: z.string().openapi({ description: 'The node rows go to' }),
+    label: z
+      .string()
+      .nullable()
+      .openapi({
+        description:
+          'A caption (`optional` for the outer side of a join, `scalar` for a scalar subquery)',
+      }),
+    kind: EdgeKindSchema.openapi({ description: 'How rows travel' }),
+  })
+  .openapi({
+    required: ['id', 'source', 'target', 'label', 'kind'],
+    description: 'An edge of the data-flow graph.',
+    example: { id: 'n1->n3:0', source: 'n1', target: 'n3', label: null, kind: 'flow' },
+  })
+  .openapi('GraphEdge')
+
+export const TableRefSchema = z
+  .object({
+    nodeId: z.string().openapi({ description: 'The graph node of this reference' }),
+    name: z.string().openapi({ description: 'The table name as written' }),
+    alias: z.string().nullable().openapi({ description: 'The alias, when one was given' }),
+    scope: z
+      .string()
+      .openapi({ description: '`main`, or the CTE / subquery alias the reference sits in' }),
+    known: z.boolean().openapi({ description: 'Whether the schema has the table' }),
+    columnsUsed: z
+      .array(z.string())
+      .openapi({ description: 'The columns the statement reads from this reference' }),
+    range: TextRangeSchema.openapi({ description: 'Where the name sits in the text' }),
+  })
+  .openapi({
+    required: ['nodeId', 'name', 'alias', 'scope', 'known', 'columnsUsed', 'range'],
+    description: 'A table the statement reads or writes.',
+    example: {
+      nodeId: 'n1',
+      name: 'users',
+      alias: 'u',
+      scope: 'main',
+      known: true,
+      columnsUsed: ['id', 'email'],
+      range: { start: 20, end: 25 },
+    },
+  })
+  .openapi('TableRef')
+
+export const ColumnSourceSchema = z
+  .object({
+    table: z.string().openapi({ description: 'The base table' }),
+    column: z.string().openapi({ description: 'The column of that table' }),
+  })
+  .openapi({
+    required: ['table', 'column'],
+    description: 'A base-table column an output column derives from.',
+    example: { table: 'users', column: 'email' },
+  })
+  .openapi('ColumnSource')
+
+export const OutputColumnSchema = z
+  .object({
+    name: z.string().openapi({ description: 'The name a driver keys the row with' }),
+    expression: z.string().openapi({ description: 'The expression as written' }),
+    dataType: z.string().nullable().openapi({ description: 'The declared type, when known' }),
+    tsType: z.string().openapi({ description: 'The TypeScript type of the value' }),
+    nullable: z
+      .boolean()
+      .nullable()
+      .openapi({ description: 'Whether NULL can come back; null when the analysis cannot tell' }),
+    sources: z
+      .array(ColumnSourceSchema)
+      .openapi({ description: 'The base-table columns the value derives from' }),
+  })
+  .openapi({
+    required: ['name', 'expression', 'dataType', 'tsType', 'nullable', 'sources'],
+    description: 'A column of the result, with its lineage and type.',
+    example: {
+      name: 'email',
+      expression: 'u.email',
+      dataType: 'TEXT',
+      tsType: 'string',
+      nullable: true,
+      sources: [{ table: 'users', column: 'email' }],
+    },
+  })
+  .openapi('OutputColumn')
+
+export const SqlParameterSchema = z
+  .object({
+    index: z.int32().openapi({ description: 'The bind position (1-based), or the `$n` number' }),
+    placeholder: z
+      .string()
+      .openapi({ description: 'The placeholder as written (`?`, `$1`, `:name`)' }),
+    dataType: z
+      .string()
+      .nullable()
+      .openapi({ description: 'The declared type of the column it is compared with, when known' }),
+    tsType: z.string().openapi({ description: 'The TypeScript type a value should have' }),
+    nullable: z
+      .boolean()
+      .nullable()
+      .openapi({
+        description: 'Whether NULL is a valid value; null when the analysis cannot tell',
+      }),
+    context: z.string().openapi({ description: 'The expression the placeholder sits in' }),
+  })
+  .openapi({
+    required: ['index', 'placeholder', 'dataType', 'tsType', 'nullable', 'context'],
+    description: 'A placeholder and the type of what it stands beside.',
+    example: {
+      index: 1,
+      placeholder: '?',
+      dataType: 'INTEGER',
+      tsType: 'number',
+      nullable: false,
+      context: 'u.id = ?',
+    },
+  })
+  .openapi('SqlParameter')
+
+export const SqlSeveritySchema = z
+  .enum(['error', 'warning', 'info'])
+  .openapi({ description: 'How serious a problem the analysis found is.' })
+  .openapi('SqlSeverity')
+
+export const SqlDiagnosticSchema = z
+  .object({
+    severity: SqlSeveritySchema.openapi({ description: 'How serious it is' }),
+    message: z.string().openapi({ description: 'What is wrong' }),
+    range: TextRangeSchema.nullable().openapi({
+      description: 'Where, when the analysis can point at it',
+    }),
+  })
+  .openapi({
+    required: ['severity', 'message', 'range'],
+    description: 'A problem found in the statement.',
+    example: {
+      severity: 'warning',
+      message: 'Unknown column "nmae"',
+      range: { start: 7, end: 11 },
+    },
+  })
+  .openapi('SqlDiagnostic')
+
+export const StatementAnalysisSchema = z
+  .object({
+    kind: StatementKindSchema.openapi({ description: 'What kind of statement it is' }),
+    text: z.string().openapi({ description: 'The statement text' }),
+    range: TextRangeSchema.openapi({
+      description: 'Where the statement sits in the submitted text',
+    }),
+    nodes: z.array(GraphNodeSchema).openapi({ description: 'The nodes of the data-flow graph' }),
+    edges: z.array(GraphEdgeSchema).openapi({ description: 'The edges of the data-flow graph' }),
+    tables: z.array(TableRefSchema).openapi({ description: 'Every table the statement touches' }),
+    columns: z
+      .array(OutputColumnSchema)
+      .openapi({ description: 'The columns of the result (empty for a write without RETURNING)' }),
+    parameters: z
+      .array(SqlParameterSchema)
+      .openapi({ description: 'The placeholders, in bind order' }),
+    diagnostics: z.array(SqlDiagnosticSchema).openapi({ description: 'What was found wrong' }),
+    rowType: z
+      .string()
+      .openapi({
+        description: 'The row type as TypeScript (`{ id: number; email: string | null }`)',
+      }),
+    paramsType: z
+      .string()
+      .openapi({
+        description: 'The parameter tuple (or object, for named placeholders) as TypeScript',
+      }),
+  })
+  .openapi({
+    required: [
+      'kind',
+      'text',
+      'range',
+      'nodes',
+      'edges',
+      'tables',
+      'columns',
+      'parameters',
+      'diagnostics',
+      'rowType',
+      'paramsType',
+    ],
+    description: 'The analysis of one statement.',
+  })
+  .openapi('StatementAnalysis')
+
+type AnalysisType = { statements: z.infer<typeof StatementAnalysisSchema>[] }
+
 export const SchemaFileSchema = z
   .object({
     path: z
@@ -912,18 +1208,101 @@ export const SqlSchema = z
   .brand<'Sql'>()
   .openapi({
     description:
-      'One SQL statement, run as written (the Studio API is loopback-only; there is no sandbox).',
+      'SQL text: one or more statements, analyzed or run as written (the Studio API is loopback-only; there is no sandbox).',
   })
   .openapi('Sql')
 
 export const SqlBodySchema = z
-  .object({ sql: SqlSchema.openapi({ description: 'The statement' }) })
+  .object({
+    sql: SqlSchema.openapi({
+      description: 'The statements; several are run one by one and the result belongs to the last',
+    }),
+    params: z
+      .array(z.union([z.string(), z.float64(), z.boolean()]).nullable())
+      .exactOptional()
+      .openapi({
+        description: 'The values bound to the placeholders, in order; omitted means none',
+      }),
+  })
   .openapi({
     required: ['sql'],
     description: 'A statement to run.',
     example: { sql: 'SELECT id, email FROM users LIMIT 10' },
   })
   .openapi('SqlBody')
+
+export const PlanNodeSchema = z
+  .object({
+    id: z.string().openapi({ description: 'The step id, unique within the plan' }),
+    parent: z
+      .string()
+      .nullable()
+      .openapi({ description: 'The id of the step this one feeds, or null for a root' }),
+    label: z
+      .string()
+      .openapi({
+        description: 'What the step does (`SCAN users`, `Seq Scan on users`, `Hash Join`)',
+      }),
+    detail: z
+      .string()
+      .nullable()
+      .openapi({ description: 'The rest of what the database said about the step' }),
+    cost: z
+      .float64()
+      .nullable()
+      .openapi({ description: 'The estimated cost, when the database reports one' }),
+    rows: z
+      .float64()
+      .nullable()
+      .openapi({
+        description: 'The estimated (or, with ANALYZE, actual) row count, when reported',
+      }),
+  })
+  .openapi({
+    required: ['id', 'parent', 'label', 'detail', 'cost', 'rows'],
+    description: 'One step of the execution plan, flattened; `parent` rebuilds the tree.',
+    example: { id: '3', parent: null, label: 'SCAN users', detail: null, cost: null, rows: null },
+  })
+  .openapi('PlanNode')
+
+export const PlanSchema = z
+  .object({
+    dialect: DialectSchema.openapi({ description: 'The dialect that produced the plan' }),
+    nodes: z.array(PlanNodeSchema).openapi({ description: 'The steps, parents before children' }),
+    raw: z.string().openapi({ description: 'The plan as the database printed it' }),
+  })
+  .brand<'Plan'>()
+  .openapi({
+    required: ['dialect', 'nodes', 'raw'],
+    description: 'The execution plan of a statement.',
+    example: { dialect: 'sqlite', nodes: [], raw: '' },
+  })
+  .openapi('Plan')
+
+export const AnalysisSchema: z.ZodType<AnalysisType> = z
+  .lazy(() =>
+    z
+      .object({
+        statements: z
+          .array(StatementAnalysisSchema)
+          .openapi({ description: 'One entry per statement, in order' }),
+      })
+      .brand<'Analysis'>()
+      .openapi({
+        required: ['statements'],
+        description: 'The analysis of every statement in the text.',
+      }),
+  )
+  .openapi('Analysis')
+
+export const AnalyzeBodySchema = z
+  .object({ sql: SqlSchema.openapi({ description: 'The statements' }) })
+  .openapi({
+    required: ['sql'],
+    description: 'Text to analyze.',
+    example: { sql: 'SELECT id, email FROM users WHERE id = ?' },
+  })
+  .openapi('AnalyzeBody')
 
 export const LspTextEditSchema = z
   .object({
@@ -1941,7 +2320,7 @@ export const postDbSqlRoute = createRoute({
   path: '/db/sql',
   tags: ['db'],
   description:
-    'Run one statement and return its rows, or the affected count for a write, with the wall time.',
+    'Run the statements one by one and return the rows of the last, or its affected count for a write, with the wall time of the whole.',
   operationId: 'runSql',
   request: { body: { content: { 'application/json': { schema: SqlBodySchema } }, required: true } },
   responses: {
@@ -1960,6 +2339,59 @@ export const postDbSqlRoute = createRoute({
     503: {
       description: '503 Service Unavailable (`application/problem+json`)',
       content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
+    },
+  },
+})
+
+export const postDbExplainRoute = createRoute({
+  method: 'post',
+  path: '/db/explain',
+  tags: ['db'],
+  description: 'The execution plan the database chooses for the first statement of the text.',
+  operationId: 'explainSql',
+  request: { body: { content: { 'application/json': { schema: SqlBodySchema } }, required: true } },
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: PlanSchema } },
+    },
+    422: {
+      description: '422 Unprocessable Content (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ValidationProblemSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+    503: {
+      description: '503 Service Unavailable (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
+    },
+  },
+})
+
+export const postDbAnalyzeRoute = createRoute({
+  method: 'post',
+  path: '/db/analyze',
+  tags: ['db'],
+  description:
+    "Analyze the statements against the Prisma schema's tables: data flow, lineage, row type, parameters and problems.",
+  operationId: 'analyzeSql',
+  request: {
+    body: { content: { 'application/json': { schema: AnalyzeBodySchema } }, required: true },
+  },
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: AnalysisSchema } },
+    },
+    422: {
+      description: '422 Unprocessable Content (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ValidationProblemSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
     },
   },
 })

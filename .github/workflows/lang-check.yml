@@ -45,6 +45,8 @@ jobs:
         lang: [gorm, sea-orm, sqlalchemy, django, ecto, drizzle, activerecord, eloquent, atlas]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: voidzero-dev/setup-vp@313600b80b104eadebb9111787d37a2e83e014ca # v1.17.0
         with:
           node-version: '22'
@@ -93,7 +95,7 @@ jobs:
       # installer ships no checksum verification, so floating `latest` would
       # reinstall an unvetted binary on every run.
       - if: matrix.lang == 'atlas'
-        uses: ariga/setup-atlas@v0.3
+        uses: ariga/setup-atlas@2f3c785c89a15e1c0d07bcae3900fb5feb969eea # v0.3
         with:
           version: v1.3.0
 
@@ -115,6 +117,8 @@ jobs:
         working-directory: packages/hekireki
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: voidzero-dev/setup-vp@313600b80b104eadebb9111787d37a2e83e014ca # v1.17.0
         with:
           node-version: '22'

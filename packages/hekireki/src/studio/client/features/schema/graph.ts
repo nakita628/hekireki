@@ -7,6 +7,7 @@ import { diagramFields } from './layout.js'
 
 type Field = {
   readonly name: string
+  readonly dbName?: string | null
   readonly kind: 'scalar' | 'object' | 'enum' | 'unsupported'
   readonly type: string
   readonly isList: boolean
@@ -61,9 +62,16 @@ type Schema = {
   readonly enums: readonly EnumBlock[]
 }
 
+/** What a card is told about the statement being drawn: whether it takes part, and which fields it reads. */
+export type ModelHighlight = {
+  readonly dim: boolean
+  readonly used: ReadonlySet<string>
+}
+
 type ModelNodeData = {
   readonly model: Model
   readonly fields: readonly Field[]
+  readonly highlight: ModelHighlight | null
 }
 
 export type ModelNodeType = Node<ModelNodeData, 'model'>
@@ -95,13 +103,35 @@ export function loopTargetHandle(field: string) {
   return `${field}-loop`
 }
 
-export function buildNodes(schema: Schema, positions: LayoutPositions): readonly DiagramNodeType[] {
+/** The tables a statement touches, keyed by lowercased table name, each with the lowercased columns it reads. */
+export type SchemaHighlight = ReadonlyMap<string, ReadonlySet<string>>
+
+/** What the card of a model shows of the statement: nothing while none is drawn, its part otherwise. */
+export function highlightOf(touched: SchemaHighlight | null, model: Model): ModelHighlight | null {
+  if (touched === null) return null
+  const used = touched.get((model.dbName ?? model.name).toLowerCase())
+  if (used === undefined) return { dim: true, used: new Set() }
+  return {
+    dim: false,
+    used: new Set(
+      model.fields
+        .filter((field) => used.has((field.dbName ?? field.name).toLowerCase()))
+        .map((field) => field.name),
+    ),
+  }
+}
+
+export function buildNodes(
+  schema: Schema,
+  positions: LayoutPositions,
+  touched: SchemaHighlight | null = null,
+): readonly DiagramNodeType[] {
   return [
     ...schema.models.map<DiagramNodeType>((model) => ({
       id: model.name,
       type: 'model',
       position: positions[model.name] ?? { x: 0, y: 0 },
-      data: { model, fields: diagramFields(model) },
+      data: { model, fields: diagramFields(model), highlight: highlightOf(touched, model) },
     })),
     ...schema.enums.map<DiagramNodeType>((value) => ({
       id: value.name,

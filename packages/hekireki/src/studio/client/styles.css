@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import '@heroui/react/styles';
 @import '@xyflow/react/dist/style.css';
 
 @custom-variant dark (&:where(.dark, .dark *));
@@ -20,6 +21,8 @@
   --c-danger: #c2410c;
   --c-danger-soft: #fff4ec;
   --c-danger-line: #fed7aa;
+  --c-warn: #b45309;
+  --c-warn-soft: #fff7e6;
   --c-node: #1f2233;
   --c-node-text: #f4f5fa;
   --c-edge: #9095ab;
@@ -39,6 +42,17 @@
   --c-tok-string: #0f766e;
   --c-tok-number: #b45309;
   --c-tok-definition: #1d4ed8;
+  /* The nodes of a statement's data-flow picture: one hue per family, so it reads at a glance. */
+  --c-kind-source: #0f766e;
+  --c-kind-source-soft: #e6f6f3;
+  --c-kind-shape: #1d4ed8;
+  --c-kind-shape-soft: #e8efff;
+  --c-kind-filter: #b45309;
+  --c-kind-filter-soft: #fff4e5;
+  --c-kind-output: #7c3aed;
+  --c-kind-output-soft: #f1eaff;
+  --c-kind-write: #c2410c;
+  --c-kind-write-soft: #fff1ea;
 }
 
 .dark {
@@ -56,6 +70,8 @@
   --c-danger: #fb923c;
   --c-danger-soft: #2b1d14;
   --c-danger-line: #5b3a1f;
+  --c-warn: #fbbf24;
+  --c-warn-soft: #2b2414;
   --c-node: #2a2f45;
   --c-node-text: #f4f5fa;
   --c-edge: #6b7189;
@@ -69,6 +85,54 @@
   --c-tok-string: #5eead4;
   --c-tok-number: #fcd34d;
   --c-tok-definition: #93c5fd;
+  --c-kind-source: #5eead4;
+  --c-kind-source-soft: #12302c;
+  --c-kind-shape: #93c5fd;
+  --c-kind-shape-soft: #172445;
+  --c-kind-filter: #fcd34d;
+  --c-kind-filter-soft: #2e2611;
+  --c-kind-output: #c4b5fd;
+  --c-kind-output-soft: #26204a;
+  --c-kind-write: #fb923c;
+  --c-kind-write-soft: #3a2113;
+}
+
+/* HeroUI reads its own variables. They are pointed at the palette above rather than left on their
+   defaults, so its components are drawn in Studio's colours and follow the theme switch with
+   everything else — one palette, and the ER diagram's exported SVG still agrees with the canvas. */
+@layer base {
+  :root {
+    --background: var(--c-canvas);
+    --foreground: var(--c-ink);
+    --surface: var(--c-surface);
+    --surface-foreground: var(--c-ink);
+    --surface-secondary: var(--c-surface-2);
+    --surface-tertiary: var(--c-canvas);
+    --overlay: var(--c-surface);
+    --overlay-foreground: var(--c-ink);
+    --muted: var(--c-muted);
+    --accent: var(--c-accent);
+    --accent-foreground: #ffffff;
+    --default: var(--c-canvas);
+    --default-foreground: var(--c-ink);
+    --border: var(--c-line-strong);
+    --separator: var(--c-line);
+    /* HeroUI mixes these two out of --surface for the lines inside a table. Studio has a colour
+       for a line already, and a grid whose rules disagree with its own borders looks unfinished. */
+    --separator-secondary: var(--c-line);
+    --separator-tertiary: var(--c-line);
+    --focus: var(--c-accent);
+    --link: var(--c-accent-text);
+    --danger: var(--c-danger);
+    --success: var(--c-ok);
+    --warning: var(--c-busy);
+    --field-background: var(--c-surface);
+    --field-foreground: var(--c-ink);
+    --field-border: var(--c-line-strong);
+    --field-border-width: 1px;
+    --field-radius: 0.5rem;
+    --radius: 0.5rem;
+  }
 }
 
 @theme inline {
@@ -86,6 +150,8 @@
   --color-danger: var(--c-danger);
   --color-danger-soft: var(--c-danger-soft);
   --color-danger-line: var(--c-danger-line);
+  --color-warn: var(--c-warn);
+  --color-warn-soft: var(--c-warn-soft);
   --color-node: var(--c-node);
   --color-node-text: var(--c-node-text);
   --color-key: var(--c-key);
@@ -94,6 +160,16 @@
   --color-edge: var(--c-edge);
   --color-ok: var(--c-ok);
   --color-busy: var(--c-busy);
+  --color-kind-source: var(--c-kind-source);
+  --color-kind-source-soft: var(--c-kind-source-soft);
+  --color-kind-shape: var(--c-kind-shape);
+  --color-kind-shape-soft: var(--c-kind-shape-soft);
+  --color-kind-filter: var(--c-kind-filter);
+  --color-kind-filter-soft: var(--c-kind-filter-soft);
+  --color-kind-output: var(--c-kind-output);
+  --color-kind-output-soft: var(--c-kind-output-soft);
+  --color-kind-write: var(--c-kind-write);
+  --color-kind-write-soft: var(--c-kind-write-soft);
   --font-sans:
     ui-sans-serif, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
@@ -131,43 +207,10 @@
 }
 
 @layer components {
-  .toast {
-    border: 1px solid var(--c-line);
-    background: var(--c-surface);
-    color: var(--c-ink);
-  }
-  .btn {
-    @apply inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-3.5 text-ui font-medium whitespace-nowrap text-ink hover:bg-canvas disabled:cursor-default disabled:opacity-50;
-  }
-
-  .btn-ghost {
-    @apply border-transparent hover:border-line;
-  }
-
-  .btn-primary {
-    @apply border-accent bg-accent text-white hover:bg-accent-text;
-  }
-
-  .chip {
-    @apply rounded-md bg-accent-soft px-1.5 py-px font-mono text-meta whitespace-nowrap text-accent-text;
-  }
-
-  .tab {
-    @apply cursor-pointer border-0 border-b-2 border-transparent bg-transparent px-3 py-2 font-mono text-code whitespace-nowrap text-muted hover:text-ink;
-  }
-
-  .tab-active {
-    @apply border-accent font-semibold text-accent-text;
-  }
-
-  /* The `h1` of a page, and the smaller button a toolbar packs in. Both were spelled out at every
-     call site before, which is how a scale drifts. */
+  /* The `h1` of a page: spelled out at every call site before, which is how a scale drifts.
+     Buttons, chips, tabs, key caps, pagination and toasts are HeroUI's now. */
   .page-title {
     @apply m-0 text-title font-bold tracking-tight;
-  }
-
-  .btn-sm {
-    @apply h-7 px-2.5 text-code;
   }
 
   .heading {
@@ -182,9 +225,293 @@
     @apply rounded-[10px] border border-danger-line bg-danger-soft p-4 font-mono text-code whitespace-pre-wrap text-ink;
   }
 
+  /* The header cell of the docs page's reference tables. Those are read rather than worked in, so
+     they stay plain `<table>`s in an article; the four that are worked in are HeroUI `Table`s,
+     dressed by `.studio-table` below. */
   .th {
     @apply sticky top-0 border-b border-line bg-surface-2 px-3.5 py-2.5 text-left text-code font-semibold whitespace-nowrap text-muted;
   }
+
+  /* A body cell of those same plain tables: the SQL page's lineage and table lists. */
+  .td {
+    @apply border-b border-line px-3.5 py-2 align-top text-code;
+  }
+
+  /* A small pill naming a statement, a kind or a source column. */
+  .pill {
+    @apply inline-flex items-center rounded-full border px-2 py-px font-mono text-caption whitespace-nowrap;
+  }
+
+  /* Those four — the data grid, a SQL result, a model's fields, an enum's values — in HeroUI's
+     `secondary` variant, which is spaced for a dozen rows of prose. A page of a hundred database
+     rows is read at the density of a spreadsheet and its header has to stay put while they scroll
+     under it: one class on the root says so for all of them, and no call site spells out padding
+     again. */
+  .studio-table .table__column {
+    @apply sticky top-0 z-10 border-b border-line px-3 py-2 text-code font-semibold whitespace-nowrap text-muted;
+  }
+
+  /* The variant rounds the outermost column headers into a card. These tables run edge to edge. */
+  .studio-table .table__column:first-child,
+  .studio-table .table__column:last-child {
+    border-radius: 0;
+  }
+
+  .studio-table .table__cell {
+    @apply px-3 py-1.5 align-top text-code;
+  }
+
+  /* The picked cell is the one holding the focus — itself or one of its buttons — and it is
+     drawn by CSS rather than by state, so a page of a hundred rows is not redrawn for a click.
+     Its copy and edit buttons appear under the pointer or the focus, and nowhere else. */
+  .studio-table .table__cell:focus-within {
+    box-shadow: inset 0 0 0 1px var(--c-accent);
+  }
+
+  .studio-table .cell-actions {
+    visibility: hidden;
+  }
+
+  .studio-table .table__cell:hover .cell-actions,
+  .studio-table .table__cell:focus-within .cell-actions {
+    visibility: visible;
+  }
+
+  /* A cell holding controls rather than a value centres them on the row instead. */
+  .studio-table .table__cell:has(> button),
+  .studio-table .table__cell:has(> label),
+  .studio-table .table__cell:has(> div > button) {
+    @apply py-1 align-middle;
+  }
+}
+
+/* The SQL editor (CodeMirror) is drawn in the palette above. */
+.cm-editor {
+  height: 100%;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  background: var(--c-surface);
+  color: var(--c-ink);
+}
+
+.cm-editor.cm-focused {
+  outline: none;
+}
+
+.cm-editor .cm-scroller {
+  line-height: 1.6;
+}
+
+.cm-editor .cm-gutters {
+  background: var(--c-surface);
+  color: var(--c-faint);
+  border-right: 1px solid var(--c-line);
+}
+
+.cm-editor .cm-activeLine {
+  background: color-mix(in srgb, var(--c-accent) 6%, transparent);
+}
+
+.cm-editor .cm-activeLineGutter {
+  background: color-mix(in srgb, var(--c-accent) 8%, transparent);
+}
+
+.cm-editor .cm-selectionBackground,
+.cm-editor.cm-focused .cm-selectionBackground {
+  background: color-mix(in srgb, var(--c-accent) 22%, transparent) !important;
+}
+
+.cm-editor .cm-cursor,
+.cm-editor .cm-dropCursor {
+  border-left: 2px solid var(--c-ink);
+}
+
+.cm-editor .cm-content {
+  padding: 8px 0;
+  caret-color: var(--c-ink);
+}
+
+.cm-editor .cm-line {
+  padding: 0 12px;
+}
+
+.cm-editor .cm-placeholder {
+  color: var(--c-faint);
+  font-style: italic;
+}
+
+.cm-editor .cm-foldGutter {
+  color: var(--c-faint);
+}
+
+.cm-editor .cm-foldPlaceholder {
+  background: var(--c-accent-soft);
+  border: 1px solid var(--c-line-strong);
+  color: var(--c-accent-text);
+}
+
+.cm-editor .cm-matchingBracket,
+.cm-editor.cm-focused .cm-matchingBracket {
+  background: color-mix(in srgb, var(--c-accent) 14%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--c-accent) 50%, transparent);
+  border-radius: 2px;
+}
+
+.cm-editor .cm-nonmatchingBracket,
+.cm-editor.cm-focused .cm-nonmatchingBracket {
+  background: color-mix(in srgb, var(--c-danger) 18%, transparent);
+}
+
+/* The other places the picked text appears, as an IDE shows them. */
+.cm-editor .cm-selectionMatch {
+  background: color-mix(in srgb, var(--c-accent) 12%, transparent);
+  border-radius: 2px;
+}
+
+.cm-editor .cm-searchMatch {
+  background: color-mix(in srgb, var(--c-warn) 30%, transparent);
+  border-radius: 2px;
+}
+
+.cm-editor .cm-searchMatch.cm-searchMatch-selected {
+  background: color-mix(in srgb, var(--c-warn) 60%, transparent);
+}
+
+/* The search panel (⌘F / Ctrl+F) sits at the top of the editor. */
+.cm-editor .cm-panels {
+  background: var(--c-surface-2);
+  color: var(--c-ink);
+  border-bottom: 1px solid var(--c-line);
+  font-family: var(--font-sans);
+  font-size: 12px;
+}
+
+.cm-editor .cm-panels .cm-textfield {
+  background: var(--c-surface);
+  border: 1px solid var(--c-line-strong);
+  border-radius: 4px;
+  color: var(--c-ink);
+  font-family: var(--font-mono);
+}
+
+.cm-editor .cm-panels .cm-button {
+  background: var(--c-surface);
+  background-image: none;
+  border: 1px solid var(--c-line-strong);
+  border-radius: 4px;
+  color: var(--c-ink);
+}
+
+.cm-editor .cm-panels .cm-button:hover {
+  border-color: var(--c-accent);
+}
+
+.cm-editor .cm-tooltip {
+  background: var(--c-surface);
+  border: 1px solid var(--c-line-strong);
+  color: var(--c-ink);
+  border-radius: 8px;
+}
+
+.cm-editor .cm-tooltip-autocomplete {
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--c-ink) 12%, transparent);
+}
+
+.cm-editor .cm-tooltip-autocomplete ul {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+.cm-editor .cm-tooltip-autocomplete ul li {
+  padding: 3px 8px;
+  line-height: 1.5;
+}
+
+.cm-editor .cm-tooltip-autocomplete ul li[aria-selected] {
+  background: var(--c-accent-soft);
+  color: var(--c-accent-text);
+}
+
+/* The kind of each completion, drawn as an IDE draws it: a table, a column, a keyword. */
+.cm-editor .cm-completionIcon {
+  width: 1.4em;
+  opacity: 0.8;
+}
+
+.cm-editor .cm-completionIcon-class::after {
+  content: '▦';
+  color: var(--c-kind-source);
+}
+
+.cm-editor .cm-completionIcon-type::after {
+  content: 'T';
+  font-size: 90%;
+  color: var(--c-tok-definition);
+}
+
+.cm-editor .cm-completionIcon-property::after {
+  content: '▪';
+  color: var(--c-kind-output);
+}
+
+.cm-editor .cm-completionIcon-keyword::after {
+  content: 'K';
+  font-size: 90%;
+  color: var(--c-tok-keyword);
+}
+
+.cm-editor .cm-completionDetail {
+  margin-left: 0.8em;
+  font-style: normal;
+  color: var(--c-muted);
+}
+
+.cm-editor .cm-completionMatchedText {
+  text-decoration: none;
+  font-weight: 700;
+  color: var(--c-accent-text);
+}
+
+/* The hover over a table or column. */
+.cm-schema-tooltip {
+  padding: 6px 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.cm-schema-tooltip-head {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  margin-bottom: 2px;
+}
+
+.cm-schema-tooltip-head span {
+  color: var(--c-muted);
+}
+
+/* The clause the picked node stands for, and the problems the analysis found. */
+.cm-node-range {
+  background: color-mix(in srgb, var(--c-accent) 18%, transparent);
+  border-radius: 3px;
+}
+
+.cm-diagnostic-error {
+  text-decoration: underline wavy var(--c-danger);
+  text-decoration-skip-ink: none;
+}
+
+.cm-diagnostic-warning {
+  text-decoration: underline wavy var(--c-warn);
+  text-decoration-skip-ink: none;
+}
+
+.cm-diagnostic-info {
+  text-decoration: underline dotted var(--c-faint);
 }
 
 /* React Flow chrome */
@@ -222,6 +549,27 @@
   border: 0;
   background: transparent;
   pointer-events: none;
+}
+
+/* The data-flow picture of a statement: rows travel left to right along a solid edge, and a
+   subquery evaluated inside an expression feeds its clause along a dashed one. */
+.flow-handle.react-flow__handle {
+  width: 6px;
+  height: 6px;
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+.react-flow__edge.flow-edge .react-flow__edge-path {
+  stroke: var(--c-edge);
+  stroke-width: 1.6;
+}
+
+.react-flow__edge.flow-edge--lookup .react-flow__edge-path {
+  stroke-dasharray: 4 4;
 }
 
 .react-flow__edge.relation-edge .react-flow__edge-path {

@@ -65,20 +65,40 @@ test('the theme toggle switches the palette without breaking the layout', async 
   await expect(html).not.toHaveClass(/dark/u)
 })
 
+test('a node carries a link to its page', async ({ page }) => {
+  await page.goto('/')
+  const nodes = page.locator('.react-flow__node')
+  await expect(nodes).toHaveCount(3)
+
+  // One click on the header link, the gesture nobody has to guess.
+  await nodes.filter({ hasText: 'User' }).first().getByLabel('Open User').click()
+  await expect(page).toHaveURL(/\/models\/User/u)
+  await expect(page.getByRole('heading', { level: 1, name: 'User' })).toBeVisible()
+
+  await page.goto('/')
+  await page.locator('.react-flow__node-enum').first().getByLabel('Open Role').click()
+  await expect(page).toHaveURL(/\/enums\/Role/u)
+
+  // The link opens in a new tab the way any link does, rather than swallowing the modifier.
+  await page.goto('/')
+  const link = nodes.filter({ hasText: 'Post' }).first().getByLabel('Open Post')
+  await expect(link).toHaveAttribute('href', '/models/Post')
+})
+
 test('a model page shows its fields and an enum page its values', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('complementary').getByRole('link', { name: /^User/u }).click()
   await expect(page).toHaveURL(/\/models\/User/u)
   await expect(page.getByRole('heading', { level: 1, name: 'User' })).toBeVisible()
-  await page.getByRole('link', { name: 'Fields' }).click()
-  const table = page.getByRole('table')
+  await page.getByRole('tab', { name: 'Fields' }).click()
+  const table = page.getByRole('grid')
   await expectTexts(table, ['id', 'email', 'name', 'role', 'posts'])
   await expect(table).toContainText('Login address')
   await expectNoHorizontalOverflow(page)
 
   await page.getByRole('complementary').getByRole('link', { name: /^Role/u }).click()
   await expect(page.getByRole('heading', { level: 1, name: 'Role' })).toBeVisible()
-  await expectTexts(page.getByRole('table'), ['ADMIN', 'VIEWER'])
+  await expectTexts(page.getByRole('grid'), ['ADMIN', 'VIEWER'])
 })
 
 test('the docs page renders every model and links its sections', async ({ page }) => {
@@ -110,7 +130,7 @@ test('a broken schema keeps the last diagram and points at the editor', async ({
   // The link opens the file with the error at its line.
   await page.getByRole('link', { name: 'Fix it in the editor' }).click()
   await expect(page).toHaveURL(/\/prisma/u)
-  await expect(page.locator('.tab-active')).toHaveText(/base\.prisma$/u)
+  await expect(page.getByRole('tab', { selected: true })).toHaveText(/base\.prisma$/u)
   await expect(page.locator('.monaco-editor .squiggly-error').first()).toBeVisible()
   await expect(page.locator('.monaco-editor .current-line').first()).toBeVisible()
 })

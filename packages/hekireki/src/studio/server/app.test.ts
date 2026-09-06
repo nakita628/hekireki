@@ -157,6 +157,53 @@ describe('createStudioApp', () => {
     expect(sql.status).toBe(503)
   })
 
+  it('analyzes SQL against the schema models while no database is connected', async () => {
+    const { app } = await setup()
+    const response = await app.request('/api/db/analyze', {
+      ...json({ sql: 'SELECT id, nmae FROM User WHERE id = ?' }),
+      method: 'POST',
+    })
+    expect(response.status).toBe(200)
+    const body: unknown = await response.json()
+    const statement =
+      typeof body === 'object' && body !== null && 'statements' in body
+        ? Array.isArray(body.statements)
+          ? body.statements[0]
+          : undefined
+        : undefined
+    expect(statement).toMatchObject({
+      kind: 'select',
+      tables: [
+        {
+          name: 'User',
+          alias: null,
+          scope: 'main',
+          known: true,
+          columnsUsed: ['id'],
+          range: { start: 21, end: 25 },
+        },
+      ],
+      parameters: [
+        {
+          index: 1,
+          placeholder: '?',
+          dataType: 'INTEGER',
+          tsType: 'number',
+          nullable: false,
+          context: 'id = ?',
+        },
+      ],
+      diagnostics: [
+        {
+          severity: 'warning',
+          message: 'Unknown column "nmae"',
+          range: { start: 11, end: 15 },
+        },
+      ],
+      paramsType: '[number]',
+    })
+  })
+
   it('publishes the OpenAPI document', async () => {
     const { app } = await setup()
     const response = await app.request('/api/openapi.json')
@@ -173,7 +220,9 @@ describe('createStudioApp', () => {
     expect(new Set(paths)).toStrictEqual(
       new Set([
         '/api/db',
+        '/api/db/analyze',
         '/api/db/counts',
+        '/api/db/explain',
         '/api/docs',
         '/api/db/rows/{modelName}',
         '/api/db/sql',

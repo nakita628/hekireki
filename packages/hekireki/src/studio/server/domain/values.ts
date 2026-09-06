@@ -113,3 +113,20 @@ export function makeRow(input: z.infer<typeof MakeRowInput>) {
     }),
   )
 }
+
+const MakeBindValueInput = z
+  .object({
+    dialect: Dialect,
+    value: Cell,
+  })
+  .readonly()
+  .meta({
+    description: 'A parameter value from the client and the dialect it is bound for',
+    example: { dialect: 'sqlite', value: 1 },
+  })
+
+/** The driver value for a JSON parameter: SQLite has no booleans, so they bind as 0 / 1. */
+export function makeBindValue(input: z.infer<typeof MakeBindValueInput>): unknown {
+  if (typeof input.value === 'boolean' && input.dialect === 'sqlite') return input.value ? 1 : 0
+  return input.value
+}

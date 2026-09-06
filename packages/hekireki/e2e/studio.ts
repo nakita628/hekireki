@@ -94,6 +94,11 @@ export async function expectNoHorizontalOverflow(page: Page) {
 }
 
 /** Every text appears somewhere inside the element (toContainText with an array counts elements instead). */
+/** The grid's column headers that name a field; the checkbox column's header has no name. */
+export function fieldHeaders(grid: Locator) {
+  return grid.getByRole('columnheader').filter({ hasText: /\S/u })
+}
+
 export async function expectTexts(locator: Locator, texts: readonly string[]) {
   await Promise.all(texts.map((text) => expect(locator).toContainText(text)))
 }
@@ -139,15 +144,9 @@ export function editorOf(page: Page) {
         })
         .toBeGreaterThan(1)
     },
-    /**
-     * Types like a user: key by key, so completion triggers fire. Chromium drops the Space key
-     * Playwright sends into Monaco's EditContext, so spaces go in as text.
-     */
+    /** Types like a user: key by key, so completion triggers fire. */
     async type(text: string) {
-      for (const [index, word] of text.split(' ').entries()) {
-        if (index > 0) await page.keyboard.insertText(' ')
-        if (word !== '') await page.keyboard.type(word)
-      }
+      await page.keyboard.type(text)
     },
     /** Puts the cursor at a 1-based line and column through the keyboard, like a user would. */
     async goto(line: number, column: number) {
