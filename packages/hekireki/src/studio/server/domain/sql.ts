@@ -254,3 +254,29 @@ const SplitStatementsInput = z
 export function splitStatements(input: z.infer<typeof SplitStatementsInput>) {
   return splitSqlStatements(input.sql)
 }
+
+const MakeExplainStatementInput = z
+  .object({
+    dialect: Dialect,
+    sql: z.string().meta({ description: 'The statement to explain.', example: 'SELECT 1' }),
+  })
+  .readonly()
+  .meta({
+    description: 'A statement and the dialect whose EXPLAIN syntax to use',
+    example: { dialect: 'sqlite', sql: 'SELECT 1' },
+  })
+
+/** The EXPLAIN form each database answers with a machine-readable plan. */
+export function makeExplainStatement(input: z.infer<typeof MakeExplainStatementInput>) {
+  const body = input.sql.trim().replace(/;\s*$/u, '')
+  switch (input.dialect) {
+    case 'sqlite':
+      return `EXPLAIN QUERY PLAN ${body}`
+    case 'postgresql':
+      return `EXPLAIN (FORMAT JSON) ${body}`
+    case 'mysql':
+      return `EXPLAIN FORMAT=JSON ${body}`
+    default:
+      return `EXPLAIN ${body}`
+  }
+}

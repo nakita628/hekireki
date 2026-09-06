@@ -6,7 +6,13 @@ import { LuPlay } from 'react-icons/lu'
 import { fieldTypeLabel } from '../../components/labels.js'
 import { ResultTable } from '../../components/result-table.js'
 import { useDebounced } from '../../hooks/debounce.js'
-import { getDbCountsQueryKey, useDb, usePostDbSql, useSchema } from '../../hooks/index.js'
+import {
+  getDbCountsQueryKey,
+  useDb,
+  usePostDbExplain,
+  usePostDbSql,
+  useSchema,
+} from '../../hooks/index.js'
 import { loadString, saveString } from '../../lib/index.js'
 import { SchemaCanvas } from '../schema/schema-view.js'
 import type { SchemaHighlight } from '../schema/schema-view.js'
@@ -17,6 +23,7 @@ import { DiagnosticsList } from './diagnostics-list.js'
 import { FlowView } from './flow-view.js'
 import { ParamsPanel } from './params-panel.js'
 import { bindValues } from './params.js'
+import { PlanView } from './plan-view.js'
 import { SplitPane } from './split-pane.js'
 import { SqlEditor } from './sql-editor.js'
 import type { EditorTable } from './sql-editor.js'
@@ -28,7 +35,7 @@ const PANES_KEY = 'hekireki-studio:sql-panes'
 const EDITOR_KEY = 'hekireki-studio:sql-editor-height'
 const ANALYZE_DEBOUNCE_MS = 250
 
-type Tab = 'flow' | 'columns' | 'type' | 'result'
+type Tab = 'flow' | 'columns' | 'type' | 'result' | 'plan'
 
 // The server sends only the first page of a large result, so the count of what matched and the
 // number of rows on screen can differ; say so rather than showing a wrong total.
@@ -63,7 +70,9 @@ function highlightOf(statement: StatementAnalysis | null): SchemaHighlight | nul
 
 function tabOf(key: string | number): Tab {
   const name = String(key)
-  return name === 'columns' || name === 'type' || name === 'result' ? name : 'flow'
+  return name === 'columns' || name === 'type' || name === 'result' || name === 'plan'
+    ? name
+    : 'flow'
 }
 
 /** The SQL page: the editor and what the analysis says on the left, the models it runs against on the right. */
@@ -114,6 +123,7 @@ export function SqlView() {
         ]),
     },
   })
+  const explain = usePostDbExplain()
   const result = run.data ?? null
 
   const params = useMemo(
@@ -128,6 +138,12 @@ export function SqlView() {
     run.mutate({ json: { sql: text, params: [...params] } })
     setTab('result')
   }, [run, sql, database, statement, statements.length, params])
+
+  const runExplain = useCallback(() => {
+    if (explain.isPending || sql.trim() === '' || database?.connected !== true) return
+    const text = statement === null || statements.length <= 1 ? sql : statement.text
+    explain.mutate({ json: { sql: text, params: [...params] } })
+  }, [explain, sql, database, statement, statements.length, params])
 
   const onChange = useCallback((value: string) => {
     setSql(value)
@@ -193,6 +209,7 @@ export function SqlView() {
               <Tabs.Tab id="columns">Columns</Tabs.Tab>
               <Tabs.Tab id="type">Type</Tabs.Tab>
               <Tabs.Tab id="result">Result</Tabs.Tab>
+              <Tabs.Tab id="plan">Plan</Tabs.Tab>
             </Tabs.List>
           </Tabs.ListContainer>
         </Tabs>
@@ -253,6 +270,14 @@ export function SqlView() {
             ) : null}
           </div>
         )
+      ) : null}
+      {tab === 'plan' ? (
+        <PlanView
+          plan={explain.data ?? null}
+          pending={explain.isPending}
+          error={explain.isError ? problemDetail(explain.error) : null}
+          onExplain={runExplain}
+        />
       ) : null}
     </div>
   )

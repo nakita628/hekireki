@@ -1056,6 +1056,49 @@ model Analysis {
   statements: StatementAnalysis[];
 }
 
+/** One step of the execution plan, flattened; `parent` rebuilds the tree. */
+@example(#{
+  id: "3",
+  parent: null,
+  label: "SCAN users",
+  detail: null,
+  cost: null,
+  rows: null,
+})
+model PlanNode {
+  /** The step id, unique within the plan */
+  id: string;
+
+  /** The id of the step this one feeds, or null for a root */
+  parent: string | null;
+
+  /** What the step does (`SCAN users`, `Seq Scan on users`, `Hash Join`) */
+  label: string;
+
+  /** The rest of what the database said about the step */
+  detail: string | null;
+
+  /** The estimated cost, when the database reports one */
+  cost: float64 | null;
+
+  /** The estimated (or, with ANALYZE, actual) row count, when reported */
+  rows: float64 | null;
+}
+
+/** The execution plan of a statement. */
+@example(#{ dialect: "sqlite", nodes: #[], raw: "" })
+@extension("x-brand", "Plan")
+model Plan {
+  /** The dialect that produced the plan */
+  dialect: Dialect;
+
+  /** The steps, parents before children */
+  nodes: PlanNode[];
+
+  /** The plan as the database printed it */
+  raw: string;
+}
+
 // ---------------------------------------------------------------------------
 // Prisma language server
 // ---------------------------------------------------------------------------
@@ -1897,6 +1940,16 @@ namespace DbRoutes {
   @operationId("runSql")
   op sql(@body body: SqlBody):
     | SqlResult
+    | ValidationProblemResponse
+    | ServiceUnavailableProblemResponse
+    | InternalServerProblemResponse;
+
+  /** The execution plan the database chooses for the first statement of the text. */
+  @post
+  @route("/explain")
+  @operationId("explainSql")
+  op explain(@body body: SqlBody):
+    | Plan
     | ValidationProblemResponse
     | ServiceUnavailableProblemResponse
     | InternalServerProblemResponse;

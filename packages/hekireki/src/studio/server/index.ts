@@ -9,6 +9,7 @@ import {
   getSchemaRouteHandler,
   patchDbRowsModelNameRouteHandler,
   postDbAnalyzeRouteHandler,
+  postDbExplainRouteHandler,
   postDbRowsModelNameRouteHandler,
   postDbSqlRouteHandler,
   postPrismaCodeActionsRouteHandler,
@@ -33,6 +34,7 @@ import {
   getSchemaRoute,
   patchDbRowsModelNameRoute,
   postDbAnalyzeRoute,
+  postDbExplainRoute,
   postDbRowsModelNameRoute,
   postDbSqlRoute,
   postPrismaCodeActionsRoute,
@@ -62,6 +64,7 @@ export const api = app
   .openapi(patchDbRowsModelNameRoute, patchDbRowsModelNameRouteHandler)
   .openapi(deleteDbRowsModelNameRoute, deleteDbRowsModelNameRouteHandler)
   .openapi(postDbSqlRoute, postDbSqlRouteHandler)
+  .openapi(postDbExplainRoute, postDbExplainRouteHandler)
   .openapi(postDbAnalyzeRoute, postDbAnalyzeRouteHandler)
   .openapi(postPrismaFormatRoute, postPrismaFormatRouteHandler)
   .openapi(postPrismaLintRoute, postPrismaLintRouteHandler)

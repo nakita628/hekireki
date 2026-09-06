@@ -222,6 +222,7 @@ describe('createStudioApp', () => {
         '/api/db',
         '/api/db/analyze',
         '/api/db/counts',
+        '/api/db/explain',
         '/api/docs',
         '/api/db/rows/{modelName}',
         '/api/db/sql',

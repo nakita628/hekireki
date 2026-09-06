@@ -365,6 +365,12 @@ test('the SQL page draws the statement, lights up the models it touches and type
   await page.getByRole('button', { name: 'Run' }).click()
   await expect(page.getByText('2 rows · ')).toBeVisible()
   await expect(page.getByRole('grid')).toContainText('ada@example.com')
+
+  // Plan: what SQLite chose to answer it.
+  await page.getByRole('tab', { name: 'Plan' }).click()
+  await page.getByRole('button', { name: 'Explain' }).click()
+  await expect(page.getByText(/SCAN u|SEARCH u/u).first()).toBeVisible()
+  await expect(page.getByText(/sqlite · \d+ steps?/u)).toBeVisible()
   await expectNoHorizontalOverflow(page)
 })
 

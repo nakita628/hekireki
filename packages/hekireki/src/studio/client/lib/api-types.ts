@@ -24,3 +24,5 @@ export type Diagnostic = StatementAnalysis['diagnostics'][number]
 export type Range = { readonly start: number; readonly end: number }
 
 export type SqlResult = Body<typeof client.db.sql.$post>
+
+export type Plan = Body<typeof client.db.explain.$post>

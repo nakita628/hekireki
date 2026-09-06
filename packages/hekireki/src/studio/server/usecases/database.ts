@@ -14,6 +14,7 @@ import {
   AnalysisSchema,
   CountsSchema,
   DbStatusSchema,
+  PlanSchema,
   RowsSchema,
   SqlResultSchema,
 } from '../routes/index.js'
@@ -446,6 +447,33 @@ export function runSql(input: z.infer<typeof RunSqlInput>) {
       durationMs: Math.round((performance.now() - started) * 10) / 10,
     }
     const result = SqlResultSchema.safeParse(sqlResult)
+    if (!result.success) {
+      return yield* new ContractViolationError({ message: result.error.message })
+    }
+    return result.data
+  })
+}
+
+/**
+ * The execution plan the database chooses for the first statement of the text.
+ *
+ * @param input - the text and the parameter values
+ * @returns the plan steps, parents first, and the plan as the database printed it
+ */
+export function explainSql(input: z.infer<typeof RunSqlInput>) {
+  return Effect.gen(function* () {
+    const db = yield* RuntimeService.DatabaseTag
+    const driver = yield* db.driver
+    const [first] = SqlDomain.splitStatements({ sql: input.sql })
+    if (first === undefined) {
+      return yield* new InvalidInputError({ field: 'sql', message: 'holds no statement' })
+    }
+    const params = input.params.map((value) =>
+      ValuesDomain.makeBindValue({ dialect: driver.dialect, value }),
+    )
+    const explained = yield* driver.explain({ sql: first, params })
+    const plan = { dialect: driver.dialect, nodes: explained.nodes, raw: explained.raw }
+    const result = PlanSchema.safeParse(plan)
     if (!result.success) {
       return yield* new ContractViolationError({ message: result.error.message })
     }

@@ -600,6 +600,34 @@ export function usePostDbSql<TError = unknown>(options?: {
   return useMutation({ ...mutationOptions, ...getPostDbSqlMutationOptions<TError>(clientOptions) })
 }
 
+export function getPostDbExplainMutationOptions<TError = unknown>(options?: ClientRequestOptions) {
+  return mutationOptions<
+    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.explain.$post>>>>>,
+    TError,
+    InferRequestType<typeof client.db.explain.$post>
+  >({
+    mutationKey: ['db', '/db/explain', 'POST'] as const,
+    async mutationFn(args: InferRequestType<typeof client.db.explain.$post>) {
+      return parseResponse(client.db.explain.$post(args, options))
+    },
+  })
+}
+
+export function usePostDbExplain<TError = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.explain.$post>>>>>,
+    TError,
+    InferRequestType<typeof client.db.explain.$post>
+  >
+  options?: ClientRequestOptions
+}) {
+  const { mutation: mutationOptions, options: clientOptions } = options ?? {}
+  return useMutation({
+    ...mutationOptions,
+    ...getPostDbExplainMutationOptions<TError>(clientOptions),
+  })
+}
+
 export function getPostDbAnalyzeMutationOptions<TError = unknown>(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.analyze.$post>>>>>,

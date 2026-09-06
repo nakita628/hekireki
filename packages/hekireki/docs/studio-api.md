@@ -662,6 +662,67 @@ Run the statements one by one and return the rows of the last, or its affected c
 This operation does not require authentication
 </aside>
 
+## explainSql
+
+<a id="opIdexplainSql"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/db/explain \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{
+    "sql": "SELECT id, email FROM users LIMIT 10"
+  }'
+```
+
+`POST /db/explain`
+
+The execution plan the database chooses for the first statement of the text.
+
+> Body parameter
+
+```json
+{
+  "sql": "SELECT id, email FROM users LIMIT 10"
+}
+```
+
+<h3 id="explainsql-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|
+|---|---|---|---|---|
+|body|body|[SqlBody](#schemasqlbody)|true|none|
+|» sql|body|object|true|The statements; several are run one by one and the result belongs to the last|
+|» params|body|[object]|false|The values bound to the placeholders, in order; omitted means none|
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "dialect": "sqlite",
+  "nodes": [],
+  "raw": ""
+}
+```
+
+<h3 id="explainsql-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[Plan](#schemaplan)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
 ## analyzeSql
 
 <a id="opIdanalyzeSql"></a>
@@ -2570,6 +2631,58 @@ This operation does not require authentication
 |---|---|---|---|---|
 |sql|object|true|none|The statements; several are run one by one and the result belongs to the last|
 |params|[object]|false|none|The values bound to the placeholders, in order; omitted means none|
+
+<h2 id="tocS_PlanNode">PlanNode</h2>
+<!-- backwards compatibility -->
+<a id="schemaplannode"></a>
+<a id="schema_PlanNode"></a>
+<a id="tocSplannode"></a>
+<a id="tocsplannode"></a>
+
+```json
+{
+  "id": "3",
+  "parent": null,
+  "label": "SCAN users",
+  "detail": null,
+  "cost": null,
+  "rows": null
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|id|string|true|none|The step id, unique within the plan|
+|parent|string|true|none|The id of the step this one feeds, or null for a root|
+|label|string|true|none|What the step does (`SCAN users`, `Seq Scan on users`, `Hash Join`)|
+|detail|string|true|none|The rest of what the database said about the step|
+|cost|number(double)|true|none|The estimated cost, when the database reports one|
+|rows|number(double)|true|none|The estimated (or, with ANALYZE, actual) row count, when reported|
+
+<h2 id="tocS_Plan">Plan</h2>
+<!-- backwards compatibility -->
+<a id="schemaplan"></a>
+<a id="schema_Plan"></a>
+<a id="tocSplan"></a>
+<a id="tocsplan"></a>
+
+```json
+{
+  "dialect": "sqlite",
+  "nodes": [],
+  "raw": ""
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|dialect|object|true|none|The dialect that produced the plan|
+|nodes|[[PlanNode](#schemaplannode)]|true|none|The steps, parents before children|
+|raw|string|true|none|The plan as the database printed it|
 
 <h2 id="tocS_StatementKind">StatementKind</h2>
 <!-- backwards compatibility -->

@@ -7,6 +7,7 @@ import * as z from 'zod'
 
 import { readFile } from '../../../file/index.js'
 import * as DatabaseErrorDomain from '../domain/index.js'
+import * as PlanDomain from '../domain/index.js'
 import * as SqlDomain from '../domain/index.js'
 import * as UrlDomain from '../domain/index.js'
 import { DatabaseError, DatabaseUnavailableError } from '../errors/index.js'
@@ -19,10 +20,23 @@ type QueryResult = {
   readonly rowCount: number
 }
 
-/** An open connection: every query is an Effect that fails with the driver's message. */
+type PlanResult = {
+  readonly nodes: readonly {
+    readonly id: string
+    readonly parent: string | null
+    readonly label: string
+    readonly detail: string | null
+    readonly cost: number | null
+    readonly rows: number | null
+  }[]
+  readonly raw: string
+}
+
+/** An open connection: every operation is an Effect that fails with the driver's message. */
 type Driver = {
   readonly dialect: 'postgresql' | 'mysql' | 'sqlite'
   readonly query: (statement: Statement) => Effect.Effect<QueryResult, DatabaseError>
+  readonly explain: (statement: Statement) => Effect.Effect<PlanResult, DatabaseError>
   readonly close: Effect.Effect<void>
 }
 
@@ -127,6 +141,18 @@ function openSqlite(url: string, baseDir: string) {
           },
           catch: databaseError,
         }),
+      explain: (statement) =>
+        Effect.try({
+          try: () => {
+            const prepared = db.prepare(
+              SqlDomain.makeExplainStatement({ dialect: 'sqlite', sql: statement.sql }),
+            )
+            // oxlint-disable-next-line promise/prefer-await-to-then -- zod's .catch(), not a promise
+            const rows = DriverRows.catch([]).parse(prepared.all(...statement.params))
+            return PlanDomain.makeSqlitePlan({ rows })
+          },
+          catch: databaseError,
+        }),
       close: Effect.sync(() => {
         db.close()
       }),
@@ -204,6 +230,20 @@ function openPostgres(url: string, cwd: string) {
           },
           catch: databaseError,
         }),
+      explain: (statement) =>
+        Effect.tryPromise({
+          try: async () => {
+            // oxlint-disable-next-line promise/prefer-await-to-then -- zod's .catch(), not a promise
+            const { rows } = PgResult.catch({ rows: [] }).parse(
+              await client.query(
+                SqlDomain.makeExplainStatement({ dialect: 'postgresql', sql: statement.sql }),
+                statement.params,
+              ),
+            )
+            return PlanDomain.makePostgresPlan({ document: rows[0]?.['QUERY PLAN'] ?? null })
+          },
+          catch: databaseError,
+        }),
       close: Effect.promise(() => client.end()),
     }
     return driver
@@ -263,6 +303,21 @@ function openMysql(url: string, cwd: string) {
               rows: data,
               rowCount: data.length,
             }
+          },
+          catch: databaseError,
+        }),
+      explain: (statement) =>
+        Effect.tryPromise({
+          try: async () => {
+            // oxlint-disable-next-line promise/prefer-await-to-then -- zod's .catch(), not a promise
+            const [data] = MysqlResult.catch([[], undefined]).parse(
+              await connection.query(
+                SqlDomain.makeExplainStatement({ dialect: 'mysql', sql: statement.sql }),
+                statement.params,
+              ),
+            )
+            const first = Array.isArray(data) ? data[0] : undefined
+            return PlanDomain.makeMysqlPlan({ document: first?.EXPLAIN ?? null })
           },
           catch: databaseError,
         }),

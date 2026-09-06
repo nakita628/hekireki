@@ -1231,6 +1231,54 @@ export const SqlBodySchema = z
   })
   .openapi('SqlBody')
 
+export const PlanNodeSchema = z
+  .object({
+    id: z.string().openapi({ description: 'The step id, unique within the plan' }),
+    parent: z
+      .string()
+      .nullable()
+      .openapi({ description: 'The id of the step this one feeds, or null for a root' }),
+    label: z
+      .string()
+      .openapi({
+        description: 'What the step does (`SCAN users`, `Seq Scan on users`, `Hash Join`)',
+      }),
+    detail: z
+      .string()
+      .nullable()
+      .openapi({ description: 'The rest of what the database said about the step' }),
+    cost: z
+      .float64()
+      .nullable()
+      .openapi({ description: 'The estimated cost, when the database reports one' }),
+    rows: z
+      .float64()
+      .nullable()
+      .openapi({
+        description: 'The estimated (or, with ANALYZE, actual) row count, when reported',
+      }),
+  })
+  .openapi({
+    required: ['id', 'parent', 'label', 'detail', 'cost', 'rows'],
+    description: 'One step of the execution plan, flattened; `parent` rebuilds the tree.',
+    example: { id: '3', parent: null, label: 'SCAN users', detail: null, cost: null, rows: null },
+  })
+  .openapi('PlanNode')
+
+export const PlanSchema = z
+  .object({
+    dialect: DialectSchema.openapi({ description: 'The dialect that produced the plan' }),
+    nodes: z.array(PlanNodeSchema).openapi({ description: 'The steps, parents before children' }),
+    raw: z.string().openapi({ description: 'The plan as the database printed it' }),
+  })
+  .brand<'Plan'>()
+  .openapi({
+    required: ['dialect', 'nodes', 'raw'],
+    description: 'The execution plan of a statement.',
+    example: { dialect: 'sqlite', nodes: [], raw: '' },
+  })
+  .openapi('Plan')
+
 export const AnalysisSchema: z.ZodType<AnalysisType> = z
   .lazy(() =>
     z
@@ -2279,6 +2327,33 @@ export const postDbSqlRoute = createRoute({
     200: {
       description: 'The request has succeeded.',
       content: { 'application/json': { schema: SqlResultSchema } },
+    },
+    422: {
+      description: '422 Unprocessable Content (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ValidationProblemSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+    503: {
+      description: '503 Service Unavailable (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
+    },
+  },
+})
+
+export const postDbExplainRoute = createRoute({
+  method: 'post',
+  path: '/db/explain',
+  tags: ['db'],
+  description: 'The execution plan the database chooses for the first statement of the text.',
+  operationId: 'explainSql',
+  request: { body: { content: { 'application/json': { schema: SqlBodySchema } }, required: true } },
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: PlanSchema } },
     },
     422: {
       description: '422 Unprocessable Content (`application/problem+json`)',

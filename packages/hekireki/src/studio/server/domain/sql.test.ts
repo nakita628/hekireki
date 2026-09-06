@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vite-plus/test'
 import {
   makeCountStatement,
   makeDeleteStatement,
+  makeExplainStatement,
   makeIdentifier,
   makeInsertStatement,
   makePlaceholder,
@@ -148,5 +149,19 @@ describe('splitStatements', () => {
       }),
     ).toStrictEqual(["SELECT ';' AS a", 'SELECT 2 /* three; */'])
     expect(splitStatements({ sql: '  ;; ' })).toStrictEqual([])
+  })
+})
+
+describe('makeExplainStatement', () => {
+  it('asks each database for its machine-readable plan, without the trailing semicolon', () => {
+    expect(makeExplainStatement({ dialect: 'sqlite', sql: 'SELECT 1;' })).toBe(
+      'EXPLAIN QUERY PLAN SELECT 1',
+    )
+    expect(makeExplainStatement({ dialect: 'postgresql', sql: ' SELECT 1 ' })).toBe(
+      'EXPLAIN (FORMAT JSON) SELECT 1',
+    )
+    expect(makeExplainStatement({ dialect: 'mysql', sql: 'SELECT 1' })).toBe(
+      'EXPLAIN FORMAT=JSON SELECT 1',
+    )
   })
 })
