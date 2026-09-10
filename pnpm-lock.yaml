@@ -195,7 +195,7 @@ importers:
         version: 1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1))(@typespec/http@1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1)))
       '@typespec/openapi3':
         specifier: ^1.15.0
-        version: 1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1))(@typespec/http@1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1)))(@typespec/openapi@1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1))(@typespec/http@1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1))))
+        version: 1.16.0(@typespec/compiler@1.15.0(@types/node@26.4.1))(@typespec/http@1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1)))(@typespec/openapi@1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1))(@typespec/http@1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1))))
       '@vitejs/plugin-react':
         specifier: ^6.1.1
         version: 6.1.1(vite@8.1.2(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))
@@ -3043,6 +3043,12 @@ packages:
     peerDependencies:
       '@typespec/compiler': ^1.10.0
 
+  '@typespec/asset-emitter@0.79.2':
+    resolution: {integrity: sha512-hcr0jxYgXM0suBwPtjnScYXZVIIqkcdd8jgYh1T7VLHem8+q0WthFQxeKbDIrip4k/nCFtnZui6Dj5oOVJb8fA==}
+    engines: {node: '>=22.0.0'}
+    peerDependencies:
+      '@typespec/compiler': ^1.16.0
+
   '@typespec/compiler@1.15.0':
     resolution: {integrity: sha512-NbCIRAIzyozchlSaGPVuyV43bC+y+OpXYCuT+8M8kt35Ln9zWzLFcIt7irofQ5QUXBZrHsBFpI5fTOFdCGeWCA==}
     engines: {node: '>=22.0.0'}
@@ -3071,6 +3077,34 @@ packages:
       '@typespec/sse': ^0.85.0
       '@typespec/streams': ^0.85.0
       '@typespec/versioning': ^0.85.0
+      '@typespec/xml': '*'
+    peerDependenciesMeta:
+      '@typespec/events':
+        optional: true
+      '@typespec/json-schema':
+        optional: true
+      '@typespec/sse':
+        optional: true
+      '@typespec/streams':
+        optional: true
+      '@typespec/versioning':
+        optional: true
+      '@typespec/xml':
+        optional: true
+
+  '@typespec/openapi3@1.16.0':
+    resolution: {integrity: sha512-eRyTwn4w5hWSRm15ys20O2Jp1aHDPHp6TZsctOsG3nxo+N50Qg7Epgu44ATsxaELmnCEg9G0B7N9czZKb51dSQ==}
+    engines: {node: '>=22.0.0'}
+    hasBin: true
+    peerDependencies:
+      '@typespec/compiler': ^1.16.0
+      '@typespec/events': ^0.86.0
+      '@typespec/http': ^1.16.0
+      '@typespec/json-schema': ^1.16.0
+      '@typespec/openapi': ^1.16.0
+      '@typespec/sse': ^0.86.0
+      '@typespec/streams': ^0.86.0
+      '@typespec/versioning': ^0.86.0
       '@typespec/xml': '*'
     peerDependenciesMeta:
       '@typespec/events':
@@ -8253,6 +8287,10 @@ snapshots:
     dependencies:
       '@typespec/compiler': 1.15.0(@types/node@26.4.1)
 
+  '@typespec/asset-emitter@0.79.2(@typespec/compiler@1.15.0(@types/node@26.4.1))':
+    dependencies:
+      '@typespec/compiler': 1.15.0(@types/node@26.4.1)
+
   '@typespec/compiler@1.15.0(@types/node@26.4.1)':
     dependencies:
       '@babel/code-frame': 7.29.7
@@ -8284,6 +8322,17 @@ snapshots:
       '@scalar/openapi-parser': 0.28.16
       '@scalar/openapi-types': 0.9.5
       '@typespec/asset-emitter': 0.79.1(@typespec/compiler@1.15.0(@types/node@26.4.1))
+      '@typespec/compiler': 1.15.0(@types/node@26.4.1)
+      '@typespec/http': 1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1))
+      '@typespec/openapi': 1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1))(@typespec/http@1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1)))
+      yaml: 2.9.0
+
+  '@typespec/openapi3@1.16.0(@typespec/compiler@1.15.0(@types/node@26.4.1))(@typespec/http@1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1)))(@typespec/openapi@1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1))(@typespec/http@1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1))))':
+    dependencies:
+      '@scalar/json-magic': 0.13.2
+      '@scalar/openapi-parser': 0.28.16
+      '@scalar/openapi-types': 0.9.5
+      '@typespec/asset-emitter': 0.79.2(@typespec/compiler@1.15.0(@types/node@26.4.1))
       '@typespec/compiler': 1.15.0(@types/node@26.4.1)
       '@typespec/http': 1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1))
       '@typespec/openapi': 1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1))(@typespec/http@1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1)))
