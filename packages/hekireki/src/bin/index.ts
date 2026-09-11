@@ -26,7 +26,7 @@ const GENERATORS = {
   ajv: { prettyName: 'Hekireki-AJV', handler: ajv },
   arktype: { prettyName: 'Hekireki-ArkType', handler: arktype },
   atlas: { prettyName: 'Hekireki-Atlas', handler: atlas },
-  // One ER model, four renderings, picked by the extension of `output`.
+  // One ER model, four renderings, picked by the extension of each file in `output` / `outputs`.
   er: { prettyName: 'Hekireki-ER', handler: er },
   django: { prettyName: 'Hekireki-Django', handler: django },
   drizzle: { prettyName: 'Hekireki-Drizzle', handler: drizzle },
