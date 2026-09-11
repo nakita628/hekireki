@@ -109,25 +109,43 @@ function makePrismaColumn(column: {
   return `  ${column.name} ${column.type}${formatConstraints(constraints)}`
 }
 
+/**
+ * The name a model, field, enum or enum value has in the database: its `@map` / `@@map` when it
+ * has one, its Prisma name otherwise. DBML describes the database, so every name it writes is this.
+ */
+function dbNameOf(item: { readonly name: string; readonly dbName?: string | null }) {
+  return item.dbName ?? item.name
+}
+
+/** The column a Prisma field of `model` is stored in. */
+function columnOf(model: DMMF.Model | undefined, field: string) {
+  const found = model?.fields.find((f) => f.name === field)
+  return found ? dbNameOf(found) : field
+}
+
 function isFunctionDefault(
   def: DMMF.Field['default'],
 ): def is { readonly name: string; readonly args: readonly (string | number)[] } {
   return def !== null && typeof def === 'object' && 'name' in def
 }
 
-function toDBMLColumn(field: DMMF.Field, models: readonly DMMF.Model[], mapToDbSchema: boolean) {
+function toDBMLColumn(field: DMMF.Field, enums: readonly DMMF.DatamodelEnum[]) {
   const defaultName = isFunctionDefault(field.default) ? field.default.name : undefined
+  // An enum column holds the enum's mapped type and its values' mapped names.
+  const enumDef = field.kind === 'enum' ? enums.find((e) => e.name === field.type) : undefined
 
-  const baseType = mapToDbSchema
-    ? (models.find((m) => m.name === field.type)?.dbName ?? field.type)
-    : field.type
+  const baseType = enumDef ? dbNameOf(enumDef) : field.type
   const type = field.isList && !field.relationName ? `${baseType}[]` : baseType
 
   const defaultValue = (() => {
     if (defaultName === 'autoincrement') return undefined
     if (defaultName === 'now') return '`now()`'
     if (field.hasDefaultValue && typeof field.default !== 'object') {
-      return field.type === 'String' || field.type === 'Json' || field.kind === 'enum'
+      if (field.kind === 'enum') {
+        const value = enumDef?.values.find((v) => v.name === field.default)
+        return `'${value ? dbNameOf(value) : String(field.default)}'`
+      }
+      return field.type === 'String' || field.type === 'Json'
         ? `'${field.default}'`
         : String(field.default)
     }
@@ -135,7 +153,7 @@ function toDBMLColumn(field: DMMF.Field, models: readonly DMMF.Model[], mapToDbS
   })()
 
   return {
-    name: field.name,
+    name: dbNameOf(field),
     type,
     isPrimaryKey: field.isId,
     isIncrement: defaultName === 'autoincrement',
@@ -146,22 +164,26 @@ function toDBMLColumn(field: DMMF.Field, models: readonly DMMF.Model[], mapToDbS
   }
 }
 
-export function makeTables(models: readonly DMMF.Model[], mapToDbSchema = false) {
+export function makeTables(
+  models: readonly DMMF.Model[],
+  enums: readonly DMMF.DatamodelEnum[] = [],
+) {
   return models.map((model) => {
-    const modelName = mapToDbSchema && model.dbName ? model.dbName : model.name
+    const modelName = dbNameOf(model)
 
     const columns = model.fields
       .filter((field) => !field.relationName)
-      .map((field) => toDBMLColumn(field, models, mapToDbSchema))
+      .map((field) => toDBMLColumn(field, enums))
     const columnLines = columns.map(makePrismaColumn).join('\n')
 
+    const columnsOf = (fields: readonly string[]) => fields.map((f) => columnOf(model, f))
     const indexes = [
       ...(model.primaryKey?.fields && model.primaryKey.fields.length > 0
-        ? [{ columns: model.primaryKey.fields, isPrimaryKey: true }]
+        ? [{ columns: columnsOf(model.primaryKey.fields), isPrimaryKey: true }]
         : []),
       ...model.uniqueFields
         .filter((c) => c.length > 1)
-        .map((c) => ({ columns: c, isUnique: true })),
+        .map((c) => ({ columns: columnsOf(c), isUnique: true })),
     ]
     const indexBlock =
       indexes.length > 0 ? `\n\n  indexes {\n${indexes.map(makeIndex).join('\n')}\n  }` : ''
@@ -176,13 +198,13 @@ export function makeTables(models: readonly DMMF.Model[], mapToDbSchema = false)
 export function makeEnums(enums: readonly DMMF.DatamodelEnum[]) {
   return enums.map((e) =>
     makeEnum({
-      name: e.name,
-      values: e.values.map((v) => v.name),
+      name: dbNameOf(e),
+      values: e.values.map(dbNameOf),
     }),
   )
 }
 
-export function makeRelations(models: readonly DMMF.Model[], mapToDbSchema = false) {
+export function makeRelations(models: readonly DMMF.Model[]) {
   return models.flatMap((model) =>
     model.fields
       .filter(
@@ -203,11 +225,15 @@ export function makeRelations(models: readonly DMMF.Model[], mapToDbSchema = fal
         )
         const operator: '>' | '<' | '-' = toField?.isList ? '>' : '-'
 
-        const relationFromName = mapToDbSchema && model.dbName ? model.dbName : model.name
-        const relationToName = mapToDbSchema && toModel?.dbName ? toModel.dbName : relationTo
+        const relationFromName = dbNameOf(model)
+        const relationToName = toModel ? dbNameOf(toModel) : relationTo
 
-        const fromColumn = combineKeys(field.relationFromFields ?? [])
-        const toColumn = combineKeys(field.relationToFields ?? [])
+        const fromColumn = combineKeys(
+          (field.relationFromFields ?? []).map((f) => columnOf(model, f)),
+        )
+        const toColumn = combineKeys(
+          (field.relationToFields ?? []).map((f) => columnOf(toModel, f)),
+        )
 
         return makeRef({
           name: `${relationFromName}_${fromColumn}_fk`,
@@ -241,20 +267,25 @@ function dbmlOperator(leftMany: boolean, rightMany: boolean) {
 // Emits `Ref` lines for logical relations declared by `/// @relation` that have
 // NO physical FK backing them (annotation-only). Pairs already covered by a
 // physical FK are left to `makeRelations`, which carries the richer FK metadata
-// (onDelete, composite keys, dbName). Logical refs drop the `_fk` suffix that
+// (onDelete, composite keys). Logical refs drop the `_fk` suffix that
 // physical FKs carry, since they are not DB-enforced constraints.
 export function annotatedDbmlRefs(models: readonly DMMF.Model[]) {
   const inferredKeys = new Set(inferredERRelations(models).map(erKey))
+  // The annotation names Prisma models and fields; the ref names the tables and columns they map to.
+  const end = (side: { readonly model: string; readonly field: string }) => {
+    const model = models.find((m) => m.name === side.model)
+    return { table: model ? dbNameOf(model) : side.model, column: columnOf(model, side.field) }
+  }
   return annotatedERRelations(models)
     .filter((relation) => !inferredKeys.has(erKey(relation)))
     .map((relation) => {
-      const left = `${relation.to.model}.${relation.to.field}`
-      const right = `${relation.from.model}.${relation.from.field}`
+      const to = end(relation.to)
+      const from = end(relation.from)
       const operator = dbmlOperator(
         isMany(relation.to.cardinality),
         isMany(relation.from.cardinality),
       )
-      const name = `${relation.to.model}_${relation.to.field}_${relation.from.model}_${relation.from.field}`
-      return `Ref ${name}: ${left} ${operator} ${right}`
+      const name = `${to.table}_${to.column}_${from.table}_${from.column}`
+      return `Ref ${name}: ${to.table}.${to.column} ${operator} ${from.table}.${from.column}`
     })
 }

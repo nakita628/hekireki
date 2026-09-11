@@ -24,7 +24,8 @@ npm install -D hekireki
 
 Each generator is a `generator` block in `schema.prisma`. `output` is **required**: point it at a
 directory to get the default file name of that generator, or at a path with an extension to name
-the file yourself.
+the file yourself. `hekireki-er` is the exception: it has no default file name, so it only takes
+paths to files, extension included (see [ER diagrams](#er-diagrams)).
 
 ```prisma
 datasource db {
@@ -170,7 +171,7 @@ model Post {
 | `hekireki-activerecord` | Ruby (Rails ≥ 7.1)         | one `.rb` per model                         | —                                    |
 | `hekireki-eloquent`     | PHP (Laravel, PHP ≥ 8.1)   | one `.php` per model and enum               | `namespace`                          |
 | `hekireki-atlas`        | Atlas HCL                  | `schema.hcl`                                | `schemaName`, `comment`              |
-| `hekireki-er`           | Mermaid / DBML / PNG / SVG | — (see [ER diagrams](#er-diagrams))         | `outputs`, `mapToDbSchema`, `theme`  |
+| `hekireki-er`           | Mermaid / DBML / PNG / SVG | — ([extension required](#er-diagrams))      | `outputs`, `theme`                   |
 
 ## Configuration
 
@@ -237,25 +238,55 @@ generator Hekireki-Eloquent {
     namespace = "App.Models" // PHP namespace, "." becomes "\" (default: App\Models)
 }
 
+// ER takes output or outputs (not both). Every path is a file ending in .md, .dbml, .png or .svg,
+// never a directory, and its extension picks the format (see ER diagrams).
 generator Hekireki-ER {
-    provider      = "hekireki-er"
-    output        = "docs"                              // The directory the files in outputs go in
-    outputs       = ["er.md", "schema.dbml", "er.svg"]  // .md, .dbml, .png or .svg (optional)
-    mapToDbSchema = true                                // .dbml only. @@map/@map names (default: true)
-    theme         = "light"                             // .png / .svg only. "light" (default) or "dark"
+    provider = "hekireki-er"
+    // output = "docs/er.md"                                      // One file: output alone is enough
+    outputs  = ["docs/er.md", "docs/schema.dbml", "docs/er.svg"]  // Several files: list them here
+    theme    = "light"                                            // .png / .svg only. "light" (default) or "dark"
 }
 ```
 
 ## ER diagrams
 
 `hekireki-er` writes the ER model of the schema in four formats, and the extension of each file
-picks which — so the file you name is the file you get, and an extension it has no format for is an
-error rather than a guess. `outputs` is the list of files and `output` the directory they go in; for
-a single file, point `output` straight at it and leave `outputs` out.
+picks which — so the file you name is the file you get. Unlike the other generators it has no
+default file name, so every file has to be named with one of these extensions:
 
-Every option belongs to a format (`mapToDbSchema` to `.dbml`, `theme` to `.png` and `.svg`), and
-setting one that no chosen format reads is an error — so an option never looks like it did something
-it did not.
+| Extension | Writes                 |
+| --------- | ---------------------- |
+| `.md`     | A Mermaid `erDiagram`  |
+| `.dbml`   | DBML                   |
+| `.png`    | The diagram, as a PNG  |
+| `.svg`    | The diagram, as an SVG |
+
+Name the files with `output` or with `outputs` — one of the two, not both. When one file is all
+you need, `output` alone is enough:
+
+```prisma
+generator Hekireki-ER {
+    provider = "hekireki-er"
+    output   = "docs/er.md"  // Writes docs/er.md
+}
+```
+
+For several formats at once, list them in `outputs` instead:
+
+```prisma
+generator Hekireki-ER {
+    provider = "hekireki-er"
+    outputs  = ["docs/er.md", "docs/er.svg"]  // Writes docs/er.md and docs/er.svg
+}
+```
+
+Every path is a whole file, directory and extension included, resolved the way Prisma resolves any
+`output`: against the directory of the schema file that declares the generator. Neither ever names
+a directory, so a path with no extension, or with one outside the four, is an error rather than a
+guess — `output = "docs"` fails.
+
+Every option belongs to a format (`theme` to `.png` and `.svg`), and setting one that no chosen
+format reads is an error — so an option never looks like it did something it did not.
 
 `.md` writes a Mermaid diagram:
 
@@ -273,7 +304,9 @@ erDiagram
     }
 ```
 
-`.dbml` writes the same model for [dbdiagram.io](https://dbml.dbdiagram.io/); `.png` and `.svg`
+`.dbml` writes the same model for [dbdiagram.io](https://dbml.dbdiagram.io/) as the database
+names it: tables, columns, enums and enum values under their `@@map` / `@map` names wherever the
+schema declares one. `.png` and `.svg`
 draw the diagram Hekireki Studio shows, laid out automatically: a card per model and enum, its
 fields with `🔑` / `🔗` / `UK` marks, the attributes and `///` prose under each, the `@@id` /
 `@@unique` / `@@index` block attributes, and an edge per relation in crow's-foot notation captioned

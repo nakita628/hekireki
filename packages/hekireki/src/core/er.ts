@@ -26,12 +26,8 @@ const FORMATS = {
     render: (options: GeneratorOptions) => erContent(options.dmmf.datamodel.models).join('\n'),
   },
   '.dbml': {
-    options: ['mapToDbSchema'],
-    render: (options: GeneratorOptions) =>
-      dbmlContent(
-        options.dmmf.datamodel,
-        getString(options.generator.config?.mapToDbSchema) !== 'false',
-      ),
+    options: [],
+    render: (options: GeneratorOptions) => dbmlContent(options.dmmf.datamodel),
   },
   '.png': {
     options: ['theme'],
@@ -70,32 +66,42 @@ function endsIn(name: string) {
 }
 
 /**
- * The files to write, from `output` alone or from the names `outputs` lists inside it.
+ * The files to write: the one `output` names, or every one `outputs` lists.
  *
- * One block writes as many files as it names, so a schema that wants the ER model in several
- * formats declares `Hekireki-ER` once — `outputs` is the list, `output` the directory it fills.
+ * Neither ever names a directory — each entry is a whole path, extension included — so the file
+ * the caller writes is the file they get. A schema that wants the ER model in several formats
+ * declares `Hekireki-ER` once and lists them in `outputs`, each resolved the way Prisma resolves
+ * `output`: against the directory of the schema file that declares the block.
  */
-function filesOf(output: string, outputs: readonly string[] | undefined) {
+function filesOf(options: GeneratorOptions, outputs: readonly string[] | undefined) {
   return Effect.gen(function* () {
-    if (outputs === undefined) {
+    const output = options.generator.isCustomOutput ? options.generator.output?.value : undefined
+    if (output && outputs !== undefined) {
+      return yield* new GeneratorConfigError({
+        message:
+          'Hekireki-ER takes output or outputs, not both: output names one file, outputs lists several.',
+      })
+    }
+    if (output) {
       const extension = path.extname(output).toLowerCase()
       if (!isFormat(extension)) {
         return yield* new GeneratorConfigError({
-          message: `output for Hekireki-ER has to name a file ending in ${EXTENSIONS}; "${output}" ends in ${endsIn(output)}.`,
+          message: `output for Hekireki-ER has to name a file ending in ${EXTENSIONS}, not a directory; "${output}" ends in ${endsIn(output)}.`,
         })
       }
       return [{ file: output, extension }]
+    }
+    if (outputs === undefined) {
+      return yield* new GeneratorConfigError({
+        message: `output or outputs is required for Hekireki-ER: output names one file, outputs lists several, each ending in ${EXTENSIONS}.`,
+      })
     }
     if (outputs.length === 0) {
       return yield* new GeneratorConfigError({
         message: 'outputs for Hekireki-ER has to name at least one file.',
       })
     }
-    if (path.extname(output) !== '') {
-      return yield* new GeneratorConfigError({
-        message: `output for Hekireki-ER names the directory the files in outputs go in, so it cannot name a file; "${output}" ends in ${endsIn(output)}.`,
-      })
-    }
+    const base = path.dirname(options.generator.sourceFilePath)
     return yield* Effect.forEach(outputs, (name) => {
       const extension = path.extname(name).toLowerCase()
       if (!isFormat(extension)) {
@@ -103,22 +109,16 @@ function filesOf(output: string, outputs: readonly string[] | undefined) {
           message: `outputs for Hekireki-ER has to name files ending in ${EXTENSIONS}; "${name}" ends in ${endsIn(name)}.`,
         })
       }
-      return Effect.succeed({ file: path.resolve(output, name), extension })
+      return Effect.succeed({ file: path.resolve(base, name), extension })
     })
   })
 }
 
 export function er(options: GeneratorOptions) {
   return Effect.gen(function* () {
-    if (!(options.generator.isCustomOutput && options.generator.output?.value)) {
-      return yield* new GeneratorConfigError({
-        message:
-          'output is required for Hekireki-ER. Please specify output in your generator config.',
-      })
-    }
     const config = options.generator.config ?? {}
     const outputs = getStrings(config.outputs)
-    const files = yield* filesOf(options.generator.output.value, outputs)
+    const files = yield* filesOf(options, outputs)
     // Every option belongs to a format, so the options a block may carry are the ones the
     // formats it writes read between them — and `outputs`, which picks those formats.
     const read = new Set<string>(outputs === undefined ? [] : ['outputs'])

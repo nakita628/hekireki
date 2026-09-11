@@ -514,7 +514,7 @@ describe('helper/dbml', () => {
       )
     })
 
-    it('uses dbName when mapToDbSchema is true', () => {
+    it('writes a model under its @@map name', () => {
       const datamodel: DMMF.Datamodel = {
         models: [
           {
@@ -546,7 +546,7 @@ describe('helper/dbml', () => {
         types: [],
         indexes: [],
       }
-      const result = dbmlContent(datamodel, true)
+      const result = dbmlContent(datamodel)
       expect(result).toBe('Table users {\n  id String [pk]\n}')
     })
 
@@ -773,15 +773,8 @@ describe('helper/dbml', () => {
       isGenerated: false,
     }
 
-    it('generates Order table with note and FK', () => {
+    it('generates Order table with note and FK, under its @@map name', () => {
       const tables = makeTables([orderModel])
-      expect(tables[0]).toBe(
-        "Table Order {\n  id String [pk, note: 'Order ID']\n  totalAmount Int [not null, note: 'Total amount in cents']\n  customerId String [not null]\n}",
-      )
-    })
-
-    it('uses dbName when mapToDbSchema is true', () => {
-      const tables = makeTables([orderModel], true)
       expect(tables[0]).toBe(
         "Table orders {\n  id String [pk, note: 'Order ID']\n  totalAmount Int [not null, note: 'Total amount in cents']\n  customerId String [not null]\n}",
       )
@@ -789,7 +782,7 @@ describe('helper/dbml', () => {
 
     it('generates FK reference from Order to Customer', () => {
       const refs = makeRelations([orderModel, customerModel])
-      expect(refs).toStrictEqual(['Ref Order_customerId_fk: Order.customerId > Customer.id'])
+      expect(refs).toStrictEqual(['Ref orders_customerId_fk: orders.customerId > customers.id'])
     })
 
     it('generates complete DBML with enum', () => {
@@ -812,7 +805,7 @@ describe('helper/dbml', () => {
       }
       const result = dbmlContent(datamodel)
       expect(result).toBe(
-        "Enum OrderStatus {\n  PENDING\n  CONFIRMED\n  SHIPPED\n  DELIVERED\n  CANCELLED\n}\n\nTable Order {\n  id String [pk, note: 'Order ID']\n  totalAmount Int [not null, note: 'Total amount in cents']\n  customerId String [not null]\n}\n\nTable Customer {\n  id String [pk]\n  email String [unique, not null, note: 'Unique email address']\n}\n\nRef Order_customerId_fk: Order.customerId > Customer.id",
+        "Enum OrderStatus {\n  PENDING\n  CONFIRMED\n  SHIPPED\n  DELIVERED\n  CANCELLED\n}\n\nTable orders {\n  id String [pk, note: 'Order ID']\n  totalAmount Int [not null, note: 'Total amount in cents']\n  customerId String [not null]\n}\n\nTable customers {\n  id String [pk]\n  email String [unique, not null, note: 'Unique email address']\n}\n\nRef orders_customerId_fk: orders.customerId > customers.id",
       )
     })
   })
@@ -1849,6 +1842,99 @@ describe('helper/dbml', () => {
 
     it('returns empty when there are no annotations', () => {
       expect(annotatedDbmlRefs([makeModel({ name: 'User' })])).toStrictEqual([])
+    })
+  })
+
+  // DBML describes the database, so every name in it is the one the database has: a `@map` /
+  // `@@map` wherever the schema declares one, the Prisma name where it does not.
+  describe('database names', () => {
+    const role: DMMF.DatamodelEnum = {
+      name: 'Visibility',
+      dbName: 'visibility_level',
+      values: [
+        { name: 'PUBLIC', dbName: 'public' },
+        { name: 'LINK_ONLY', dbName: 'link_only' },
+        { name: 'DRAFT', dbName: null },
+      ],
+    }
+    const user = makeModel({
+      name: 'User',
+      dbName: 'users',
+      fields: [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'createdAt', type: 'DateTime', dbName: 'created_at' }),
+        makeField({
+          name: 'visibility',
+          type: 'Visibility',
+          kind: 'enum',
+          hasDefaultValue: true,
+          default: 'LINK_ONLY',
+        }),
+        makeField({ name: 'posts', type: 'Post', kind: 'object', isList: true, relationName: 'p' }),
+      ],
+    })
+    const post = makeModel({
+      name: 'Post',
+      dbName: 'posts',
+      fields: [
+        makeField({ name: 'tenantId', type: 'Int', dbName: 'tenant_id' }),
+        makeField({ name: 'slug', type: 'String' }),
+        makeField({ name: 'authorId', type: 'Int', dbName: 'author_id' }),
+        makeField({
+          name: 'author',
+          type: 'User',
+          kind: 'object',
+          relationName: 'p',
+          relationFromFields: ['authorId'],
+          relationToFields: ['id'],
+        }),
+      ],
+      primaryKey: { name: null, fields: ['tenantId', 'slug'] },
+      uniqueFields: [['tenantId', 'authorId']],
+    })
+
+    it('writes columns under their @map names', () => {
+      expect(makeTables([user], [role])[0]).toContain('  created_at DateTime [not null]')
+    })
+
+    it('writes an enum, its values, and a column of it under their mapped names', () => {
+      expect(makeEnums([role])).toStrictEqual([
+        'Enum visibility_level {\n  public\n  link_only\n  DRAFT\n}',
+      ])
+      expect(makeTables([user], [role])[0]).toContain(
+        "  visibility visibility_level [default: 'link_only', not null]",
+      )
+    })
+
+    it('writes the columns of a composite key or unique under their @map names', () => {
+      expect(makeTables([post], [])[0]).toContain(
+        '  indexes {\n    (tenant_id, slug) [pk]\n    (tenant_id, author_id) [unique]\n  }',
+      )
+    })
+
+    it('writes both ends of a foreign key as tables and columns', () => {
+      expect(makeRelations([user, post])).toStrictEqual([
+        'Ref posts_author_id_fk: posts.author_id > users.id',
+      ])
+    })
+
+    it('writes an annotation-only relation as the tables and columns it names', () => {
+      const models = [
+        makeModel({
+          name: 'User',
+          dbName: 'users',
+          fields: [makeField({ name: 'id', type: 'Int' })],
+        }),
+        makeModel({
+          name: 'Post',
+          dbName: 'posts',
+          documentation: '@relation User.id Post.userId one-to-many',
+          fields: [makeField({ name: 'userId', type: 'Int', dbName: 'user_id' })],
+        }),
+      ]
+      expect(annotatedDbmlRefs(models)).toStrictEqual([
+        'Ref posts_user_id_users_id: posts.user_id > users.id',
+      ])
     })
   })
 

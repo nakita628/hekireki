@@ -4,10 +4,10 @@ Enum Role {
   VIEWER
 }
 
-Enum Visibility {
-  PUBLIC
-  PRIVATE
-  LINK_ONLY
+Enum visibility_level {
+  public
+  private
+  link_only
 }
 
 Table users {
@@ -16,8 +16,8 @@ Table users {
   name String [not null, note: 'Display name']
   role Role [default: 'VIEWER', not null]
   interests String[] [not null]
-  createdAt DateTime [default: `now()`, not null]
-  updatedAt DateTime [not null]
+  created_at DateTime [default: `now()`, not null]
+  updated_at DateTime [not null]
 
   Note: '''Application user. Fully annotated for every validator generator,
 with a UUIDv7 primary key, enum default, scalar list, @map columns,
@@ -26,7 +26,7 @@ with a UUIDv7 primary key, enum default, scalar list, @map columns,
 
 Table Profile {
   id String [pk]
-  userId String [unique, not null]
+  user_id String [unique, not null]
   bio String
   nickname String [default: 'anonymous', not null]
   age Int
@@ -34,7 +34,7 @@ Table Profile {
   verified Boolean [default: false, not null]
   meta Json
   avatar Bytes
-  lastSeen DateTime
+  last_seen DateTime
 
   Note: '''One-to-one relation with native @db.* types, literal defaults,
 and optional scalars of every flavour. ConfigDict passthrough: the
@@ -45,11 +45,11 @@ Table posts {
   id String [pk, note: 'Primary key']
   title String [not null, note: 'Article title']
   content String
-  visibility Visibility [default: 'LINK_ONLY', not null]
+  visibility visibility_level [default: 'link_only', not null]
   published Boolean [default: false, not null]
-  viewCount Int [default: 0, not null]
-  authorId String [not null]
-  createdAt DateTime [default: `now()`, not null]
+  view_count Int [default: 0, not null]
+  author_id String [not null]
+  created_at DateTime [default: `now()`, not null]
 
   Note: '''@@map + @map column names, FK with a referential action,
 mapped-enum default, and an implicit many-to-many to Tag.'''
@@ -65,21 +65,21 @@ Table Tag {
 Table comments {
   id Int [pk, increment]
   body String [not null]
-  postId String [not null]
-  authorId String
-  createdAt DateTime [default: `now()`, not null]
+  post_id String [not null]
+  author_id String
+  created_at DateTime [default: `now()`, not null]
 
   Note: '''Two foreign keys with different referential actions
 (Cascade vs SetNull) and a composite index.'''
 }
 
 Table follows {
-  followerId String [not null]
-  followingId String [not null]
+  follower_id String [not null]
+  following_id String [not null]
   since DateTime [default: `now()`, not null]
 
   indexes {
-    (followerId, followingId) [pk]
+    (follower_id, following_id) [pk]
   }
 
   Note: 'Composite primary key + two named relations to the same model.'
@@ -88,10 +88,10 @@ Table follows {
 Table Category {
   id Int [pk, increment]
   name String [not null]
-  parentId Int
+  parent_id Int
 
   indexes {
-    (parentId, name) [unique]
+    (parent_id, name) [unique]
   }
 
   Note: 'Self-relation (adjacency-list tree) with a composite unique.'
@@ -99,22 +99,22 @@ Table Category {
 
 Table orders {
   id BigInt [pk, increment]
-  userId String [not null]
+  user_id String [not null]
   total Decimal [not null]
-  placedAt DateTime [default: `now()`, not null]
+  placed_at DateTime [default: `now()`, not null]
 
   Note: 'BigInt autoincrement primary key (bigserial) and money as Decimal.'
 }
 
 Table order_items {
   id BigInt [pk, increment]
-  orderId BigInt [not null]
+  order_id BigInt [not null]
   sku String [not null]
   qty Int [default: 1, not null]
   price Decimal [not null]
 
   indexes {
-    (orderId, sku) [unique]
+    (order_id, sku) [unique]
   }
 
   Note: 'Child of Order with a composite unique constraint.'
@@ -125,7 +125,7 @@ Table audit_logs {
   action String [not null]
   payload Json [default: '{}', not null]
   signature Bytes
-  loggedAt DateTime [not null]
+  logged_at DateTime [not null]
 
   Note: 'DB-side generated defaults (dbgenerated) plus Json / Bytes payloads.'
 }
@@ -143,20 +143,20 @@ Table Film {
   title String [not null]
 }
 
-Ref Profile_userId_fk: Profile.userId - users.id [delete: cascade]
+Ref Profile_user_id_fk: Profile.user_id - users.id [delete: cascade]
 
-Ref posts_authorId_fk: posts.authorId > users.id [delete: cascade]
+Ref posts_author_id_fk: posts.author_id > users.id [delete: cascade]
 
-Ref comments_postId_fk: comments.postId > posts.id [delete: cascade]
+Ref comments_post_id_fk: comments.post_id > posts.id [delete: cascade]
 
-Ref comments_authorId_fk: comments.authorId > users.id [delete: set null]
+Ref comments_author_id_fk: comments.author_id > users.id [delete: set null]
 
-Ref follows_followerId_fk: follows.followerId > users.id [delete: cascade]
+Ref follows_follower_id_fk: follows.follower_id > users.id [delete: cascade]
 
-Ref follows_followingId_fk: follows.followingId > users.id [delete: cascade]
+Ref follows_following_id_fk: follows.following_id > users.id [delete: cascade]
 
-Ref Category_parentId_fk: Category.parentId > Category.id
+Ref Category_parent_id_fk: Category.parent_id > Category.id
 
-Ref orders_userId_fk: orders.userId > users.id
+Ref orders_user_id_fk: orders.user_id > users.id
 
-Ref order_items_orderId_fk: order_items.orderId > orders.id [delete: cascade]
+Ref order_items_order_id_fk: order_items.order_id > orders.id [delete: cascade]

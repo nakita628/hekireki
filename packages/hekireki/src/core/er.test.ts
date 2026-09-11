@@ -47,20 +47,34 @@ const MODEL = {
   uniqueIndexes: [],
 }
 
-/** The slice of `GeneratorOptions` this generator reads. */
-function options(output: string | null, config: Record<string, string | string[]> = {}) {
+/**
+ * The slice of `GeneratorOptions` this generator reads. Like Prisma, a block without `output`
+ * still gets one — the directory of the schema file that declares it — just not a custom one.
+ */
+function options(
+  output: string | null,
+  config: Record<string, string | string[]>,
+  schemaDir: string,
+) {
   return {
     generator: {
       isCustomOutput: output !== null,
-      output: output === null ? null : { fromEnvVar: null, value: output },
+      output: { fromEnvVar: null, value: output ?? schemaDir },
       config,
+      sourceFilePath: path.join(schemaDir, 'schema.prisma'),
     },
     dmmf: { datamodel: { models: [MODEL], enums: [], types: [], indexes: [] } },
   } as unknown as GeneratorOptions
 }
 
-function run(output: string | null, config: Record<string, string | string[]> = {}) {
-  return Effect.runPromiseExit(Effect.provide(er(options(output, config)), fileSystemLayer))
+function run(
+  output: string | null,
+  config: Record<string, string | string[]> = {},
+  schemaDir = tmpdir(),
+) {
+  return Effect.runPromiseExit(
+    Effect.provide(er(options(output, config, schemaDir)), fileSystemLayer),
+  )
 }
 
 /** The message of a failure, whichever way it failed. */
@@ -105,29 +119,31 @@ describe('er', () => {
   })
 
   it('refuses a path with no extension, which used to mean a directory', async () => {
-    expect(failure(await run(path.join(tmp(), 'diagram')))).toContain('ends in nothing')
+    const message = failure(await run(path.join(tmp(), 'diagram')))
+    expect(message).toContain('not a directory')
+    expect(message).toContain('ends in nothing')
   })
 
-  it('says that output is required when there is none', async () => {
-    expect(failure(await run(null))).toContain('output is required for Hekireki-ER')
+  it('says that output or outputs is required when there is neither', async () => {
+    expect(failure(await run(null))).toContain('output or outputs is required for Hekireki-ER')
   })
 
-  it('reads the theme of a drawing, and the schema mapping of a dbml file', async () => {
+  it('reads the theme of a drawing', async () => {
     const dir = tmp()
     const dark = path.join(dir, 'dark.svg')
     const light = path.join(dir, 'light.svg')
     expect(Exit.isSuccess(await run(dark, { theme: 'dark' }))).toBe(true)
     expect(Exit.isSuccess(await run(light, { theme: 'light' }))).toBe(true)
     expect(readFileSync(dark, 'utf8')).not.toBe(readFileSync(light, 'utf8'))
-    const mapped = path.join(dir, 'plain.dbml')
-    expect(Exit.isSuccess(await run(mapped, { mapToDbSchema: 'false' }))).toBe(true)
   })
 
   // An option the chosen format cannot read is a mistake in the schema, not something to skip
   // over: `theme` on a `.md` output would otherwise look like it did something.
   it.each([
     ['er.md', { theme: 'dark' }, '"theme"', '.md takes no options'],
-    ['er.dbml', { theme: 'dark' }, '"theme"', '.dbml takes mapToDbSchema'],
+    ['er.dbml', { theme: 'dark' }, '"theme"', '.dbml takes no options'],
+    // DBML always writes the @map / @@map names; the switch that turned that off is gone.
+    ['er.dbml', { mapToDbSchema: 'false' }, '"mapToDbSchema"', '.dbml takes no options'],
     ['er.svg', { mapToDbSchema: 'false' }, '"mapToDbSchema"', '.svg takes theme'],
     ['er.png', { nope: '1' }, '"nope"', '.png takes theme'],
   ])('refuses %s carrying an option it cannot read', async (name, config, named, tail) => {
@@ -142,63 +158,78 @@ describe('er', () => {
     expect(message).toContain('"theme", "nope"')
   })
 
-  // One ER model in several formats is one generator block: `outputs` is the list of files,
-  // `output` the directory they go in.
-  it('writes every file outputs names into the directory output points at', async () => {
+  // One ER model in several formats is one generator block: `outputs` lists every file, each a
+  // whole path resolved the way Prisma resolves `output` — against the schema file's directory.
+  it('writes every file outputs names, relative to the schema', async () => {
     const dir = tmp()
     expect(
-      Exit.isSuccess(await run(dir, { outputs: ['er.md', 'schema.dbml', 'er.svg', 'er.png'] })),
+      Exit.isSuccess(
+        await run(
+          null,
+          { outputs: ['docs/er.md', 'docs/schema.dbml', 'images/er.svg', 'er.png'] },
+          dir,
+        ),
+      ),
     ).toBe(true)
-    expect(readFileSync(path.join(dir, 'er.md'), 'utf8')).toContain('```mermaid')
-    expect(readFileSync(path.join(dir, 'schema.dbml'), 'utf8')).toContain('Table User {')
-    expect(readFileSync(path.join(dir, 'er.svg'), 'utf8')).toContain('<svg')
+    expect(readFileSync(path.join(dir, 'docs/er.md'), 'utf8')).toContain('```mermaid')
+    expect(readFileSync(path.join(dir, 'docs/schema.dbml'), 'utf8')).toContain('Table User {')
+    expect(readFileSync(path.join(dir, 'images/er.svg'), 'utf8')).toContain('<svg')
     expect(readFileSync(path.join(dir, 'er.png'), 'latin1').slice(0, 8)).toContain('PNG')
   })
 
-  it('takes outputs written as one name, and makes the directories under it', async () => {
+  it('takes outputs written as one name, and an absolute path as it is', async () => {
     const dir = tmp()
-    expect(Exit.isSuccess(await run(dir, { outputs: 'diagram/er.svg' }))).toBe(true)
-    expect(readFileSync(path.join(dir, 'diagram/er.svg'), 'utf8')).toContain('<svg')
+    expect(Exit.isSuccess(await run(null, { outputs: 'docs/er.svg' }, dir))).toBe(true)
+    expect(readFileSync(path.join(dir, 'docs/er.svg'), 'utf8')).toContain('<svg')
+    const absolute = path.join(tmp(), 'er.md')
+    expect(Exit.isSuccess(await run(null, { outputs: [absolute] }, dir))).toBe(true)
+    expect(readFileSync(absolute, 'utf8')).toContain('```mermaid')
   })
 
   it('reads an option for any format outputs names', async () => {
     const dir = tmp()
     expect(
       Exit.isSuccess(
-        await run(dir, { outputs: ['er.md', 'er.svg'], theme: 'dark', mapToDbSchema: 'false' }),
+        await run(null, { outputs: ['er.md', 'er.svg'], theme: 'dark', nope: '1' }, dir),
       ),
     ).toBe(false)
-    expect(Exit.isSuccess(await run(dir, { outputs: ['er.md', 'er.svg'], theme: 'dark' }))).toBe(
+    expect(
+      Exit.isSuccess(await run(null, { outputs: ['er.md', 'er.svg'], theme: 'dark' }, dir)),
+    ).toBe(true)
+    const light = tmp()
+    expect(Exit.isSuccess(await run(null, { outputs: ['er.svg'], theme: 'light' }, light))).toBe(
       true,
     )
-    const light = tmp()
-    expect(Exit.isSuccess(await run(light, { outputs: ['er.svg'], theme: 'light' }))).toBe(true)
     expect(readFileSync(path.join(dir, 'er.svg'), 'utf8')).not.toBe(
       readFileSync(path.join(light, 'er.svg'), 'utf8'),
     )
   })
 
   it('names every format when it refuses an option none of them reads', async () => {
-    const message = failure(await run(tmp(), { outputs: ['er.md', 'er.svg'], nope: '1' }))
+    const message = failure(await run(null, { outputs: ['er.md', 'er.svg'], nope: '1' }, tmp()))
     expect(message).toContain('does not read "nope" for the .md, .svg outputs')
     expect(message).toContain('.md takes no options, .svg takes theme')
   })
 
-  it('refuses a file in outputs it has no format for', async () => {
-    const message = failure(await run(tmp(), { outputs: ['er.md', 'er.jpeg'] }))
+  it.each([
+    ['er.jpeg', '".jpeg"'],
+    ['docs', 'nothing'],
+  ])('refuses %s in outputs, which names no format', async (name, ending) => {
+    const message = failure(await run(null, { outputs: ['er.md', name] }, tmp()))
     expect(message).toContain('outputs for Hekireki-ER has to name files ending in')
-    expect(message).toContain('"er.jpeg" ends in ".jpeg"')
+    expect(message).toContain(`"${name}" ends in ${ending}`)
   })
 
   it('refuses an empty outputs, which would write nothing', async () => {
-    expect(failure(await run(tmp(), { outputs: [] }))).toContain(
+    expect(failure(await run(null, { outputs: [] }, tmp()))).toContain(
       'outputs for Hekireki-ER has to name at least one file',
     )
   })
 
-  it('refuses an output that names a file when outputs names the files', async () => {
-    const message = failure(await run(path.join(tmp(), 'er.md'), { outputs: ['er.svg'] }))
-    expect(message).toContain('names the directory the files in outputs go in')
-    expect(message).toContain('ends in ".md"')
+  // Two places to name files would leave it unclear which one wins, so a block uses one.
+  it('refuses output and outputs together', async () => {
+    const dir = tmp()
+    const message = failure(await run(path.join(dir, 'er.md'), { outputs: ['er.svg'] }, dir))
+    expect(message).toContain('Hekireki-ER takes output or outputs, not both')
   })
 })

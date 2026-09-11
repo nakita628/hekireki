@@ -71,7 +71,7 @@ const datamodel: DMMF.Datamodel = {
 
 describe('dbmlContent', () => {
   it('writes the tables under their database names', () => {
-    const dbml = dbmlContent(datamodel, true)
+    const dbml = dbmlContent(datamodel)
     expect(dbml).toContain('Table users {')
     expect(dbml).toContain('Table Post {')
     expect(dbml).toContain('authorId Int [not null]')

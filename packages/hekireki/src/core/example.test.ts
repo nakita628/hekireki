@@ -166,19 +166,22 @@ function listFiles(dir: string, prefix = ''): readonly string[] {
   )
 }
 
-/** The options Prisma would hand the generator for one block, with the output under `outDir`. */
+/**
+ * The options Prisma would hand the generator for one block, as if the schema lived in `outDir`:
+ * `output` and the paths `outputs` lists both resolve against the schema's directory.
+ */
 function optionsFor(generator: (typeof parsed.config.generators)[number]): GeneratorOptions {
-  const output = generator.output?.value ?? ''
+  const output = generator.output?.value
   return {
     generator: {
       name: generator.name,
       provider: { fromEnvVar: null, value: generator.provider.value },
-      output: { fromEnvVar: null, value: path.join(outDir, output) },
-      isCustomOutput: true,
+      output: { fromEnvVar: null, value: path.join(outDir, output ?? '') },
+      isCustomOutput: output !== undefined,
       config: generator.config,
       binaryTargets: [],
       previewFeatures: [],
-      sourceFilePath: SCHEMA_PATH,
+      sourceFilePath: path.join(outDir, path.basename(SCHEMA_PATH)),
     },
     datasources: parsed.config.datasources.map((datasource) => ({
       name: 'db',
@@ -209,7 +212,8 @@ describe('example/schema.prisma', () => {
     '%s',
     (_name, generator) => {
       const handler = HANDLERS[generator.provider.value]
-      const output = generator.output?.value ?? ''
+      // A block without `output` names its files in `outputs`, all in one directory.
+      const output = generator.output?.value ?? [generator.config.outputs ?? ''].flat()[0] ?? ''
       // `generated/drizzle/schema.ts` names a file; the golden directory is the one that holds it.
       const goldenDir = path.join(
         EXAMPLE_DIR,
