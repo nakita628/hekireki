@@ -21,6 +21,10 @@
       "minimumReleaseAge": "7 days"
     },
     {
+      "matchPackageNames": ["@typespec/**"],
+      "groupName": "typespec"
+    },
+    {
       "matchUpdateTypes": ["pin", "pinDigest"],
       "automerge": true
     },
