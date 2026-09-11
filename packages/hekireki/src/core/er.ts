@@ -26,12 +26,8 @@ const FORMATS = {
     render: (options: GeneratorOptions) => erContent(options.dmmf.datamodel.models).join('\n'),
   },
   '.dbml': {
-    options: ['mapToDbSchema'],
-    render: (options: GeneratorOptions) =>
-      dbmlContent(
-        options.dmmf.datamodel,
-        getString(options.generator.config?.mapToDbSchema) !== 'false',
-      ),
+    options: [],
+    render: (options: GeneratorOptions) => dbmlContent(options.dmmf.datamodel),
   },
   '.png': {
     options: ['theme'],

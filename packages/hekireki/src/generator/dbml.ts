@@ -7,10 +7,11 @@ import type { DiagramTheme } from '../diagram/svg.js'
 import { annotatedDbmlRefs, makeEnums, makeRelations, makeTables } from '../helper/dbml.js'
 import { makeSchema } from '../studio/server/domain/schema.js'
 
-export function dbmlContent(datamodel: DMMF.Datamodel, mapToDbSchema = false) {
-  const tables = makeTables(datamodel.models, mapToDbSchema)
+/** The schema as DBML, named as the database names it: every `@map` / `@@map` applied. */
+export function dbmlContent(datamodel: DMMF.Datamodel) {
+  const tables = makeTables(datamodel.models, datamodel.enums)
   const enums = makeEnums(datamodel.enums)
-  const refs = makeRelations(datamodel.models, mapToDbSchema)
+  const refs = makeRelations(datamodel.models)
   const logicalRefs = annotatedDbmlRefs(datamodel.models)
 
   return [...enums, ...tables, ...refs, ...logicalRefs].join('\n\n')

@@ -128,22 +128,22 @@ describe('er', () => {
     expect(failure(await run(null))).toContain('output or outputs is required for Hekireki-ER')
   })
 
-  it('reads the theme of a drawing, and the schema mapping of a dbml file', async () => {
+  it('reads the theme of a drawing', async () => {
     const dir = tmp()
     const dark = path.join(dir, 'dark.svg')
     const light = path.join(dir, 'light.svg')
     expect(Exit.isSuccess(await run(dark, { theme: 'dark' }))).toBe(true)
     expect(Exit.isSuccess(await run(light, { theme: 'light' }))).toBe(true)
     expect(readFileSync(dark, 'utf8')).not.toBe(readFileSync(light, 'utf8'))
-    const mapped = path.join(dir, 'plain.dbml')
-    expect(Exit.isSuccess(await run(mapped, { mapToDbSchema: 'false' }))).toBe(true)
   })
 
   // An option the chosen format cannot read is a mistake in the schema, not something to skip
   // over: `theme` on a `.md` output would otherwise look like it did something.
   it.each([
     ['er.md', { theme: 'dark' }, '"theme"', '.md takes no options'],
-    ['er.dbml', { theme: 'dark' }, '"theme"', '.dbml takes mapToDbSchema'],
+    ['er.dbml', { theme: 'dark' }, '"theme"', '.dbml takes no options'],
+    // DBML always writes the @map / @@map names; the switch that turned that off is gone.
+    ['er.dbml', { mapToDbSchema: 'false' }, '"mapToDbSchema"', '.dbml takes no options'],
     ['er.svg', { mapToDbSchema: 'false' }, '"mapToDbSchema"', '.svg takes theme'],
     ['er.png', { nope: '1' }, '"nope"', '.png takes theme'],
   ])('refuses %s carrying an option it cannot read', async (name, config, named, tail) => {
@@ -190,11 +190,7 @@ describe('er', () => {
     const dir = tmp()
     expect(
       Exit.isSuccess(
-        await run(
-          null,
-          { outputs: ['er.md', 'er.svg'], theme: 'dark', mapToDbSchema: 'false' },
-          dir,
-        ),
+        await run(null, { outputs: ['er.md', 'er.svg'], theme: 'dark', nope: '1' }, dir),
       ),
     ).toBe(false)
     expect(

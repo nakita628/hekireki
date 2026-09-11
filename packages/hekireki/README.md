@@ -171,7 +171,7 @@ model Post {
 | `hekireki-activerecord` | Ruby (Rails ≥ 7.1)         | one `.rb` per model                         | —                                    |
 | `hekireki-eloquent`     | PHP (Laravel, PHP ≥ 8.1)   | one `.php` per model and enum               | `namespace`                          |
 | `hekireki-atlas`        | Atlas HCL                  | `schema.hcl`                                | `schemaName`, `comment`              |
-| `hekireki-er`           | Mermaid / DBML / PNG / SVG | — ([extension required](#er-diagrams))      | `outputs`, `mapToDbSchema`, `theme`  |
+| `hekireki-er`           | Mermaid / DBML / PNG / SVG | — ([extension required](#er-diagrams))      | `outputs`, `theme`                   |
 
 ## Configuration
 
@@ -241,11 +241,10 @@ generator Hekireki-Eloquent {
 // ER takes output or outputs (not both). Every path is a file ending in .md, .dbml, .png or .svg,
 // never a directory, and its extension picks the format (see ER diagrams).
 generator Hekireki-ER {
-    provider      = "hekireki-er"
-    // output     = "docs/er.md"                                       // One file: output alone is enough
-    outputs       = ["docs/er.md", "docs/schema.dbml", "docs/er.svg"]  // Several files: list them here
-    mapToDbSchema = true                                               // .dbml only. @@map/@map names (default: true)
-    theme         = "light"                                            // .png / .svg only. "light" (default) or "dark"
+    provider = "hekireki-er"
+    // output = "docs/er.md"                                      // One file: output alone is enough
+    outputs  = ["docs/er.md", "docs/schema.dbml", "docs/er.svg"]  // Several files: list them here
+    theme    = "light"                                            // .png / .svg only. "light" (default) or "dark"
 }
 ```
 
@@ -286,9 +285,8 @@ Every path is a whole file, directory and extension included, resolved the way P
 a directory, so a path with no extension, or with one outside the four, is an error rather than a
 guess — `output = "docs"` fails.
 
-Every option belongs to a format (`mapToDbSchema` to `.dbml`, `theme` to `.png` and `.svg`), and
-setting one that no chosen format reads is an error — so an option never looks like it did something
-it did not.
+Every option belongs to a format (`theme` to `.png` and `.svg`), and setting one that no chosen
+format reads is an error — so an option never looks like it did something it did not.
 
 `.md` writes a Mermaid diagram:
 
@@ -306,7 +304,9 @@ erDiagram
     }
 ```
 
-`.dbml` writes the same model for [dbdiagram.io](https://dbml.dbdiagram.io/); `.png` and `.svg`
+`.dbml` writes the same model for [dbdiagram.io](https://dbml.dbdiagram.io/) as the database
+names it: tables, columns, enums and enum values under their `@@map` / `@map` names wherever the
+schema declares one. `.png` and `.svg`
 draw the diagram Hekireki Studio shows, laid out automatically: a card per model and enum, its
 fields with `🔑` / `🔗` / `UK` marks, the attributes and `///` prose under each, the `@@id` /
 `@@unique` / `@@index` block attributes, and an edge per relation in crow's-foot notation captioned
