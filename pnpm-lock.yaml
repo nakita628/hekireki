@@ -185,17 +185,17 @@ importers:
         specifier: 7.0.0-dev.20260707.2
         version: 7.0.0-dev.20260707.2
       '@typespec/compiler':
-        specifier: ^1.15.0
-        version: 1.15.0(@types/node@26.4.1)
+        specifier: ^1.16.0
+        version: 1.16.0(@types/node@26.4.1)
       '@typespec/http':
-        specifier: ^1.15.0
-        version: 1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1))
+        specifier: ^1.16.0
+        version: 1.16.0(@typespec/compiler@1.16.0(@types/node@26.4.1))
       '@typespec/openapi':
-        specifier: ^1.15.0
-        version: 1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1))(@typespec/http@1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1)))
+        specifier: ^1.16.0
+        version: 1.16.0(@typespec/compiler@1.16.0(@types/node@26.4.1))(@typespec/http@1.16.0(@typespec/compiler@1.16.0(@types/node@26.4.1)))
       '@typespec/openapi3':
-        specifier: ^1.15.0
-        version: 1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1))(@typespec/http@1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1)))(@typespec/openapi@1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1))(@typespec/http@1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1))))
+        specifier: ^1.16.0
+        version: 1.16.0(@typespec/compiler@1.16.0(@types/node@26.4.1))(@typespec/http@1.16.0(@typespec/compiler@1.16.0(@types/node@26.4.1)))(@typespec/openapi@1.16.0(@typespec/compiler@1.16.0(@types/node@26.4.1))(@typespec/http@1.16.0(@typespec/compiler@1.16.0(@types/node@26.4.1))))
       '@vitejs/plugin-react':
         specifier: ^6.1.1
         version: 6.1.1(vite@8.1.2(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))
@@ -213,7 +213,7 @@ importers:
         version: 0.45.2(@electric-sql/pglite@0.4.3)(@prisma/client@7.9.0(prisma@8.1.0-dev.6(@types/react-dom@19.2.5(@types/react@19.2.17))(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2))(typescript@7.0.2))(better-sqlite3@12.11.1)(kysely@0.29.5)(mysql2@3.23.1(@types/node@26.4.1))(pg@8.22.0)(postgres@3.4.7)(prisma@8.1.0-dev.6(@types/react-dom@19.2.5(@types/react@19.2.17))(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2))
       hono-takibi:
         specifier: ^0.9.99998
-        version: 0.9.99998(@types/node@26.4.1)(@typespec/http@1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1)))(@typespec/openapi@1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1))(@typespec/http@1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1))))(openapi-types@12.1.3)(vite-plus@0.3.0(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(typescript@7.0.2)(vite@8.1.2(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))(yaml@2.9.0))
+        version: 0.9.99998(@types/node@26.4.1)(@typespec/http@1.16.0(@typespec/compiler@1.16.0(@types/node@26.4.1)))(@typespec/openapi@1.16.0(@typespec/compiler@1.16.0(@types/node@26.4.1))(@typespec/http@1.16.0(@typespec/compiler@1.16.0(@types/node@26.4.1))))(openapi-types@12.1.3)(vite-plus@0.3.0(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(typescript@7.0.2)(vite@8.1.2(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))(yaml@2.9.0))
       json-schema-to-ts:
         specifier: ^3.1.1
         version: 3.1.1
@@ -2482,16 +2482,8 @@ packages:
   '@rolldown/pluginutils@1.0.1':
     resolution: {integrity: sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw==}
 
-  '@scalar/helpers@0.10.0':
-    resolution: {integrity: sha512-IAfnpIZnXY6ni+zyFMwWHBa5b/7yr4mCSvoTGR84oS9q4Quy2wjgafnr7CyfL65ney3iilBZHigZYLYqdqCu3Q==}
-    engines: {node: '>=22'}
-
   '@scalar/helpers@0.11.1':
     resolution: {integrity: sha512-Knwbe0IYqFk0PPDoOKLasqglBHfyf9/zwWWqFsSNi/AtdjM29wSZXN6p8DFid6iB5B9epYH9YiSgJ6tpD00TEw==}
-    engines: {node: '>=22'}
-
-  '@scalar/json-magic@0.12.20':
-    resolution: {integrity: sha512-5JawJ1L3+ddDoKefkXsklKs6CmmTIcPDmkJPpAkbRi9QQiU9MUONQ4VSi2z3ij+8Ka4neNhsXBNG4itPjurBLg==}
     engines: {node: '>=22'}
 
   '@scalar/json-magic@0.13.2':
@@ -3037,40 +3029,40 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@typespec/asset-emitter@0.79.1':
-    resolution: {integrity: sha512-53s3GLu5BwNkl7Itr/OizfhymTV2u7k5/cwjUOAt03AUDfiKlwbsp+iCIsq1vccJuoDOiXOceJOfL8rAf4/9LQ==}
-    engines: {node: '>=20.0.0'}
+  '@typespec/asset-emitter@0.79.2':
+    resolution: {integrity: sha512-hcr0jxYgXM0suBwPtjnScYXZVIIqkcdd8jgYh1T7VLHem8+q0WthFQxeKbDIrip4k/nCFtnZui6Dj5oOVJb8fA==}
+    engines: {node: '>=22.0.0'}
     peerDependencies:
-      '@typespec/compiler': ^1.10.0
+      '@typespec/compiler': ^1.16.0
 
-  '@typespec/compiler@1.15.0':
-    resolution: {integrity: sha512-NbCIRAIzyozchlSaGPVuyV43bC+y+OpXYCuT+8M8kt35Ln9zWzLFcIt7irofQ5QUXBZrHsBFpI5fTOFdCGeWCA==}
+  '@typespec/compiler@1.16.0':
+    resolution: {integrity: sha512-pT4gN+OSEXZMLxIhtI3QgIUafeFktfIBKVb7p+X/rAzDymQSO8yAb+srMBQ43PIcmfrvMxCNaD1SKBa9AGhWtA==}
     engines: {node: '>=22.0.0'}
     hasBin: true
 
-  '@typespec/http@1.15.0':
-    resolution: {integrity: sha512-LNyzYHyX3C0xyQQ262jhvIaVzTn7DqiDB2gz45w1m6ngJH9ArGU8XjO3o7PaZkl/nuB5MTpImnsXpHIV1rbi4Q==}
+  '@typespec/http@1.16.0':
+    resolution: {integrity: sha512-4cODL4uqoj6YGj3Z04mQx1JwrM7o4Ytv4dO75o3Y3fx66v4BF4B5hF2dwnwh02Xe0e9qO1aDoaRlO2QGDz3mEA==}
     engines: {node: '>=22.0.0'}
     peerDependencies:
-      '@typespec/compiler': ^1.15.0
-      '@typespec/streams': ^0.85.0
+      '@typespec/compiler': ^1.16.0
+      '@typespec/streams': ^0.86.0
     peerDependenciesMeta:
       '@typespec/streams':
         optional: true
 
-  '@typespec/openapi3@1.15.0':
-    resolution: {integrity: sha512-Gc6OjBiAtPo3ohlkrDxQKt8+xdeR54tC+Cgu3YLlxUxrWHWYOfWQXzp4NX+sraiFjF6kX7t0G1A1kY7rgy73qw==}
+  '@typespec/openapi3@1.16.0':
+    resolution: {integrity: sha512-eRyTwn4w5hWSRm15ys20O2Jp1aHDPHp6TZsctOsG3nxo+N50Qg7Epgu44ATsxaELmnCEg9G0B7N9czZKb51dSQ==}
     engines: {node: '>=22.0.0'}
     hasBin: true
     peerDependencies:
-      '@typespec/compiler': ^1.15.0
-      '@typespec/events': ^0.85.0
-      '@typespec/http': ^1.15.0
-      '@typespec/json-schema': ^1.15.0
-      '@typespec/openapi': ^1.15.0
-      '@typespec/sse': ^0.85.0
-      '@typespec/streams': ^0.85.0
-      '@typespec/versioning': ^0.85.0
+      '@typespec/compiler': ^1.16.0
+      '@typespec/events': ^0.86.0
+      '@typespec/http': ^1.16.0
+      '@typespec/json-schema': ^1.16.0
+      '@typespec/openapi': ^1.16.0
+      '@typespec/sse': ^0.86.0
+      '@typespec/streams': ^0.86.0
+      '@typespec/versioning': ^0.86.0
       '@typespec/xml': '*'
     peerDependenciesMeta:
       '@typespec/events':
@@ -3086,12 +3078,12 @@ packages:
       '@typespec/xml':
         optional: true
 
-  '@typespec/openapi@1.15.0':
-    resolution: {integrity: sha512-lHd3H5W23KOIGKyBPKpBLPHVOxcxuvqOBXGqlyPvGmHDgmD74mrUtHWxNoGx+QQESjx4tS8Tu6URNQBU6y6Q1Q==}
+  '@typespec/openapi@1.16.0':
+    resolution: {integrity: sha512-6F+3e1dOJkIV4K0vCsuDpdwxoXnsT6eOomd4MpIUJAwyA7etEraUmPM9Qstp42MLIBoPWm9dK4Y9Whxtohc/KA==}
     engines: {node: '>=22.0.0'}
     peerDependencies:
-      '@typespec/compiler': ^1.15.0
-      '@typespec/http': ^1.15.0
+      '@typespec/compiler': ^1.16.0
+      '@typespec/http': ^1.16.0
 
   '@visx/curve@4.0.1-alpha.0':
     resolution: {integrity: sha512-jRu61Uz274pV1zyioXmboyrLutYbnKsgjj4njSGCnhdXj5GkZvZbg+ThDb6oOzoAnJOBRLz4rzPlWvNJOzuVMg==}
@@ -7699,15 +7691,7 @@ snapshots:
 
   '@rolldown/pluginutils@1.0.1': {}
 
-  '@scalar/helpers@0.10.0': {}
-
   '@scalar/helpers@0.11.1': {}
-
-  '@scalar/json-magic@0.12.20':
-    dependencies:
-      '@scalar/helpers': 0.10.0
-      pathe: 2.0.3
-      yaml: 2.9.0
 
   '@scalar/json-magic@0.13.2':
     dependencies:
@@ -8249,11 +8233,11 @@ snapshots:
   '@typescript/typescript-win32-x64@7.0.2':
     optional: true
 
-  '@typespec/asset-emitter@0.79.1(@typespec/compiler@1.15.0(@types/node@26.4.1))':
+  '@typespec/asset-emitter@0.79.2(@typespec/compiler@1.16.0(@types/node@26.4.1))':
     dependencies:
-      '@typespec/compiler': 1.15.0(@types/node@26.4.1)
+      '@typespec/compiler': 1.16.0(@types/node@26.4.1)
 
-  '@typespec/compiler@1.15.0(@types/node@26.4.1)':
+  '@typespec/compiler@1.16.0(@types/node@26.4.1)':
     dependencies:
       '@babel/code-frame': 7.29.7
       '@inquirer/prompts': 8.7.0(@types/node@26.4.1)
@@ -8274,25 +8258,25 @@ snapshots:
     transitivePeerDependencies:
       - '@types/node'
 
-  '@typespec/http@1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1))':
+  '@typespec/http@1.16.0(@typespec/compiler@1.16.0(@types/node@26.4.1))':
     dependencies:
-      '@typespec/compiler': 1.15.0(@types/node@26.4.1)
+      '@typespec/compiler': 1.16.0(@types/node@26.4.1)
 
-  '@typespec/openapi3@1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1))(@typespec/http@1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1)))(@typespec/openapi@1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1))(@typespec/http@1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1))))':
+  '@typespec/openapi3@1.16.0(@typespec/compiler@1.16.0(@types/node@26.4.1))(@typespec/http@1.16.0(@typespec/compiler@1.16.0(@types/node@26.4.1)))(@typespec/openapi@1.16.0(@typespec/compiler@1.16.0(@types/node@26.4.1))(@typespec/http@1.16.0(@typespec/compiler@1.16.0(@types/node@26.4.1))))':
     dependencies:
-      '@scalar/json-magic': 0.12.20
+      '@scalar/json-magic': 0.13.2
       '@scalar/openapi-parser': 0.28.16
       '@scalar/openapi-types': 0.9.5
-      '@typespec/asset-emitter': 0.79.1(@typespec/compiler@1.15.0(@types/node@26.4.1))
-      '@typespec/compiler': 1.15.0(@types/node@26.4.1)
-      '@typespec/http': 1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1))
-      '@typespec/openapi': 1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1))(@typespec/http@1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1)))
+      '@typespec/asset-emitter': 0.79.2(@typespec/compiler@1.16.0(@types/node@26.4.1))
+      '@typespec/compiler': 1.16.0(@types/node@26.4.1)
+      '@typespec/http': 1.16.0(@typespec/compiler@1.16.0(@types/node@26.4.1))
+      '@typespec/openapi': 1.16.0(@typespec/compiler@1.16.0(@types/node@26.4.1))(@typespec/http@1.16.0(@typespec/compiler@1.16.0(@types/node@26.4.1)))
       yaml: 2.9.0
 
-  '@typespec/openapi@1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1))(@typespec/http@1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1)))':
+  '@typespec/openapi@1.16.0(@typespec/compiler@1.16.0(@types/node@26.4.1))(@typespec/http@1.16.0(@typespec/compiler@1.16.0(@types/node@26.4.1)))':
     dependencies:
-      '@typespec/compiler': 1.15.0(@types/node@26.4.1)
-      '@typespec/http': 1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1))
+      '@typespec/compiler': 1.16.0(@types/node@26.4.1)
+      '@typespec/http': 1.16.0(@typespec/compiler@1.16.0(@types/node@26.4.1))
 
   '@visx/curve@4.0.1-alpha.0':
     dependencies:
@@ -9268,9 +9252,9 @@ snapshots:
     dependencies:
       format: 0.2.2
 
-  fdir@6.5.0(picomatch@4.0.5):
+  fdir@6.5.0(picomatch@4.0.7):
     optionalDependencies:
-      picomatch: 4.0.5
+      picomatch: 4.0.7
 
   file-entry-cache@10.1.4:
     dependencies:
@@ -9377,11 +9361,11 @@ snapshots:
     dependencies:
       hookified: 1.15.1
 
-  hono-takibi@0.9.99998(@types/node@26.4.1)(@typespec/http@1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1)))(@typespec/openapi@1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1))(@typespec/http@1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1))))(openapi-types@12.1.3)(vite-plus@0.3.0(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(typescript@7.0.2)(vite@8.1.2(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))(yaml@2.9.0)):
+  hono-takibi@0.9.99998(@types/node@26.4.1)(@typespec/http@1.16.0(@typespec/compiler@1.16.0(@types/node@26.4.1)))(@typespec/openapi@1.16.0(@typespec/compiler@1.16.0(@types/node@26.4.1))(@typespec/http@1.16.0(@typespec/compiler@1.16.0(@types/node@26.4.1))))(openapi-types@12.1.3)(vite-plus@0.3.0(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(typescript@7.0.2)(vite@8.1.2(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))(yaml@2.9.0)):
     dependencies:
       '@apidevtools/swagger-parser': 12.1.0(openapi-types@12.1.3)
-      '@typespec/compiler': 1.15.0(@types/node@26.4.1)
-      '@typespec/openapi3': 1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1))(@typespec/http@1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1)))(@typespec/openapi@1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1))(@typespec/http@1.15.0(@typespec/compiler@1.15.0(@types/node@26.4.1))))
+      '@typespec/compiler': 1.16.0(@types/node@26.4.1)
+      '@typespec/openapi3': 1.16.0(@typespec/compiler@1.16.0(@types/node@26.4.1))(@typespec/http@1.16.0(@typespec/compiler@1.16.0(@types/node@26.4.1)))(@typespec/openapi@1.16.0(@typespec/compiler@1.16.0(@types/node@26.4.1))(@typespec/http@1.16.0(@typespec/compiler@1.16.0(@types/node@26.4.1))))
       oxfmt: 0.60.0(vite-plus@0.3.0(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(typescript@7.0.2)(vite@8.1.2(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))(yaml@2.9.0))
       ts-morph: 28.0.0
       typescript: 7.0.2
@@ -10888,8 +10872,8 @@ snapshots:
 
   tinyglobby@0.2.17:
     dependencies:
-      fdir: 6.5.0(picomatch@4.0.5)
-      picomatch: 4.0.5
+      fdir: 6.5.0(picomatch@4.0.7)
+      picomatch: 4.0.7
 
   tinypool@2.1.0: {}
 
@@ -11130,7 +11114,7 @@ snapshots:
       magic-string: 0.30.21
       obug: 2.1.4
       pathe: 2.0.3
-      picomatch: 4.0.5
+      picomatch: 4.0.7
       std-env: 4.2.0
       tinybench: 2.9.0
       tinyexec: 1.2.4
