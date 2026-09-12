@@ -23,9 +23,6 @@ generator Hekireki-Zod {
 }
 ```
 
-The output of every generator for one schema is in
-[`example/generated/`](https://github.com/nakita628/hekireki/tree/main/example/generated).
-
 ## Generators
 
 ### Validation schemas
@@ -116,18 +113,6 @@ hekireki studio -p 3000                 # Another port (default: 5555)
 Studio shows the ER diagram, the docs, each model's rows, a Prisma editor and a SQL console, and
 reloads when the schema changes. The database comes from `--url`, `DATABASE_URL` or
 `prisma.config.ts`.
-
-## Notes
-
-- Atlas — `atlas schema apply` drops what the HCL lacks; dry-run first, with
-  `--exclude '_prisma_migrations'`.
-- Kysely — `uuid()`, `cuid()`, `ulid()` and `nanoid()` are filled in by Prisma Client, so a raw
-  Kysely insert must supply them.
-- Django — annotate `DateTime` fields `@db.Timestamptz` to read them timezone-aware with
-  `USE_TZ = True`.
-- EF Core — PostgreSQL only. Register the context with
-  `o.UseNpgsql(connectionString, AppDbContext.MapEnums)`. `ulid()` needs the `Ulid` package and
-  `cuid()` needs `cuid.net`. A `Decimal` needs a scale of 28 or less, e.g. `@db.Decimal(38, 18)`.
 
 ## License
 
