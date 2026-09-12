@@ -10,6 +10,7 @@ export default defineConfig({
       'bin/ecto': './src/bin/ecto.ts',
       'bin/arktype': './src/bin/arktype.ts',
       'bin/effect': './src/bin/effect.ts',
+      'bin/efcore': './src/bin/efcore.ts',
       'bin/django': './src/bin/django.ts',
       'bin/drizzle': './src/bin/drizzle.ts',
       'bin/typebox': './src/bin/typebox.ts',

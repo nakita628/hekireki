@@ -8,7 +8,7 @@ A single complex Prisma schema ([`schema.prisma`](./schema.prisma)) run through 
 pnpm example
 ```
 
-This builds the generators, wipes `generated/`, runs `prisma generate`, and verifies that all 20 outputs exist — printing a ✓/✗ table and exiting non-zero if any generator produced nothing.
+This builds the generators, wipes `generated/`, runs `prisma generate`, and verifies that all 22 outputs exist — printing a ✓/✗ table and exiting non-zero if any generator produced nothing.
 
 ## What the schema exercises
 
@@ -34,6 +34,7 @@ This builds the generators, wipes `generated/`, runs `prisma generate`, and veri
 | GORM                                             | `generated/gorm/models.go`                                                                     |
 | Sea-ORM                                          | `generated/sea-orm/*.rs`                                                                       |
 | Ecto                                             | `generated/ecto/*.ex`                                                                          |
+| EF Core                                          | `generated/efcore/*.cs`                                                                        |
 | Active Record                                    | `generated/activerecord/*.rb`                                                                  |
 | Eloquent                                         | `generated/eloquent/*.php`                                                                     |
 | ER (Markdown / DBML / PNG / SVG)                 | `generated/er/er.md`, `generated/er/schema.dbml`, `generated/er/er.png`, `generated/er/er.svg` |

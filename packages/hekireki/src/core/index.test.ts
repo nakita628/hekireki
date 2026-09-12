@@ -15,6 +15,7 @@ import { atlas } from './atlas.js'
 import { django } from './django.js'
 import { drizzle } from './drizzle.js'
 import { ecto } from './ecto.js'
+import { efcore } from './efcore.js'
 import { effect } from './effect.js'
 import { eloquent } from './eloquent.js'
 import { gorm } from './gorm.js'
@@ -43,6 +44,7 @@ function tmp() {
 const MODELS = [
   {
     name: 'User',
+    documentation: 'A user.',
     dbName: null,
     schema: null,
     primaryKey: null,
@@ -228,6 +230,7 @@ describe.each([
   ['drizzle', drizzle, 'Hekireki-Drizzle'],
   ['ecto', ecto, 'Hekireki-Ecto'],
   ['effect', effect, 'Hekireki-Effect'],
+  ['efcore', efcore, 'Hekireki-EFCore'],
   ['eloquent', eloquent, 'Hekireki-Eloquent'],
   ['gorm', gorm, 'Hekireki-GORM'],
   ['kysely', kysely, 'Hekireki-Kysely'],
@@ -281,10 +284,11 @@ describe.each([
   })
 })
 
-// The other four write one file per model, so their output is always a directory.
+// The other five write one file per model, so their output is always a directory.
 describe.each([
   ['activerecord', activerecord, ['post.rb', 'user.rb']],
   ['ecto', ecto, ['post.ex', 'user.ex']],
+  ['efcore', efcore, ['AppDbContext.cs', 'Post.cs', 'Role.cs', 'User.cs']],
   ['eloquent', eloquent, ['Post.php', 'Role.php', 'User.php']],
   ['sea-orm', seaOrm, ['mod.rs', 'post.rs', 'prelude.rs', 'role.rs', 'user.rs']],
 ])('%s', (_name, generator, files) => {
@@ -351,6 +355,56 @@ describe('generator config', () => {
     )
   })
 
+  it('defaults the EF Core namespace and DbContext and reads the ones that are configured', async () => {
+    const fallback = tmp()
+    const configured = tmp()
+    expect(Exit.isSuccess(await run(efcore, fallback))).toBe(true)
+    expect(
+      Exit.isSuccess(
+        await run(efcore, configured, { namespace: 'Shop.Data', context: 'ShopContext' }),
+      ),
+    ).toBe(true)
+    expect(readFileSync(path.join(fallback, 'AppDbContext.cs'), 'utf8')).toContain(
+      'namespace Models;\n\npublic partial class AppDbContext : DbContext\n',
+    )
+    expect(readFileSync(path.join(configured, 'ShopContext.cs'), 'utf8')).toContain(
+      'namespace Shop.Data;\n\npublic partial class ShopContext : DbContext\n',
+    )
+    expect(new Set(readdirSync(configured))).toStrictEqual(
+      new Set(['Post.cs', 'Role.cs', 'ShopContext.cs', 'User.cs']),
+    )
+  })
+
+  it('leaves /// comments out of the C# it writes', async () => {
+    const dir = tmp()
+    expect(Exit.isSuccess(await run(efcore, dir))).toBe(true)
+    for (const file of readdirSync(dir)) {
+      expect(readFileSync(path.join(dir, file), 'utf8')).not.toMatch(/^\s*\/\//mu)
+    }
+  })
+
+  it.each([['My-App'], ['class.Models'], ['1Models'], ['Models.'], ['']])(
+    'refuses %j as an EF Core namespace',
+    async (namespace) => {
+      const dir = tmp()
+      const exit = await run(efcore, dir, { namespace })
+      expect(failure(exit)).toContain(
+        `namespace for Hekireki-EFCore must be a C# namespace such as "MyApp.Models": ${namespace}`,
+      )
+      expect(readdirSync(dir)).toStrictEqual([])
+    },
+  )
+
+  it.each([['App Context'], ['class'], ['My.Context'], ['db'], ['record']])(
+    'refuses %j as an EF Core DbContext name',
+    async (context) => {
+      const exit = await run(efcore, tmp(), { context })
+      expect(failure(exit)).toContain(
+        `context for Hekireki-EFCore must be a C# class name such as "AppDbContext": ${context}`,
+      )
+    },
+  )
+
   it('names the schema in the Atlas output when schemaName is configured', async () => {
     const dir = tmp()
     expect(Exit.isSuccess(await run(atlas, dir, { schemaName: 'shop' }))).toBe(true)
@@ -380,6 +434,18 @@ describe('datasource provider', () => {
     expect(Exit.isSuccess(exit)).toBe(false)
     expect(failure(exit)).toContain('Unsupported provider for Hekireki-Drizzle: mongodb')
   })
+
+  it.each(['mysql', 'sqlite', 'sqlserver', 'cockroachdb', 'mongodb'])(
+    'refuses %s for EF Core, which it maps onto PostgreSQL only',
+    async (provider) => {
+      const dir = tmp()
+      const exit = await run(efcore, dir, {}, provider)
+      expect(failure(exit)).toContain(
+        `Unsupported provider for Hekireki-EFCore: ${provider}. Supported providers are postgresql.`,
+      )
+      expect(readdirSync(dir)).toStrictEqual([])
+    },
+  )
 
   it('writes nothing when the provider is refused', async () => {
     const dir = tmp()

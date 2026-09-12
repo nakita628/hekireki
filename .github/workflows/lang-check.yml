@@ -3,7 +3,7 @@ name: Lang Check
 # Validity checks for hekireki's generated foreign-language code: each language
 # is generated from test/prisma/schema.prisma and then checked in its own toolchain —
 # it parses (syntax) and compiles or loads against the real GORM / sea-orm /
-# SQLAlchemy / Django / Ecto / Active Record / Eloquent API (type). This is separate
+# SQLAlchemy / Django / Ecto / Active Record / Eloquent / EF Core API (type). This is separate
 # from Test (test.yml), which owns the byte-equality codegen contract and stays
 # toolchain-free.
 #
@@ -42,7 +42,8 @@ jobs:
       matrix:
         # drizzle needs no extra toolchain step: setup-vp's node runs
         # tsc + drizzle-kit from the workspace's devDependencies.
-        lang: [gorm, sea-orm, sqlalchemy, django, ecto, drizzle, activerecord, eloquent, atlas]
+        lang:
+          [gorm, sea-orm, sqlalchemy, django, ecto, drizzle, activerecord, eloquent, atlas, efcore]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -89,6 +90,18 @@ jobs:
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
           php-version: '8.3'
+      - if: matrix.lang == 'efcore'
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '10.0.401'
+      # The efcore leg compares the model against the schema Prisma Migrate creates, and reads and
+      # writes it, on the PostgreSQL the runner image ships (installed, not started). The server
+      # only lives as long as the job, so its password is no secret.
+      - if: matrix.lang == 'efcore'
+        run: |
+          sudo systemctl start postgresql.service
+          sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres'"
+          echo "HEKIREKI_EFCORE_PG=Host=localhost;Username=postgres;Password=postgres" >> "$GITHUB_ENV"
       # The atlas leg also uses the runner's Docker daemon: the test validates
       # the generated HCL against a disposable postgres dev database via
       # Atlas's docker:// dev-url. The CLI version is pinned: the action's

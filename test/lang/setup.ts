@@ -5,13 +5,14 @@ import { join, resolve } from 'node:path'
 
 // Regenerates test/harness/* from test/prisma/schema.prisma with the built generators
 // before the language checks run. One prisma run emits every target, so
-// running a single language's file still starts from fresh output.
+// running a single language's file still starts from fresh output. A second run
+// covers test/prisma/efcore.prisma, the hazards particular to C# and EF Core.
 //
 // The generated files are gitignored: the byte-for-byte golden masters live in
 // packages/hekireki/src/**/*.test.ts, and these harnesses only answer the
 // question a string comparison cannot — does the output compile and load
 // against the real GORM / sea-orm / SQLAlchemy / Pydantic / Ecto / Drizzle /
-// Kysely / Active Record / Eloquent API.
+// Kysely / Active Record / Eloquent / EF Core API.
 
 const LANGS = [
   'gorm',
@@ -25,6 +26,7 @@ const LANGS = [
   'activerecord',
   'eloquent',
   'atlas',
+  'efcore',
 ] as const
 
 const STALE_OUTPUT = [
@@ -39,6 +41,8 @@ const STALE_OUTPUT = [
   'activerecord/models',
   'eloquent/models',
   'atlas/schema.hcl',
+  'efcore/Models',
+  'efcore/Edge',
 ]
 
 export default function setup() {
@@ -74,19 +78,21 @@ export default function setup() {
     }
   }
 
-  execFileSync(
-    join(root, 'packages/hekireki/node_modules/.bin/prisma'),
-    ['generate', '--schema', join(root, 'test/prisma/schema.prisma')],
-    {
-      cwd: root,
-      env: {
-        ...process.env,
-        PATH: `${bin}:${process.env.PATH}`,
-        DATABASE_URL: 'postgresql://localhost/hekireki_lang',
+  for (const schema of ['schema.prisma', 'efcore.prisma']) {
+    execFileSync(
+      join(root, 'packages/hekireki/node_modules/.bin/prisma'),
+      ['generate', '--schema', join(root, 'test/prisma', schema)],
+      {
+        cwd: root,
+        env: {
+          ...process.env,
+          PATH: `${bin}:${process.env.PATH}`,
+          DATABASE_URL: 'postgresql://localhost/hekireki_lang',
+        },
+        stdio: ['ignore', 'ignore', 'inherit'],
       },
-      stdio: ['ignore', 'ignore', 'inherit'],
-    },
-  )
+    )
+  }
 
   return () => {
     rmSync(bin, { recursive: true, force: true })
