@@ -4,6 +4,15 @@ import type { Locator, Page } from '@playwright/test'
 import { expect, expectNoHorizontalOverflow, expectTexts, fieldHeaders, test } from './studio.js'
 import { runSql } from './workspace.js'
 
+/**
+ * A row's tick box as it is drawn: the label, which is what React Aria listens to. The input is
+ * clipped away under it and cannot be clicked without `force`, which also skips waiting for the row
+ * to hold still and be the thing under the pointer. Playwright reads a label's state off its input.
+ */
+function tickBox(row: Locator) {
+  return row.locator('label', { has: row.page().getByRole('checkbox') })
+}
+
 test('the sidebar counts rows and the grid shows them', async ({ page }) => {
   await page.goto('/models/User?tab=data')
   await expect(page.getByRole('complementary').getByText('(rows)')).toBeVisible()
@@ -66,29 +75,31 @@ test('searches, edits a cell, adds and deletes a row', async ({ page }) => {
 })
 
 test('ticking rows deletes them together', async ({ page }) => {
-  await page.goto('/models/User?tab=data')
-  const grid = page.getByRole('grid')
-  for (const email of ['eve@example.com', 'fay@example.com']) {
-    await page.getByRole('button', { name: 'Add row' }).click()
-    await grid.getByPlaceholder('required').fill(email)
-    await grid.getByRole('button', { name: 'Save row' }).click()
-    await expect(grid).toContainText(email)
-  }
-  await expect(page.getByText('5 rows', { exact: true })).toBeVisible()
+  const emails = ['eve@example.com', 'fay@example.com']
+  try {
+    await page.goto('/models/User?tab=data')
+    const grid = page.getByRole('grid')
+    for (const email of emails) {
+      await page.getByRole('button', { name: 'Add row' }).click()
+      await grid.getByPlaceholder('required').fill(email)
+      await grid.getByRole('button', { name: 'Save row' }).click()
+      await expect(grid).toContainText(email)
+    }
+    await expect(page.getByText('5 rows', { exact: true })).toBeVisible()
 
-  // The checkbox is drawn over its input, so the tick is asked for rather than clicked at.
-  for (const email of ['eve@example.com', 'fay@example.com']) {
-    await grid
-      .getByRole('row')
-      .filter({ hasText: email })
-      .getByRole('checkbox')
-      .check({ force: true })
+    for (const email of emails) {
+      await tickBox(grid.getByRole('row').filter({ hasText: email })).check()
+    }
+    await expect(page.getByText('2 rows selected')).toBeVisible()
+    await page.getByRole('button', { name: 'Delete', exact: true }).click()
+    await page.getByRole('button', { name: 'Delete 2 rows' }).click()
+    await expect(page.getByText('3 rows', { exact: true })).toBeVisible()
+    await expect(page.getByText('2 rows selected')).toBeHidden()
+  } finally {
+    // A run that stops half way would leave the two rows behind, and a retry would then fail on
+    // the unique email instead of on what went wrong.
+    runSql(`DELETE FROM "User" WHERE "email" IN ('${emails.join("', '")}');`)
   }
-  await expect(page.getByText('2 rows selected')).toBeVisible()
-  await page.getByRole('button', { name: 'Delete', exact: true }).click()
-  await page.getByRole('button', { name: 'Delete 2 rows' }).click()
-  await expect(page.getByText('3 rows', { exact: true })).toBeVisible()
-  await expect(page.getByText('2 rows selected')).toBeHidden()
 })
 
 test('copies one cell and folds columns away', async ({ page }) => {
@@ -100,7 +111,7 @@ test('copies one cell and folds columns away', async ({ page }) => {
   // A cell's own copy button takes that one value, and so does ⌘C on the picked cell — even
   // with a row ticked, the chord is the cell's, not the row's.
   const bob = grid.getByRole('row').filter({ hasText: 'bob@example.com' })
-  await bob.getByRole('checkbox').check({ force: true })
+  await tickBox(bob).check()
   await bob.getByRole('gridcell', { name: 'bob@example.com' }).click()
   await page.keyboard.press('ControlOrMeta+c')
   await expect.poll(clipboard).toBe('bob@example.com')

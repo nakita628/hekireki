@@ -25,6 +25,11 @@
       "groupName": "typespec"
     },
     {
+      "description": "Held back on purpose in pnpm-workspace.yaml: later versions pull in @adobe/react-spectrum.",
+      "matchPackageNames": ["@react-types/color", "@react-types/slider"],
+      "enabled": false
+    },
+    {
       "matchUpdateTypes": ["pin", "pinDigest"],
       "automerge": true
     },
