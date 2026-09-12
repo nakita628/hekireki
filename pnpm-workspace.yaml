@@ -15,5 +15,5 @@ allowBuilds:
 # and through them @adobe/react-spectrum with its thousands of icon files) — for declarations that
 # are erased at build time. The versions below are the same types without it.
 overrides:
-  '@react-types/color': 3.1.4
-  '@react-types/slider': 3.8.4
+  '@react-types/color': 3.2.0
+  '@react-types/slider': 3.9.0
