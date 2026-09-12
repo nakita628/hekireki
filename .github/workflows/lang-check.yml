@@ -64,7 +64,7 @@ jobs:
         with:
           python-version: '3.14.7'
       - if: matrix.lang == 'sea-orm'
-        uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1.17.0
+        uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
         with:
           # Locked crates (zeroize 1.9+) use edition2024, which needs
           # cargo >= 1.85 just to parse their manifests.
