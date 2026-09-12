@@ -1,0 +1,290 @@
+// The shapes that are hazards for C# and EF Core specifically — names, keys, value generation —
+// on top of the ones every generator meets in schema.prisma. Only Hekireki-EFCore reads it; the
+// efcore language check compiles it next to schema.prisma's model and runs it against PostgreSQL.
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["public", "audit"]
+}
+
+generator Hekireki-EFCore {
+  provider  = "hekireki-efcore"
+  output    = "../harness/efcore/Edge"
+  namespace = "Hekireki.Edge"
+  context   = "EdgeContext"
+}
+
+enum Status {
+  ACTIVE
+  INACTIVE
+
+  @@schema("public")
+}
+
+// Values whose names collide once PascalCased (FOO_BAR and FooBar are both FooBar).
+enum Level {
+  FOO_BAR
+  FooBar  @map("foo-bar")
+  low
+
+  @@schema("public")
+}
+
+// A task — named like System.Threading.Tasks.Task, which SaveChangesAsync returns. Its members
+// collide with one another and with the class.
+model Task {
+  id        Int      @id @default(autoincrement())
+  // Named like the class, so it cannot keep the name.
+  task      String
+  // A property named Status whose type is not the Status enum.
+  status    Level    @default(low)
+  // Its default names the Status enum, which the property above shadows.
+  mood      Status   @default(ACTIVE)
+  userId    Int      @default(0)
+  UserId    Int      @default(1)
+  toString  String   @default("")
+  // Named like System.Convert, which the Bytes default below calls.
+  convert   Bytes    @default("aGVsbG8=")
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  seenOn    DateTime? @updatedAt @db.Date
+
+  @@map("tasks")
+  @@schema("public")
+}
+
+// Named like the framework types the DbContext and the entities use.
+model DeleteBehavior {
+  id     Int    @id
+  name   String
+  lists  List[]
+
+  @@schema("public")
+}
+
+model List {
+  id       Int            @id @default(autoincrement()) @db.SmallInt
+  ownerId  Int
+  owner    DeleteBehavior @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@schema("public")
+}
+
+// Two class names that differ only in case once PascalCased, and two DbSet names that pluralize to
+// the same word.
+model order_item {
+  id Int @id
+
+  @@schema("public")
+}
+
+model OrderItem {
+  id Int @id
+
+  @@schema("public")
+}
+
+model Person {
+  id Int @id
+
+  @@schema("public")
+}
+
+model People {
+  id Int @id
+
+  @@schema("public")
+}
+
+// Implicit many-to-many from a model to itself: the field whose name sorts first reads column B.
+model Member {
+  id       String   @id @default(uuid(7)) @db.Uuid
+  handle   String   @unique @db.VarChar(40)
+  friends  Member[] @relation("friendship")
+  friendOf Member[] @relation("friendship")
+  badge    Badge?
+
+  @@schema("audit")
+}
+
+// One-to-one whose foreign key references a unique column rather than the key.
+model Badge {
+  id           Int    @id @default(autoincrement())
+  memberHandle String @unique @db.VarChar(40)
+  member       Member @relation(fields: [memberHandle], references: [handle])
+
+  @@schema("audit")
+}
+
+// A composite key referenced with its columns in the other order, and a key that is a unique
+// criterion because there is no @id.
+model Tile {
+  x     Int
+  y     Int
+  pins  Pin[]
+
+  @@id([x, y], map: "tile_pk")
+  @@schema("public")
+}
+
+model Pin {
+  id    Int  @id @default(autoincrement())
+  b     Int
+  a     Int
+  tile  Tile @relation(fields: [b, a], references: [y, x])
+
+  @@index([a(sort: Desc), b], map: "pin_ab_idx")
+  @@schema("public")
+}
+
+model Keyless {
+  code  String @unique(map: "keyless_code_key")
+  label String
+
+  @@schema("public")
+}
+
+// A composite key with an autoincrement column, which EF Core does not generate by convention.
+model Ledger {
+  seq   Int    @default(autoincrement())
+  book  String
+  total Decimal @db.Decimal(18, 2) @default(0)
+
+  @@id([seq, book])
+  @@index([book], type: Hash)
+  @@schema("public")
+}
+
+// Names past PostgreSQL's 63 characters: the ones Prisma derives are cut short.
+model AnExceedinglyLongModelNameThatKeepsGoingAndGoing {
+  id                                         Int                                               @id @default(autoincrement())
+  anExceedinglyLongColumnNameThatAlsoKeepsGoing Int
+  others                                     AnotherExceedinglyLongModelNameThatKeepsGoing[]
+
+  @@unique([id, anExceedinglyLongColumnNameThatAlsoKeepsGoing])
+  @@schema("public")
+}
+
+model AnotherExceedinglyLongModelNameThatKeepsGoing {
+  id    Int                                               @id @default(autoincrement())
+  longs AnExceedinglyLongModelNameThatKeepsGoingAndGoing[]
+
+  @@schema("public")
+}
+
+// A one-to-one that shares its key with the principal, whose key the database fills in as text.
+model Wallet {
+  id    String       @id @default(dbgenerated("'w-' || gen_random_uuid()::text"))
+  owner WalletOwner?
+
+  @@schema("public")
+}
+
+model WalletOwner {
+  walletId String  @id
+  wallet   Wallet  @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  name     String
+
+  @@schema("public")
+}
+
+// Index methods and operator classes, named and raw, one of them on a column of a multi-column
+// index that keeps the default class.
+model Indexed {
+  id   Int      @id @default(autoincrement())
+  doc  Json
+  tags String[]
+  addr String   @db.Inet
+  name String
+  n    Int
+  u    String   @db.Uuid
+
+  @@index([doc(ops: JsonbPathOps)], type: Gin)
+  @@index([tags], type: Gin)
+  @@index([addr(ops: InetOps)], type: Gist)
+  @@index([name], type: SpGist)
+  @@index([n, u(ops: UuidMinMaxMultiOps)], type: Brin)
+  @@index([name(ops: raw("text_pattern_ops"))], map: "indexed_name_pattern")
+  @@schema("public")
+}
+
+// Past 63 bytes in UTF-8: Prisma counts bytes, as PostgreSQL does, and cuts at a character.
+model Kanji {
+  id       Int     @id @default(autoincrement())
+  name     Int     @unique @map("名前名前名前名前名前名前名前名前")
+  parentId Int?    @map("親親親親親親親親親親親親親親親親")
+  parent   Kanji?  @relation("tree", fields: [parentId], references: [name])
+  children Kanji[] @relation("tree")
+
+  @@map("日本語のテーブル名前日本語のテーブル")
+  @@schema("public")
+}
+
+// Native types without their arguments, and lists of native types.
+model Bare {
+  id        Int       @id @default(autoincrement())
+  varying   String    @db.VarChar
+  fixed     String    @db.Char
+  flag      String    @db.Bit
+  bits      String    @db.VarBit
+  stamp     DateTime  @db.Timestamp
+  zoned     DateTime  @db.Timestamptz
+  clock     DateTime  @db.Time
+  zonedTime DateTime  @db.Timetz(3)
+  exact     Decimal   @db.Decimal
+  names     String[]  @db.VarChar(20)
+  docs      Json[]
+  blobs     Bytes[]
+  ids       String[]  @db.Uuid
+  days      DateTime[] @db.Date
+  levels    Level[]   @default([FOO_BAR, low])
+
+  @@schema("public")
+}
+
+// Defaults the C# initializers must reproduce exactly, optional ones included. A timestamp with an
+// offset is the instant it names to Prisma Client, while PostgreSQL drops the offset when it reads
+// the DEFAULT clause into a column without a time zone: the property starts out with the former.
+model Defaults {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  real      Float     @default(2.5) @db.Real
+  small     Int       @default(-1) @db.SmallInt
+  oid       Int       @default(7) @db.Oid
+  big       BigInt    @default(42)
+  float0    Float     @default(0)
+  when      DateTime  @default("2020-01-01T12:34:56.123456+09:00")
+  whenZoned DateTime  @default("2020-01-01T12:34:56.123456+09:00") @db.Timestamptz(6)
+  day       DateTime  @default("2020-01-01T23:00:00-05:00") @db.Date
+  clock     DateTime  @default("2020-01-01T08:09:10.5Z") @db.Time(6)
+  stamps    DateTime[] @default(["2020-01-01T12:34:56.5+09:00", "2021-06-30T23:59:59Z"])
+  dates     DateTime[] @default(["2020-01-01T23:00:00-05:00"]) @db.Date
+  guid      String    @default("8f1d3b4a-2c6e-4f7a-9b0c-1d2e3f4a5b6c") @db.Uuid
+  doc       Json      @default("{\"k\":[1,2]}")
+  nickname  String?   @default("anon")
+  count     Int?      @default(3)
+  mood      Status?   @default(INACTIVE)
+  bitsDef   String    @default("101") @db.VarBit(8)
+  code      String    @default(nanoid())
+  ref       String    @default(cuid())
+  tag       String?   @default(ulid())
+  token     String    @default(uuid(4))
+  auto      Int       @default(autoincrement())
+  trigger   Int?      @default(dbgenerated())
+
+  @@schema("public")
+}
+
+// The key of an unmapped model is still a key; an implicit many-to-many between a VarChar key and
+// an Int key, across schemas.
+model Label {
+  id     String  @id @db.VarChar(12)
+  posts  Article[]
+
+  @@schema("audit")
+}
+
+model Article {
+  id     Int     @id
+  labels Label[]
+
+  @@schema("public")
+}

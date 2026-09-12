@@ -8,6 +8,7 @@ import { atlas } from '../core/atlas.js'
 import { django } from '../core/django.js'
 import { drizzle } from '../core/drizzle.js'
 import { ecto } from '../core/ecto.js'
+import { efcore } from '../core/efcore.js'
 import { effect } from '../core/effect.js'
 import { eloquent } from '../core/eloquent.js'
 import { er } from '../core/er.js'
@@ -32,6 +33,7 @@ const GENERATORS = {
   drizzle: { prettyName: 'Hekireki-Drizzle', handler: drizzle },
   ecto: { prettyName: 'Hekireki-Ecto', handler: ecto },
   effect: { prettyName: 'Hekireki-Effect', handler: effect },
+  efcore: { prettyName: 'Hekireki-EFCore', handler: efcore },
   eloquent: { prettyName: 'Hekireki-Eloquent', handler: eloquent },
   gorm: { prettyName: 'Hekireki-GORM', handler: gorm },
   kysely: { prettyName: 'Hekireki-Kysely', handler: kysely },

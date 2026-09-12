@@ -60,6 +60,11 @@ generator Hekireki-Atlas {
   output   = "../harness/atlas/schema.hcl"
 }
 
+generator Hekireki-EFCore {
+  provider = "hekireki-efcore"
+  output   = "../harness/efcore/Models"
+}
+
 enum Status {
   ACTIVE
   INACTIVE

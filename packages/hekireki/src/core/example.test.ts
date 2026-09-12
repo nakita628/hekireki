@@ -19,6 +19,7 @@ import { atlas } from './atlas.js'
 import { django } from './django.js'
 import { drizzle } from './drizzle.js'
 import { ecto } from './ecto.js'
+import { efcore } from './efcore.js'
 import { effect } from './effect.js'
 import { eloquent } from './eloquent.js'
 import { er } from './er.js'
@@ -54,6 +55,7 @@ const HANDLERS: Record<
   'hekireki-drizzle': drizzle,
   'hekireki-ecto': ecto,
   'hekireki-effect': effect,
+  'hekireki-efcore': efcore,
   'hekireki-eloquent': eloquent,
   'hekireki-er': er,
   'hekireki-gorm': gorm,

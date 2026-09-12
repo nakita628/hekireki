@@ -4,13 +4,13 @@
 
 **[Hekireki](https://www.npmjs.com/package/hekireki)** generates validation schemas, ORM models and
 ER diagrams from a [Prisma](https://www.prisma.io/) schema — for TypeScript, Python, Go, Rust,
-Elixir, Ruby and PHP — and opens the schema, its documentation and its data in the browser with
+Elixir, Ruby, PHP and C# — and opens the schema, its documentation and its data in the browser with
 [Hekireki Studio](#studio).
 
 ## Features
 
 - **Validation schemas** — [Zod](https://zod.dev/), [Valibot](https://valibot.dev/), [ArkType](https://arktype.io/), [Effect Schema](https://effect.website/docs/schema/introduction/), [TypeBox](https://github.com/sinclairzx81/typebox), [AJV](https://ajv.js.org/) (JSON Schema) and [Pydantic](https://docs.pydantic.dev/) v2, written from the `///` [annotations](#annotations) on each field
-- **ORM models and DDL** — [Drizzle](https://orm.drizzle.team/), [Kysely](https://kysely.dev/), [SQLAlchemy](https://www.sqlalchemy.org/), [Django](https://www.djangoproject.com/), [GORM](https://gorm.io/), [Sea-ORM](https://www.sea-ql.org/SeaORM/), [Ecto](https://hexdocs.pm/ecto/Ecto.Schema.html), [Active Record](https://guides.rubyonrails.org/active_record_basics.html), [Eloquent](https://laravel.com/docs/eloquent) and [Atlas](https://atlasgo.io/) HCL — with relations, enums, composite keys, indexes and `@@map` / `@map` throughout
+- **ORM models and DDL** — [Drizzle](https://orm.drizzle.team/), [Kysely](https://kysely.dev/), [SQLAlchemy](https://www.sqlalchemy.org/), [Django](https://www.djangoproject.com/), [GORM](https://gorm.io/), [Sea-ORM](https://www.sea-ql.org/SeaORM/), [Ecto](https://hexdocs.pm/ecto/Ecto.Schema.html), [Active Record](https://guides.rubyonrails.org/active_record_basics.html), [Eloquent](https://laravel.com/docs/eloquent), [EF Core](https://learn.microsoft.com/ef/core/) and [Atlas](https://atlasgo.io/) HCL — with relations, enums, composite keys, indexes and `@@map` / `@map` throughout
 - **ER diagrams** — [Mermaid](https://mermaid.js.org/), [DBML](https://dbml.dbdiagram.io/), PNG and SVG from one generator block, with crow's-foot cardinality and `PK` / `FK` / `UK` markers
 - **[Hekireki Studio](#studio)** — the ER diagram, a reference docs page, every model's data, a Prisma editor and a SQL console, live from `schema.prisma`
 
@@ -170,6 +170,7 @@ model Post {
 | `hekireki-ecto`         | Elixir                     | one `.ex` per model                         | `app`                                |
 | `hekireki-activerecord` | Ruby (Rails ≥ 7.1)         | one `.rb` per model                         | —                                    |
 | `hekireki-eloquent`     | PHP (Laravel, PHP ≥ 8.1)   | one `.php` per model and enum               | `namespace`                          |
+| `hekireki-efcore`       | C# (EF Core ≥ 9, .NET ≥ 9) | one `.cs` per model and enum, the DbContext | `namespace`, `context`               |
 | `hekireki-atlas`        | Atlas HCL                  | `schema.hcl`                                | `schemaName`, `comment`              |
 | `hekireki-er`           | Mermaid / DBML / PNG / SVG | — ([extension required](#er-diagrams))      | `outputs`, `theme`                   |
 
@@ -236,6 +237,14 @@ generator Hekireki-Eloquent {
     provider  = "hekireki-eloquent"
     output    = "./eloquent"
     namespace = "App.Models" // PHP namespace, "." becomes "\" (default: App\Models)
+}
+
+// PostgreSQL only: the model maps onto the tables Prisma Migrate creates there, through Npgsql.
+generator Hekireki-EFCore {
+    provider  = "hekireki-efcore"
+    output    = "./efcore"      // A directory: one .cs per model and enum, and the DbContext
+    namespace = "MyApp.Models"  // C# namespace (default: Models)
+    context   = "ShopContext"   // DbContext class name (default: AppDbContext)
 }
 
 // ER takes output or outputs (not both). Every path is a file ending in .md, .dbml, .png or .svg,
@@ -397,6 +406,30 @@ The HTTP API behind it is documented in [docs/studio-api.md](https://github.com/
 - **Eloquent** — a composite primary key is emitted as `protected $primaryKey = null;`, because
   Eloquent has no native support for one. Active Record writes the real
   `self.primary_key = [...]` (Rails ≥ 7.1).
+- **EF Core** — PostgreSQL only, through
+  [Npgsql](https://www.npgsql.org/efcore/) 9 or later. Register the context with its enum mappings,
+  `services.AddDbContext<AppDbContext>(o => o.UseNpgsql(connectionString, AppDbContext.MapEnums))`
+  (`AddDbContextPool` alike); if you hand Npgsql your own `NpgsqlDataSource`, call
+  `AppDbContext.MapEnums(dataSourceBuilder)` on its builder too. Without them, reading or writing an
+  enum column fails. `ulid()` needs the [`Ulid`](https://www.nuget.org/packages/Ulid) package and
+  `cuid()` / `cuid(2)` [`cuid.net`](https://www.nuget.org/packages/cuid.net); `uuid()` and
+  `nanoid()` need nothing more.
+  - Npgsql cannot read a `numeric` with a scale over 28 into `decimal`, and a `Decimal` without
+    `@db.Decimal` is `numeric(65,30)` on PostgreSQL: give such fields a scale of 28 or less, e.g.
+    `@db.Decimal(38, 18)`, before reading them through EF Core.
+  - Defaults behave as with Prisma Client: a new entity starts out holding them, an explicit value —
+    `0`, `false`, `null` included — is written as it is, and `@updatedAt` is set in `SaveChanges`
+    (not by `ExecuteUpdate`). A timestamp default with an offset is the UTC instant it names, as
+    Prisma Client writes it.
+  - What EF Core cannot say about the database, and leaves to it: `onUpdate` actions;
+    `SetDefault`, and `Restrict` / `NoAction` on an optional relation, as `onDelete` actions — these
+    become `ClientNoAction`, so that EF Core never sets the foreign keys of loaded rows to null on
+    its own; and a model without `@id`, which EF Core keys by its first unique criterion. Constraint
+    names are the ones Prisma derives (a `map:` on `@relation` is not in DMMF), enums are mapped
+    in the default schema (DMMF has no `@@schema` for an enum), and a `view` is mapped as a table
+    (DMMF does not tell the two apart).
+  - Prisma creates no index for a foreign key, so the context removes EF Core's convention that
+    would add one.
 
 ## License
 

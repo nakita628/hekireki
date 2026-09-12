@@ -103,6 +103,13 @@ generator Hekireki-ActiveRecord {
   output   = "generated/activerecord"
 }
 
+generator Hekireki-EFCore {
+  provider  = "hekireki-efcore"
+  output    = "generated/efcore"
+  namespace = "Example.Models"
+  context   = "ExampleContext"
+}
+
 generator Hekireki-Eloquent {
   provider  = "hekireki-eloquent"
   output    = "generated/eloquent"
