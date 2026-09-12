@@ -23,6 +23,7 @@ import { efcore } from './efcore.js'
 import { effect } from './effect.js'
 import { eloquent } from './eloquent.js'
 import { er } from './er.js'
+import { exposed } from './exposed.js'
 import { gorm } from './gorm.js'
 import { kysely } from './kysely.js'
 import { pydantic } from './pydantic.js'
@@ -58,6 +59,7 @@ const HANDLERS: Record<
   'hekireki-efcore': efcore,
   'hekireki-eloquent': eloquent,
   'hekireki-er': er,
+  'hekireki-exposed': exposed,
   'hekireki-gorm': gorm,
   'hekireki-kysely': kysely,
   'hekireki-pydantic': pydantic,

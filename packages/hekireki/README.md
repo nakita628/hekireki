@@ -78,6 +78,7 @@ model Post {
 - `hekireki-activerecord` — [Active Record](https://guides.rubyonrails.org/active_record_basics.html)
 - `hekireki-eloquent` — [Eloquent](https://laravel.com/docs/eloquent)
 - `hekireki-efcore` — [EF Core](https://learn.microsoft.com/ef/core/)
+- `hekireki-exposed` — [Exposed](https://github.com/JetBrains/Exposed)
 - `hekireki-atlas` — [Atlas](https://atlasgo.io/) HCL
 
 ### ER diagrams
@@ -208,6 +209,14 @@ generator Hekireki-EFCore {
     context   = "AppDbContext"   // DbContext class name (default: "AppDbContext")
 }
 
+// PostgreSQL only
+generator Hekireki-Exposed {
+    provider = "hekireki-exposed"
+    output   = "./exposed"
+    package  = "com.example.db"  // Kotlin package (default: "models")
+    dao      = false             // Tables only, no DAO entities (default: true)
+}
+
 generator Hekireki-Atlas {
     provider   = "hekireki-atlas"
     output     = "./atlas"
@@ -215,6 +224,36 @@ generator Hekireki-Atlas {
     comment    = true      // Keep /// comments
 }
 ```
+
+#### Exposed
+
+Hekireki-Exposed writes Kotlin for Exposed 1.x (`org.jetbrains.exposed.v1`) over JDBC: a `<Model>Table`
+object per model, a `<Model>Entity` class per model when `dao` is on, a table per implicit
+many-to-many relation, an enum class per enum, `ColumnTypes.kt` with the column types PostgreSQL needs
+beyond Exposed's own, and `PrismaSchema`, which lists the schemas, the enum types and the tables in
+the order `SchemaUtils.create` wants them. It is checked against Exposed 1.0 and 1.5, Kotlin 2.3 and
+ktlint 1.8.
+
+- Dependencies: `exposed-core` and `exposed-jdbc`, `exposed-dao` for the entities, `exposed-json` for
+  `Json` fields, `io.github.thibaultmeyer:cuid` for `cuid()`, `com.github.f4b6a3:ulid-creator` for
+  `ulid()`, and the PostgreSQL JDBC driver.
+- Defaults are the ones Prisma Client and Prisma Migrate apply: `uuid()`, `cuid()`, `ulid()`,
+  `nanoid()` and `@updatedAt` are filled in by the client, `now()` by both, `dbgenerated()` by the
+  database. The entities stamp `@updatedAt` on every update; an update through the DSL has to set it.
+- Temporal columns bind `java.time` values, so the JVM's time zone never shifts a value. A `DateTime`
+  without a time zone holds UTC, as Prisma Client writes it.
+- `money` is read from the text PostgreSQL formats by `lc_monetary`.
+- Partial indexes (`where`) keep their condition. Views, `@@ignore` models, and `@ignore` and
+  `Unsupported` fields are left out, as DMMF leaves them out, and so is an index over such a field.
+- The DAO leaves out the relations Exposed cannot follow: a foreign key that shares its columns with
+  another, one to a key of another column type or to a `@db.SmallInt` autoincrement key, one that
+  pairs a key column with a column that is not a key, and a composite one unless it is the only one
+  between two tables and references a whole composite key. Their columns are there all the same.
+  With `relationMode = "prisma"` there are no foreign keys, and the DAO follows no relation.
+- Exposed puts an autoincrement column first in a composite primary key, and writes a constraint or
+  index name that needs quoting and is longer than 61 characters unquoted, which PostgreSQL folds to
+  lower case. Its `MigrationUtils` misreads tables with a schema or a name in capitals; keep
+  migrations with Prisma Migrate.
 
 ### ER diagrams
 

@@ -13,6 +13,8 @@ harness/eloquent/models/
 harness/atlas/schema.hcl
 harness/efcore/Models/
 harness/efcore/Edge/
+harness/exposed/src/main/kotlin/models/
+harness/exposed/src/main/kotlin/hekireki/
 
 # Toolchain build artifacts.
 harness/drizzle/node_modules
@@ -37,5 +39,12 @@ harness/activerecord/vendor/
 harness/eloquent/vendor/
 harness/efcore/bin/
 harness/efcore/obj/
-# Prisma Migrate's DDL for each schema, written by lang/efcore.test.ts for the catalog comparison.
+harness/exposed/build/
+harness/exposed/.gradle/
+harness/exposed/.kotlin/
+# What VS Code's Java extension copies the sources to.
+harness/exposed/bin/
+# Prisma Migrate's DDL for each schema, written by lang/efcore.test.ts and lang/exposed.test.ts for
+# the catalog comparison.
 harness/efcore/*.sql
+harness/exposed/*.sql

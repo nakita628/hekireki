@@ -12,6 +12,7 @@ import { efcore } from '../core/efcore.js'
 import { effect } from '../core/effect.js'
 import { eloquent } from '../core/eloquent.js'
 import { er } from '../core/er.js'
+import { exposed } from '../core/exposed.js'
 import { gorm } from '../core/gorm.js'
 import { kysely } from '../core/kysely.js'
 import { pydantic } from '../core/pydantic.js'
@@ -35,6 +36,7 @@ const GENERATORS = {
   effect: { prettyName: 'Hekireki-Effect', handler: effect },
   efcore: { prettyName: 'Hekireki-EFCore', handler: efcore },
   eloquent: { prettyName: 'Hekireki-Eloquent', handler: eloquent },
+  exposed: { prettyName: 'Hekireki-Exposed', handler: exposed },
   gorm: { prettyName: 'Hekireki-GORM', handler: gorm },
   kysely: { prettyName: 'Hekireki-Kysely', handler: kysely },
   pydantic: { prettyName: 'Hekireki-Pydantic', handler: pydantic },

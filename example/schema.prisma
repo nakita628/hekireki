@@ -116,6 +116,12 @@ generator Hekireki-Eloquent {
   namespace = "App.Models"
 }
 
+generator Hekireki-Exposed {
+  provider = "hekireki-exposed"
+  output   = "generated/exposed"
+  package  = "com.example.models"
+}
+
 generator Hekireki-Atlas {
   provider = "hekireki-atlas"
   output   = "generated/atlas/schema.hcl"

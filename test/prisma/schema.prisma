@@ -65,6 +65,11 @@ generator Hekireki-EFCore {
   output   = "../harness/efcore/Models"
 }
 
+generator Hekireki-Exposed {
+  provider = "hekireki-exposed"
+  output   = "../harness/exposed/src/main/kotlin/models"
+}
+
 enum Status {
   ACTIVE
   INACTIVE
