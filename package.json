@@ -23,13 +23,13 @@
     "hekireki": "link:packages/hekireki"
   },
   "devDependencies": {
-    "actionlint": "^2.0.6",
-    "cspell": "^10.2.2",
-    "markdownlint-cli2": "^0.23.2",
-    "mysql2": "^3.23.1",
-    "pg": "^8.22.0",
-    "textlint": "^15.8.0",
-    "textlint-rule-terminology": "^5.2.16",
+    "actionlint": "2.0.6",
+    "cspell": "10.2.2",
+    "markdownlint-cli2": "0.23.2",
+    "mysql2": "3.23.1",
+    "pg": "8.22.0",
+    "textlint": "15.8.0",
+    "textlint-rule-terminology": "5.2.16",
     "vite-plus": "0.3.0"
   },
   "packageManager": "pnpm@11.25.0"
