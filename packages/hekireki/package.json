@@ -110,7 +110,7 @@
     "@heroui/react": "^3.2.4",
     "@lezer/highlight": "^1.2.3",
     "@monaco-editor/react": "^4.7.0",
-    "@playwright/test": "^1.62.1",
+    "@playwright/test": "^1.63.0",
     "@react-aria/i18n": "^3.13.1",
     "@react-aria/ssr": "^3.10.1",
     "@react-aria/utils": "^3.34.1",
