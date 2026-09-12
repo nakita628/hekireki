@@ -17,9 +17,40 @@ npm install -D hekireki
 Add a generator to `schema.prisma` and run `npx prisma generate`. `output` is required.
 
 ```prisma
+datasource db {
+    provider = "postgresql"
+}
+
 generator Hekireki-Zod {
     provider = "hekireki-zod"
     output   = "./zod"
+    type     = true
+}
+
+generator Hekireki-Drizzle {
+    provider = "hekireki-drizzle"
+    output   = "./drizzle"
+}
+
+model User {
+    /// Primary key
+    /// @z.uuid()
+    id    String @id @default(uuid())
+    /// Display name
+    /// @z.string().min(1).max(50)
+    name  String
+    posts Post[]
+}
+
+model Post {
+    /// Primary key
+    /// @z.uuid()
+    id     String @id @default(uuid())
+    /// Article title
+    /// @z.string().min(1).max(100)
+    title  String
+    userId String
+    user   User   @relation(fields: [userId], references: [id])
 }
 ```
 
@@ -53,7 +84,11 @@ generator Hekireki-Zod {
 
 - `hekireki-er` — Mermaid, DBML, PNG and SVG
 
-## Options
+## Configuration
+
+Every generator with every option. All options are optional.
+
+### Validation schemas
 
 ```prisma
 generator Hekireki-Zod {
@@ -64,16 +99,134 @@ generator Hekireki-Zod {
     relation = true  // Add <Model>Relations schemas
     zod      = "v4"  // "v4" (default), "mini" or "@hono/zod-openapi"
 }
+
+generator Hekireki-Valibot {
+    provider = "hekireki-valibot"
+    output   = "./valibot"
+    type     = true
+    comment  = true
+    relation = true
+}
+
+generator Hekireki-ArkType {
+    provider = "hekireki-arktype"
+    output   = "./arktype"
+    type     = true
+    comment  = true
+    relation = true
+}
+
+generator Hekireki-Effect {
+    provider = "hekireki-effect"
+    output   = "./effect"
+    type     = true
+    comment  = true
+    relation = true
+}
+
+generator Hekireki-TypeBox {
+    provider = "hekireki-typebox"
+    output   = "./typebox"
+    type     = true
+    comment  = true
+    relation = true
+}
+
+generator Hekireki-AJV {
+    provider = "hekireki-ajv"
+    output   = "./ajv"
+    type     = true
+    comment  = true
+    relation = true
+}
+
+generator Hekireki-Pydantic {
+    provider = "hekireki-pydantic"
+    output   = "./pydantic"
+    comment  = true
+    relation = true
+}
 ```
 
-- `type`, `comment`, `relation` — every validation schema generator (Pydantic: `comment`, `relation`)
-- `package` — GORM package name (default: `model`)
-- `renameAll` — SeaORM `#[serde(rename_all = "...")]`
-- `app` — Ecto module prefix (default: `MyApp`)
-- `namespace` — Eloquent (default: `App\Models`) and EF Core (default: `Models`)
-- `context` — EF Core `DbContext` class name (default: `AppDbContext`)
-- `schemaName`, `comment` — Atlas
-- `outputs`, `theme` — ER
+### ORM models
+
+```prisma
+generator Hekireki-Drizzle {
+    provider = "hekireki-drizzle"
+    output   = "./drizzle"
+}
+
+generator Hekireki-Kysely {
+    provider = "hekireki-kysely"
+    output   = "./kysely"
+}
+
+generator Hekireki-SQLAlchemy {
+    provider = "hekireki-sqlalchemy"
+    output   = "./sqlalchemy"
+}
+
+generator Hekireki-Django {
+    provider = "hekireki-django"
+    output   = "./django"
+}
+
+generator Hekireki-GORM {
+    provider = "hekireki-gorm"
+    output   = "./gorm"
+    package  = "model"  // Go package name (default: "model")
+}
+
+generator Hekireki-SeaORM {
+    provider  = "hekireki-sea-orm"
+    output    = "./sea-orm"
+    renameAll = "camelCase"  // #[serde(rename_all = "...")]
+}
+
+generator Hekireki-Ecto {
+    provider = "hekireki-ecto"
+    output   = "./ecto"
+    app      = "MyApp"  // Module prefix (default: "MyApp")
+}
+
+generator Hekireki-ActiveRecord {
+    provider = "hekireki-activerecord"
+    output   = "./activerecord"
+}
+
+generator Hekireki-Eloquent {
+    provider  = "hekireki-eloquent"
+    output    = "./eloquent"
+    namespace = "App.Models"  // "." becomes "\" (default: "App\Models")
+}
+
+// PostgreSQL only
+generator Hekireki-EFCore {
+    provider  = "hekireki-efcore"
+    output    = "./efcore"
+    namespace = "MyApp.Models"   // C# namespace (default: "Models")
+    context   = "AppDbContext"   // DbContext class name (default: "AppDbContext")
+}
+
+generator Hekireki-Atlas {
+    provider   = "hekireki-atlas"
+    output     = "./atlas"
+    schemaName = "public"  // Default: "public" ("main" on SQLite)
+    comment    = true      // Keep /// comments
+}
+```
+
+### ER diagrams
+
+The extension of each path picks the format: `.md` (Mermaid), `.dbml`, `.png` or `.svg`.
+
+```prisma
+generator Hekireki-ER {
+    provider = "hekireki-er"
+    outputs  = ["docs/er.md", "docs/er.dbml", "docs/er.png", "docs/er.svg"] // One file: output = "docs/er.md"
+    theme    = "dark"  // .png / .svg: "light" (default) or "dark"
+}
+```
 
 ## Annotations
 
@@ -85,19 +238,33 @@ model User {
     /// Display name
     /// @z.string().min(1).max(50)
     /// @v.pipe(v.string(), v.minLength(1), v.maxLength(50))
-    name String
+    /// @a."1 <= string <= 50"
+    /// @e.Schema.String.pipe(Schema.minLength(1), Schema.maxLength(50))
+    /// @t.Type.String({ minLength: 1, maxLength: 50 })
+    /// @j.{ type: 'string' as const, minLength: 1, maxLength: 50 }
+    /// @p.Annotated[str, StringConstraints(min_length=1, max_length=50)]
+    name  String
+    /// @z.email()
+    /// @v.pipe(v.string(), v.email())
+    /// @a."string.email"
+    /// @e.Schema.String.pipe(Schema.pattern(/^[^@]+@[^@]+\.[^@]+$/))
+    /// @t.Type.String({ format: 'email' })
+    /// @j.{ type: 'string' as const, format: 'email' as const }
+    /// @p.EmailStr
+    email String @unique
 }
 ```
 
-## ER diagrams
-
-The extension of each path picks the format: `.md` (Mermaid), `.dbml`, `.png` or `.svg`.
+On a model, `@p.ConfigDict(...)` becomes Pydantic's `model_config`, and
+`@relation <Model>.<field> <Model>.<field> <type>` adds a relation without a foreign key to the ER
+diagram (drawn dashed).
 
 ```prisma
-generator Hekireki-ER {
-    provider = "hekireki-er"
-    outputs  = ["docs/er.md", "docs/er.svg"] // One file: output = "docs/er.md"
-    theme    = "dark"                         // .png / .svg: "light" (default) or "dark"
+/// @p.ConfigDict(extra='forbid')
+/// @relation User.id Post.userId one-to-many
+model Post {
+    id     String @id @default(uuid())
+    userId String
 }
 ```
 
