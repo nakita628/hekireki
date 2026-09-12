@@ -3,7 +3,7 @@ name: Lang Check
 # Validity checks for hekireki's generated foreign-language code: each language
 # is generated from test/prisma/schema.prisma and then checked in its own toolchain —
 # it parses (syntax) and compiles or loads against the real GORM / sea-orm /
-# SQLAlchemy / Django / Ecto / Active Record / Eloquent / EF Core API (type). This is separate
+# SQLAlchemy / Django / Ecto / Active Record / Eloquent / EF Core / Exposed API (type). This is separate
 # from Test (test.yml), which owns the byte-equality codegen contract and stays
 # toolchain-free.
 #
@@ -43,7 +43,19 @@ jobs:
         # drizzle needs no extra toolchain step: setup-vp's node runs
         # tsc + drizzle-kit from the workspace's devDependencies.
         lang:
-          [gorm, sea-orm, sqlalchemy, django, ecto, drizzle, activerecord, eloquent, atlas, efcore]
+          [
+            gorm,
+            sea-orm,
+            sqlalchemy,
+            django,
+            ecto,
+            drizzle,
+            activerecord,
+            eloquent,
+            atlas,
+            efcore,
+            exposed,
+          ]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -94,14 +106,27 @@ jobs:
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: '10.0.401'
-      # The efcore leg compares the model against the schema Prisma Migrate creates, and reads and
-      # writes it, on the PostgreSQL the runner image ships (installed, not started). The server
-      # only lives as long as the job, so its password is no secret.
-      - if: matrix.lang == 'efcore'
+      - if: matrix.lang == 'exposed'
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      # The harness pins every dependency and its checksum (gradle.lockfile,
+      # gradle/verification-metadata.xml); the Gradle version is pinned here.
+      - if: matrix.lang == 'exposed'
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          gradle-version: '9.7.1'
+      # The efcore and exposed legs compare the model against the schema Prisma Migrate creates,
+      # and read and write it, on the PostgreSQL the runner image ships (installed, not started).
+      # The server only lives as long as the job, so its password is no secret. The exposed
+      # harness creates the citext extension, which the server ships with.
+      - if: matrix.lang == 'efcore' || matrix.lang == 'exposed'
         run: |
           sudo systemctl start postgresql.service
           sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres'"
           echo "HEKIREKI_EFCORE_PG=Host=localhost;Username=postgres;Password=postgres" >> "$GITHUB_ENV"
+          echo "HEKIREKI_EXPOSED_PG=jdbc:postgresql://localhost:5432/?user=postgres&password=postgres" >> "$GITHUB_ENV"
       # The atlas leg also uses the runner's Docker daemon: the test validates
       # the generated HCL against a disposable postgres dev database via
       # Atlas's docker:// dev-url. The CLI version is pinned: the action's

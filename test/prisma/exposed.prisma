@@ -1,0 +1,670 @@
+// The shapes that are hazards for Kotlin and Exposed specifically — names, quoting, keys, time zones,
+// value generation — on top of the ones every generator meets in schema.prisma. Only
+// Hekireki-Exposed reads it; the exposed language check compiles it next to schema.prisma's model
+// and runs it against PostgreSQL.
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["public", "audit", "Mixed"]
+}
+
+generator Hekireki-Exposed {
+  provider        = "hekireki-exposed"
+  output          = "../harness/exposed/src/main/kotlin/hekireki/edge"
+  package         = "hekireki.edge"
+  previewFeatures = ["partialIndexes", "views"]
+}
+
+// The same schema with the tables alone, which must compile without the DAO.
+generator Hekireki-Exposed-DSL {
+  provider = "hekireki-exposed"
+  output   = "../harness/exposed/src/main/kotlin/hekireki/dsl"
+  package  = "hekireki.dsl"
+  dao      = false
+}
+
+// Values that are no Kotlin constant names as written (lower case, a keyword), two that collide
+// once in upper case, and labels that need quoting in SQL. (Prisma Migrate writes a label with an apostrophe unescaped.)
+enum Level {
+  FOO_BAR
+  fooBar  @map("foo-bar")
+  low
+  in      @map("in-out")
+  FooBar  @map("say \"hi\"")
+
+  @@map("level")
+  @@schema("audit")
+}
+
+// Named like classes the generated code uses: the Kotlin standard library's List, java.time's
+// Instant, Exposed's ReferenceOption and Table.PrimaryKey, and the support file's column type.
+enum List {
+  ONE
+  TWO
+
+  @@schema("public")
+}
+
+enum Instant {
+  EARLY
+  LATE
+
+  @@schema("public")
+}
+
+enum ReferenceOption {
+  ASK
+  TELL
+
+  @@schema("public")
+}
+
+enum PrimaryKey {
+  NATURAL
+  SURROGATE
+
+  @@schema("public")
+}
+
+enum PgEnumColumnType {
+  X
+
+  @@map("pg_enum_column_type")
+  @@schema("public")
+}
+
+// An enum in a schema named in mixed case.
+enum Shade {
+  LIGHT
+  DARK
+
+  @@schema("Mixed")
+}
+
+// Names in letters outside ASCII, which Prisma takes for enums, values and fields.
+enum Größe {
+  KLEIN
+  groß
+  Ünï
+
+  @@schema("Mixed")
+}
+
+// Every class name above in use, on a table that also has a foreign key (ReferenceOption) and a
+// primary key (PrimaryKey) of its own.
+model Clash {
+  id        Int               @id @default(autoincrement())
+  list      List              @default(ONE)
+  lists     List[]
+  instant   Instant
+  stamp     DateTime          @default(now())
+  reference ReferenceOption   @default(ASK)
+  kind      PrimaryKey
+  weird     PgEnumColumnType?
+  level     Level             @default(fooBar)
+  levels    Level[]           @default([FOO_BAR, fooBar, in, FooBar])
+  shade     Shade?
+  parentId  Int?
+  parent    Clash?            @relation("tree", fields: [parentId], references: [id], onDelete: SetNull)
+  children  Clash[]           @relation("tree")
+
+  @@schema("public")
+}
+
+// Field names Kotlin reserves, and names of the members Exposed's Table, IdTable and Entity already
+// have; two fields whose names are one property once in lower camel case.
+model Member {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  when        String
+  in          Int
+  object      Boolean
+  fun         String?
+  tableName   String
+  columns     String
+  primaryKey  String
+  indices     String
+  schemaName  String
+  db          String
+  klass       String
+  writeValues String
+  readValues  String
+  companion   String
+  value       String
+  userId      Int      @default(0)
+  UserId      Int      @default(1)
+  sku_code    String   @default("x")
+  URL         String   @default("https://example.com/") @map("URL")
+  toString    String   @default("")
+  handle      String   @unique @db.VarChar(40)
+  friends     Member[] @relation("friends-of")
+  friendOf    Member[] @relation("friends-of")
+  badge       Badge?
+  chained     Chained?
+
+  @@map("Member")
+  @@schema("audit")
+}
+
+// One-to-one whose foreign key references a unique column rather than the key, across schemas.
+model Badge {
+  id           Int    @id @default(autoincrement())
+  memberHandle String @unique @db.VarChar(40)
+  member       Member @relation(fields: [memberHandle], references: [handle], map: "badge_member_fkey")
+
+  @@schema("public")
+}
+
+// Columns Exposed would misread unless quoted: in capitals throughout, with a dot, a keyword,
+// Japanese, and spaces in mixed case; a table in a lower-case schema. (Prisma Migrate writes a name
+// with a double quote in it unescaped, so none is here.)
+model Quoted {
+  id      Int       @id @default(autoincrement())
+  upper   String    @map("NAME")
+  dotted  String    @map("a.b")
+  keyword String    @map("order")
+  kanji   String    @map("名前")
+  spaced  String    @map("First Name")
+  größe Größe   @default(groß)
+  maße   Größe[] @default([Ünï, KLEIN])
+  lower   Lower[]
+
+  @@map("quoted")
+  @@schema("audit")
+}
+
+model Lower {
+  id       Int    @id @default(autoincrement())
+  quotedId Int
+  quoted   Quoted @relation(fields: [quotedId], references: [id], onDelete: Cascade)
+
+  @@map("lower_table")
+  @@schema("audit")
+}
+
+// A table named with a dot and one named like a keyword, in a schema named in mixed case.
+model Dotted {
+  id   Int    @id @default(autoincrement())
+  name String @unique
+
+  @@map("dot.table")
+  @@schema("Mixed")
+}
+
+model Order {
+  id    Int    @id @default(autoincrement())
+  label String
+
+  @@map("order")
+  @@schema("Mixed")
+}
+
+// A composite key with an autoincrement part listed last: Exposed puts an autoincrement column
+// first in a primary key.
+model Ledger {
+  book   String
+  seq    Int     @default(autoincrement())
+  total  Decimal @default(0) @db.Decimal(18, 2)
+  lines  Line[]  @relation("ledger")
+  others Line[]  @relation("other")
+
+  @@id([book, seq])
+  @@index([book], type: Hash)
+  @@schema("public")
+}
+
+// Two composite foreign keys to the same composite key: the DAO follows neither, since Exposed
+// finds a composite foreign key by the table it references.
+model Line {
+  id        Int    @id @default(autoincrement())
+  book      String
+  seq       Int
+  otherBook String
+  otherSeq  Int
+  ledger    Ledger @relation("ledger", fields: [book, seq], references: [book, seq], onDelete: Cascade)
+  other     Ledger @relation("other", fields: [otherBook, otherSeq], references: [book, seq], onDelete: Cascade)
+
+  @@schema("public")
+}
+
+// A model keyed by a composite unique criterion, with no @id; and one keyed by a unique column.
+model Keyless {
+  region String
+  code   String
+  label  String
+
+  @@unique([region, code], map: "keyless_region_code_key")
+  @@schema("public")
+}
+
+model Slugged {
+  slug  String @unique
+  title String
+
+  @@schema("public")
+}
+
+// A column that carries a foreign key to a unique column other than the key, a unique index, a
+// default and its nullability: more calls than ktlint keeps on one line.
+model Chained {
+  id     Int     @id @default(autoincrement())
+  code   String? @unique @default("none") @db.VarChar(40)
+  member Member? @relation(fields: [code], references: [handle])
+
+  @@schema("public")
+}
+
+// A one-to-one that shares its key with the principal, whose key the database fills in as text.
+model Wallet {
+  id    String       @id @default(dbgenerated("'w-' || gen_random_uuid()::text"))
+  owner WalletOwner?
+
+  @@schema("public")
+}
+
+model WalletOwner {
+  walletId String @id
+  wallet   Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  name     String
+
+  @@schema("public")
+}
+
+// A cycle of references, each foreign key declared before the column it references: the table
+// objects initialize one another.
+model Hen {
+  eggId Int?  @unique
+  egg   Egg?  @relation("laid", fields: [eggId], references: [id])
+  id    Int   @id @default(autoincrement())
+  eggs  Egg[] @relation("hatched")
+
+  @@schema("public")
+}
+
+model Egg {
+  henId Int?
+  hen   Hen? @relation("hatched", fields: [henId], references: [id])
+  id    Int  @id @default(autoincrement())
+  layer Hen? @relation("laid")
+
+  @@schema("public")
+}
+
+// Two relations over the same column: one is declared on the column, the other on the table.
+model Shared {
+  id      Int   @id @default(autoincrement())
+  ownerId Int
+  owner   Owner @relation("owner", fields: [ownerId], references: [id], map: "shared_owner_fkey")
+  alias   Owner @relation("alias", fields: [ownerId], references: [id], map: "Shared_alias_FK")
+
+  @@schema("public")
+}
+
+model Owner {
+  id      Int      @id @default(autoincrement())
+  owned   Shared[] @relation("owner")
+  aliased Shared[] @relation("alias")
+
+  @@schema("public")
+}
+
+// A model with nothing but its key: an entity with no properties.
+model Lonely {
+  id Int @id @default(autoincrement())
+
+  @@schema("public")
+}
+
+// A smallint autoincrement key, which Exposed cannot generate, referenced by another table.
+model Tiny {
+  id   Int       @id @default(autoincrement()) @db.SmallInt
+  name String
+  refs TinyRef[]
+  tags TinyTag[]
+
+  @@schema("public")
+}
+
+model TinyRef {
+  id     Int  @id @default(autoincrement())
+  tinyId Int  @db.SmallInt
+  tiny   Tiny @relation(fields: [tinyId], references: [id])
+
+  @@schema("public")
+}
+
+// Native types without their arguments, and a list of every type.
+model Bare {
+  id        Int        @id @default(autoincrement())
+  varying   String     @db.VarChar
+  fixed     String     @db.Char
+  flag      String     @db.Bit
+  bits      String     @db.VarBit
+  exact     Decimal    @db.Decimal
+  stamp     DateTime   @db.Timestamp
+  zoned     DateTime   @db.Timestamptz
+  clock     DateTime   @db.Time
+  zonedTime DateTime   @db.Timetz(3)
+  ci        String     @db.Citext
+  names     String[]   @db.VarChar(20)
+  codes     String[]   @db.Char(3)
+  cis       String[]   @db.Citext
+  inets     String[]   @db.Inet
+  flags     String[]   @db.Bit(4)
+  varbits   String[]   @db.VarBit
+  xmls      String[]   @db.Xml
+  ids       String[]   @db.Uuid
+  smalls    Int[]      @db.SmallInt
+  oids      Int[]      @db.Oid
+  reals     Float[]    @db.Real
+  exacts    Decimal[]  @db.Decimal
+  moneys    Decimal[]  @db.Money
+  docs      Json[]
+  plains    Json[]     @db.Json
+  blobs     Bytes[]
+  stamps    DateTime[] @db.Timestamptz(6)
+  days      DateTime[] @db.Date
+  clocks    DateTime[] @db.Time(3)
+  zones     DateTime[] @db.Timetz(3)
+
+  @@schema("public")
+}
+
+// Defaults the columns must reproduce exactly, optional ones included. A timestamp with an offset
+// is the instant it names to Prisma Client, while PostgreSQL drops the offset when it reads the
+// DEFAULT clause into a column without a time zone: the DEFAULT is Prisma's, the value an insert
+// starts from Prisma Client's.
+model Defaults {
+  id        String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  real      Float      @default(2.5) @db.Real
+  small     Int        @default(-1) @db.SmallInt
+  oid       Int        @default(7) @db.Oid
+  big       BigInt     @default(9007199254740993)
+  minBig    BigInt     @default(-9223372036854775808)
+  minInt    Int        @default(-2147483648)
+  minSmall  Int        @default(-32768) @db.SmallInt
+  tiny      Float      @default(0.000001)
+  float0    Float      @default(0)
+  when      DateTime   @default("2020-01-01T12:34:56.123456+09:00")
+  whenZoned DateTime   @default("2020-01-01T12:34:56.123456+09:00") @db.Timestamptz(6)
+  day       DateTime   @default("2020-01-01T23:00:00-05:00") @db.Date
+  clock     DateTime   @default("2020-01-01T08:09:10.5Z") @db.Time(6)
+  zonedTime DateTime   @default("2020-01-01T08:09:10.5+09:00") @db.Timetz(3)
+  stamps    DateTime[] @default(["2020-01-01T12:34:56.5+09:00", "2021-06-30T23:59:59Z"])
+  dates     DateTime[] @default(["2020-01-01T23:00:00-05:00"]) @db.Date
+  guid      String     @default("8f1d3b4a-2c6e-4f7a-9b0c-1d2e3f4a5b6c") @db.Uuid
+  doc       Json       @default("{\"k\":[1,2]}")
+  text      String     @default("line one\nline two\r\n$dollar \"quoted\" \\ back")
+  quoted    Json       @default("{\"a\": \"it's\"}")
+  exact     Decimal    @default(0.1234567890123456789)
+  labels    String[]   @default(["a,b", "c\"d", "{e}", "f\\g", "NULL", ""])
+  words     String[]   @default(["alphabetical", "bureaucratic", "catastrophic", "demonstrative", "extraordinary", "fundamental"])
+  bytes     Bytes      @default("aGVsbG8=")
+  price     Decimal    @default("12.5") @db.Money
+  address   String     @default("192.168.0.1/24") @db.Inet
+  mask      String     @default("1010") @db.Bit(4)
+  bitsDef   String     @default("101") @db.VarBit(8)
+  markup    String     @default("<a>it's</a>") @db.Xml
+  nickname  String?    @default("anon")
+  count     Int?       @default(3)
+  mood      Level?     @default(low)
+  code      String     @default(nanoid(8))
+  ref       String     @default(cuid())
+  ref2      String     @default(cuid(2))
+  tag       String?    @default(ulid())
+  token     String     @default(uuid(4))
+  plain     String     @default(uuid(7)) @db.Uuid
+  auto      Int        @default(autoincrement())
+  trigger   Int?       @default(dbgenerated())
+  dayNow    DateTime   @default(now()) @db.Date
+  clockNow  DateTime   @default(now()) @db.Time(3)
+  zonedNow  DateTime   @default(now()) @db.Timetz(3)
+  touched   DateTime?  @updatedAt @db.Timestamptz(3)
+  touchedOn DateTime   @updatedAt @db.Date
+
+  @@schema("public")
+}
+
+// Index methods, operator classes, sort orders and a unique criterion in descending order.
+model Indexed {
+  id   Int      @id @default(autoincrement())
+  doc  Json
+  tags String[]
+  addr String   @db.Inet
+  name String
+  n    Int
+  u    String   @db.Uuid
+
+  @@unique([name(sort: Desc), n])
+  @@unique([name], where: raw("n > 0"), map: "indexed_name_positive")
+  @@index([doc(ops: JsonbPathOps)], type: Gin)
+  @@index([tags], type: Gin)
+  @@index([addr(ops: InetOps)], type: Gist)
+  @@index([name], type: SpGist)
+  @@index([n, u(ops: UuidMinMaxMultiOps)], type: Brin)
+  @@index([name(ops: raw("text_pattern_ops"))], map: "indexed_name_pattern")
+  @@index([n(sort: Desc), name])
+  @@index([n(sort: Desc), name(sort: Desc), u(sort: Desc), addr(sort: Desc)], map: "indexed_all_desc")
+  // Partial indexes: raw SQL, and the fields-to-values form Prisma Migrate writes out.
+  @@index([n], where: { name: "it's", u: { not: null }, n: { not: 5 } }, map: "indexed_partial")
+  @@schema("public")
+}
+
+// Names past what fits on a line of Kotlin, and constraint names past what Exposed can quote.
+model AnExceedinglyLongModelNameThatKeepsGoingAndGoing {
+  id                                                            Int                                             @id @default(autoincrement())
+  anExceedinglyLongColumnNameThatAlsoKeepsGoing                 Int
+  anotherExceedinglyLongColumnNameThatKeepsGoingAndGoingOnAndOn Int?
+  others                                                        AnotherExceedinglyLongModelNameThatKeepsGoing[]
+
+  @@unique([id, anExceedinglyLongColumnNameThatAlsoKeepsGoing])
+  @@schema("public")
+}
+
+model AnotherExceedinglyLongModelNameThatKeepsGoing {
+  id    Int                                                @id @default(autoincrement())
+  longs AnExceedinglyLongModelNameThatKeepsGoingAndGoing[]
+
+  @@schema("public")
+}
+
+// A join table to a smallserial key, whose column is a plain smallint.
+model TinyTag {
+  id    Int    @id @default(autoincrement())
+  tinys Tiny[]
+
+  @@schema("public")
+}
+
+// Foreign keys between columns of different types: an integer to a smallint key, text to a
+// varchar key, text to a varchar unique column.
+model Small {
+  id   Int        @id @db.SmallInt
+  refs TypedRef[]
+
+  @@schema("public")
+}
+
+model Code {
+  code   String     @id @db.VarChar(40)
+  name   String     @unique @db.VarChar(20)
+  refs   TypedRef[] @relation("code")
+  byName TypedRef[] @relation("name")
+
+  @@schema("public")
+}
+
+model TypedRef {
+  id       Int    @id @default(autoincrement())
+  smallId  Int
+  small    Small  @relation(fields: [smallId], references: [id])
+  codeId   String
+  code     Code   @relation("code", fields: [codeId], references: [code])
+  codeName String
+  named    Code   @relation("name", fields: [codeName], references: [name])
+
+  @@schema("public")
+}
+
+// A composite foreign key with an optional and a required column: Prisma restricts the delete.
+model Grid {
+  x     Int
+  y     Int
+  mixes Mix[]
+
+  @@id([x, y])
+  @@schema("public")
+}
+
+model Mix {
+  id   Int   @id @default(autoincrement())
+  mx   Int?
+  my   Int
+  grid Grid? @relation(fields: [mx, my], references: [x, y])
+
+  @@schema("public")
+}
+
+// A cycle closed by a table-level foreign key: the first table's columns the second references
+// have to be declared before the column that initializes the second.
+model Rooster {
+  id      Int     @id @default(autoincrement())
+  chickId Int?
+  chick   Chick?  @relation("reared", fields: [chickId], references: [id])
+  x       Int
+  y       Int
+  chicks  Chick[] @relation("sired")
+
+  @@unique([x, y])
+  @@schema("public")
+}
+
+model Chick {
+  id       Int       @id @default(autoincrement())
+  rx       Int
+  ry       Int
+  sire     Rooster   @relation("sired", fields: [rx, ry], references: [x, y])
+  roosters Rooster[] @relation("reared")
+
+  @@schema("public")
+}
+
+// A referenced column named like a Kotlin keyword.
+model Npm {
+  id       Int       @id @default(autoincrement())
+  package  String    @unique
+  versions Version[]
+
+  @@schema("public")
+}
+
+model Version {
+  id      Int    @id @default(autoincrement())
+  pkgName String
+  npm     Npm    @relation(fields: [pkgName], references: [package])
+
+  @@schema("public")
+}
+
+// A foreign key to a unique column that is a reference itself.
+model Account {
+  id      Int      @id @default(autoincrement())
+  profile Profile?
+
+  @@schema("public")
+}
+
+model Profile {
+  id        Int     @id @default(autoincrement())
+  accountId Int     @unique
+  account   Account @relation(fields: [accountId], references: [id])
+  posts     Post[]
+
+  @@schema("public")
+}
+
+model Post {
+  id               Int     @id @default(autoincrement())
+  profileAccountId Int
+  profile          Profile @relation(fields: [profileAccountId], references: [accountId])
+
+  @@schema("public")
+}
+
+// Fields DMMF leaves out: an Unsupported column, and an index over it.
+model Doc {
+  id     Int                      @id @default(autoincrement())
+  title  String
+  search Unsupported("tsvector")?
+
+  @@index([search], type: Gin)
+  @@index([title])
+  @@schema("public")
+}
+
+// An oid key with autoincrement, which Prisma Migrate gives no sequence.
+model OidKey {
+  id Int @id @default(autoincrement()) @db.Oid
+
+  @@schema("public")
+}
+
+// @updatedAt on a key column, which an entity cannot set, and on a column named like flush's
+// parameter.
+model Stamp {
+  at    DateTime @updatedAt
+  name  String
+  batch DateTime @updatedAt
+
+  @@id([at, name])
+  @@schema("public")
+}
+
+// Named like the class ColumnTypes.kt compiles into.
+enum ColumnTypesKt {
+  A
+
+  @@schema("public")
+}
+
+// Lists of temporal types without a precision.
+model ArgLess {
+  id     Int           @id @default(autoincrement())
+  kind   ColumnTypesKt @default(A)
+  stamps DateTime[]    @db.Timestamp
+  zoned  DateTime[]    @db.Timestamptz
+  clocks DateTime[]    @db.Time
+  zones  DateTime[]    @db.Timetz
+
+  @@schema("public")
+}
+
+// A view, for which Prisma Migrate creates no table.
+view MemberView {
+  id     String @unique @db.Uuid
+  handle String
+
+  @@schema("audit")
+}
+
+// Columns named like the functions a table object and an entity call.
+model Shadow {
+  id              Int      @id @default(autoincrement())
+  jsonb           Json
+  json            Json     @db.Json
+  nanoid          String   @default(nanoid())
+  pgEnum          Level?
+  listOf          String[] @default(["a"])
+  javaUUID        String   @db.Uuid
+  isWritten       DateTime @updatedAt
+  to              Int
+  from            Int
+  by              Int
+  entityId        Int
+  reference       Int
+  array           Int[]
+  integer         Int
+  text            String
+  databaseDefault String   @default(dbgenerated("'x'"))
+
+  @@schema("public")
+}

@@ -22,6 +22,7 @@ export default defineConfig({
       'bin/sea-orm': './src/bin/sea-orm.ts',
       'bin/activerecord': './src/bin/activerecord.ts',
       'bin/eloquent': './src/bin/eloquent.ts',
+      'bin/exposed': './src/bin/exposed.ts',
       'bin/er': './src/bin/er.ts',
     },
     format: 'esm',

@@ -18,6 +18,7 @@ import { ecto } from './ecto.js'
 import { efcore } from './efcore.js'
 import { effect } from './effect.js'
 import { eloquent } from './eloquent.js'
+import { exposed } from './exposed.js'
 import { gorm } from './gorm.js'
 import { kysely } from './kysely.js'
 import { pydantic } from './pydantic.js'
@@ -232,6 +233,7 @@ describe.each([
   ['effect', effect, 'Hekireki-Effect'],
   ['efcore', efcore, 'Hekireki-EFCore'],
   ['eloquent', eloquent, 'Hekireki-Eloquent'],
+  ['exposed', exposed, 'Hekireki-Exposed'],
   ['gorm', gorm, 'Hekireki-GORM'],
   ['kysely', kysely, 'Hekireki-Kysely'],
   ['pydantic', pydantic, 'Hekireki-Pydantic'],
@@ -284,12 +286,25 @@ describe.each([
   })
 })
 
-// The other five write one file per model, so their output is always a directory.
+// The other six write one file per model, so their output is always a directory.
 describe.each([
   ['activerecord', activerecord, ['post.rb', 'user.rb']],
   ['ecto', ecto, ['post.ex', 'user.ex']],
   ['efcore', efcore, ['AppDbContext.cs', 'Post.cs', 'Role.cs', 'User.cs']],
   ['eloquent', eloquent, ['Post.php', 'Role.php', 'User.php']],
+  [
+    'exposed',
+    exposed,
+    [
+      'ColumnTypes.kt',
+      'PostEntity.kt',
+      'PostTable.kt',
+      'PrismaSchema.kt',
+      'Role.kt',
+      'UserEntity.kt',
+      'UserTable.kt',
+    ],
+  ],
   ['sea-orm', seaOrm, ['mod.rs', 'post.rs', 'prelude.rs', 'role.rs', 'user.rs']],
 ])('%s', (_name, generator, files) => {
   it('writes one file per model into the output directory', async () => {
@@ -405,6 +420,50 @@ describe('generator config', () => {
     },
   )
 
+  it('defaults the Exposed package to models and reads the one that is configured', async () => {
+    const fallback = tmp()
+    const configured = tmp()
+    expect(Exit.isSuccess(await run(exposed, fallback))).toBe(true)
+    expect(Exit.isSuccess(await run(exposed, configured, { package: 'com.example.db' }))).toBe(true)
+    expect(readFileSync(path.join(fallback, 'UserTable.kt'), 'utf8')).toMatch(/^package models\n/u)
+    expect(readFileSync(path.join(configured, 'UserTable.kt'), 'utf8')).toMatch(
+      /^package com\.example\.db\n/u,
+    )
+  })
+
+  it('writes the Exposed entities unless dao is false', async () => {
+    const withDao = tmp()
+    const withoutDao = tmp()
+    expect(Exit.isSuccess(await run(exposed, withDao, { dao: 'true' }))).toBe(true)
+    expect(Exit.isSuccess(await run(exposed, withoutDao, { dao: 'false' }))).toBe(true)
+    expect(readdirSync(withDao).filter((file) => file.endsWith('Entity.kt'))).toStrictEqual([
+      'PostEntity.kt',
+      'UserEntity.kt',
+    ])
+    expect(new Set(readdirSync(withoutDao))).toStrictEqual(
+      new Set(['ColumnTypes.kt', 'PostTable.kt', 'PrismaSchema.kt', 'Role.kt', 'UserTable.kt']),
+    )
+  })
+
+  it.each([['com-example'], ['class.models'], ['1models'], ['models.'], ['com..db'], ['']])(
+    'refuses %j as a Kotlin package',
+    async (packageName) => {
+      const dir = tmp()
+      const exit = await run(exposed, dir, { package: packageName })
+      expect(failure(exit)).toContain(
+        `package for Hekireki-Exposed must be a Kotlin package such as "com.example.db": ${packageName}`,
+      )
+      expect(readdirSync(dir)).toStrictEqual([])
+    },
+  )
+
+  it.each([['yes'], ['TRUE'], ['0'], ['']])('refuses %j as the Exposed dao switch', async (dao) => {
+    const dir = tmp()
+    const exit = await run(exposed, dir, { dao })
+    expect(failure(exit)).toContain(`dao for Hekireki-Exposed must be true or false: ${dao}`)
+    expect(readdirSync(dir)).toStrictEqual([])
+  })
+
   it('names the schema in the Atlas output when schemaName is configured', async () => {
     const dir = tmp()
     expect(Exit.isSuccess(await run(atlas, dir, { schemaName: 'shop' }))).toBe(true)
@@ -442,6 +501,18 @@ describe('datasource provider', () => {
       const exit = await run(efcore, dir, {}, provider)
       expect(failure(exit)).toContain(
         `Unsupported provider for Hekireki-EFCore: ${provider}. Supported providers are postgresql.`,
+      )
+      expect(readdirSync(dir)).toStrictEqual([])
+    },
+  )
+
+  it.each(['mysql', 'sqlite', 'sqlserver', 'cockroachdb', 'mongodb'])(
+    'refuses %s for Exposed, which it maps onto PostgreSQL only',
+    async (provider) => {
+      const dir = tmp()
+      const exit = await run(exposed, dir, {}, provider)
+      expect(failure(exit)).toContain(
+        `Unsupported provider for Hekireki-Exposed: ${provider}. Supported providers are postgresql.`,
       )
       expect(readdirSync(dir)).toStrictEqual([])
     },

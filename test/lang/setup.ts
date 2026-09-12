@@ -5,14 +5,15 @@ import { join, resolve } from 'node:path'
 
 // Regenerates test/harness/* from test/prisma/schema.prisma with the built generators
 // before the language checks run. One prisma run emits every target, so
-// running a single language's file still starts from fresh output. A second run
-// covers test/prisma/efcore.prisma, the hazards particular to C# and EF Core.
+// running a single language's file still starts from fresh output. Further runs
+// cover test/prisma/efcore.prisma and test/prisma/exposed.prisma, the hazards
+// particular to C# and EF Core and to Kotlin and Exposed.
 //
 // The generated files are gitignored: the byte-for-byte golden masters live in
 // packages/hekireki/src/**/*.test.ts, and these harnesses only answer the
 // question a string comparison cannot — does the output compile and load
 // against the real GORM / sea-orm / SQLAlchemy / Pydantic / Ecto / Drizzle /
-// Kysely / Active Record / Eloquent / EF Core API.
+// Kysely / Active Record / Eloquent / EF Core / Exposed API.
 
 const LANGS = [
   'gorm',
@@ -27,6 +28,7 @@ const LANGS = [
   'eloquent',
   'atlas',
   'efcore',
+  'exposed',
 ] as const
 
 const STALE_OUTPUT = [
@@ -43,6 +45,8 @@ const STALE_OUTPUT = [
   'atlas/schema.hcl',
   'efcore/Models',
   'efcore/Edge',
+  'exposed/src/main/kotlin/models',
+  'exposed/src/main/kotlin/hekireki',
 ]
 
 export default function setup() {
@@ -78,7 +82,7 @@ export default function setup() {
     }
   }
 
-  for (const schema of ['schema.prisma', 'efcore.prisma']) {
+  for (const schema of ['schema.prisma', 'efcore.prisma', 'exposed.prisma']) {
     execFileSync(
       join(root, 'packages/hekireki/node_modules/.bin/prisma'),
       ['generate', '--schema', join(root, 'test/prisma', schema)],
