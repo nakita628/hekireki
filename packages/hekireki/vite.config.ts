@@ -3,6 +3,7 @@ import { defineConfig } from 'vite-plus'
 export default defineConfig({
   pack: {
     entry: {
+      index: './src/index.ts',
       'bin/hekireki': './src/bin/hekireki.ts',
       'bin/atlas': './src/bin/atlas.ts',
       'bin/zod': './src/bin/zod.ts',
@@ -20,6 +21,7 @@ export default defineConfig({
       'bin/kysely': './src/bin/kysely.ts',
       'bin/pydantic': './src/bin/pydantic.ts',
       'bin/sea-orm': './src/bin/sea-orm.ts',
+      'bin/seed': './src/bin/seed.ts',
       'bin/activerecord': './src/bin/activerecord.ts',
       'bin/eloquent': './src/bin/eloquent.ts',
       'bin/exposed': './src/bin/exposed.ts',
@@ -891,6 +893,7 @@ export default defineConfig({
         files: [
           'src/core/errors.ts',
           'src/format/index.ts',
+          'src/seed/errors.ts',
           'src/studio/server/errors/index.ts',
           'src/studio/server/services/runtime.ts',
         ],

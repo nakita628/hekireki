@@ -122,6 +122,13 @@ generator Hekireki-Exposed {
   package  = "com.example.models"
 }
 
+// The schema module hekireki.config.ts types its seed rules against (see `hekireki seed`):
+// generated/seed/schema.ts.
+generator Hekireki-Seed {
+  provider = "hekireki-seed"
+  output   = "generated/seed"
+}
+
 generator Hekireki-Atlas {
   provider = "hekireki-atlas"
   output   = "generated/atlas/schema.hcl"

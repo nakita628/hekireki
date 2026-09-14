@@ -70,7 +70,8 @@ packages/hekireki/src/
 ├── core/        # Prisma generator entrypoints (options → generate → emit)
 ├── bin/         # CLI shims registered as prisma generator providers
 ├── emit/        # file-writing boundary (the only place with I/O side effects)
-└── format/      # oxfmt formatting for TypeScript output
+├── format/      # oxfmt formatting for TypeScript output
+└── seed/        # `hekireki seed`: DMMF → insert plan → faker rows → SQL / database
 test/
 ├── prisma/          # the one schema every language check generates from
 ├── lang/            # per-language checks (setup.ts regenerates the harness)

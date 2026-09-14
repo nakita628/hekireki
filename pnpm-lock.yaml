@@ -51,6 +51,9 @@ importers:
       '@effect/platform-node':
         specifier: ^4.0.0-rc.112
         version: 4.0.0-rc.112(effect@4.0.0-rc.112)(redis@6.2.1)
+      '@faker-js/faker':
+        specifier: ^10.6.0
+        version: 10.6.0
       '@hono/node-server':
         specifier: ^2.0.11
         version: 2.1.1(hono@4.13.7)
@@ -253,6 +256,15 @@ importers:
       zustand:
         specifier: ^5.0.8
         version: 5.0.15(@types/react@19.2.17)(react@19.2.8)(use-sync-external-store@1.6.0(react@19.2.8))
+
+  sandbox/seed:
+    devDependencies:
+      hekireki:
+        specifier: workspace:*
+        version: link:../../packages/hekireki
+      prisma:
+        specifier: 8.1.0-dev.6
+        version: 8.1.0-dev.6(@types/react-dom@19.2.5(@types/react@19.2.17))(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2)
 
   sandbox/sqlite:
     devDependencies:
@@ -1147,6 +1159,10 @@ packages:
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
+
+  '@faker-js/faker@10.6.0':
+    resolution: {integrity: sha512-3RQHgEtvL1Frl/d1cSreo7qhJ3Gk1OdNUai/CtZ8G+wYeRQnJih3s9xJ9/kgYekPQRdwgh0HXRPqMlzWGwivIQ==}
+    engines: {node: ^20.19.0 || ^22.13.0 || ^23.5.0 || >=24.0.0, npm: '>=10'}
 
   '@formatjs/ecma402-abstract@2.3.6':
     resolution: {integrity: sha512-HJnTFeRM2kVFVr5gr5kH1XP6K0JcJtE7Lzvtr3FS/so5f1kpsqqqxy5JF+FRaO6H2qmcMfAUIox7AJteieRtVw==}
@@ -6682,6 +6698,8 @@ snapshots:
 
   '@esbuild/win32-x64@0.28.1':
     optional: true
+
+  '@faker-js/faker@10.6.0': {}
 
   '@formatjs/ecma402-abstract@2.3.6':
     dependencies:

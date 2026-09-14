@@ -18,6 +18,7 @@
     "eloquent",
     "entity-framework-core",
     "exposed",
+    "faker",
     "go",
     "gorm",
     "json-schema",
@@ -64,6 +65,7 @@
     "hekireki-kysely": "dist/bin/kysely.js",
     "hekireki-pydantic": "dist/bin/pydantic.js",
     "hekireki-sea-orm": "dist/bin/sea-orm.js",
+    "hekireki-seed": "dist/bin/seed.js",
     "hekireki-sqlalchemy": "dist/bin/sqlalchemy.js",
     "hekireki-typebox": "dist/bin/typebox.js",
     "hekireki-valibot": "dist/bin/valibot.js",
@@ -73,6 +75,15 @@
     "dist"
   ],
   "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
   "scripts": {
     "build": "vp pack && vp build -c vite.studio.config.ts",
     "check": "vp check && tsgo -p src/studio/client/tsconfig.json --noEmit",
@@ -86,6 +97,7 @@
   "dependencies": {
     "@dagrejs/dagre": "^3.1.1",
     "@effect/platform-node": "^4.0.0-rc.112",
+    "@faker-js/faker": "^10.6.0",
     "@hono/node-server": "^2.0.11",
     "@hono/zod-openapi": "^1.6.1",
     "@paralleldrive/cuid2": "^3.3.0",

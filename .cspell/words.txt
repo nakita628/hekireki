@@ -109,6 +109,7 @@ RUSTFLAGS
 Segoe
 setnull
 setop
+setval
 spawnable
 spgist
 sqlx

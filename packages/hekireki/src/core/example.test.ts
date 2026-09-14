@@ -28,6 +28,7 @@ import { gorm } from './gorm.js'
 import { kysely } from './kysely.js'
 import { pydantic } from './pydantic.js'
 import { seaOrm } from './sea-orm.js'
+import { seed } from './seed.js'
 import { sqlalchemy } from './sqlalchemy.js'
 import { typebox } from './typebox.js'
 import { valibot } from './valibot.js'
@@ -64,6 +65,7 @@ const HANDLERS: Record<
   'hekireki-kysely': kysely,
   'hekireki-pydantic': pydantic,
   'hekireki-sea-orm': seaOrm,
+  'hekireki-seed': seed,
   'hekireki-sqlalchemy': sqlalchemy,
   'hekireki-typebox': typebox,
   'hekireki-valibot': valibot,

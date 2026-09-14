@@ -211,6 +211,49 @@ describe('hekireki studio', () => {
   })
 })
 
+describe('hekireki seed', () => {
+  it('documents its flags and examples', async () => {
+    const { exit, out } = await cli(['seed', '--help'])
+    expect(Exit.isSuccess(exit)).toBe(true)
+    for (const flag of [
+      '--config',
+      '--schema',
+      '--url',
+      '--sql',
+      '--seed',
+      '--count',
+      '--locale',
+      '--reset',
+    ]) {
+      expect(out).toContain(flag)
+    }
+    expect(out).toContain('hekireki seed --sql prisma/seed.sql')
+  })
+
+  it('is listed beside studio', async () => {
+    const { out } = await cli(['--help'])
+    expect(out).toContain('seed')
+  })
+
+  it('rejects a database URL it has no driver for and a seed that is not a number', async () => {
+    const bad = await cli(['seed', '--url', 'mongodb://localhost/app'])
+    expect(Exit.isFailure(bad.exit)).toBe(true)
+    expect(bad.printed).toContain(
+      'a postgres://, postgresql://, mysql:// or file: connection string',
+    )
+    const seed = await cli(['seed', '--seed', 'many'])
+    expect(Exit.isFailure(seed.exit)).toBe(true)
+  })
+
+  it('reports a config that is not there, without starting anything', async () => {
+    const dir = tmp()
+    process.chdir(dir)
+    const { exit, printed } = await cli(['seed', '--config', 'missing.ts'])
+    expect(Exit.isFailure(exit)).toBe(true)
+    expect(printed).toContain('Config not found: missing.ts')
+  })
+})
+
 describe('resolveSchemaPath', () => {
   // Both failures carry the same sentence; only one of them also asks for the usage block.
   const resolve = (explicit: string | null) =>

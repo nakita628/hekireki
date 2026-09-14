@@ -4,14 +4,15 @@ import { Config, Console, Effect, Option, Schema, Stdio } from 'effect'
 import { CliError, Command, Flag } from 'effect/unstable/cli'
 
 import { exists } from '../file/index.js'
+import type { SeedOverrides } from '../seed/run.js'
 import { DEFAULT_PORT } from '../studio/server/constants/index.js'
 import { ServerListenError } from '../studio/server/errors/index.js'
 import type { startStudioServer } from '../studio/server/start.js'
+import { DEFAULT_SCHEMA_PATHS } from './constants.js'
+
+export { DEFAULT_SCHEMA_PATHS } from './constants.js'
 
 const COMMAND_NAME = 'hekireki'
-
-/** Where `--schema` looks when it is omitted, in order. */
-export const DEFAULT_SCHEMA_PATHS = ['prisma/schema.prisma', 'schema.prisma'] as const
 
 // The schemes Studio opens a connection for; `makeDialect` reads the dialect from the same four.
 const DATABASE_URL_SCHEMES = ['postgres', 'postgresql', 'mysql', 'file'] as const
@@ -183,10 +184,118 @@ const studio = Command.make('studio', studioFlags, runStudio).pipe(
   ]),
 )
 
+const seedFlags = {
+  config: Flag.string('config').pipe(
+    Flag.withAlias('c'),
+    Flag.withDescription(
+      'Path to hekireki.config.ts (default: hekireki.config.ts, .mts, .js or .mjs in the working directory)',
+    ),
+    Flag.withMetavar('hekireki.config.ts'),
+    Flag.optional,
+  ),
+  schema: Flag.string('schema').pipe(
+    Flag.withAlias('s'),
+    Flag.withDescription(
+      `Path to schema.prisma or a directory of .prisma files (default: \`schema\` in the config, then ${DEFAULT_SCHEMA_PATHS.join(', then ')})`,
+    ),
+    Flag.withMetavar('schema.prisma|dir'),
+    Flag.optional,
+  ),
+  url: Flag.string('url').pipe(
+    Flag.withAlias('u'),
+    Flag.withSchema(databaseUrlSchema),
+    Flag.withDescription(
+      'Database connection URL to insert into (default: `url` in the config, DATABASE_URL from the environment or .env, then datasource.url in prisma.config.ts)',
+    ),
+    Flag.withMetavar('connection-string'),
+    Flag.optional,
+  ),
+  sql: Flag.string('sql').pipe(
+    Flag.withDescription('Write the rows to this SQL file instead of inserting them'),
+    Flag.withMetavar('seed.sql'),
+    Flag.optional,
+  ),
+  seed: Flag.integer('seed').pipe(
+    Flag.withDescription(
+      'The faker seed; the same seed always gives the same rows (left out: every run differs)',
+    ),
+    Flag.withMetavar('n'),
+    Flag.optional,
+  ),
+  count: Flag.integer('count').pipe(
+    Flag.withAlias('n'),
+    Flag.withDescription(
+      'Rows for every model the config gives no rule for (left out: only the configured models are seeded)',
+    ),
+    Flag.withMetavar('rows'),
+    Flag.optional,
+  ),
+  locale: Flag.string('locale').pipe(
+    Flag.withAlias('l'),
+    Flag.withDescription(
+      "Faker locale, or a comma-separated list tried in order (left out: faker's English)",
+    ),
+    Flag.withMetavar('ja,en'),
+    Flag.optional,
+  ),
+  reset: Flag.boolean('reset').pipe(
+    Flag.withDescription('Delete every row of the seeded tables before inserting'),
+    Flag.withDefault(false),
+  ),
+}
+
+/**
+ * The seeder, imported when it runs: it pulls in faker with every locale, the Prisma schema
+ * engine and the database drivers, which `--help` must not pay for.
+ */
+function runSeedCommand(args: Command.Command.Config.Infer<typeof seedFlags>) {
+  return Effect.gen(function* () {
+    const { runSeed, seedBanner } = yield* Effect.promise(() => import('../seed/run.js'))
+    const overrides: SeedOverrides = {
+      config: Option.getOrNull(args.config),
+      schema: Option.getOrNull(args.schema),
+      url: Option.getOrNull(args.url),
+      output: Option.getOrNull(args.sql),
+      seed: Option.getOrNull(args.seed),
+      count: Option.getOrNull(args.count),
+      locale: Option.getOrNull(args.locale),
+      reset: args.reset,
+    }
+    const report = yield* runSeed(overrides, process.cwd()).pipe(
+      Effect.mapError((error) => userError(error.message)),
+    )
+    yield* Console.log(seedBanner(report))
+  })
+}
+
+const seed = Command.make('seed', seedFlags, runSeedCommand).pipe(
+  Command.withDescription(
+    'Fill the database with faker rows that follow the schema: relations, enums, unique keys and date ranges',
+  ),
+  Command.withExamples([
+    {
+      command: `${COMMAND_NAME} seed`,
+      description: 'Read hekireki.config.ts and insert into the database named by DATABASE_URL',
+    },
+    {
+      command: `${COMMAND_NAME} seed --sql prisma/seed.sql`,
+      description: 'Write the same rows as a SQL script instead of inserting them',
+    },
+    {
+      command: `${COMMAND_NAME} seed --reset --seed 7 --count 100`,
+      description: 'Empty the seeded tables first, then insert 100 rows per model from seed 7',
+    },
+    {
+      command: `${COMMAND_NAME} seed --locale ja`,
+      description: 'Japanese names, addresses and text',
+    },
+  ]),
+)
+
 /** The `hekireki` command tree; run it with {@link hekirekiCli}. */
 const cli = Command.make(COMMAND_NAME).pipe(
   Command.withDescription('⚡️ Prisma schema tools'),
-  Command.withSubcommands([studio]),
+  Command.withSubcommands([studio, seed]),
 )
 
 /**

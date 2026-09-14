@@ -1,0 +1,98 @@
+// A schema with every shape `hekireki seed` has to get right, on SQLite so nothing needs to run.
+// `pnpm setup` writes generated/seed/schema.ts for hekireki.config.ts and creates seed.db.
+
+datasource db {
+  provider = "sqlite"
+}
+
+// The schema module hekireki.config.ts is typed against.
+generator Hekireki-Seed {
+  provider = "hekireki-seed"
+  output   = "generated/seed"
+}
+
+enum Role {
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+/// UUID v7 ids, a unique email, an enum default, timestamps, and relations of every cardinality.
+model User {
+  id        String    @id @default(uuid(7))
+  email     String    @unique
+  name      String
+  role      Role      @default(VIEWER)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  profile   Profile?
+  posts     Post[]
+  comments  Comment[]
+  followers Follow[]  @relation("following")
+  following Follow[]  @relation("follower")
+}
+
+/// One-to-one: every profile gets a user of its own.
+model Profile {
+  id       String  @id @default(cuid(2))
+  userId   String  @unique
+  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bio      String?
+  website  String?
+  age      Int?
+  verified Boolean @default(false)
+}
+
+/// Autoincrement id, a required author, and an implicit many-to-many to Tag.
+model Post {
+  id        Int       @id @default(autoincrement())
+  title     String
+  body      String?
+  published Boolean   @default(false)
+  viewCount Int       @default(0)
+  authorId  String
+  author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  tags      Tag[]
+  comments  Comment[]
+  createdAt DateTime  @default(now())
+}
+
+/// Real rows in hekireki.config.ts: only `label` has to be given.
+model Tag {
+  id    Int    @id @default(autoincrement())
+  label String @unique
+  posts Post[]
+}
+
+/// An optional foreign key: some comments are anonymous.
+model Comment {
+  id        Int      @id @default(autoincrement())
+  body      String
+  postId    Int
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId  String?
+  author    User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+}
+
+/// Composite primary key over two foreign keys to the same model.
+model Follow {
+  followerId  String
+  followingId String
+  follower    User     @relation("follower", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User     @relation("following", fields: [followingId], references: [id], onDelete: Cascade)
+  since       DateTime @default(now())
+
+  @@id([followerId, followingId])
+}
+
+/// Self relation: a tree of categories.
+model Category {
+  id       Int        @id @default(autoincrement())
+  name     String
+  parentId Int?
+  parent   Category?  @relation("tree", fields: [parentId], references: [id])
+  children Category[] @relation("tree")
+
+  @@unique([parentId, name])
+}

@@ -17,7 +17,8 @@
     "test": "vp run --filter ./packages/hekireki test",
     "lang": "vp run hekireki#build && vp run --filter ./test test",
     "example": "vp run hekireki#build && vp run --filter ./example generate",
-    "studio": "vp run hekireki#build && hekireki studio --schema example/schema.prisma"
+    "studio": "vp run hekireki#build && hekireki studio --schema example/schema.prisma",
+    "seed": "vp run hekireki#build && vp run --filter ./sandbox/seed seed"
   },
   "dependencies": {
     "hekireki": "link:packages/hekireki"
