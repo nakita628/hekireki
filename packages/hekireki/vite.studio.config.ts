@@ -10,7 +10,11 @@ import type { Plugin } from 'vite-plus'
 
 import { fileSystemLayer } from './src/file/index.js'
 import { createStudioApi } from './src/studio/server/app.js'
-import { connectDatabase, createStudioState } from './src/studio/server/services/index.js'
+import {
+  connectDatabase,
+  createProjectClient,
+  createStudioState,
+} from './src/studio/server/services/index.js'
 
 const CLIENT_ROOT = path.resolve(import.meta.dirname, 'src/studio/client')
 const OUT_DIR = path.resolve(import.meta.dirname, 'dist/studio')
@@ -33,6 +37,9 @@ function studioApi(): Plugin {
         Effect.provide(
           connectDatabase({
             explicitUrl: process.env.HEKIREKI_DATABASE_URL ?? null,
+            configUrl: null,
+            configError: null,
+            schemaText: snapshot.files.map((file) => file.content).join('\n'),
             schemaProvider: snapshot.schema?.provider ?? null,
             cwd: process.cwd(),
             schemaDir: path.dirname(schemaPath),
@@ -41,7 +48,13 @@ function studioApi(): Plugin {
           fileSystemLayer,
         ),
       )
-      const api = createStudioApi(state, db)
+      const client = createProjectClient({
+        target: db.target,
+        reason: db.status.error,
+        schemaDir: path.dirname(schemaPath),
+        cwd: process.cwd(),
+      })
+      const api = createStudioApi(state, db, client)
       const listener = getRequestListener((request) => api.fetch(request))
       server.watcher.add(schemaPath)
       server.watcher.on('change', (file) => {

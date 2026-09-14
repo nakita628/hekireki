@@ -969,7 +969,7 @@ export const DialectSchema = z
   .openapi('Dialect')
 
 export const UrlSourceSchema = z
-  .enum(['flag', 'env', 'config'])
+  .enum(['flag', 'hekireki', 'prisma', 'env'])
   .openapi({ description: 'Where the database URL was found, in precedence order.' })
   .openapi('UrlSource')
 
@@ -1303,6 +1303,391 @@ export const AnalyzeBodySchema = z
     example: { sql: 'SELECT id, email FROM users WHERE id = ?' },
   })
   .openapi('AnalyzeBody')
+
+export const ClientStatusSchema = z
+  .object({
+    available: z
+      .boolean()
+      .openapi({
+        description:
+          "Whether the client is loaded and connected through the project's driver adapter",
+      }),
+    source: z
+      .string()
+      .nullable()
+      .openapi({
+        description: 'Where the client was loaded from: the generator output, or `@prisma/client`',
+      }),
+    error: z
+      .string()
+      .nullable()
+      .openapi({ description: 'Why the client could not be loaded, when it could not' }),
+    typescript: z
+      .string()
+      .nullable()
+      .openapi({
+        description:
+          "The version of the project's TypeScript the editor completes with, or null without one",
+      }),
+    typesError: z
+      .string()
+      .nullable()
+      .openapi({
+        description: "Why the editor cannot complete against the client's types, when it cannot",
+      }),
+  })
+  .brand<'ClientStatus'>()
+  .openapi({
+    required: ['available', 'source', 'error', 'typescript', 'typesError'],
+    description:
+      "Whether the project's Prisma Client can be loaded, and whether its types can be read.",
+    example: {
+      available: true,
+      source: 'generated/client',
+      error: null,
+      typescript: '5.9.3',
+      typesError: null,
+    },
+  })
+  .openapi('ClientStatus')
+
+export const ClientCallSchema = z
+  .object({
+    model: z
+      .string()
+      .openapi({ description: 'The model the delegate stands for (`prisma.user` → `User`)' }),
+    operation: z
+      .string()
+      .openapi({ description: 'The operation called on it (`findMany`, `create`, ...)' }),
+    write: z.boolean().openapi({ description: 'Whether the operation writes' }),
+    range: TextRangeSchema.openapi({ description: 'Where the call sits in the text' }),
+  })
+  .openapi({
+    required: ['model', 'operation', 'write', 'range'],
+    description: 'One model operation the query makes.',
+    example: { model: 'User', operation: 'findMany', write: false, range: { start: 0, end: 22 } },
+  })
+  .openapi('ClientCall')
+
+export const ClientDiagnosticSchema = z
+  .object({
+    message: z.string().openapi({ description: 'What is wrong' }),
+    range: TextRangeSchema.openapi({ description: 'Where' }),
+  })
+  .openapi({
+    required: ['message', 'range'],
+    description: 'A problem that keeps the query from being run.',
+    example: { message: 'Unknown model delegate "usr"', range: { start: 7, end: 10 } },
+  })
+  .openapi('ClientDiagnostic')
+
+export const ClientAnalysisSchema = z
+  .object({
+    calls: z
+      .array(ClientCallSchema)
+      .openapi({ description: 'The calls, in order (empty when the text does not parse)' }),
+    transaction: z
+      .boolean()
+      .openapi({ description: 'Whether the calls are batched in one `$transaction`' }),
+    diagnostics: z
+      .array(ClientDiagnosticSchema)
+      .openapi({ description: 'What keeps the query from being run (empty when it can be)' }),
+  })
+  .brand<'ClientAnalysis'>()
+  .openapi({
+    required: ['calls', 'transaction', 'diagnostics'],
+    description: 'What the query text says, read without running it.',
+    example: {
+      calls: [{ model: 'User', operation: 'findMany', write: false, range: { start: 0, end: 22 } }],
+      transaction: false,
+      diagnostics: [],
+    },
+  })
+  .openapi('ClientAnalysis')
+
+export const ClientQuerySchema = z
+  .string({ error: 'Query must be a string' })
+  .trim()
+  .min(1, { error: 'Query must not be empty' })
+  .brand<'ClientQuery'>()
+  .openapi({
+    description:
+      'A Prisma Client call as TypeScript would write it (`prisma.user.findMany({ take: 10 })`, or\n`prisma.$transaction([...])` over several). Only literal arguments are read: nothing in it is\nevaluated as code.',
+  })
+  .openapi('ClientQuery')
+
+export const ClientQueryBodySchema = z
+  .object({
+    query: ClientQuerySchema.openapi({ description: 'The call, as TypeScript would write it' }),
+  })
+  .openapi({
+    required: ['query'],
+    description: 'A Prisma Client call to analyze or run.',
+    example: { query: 'prisma.user.findMany({ where: { email: { contains: "ann" } }, take: 10 })' },
+  })
+  .openapi('ClientQueryBody')
+
+export const ClientCompletionItemSchema = z
+  .object({
+    label: z.string().openapi({ description: 'What is inserted, and shown' }),
+    kind: z
+      .string()
+      .openapi({
+        description: 'The TypeScript element kind (`property`, `method`, `keyword`, ...)',
+      }),
+    sortText: z.string().openapi({ description: 'The order TypeScript ranks the item in' }),
+    insertText: z
+      .string()
+      .nullable()
+      .openapi({
+        description: 'The text to insert when it differs from the label (a quoted key), else null',
+      }),
+  })
+  .openapi({
+    required: ['label', 'kind', 'sortText', 'insertText'],
+    description: 'One completion TypeScript offers at a position.',
+    example: { label: 'where', kind: 'property', sortText: '11', insertText: null },
+  })
+  .openapi('ClientCompletionItem')
+
+export const ClientCompletionsSchema = z
+  .object({
+    items: z
+      .array(ClientCompletionItemSchema)
+      .openapi({ description: 'The items, unordered; `sortText` orders them' }),
+  })
+  .brand<'ClientCompletions'>()
+  .openapi({ required: ['items'], description: 'The completions at a position.', example: {} })
+  .openapi('ClientCompletions')
+
+export const QueryOffsetSchema = z
+  .int32()
+  .min(0)
+  .brand<'QueryOffset'>()
+  .openapi({
+    description:
+      'A 0-based offset into the query text, in UTF-16 code units, as the editor counts.',
+    'x-minValue-message': 'offset must be 0 or more',
+  })
+  .openapi('QueryOffset')
+
+export const ClientPositionBodySchema = z
+  .object({
+    query: ClientQuerySchema.openapi({ description: 'The query text as typed so far' }),
+    offset: QueryOffsetSchema.openapi({ description: 'Where the cursor is' }),
+  })
+  .openapi({
+    required: ['query', 'offset'],
+    description: 'A position in a query, for completion, hovers and signature help.',
+    example: { query: 'prisma.user.findMany({ wh', offset: 25 },
+  })
+  .openapi('ClientPositionBody')
+
+export const ClientCompletionDetailSchema = z
+  .object({
+    detail: z
+      .string()
+      .nullable()
+      .openapi({ description: "The item's signature as TypeScript prints it" }),
+    documentation: z.string().nullable().openapi({ description: 'Its doc comment, as Markdown' }),
+  })
+  .brand<'ClientCompletionDetail'>()
+  .openapi({
+    required: ['detail', 'documentation'],
+    description: 'The type and the documentation of one completion.',
+    example: { detail: '(property) where?: UserWhereInput', documentation: null },
+  })
+  .openapi('ClientCompletionDetail')
+
+export const ClientCompletionDetailBodySchema = z
+  .object({
+    query: ClientQuerySchema.openapi({ description: 'The query text as typed so far' }),
+    offset: QueryOffsetSchema.openapi({ description: 'Where the cursor is' }),
+    name: z.string().openapi({ description: 'The label of the item' }),
+  })
+  .openapi({
+    required: ['query', 'offset', 'name'],
+    description: 'One completion to say more about.',
+    example: { query: 'prisma.user.findMany({ wh', offset: 25, name: 'where' },
+  })
+  .openapi('ClientCompletionDetailBody')
+
+export const ClientHoverSchema = z
+  .object({
+    contents: z
+      .string()
+      .nullable()
+      .openapi({
+        description: 'The type and documentation as Markdown, or null when nothing is there',
+      }),
+    range: TextRangeSchema.nullable().openapi({ description: 'The symbol the hover is about' }),
+  })
+  .brand<'ClientHover'>()
+  .openapi({
+    required: ['contents', 'range'],
+    description: 'What TypeScript says about the symbol at a position.',
+    example: {
+      contents: '```typescript\n(property) take?: number\n```',
+      range: { start: 22, end: 26 },
+    },
+  })
+  .openapi('ClientHover')
+
+export const ClientSignatureParameterSchema = z
+  .object({
+    label: z.string().openapi({ description: 'The parameter as TypeScript prints it' }),
+    documentation: z.string().nullable().openapi({ description: 'Its doc comment' }),
+  })
+  .openapi({
+    required: ['label', 'documentation'],
+    description: 'One parameter of a signature.',
+    example: { label: 'args?: UserFindManyArgs', documentation: null },
+  })
+  .openapi('ClientSignatureParameter')
+
+export const ClientSignatureSchema = z
+  .object({
+    label: z.string().openapi({ description: 'The whole signature' }),
+    documentation: z.string().nullable().openapi({ description: 'Its doc comment' }),
+    parameters: z
+      .array(ClientSignatureParameterSchema)
+      .openapi({ description: 'The parameters, in order' }),
+  })
+  .openapi({
+    required: ['label', 'documentation', 'parameters'],
+    description: 'One overload of the call under the cursor.',
+    example: {
+      label: 'findMany(args?: UserFindManyArgs): PrismaPromise<User[]>',
+      documentation: 'Find zero or more Users that matches the filter.',
+      parameters: [{ label: 'args?: UserFindManyArgs', documentation: null }],
+    },
+  })
+  .openapi('ClientSignature')
+
+export const ClientSignatureHelpSchema = z
+  .object({
+    signatures: z
+      .array(ClientSignatureSchema)
+      .openapi({ description: 'The overloads; empty when the cursor is not inside a call' }),
+    activeSignature: z.int32().openapi({ description: 'The overload the arguments so far match' }),
+    activeParameter: z.int32().openapi({ description: 'The parameter the cursor is on' }),
+  })
+  .brand<'ClientSignatureHelp'>()
+  .openapi({
+    required: ['signatures', 'activeSignature', 'activeParameter'],
+    description:
+      'The signatures of the call the cursor is inside, and which one and which parameter is active.',
+    example: { signatures: [], activeSignature: 0, activeParameter: 0 },
+  })
+  .openapi('ClientSignatureHelp')
+
+export const TypeSeveritySchema = z
+  .enum(['error', 'warning', 'info'])
+  .openapi({ description: 'How serious a TypeScript diagnostic is.' })
+  .openapi('TypeSeverity')
+
+export const ClientTypeDiagnosticSchema = z
+  .object({
+    message: z.string().openapi({ description: 'What is wrong' }),
+    severity: TypeSeveritySchema.openapi({ description: 'How serious it is' }),
+    range: TextRangeSchema.openapi({ description: 'Where' }),
+  })
+  .openapi({
+    required: ['message', 'severity', 'range'],
+    description: 'One problem TypeScript finds in the query.',
+    example: {
+      message: 'Object literal may only specify known properties.',
+      severity: 'error',
+      range: { start: 22, end: 26 },
+    },
+  })
+  .openapi('ClientTypeDiagnostic')
+
+export const ClientTypeDiagnosticsSchema = z
+  .object({
+    diagnostics: z
+      .array(ClientTypeDiagnosticSchema)
+      .openapi({ description: 'The problems, in order of position' }),
+  })
+  .brand<'ClientTypeDiagnostics'>()
+  .openapi({
+    required: ['diagnostics'],
+    description: "What TypeScript finds wrong with the query against the client's types.",
+    example: { diagnostics: [] },
+  })
+  .openapi('ClientTypeDiagnostics')
+
+export const ClientSqlQuerySchema = z
+  .object({
+    sql: z
+      .string()
+      .openapi({
+        description:
+          "The statement as the driver received it, from Prisma Client's own query event",
+      }),
+    formatted: z
+      .string()
+      .openapi({
+        description:
+          'The same statement laid out a clause per line for reading: only its whitespace differs',
+      }),
+    params: z
+      .array(z.union([z.string(), z.float64(), z.boolean()]).nullable())
+      .openapi({ description: 'The values bound to its placeholders, in order' }),
+    durationMs: z.float64().openapi({ description: 'How long the database took, in milliseconds' }),
+  })
+  .openapi({
+    required: ['sql', 'formatted', 'params', 'durationMs'],
+    description: 'One SQL statement the Prisma Client sent to the database.',
+    example: {
+      sql: 'SELECT `main`.`User`.`id` FROM `main`.`User` LIMIT ? OFFSET ?',
+      formatted: 'SELECT\n  `main`.`User`.`id`\nFROM `main`.`User`\nLIMIT ?\nOFFSET ?',
+      params: ['10', '0'],
+      durationMs: 0.4,
+    },
+  })
+  .openapi('ClientSqlQuery')
+
+export const ClientResultSchema = z
+  .object({
+    result: z
+      .any()
+      .openapi({
+        description:
+          'The value the call resolved to, as JSON: dates are ISO strings, bigints and decimals are\nstrings, bytes are base64. A `$transaction` resolves to the array of its results.',
+      }),
+    rowCount: z
+      .int32()
+      .nullable()
+      .openapi({ description: 'The length of the result, when it is an array' }),
+    truncated: z
+      .boolean()
+      .openapi({ description: 'Whether only the first rows of the array are in `result`' }),
+    queries: z
+      .array(ClientSqlQuerySchema)
+      .openapi({ description: 'The statements the client sent, in order' }),
+    durationMs: z.float64().openapi({ description: 'Wall time of the whole call in milliseconds' }),
+  })
+  .brand<'ClientResult'>()
+  .openapi({
+    required: ['result', 'rowCount', 'truncated', 'queries', 'durationMs'],
+    description: 'What a Prisma Client call returned, with the SQL it took.',
+    example: {
+      result: [{ id: 1, email: 'ann@example.com' }],
+      rowCount: 1,
+      truncated: false,
+      queries: [
+        {
+          sql: 'SELECT `main`.`User`.`id` FROM `main`.`User` LIMIT ? OFFSET ?',
+          formatted: 'SELECT\n  `main`.`User`.`id`\nFROM `main`.`User`\nLIMIT ?\nOFFSET ?',
+          params: ['10', '0'],
+          durationMs: 0.4,
+        },
+      ],
+      durationMs: 3.2,
+    },
+  })
+  .openapi('ClientResult')
 
 export const LspTextEditSchema = z
   .object({
@@ -2392,6 +2777,229 @@ export const postDbAnalyzeRoute = createRoute({
     500: {
       description: '500 Internal Server Error (`application/problem+json`)',
       content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+  },
+})
+
+export const getClientRoute = createRoute({
+  method: 'get',
+  path: '/client',
+  tags: ['client'],
+  description:
+    "Load the project's Prisma Client, the first time it is asked for, and say whether it could.",
+  operationId: 'readClientStatus',
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: ClientStatusSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+  },
+})
+
+export const postClientAnalyzeRoute = createRoute({
+  method: 'post',
+  path: '/client/analyze',
+  tags: ['client'],
+  description:
+    "Read the query against the schema's models, without running it: its calls and its problems.",
+  operationId: 'analyzeClientQuery',
+  request: {
+    body: { content: { 'application/json': { schema: ClientQueryBodySchema } }, required: true },
+  },
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: ClientAnalysisSchema } },
+    },
+    422: {
+      description: '422 Unprocessable Content (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ValidationProblemSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+  },
+})
+
+export const postClientCompleteRoute = createRoute({
+  method: 'post',
+  path: '/client/complete',
+  tags: ['client'],
+  description: "The completions TypeScript offers at a position, against the client's types.",
+  operationId: 'completeClientQuery',
+  request: {
+    body: { content: { 'application/json': { schema: ClientPositionBodySchema } }, required: true },
+  },
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: ClientCompletionsSchema } },
+    },
+    422: {
+      description: '422 Unprocessable Content (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ValidationProblemSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+    503: {
+      description: '503 Service Unavailable (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
+    },
+  },
+})
+
+export const postClientCompleteDetailRoute = createRoute({
+  method: 'post',
+  path: '/client/complete/detail',
+  tags: ['client'],
+  description: 'The type and documentation of one completion item.',
+  operationId: 'detailClientCompletion',
+  request: {
+    body: {
+      content: { 'application/json': { schema: ClientCompletionDetailBodySchema } },
+      required: true,
+    },
+  },
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: ClientCompletionDetailSchema } },
+    },
+    422: {
+      description: '422 Unprocessable Content (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ValidationProblemSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+    503: {
+      description: '503 Service Unavailable (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
+    },
+  },
+})
+
+export const postClientHoverRoute = createRoute({
+  method: 'post',
+  path: '/client/hover',
+  tags: ['client'],
+  description: 'What TypeScript says about the symbol at a position.',
+  operationId: 'hoverClientQuery',
+  request: {
+    body: { content: { 'application/json': { schema: ClientPositionBodySchema } }, required: true },
+  },
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: ClientHoverSchema } },
+    },
+    422: {
+      description: '422 Unprocessable Content (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ValidationProblemSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+    503: {
+      description: '503 Service Unavailable (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
+    },
+  },
+})
+
+export const postClientSignatureRoute = createRoute({
+  method: 'post',
+  path: '/client/signature',
+  tags: ['client'],
+  description: 'The signatures of the call the cursor is inside.',
+  operationId: 'signatureClientQuery',
+  request: {
+    body: { content: { 'application/json': { schema: ClientPositionBodySchema } }, required: true },
+  },
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: ClientSignatureHelpSchema } },
+    },
+    422: {
+      description: '422 Unprocessable Content (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ValidationProblemSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+    503: {
+      description: '503 Service Unavailable (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
+    },
+  },
+})
+
+export const postClientCheckRoute = createRoute({
+  method: 'post',
+  path: '/client/check',
+  tags: ['client'],
+  description: "What TypeScript finds wrong with the query, checked against the client's types.",
+  operationId: 'checkClientQuery',
+  request: {
+    body: { content: { 'application/json': { schema: ClientQueryBodySchema } }, required: true },
+  },
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: ClientTypeDiagnosticsSchema } },
+    },
+    422: {
+      description: '422 Unprocessable Content (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ValidationProblemSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+    503: {
+      description: '503 Service Unavailable (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
+    },
+  },
+})
+
+export const postClientRunRoute = createRoute({
+  method: 'post',
+  path: '/client/run',
+  tags: ['client'],
+  description:
+    "Run the query through the project's Prisma Client and return its result with the SQL it sent.",
+  operationId: 'runClientQuery',
+  request: {
+    body: { content: { 'application/json': { schema: ClientQueryBodySchema } }, required: true },
+  },
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: ClientResultSchema } },
+    },
+    422: {
+      description: '422 Unprocessable Content (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ValidationProblemSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+    503: {
+      description: '503 Service Unavailable (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
     },
   },
 })

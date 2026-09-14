@@ -49,3 +49,18 @@ export function paramKey(parameter: Parameter) {
     ? parameter.placeholder
     : `#${parameter.index}`
 }
+
+/**
+ * The parameter fields filled with values a statement was bound with, positional placeholders
+ * (`?`, `$1`) keyed by their 1-based position as the analysis numbers them. A boolean is written
+ * `1` / `0`, which a boolean parameter reads as true / false and a number one (SQLite and MySQL
+ * keep booleans as integers) as the integer the database holds.
+ */
+export function paramInputsOf(values: readonly Cell[]): Readonly<Record<string, string>> {
+  return Object.fromEntries(
+    values.map((value, index) => [
+      `#${index + 1}`,
+      value === null ? 'NULL' : typeof value === 'boolean' ? (value ? '1' : '0') : String(value),
+    ]),
+  )
+}

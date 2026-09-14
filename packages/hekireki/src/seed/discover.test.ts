@@ -269,6 +269,22 @@ describe('discoverClient', () => {
     },
   )
 
+  it('hands the PostgreSQL adapter the schema the URL names, which the pg driver would ignore', async () => {
+    const dir = tmp()
+    writeClient(dir)
+    writeAdapter(dir, '@prisma/adapter-pg', 'PrismaPg', '; this.options = arguments[1]')
+    const url = 'postgresql://postgres:pw@localhost:5432/app?schema=tenant'
+    const found = await discover(
+      dir,
+      `${SCHEMA.replace('"sqlite"', '"postgresql"')}${CLIENT_GENERATOR}`,
+      'postgresql',
+      url,
+    )
+    expect(found.reason).toBeNull()
+    const { adapter } = found.client as { adapter: { config: unknown; options: unknown } }
+    expect([adapter.config, adapter.options]).toStrictEqual([url, { schema: 'tenant' }])
+  })
+
   it('takes client.ts before the JavaScript variants, and a lone client.mjs when that is all there is', async () => {
     const dir = tmp()
     writeAdapter(dir, '@prisma/adapter-better-sqlite3', 'PrismaBetterSqlite3')

@@ -868,6 +868,513 @@ Analyze the statements against the Prisma schema's tables: data flow, lineage, r
 This operation does not require authentication
 </aside>
 
+<h1 id="hekireki-studio-api-client">client</h1>
+
+## readClientStatus
+
+<a id="opIdreadClientStatus"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/client \
+  -H 'Accept: application/json'
+```
+
+`GET /client`
+
+Load the project's Prisma Client, the first time it is asked for, and say whether it could.
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "available": true,
+  "source": "generated/client",
+  "error": null,
+  "typescript": "5.9.3",
+  "typesError": null
+}
+```
+
+<h3 id="readclientstatus-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[ClientStatus](#schemaclientstatus)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## analyzeClientQuery
+
+<a id="opIdanalyzeClientQuery"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/client/analyze \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{
+    "query": "prisma.user.findMany({ where: { email: { contains: \"ann\" } }, take: 10 })"
+  }'
+```
+
+`POST /client/analyze`
+
+Read the query against the schema's models, without running it: its calls and its problems.
+
+> Body parameter
+
+```json
+{
+  "query": "prisma.user.findMany({ where: { email: { contains: \"ann\" } }, take: 10 })"
+}
+```
+
+<h3 id="analyzeclientquery-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|
+|---|---|---|---|---|
+|body|body|[ClientQueryBody](#schemaclientquerybody)|true|none|
+|» query|body|object|true|The call, as TypeScript would write it|
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "calls": [
+    {
+      "model": "User",
+      "operation": "findMany",
+      "write": false,
+      "range": {
+        "start": 0,
+        "end": 22
+      }
+    }
+  ],
+  "transaction": false,
+  "diagnostics": []
+}
+```
+
+<h3 id="analyzeclientquery-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[ClientAnalysis](#schemaclientanalysis)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## completeClientQuery
+
+<a id="opIdcompleteClientQuery"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/client/complete \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{
+    "query": "prisma.user.findMany({ wh",
+    "offset": 25
+  }'
+```
+
+`POST /client/complete`
+
+The completions TypeScript offers at a position, against the client's types.
+
+> Body parameter
+
+```json
+{
+  "query": "prisma.user.findMany({ wh",
+  "offset": 25
+}
+```
+
+<h3 id="completeclientquery-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|
+|---|---|---|---|---|
+|body|body|[ClientPositionBody](#schemaclientpositionbody)|true|none|
+|» query|body|object|true|The query text as typed so far|
+|» offset|body|object|true|Where the cursor is|
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "items": [
+    {
+      "label": "where",
+      "kind": "property",
+      "sortText": "11",
+      "insertText": null
+    }
+  ]
+}
+```
+
+<h3 id="completeclientquery-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[ClientCompletions](#schemaclientcompletions)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## detailClientCompletion
+
+<a id="opIddetailClientCompletion"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/client/complete/detail \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{
+    "query": "prisma.user.findMany({ wh",
+    "offset": 25,
+    "name": "where"
+  }'
+```
+
+`POST /client/complete/detail`
+
+The type and documentation of one completion item.
+
+> Body parameter
+
+```json
+{
+  "query": "prisma.user.findMany({ wh",
+  "offset": 25,
+  "name": "where"
+}
+```
+
+<h3 id="detailclientcompletion-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|
+|---|---|---|---|---|
+|body|body|[ClientCompletionDetailBody](#schemaclientcompletiondetailbody)|true|none|
+|» query|body|object|true|The query text as typed so far|
+|» offset|body|object|true|Where the cursor is|
+|» name|body|string|true|The label of the item|
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "detail": "(property) where?: UserWhereInput",
+  "documentation": null
+}
+```
+
+<h3 id="detailclientcompletion-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[ClientCompletionDetail](#schemaclientcompletiondetail)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## hoverClientQuery
+
+<a id="opIdhoverClientQuery"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/client/hover \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{
+    "query": "prisma.user.findMany({ wh",
+    "offset": 25
+  }'
+```
+
+`POST /client/hover`
+
+What TypeScript says about the symbol at a position.
+
+> Body parameter
+
+```json
+{
+  "query": "prisma.user.findMany({ wh",
+  "offset": 25
+}
+```
+
+<h3 id="hoverclientquery-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|
+|---|---|---|---|---|
+|body|body|[ClientPositionBody](#schemaclientpositionbody)|true|none|
+|» query|body|object|true|The query text as typed so far|
+|» offset|body|object|true|Where the cursor is|
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "contents": "```typescript\n(property) take?: number\n```",
+  "range": {
+    "start": 22,
+    "end": 26
+  }
+}
+```
+
+<h3 id="hoverclientquery-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[ClientHover](#schemaclienthover)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## signatureClientQuery
+
+<a id="opIdsignatureClientQuery"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/client/signature \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{
+    "query": "prisma.user.findMany({ wh",
+    "offset": 25
+  }'
+```
+
+`POST /client/signature`
+
+The signatures of the call the cursor is inside.
+
+> Body parameter
+
+```json
+{
+  "query": "prisma.user.findMany({ wh",
+  "offset": 25
+}
+```
+
+<h3 id="signatureclientquery-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|
+|---|---|---|---|---|
+|body|body|[ClientPositionBody](#schemaclientpositionbody)|true|none|
+|» query|body|object|true|The query text as typed so far|
+|» offset|body|object|true|Where the cursor is|
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "signatures": [],
+  "activeSignature": 0,
+  "activeParameter": 0
+}
+```
+
+<h3 id="signatureclientquery-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[ClientSignatureHelp](#schemaclientsignaturehelp)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## checkClientQuery
+
+<a id="opIdcheckClientQuery"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/client/check \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{
+    "query": "prisma.user.findMany({ where: { email: { contains: \"ann\" } }, take: 10 })"
+  }'
+```
+
+`POST /client/check`
+
+What TypeScript finds wrong with the query, checked against the client's types.
+
+> Body parameter
+
+```json
+{
+  "query": "prisma.user.findMany({ where: { email: { contains: \"ann\" } }, take: 10 })"
+}
+```
+
+<h3 id="checkclientquery-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|
+|---|---|---|---|---|
+|body|body|[ClientQueryBody](#schemaclientquerybody)|true|none|
+|» query|body|object|true|The call, as TypeScript would write it|
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "diagnostics": []
+}
+```
+
+<h3 id="checkclientquery-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[ClientTypeDiagnostics](#schemaclienttypediagnostics)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## runClientQuery
+
+<a id="opIdrunClientQuery"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/client/run \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{
+    "query": "prisma.user.findMany({ where: { email: { contains: \"ann\" } }, take: 10 })"
+  }'
+```
+
+`POST /client/run`
+
+Run the query through the project's Prisma Client and return its result with the SQL it sent.
+
+> Body parameter
+
+```json
+{
+  "query": "prisma.user.findMany({ where: { email: { contains: \"ann\" } }, take: 10 })"
+}
+```
+
+<h3 id="runclientquery-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|
+|---|---|---|---|---|
+|body|body|[ClientQueryBody](#schemaclientquerybody)|true|none|
+|» query|body|object|true|The call, as TypeScript would write it|
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "result": [
+    {
+      "id": 1,
+      "email": "ann@example.com"
+    }
+  ],
+  "rowCount": 1,
+  "truncated": false,
+  "queries": [
+    {
+      "sql": "SELECT `main`.`User`.`id` FROM `main`.`User` LIMIT ? OFFSET ?",
+      "formatted": "SELECT\n  `main`.`User`.`id`\nFROM `main`.`User`\nLIMIT ?\nOFFSET ?",
+      "params": [
+        "10",
+        "0"
+      ],
+      "durationMs": 0.4
+    }
+  ],
+  "durationMs": 3.2
+}
+```
+
+<h3 id="runclientquery-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[ClientResult](#schemaclientresult)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
 <h1 id="hekireki-studio-api-prisma">prisma</h1>
 
 ## formatSchemaText
@@ -3220,6 +3727,498 @@ This operation does not require authentication
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |sql|object|true|none|The statements|
+
+<h2 id="tocS_ClientStatus">ClientStatus</h2>
+<!-- backwards compatibility -->
+<a id="schemaclientstatus"></a>
+<a id="schema_ClientStatus"></a>
+<a id="tocSclientstatus"></a>
+<a id="tocsclientstatus"></a>
+
+```json
+{
+  "available": true,
+  "source": "generated/client",
+  "error": null,
+  "typescript": "5.9.3",
+  "typesError": null
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|available|boolean|true|none|Whether the client is loaded and connected through the project's driver adapter|
+|source|string|true|none|Where the client was loaded from: the generator output, or `@prisma/client`|
+|error|string|true|none|Why the client could not be loaded, when it could not|
+|typescript|string|true|none|The version of the project's TypeScript the editor completes with, or null without one|
+|typesError|string|true|none|Why the editor cannot complete against the client's types, when it cannot|
+
+<h2 id="tocS_ClientCall">ClientCall</h2>
+<!-- backwards compatibility -->
+<a id="schemaclientcall"></a>
+<a id="schema_ClientCall"></a>
+<a id="tocSclientcall"></a>
+<a id="tocsclientcall"></a>
+
+```json
+{
+  "model": "User",
+  "operation": "findMany",
+  "write": false,
+  "range": {
+    "start": 0,
+    "end": 22
+  }
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|model|string|true|none|The model the delegate stands for (`prisma.user` → `User`)|
+|operation|string|true|none|The operation called on it (`findMany`, `create`, ...)|
+|write|boolean|true|none|Whether the operation writes|
+|range|object|true|none|Where the call sits in the text|
+
+<h2 id="tocS_ClientDiagnostic">ClientDiagnostic</h2>
+<!-- backwards compatibility -->
+<a id="schemaclientdiagnostic"></a>
+<a id="schema_ClientDiagnostic"></a>
+<a id="tocSclientdiagnostic"></a>
+<a id="tocsclientdiagnostic"></a>
+
+```json
+{
+  "message": "Unknown model delegate \"usr\"",
+  "range": {
+    "start": 7,
+    "end": 10
+  }
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|message|string|true|none|What is wrong|
+|range|object|true|none|Where|
+
+<h2 id="tocS_ClientAnalysis">ClientAnalysis</h2>
+<!-- backwards compatibility -->
+<a id="schemaclientanalysis"></a>
+<a id="schema_ClientAnalysis"></a>
+<a id="tocSclientanalysis"></a>
+<a id="tocsclientanalysis"></a>
+
+```json
+{
+  "calls": [
+    {
+      "model": "User",
+      "operation": "findMany",
+      "write": false,
+      "range": {
+        "start": 0,
+        "end": 22
+      }
+    }
+  ],
+  "transaction": false,
+  "diagnostics": []
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|calls|[[ClientCall](#schemaclientcall)]|true|none|The calls, in order (empty when the text does not parse)|
+|transaction|boolean|true|none|Whether the calls are batched in one `$transaction`|
+|diagnostics|[[ClientDiagnostic](#schemaclientdiagnostic)]|true|none|What keeps the query from being run (empty when it can be)|
+
+<h2 id="tocS_clientQuery">clientQuery</h2>
+<!-- backwards compatibility -->
+<a id="schemaclientquery"></a>
+<a id="schema_clientQuery"></a>
+<a id="tocSclientquery"></a>
+<a id="tocsclientquery"></a>
+
+```json
+"string"
+```
+
+<h2 id="tocS_ClientQueryBody">ClientQueryBody</h2>
+<!-- backwards compatibility -->
+<a id="schemaclientquerybody"></a>
+<a id="schema_ClientQueryBody"></a>
+<a id="tocSclientquerybody"></a>
+<a id="tocsclientquerybody"></a>
+
+```json
+{
+  "query": "prisma.user.findMany({ where: { email: { contains: \"ann\" } }, take: 10 })"
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|query|object|true|none|The call, as TypeScript would write it|
+
+<h2 id="tocS_ClientCompletionItem">ClientCompletionItem</h2>
+<!-- backwards compatibility -->
+<a id="schemaclientcompletionitem"></a>
+<a id="schema_ClientCompletionItem"></a>
+<a id="tocSclientcompletionitem"></a>
+<a id="tocsclientcompletionitem"></a>
+
+```json
+{
+  "label": "where",
+  "kind": "property",
+  "sortText": "11",
+  "insertText": null
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|label|string|true|none|What is inserted, and shown|
+|kind|string|true|none|The TypeScript element kind (`property`, `method`, `keyword`, ...)|
+|sortText|string|true|none|The order TypeScript ranks the item in|
+|insertText|string|true|none|The text to insert when it differs from the label (a quoted key), else null|
+
+<h2 id="tocS_ClientCompletions">ClientCompletions</h2>
+<!-- backwards compatibility -->
+<a id="schemaclientcompletions"></a>
+<a id="schema_ClientCompletions"></a>
+<a id="tocSclientcompletions"></a>
+<a id="tocsclientcompletions"></a>
+
+```json
+{
+  "items": [
+    {
+      "label": "where",
+      "kind": "property",
+      "sortText": "11",
+      "insertText": null
+    }
+  ]
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|items|[[ClientCompletionItem](#schemaclientcompletionitem)]|true|none|The items, unordered; `sortText` orders them|
+
+<h2 id="tocS_queryOffset">queryOffset</h2>
+<!-- backwards compatibility -->
+<a id="schemaqueryoffset"></a>
+<a id="schema_queryOffset"></a>
+<a id="tocSqueryoffset"></a>
+<a id="tocsqueryoffset"></a>
+
+```json
+0
+```
+
+<h2 id="tocS_ClientPositionBody">ClientPositionBody</h2>
+<!-- backwards compatibility -->
+<a id="schemaclientpositionbody"></a>
+<a id="schema_ClientPositionBody"></a>
+<a id="tocSclientpositionbody"></a>
+<a id="tocsclientpositionbody"></a>
+
+```json
+{
+  "query": "prisma.user.findMany({ wh",
+  "offset": 25
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|query|object|true|none|The query text as typed so far|
+|offset|object|true|none|Where the cursor is|
+
+<h2 id="tocS_ClientCompletionDetail">ClientCompletionDetail</h2>
+<!-- backwards compatibility -->
+<a id="schemaclientcompletiondetail"></a>
+<a id="schema_ClientCompletionDetail"></a>
+<a id="tocSclientcompletiondetail"></a>
+<a id="tocsclientcompletiondetail"></a>
+
+```json
+{
+  "detail": "(property) where?: UserWhereInput",
+  "documentation": null
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|detail|string|true|none|The item's signature as TypeScript prints it|
+|documentation|string|true|none|Its doc comment, as Markdown|
+
+<h2 id="tocS_ClientCompletionDetailBody">ClientCompletionDetailBody</h2>
+<!-- backwards compatibility -->
+<a id="schemaclientcompletiondetailbody"></a>
+<a id="schema_ClientCompletionDetailBody"></a>
+<a id="tocSclientcompletiondetailbody"></a>
+<a id="tocsclientcompletiondetailbody"></a>
+
+```json
+{
+  "query": "prisma.user.findMany({ wh",
+  "offset": 25,
+  "name": "where"
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|query|object|true|none|The query text as typed so far|
+|offset|object|true|none|Where the cursor is|
+|name|string|true|none|The label of the item|
+
+<h2 id="tocS_ClientHover">ClientHover</h2>
+<!-- backwards compatibility -->
+<a id="schemaclienthover"></a>
+<a id="schema_ClientHover"></a>
+<a id="tocSclienthover"></a>
+<a id="tocsclienthover"></a>
+
+```json
+{
+  "contents": "```typescript\n(property) take?: number\n```",
+  "range": {
+    "start": 22,
+    "end": 26
+  }
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|contents|string|true|none|The type and documentation as Markdown, or null when nothing is there|
+|range|object|true|none|The symbol the hover is about|
+
+<h2 id="tocS_ClientSignatureParameter">ClientSignatureParameter</h2>
+<!-- backwards compatibility -->
+<a id="schemaclientsignatureparameter"></a>
+<a id="schema_ClientSignatureParameter"></a>
+<a id="tocSclientsignatureparameter"></a>
+<a id="tocsclientsignatureparameter"></a>
+
+```json
+{
+  "label": "args?: UserFindManyArgs",
+  "documentation": null
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|label|string|true|none|The parameter as TypeScript prints it|
+|documentation|string|true|none|Its doc comment|
+
+<h2 id="tocS_ClientSignature">ClientSignature</h2>
+<!-- backwards compatibility -->
+<a id="schemaclientsignature"></a>
+<a id="schema_ClientSignature"></a>
+<a id="tocSclientsignature"></a>
+<a id="tocsclientsignature"></a>
+
+```json
+{
+  "label": "findMany(args?: UserFindManyArgs): PrismaPromise<User[]>",
+  "documentation": "Find zero or more Users that matches the filter.",
+  "parameters": [
+    {
+      "label": "args?: UserFindManyArgs",
+      "documentation": null
+    }
+  ]
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|label|string|true|none|The whole signature|
+|documentation|string|true|none|Its doc comment|
+|parameters|[[ClientSignatureParameter](#schemaclientsignatureparameter)]|true|none|The parameters, in order|
+
+<h2 id="tocS_ClientSignatureHelp">ClientSignatureHelp</h2>
+<!-- backwards compatibility -->
+<a id="schemaclientsignaturehelp"></a>
+<a id="schema_ClientSignatureHelp"></a>
+<a id="tocSclientsignaturehelp"></a>
+<a id="tocsclientsignaturehelp"></a>
+
+```json
+{
+  "signatures": [],
+  "activeSignature": 0,
+  "activeParameter": 0
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|signatures|[[ClientSignature](#schemaclientsignature)]|true|none|The overloads; empty when the cursor is not inside a call|
+|activeSignature|integer(int32)|true|none|The overload the arguments so far match|
+|activeParameter|integer(int32)|true|none|The parameter the cursor is on|
+
+<h2 id="tocS_TypeSeverity">TypeSeverity</h2>
+<!-- backwards compatibility -->
+<a id="schematypeseverity"></a>
+<a id="schema_TypeSeverity"></a>
+<a id="tocStypeseverity"></a>
+<a id="tocstypeseverity"></a>
+
+```json
+"error"
+```
+
+<h2 id="tocS_ClientTypeDiagnostic">ClientTypeDiagnostic</h2>
+<!-- backwards compatibility -->
+<a id="schemaclienttypediagnostic"></a>
+<a id="schema_ClientTypeDiagnostic"></a>
+<a id="tocSclienttypediagnostic"></a>
+<a id="tocsclienttypediagnostic"></a>
+
+```json
+{
+  "message": "Object literal may only specify known properties.",
+  "severity": "error",
+  "range": {
+    "start": 22,
+    "end": 26
+  }
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|message|string|true|none|What is wrong|
+|severity|object|true|none|How serious it is|
+|range|object|true|none|Where|
+
+<h2 id="tocS_ClientTypeDiagnostics">ClientTypeDiagnostics</h2>
+<!-- backwards compatibility -->
+<a id="schemaclienttypediagnostics"></a>
+<a id="schema_ClientTypeDiagnostics"></a>
+<a id="tocSclienttypediagnostics"></a>
+<a id="tocsclienttypediagnostics"></a>
+
+```json
+{
+  "diagnostics": []
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|diagnostics|[[ClientTypeDiagnostic](#schemaclienttypediagnostic)]|true|none|The problems, in order of position|
+
+<h2 id="tocS_ClientSqlQuery">ClientSqlQuery</h2>
+<!-- backwards compatibility -->
+<a id="schemaclientsqlquery"></a>
+<a id="schema_ClientSqlQuery"></a>
+<a id="tocSclientsqlquery"></a>
+<a id="tocsclientsqlquery"></a>
+
+```json
+{
+  "sql": "SELECT `main`.`User`.`id` FROM `main`.`User` LIMIT ? OFFSET ?",
+  "formatted": "SELECT\n  `main`.`User`.`id`\nFROM `main`.`User`\nLIMIT ?\nOFFSET ?",
+  "params": [
+    "10",
+    "0"
+  ],
+  "durationMs": 0.4
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|sql|string|true|none|The statement as the driver received it, from Prisma Client's own query event|
+|formatted|string|true|none|The same statement laid out a clause per line for reading: only its whitespace differs|
+|params|[object]|true|none|The values bound to its placeholders, in order|
+|durationMs|number(double)|true|none|How long the database took, in milliseconds|
+
+<h2 id="tocS_ClientResult">ClientResult</h2>
+<!-- backwards compatibility -->
+<a id="schemaclientresult"></a>
+<a id="schema_ClientResult"></a>
+<a id="tocSclientresult"></a>
+<a id="tocsclientresult"></a>
+
+```json
+{
+  "result": [
+    {
+      "id": 1,
+      "email": "ann@example.com"
+    }
+  ],
+  "rowCount": 1,
+  "truncated": false,
+  "queries": [
+    {
+      "sql": "SELECT `main`.`User`.`id` FROM `main`.`User` LIMIT ? OFFSET ?",
+      "formatted": "SELECT\n  `main`.`User`.`id`\nFROM `main`.`User`\nLIMIT ?\nOFFSET ?",
+      "params": [
+        "10",
+        "0"
+      ],
+      "durationMs": 0.4
+    }
+  ],
+  "durationMs": 3.2
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|result|object|true|none|The value the call resolved to, as JSON: dates are ISO strings, bigints and decimals are
+strings, bytes are base64. A `$transaction` resolves to the array of its results.|
+|rowCount|integer(int32)|true|none|The length of the result, when it is an array|
+|truncated|boolean|true|none|Whether only the first rows of the array are in `result`|
+|queries|[[ClientSqlQuery](#schemaclientsqlquery)]|true|none|The statements the client sent, in order|
+|durationMs|number(double)|true|none|Wall time of the whole call in milliseconds|
 
 <h2 id="tocS_LspTextEdit">LspTextEdit</h2>
 <!-- backwards compatibility -->

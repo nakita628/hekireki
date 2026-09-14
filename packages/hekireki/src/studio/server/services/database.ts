@@ -345,6 +345,8 @@ export function disconnectedDatabase(reason: string | null = null): {
     readonly error: string | null
   }
   readonly driver: Effect.Effect<Driver, DatabaseUnavailableError>
+  /** The URL as found (password included) and its dialect, for a client that dials on its own. */
+  readonly target: { readonly url: string; readonly dialect: Driver['dialect'] } | null
   readonly close: Effect.Effect<void>
 } {
   return {
@@ -352,6 +354,7 @@ export function disconnectedDatabase(reason: string | null = null): {
     driver: Effect.fail(
       new DatabaseUnavailableError({ reason: reason ?? 'No database connected.' }),
     ),
+    target: null,
     close: Effect.void,
   }
 }
@@ -420,6 +423,7 @@ export function connectDatabase(options: z.infer<typeof ConnectDatabaseInput>) {
     return {
       status: { connected: true, dialect, url, source: found.source, error: null },
       driver: Effect.succeed(driver),
+      target: { url: found.url, dialect },
       close: driver.close,
     }
   }).pipe(

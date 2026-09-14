@@ -74,6 +74,24 @@ scalar search extends string;
 @extension("x-brand", "Sql")
 scalar sql extends string;
 
+/**
+ * A Prisma Client call as TypeScript would write it (`prisma.user.findMany({ take: 10 })`, or
+ * `prisma.$transaction([...])` over several). Only literal arguments are read: nothing in it is
+ * evaluated as code.
+ */
+@minLength(1)
+@extension("x-trim", true)
+@extension("x-error-message", "Query must be a string")
+@extension("x-minLength-message", "Query must not be empty")
+@extension("x-brand", "ClientQuery")
+scalar clientQuery extends string;
+
+/** A 0-based offset into the query text, in UTF-16 code units, as the editor counts. */
+@minValue(0)
+@extension("x-minValue-message", "offset must be 0 or more")
+@extension("x-brand", "QueryOffset")
+scalar queryOffset extends int32;
+
 /** A 0-based line number in the editor buffer. */
 @minValue(0)
 @extension("x-minValue-message", "line must be 0 or more")
@@ -107,11 +125,14 @@ union UrlSource {
   /** The `--url` flag of `hekireki studio` */
   flag: "flag",
 
+  /** `url` in `hekireki.config.ts` */
+  hekireki: "hekireki",
+
+  /** `datasource.url` in `prisma.config.ts` or the schema, or the variable it names */
+  prisma: "prisma",
+
   /** `DATABASE_URL` in the environment or `.env` */
   env: "env",
-
-  /** `datasource.url` in `prisma.config.ts` */
-  config: "config",
 }
 
 /** What a field holds, as Prisma classifies it. */
@@ -1100,6 +1121,282 @@ model Plan {
 }
 
 // ---------------------------------------------------------------------------
+// Prisma Client
+// ---------------------------------------------------------------------------
+
+/** Whether the project's Prisma Client can be loaded, and whether its types can be read. */
+@example(#{
+  available: true,
+  source: "generated/client",
+  error: null,
+  typescript: "5.9.3",
+  typesError: null,
+})
+@extension("x-brand", "ClientStatus")
+model ClientStatus {
+  /** Whether the client is loaded and connected through the project's driver adapter */
+  available: boolean;
+
+  /** Where the client was loaded from: the generator output, or `@prisma/client` */
+  source: string | null;
+
+  /** Why the client could not be loaded, when it could not */
+  error: string | null;
+
+  /** The version of the project's TypeScript the editor completes with, or null without one */
+  typescript: string | null;
+
+  /** Why the editor cannot complete against the client's types, when it cannot */
+  typesError: string | null;
+}
+
+/** A position in a query, for completion, hovers and signature help. */
+@example(#{ query: "prisma.user.findMany({ wh", offset: 25 })
+model ClientPositionBody {
+  /** The query text as typed so far */
+  query: clientQuery;
+
+  /** Where the cursor is */
+  offset: queryOffset;
+}
+
+/** One completion TypeScript offers at a position. */
+@example(#{ label: "where", kind: "property", sortText: "11", insertText: null })
+model ClientCompletionItem {
+  /** What is inserted, and shown */
+  label: string;
+
+  /** The TypeScript element kind (`property`, `method`, `keyword`, ...) */
+  kind: string;
+
+  /** The order TypeScript ranks the item in */
+  sortText: string;
+
+  /** The text to insert when it differs from the label (a quoted key), else null */
+  insertText: string | null;
+}
+
+/** The completions at a position. */
+@example(#{ items: #[#{ label: "where", kind: "property", sortText: "11", insertText: null }] })
+@extension("x-brand", "ClientCompletions")
+model ClientCompletions {
+  /** The items, unordered; `sortText` orders them */
+  items: ClientCompletionItem[];
+}
+
+/** One completion to say more about. */
+@example(#{ query: "prisma.user.findMany({ wh", offset: 25, name: "where" })
+model ClientCompletionDetailBody {
+  /** The query text as typed so far */
+  query: clientQuery;
+
+  /** Where the cursor is */
+  offset: queryOffset;
+
+  /** The label of the item */
+  name: string;
+}
+
+/** The type and the documentation of one completion. */
+@example(#{ detail: "(property) where?: UserWhereInput", documentation: null })
+@extension("x-brand", "ClientCompletionDetail")
+model ClientCompletionDetail {
+  /** The item's signature as TypeScript prints it */
+  detail: string | null;
+
+  /** Its doc comment, as Markdown */
+  documentation: string | null;
+}
+
+/** What TypeScript says about the symbol at a position. */
+@example(#{ contents: "```typescript\n(property) take?: number\n```", range: #{ start: 22, end: 26 } })
+@extension("x-brand", "ClientHover")
+model ClientHover {
+  /** The type and documentation as Markdown, or null when nothing is there */
+  contents: string | null;
+
+  /** The symbol the hover is about */
+  range: TextRange | null;
+}
+
+/** One parameter of a signature. */
+@example(#{ label: "args?: UserFindManyArgs", documentation: null })
+model ClientSignatureParameter {
+  /** The parameter as TypeScript prints it */
+  label: string;
+
+  /** Its doc comment */
+  documentation: string | null;
+}
+
+/** One overload of the call under the cursor. */
+@example(#{
+  label: "findMany(args?: UserFindManyArgs): PrismaPromise<User[]>",
+  documentation: "Find zero or more Users that matches the filter.",
+  parameters: #[#{ label: "args?: UserFindManyArgs", documentation: null }],
+})
+model ClientSignature {
+  /** The whole signature */
+  label: string;
+
+  /** Its doc comment */
+  documentation: string | null;
+
+  /** The parameters, in order */
+  parameters: ClientSignatureParameter[];
+}
+
+/** The signatures of the call the cursor is inside, and which one and which parameter is active. */
+@example(#{ signatures: #[], activeSignature: 0, activeParameter: 0 })
+@extension("x-brand", "ClientSignatureHelp")
+model ClientSignatureHelp {
+  /** The overloads; empty when the cursor is not inside a call */
+  signatures: ClientSignature[];
+
+  /** The overload the arguments so far match */
+  activeSignature: int32;
+
+  /** The parameter the cursor is on */
+  activeParameter: int32;
+}
+
+/** How serious a TypeScript diagnostic is. */
+union TypeSeverity {
+  error: "error",
+  warning: "warning",
+  info: "info",
+}
+
+/** One problem TypeScript finds in the query. */
+@example(#{ message: "Object literal may only specify known properties.", severity: "error", range: #{ start: 22, end: 26 } })
+model ClientTypeDiagnostic {
+  /** What is wrong */
+  message: string;
+
+  /** How serious it is */
+  severity: TypeSeverity;
+
+  /** Where */
+  range: TextRange;
+}
+
+/** What TypeScript finds wrong with the query against the client's types. */
+@example(#{ diagnostics: #[] })
+@extension("x-brand", "ClientTypeDiagnostics")
+model ClientTypeDiagnostics {
+  /** The problems, in order of position */
+  diagnostics: ClientTypeDiagnostic[];
+}
+
+/** A Prisma Client call to analyze or run. */
+@example(#{ query: "prisma.user.findMany({ where: { email: { contains: \"ann\" } }, take: 10 })" })
+model ClientQueryBody {
+  /** The call, as TypeScript would write it */
+  query: clientQuery;
+}
+
+/** One model operation the query makes. */
+@example(#{ `model`: "User", operation: "findMany", write: false, range: #{ start: 0, end: 22 } })
+model ClientCall {
+  /** The model the delegate stands for (`prisma.user` → `User`) */
+  `model`: string;
+
+  /** The operation called on it (`findMany`, `create`, ...) */
+  operation: string;
+
+  /** Whether the operation writes */
+  write: boolean;
+
+  /** Where the call sits in the text */
+  range: TextRange;
+}
+
+/** A problem that keeps the query from being run. */
+@example(#{ message: "Unknown model delegate \"usr\"", range: #{ start: 7, end: 10 } })
+model ClientDiagnostic {
+  /** What is wrong */
+  message: string;
+
+  /** Where */
+  range: TextRange;
+}
+
+/** What the query text says, read without running it. */
+@example(#{
+  calls: #[#{ `model`: "User", operation: "findMany", write: false, range: #{ start: 0, end: 22 } }],
+  transaction: false,
+  diagnostics: #[],
+})
+@extension("x-brand", "ClientAnalysis")
+model ClientAnalysis {
+  /** The calls, in order (empty when the text does not parse) */
+  calls: ClientCall[];
+
+  /** Whether the calls are batched in one `$transaction` */
+  transaction: boolean;
+
+  /** What keeps the query from being run (empty when it can be) */
+  diagnostics: ClientDiagnostic[];
+}
+
+/** One SQL statement the Prisma Client sent to the database. */
+@example(#{
+  sql: "SELECT `main`.`User`.`id` FROM `main`.`User` LIMIT ? OFFSET ?",
+  formatted: "SELECT\n  `main`.`User`.`id`\nFROM `main`.`User`\nLIMIT ?\nOFFSET ?",
+  params: #["10", "0"],
+  durationMs: 0.4,
+})
+model ClientSqlQuery {
+  /** The statement as the driver received it, from Prisma Client's own query event */
+  sql: string;
+
+  /** The same statement laid out a clause per line for reading: only its whitespace differs */
+  formatted: string;
+
+  /** The values bound to its placeholders, in order */
+  params: (string | float64 | boolean | null)[];
+
+  /** How long the database took, in milliseconds */
+  durationMs: float64;
+}
+
+/** What a Prisma Client call returned, with the SQL it took. */
+@example(#{
+  result: #[#{ id: 1, email: "ann@example.com" }],
+  rowCount: 1,
+  truncated: false,
+  queries: #[
+    #{
+      sql: "SELECT `main`.`User`.`id` FROM `main`.`User` LIMIT ? OFFSET ?",
+      formatted: "SELECT\n  `main`.`User`.`id`\nFROM `main`.`User`\nLIMIT ?\nOFFSET ?",
+      params: #["10", "0"],
+      durationMs: 0.4,
+    }
+  ],
+  durationMs: 3.2,
+})
+@extension("x-brand", "ClientResult")
+model ClientResult {
+  /**
+   * The value the call resolved to, as JSON: dates are ISO strings, bigints and decimals are
+   * strings, bytes are base64. A `$transaction` resolves to the array of its results.
+   */
+  result: unknown;
+
+  /** The length of the result, when it is an array */
+  rowCount: int32 | null;
+
+  /** Whether only the first rows of the array are in `result` */
+  truncated: boolean;
+
+  /** The statements the client sent, in order */
+  queries: ClientSqlQuery[];
+
+  /** Wall time of the whole call in milliseconds */
+  durationMs: float64;
+}
+
+// ---------------------------------------------------------------------------
 // Prisma language server
 // ---------------------------------------------------------------------------
 //
@@ -1961,6 +2258,84 @@ namespace DbRoutes {
   op analyze(@body body: AnalyzeBody):
     | Analysis
     | ValidationProblemResponse
+    | InternalServerProblemResponse;
+}
+
+@route("/client")
+@tag("client")
+namespace ClientRoutes {
+  /** Load the project's Prisma Client, the first time it is asked for, and say whether it could. */
+  @get
+  @operationId("readClientStatus")
+  op status(): ClientStatus | InternalServerProblemResponse;
+
+  /** Read the query against the schema's models, without running it: its calls and its problems. */
+  @post
+  @route("/analyze")
+  @operationId("analyzeClientQuery")
+  op analyze(@body body: ClientQueryBody):
+    | ClientAnalysis
+    | ValidationProblemResponse
+    | InternalServerProblemResponse;
+
+  /** The completions TypeScript offers at a position, against the client's types. */
+  @post
+  @route("/complete")
+  @operationId("completeClientQuery")
+  op complete(@body body: ClientPositionBody):
+    | ClientCompletions
+    | ValidationProblemResponse
+    | ServiceUnavailableProblemResponse
+    | InternalServerProblemResponse;
+
+  /** The type and documentation of one completion item. */
+  @post
+  @route("/complete/detail")
+  @operationId("detailClientCompletion")
+  op completeDetail(@body body: ClientCompletionDetailBody):
+    | ClientCompletionDetail
+    | ValidationProblemResponse
+    | ServiceUnavailableProblemResponse
+    | InternalServerProblemResponse;
+
+  /** What TypeScript says about the symbol at a position. */
+  @post
+  @route("/hover")
+  @operationId("hoverClientQuery")
+  op hover(@body body: ClientPositionBody):
+    | ClientHover
+    | ValidationProblemResponse
+    | ServiceUnavailableProblemResponse
+    | InternalServerProblemResponse;
+
+  /** The signatures of the call the cursor is inside. */
+  @post
+  @route("/signature")
+  @operationId("signatureClientQuery")
+  op signature(@body body: ClientPositionBody):
+    | ClientSignatureHelp
+    | ValidationProblemResponse
+    | ServiceUnavailableProblemResponse
+    | InternalServerProblemResponse;
+
+  /** What TypeScript finds wrong with the query, checked against the client's types. */
+  @post
+  @route("/check")
+  @operationId("checkClientQuery")
+  op check(@body body: ClientQueryBody):
+    | ClientTypeDiagnostics
+    | ValidationProblemResponse
+    | ServiceUnavailableProblemResponse
+    | InternalServerProblemResponse;
+
+  /** Run the query through the project's Prisma Client and return its result with the SQL it sent. */
+  @post
+  @route("/run")
+  @operationId("runClientQuery")
+  op run(@body body: ClientQueryBody):
+    | ClientResult
+    | ValidationProblemResponse
+    | ServiceUnavailableProblemResponse
     | InternalServerProblemResponse;
 }
 

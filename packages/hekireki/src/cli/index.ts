@@ -225,7 +225,7 @@ const seedFlags = {
   count: Flag.integer('count').pipe(
     Flag.withAlias('n'),
     Flag.withDescription(
-      'Rows for every model the config gives no rule for (left out: only the configured models are seeded)',
+      'Rows for every faker model, over the per-model counts of the config; models given as data keep their rows (left out: the config decides, and only the configured models are seeded)',
     ),
     Flag.withMetavar('rows'),
     Flag.optional,

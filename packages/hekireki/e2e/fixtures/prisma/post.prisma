@@ -6,3 +6,9 @@ model Post {
   authorId  Int
   author    User    @relation(fields: [authorId], references: [id])
 }
+
+/// The client the Prisma Client page runs through; e2e/workspace.ts generates it.
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/client"
+}

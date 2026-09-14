@@ -328,6 +328,33 @@ the variable `datasource.url` names with `env("...")` in `prisma.config.ts` (or 
 or the literal written there. `DATABASE_URL` is looked up only when Prisma names no variable, and
 `--url` overrides everything.
 
+The Prisma Client page runs a call as your code writes it, through the project's own generated
+client, and lists the SQL the client sent for it — the statements, their bound values and their
+timings — each one a click away from the SQL page, where it can be explained and edited:
+
+```ts
+prisma.user.findMany({
+  where: { posts: { some: { published: true } } },
+  include: { posts: { take: 3 } },
+  take: 10,
+})
+```
+
+A single model operation or a batch `prisma.$transaction([...])` is read, never evaluated: the
+arguments are literals (strings, numbers, booleans, `null`, objects, arrays, `new Date(...)`,
+bigints like `10n`), so variables, callbacks and `$queryRaw` are refused before anything runs, and
+a write asks before it goes through. The client is the one `hekireki seed` uses: the output of the
+schema's `prisma-client` generator (or `@prisma/client` for `prisma-client-js`) after
+`prisma generate`, opened with the driver adapter installed in the project (`@prisma/adapter-pg`,
+`@prisma/adapter-mariadb` or `@prisma/adapter-better-sqlite3`). Restart Studio after regenerating
+the client so it runs through the new one.
+
+The editor completes, explains and type-checks the call against the generated client's own types
+— `where` offers the model's fields and filters, a hover shows the argument's type, a wrong key is
+underlined — through the project's TypeScript: install `typescript` 5.x as a dev dependency and
+Studio picks it up (`typescript` 7, the native compiler, has no language service API, so the
+editor falls back to completing model, operation and argument names from the schema).
+
 ## Seed
 
 `hekireki seed` fills the database with rows made by [Faker](https://fakerjs.dev/) that follow the
@@ -339,7 +366,7 @@ unique constraints hold, `@updatedAt` comes after `@default(now())`, and `uuid(7
 ```bash
 hekireki seed                          # hekireki.config.ts (its `url`, or Prisma's env variable)
 hekireki seed --sql prisma/seed.sql    # Write a SQL script instead of inserting
-hekireki seed --reset --count 100      # Empty the seeded tables first, 100 rows per model
+hekireki seed --reset --count 100      # Empty the seeded tables first, 100 faker rows per model (over the config's counts)
 hekireki seed --seed 7 --locale ja     # Another seed, Japanese names and text
 ```
 

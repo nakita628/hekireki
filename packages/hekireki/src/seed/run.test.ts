@@ -326,9 +326,9 @@ CREATE TABLE "Post" ("id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "title" TE
     })
   })
 
-  it('lets the command line override the config, locale included', async () => {
+  it('lets the command line override the config, locale included, --count winning over per-model counts', async () => {
     const dir = project(
-      `export default { schema: 'schema.prisma', seed: 1, count: 9, locale: 'en' }\n`,
+      `export default { schema: 'schema.prisma', seed: 1, count: 9, locale: 'en', models: { User: { count: 30 }, Post: { count: 5 } } }\n`,
     )
     const exit = await run({ output: 'seed.sql', seed: 2, count: 1, locale: 'ja, en' }, dir)
     expect(Exit.isSuccess(exit)).toBe(true)
@@ -336,6 +336,17 @@ CREATE TABLE "Post" ("id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "title" TE
     expect(exit.value.seed).toBe(2)
     expect(exit.value.locale).toStrictEqual(['ja', 'en'])
     expect(exit.value.tables.map((t) => t.rows)).toStrictEqual([1, 1])
+    // Models given as real rows keep them; --count is for faker rows only.
+    const withData = project(
+      `export default { schema: 'schema.prisma', models: { User: { data: [{ email: 'a@example.com' }, { email: 'b@example.com' }] }, Post: { count: 7 } } }\n`,
+    )
+    const kept = await run({ output: 'seed.sql', count: 3 }, withData)
+    expect(
+      Exit.isSuccess(kept) ? kept.value.tables.map((t) => [t.name, t.rows]) : null,
+    ).toStrictEqual([
+      ['User', 2],
+      ['Post', 3],
+    ])
   })
 
   it('explains a missing schema, a schema Prisma rejects, an unknown locale and a provider it cannot write', async () => {

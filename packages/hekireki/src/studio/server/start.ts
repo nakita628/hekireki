@@ -10,6 +10,7 @@ import { withTypeScriptImports } from '../../seed/resolve.js'
 import { createStudioApp } from './app.js'
 import { RELOAD_DEBOUNCE_MS, STUDIO_HOSTNAME } from './constants/index.js'
 import { SchemaLoadError, ServerListenError } from './errors/index.js'
+import * as ClientService from './services/index.js'
 import * as DatabaseService from './services/index.js'
 import * as StateService from './services/index.js'
 import * as WatchService from './services/index.js'
@@ -83,8 +84,15 @@ export function startStudioServer(options: {
       env: process.env,
     })
     yield* Effect.addFinalizer(() => db.close)
+    const client = ClientService.createProjectClient({
+      target: db.target,
+      reason: db.status.error,
+      schemaDir: watchDir,
+      cwd: process.cwd(),
+    })
+    yield* Effect.addFinalizer(() => client.close)
     yield* WatchService.watchSchema({ state, dir: watchDir, debounceMs: RELOAD_DEBOUNCE_MS })
-    const app = createStudioApp(state, options.staticDir, db)
+    const app = createStudioApp(state, options.staticDir, db, client)
     const server = yield* listen({ fetch: app.fetch, port: options.port })
     return { snapshot, database: db.status, server }
   })

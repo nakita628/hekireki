@@ -10,7 +10,9 @@ permissions:
   contents: read
 
 # `hekireki seed` against real PostgreSQL and MySQL servers: the rows Prisma's own `db push`
-# tables accept, the foreign keys they enforce, the sequences, and the SQL script variant.
+# tables accept, the foreign keys they enforce, the sequences, and the SQL script variant. And the
+# Prisma Client page of `hekireki studio` on the same servers: calls run through a generated
+# client and the adapter of the dialect, with the statements Prisma Client sent.
 jobs:
   seed-db:
     runs-on: ubuntu-latest
@@ -56,4 +58,4 @@ jobs:
 
       - run: vp run hekireki#build
 
-      - run: vp run --filter ./test test db/seed.test.ts
+      - run: vp run --filter ./test test db/seed.test.ts db/studio-client.test.ts

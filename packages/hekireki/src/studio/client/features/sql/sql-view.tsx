@@ -21,7 +21,7 @@ import { ColumnsView } from './columns-view.js'
 import { DiagnosticsList } from './diagnostics-list.js'
 import { FlowView } from './flow-view.js'
 import { ParamsPanel } from './params-panel.js'
-import { bindValues } from './params.js'
+import { bindValues, paramInputsOf } from './params.js'
 import { PlanView } from './plan-view.js'
 import { SplitPane } from './split-pane.js'
 import { SqlEditor } from './sql-editor.js'
@@ -74,17 +74,26 @@ function tabOf(key: string | number): Tab {
 }
 
 /** The SQL page: the editor and what the analysis says on the left, the models it runs against on the right. */
-export function SqlView() {
+export function SqlView({
+  initialSql,
+  initialParams,
+}: {
+  readonly initialSql: string
+  readonly initialParams: readonly (string | number | boolean | null)[]
+}) {
   const queryClient = useQueryClient()
   const database = useDb().data ?? null
   const schema = useSchema().data?.schema ?? null
-  // The editor is empty on every visit: what is run here is typed here.
-  const [sql, setSql] = useState('')
+  // The editor is empty on every visit, unless a page hands a statement over (the Prisma Client
+  // page opens what the client sent, with the values it was bound with).
+  const [sql, setSql] = useState(initialSql)
   const [tab, setTab] = useState<Tab>('flow')
   const [statementIndex, setStatementIndex] = useState(0)
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
   const [pickedRange, setPickedRange] = useState<Range | null>(null)
-  const [paramInputs, setParamInputs] = useState<Readonly<Record<string, string>>>({})
+  const [paramInputs, setParamInputs] = useState<Readonly<Record<string, string>>>(() =>
+    paramInputsOf(initialParams),
+  )
 
   const settled = useDebounced(sql, ANALYZE_DEBOUNCE_MS)
   const analysis = useAnalysis(settled)

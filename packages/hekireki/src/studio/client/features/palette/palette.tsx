@@ -5,6 +5,7 @@ import type { ReactNode } from 'react'
 import { Autocomplete } from 'react-aria-components'
 import {
   LuBook,
+  LuBraces,
   LuDot,
   LuFileText,
   LuGitCompare,
@@ -143,7 +144,16 @@ export function CommandPalette({ schema }: { readonly schema: Schema | null }) {
         kind: 'Page',
         icon: <LuTerminal />,
         go: () => {
-          void navigate({ to: '/sql' })
+          void navigate({ to: '/sql', search: {} })
+        },
+      },
+      {
+        id: 'page:client',
+        label: 'Prisma Client',
+        kind: 'Page',
+        icon: <LuBraces />,
+        go: () => {
+          void navigate({ to: '/client' })
         },
       },
       {

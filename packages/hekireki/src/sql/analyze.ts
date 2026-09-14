@@ -302,12 +302,20 @@ function sourcesOf(...types: readonly TypeInfo[]): readonly ColumnSource[] {
 
 // --- column resolution ---------------------------------------------------------------------------
 
-function findRelation(scope: Scope | null, qualifier: string): Relation | null {
+function findRelationByKey(scope: Scope | null, key: string): Relation | null {
   if (scope === null) return null
-  const key = qualifier.toLowerCase()
   return (
-    scope.relations.find((relation) => relation.key === key) ?? findRelation(scope.outer, qualifier)
+    scope.relations.find((relation) => relation.key === key) ?? findRelationByKey(scope.outer, key)
   )
+}
+
+function findRelation(scope: Scope | null, qualifier: string): Relation | null {
+  const key = qualifier.toLowerCase()
+  const exact = findRelationByKey(scope, key)
+  if (exact !== null || !key.includes('.')) return exact
+  // `schema.table.column`, as Prisma Client writes every reference (`main`.`User`.`id`,
+  // "public"."User"."id"): the table is the last part of the qualifier.
+  return findRelationByKey(scope, key.split('.').at(-1) ?? key)
 }
 
 function columnOf(relation: Relation, name: string) {

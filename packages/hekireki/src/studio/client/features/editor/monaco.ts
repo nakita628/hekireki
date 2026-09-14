@@ -108,6 +108,41 @@ export const MARKER_OWNER = 'prisma'
 export const EDITOR_FONT =
   'ui-monospace, SF Mono, Menlo, Consolas, Liberation Mono, DejaVu Sans Mono, monospace'
 
+export const EDITOR_OPTIONS: editor.IStandaloneEditorConstructionOptions = {
+  // Monaco 0.56 defaults its input to the experimental `EditContext`, which drives a plain
+  // `<div class="native-edit-context">` — no `contenteditable`, no textarea. In Chromium a letter
+  // reaches it as a `beforeinput`, and the space bar does not: the key arrives, nothing cancels
+  // it, and no text is ever inserted. Typing `model User` in the schema editor writes `modelUser`.
+  // The textarea this turns back on is the input path Monaco used for a decade.
+  editContext: false,
+  fontFamily: EDITOR_FONT,
+  fontSize: 12.5,
+  lineHeight: 20,
+  tabSize: 2,
+  insertSpaces: true,
+  minimap: { enabled: false },
+  scrollBeyondLastLine: false,
+  automaticLayout: true,
+  padding: { top: 12, bottom: 12 },
+  renderLineHighlight: 'line',
+  lineNumbersMinChars: 3,
+  glyphMargin: false,
+  folding: true,
+  wordBasedSuggestions: 'off',
+  quickSuggestions: { other: true, comments: false, strings: false },
+  suggest: { showWords: false, preview: true },
+  bracketPairColorization: { enabled: false },
+  guides: { bracketPairs: false, indentation: true },
+  stickyScroll: { enabled: false },
+  overviewRulerLanes: 0,
+  hideCursorInOverviewRuler: true,
+  scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8, useShadows: false },
+  fixedOverflowWidgets: true,
+  smoothScrolling: true,
+  cursorBlinking: 'smooth',
+  renderWhitespace: 'none',
+}
+
 const PALETTE = {
   light: {
     surface: '#ffffff',
@@ -172,6 +207,12 @@ function themeData(theme: Theme): editor.IStandaloneThemeData {
       { token: 'comment.doc', foreground: c.docComment.slice(1), fontStyle: 'italic' },
       { token: 'function', foreground: c.fn.slice(1) },
       { token: 'identifier', foreground: c.ink.slice(1) },
+      // A Prisma Client call: the client, its model delegate, the argument keys, the literals.
+      { token: 'variable.predefined', foreground: c.annotation.slice(1) },
+      { token: 'member', foreground: c.blockName.slice(1), fontStyle: 'bold' },
+      { token: 'key', foreground: c.type.slice(1) },
+      { token: 'keyword.literal', foreground: c.keyword.slice(1) },
+      { token: 'operator', foreground: c.muted.slice(1) },
       { token: 'delimiter', foreground: c.muted.slice(1) },
     ],
     colors: {

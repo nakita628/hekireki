@@ -9,6 +9,7 @@ import { readFile } from '../../file/index.js'
 import { isLoopbackHostname } from '../../utils/index.js'
 import { FORBIDDEN_HOST_MESSAGE } from './constants/index.js'
 import { api } from './index.js'
+import * as ClientService from './services/index.js'
 import type * as DatabaseService from './services/index.js'
 import * as RuntimeService from './services/index.js'
 import type * as StateService from './services/index.js'
@@ -25,8 +26,9 @@ const loopbackOnly = createMiddleware((c, next) =>
 export function createStudioApi(
   state: ReturnType<typeof StateService.createStudioState>,
   db: ReturnType<typeof DatabaseService.disconnectedDatabase>,
+  client: ReturnType<typeof ClientService.createProjectClient> = ClientService.unavailableClient(),
 ) {
-  RuntimeService.configureRuntime({ state, db })
+  RuntimeService.configureRuntime({ state, db, client })
   const app = new OpenAPIHono({
     defaultHook: (result, c) => {
       if (!result.success) {
@@ -80,8 +82,9 @@ export function createStudioApp(
   state: ReturnType<typeof StateService.createStudioState>,
   staticDir: string,
   db: ReturnType<typeof DatabaseService.disconnectedDatabase>,
+  client: ReturnType<typeof ClientService.createProjectClient> = ClientService.unavailableClient(),
 ) {
-  const app = createStudioApi(state, db)
+  const app = createStudioApi(state, db, client)
   app.use('/*', serveStatic({ root: staticDir }))
   app.get('/*', (c) =>
     c.req.path.startsWith('/api/')

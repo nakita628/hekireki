@@ -1,6 +1,7 @@
 import { OpenAPIHono } from '@hono/zod-openapi'
 import {
   deleteDbRowsModelNameRouteHandler,
+  getClientRouteHandler,
   getDbCountsRouteHandler,
   getDbRouteHandler,
   getDbRowsModelNameRouteHandler,
@@ -8,6 +9,13 @@ import {
   getSchemaEventsRouteHandler,
   getSchemaRouteHandler,
   patchDbRowsModelNameRouteHandler,
+  postClientAnalyzeRouteHandler,
+  postClientCheckRouteHandler,
+  postClientCompleteDetailRouteHandler,
+  postClientCompleteRouteHandler,
+  postClientHoverRouteHandler,
+  postClientRunRouteHandler,
+  postClientSignatureRouteHandler,
   postDbAnalyzeRouteHandler,
   postDbExplainRouteHandler,
   postDbRowsModelNameRouteHandler,
@@ -26,6 +34,7 @@ import {
 } from './handlers'
 import {
   deleteDbRowsModelNameRoute,
+  getClientRoute,
   getDbCountsRoute,
   getDbRoute,
   getDbRowsModelNameRoute,
@@ -33,6 +42,13 @@ import {
   getSchemaEventsRoute,
   getSchemaRoute,
   patchDbRowsModelNameRoute,
+  postClientAnalyzeRoute,
+  postClientCheckRoute,
+  postClientCompleteDetailRoute,
+  postClientCompleteRoute,
+  postClientHoverRoute,
+  postClientRunRoute,
+  postClientSignatureRoute,
   postDbAnalyzeRoute,
   postDbExplainRoute,
   postDbRowsModelNameRoute,
@@ -66,6 +82,14 @@ export const api = app
   .openapi(postDbSqlRoute, postDbSqlRouteHandler)
   .openapi(postDbExplainRoute, postDbExplainRouteHandler)
   .openapi(postDbAnalyzeRoute, postDbAnalyzeRouteHandler)
+  .openapi(getClientRoute, getClientRouteHandler)
+  .openapi(postClientAnalyzeRoute, postClientAnalyzeRouteHandler)
+  .openapi(postClientCompleteRoute, postClientCompleteRouteHandler)
+  .openapi(postClientCompleteDetailRoute, postClientCompleteDetailRouteHandler)
+  .openapi(postClientHoverRoute, postClientHoverRouteHandler)
+  .openapi(postClientSignatureRoute, postClientSignatureRouteHandler)
+  .openapi(postClientCheckRoute, postClientCheckRouteHandler)
+  .openapi(postClientRunRoute, postClientRunRouteHandler)
   .openapi(postPrismaFormatRoute, postPrismaFormatRouteHandler)
   .openapi(postPrismaLintRoute, postPrismaLintRouteHandler)
   .openapi(postPrismaSymbolsRoute, postPrismaSymbolsRouteHandler)

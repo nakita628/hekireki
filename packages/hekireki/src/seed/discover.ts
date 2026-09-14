@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url'
 import { Effect } from 'effect'
 
 import type { Dialect } from '../database/url.js'
-import { makeSqliteFilePath } from '../database/url.js'
+import { makePostgresSchema, makeSqliteFilePath } from '../database/url.js'
 import { SeedDatabaseError } from './errors.js'
 import type { GeneratorBlock } from './schema.js'
 
@@ -19,6 +19,24 @@ function clientGenerator(generators: readonly GeneratorBlock[]) {
   return (
     generators.find((g) => ['prisma-client', 'prisma-client-js'].includes(g.provider.value)) ?? null
   )
+}
+
+/**
+ * Where the schema says the Prisma Client is: the `output` of its `prisma-client` generator, or
+ * `@prisma/client` for the legacy `prisma-client-js`; null, with the reason, when it says nothing.
+ */
+export function clientSource(generators: readonly GeneratorBlock[]) {
+  const generator = clientGenerator(generators)
+  if (generator === null) {
+    return { source: null, reason: 'no prisma-client generator in the schema' }
+  }
+  const source =
+    generator.provider.value === 'prisma-client-js'
+      ? '@prisma/client'
+      : (generator.output?.value ?? null)
+  return source === null
+    ? { source: null, reason: 'the prisma-client generator has no output' }
+    : { source, reason: null }
 }
 
 function messageOf(error: unknown) {
@@ -48,13 +66,23 @@ export const ADAPTERS: Readonly<Record<Dialect, { readonly pkg: string; readonly
     sqlite: { pkg: '@prisma/adapter-better-sqlite3', name: 'PrismaBetterSqlite3' },
   }
 
-function isConstructor(value: unknown): value is new (argument: unknown) => unknown {
+function isConstructor(value: unknown): value is new (...args: unknown[]) => unknown {
   return typeof value === 'function'
+}
+
+/**
+ * What the adapter of the dialect is built with: the SQLite file, or the URL — and for PostgreSQL
+ * the schema of its `?schema=`, which the pg driver does not read and PrismaPg takes as an option.
+ */
+function adapterArguments(dialect: Dialect, url: string, schemaDir: string): readonly unknown[] {
+  if (dialect === 'sqlite') return [{ url: makeSqliteFilePath({ url, baseDir: schemaDir }) }]
+  const schema = dialect === 'postgresql' ? makePostgresSchema({ url }) : null
+  return schema === null ? [url] : [url, { schema }]
 }
 
 function isClientConstructor(
   value: unknown,
-): value is new (options: { readonly adapter: unknown }) => unknown {
+): value is new (options: Readonly<Record<string, unknown>>) => unknown {
   return typeof value === 'function'
 }
 
@@ -76,10 +104,9 @@ function makeAdapter(dialect: Dialect, url: string, cwd: string, schemaDir: stri
     if (!isConstructor(factory)) {
       return { adapter: null, reason: `${pkg} does not export ${name}` }
     }
-    const argument =
-      dialect === 'sqlite' ? { url: makeSqliteFilePath({ url, baseDir: schemaDir }) } : url
+    const args = adapterArguments(dialect, url, schemaDir)
     return yield* Effect.try({
-      try: () => new factory(argument),
+      try: () => new factory(...args),
       catch: (error) => new SeedDatabaseError({ message: messageOf(error) }),
     }).pipe(
       Effect.match({
@@ -104,8 +131,8 @@ function clientEntry(schemaDir: string, output: string) {
 /**
  * The project's Prisma Client, found from the schema: the `prisma-client` generator's output
  * (or `@prisma/client` for the legacy generator), instantiated with the driver adapter package
- * the project has for its database. Null, with the reason, when any piece is missing, so the
- * caller can fall back to the database URL.
+ * the project has for its database and any other client `options`. Null, with the reason, when
+ * any piece is missing, so the caller can fall back to the database URL.
  */
 export function discoverClient(input: {
   readonly generators: readonly GeneratorBlock[]
@@ -113,19 +140,11 @@ export function discoverClient(input: {
   readonly cwd: string
   readonly url: string
   readonly dialect: Dialect
+  readonly options?: Readonly<Record<string, unknown>>
 }) {
   return Effect.gen(function* () {
-    const generator = clientGenerator(input.generators)
-    if (generator === null) {
-      return { client: null, source: null, reason: 'no prisma-client generator in the schema' }
-    }
-    const source =
-      generator.provider.value === 'prisma-client-js'
-        ? '@prisma/client'
-        : (generator.output?.value ?? null)
-    if (source === null) {
-      return { client: null, source: null, reason: 'the prisma-client generator has no output' }
-    }
+    const { source, reason } = clientSource(input.generators)
+    if (source === null) return { client: null, source: null, reason }
     const loaded = yield* (
       source === '@prisma/client'
         ? importFromProject(source, input.cwd)
@@ -158,7 +177,7 @@ export function discoverClient(input: {
     const adapter = yield* makeAdapter(input.dialect, input.url, input.cwd, input.schemaDir)
     if (adapter.adapter === null) return { client: null, source, reason: adapter.reason }
     return yield* Effect.try({
-      try: () => new clientClass({ adapter: adapter.adapter }),
+      try: () => new clientClass({ ...input.options, adapter: adapter.adapter }),
       catch: (error) => new SeedDatabaseError({ message: messageOf(error) }),
     }).pipe(
       Effect.match({

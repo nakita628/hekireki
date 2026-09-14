@@ -96,9 +96,23 @@ function makeFaker(seed: number | null, locales: readonly string[] | null) {
   })
 }
 
+/**
+ * The config with the command line laid over it. `--count` is the count of every faker model, the
+ * per-model counts of the config included; models given as `data` keep their rows.
+ */
 function withOverrides(config: SeedConfig, overrides: SeedOverrides) {
+  const models =
+    overrides.count === null
+      ? config.models
+      : Object.fromEntries(
+          Object.entries(config.models ?? {}).map(([name, rule]) => [
+            name,
+            rule.data === undefined ? { ...rule, count: overrides.count ?? undefined } : rule,
+          ]),
+        )
   return {
     ...config,
+    ...(models === undefined ? {} : { models }),
     ...(overrides.schema === null ? {} : { schema: overrides.schema }),
     ...(overrides.url === null ? {} : { url: overrides.url }),
     ...(overrides.output === null ? {} : { output: overrides.output }),

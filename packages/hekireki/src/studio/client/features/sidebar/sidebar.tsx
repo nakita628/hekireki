@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import {
   LuBook,
+  LuBraces,
   LuFileText,
   LuGitCompare,
   LuList,
@@ -147,11 +148,17 @@ export function Sidebar({
           </span>
           <span>Prisma schema</span>
         </Link>
-        <Link to="/sql" activeProps={NAV_ACTIVE} inactiveProps={NAV_INACTIVE}>
+        <Link to="/sql" search={{}} activeProps={NAV_ACTIVE} inactiveProps={NAV_INACTIVE}>
           <span className="inline-flex opacity-85">
             <LuTerminal />
           </span>
           <span>SQL</span>
+        </Link>
+        <Link to="/client" activeProps={NAV_ACTIVE} inactiveProps={NAV_INACTIVE}>
+          <span className="inline-flex opacity-85">
+            <LuBraces />
+          </span>
+          <span>Prisma Client</span>
         </Link>
         <Link to="/docs" activeProps={NAV_ACTIVE} inactiveProps={NAV_INACTIVE}>
           <span className="inline-flex opacity-85">

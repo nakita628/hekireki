@@ -1,3 +1,4 @@
+export * from './client.js'
 export * from './database.js'
 export * from './docs.js'
 export * from './prisma.js'

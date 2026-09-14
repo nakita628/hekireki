@@ -219,6 +219,14 @@ describe('createStudioApp', () => {
         : []
     expect(new Set(paths)).toStrictEqual(
       new Set([
+        '/api/client',
+        '/api/client/analyze',
+        '/api/client/check',
+        '/api/client/complete',
+        '/api/client/complete/detail',
+        '/api/client/hover',
+        '/api/client/run',
+        '/api/client/signature',
         '/api/db',
         '/api/db/analyze',
         '/api/db/counts',

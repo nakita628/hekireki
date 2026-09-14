@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import { bindValues, defaultParamInput, paramKey, parseParamInput } from './params.js'
+import {
+  bindValues,
+  defaultParamInput,
+  paramInputsOf,
+  paramKey,
+  parseParamInput,
+} from './params.js'
 
 function parameter(tsType: string, nullable: boolean | null = null, placeholder = '?', index = 0) {
   return { index, placeholder, tsType, nullable }
@@ -67,5 +73,28 @@ describe('bindValues', () => {
     ]
     expect(bindValues(parameters, { '#0': '7', ':name': 'ann' })).toStrictEqual([7, 'ann', true])
     expect(bindValues(parameters, {})).toStrictEqual([1, '', true])
+  })
+})
+
+describe('paramInputsOf', () => {
+  it('fills the positional fields in bind order, NULL for null', () => {
+    expect(paramInputsOf(['ann', 10, true, false, null])).toStrictEqual({
+      '#1': 'ann',
+      '#2': '10',
+      '#3': '1',
+      '#4': '0',
+      '#5': 'NULL',
+    })
+    expect(
+      bindValues(
+        [
+          parameter('string', null, '$1', 1),
+          parameter('number', null, '$2', 2),
+          parameter('boolean', null, '$3', 3),
+          parameter('number', null, '$4', 4),
+        ],
+        paramInputsOf(['ann', '10', true, true]),
+      ),
+    ).toStrictEqual(['ann', 10, true, 1])
   })
 })

@@ -1,4 +1,4 @@
-# The two databases test/db/seed.test.ts runs against. `docker compose -f test/db/compose.yaml up -d`,
+# The two databases test/db/seed.test.ts and test/db/studio-client.test.ts run against. `docker compose -f test/db/compose.yaml up -d`,
 # then export the URLs the test reads:
 #
 #   HEKIREKI_SEED_PG=postgresql://postgres:postgres@localhost:5432/seed

@@ -26,3 +26,11 @@ export type Range = { readonly start: number; readonly end: number }
 export type SqlResult = Body<typeof client.db.sql.$post>
 
 export type Plan = Body<typeof client.db.explain.$post>
+
+export type ClientAnalysis = Body<typeof client.client.analyze.$post>
+
+export type ClientResult = Body<typeof client.client.run.$post>
+
+export type ClientSqlQuery = ClientResult['queries'][number]
+
+export type ClientTypeDiagnostics = Body<typeof client.client.check.$post>

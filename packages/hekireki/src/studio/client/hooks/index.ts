@@ -15,6 +15,10 @@ import type { ClientRequestOptions, InferRequestType } from 'hono/client'
 import { parseResponse } from 'hono/client'
 import { client } from '../lib/index.js'
 
+export function getClientKey() {
+  return ['client'] as const
+}
+
 export function getDbKey() {
   return ['db'] as const
 }
@@ -653,6 +657,309 @@ export function usePostDbAnalyze<TError = unknown>(options?: {
   return useMutation({
     ...mutationOptions,
     ...getPostDbAnalyzeMutationOptions<TError>(clientOptions),
+  })
+}
+
+export function getClientQueryKey() {
+  return ['client', '/client'] as const
+}
+
+export function getClientQueryOptions(options?: ClientRequestOptions) {
+  return queryOptions({
+    queryKey: getClientQueryKey(),
+    queryFn({ signal }) {
+      return parseResponse(
+        client.client.$get(undefined, { ...options, init: { ...options?.init, signal } }),
+      )
+    },
+  })
+}
+
+export function useClient<
+  TData = Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.$get>>>>>,
+  TError = unknown,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.$get>>>>>,
+    TError,
+    TData
+  >
+  options?: ClientRequestOptions
+}) {
+  const { query: queryOptions, options: clientOptions } = options ?? {}
+  return useQuery({
+    ...queryOptions,
+    queryKey: getClientQueryKey(),
+    queryFn({ signal }: QueryFunctionContext) {
+      return parseResponse(
+        client.client.$get(undefined, {
+          ...clientOptions,
+          init: { ...clientOptions?.init, signal },
+        }),
+      )
+    },
+  })
+}
+
+export function useSuspenseClient<
+  TData = Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.$get>>>>>,
+  TError = unknown,
+>(options?: {
+  query?: UseSuspenseQueryOptions<
+    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.$get>>>>>,
+    TError,
+    TData
+  >
+  options?: ClientRequestOptions
+}) {
+  const { query: queryOptions, options: clientOptions } = options ?? {}
+  return useSuspenseQuery({
+    ...queryOptions,
+    queryKey: getClientQueryKey(),
+    queryFn({ signal }: QueryFunctionContext) {
+      return parseResponse(
+        client.client.$get(undefined, {
+          ...clientOptions,
+          init: { ...clientOptions?.init, signal },
+        }),
+      )
+    },
+  })
+}
+
+export function getPostClientAnalyzeMutationOptions<TError = unknown>(
+  options?: ClientRequestOptions,
+) {
+  return mutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.analyze.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.client.analyze.$post>
+  >({
+    mutationKey: ['client', '/client/analyze', 'POST'] as const,
+    async mutationFn(args: InferRequestType<typeof client.client.analyze.$post>) {
+      return parseResponse(client.client.analyze.$post(args, options))
+    },
+  })
+}
+
+export function usePostClientAnalyze<TError = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.analyze.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.client.analyze.$post>
+  >
+  options?: ClientRequestOptions
+}) {
+  const { mutation: mutationOptions, options: clientOptions } = options ?? {}
+  return useMutation({
+    ...mutationOptions,
+    ...getPostClientAnalyzeMutationOptions<TError>(clientOptions),
+  })
+}
+
+export function getPostClientCompleteMutationOptions<TError = unknown>(
+  options?: ClientRequestOptions,
+) {
+  return mutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.complete.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.client.complete.$post>
+  >({
+    mutationKey: ['client', '/client/complete', 'POST'] as const,
+    async mutationFn(args: InferRequestType<typeof client.client.complete.$post>) {
+      return parseResponse(client.client.complete.$post(args, options))
+    },
+  })
+}
+
+export function usePostClientComplete<TError = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.complete.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.client.complete.$post>
+  >
+  options?: ClientRequestOptions
+}) {
+  const { mutation: mutationOptions, options: clientOptions } = options ?? {}
+  return useMutation({
+    ...mutationOptions,
+    ...getPostClientCompleteMutationOptions<TError>(clientOptions),
+  })
+}
+
+export function getPostClientCompleteDetailMutationOptions<TError = unknown>(
+  options?: ClientRequestOptions,
+) {
+  return mutationOptions<
+    Awaited<
+      ReturnType<
+        typeof parseResponse<Awaited<ReturnType<typeof client.client.complete.detail.$post>>>
+      >
+    >,
+    TError,
+    InferRequestType<typeof client.client.complete.detail.$post>
+  >({
+    mutationKey: ['client', '/client/complete/detail', 'POST'] as const,
+    async mutationFn(args: InferRequestType<typeof client.client.complete.detail.$post>) {
+      return parseResponse(client.client.complete.detail.$post(args, options))
+    },
+  })
+}
+
+export function usePostClientCompleteDetail<TError = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof parseResponse<Awaited<ReturnType<typeof client.client.complete.detail.$post>>>
+      >
+    >,
+    TError,
+    InferRequestType<typeof client.client.complete.detail.$post>
+  >
+  options?: ClientRequestOptions
+}) {
+  const { mutation: mutationOptions, options: clientOptions } = options ?? {}
+  return useMutation({
+    ...mutationOptions,
+    ...getPostClientCompleteDetailMutationOptions<TError>(clientOptions),
+  })
+}
+
+export function getPostClientHoverMutationOptions<TError = unknown>(
+  options?: ClientRequestOptions,
+) {
+  return mutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.hover.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.client.hover.$post>
+  >({
+    mutationKey: ['client', '/client/hover', 'POST'] as const,
+    async mutationFn(args: InferRequestType<typeof client.client.hover.$post>) {
+      return parseResponse(client.client.hover.$post(args, options))
+    },
+  })
+}
+
+export function usePostClientHover<TError = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.hover.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.client.hover.$post>
+  >
+  options?: ClientRequestOptions
+}) {
+  const { mutation: mutationOptions, options: clientOptions } = options ?? {}
+  return useMutation({
+    ...mutationOptions,
+    ...getPostClientHoverMutationOptions<TError>(clientOptions),
+  })
+}
+
+export function getPostClientSignatureMutationOptions<TError = unknown>(
+  options?: ClientRequestOptions,
+) {
+  return mutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.signature.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.client.signature.$post>
+  >({
+    mutationKey: ['client', '/client/signature', 'POST'] as const,
+    async mutationFn(args: InferRequestType<typeof client.client.signature.$post>) {
+      return parseResponse(client.client.signature.$post(args, options))
+    },
+  })
+}
+
+export function usePostClientSignature<TError = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.signature.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.client.signature.$post>
+  >
+  options?: ClientRequestOptions
+}) {
+  const { mutation: mutationOptions, options: clientOptions } = options ?? {}
+  return useMutation({
+    ...mutationOptions,
+    ...getPostClientSignatureMutationOptions<TError>(clientOptions),
+  })
+}
+
+export function getPostClientCheckMutationOptions<TError = unknown>(
+  options?: ClientRequestOptions,
+) {
+  return mutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.check.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.client.check.$post>
+  >({
+    mutationKey: ['client', '/client/check', 'POST'] as const,
+    async mutationFn(args: InferRequestType<typeof client.client.check.$post>) {
+      return parseResponse(client.client.check.$post(args, options))
+    },
+  })
+}
+
+export function usePostClientCheck<TError = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.check.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.client.check.$post>
+  >
+  options?: ClientRequestOptions
+}) {
+  const { mutation: mutationOptions, options: clientOptions } = options ?? {}
+  return useMutation({
+    ...mutationOptions,
+    ...getPostClientCheckMutationOptions<TError>(clientOptions),
+  })
+}
+
+export function getPostClientRunMutationOptions<TError = unknown>(options?: ClientRequestOptions) {
+  return mutationOptions<
+    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.run.$post>>>>>,
+    TError,
+    InferRequestType<typeof client.client.run.$post>
+  >({
+    mutationKey: ['client', '/client/run', 'POST'] as const,
+    async mutationFn(args: InferRequestType<typeof client.client.run.$post>) {
+      return parseResponse(client.client.run.$post(args, options))
+    },
+  })
+}
+
+export function usePostClientRun<TError = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.run.$post>>>>>,
+    TError,
+    InferRequestType<typeof client.client.run.$post>
+  >
+  options?: ClientRequestOptions
+}) {
+  const { mutation: mutationOptions, options: clientOptions } = options ?? {}
+  return useMutation({
+    ...mutationOptions,
+    ...getPostClientRunMutationOptions<TError>(clientOptions),
   })
 }
 

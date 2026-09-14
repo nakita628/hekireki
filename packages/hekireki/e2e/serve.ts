@@ -3,7 +3,14 @@
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 
-import { DATABASE_FILE, E2E_DIR, PORT, prepareWorkspace, SCHEMA_DIR } from './workspace.ts'
+import {
+  DATABASE_FILE,
+  E2E_DIR,
+  PORT,
+  prepareWorkspace,
+  SCHEMA_DIR,
+  WORKSPACE_DIR,
+} from './workspace.ts'
 
 prepareWorkspace()
 const child = spawn(
@@ -18,7 +25,8 @@ const child = spawn(
     '--port',
     String(PORT),
   ],
-  { stdio: 'inherit' },
+  // The workspace is the project: its node_modules is where Studio finds TypeScript and the adapter.
+  { stdio: 'inherit', cwd: WORKSPACE_DIR },
 )
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {

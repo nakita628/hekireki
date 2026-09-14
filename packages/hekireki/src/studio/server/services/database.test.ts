@@ -107,6 +107,19 @@ describe('connectDatabase', () => {
     })
   })
 
+  it('keeps the URL as it was found, with its dialect, for a client that dials on its own', async () => {
+    const dir = tmp()
+    const db = await connect({
+      explicitUrl: 'file:./dev.db?connection_limit=1',
+      cwd: dir,
+      schemaDir: dir,
+    })
+    expect(db.target).toStrictEqual({ url: 'file:./dev.db?connection_limit=1', dialect: 'sqlite' })
+    expect(disconnectedDatabase('none').target).toBeNull()
+    const refused = await connect({ explicitUrl: 'redis://localhost' })
+    expect(refused.target).toBeNull()
+  })
+
   it('reads DATABASE_URL out of .env when no flag was given', async () => {
     const dir = tmp()
     writeFileSync(path.join(dir, '.env'), 'DATABASE_URL="file:./dev.db"\n')

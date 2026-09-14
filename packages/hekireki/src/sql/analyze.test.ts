@@ -200,6 +200,22 @@ describe('analyze', () => {
     ])
   })
 
+  it('resolves schema.table.column references as Prisma Client writes them', () => {
+    const statement = first(
+      'SELECT `main`.`posts`.`id`, `main`.`posts`.* FROM `main`.`posts` WHERE `main`.`posts`.`published` = ? LIMIT ?',
+    )
+    expect(statement.diagnostics).toStrictEqual([])
+    expect(
+      statement.parameters.map((parameter) => [parameter.placeholder, parameter.tsType]),
+    ).toStrictEqual([
+      ['?', 'number'],
+      ['?', 'number'],
+    ])
+    expect(first('SELECT "public"."users"."email" FROM "public"."users"').rowType).toBe(
+      '{ email: string | null }',
+    )
+  })
+
   it('reports an unknown table, an unknown column and an ambiguous one', () => {
     expect(first('SELECT nmae FROM users').diagnostics).toStrictEqual([
       { severity: 'warning', message: 'Unknown column "nmae"', range: { start: 7, end: 11 } },

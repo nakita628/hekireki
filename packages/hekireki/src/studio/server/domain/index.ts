@@ -1,3 +1,4 @@
+export * from './client.js'
 export * from './database-error.js'
 export * from './defaults.js'
 export * from './docs.js'
