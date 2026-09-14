@@ -17,6 +17,7 @@ import { users } from './data/users'
 import { schema } from './generated/seed/schema'
 
 export default defineConfig(schema, {
+  url: 'file:./seed.db',
   models: {
     Tag: { data: tags },
     User: { data: users },

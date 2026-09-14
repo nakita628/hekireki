@@ -20,7 +20,7 @@ const YEAR = 365 * 24 * 60 * 60 * 1000
 
 type ObjectRule = Exclude<LooseFieldRule, (...args: never[]) => unknown>
 
-function ruleObject(rule: LooseFieldRule | undefined): ObjectRule {
+function ruleObject(rule: LooseFieldRule | undefined) {
   return rule === undefined || typeof rule === 'function' ? {} : rule
 }
 
@@ -212,12 +212,11 @@ function makeDecimal(faker: Faker, field: DMMF.Field, rule: ObjectRule) {
       ? [native.args[0] ?? 10, native.args[1] ?? 2]
       : [10, 2]
   const range = floatRange(field, rule)
+  // The column cannot hold more digits than its precision, so a rule beyond it is cut to fit.
   const ceiling = 10 ** (precision - scale) - 1
-  const value = faker.number.float({
-    min: Math.max(range.min, -ceiling),
-    max: Math.min(range.max, ceiling),
-    fractionDigits: scale,
-  })
+  const min = Math.min(Math.max(range.min, -ceiling), ceiling)
+  const max = Math.max(Math.min(range.max, ceiling), min)
+  const value = faker.number.float({ min, max, fractionDigits: scale })
   return value.toFixed(scale)
 }
 

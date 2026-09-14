@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url'
 import { Effect } from 'effect'
 import * as z from 'zod'
 
-import { readFile } from '../../../file/index.js'
+import { resolveDatabaseUrl } from '../../../database/resolve.js'
 import * as DatabaseErrorDomain from '../domain/index.js'
 import * as PlanDomain from '../domain/index.js'
 import * as SqlDomain from '../domain/index.js'
@@ -341,7 +341,7 @@ export function disconnectedDatabase(reason: string | null = null): {
     readonly connected: boolean
     readonly dialect: 'postgresql' | 'mysql' | 'sqlite' | null
     readonly url: string | null
-    readonly source: 'flag' | 'env' | 'config' | null
+    readonly source: UrlDomain.UrlSource | null
     readonly error: string | null
   }
   readonly driver: Effect.Effect<Driver, DatabaseUnavailableError>
@@ -362,6 +362,18 @@ const ConnectDatabaseInput = z
       .string()
       .nullable()
       .meta({ description: 'The --url flag, when given.', example: 'file:./dev.db' }),
+    configUrl: z.string().nullable().meta({
+      description: 'The `url` of hekireki.config.ts, when set.',
+      example: 'file:./dev.db',
+    }),
+    configError: z.string().nullable().meta({
+      description: 'Why hekireki.config.ts could not be read, when it could not.',
+      example: null,
+    }),
+    schemaText: z.string().nullable().meta({
+      description: 'The text of the schema files, for the `url` of a datasource block.',
+      example: null,
+    }),
     schemaProvider: z
       .string()
       .nullable()
@@ -386,23 +398,12 @@ const ConnectDatabaseInput = z
 /** Resolves the URL, picks the dialect and opens the driver; a failure is a disconnected database that says why. */
 export function connectDatabase(options: z.infer<typeof ConnectDatabaseInput>) {
   return Effect.gen(function* () {
-    const dotenv = yield* readFile(path.join(options.cwd, '.env')).pipe(
-      Effect.map((text) => UrlDomain.makeDotenv({ text })),
-      Effect.orElseSucceed(() => ({})),
+    const found = yield* resolveDatabaseUrl(options).pipe(
+      Effect.mapError((error) => new DatabaseUnavailableError({ reason: error.reason })),
     )
-    const configText = yield* readFile(path.join(options.cwd, 'prisma.config.ts')).pipe(
-      Effect.orElseSucceed(() => null),
-    )
-    const resolved = UrlDomain.makeDatabaseUrl({
-      explicit: options.explicitUrl,
-      env: options.env,
-      dotenv,
-      configText,
-    })
-    if (!resolved.ok) return yield* new DatabaseUnavailableError({ reason: resolved.error })
-    const url = UrlDomain.makeRedactedUrl({ url: resolved.value.url })
+    const url = UrlDomain.makeRedactedUrl({ url: found.url })
     const dialect = UrlDomain.makeDialect({
-      url: resolved.value.url,
+      url: found.url,
       schemaProvider: options.schemaProvider,
     })
     if (dialect === null) {
@@ -412,12 +413,12 @@ export function connectDatabase(options: z.infer<typeof ConnectDatabaseInput>) {
     }
     const driver =
       dialect === 'sqlite'
-        ? yield* openSqlite(resolved.value.url, options.schemaDir)
+        ? yield* openSqlite(found.url, options.schemaDir)
         : dialect === 'postgresql'
-          ? yield* openPostgres(resolved.value.url, options.cwd)
-          : yield* openMysql(resolved.value.url, options.cwd)
+          ? yield* openPostgres(found.url, options.cwd)
+          : yield* openMysql(found.url, options.cwd)
     return {
-      status: { connected: true, dialect, url, source: resolved.value.source, error: null },
+      status: { connected: true, dialect, url, source: found.source, error: null },
       driver: Effect.succeed(driver),
       close: driver.close,
     }

@@ -5,6 +5,8 @@ import { defineConfig } from 'hekireki'
 import { schema } from './generated/seed/schema'
 
 export default defineConfig(schema, {
+  // The one place the database is named: `hekireki seed` writes here and `hekireki studio` opens it.
+  url: 'file:./seed.db',
   seed: 42,
   locale: ['ja', 'en'],
   count: 20,

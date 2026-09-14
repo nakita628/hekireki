@@ -1,0 +1,7 @@
+# `pnpm setup` rebuilds these; the schema module in */generated/seed is committed, the Prisma Client is not.
+*/generated/client/
+*.db
+*.db-journal
+*/seed.sql
+# A local .env for a database of your own; the committed configs name the compose databases.
+.env

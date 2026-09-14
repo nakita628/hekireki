@@ -16,6 +16,21 @@ importers:
         specifier: link:packages/hekireki
         version: link:packages/hekireki
     devDependencies:
+      '@prisma/adapter-better-sqlite3':
+        specifier: 8.1.0-dev.6
+        version: 8.1.0-dev.6
+      '@prisma/adapter-mariadb':
+        specifier: 8.1.0-dev.6
+        version: 8.1.0-dev.6
+      '@prisma/adapter-pg':
+        specifier: 8.1.0-dev.6
+        version: 8.1.0-dev.6
+      '@prisma/client':
+        specifier: 8.1.0-dev.6
+        version: 8.1.0-dev.6(typescript@7.0.2)
+      '@types/pg':
+        specifier: ^8.23.1
+        version: 8.23.1
       actionlint:
         specifier: ^2.0.6
         version: 2.0.6
@@ -42,6 +57,33 @@ importers:
         version: 0.3.0(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(typescript@7.0.2)(vite@8.1.2(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))(yaml@2.9.0)
 
   example: {}
+
+  examples/mysql:
+    devDependencies:
+      hekireki:
+        specifier: workspace:*
+        version: link:../../packages/hekireki
+      prisma:
+        specifier: 8.1.0-dev.6
+        version: 8.1.0-dev.6(@types/react-dom@19.2.5(@types/react@19.2.17))(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2)
+
+  examples/postgresql:
+    devDependencies:
+      hekireki:
+        specifier: workspace:*
+        version: link:../../packages/hekireki
+      prisma:
+        specifier: 8.1.0-dev.6
+        version: 8.1.0-dev.6(@types/react-dom@19.2.5(@types/react@19.2.17))(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2)
+
+  examples/sqlite:
+    devDependencies:
+      hekireki:
+        specifier: workspace:*
+        version: link:../../packages/hekireki
+      prisma:
+        specifier: 8.1.0-dev.6
+        version: 8.1.0-dev.6(@types/react-dom@19.2.5(@types/react@19.2.17))(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2)
 
   packages/hekireki:
     dependencies:
@@ -213,7 +255,7 @@ importers:
         version: 0.31.10
       drizzle-orm:
         specifier: ^0.45.2
-        version: 0.45.2(@electric-sql/pglite@0.4.3)(@prisma/client@7.9.0(prisma@8.1.0-dev.6(@types/react-dom@19.2.5(@types/react@19.2.17))(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2))(typescript@7.0.2))(better-sqlite3@12.11.1)(kysely@0.29.5)(mysql2@3.23.1(@types/node@26.4.1))(pg@8.22.0)(postgres@3.4.7)(prisma@8.1.0-dev.6(@types/react-dom@19.2.5(@types/react@19.2.17))(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2))
+        version: 0.45.2(@electric-sql/pglite@0.4.3)(@prisma/client@8.1.0-dev.6(typescript@7.0.2))(@types/pg@8.23.1)(better-sqlite3@12.11.1)(kysely@0.29.5)(mysql2@3.23.1(@types/node@26.4.1))(pg@8.22.0)(postgres@3.4.7)(prisma@8.1.0-dev.6(@types/react-dom@19.2.5(@types/react@19.2.17))(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2))
       hono-takibi:
         specifier: ^0.9.99998
         version: 0.9.99998(@types/node@26.4.1)(@typespec/http@1.16.0(@typespec/compiler@1.16.0(@types/node@26.4.1)))(@typespec/openapi@1.16.0(@typespec/compiler@1.16.0(@types/node@26.4.1))(@typespec/http@1.16.0(@typespec/compiler@1.16.0(@types/node@26.4.1))))(openapi-types@12.1.3)(vite-plus@0.3.0(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(typescript@7.0.2)(vite@8.1.2(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))(yaml@2.9.0))
@@ -256,21 +298,6 @@ importers:
       zustand:
         specifier: ^5.0.8
         version: 5.0.15(@types/react@19.2.17)(react@19.2.8)(use-sync-external-store@1.6.0(react@19.2.8))
-
-  sandbox/seed:
-    devDependencies:
-      hekireki:
-        specifier: workspace:*
-        version: link:../../packages/hekireki
-      prisma:
-        specifier: 8.1.0-dev.6
-        version: 8.1.0-dev.6(@types/react-dom@19.2.5(@types/react@19.2.17))(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2)
-
-  sandbox/sqlite:
-    devDependencies:
-      prisma:
-        specifier: 8.1.0-dev.6
-        version: 8.1.0-dev.6(@types/react-dom@19.2.5(@types/react@19.2.17))(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2)
 
   test:
     devDependencies:
@@ -2019,11 +2046,20 @@ packages:
   '@polka/url@1.0.0-next.29':
     resolution: {integrity: sha512-wwQAWhWSuHaag8c4q/KN/vCoeOJYshAIvMQwD4GpSb3OiZklFfvAgmj0VCBBImRpuF/aFgIRzllXlVX93Jevww==}
 
-  '@prisma/client-runtime-utils@7.9.0':
-    resolution: {integrity: sha512-kMVmS4ZEy3xlkca+TfxOEm/ToVVlOS2x1Tc6/wIRf/HfczBqENtSPcKszy4ZpFNzjJ8SRKvlU5V0rrpoFw2KOg==}
+  '@prisma/adapter-better-sqlite3@8.1.0-dev.6':
+    resolution: {integrity: sha512-UnrQwlPTzzEO1iYH0U5xLzmMXu0SHCRKHQKP/Asl/dDlHU0KYfMl/EQR7uE/EfWEIGoW+dInlM4HCtz9+6wYvw==}
 
-  '@prisma/client@7.9.0':
-    resolution: {integrity: sha512-BTG/mB+WL/1sD2gWwdNc2uuVJjNNBgCDlPFdjco6jJArgbg4IAChtzVeW4debFa/NKBbsGedCjET316sjllWTQ==}
+  '@prisma/adapter-mariadb@8.1.0-dev.6':
+    resolution: {integrity: sha512-FYslJHY17DGSWs0ukKfWYqEzMDu5NS3mT4g1MpA1M0e1PsIuspdISJ++FPe84H4TeltZxe90E7+2AwFBULE/Lg==}
+
+  '@prisma/adapter-pg@8.1.0-dev.6':
+    resolution: {integrity: sha512-po8qnd42Yi1gUIpkRlYoT5XBMN9fQN/N013/d38er6LO7gM3YWxDUbdKVXNrNGFrFMRBbhwJmP/DjhGefvkqHQ==}
+
+  '@prisma/client-runtime-utils@8.1.0-dev.6':
+    resolution: {integrity: sha512-/qsCpN3tz5kUlwQlU3+PTAjRlBRFUfr94o3j3yUbkGHWvSA5qnrosD0zhVIP/NqaDJOP1oOQzeXf8iEIZiVLMg==}
+
+  '@prisma/client@8.1.0-dev.6':
+    resolution: {integrity: sha512-JDGxvNgwCD/MCMS5e4kmmusNjdc7kMWqw8u7ImvIUkjUajth6CygKVk5OOHCcntPJnNPK2Y+1gDQzesZPIhMBA==}
     engines: {node: ^20.19 || ^22.12 || >=24.0}
     peerDependencies:
       prisma: '*'
@@ -2051,6 +2087,9 @@ packages:
 
   '@prisma/dmmf@8.1.0-dev.6':
     resolution: {integrity: sha512-y4X9VHOD4IIeP1m65ypMxWFbcSkZldXgzyuflbWo1bcm1G2ofy/MORKieGXJBd9ltO0xF5pEiJV9sY6bFc/crA==}
+
+  '@prisma/driver-adapter-utils@8.1.0-dev.6':
+    resolution: {integrity: sha512-IDIeYCEtw2pISajqSupt5O7W+CKNLupGQwZByU9QUxxxes/MXIJkQsewcapAiC8VxnGRamyh7zxohQS+OsnT+g==}
 
   '@prisma/engines-version@8.1.0-1.d1b3f377ca835d73fd50954a5e22128b9ebdd6b8':
     resolution: {integrity: sha512-XjXmwjN2NE340RpXoXv8ZF8aNAvr0FE+7gNfkKeW6vyjXs7F8uxvEbWQoVrhioXDQoIsnNmv7r+wxvzfdEZaWA==}
@@ -2860,6 +2899,9 @@ packages:
 
   '@types/normalize-package-data@2.4.4':
     resolution: {integrity: sha512-37i+OaWTh9qeK4LSHPsyRC7NahnGotNuZvjLSgcPzblpHB3rrCJxAOgI5gCdKm7coonsaX1Of0ILiTcnZjbfxA==}
+
+  '@types/pg@8.23.1':
+    resolution: {integrity: sha512-fKVHpikPdg4GKks3JuLEhvwSyvwzF23hnabPy6DD8ljVbC7+6J5dQzdv4arV6jqq57djnMgs1HKBxX4P8aBI3A==}
 
   '@types/react-dom@19.2.5':
     resolution: {integrity: sha512-fMPwH9v7r/pp43yUd2/Mbiex5KouJwwR3dzHkhLREUC6764VyDsqxhAxv6OFEYR1RhjOyD1naqba8ECDBe7ZQg==}
@@ -4661,6 +4703,10 @@ packages:
   magicast@0.5.3:
     resolution: {integrity: sha512-pVKE4UdSQ7DvHzivsCIFx2BJn1mHG6KsyrFcaxFx6tONdneEuThrDx0Cj3AMg58KyN4pzYT+LHOotxDQDjNvkw==}
 
+  mariadb@3.5.3:
+    resolution: {integrity: sha512-i053Kc0MgdUv/hu9mCyq67TYfPXFj3/MV8I7ZW5wvJNixIyXC0VztMPUjIVj/449nQo+BsxFD4Fdk/sA/uqKPQ==}
+    engines: {node: '>= 20.0.0'}
+
   markdown-it@14.3.0:
     resolution: {integrity: sha512-RCEsPjR+sr0x+AuYp601tKTkgFG4YEPLCzHST3cQ/fhlJkqAkz1L2/Qbp1j9qw5SBwQHFBoW8+hoN5xssOF0Tw==}
     hasBin: true
@@ -5121,6 +5167,10 @@ packages:
   postgres-array@2.0.0:
     resolution: {integrity: sha512-VpZrUqU5A69eQyW2c5CA1jtLecCsN2U/bD6VilrFDWq5+5UIEVO7nazS3TEcHf1zuPYO/sqGvUvW62g86RXZuA==}
     engines: {node: '>=4'}
+
+  postgres-array@3.0.4:
+    resolution: {integrity: sha512-nAUSGfSDGOaOAEGwqsRY27GPOea7CNipJPOA7lPbdEpx5Kg3qzdP0AaWC5MlhTWV9s4hFX39nomVZ+C4tnGOJQ==}
+    engines: {node: '>=12'}
 
   postgres-bytea@1.0.1:
     resolution: {integrity: sha512-5+5HqXnsZPE65IJZSMkZtURARZelel2oXUEO8rH83VS/hxH5vv1uHquPg5wZs8yMAfdv971IU+kcPUczi7NVBQ==}
@@ -7284,16 +7334,32 @@ snapshots:
 
   '@polka/url@1.0.0-next.29': {}
 
-  '@prisma/client-runtime-utils@7.9.0':
-    optional: true
-
-  '@prisma/client@7.9.0(prisma@8.1.0-dev.6(@types/react-dom@19.2.5(@types/react@19.2.17))(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2))(typescript@7.0.2)':
+  '@prisma/adapter-better-sqlite3@8.1.0-dev.6':
     dependencies:
-      '@prisma/client-runtime-utils': 7.9.0
+      '@prisma/driver-adapter-utils': 8.1.0-dev.6
+      better-sqlite3: 12.11.1
+
+  '@prisma/adapter-mariadb@8.1.0-dev.6':
+    dependencies:
+      '@prisma/driver-adapter-utils': 8.1.0-dev.6
+      mariadb: 3.5.3
+
+  '@prisma/adapter-pg@8.1.0-dev.6':
+    dependencies:
+      '@prisma/driver-adapter-utils': 8.1.0-dev.6
+      '@types/pg': 8.23.1
+      pg: 8.22.0
+      postgres-array: 3.0.4
+    transitivePeerDependencies:
+      - pg-native
+
+  '@prisma/client-runtime-utils@8.1.0-dev.6': {}
+
+  '@prisma/client@8.1.0-dev.6(typescript@7.0.2)':
+    dependencies:
+      '@prisma/client-runtime-utils': 8.1.0-dev.6
     optionalDependencies:
-      prisma: 8.1.0-dev.6(@types/react-dom@19.2.5(@types/react@19.2.17))(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2)
       typescript: 7.0.2
-    optional: true
 
   '@prisma/config@7.9.0-dev.4(magicast@0.5.3)':
     dependencies:
@@ -7338,6 +7404,10 @@ snapshots:
       - typescript
 
   '@prisma/dmmf@8.1.0-dev.6': {}
+
+  '@prisma/driver-adapter-utils@8.1.0-dev.6':
+    dependencies:
+      '@prisma/debug': 8.1.0-dev.6
 
   '@prisma/engines-version@8.1.0-1.d1b3f377ca835d73fd50954a5e22128b9ebdd6b8': {}
 
@@ -8138,6 +8208,12 @@ snapshots:
 
   '@types/normalize-package-data@2.4.4': {}
 
+  '@types/pg@8.23.1':
+    dependencies:
+      '@types/node': 26.4.1
+      pg-protocol: 1.15.0
+      pg-types: 2.2.0
+
   '@types/react-dom@19.2.5(@types/react@19.2.17)':
     dependencies:
       '@types/react': 19.2.17
@@ -8657,8 +8733,7 @@ snapshots:
 
   balanced-match@4.0.4: {}
 
-  base64-js@1.5.1:
-    optional: true
+  base64-js@1.5.1: {}
 
   baseline-browser-mapping@2.11.20: {}
 
@@ -8668,21 +8743,18 @@ snapshots:
     dependencies:
       bindings: 1.5.0
       prebuild-install: 7.1.3
-    optional: true
 
   bignumber.js@9.3.1: {}
 
   bindings@1.5.0:
     dependencies:
       file-uri-to-path: 1.0.0
-    optional: true
 
   bl@4.1.0:
     dependencies:
       buffer: 5.7.1
       inherits: 2.0.4
       readable-stream: 3.6.2
-    optional: true
 
   boundary@2.0.0: {}
 
@@ -8708,7 +8780,6 @@ snapshots:
     dependencies:
       base64-js: 1.5.1
       ieee754: 1.2.1
-    optional: true
 
   c12@3.3.4(magicast@0.5.3):
     dependencies:
@@ -8773,8 +8844,7 @@ snapshots:
     dependencies:
       readdirp: 5.0.0
 
-  chownr@1.1.4:
-    optional: true
+  chownr@1.1.4: {}
 
   chownr@3.0.0: {}
 
@@ -9012,10 +9082,8 @@ snapshots:
   decompress-response@6.0.0:
     dependencies:
       mimic-response: 3.1.0
-    optional: true
 
-  deep-extend@0.6.0:
-    optional: true
+  deep-extend@0.6.0: {}
 
   deep-is@0.1.4: {}
 
@@ -9058,10 +9126,11 @@ snapshots:
       esbuild: 0.25.12
       tsx: 4.23.1
 
-  drizzle-orm@0.45.2(@electric-sql/pglite@0.4.3)(@prisma/client@7.9.0(prisma@8.1.0-dev.6(@types/react-dom@19.2.5(@types/react@19.2.17))(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2))(typescript@7.0.2))(better-sqlite3@12.11.1)(kysely@0.29.5)(mysql2@3.23.1(@types/node@26.4.1))(pg@8.22.0)(postgres@3.4.7)(prisma@8.1.0-dev.6(@types/react-dom@19.2.5(@types/react@19.2.17))(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2)):
+  drizzle-orm@0.45.2(@electric-sql/pglite@0.4.3)(@prisma/client@8.1.0-dev.6(typescript@7.0.2))(@types/pg@8.23.1)(better-sqlite3@12.11.1)(kysely@0.29.5)(mysql2@3.23.1(@types/node@26.4.1))(pg@8.22.0)(postgres@3.4.7)(prisma@8.1.0-dev.6(@types/react-dom@19.2.5(@types/react@19.2.17))(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2)):
     optionalDependencies:
       '@electric-sql/pglite': 0.4.3
-      '@prisma/client': 7.9.0(prisma@8.1.0-dev.6(@types/react-dom@19.2.5(@types/react@19.2.17))(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2))(typescript@7.0.2)
+      '@prisma/client': 8.1.0-dev.6(typescript@7.0.2)
+      '@types/pg': 8.23.1
       better-sqlite3: 12.11.1
       kysely: 0.29.5
       mysql2: 3.23.1(@types/node@26.4.1)
@@ -9092,7 +9161,6 @@ snapshots:
   end-of-stream@1.4.5:
     dependencies:
       once: 1.4.0
-    optional: true
 
   enhanced-resolve@5.24.5:
     dependencies:
@@ -9204,8 +9272,7 @@ snapshots:
     dependencies:
       '@types/estree': 1.0.9
 
-  expand-template@2.0.3:
-    optional: true
+  expand-template@2.0.3: {}
 
   expect-type@1.4.0: {}
 
@@ -9273,8 +9340,7 @@ snapshots:
     dependencies:
       flat-cache: 6.1.23
 
-  file-uri-to-path@1.0.0:
-    optional: true
+  file-uri-to-path@1.0.0: {}
 
   fill-range@7.1.1:
     dependencies:
@@ -9303,8 +9369,7 @@ snapshots:
 
   format@0.2.2: {}
 
-  fs-constants@1.0.0:
-    optional: true
+  fs-constants@1.0.0: {}
 
   fs-extra@11.3.0:
     dependencies:
@@ -9335,8 +9400,7 @@ snapshots:
 
   giget@3.3.1: {}
 
-  github-from-package@0.0.0:
-    optional: true
+  github-from-package@0.0.0: {}
 
   glob-parent@5.1.2:
     dependencies:
@@ -9408,8 +9472,7 @@ snapshots:
     dependencies:
       safer-buffer: 2.1.2
 
-  ieee754@1.2.1:
-    optional: true
+  ieee754@1.2.1: {}
 
   ignore@7.0.8: {}
 
@@ -9419,11 +9482,9 @@ snapshots:
 
   index-to-position@1.2.0: {}
 
-  inherits@2.0.4:
-    optional: true
+  inherits@2.0.4: {}
 
-  ini@1.3.8:
-    optional: true
+  ini@1.3.8: {}
 
   ini@6.0.0: {}
 
@@ -9679,6 +9740,14 @@ snapshots:
       '@babel/types': 7.29.8
       source-map-js: 1.2.1
     optional: true
+
+  mariadb@3.5.3:
+    dependencies:
+      '@types/geojson': 7946.0.16
+      '@types/node': 26.4.1
+      denque: 2.1.0
+      iconv-lite: 0.7.3
+      lru-cache: 11.5.2
 
   markdown-it@14.3.0:
     dependencies:
@@ -10039,15 +10108,13 @@ snapshots:
 
   mime@4.1.0: {}
 
-  mimic-response@3.1.0:
-    optional: true
+  mimic-response@3.1.0: {}
 
   minimatch@10.2.6:
     dependencies:
       brace-expansion: 5.0.9
 
-  minimist@1.2.8:
-    optional: true
+  minimist@1.2.8: {}
 
   minipass@7.1.3: {}
 
@@ -10055,8 +10122,7 @@ snapshots:
     dependencies:
       minipass: 7.1.3
 
-  mkdirp-classic@0.5.3:
-    optional: true
+  mkdirp-classic@0.5.3: {}
 
   monaco-editor@0.56.0:
     dependencies:
@@ -10119,15 +10185,13 @@ snapshots:
 
   nanoid@6.0.1: {}
 
-  napi-build-utils@2.0.0:
-    optional: true
+  napi-build-utils@2.0.0: {}
 
   neotraverse@0.6.18: {}
 
   node-abi@3.94.0:
     dependencies:
       semver: 7.8.5
-    optional: true
 
   node-gyp-build-optional-packages@5.2.2:
     dependencies:
@@ -10149,7 +10213,6 @@ snapshots:
   once@1.4.0:
     dependencies:
       wrappy: 1.0.2
-    optional: true
 
   openapi-types@12.1.3: {}
 
@@ -10382,6 +10445,8 @@ snapshots:
 
   postgres-array@2.0.0: {}
 
+  postgres-array@3.0.4: {}
+
   postgres-bytea@1.0.1: {}
 
   postgres-date@1.0.7: {}
@@ -10406,7 +10471,6 @@ snapshots:
       simple-get: 4.0.1
       tar-fs: 2.1.5
       tunnel-agent: 0.6.0
-    optional: true
 
   prelude-ls@1.2.1: {}
 
@@ -10446,7 +10510,6 @@ snapshots:
     dependencies:
       end-of-stream: 1.4.5
       once: 1.4.0
-    optional: true
 
   punycode.js@2.3.1: {}
 
@@ -10480,7 +10543,6 @@ snapshots:
       ini: 1.3.8
       minimist: 1.2.8
       strip-json-comments: 2.0.1
-    optional: true
 
   react-aria-components@1.21.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
     dependencies:
@@ -10550,7 +10612,6 @@ snapshots:
       inherits: 2.0.4
       string_decoder: 1.3.0
       util-deprecate: 1.0.2
-    optional: true
 
   readdirp@5.0.0: {}
 
@@ -10633,8 +10694,7 @@ snapshots:
     dependencies:
       queue-microtask: 1.2.3
 
-  safe-buffer@5.2.1:
-    optional: true
+  safe-buffer@5.2.1: {}
 
   safe-regex2@5.1.1:
     dependencies:
@@ -10668,15 +10728,13 @@ snapshots:
 
   signal-exit@4.1.0: {}
 
-  simple-concat@1.0.1:
-    optional: true
+  simple-concat@1.0.1: {}
 
   simple-get@4.0.1:
     dependencies:
       decompress-response: 6.0.0
       once: 1.4.0
       simple-concat: 1.0.1
-    optional: true
 
   sirv@3.0.2:
     dependencies:
@@ -10758,7 +10816,6 @@ snapshots:
   string_decoder@1.3.0:
     dependencies:
       safe-buffer: 5.2.1
-    optional: true
 
   strip-ansi@6.0.1:
     dependencies:
@@ -10768,8 +10825,7 @@ snapshots:
     dependencies:
       ansi-regex: 6.3.0
 
-  strip-json-comments@2.0.1:
-    optional: true
+  strip-json-comments@2.0.1: {}
 
   strip-json-comments@5.0.3: {}
 
@@ -10804,7 +10860,6 @@ snapshots:
       mkdirp-classic: 0.5.3
       pump: 3.0.4
       tar-stream: 2.2.0
-    optional: true
 
   tar-stream@2.2.0:
     dependencies:
@@ -10813,7 +10868,6 @@ snapshots:
       fs-constants: 1.0.0
       inherits: 2.0.4
       readable-stream: 3.6.2
-    optional: true
 
   tar@7.5.22:
     dependencies:
@@ -10913,7 +10967,6 @@ snapshots:
   tunnel-agent@0.6.0:
     dependencies:
       safe-buffer: 5.2.1
-    optional: true
 
   tw-animate-css@1.4.0: {}
 
@@ -11009,8 +11062,7 @@ snapshots:
     dependencies:
       react: 19.2.8
 
-  util-deprecate@1.0.2:
-    optional: true
+  util-deprecate@1.0.2: {}
 
   uuid@14.0.2: {}
 
@@ -11189,8 +11241,7 @@ snapshots:
       string-width: 7.2.0
       strip-ansi: 7.2.0
 
-  wrappy@1.0.2:
-    optional: true
+  wrappy@1.0.2: {}
 
   ws@8.21.3: {}
 

@@ -78,7 +78,10 @@ async function setup() {
     Effect.provide(
       connectDatabase({
         explicitUrl: null,
+        configUrl: null,
+        configError: null,
         schemaProvider: snapshot.schema?.provider ?? null,
+        schemaText: null,
         cwd: dir,
         schemaDir: dir,
         env: {},

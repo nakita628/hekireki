@@ -19,7 +19,7 @@
     "test/harness/**",
     "packages/hekireki/docs/studio-api.md",
     "example/generated/**",
-    "sandbox/**",
+    "examples/*/generated/**",
     // What a Playwright run leaves behind.
     "**/e2e/.results/**",
     "**/e2e/.workspace/**",

@@ -1,22 +1,15 @@
-import { existsSync, statSync } from 'node:fs'
 import nodeModule from 'node:module'
 import path from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { pathToFileURL } from 'node:url'
 
-import { Effect, FileSystem } from 'effect'
-import * as z from 'zod'
+import { Effect, FileSystem, Schema, SchemaIssue } from 'effect'
 
 import { exists, readFile, writeFile } from '../file/index.js'
 import type { LooseFieldRule, SeedValue } from './config.js'
 import { SeedConfigError } from './errors.js'
 
-/** Where `hekireki seed` looks for its config when `--config` is omitted, in order. */
-export const CONFIG_CANDIDATES = [
-  'hekireki.config.ts',
-  'hekireki.config.mts',
-  'hekireki.config.js',
-  'hekireki.config.mjs',
-] as const
+/** The one file `hekireki seed` and `hekireki studio` look for when `--config` is omitted. */
+export const CONFIG_FILE = 'hekireki.config.ts'
 
 function isSeedValue(value: unknown): value is SeedValue {
   if (value === null) return true
@@ -28,207 +21,128 @@ function isSeedValue(value: unknown): value is SeedValue {
 
 type Generator = Extract<LooseFieldRule, (...args: never[]) => unknown>
 
-const SeedValueSchema = z
-  .custom<SeedValue>(
-    isSeedValue,
-    'Expected a string, number, bigint, boolean, Date, bytes, null, or JSON of those',
-  )
-  .meta({ description: 'A value a column can hold', example: 'fixed' })
-
-const GeneratorSchema = z
-  .custom<Generator>(
-    (value) => typeof value === 'function',
-    'Expected a rule function (faker, { index, row }) => value',
-  )
-  .meta({
-    description: 'A function of the seeded faker that makes the value',
-    example: 'faker => faker.person.fullName()',
-  })
-
-const ClientFactorySchema = z
-  .custom<() => unknown>(
-    (value) => typeof value === 'function',
-    'Expected a function returning the Prisma Client: () => new PrismaClient({ adapter })',
-  )
-  .meta({
-    description: 'A function returning the Prisma Client',
-    example: '() => new PrismaClient({ adapter })',
-  })
-
-const NonNegativeInt = z.int().min(0).meta({ description: 'A count or a length', example: 3 })
-
-const Rate = z
-  .number()
-  .min(0)
-  .max(1)
-  .meta({ description: 'How often an optional field is null, from 0 to 1', example: 0.2 })
-
-const DateInput = z
-  .union([z.string(), z.date()])
-  .meta({ description: 'An ISO 8601 date or a Date', example: '2025-01-01' })
-
-const Range = z
-  .strictObject({
-    min: NonNegativeInt.meta({ description: 'The shortest length.', example: 1 }),
-    max: NonNegativeInt.meta({ description: 'The longest length.', example: 3 }),
-  })
-  .meta({ description: 'A length range', example: { min: 1, max: 3 } })
-
-const FieldRuleObject = z
-  .strictObject({
-    value: SeedValueSchema.optional().meta({
-      description: 'The value every row gets.',
-      example: 'fixed',
-    }),
-    values: z
-      .array(SeedValueSchema)
-      .optional()
-      .meta({ description: 'The values rows draw from.', example: ['ADMIN', 'EDITOR'] }),
-    min: z
-      .number()
-      .optional()
-      .meta({ description: 'The lower bound of a number, or the shortest list.', example: 0 }),
-    max: z
-      .number()
-      .optional()
-      .meta({ description: 'The upper bound of a number, or the longest list.', example: 100 }),
-    from: DateInput.optional().meta({
-      description: 'The earliest DateTime.',
-      example: '2025-01-01',
-    }),
-    to: DateInput.optional().meta({ description: 'The latest DateTime.', example: '2025-12-31' }),
-    length: z
-      .union([NonNegativeInt, Range])
-      .optional()
-      .meta({ description: 'The length of a string, or its range.', example: 8 }),
-    nullRate: Rate.optional().meta({
-      description: 'How often an optional field is null.',
-      example: 0.2,
-    }),
-  })
-  .meta({ description: 'Bounds for one field', example: { min: 18, max: 65 } })
-
-const FieldRuleSchema = z.union([GeneratorSchema, FieldRuleObject]).meta({
-  description: 'A field rule: bounds, or a generator function',
-  example: { min: 18, max: 65 },
+const seedValue = Schema.declare(isSeedValue, {
+  expected: 'a string, number, bigint, boolean, Date, bytes, null, or JSON of those',
 })
 
-const RelationRuleSchema = z
-  .strictObject({
-    min: NonNegativeInt.optional().meta({
-      description: 'The fewest partners per row.',
-      example: 0,
-    }),
-    max: NonNegativeInt.optional().meta({ description: 'The most partners per row.', example: 3 }),
-  })
-  .meta({
-    description: 'How many partners each row of an implicit many-to-many gets',
-    example: { min: 0, max: 3 },
-  })
+const generator = Schema.declare((value): value is Generator => typeof value === 'function', {
+  expected: 'a rule function (faker, { index, row }) => value',
+})
 
-const ModelRuleSchema = z
-  .strictObject({
-    count: NonNegativeInt.optional().meta({ description: 'Rows to generate.', example: 100 }),
-    data: z
-      .array(z.record(z.string(), SeedValueSchema))
-      .optional()
-      .meta({
-        description: 'Real rows, inserted as written.',
-        example: [{ email: 'ann@example.com' }],
-      }),
-    fields: z
-      .record(z.string(), FieldRuleSchema)
-      .optional()
-      .meta({ description: 'Rules per field name.', example: { age: { min: 18, max: 65 } } }),
-    relations: z
-      .record(z.string(), RelationRuleSchema)
-      .optional()
-      .meta({
-        description: 'Rules per implicit many-to-many list field.',
-        example: { tags: { min: 0, max: 3 } },
-      }),
-  })
-  .meta({ description: 'Rules for one model', example: { count: 100 } })
+const clientFactory = Schema.declare(
+  (value): value is () => unknown => typeof value === 'function',
+  { expected: 'a function returning the Prisma Client: () => new PrismaClient({ adapter })' },
+)
+
+const nonNegativeInt = Schema.Int.pipe(Schema.check(Schema.isGreaterThanOrEqualTo(0)))
+
+const rate = Schema.Number.pipe(Schema.check(Schema.isBetween({ minimum: 0, maximum: 1 })))
+
+const dateInput = Schema.declare(
+  (value): value is string | Date =>
+    value instanceof Date ||
+    (typeof value === 'string' && !Number.isNaN(new Date(value).getTime())),
+  { expected: 'a date' },
+)
+
+/** Whether the window `from`..`to` is the right way round; either edge missing is fine. */
+const ordered = Schema.makeFilter(
+  (window: { readonly from?: string | Date; readonly to?: string | Date }) =>
+    window.from === undefined ||
+    window.to === undefined ||
+    new Date(window.from).getTime() <= new Date(window.to).getTime(),
+  { expected: 'from at or before to' },
+)
+
+const bounded = Schema.makeFilter(
+  (range: { readonly min?: number; readonly max?: number }) =>
+    range.min === undefined || range.max === undefined || range.min <= range.max,
+  { expected: 'min at or below max' },
+)
+
+const range = Schema.Struct({ min: nonNegativeInt, max: nonNegativeInt }).pipe(
+  Schema.check(bounded),
+)
+
+const fieldRuleObject = Schema.Struct({
+  value: Schema.optionalKey(seedValue),
+  values: Schema.optionalKey(Schema.Array(seedValue)),
+  min: Schema.optionalKey(Schema.Number),
+  max: Schema.optionalKey(Schema.Number),
+  from: Schema.optionalKey(dateInput),
+  to: Schema.optionalKey(dateInput),
+  length: Schema.optionalKey(Schema.Union([nonNegativeInt, range])),
+  nullRate: Schema.optionalKey(rate),
+}).pipe(Schema.check(bounded, ordered))
+
+const fieldRule = Schema.Union([generator, fieldRuleObject])
+
+const relationRule = Schema.Struct({
+  min: Schema.optionalKey(nonNegativeInt),
+  max: Schema.optionalKey(nonNegativeInt),
+}).pipe(Schema.check(bounded))
+
+const modelRule = Schema.Struct({
+  count: Schema.optionalKey(nonNegativeInt),
+  data: Schema.optionalKey(Schema.Array(Schema.Record(Schema.String, seedValue))),
+  fields: Schema.optionalKey(Schema.Record(Schema.String, fieldRule)),
+  relations: Schema.optionalKey(Schema.Record(Schema.String, relationRule)),
+})
 
 /** The loaded config as `hekireki seed` accepts it; the schema module's types are not needed at runtime. */
-const SeedConfigSchema = z
-  .strictObject({
-    schema: z
-      .string()
-      .optional()
-      .meta({ description: 'The schema path.', example: 'prisma/schema.prisma' }),
-    seed: z.int().optional().meta({ description: 'The faker seed.', example: 42 }),
-    locale: z
-      .union([z.string(), z.array(z.string())])
-      .optional()
-      .meta({ description: 'The faker locale, or a list tried in order.', example: 'ja' }),
-    count: NonNegativeInt.optional().meta({
-      description: 'Rows per model by default.',
-      example: 10,
-    }),
-    nullRate: Rate.optional().meta({
-      description: 'How often an optional field is null.',
-      example: 0.1,
-    }),
-    dates: z
-      .strictObject({
-        from: DateInput.optional().meta({
-          description: 'The earliest DateTime.',
-          example: '2025-01-01',
-        }),
-        to: DateInput.optional().meta({
-          description: 'The latest DateTime.',
-          example: '2025-12-31',
-        }),
-      })
-      .optional()
-      .meta({
-        description: 'The window every DateTime falls in.',
-        example: { from: '2025-01-01', to: '2025-12-31' },
-      }),
-    output: z
-      .string()
-      .optional()
-      .meta({ description: 'Where to write the SQL.', example: 'prisma/seed.sql' }),
-    url: z.string().optional().meta({ description: 'The database URL.', example: 'file:./dev.db' }),
-    reset: z
-      .boolean()
-      .optional()
-      .meta({ description: 'Delete the seeded tables first.', example: true }),
-    client: ClientFactorySchema.optional().meta({
-      description: 'The Prisma Client to write through.',
-      example: '() => new PrismaClient({ adapter })',
-    }),
-    models: z
-      .record(z.string(), ModelRuleSchema)
-      .optional()
-      .meta({ description: 'Rules per model name.', example: { User: { count: 100 } } }),
-  })
-  .meta({ description: 'The hekireki.config.ts seed config', example: { seed: 42, count: 10 } })
+const seedConfig = Schema.Struct({
+  schema: Schema.optionalKey(Schema.String),
+  seed: Schema.optionalKey(Schema.Int),
+  locale: Schema.optionalKey(Schema.Union([Schema.String, Schema.Array(Schema.String)])),
+  count: Schema.optionalKey(nonNegativeInt),
+  nullRate: Schema.optionalKey(rate),
+  dates: Schema.optionalKey(
+    Schema.Struct({ from: Schema.optionalKey(dateInput), to: Schema.optionalKey(dateInput) }).pipe(
+      Schema.check(ordered),
+    ),
+  ),
+  output: Schema.optionalKey(Schema.String),
+  url: Schema.optionalKey(Schema.String),
+  reset: Schema.optionalKey(Schema.Boolean),
+  client: Schema.optionalKey(clientFactory),
+  models: Schema.optionalKey(Schema.Record(Schema.String, modelRule)),
+})
 
-const ModuleNamespace = z
-  .object({
-    default: z
-      .unknown()
-      .meta({ description: 'The default export of the config module.', example: {} }),
-  })
-  .meta({ description: 'An imported config module', example: { default: {} } })
+/** Every problem of a config as `path: message`, unknown keys included, so a typo is not ignored. */
+const decodeConfig = Schema.decodeUnknownEffect(seedConfig, {
+  errors: 'all',
+  onExcessProperty: 'error',
+})
+const formatIssues = SchemaIssue.makeFormatterStandardSchemaV1()
 
-/** The explicit config path when it exists, else the first candidate in `cwd` that does, else null. */
+/** The default export of an imported module, when it has one. */
+function defaultExportOf(namespace: unknown) {
+  return typeof namespace === 'object' && namespace !== null && 'default' in namespace
+    ? namespace.default
+    : undefined
+}
+
+/**
+ * The explicit config path when it is a TypeScript file that exists, else `hekireki.config.ts` in
+ * `cwd` when that exists, else null. The config is TypeScript only: it is typed against the schema
+ * module `prisma generate` writes, and a JavaScript file would lose that check.
+ */
 export function resolveConfigPath(explicit: string | null, cwd: string) {
   return Effect.gen(function* () {
     if (explicit !== null) {
+      if (!/\.[cm]?ts$/u.test(explicit)) {
+        return yield* new SeedConfigError({
+          message: `Config must be a TypeScript file: ${explicit}\n   Write it as hekireki.config.ts, typed against the schema module.`,
+        })
+      }
       const resolved = path.resolve(cwd, explicit)
       if (yield* exists(resolved)) return resolved
       return yield* new SeedConfigError({
         message: `Config not found: ${explicit}\n   Check the path passed to --config.`,
       })
     }
-    for (const candidate of CONFIG_CANDIDATES) {
-      const resolved = path.resolve(cwd, candidate)
-      if (yield* exists(resolved)) return resolved
-    }
-    return null
+    const resolved = path.resolve(cwd, CONFIG_FILE)
+    return (yield* exists(resolved)) ? resolved : null
   })
 }
 
@@ -238,53 +152,11 @@ class ImportFailure {
   constructor(readonly error: unknown) {}
 }
 
-function isFile(candidate: string) {
-  return existsSync(candidate) && statSync(candidate).isFile()
-}
-
-/**
- * Resolves a relative import the way a bundler does while the config loads: `./data/users` and
- * `./generated/seed/schema` find `.ts` (or `.mts`, or `index.ts`) files, and `./x.js` finds
- * `x.ts` when there is no `x.js`. Node.js alone wants the exact file name, and the config and the
- * files it imports are TypeScript it runs as such.
- */
-function resolveTypeScript(
-  specifier: string,
-  context: { readonly parentURL?: string | undefined },
-  next: (specifier: string) => { readonly url: string },
-) {
-  const parent = context.parentURL
-  if (!(specifier.startsWith('./') || specifier.startsWith('../')) || parent === undefined) {
-    return next(specifier)
-  }
-  if (!parent.startsWith('file:')) return next(specifier)
-  const base = fileURLToPath(new URL(specifier, parent))
-  if (isFile(base)) return next(specifier)
-  const found = [
-    base.replace(/\.js$/u, '.ts'),
-    `${base}.ts`,
-    `${base}.mts`,
-    path.join(base, 'index.ts'),
-  ].find(isFile)
-  return found === undefined ? next(specifier) : next(pathToFileURL(found).href)
-}
-
-/** Imports the module with the TypeScript resolution above in place, then takes it down again. */
 function importModule(file: string) {
   return Effect.tryPromise({
-    try: async (): Promise<unknown> => {
-      const hooks =
-        typeof nodeModule.registerHooks === 'function'
-          ? nodeModule.registerHooks({
-              resolve: (specifier, context, nextResolve) =>
-                resolveTypeScript(specifier, context, (resolved) => nextResolve(resolved, context)),
-            })
-          : null
-      try {
-        return await import(pathToFileURL(file).href)
-      } finally {
-        hooks?.deregister()
-      }
+    try: async () => {
+      const namespace: unknown = await import(pathToFileURL(file).href)
+      return namespace
     },
     catch: (error) => new ImportFailure(error),
   })
@@ -338,30 +210,41 @@ function importStripped(file: string, original: SeedConfigError) {
 /** Loads the config module and checks its default export against what `hekireki seed` accepts. */
 export function loadSeedConfig(file: string) {
   return Effect.gen(function* () {
-    const typescript = /\.[cm]?ts$/u.test(file)
     const namespace = yield* importModule(file).pipe(
       Effect.catch((failure) =>
-        typescript && isTypeScriptUnsupported(failure)
+        isTypeScriptUnsupported(failure)
           ? importStripped(file, importError(file, failure))
           : Effect.fail(importError(file, failure)),
       ),
     )
-    const parsedModule = ModuleNamespace.safeParse(namespace)
-    const exported = parsedModule.success ? parsedModule.data.default : undefined
+    const exported = defaultExportOf(namespace)
     if (exported === undefined) {
       return yield* new SeedConfigError({
         message: `${file} has no default export.\n   Write \`export default defineConfig({ ... })\`.`,
       })
     }
-    const parsed = SeedConfigSchema.safeParse(exported)
-    if (!parsed.success) {
-      const issues = parsed.error.issues.map(
-        (issue) => `${issue.path.map(String).join('.') || '(root)'}: ${issue.message}`,
-      )
-      return yield* new SeedConfigError({
-        message: `Invalid config in ${file}:\n   ${issues.join('\n   ')}`,
-      })
-    }
-    return parsed.data
+    return yield* decodeConfig(exported).pipe(
+      Effect.mapError((error) => {
+        const issues = formatIssues(error.issue).issues.map(
+          (issue) => `${(issue.path ?? []).map(String).join('.') || '(root)'}: ${issue.message}`,
+        )
+        return new SeedConfigError({
+          message: `Invalid config in ${file}:\n   ${issues.join('\n   ')}`,
+        })
+      }),
+    )
+  })
+}
+
+/**
+ * The `url` of the hekireki.config.ts in `cwd`, so `hekireki studio` opens the database `hekireki
+ * seed` writes to without being told twice; null when there is no config or it sets no `url`.
+ */
+export function readConfigUrl(cwd: string) {
+  return Effect.gen(function* () {
+    const file = yield* resolveConfigPath(null, cwd)
+    if (file === null) return null
+    const config = yield* loadSeedConfig(file)
+    return config.url ?? null
   })
 }

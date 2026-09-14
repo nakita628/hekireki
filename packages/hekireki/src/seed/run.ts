@@ -4,20 +4,23 @@ import { Faker, allLocales } from '@faker-js/faker'
 import { Effect } from 'effect'
 
 import { DEFAULT_SCHEMA_PATHS } from '../cli/constants.js'
+import { resolveDatabaseUrl } from '../database/resolve.js'
+import type { Dialect } from '../database/url.js'
 import { emitRaw } from '../emit/index.js'
 import { exists } from '../file/index.js'
-import { connectDatabase } from '../studio/server/services/database.js'
-import { parseSchemaFiles, readSchemaFiles } from '../studio/server/services/load.js'
 import { seedWithClient } from './client.js'
 import type { SeedConfig } from './config.js'
-import { resolveSeedConfig } from './config.js'
+import { ADAPTERS, discoverClient } from './discover.js'
 import { SeedConfigError, SeedDatabaseError } from './errors.js'
-import { generateSeedRows } from './generate.js'
-import type { SeedTableRows } from './generate.js'
+import { generateSeedRows } from './generate/index.js'
 import { loadSeedConfig, resolveConfigPath } from './load-config.js'
+import type { ResolvedSeedConfig } from './options.js'
+import { resolveSeedConfig } from './options.js'
 import { makeSeedPlan } from './plan.js'
-import { insertStatements, makeSeedSql, resetStatements, sequenceStatements } from './sql.js'
-import type { Dialect, Statement } from './sql.js'
+import { withTypeScriptImports } from './resolve.js'
+import { dialectOf, parseSchema, readSchemaFiles, schemaText } from './schema.js'
+import type { GeneratorBlock, SchemaFile } from './schema.js'
+import { makeSeedSql } from './sql.js'
 
 export type SeedOverrides = {
   readonly config: string | null
@@ -53,19 +56,6 @@ function findSchemaPath(explicit: string | null, base: string, cwd: string) {
       message: `No Prisma schema found (looked for ${DEFAULT_SCHEMA_PATHS.join(', ')}).\n   Pass --schema <path> or set \`schema\` in hekireki.config.ts.`,
     })
   })
-}
-
-const DIALECTS: Readonly<Record<string, Dialect>> = {
-  postgresql: 'postgresql',
-  postgres: 'postgresql',
-  cockroachdb: 'postgresql',
-  mysql: 'mysql',
-  sqlite: 'sqlite',
-}
-
-/** The dialect the SQL is written for, from the schema's datasource provider. */
-function dialectOf(provider: string | null) {
-  return provider === null ? null : (DIALECTS[provider] ?? null)
 }
 
 /**
@@ -106,7 +96,7 @@ function makeFaker(seed: number | null, locales: readonly string[] | null) {
   })
 }
 
-function withOverrides(config: SeedConfig, overrides: SeedOverrides): SeedConfig {
+function withOverrides(config: SeedConfig, overrides: SeedOverrides) {
   return {
     ...config,
     ...(overrides.schema === null ? {} : { schema: overrides.schema }),
@@ -121,94 +111,77 @@ function withOverrides(config: SeedConfig, overrides: SeedOverrides): SeedConfig
   }
 }
 
-type Driver = {
-  readonly query: (statement: Statement) => Effect.Effect<unknown, { readonly cause: string }>
-}
-
-function runStatements(driver: Driver, statements: readonly Statement[]) {
-  return Effect.forEach(statements, (statement) => driver.query(statement), {
-    discard: true,
-  }).pipe(Effect.mapError((error) => new SeedDatabaseError({ message: error.cause })))
-}
-
-/** The statements in one transaction; a failure rolls it back before it is reported. */
-function transaction(driver: Driver, dialect: Dialect, body: readonly Statement[]) {
-  return Effect.gen(function* () {
-    if (dialect === 'sqlite') {
-      yield* runStatements(driver, [{ sql: 'PRAGMA foreign_keys = ON', params: [] }])
-    }
-    yield* runStatements(driver, [
-      { sql: dialect === 'mysql' ? 'START TRANSACTION' : 'BEGIN', params: [] },
-    ])
-    yield* runStatements(driver, body).pipe(
-      Effect.tapError(() =>
-        runStatements(driver, [{ sql: 'ROLLBACK', params: [] }]).pipe(
-          Effect.orElseSucceed(() => undefined),
-        ),
-      ),
-    )
-    yield* runStatements(driver, [{ sql: 'COMMIT', params: [] }])
-  })
-}
-
-/** Runs the reset, the inserts and the sequence fix-ups in one transaction against the database. */
-function insertIntoDatabase(input: {
-  readonly url: string | null
-  readonly provider: string | null
-  readonly cwd: string
-  readonly schemaDir: string
-  readonly entries: readonly SeedTableRows[]
-  readonly reset: boolean
-}) {
-  return Effect.gen(function* () {
-    const db = yield* connectDatabase({
-      explicitUrl: input.url,
-      schemaProvider: input.provider,
-      cwd: input.cwd,
-      schemaDir: input.schemaDir,
-      env: process.env,
-    })
-    if (!db.status.connected || db.status.dialect === null) {
-      return yield* new SeedDatabaseError({
-        message: `${db.status.error ?? 'No database connected.'}\n   Pass --url <connection-string>, or --sql <file> to write the rows as SQL instead.`,
-      })
-    }
-    // `connectDatabase` returns one of two shapes; naming the union of their drivers lets it be yielded.
-    const opened: Effect.Effect<
-      Effect.Success<typeof db.driver>,
-      Effect.Error<typeof db.driver>
-    > = db.driver
-    const driver = yield* opened.pipe(
-      Effect.mapError((error) => new SeedDatabaseError({ message: error.reason })),
-    )
-    const dialect = db.status.dialect
-    const tables = input.entries.map((entry) => entry.table)
-    const body = [
-      ...(input.reset ? resetStatements(dialect, tables) : []),
-      ...input.entries
-        .filter((entry) => entry.rows.length > 0)
-        .flatMap((entry) => insertStatements(dialect, entry)),
-      ...sequenceStatements(dialect, tables),
-    ]
-    yield* transaction(driver, dialect, body).pipe(
-      Effect.mapError((error) =>
-        /unique|duplicate/iu.test(error.message) && !input.reset
-          ? new SeedDatabaseError({
-              message: `${error.message}\n   The tables already hold rows; pass --reset to empty the seeded tables first.`,
-            })
-          : error,
-      ),
-      Effect.ensuring(db.close),
-    )
-    return { dialect, url: db.status.url ?? '' }
-  })
+/** The dialect the SQL is written for; the seeder writes the three databases Prisma has adapters for. */
+function requireDialect(provider: string | null, purpose: string) {
+  const dialect = dialectOf(provider)
+  return dialect === null
+    ? Effect.fail(
+        new SeedConfigError({
+          message: `Cannot ${purpose} for datasource provider "${provider ?? 'unknown'}".\n   Supported: postgresql, cockroachdb, mysql, sqlite.`,
+        }),
+      )
+    : Effect.succeed(dialect)
 }
 
 /**
- * `hekireki seed`: the config and the schema in, rows out — into the database the schema's
- * datasource points at, or into a SQL file when `--sql` / `output` names one.
+ * The Prisma Client the rows go through: the one `client` in the config returns, else the one
+ * the schema generates, opened with the project's driver adapter and the database URL.
  */
-export function runSeed(overrides: SeedOverrides, cwd: string) {
+function findClient(input: {
+  readonly config: ResolvedSeedConfig
+  readonly generators: readonly GeneratorBlock[]
+  readonly files: readonly SchemaFile[]
+  readonly schemaPath: string
+  readonly cwd: string
+  readonly dialect: Dialect
+}) {
+  return Effect.gen(function* () {
+    if (input.config.client !== null) {
+      const factory = input.config.client
+      const client = yield* Effect.tryPromise({
+        try: () => Promise.resolve(factory()),
+        catch: (error) =>
+          new SeedDatabaseError({
+            message: `\`client\` threw: ${error instanceof Error ? error.message : String(error)}`,
+          }),
+      })
+      return { client, source: 'config' }
+    }
+    const schemaDir = path.dirname(input.schemaPath)
+    const { url } = yield* resolveDatabaseUrl({
+      explicitUrl: input.config.url,
+      configUrl: null,
+      configError: null,
+      schemaText: schemaText(input.files),
+      cwd: input.cwd,
+      schemaDir,
+      env: process.env,
+    }).pipe(
+      Effect.mapError(
+        (error) =>
+          new SeedDatabaseError({
+            message: `${error.reason}\n   Or pass --sql <file> to write the rows as SQL instead.`,
+          }),
+      ),
+    )
+    const found = yield* discoverClient({
+      generators: input.generators,
+      schemaDir,
+      cwd: input.cwd,
+      url,
+      dialect: input.dialect,
+    })
+    if (found.client === null) {
+      const adapter = ADAPTERS[input.dialect]
+      return yield* new SeedDatabaseError({
+        message: `Prisma Client not found: ${found.reason ?? 'unknown'}.\n   Add a \`prisma-client\` generator to the schema and run \`prisma generate\`, install ${adapter.pkg}, set \`client\` in hekireki.config.ts, or pass --sql <file> to write the rows as a script instead.`,
+      })
+    }
+    return { client: found.client, source: found.source ?? 'generated' }
+  })
+}
+
+function seedProgram(overrides: SeedOverrides, cwd: string) {
   return Effect.gen(function* () {
     const configPath = yield* resolveConfigPath(overrides.config, cwd)
     const loaded = configPath === null ? {} : yield* loadSeedConfig(configPath)
@@ -219,13 +192,9 @@ export function runSeed(overrides: SeedOverrides, cwd: string) {
       overrides.schema === null ? configDir : cwd,
       cwd,
     )
-    const files = yield* readSchemaFiles({ schemaPath }).pipe(
-      Effect.mapError((error) => new SeedConfigError({ message: error.message })),
-    )
-    const parsed = yield* parseSchemaFiles({ files }).pipe(
-      Effect.mapError((error) => new SeedConfigError({ message: error.message })),
-    )
-    const tables = yield* makeSeedPlan(parsed.dmmf.datamodel)
+    const files = yield* readSchemaFiles(schemaPath)
+    const schema = yield* parseSchema(files)
+    const tables = yield* makeSeedPlan(schema.datamodel)
     const faker = yield* makeFaker(config.seed, config.locale)
     const entries = yield* generateSeedRows({ tables, config, faker })
     const report = {
@@ -240,12 +209,7 @@ export function runSeed(overrides: SeedOverrides, cwd: string) {
       })),
     }
     if (config.output !== null) {
-      const dialect = dialectOf(parsed.schema.provider)
-      if (dialect === null) {
-        return yield* new SeedConfigError({
-          message: `Cannot write SQL for datasource provider "${parsed.schema.provider ?? 'unknown'}".\n   Supported: postgresql, cockroachdb, mysql, sqlite.`,
-        })
-      }
+      const dialect = yield* requireDialect(schema.provider, 'write SQL')
       const output = path.resolve(overrides.output === null ? configDir : cwd, config.output)
       const sql = makeSeedSql({
         dialect,
@@ -259,41 +223,40 @@ export function runSeed(overrides: SeedOverrides, cwd: string) {
       )
       return { ...report, target: { kind: 'sql' as const, path: output } }
     }
-    if (config.client !== null) {
-      const factory = config.client
-      const client = yield* Effect.tryPromise({
-        try: () => Promise.resolve(factory()),
-        catch: (error) =>
-          new SeedDatabaseError({
-            message: `\`client\` threw: ${error instanceof Error ? error.message : String(error)}`,
-          }),
-      })
-      const done = yield* seedWithClient({
-        client,
-        entries,
-        reset: config.reset,
-        dialect: dialectOf(parsed.schema.provider),
-      }).pipe(
-        Effect.mapError((error) =>
-          /unique|duplicate/iu.test(error.message) && !config.reset
-            ? new SeedDatabaseError({
-                message: `${error.message}\n   The tables already hold rows; pass --reset to empty the seeded tables first.`,
-              })
-            : error,
-        ),
-      )
-      return { ...report, target: { kind: 'client' as const, ...done } }
-    }
-    const written = yield* insertIntoDatabase({
-      url: config.url,
-      provider: parsed.schema.provider,
+    const dialect = yield* requireDialect(schema.provider, 'seed')
+    const found = yield* findClient({
+      config,
+      generators: schema.generators,
+      files,
+      schemaPath,
       cwd,
-      schemaDir: path.dirname(schemaPath),
+      dialect,
+    })
+    const done = yield* seedWithClient({
+      client: found.client,
       entries,
       reset: config.reset,
-    })
-    return { ...report, target: { kind: 'database' as const, ...written } }
+      dialect,
+    }).pipe(
+      Effect.mapError((error) =>
+        /unique|duplicate/iu.test(error.message) && !config.reset
+          ? new SeedDatabaseError({
+              message: `${error.message}\n   The tables already hold rows; pass --reset to empty the seeded tables first.`,
+            })
+          : error,
+      ),
+    )
+    return { ...report, target: { kind: 'client' as const, source: found.source, ...done } }
   })
+}
+
+/**
+ * `hekireki seed`: the config and the schema in, rows out — through the project's Prisma Client,
+ * or into a SQL file when `--sql` / `output` names one. Relative imports of the config and of the
+ * generated client resolve as a bundler would while it runs.
+ */
+export function runSeed(overrides: SeedOverrides, cwd: string) {
+  return withTypeScriptImports(seedProgram(overrides, cwd))
 }
 
 export type SeedReport = Effect.Success<ReturnType<typeof runSeed>>
@@ -307,9 +270,7 @@ export function seedBanner(report: SeedReport) {
   const target =
     report.target.kind === 'sql'
       ? `   SQL: ${report.target.path}`
-      : report.target.kind === 'client'
-        ? `   Prisma Client: ${report.target.operations} writes in one transaction`
-        : `   Database: ${report.target.dialect} ${report.target.url}`.trimEnd()
+      : `   Prisma Client: ${report.target.source}, ${report.target.operations} writes in one transaction`
   return [
     `⚡️ Seeded ${report.tables.reduce((sum, t) => sum + t.rows, 0)} rows (seed ${report.seed ?? 'random'}, locale ${report.locale.length === 0 ? 'en' : report.locale.join(', ')})`,
     `   Schema: ${report.schemaPath}`,

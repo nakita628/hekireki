@@ -6,10 +6,10 @@ import { Effect } from 'effect'
 import { describe, expect, it } from 'vite-plus/test'
 
 import type { SeedConfig } from './config.js'
-import { resolveSeedConfig } from './config.js'
-import { generateSeedRows } from './generate.js'
-import type { SeedTableRows } from './generate.js'
+import { generateSeedRows } from './generate/index.js'
+import { resolveSeedConfig } from './options.js'
 import { makeSeedPlan } from './plan.js'
+import type { SeedTableRows } from './plan.js'
 
 const SCHEMA = `
 datasource db {
@@ -766,5 +766,376 @@ describe('generateSeedRows', () => {
     expect(short.startsWith('Relations out of bounds, nothing was inserted.\n   User[')).toBe(true)
     expect(short).toContain('.posts: 1 row, at least 2 expected (models.User.relations.posts.min)')
     expect(short.split('\n').length).toBe(2)
+  })
+})
+
+describe('generateSeedRows, what the rules may not say', () => {
+  const ANN = '0195a4c8-3d2e-7f10-8a5b-1c2d3e4f5a6b'
+  const BOB = '0195a4c8-3d2e-7f10-8a5b-1c2d3e4f5a6c'
+
+  it.each([
+    [
+      'a model the schema does not have',
+      { models: { Ghost: { count: 1 } } },
+      'models.Ghost: no model named Ghost in the schema.',
+    ],
+    [
+      'a field rule for a relation field',
+      { models: { User: { fields: { posts: { min: 1 } } } } },
+      'models.User.fields.posts: User has no scalar field named posts.',
+    ],
+    [
+      'a field rule for a field that is not there',
+      { models: { Post: { fields: { nope: { value: 1 } } } } },
+      'models.Post.fields.nope: Post has no scalar field named nope.',
+    ],
+    [
+      'a relation rule on a column',
+      { models: { User: { relations: { email: { max: 1 } } } } },
+      'models.User.relations.email: User has no relation field named email that a rule can bound (a list, or the other side of a key).',
+    ],
+    [
+      'a relation rule on the side that owns the key',
+      { models: { Post: { relations: { author: { max: 1 } } } } },
+      'models.Post.relations.author: Post has no relation field named author that a rule can bound (a list, or the other side of a key).',
+    ],
+    [
+      'a relation rule on the owning side of a one-to-one',
+      { models: { Profile: { relations: { user: { min: 1 } } } } },
+      'models.Profile.relations.user: Profile has no relation field named user that a rule can bound (a list, or the other side of a key).',
+    ],
+    [
+      'a numeric rule with min above max',
+      { models: { Post: { fields: { id: { min: 5, max: 4 } } } } },
+      'models.Post.fields.id: min 5 is above max 4.',
+    ],
+    [
+      'a length range with min above max',
+      { models: { User: { fields: { name: { length: { min: 3, max: 1 } } } } } },
+      'models.User.fields.name: length.min 3 is above length.max 1.',
+    ],
+    [
+      'a date window the wrong way round',
+      { models: { User: { fields: { createdAt: { from: '2025-02-01', to: '2025-01-01' } } } } },
+      'models.User.fields.createdAt: from 2025-02-01T00:00:00.000Z is after to 2025-01-01T00:00:00.000Z.',
+    ],
+    [
+      'a relation bound with min above max',
+      { models: { User: { relations: { posts: { min: 2, max: 1 } } } } },
+      'models.User.relations.posts: min 2 is above max 1.',
+    ],
+    [
+      'a negative count',
+      { models: { User: { count: -1 } } },
+      'models.User.count: expected a non-negative integer, got -1.',
+    ],
+    [
+      'a fractional count',
+      { models: { User: { count: 1.5 } } },
+      'models.User.count: expected a non-negative integer, got 1.5.',
+    ],
+    [
+      'real rows next to field rules',
+      { models: { Tag: { data: [{ label: 'x' }], fields: { label: { value: 'y' } } } } },
+      'models.Tag: `data` and `count` / `fields` are exclusive. Give the real rows in `data`, or let faker make them with `count` and `fields`, not both.',
+    ],
+    [
+      'an owning relation given as a bare value',
+      { models: { Post: { data: [{ title: 'x', author: 3 }] } } },
+      'models.Post.data[0].author: name the User row by a unique key, `{ id }` or `{ email }`, or give authorId.',
+    ],
+    [
+      'a many-to-many field given as one value',
+      { models: { Post: { data: [{ title: 'x', authorId: ANN, tags: 3 }] } } },
+      'models.Post.data[0].tags: expected a list of Tag ids or keys.',
+    ],
+    [
+      'nested rows that are not rows',
+      { models: { User: { data: [{ email: 'a@example.com', name: 'A', posts: [3] }] } } },
+      'models.User.data[0].posts: expected rows of Post.',
+    ],
+    [
+      'a nested one-to-one row that is not a row',
+      { models: { User: { data: [{ email: 'a@example.com', name: 'A', profile: 'x' }] } } },
+      'models.User.data[0].profile: expected a row of Profile.',
+    ],
+    [
+      'an unknown field two levels down',
+      {
+        models: {
+          User: {
+            data: [{ email: 'a@example.com', name: 'A', posts: [{ title: 'ok' }, { nope: 1 }] }],
+          },
+        },
+      },
+      'models.User.data[0].posts[1].nope: Post has no field named nope.',
+    ],
+  ])('refuses %s, naming the rule', (_, config, message) => {
+    expect(failure(config as SeedConfig)).toBe(message)
+  })
+
+  it('lists every problem of the config at once, one per line', () => {
+    expect(
+      failure({
+        models: {
+          User: { fields: { nope: { value: 1 } }, relations: { email: { max: 1 } }, count: -2 },
+          Ghost: {},
+        },
+      }),
+    ).toBe(
+      [
+        'models.User.fields.nope: User has no scalar field named nope.',
+        '   models.User.relations.email: User has no relation field named email that a rule can bound (a list, or the other side of a key).',
+        '   models.User.count: expected a non-negative integer, got -2.',
+        '   models.Ghost: no model named Ghost in the schema.',
+      ].join('\n'),
+    )
+  })
+
+  it('refuses a required key set to null, and a parent no key names', () => {
+    expect(
+      failure({
+        models: {
+          User: { data: [{ id: ANN, email: 'ann@example.com', name: 'Ann' }] },
+          Post: { data: [{ title: 'x', authorId: null }] },
+        },
+      }),
+    ).toBe('Post data[0].author: the relation is required, but authorId is null.')
+    expect(
+      failure({
+        models: {
+          User: { data: [{ id: ANN, email: 'ann@example.com', name: 'Ann' }] },
+          Post: { data: [{ title: 'x', author: { email: 'zed@example.com' } }] },
+        },
+      }),
+    ).toBe('Post data[0].author: no User has email = "zed@example.com".\n   Give User that row.')
+    expect(
+      failure({
+        models: {
+          User: {
+            data: [
+              { id: ANN, email: 'ann@example.com', name: 'Twin' },
+              { id: BOB, email: 'bob@example.com', name: 'Twin' },
+            ],
+          },
+          Post: { data: [{ title: 'x', author: { name: 'Twin' } }] },
+        },
+      }),
+    ).toBe('Post data[0].author: 2 User rows have name = "Twin"; name the row by a unique key.')
+  })
+
+  it('refuses a second one-to-one row for the same parent, as the unique key it repeats', () => {
+    expect(
+      failure({
+        models: {
+          User: { data: [{ id: ANN, email: 'ann@example.com', name: 'Ann' }] },
+          Profile: { data: [{ user: { id: ANN } }, { user: { email: 'ann@example.com' } }] },
+        },
+      }),
+    ).toBe(`Profile data[1]: userId = "${ANN}" repeats an earlier row.`)
+    expect(
+      failure({
+        models: {
+          User: {
+            data: [{ id: ANN, email: 'ann@example.com', name: 'Ann', profile: [{}, { bio: 'b' }] }],
+          },
+        },
+      }),
+    ).toBe(`Profile data[1]: userId = "${ANN}" repeats an earlier row.`)
+  })
+
+  it('refuses a link to a partner that is not there, by id and by key, and links only what exists', () => {
+    expect(
+      failure({
+        models: {
+          User: { data: [{ id: ANN, email: 'ann@example.com', name: 'Ann' }] },
+          Tag: { data: [{ label: 'a' }] },
+          Post: { data: [{ title: 'x', author: { id: ANN }, tags: [1, 99] }] },
+        },
+      }),
+    ).toBe('Post data[0].tags: no Tag has id = 99.\n   Give Tag that row.')
+    expect(
+      failure({
+        models: {
+          User: { data: [{ id: ANN, email: 'ann@example.com', name: 'Ann' }] },
+          Tag: { data: [] },
+          Post: { data: [{ title: 'x', author: { id: ANN }, tags: [{ label: 'a' }] }] },
+        },
+      }),
+    ).toBe('Post data[0].tags: no Tag has label = "a".\n   Give Tag that row.')
+    const linked = generate({
+      models: {
+        User: { data: [{ id: ANN, email: 'ann@example.com', name: 'Ann' }] },
+        Tag: { data: [{ label: 'a' }, { label: 'b' }] },
+        Post: { data: [{ title: 'x', author: { id: ANN }, tags: [{ label: 'b' }, 1] }] },
+      },
+    })
+    expect(rowsOf(linked, '_PostToTag')).toStrictEqual([
+      { A: 1, B: 2 },
+      { A: 1, B: 1 },
+    ])
+  })
+
+  it('names a self parent by key, and refuses one that is missing', () => {
+    const made = generate({
+      models: {
+        Category: { data: [{ name: 'Root' }, { name: 'Leaf', parent: { name: 'Root' } }] },
+      },
+    })
+    expect(rowsOf(made, 'Category')).toStrictEqual([
+      { id: 1, name: 'Root', parentId: null },
+      { id: 2, name: 'Leaf', parentId: 1 },
+    ])
+    expect(
+      failure({
+        models: { Category: { data: [{ name: 'Leaf', parent: { name: 'Nope' } }] } },
+      }),
+    ).toBe('Category data[0].parent: no Category has name = "Nope".\n   Give Category that row.')
+  })
+
+  it('links a composite key by its scalars, and names both columns when no parent has them', () => {
+    const made = generate({
+      models: {
+        Warehouse: { data: [{ country: 'JP', code: 'TYO' }] },
+        Stock: { data: [{ country: 'JP', code: 'TYO' }, { warehouse: { code: 'TYO' } }] },
+      },
+    })
+    expect(rowsOf(made, 'Stock')).toStrictEqual([
+      { id: 1, country: 'JP', code: 'TYO' },
+      { id: 2, country: 'JP', code: 'TYO' },
+    ])
+    expect(
+      failure({
+        models: {
+          Warehouse: { data: [{ country: 'JP', code: 'TYO' }] },
+          Stock: { data: [{ country: 'JP', code: 'OSA' }] },
+        },
+      }),
+    ).toBe(
+      'Stock data[0].warehouse: no Warehouse has country, code = "JP", "OSA".\n   Give Warehouse that row, or let the seeder pick one.',
+    )
+  })
+
+  it('refuses a repeated composite id in real rows', () => {
+    expect(
+      failure({
+        models: {
+          User: {
+            data: [
+              { id: ANN, email: 'ann@example.com', name: 'Ann' },
+              { id: BOB, email: 'bob@example.com', name: 'Bob' },
+            ],
+          },
+          Follow: {
+            data: [
+              { follower: { id: ANN }, following: { id: BOB } },
+              { follower: { email: 'ann@example.com' }, following: { email: 'bob@example.com' } },
+            ],
+          },
+        },
+      }),
+    ).toBe(`Follow data[1]: followerId, followingId = "${ANN}", "${BOB}" repeats an earlier row.`)
+  })
+
+  it('stops when every parent is at its max, and when a required parent model has no rows', () => {
+    expect(
+      failure({
+        models: { User: { count: 1, relations: { posts: { max: 2 } } }, Post: { count: 3 } },
+      }),
+    ).toBe(
+      'Post.author: every User already has 2 Post rows (models.User.relations.posts.max).\n   Lower models.Post.count or raise the max.',
+    )
+    expect(failure({ models: { User: { count: 0 }, Post: { count: 2 } } })).toBe(
+      'Post.author requires a User row, but User has none. Give User a count.',
+    )
+    expect(failure({ models: { User: { data: [] }, Post: { count: 1 } } })).toBe(
+      'Post.author requires a User row, but User has none. Give User a count.',
+    )
+  })
+
+  it('reports a min that faker cannot reach because the child count is too low', () => {
+    expect(
+      failure({
+        models: { User: { count: 3, relations: { posts: { min: 2 } } }, Post: { count: 3 } },
+      }),
+    ).toMatch(
+      /^Relations out of bounds, nothing was inserted\.\n( {3}User\[\d\] \{ email: "[^"]+" \}\.posts: [01] rows?, at least 2 expected \(models\.User\.relations\.posts\.min\)\n?)+$/u,
+    )
+  })
+
+  it('checks the bounds of real rows on both sides of a many-to-many', () => {
+    expect(
+      failure({
+        models: {
+          User: { data: [{ id: ANN, email: 'ann@example.com', name: 'Ann' }] },
+          Tag: { data: [{ label: 'a' }], relations: { posts: { max: 2 } } },
+          Post: {
+            data: [
+              { title: 'x', author: { id: ANN }, tags: [{ label: 'a' }] },
+              { title: 'y', author: { id: ANN }, tags: [{ label: 'a' }] },
+              { title: 'z', author: { id: ANN }, tags: [{ label: 'a' }] },
+            ],
+            relations: { tags: { min: 1 } },
+          },
+        },
+      }),
+    ).toBe(
+      'Relations out of bounds, nothing was inserted.\n   Tag[0] { label: "a" }.posts: 3 rows, at most 2 expected (models.Tag.relations.posts.max)',
+    )
+  })
+
+  it('makes the same rows twice for the same seed in data mode, nesting and keys included', () => {
+    // Without a window the dates hang off the clock, so the window pins them.
+    const config: SeedConfig = {
+      dates: { from: '2025-01-01', to: '2025-12-31' },
+      models: {
+        User: {
+          data: [
+            {
+              email: 'ann@example.com',
+              name: 'Ann',
+              profile: { bio: 'hi' },
+              posts: [{ title: 'a' }, { title: 'b' }],
+            },
+            {
+              email: 'bob@example.com',
+              name: 'Bob',
+              posts: [{ title: 'c', tags: [{ label: 'a' }] }],
+            },
+          ],
+        },
+        Tag: { data: [{ label: 'a' }, { label: 'b' }] },
+        Comment: { count: 5 },
+      },
+    }
+    expect(generate(config, 11)).toStrictEqual(generate(config, 11))
+    expect(rowsOf(generate(config, 11), 'Comment')).not.toStrictEqual(
+      rowsOf(generate(config, 12), 'Comment'),
+    )
+    const users = rowsOf(generate(config, 11), 'User')
+    const posts = rowsOf(generate(config, 11), 'Post')
+    expect(posts.map((post) => post.authorId)).toStrictEqual([
+      users[0]?.id,
+      users[0]?.id,
+      users[1]?.id,
+    ])
+    expect(rowsOf(generate(config, 11), '_PostToTag')).toStrictEqual([{ A: 3, B: 1 }])
+  })
+
+  it('takes a count of zero as no rows, every other table staying empty as well', () => {
+    const made = generate({ models: { User: { count: 0 } } })
+    expect(made.map((entry) => entry.table.name)).toStrictEqual([
+      'User',
+      'Profile',
+      'Post',
+      'Tag',
+      'Comment',
+      'Follow',
+      'Category',
+      'Warehouse',
+      'Stock',
+      '_PostToTag',
+    ])
+    expect(made.every((entry) => entry.rows.length === 0)).toBe(true)
   })
 })

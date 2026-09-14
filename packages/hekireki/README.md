@@ -321,8 +321,12 @@ hekireki studio -p 3000                 # Another port (default: 5555)
 ```
 
 Studio shows the ER diagram, the docs, each model's rows, a Prisma editor and a SQL console, and
-reloads when the schema changes. The database comes from `--url`, `DATABASE_URL` or
-`prisma.config.ts`.
+reloads when the schema changes. The database is found without a flag: `url` in
+`hekireki.config.ts` (the one `hekireki seed` fills), then whatever Prisma itself connects with:
+the variable `datasource.url` names with `env("...")` in `prisma.config.ts` (or in the schema's
+`datasource` block), read from the environment or a `.env` next to `package.json` or the schema,
+or the literal written there. `DATABASE_URL` is looked up only when Prisma names no variable, and
+`--url` overrides everything.
 
 ## Seed
 
@@ -333,14 +337,14 @@ unique constraints hold, `@updatedAt` comes after `@default(now())`, and `uuid(7
 `ulid()` and `nanoid()` defaults look like the real thing. The same seed always gives the same rows.
 
 ```bash
-hekireki seed                          # hekireki.config.ts + DATABASE_URL (or --url)
+hekireki seed                          # hekireki.config.ts (its `url`, or Prisma's env variable)
 hekireki seed --sql prisma/seed.sql    # Write a SQL script instead of inserting
 hekireki seed --reset --count 100      # Empty the seeded tables first, 100 rows per model
 hekireki seed --seed 7 --locale ja     # Another seed, Japanese names and text
 ```
 
-Options live in `hekireki.config.ts` (or `.mts`, `.js`, `.mjs`) next to `package.json`; every
-flag above overrides it. With the `hekireki-seed` generator in `schema.prisma`, `prisma generate`
+Options live in `hekireki.config.ts` next to `package.json`, TypeScript only so the schema check
+below applies; every flag above overrides it. With the `hekireki-seed` generator in `schema.prisma`, `prisma generate`
 writes a schema module, and `defineConfig(schema, { ... })` checks the config against it: only
 the schema's models, fields and enum members are accepted, each bound fits its field's type, and
 a rule function knows the row it is given. No option has a value of its own: each one takes
@@ -478,13 +482,18 @@ with their randomness drawn from the seeded faker, so they repeat with the seed;
 seed` reports the ones the schema does not have. `schema` names the Prisma schema when it is not
 at `prisma/schema.prisma` or `schema.prisma`, next to the working directory or the config.
 
-[sandbox/seed](https://github.com/nakita628/hekireki/tree/main/sandbox/seed) is a SQLite database
-to try all of this on: `pnpm setup`, `pnpm seed`, `pnpm studio`.
+[examples/](https://github.com/nakita628/hekireki/tree/main/examples) has a SQLite, a MySQL and
+a PostgreSQL project to try all of this on: `pnpm setup`, `pnpm seed`, `pnpm studio`.
 
-The rows go through the project's Prisma Client when `client` returns one: `createMany` per model,
-`connect` per implicit many-to-many pair and the PostgreSQL sequence fix-ups, all in one
-`$transaction`, with `deleteMany` first under `reset`. Without `client`, `hekireki seed` connects
-to the database URL itself with the driver in the project (`pg`, `mysql2`, or `node:sqlite`).
+The rows go through the project's Prisma Client when there is one: `hekireki seed` reads the
+`prisma-client` generator's `output` from the schema, imports the client from there, and builds
+the driver adapter the project has for its database (`@prisma/adapter-pg`,
+`@prisma/adapter-mariadb`, `@prisma/adapter-better-sqlite3`) with the connection URL. Every write
+then runs in one `$transaction`: `deleteMany` first under `reset`, `createMany` per model, `connect`
+per implicit many-to-many pair, and the PostgreSQL sequence fix-ups. The Prisma Client is the only
+way rows reach a database: without a generated client or the adapter package, `hekireki seed`
+stops and says what to add (`prisma generate`, `@prisma/adapter-*`, or `--sql` for a script that
+touches nothing). `client` in the config hands it a client of your own instead, adapter and all:
 
 ```ts
 import { PrismaPg } from '@prisma/adapter-pg'

@@ -1,0 +1,18 @@
+{
+  "name": "@hekireki/example-sqlite",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "setup": "prisma validate && prisma generate && prisma db push --url file:./seed.db",
+    "seed": "hekireki seed --reset",
+    "seed:data": "hekireki seed --config hekireki.data.config.ts --reset",
+    "seed:sql": "hekireki seed --sql seed.sql",
+    "studio": "hekireki studio --schema schema.prisma",
+    "prisma-studio": "prisma studio --url file://$PWD/seed.db --port 5556 --browser none",
+    "reset": "rm -f seed.db && pnpm setup"
+  },
+  "devDependencies": {
+    "hekireki": "workspace:*",
+    "prisma": "8.1.0-dev.6"
+  }
+}

@@ -5,8 +5,8 @@ import { Effect, Exit } from 'effect'
 import { describe, expect, it } from 'vite-plus/test'
 
 import { delegateName, isSeedClient, seedWithClient } from './client.js'
-import type { SeedTableRows } from './generate.js'
 import { makeSeedPlan } from './plan.js'
+import type { SeedTableRows } from './plan.js'
 
 const SCHEMA = `
 datasource db {
@@ -181,5 +181,203 @@ describe('seedWithClient', () => {
     )
     expect(String(exit)).toContain('Unique constraint failed on the fields: (`email`)')
     expect(log.at(-1)).toBe('disconnect')
+  })
+})
+
+describe('seedWithClient, the edges', () => {
+  it('splits createMany at 500 rows, and skips a model without rows', async () => {
+    const { client, log } = fakeClient(['User', 'Post', 'Tag'])
+    const rows = Array.from({ length: 501 }, (_, i) => ({ id: i + 1, email: `${i}@example.com` }))
+    const exit = await Effect.runPromiseExit(
+      seedWithClient({
+        client,
+        entries: [
+          { table: table('User'), rows },
+          { table: table('Post'), rows: [] },
+          { table: table('Tag'), rows: Array.from({ length: 500 }, (_, i) => ({ id: i + 1 })) },
+        ],
+        reset: false,
+        dialect: 'mysql',
+      }),
+    )
+    expect(exit).toStrictEqual(Exit.succeed({ models: 3, operations: 3 }))
+    expect(log).toStrictEqual([
+      { op: 'createMany', model: 'User', rows: 500 },
+      { op: 'createMany', model: 'User', rows: 1 },
+      { op: 'createMany', model: 'Tag', rows: 500 },
+      'disconnect',
+    ])
+  })
+
+  it('hands createMany the rows as they are, values untouched, and connects by the partner ids', async () => {
+    const received: unknown[] = []
+    const { client } = fakeClient([])
+    const recording = {
+      ...client,
+      user: {
+        createMany: (args: { readonly data: readonly unknown[] }) => {
+          received.push(args.data)
+          return 'create-user'
+        },
+        deleteMany: () => 'delete-user',
+        update: () => 'update-user',
+      },
+      post: {
+        createMany: () => 'create-post',
+        deleteMany: () => 'delete-post',
+        update: (args: unknown) => ({ update: args }),
+      },
+      tag: { createMany: () => 'create-tag', deleteMany: () => 'delete-tag', update: () => 'x' },
+    }
+    const when = new Date('2025-01-01T00:00:00.000Z')
+    const bytes = Uint8Array.from([1])
+    const exit = await Effect.runPromiseExit(
+      seedWithClient({
+        client: recording,
+        entries: [
+          { table: table('User'), rows: [{ id: 1, email: 'a@example.com', when, bytes, n: 5n }] },
+          { table: table('Post'), rows: [{ id: 1, authorId: 1 }] },
+          { table: table('Tag'), rows: [{ id: 1 }, { id: 2 }] },
+          {
+            table: table('_PostToTag'),
+            rows: [
+              { A: 1, B: 2 },
+              { A: 1, B: 1 },
+            ],
+          },
+        ],
+        reset: true,
+        dialect: 'sqlite',
+      }),
+    )
+    expect(exit).toStrictEqual(Exit.succeed({ models: 3, operations: 3 + 3 + 1 }))
+    expect(received).toStrictEqual([[{ id: 1, email: 'a@example.com', when, bytes, n: 5n }]])
+    const transaction = await recording.$transaction([])
+    expect(transaction).toStrictEqual([])
+  })
+
+  it('groups the links of one row into a single connect, in the order the pairs came', async () => {
+    const { client, log } = fakeClient(['User', 'Post', 'Tag'])
+    await Effect.runPromise(
+      seedWithClient({
+        client,
+        entries: [
+          // The connects go through the owning model's delegate, so that model must be seeded too.
+          { table: table('Post'), rows: [] },
+          {
+            table: table('_PostToTag'),
+            rows: [
+              { A: 1, B: 3 },
+              { A: 2, B: 1 },
+              { A: 1, B: 1 },
+            ],
+          },
+        ],
+        reset: false,
+        dialect: null,
+      }),
+    )
+    expect(log).toStrictEqual([
+      {
+        op: 'update',
+        model: 'Post',
+        args: { where: { id: 1 }, data: { tags: { connect: [{ id: 3 }, { id: 1 }] } } },
+      },
+      {
+        op: 'update',
+        model: 'Post',
+        args: { where: { id: 2 }, data: { tags: { connect: [{ id: 1 }] } } },
+      },
+      'disconnect',
+    ])
+  })
+
+  it('runs no sequence fix-ups without a dialect, and reports only the model operations', async () => {
+    const { client, log } = fakeClient(['User'])
+    const exit = await Effect.runPromiseExit(
+      seedWithClient({
+        client,
+        entries: [{ table: table('User'), rows: [{ id: 1, email: 'a@example.com' }] }],
+        reset: true,
+        dialect: null,
+      }),
+    )
+    expect(exit).toStrictEqual(Exit.succeed({ models: 1, operations: 2 }))
+    expect(log).toStrictEqual([
+      { op: 'deleteMany', model: 'User' },
+      { op: 'createMany', model: 'User', rows: 1 },
+      'disconnect',
+    ])
+  })
+
+  it.each<[unknown, string]>([
+    [null, 'null'],
+    [3, 'a number'],
+    [{}, 'an empty object'],
+    [{ $transaction: () => 1, $executeRawUnsafe: () => 1 }, 'a client without $disconnect'],
+    [{ $transaction: () => 1, $disconnect: () => 1 }, 'a client without $executeRawUnsafe'],
+    [
+      { $transaction: 'x', $executeRawUnsafe: () => 1, $disconnect: () => 1 },
+      'a non-function member',
+    ],
+  ])('refuses %s (%s) as a client', async (value) => {
+    expect(isSeedClient(value)).toBe(false)
+    const exit = await Effect.runPromiseExit(
+      seedWithClient({ client: value, entries: [], reset: false, dialect: null }).pipe(Effect.flip),
+    )
+    expect(Exit.isSuccess(exit) ? exit.value.message : '').toBe(
+      '`client` must return a Prisma Client: an object with $transaction, $executeRawUnsafe and $disconnect.\n   Write `client: () => new PrismaClient({ adapter })` in hekireki.config.ts.',
+    )
+  })
+
+  it('names the first delegate that is missing or incomplete, before any write', async () => {
+    const { client, log } = fakeClient(['User'])
+    const incomplete = { ...client, post: { createMany: () => 1 } }
+    const exit = await Effect.runPromiseExit(
+      seedWithClient({
+        client: incomplete,
+        entries: [
+          { table: table('User'), rows: [{ id: 1, email: 'a@example.com' }] },
+          { table: table('Post'), rows: [] },
+        ],
+        reset: false,
+        dialect: null,
+      }).pipe(Effect.flip),
+    )
+    expect(Exit.isSuccess(exit) ? exit.value.message : '').toBe(
+      'The Prisma Client has no model delegate `post` with createMany, deleteMany and update.\n   Run `prisma generate` so the client knows Post.',
+    )
+    expect(log).toStrictEqual([])
+  })
+
+  it('reports the transaction failure and survives a failing disconnect', async () => {
+    const { client } = fakeClient(['User'])
+    const failing = {
+      ...client,
+      $transaction: () => Promise.reject(new Error('unique constraint')),
+      $disconnect: () => Promise.reject(new Error('already closed')),
+    }
+    const exit = await Effect.runPromiseExit(
+      seedWithClient({
+        client: failing,
+        entries: [{ table: table('User'), rows: [{ id: 1, email: 'a@example.com' }] }],
+        reset: false,
+        dialect: null,
+      }).pipe(Effect.flip),
+    )
+    expect(Exit.isSuccess(exit) ? exit.value.message : '').toBe('unique constraint')
+  })
+})
+
+describe('delegateName, the edges', () => {
+  it.each([
+    ['User', 'user'],
+    ['OrderItem', 'orderItem'],
+    ['URLThing', 'uRLThing'],
+    ['A', 'a'],
+    ['user', 'user'],
+    ['_Private', '_Private'],
+  ])('%s → %s', (model, delegate) => {
+    expect(delegateName(model)).toBe(delegate)
   })
 })

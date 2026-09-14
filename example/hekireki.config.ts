@@ -4,8 +4,8 @@
 //
 //   hekireki seed --config example/hekireki.config.ts --sql example/seed.sql
 //
-// writes the rows as a PostgreSQL script; with a database, `--url postgresql://...` inserts them,
-// or `client: () => new PrismaClient({ adapter })` below writes them through Prisma Client.
+// writes the rows as a PostgreSQL script; with a generated Prisma Client and `--url postgresql://...`
+// it inserts them through that client, or `client: () => new PrismaClient({ adapter })` hands it one.
 import { defineConfig } from 'hekireki'
 
 import { schema } from './generated/seed/schema'

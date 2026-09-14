@@ -2,7 +2,7 @@
 **/dist/**
 test/harness/**
 example/generated/**
-sandbox/**
+examples/*/generated/**
 packages/hekireki/docs/studio-api.md
 **/e2e/.results/**
 **/e2e/.workspace/**

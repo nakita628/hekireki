@@ -31,7 +31,7 @@
     "pnpm-lock.yaml",
     "test/harness",
     "example/generated",
-    "sandbox",
+    "examples/*/generated",
     "packages/hekireki/docs/studio-api.md",
     "packages/hekireki/src/studio/server/routes/index.ts",
     "packages/hekireki/src/studio/client/hooks/index.ts",

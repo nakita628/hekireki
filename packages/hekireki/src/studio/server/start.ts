@@ -5,6 +5,8 @@ import type { ServerType } from '@hono/node-server'
 import { Effect } from 'effect'
 
 import { isDirectory } from '../../file/index.js'
+import { readConfigUrl } from '../../seed/load-config.js'
+import { withTypeScriptImports } from '../../seed/resolve.js'
 import { createStudioApp } from './app.js'
 import { RELOAD_DEBOUNCE_MS, STUDIO_HOSTNAME } from './constants/index.js'
 import { SchemaLoadError, ServerListenError } from './errors/index.js'
@@ -62,9 +64,20 @@ export function startStudioServer(options: {
     const state = StateService.createStudioState({ schemaPath: options.schemaPath })
     const snapshot = yield* state.reload()
     const watchDir = directory ? options.schemaPath : path.dirname(options.schemaPath)
+    // The `url` of hekireki.config.ts, so the database `hekireki seed` fills is the one Studio
+    // opens. A config that does not load is not fatal to Studio: it shows the schema and says why.
+    const config = yield* withTypeScriptImports(readConfigUrl(process.cwd())).pipe(
+      Effect.match({
+        onFailure: (error) => ({ url: null, error: error.message }),
+        onSuccess: (url) => ({ url, error: null }),
+      }),
+    )
     const db = yield* DatabaseService.connectDatabase({
       explicitUrl: options.databaseUrl,
+      configUrl: config.url,
+      configError: config.error,
       schemaProvider: snapshot.schema?.provider ?? null,
+      schemaText: snapshot.files.map((file) => file.content).join('\n'),
       cwd: process.cwd(),
       schemaDir: watchDir,
       env: process.env,

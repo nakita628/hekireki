@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import { defineConfig, defineData, defineSchema, resolveSeedConfig } from './config.js'
+import { defineConfig, defineData, defineSchema } from './config.js'
 import type { Row } from './config.js'
+import { resolveSeedConfig } from './options.js'
 
 const schema = defineSchema({
   models: [

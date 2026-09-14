@@ -5,6 +5,12 @@ datasource db {
   provider = "sqlite"
 }
 
+// The Prisma Client `hekireki seed` writes through when it finds one.
+generator client {
+  provider = "prisma-client"
+  output   = "generated/client"
+}
+
 // The schema module hekireki.config.ts is typed against.
 generator Hekireki-Seed {
   provider = "hekireki-seed"

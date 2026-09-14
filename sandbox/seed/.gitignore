@@ -1,4 +1,0 @@
-# Rebuilt by `pnpm setup` and `pnpm seed:sql`; nothing here is worth committing.
-*.db
-*.db-journal
-seed.sql

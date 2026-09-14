@@ -1,17 +1,16 @@
 import { Effect } from 'effect'
 
+import type { Dialect } from '../database/url.js'
 import type { SeedRow, SeedValue } from './config.js'
 import { SeedDatabaseError } from './errors.js'
-import type { SeedTableRows } from './generate.js'
-import type { JoinTable, ModelTable } from './plan.js'
-import { sequenceStatements } from './sql.js'
-import type { Dialect } from './sql.js'
+import type { JoinTable, ModelTable, SeedTableRows } from './plan.js'
+import { sequenceSql } from './sql.js'
 
 /** Rows per `createMany`, so one call stays well under any driver's parameter limit. */
 const CREATE_CHUNK = 500
 
 /** The part of a Prisma Client the seeder calls: a batch transaction, raw SQL, and disconnect. */
-export type SeedClient = {
+type SeedClient = {
   readonly $transaction: (operations: readonly unknown[]) => Promise<unknown>
   readonly $executeRawUnsafe: (query: string) => unknown
   readonly $disconnect: () => Promise<void>
@@ -138,10 +137,10 @@ export function seedWithClient(input: {
     const sequences =
       input.dialect === null
         ? []
-        : sequenceStatements(
+        : sequenceSql(
             input.dialect,
             models.map((entry) => entry.table),
-          ).map((statement) => client.$executeRawUnsafe(statement.sql))
+          ).map((sql) => client.$executeRawUnsafe(sql))
     yield* Effect.tryPromise({
       try: () => client.$transaction([...resets, ...creates, ...connects, ...sequences]),
       catch: (error) =>

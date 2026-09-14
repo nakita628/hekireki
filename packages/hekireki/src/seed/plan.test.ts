@@ -268,3 +268,262 @@ describe('fieldDefault', () => {
     expect(id === undefined ? null : fieldDefault(id)).toStrictEqual({ name: 'uuid', args: [7] })
   })
 })
+
+describe('makeSeedPlan, the shapes it has to get right', () => {
+  it('orders a diamond so every model follows all of its parents, whatever the schema order', () => {
+    const tables = Effect.runSync(
+      makeSeedPlan(
+        datamodel(`
+model D {
+  id  Int @id @default(autoincrement())
+  bId Int
+  b   B   @relation(fields: [bId], references: [id])
+  cId Int
+  c   C   @relation(fields: [cId], references: [id])
+}
+
+model C {
+  id  Int @id @default(autoincrement())
+  aId Int
+  a   A   @relation(fields: [aId], references: [id])
+  ds  D[]
+}
+
+model B {
+  id  Int @id @default(autoincrement())
+  aId Int
+  a   A   @relation(fields: [aId], references: [id])
+  ds  D[]
+}
+
+model A {
+  id Int @id @default(autoincrement())
+  bs B[]
+  cs C[]
+}
+`),
+      ),
+    )
+    expect(tables.map((table) => table.name)).toStrictEqual(['A', 'B', 'C', 'D'])
+  })
+
+  it('names every model of a three-way required cycle, and breaks it at one optional key', () => {
+    const models = (optional: boolean) => `
+model A {
+  id  Int @id
+  bId Int
+  b   B   @relation("ab", fields: [bId], references: [id])
+  cs  C[] @relation("ca")
+}
+
+model B {
+  id  Int @id
+  cId Int
+  c   C   @relation("bc", fields: [cId], references: [id])
+  as  A[] @relation("ab")
+}
+
+model C {
+  id  Int  @id
+  aId Int${optional ? '?' : ''}
+  a   A${optional ? '?' : ''}   @relation("ca", fields: [aId], references: [id])
+  bs  B[]  @relation("bc")
+}
+`
+    expect(Effect.runSync(Effect.flip(makeSeedPlan(datamodel(models(false))))).message).toBe(
+      'Required relations form a cycle: A -> B -> C -> A.\n   Make one of them optional so the seeder can insert the models in order.',
+    )
+    expect(
+      Effect.runSync(makeSeedPlan(datamodel(models(true)))).map((table) => table.name),
+    ).toStrictEqual(['C', 'B', 'A'])
+  })
+
+  it('leaves out what cannot be seeded and keeps composite keys, mapped uniques and self many-to-many', () => {
+    const tables = Effect.runSync(
+      makeSeedPlan(
+        datamodel(`
+enum Role {
+  ADMIN
+  VIEWER @map("viewer")
+}
+
+model Warehouse {
+  country String
+  code    String
+  stocks  Stock[]
+
+  @@id([country, code])
+}
+
+model Stock {
+  id        Int       @id @default(autoincrement())
+  country   String
+  code      String
+  warehouse Warehouse @relation(fields: [country, code], references: [country, code])
+  note      Unsupported("geometry")?
+  secret    String    @ignore
+  slug      String?   @unique
+  a         Int
+  b         Int
+  roles     Role[]
+  meta      Json?
+
+  @@unique([a, b], map: "ab_key")
+}
+
+model Ghost {
+  id Int @id
+
+  @@ignore
+}
+
+model Category {
+  id        Int        @id @default(autoincrement())
+  related   Category[] @relation("rel")
+  relatedBy Category[] @relation("rel")
+}
+`),
+      ),
+    )
+    expect(tables.map((table) => table.name)).toStrictEqual([
+      'Warehouse',
+      'Stock',
+      'Category',
+      '_rel',
+    ])
+    const [warehouse, stock, , rel] = tables
+    expect(warehouse?.kind === 'model' ? warehouse.uniques : null).toStrictEqual([
+      ['country', 'code'],
+    ])
+    expect(warehouse?.kind === 'model' ? warehouse.autoincrement : null).toStrictEqual([])
+    expect(stock?.kind === 'model' ? stock.columns.map((c) => c.field) : null).toStrictEqual([
+      'id',
+      'country',
+      'code',
+      'slug',
+      'a',
+      'b',
+      'roles',
+      'meta',
+    ])
+    expect(
+      stock?.kind === 'model' ? stock.columns.find((c) => c.field === 'roles') : null,
+    ).toStrictEqual({
+      field: 'roles',
+      column: 'roles',
+      type: 'Role',
+      kind: 'enum',
+      isList: true,
+      enumValues: [
+        { name: 'ADMIN', dbName: 'ADMIN' },
+        { name: 'VIEWER', dbName: 'viewer' },
+      ],
+    })
+    expect(stock?.kind === 'model' ? stock.foreignKeys : null).toStrictEqual([
+      {
+        field: 'warehouse',
+        fromFields: ['country', 'code'],
+        toModel: 'Warehouse',
+        toFields: ['country', 'code'],
+        required: true,
+        oneToOne: false,
+        self: false,
+      },
+    ])
+    expect(stock?.kind === 'model' ? stock.uniques : null).toStrictEqual([
+      ['id'],
+      ['slug'],
+      ['a', 'b'],
+    ])
+    expect(rel).toStrictEqual({
+      kind: 'join',
+      name: '_rel',
+      table: '_rel',
+      schema: null,
+      sides: [
+        {
+          model: 'Category',
+          field: 'related',
+          idField: 'id',
+          column: 'A',
+          type: 'Int',
+          kind: 'scalar',
+          enumValues: null,
+        },
+        {
+          model: 'Category',
+          field: 'relatedBy',
+          idField: 'id',
+          column: 'B',
+          type: 'Int',
+          kind: 'scalar',
+          enumValues: null,
+        },
+      ],
+    })
+  })
+
+  it('carries the @@schema and @@map of a model into the table it writes to', () => {
+    const result: DMMF.Document | GetDMMFError = getDMMF({
+      datamodel: [
+        [
+          'schema.prisma',
+          `datasource db {
+  provider = "postgresql"
+  schemas  = ["inventory", "public"]
+}
+
+model Item {
+  id Int @id
+
+  @@schema("inventory")
+  @@map("items")
+}
+`,
+        ],
+      ],
+    })
+    if ('type' in result) throw new Error(result.error.message)
+    const [item] = Effect.runSync(makeSeedPlan(result.datamodel))
+    expect(
+      item?.kind === 'model' ? { table: item.table, schema: item.schema } : null,
+    ).toStrictEqual({
+      table: 'items',
+      schema: 'inventory',
+    })
+  })
+
+  it('reads every function default with its arguments, and nothing for literals and dbgenerated', () => {
+    const [model] = datamodel(`
+model Defaults {
+  id    String   @id @default(cuid(2))
+  n     String   @default(nanoid(12))
+  u     String   @default(uuid())
+  l     String   @default(ulid())
+  seq   Int      @default(autoincrement())
+  at    DateTime @default(now())
+  text  String   @default("hello")
+  flag  Boolean  @default(true)
+  count Int      @default(0)
+  gen   DateTime @default(dbgenerated("now()"))
+  up    DateTime @updatedAt
+}
+`).models
+    const defaults = Object.fromEntries(
+      (model?.fields ?? []).map((field) => [field.name, fieldDefault(field)]),
+    )
+    expect(defaults).toStrictEqual({
+      id: { name: 'cuid', args: [2] },
+      n: { name: 'nanoid', args: [12] },
+      u: { name: 'uuid', args: [4] },
+      l: { name: 'ulid', args: [] },
+      seq: { name: 'autoincrement', args: [] },
+      at: { name: 'now', args: [] },
+      text: null,
+      flag: null,
+      count: null,
+      gen: { name: 'dbgenerated', args: ['now()'] },
+      up: null,
+    })
+  })
+})

@@ -80,10 +80,11 @@ function decimalSchema(field: DMMF.Field) {
     scale !== undefined
   ) {
     const integer = Math.max(precision - scale, 1)
+    const fraction = scale > 0 ? `(\\.\\d{1,${scale}})?` : ''
     return z
       .string()
       .regex(
-        new RegExp(`^-?\\d{1,${integer}}(\\.\\d{1,${Math.max(scale, 1)}})?$`, 'u'),
+        new RegExp(`^-?\\d{1,${integer}}${fraction}$`, 'u'),
         `Invalid decimal: at most ${precision - scale} integer and ${scale} fraction digits (@db.${native.name}(${precision}, ${scale}))`,
       )
   }
@@ -125,7 +126,7 @@ export function fieldSchema(field: DMMF.Field, enumValues: readonly EnumMember[]
 }
 
 /** The zod schema a whole row of the table must pass, one field per insertable column. */
-export function rowSchema(table: ModelTable) {
+function rowSchema(table: ModelTable) {
   return z.object(
     Object.fromEntries(
       table.columns.flatMap((column) => {

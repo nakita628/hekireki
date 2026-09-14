@@ -124,7 +124,7 @@ const studioFlags = {
     Flag.withAlias('u'),
     Flag.withSchema(databaseUrlSchema),
     Flag.withDescription(
-      'Database connection URL for browsing and editing data (default: DATABASE_URL from the environment or .env, then datasource.url in prisma.config.ts)',
+      'Database connection URL for browsing and editing data (default: `url` in hekireki.config.ts, then the variable datasource.url names in prisma.config.ts or the schema, read from the environment or .env; DATABASE_URL when it names none)',
     ),
     Flag.withMetavar('connection-string'),
     Flag.optional,
@@ -188,7 +188,7 @@ const seedFlags = {
   config: Flag.string('config').pipe(
     Flag.withAlias('c'),
     Flag.withDescription(
-      'Path to hekireki.config.ts (default: hekireki.config.ts, .mts, .js or .mjs in the working directory)',
+      'Path to the config, a TypeScript file (default: hekireki.config.ts in the working directory)',
     ),
     Flag.withMetavar('hekireki.config.ts'),
     Flag.optional,
@@ -205,7 +205,7 @@ const seedFlags = {
     Flag.withAlias('u'),
     Flag.withSchema(databaseUrlSchema),
     Flag.withDescription(
-      'Database connection URL to insert into (default: `url` in the config, DATABASE_URL from the environment or .env, then datasource.url in prisma.config.ts)',
+      'Database connection URL to insert into (default: `url` in hekireki.config.ts, then the variable datasource.url names in prisma.config.ts or the schema, read from the environment or .env; DATABASE_URL when it names none)',
     ),
     Flag.withMetavar('connection-string'),
     Flag.optional,

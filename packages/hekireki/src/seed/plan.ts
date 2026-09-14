@@ -1,6 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 import { Effect } from 'effect'
 
+import type { SeedRow } from './config.js'
 import { SeedGenerationError } from './errors.js'
 
 export type EnumMember = { readonly name: string; readonly dbName: string }
@@ -59,6 +60,9 @@ export type JoinTable = {
 }
 
 export type SeedTable = ModelTable | JoinTable
+
+/** The rows made for one table of the plan. */
+export type SeedTableRows = { readonly table: SeedTable; readonly rows: readonly SeedRow[] }
 
 function isForeignKeyField(field: DMMF.Field) {
   return field.kind === 'object' && (field.relationFromFields ?? []).length > 0

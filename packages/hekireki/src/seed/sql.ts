@@ -1,8 +1,6 @@
+import type { Dialect } from '../database/url.js'
 import type { SeedValue } from './config.js'
-import type { SeedTableRows } from './generate.js'
-import type { EnumMember, SeedTable } from './plan.js'
-
-export type Dialect = 'postgresql' | 'mysql' | 'sqlite'
+import type { EnumMember, SeedTable, SeedTableRows } from './plan.js'
 
 /** What the renderers need to know about a column: its Prisma type, list-ness and enum members. */
 type ColumnShape = {
@@ -13,18 +11,16 @@ type ColumnShape = {
   readonly enumValues: readonly EnumMember[] | null
 }
 
-export type Statement = { readonly sql: string; readonly params: readonly unknown[] }
-
 function isSeedList(value: SeedValue): value is readonly SeedValue[] {
   return Array.isArray(value)
 }
 
-function itemsOf(value: SeedValue): readonly SeedValue[] {
+function itemsOf(value: SeedValue) {
   return isSeedList(value) ? value : [value]
 }
 
 /** Rows per INSERT: PostgreSQL binds at most 65535 parameters, and a literal file stays readable. */
-export const INSERT_CHUNK = 200
+const INSERT_CHUNK = 200
 
 function quoteIdentifier(dialect: Dialect, name: string) {
   return dialect === 'mysql'
@@ -33,7 +29,7 @@ function quoteIdentifier(dialect: Dialect, name: string) {
 }
 
 /** The table, schema-qualified when the model carries `@@schema`. */
-export function qualifiedTable(dialect: Dialect, table: SeedTable) {
+function qualifiedTable(dialect: Dialect, table: SeedTable) {
   const name = quoteIdentifier(dialect, table.table)
   return table.schema === null ? name : `${quoteIdentifier(dialect, table.schema)}.${name}`
 }
@@ -131,63 +127,10 @@ function jsonValue(value: SeedValue): unknown {
   return value
 }
 
-/** The value a database driver binds for the column, in the dialect's own representation. */
-export function driverValue(dialect: Dialect, column: ColumnShape, value: SeedValue) {
-  if (value === null || value === undefined) return null
-  if (column.isList) {
-    const items = itemsOf(value)
-    return dialect === 'postgresql'
-      ? items.map((item) =>
-          typeof item === 'string' && column.kind === 'enum'
-            ? enumStored(column, item)
-            : driverScalar(dialect, item),
-        )
-      : JSON.stringify(items.map((item) => jsonValue(item)))
-  }
-  if (column.type === 'Json') return JSON.stringify(jsonValue(value))
-  if (typeof value === 'string' && column.kind === 'enum') return enumStored(column, value)
-  return driverScalar(dialect, value)
-}
-
-function driverScalar(dialect: Dialect, value: SeedValue) {
-  if (typeof value === 'bigint') return dialect === 'sqlite' ? value : value.toString()
-  if (typeof value === 'boolean') return dialect === 'sqlite' ? (value ? 1 : 0) : value
-  if (value instanceof Date) return dialect === 'sqlite' ? value.toISOString() : value
-  if (value instanceof Uint8Array) return Buffer.from(value)
-  if (Array.isArray(value) || (typeof value === 'object' && value !== null)) {
-    return JSON.stringify(jsonValue(value))
-  }
-  return value
-}
-
 function chunks<T>(items: readonly T[], size: number) {
   return Array.from({ length: Math.ceil(items.length / size) }, (_, i) =>
     items.slice(i * size, (i + 1) * size),
   )
-}
-
-function placeholder(dialect: Dialect, index: number) {
-  return dialect === 'postgresql' ? `$${index}` : '?'
-}
-
-/** The multi-row INSERTs of one table with bound parameters, for a driver. */
-export function insertStatements(dialect: Dialect, entry: SeedTableRows, chunk = INSERT_CHUNK) {
-  const columns = columnsOf(entry.table)
-  const target = qualifiedTable(dialect, entry.table)
-  const names = columns.map((c) => quoteIdentifier(dialect, c.column)).join(', ')
-  return chunks(entry.rows, chunk).map((rows) => ({
-    sql: `INSERT INTO ${target} (${names}) VALUES ${rows
-      .map(
-        (_, r) =>
-          `(${columns.map((_c, c) => placeholder(dialect, r * columns.length + c + 1)).join(', ')})`,
-      )
-      .join(', ')}`,
-    params: rows.flatMap((row) =>
-      columns.map((column) =>
-        driverValue(dialect, column, row[fieldOf(entry.table, column)] ?? null),
-      ),
-    ),
-  }))
 }
 
 function fieldOf(table: SeedTable, column: ColumnShape) {
@@ -217,21 +160,13 @@ export function insertSql(dialect: Dialect, entry: SeedTableRows, chunk = INSERT
 }
 
 /** `DELETE FROM` every seeded table, children first, so no foreign key is left dangling. */
-export function resetStatements(
-  dialect: Dialect,
-  tables: readonly SeedTable[],
-): readonly Statement[] {
-  const deletes = tables.toReversed().map((table) => ({
-    sql: `DELETE FROM ${qualifiedTable(dialect, table)}`,
-    params: [],
-  }))
+export function resetSql(dialect: Dialect, tables: readonly SeedTable[]) {
+  const deletes = tables
+    .toReversed()
+    .map((table) => `DELETE FROM ${qualifiedTable(dialect, table)}`)
   // MySQL checks foreign keys row by row, so a self relation would block its own DELETE.
   return dialect === 'mysql'
-    ? [
-        { sql: 'SET FOREIGN_KEY_CHECKS = 0', params: [] },
-        ...deletes,
-        { sql: 'SET FOREIGN_KEY_CHECKS = 1', params: [] },
-      ]
+    ? ['SET FOREIGN_KEY_CHECKS = 0', ...deletes, 'SET FOREIGN_KEY_CHECKS = 1']
     : deletes
 }
 
@@ -239,7 +174,7 @@ export function resetStatements(
  * PostgreSQL sequences do not follow explicit values, so after seeding `autoincrement()` columns
  * with 1..n the next application insert would reuse 1. These move each sequence past the rows.
  */
-export function sequenceStatements(dialect: Dialect, tables: readonly SeedTable[]) {
+export function sequenceSql(dialect: Dialect, tables: readonly SeedTable[]) {
   if (dialect !== 'postgresql') return []
   return tables.flatMap((table) =>
     table.kind === 'model'
@@ -249,10 +184,7 @@ export function sequenceStatements(dialect: Dialect, tables: readonly SeedTable[
           const target = qualifiedTable(dialect, table)
           const name = quoteIdentifier(dialect, column.column)
           return [
-            {
-              sql: `SELECT setval(pg_get_serial_sequence('${target.replaceAll("'", "''")}', '${column.column.replaceAll("'", "''")}'), COALESCE((SELECT MAX(${name}) FROM ${target}), 0) + 1, false)`,
-              params: [],
-            },
+            `SELECT setval(pg_get_serial_sequence('${target.replaceAll("'", "''")}', '${column.column.replaceAll("'", "''")}'), COALESCE((SELECT MAX(${name}) FROM ${target}), 0) + 1, false)`,
           ]
         })
       : [],
@@ -276,10 +208,10 @@ export function makeSeedSql(input: {
   ]
   const open = dialect === 'mysql' ? 'START TRANSACTION;' : 'BEGIN;'
   const pragma = dialect === 'sqlite' ? ['PRAGMA foreign_keys = ON;'] : []
-  const reset = input.reset ? resetStatements(dialect, tables).map((s) => `${s.sql};`) : []
+  const reset = input.reset ? resetSql(dialect, tables).map((sql) => `${sql};`) : []
   const inserts = entries
     .filter((entry) => entry.rows.length > 0)
     .flatMap((entry) => insertSql(dialect, entry))
-  const sequences = sequenceStatements(dialect, tables).map((s) => `${s.sql};`)
+  const sequences = sequenceSql(dialect, tables).map((sql) => `${sql};`)
   return `${[...header, ...pragma, open, ...reset, ...inserts, ...sequences, 'COMMIT;'].join('\n')}\n`
 }

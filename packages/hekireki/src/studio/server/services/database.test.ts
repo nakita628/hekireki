@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
@@ -27,7 +27,10 @@ function tmp() {
 async function connect(
   options: {
     readonly explicitUrl?: string | null
+    readonly configUrl?: string | null
+    readonly configError?: string | null
     readonly schemaProvider?: string | null
+    readonly schemaText?: string | null
     readonly cwd?: string
     readonly schemaDir?: string
     readonly env?: Readonly<Record<string, string | undefined>>
@@ -38,7 +41,10 @@ async function connect(
     Effect.provide(
       connectDatabase({
         explicitUrl: options.explicitUrl ?? null,
+        configUrl: options.configUrl ?? null,
+        configError: options.configError ?? null,
         schemaProvider: options.schemaProvider ?? null,
+        schemaText: options.schemaText ?? null,
         cwd,
         schemaDir: options.schemaDir ?? cwd,
         env: options.env ?? {},
@@ -79,7 +85,7 @@ describe('connectDatabase', () => {
     const db = await connect()
     expect(db.status.connected).toBe(false)
     expect(db.status.error).toContain('No database URL found.')
-    expect(db.status.error).toContain('Set DATABASE_URL (in .env or the environment)')
+    expect(db.status.error).toContain('name the variable in prisma.config.ts')
   })
 
   it('refuses a URL whose scheme names no database it can drive', async () => {
@@ -127,6 +133,51 @@ describe('connectDatabase', () => {
     expect(fromFlag.status.url).toBe('file:./flag.db')
   })
 
+  it('takes the url of hekireki.config.ts over DATABASE_URL, and --url over that', async () => {
+    const dir = tmp()
+    const fromConfig = await connect({
+      configUrl: 'file:./config.db',
+      cwd: dir,
+      schemaDir: dir,
+      env: { DATABASE_URL: 'file:./environment.db' },
+    })
+    expect(fromConfig.status).toMatchObject({ url: 'file:./config.db', source: 'hekireki' })
+    const fromFlag = await connect({
+      explicitUrl: 'file:./flag.db',
+      configUrl: 'file:./config.db',
+      cwd: dir,
+      schemaDir: dir,
+    })
+    expect(fromFlag.status).toMatchObject({ url: 'file:./flag.db', source: 'flag' })
+  })
+
+  it('reads .env beside the schema too, the working directory winning when both name the variable', async () => {
+    const cwd = tmp()
+    const schemaDir = path.join(cwd, 'prisma')
+    mkdirSync(schemaDir)
+    writeFileSync(path.join(schemaDir, '.env'), 'DATABASE_URL="file:./schema.db"\n')
+    const fromSchema = await connect({ cwd, schemaDir })
+    expect(fromSchema.status).toMatchObject({ url: 'file:./schema.db', source: 'env' })
+    writeFileSync(path.join(cwd, '.env'), 'DATABASE_URL="file:./root.db"\n')
+    const fromRoot = await connect({ cwd, schemaDir })
+    expect(fromRoot.status.url).toBe('file:./root.db')
+  })
+
+  it('says when hekireki.config.ts could not be read and nothing else names a database', async () => {
+    const dir = tmp()
+    const db = await connect({ configError: 'Invalid config: seed: expected number', cwd: dir })
+    expect(db.status.connected).toBe(false)
+    expect(db.status.error).toBe(
+      'hekireki.config.ts could not be read for its `url`: Invalid config: seed: expected number',
+    )
+    const fallback = await connect({
+      configError: 'broken',
+      explicitUrl: 'file:./flag.db',
+      cwd: dir,
+    })
+    expect(fallback.status.connected).toBe(true)
+  })
+
   it('reads the URL out of prisma.config.ts when nothing else supplies one', async () => {
     const dir = tmp()
     writeFileSync(
@@ -134,8 +185,42 @@ describe('connectDatabase', () => {
       "export default defineConfig({ datasource: { url: 'file:./dev.db' } })\n",
     )
     const db = await connect({ cwd: dir, schemaDir: dir })
-    expect(db.status.source).toBe('config')
+    expect(db.status.source).toBe('prisma')
     expect(db.status.connected).toBe(true)
+  })
+
+  it('reads the variable Prisma names, not DATABASE_URL, when prisma.config.ts names one', async () => {
+    const dir = tmp()
+    writeFileSync(
+      path.join(dir, 'prisma.config.ts'),
+      "export default defineConfig({ datasource: { url: env('SHOP_DATABASE_URL') } })\n",
+    )
+    writeFileSync(path.join(dir, '.env'), 'SHOP_DATABASE_URL="file:./shop.db"\n')
+    const db = await connect({
+      cwd: dir,
+      schemaDir: dir,
+      env: { DATABASE_URL: 'file:./other.db' },
+    })
+    expect(db.status).toMatchObject({ url: 'file:./shop.db', source: 'prisma' })
+  })
+
+  it('reads the datasource url of a Prisma 6 schema, and finds prisma.config.ts beside the schema', async () => {
+    const cwd = tmp()
+    const schemaDir = path.join(cwd, 'prisma')
+    mkdirSync(schemaDir)
+    const fromSchema = await connect({
+      cwd,
+      schemaDir,
+      schemaText: 'datasource db {\n  provider = "sqlite"\n  url      = env("APP_DB")\n}\n',
+      env: { APP_DB: 'file:./app.db' },
+    })
+    expect(fromSchema.status).toMatchObject({ url: 'file:./app.db', source: 'prisma' })
+    writeFileSync(
+      path.join(schemaDir, 'prisma.config.ts'),
+      "export default defineConfig({ datasource: { url: 'file:./beside.db' } })\n",
+    )
+    const beside = await connect({ cwd, schemaDir })
+    expect(beside.status).toMatchObject({ url: 'file:./beside.db', source: 'prisma' })
   })
 
   it('names the variable prisma.config.ts reads when that variable is unset', async () => {
