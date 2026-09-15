@@ -4,37 +4,26 @@ import { Config, Console, Effect, Option, Schema, Stdio } from 'effect'
 import { CliError, Command, Flag } from 'effect/unstable/cli'
 
 import { exists } from '../file/index.js'
-import type { SeedOverrides } from '../seed/run.js'
 import { DEFAULT_PORT } from '../studio/server/constants/index.js'
 import { ServerListenError } from '../studio/server/errors/index.js'
-import type { startStudioServer } from '../studio/server/start.js'
 import { DEFAULT_SCHEMA_PATHS } from './constants.js'
 
 const COMMAND_NAME = 'hekireki'
 
-// The schemes Studio opens a connection for; `makeDialect` reads the dialect from the same four.
-const DATABASE_URL_SCHEMES = ['postgres', 'postgresql', 'mysql', 'file'] as const
-
 const STATIC_DIR = path.resolve(import.meta.dirname, '../studio')
 
-// `Schema.refine` rejects the value while the command line is still being read, so a URL Studio
-// has no driver for is answered by the sentence below rather than by whatever the driver says
-// when it is handed something it cannot dial.
+// Checked while the command line is read, so a URL Studio has no driver for is answered by this
+// sentence rather than by whatever the driver says. The schemes are the four `makeDialect` reads.
 const databaseUrlSchema = Schema.String.pipe(
-  Schema.refine(
-    (value): value is string =>
-      DATABASE_URL_SCHEMES.some((scheme) => value.startsWith(`${scheme}:`)),
-    { message: 'a postgres://, postgresql://, mysql:// or file: connection string' },
+  Schema.check(
+    Schema.isPattern(/^(?:postgres|postgresql|mysql|file):/u, {
+      message: 'a postgres://, postgresql://, mysql:// or file: connection string',
+    }),
   ),
 )
 
 function userError(message: string) {
   return new CliError.UserError({ cause: new Error(message), userMessage: message })
-}
-
-/** The usage block, with the sentence that asked for it — what the runner renders for a bad line. */
-function showHelp(commandPath: readonly string[], message: string) {
-  return new CliError.ShowHelp({ commandPath: [...commandPath], errors: [userError(message)] })
 }
 
 /**
@@ -55,18 +44,15 @@ export function resolveSchemaPath(explicit: string | null, commandPath: readonly
     for (const candidate of DEFAULT_SCHEMA_PATHS) {
       if (yield* exists(candidate)) return candidate
     }
-    return yield* showHelp(
-      commandPath,
-      `No Prisma schema found (looked for ${DEFAULT_SCHEMA_PATHS.join(', ')}).\n   Pass --schema <path> to point at your schema.prisma or a directory of .prisma files.`,
-    )
+    return yield* new CliError.ShowHelp({
+      commandPath: [...commandPath],
+      errors: [
+        userError(
+          `No Prisma schema found (looked for ${DEFAULT_SCHEMA_PATHS.join(', ')}).\n   Pass --schema <path> to point at your schema.prisma or a directory of .prisma files.`,
+        ),
+      ],
+    })
   })
-}
-
-/** Every way the server can refuse to start, as the one sentence the runner prints. */
-function startError(error: Effect.Error<ReturnType<typeof startStudioServer>>) {
-  return error instanceof ServerListenError && error.code === 'EADDRINUSE'
-    ? userError(`Port ${error.port} is already in use. Pass -p <port> to use another port.`)
-    : userError(error.message)
 }
 
 export function studioBanner(options: {
@@ -93,13 +79,8 @@ export function studioBanner(options: {
   return lines.join('\n')
 }
 
-/**
- * The command line itself: what Studio accepts, what each piece means, and the schema every
- * value is decoded through before the handler below ever sees it.
- */
 const studioFlags = {
-  // `Config.Port` is Effect's own port schema — an integer in 1–65535 — so a port no listener
-  // could bind is rejected while the command line is still being read.
+  // `Config.Port` (an integer in 1–65535) rejects a port no listener could bind up front.
   port: Flag.integer('port').pipe(
     Flag.withAlias('p'),
     Flag.withSchema(Config.Port),
@@ -108,8 +89,7 @@ const studioFlags = {
     Flag.withDefault(DEFAULT_PORT),
   ),
   // `Flag.string`, not `Flag.path`: the path primitive rewrites its value to an absolute one, and
-  // this flag also takes a directory and reports a missing path in its own words, next to the
-  // defaults it looked through.
+  // this flag also takes a directory and reports a missing path in its own words.
   schema: Flag.string('schema').pipe(
     Flag.withAlias('s'),
     Flag.withDescription(
@@ -129,13 +109,8 @@ const studioFlags = {
   ),
 }
 
-/**
- * Studio itself, listening until it is interrupted.
- *
- * It pulls in Hono, the Prisma schema engine and the database drivers. `--help`, `--version`,
- * `--completions` and every rejected command line must not pay for that, so it is imported here
- * rather than at module scope.
- */
+// The server pulls in Hono, the Prisma schema engine and the database drivers, which `--help`,
+// `--version` and a rejected command line must not pay for, so it is imported when it runs.
 function runStudio(args: Command.Command.Config.Infer<typeof studioFlags>) {
   return Effect.gen(function* () {
     const schemaPath = yield* resolveSchemaPath(Option.getOrNull(args.schema), [
@@ -148,7 +123,15 @@ function runStudio(args: Command.Command.Config.Infer<typeof studioFlags>) {
       port: args.port,
       staticDir: STATIC_DIR,
       databaseUrl: Option.getOrNull(args.url),
-    }).pipe(Effect.mapError(startError))
+    }).pipe(
+      Effect.mapError((error) =>
+        userError(
+          error instanceof ServerListenError && error.code === 'EADDRINUSE'
+            ? `Port ${error.port} is already in use. Pass -p <port> to use another port.`
+            : error.message,
+        ),
+      ),
+    )
     yield* Console.log(
       studioBanner({
         port: args.port,
@@ -242,26 +225,24 @@ const seedFlags = {
   ),
 }
 
-/**
- * The seeder, imported when it runs: it pulls in faker with every locale, the Prisma schema
- * engine and the database drivers, which `--help` must not pay for.
- */
+// The seeder pulls in faker with every locale, the Prisma schema engine and the database drivers,
+// so it is imported when it runs.
 function runSeedCommand(args: Command.Command.Config.Infer<typeof seedFlags>) {
   return Effect.gen(function* () {
     const { runSeed, seedBanner } = yield* Effect.promise(() => import('../seed/run.js'))
-    const overrides: SeedOverrides = {
-      config: Option.getOrNull(args.config),
-      schema: Option.getOrNull(args.schema),
-      url: Option.getOrNull(args.url),
-      output: Option.getOrNull(args.sql),
-      seed: Option.getOrNull(args.seed),
-      count: Option.getOrNull(args.count),
-      locale: Option.getOrNull(args.locale),
-      reset: args.reset,
-    }
-    const report = yield* runSeed(overrides, process.cwd()).pipe(
-      Effect.mapError((error) => userError(error.message)),
-    )
+    const report = yield* runSeed(
+      {
+        config: Option.getOrNull(args.config),
+        schema: Option.getOrNull(args.schema),
+        url: Option.getOrNull(args.url),
+        output: Option.getOrNull(args.sql),
+        seed: Option.getOrNull(args.seed),
+        count: Option.getOrNull(args.count),
+        locale: Option.getOrNull(args.locale),
+        reset: args.reset,
+      },
+      process.cwd(),
+    ).pipe(Effect.mapError((error) => userError(error.message)))
     yield* Console.log(seedBanner(report))
   })
 }
@@ -290,7 +271,6 @@ const seed = Command.make('seed', seedFlags, runSeedCommand).pipe(
   ]),
 )
 
-/** The `hekireki` command tree; run it with {@link hekirekiCli}. */
 const cli = Command.make(COMMAND_NAME).pipe(
   Command.withDescription('⚡️ Prisma schema tools'),
   Command.withSubcommands([studio, seed]),
@@ -304,17 +284,13 @@ const cli = Command.make(COMMAND_NAME).pipe(
  * Only the words before the first flag are a command path, so a value that happens to read `help`
  * (`--schema help`) is left alone.
  */
-export function helpAsFlag(args: readonly string[]): readonly string[] {
+export function helpAsFlag(args: readonly string[]) {
   const flag = args.findIndex((arg) => arg.startsWith('-'))
   const verbs = flag === -1 ? args : args.slice(0, flag)
   const at = verbs.indexOf('help')
   return at === -1 ? args : [...args.slice(0, at), ...args.slice(at + 1), '--help']
 }
 
-/**
- * Runs `hekireki` against an argument list: parsing, validation, `--help`, `--version` and shell
- * completions are owned by `effect/unstable/cli`, the commands above are the rest.
- */
 export function hekirekiCli(argv: readonly string[], config: { readonly version: string }) {
   return Command.runWith(cli, config)(helpAsFlag(argv))
 }
