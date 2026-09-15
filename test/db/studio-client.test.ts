@@ -116,11 +116,26 @@ function link(dir: string, name: string, target: string) {
   symlinkSync(realpathSync(target), at, 'dir')
 }
 
+/** Runs a command to completion; what went wrong when it did not exit with 0, else null. */
 function run(command: string, args: readonly string[], cwd: string) {
   const result = spawnSync(command, args, { cwd, encoding: 'utf8' })
-  if (result.status !== 0) {
-    throw new Error(`${command} ${args.join(' ')} failed:\n${result.stdout}${result.stderr}`)
-  }
+  return result.status === 0
+    ? null
+    : `${command} ${args.join(' ')} failed:\n${result.stdout}${result.stderr}`
+}
+
+/** Whether Studio answers yet, asked again every 200 ms until the deadline. */
+async function serving(url: string, deadline: number): Promise<boolean> {
+  const up = await fetch(url).then(
+    (response) => response.ok,
+    () => false,
+  )
+  if (up) return true
+  if (Date.now() > deadline) return false
+  await new Promise((_resolve) => {
+    setTimeout(_resolve, 200)
+  })
+  return serving(url, deadline)
 }
 
 type Response = { readonly status: number; readonly json: unknown }
@@ -141,7 +156,12 @@ function isStatement(value: unknown): value is Statement {
 }
 
 describe.each(TARGETS)('the Prisma Client page on $dialect', (target) => {
-  const state: { dir: string; studio: ChildProcess | null } = { dir: '', studio: null }
+  // Setup cannot assert; what it could not do is kept here, and every test checks it first.
+  const state: { dir: string; studio: ChildProcess | null; failure: string | null } = {
+    dir: '',
+    studio: null,
+    failure: null,
+  }
   const base = `http://127.0.0.1:${target.port}`
 
   const call = async (path: string, body?: unknown): Promise<Response> => {
@@ -158,11 +178,10 @@ describe.each(TARGETS)('the Prisma Client page on $dialect', (target) => {
     return { status: response.status, json: await response.json() }
   }
 
-  /** A write through the page's API, which asks no question (the page's dialog is the UI's). */
+  /** A write through the page's API, which asks no question (the page's dialog is the UI's); what it answered when it refused. */
   const write = async (query: string) => {
     const response = await call('/api/client/run', { query })
-    if (response.status !== 200) throw new Error(JSON.stringify(response.json))
-    return response
+    return response.status === 200 ? null : JSON.stringify(response.json)
   }
 
   /** The number of rows, counted by Studio's own driver through the SQL page's API. */
@@ -185,8 +204,13 @@ describe.each(TARGETS)('the Prisma Client page on $dialect', (target) => {
     link(dir, 'typescript', join(pkg, 'node_modules', 'typescript-5'))
     const schema = join(dir, 'schema.prisma')
     writeFileSync(schema, schemaOf(target.dialect))
-    run(prisma, ['generate', '--schema', schema], dir)
-    run(prisma, ['db', 'push', '--schema', schema, '--url', url], dir)
+    const prepared =
+      run(prisma, ['generate', '--schema', schema], dir) ??
+      run(prisma, ['db', 'push', '--schema', schema, '--url', url], dir)
+    if (prepared !== null) {
+      state.failure = prepared
+      return
+    }
     state.studio = spawn(
       'node',
       [cli, 'studio', '--schema', schema, '--url', url, '-p', String(target.port)],
@@ -195,26 +219,17 @@ describe.each(TARGETS)('the Prisma Client page on $dialect', (target) => {
         stdio: 'ignore',
       },
     )
-    const started = Date.now()
-    const ready = async (): Promise<void> => {
-      const up = await fetch(`${base}/api/schema`).then(
-        (response) => response.ok,
-        () => false,
-      )
-      if (up) return
-      if (Date.now() - started > 30_000) throw new Error('hekireki studio did not start')
-      await new Promise((_resolve) => {
-        setTimeout(_resolve, 200)
-      })
-      return ready()
+    if (!(await serving(`${base}/api/schema`, Date.now() + 30_000))) {
+      state.failure = 'hekireki studio did not start'
+      return
     }
-    await ready()
-    await write(
-      'prisma.user.createMany({ data: [{ email: "ada@example.com", name: "Ada" }, { email: "bob@example.com", name: "Bob" }, { email: "cy@example.org" }] })',
-    )
-    await write(
-      'prisma.post.createMany({ data: [{ title: "Hello", published: true, authorId: 1 }, { title: "Draft", authorId: 1 }, { title: "Notes", published: true, authorId: 2 }] })',
-    )
+    state.failure =
+      (await write(
+        'prisma.user.createMany({ data: [{ email: "ada@example.com", name: "Ada" }, { email: "bob@example.com", name: "Bob" }, { email: "cy@example.org" }] })',
+      )) ??
+      (await write(
+        'prisma.post.createMany({ data: [{ title: "Hello", published: true, authorId: 1 }, { title: "Draft", authorId: 1 }, { title: "Notes", published: true, authorId: 2 }] })',
+      ))
   })
 
   afterAll(async () => {
@@ -226,6 +241,7 @@ describe.each(TARGETS)('the Prisma Client page on $dialect', (target) => {
   it.skipIf(target.url === undefined)(
     'loads the generated client through the adapter, with TypeScript for the editor',
     async () => {
+      expect(state.failure).toBeNull()
       expect(await call('/api/client')).toStrictEqual({
         status: 200,
         json: {
@@ -242,6 +258,7 @@ describe.each(TARGETS)('the Prisma Client page on $dialect', (target) => {
   it.skipIf(target.url === undefined)(
     'returns the rows with the statements Prisma Client sent, which run the same on the SQL page',
     async () => {
+      expect(state.failure).toBeNull()
       const response = await call('/api/client/run', {
         query:
           'prisma.user.findMany({ where: { email: { endsWith: "example.com" } }, orderBy: { id: "asc" }, include: { posts: { where: { published: true }, select: { title: true } } } })',
@@ -278,8 +295,43 @@ describe.each(TARGETS)('the Prisma Client page on $dialect', (target) => {
   )
 
   it.skipIf(target.url === undefined)(
+    'previews the statements a read sends as its run sends them, and runs no write for its SQL',
+    async () => {
+      expect(state.failure).toBeNull()
+      const query =
+        'prisma.post.findMany({ where: { published: true }, include: { author: { select: { email: true } } } })'
+      const statementsOf = (json: unknown) =>
+        listOf(json, 'queries')
+          .filter(isStatement)
+          .map((statement) => [statement.sql, statement.params])
+      const previewed = await call('/api/client/preview', { query })
+      const ran = await call('/api/client/run', { query })
+      expect(previewed.status).toBe(200)
+      expect(statementsOf(previewed.json).length).toBeGreaterThan(0)
+      expect(statementsOf(previewed.json)).toStrictEqual(statementsOf(ran.json))
+      // The placeholders are the dialect's own: `$1` on PostgreSQL, `?` on MySQL.
+      const first = listOf(previewed.json, 'queries').find(isStatement)
+      expect(first?.sql).toMatch(target.dialect === 'postgresql' ? /\$1/u : /\?/u)
+      expect(await call('/api/client/analyze', { query })).toMatchObject({
+        json: {
+          touched: [
+            { model: 'Post', fields: ['published', 'author'] },
+            { model: 'User', fields: ['email'] },
+          ],
+        },
+      })
+
+      const before = await countOf('Post')
+      const refused = await call('/api/client/preview', { query: 'prisma.post.deleteMany()' })
+      expect(refused.status).toBe(422)
+      expect(await countOf('Post')).toBe(before)
+    },
+  )
+
+  it.skipIf(target.url === undefined)(
     'runs a batch $transaction: the INSERT is listed and the row is in the database',
     async () => {
+      expect(state.failure).toBeNull()
       const before = await countOf('Post')
       const response = await call('/api/client/run', {
         query:
@@ -301,6 +353,7 @@ describe.each(TARGETS)('the Prisma Client page on $dialect', (target) => {
   it.skipIf(target.url === undefined)(
     'reports a constraint the database enforces, in Prisma Client’s words',
     async () => {
+      expect(state.failure).toBeNull()
       const response = await call('/api/client/run', {
         query: 'prisma.user.create({ data: { email: "ada@example.com" } })',
       })
@@ -315,6 +368,7 @@ describe.each(TARGETS)('the Prisma Client page on $dialect', (target) => {
   it.skipIf(target.url === undefined)(
     'completes and checks the call against the generated types',
     async () => {
+      expect(state.failure).toBeNull()
       const completions = await call('/api/client/complete', {
         query: 'prisma.user.findMany({ where: { ',
         offset: 33,

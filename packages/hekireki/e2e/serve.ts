@@ -12,7 +12,8 @@ import {
   WORKSPACE_DIR,
 } from './workspace.ts'
 
-prepareWorkspace()
+const prepared = prepareWorkspace()
+if (prepared !== 0) process.exit(prepared)
 const child = spawn(
   process.execPath,
   [

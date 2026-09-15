@@ -3,8 +3,10 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useMemo, useState } from 'react'
 import { LuPlay } from 'react-icons/lu'
 
+import { DiagnosticsList } from '../../components/diagnostics-list.js'
 import { fieldTypeLabel } from '../../components/labels.js'
 import { ResultTable } from '../../components/result-table.js'
+import { SplitPane } from '../../components/split-pane.js'
 import { useDebounced } from '../../hooks/debounce.js'
 import {
   getDbCountsQueryKey,
@@ -18,12 +20,10 @@ import type { SchemaHighlight } from '../schema/schema-view.js'
 import { useAnalysis } from './analysis.js'
 import type { Range, StatementAnalysis } from './analysis.js'
 import { ColumnsView } from './columns-view.js'
-import { DiagnosticsList } from './diagnostics-list.js'
 import { FlowView } from './flow-view.js'
 import { ParamsPanel } from './params-panel.js'
 import { bindValues, paramInputsOf } from './params.js'
 import { PlanView } from './plan-view.js'
-import { SplitPane } from './split-pane.js'
 import { SqlEditor } from './sql-editor.js'
 import type { EditorTable } from './sql-editor.js'
 import { TypeView } from './type-view.js'
@@ -291,7 +291,7 @@ export function SqlView({
     <div className="flex min-h-0 min-w-0 flex-col">
       <header className="flex flex-wrap items-center gap-3.5 border-b border-line bg-surface px-6 py-3">
         <h1 className="page-title">SQL</h1>
-        <span className="text-lead text-muted">
+        <span className="min-w-0 text-lead [overflow-wrap:anywhere] text-muted">
           {database?.connected
             ? `${database.dialect ?? ''} · ${database.url ?? ''}`
             : 'No database connected'}

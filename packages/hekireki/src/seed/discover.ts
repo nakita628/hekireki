@@ -70,16 +70,6 @@ function isConstructor(value: unknown): value is new (...args: unknown[]) => unk
   return typeof value === 'function'
 }
 
-/**
- * What the adapter of the dialect is built with: the SQLite file, or the URL — and for PostgreSQL
- * the schema of its `?schema=`, which the pg driver does not read and PrismaPg takes as an option.
- */
-function adapterArguments(dialect: Dialect, url: string, schemaDir: string): readonly unknown[] {
-  if (dialect === 'sqlite') return [{ url: makeSqliteFilePath({ url, baseDir: schemaDir }) }]
-  const schema = dialect === 'postgresql' ? makePostgresSchema({ url }) : null
-  return schema === null ? [url] : [url, { schema }]
-}
-
 function isClientConstructor(
   value: unknown,
 ): value is new (options: Readonly<Record<string, unknown>>) => unknown {
@@ -104,7 +94,15 @@ function makeAdapter(dialect: Dialect, url: string, cwd: string, schemaDir: stri
     if (!isConstructor(factory)) {
       return { adapter: null, reason: `${pkg} does not export ${name}` }
     }
-    const args = adapterArguments(dialect, url, schemaDir)
+    // The SQLite file, or the URL — and for PostgreSQL the schema of its `?schema=`, which the pg
+    // driver does not read and PrismaPg takes as an option.
+    const schema = dialect === 'postgresql' ? makePostgresSchema({ url }) : null
+    const args: readonly unknown[] =
+      dialect === 'sqlite'
+        ? [{ url: makeSqliteFilePath({ url, baseDir: schemaDir }) }]
+        : schema === null
+          ? [url]
+          : [url, { schema }]
     return yield* Effect.try({
       try: () => new factory(...args),
       catch: (error) => new SeedDatabaseError({ message: messageOf(error) }),

@@ -32,8 +32,8 @@ export function parseCellInput(field: Field, text: string): Row[string] {
   switch (field.type) {
     case 'Int':
     case 'Float': {
-      const parsed = Number(text)
-      return text.trim() !== '' && !Number.isNaN(parsed) ? parsed : text
+      const result = Number(text)
+      return text.trim() !== '' && !Number.isNaN(result) ? result : text
     }
     case 'Boolean':
       return text === 'true' || text === '1'

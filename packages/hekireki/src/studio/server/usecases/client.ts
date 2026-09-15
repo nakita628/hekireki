@@ -1,6 +1,7 @@
 import { Effect } from 'effect'
 import * as z from 'zod'
 
+import { fmt } from '../../../format/index.js'
 import { formatSql } from '../../../sql/index.js'
 import { CLIENT_ROW_LIMIT } from '../constants/index.js'
 import * as ClientDomain from '../domain/index.js'
@@ -9,7 +10,9 @@ import {
   ClientAnalysisSchema,
   ClientCompletionDetailSchema,
   ClientCompletionsSchema,
+  ClientFormattedSchema,
   ClientHoverSchema,
+  ClientPreviewSchema,
   ClientResultSchema,
   ClientSignatureHelpSchema,
   ClientStatusSchema,
@@ -57,8 +60,11 @@ const AnalyzeClientQueryInput = z
 export function analyzeClientQuery(input: z.infer<typeof AnalyzeClientQueryInput>) {
   return Effect.gen(function* () {
     const state = yield* RuntimeService.StudioStateTag
-    const models = (state.snapshot().schema?.models ?? []).map((model) => model.name)
-    const query = ClientDomain.makeClientQuery({ text: input.query, models })
+    const models = state.snapshot().schema?.models ?? []
+    const query = ClientDomain.makeClientQuery({
+      text: input.query,
+      models: models.map((model) => model.name),
+    })
     const analysis = {
       calls: query.calls.map(({ model, operation, write, range }) => ({
         model,
@@ -67,6 +73,7 @@ export function analyzeClientQuery(input: z.infer<typeof AnalyzeClientQueryInput
         range,
       })),
       transaction: query.transaction,
+      touched: ClientDomain.makeClientTouched({ calls: query.calls, models }),
       diagnostics: query.diagnostics,
     }
     const result = ClientAnalysisSchema.safeParse(analysis)
@@ -99,7 +106,9 @@ const RunClientQueryInput = z
  *   participant U as runClientQuery
  *   participant St as StudioState
  *   participant C as Client (Prisma Client)
+ *   participant Db as Database
  *   U->>St: models, schema files
+ *   U->>Db: dialect, for laying the statements out
  *   Note over U: read the text into calls (domain)
  *   U->>C: run(calls)
  *   C-->>U: value, query events / ClientUnavailableError / ClientQueryError
@@ -113,6 +122,7 @@ export function runClientQuery(input: z.infer<typeof RunClientQueryInput>) {
   return Effect.gen(function* () {
     const state = yield* RuntimeService.StudioStateTag
     const client = yield* RuntimeService.ClientTag
+    const db = yield* RuntimeService.DatabaseTag
     const snapshot = state.snapshot()
     const models = (snapshot.schema?.models ?? []).map((model) => model.name)
     const query = ClientDomain.makeClientQuery({ text: input.query, models })
@@ -125,13 +135,45 @@ export function runClientQuery(input: z.infer<typeof RunClientQueryInput>) {
       ...ClientDomain.makeClientResult({ value: ran.value, limit: CLIENT_ROW_LIMIT }),
       queries: ran.queries.map((event) => ({
         sql: event.sql,
-        formatted: formatSql(event.sql),
+        formatted: formatSql(event.sql, db.status.dialect),
         params: ClientDomain.makeSqlParams({ text: event.params }),
         durationMs: Math.round(event.durationMs * 10) / 10,
       })),
       durationMs: Math.round(ran.durationMs * 10) / 10,
     }
     const result = ClientResultSchema.safeParse(clientResult)
+    if (!result.success) {
+      return yield* new ContractViolationError({ message: result.error.message })
+    }
+    return result.data
+  })
+}
+
+/**
+ * Runs a call that only reads, to show the SQL it sends while it is being typed. A write is
+ * refused: its SQL shows when it is run, once the write has been confirmed.
+ *
+ * @param input - the query text
+ * @returns the statements the client sent and the wall time
+ */
+export function previewClientQuery(input: z.infer<typeof RunClientQueryInput>) {
+  return Effect.gen(function* () {
+    const state = yield* RuntimeService.StudioStateTag
+    const models = (state.snapshot().schema?.models ?? []).map((model) => model.name)
+    const write = ClientDomain.makeClientQuery({ text: input.query, models }).calls.find(
+      (call) => call.write,
+    )
+    if (write !== undefined) {
+      return yield* new InvalidInputError({
+        field: 'query',
+        message: `${write.model}.${write.operation} writes: its SQL shows when it is run`,
+      })
+    }
+    const ran = yield* runClientQuery(input)
+    const result = ClientPreviewSchema.safeParse({
+      queries: ran.queries,
+      durationMs: ran.durationMs,
+    })
     if (!result.success) {
       return yield* new ContractViolationError({ message: result.error.message })
     }
@@ -292,6 +334,36 @@ export function checkClientQuery(input: z.infer<typeof CheckClientQueryInput>) {
     const client = yield* RuntimeService.ClientTag
     const diagnostics = yield* client.typescript.check(state.snapshot().files, input.query)
     const result = ClientTypeDiagnosticsSchema.safeParse({ diagnostics })
+    if (!result.success) {
+      return yield* new ContractViolationError({ message: result.error.message })
+    }
+    return result.data
+  })
+}
+
+const FormatClientQueryInput = z
+  .object({
+    query: z.string().trim().min(1).brand<'ClientQuery'>().meta({
+      description: 'The query text.',
+      example: 'prisma.user.findMany({take:10})',
+    }),
+  })
+  .readonly()
+  .meta({
+    description: 'Input for formatting a query',
+    example: { query: 'prisma.user.findMany({take:10})' },
+  })
+
+/**
+ * The query laid out as the repository's TypeScript formatter writes it.
+ *
+ * @param input - the text
+ * @returns the whole text, formatted
+ */
+export function formatClientQuery(input: z.infer<typeof FormatClientQueryInput>) {
+  return Effect.gen(function* () {
+    const text = yield* fmt(input.query)
+    const result = ClientFormattedSchema.safeParse({ text: text.trimEnd() })
     if (!result.success) {
       return yield* new ContractViolationError({ message: result.error.message })
     }

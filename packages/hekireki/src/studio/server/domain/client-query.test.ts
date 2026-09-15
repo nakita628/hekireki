@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import { isWriteOperation, makeClientQuery, makeClientResult, makeSqlParams } from './client.js'
+import { isWriteOperation, makeClientQuery } from './client-query.js'
 
 const MODELS = ['User', 'Post', 'OrderItem']
 
@@ -167,12 +167,12 @@ describe('makeClientQuery', () => {
     [
       'prisma.user.findMany({ ...base })',
       'Spread is not supported: write the fields out',
-      { start: 23, end: 26 },
+      { start: 23, end: 30 },
     ],
     [
       'prisma.user.findMany({ [key]: 1 })',
       'Computed keys are not supported',
-      { start: 23, end: 24 },
+      { start: 24, end: 27 },
     ],
     [
       'prisma.user.findMany({ where: { name: `${name}` } })',
@@ -182,26 +182,26 @@ describe('makeClientQuery', () => {
     [
       'prisma.user.findMany({ at: new Map() })',
       'Only new Date(...) is supported, not new Map',
-      { start: 31, end: 34 },
+      { start: 27, end: 36 },
     ],
     [
       'prisma.user.findMany({ at: new Date("soon") })',
       'Invalid date: "soon"',
-      { start: 36, end: 43 },
+      { start: 27, end: 43 },
     ],
     [
       'prisma.user.findMany({ take: 1 }, {})',
       'A model operation takes one argument',
-      { start: 34, end: 35 },
+      { start: 34, end: 36 },
     ],
+    ['prisma.user.findMany({ take: 1 ', 'Unexpected token', { start: 31, end: 31 }],
     [
-      'prisma.user.findMany({ take: 1 ',
-      'Expected "," or "}", found the end of the text',
-      { start: 30, end: 30 },
+      'prisma.user.findMany({ name: "ann })',
+      'Unterminated string constant',
+      { start: 29, end: 30 },
     ],
-    ['prisma.user.findMany({ name: "ann })', 'Unterminated string', { start: 29, end: 30 }],
-    ['prisma.user.findMany() /* open', 'Unterminated comment', { start: 23, end: 25 }],
-    ['prisma.user.findMany({ a: 1 # 2 })', 'Unexpected character "#"', { start: 28, end: 29 }],
+    ['prisma.user.findMany() /* open', 'Unterminated comment', { start: 23, end: 24 }],
+    ['prisma.user.findMany({ a: 1 # 2 })', "Unexpected character ' '", { start: 29, end: 30 }],
     [
       'prisma.user.count()\nprisma.post.count()',
       'Only one call runs at a time: batch several in prisma.$transaction([...])',
@@ -215,22 +215,22 @@ describe('makeClientQuery', () => {
     [
       'prisma.$transaction(async (tx) => tx.user.count())',
       '$transaction takes an array of calls here: prisma.$transaction([prisma.user.count(), ...])',
-      { start: 20, end: 25 },
+      { start: 20, end: 49 },
     ],
-    ['prisma.$transaction([])', '$transaction needs at least one call', { start: 20, end: 21 }],
+    ['prisma.$transaction([])', '$transaction needs at least one call', { start: 20, end: 22 }],
     [
       'prisma.$transaction([prisma.$transaction([])])',
       '$transaction cannot be nested',
       { start: 28, end: 40 },
     ],
-    ['prisma.user', 'Expected "." and an operation after "user"', { start: 11, end: 11 }],
+    ['prisma.user', 'Expected a call such as prisma.user.findMany()', { start: 0, end: 11 }],
     [
       'prisma.user.findMany',
-      'Expected "(" after "findMany", found the end of the text',
-      { start: 20, end: 20 },
+      'Expected a call such as prisma.user.findMany()',
+      { start: 0, end: 20 },
     ],
-    ['user.findMany()', 'Expected "." and an operation after "findMany"', { start: 13, end: 14 }],
-    ['42', 'Expected a call such as prisma.user.findMany(), found "42"', { start: 0, end: 2 }],
+    ['user.findMany()', 'Expected a call such as prisma.user.findMany()', { start: 0, end: 13 }],
+    ['42', 'Expected a call such as prisma.user.findMany()', { start: 0, end: 2 }],
   ])('refuses %s', (text, message, range) => {
     expect(makeClientQuery({ text, models: MODELS })).toStrictEqual({
       calls: [],
@@ -251,69 +251,6 @@ describe('isWriteOperation', () => {
   })
 })
 
-describe('makeClientResult', () => {
-  it('writes the values JSON cannot carry as strings', () => {
-    class Decimal {
-      constructor(private readonly digits: string) {}
-      toJSON() {
-        return this.digits
-      }
-    }
-    expect(
-      makeClientResult({
-        value: {
-          id: 1n,
-          at: new Date('2025-01-01T00:00:00.000Z'),
-          price: new Decimal('9.90'),
-          bytes: new Uint8Array([104, 105]),
-          nested: [{ none: undefined, nan: Number.NaN }],
-          bare: Object.assign(Object.create(null), { ok: true }),
-        },
-        limit: 10,
-      }),
-    ).toStrictEqual({
-      result: {
-        id: '1',
-        at: '2025-01-01T00:00:00.000Z',
-        price: '9.90',
-        bytes: 'aGk=',
-        nested: [{ none: null, nan: null }],
-        bare: { ok: true },
-      },
-      rowCount: null,
-      truncated: false,
-    })
-  })
-
-  it('keeps the first rows of an array and says how many there were', () => {
-    expect(makeClientResult({ value: [{ id: 1 }, { id: 2 }, { id: 3 }], limit: 2 })).toStrictEqual({
-      result: [{ id: 1 }, { id: 2 }],
-      rowCount: 3,
-      truncated: true,
-    })
-    expect(makeClientResult({ value: 3, limit: 2 })).toStrictEqual({
-      result: 3,
-      rowCount: null,
-      truncated: false,
-    })
-  })
-})
-
-describe('makeSqlParams', () => {
-  it('reads the logged params as cells', () => {
-    expect(makeSqlParams({ text: '["ann",10,true,null,[1],{"a":1}]' })).toStrictEqual([
-      'ann',
-      10,
-      true,
-      null,
-      '[1]',
-      '{"a":1}',
-    ])
-    expect(makeSqlParams({ text: 'not json' })).toStrictEqual([])
-    expect(makeSqlParams({ text: '{"a":1}' })).toStrictEqual([])
-  })
-})
-
 describe('makeClientQuery on large and deep input', () => {
   it('reads the data of a createMany with twenty thousand rows', () => {
     const rows = Array.from({ length: 20_000 }, (_, index) => `{ email: "u${index}@example.com" }`)
@@ -329,7 +266,7 @@ describe('makeClientQuery on large and deep input', () => {
     const open = '['.repeat(300)
     const text = `prisma.user.findMany({ where: { id: { in: ${open}1${']'.repeat(300)} } } })`
     expect(makeClientQuery({ text, models: MODELS }).diagnostics).toStrictEqual([
-      { message: 'The arguments nest deeper than 256 levels', range: { start: 294, end: 295 } },
+      { message: 'The arguments nest deeper than 256 levels', range: { start: 295, end: 390 } },
     ])
     const fine = `prisma.user.findMany({ where: { id: { in: ${'['.repeat(200)}1${']'.repeat(200)} } } })`
     expect(makeClientQuery({ text: fine, models: MODELS }).diagnostics).toStrictEqual([])
@@ -338,30 +275,42 @@ describe('makeClientQuery on large and deep input', () => {
 
 describe('makeClientQuery on the rest of what it refuses', () => {
   it.each([
-    ['prisma.user.findMany({ at: new Date })', 'Expected "(" after "new Date", found "}"'],
     ['prisma.user.findMany({ at: new Date(now) })', 'new Date takes one string or number'],
     ['prisma.user.findMany({ at: new Date(1n) })', 'new Date takes one string or number'],
-    ['prisma.user.findMany({ at: new Date(1, 2) })', 'Expected ")", found ","'],
-    ['prisma.user.findMany({ (a): 1 })', 'Expected a key, found "("'],
-    ['prisma.user.findMany({ a 1 })', 'Expected ":" after "a", found "1"'],
-    ['prisma.user.findMany({ "a" })', 'Expected ":" after "a", found "}"'],
-    ['prisma.user.findMany({ a: - x })', 'Expected a number after "-"'],
-    ['prisma.user.findMany({ a: 1 }', 'Expected ")", found the end of the text'],
-    ['prisma.user.findMany(,)', 'Expected a value, found ","'],
-    ['prisma user', 'Expected "." after "prisma", found "user"'],
-    ['prisma.(', 'Expected a model delegate such as "user", found "("'],
-    ['prisma.1', 'Expected "." after "prisma", found ".1"'],
-    ['prisma.user."findMany"()', 'Expected an operation such as "findMany", found ""findMany""'],
-    ['prisma.$transaction', 'Expected "(" after "$transaction", found the end of the text'],
-    ['prisma.$transaction([prisma.user.count()] {})', 'Expected ")", found "{"'],
+    ['prisma.user.findMany({ at: new Date(1, 2) })', 'new Date takes one string or number'],
+    ['prisma.user.findMany({ (a): 1 })', 'Unexpected token'],
+    ['prisma.user.findMany({ a 1 })', 'Unexpected token'],
+    ['prisma.user.findMany({ "a" })', 'Unexpected token'],
+    ['prisma.user.findMany({ a: - x })', '"-" is not supported: write the value out'],
+    ['prisma.user.findMany({ a: /x/ })', 'A regular expression is not a value'],
+    ['prisma.user.findMany({ a() {} })', 'A method is not a value'],
+    ['prisma.user.findMany({ a: [1, , 2] })', 'An array cannot have a hole'],
+    ['prisma.user.findMany({ a: [...b] })', 'Spread is not supported: write the items out'],
+    ['prisma.user.findMany({ a: 1 }', 'Unexpected token'],
+    ['prisma.user.findMany(,)', 'Unexpected token'],
+    ['prisma user', 'Unexpected token'],
+    ['prisma.(', 'Unexpected token'],
+    ['prisma.1', 'Unexpected token'],
+    ['prisma.user."findMany"()', 'Unexpected token'],
+    ['prisma.user[op]()', 'Expected an operation such as "findMany"'],
+    ['prisma[model].findMany()', 'Expected a model delegate such as "user"'],
+    ['prisma.$transaction', 'Expected a call such as prisma.user.findMany()'],
+    ['prisma.$transaction([prisma.user.count()] {})', 'Unexpected token'],
+    [
+      'prisma.$transaction([prisma.user.count()], {}, 1)',
+      '$transaction takes the calls and, at most, options',
+    ],
+    [
+      'prisma.$transaction([prisma.user.count(), ...more])',
+      'Expected a call such as prisma.user.count()',
+    ],
     [
       'prisma.$transaction([prisma.user.count()], { a: b })',
       '"b" is not a literal. Arguments are read, not evaluated: write strings, numbers, booleans, null, objects, arrays or new Date(...).',
     ],
-    [
-      'prisma.$transaction([prisma.user.count() prisma.post.count()])',
-      'Expected "," or "]", found "prisma"',
-    ],
+    ['prisma.$transaction([prisma.user.count() prisma.post.count()])', 'Unexpected token'],
+    ['const x = 1', 'Expected a call such as prisma.user.findMany()'],
+    ['', 'Expected a call such as prisma.user.findMany()'],
   ])('refuses %s', (text, message) => {
     expect(
       makeClientQuery({ text, models: MODELS }).diagnostics.map((d) => d.message),
@@ -371,7 +320,7 @@ describe('makeClientQuery on the rest of what it refuses', () => {
   it('reads new Date() as the moment it is read, and a number key as its text', () => {
     const before = Date.now()
     const { calls } = makeClientQuery({
-      text: 'prisma.user.findMany({ where: { at: new Date() }, 1: "one", 0x10: "hex" })',
+      text: 'prisma.user.findMany({ where: { at: new Date }, 1: "one", 0x10: "hex" })',
       models: MODELS,
     })
     const args = calls[0]?.args as { where: { at: Date }; 1: string; 16: string }
@@ -522,37 +471,4 @@ describe('makeClientQuery reads back whatever literal it is given', () => {
       }
     },
   )
-})
-
-describe('makeClientResult on values Prisma Client does not return', () => {
-  it('writes an invalid date, a function, a symbol and an object without a JSON form as null', () => {
-    class Opaque {
-      readonly secret = 1
-    }
-    class Nested {
-      toJSON() {
-        return { nested: true }
-      }
-    }
-    expect(
-      makeClientResult({
-        value: {
-          invalid: new Date(Number.NaN),
-          fn: () => 1,
-          symbol: Symbol('s'),
-          opaque: new Opaque(),
-          nested: new Nested(),
-          infinite: Number.POSITIVE_INFINITY,
-        },
-        limit: 10,
-      }).result,
-    ).toStrictEqual({
-      invalid: null,
-      fn: null,
-      symbol: null,
-      opaque: null,
-      nested: null,
-      infinite: null,
-    })
-  })
 })

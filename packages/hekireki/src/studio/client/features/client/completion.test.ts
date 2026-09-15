@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import { contextAt, suggestionsAt } from './completion.js'
+import { suggestionsAt } from './completion.js'
+import { contextAt } from './cursor.js'
 
 const MODELS = [
   {

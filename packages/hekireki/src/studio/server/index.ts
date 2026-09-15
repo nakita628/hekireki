@@ -13,7 +13,9 @@ import {
   postClientCheckRouteHandler,
   postClientCompleteDetailRouteHandler,
   postClientCompleteRouteHandler,
+  postClientFormatRouteHandler,
   postClientHoverRouteHandler,
+  postClientPreviewRouteHandler,
   postClientRunRouteHandler,
   postClientSignatureRouteHandler,
   postDbAnalyzeRouteHandler,
@@ -46,7 +48,9 @@ import {
   postClientCheckRoute,
   postClientCompleteDetailRoute,
   postClientCompleteRoute,
+  postClientFormatRoute,
   postClientHoverRoute,
+  postClientPreviewRoute,
   postClientRunRoute,
   postClientSignatureRoute,
   postDbAnalyzeRoute,
@@ -88,7 +92,9 @@ export const api = app
   .openapi(postClientCompleteDetailRoute, postClientCompleteDetailRouteHandler)
   .openapi(postClientHoverRoute, postClientHoverRouteHandler)
   .openapi(postClientSignatureRoute, postClientSignatureRouteHandler)
+  .openapi(postClientFormatRoute, postClientFormatRouteHandler)
   .openapi(postClientCheckRoute, postClientCheckRouteHandler)
+  .openapi(postClientPreviewRoute, postClientPreviewRouteHandler)
   .openapi(postClientRunRoute, postClientRunRouteHandler)
   .openapi(postPrismaFormatRoute, postPrismaFormatRouteHandler)
   .openapi(postPrismaLintRoute, postPrismaLintRouteHandler)

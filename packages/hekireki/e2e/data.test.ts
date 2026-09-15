@@ -433,6 +433,23 @@ test('the SQL page is shared out by its handles, and a click anywhere in the edi
   expect(reset.height).toBeLessThan(taller.height - 100)
 })
 
+test('the SQL page keeps a wide result inside its pane when the pane is narrowed, scrolling it instead', async ({
+  page,
+}) => {
+  await page.goto('/sql')
+  await sqlEditor(page).fill('SELECT * FROM "User" u JOIN "Post" p ON p."authorId" = u.id')
+  await page.getByRole('button', { name: 'Run' }).click()
+  await expect(page.getByRole('grid')).toContainText('ada@example.com')
+
+  // Narrowed after the result is drawn: the pane shrinks around the table, which scrolls.
+  const handle = page.getByRole('button', { name: 'Resize the schema' })
+  await handle.press('Home')
+  const split = await boxOf(handle)
+  const table = await boxOf(page.locator('.table__scroll-container'))
+  expect(table.x + table.width).toBeLessThanOrEqual(split.x)
+  await expectNoHorizontalOverflow(page)
+})
+
 test('the SQL editor completes columns with their types after an alias, and explains a name on hover', async ({
   page,
 }) => {

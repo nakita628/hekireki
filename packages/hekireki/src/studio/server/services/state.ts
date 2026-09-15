@@ -37,7 +37,7 @@ export function createStudioState(input: z.infer<typeof CreateStudioStateInput>)
     return Effect.gen(function* () {
       const previous = store.snapshot
       const files = yield* LoadService.readSchemaFiles({ schemaPath })
-      const parsed = yield* LoadService.parseSchemaFiles({ files }).pipe(
+      const result = yield* LoadService.parseSchemaFiles({ files }).pipe(
         Effect.catchTag('SchemaParseError', (error) =>
           Effect.succeed({
             schema: previous.schema,
@@ -49,10 +49,10 @@ export function createStudioState(input: z.infer<typeof CreateStudioStateInput>)
       )
       return {
         files,
-        schema: parsed.schema,
-        docs: parsed.docs,
-        error: 'error' in parsed ? parsed.error : null,
-        diagnostics: parsed.diagnostics,
+        schema: result.schema,
+        docs: result.docs,
+        error: 'error' in result ? result.error : null,
+        diagnostics: result.diagnostics,
       }
     })
   }
@@ -73,7 +73,7 @@ export function createStudioState(input: z.infer<typeof CreateStudioStateInput>)
       const { docs, ...snapshot } = loaded
       // oxlint-disable-next-line custom/no-mutation -- the store is the one mutable cell of Studio
       store.snapshot = { ...snapshot, updatedAt: new Date().toISOString() }
-      // oxlint-disable-next-line custom/no-mutation -- same cell: the docs of the last schema that parsed
+      // oxlint-disable-next-line custom/no-mutation -- same cell: the docs of the last schema that result
       store.docs = docs
       return store.snapshot
     })

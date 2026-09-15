@@ -1,4 +1,6 @@
-export * from './client.js'
+export * from './client-query.js'
+export * from './client-result.js'
+export * from './client-touched.js'
 export * from './database-error.js'
 export * from './defaults.js'
 export * from './docs.js'

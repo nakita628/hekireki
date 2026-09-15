@@ -73,7 +73,7 @@ function link(dir: string, name: string, target: string) {
 
 function generate(schemaPath: string) {
   const result = spawnSync(PRISMA, ['generate', '--schema', schemaPath], { encoding: 'utf8' })
-  if (result.status !== 0) throw new Error(`prisma generate failed:\n${result.stderr}`)
+  expect(result.status, `prisma generate\n${result.stderr}`).toBe(0)
 }
 
 /** How many rows the table has, read straight from the file rather than through Studio. */
@@ -218,10 +218,67 @@ describe('the Prisma Client page on a generated client', () => {
     expect(queries[1]?.sql).toMatch(/^SELECT .+ FROM `main`\.`Post` WHERE .+ IN \(/u)
     expect(queries[1]?.params).toStrictEqual(expect.arrayContaining([true, 1, 2]))
     for (const query of queries) {
-      expect(query.formatted).toBe(formatSql(query.sql))
+      // The layout follows the connected database's dialect; here Studio's own connection is off.
+      expect(query.formatted).toBe(formatSql(query.sql, null))
       expect(query.formatted.split('\n').length).toBeGreaterThan(3)
       expect(query.durationMs).toBeGreaterThanOrEqual(0)
     }
+  })
+
+  it('previews the statements a read sends as the run sends them, and changes nothing for a write', async () => {
+    const query =
+      'prisma.user.findMany({ where: { role: "VIEWER" }, include: { posts: { select: { title: true } } } })'
+    const sqlOf = (json: unknown) =>
+      typeof json === 'object' && json !== null && 'queries' in json && Array.isArray(json.queries)
+        ? json.queries.map((entry: { sql: string; params: unknown[] }) => [entry.sql, entry.params])
+        : null
+    const preview = await project.call('/api/client/preview', { query })
+    const run = await project.call('/api/client/run', { query })
+    expect(preview.status).toBe(200)
+    expect(sqlOf(preview.json)).toHaveLength(2)
+    expect(sqlOf(preview.json)).toStrictEqual(sqlOf(run.json))
+    expect(preview.json).not.toHaveProperty('result')
+
+    const posts = async () => {
+      const { json } = await project.call('/api/client/run', { query: 'prisma.post.count()' })
+      return typeof json === 'object' && json !== null && 'result' in json ? json.result : null
+    }
+    const before = await posts()
+    expect(before).toBeGreaterThan(0)
+    const refused = await project.call('/api/client/preview', { query: 'prisma.post.deleteMany()' })
+    expect(refused.status).toBe(422)
+    expect(await posts()).toBe(before)
+  })
+
+  it('names the models a call touches through its relations, with the fields it names', async () => {
+    expect(
+      await project.call('/api/client/analyze', {
+        query:
+          'prisma.user.findMany({ where: { posts: { some: { published: true } } }, include: { posts: { select: { title: true } } } })',
+      }),
+    ).toMatchObject({
+      status: 200,
+      json: {
+        touched: [
+          { model: 'User', fields: ['posts'] },
+          { model: 'Post', fields: ['published', 'title'] },
+        ],
+      },
+    })
+    expect(
+      await project.call('/api/client/analyze', {
+        query:
+          'prisma.$transaction([prisma.post.count({ where: { author: { role: "ADMIN" } } }), prisma.user.count()])',
+      }),
+    ).toMatchObject({
+      status: 200,
+      json: {
+        touched: [
+          { model: 'Post', fields: ['author'] },
+          { model: 'User', fields: ['role'] },
+        ],
+      },
+    })
   })
 
   it('runs a batch $transaction: the write reaches the database, and its INSERT is listed', async () => {

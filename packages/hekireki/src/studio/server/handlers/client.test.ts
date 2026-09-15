@@ -266,7 +266,7 @@ describe('client routes', () => {
         queries: [
           {
             sql: 'SELECT "id", "email" FROM "User" LIMIT ?',
-            formatted: 'SELECT\n  "id",\n  "email"\nFROM "User"\nLIMIT ?',
+            formatted: 'SELECT\n  "id",\n  "email"\nFROM\n  "User"\nLIMIT\n  ?',
             params: [10],
             durationMs: 1.3,
           },
@@ -274,6 +274,56 @@ describe('client routes', () => {
         durationMs: expect.any(Number),
       },
     })
+  })
+
+  it('previews the SQL a read sends, without its result, and refuses a write before it reaches the client', async () => {
+    const { call } = await setup({ client: projectClient })
+    expect(
+      await call('/api/client/preview', { query: 'prisma.user.findMany({ take: 10 })' }),
+    ).toStrictEqual({
+      status: 200,
+      json: {
+        queries: [
+          {
+            sql: 'SELECT "id", "email" FROM "User" LIMIT ?',
+            formatted: 'SELECT\n  "id",\n  "email"\nFROM\n  "User"\nLIMIT\n  ?',
+            params: [10],
+            durationMs: 1.3,
+          },
+        ],
+        durationMs: expect.any(Number),
+      },
+    })
+    // The fixture's delegate has no create: had the write reached the client, it would say so.
+    const refused = [
+      [
+        'prisma.user.create({ data: { email: "x" } })',
+        'User.create writes: its SQL shows when it is run',
+      ],
+      [
+        'prisma.$transaction([prisma.user.count(), prisma.user.deleteMany()])',
+        'User.deleteMany writes: its SQL shows when it is run',
+      ],
+      [
+        'prisma.user.findMany({ where: { email } })',
+        '"email" is a variable: write "email: <value>"',
+      ],
+    ] as const
+    expect(
+      await Promise.all(refused.map(([query]) => call('/api/client/preview', { query }))),
+    ).toStrictEqual(
+      refused.map(([, message]) => ({
+        status: 422,
+        json: {
+          type: '/problems/validation-failed',
+          title: 'Validation Failed',
+          status: 422,
+          detail: message,
+          instance: '/api/client/preview',
+          errors: [{ field: 'query', message }],
+        },
+      })),
+    )
   })
 
   it('runs a batch $transaction with its options and collects every statement', async () => {
@@ -292,13 +342,13 @@ describe('client routes', () => {
         queries: [
           {
             sql: 'SELECT COUNT(*) FROM "User"',
-            formatted: 'SELECT\n  COUNT(*)\nFROM "User"',
+            formatted: 'SELECT\n  COUNT(*)\nFROM\n  "User"',
             params: [],
             durationMs: 1.3,
           },
           {
             sql: 'INSERT INTO "User" ("email") VALUES (?)',
-            formatted: 'INSERT INTO "User" ("email")\nVALUES\n  (?)',
+            formatted: 'INSERT INTO\n  "User" ("email")\nVALUES\n  (?)',
             params: ['cy@example.com'],
             durationMs: 1.3,
           },
@@ -337,6 +387,63 @@ describe('client routes', () => {
       ['SELECT 1 FROM "User" WHERE "email" = ?', ['bob']],
       ['SELECT 2 FROM "User" WHERE "email" = ?', ['bob']],
     ])
+  })
+
+  it('keeps the statements of a preview apart from a run that goes at the same time', async () => {
+    const { call } = await setup({ client: projectClient })
+    const [previewed, ran] = await Promise.all([
+      call('/api/client/preview', {
+        query: 'prisma.user.findFirstOrThrow({ where: { email: "ann" } })',
+      }),
+      call('/api/client/run', {
+        query: 'prisma.user.findFirstOrThrow({ where: { email: "bob" } })',
+      }),
+    ])
+    const statementsOf = (json: unknown) =>
+      typeof json === 'object' && json !== null && 'queries' in json && Array.isArray(json.queries)
+        ? json.queries.map((query: { sql: string; params: unknown[] }) => [query.sql, query.params])
+        : []
+    expect(statementsOf(previewed.json)).toStrictEqual([
+      ['SELECT 1 FROM "User" WHERE "email" = ?', ['ann']],
+      ['SELECT 2 FROM "User" WHERE "email" = ?', ['ann']],
+    ])
+    expect(statementsOf(ran.json)).toStrictEqual([
+      ['SELECT 1 FROM "User" WHERE "email" = ?', ['bob']],
+      ['SELECT 2 FROM "User" WHERE "email" = ?', ['bob']],
+    ])
+  })
+
+  it('previews every statement of a batch of reads, and reports what the client throws', async () => {
+    const { call } = await setup({ client: projectClient })
+    expect(
+      await call('/api/client/preview', {
+        query: 'prisma.$transaction([prisma.user.count(), prisma.user.findMany({ take: 1 })])',
+      }),
+    ).toMatchObject({
+      status: 200,
+      json: {
+        queries: [
+          { sql: 'SELECT COUNT(*) FROM "User"', params: [] },
+          { sql: 'SELECT "id", "email" FROM "User" LIMIT ?', params: [1] },
+          // The batch commits as one transaction, as the run of it does.
+          { sql: 'COMMIT' },
+        ],
+      },
+    })
+    const message = 'aggregate is not wired in this client'
+    expect(await call('/api/client/preview', { query: 'prisma.user.aggregate({})' })).toStrictEqual(
+      {
+        status: 422,
+        json: {
+          type: '/problems/validation-failed',
+          title: 'Validation Failed',
+          status: 422,
+          detail: message,
+          instance: '/api/client/preview',
+          errors: [{ field: 'query', message }],
+        },
+      },
+    )
   })
 
   it('answers two questions about different texts that arrive together, each about its own text', async () => {
@@ -553,6 +660,7 @@ describe('client routes', () => {
           },
         ],
         transaction: true,
+        touched: [{ model: 'Post', fields: [] }],
         diagnostics: [
           {
             message: 'Unknown model delegate "usr". The client has user, post',
@@ -560,6 +668,14 @@ describe('client routes', () => {
           },
         ],
       },
+    })
+    expect(
+      await call('/api/client/analyze', {
+        query: 'prisma.user.findMany({ where: { email: "a" }, orderBy: { id: "asc" } })',
+      }),
+    ).toMatchObject({
+      status: 200,
+      json: { touched: [{ model: 'User', fields: ['email', 'id'] }] },
     })
   })
 
@@ -576,16 +692,23 @@ describe('client routes', () => {
           'Completion against the client types needs TypeScript 5 in the project (typescript@7 ships no language service API).\n   Install it with `npm install -D typescript@5`; the editor still completes model and field names from the schema.',
       },
     })
-    expect(await offline.call('/api/client/run', { query: 'prisma.user.count()' })).toStrictEqual({
-      status: 503,
-      json: {
-        type: '/problems/service-unavailable',
-        title: 'Service Unavailable',
+    const routes = ['/api/client/run', '/api/client/preview']
+    expect(
+      await Promise.all(
+        routes.map((route) => offline.call(route, { query: 'prisma.user.count()' })),
+      ),
+    ).toStrictEqual(
+      routes.map((route) => ({
         status: 503,
-        detail: 'No DATABASE_URL.',
-        instance: '/api/client/run',
-      },
-    })
+        json: {
+          type: '/problems/service-unavailable',
+          title: 'Service Unavailable',
+          status: 503,
+          detail: 'No DATABASE_URL.',
+          instance: route,
+        },
+      })),
+    )
     const bare = await setup({
       client: projectClient,
       schema: SCHEMA.replace(/generator client \{[^}]*\}/u, ''),
@@ -756,6 +879,28 @@ describe('client routes', () => {
         detail:
           'Completion against the client types needs TypeScript 5 in the project (typescript@7 ships no language service API).\n   Install it with `npm install -D typescript@5`; the editor still completes model and field names from the schema.',
         instance: url,
+      },
+    })
+  })
+
+  it('lays the query out as the TypeScript formatter writes it, and reports a text it cannot read', async () => {
+    const { call } = await setup({ client: () => unavailableClient() })
+    expect(
+      await call('/api/client/format', {
+        query:
+          'await prisma.user.findMany({where:{email:{contains:"a"}},include:{posts:true},take:10});',
+      }),
+    ).toStrictEqual({
+      status: 200,
+      json: {
+        text: "await prisma.user.findMany({\n  where: { email: { contains: 'a' } },\n  include: { posts: true },\n  take: 10,\n})",
+      },
+    })
+    expect(await call('/api/client/format', { query: 'prisma.user.findMany(' })).toMatchObject({
+      status: 422,
+      json: {
+        type: '/problems/validation-failed',
+        errors: [{ field: 'query', message: expect.stringMatching(/expected/iu) }],
       },
     })
   })

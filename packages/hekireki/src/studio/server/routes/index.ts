@@ -1369,6 +1369,23 @@ export const ClientCallSchema = z
   })
   .openapi('ClientCall')
 
+export const ClientTouchedModelSchema = z
+  .object({
+    model: z.string().openapi({ description: 'The model, as the schema declares it' }),
+    fields: z
+      .array(z.string())
+      .openapi({
+        description:
+          'The fields of the model the arguments name: scalars they filter, select, order or write, relations they follow',
+      }),
+  })
+  .openapi({
+    required: ['model', 'fields'],
+    description: 'A model the query touches, with the fields its arguments name.',
+    example: { model: 'User', fields: ['email', 'posts'] },
+  })
+  .openapi('ClientTouchedModel')
+
 export const ClientDiagnosticSchema = z
   .object({
     message: z.string().openapi({ description: 'What is wrong' }),
@@ -1389,17 +1406,24 @@ export const ClientAnalysisSchema = z
     transaction: z
       .boolean()
       .openapi({ description: 'Whether the calls are batched in one `$transaction`' }),
+    touched: z
+      .array(ClientTouchedModelSchema)
+      .openapi({
+        description:
+          'The models the calls are made on and the ones their relations reach, in the order they are reached',
+      }),
     diagnostics: z
       .array(ClientDiagnosticSchema)
       .openapi({ description: 'What keeps the query from being run (empty when it can be)' }),
   })
   .brand<'ClientAnalysis'>()
   .openapi({
-    required: ['calls', 'transaction', 'diagnostics'],
+    required: ['calls', 'transaction', 'touched', 'diagnostics'],
     description: 'What the query text says, read without running it.',
     example: {
       calls: [{ model: 'User', operation: 'findMany', write: false, range: { start: 0, end: 22 } }],
       transaction: false,
+      touched: [{ model: 'User', fields: ['email'] }],
       diagnostics: [],
     },
   })
@@ -1581,6 +1605,20 @@ export const ClientSignatureHelpSchema = z
   })
   .openapi('ClientSignatureHelp')
 
+export const ClientFormattedSchema = z
+  .object({
+    text: z
+      .string()
+      .openapi({ description: 'The whole text, formatted; the same text when it already is' }),
+  })
+  .brand<'ClientFormatted'>()
+  .openapi({
+    required: ['text'],
+    description: "The query laid out as the repository's TypeScript formatter (oxfmt) writes it.",
+    example: { text: 'prisma.user.findMany({ take: 10 })' },
+  })
+  .openapi('ClientFormatted')
+
 export const TypeSeveritySchema = z
   .enum(['error', 'warning', 'info'])
   .openapi({ description: 'How serious a TypeScript diagnostic is.' })
@@ -1647,6 +1685,31 @@ export const ClientSqlQuerySchema = z
     },
   })
   .openapi('ClientSqlQuery')
+
+export const ClientPreviewSchema = z
+  .object({
+    queries: z
+      .array(ClientSqlQuerySchema)
+      .openapi({ description: 'The statements the client sent, in order' }),
+    durationMs: z.float64().openapi({ description: 'Wall time of the whole call in milliseconds' }),
+  })
+  .brand<'ClientPreview'>()
+  .openapi({
+    required: ['queries', 'durationMs'],
+    description: 'The SQL a read-only call sends, from running it while it is typed.',
+    example: {
+      queries: [
+        {
+          sql: 'SELECT `main`.`User`.`id` FROM `main`.`User` LIMIT ? OFFSET ?',
+          formatted: 'SELECT\n  `main`.`User`.`id`\nFROM `main`.`User`\nLIMIT ?\nOFFSET ?',
+          params: ['10', '0'],
+          durationMs: 0.4,
+        },
+      ],
+      durationMs: 3.2,
+    },
+  })
+  .openapi('ClientPreview')
 
 export const ClientResultSchema = z
   .object({
@@ -2945,6 +3008,32 @@ export const postClientSignatureRoute = createRoute({
   },
 })
 
+export const postClientFormatRoute = createRoute({
+  method: 'post',
+  path: '/client/format',
+  tags: ['client'],
+  description:
+    'The query laid out as the TypeScript formatter writes it; a query that does not parse is reported on `query`.',
+  operationId: 'formatClientQuery',
+  request: {
+    body: { content: { 'application/json': { schema: ClientQueryBodySchema } }, required: true },
+  },
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: ClientFormattedSchema } },
+    },
+    422: {
+      description: '422 Unprocessable Content (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ValidationProblemSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+  },
+})
+
 export const postClientCheckRoute = createRoute({
   method: 'post',
   path: '/client/check',
@@ -2958,6 +3047,36 @@ export const postClientCheckRoute = createRoute({
     200: {
       description: 'The request has succeeded.',
       content: { 'application/json': { schema: ClientTypeDiagnosticsSchema } },
+    },
+    422: {
+      description: '422 Unprocessable Content (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ValidationProblemSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+    503: {
+      description: '503 Service Unavailable (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
+    },
+  },
+})
+
+export const postClientPreviewRoute = createRoute({
+  method: 'post',
+  path: '/client/preview',
+  tags: ['client'],
+  description:
+    'Run a query that only reads to show the SQL it sends while it is typed; a write is refused on `query`.',
+  operationId: 'previewClientQuery',
+  request: {
+    body: { content: { 'application/json': { schema: ClientQueryBodySchema } }, required: true },
+  },
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: ClientPreviewSchema } },
     },
     422: {
       description: '422 Unprocessable Content (`application/problem+json`)',

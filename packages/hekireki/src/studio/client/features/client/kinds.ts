@@ -30,7 +30,7 @@ const MONACO_KINDS = [
   'Snippet',
 ] as const
 
-export type MonacoKindName = (typeof MONACO_KINDS)[number]
+type MonacoKindName = (typeof MONACO_KINDS)[number]
 
 // TypeScript's `ScriptElementKind` strings, as the language service labels its completions.
 const TYPESCRIPT_KINDS: ReadonlyMap<string, MonacoKindName> = new Map([
@@ -65,19 +65,6 @@ const TYPESCRIPT_KINDS: ReadonlyMap<string, MonacoKindName> = new Map([
 ])
 
 /** The Monaco kind a TypeScript completion shows with; anything unfamiliar is plain text. */
-export function completionKindOf(kind: string): MonacoKindName {
+export function completionKindOf(kind: string) {
   return TYPESCRIPT_KINDS.get(kind) ?? 'Text'
-}
-
-/** The Monaco kind of a schema-based suggestion, offered when there are no types to complete against. */
-export function suggestionKindOf(
-  kind: 'model' | 'operation' | 'argument' | 'field',
-): MonacoKindName {
-  return kind === 'model'
-    ? 'Class'
-    : kind === 'operation'
-      ? 'Method'
-      : kind === 'argument'
-        ? 'Keyword'
-        : 'Property'
 }

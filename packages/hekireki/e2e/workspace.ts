@@ -34,6 +34,7 @@ function link(name: string, target: string) {
   symlinkSync(realpathSync(target), at, 'dir')
 }
 
+/** Rebuilds the workspace; the exit status of a step that failed, 0 when every step ran. */
 export function prepareWorkspace() {
   rmSync(WORKSPACE_DIR, { recursive: true, force: true })
   mkdirSync(WORKSPACE_DIR, { recursive: true })
@@ -47,12 +48,13 @@ export function prepareWorkspace() {
     path.join(ROOT_DIR, 'node_modules', '@prisma', 'adapter-better-sqlite3'),
   )
   link('typescript', path.join(PACKAGE_DIR, 'node_modules', 'typescript-5'))
+  // Prisma reports its own failure on stderr; the caller stops on the status.
   const generated = spawnSync(
     path.join(PACKAGE_DIR, 'node_modules', '.bin', 'prisma'),
     ['generate', '--schema', SCHEMA_DIR],
-    { encoding: 'utf8' },
+    { stdio: 'inherit' },
   )
-  if (generated.status !== 0) throw new Error(`prisma generate failed:\n${generated.stderr}`)
+  if (generated.status !== 0) return generated.status ?? 1
   const db = new DatabaseSync(DATABASE_FILE)
   db.exec(`
     CREATE TABLE "User" (
@@ -77,4 +79,5 @@ export function prepareWorkspace() {
       ('Notes', 1, 2);
   `)
   db.close()
+  return 0
 }

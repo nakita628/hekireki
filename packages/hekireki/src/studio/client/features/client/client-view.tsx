@@ -1,121 +1,39 @@
-import { Button, Kbd, Tabs } from '@heroui/react'
-import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Button, Kbd, Tooltip } from '@heroui/react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { parseResponse } from 'hono/client'
 import { useCallback, useMemo, useState } from 'react'
-import { LuPlay } from 'react-icons/lu'
+import { LuCopy, LuPlay, LuWandSparkles } from 'react-icons/lu'
 
-import { CodeBlock } from '../../components/code-block.js'
 import { ConfirmDialog } from '../../components/confirm-dialog.js'
-import { ResultTable } from '../../components/result-table.js'
+import { DiagnosticsList } from '../../components/diagnostics-list.js'
+import { SplitPane } from '../../components/split-pane.js'
+import { useCopy } from '../../hooks/copy.js'
 import { useDebounced } from '../../hooks/debounce.js'
 import {
-  getClientKey,
   getDbCountsQueryKey,
   useClient,
   useDb,
   usePostClientRun,
   useSchema,
 } from '../../hooks/index.js'
-import { client } from '../../lib/index.js'
-import type { ClientAnalysis, ClientSqlQuery, ClientTypeDiagnostics } from '../../lib/index.js'
-import { DiagnosticsList } from '../sql/diagnostics-list.js'
-import { SplitPane } from '../sql/split-pane.js'
+import type { ClientAnalysis, ClientSqlQuery, Range } from '../../lib/index.js'
+import type { MonacoEditor } from '../editor/monaco.js'
+import { SchemaCanvas } from '../schema/schema-view.js'
 import { ClientEditor } from './client-editor.js'
-import type { CompletionModel } from './completion.js'
-import type { ClientMarker } from './monaco-typescript.js'
-import { problemMessage, tableOf } from './result.js'
-import { Statements } from './statements.js'
+import { readAnalysis, useClientAnalysis, useClientPreview, useTypeCheck } from './queries.js'
+import { ResultPane } from './result-pane.js'
+import type { ResultTab } from './result-pane.js'
+import { touchedHighlight } from './touched.js'
 
+// How the page is shared out: the editor above its result and SQL, and the schema the whole
+// height of the other side, to be looked at while the call is written.
+const PANES_KEY = 'hekireki-studio:client-panes'
 const EDITOR_KEY = 'hekireki-studio:client-editor-height'
 const ANALYZE_DEBOUNCE_MS = 250
 
-type Tab = 'result' | 'sql'
-
-type Range = { readonly start: number; readonly end: number }
-
-function analysisOptions(query: string) {
-  return queryOptions({
-    queryKey: [...getClientKey(), '/client/analyze', query] as const,
-    queryFn: ({ signal }) =>
-      parseResponse(client.client.analyze.$post({ json: { query } }, { init: { signal } })),
-  })
-}
-
-/** The analysis of exactly this text, from the cache when it is there; null when it cannot be had. */
-async function readAnalysis(queryClient: ReturnType<typeof useQueryClient>, query: string) {
-  try {
-    return await queryClient.query(analysisOptions(query))
-  } catch {
-    return null
-  }
-}
-
-function checkOptions(query: string) {
-  return queryOptions({
-    queryKey: [...getClientKey(), '/client/check', query] as const,
-    queryFn: ({ signal }) =>
-      parseResponse(client.client.check.$post({ json: { query } }, { init: { signal } })),
-  })
-}
-
-/** What TypeScript finds wrong with the settled text, once the project has a TypeScript to ask. */
-function useTypeCheck(query: string, enabled: boolean) {
-  return useQuery({
-    ...checkOptions(query),
-    enabled: enabled && query.trim() !== '',
-    placeholderData: (previous: ClientTypeDiagnostics | undefined) => previous,
-  })
-}
-
-/** The calls and problems of the text, read by the server once per settled edit. */
-function useClientAnalysis(query: string) {
-  return useQuery({
-    ...analysisOptions(query),
-    enabled: query.trim() !== '',
-    placeholderData: (previous: ClientAnalysis | undefined) => previous,
-  })
-}
-
-// The server sends the first rows of a long array; say so rather than showing a wrong total.
-function summaryOf(rowCount: number | null, shown: number) {
-  if (rowCount === null) return 'one value'
-  const rows = `${rowCount.toLocaleString()} ${rowCount === 1 ? 'row' : 'rows'}`
-  return shown < rowCount ? `first ${shown.toLocaleString()} of ${rows}` : rows
-}
-
-/** Two or more ways to show the same thing, as pills: the one in use is marked. */
-function ModeSwitch<Mode extends string>({
-  modes,
-  selected,
-  onSelect,
-}: {
-  readonly modes: readonly Mode[]
-  readonly selected: Mode
-  readonly onSelect: (mode: Mode) => void
-}) {
-  return (
-    <div className="flex items-center gap-1">
-      {modes.map((mode) => (
-        <button
-          key={mode}
-          type="button"
-          aria-pressed={mode === selected}
-          className={`pill ${mode === selected ? 'border-accent bg-accent-soft text-accent-text' : 'border-line bg-canvas text-muted hover:border-accent'}`}
-          onClick={() => {
-            onSelect(mode)
-          }}
-        >
-          {mode}
-        </button>
-      ))}
-    </div>
-  )
-}
-
 /**
  * The Prisma Client page: a call typed as the application would write it, run through the
- * project's own generated client, its result beside the SQL the client sent for it.
+ * project's own generated client, its result beside the models it touches and the SQL it sends.
  */
 export function ClientView() {
   const queryClient = useQueryClient()
@@ -124,11 +42,13 @@ export function ClientView() {
   const schema = useSchema().data?.schema ?? null
   const status = useClient().data ?? null
   const [query, setQuery] = useState('')
-  const [tab, setTab] = useState<Tab>('result')
+  const [tab, setTab] = useState<ResultTab>('result')
   const [asJson, setAsJson] = useState(false)
   const [asSent, setAsSent] = useState(false)
   const [writes, setWrites] = useState<readonly ClientAnalysis['calls'][number][] | null>(null)
   const [picked, setPicked] = useState<Range | null>(null)
+  const [editor, setEditor] = useState<MonacoEditor.IStandaloneCodeEditor | null>(null)
+  const { copied, copy } = useCopy()
 
   const settled = useDebounced(query, ANALYZE_DEBOUNCE_MS)
   const analysis = useClientAnalysis(settled)
@@ -136,14 +56,15 @@ export function ClientView() {
   const diagnostics = useMemo(() => analysis.data?.diagnostics ?? [], [analysis.data])
   const typesAvailable = status?.typescript !== null && status?.typescript !== undefined
   const typeCheck = useTypeCheck(settled, typesAvailable)
+  const stale = settled !== query
   // What the reading refuses comes first: it stops the run, and TypeScript says the same thing
   // in its own words underneath.
   const markers = useMemo(
-    (): readonly ClientMarker[] => [
+    () => [
       ...diagnostics.map((diagnostic) => ({ ...diagnostic, severity: 'error' as const })),
-      ...(settled === query ? (typeCheck.data?.diagnostics ?? []) : []),
+      ...(stale ? [] : (typeCheck.data?.diagnostics ?? [])),
     ],
-    [diagnostics, typeCheck.data, settled, query],
+    [diagnostics, typeCheck.data, stale],
   )
 
   const run = usePostClientRun({
@@ -157,11 +78,51 @@ export function ClientView() {
     },
   })
   const result = run.data ?? null
-  const table = useMemo(() => (result === null ? null : tableOf(result.result)), [result])
-  const shown = Array.isArray(result?.result) ? result.result.length : 1
+
+  // The SQL tab shows what the call in the editor sends, kept up to date whichever tab is open:
+  // what it sent, when it has run as it stands; otherwise what a read sends, from running the
+  // settled text once it is read and checked without a problem. A write waits for Run and its
+  // confirmation.
+  const ran = result !== null && run.variables?.json.query === settled
+  const checking = stale || analysis.isFetching || typeCheck.isFetching
+  const hasWrite = calls.some((call) => call.write)
+  const problems = markers.length > 0
+  const sqlNote =
+    status?.available !== true
+      ? 'The Prisma Client is not available.'
+      : calls.length === 0 && !problems
+        ? 'Type a call to see the SQL it sends.'
+        : problems
+          ? 'Fix the problems to update the SQL: this is what the call last sent.'
+          : hasWrite
+            ? 'A write shows its SQL when it is run.'
+            : null
+  const preview = useClientPreview(settled, !ran && !checking && sqlNote === null)
+  // What is going on with the text, in the editor's status bar: being read, being checked, and
+  // what was found. The run says how it is going in the result pane.
+  const state =
+    query.trim() === ''
+      ? ''
+      : analysis.isError
+        ? 'The analysis failed.'
+        : stale || analysis.isFetching
+          ? 'Analyzing…'
+          : typeCheck.isFetching
+            ? 'Checking types…'
+            : problems
+              ? `${markers.length} ${markers.length === 1 ? 'problem' : 'problems'}`
+              : 'No problems'
+
+  const touched = useMemo(
+    () =>
+      schema === null || settled.trim() === ''
+        ? null
+        : touchedHighlight(analysis.data?.touched ?? [], schema.models),
+    [schema, settled, analysis.data],
+  )
 
   const models = useMemo(
-    (): readonly CompletionModel[] =>
+    () =>
       (schema?.models ?? []).map((model) => ({
         name: model.name,
         fields: model.fields.map((field) => ({
@@ -173,6 +134,12 @@ export function ClientView() {
       })),
     [schema],
   )
+
+  // Writing the call brings its SQL into view, as it changes; running it brings the result.
+  const edit = useCallback((value: string) => {
+    setQuery(value)
+    setTab('sql')
+  }, [])
 
   const send = useCallback(() => {
     run.mutate({ json: { query } })
@@ -211,21 +178,24 @@ export function ClientView() {
       <div className="min-h-0 flex-1">
         <ClientEditor
           value={query}
-          onChange={setQuery}
+          onChange={edit}
           onRun={() => {
             void execute()
           }}
+          onReady={setEditor}
           models={models}
           typesAvailable={typesAvailable}
           markers={markers}
           selection={picked}
         />
       </div>
-      {calls.length > 0 ? (
+      {state === '' ? null : (
         <div className="flex flex-wrap items-center gap-1.5 border-t border-line bg-surface-2 px-4 py-1.5 text-code">
-          <span className="heading mb-0">
-            {analysis.data?.transaction ? '$transaction' : 'Call'}
-          </span>
+          {calls.length > 0 ? (
+            <span className="heading mb-0">
+              {analysis.data?.transaction ? '$transaction' : 'Call'}
+            </span>
+          ) : null}
           {calls.map((call) => (
             <span
               key={`${call.range.start}-${call.range.end}`}
@@ -235,101 +205,94 @@ export function ClientView() {
               {call.write ? ' · write' : ''}
             </span>
           ))}
+          <output aria-label="Editor status" className="ml-auto text-faint">
+            {state}
+          </output>
         </div>
-      ) : null}
-      <DiagnosticsList
-        diagnostics={markers.map(({ message, range, severity }) => ({
-          message,
-          range,
-          severity: severity === 'info' ? ('info' as const) : severity,
-        }))}
-        onPick={setPicked}
-      />
+      )}
+      <DiagnosticsList diagnostics={markers} onPick={setPicked} />
     </div>
   )
 
   const viewsPane = (
-    <div className="flex min-h-0 flex-col">
-      <div className="flex flex-wrap items-center gap-3 border-b border-line bg-surface px-4 py-1.5">
-        <Tabs
-          selectedKey={tab}
-          onSelectionChange={(key) => {
-            setTab(key === 'sql' ? 'sql' : 'result')
-          }}
-        >
-          <Tabs.ListContainer className="w-fit">
-            <Tabs.List aria-label="Views of the call">
-              <Tabs.Tab id="result">Result</Tabs.Tab>
-              <Tabs.Tab id="sql" className="whitespace-nowrap">
-                SQL{result === null ? '' : ` · ${result.queries.length}`}
-              </Tabs.Tab>
-            </Tabs.List>
-          </Tabs.ListContainer>
-        </Tabs>
-        {tab === 'result' && table !== null ? (
-          <ModeSwitch
-            modes={['Table', 'JSON']}
-            selected={asJson ? 'JSON' : 'Table'}
-            onSelect={(mode) => {
-              setAsJson(mode === 'JSON')
-            }}
-          />
-        ) : null}
-        {tab === 'sql' && result !== null && result.queries.length > 0 ? (
-          <ModeSwitch
-            modes={['Formatted', 'As sent']}
-            selected={asSent ? 'As sent' : 'Formatted'}
-            onSelect={(mode) => {
-              setAsSent(mode === 'As sent')
-            }}
-          />
-        ) : null}
-        {result === null ? null : (
-          <span className="ml-auto text-code text-faint">
-            {summaryOf(result.rowCount, shown)} · {result.durationMs} ms · {result.queries.length}{' '}
-            {result.queries.length === 1 ? 'statement' : 'statements'}
-          </span>
-        )}
+    <ResultPane
+      tab={tab}
+      onTab={setTab}
+      result={result}
+      running={run.isPending}
+      error={run.isError ? run.error : null}
+      asJson={asJson}
+      onAsJson={setAsJson}
+      sql={{
+        data: ran ? result : (preview.data ?? null),
+        error: ran || !preview.isError ? null : preview.error,
+        note: ran ? null : sqlNote,
+        stale: !ran && problems,
+        updating: !ran && (checking || preview.isFetching),
+      }}
+      asSent={asSent}
+      onAsSent={setAsSent}
+      dialect={database?.dialect ?? null}
+      onOpen={openInSql}
+    />
+  )
+
+  const schemaPane = (
+    <div className="flex min-h-0 min-w-0 flex-col">
+      <div className="flex items-center gap-3 border-b border-line bg-surface px-4 py-2 text-code text-muted">
+        <span className="heading mb-0">Schema</span>
+        <span className="truncate">
+          {touched === null
+            ? 'Every model; the ones a call touches light up as you type.'
+            : `${touched.size} ${touched.size === 1 ? 'model' : 'models'} touched · the fields the call names are marked`}
+        </span>
       </div>
-      {run.isError ? (
-        <pre className="error-box m-4 whitespace-pre-wrap">{problemMessage(run.error)}</pre>
-      ) : result === null ? (
-        <div className="p-6 text-muted">
-          Run the call to see what it returns and the SQL the Prisma Client sends for it.
-        </div>
-      ) : tab === 'sql' ? (
-        <Statements
-          queries={result.queries}
-          dialect={database?.dialect ?? null}
-          asSent={asSent}
-          onOpen={openInSql}
-        />
-      ) : table !== null && !asJson ? (
-        <ResultTable columns={table.columns} rows={table.rows} />
+      {schema === null ? null : schema.models.length === 0 ? (
+        <div className="p-6 text-muted">No models in the schema.</div>
       ) : (
-        <div className="min-h-0 flex-1 overflow-auto p-4">
-          <CodeBlock code={JSON.stringify(result.result, null, 2)} />
-        </div>
+        <SchemaCanvas schema={schema} focus={null} touched={touched} compact />
       )}
     </div>
   )
 
-  return (
-    <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+  const workspace = (
+    <div className="flex min-h-0 min-w-0 flex-col">
       <header className="flex flex-wrap items-center gap-3.5 border-b border-line bg-surface px-6 py-3">
         <h1 className="page-title">Prisma Client</h1>
-        <span className="text-lead text-muted">
+        <span className="min-w-0 text-lead [overflow-wrap:anywhere] text-muted">
+          {query.split('\n').length} lines
           {status === null
-            ? 'Loading the Prisma Client…'
+            ? ' · loading the Prisma Client…'
             : status.available
-              ? `${status.source ?? 'generated'} · ${database?.dialect ?? ''} ${database?.url ?? ''}`.trimEnd()
-              : 'Prisma Client not available'}
+              ? ` · ${status.source ?? 'generated'} · ${database?.dialect ?? ''} ${database?.url ?? ''}`.trimEnd()
+              : ' · Prisma Client not available'}
         </span>
         <span className="ml-auto flex items-center gap-1.5 text-code text-faint">
           <Kbd>⌘/Ctrl</Kbd>
           <Kbd>Enter</Kbd>
           to run
         </span>
+        <Tooltip>
+          <Button
+            variant="ghost"
+            onPress={() => {
+              void editor?.getAction('editor.action.formatDocument')?.run()
+            }}
+          >
+            <LuWandSparkles size={15} />
+            Format
+          </Button>
+          <Tooltip.Content>Format with the TypeScript formatter (Shift+Alt+F)</Tooltip.Content>
+        </Tooltip>
+        <Button
+          variant="ghost"
+          onPress={() => {
+            copy(query)
+          }}
+        >
+          <LuCopy size={15} />
+          {copied ? 'Copied' : 'Copy'}
+        </Button>
         <Button
           variant="primary"
           isDisabled={run.isPending || status?.available !== true}
@@ -355,6 +318,21 @@ export function ClientView() {
         label="Resize the editor"
         first={editorPane}
         second={viewsPane}
+      />
+    </div>
+  )
+
+  return (
+    <section className="flex min-h-0 flex-1 overflow-hidden">
+      <SplitPane
+        direction="row"
+        storageKey={PANES_KEY}
+        defaultRatio={0.58}
+        min={0.3}
+        max={0.8}
+        label="Resize the schema"
+        first={workspace}
+        second={schemaPane}
       />
       <ConfirmDialog
         isOpen={writes !== null}

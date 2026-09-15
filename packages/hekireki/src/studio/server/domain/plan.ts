@@ -36,8 +36,8 @@ const MakeSqlitePlanInput = z
 /** SQLite's `EXPLAIN QUERY PLAN` rows: `id`, `parent` (0 for a root) and `detail`. */
 export function makeSqlitePlan(input: z.infer<typeof MakeSqlitePlanInput>) {
   const rows = input.rows.flatMap((row) => {
-    const parsed = SqliteRow.safeParse(row)
-    return parsed.success ? [parsed.data] : []
+    const result = SqliteRow.safeParse(row)
+    return result.success ? [result.data] : []
   })
   const ids = new Set(rows.map((row) => row.id))
   const nodes: readonly Node[] = rows.map((row) => ({
@@ -102,9 +102,9 @@ function postgresDetail(plan: z.infer<typeof PostgresPlan>) {
 }
 
 function flattenPostgres(value: unknown, parent: string | null, id: string): readonly Node[] {
-  const parsed = PostgresPlan.safeParse(value)
-  if (!parsed.success) return []
-  const plan = parsed.data
+  const result = PostgresPlan.safeParse(value)
+  if (!result.success) return []
+  const plan = result.data
   const target = plan['Relation Name'] ?? plan['CTE Name']
   const alias = plan.Alias !== undefined && plan.Alias !== target ? ` ${plan.Alias}` : ''
   const join = plan['Join Type'] === undefined ? '' : ` (${plan['Join Type']})`

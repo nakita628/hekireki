@@ -1,6 +1,6 @@
 import { LuCircleAlert, LuInfo, LuTriangleAlert } from 'react-icons/lu'
 
-import type { Diagnostic, Range } from './analysis.js'
+import type { Diagnostic, Range } from '../lib/index.js'
 
 const STYLES = {
   error: { className: 'text-danger', icon: LuCircleAlert },

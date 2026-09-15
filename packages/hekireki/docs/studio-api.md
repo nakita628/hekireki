@@ -963,6 +963,14 @@ Read the query against the schema's models, without running it: its calls and it
     }
   ],
   "transaction": false,
+  "touched": [
+    {
+      "model": "User",
+      "fields": [
+        "email"
+      ]
+    }
+  ],
   "diagnostics": []
 }
 ```
@@ -1240,6 +1248,63 @@ The signatures of the call the cursor is inside.
 This operation does not require authentication
 </aside>
 
+## formatClientQuery
+
+<a id="opIdformatClientQuery"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/client/format \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{
+    "query": "prisma.user.findMany({ where: { email: { contains: \"ann\" } }, take: 10 })"
+  }'
+```
+
+`POST /client/format`
+
+The query laid out as the TypeScript formatter writes it; a query that does not parse is reported on `query`.
+
+> Body parameter
+
+```json
+{
+  "query": "prisma.user.findMany({ where: { email: { contains: \"ann\" } }, take: 10 })"
+}
+```
+
+<h3 id="formatclientquery-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|
+|---|---|---|---|---|
+|body|body|[ClientQueryBody](#schemaclientquerybody)|true|none|
+|» query|body|object|true|The call, as TypeScript would write it|
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "text": "prisma.user.findMany({ take: 10 })"
+}
+```
+
+<h3 id="formatclientquery-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[ClientFormatted](#schemaclientformatted)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
 ## checkClientQuery
 
 <a id="opIdcheckClientQuery"></a>
@@ -1290,6 +1355,75 @@ What TypeScript finds wrong with the query, checked against the client's types.
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[ClientTypeDiagnostics](#schemaclienttypediagnostics)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## previewClientQuery
+
+<a id="opIdpreviewClientQuery"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/client/preview \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{
+    "query": "prisma.user.findMany({ where: { email: { contains: \"ann\" } }, take: 10 })"
+  }'
+```
+
+`POST /client/preview`
+
+Run a query that only reads to show the SQL it sends while it is typed; a write is refused on `query`.
+
+> Body parameter
+
+```json
+{
+  "query": "prisma.user.findMany({ where: { email: { contains: \"ann\" } }, take: 10 })"
+}
+```
+
+<h3 id="previewclientquery-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|
+|---|---|---|---|---|
+|body|body|[ClientQueryBody](#schemaclientquerybody)|true|none|
+|» query|body|object|true|The call, as TypeScript would write it|
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "queries": [
+    {
+      "sql": "SELECT `main`.`User`.`id` FROM `main`.`User` LIMIT ? OFFSET ?",
+      "formatted": "SELECT\n  `main`.`User`.`id`\nFROM `main`.`User`\nLIMIT ?\nOFFSET ?",
+      "params": [
+        "10",
+        "0"
+      ],
+      "durationMs": 0.4
+    }
+  ],
+  "durationMs": 3.2
+}
+```
+
+<h3 id="previewclientquery-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[ClientPreview](#schemaclientpreview)|
 |422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
 |500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
 |503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
@@ -3783,6 +3917,30 @@ This operation does not require authentication
 |write|boolean|true|none|Whether the operation writes|
 |range|object|true|none|Where the call sits in the text|
 
+<h2 id="tocS_ClientTouchedModel">ClientTouchedModel</h2>
+<!-- backwards compatibility -->
+<a id="schemaclienttouchedmodel"></a>
+<a id="schema_ClientTouchedModel"></a>
+<a id="tocSclienttouchedmodel"></a>
+<a id="tocsclienttouchedmodel"></a>
+
+```json
+{
+  "model": "User",
+  "fields": [
+    "email",
+    "posts"
+  ]
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|model|string|true|none|The model, as the schema declares it|
+|fields|[string]|true|none|The fields of the model the arguments name: scalars they filter, select, order or write, relations they follow|
+
 <h2 id="tocS_ClientDiagnostic">ClientDiagnostic</h2>
 <!-- backwards compatibility -->
 <a id="schemaclientdiagnostic"></a>
@@ -3828,6 +3986,14 @@ This operation does not require authentication
     }
   ],
   "transaction": false,
+  "touched": [
+    {
+      "model": "User",
+      "fields": [
+        "email"
+      ]
+    }
+  ],
   "diagnostics": []
 }
 ```
@@ -3838,6 +4004,7 @@ This operation does not require authentication
 |---|---|---|---|---|
 |calls|[[ClientCall](#schemaclientcall)]|true|none|The calls, in order (empty when the text does not parse)|
 |transaction|boolean|true|none|Whether the calls are batched in one `$transaction`|
+|touched|[[ClientTouchedModel](#schemaclienttouchedmodel)]|true|none|The models the calls are made on and the ones their relations reach, in the order they are reached|
 |diagnostics|[[ClientDiagnostic](#schemaclientdiagnostic)]|true|none|What keeps the query from being run (empty when it can be)|
 
 <h2 id="tocS_clientQuery">clientQuery</h2>
@@ -4093,6 +4260,25 @@ This operation does not require authentication
 |activeSignature|integer(int32)|true|none|The overload the arguments so far match|
 |activeParameter|integer(int32)|true|none|The parameter the cursor is on|
 
+<h2 id="tocS_ClientFormatted">ClientFormatted</h2>
+<!-- backwards compatibility -->
+<a id="schemaclientformatted"></a>
+<a id="schema_ClientFormatted"></a>
+<a id="tocSclientformatted"></a>
+<a id="tocsclientformatted"></a>
+
+```json
+{
+  "text": "prisma.user.findMany({ take: 10 })"
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|text|string|true|none|The whole text, formatted; the same text when it already is|
+
 <h2 id="tocS_TypeSeverity">TypeSeverity</h2>
 <!-- backwards compatibility -->
 <a id="schematypeseverity"></a>
@@ -4176,6 +4362,37 @@ This operation does not require authentication
 |formatted|string|true|none|The same statement laid out a clause per line for reading: only its whitespace differs|
 |params|[object]|true|none|The values bound to its placeholders, in order|
 |durationMs|number(double)|true|none|How long the database took, in milliseconds|
+
+<h2 id="tocS_ClientPreview">ClientPreview</h2>
+<!-- backwards compatibility -->
+<a id="schemaclientpreview"></a>
+<a id="schema_ClientPreview"></a>
+<a id="tocSclientpreview"></a>
+<a id="tocsclientpreview"></a>
+
+```json
+{
+  "queries": [
+    {
+      "sql": "SELECT `main`.`User`.`id` FROM `main`.`User` LIMIT ? OFFSET ?",
+      "formatted": "SELECT\n  `main`.`User`.`id`\nFROM `main`.`User`\nLIMIT ?\nOFFSET ?",
+      "params": [
+        "10",
+        "0"
+      ],
+      "durationMs": 0.4
+    }
+  ],
+  "durationMs": 3.2
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|queries|[[ClientSqlQuery](#schemaclientsqlquery)]|true|none|The statements the client sent, in order|
+|durationMs|number(double)|true|none|Wall time of the whole call in milliseconds|
 
 <h2 id="tocS_ClientResult">ClientResult</h2>
 <!-- backwards compatibility -->

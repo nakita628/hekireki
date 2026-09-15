@@ -16,8 +16,8 @@ export function parseParamInput(parameter: Parameter, text: string): Cell {
   const trimmed = text.trim()
   if (trimmed === 'NULL' || (trimmed === '' && parameter.nullable === true)) return null
   if (parameter.tsType === 'number') {
-    const parsed = Number(trimmed)
-    return trimmed !== '' && !Number.isNaN(parsed) ? parsed : text
+    const result = Number(trimmed)
+    return trimmed !== '' && !Number.isNaN(result) ? result : text
   }
   if (parameter.tsType === 'boolean') {
     return trimmed === 'true' || trimmed === '1'

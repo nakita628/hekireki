@@ -901,6 +901,40 @@ export function usePostClientSignature<TError = unknown>(options?: {
   })
 }
 
+export function getPostClientFormatMutationOptions<TError = unknown>(
+  options?: ClientRequestOptions,
+) {
+  return mutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.format.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.client.format.$post>
+  >({
+    mutationKey: ['client', '/client/format', 'POST'] as const,
+    async mutationFn(args: InferRequestType<typeof client.client.format.$post>) {
+      return parseResponse(client.client.format.$post(args, options))
+    },
+  })
+}
+
+export function usePostClientFormat<TError = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.format.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.client.format.$post>
+  >
+  options?: ClientRequestOptions
+}) {
+  const { mutation: mutationOptions, options: clientOptions } = options ?? {}
+  return useMutation({
+    ...mutationOptions,
+    ...getPostClientFormatMutationOptions<TError>(clientOptions),
+  })
+}
+
 export function getPostClientCheckMutationOptions<TError = unknown>(
   options?: ClientRequestOptions,
 ) {
@@ -932,6 +966,40 @@ export function usePostClientCheck<TError = unknown>(options?: {
   return useMutation({
     ...mutationOptions,
     ...getPostClientCheckMutationOptions<TError>(clientOptions),
+  })
+}
+
+export function getPostClientPreviewMutationOptions<TError = unknown>(
+  options?: ClientRequestOptions,
+) {
+  return mutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.preview.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.client.preview.$post>
+  >({
+    mutationKey: ['client', '/client/preview', 'POST'] as const,
+    async mutationFn(args: InferRequestType<typeof client.client.preview.$post>) {
+      return parseResponse(client.client.preview.$post(args, options))
+    },
+  })
+}
+
+export function usePostClientPreview<TError = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.preview.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.client.preview.$post>
+  >
+  options?: ClientRequestOptions
+}) {
+  const { mutation: mutationOptions, options: clientOptions } = options ?? {}
+  return useMutation({
+    ...mutationOptions,
+    ...getPostClientPreviewMutationOptions<TError>(clientOptions),
   })
 }
 

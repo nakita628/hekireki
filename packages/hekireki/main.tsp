@@ -1260,6 +1260,14 @@ model ClientSignatureHelp {
   activeParameter: int32;
 }
 
+/** The query laid out as the repository's TypeScript formatter (oxfmt) writes it. */
+@example(#{ text: "prisma.user.findMany({ take: 10 })" })
+@extension("x-brand", "ClientFormatted")
+model ClientFormatted {
+  /** The whole text, formatted; the same text when it already is */
+  text: string;
+}
+
 /** How serious a TypeScript diagnostic is. */
 union TypeSeverity {
   error: "error",
@@ -1321,10 +1329,21 @@ model ClientDiagnostic {
   range: TextRange;
 }
 
+/** A model the query touches, with the fields its arguments name. */
+@example(#{ `model`: "User", fields: #["email", "posts"] })
+model ClientTouchedModel {
+  /** The model, as the schema declares it */
+  `model`: string;
+
+  /** The fields of the model the arguments name: scalars they filter, select, order or write, relations they follow */
+  fields: string[];
+}
+
 /** What the query text says, read without running it. */
 @example(#{
   calls: #[#{ `model`: "User", operation: "findMany", write: false, range: #{ start: 0, end: 22 } }],
   transaction: false,
+  touched: #[#{ `model`: "User", fields: #["email"] }],
   diagnostics: #[],
 })
 @extension("x-brand", "ClientAnalysis")
@@ -1334,6 +1353,9 @@ model ClientAnalysis {
 
   /** Whether the calls are batched in one `$transaction` */
   transaction: boolean;
+
+  /** The models the calls are made on and the ones their relations reach, in the order they are reached */
+  touched: ClientTouchedModel[];
 
   /** What keeps the query from being run (empty when it can be) */
   diagnostics: ClientDiagnostic[];
@@ -1389,6 +1411,27 @@ model ClientResult {
   /** Whether only the first rows of the array are in `result` */
   truncated: boolean;
 
+  /** The statements the client sent, in order */
+  queries: ClientSqlQuery[];
+
+  /** Wall time of the whole call in milliseconds */
+  durationMs: float64;
+}
+
+/** The SQL a read-only call sends, from running it while it is typed. */
+@example(#{
+  queries: #[
+    #{
+      sql: "SELECT `main`.`User`.`id` FROM `main`.`User` LIMIT ? OFFSET ?",
+      formatted: "SELECT\n  `main`.`User`.`id`\nFROM `main`.`User`\nLIMIT ?\nOFFSET ?",
+      params: #["10", "0"],
+      durationMs: 0.4,
+    }
+  ],
+  durationMs: 3.2,
+})
+@extension("x-brand", "ClientPreview")
+model ClientPreview {
   /** The statements the client sent, in order */
   queries: ClientSqlQuery[];
 
@@ -2318,12 +2361,31 @@ namespace ClientRoutes {
     | ServiceUnavailableProblemResponse
     | InternalServerProblemResponse;
 
+  /** The query laid out as the TypeScript formatter writes it; a query that does not parse is reported on `query`. */
+  @post
+  @route("/format")
+  @operationId("formatClientQuery")
+  op format(@body body: ClientQueryBody):
+    | ClientFormatted
+    | ValidationProblemResponse
+    | InternalServerProblemResponse;
+
   /** What TypeScript finds wrong with the query, checked against the client's types. */
   @post
   @route("/check")
   @operationId("checkClientQuery")
   op check(@body body: ClientQueryBody):
     | ClientTypeDiagnostics
+    | ValidationProblemResponse
+    | ServiceUnavailableProblemResponse
+    | InternalServerProblemResponse;
+
+  /** Run a query that only reads to show the SQL it sends while it is typed; a write is refused on `query`. */
+  @post
+  @route("/preview")
+  @operationId("previewClientQuery")
+  op preview(@body body: ClientQueryBody):
+    | ClientPreview
     | ValidationProblemResponse
     | ServiceUnavailableProblemResponse
     | InternalServerProblemResponse;

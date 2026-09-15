@@ -10,8 +10,8 @@ export type Theme = v.InferOutput<typeof ThemeSchema>
 export const THEME_KEY = 'hekireki-studio:theme'
 
 export function resolveTheme(stored: string | null, prefersDark: boolean) {
-  const parsed = v.safeParse(ThemeSchema, stored)
-  if (parsed.success) return parsed.output
+  const result = v.safeParse(ThemeSchema, stored)
+  if (result.success) return result.output
   return prefersDark ? 'dark' : 'light'
 }
 

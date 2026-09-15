@@ -75,8 +75,8 @@ function importFromProject(specifier: string, cwd: string) {
     try: async (): Promise<unknown> => {
       const resolved = createRequire(path.join(cwd, 'package.json')).resolve(specifier)
       const namespace: unknown = await import(pathToFileURL(resolved).href)
-      const parsed = ModuleNamespace.safeParse(namespace)
-      return parsed.success ? parsed.data.default : namespace
+      const result = ModuleNamespace.safeParse(namespace)
+      return result.success ? result.data.default : namespace
     },
     catch: (error) =>
       new DatabaseUnavailableError({
@@ -116,10 +116,10 @@ function openSqlite(url: string, baseDir: string) {
       try: () => import('node:sqlite'),
       catch: () => new DatabaseUnavailableError({ reason: NO_SQLITE }),
     })
-    const parsed = SqliteModule.safeParse(sqlite)
-    if (!parsed.success) return yield* new DatabaseUnavailableError({ reason: NO_SQLITE })
+    const result = SqliteModule.safeParse(sqlite)
+    if (!result.success) return yield* new DatabaseUnavailableError({ reason: NO_SQLITE })
     const db = yield* Effect.try({
-      try: () => new parsed.data.DatabaseSync(UrlDomain.makeSqliteFilePath({ url, baseDir })),
+      try: () => new result.data.DatabaseSync(UrlDomain.makeSqliteFilePath({ url, baseDir })),
       catch: unavailable,
     })
     const driver: Driver = {
@@ -191,15 +191,15 @@ const PgResult = z
 
 function openPostgres(url: string, cwd: string) {
   return Effect.gen(function* () {
-    const parsed = PgModule.safeParse(yield* importFromProject('pg', cwd))
-    if (!parsed.success) {
+    const result = PgModule.safeParse(yield* importFromProject('pg', cwd))
+    if (!result.success) {
       return yield* new DatabaseUnavailableError({
         reason: 'The "pg" package does not export Client.',
       })
     }
     const client = yield* Effect.tryPromise({
       try: async () => {
-        const opened = new parsed.data.Client({ connectionString: url })
+        const opened = new result.data.Client({ connectionString: url })
         await opened.connect()
         // `pg` ignores Prisma's `?schema=`; without this the tables of a non-public namespace are
         // invisible and every query reports a missing relation.
@@ -277,14 +277,14 @@ const MysqlResult = z
 
 function openMysql(url: string, cwd: string) {
   return Effect.gen(function* () {
-    const parsed = MysqlModule.safeParse(yield* importFromProject('mysql2/promise', cwd))
-    if (!parsed.success) {
+    const result = MysqlModule.safeParse(yield* importFromProject('mysql2/promise', cwd))
+    if (!result.success) {
       return yield* new DatabaseUnavailableError({
         reason: 'The "mysql2/promise" module does not export createConnection.',
       })
     }
     const connection = yield* Effect.tryPromise({
-      try: () => parsed.data.createConnection(url),
+      try: () => result.data.createConnection(url),
       catch: unavailable,
     })
     const driver: Driver = {

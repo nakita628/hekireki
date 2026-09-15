@@ -62,8 +62,8 @@ export function makeDbValue(input: z.infer<typeof MakeDbValueInput>): unknown {
     case 'Float': {
       if (typeof value === 'number') return value
       if (typeof value === 'boolean') return value ? 1 : 0
-      const parsed = Number(value)
-      return Number.isNaN(parsed) ? value : parsed
+      const result = Number(value)
+      return Number.isNaN(result) ? value : result
     }
     case 'BigInt':
     case 'Decimal':

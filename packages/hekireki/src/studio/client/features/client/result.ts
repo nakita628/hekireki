@@ -4,14 +4,6 @@ function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function cellOf(value: unknown): Cell {
-  if (value === null || value === undefined) return null
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-    return value
-  }
-  return JSON.stringify(value)
-}
-
 /**
  * The result as a table, when it is one: an array of objects is a row per object, a single
  * object is one row, and a nested value (an included relation, an aggregate) is its JSON text in
@@ -22,17 +14,18 @@ export function tableOf(value: unknown) {
   if (items.length === 0 || !items.every(isRecord)) return null
   const columns = [...new Set(items.flatMap((item) => Object.keys(item)))]
   const rows = items.map((item) =>
-    Object.fromEntries(columns.map((column) => [column, cellOf(item[column])])),
+    Object.fromEntries(
+      columns.map((column): [string, Cell] => {
+        const cell = item[column]
+        if (cell === null || cell === undefined) return [column, null]
+        if (typeof cell === 'string' || typeof cell === 'number' || typeof cell === 'boolean') {
+          return [column, cell]
+        }
+        return [column, JSON.stringify(cell)]
+      }),
+    ),
   )
   return { columns, rows }
-}
-
-function parsedOf(text: string): unknown {
-  try {
-    return JSON.parse(text)
-  } catch {
-    return null
-  }
 }
 
 /**
@@ -43,6 +36,10 @@ export function problemMessage(error: unknown) {
   if (!(error instanceof Error)) return 'The query could not be run.'
   const detail: unknown = Reflect.get(error, 'detail')
   const data: unknown = isRecord(detail) ? detail.data : undefined
-  const body = typeof data === 'string' ? parsedOf(data) : data
-  return isRecord(body) && typeof body.detail === 'string' ? body.detail : error.message
+  try {
+    const body: unknown = typeof data === 'string' ? JSON.parse(data) : data
+    return isRecord(body) && typeof body.detail === 'string' ? body.detail : error.message
+  } catch {
+    return error.message
+  }
 }

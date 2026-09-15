@@ -28,8 +28,8 @@ export function loadLayout(key: string): LayoutPositions {
   try {
     const raw = globalThis.localStorage.getItem(key)
     if (raw === null) return {}
-    const parsed: unknown = JSON.parse(raw)
-    const stored = v.safeParse(StoredLayoutSchema, parsed)
+    const result: unknown = JSON.parse(raw)
+    const stored = v.safeParse(StoredLayoutSchema, result)
     if (!stored.success) return {}
     return Object.fromEntries(
       Object.entries(stored.output).flatMap(([name, position]) => {

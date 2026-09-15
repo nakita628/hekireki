@@ -72,6 +72,33 @@ function studioApi(): Plugin {
   }
 }
 
+const MONACO_CHUNK = 'monaco'
+
+/** The size past which a chunk slows the first visit to a page down (Vite's default). */
+const CHUNK_SIZE_LIMIT = 500 * 1024
+
+/**
+ * The build's chunk size warning for every chunk but the Monaco core, which is as large as it is
+ * and loads only with the editor pages.
+ */
+function chunkSizeWarning(): Plugin {
+  return {
+    name: 'hekireki-chunk-size',
+    apply: 'build',
+    generateBundle(_options, bundle) {
+      for (const chunk of Object.values(bundle)) {
+        if (chunk.type !== 'chunk' || chunk.name === MONACO_CHUNK) continue
+        const size = Buffer.byteLength(chunk.code)
+        if (size > CHUNK_SIZE_LIMIT) {
+          this.warn(
+            `${chunk.fileName} is ${Math.round(size / 1024)} kB, over ${CHUNK_SIZE_LIMIT / 1024} kB: split it with a dynamic import() or a codeSplitting group.`,
+          )
+        }
+      }
+    },
+  }
+}
+
 export default defineConfig({
   root: CLIENT_ROOT,
   plugins: [
@@ -87,9 +114,22 @@ export default defineConfig({
     tailwindcss(),
     react(),
     studioApi(),
+    chunkSizeWarning(),
   ],
   build: {
     outDir: OUT_DIR,
     emptyOutDir: true,
+    // Monaco's own warning is replaced by the plugin below, which keeps it for every other chunk.
+    chunkSizeWarningLimit: Number.POSITIVE_INFINITY,
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          // The Monaco core in one chunk of a known name: the two editor pages load it, nothing
+          // else does, and it cannot be cut further — its services register themselves in module
+          // order, and split across chunks the editor fails to start (`serviceIds` of undefined).
+          groups: [{ name: MONACO_CHUNK, test: /node_modules[\\/]monaco-editor[\\/]/u }],
+        },
+      },
+    },
   },
 })

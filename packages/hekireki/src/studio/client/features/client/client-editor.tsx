@@ -13,14 +13,6 @@ import { QUERY_LANGUAGE_ID } from './query-monarch.js'
 // One model for the page: the providers and the markers find it by this name.
 const QUERY_PATH = 'file:///hekireki-studio-query.ts'
 
-const OPTIONS: MonacoEditor.IStandaloneEditorConstructionOptions = {
-  ...EDITOR_OPTIONS,
-  placeholder: 'prisma.user.findMany({ take: 10 })',
-  quickSuggestions: { other: true, comments: false, strings: true },
-  suggest: { showWords: false, preview: true, snippetsPreventQuickSuggestions: false },
-  parameterHints: { enabled: true },
-}
-
 /**
  * The Prisma Client editor: Monaco with the grammar of a Prisma call, completion, hovers and
  * signature help answered by the project's TypeScript through the Studio API (the schema's
@@ -31,6 +23,7 @@ export function ClientEditor({
   value,
   onChange,
   onRun,
+  onReady,
   models,
   typesAvailable,
   markers,
@@ -39,6 +32,8 @@ export function ClientEditor({
   readonly value: string
   readonly onChange: (value: string) => void
   readonly onRun: () => void
+  /** Receives the editor once mounted, for the page's own commands (Format). */
+  readonly onReady: (editor: MonacoEditor.IStandaloneCodeEditor) => void
   readonly models: readonly CompletionModel[]
   /** Whether the server can complete against the client's types; otherwise the schema completes. */
   readonly typesAvailable: boolean
@@ -87,6 +82,15 @@ export function ClientEditor({
         latest.current.onRun()
       },
     )
+    // Monaco binds Ctrl+Shift+I on Linux; the header advertises Shift+Alt+F, so bind it everywhere.
+    mounted.addCommand(
+      // oxlint-disable-next-line no-bitwise -- Monaco keybindings are bit flags by design
+      monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF,
+      () => {
+        void mounted.getAction('editor.action.formatDocument')?.run()
+      },
+    )
+    onReady(mounted)
     const model = mounted.getModel()
     if (model) applyClientMarkers(model, markers)
     mounted.focus()
@@ -98,7 +102,7 @@ export function ClientEditor({
       language={QUERY_LANGUAGE_ID}
       value={value}
       theme={themeName(theme)}
-      options={OPTIONS}
+      options={EDITOR_OPTIONS}
       keepCurrentModel
       loading={<div className="p-4 text-code text-muted">Loading editor…</div>}
       onMount={onMount}

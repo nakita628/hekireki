@@ -330,7 +330,9 @@ or the literal written there. `DATABASE_URL` is looked up only when Prisma names
 
 The Prisma Client page runs a call as your code writes it, through the project's own generated
 client, and lists the SQL the client sent for it — the statements, their bound values and their
-timings — each one a click away from the SQL page, where it can be explained and edited:
+timings — each one a click away from the SQL page, where it can be explained and edited. The
+schema beside the editor lights up the models the call touches as you type, following its
+relations, and marks the fields it names:
 
 ```ts
 prisma.user.findMany({
@@ -343,11 +345,14 @@ prisma.user.findMany({
 A single model operation or a batch `prisma.$transaction([...])` is read, never evaluated: the
 arguments are literals (strings, numbers, booleans, `null`, objects, arrays, `new Date(...)`,
 bigints like `10n`), so variables, callbacks and `$queryRaw` are refused before anything runs, and
-a write asks before it goes through. The client is the one `hekireki seed` uses: the output of the
-schema's `prisma-client` generator (or `@prisma/client` for `prisma-client-js`) after
-`prisma generate`, opened with the driver adapter installed in the project (`@prisma/adapter-pg`,
-`@prisma/adapter-mariadb` or `@prisma/adapter-better-sqlite3`). Restart Studio after regenerating
-the client so it runs through the new one.
+a write asks before it goes through. While you write the call, the SQL tab under the editor shows
+the SQL it sends as it changes (a call that only reads runs to show it), and running the call
+turns to its result; a write shows its SQL once it has run.
+The client is the one `hekireki seed` uses: the output of the schema's `prisma-client` generator
+(or `@prisma/client` for `prisma-client-js`) after `prisma generate`, opened with the driver
+adapter installed in the project (`@prisma/adapter-pg`, `@prisma/adapter-mariadb` or
+`@prisma/adapter-better-sqlite3`). Restart Studio after regenerating the client so it runs
+through the new one.
 
 The editor completes, explains and type-checks the call against the generated client's own types
 — `where` offers the model's fields and filters, a hover shows the argument's type, a wrong key is

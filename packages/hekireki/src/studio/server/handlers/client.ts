@@ -7,7 +7,9 @@ import type {
   postClientCheckRoute,
   postClientCompleteDetailRoute,
   postClientCompleteRoute,
+  postClientFormatRoute,
   postClientHoverRoute,
+  postClientPreviewRoute,
   postClientRunRoute,
   postClientSignatureRoute,
 } from '../routes'
@@ -353,6 +355,129 @@ export const postClientCheckRouteHandler: RouteHandler<typeof postClientCheckRou
       onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
+          Match.tag('ClientUnavailableError', ({ reason }) =>
+            Effect.succeed(
+              c.json(
+                {
+                  type: '/problems/service-unavailable' as const,
+                  title: 'Service Unavailable' as const,
+                  status: 503 as const,
+                  detail: reason,
+                  instance: c.req.path,
+                },
+                503,
+                { 'Content-Type': 'application/problem+json' },
+              ),
+            ),
+          ),
+          Match.tag('ContractViolationError', ({ message }) =>
+            Effect.logError('contract violation', message).pipe(
+              Effect.as(
+                c.json(
+                  {
+                    type: '/problems/internal-server-error' as const,
+                    title: 'Internal Server Error' as const,
+                    status: 500 as const,
+                    detail: 'An unexpected error occurred.',
+                    instance: c.req.path,
+                  },
+                  500,
+                  { 'Content-Type': 'application/problem+json' },
+                ),
+              ),
+            ),
+          ),
+          Match.exhaustive,
+        ),
+    }),
+  )
+}
+
+export const postClientFormatRouteHandler: RouteHandler<typeof postClientFormatRoute> = (c) => {
+  const data = c.req.valid('json')
+  return RuntimeService.studioRuntime().runPromise(
+    Effect.matchEffect(ClientUseCase.formatClientQuery({ query: data.query }), {
+      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
+      onFailure: (error) =>
+        Match.value(error).pipe(
+          Match.tag('FormatError', ({ message }) =>
+            Effect.succeed(
+              c.json(
+                {
+                  type: '/problems/validation-failed' as const,
+                  title: 'Validation Failed' as const,
+                  status: 422 as const,
+                  detail: message,
+                  instance: c.req.path,
+                  errors: [{ field: 'query', message }],
+                },
+                422,
+                { 'Content-Type': 'application/problem+json' },
+              ),
+            ),
+          ),
+          Match.tag('ContractViolationError', ({ message }) =>
+            Effect.logError('contract violation', message).pipe(
+              Effect.as(
+                c.json(
+                  {
+                    type: '/problems/internal-server-error' as const,
+                    title: 'Internal Server Error' as const,
+                    status: 500 as const,
+                    detail: 'An unexpected error occurred.',
+                    instance: c.req.path,
+                  },
+                  500,
+                  { 'Content-Type': 'application/problem+json' },
+                ),
+              ),
+            ),
+          ),
+          Match.exhaustive,
+        ),
+    }),
+  )
+}
+
+export const postClientPreviewRouteHandler: RouteHandler<typeof postClientPreviewRoute> = (c) => {
+  const data = c.req.valid('json')
+  return RuntimeService.studioRuntime().runPromise(
+    Effect.matchEffect(ClientUseCase.previewClientQuery({ query: data.query }), {
+      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
+      onFailure: (error) =>
+        Match.value(error).pipe(
+          Match.tag('InvalidInputError', ({ field, message }) =>
+            Effect.succeed(
+              c.json(
+                {
+                  type: '/problems/validation-failed' as const,
+                  title: 'Validation Failed' as const,
+                  status: 422 as const,
+                  detail: message,
+                  instance: c.req.path,
+                  errors: [{ field, message }],
+                },
+                422,
+                { 'Content-Type': 'application/problem+json' },
+              ),
+            ),
+          ),
+          Match.tag('ClientQueryError', ({ message }) =>
+            Effect.succeed(
+              c.json(
+                {
+                  type: '/problems/validation-failed' as const,
+                  title: 'Validation Failed' as const,
+                  status: 422 as const,
+                  detail: message,
+                  instance: c.req.path,
+                  errors: [{ field: 'query', message }],
+                },
+                422,
+                { 'Content-Type': 'application/problem+json' },
+              ),
+            ),
+          ),
           Match.tag('ClientUnavailableError', ({ reason }) =>
             Effect.succeed(
               c.json(

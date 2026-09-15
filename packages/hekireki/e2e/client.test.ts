@@ -1,6 +1,6 @@
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
-import { expect, test } from './studio.js'
+import { expect, expectNoHorizontalOverflow, test } from './studio.js'
 
 // The Prisma Client page on the client e2e/workspace.ts generated from the fixtures, with
 // TypeScript 5 in the workspace: the call runs through Prisma Client itself, the SQL on the page
@@ -9,9 +9,10 @@ import { expect, test } from './studio.js'
 /** The query editor, emptied, with the text typed into it key by key (so brackets auto-close and overtype as they do for a user). */
 async function typeQuery(page: Page, text: string) {
   const editor = page.locator('.monaco-editor').first()
-  // The top left corner: a hover or a hint from before may cover the middle of the editor.
+  // Focused rather than clicked: a hover or a hint from before may cover the editor, and a long
+  // line scrolls its text out from under any fixed point.
   await page.keyboard.press('Escape')
-  await editor.locator('.view-lines').click({ position: { x: 5, y: 5 } })
+  await editor.getByRole('textbox').focus()
   await page.keyboard.press('ControlOrMeta+a')
   await page.keyboard.press('Delete')
   await page.keyboard.type(text)
@@ -34,12 +35,24 @@ async function editorText(page: Page) {
   return text.replaceAll('\u00A0', ' ')
 }
 
+/** Holds the page's requests to the Studio API path until the returned function lets them through. */
+async function hold(page: Page, path: string) {
+  const gate = Promise.withResolvers()
+  await page.route(`**/api${path}`, async (route) => {
+    await gate.promise
+    await route.continue()
+  })
+  return () => {
+    gate.resolve(null)
+  }
+}
+
 test.beforeEach(async ({ page }) => {
   await page.goto('/')
   await page.getByRole('link', { name: 'Prisma Client' }).click()
   await expect(page).toHaveURL(/\/client$/u)
   await expect(page.getByRole('heading', { level: 1, name: 'Prisma Client' })).toBeVisible()
-  await expect(page.getByText(/^\.\.\/generated\/client · sqlite/u)).toBeVisible()
+  await expect(page.getByText(/^1 lines · \.\.\/generated\/client · sqlite/u)).toBeVisible()
   await expect(page.getByRole('button', { name: 'Run', exact: true })).toBeEnabled()
 })
 
@@ -58,11 +71,14 @@ test('runs a call and shows its rows and the SQL Prisma Client sent, which opens
   await expect(grid).not.toContainText('ada@example.com')
   await expect(page.getByText(/^2 rows · .+ · 1 statement$/u)).toBeVisible()
 
-  await page.getByRole('tab', { name: /^SQL/u }).click()
+  // The SQL tab shows what the run sent.
+  await page.getByRole('tab', { name: /^SQL · 1$/u }).click()
   const statement = page.locator('pre').filter({ hasText: 'FROM `main`.`User`' })
   // Laid out a clause per line by default; the text itself is Prisma's.
   await expect(statement).toContainText(/^SELECT\n {2}`main`\.`User`\.`id`,/u)
-  await expect(statement).toContainText('\nFROM `main`.`User`\nWHERE `main`.`User`.`role` = ?\n')
+  await expect(statement).toContainText(
+    '\nFROM\n  `main`.`User`\nWHERE\n  `main`.`User`.`role` = ?\n',
+  )
   // The value bound to the placeholder, as Prisma Client logged it.
   await expect(page.locator('.pill').filter({ hasText: '?1' })).toHaveText('?1"VIEWER"')
   await page.getByRole('button', { name: 'As sent' }).click()
@@ -105,6 +121,155 @@ test('completes, colours and checks the call against the types prisma generate w
   await expect.poll(() => colourOf(page, 'where')).toBe('rgb(15, 118, 110)')
 })
 
+test('says in the editor that the text is being read and checked, then what was found', async ({
+  page,
+}) => {
+  const state = page.getByRole('status', { name: 'Editor status' })
+  // The reading, then TypeScript's check, each held back so the page is seen waiting on it.
+  const analyzed = await hold(page, '/client/analyze')
+  const checked = await hold(page, '/client/check')
+  await typeQuery(page, 'prisma.user.count()')
+  await expect(state).toHaveText('Analyzing…')
+  analyzed()
+  await expect(state).toHaveText('Checking types…')
+  checked()
+  await expect(state).toHaveText('No problems')
+
+  await typeQuery(page, 'prisma.user.findMany({ where: { nope: 1 } })')
+  await expect(state).toHaveText('1 problem')
+})
+
+test('says the call is running, then what it came back with', async ({ page }) => {
+  const state = page.getByRole('status', { name: 'Run status' })
+  const ran = await hold(page, '/client/run')
+  await typeQuery(page, 'prisma.user.count()')
+  await expect(page.getByRole('status', { name: 'Editor status' })).toHaveText('No problems')
+  await page.keyboard.press('ControlOrMeta+Enter')
+  await expect(state).toHaveText('Running…')
+  await expect(page.getByRole('button', { name: 'Run', exact: true })).toBeDisabled()
+  ran()
+  await expect(state).toHaveText(/^one value · .+ · 1 statement$/u)
+})
+
+test('shows the SQL as the call is written, the result once it runs, and a write’s SQL only after it has run', async ({
+  page,
+}) => {
+  const previewed: string[] = []
+  page.on('request', (request) => {
+    if (request.url().endsWith('/api/client/preview')) previewed.push(request.postData() ?? '')
+  })
+  const sqlTab = page.getByRole('tab', { name: /^SQL/u })
+  const resultTab = page.getByRole('tab', { name: 'Result' })
+  const state = page.getByRole('status', { name: 'SQL status' })
+  const statement = page.locator('pre').filter({ hasText: 'FROM' })
+  // Writing the call brings its SQL into view, without a click.
+  await typeQuery(page, 'prisma.user.findMany({ where: { role: "VIEWER" } })')
+  await expect(sqlTab).toHaveAttribute('aria-selected', 'true')
+  await expect(statement).toContainText(
+    '\nFROM\n  `main`.`User`\nWHERE\n  `main`.`User`.`role` = ?\n',
+  )
+  await expect(state).toHaveText(/^1 statement · .+ ms$/u)
+
+  const updated = await hold(page, '/client/preview')
+  await typeQuery(page, 'prisma.user.findMany({ where: { role: "ADMIN" } })')
+  await expect(state).toHaveText('Updating…')
+  updated()
+  await expect(page.locator('.pill').filter({ hasText: '?1' })).toHaveText('?1"ADMIN"')
+
+  // Running it brings the result; writing again, the SQL.
+  await page.keyboard.press('ControlOrMeta+Enter')
+  await expect(resultTab).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByRole('grid', { name: 'Query result' })).toContainText('ada@example.com')
+  await typeQuery(page, 'prisma.post.count()')
+  await expect(sqlTab).toHaveAttribute('aria-selected', 'true')
+  await expect(statement).toContainText('`main`.`Post`')
+
+  // While the text has a problem, what the call last sent stays, stepped back.
+  await typeQuery(page, 'prisma.post.count({ where: { nope: 1 } })')
+  await expect(
+    page.getByText('Fix the problems to update the SQL: this is what the call last sent.'),
+  ).toBeVisible()
+  await expect(statement).toContainText('`main`.`Post`')
+
+  // A write is not run for its SQL: it shows once the write has run, after it is confirmed.
+  await typeQuery(page, 'prisma.post.updateMany({ where: { id: -1 }, data: { title: "x" } })')
+  await expect(page.getByText('A write shows its SQL when it is run.')).toBeVisible()
+  await page.keyboard.press('ControlOrMeta+Enter')
+  const dialog = page.getByRole('alertdialog', { name: 'Run a write?' })
+  await dialog.getByRole('button', { name: 'Run', exact: true }).click()
+  await expect(page.getByRole('grid', { name: 'Query result' })).toContainText('count')
+  await sqlTab.click()
+  await expect(page.locator('pre').filter({ hasText: 'UPDATE `main`.`Post`' })).toBeVisible()
+  expect(previewed.filter((body) => body.includes('updateMany'))).toStrictEqual([])
+})
+
+test('shows the SQL the run sent for the text it ran, without waiting on a preview', async ({
+  page,
+}) => {
+  // No preview answers until the end: what the SQL tab shows after the run is the run's own.
+  const answered = await hold(page, '/client/preview')
+  await typeQuery(page, 'prisma.user.findMany({ where: { role: "ADMIN" } })')
+  await page.keyboard.press('ControlOrMeta+Enter')
+  await expect(page.getByRole('grid', { name: 'Query result' })).toContainText('ada@example.com')
+  await page.getByRole('tab', { name: 'SQL · 1' }).click()
+  await expect(page.locator('.pill').filter({ hasText: '?1' })).toHaveText('?1"ADMIN"')
+  await expect(page.getByRole('status', { name: 'SQL status' })).toHaveText(
+    /^1 statement · .+ ms$/u,
+  )
+  answered()
+})
+
+test('lights up the models the call touches in the schema beside it, and marks the fields it names', async ({
+  page,
+}) => {
+  const schema = page.locator('.react-flow')
+  await expect(
+    page.getByText('Every model; the ones a call touches light up as you type.'),
+  ).toBeVisible()
+  await typeQuery(
+    page,
+    'prisma.user.findMany({ where: { role: "VIEWER" }, include: { posts: { select: { title: true } } } })',
+  )
+  await expect(
+    page.getByText('2 models touched · the fields the call names are marked'),
+  ).toBeVisible()
+  await expect(schema.getByTitle('Read by the statement')).toHaveCount(2)
+
+  // Another call, another model: User steps back.
+  await typeQuery(page, 'prisma.post.count({ where: { published: true } })')
+  await expect(
+    page.getByText('1 model touched · the fields the call names are marked'),
+  ).toBeVisible()
+  await expect(schema.getByTitle('Read by the statement')).toHaveCount(1)
+})
+
+test('keeps a wide result inside its pane when the pane is narrowed, scrolling it instead', async ({
+  page,
+}) => {
+  await typeQuery(page, 'prisma.user.findMany({ include: { posts: true } })')
+  await page.keyboard.press('ControlOrMeta+Enter')
+  await expect(page.getByRole('grid', { name: 'Query result' })).toContainText('ada@example.com')
+
+  // Narrowed after the result is drawn: the pane shrinks around the table, which scrolls.
+  const handle = page.getByRole('button', { name: 'Resize the schema' })
+  await handle.press('Home')
+  const rightOf = async (locator: Locator) => {
+    const box = await locator.boundingBox()
+    return box === null ? Number.POSITIVE_INFINITY : box.x + box.width
+  }
+  const split = await handle.boundingBox()
+  const edge = split?.x ?? 0
+  expect(edge).toBeGreaterThan(0)
+  for (const locator of [
+    page.getByRole('status', { name: 'Run status' }),
+    page.locator('.table__scroll-container'),
+    page.getByText(/^1 lines · /u),
+  ]) {
+    await expect.poll(() => rightOf(locator)).toBeLessThanOrEqual(edge)
+  }
+  await expectNoHorizontalOverflow(page)
+})
+
 test('asks before a write, and runs it only once it is confirmed', async ({ page }) => {
   await typeQuery(page, 'prisma.post.updateMany({ where: { id: -1 }, data: { title: "x" } })')
   await expect(page.getByText('Post.updateMany · write')).toBeVisible()
@@ -114,9 +279,10 @@ test('asks before a write, and runs it only once it is confirmed', async ({ page
   await expect(dialog).toContainText('Post.updateMany')
   await dialog.getByRole('button', { name: 'Cancel' }).click()
   await expect(dialog).toBeHidden()
+  await page.getByRole('tab', { name: 'Result' }).click()
   await expect(page.getByText('Run the call to see what it returns')).toBeVisible()
 
-  await page.locator('.monaco-editor .view-lines').click()
+  await page.locator('.monaco-editor').first().getByRole('textbox').focus()
   await page.keyboard.press('ControlOrMeta+Enter')
   await dialog.getByRole('button', { name: 'Run', exact: true }).click()
   await expect(dialog).toBeHidden()
@@ -163,7 +329,7 @@ test('colours every part of a call, and the SQL Prisma Client sent', async ({ pa
 
   await typeQuery(page, 'prisma.user.findMany({ take: 1 })')
   await page.keyboard.press('ControlOrMeta+Enter')
-  await page.getByRole('tab', { name: /^SQL/u }).click()
+  await page.getByRole('tab', { name: /^SQL · 1$/u }).click()
   const statement = page.locator('pre').filter({ hasText: 'FROM `main`.`User`' })
   await expect(statement.locator('.tok-keyword').first()).toHaveText('SELECT')
 })
@@ -201,6 +367,32 @@ test('points the editor at a problem when it is clicked', async ({ page }) => {
   // The range of the problem is selected: typing replaces exactly it.
   await page.keyboard.type('email')
   await expect.poll(() => editorText(page)).toBe('prisma.user.findMany({ where: { email } })')
+})
+
+test('formats the call from the button and from the keyboard, as VS Code would', async ({
+  page,
+}) => {
+  await typeQuery(
+    page,
+    'prisma.user.findMany({where:{role:"VIEWER"},orderBy:{id:"asc"},include:{posts:{where:{published:true}}},take:2})',
+  )
+  await page.getByRole('button', { name: 'Format' }).click()
+  // Longer than the formatter's line, so it breaks the argument out, one key per line.
+  await expect.poll(() => editorText(page)).toBe(`prisma.user.findMany({
+  where: { role: 'VIEWER' },
+  orderBy: { id: 'asc' },
+  include: { posts: { where: { published: true } } },
+  take: 2,
+})`)
+
+  await typeQuery(page, 'prisma.post.count({where:{published:true}})')
+  await page.keyboard.press('Shift+Alt+F')
+  await expect
+    .poll(() => editorText(page))
+    .toBe('prisma.post.count({ where: { published: true } })')
+  // The formatted text runs as the typed one did.
+  await page.keyboard.press('ControlOrMeta+Enter')
+  await expect(page.locator('pre').filter({ hasText: /^2$/u })).toBeVisible()
 })
 
 test('opens from the palette', async ({ page }) => {
@@ -248,6 +440,16 @@ test.describe('when a call is refused', () => {
     const error = page.locator('pre.error-box')
     await expect(error).toContainText('Unknown argument `nope`')
     await expect(error).not.toContainText('422')
+  })
+
+  test('shows in the SQL tab what Prisma Client said when a read it previews throws', async ({
+    page,
+  }) => {
+    // TypeScript has nothing against it; only the database knows there is no such row.
+    await typeQuery(page, 'prisma.user.findUniqueOrThrow({ where: { id: 999 } })')
+    await expect(page.getByRole('tab', { name: /^SQL/u })).toHaveAttribute('aria-selected', 'true')
+    await expect(page.locator('pre.error-box')).toContainText(/No record was found/u)
+    await expect(page.getByRole('status', { name: 'SQL status' })).toBeEmpty()
   })
 
   test('shows why the text could not be read, before it reached Prisma Client', async ({

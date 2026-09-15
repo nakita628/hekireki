@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react'
 import type { ReactNode } from 'react'
 
-import { loadString, saveString } from '../../lib/index.js'
+import { loadString, saveString } from '../lib/index.js'
 
 type Direction = 'row' | 'column'
 
@@ -100,12 +100,17 @@ export function SplitPane({
   )
 
   const template = `minmax(0, ${ratio}fr) ${HANDLE_PX}px minmax(0, ${1 - ratio}fr)`
+  // The other axis is one track as wide (or as tall) as the pane: left to `auto`, it keeps the
+  // size its content once had, and a wide table spills into the next pane when this one shrinks.
+  const across = 'minmax(0, 1fr)'
   return (
     <div
       ref={container}
       className="grid min-h-0 min-w-0 flex-1"
       style={
-        direction === 'row' ? { gridTemplateColumns: template } : { gridTemplateRows: template }
+        direction === 'row'
+          ? { gridTemplateColumns: template, gridTemplateRows: across }
+          : { gridTemplateRows: template, gridTemplateColumns: across }
       }
     >
       {first}
