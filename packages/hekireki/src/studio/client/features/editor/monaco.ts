@@ -29,10 +29,7 @@ import {
   PRISMA_MONARCH,
 } from './prisma-monarch.js'
 
-export type { editor as MonacoEditor } from 'monaco-editor/editor/editor.api.js'
-export type { PlainDiagnostic } from './lsp.js'
-
-export const monaco = { editor, languages, KeyCode, KeyMod, MarkerSeverity, Position, Range, Uri }
+const monaco = { editor, languages, KeyCode, KeyMod, MarkerSeverity, Position, Range, Uri }
 
 // The wire shapes of what the server returns for a text: brands do not survive JSON.
 type PlainHover = { readonly contents: string | null; readonly range: PlainRange | null }
@@ -104,8 +101,8 @@ export type EditorServices = {
   readonly save: (path: string, content: string) => void
 }
 
-export const MARKER_OWNER = 'prisma'
-export const EDITOR_FONT =
+const MARKER_OWNER = 'prisma'
+const EDITOR_FONT =
   'ui-monospace, SF Mono, Menlo, Consolas, Liberation Mono, DejaVu Sans Mono, monospace'
 
 export const EDITOR_OPTIONS: editor.IStandaloneEditorConstructionOptions = {
@@ -265,7 +262,7 @@ export function themeName(theme: Theme) {
 }
 
 /** The model URI of a loaded file: the same the React wrapper derives from its `path` prop. */
-export function uriOf(path: string) {
+function uriOf(path: string) {
   return Uri.parse(path)
 }
 

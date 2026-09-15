@@ -256,12 +256,12 @@ function midpoint(points: readonly Point[]): Point {
   }
 }
 
-export type CaptionedEdge = {
+type CaptionedEdge = {
   readonly caption: readonly string[]
   readonly points: readonly Point[]
 }
 
-export type PlacedCaption<E extends CaptionedEdge> = {
+type PlacedCaption<E extends CaptionedEdge> = {
   readonly edge: E
   readonly caption: readonly string[]
   readonly box: Box

@@ -616,7 +616,7 @@ function joinVarName(relationName: string) {
   return snakeToCamel(makeSnakeCase(relationName))
 }
 
-export function collectM2MJoinTables(models: readonly DMMF.Model[]) {
+function collectM2MJoinTables(models: readonly DMMF.Model[]) {
   const pairs = models.flatMap((model) =>
     model.fields
       .filter((field) => isImplicitM2M(field, models))

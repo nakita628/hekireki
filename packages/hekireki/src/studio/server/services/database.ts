@@ -12,31 +12,24 @@ import * as SqlDomain from '../domain/index.js'
 import * as UrlDomain from '../domain/index.js'
 import { DatabaseError, DatabaseUnavailableError } from '../errors/index.js'
 
-type Statement = { readonly sql: string; readonly params: readonly unknown[] }
-
-type QueryResult = {
-  readonly columns: readonly string[]
-  readonly rows: readonly Readonly<Record<string, unknown>>[]
-  readonly rowCount: number
-}
-
-type PlanResult = {
-  readonly nodes: readonly {
-    readonly id: string
-    readonly parent: string | null
-    readonly label: string
-    readonly detail: string | null
-    readonly cost: number | null
-    readonly rows: number | null
-  }[]
-  readonly raw: string
-}
-
 /** An open connection: every operation is an Effect that fails with the driver's message. */
 type Driver = {
   readonly dialect: 'postgresql' | 'mysql' | 'sqlite'
-  readonly query: (statement: Statement) => Effect.Effect<QueryResult, DatabaseError>
-  readonly explain: (statement: Statement) => Effect.Effect<PlanResult, DatabaseError>
+  readonly query: (statement: {
+    readonly sql: string
+    readonly params: readonly unknown[]
+  }) => Effect.Effect<
+    {
+      readonly columns: readonly string[]
+      readonly rows: readonly Readonly<Record<string, unknown>>[]
+      readonly rowCount: number
+    },
+    DatabaseError
+  >
+  readonly explain: (statement: {
+    readonly sql: string
+    readonly params: readonly unknown[]
+  }) => Effect.Effect<ReturnType<typeof PlanDomain.makeSqlitePlan>, DatabaseError>
   readonly close: Effect.Effect<void>
 }
 
@@ -85,20 +78,18 @@ function importFromProject(specifier: string, cwd: string) {
   })
 }
 
-type SqliteStatement = {
-  readonly all: (...params: unknown[]) => unknown
-  readonly run: (...params: unknown[]) => unknown
-}
-
-type SqliteDatabase = {
-  readonly prepare: (sql: string) => SqliteStatement
-  readonly close: () => void
-}
-
 const SqliteModule = z
   .object({
     DatabaseSync: z
-      .custom<new (file: string) => SqliteDatabase>((value) => typeof value === 'function')
+      .custom<
+        new (file: string) => {
+          readonly prepare: (sql: string) => {
+            readonly all: (...params: unknown[]) => unknown
+            readonly run: (...params: unknown[]) => unknown
+          }
+          readonly close: () => void
+        }
+      >((value) => typeof value === 'function')
       .meta({ description: 'The synchronous database class of node:sqlite.' }),
   })
   .meta({ description: 'The node:sqlite module' })
@@ -161,18 +152,16 @@ function openSqlite(url: string, baseDir: string) {
   })
 }
 
-type PgClient = {
-  readonly connect: () => Promise<void>
-  readonly end: () => Promise<void>
-  readonly query: (sql: string, params: readonly unknown[]) => Promise<unknown>
-}
-
 const PgModule = z
   .object({
     Client: z
-      .custom<new (options: { connectionString: string }) => PgClient>(
-        (value) => typeof value === 'function',
-      )
+      .custom<
+        new (options: { connectionString: string }) => {
+          readonly connect: () => Promise<void>
+          readonly end: () => Promise<void>
+          readonly query: (sql: string, params: readonly unknown[]) => Promise<unknown>
+        }
+      >((value) => typeof value === 'function')
       .meta({ description: 'The pg Client class.' }),
   })
   .meta({ description: 'The pg module' })
@@ -250,15 +239,15 @@ function openPostgres(url: string, cwd: string) {
   })
 }
 
-type MysqlConnection = {
-  readonly end: () => Promise<void>
-  readonly query: (sql: string, params: readonly unknown[]) => Promise<unknown>
-}
-
 const MysqlModule = z
   .object({
     createConnection: z
-      .custom<(url: string) => Promise<MysqlConnection>>((value) => typeof value === 'function')
+      .custom<
+        (url: string) => Promise<{
+          readonly end: () => Promise<void>
+          readonly query: (sql: string, params: readonly unknown[]) => Promise<unknown>
+        }>
+      >((value) => typeof value === 'function')
       .meta({ description: 'The mysql2/promise connection factory.' }),
   })
   .meta({ description: 'The mysql2/promise module' })

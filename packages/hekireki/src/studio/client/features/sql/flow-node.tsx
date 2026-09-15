@@ -1,7 +1,7 @@
 import { Handle, Position } from '@xyflow/react'
 import type { Node, NodeProps } from '@xyflow/react'
+import type { InferResponseType } from 'hono/client'
 import { memo } from 'react'
-import type { IconType } from 'react-icons'
 import {
   LuArrowDownUp,
   LuBraces,
@@ -20,17 +20,21 @@ import {
   LuUpload,
 } from 'react-icons/lu'
 
-import type { GraphNode } from './analysis.js'
+import type { client } from '../../lib/index.js'
 import { nodeLines } from './flow-layout.js'
 
-export type FlowNodeType = Node<{ readonly node: GraphNode }, 'flow'>
-
-type Family = 'source' | 'shape' | 'filter' | 'output' | 'write'
+export type FlowNodeType = Node<
+  {
+    readonly node: InferResponseType<
+      typeof client.db.analyze.$post,
+      200
+    >['statements'][number]['nodes'][number]
+  },
+  'flow'
+>
 
 /** The colour family and the mark of every node kind. */
-const KINDS: Readonly<
-  Record<GraphNode['kind'], { readonly family: Family; readonly icon: IconType }>
-> = {
+const KINDS = {
   table: { family: 'source', icon: LuTable },
   cte: { family: 'source', icon: LuLayers },
   subquery: { family: 'source', icon: LuLayers },
@@ -49,11 +53,9 @@ const KINDS: Readonly<
   update: { family: 'write', icon: LuPencil },
   delete: { family: 'write', icon: LuTrash2 },
   returning: { family: 'output', icon: LuBraces },
-}
+} as const
 
-const FAMILY_STYLES: Readonly<
-  Record<Family, { readonly header: string; readonly border: string }>
-> = {
+const FAMILY_STYLES = {
   source: { header: 'bg-kind-source-soft text-kind-source', border: 'border-kind-source/40' },
   shape: { header: 'bg-kind-shape-soft text-kind-shape', border: 'border-kind-shape/40' },
   filter: { header: 'bg-kind-filter-soft text-kind-filter', border: 'border-kind-filter/40' },

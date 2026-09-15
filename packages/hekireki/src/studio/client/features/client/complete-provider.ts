@@ -4,7 +4,7 @@ import { languages } from 'monaco-editor/editor/editor.api.js'
 import { client } from '../../lib/index.js'
 import { suggestionsAt } from './completion.js'
 import { contextAt } from './cursor.js'
-import { quietly, registry, wordRange } from './editor-state.js'
+import { registry, wordRange } from './editor-state.js'
 import { completionKindOf } from './kinds.js'
 
 // What each completion item was asked about, for the detail lookup when it is highlighted.
@@ -45,9 +45,11 @@ export function completionProvider() {
         return { suggestions }
       }
       if (query.trim() === '') return null
-      const found = await quietly(
-        parseResponse(client.client.complete.$post({ json: { query, offset } })),
-      )
+      // A request the API refuses (no TypeScript 5, a broken schema) leaves the editor without
+      // the feature, not with an error.
+      const found = await parseResponse(
+        client.client.complete.$post({ json: { query, offset } }),
+      ).catch(() => null)
       if (found === null) return null
       const suggestions = found.items.map((item) => {
         const suggestion = {
@@ -66,9 +68,9 @@ export function completionProvider() {
       const context = asked.get(item)
       if (context === undefined) return item
       const label = typeof item.label === 'string' ? item.label : item.label.label
-      const detail = await quietly(
-        parseResponse(client.client.complete.detail.$post({ json: { ...context, name: label } })),
-      )
+      const detail = await parseResponse(
+        client.client.complete.detail.$post({ json: { ...context, name: label } }),
+      ).catch(() => null)
       if (detail === null) return item
       return {
         ...item,

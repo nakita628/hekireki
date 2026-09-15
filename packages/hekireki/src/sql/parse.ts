@@ -1276,9 +1276,3 @@ export function parseStatements(text: string): readonly Statement[] {
   }
   return statements
 }
-
-/** The first statement of the text as a SELECT query, for callers that only take a query. */
-export function parseQueryText(text: string) {
-  const [first] = parseStatements(text)
-  return first?.type === 'select' ? first.query : null
-}

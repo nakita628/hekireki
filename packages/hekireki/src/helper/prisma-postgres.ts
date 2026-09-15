@@ -219,7 +219,7 @@ function roundToMicroseconds(digits: string) {
   return isAboveHalf || (isHalf && whole % 2 === 1) ? whole + 1 : whole
 }
 
-export type Moment = Exclude<ReturnType<typeof parseDateTimeDefault>, null>
+type Moment = Exclude<ReturnType<typeof parseDateTimeDefault>, null>
 
 // The moment `offsetMinutes` away from the timestamp's own clock, carrying a fraction rounded up
 // to a whole second into the seconds.

@@ -1,14 +1,13 @@
 import { Tabs } from '@heroui/react'
+import type { InferResponseType } from 'hono/client'
 import { useMemo } from 'react'
 
 import { CodeBlock } from '../../components/code-block.js'
 import { ModeSwitch } from '../../components/mode-switch.js'
 import { ResultTable } from '../../components/result-table.js'
-import type { ClientResult, ClientSqlQuery } from '../../lib/index.js'
+import type { client } from '../../lib/index.js'
 import { problemMessage, tableOf } from './result.js'
 import { Statements } from './statements.js'
-
-export type ResultTab = 'result' | 'sql'
 
 /**
  * Under the editor, one tab at a time: what the call came back with, as a table or as JSON (and,
@@ -30,9 +29,9 @@ export function ResultPane({
   dialect,
   onOpen,
 }: {
-  readonly tab: ResultTab
-  readonly onTab: (tab: ResultTab) => void
-  readonly result: ClientResult | null
+  readonly tab: 'result' | 'sql'
+  readonly onTab: (tab: 'result' | 'sql') => void
+  readonly result: InferResponseType<typeof client.client.run.$post, 200> | null
   /** Whether a run is on its way. */
   readonly running: boolean
   /** What the run failed with, when it did. */
@@ -41,7 +40,7 @@ export function ResultPane({
   readonly onAsJson: (asJson: boolean) => void
   readonly sql: {
     readonly data: {
-      readonly queries: readonly ClientSqlQuery[]
+      readonly queries: InferResponseType<typeof client.client.run.$post, 200>['queries']
       readonly durationMs: number
     } | null
     /** What reading the SQL failed with, when it did. */
@@ -55,7 +54,9 @@ export function ResultPane({
   readonly asSent: boolean
   readonly onAsSent: (asSent: boolean) => void
   readonly dialect: 'postgresql' | 'mysql' | 'sqlite' | null
-  readonly onOpen: (statement: ClientSqlQuery) => void
+  readonly onOpen: (
+    statement: InferResponseType<typeof client.client.run.$post, 200>['queries'][number],
+  ) => void
 }) {
   const table = useMemo(() => (result === null ? null : tableOf(result.result)), [result])
   // The server sends the first rows of a long array; say so rather than showing a wrong total.

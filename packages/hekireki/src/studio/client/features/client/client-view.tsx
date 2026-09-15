@@ -1,6 +1,7 @@
 import { Button, Kbd, Tooltip } from '@heroui/react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
+import type { editor as MonacoEditor } from 'monaco-editor/editor/editor.api.js'
 import { useCallback, useMemo, useState } from 'react'
 import { LuCopy, LuPlay, LuWandSparkles } from 'react-icons/lu'
 
@@ -16,13 +17,10 @@ import {
   usePostClientRun,
   useSchema,
 } from '../../hooks/index.js'
-import type { ClientAnalysis, ClientSqlQuery, Range } from '../../lib/index.js'
-import type { MonacoEditor } from '../editor/monaco.js'
 import { SchemaCanvas } from '../schema/schema-view.js'
 import { ClientEditor } from './client-editor.js'
 import { readAnalysis, useClientAnalysis, useClientPreview, useTypeCheck } from './queries.js'
 import { ResultPane } from './result-pane.js'
-import type { ResultTab } from './result-pane.js'
 import { touchedHighlight } from './touched.js'
 
 // How the page is shared out: the editor above its result and SQL, and the schema the whole
@@ -42,17 +40,19 @@ export function ClientView() {
   const schema = useSchema().data?.schema ?? null
   const status = useClient().data ?? null
   const [query, setQuery] = useState('')
-  const [tab, setTab] = useState<ResultTab>('result')
+  const [tab, setTab] = useState<'result' | 'sql'>('result')
   const [asJson, setAsJson] = useState(false)
   const [asSent, setAsSent] = useState(false)
-  const [writes, setWrites] = useState<readonly ClientAnalysis['calls'][number][] | null>(null)
-  const [picked, setPicked] = useState<Range | null>(null)
+  const [picked, setPicked] = useState<{ readonly start: number; readonly end: number } | null>(
+    null,
+  )
   const [editor, setEditor] = useState<MonacoEditor.IStandaloneCodeEditor | null>(null)
   const { copied, copy } = useCopy()
 
   const settled = useDebounced(query, ANALYZE_DEBOUNCE_MS)
   const analysis = useClientAnalysis(settled)
   const calls = analysis.data?.calls ?? []
+  const [writes, setWrites] = useState<typeof calls | null>(null)
   const diagnostics = useMemo(() => analysis.data?.diagnostics ?? [], [analysis.data])
   const typesAvailable = status?.typescript !== null && status?.typescript !== undefined
   const typeCheck = useTypeCheck(settled, typesAvailable)
@@ -159,20 +159,6 @@ export function ClientView() {
     send()
   }, [run.isPending, query, status, queryClient, send])
 
-  // The SQL page opens the statement the way it is shown here, with the values it was bound with.
-  const openInSql = useCallback(
-    (statement: ClientSqlQuery) => {
-      void navigate({
-        to: '/sql',
-        search: {
-          sql: asSent ? statement.sql : statement.formatted,
-          params: [...statement.params],
-        },
-      })
-    },
-    [navigate, asSent],
-  )
-
   const editorPane = (
     <div className="flex min-h-0 flex-col">
       <div className="min-h-0 flex-1">
@@ -233,7 +219,16 @@ export function ClientView() {
       asSent={asSent}
       onAsSent={setAsSent}
       dialect={database?.dialect ?? null}
-      onOpen={openInSql}
+      // The SQL page opens the statement the way it is shown here, with the values it was bound with.
+      onOpen={(statement) => {
+        void navigate({
+          to: '/sql',
+          search: {
+            sql: asSent ? statement.sql : statement.formatted,
+            params: [...statement.params],
+          },
+        })
+      }}
     />
   )
 

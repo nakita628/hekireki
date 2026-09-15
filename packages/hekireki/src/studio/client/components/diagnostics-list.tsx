@@ -1,7 +1,5 @@
 import { LuCircleAlert, LuInfo, LuTriangleAlert } from 'react-icons/lu'
 
-import type { Diagnostic, Range } from '../lib/index.js'
-
 const STYLES = {
   error: { className: 'text-danger', icon: LuCircleAlert },
   warning: { className: 'text-warn', icon: LuTriangleAlert },
@@ -13,8 +11,12 @@ export function DiagnosticsList({
   diagnostics,
   onPick,
 }: {
-  readonly diagnostics: readonly Diagnostic[]
-  readonly onPick: (range: Range | null) => void
+  readonly diagnostics: readonly {
+    readonly severity: 'error' | 'warning' | 'info'
+    readonly message: string
+    readonly range: { readonly start: number; readonly end: number } | null
+  }[]
+  readonly onPick: (range: { readonly start: number; readonly end: number } | null) => void
 }) {
   if (diagnostics.length === 0) return null
   return (

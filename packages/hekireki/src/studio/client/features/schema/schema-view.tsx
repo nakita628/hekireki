@@ -27,8 +27,6 @@ import type { DiagramNodeType, SchemaHighlight } from './graph.js'
 import { autoLayout, positionsFor } from './layout.js'
 import { RelationEdge } from './relation-edge.js'
 
-export type { SchemaHighlight } from './graph.js'
-
 type Field = {
   readonly name: string
   readonly dbName?: string | null

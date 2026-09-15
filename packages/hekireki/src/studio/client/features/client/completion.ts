@@ -4,7 +4,7 @@ import type { CursorContext } from './cursor.js'
 import { delegateOf, OPERATIONS } from './operations.js'
 
 /** A field as completion needs it: its name, its Prisma type, and whether it is a relation or a list. */
-export type CompletionField = {
+type CompletionField = {
   readonly name: string
   readonly type: string
   readonly kind: string
@@ -13,7 +13,7 @@ export type CompletionField = {
 
 export type CompletionModel = { readonly name: string; readonly fields: readonly CompletionField[] }
 
-export type Suggestion = {
+type Suggestion = {
   readonly label: string
   readonly detail: string
   readonly kind: 'model' | 'operation' | 'argument' | 'field'

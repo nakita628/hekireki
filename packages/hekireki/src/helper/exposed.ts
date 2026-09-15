@@ -352,7 +352,7 @@ export function relationMaps(source: string) {
  * @param source - The Prisma schema as written (all of its files, merged).
  * @returns The name of each view.
  */
-export function viewNames(source: string) {
+function viewNames(source: string) {
   return new Set(
     prismaBlocks(source)
       .filter((block) => block.keyword === 'view')
@@ -366,7 +366,7 @@ export function viewNames(source: string) {
  * @param source - The Prisma schema as written (all of its files, merged).
  * @returns The relation mode, `foreignKeys` unless the datasource names another.
  */
-export function relationMode(source: string) {
+function relationMode(source: string) {
   const setting = prismaBlocks(source)
     .filter((block) => block.keyword === 'datasource')
     .flatMap((block) => block.lines)
@@ -416,7 +416,7 @@ function attributeArguments(tokens: readonly string[]) {
 }
 
 /** What a partial index's `where` says: raw SQL, or equalities of fields to values. */
-export type IndexCondition =
+type IndexCondition =
   | { readonly kind: 'raw'; readonly sql: string }
   | {
       readonly kind: 'fields'
@@ -450,7 +450,7 @@ function indexCondition(tokens: readonly string[]): IndexCondition | null {
  * @param source - The Prisma schema as written (all of its files, merged).
  * @returns Each index that has a `where`.
  */
-export function indexConditions(source: string) {
+function indexConditions(source: string) {
   return prismaBlocks(source)
     .filter((block) => block.keyword === 'model')
     .flatMap((block) =>
@@ -493,7 +493,7 @@ export function indexConditions(source: string) {
  * @param source - The Prisma schema as written (all of its files, merged).
  * @returns The literal of each field whose default is a number.
  */
-export function numericDefaults(source: string) {
+function numericDefaults(source: string) {
   return new Map(
     prismaBlocks(source)
       .filter((block) => block.keyword === 'model')
@@ -836,7 +836,7 @@ function scalarFields(model: DMMF.Model) {
 }
 
 /** Everything the files are written from: the schema, what it implies, and the Kotlin names. */
-export type ExposedPlan = {
+type ExposedPlan = {
   readonly names: Names
   readonly dao: boolean
   readonly models: readonly DMMF.Model[]

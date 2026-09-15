@@ -1,5 +1,6 @@
 import { Editor } from '@monaco-editor/react'
 import type { OnMount } from '@monaco-editor/react'
+import type { editor as MonacoEditor } from 'monaco-editor/editor/editor.api.js'
 import { useCallback, useEffect, useRef } from 'react'
 
 import type { Theme } from '../../lib/index.js'
@@ -11,10 +12,8 @@ import {
   syncFileModels,
   themeName,
 } from './monaco.js'
-import type { EditorServices, MonacoEditor, PlainSymbol } from './monaco.js'
+import type { EditorServices, PlainSymbol } from './monaco.js'
 import { PRISMA_LANGUAGE_ID } from './prisma-monarch.js'
-
-export type { EditorServices, MonacoEditor, PlainSymbol } from './monaco.js'
 
 const ANALYZE_DEBOUNCE_MS = 400
 

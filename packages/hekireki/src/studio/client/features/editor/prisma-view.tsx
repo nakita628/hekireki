@@ -1,6 +1,7 @@
 import { Button, Tabs, toast, Tooltip } from '@heroui/react'
 import { useQueryClient } from '@tanstack/react-query'
 import { parseResponse } from 'hono/client'
+import type { editor as MonacoEditor } from 'monaco-editor/editor/editor.api.js'
 import { useMemo, useRef, useState } from 'react'
 import { LuCopy, LuWandSparkles } from 'react-icons/lu'
 
@@ -13,7 +14,7 @@ import { client, loadString, saveString, useUiStore } from '../../lib/index.js'
 import { SchemaCanvas } from '../schema/schema-view.js'
 import { blockAtLine } from './blocks.js'
 import { CodeEditor } from './code-editor.js'
-import type { EditorServices, MonacoEditor, PlainSymbol } from './code-editor.js'
+import type { EditorServices, PlainSymbol } from './monaco.js'
 import { saveStatus } from './save-status.js'
 
 type Cardinality = 'zero-one' | 'one' | 'zero-many' | 'many'

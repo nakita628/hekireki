@@ -11,7 +11,7 @@ import type { EnumMember } from './plan.js'
 import { fieldDefault } from './plan.js'
 
 /** What the config says for every field: a null rate and a date window, or nothing. */
-export type Bounds = {
+type Bounds = {
   readonly nullRate: number | null
   readonly dates: { readonly from: Date; readonly to: Date } | null
 }

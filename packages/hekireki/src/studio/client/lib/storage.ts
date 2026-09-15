@@ -2,8 +2,6 @@ import * as v from 'valibot'
 
 import type { LayoutPositions } from '../../../diagram/layout.js'
 
-export type { LayoutPositions, Position } from '../../../diagram/layout.js'
-
 const PositionSchema = v.pipe(
   v.object({
     x: v.pipe(v.number(), v.description('Left edge in canvas pixels')),

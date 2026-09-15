@@ -6,14 +6,6 @@
  * than eyeballed in the browser.
  */
 
-type Labelled = { readonly label: string }
-
-export type Match<T> = {
-  readonly item: T
-  /** Where in `item.label` the query landed, for the emphasis the list draws on those letters. */
-  readonly indices: readonly number[]
-}
-
 /**
  * A letter starts a word when nothing precedes it, when what precedes it is not a letter or digit
  * (`created_at`, `order-line`), or when it is the capital of a camel hump (`createdAt`).
@@ -61,14 +53,12 @@ function scoreLabel(label: string, query: string) {
 }
 
 /**
- * The entries a query keeps, best first. An empty query keeps every entry in the order it was
+ * The entries a query keeps, best first, each with where in its label the query landed (for the
+ * emphasis the list draws on those letters). An empty query keeps every entry in the order it was
  * given, which is the list the palette shows before anything is typed. Whitespace is dropped from
  * the query rather than matched, so `us er` still finds `User`.
  */
-export function search<T extends Labelled>(
-  items: readonly T[],
-  query: string,
-): readonly Match<T>[] {
+export function search<T extends { readonly label: string }>(items: readonly T[], query: string) {
   const needle = query.replaceAll(/\s+/gu, '').toLowerCase()
   if (needle === '') return items.map((item) => ({ item, indices: [] }))
   return items
@@ -80,19 +70,12 @@ export function search<T extends Labelled>(
     .map(({ item, indices }) => ({ item, indices }))
 }
 
-export type Segment = {
-  /** Where the run starts in the label; its identity in the list, since runs never overlap. */
-  readonly start: number
-  readonly text: string
-  readonly matched: boolean
-}
-
 /**
  * The label cut into the runs the query matched and the runs it did not, so the palette can pick
  * the matched letters out in one pass. Adjacent letters of the same kind are one run, which keeps
  * `Post` under `post` a single emphasised word rather than four emphasised letters.
  */
-export function segments(label: string, indices: readonly number[]): readonly Segment[] {
+export function segments(label: string, indices: readonly number[]) {
   const hit = new Set(indices)
   // Walked by code unit, because the offsets the matcher reports are code-unit offsets. A run
   // starts wherever the matched/unmatched answer changes, and reaches to the next start.
@@ -100,6 +83,7 @@ export function segments(label: string, indices: readonly number[]): readonly Se
     (position) => position === 0 || hit.has(position) !== hit.has(position - 1),
   )
   return starts.map((start, run) => ({
+    // Where the run starts in the label; its identity in the list, since runs never overlap.
     start,
     text: label.slice(start, starts[run + 1] ?? label.length),
     matched: hit.has(start),

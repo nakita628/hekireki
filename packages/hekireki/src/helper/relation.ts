@@ -19,9 +19,9 @@ export type Cardinality = 'zero-one' | 'one' | 'zero-many' | 'many'
  * explicit many-to-many written as a join model is two `inferred` relations and draws solid,
  * while an `annotated` one-to-many draws dashed.
  */
-export type RelationOrigin = 'inferred' | 'annotated' | 'implicit-many-to-many'
+type RelationOrigin = 'inferred' | 'annotated' | 'implicit-many-to-many'
 
-export type ERRelation = {
+type ERRelation = {
   /** The `@relation` name the relation carries, when it has one. */
   readonly name: string | null
   readonly from: {

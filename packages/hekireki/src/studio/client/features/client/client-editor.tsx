@@ -1,12 +1,13 @@
 import { Editor } from '@monaco-editor/react'
 import type { OnMount } from '@monaco-editor/react'
+import type { editor as MonacoEditor } from 'monaco-editor/editor/editor.api.js'
 import { useEffect, useRef } from 'react'
 
 import { useUiStore } from '../../lib/index.js'
 import { EDITOR_OPTIONS, setupMonaco, themeName } from '../editor/monaco.js'
-import type { MonacoEditor } from '../editor/monaco.js'
 import type { CompletionModel } from './completion.js'
-import { applyClientMarkers, bindClientEditor, setupClientEditor } from './monaco-typescript.js'
+import { registry } from './editor-state.js'
+import { applyClientMarkers, setupClientEditor } from './monaco-typescript.js'
 import type { ClientMarker } from './monaco-typescript.js'
 import { QUERY_LANGUAGE_ID } from './query-monarch.js'
 
@@ -51,7 +52,8 @@ export function ClientEditor({
   })
 
   useEffect(() => {
-    bindClientEditor({ models, typesAvailable })
+    registry.models = models
+    registry.typesAvailable = typesAvailable
   }, [models, typesAvailable])
 
   useEffect(() => {

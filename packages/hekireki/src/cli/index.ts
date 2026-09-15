@@ -10,8 +10,6 @@ import { ServerListenError } from '../studio/server/errors/index.js'
 import type { startStudioServer } from '../studio/server/start.js'
 import { DEFAULT_SCHEMA_PATHS } from './constants.js'
 
-export { DEFAULT_SCHEMA_PATHS } from './constants.js'
-
 const COMMAND_NAME = 'hekireki'
 
 // The schemes Studio opens a connection for; `makeDialect` reads the dialect from the same four.

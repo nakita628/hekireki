@@ -11,24 +11,24 @@ import {
 import type { Box, Point } from '../../../../diagram/edge.js'
 
 /** Where an edge runs and where its caption sits, both in flow coordinates. */
-export type EdgeGeometry = {
+type EdgeGeometry = {
   /** The corners the wire turns at; `path` is these, with the corners rounded. */
   readonly points: readonly Point[]
   readonly path: string
   readonly caption: Point | null
 }
 
-export type DiagramGeometry = ReadonlyMap<string, EdgeGeometry>
+type DiagramGeometry = ReadonlyMap<string, EdgeGeometry>
 
 /** A card as the geometry pass sees it: where it sits, and where each of its handles is. */
-export type GeometryCard = {
+type GeometryCard = {
   readonly box: Box
   readonly source: ReadonlyMap<string, Point>
   readonly target: ReadonlyMap<string, Point>
 }
 
 /** An edge as the geometry pass sees it: which handles it joins, and what it says along the way. */
-export type GeometryEdge = {
+type GeometryEdge = {
   readonly id: string
   readonly source: string
   readonly target: string

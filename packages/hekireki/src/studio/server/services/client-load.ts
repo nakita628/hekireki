@@ -16,14 +16,12 @@ const QueryEvent = z
   })
   .meta({ description: 'A query event of Prisma Client' })
 
-/** The part of a Prisma Client Studio calls, besides the model delegates. */
-export type StudioClient = {
+/** Whether the value has the part of a Prisma Client Studio calls, besides the model delegates. */
+function isStudioClient(value: unknown): value is {
   readonly $on: (event: 'query', listener: (event: unknown) => void) => void
   readonly $transaction: (operations: readonly unknown[], options?: unknown) => Promise<unknown>
   readonly $disconnect: () => Promise<void>
-}
-
-function isStudioClient(value: unknown): value is StudioClient {
+} {
   return (
     typeof value === 'object' &&
     value !== null &&

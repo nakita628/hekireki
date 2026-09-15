@@ -11,8 +11,6 @@ import { hoverProvider } from './hover-provider.js'
 import { QUERY_LANGUAGE_CONFIGURATION, QUERY_LANGUAGE_ID, QUERY_MONARCH } from './query-monarch.js'
 import { signatureHelpProvider } from './signature-provider.js'
 
-export { bindClientEditor } from './editor-state.js'
-
 const MARKER_OWNER = 'hekireki-client'
 
 export type ClientMarker = {

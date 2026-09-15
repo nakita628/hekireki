@@ -1,39 +1,7 @@
-// The names Monaco's `languages.CompletionItemKind` has, as `keyof typeof` would list them.
-const MONACO_KINDS = [
-  'Method',
-  'Function',
-  'Constructor',
-  'Field',
-  'Variable',
-  'Class',
-  'Struct',
-  'Interface',
-  'Module',
-  'Property',
-  'Event',
-  'Operator',
-  'Unit',
-  'Value',
-  'Constant',
-  'Enum',
-  'EnumMember',
-  'Keyword',
-  'Text',
-  'Color',
-  'File',
-  'Reference',
-  'Customcolor',
-  'Folder',
-  'TypeParameter',
-  'User',
-  'Issue',
-  'Snippet',
-] as const
-
-type MonacoKindName = (typeof MONACO_KINDS)[number]
+import type { languages } from 'monaco-editor/editor/editor.api.js'
 
 // TypeScript's `ScriptElementKind` strings, as the language service labels its completions.
-const TYPESCRIPT_KINDS: ReadonlyMap<string, MonacoKindName> = new Map([
+const TYPESCRIPT_KINDS: ReadonlyMap<string, keyof typeof languages.CompletionItemKind> = new Map([
   ['method', 'Method'],
   ['function', 'Function'],
   ['local function', 'Function'],

@@ -1,9 +1,6 @@
 import { graphlib, layout } from '@dagrejs/dagre'
 import * as v from 'valibot'
 
-import type { LayoutPositions } from '../../lib/index.js'
-import type { GraphEdge, GraphNode } from './analysis.js'
-
 const LayoutNodeSchema = v.pipe(
   v.object({
     x: v.pipe(v.number(), v.description('Centre x in canvas pixels')),
@@ -19,7 +16,11 @@ export const NODE_PADDING = 10
 export const MAX_LINES = 8
 
 /** The lines a node shows under its caption: its columns for a relation, its details otherwise. */
-export function nodeLines(node: GraphNode): readonly string[] {
+export function nodeLines(node: {
+  readonly kind: string
+  readonly columns: readonly { readonly name: string }[]
+  readonly details: readonly string[]
+}) {
   const lines =
     node.kind === 'table' || node.kind === 'cte' || node.kind === 'subquery'
       ? node.columns.map((column) => column.name)
@@ -29,16 +30,16 @@ export function nodeLines(node: GraphNode): readonly string[] {
     : lines
 }
 
-export function nodeHeight(node: GraphNode) {
+export function nodeHeight(node: Parameters<typeof nodeLines>[0]) {
   const lines = nodeLines(node).length
   return NODE_HEADER_HEIGHT + (lines === 0 ? 0 : lines * NODE_LINE_HEIGHT + NODE_PADDING)
 }
 
 /** Left-to-right layers: sources on the left, the result on the right. */
 export function autoLayout(
-  nodes: readonly GraphNode[],
-  edges: readonly GraphEdge[],
-): LayoutPositions {
+  nodes: readonly (Parameters<typeof nodeLines>[0] & { readonly id: string })[],
+  edges: readonly { readonly source: string; readonly target: string }[],
+) {
   const graph = new graphlib.Graph()
   graph.setGraph({ rankdir: 'LR', nodesep: 28, ranksep: 70, marginx: 24, marginy: 24 })
   graph.setDefaultEdgeLabel(() => ({}))

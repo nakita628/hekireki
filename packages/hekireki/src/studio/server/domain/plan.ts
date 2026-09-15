@@ -11,8 +11,6 @@ const PlanNode = z
   })
   .meta({ description: 'One step of an execution plan, flattened' })
 
-type Node = z.infer<typeof PlanNode>
-
 const SqliteRow = z
   .object({
     id: z.coerce.number().meta({ description: 'The step id.', example: 3 }),
@@ -40,7 +38,7 @@ export function makeSqlitePlan(input: z.infer<typeof MakeSqlitePlanInput>) {
     return result.success ? [result.data] : []
   })
   const ids = new Set(rows.map((row) => row.id))
-  const nodes: readonly Node[] = rows.map((row) => ({
+  const nodes: readonly z.infer<typeof PlanNode>[] = rows.map((row) => ({
     id: String(row.id),
     parent: row.parent === 0 || !ids.has(row.parent) ? null : String(row.parent),
     label: row.detail,
@@ -101,7 +99,11 @@ function postgresDetail(plan: z.infer<typeof PostgresPlan>) {
   return parts.length === 0 ? null : parts.join(' · ')
 }
 
-function flattenPostgres(value: unknown, parent: string | null, id: string): readonly Node[] {
+function flattenPostgres(
+  value: unknown,
+  parent: string | null,
+  id: string,
+): readonly z.infer<typeof PlanNode>[] {
   const result = PostgresPlan.safeParse(value)
   if (!result.success) return []
   const plan = result.data
@@ -109,7 +111,7 @@ function flattenPostgres(value: unknown, parent: string | null, id: string): rea
   const alias = plan.Alias !== undefined && plan.Alias !== target ? ` ${plan.Alias}` : ''
   const join = plan['Join Type'] === undefined ? '' : ` (${plan['Join Type']})`
   const label = `${plan['Node Type']}${target === undefined ? '' : ` on ${target}${alias}`}${join}`
-  const node: Node = {
+  const node = {
     id,
     parent,
     label: plan['Subplan Name'] === undefined ? label : `${plan['Subplan Name']}: ${label}`,
@@ -209,10 +211,10 @@ function flattenMysql(
   parent: string | null,
   id: string,
   key: string,
-): readonly Node[] {
+): readonly z.infer<typeof PlanNode>[] {
   if (Array.isArray(value)) {
     // `nested_loop` and its kin hold one entry per input; the array is the operation, its entries feed it.
-    const node: Node = {
+    const node = {
       id,
       parent,
       label: key.replaceAll('_', ' '),
@@ -234,7 +236,7 @@ function flattenMysql(
       table.data.key === undefined ? null : `key ${table.data.key}`,
       table.data.attached_condition ?? null,
     ].filter((part) => part !== null)
-    const node: Node = {
+    const node = {
       id,
       parent,
       label: `${table.data.access_type ?? 'scan'} ${table.data.table_name}`,
@@ -249,7 +251,7 @@ function flattenMysql(
   }
   if (key === 'query_block') {
     const block = MysqlBlock.safeParse(record)
-    const node: Node = {
+    const node = {
       id,
       parent,
       label:
@@ -263,7 +265,7 @@ function flattenMysql(
     return [node, ...childrenOfMysql(record, id, id)]
   }
   if (MYSQL_OPERATIONS.has(key)) {
-    const node: Node = {
+    const node = {
       id,
       parent,
       label: key.replaceAll('_', ' '),
@@ -277,7 +279,11 @@ function flattenMysql(
 }
 
 /** The operations nested in an object, numbered under `base` (`1.2` → `1.2.1`, `1.2.2`, ...). */
-function childrenOfMysql(value: unknown, parent: string | null, base: string): readonly Node[] {
+function childrenOfMysql(
+  value: unknown,
+  parent: string | null,
+  base: string,
+): readonly z.infer<typeof PlanNode>[] {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return []
   const record = z.record(z.string(), z.unknown()).parse(value)
   return Object.entries(record)

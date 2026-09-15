@@ -26,13 +26,13 @@ import { parseStatements } from './parse.js'
 import { literalDataType, toTsType } from './types.js'
 import type { Dialect } from './types.js'
 
-export type SchemaColumn = {
+type SchemaColumn = {
   readonly name: string
   readonly dataType: string
   readonly nullable: boolean
 }
 
-export type SchemaTable = {
+type SchemaTable = {
   readonly name: string
   readonly columns: readonly SchemaColumn[]
 }
@@ -42,7 +42,7 @@ export type AnalysisSchema = {
   readonly tables: readonly SchemaTable[]
 }
 
-export type NodeKind =
+type NodeKind =
   | 'table'
   | 'cte'
   | 'subquery'
@@ -62,13 +62,13 @@ export type NodeKind =
   | 'delete'
   | 'returning'
 
-export type NodeColumn = {
+type NodeColumn = {
   readonly name: string
   readonly dataType: string | null
   readonly used: boolean
 }
 
-export type GraphNode = {
+type GraphNode = {
   readonly id: string
   readonly kind: NodeKind
   readonly label: string
@@ -78,7 +78,7 @@ export type GraphNode = {
   readonly columns: readonly NodeColumn[]
 }
 
-export type GraphEdge = {
+type GraphEdge = {
   readonly id: string
   readonly source: string
   readonly target: string
@@ -86,9 +86,9 @@ export type GraphEdge = {
   readonly kind: 'flow' | 'lookup'
 }
 
-export type ColumnSource = { readonly table: string; readonly column: string }
+type ColumnSource = { readonly table: string; readonly column: string }
 
-export type OutputColumn = {
+type OutputColumn = {
   readonly name: string
   readonly expression: string
   readonly dataType: string | null
@@ -97,7 +97,7 @@ export type OutputColumn = {
   readonly sources: readonly ColumnSource[]
 }
 
-export type TableRef = {
+type TableRef = {
   readonly nodeId: string
   readonly name: string
   readonly alias: string | null
@@ -107,7 +107,7 @@ export type TableRef = {
   readonly range: Range
 }
 
-export type Parameter = {
+type Parameter = {
   readonly index: number
   readonly placeholder: string
   readonly dataType: string | null
@@ -116,13 +116,13 @@ export type Parameter = {
   readonly context: string
 }
 
-export type Diagnostic = {
+type Diagnostic = {
   readonly severity: 'error' | 'warning' | 'info'
   readonly message: string
   readonly range: Range | null
 }
 
-export type StatementKind = 'select' | 'insert' | 'update' | 'delete' | 'other' | 'invalid'
+type StatementKind = 'select' | 'insert' | 'update' | 'delete' | 'other' | 'invalid'
 
 export type StatementAnalysis = {
   readonly kind: StatementKind
@@ -138,7 +138,7 @@ export type StatementAnalysis = {
   readonly paramsType: string
 }
 
-export type Analysis = { readonly statements: readonly StatementAnalysis[] }
+type Analysis = { readonly statements: readonly StatementAnalysis[] }
 
 // --- internal shapes ---------------------------------------------------------------------------
 

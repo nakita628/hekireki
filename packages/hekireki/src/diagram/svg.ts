@@ -25,8 +25,6 @@ import {
 } from './layout.js'
 import type { DiagramIndex, LayoutPositions, Position } from './layout.js'
 
-export { smoothStepPath } from './edge.js'
-
 export type DiagramTheme = 'light' | 'dark'
 
 type Field = {
@@ -292,7 +290,7 @@ function isMany(cardinality: Cardinality) {
 }
 
 /** The relationship the way it is spoken: one to one, one to many, many to many. */
-export function relationshipKind(relation: Relation) {
+function relationshipKind(relation: Relation) {
   const from = isMany(relation.from.cardinality)
   const to = isMany(relation.to.cardinality)
   if (from && to) return 'many to many'
@@ -633,13 +631,6 @@ function pad(box: Box, padding: number): Box {
     width: box.width + padding * 2,
     height: box.height + padding * 2,
   }
-}
-
-/** The bounding box of the models with the canvas margin around them. */
-export function diagramBounds(models: readonly Model[], positions: LayoutPositions) {
-  const nodes = placeNodes(models, positions)
-  if (nodes.length === 0) return { x: 0, y: 0, width: PADDING * 2, height: PADDING * 2 }
-  return pad(union(nodes), PADDING)
 }
 
 /**

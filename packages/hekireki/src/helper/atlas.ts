@@ -2,7 +2,7 @@ import type { DMMF } from '@prisma/generator-helper'
 
 import { stripAnnotations } from '../utils/index.js'
 
-export type AtlasDialect = 'postgresql' | 'mysql' | 'sqlite'
+type AtlasDialect = 'postgresql' | 'mysql' | 'sqlite'
 
 const REFERENTIAL_ACTION: { [k: string]: string } = {
   Cascade: 'CASCADE',

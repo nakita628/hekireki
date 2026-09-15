@@ -167,12 +167,13 @@ function makeWorkspace(input: z.infer<typeof MakeWorkspaceInput>) {
 
 type Workspace = ReturnType<typeof makeWorkspace>
 
-type LspPosition = { readonly line: number; readonly character: number }
-
-type LspRange = { readonly start: LspPosition; readonly end: LspPosition }
+type LspRange = {
+  readonly start: { readonly line: number; readonly character: number }
+  readonly end: { readonly line: number; readonly character: number }
+}
 
 // The server's ranges are copied into Studio's own shape so nothing exported names its types.
-function rangeOf(range: LspRange): LspRange {
+function rangeOf(range: LspRange) {
   return {
     start: { line: range.start.line, character: range.start.character },
     end: { line: range.end.line, character: range.end.character },
@@ -374,9 +375,7 @@ const FormatSchemaInput = z
   })
 
 /** The edits the Prisma formatter makes to the edited text; empty when it is already formatted. */
-export function formatSchema(
-  input: z.infer<typeof FormatSchemaInput>,
-): Effect.Effect<readonly { readonly range: LspRange; readonly newText: string }[], FormatError> {
+export function formatSchema(input: z.infer<typeof FormatSchemaInput>) {
   return Effect.suspend(() => {
     const failures: string[] = []
     const edits = formatEdits(makeWorkspace(input), (message) => {
@@ -429,6 +428,7 @@ export function symbolsOfSchema(input: z.infer<typeof SymbolsOfSchemaInput>) {
       return languageServer.handlers
         .handleDocumentSymbol({ textDocument: { uri: workspace.document.uri } }, workspace.document)
         .map(
+          // `kind` is widened to a number so the declaration does not name the server's SymbolKind.
           (symbol): { name: string; kind: number; range: LspRange; selectionRange: LspRange } => ({
             name: symbol.name,
             kind: symbol.kind,
@@ -534,16 +534,6 @@ const TRIGGER_CHARACTER = 2
 // LSP InsertTextFormat: 2 = Snippet.
 const SNIPPET = 2
 
-type Completion = {
-  readonly label: string
-  readonly kind: number | null
-  readonly detail: string | null
-  readonly documentation: string | null
-  readonly insertText: string
-  readonly insertTextFormat: 'snippet' | 'plainText'
-  readonly sortText: string | null
-}
-
 function markdownOf(
   contents: string | { readonly value: string } | readonly (string | { readonly value: string })[],
 ) {
@@ -566,16 +556,28 @@ export function completeSchema(input: z.infer<typeof CompleteSchemaInput>) {
               : { triggerKind: TRIGGER_CHARACTER, triggerCharacter: input.triggerCharacter },
         }),
       )
-      return (list?.items ?? []).map((item): Completion => ({
-        label: item.label,
-        kind: item.kind ?? null,
-        detail: item.detail ?? null,
-        documentation: item.documentation === undefined ? null : markdownOf(item.documentation),
-        insertText: item.insertText ?? item.label,
-        insertTextFormat:
-          item.insertTextFormat === SNIPPET ? ('snippet' as const) : ('plainText' as const),
-        sortText: item.sortText ?? null,
-      }))
+      return (list?.items ?? []).map(
+        // `kind` is widened to a number so the declaration does not name the server's CompletionItemKind.
+        (
+          item,
+        ): {
+          label: string
+          kind: number | null
+          detail: string | null
+          documentation: string | null
+          insertText: string
+          insertTextFormat: 'snippet' | 'plainText'
+          sortText: string | null
+        } => ({
+          label: item.label,
+          kind: item.kind ?? null,
+          detail: item.detail ?? null,
+          documentation: item.documentation === undefined ? null : markdownOf(item.documentation),
+          insertText: item.insertText ?? item.label,
+          insertTextFormat: item.insertTextFormat === SNIPPET ? 'snippet' : 'plainText',
+          sortText: item.sortText ?? null,
+        }),
+      )
     } catch {
       return []
     }

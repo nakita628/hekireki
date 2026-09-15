@@ -2,7 +2,7 @@
 // Nothing is interpreted here: LSP numbers become Monaco enum names, LSP severities Monaco's.
 // The wire shapes: the brands the server puts on checked lines and columns do not apply to
 // what the editor sends and receives.
-export type PlainPosition = { readonly line: number; readonly character: number }
+type PlainPosition = { readonly line: number; readonly character: number }
 
 export type PlainRange = { readonly start: PlainPosition; readonly end: PlainPosition }
 
@@ -24,7 +24,7 @@ export type Completion = {
 }
 
 /** The LSP CompletionItemKind values by number, named as Monaco names them. */
-export const LSP_COMPLETION_KINDS = [
+const LSP_COMPLETION_KINDS = [
   'Text',
   'Text',
   'Method',
@@ -60,7 +60,7 @@ export function completionKindName(kind: number | null): CompletionKindName {
 }
 
 /** The LSP SymbolKind values by number, named as Monaco names them. */
-export const LSP_SYMBOL_KINDS = [
+const LSP_SYMBOL_KINDS = [
   'File',
   'File',
   'Module',
@@ -120,7 +120,7 @@ export function toCompletions(items: readonly Completion[]): readonly EditorComp
 }
 
 /** The LSP severities as Monaco's MarkerSeverity names them. */
-export const MARKER_SEVERITIES = {
+const MARKER_SEVERITIES = {
   error: 'Error',
   warning: 'Warning',
   information: 'Info',

@@ -131,10 +131,7 @@ export function tableName(input: z.infer<typeof TableNameInput>) {
 }
 
 /** The stored name of every member of an enum: its `@map`, else the member name. */
-function memberNames(
-  enums: z.infer<typeof Enums>,
-  type: string,
-): readonly { readonly name: string; readonly dbName: string }[] {
+function memberNames(enums: z.infer<typeof Enums>, type: string) {
   const declared = enums.find((e) => e.name === type)
   return (declared?.values ?? []).map((value) => ({
     name: value.name,

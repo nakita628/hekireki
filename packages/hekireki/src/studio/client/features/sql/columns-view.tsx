@@ -1,8 +1,9 @@
 import { Link } from '@tanstack/react-router'
+import type { InferResponseType } from 'hono/client'
 
-import type { OutputColumn, StatementAnalysis } from './analysis.js'
+import type { client } from '../../lib/index.js'
 
-function tsUnion(column: OutputColumn) {
+function tsUnion(column: { readonly tsType: string; readonly nullable: boolean | null }) {
   return column.nullable === true && column.tsType !== 'null' && column.tsType !== 'unknown'
     ? `${column.tsType} | null`
     : column.tsType
@@ -16,7 +17,7 @@ export function ColumnsView({
   statement,
   modelOf,
 }: {
-  readonly statement: StatementAnalysis
+  readonly statement: InferResponseType<typeof client.db.analyze.$post, 200>['statements'][number]
   readonly modelOf: (table: string) => string | null
 }) {
   return (

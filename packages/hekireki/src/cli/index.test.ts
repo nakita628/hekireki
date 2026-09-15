@@ -9,13 +9,8 @@ import { CliError } from 'effect/unstable/cli'
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 
 import { fileSystemLayer } from '../file/index.js'
-import {
-  DEFAULT_SCHEMA_PATHS,
-  hekirekiCli,
-  helpAsFlag,
-  resolveSchemaPath,
-  studioBanner,
-} from './index.js'
+import { DEFAULT_SCHEMA_PATHS } from './constants.js'
+import { hekirekiCli, helpAsFlag, resolveSchemaPath, studioBanner } from './index.js'
 
 const dirs: string[] = []
 const cwd = process.cwd()

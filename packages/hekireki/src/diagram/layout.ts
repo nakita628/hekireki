@@ -27,13 +27,13 @@ export type DiagramField = {
   readonly attributes?: readonly string[]
 }
 
-export type DiagramModel = {
+type DiagramModel = {
   readonly documentation?: string | null
   readonly fields: readonly DiagramField[]
   readonly indexes?: readonly DiagramIndex[]
 }
 
-export type DiagramEnum = {
+type DiagramEnum = {
   readonly name: string
   readonly documentation?: string | null
   readonly values: readonly unknown[]

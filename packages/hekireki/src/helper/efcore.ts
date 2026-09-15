@@ -868,7 +868,7 @@ function joinBlocks(blocks: readonly (readonly string[])[]) {
 }
 
 /** Everything the files are written from: the schema, what it implies, and the C# names. */
-export type EfCorePlan = {
+type EfCorePlan = {
   readonly names: Names
   readonly models: readonly DMMF.Model[]
   readonly enums: readonly DMMF.DatamodelEnum[]

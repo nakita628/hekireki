@@ -1,9 +1,10 @@
 import { Button } from '@heroui/react'
+import type { InferResponseType } from 'hono/client'
 import { LuTerminal } from 'react-icons/lu'
 
 import { CodeBlock } from '../../components/code-block.js'
 import { CopyButton } from '../../components/copy-button.js'
-import type { ClientSqlQuery } from '../../lib/index.js'
+import type { client } from '../../lib/index.js'
 
 /**
  * The statements the Prisma Client sent for a call, in order, each with the values bound to its
@@ -16,11 +17,13 @@ export function Statements({
   asSent,
   onOpen,
 }: {
-  readonly queries: readonly ClientSqlQuery[]
+  readonly queries: InferResponseType<typeof client.client.run.$post, 200>['queries']
   readonly dialect: 'postgresql' | 'mysql' | 'sqlite' | null
   /** Whether to show each statement on one line, as the driver received it. */
   readonly asSent: boolean
-  readonly onOpen: (query: ClientSqlQuery) => void
+  readonly onOpen: (
+    query: InferResponseType<typeof client.client.run.$post, 200>['queries'][number],
+  ) => void
 }) {
   if (queries.length === 0) {
     return <div className="p-6 text-muted">The call sent no statement to the database.</div>

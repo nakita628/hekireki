@@ -16,7 +16,7 @@ import * as StateService from './services/index.js'
 import * as WatchService from './services/index.js'
 
 /** Listens on loopback until the scope closes; a port already in use fails with ServerListenError. */
-export function listen(input: {
+function listen(input: {
   readonly fetch: (request: Request) => Response | Promise<Response>
   readonly port: number
 }) {

@@ -16,16 +16,13 @@ import {
   useSchema,
 } from '../../hooks/index.js'
 import { SchemaCanvas } from '../schema/schema-view.js'
-import type { SchemaHighlight } from '../schema/schema-view.js'
 import { useAnalysis } from './analysis.js'
-import type { Range, StatementAnalysis } from './analysis.js'
 import { ColumnsView } from './columns-view.js'
 import { FlowView } from './flow-view.js'
 import { ParamsPanel } from './params-panel.js'
 import { bindValues, paramInputsOf } from './params.js'
 import { PlanView } from './plan-view.js'
 import { SqlEditor } from './sql-editor.js'
-import type { EditorTable } from './sql-editor.js'
 import { TypeView } from './type-view.js'
 
 // How the page is shared out: the editor beside the schema, and the editor above the views.
@@ -47,14 +44,21 @@ function problemDetail(error: unknown) {
   return 'The statement could not be run.'
 }
 
-function statementLabel(statement: StatementAnalysis, index: number) {
+function statementLabel(
+  statement: { readonly text: string; readonly kind: string },
+  index: number,
+) {
   const first = statement.text.trim().split('\n')[0]?.trim() ?? ''
   const short = first.length > 28 ? `${first.slice(0, 27)}…` : first
   return `${index + 1} · ${short === '' ? statement.kind : short}`
 }
 
 /** The tables a statement touches and the columns it reads from each, keyed by lowercased table name. */
-function highlightOf(statement: StatementAnalysis | null): SchemaHighlight | null {
+function highlightOf(
+  statement: {
+    readonly tables: readonly { readonly name: string; readonly columnsUsed: readonly string[] }[]
+  } | null,
+) {
   if (statement === null || statement.tables.length === 0) return null
   const map = new Map<string, Set<string>>()
   for (const table of statement.tables) {
@@ -90,7 +94,10 @@ export function SqlView({
   const [tab, setTab] = useState<Tab>('flow')
   const [statementIndex, setStatementIndex] = useState(0)
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
-  const [pickedRange, setPickedRange] = useState<Range | null>(null)
+  const [pickedRange, setPickedRange] = useState<{
+    readonly start: number
+    readonly end: number
+  } | null>(null)
   const [paramInputs, setParamInputs] = useState<Readonly<Record<string, string>>>(() =>
     paramInputsOf(initialParams),
   )
@@ -158,7 +165,7 @@ export function SqlView({
   // Completion and hovers offer the names the database knows — `@@map` / `@map` over the Prisma
   // names — with the Prisma type beside each one.
   const tables = useMemo(
-    (): readonly EditorTable[] =>
+    () =>
       (schema?.models ?? []).map((model) => ({
         name: model.dbName ?? model.name,
         detail: `model ${model.name}`,

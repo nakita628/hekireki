@@ -126,7 +126,7 @@ const MakeBindValueInput = z
   })
 
 /** The driver value for a JSON parameter: SQLite has no booleans, so they bind as 0 / 1. */
-export function makeBindValue(input: z.infer<typeof MakeBindValueInput>): unknown {
+export function makeBindValue(input: z.infer<typeof MakeBindValueInput>) {
   if (typeof input.value === 'boolean' && input.dialect === 'sqlite') return input.value ? 1 : 0
   return input.value
 }

@@ -290,7 +290,7 @@ export function makeIndexAttribute(input: z.infer<typeof MakeIndexAttributeInput
 const MakeIndexInput = z.object({ index: Index }).readonly().meta({ description: 'A DMMF index' })
 
 /** Maps a DMMF index to the studio contract. */
-export function makeIndex(input: z.infer<typeof MakeIndexInput>) {
+function makeIndex(input: z.infer<typeof MakeIndexInput>) {
   const { index } = input
   return {
     type: index.type,
@@ -307,7 +307,7 @@ const MakeForeignKeyFieldsInput = z
   .meta({ description: 'A DMMF model' })
 
 /** Names of the scalar fields that back a relation (`@relation(fields: [...])`) on the model. */
-export function makeForeignKeyFields(input: z.infer<typeof MakeForeignKeyFieldsInput>) {
+function makeForeignKeyFields(input: z.infer<typeof MakeForeignKeyFieldsInput>) {
   return new Set(
     input.model.fields.flatMap((f) => (f.kind === 'object' ? (f.relationFromFields ?? []) : [])),
   )
@@ -325,7 +325,7 @@ const MakeFieldInput = z
   .meta({ description: 'A DMMF field with its model name and the model foreign-key field names' })
 
 /** Maps a DMMF field to the studio contract, rendering its attributes as Prisma writes them. */
-export function makeField(input: z.infer<typeof MakeFieldInput>) {
+function makeField(input: z.infer<typeof MakeFieldInput>) {
   const { field, modelName, foreignKeys } = input
   const defaultValue = makeDefaultText({ kind: field.kind, default: field.default })
   const nativeType = makeNativeTypeAttribute({ nativeType: field.nativeType })
@@ -443,7 +443,7 @@ const MakeModelInput = z
   .meta({ description: 'A DMMF model, the datamodel indexes and the outlined blocks' })
 
 /** Maps a DMMF model to the studio contract, with block-level indexes and `@@` attributes rendered. */
-export function makeModel(input: z.infer<typeof MakeModelInput>) {
+function makeModel(input: z.infer<typeof MakeModelInput>) {
   const { model, indexes, blocks } = input
   const blockIndexes = indexes
     .filter((i) => i.model === model.name && !i.isDefinedOnField)
@@ -497,7 +497,7 @@ const MakeEnumInput = z
   .meta({ description: 'A DMMF enum and the outlined blocks' })
 
 /** Maps a DMMF enum to the studio contract. */
-export function makeEnum(input: z.infer<typeof MakeEnumInput>) {
+function makeEnum(input: z.infer<typeof MakeEnumInput>) {
   const { value, blocks } = input
   return {
     name: value.name,

@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vite-plus/test'
 import type { Box, Point } from '../../../../diagram/edge.js'
 import { NODE_WIDTH } from '../../../../diagram/layout.js'
 import { diagramGeometry } from './geometry.js'
-import type { GeometryCard, GeometryEdge } from './geometry.js'
 import { loopTargetHandle, sourceHandle, targetHandle } from './graph.js'
 
 const ROW_HEIGHT = 22
@@ -14,7 +13,7 @@ const CARD_HEIGHT = 120
  * A card with one handle per named row, hung the way `ModelNode` hangs them: a source and a loop
  * target on the right of every row, a target on the left.
  */
-function card(x: number, y: number, rows: readonly string[]): GeometryCard {
+function card(x: number, y: number, rows: readonly string[]) {
   const rowY = (index: number) => y + FIRST_ROW + index * ROW_HEIGHT
   return {
     box: { x, y, width: NODE_WIDTH, height: CARD_HEIGHT },
@@ -35,7 +34,7 @@ function edge(
   from: readonly [string, string],
   to: readonly [string, string],
   caption: readonly string[] = [],
-): GeometryEdge {
+) {
   return {
     id,
     source: from[0],

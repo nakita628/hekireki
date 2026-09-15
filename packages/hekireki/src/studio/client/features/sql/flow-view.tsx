@@ -11,11 +11,13 @@ import {
   useReactFlow,
 } from '@xyflow/react'
 import type { Edge, OnSelectionChangeParams } from '@xyflow/react'
+import type { InferResponseType } from 'hono/client'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
+import type { ComponentProps } from 'react'
 import { LuLayoutGrid } from 'react-icons/lu'
 
 import { useUiStore } from '../../lib/index.js'
-import type { GraphEdge, GraphNode } from './analysis.js'
+import type { client } from '../../lib/index.js'
 import { autoLayout } from './flow-layout.js'
 import { FlowNode } from './flow-node.js'
 import type { FlowNodeType } from './flow-node.js'
@@ -23,19 +25,6 @@ import type { FlowNodeType } from './flow-node.js'
 const nodeTypes = { flow: FlowNode }
 const NO_NODES: FlowNodeType[] = []
 const NO_EDGES: Edge[] = []
-
-function buildEdges(edges: readonly GraphEdge[]): Edge[] {
-  return edges.map((edge) => ({
-    id: edge.id,
-    source: edge.source,
-    target: edge.target,
-    type: 'smoothstep',
-    className: `flow-edge flow-edge--${edge.kind}`,
-    label: edge.label ?? undefined,
-    labelBgPadding: [4, 2],
-    labelBgBorderRadius: 3,
-  }))
-}
 
 function highlightEdges(edges: readonly Edge[], selected: string | null): Edge[] {
   if (selected === null) return [...edges]
@@ -54,8 +43,14 @@ function Canvas({
   selected,
   onSelect,
 }: {
-  readonly nodes: readonly GraphNode[]
-  readonly edges: readonly GraphEdge[]
+  readonly nodes: InferResponseType<
+    typeof client.db.analyze.$post,
+    200
+  >['statements'][number]['nodes']
+  readonly edges: InferResponseType<
+    typeof client.db.analyze.$post,
+    200
+  >['statements'][number]['edges']
   readonly selected: string | null
   readonly onSelect: (id: string | null) => void
 }) {
@@ -83,7 +78,18 @@ function Canvas({
         data: { node },
       })),
     )
-    setEdges(buildEdges(graphEdges))
+    setEdges(
+      graphEdges.map((edge) => ({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        type: 'smoothstep',
+        className: `flow-edge flow-edge--${edge.kind}`,
+        label: edge.label ?? undefined,
+        labelBgPadding: [4, 2],
+        labelBgBorderRadius: 3,
+      })),
+    )
     const fitAll = async () => {
       try {
         await fitView({ padding: 0.15, duration: 300 })
@@ -156,12 +162,7 @@ function Canvas({
 }
 
 /** The data-flow graph of one statement: sources on the left, the result on the right. */
-export function FlowView(props: {
-  readonly nodes: readonly GraphNode[]
-  readonly edges: readonly GraphEdge[]
-  readonly selected: string | null
-  readonly onSelect: (id: string | null) => void
-}) {
+export function FlowView(props: ComponentProps<typeof Canvas>) {
   if (props.nodes.length === 0) {
     return (
       <div className="p-6 text-muted">

@@ -5,7 +5,7 @@
  * in, because `first`, `rows` or `window` are keywords in one clause and column names in another.
  */
 
-export type TokenKind = 'word' | 'quoted' | 'string' | 'number' | 'param' | 'op' | 'punct' | 'eof'
+type TokenKind = 'word' | 'quoted' | 'string' | 'number' | 'param' | 'op' | 'punct' | 'eof'
 
 export type Token = {
   readonly kind: TokenKind
@@ -17,9 +17,9 @@ export type Token = {
   readonly end: number
 }
 
-export type TokenizeError = { readonly message: string; readonly offset: number }
+type TokenizeError = { readonly message: string; readonly offset: number }
 
-export type TokenizeResult =
+type TokenizeResult =
   | { readonly ok: true; readonly tokens: readonly Token[] }
   | { readonly ok: false; readonly error: TokenizeError }
 

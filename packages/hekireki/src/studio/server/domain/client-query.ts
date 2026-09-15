@@ -30,7 +30,7 @@ const WRITE_OPERATIONS = [
 const OPERATIONS: readonly string[] = [...READ_OPERATIONS, ...WRITE_OPERATIONS]
 
 /** An argument as the query text spells it: JSON, plus `undefined`, bigints and dates. */
-export type ClientValue =
+type ClientValue =
   | string
   | number
   | bigint

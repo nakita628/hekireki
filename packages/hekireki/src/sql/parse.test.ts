@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vite-plus/test'
 
 import type { Expr, Statement } from './ast.js'
-import { parseQueryText, parseStatements } from './parse.js'
+import { parseStatements } from './parse.js'
+
+/** The first statement of the text as a SELECT query. */
+function parseQueryText(text: string) {
+  const [first] = parseStatements(text)
+  return first?.type === 'select' ? first.query : null
+}
 
 /** The expression tree without ranges, for readable assertions. */
 function shape(expr: Expr): unknown {

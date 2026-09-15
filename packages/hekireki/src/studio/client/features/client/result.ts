@@ -1,5 +1,3 @@
-type Cell = string | number | boolean | null
-
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -15,7 +13,7 @@ export function tableOf(value: unknown) {
   const columns = [...new Set(items.flatMap((item) => Object.keys(item)))]
   const rows = items.map((item) =>
     Object.fromEntries(
-      columns.map((column): [string, Cell] => {
+      columns.map((column): [string, string | number | boolean | null] => {
         const cell = item[column]
         if (cell === null || cell === undefined) return [column, null]
         if (typeof cell === 'string' || typeof cell === 'number' || typeof cell === 'boolean') {

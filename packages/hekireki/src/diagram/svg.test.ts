@@ -2,14 +2,13 @@ import { readFileSync } from 'node:fs'
 
 import { describe, expect, it } from 'vite-plus/test'
 
+import { smoothStepPath } from './edge.js'
 import { NODE_HEADER_HEIGHT, NODE_PADDING, NODE_ROW_HEIGHT, NODE_WIDTH } from './layout.js'
 import {
-  diagramBounds,
   diagramPalette,
   edgeCaption,
   fieldTypeLabel,
   renderDiagramSvg,
-  smoothStepPath,
   truncateLabel,
 } from './svg.js'
 
@@ -182,21 +181,6 @@ describe('renderDiagramSvg', () => {
   it('skips relations whose models are not on the canvas', () => {
     const svg = renderDiagramSvg({ models: [user], relations: [relation()], positions })
     expect(svg).not.toContain('class="relation-edge"')
-  })
-})
-
-describe('diagramBounds', () => {
-  it('wraps every node with the canvas margin', () => {
-    expect(diagramBounds([user, post], positions)).toStrictEqual({
-      x: -40,
-      y: -40,
-      width: 500 + NODE_WIDTH + 80,
-      height: 40 + NODE_HEADER_HEIGHT + NODE_PADDING * 2 + NODE_ROW_HEIGHT * 2 + 14 + 80,
-    })
-  })
-
-  it('is the margin alone when there are no models', () => {
-    expect(diagramBounds([], {})).toStrictEqual({ x: 0, y: 0, width: 80, height: 80 })
   })
 })
 

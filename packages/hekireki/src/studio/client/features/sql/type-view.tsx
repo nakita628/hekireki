@@ -1,8 +1,9 @@
 import { Button } from '@heroui/react'
+import type { InferResponseType } from 'hono/client'
 import { LuCopy } from 'react-icons/lu'
 
 import { copyText } from '../../hooks/copy.js'
-import type { StatementAnalysis } from './analysis.js'
+import type { client } from '../../lib/index.js'
 
 function formatType(type: string) {
   // `{ a: number; b: string }` → one property per line, the way an editor shows it on hover.
@@ -17,7 +18,11 @@ function formatType(type: string) {
 }
 
 /** The row and parameter types as TypeScript: what `sql('...')` would carry through inferql. */
-export function TypeView({ statement }: { readonly statement: StatementAnalysis }) {
+export function TypeView({
+  statement,
+}: {
+  readonly statement: InferResponseType<typeof client.db.analyze.$post, 200>['statements'][number]
+}) {
   const row = formatType(statement.rowType)
   const params = formatType(statement.paramsType)
   const snippet = `type Row = ${row}\n\ntype Params = ${params}`
