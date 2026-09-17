@@ -1,6 +1,11 @@
 import type { Dialect } from '../../database/url.js'
-import { qualifiedName, quoteIdentifier, splitStatements, splitTopLevel } from '../../sql/index.js'
-import { stringLiteral } from './dialect.js'
+import {
+  qualifiedName,
+  quoteIdentifier,
+  splitStatements,
+  splitTopLevel,
+  stringLiteral,
+} from '../../sql/index.js'
 
 /** The dollar quote of the DO block a PostgreSQL plan runs in. */
 export const BLOCK_QUOTE = '$hekireki$'

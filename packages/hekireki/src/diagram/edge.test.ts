@@ -9,7 +9,6 @@ import {
   round,
   selfLoopPoints,
   SELF_LOOP_GAP,
-  smoothStepPath,
   smoothStepPoints,
   routePoints,
 } from './edge.js'
@@ -116,13 +115,6 @@ describe('routePoints', () => {
 describe('smoothStepPoints', () => {
   it('crosses in a channel halfway between the two ends', () => {
     expect(smoothStepPoints(source, { x: 700, y: 300 })[2]).toStrictEqual({ x: 520, y: 100 })
-  })
-
-  it('answers with the same corners `smoothStepPath` draws, and their middle', () => {
-    const drawn = smoothStepPath(source, { x: 700, y: 300 })
-    expect(drawn.points).toStrictEqual(smoothStepPoints(source, { x: 700, y: 300 }))
-    expect(drawn.path).toBe(polylinePath(drawn.points))
-    expect(drawn.label).toStrictEqual({ x: 520, y: 200 })
   })
 })
 

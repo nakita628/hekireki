@@ -8,6 +8,7 @@ import * as z from 'zod'
 
 import { resolveDatabaseUrl } from '../../../database/resolve.js'
 import { fileSystemLayer, removePath } from '../../../file/index.js'
+import { stringLiteral } from '../../../sql/index.js'
 import * as DatabaseErrorDomain from '../domain/index.js'
 import * as PlanDomain from '../domain/index.js'
 import * as SqlDomain from '../domain/index.js'
@@ -677,7 +678,7 @@ const ConnectDatabaseInput = z
 export function openSqliteCopy(input: { readonly driver: Driver; readonly cwd: string }) {
   return Effect.gen(function* () {
     const file = path.join(tmpdir(), `hekireki-rehearsal-${globalThis.crypto.randomUUID()}.db`)
-    yield* input.driver.executeScript(`VACUUM INTO '${file.replaceAll("'", "''")}'`).pipe(
+    yield* input.driver.executeScript(`VACUUM INTO ${stringLiteral('sqlite', file)}`).pipe(
       Effect.mapError(
         (error) =>
           new DatabaseUnavailableError({

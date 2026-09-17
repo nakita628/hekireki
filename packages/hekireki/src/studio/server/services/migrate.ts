@@ -16,6 +16,7 @@ import {
   openNativeSchemaEngine,
 } from '../../../migrate/adapter/native-engine.js'
 import { withLockfile } from '../../../migrate/domain/history.js'
+import { MigrateConfigError } from '../../../migrate/errors.js'
 import * as DatabaseService from './database.js'
 
 const OpenMigrateSessionInput = z
@@ -61,20 +62,17 @@ export function openMigrateSession(input: z.infer<typeof OpenMigrateSessionInput
     // The wasm engine Studio runs in its own process has no MySQL connector at all, and given a
     // connection rather than a URL it asks PostgreSQL's catalogue for `public` by name, so every
     // table of another schema would read as missing. For those, the native engine the Prisma CLI
-    // runs is started on the URL instead. Without it, nothing is asked of an engine: the
-    // migrations directory is the plan, and Studio keeps the history itself.
+    // runs is started on the URL instead, and there is no migrating those without it.
     const namespace = input.url === null ? null : makePostgresSchema({ url: input.url })
     const needsNative =
-      input.driver.dialect === 'mysql'
-        ? 'mysql'
-        : input.driver.dialect === 'postgresql' && namespace !== null && namespace !== 'public'
-          ? 'schema'
-          : null
-    const binary =
-      needsNative === null || input.url === null
-        ? null
-        : yield* findSchemaEngineBinary(process.cwd())
-    const withoutEngine = needsNative !== null && binary === null ? needsNative : null
+      input.driver.dialect === 'mysql' ||
+      (input.driver.dialect === 'postgresql' && namespace !== null && namespace !== 'public')
+    const binary = needsNative ? yield* findSchemaEngineBinary(process.cwd()) : null
+    if (needsNative && (binary === null || input.url === null)) {
+      return yield* new MigrateConfigError({
+        message: `${input.driver.dialect === 'mysql' ? 'MySQL' : `The PostgreSQL schema "${namespace ?? ''}"`} is migrated through Prisma's native schema engine, which was not found: install \`@prisma/engines\` (it comes with \`prisma\`, and has to be allowed to run its install script), or name the binary with PRISMA_SCHEMA_ENGINE_BINARY.`,
+      })
+    }
     const directory = yield* isDirectory(input.schemaPath).pipe(Effect.orElseSucceed(() => false))
     // Resolved: the schema path comes from the command line and may be relative, and what is
     // shown and written has to be somewhere a person can find.
@@ -91,37 +89,33 @@ export function openMigrateSession(input: z.infer<typeof OpenMigrateSessionInput
         .find((found) => found !== undefined) ?? input.driver.dialect
     const migrations = withLockfile(yield* readMigrationsList(migrationsDir), provider)
     const engine =
-      withoutEngine !== null
-        ? null
-        : binary !== null
-          ? openNativeSchemaEngine({
-              binary,
-              files: input.files,
-              url: input.url ?? '',
-              cwd: schemaDir,
-            })
-          : yield* openSchemaEngine({
-              files: input.files,
-              // Checking a baseline replays the migrations into a shadow database beside this one.
-              adapter: makeSchemaEngineAdapter(input.driver, () =>
-                DatabaseService.openShadowDatabase({
-                  url: input.url ?? '',
-                  driver: input.driver,
-                  cwd: process.cwd(),
-                }),
-              ),
-            })
+      binary !== null
+        ? openNativeSchemaEngine({
+            binary,
+            files: input.files,
+            url: input.url ?? '',
+            cwd: schemaDir,
+          })
+        : yield* openSchemaEngine({
+            files: input.files,
+            // Checking a baseline replays the migrations into a shadow database beside this one.
+            adapter: makeSchemaEngineAdapter(input.driver, () =>
+              DatabaseService.openShadowDatabase({
+                url: input.url ?? '',
+                driver: input.driver,
+                cwd: process.cwd(),
+              }),
+            ),
+          })
     return {
       engine,
-      /** Why no engine is asked (`mysql`, or a PostgreSQL `schema` other than public, with no native engine to run); null when one is. */
-      withoutEngine,
       /**
        * The engine to ask of the database a rehearsal leaves: the wasm engine on the rehearsal's own
        * connection, or the native one on the URL of the copy it ran on. Null where neither can read
        * it: a rehearsal inside a transaction of Studio's connection, which another process cannot see.
        */
       rehearsalEngine:
-        engine === null || (binary !== null && input.driver.dialect !== 'mysql')
+        binary !== null && input.driver.dialect !== 'mysql'
           ? null
           : binary !== null
             ? (target: DatabaseService.Driver & { readonly url?: string }) =>

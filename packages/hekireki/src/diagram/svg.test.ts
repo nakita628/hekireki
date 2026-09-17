@@ -2,15 +2,9 @@ import { readFileSync } from 'node:fs'
 
 import { describe, expect, it } from 'vite-plus/test'
 
-import { smoothStepPath } from './edge.js'
+import { polylinePath, smoothStepPoints } from './edge.js'
 import { NODE_HEADER_HEIGHT, NODE_PADDING, NODE_ROW_HEIGHT, NODE_WIDTH } from './layout.js'
-import {
-  diagramPalette,
-  edgeCaption,
-  fieldTypeLabel,
-  renderDiagramSvg,
-  truncateLabel,
-} from './svg.js'
+import { PALETTES, edgeCaption, fieldTypeLabel, renderDiagramSvg, truncateLabel } from './svg.js'
 
 type Field = {
   readonly name: string
@@ -184,15 +178,15 @@ describe('renderDiagramSvg', () => {
   })
 })
 
-describe('smoothStepPath', () => {
+describe('the path of an edge between two nodes', () => {
   it('bends twice around the midpoint when the target lies to the right', () => {
-    const { path, label } = smoothStepPath({ x: 0, y: 0 }, { x: 200, y: 100 })
-    expect(path).toBe('M0 0L20 0L 95,0Q 100,0 100,5L 100,95Q 100,100 105,100L180 100L200 100')
-    expect(label).toStrictEqual({ x: 100, y: 50 })
+    expect(polylinePath(smoothStepPoints({ x: 0, y: 0 }, { x: 200, y: 100 }))).toBe(
+      'M0 0L20 0L 95,0Q 100,0 100,5L 100,95Q 100,100 105,100L180 100L200 100',
+    )
   })
 
   it('routes around both nodes when the target lies to the left', () => {
-    const { path } = smoothStepPath({ x: 200, y: 0 }, { x: 0, y: 100 })
+    const path = polylinePath(smoothStepPoints({ x: 200, y: 0 }, { x: 0, y: 100 }))
     expect(path.startsWith('M200 0L 215,0Q 220,0 220,5')).toBe(true)
     expect(path).toContain('L -15,50Q -20,50 -20,55')
     expect(path.endsWith('Q -20,100 -15,100L0 100')).toBe(true)
@@ -526,7 +520,7 @@ describe('the palette the export paints with', () => {
 
   it.each(['light', 'dark'] as const)('matches the stylesheet in %s', (theme) => {
     const tokens = tokensOf(theme)
-    const palette = diagramPalette(theme)
+    const palette = PALETTES[theme]
     expect(
       Object.keys(NAMES).map((key) => [key, palette[key as keyof typeof NAMES]]),
     ).toStrictEqual(Object.entries(NAMES).map(([key, token]) => [key, tokens[token]]))

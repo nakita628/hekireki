@@ -2274,13 +2274,6 @@ export const MigrateStatusSchema = z
         description:
           'Migrations the database has recorded whose directory the migrations directory does not hold',
       }),
-    withoutEngine: z
-      .enum(['mysql', 'schema'])
-      .nullable()
-      .openapi({
-        description:
-          "Why Studio does not ask Prisma's schema engine about this database, when it does not: `mysql`,\nwhich the engine cannot be given a connection to, or `schema`, a PostgreSQL schema other than\n`public`, which it cannot read through one. Then the migrations directory is the plan, the\nhistory is kept by Studio as Prisma keeps it, `drift` means a migration is waiting to run, and\nnothing is compared with the schema. Null when the engine is asked.",
-      }),
   })
   .brand<'MigrateStatus'>()
   .openapi({
@@ -2295,7 +2288,6 @@ export const MigrateStatusSchema = z
       'drift',
       'baselineNeeded',
       'missingFiles',
-      'withoutEngine',
     ],
     description:
       'The state of the migration history, and whether the database has drifted from the schema.',
@@ -2310,7 +2302,6 @@ export const MigrateStatusSchema = z
       drift: true,
       baselineNeeded: false,
       missingFiles: [],
-      withoutEngine: null,
     },
   })
   .openapi('MigrateStatus')
@@ -2703,13 +2694,6 @@ export const MigratePlanSchema = z
     name: z
       .string()
       .openapi({ description: 'The directory name the migration would be written under' }),
-    migration: z
-      .string()
-      .nullable()
-      .openapi({
-        description:
-          'The migration of the migrations directory the plan was made from, when Studio plans without\nthe schema engine: running the plan writes over its migration.sql and records it. Null when\nthe plan is written as a new migration',
-      }),
     steps: z
       .array(MigrationStepSchema)
       .openapi({ description: 'The steps, in the order they must run' }),
@@ -2734,11 +2718,10 @@ export const MigratePlanSchema = z
   })
   .brand<'MigratePlan'>()
   .openapi({
-    required: ['name', 'migration', 'steps', 'checks', 'unfit', 'previews', 'notes', 'errors'],
+    required: ['name', 'steps', 'checks', 'unfit', 'previews', 'notes', 'errors'],
     description: 'A migration laid out as steps that can be run one at a time.',
     example: {
       name: '20260201000000_profile',
-      migration: null,
       steps: [],
       checks: [],
       unfit: [],
@@ -3069,13 +3052,6 @@ export const CreatedMigrationSchema = z
 export const CreateMigrationBodySchema = z
   .object({
     name: z.string().openapi({ description: 'What to call it; the timestamp is put in front' }),
-    existing: z
-      .string()
-      .exactOptional()
-      .openapi({
-        description:
-          'A migration of the directory waiting to run, to write over rather than make a new one',
-      }),
     sql: z.string().openapi({ description: 'The statements to write to migration.sql' }),
   })
   .openapi({

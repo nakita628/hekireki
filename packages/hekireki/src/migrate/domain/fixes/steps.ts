@@ -1,7 +1,6 @@
-import { qualifiedName } from '../../../sql/index.js'
+import { qualifiedName, stringLiteral } from '../../../sql/index.js'
 import type { makeConversions } from '../conversion.js'
 import type { ModelFixes } from '../decisions.js'
-import { stringLiteral } from '../dialect.js'
 import type { makeExpectedTables } from '../tables.js'
 import { cascade, updated } from './effects.js'
 import type { resolveMoves } from './moves.js'

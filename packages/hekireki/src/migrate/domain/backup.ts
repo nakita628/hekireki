@@ -1,5 +1,4 @@
-import { quoteIdentifier } from '../../sql/index.js'
-import { stringLiteral } from './dialect.js'
+import { quoteIdentifier, stringLiteral } from '../../sql/index.js'
 
 /**
  * The columns of the current schema whose type is an enum, or an array of one. A copy that keeps

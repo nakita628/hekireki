@@ -23,6 +23,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vite-plus/test'
 // it, check the rows, write the fixes of a decision into it, rehearse, run and record it. Then
 // `prisma migrate status` has to find the database up to date, and `prisma migrate diff` no
 // difference between it and the schema.
+// Where no native engine can be run, the page says what to install rather than migrating without it.
 //
 //   HEKIREKI_SEED_PG=postgresql://postgres:postgres@localhost:5432/seed
 //   HEKIREKI_SEED_MYSQL=mysql://root:root@localhost:3306/seed
@@ -217,7 +218,6 @@ describe.each(TARGETS)('the Migrate page through the native schema engine on $na
       const status = await call('/api/migrate')
       expect(status.status).toBe(200)
       expect(status.json).toMatchObject({
-        withoutEngine: null,
         hasMigrationsTable: true,
         pending: [],
         failed: [],
@@ -246,10 +246,7 @@ describe.each(TARGETS)('the Migrate page through the native schema engine on $na
       ]
       const planned = await call('/api/migrate/plan', { name: 'required_name', decisions })
       expect(planned.status).toBe(200)
-      expect({ migration: planned.json.migration, errors: planned.json.errors }).toStrictEqual({
-        migration: null,
-        errors: [],
-      })
+      expect(planned.json.errors).toStrictEqual([])
       const steps = planned.json.steps as { kind: string; statements: string[] }[]
       expect(steps[0]?.kind).toBe('fix')
 
@@ -294,6 +291,31 @@ describe.each(TARGETS)('the Migrate page through the native schema engine on $na
         '--exit-code',
       ])
       expect({ status: left.status, out: left.out }).toMatchObject({ status: 0 })
+    },
+  )
+
+  it.skipIf(target.url === undefined)(
+    'says what to install when there is no native engine to run, rather than migrating without one',
+    async () => {
+      const port = target.port + 10
+      const studio = spawn(
+        'node',
+        [cli, 'studio', '--schema', 'schema.prisma', '--url', state.url, '-p', String(port)],
+        {
+          cwd: state.dir,
+          stdio: 'ignore',
+          env: { ...process.env, PRISMA_SCHEMA_ENGINE_BINARY: join(state.dir, 'no-engine') },
+        },
+      )
+      try {
+        expect(await serving(`http://127.0.0.1:${port}/api/schema`, Date.now() + 30_000)).toBe(true)
+        const response = await fetch(`http://127.0.0.1:${port}/api/migrate`)
+        const problem = (await response.json()) as { detail?: string }
+        expect(response.status).toBe(503)
+        expect(problem.detail).toContain('PRISMA_SCHEMA_ENGINE_BINARY')
+      } finally {
+        studio.kill()
+      }
     },
   )
 })

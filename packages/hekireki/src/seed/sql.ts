@@ -1,5 +1,5 @@
 import type { Dialect } from '../database/url.js'
-import { qualifiedName, quoteIdentifier } from '../sql/index.js'
+import { qualifiedName, quoteIdentifier, stringLiteral } from '../sql/index.js'
 import { chunks } from '../utils/index.js'
 import type { SeedValue } from './config.js'
 import type { EnumMember, SeedTable, SeedTableRows } from './plan.js'
@@ -42,11 +42,6 @@ function enumStored(column: ColumnShape, value: string) {
   return column.enumValues?.find((member) => member.name === value)?.dbName ?? value
 }
 
-function quoteString(dialect: Dialect, text: string) {
-  const escaped = text.replaceAll("'", "''")
-  return `'${dialect === 'mysql' ? escaped.replaceAll('\\', '\\\\') : escaped}'`
-}
-
 /** One element of a PostgreSQL array literal (`'{...}'`), quoted and escaped as the array parser expects. */
 function arrayElement(column: ColumnShape, value: SeedValue) {
   if (value === null) return 'NULL'
@@ -71,12 +66,12 @@ export function renderLiteral(dialect: Dialect, column: ColumnShape, value: Seed
   if (column.isList) {
     const items = isSeedList(value) ? value : [value]
     return dialect === 'postgresql'
-      ? quoteString(dialect, `{${items.map((item) => arrayElement(column, item)).join(',')}}`)
-      : quoteString(dialect, JSON.stringify(items.map((item) => jsonValue(item))))
+      ? stringLiteral(dialect, `{${items.map((item) => arrayElement(column, item)).join(',')}}`)
+      : stringLiteral(dialect, JSON.stringify(items.map((item) => jsonValue(item))))
   }
-  if (column.type === 'Json') return quoteString(dialect, JSON.stringify(jsonValue(value)))
+  if (column.type === 'Json') return stringLiteral(dialect, JSON.stringify(jsonValue(value)))
   if (typeof value === 'string') {
-    return quoteString(dialect, column.kind === 'enum' ? enumStored(column, value) : value)
+    return stringLiteral(dialect, column.kind === 'enum' ? enumStored(column, value) : value)
   }
   if (typeof value === 'number') return Number.isFinite(value) ? String(value) : 'NULL'
   if (typeof value === 'bigint') return value.toString()
@@ -94,7 +89,7 @@ export function renderLiteral(dialect: Dialect, column: ColumnShape, value: Seed
     const hex = Buffer.from(value).toString('hex')
     return dialect === 'postgresql' ? `'\\x${hex}'` : `X'${hex}'`
   }
-  return quoteString(dialect, JSON.stringify(jsonValue(value)))
+  return stringLiteral(dialect, JSON.stringify(jsonValue(value)))
 }
 
 /** A value as JSON can carry it: bigint and Date as strings, bytes as base64. */
@@ -159,7 +154,7 @@ export function sequenceSql(dialect: Dialect, tables: readonly SeedTable[]) {
           const target = qualifiedName(dialect, table)
           const name = quoteIdentifier(dialect, column.column)
           return [
-            `SELECT setval(pg_get_serial_sequence('${target.replaceAll("'", "''")}', '${column.column.replaceAll("'", "''")}'), COALESCE((SELECT MAX(${name}) FROM ${target}), 0) + 1, false)`,
+            `SELECT setval(pg_get_serial_sequence(${stringLiteral(dialect, target)}, ${stringLiteral(dialect, column.column)}), COALESCE((SELECT MAX(${name}) FROM ${target}), 0) + 1, false)`,
           ]
         })
       : [],

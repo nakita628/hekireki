@@ -79,7 +79,7 @@ type Relation = {
 // came from. `key`, `unique` and `enum` are the ones to watch: the canvas reads them from
 // `--c-key` / `--c-unique` / `--c-enum`, and a drawing that renders a mark in a different colour
 // from the page it was exported from is the failure this table exists to avoid.
-const PALETTES = {
+export const PALETTES = {
   light: {
     canvas: '#f7f8fb',
     surface: '#ffffff',
@@ -156,11 +156,6 @@ const LINK_ICON =
   '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>'
 
 type Palette = (typeof PALETTES)[DiagramTheme]
-
-/** The colours a drawing is painted in, which are the Studio palette read back. */
-export function diagramPalette(theme: DiagramTheme): Palette {
-  return PALETTES[theme]
-}
 
 type PlacedNode = {
   readonly model: Model

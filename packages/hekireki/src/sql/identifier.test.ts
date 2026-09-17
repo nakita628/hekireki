@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import { placeholder, qualifiedName, quoteIdentifier } from './identifier.js'
+import { placeholder, qualifiedName, quoteIdentifier, stringLiteral } from './identifier.js'
 
 // The names and placeholders every statement hekireki writes is built from: the seed script,
 // the checks and the plan, and the SQL console of Studio.
@@ -23,5 +23,13 @@ describe('placeholder', () => {
     expect(placeholder('postgresql', 2)).toBe('$2')
     expect(placeholder('mysql', 2)).toBe('?')
     expect(placeholder('sqlite', 1)).toBe('?')
+  })
+})
+
+describe('stringLiteral', () => {
+  it('doubles the quote everywhere, and the backslash only where MySQL reads it as an escape', () => {
+    expect(stringLiteral('postgresql', "it's a\\b")).toBe("'it''s a\\b'")
+    expect(stringLiteral('sqlite', "it's a\\b")).toBe("'it''s a\\b'")
+    expect(stringLiteral('mysql', "it's a\\b")).toBe("'it''s a\\\\b'")
   })
 })

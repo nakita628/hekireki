@@ -178,16 +178,6 @@ export function routePoints(source: Point, target: Point, cards: readonly Box[])
     ).points
 }
 
-/** The path of an edge from a source on the right of a node to a target on the left of another, and its label point. */
-export function smoothStepPath(source: Point, target: Point) {
-  const points = smoothStepPoints(source, target)
-  return {
-    path: polylinePath(points),
-    label: { x: (source.x + target.x) / 2, y: (source.y + target.y) / 2 },
-    points,
-  }
-}
-
 // The corners of a relation that returns to the node it started from, looped off its right side.
 // Two ends of the same row would flatten the loop into an invisible line, so they are pulled a
 // row apart — a self many-to-many hangs both of its ends off the header.

@@ -21,8 +21,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vite-plus/test'
 //
 // MySQL is the other half: the wasm engine has no MySQL connector at all, so Studio runs the native
 // schema engine `@prisma/engines` installs on the database's URL, as the Prisma CLI does, and the
-// same round trip has to hold through it. Where no native engine can be run, the page plans from
-// the migrations directory instead, which studio-migrate-directory.test.ts runs end to end.
+// same round trip has to hold through it.
 //
 //   HEKIREKI_SEED_PG=postgresql://postgres:postgres@localhost:5432/seed
 //   HEKIREKI_SEED_MYSQL=mysql://root:root@localhost:3306/seed

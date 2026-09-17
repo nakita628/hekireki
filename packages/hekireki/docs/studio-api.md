@@ -2153,8 +2153,7 @@ database has drifted from the schema. Reads only.
   "divergence": null,
   "drift": true,
   "baselineNeeded": false,
-  "missingFiles": [],
-  "withoutEngine": null
+  "missingFiles": []
 }
 ```
 
@@ -2262,8 +2261,7 @@ without running them. Refused when the database does not match them.
   "divergence": null,
   "drift": true,
   "baselineNeeded": false,
-  "missingFiles": [],
-  "withoutEngine": null
+  "missingFiles": []
 }
 ```
 
@@ -2367,7 +2365,6 @@ none holds its locks on the whole table; all of them at once when left out|
 ```json
 {
   "name": "20260201000000_profile",
-  "migration": null,
   "steps": [],
   "checks": [],
   "unfit": [],
@@ -2699,8 +2696,7 @@ migration the run it undoes wrote.
   "divergence": null,
   "drift": true,
   "baselineNeeded": false,
-  "missingFiles": [],
-  "withoutEngine": null
+  "missingFiles": []
 }
 ```
 
@@ -2799,7 +2795,6 @@ Writes a migration.sql to the migrations directory, so Prisma Migrate owns it fr
 |---|---|---|---|---|
 |body|body|[CreateMigrationBody](#schemacreatemigrationbody)|true|none|
 |» name|body|string|true|What to call it; the timestamp is put in front|
-|» existing|body|string|false|A migration of the directory waiting to run, to write over rather than make a new one|
 |» sql|body|string|true|The statements to write to migration.sql|
 
 > Example responses
@@ -2879,8 +2874,7 @@ at a time. The database must have been migrated at least once.
   "divergence": null,
   "drift": true,
   "baselineNeeded": false,
-  "missingFiles": [],
-  "withoutEngine": null
+  "missingFiles": []
 }
 ```
 
@@ -2950,8 +2944,7 @@ stops counting as failed, which a database has to have before anything else reac
   "divergence": null,
   "drift": true,
   "baselineNeeded": false,
-  "missingFiles": [],
-  "withoutEngine": null
+  "missingFiles": []
 }
 ```
 
@@ -6093,8 +6086,7 @@ strings, bytes are base64. A `$transaction` resolves to the array of its results
   "divergence": null,
   "drift": true,
   "baselineNeeded": false,
-  "missingFiles": [],
-  "withoutEngine": null
+  "missingFiles": []
 }
 ```
 
@@ -6113,18 +6105,6 @@ strings, bytes are base64. A `$transaction` resolves to the array of its results
 |baselineNeeded|boolean|true|none|Whether the database has tables and no migration history, which `prisma migrate deploy`
 refuses (P3005): it has to be baselined at the migration it already matches|
 |missingFiles|[string]|true|none|Migrations the database has recorded whose directory the migrations directory does not hold|
-|withoutEngine|string|true|none|Why Studio does not ask Prisma's schema engine about this database, when it does not: `mysql`,
-which the engine cannot be given a connection to, or `schema`, a PostgreSQL schema other than
-`public`, which it cannot read through one. Then the migrations directory is the plan, the
-history is kept by Studio as Prisma keeps it, `drift` means a migration is waiting to run, and
-nothing is compared with the schema. Null when the engine is asked.|
-
-#### Enumerated Values
-
-|Property|Value|
-|---|---|
-|withoutEngine|mysql|
-|withoutEngine|schema|
 
 <h2 id="tocS_BaselineCandidate">BaselineCandidate</h2>
 <!-- backwards compatibility -->
@@ -6489,7 +6469,6 @@ name: for the page to complete the field a rename or a move names, and to show h
 ```json
 {
   "name": "20260201000000_profile",
-  "migration": null,
   "steps": [],
   "checks": [],
   "unfit": [],
@@ -6504,9 +6483,6 @@ name: for the page to complete the field a rename or a move names, and to show h
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |name|string|true|none|The directory name the migration would be written under|
-|migration|string|true|none|The migration of the migrations directory the plan was made from, when Studio plans without
-the schema engine: running the plan writes over its migration.sql and records it. Null when
-the plan is written as a new migration|
 |steps|[[MigrationStep](#schemamigrationstep)]|true|none|The steps, in the order they must run|
 |checks|[[MigrationCheck](#schemamigrationcheck)]|true|none|What the migration needs of the rows the database holds now|
 |unfit|[[UnfitDecision](#schemaunfitdecision)]|true|none|Kept decisions set aside because they no longer fit the schema or the database: a field or
@@ -6887,7 +6863,6 @@ of its restore; one taken before Studio kept them is its rows only, in the schem
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |name|string|true|none|What to call it; the timestamp is put in front|
-|existing|string|false|none|A migration of the directory waiting to run, to write over rather than make a new one|
 |sql|string|true|none|The statements to write to migration.sql|
 
 <h2 id="tocS_MigrationDecisions">MigrationDecisions</h2>

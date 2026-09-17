@@ -2240,7 +2240,6 @@ model MigrationRecord {
   drift: true,
   baselineNeeded: false,
   missingFiles: #[],
-  withoutEngine: null,
 })
 @extension("x-brand", "MigrateStatus")
 model MigrateStatus {
@@ -2276,15 +2275,6 @@ model MigrateStatus {
 
   /** Migrations the database has recorded whose directory the migrations directory does not hold */
   missingFiles: string[];
-
-  /**
-   * Why Studio does not ask Prisma's schema engine about this database, when it does not: `mysql`,
-   * which the engine cannot be given a connection to, or `schema`, a PostgreSQL schema other than
-   * `public`, which it cannot read through one. Then the migrations directory is the plan, the
-   * history is kept by Studio as Prisma keeps it, `drift` means a migration is waiting to run, and
-   * nothing is compared with the schema. Null when the engine is asked.
-   */
-  withoutEngine: "mysql" | "schema" | null;
 }
 
 /** One migration of the directory, and the SQL it holds. */
@@ -2721,7 +2711,6 @@ model UnfitDecision {
 /** A migration laid out as steps that can be run one at a time. */
 @example(#{
   name: "20260201000000_profile",
-  migration: null,
   steps: #[],
   checks: #[],
   unfit: #[],
@@ -2733,13 +2722,6 @@ model UnfitDecision {
 model MigratePlan {
   /** The directory name the migration would be written under */
   name: string;
-
-  /**
-   * The migration of the migrations directory the plan was made from, when Studio plans without
-   * the schema engine: running the plan writes over its migration.sql and records it. Null when
-   * the plan is written as a new migration
-   */
-  migration: string | null;
 
   /** The steps, in the order they must run */
   steps: MigrationStep[];
@@ -2863,9 +2845,6 @@ model ApplyResult {
 model CreateMigrationBody {
   /** What to call it; the timestamp is put in front */
   name: string;
-
-  /** A migration of the directory waiting to run, to write over rather than make a new one */
-  existing?: string;
 
   /** The statements to write to migration.sql */
   sql: string;

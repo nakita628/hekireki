@@ -2,22 +2,6 @@ import type { Dialect } from '../../database/url.js'
 import { quoteIdentifier } from '../../sql/index.js'
 
 /**
- * A string as a SQL literal. Every dialect doubles the quote; MySQL and MariaDB also read a
- * backslash as an escape, so one written as it is would swallow the character after it.
- *
- * @example
- * ```sql
- * -- the value           it's a\b
- * -- PostgreSQL, SQLite  'it''s a\b'
- * -- MySQL, MariaDB      'it''s a\\b'
- * ```
- */
-export function stringLiteral(dialect: Dialect, value: string) {
-  const doubled = value.replaceAll("'", "''")
-  return `'${dialect === 'mysql' ? doubled.replaceAll('\\', '\\\\') : doubled}'`
-}
-
-/**
  * How each dialect writes what a suggestion or a fix needs of it.
  *
  * @example

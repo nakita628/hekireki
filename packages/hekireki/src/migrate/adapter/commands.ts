@@ -67,7 +67,7 @@ function instantOf(row: Readonly<Record<string, unknown>>, key: string) {
  * What the database has recorded in `_prisma_migrations`, and whether the table is there at all.
  * A database that has never been migrated has no such table, which is not an error.
  */
-export function readAppliedMigrations(driver: Driver) {
+function readAppliedMigrations(driver: Driver) {
   const table = quoteIdentifier(driver.dialect, MIGRATIONS_TABLE)
   return driver
     .query({

@@ -184,7 +184,7 @@ export function MigrateView() {
   const [finished, setFinished] = useState<{
     readonly name: string
     /** Null when Studio cannot compare this database with the schema. */
-    readonly matches: boolean | null
+    readonly matches: boolean
     readonly tables: readonly {
       readonly table: string
       readonly before: number | null
@@ -369,14 +369,7 @@ export function MigrateView() {
   const header = (
     <header className="flex items-center gap-3">
       <h1 className="shrink-0 text-title font-bold tracking-tight">{t.title}</h1>
-      {status.data === undefined ? null : status.data.withoutEngine !== null ? (
-        <span
-          className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-code whitespace-nowrap ${status.data.pending.length > 0 ? 'border-accent/30 bg-accent-soft text-accent-text' : 'border-line bg-surface text-muted'}`}
-        >
-          {status.data.pending.length > 0 ? <LuTriangleAlert size={13} /> : null}
-          {status.data.pending.length > 0 ? t.waiting(status.data.pending.length) : t.noneWaiting}
-        </span>
-      ) : status.data.drift ? (
+      {status.data === undefined ? null : status.data.drift ? (
         <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-accent/30 bg-accent-soft px-2.5 py-0.5 text-code whitespace-nowrap text-accent-text">
           <LuTriangleAlert size={13} />
           {t.drift}
@@ -538,7 +531,7 @@ export function MigrateView() {
     const names = [...new Set([...(before.tables ?? []), ...(after ?? [])].map((one) => one.table))]
     setFinished({
       name: recorded,
-      matches: history === null ? false : history.withoutEngine !== null ? null : !history.drift,
+      matches: history === null ? false : !history.drift,
       tables: names.map((table) => ({
         table,
         before: before.tables?.find((one) => one.table === table)?.after ?? null,
@@ -588,8 +581,6 @@ export function MigrateView() {
       const created = await creating.mutateAsync({
         json: {
           name: name === '' ? 'migration' : name,
-          // Planned from a migration of the directory: its migration.sql is written over.
-          existing: plan.migration ?? undefined,
           sql: plan.steps.flatMap((step) => step.statements.map((sql) => `${sql};`)).join('\n'),
         },
       })
@@ -719,16 +710,12 @@ export function MigrateView() {
               <LuX size={14} />
             </Button>
           </div>
-          {finished.matches === null ? (
-            <span className="text-body text-muted">{tf.notCompared}</span>
-          ) : (
-            <span
-              className={`flex items-center gap-1.5 text-body ${finished.matches ? 'text-ok' : 'text-danger'}`}
-            >
-              {finished.matches ? <LuCircleCheck size={14} /> : <LuCircleAlert size={14} />}
-              {finished.matches ? tf.matches : tf.differs}
-            </span>
-          )}
+          <span
+            className={`flex items-center gap-1.5 text-body ${finished.matches ? 'text-ok' : 'text-danger'}`}
+          >
+            {finished.matches ? <LuCircleCheck size={14} /> : <LuCircleAlert size={14} />}
+            {finished.matches ? tf.matches : tf.differs}
+          </span>
           {finished.tables.length === 0 ? null : (
             <div className="flex flex-col gap-1">
               <span className="text-body font-semibold">{tf.rows}</span>
@@ -760,12 +747,6 @@ export function MigrateView() {
         </div>
       )}
 
-      {state.withoutEngine === null ? null : (
-        <p className="rounded-lg border border-line bg-surface px-3 py-2 text-body text-muted">
-          {state.withoutEngine === 'mysql' ? t.withoutEngineMysql : t.withoutEngineSchema}
-        </p>
-      )}
-
       <section className="flex flex-col gap-2.5">
         <div>
           <h2 className="text-lead font-semibold">{t.historyTitle}</h2>
@@ -778,11 +759,7 @@ export function MigrateView() {
             resolving.mutate({ json: { name: failed } })
           }}
         />
-        {state.baselineNeeded && state.withoutEngine !== null ? (
-          <p className="rounded-lg border border-accent/30 bg-accent-soft px-3 py-2 text-body text-accent-text">
-            {t.baselineByHand}
-          </p>
-        ) : state.baselineNeeded ? (
+        {state.baselineNeeded ? (
           <Baseline
             busy={busy}
             onRecord={(migration) => {
@@ -827,7 +804,7 @@ export function MigrateView() {
         </p>
       ) : !state.drift ? (
         <p className="rounded-lg border border-line bg-surface px-3 py-6 text-center text-muted">
-          {state.withoutEngine === null ? t.upToDate : t.noneWaitingNote}
+          {t.upToDate}
         </p>
       ) : (
         <>

@@ -3,9 +3,8 @@ import path from 'node:path'
 import { Effect } from 'effect'
 
 import { exists, fileStamp, makeDirectory, readDirectory, writeFile } from '../../file/index.js'
-import { quoteIdentifier } from '../../sql/index.js'
+import { quoteIdentifier, stringLiteral } from '../../sql/index.js'
 import type { Driver } from '../../studio/server/services/database.js'
-import { stringLiteral } from '../domain/dialect.js'
 import { MigrateConfigError } from '../errors.js'
 import { createPostgresBackup, restorePostgresBackup } from './backup-postgres.js'
 

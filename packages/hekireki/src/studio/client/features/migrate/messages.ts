@@ -24,16 +24,6 @@ export const PAGE = defineMessages({
     stepFailedAt: (n: number) => `Step ${n} did not go through.`,
     drift: 'The database differs from the schema',
     inStep: 'In step with the schema',
-    waiting: (n: number) => (n === 1 ? '1 migration waiting' : `${n} migrations waiting`),
-    noneWaiting: 'No migration waiting',
-    withoutEngineMysql:
-      'The wasm schema engine has no MySQL connector, and the native one (`@prisma/engines`) was not found, so Studio does not compare this database with the schema. Install `@prisma/engines` (or set `PRISMA_SCHEMA_ENGINE_BINARY`) to have it compared, or write the migration with `prisma migrate dev --create-only`: Studio checks the rows against it, writes the fixes of your decisions into it, runs it and records it as Prisma does.',
-    withoutEngineSchema:
-      'The wasm schema engine reads only the `public` schema through a connection, this URL names another, and the native engine (`@prisma/engines`) was not found, so Studio does not compare this database with the schema. Install `@prisma/engines` (or set `PRISMA_SCHEMA_ENGINE_BINARY`) to have it compared, or write the migration with `prisma migrate dev --create-only`: Studio checks the rows against it, writes the fixes of your decisions into it, runs it and records it as Prisma does.',
-    noneWaitingNote:
-      'No migration in the migrations directory is waiting to run. Change the schema and write the migration with `prisma migrate dev --create-only`: it is planned here as soon as it is written.',
-    baselineByHand:
-      'Studio cannot replay the migrations to check this database against them. Record each migration the database already has with `prisma migrate resolve --applied <name>`.',
     loading: 'Reading the migration history…',
     unreadable: 'The migration history could not be read.',
     historyTitle: 'History',
@@ -118,16 +108,6 @@ export const PAGE = defineMessages({
     stepFailedAt: (n: number) => `ステップ ${n} を実行できませんでした。`,
     drift: 'データベースがスキーマと異なります',
     inStep: 'スキーマと一致しています',
-    waiting: (n: number) => `未実行のマイグレーション ${n} 件`,
-    noneWaiting: '未実行のマイグレーションはありません',
-    withoutEngineMysql:
-      'wasm 版の schema engine には MySQL のコネクタがなく、ネイティブ版（`@prisma/engines`）も見つからないため、Studio はこのデータベースをスキーマと比較しません。比較するには `@prisma/engines` をインストールする（または `PRISMA_SCHEMA_ENGINE_BINARY` を設定する）か、`prisma migrate dev --create-only` でマイグレーションを作成してください。Studio はそれに対して行をチェックし、決めた修正を書き込み、実行して Prisma と同じ形で記録します。',
-    withoutEngineSchema:
-      'wasm 版の schema engine は接続経由では `public` スキーマしか読めず、この URL は別のスキーマを指しています。ネイティブ版（`@prisma/engines`）も見つからないため、Studio はこのデータベースをスキーマと比較しません。比較するには `@prisma/engines` をインストールする（または `PRISMA_SCHEMA_ENGINE_BINARY` を設定する）か、`prisma migrate dev --create-only` でマイグレーションを作成してください。Studio はそれに対して行をチェックし、決めた修正を書き込み、実行して Prisma と同じ形で記録します。',
-    noneWaitingNote:
-      'migrations ディレクトリに未実行のマイグレーションはありません。スキーマを変更し、`prisma migrate dev --create-only` でマイグレーションを作成すると、ここで計画できます。',
-    baselineByHand:
-      'Studio はマイグレーションを再生してこのデータベースと照合できません。データベースに適用済みのマイグレーションを、それぞれ `prisma migrate resolve --applied <name>` で記録してください。',
     loading: 'マイグレーション履歴を読み込んでいます…',
     unreadable: 'マイグレーション履歴を読み込めませんでした。',
     historyTitle: '履歴',
@@ -875,8 +855,6 @@ export const RESULT = defineMessages({
     title: (name: string) => `${name} ran and is recorded`,
     matches: 'The database now matches the schema.',
     differs: 'The database still differs from the schema: compare again to see what is left.',
-    notCompared:
-      'Recorded as Prisma records it. Studio cannot compare this database with the schema: `prisma migrate diff` does.',
     rows: 'Rows in each table, before the run and after it',
     confirmType: (word: string) => `Type ${word} to run it`,
     confirmWord: 'migrate',
@@ -886,8 +864,6 @@ export const RESULT = defineMessages({
     title: (name: string) => `${name} を実行し、記録しました`,
     matches: 'データベースはスキーマと一致しています。',
     differs: 'まだスキーマとの違いがあります。もう一度比べて、残っている違いを確認してください。',
-    notCompared:
-      'Prisma と同じ形で記録しました。Studio はこのデータベースをスキーマと比較できません。比較は `prisma migrate diff` で行えます。',
     rows: 'テーブルごとの行数（実行前と実行後）',
     confirmType: (word: string) => `実行するには ${word} と入力してください`,
     confirmWord: 'migrate',

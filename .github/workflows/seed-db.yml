@@ -85,13 +85,13 @@ jobs:
 
       - run: vp run hekireki#build
 
-      - run: vp run --filter ./test test db/seed.test.ts db/studio-client.test.ts db/studio-migrate.test.ts db/studio-migrate-native.test.ts db/studio-migrate-directory.test.ts db/migrate.test.ts db/migrate-rewrite.test.ts db/migrate-scenarios.test.ts db/migrate-unmanaged.test.ts db/migrate-batch.test.ts
+      - run: vp run --filter ./test test db/seed.test.ts db/studio-client.test.ts db/studio-migrate.test.ts db/studio-migrate-native.test.ts db/migrate.test.ts db/migrate-rewrite.test.ts db/migrate-scenarios.test.ts db/migrate-unmanaged.test.ts db/migrate-batch.test.ts
         env:
           HEKIREKI_SEED_PG: postgresql://postgres:postgres@localhost:5432/seed
           HEKIREKI_SEED_MYSQL: mysql://root:root@localhost:3306/seed
           HEKIREKI_SEED_COCKROACH: postgresql://root@localhost:26257/defaultdb?sslmode=disable
 
       - name: Migration check on MariaDB
-        run: vp run --filter ./test test db/studio-migrate-native.test.ts db/studio-migrate-directory.test.ts db/migrate.test.ts db/migrate-rewrite.test.ts db/migrate-scenarios.test.ts db/migrate-unmanaged.test.ts db/migrate-batch.test.ts
+        run: vp run --filter ./test test db/studio-migrate-native.test.ts db/migrate.test.ts db/migrate-rewrite.test.ts db/migrate-scenarios.test.ts db/migrate-unmanaged.test.ts db/migrate-batch.test.ts
         env:
           HEKIREKI_SEED_MYSQL: mysql://root:root@localhost:3307/seed
