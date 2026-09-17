@@ -58,10 +58,25 @@ a column of every family the catalogue types differently, and the schema engine 
 catalogue through the adapter Studio writes over its own connection — has to find nothing to
 migrate to that same schema, which holds every type OID the adapter maps to what Prisma wrote.
 The schema then gains a field, and the migration written for it has to be exactly that one change
-and has to run. On MySQL the page has to refuse: Prisma Migrate has no MySQL connector behind a
-driver adapter and panics when asked for one (`Unsupported adapter provider: Mysql`), which would
-take the Studio process with it, so the refusal happens before the engine is asked anything and
-Studio has to still be serving afterwards. Each run owns a database it creates and drops again.
+and has to run. On MySQL the wasm engine has no connector, so the same round trip runs through the native schema
+engine on the database's URL. Each run owns a database it creates and drops again.
+
+`test/db/studio-migrate-native.test.ts` runs the page on MySQL (and MariaDB) and on a PostgreSQL
+schema other than `public` through the native schema engine `@prisma/engines` installs: the
+history read through it, the database found in step with the schema, then a column made required
+over rows without it, the migration written for it, a decision's fix, a rehearsal (on MySQL on a
+copy, compared with the schema there), the steps run and the migration recorded. `prisma migrate
+status` has to find the database up to date and `prisma migrate diff --exit-code` no difference.
+
+`test/db/studio-migrate-directory.test.ts` runs the same databases with no native engine to run
+(`PRISMA_SCHEMA_ENGINE_BINARY` names one that is not there), where no engine is asked: a project migrated once with
+`prisma migrate deploy`, a second migration `prisma migrate diff --script` writes that makes a
+column required over rows without it, the check blocking on them, a decision's fix written into
+the migration, a rehearsal that leaves the database as it was (and, on MySQL, no copy behind),
+the steps run and the migration recorded. Then `prisma migrate status` has to find the database
+up to date and `prisma migrate deploy` nothing to run. A deploy from the page, a migration that
+fails (which Prisma then has to see as failed too) marked rolled back, and a file edited after it
+ran read as edited, complete it.
 
 The Prisma Client page is tested at three depths. `src/studio/server/handlers/client.test.ts` drives its API against a stand-in client; `src/studio/server/handlers/client-prisma.test.ts` runs `prisma generate` into a throwaway project and checks what a real Prisma Client does through it — the statements its query events report, the writes that reach the SQLite file, the completions and type errors of the generated types, and a regenerated client being picked up — so a Prisma release that changes any of that fails there; `e2e/client.test.ts` does the same in the browser on the client `e2e/workspace.ts` generates from the fixtures; and `test/db/studio-client.test.ts` runs the built `hekireki studio` on the PostgreSQL and MySQL servers of the seed check (the same `HEKIREKI_SEED_PG` / `HEKIREKI_SEED_MYSQL`, skipped without them), through `@prisma/adapter-pg` and `@prisma/adapter-mariadb`, in a schema or database named for the run that `prisma db push` creates empty and the test drops again. The type completion needs a TypeScript with the 5.x language service API, which `typescript@7` (the native compiler the package builds with) does not have: `typescript-5` in `devDependencies` is `typescript@5` under another name, and the tests link it into their project as `typescript`, next to `@prisma/client` and `@prisma/adapter-better-sqlite3` from the root `devDependencies`.
 

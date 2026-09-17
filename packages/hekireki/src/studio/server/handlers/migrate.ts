@@ -30,7 +30,7 @@ export const getMigrateRouteHandler: RouteHandler<typeof getMigrateRoute> = (c) 
       onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
-          Match.tag('MigrateConfigError', ({ message }) =>
+          Match.tag('MigrateDatabaseError', ({ message }) =>
             Effect.succeed(
               c.json(
                 {
@@ -417,6 +417,21 @@ export const postMigrateMigrationsAppliedRouteHandler: RouteHandler<
               ),
             ),
           ),
+          Match.tag('MigrateDatabaseError', ({ message }) =>
+            Effect.succeed(
+              c.json(
+                {
+                  type: '/problems/service-unavailable' as const,
+                  title: 'Service Unavailable' as const,
+                  status: 503 as const,
+                  detail: message,
+                  instance: c.req.path,
+                },
+                503,
+                { 'Content-Type': 'application/problem+json' },
+              ),
+            ),
+          ),
           Match.tag('DatabaseUnavailableError', ({ reason }) =>
             Effect.succeed(
               c.json(
@@ -492,6 +507,21 @@ export const postMigrateMigrationsRolledBackRouteHandler: RouteHandler<
               ),
             ),
           ),
+          Match.tag('MigrateDatabaseError', ({ message }) =>
+            Effect.succeed(
+              c.json(
+                {
+                  type: '/problems/service-unavailable' as const,
+                  title: 'Service Unavailable' as const,
+                  status: 503 as const,
+                  detail: message,
+                  instance: c.req.path,
+                },
+                503,
+                { 'Content-Type': 'application/problem+json' },
+              ),
+            ),
+          ),
           Match.tag('DatabaseUnavailableError', ({ reason }) =>
             Effect.succeed(
               c.json(
@@ -551,6 +581,21 @@ export const postMigrateDeployRouteHandler: RouteHandler<typeof postMigrateDeplo
       onFailure: (error) =>
         Match.value(error).pipe(
           Match.tag('MigrateConfigError', ({ message }) =>
+            Effect.succeed(
+              c.json(
+                {
+                  type: '/problems/service-unavailable' as const,
+                  title: 'Service Unavailable' as const,
+                  status: 503 as const,
+                  detail: message,
+                  instance: c.req.path,
+                },
+                503,
+                { 'Content-Type': 'application/problem+json' },
+              ),
+            ),
+          ),
+          Match.tag('MigrateDatabaseError', ({ message }) =>
             Effect.succeed(
               c.json(
                 {
@@ -875,6 +920,21 @@ export const postMigrateBaselineRouteHandler: RouteHandler<typeof postMigrateBas
               ),
             ),
           ),
+          Match.tag('MigrateDatabaseError', ({ message }) =>
+            Effect.succeed(
+              c.json(
+                {
+                  type: '/problems/service-unavailable' as const,
+                  title: 'Service Unavailable' as const,
+                  status: 503 as const,
+                  detail: message,
+                  instance: c.req.path,
+                },
+                503,
+                { 'Content-Type': 'application/problem+json' },
+              ),
+            ),
+          ),
           Match.tag('DatabaseUnavailableError', ({ reason }) =>
             Effect.succeed(
               c.json(
@@ -946,21 +1006,6 @@ export const getMigrateMigrationsMigrationNameRouteHandler: RouteHandler<
                   instance: c.req.path,
                 },
                 404,
-                { 'Content-Type': 'application/problem+json' },
-              ),
-            ),
-          ),
-          Match.tag('MigrateConfigError', ({ message }) =>
-            Effect.succeed(
-              c.json(
-                {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
-                  detail: message,
-                  instance: c.req.path,
-                },
-                503,
                 { 'Content-Type': 'application/problem+json' },
               ),
             ),

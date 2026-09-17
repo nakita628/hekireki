@@ -39,7 +39,11 @@ export function Rehearsal({
       className={`flex flex-col gap-2.5 rounded-lg border px-3 py-2.5 ${result === null ? (required ? 'border-accent/40 bg-accent-soft' : 'border-line bg-surface') : result.ok ? 'border-ok/40 bg-ok/5' : 'border-danger/40 bg-danger/5'}`}
     >
       <p className="m-0 text-body text-muted">
-        {dialect === 'postgresql' ? t.explainPostgres : t.explainSqlite}
+        {dialect === 'postgresql'
+          ? t.explainPostgres
+          : dialect === 'mysql'
+            ? t.explainMysql
+            : t.explainSqlite}
       </p>
       <div className="flex flex-wrap items-center gap-2.5">
         <Button
@@ -100,7 +104,9 @@ export function Rehearsal({
             <span className="text-body font-semibold">{t.tables}</span>
             <RowCounts tables={result.tables} />
           </div>
-          {result.schemaMatches ? (
+          {result.schemaMatches === null ? (
+            <span className="text-body text-muted">{t.notCompared}</span>
+          ) : result.schemaMatches ? (
             <span className="flex items-center gap-1.5 text-body text-ok">
               <LuCircleCheck size={14} />
               {t.matches}

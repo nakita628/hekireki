@@ -117,6 +117,9 @@ importers:
       '@paralleldrive/cuid2':
         specifier: ^3.3.0
         version: 3.3.0
+      '@prisma/engines':
+        specifier: 8.1.0-dev.6
+        version: 8.1.0-dev.6
       '@prisma/generator-helper':
         specifier: 8.1.0-dev.6
         version: 8.1.0-dev.6

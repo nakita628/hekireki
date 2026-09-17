@@ -34,7 +34,6 @@ enum Visibility {
 model User {
   id        String    @id @default(uuid(7))
   email     String    @unique
-  test      String
   role      Role      @default(VIEWER)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt

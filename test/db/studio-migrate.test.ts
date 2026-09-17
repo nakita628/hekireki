@@ -19,18 +19,18 @@ import { afterAll, beforeAll, describe, expect, it } from 'vite-plus/test'
 // Prisma wrote it for that to hold. Then the schema gains a field and the engine has to write
 // exactly the migration for it, which has to run.
 //
-// MySQL is the other half: Prisma Migrate has no MySQL connector behind a driver adapter, and
-// asking it for one panics (`Unsupported adapter provider: Mysql`), which would take the Studio
-// process with it. The page has to refuse a MySQL database before the engine is asked anything,
-// and Studio has to still be serving afterwards.
+// MySQL is the other half: the wasm engine has no MySQL connector at all, so Studio runs the native
+// schema engine `@prisma/engines` installs on the database's URL, as the Prisma CLI does, and the
+// same round trip has to hold through it. Where no native engine can be run, the page plans from
+// the migrations directory instead, which studio-migrate-directory.test.ts runs end to end.
 //
 //   HEKIREKI_SEED_PG=postgresql://postgres:postgres@localhost:5432/seed
 //   HEKIREKI_SEED_MYSQL=mysql://root:root@localhost:3306/seed
 //
 // The tables live in a database named for this run, which the test creates empty and drops again.
-// A PostgreSQL schema would not do: given a connection rather than a URL the engine reads
-// `public` by name, which Studio refuses rather than report every table of another schema as
-// missing. Each target is skipped without a URL.
+// A PostgreSQL schema would not do here: given a connection rather than a URL the engine reads
+// `public` by name, so Studio plans a schema other than public from the migrations directory, as
+// it does MySQL. Each target is skipped without a URL.
 
 const root = resolve(import.meta.dirname, '..', '..')
 const pkg = join(root, 'packages', 'hekireki')
@@ -48,7 +48,7 @@ type Target = {
   /** Creates the database of this run, and nothing else. */
   readonly create: (url: string) => Promise<void>
   readonly port: number
-  /** Whether Prisma Migrate can read this database through a connection rather than a URL. */
+  /** Whether Studio can ask a schema engine of this database: the wasm one, or the native one on its URL. */
   readonly migratable: boolean
   /** What the migration for the added field looks like on this database. */
   readonly added: RegExp
@@ -105,7 +105,7 @@ const TARGETS: readonly Target[] = [
       }
     },
     port: 5922,
-    migratable: false,
+    migratable: true,
     added: /ALTER TABLE `User` ADD COLUMN `nickname` VARCHAR\(191\)/u,
     drop: async (url) => {
       const connection = await mysql.createConnection(url)
@@ -278,19 +278,6 @@ describe.each(TARGETS)('the Migrate page on $dialect', (target) => {
     },
   )
 
-  it.skipIf(target.url === undefined || target.migratable)(
-    'refuses a database Prisma Migrate cannot read this way, and keeps serving',
-    async () => {
-      expect(state.failure).toBeNull()
-      const diff = await call('/api/migrate/diff')
-      expect(diff.status).toBe(503)
-      expect(String(diff.json.detail)).toContain('MySQL or MariaDB')
-      expect((await call('/api/migrate')).status).toBe(503)
-      // The engine would have panicked and taken the process with it; it was never asked.
-      expect((await call('/api/schema')).status).toBe(200)
-    },
-  )
-
   it.skipIf(target.url === undefined || !target.migratable)(
     'writes exactly the migration for a field the schema gains',
     async () => {
@@ -324,7 +311,7 @@ describe.each(TARGETS)('the Migrate page on $dialect', (target) => {
     },
   )
 
-  it.skipIf(target.url === undefined || !target.migratable)(
+  it.skipIf(target.url === undefined || target.dialect !== 'postgresql')(
     'takes a backup nothing of which depends on an enum, and restores the database as it was from it',
     async () => {
       expect(state.failure).toBeNull()
@@ -412,7 +399,7 @@ describe.each(TARGETS)('the Migrate page on $dialect', (target) => {
     },
   )
 
-  it.skipIf(target.url === undefined || !target.migratable)(
+  it.skipIf(target.url === undefined || target.dialect !== 'postgresql')(
     'changes nothing when a restore cannot put everything back: a view the backup does not know holds its table',
     async () => {
       expect(state.failure).toBeNull()
@@ -448,7 +435,7 @@ describe.each(TARGETS)('the Migrate page on $dialect', (target) => {
     },
   )
 
-  it.skipIf(target.url === undefined || !target.migratable)(
+  it.skipIf(target.url === undefined || target.dialect !== 'postgresql')(
     'runs a fix over many rows a batch at a time when the plan is asked for one',
     async () => {
       expect(state.failure).toBeNull()

@@ -8,6 +8,8 @@ import { afterEach, describe, expect, it } from 'vite-plus/test'
 
 import { fileSystemLayer } from '../../file/index.js'
 import { connectDatabase, openSqliteCopy } from '../../studio/server/services/database.js'
+import { makeSchemaEngineAdapter } from './engine-adapter.js'
+import { openSchemaEngine } from './engine.js'
 import { rehearseMigration } from './rehearse.js'
 
 const dirs: string[] = []
@@ -74,6 +76,11 @@ function rehearse(dir: string, file: string, steps: readonly (readonly string[])
           steps,
           files: [{ path: path.join(dir, 'schema.prisma'), content: SCHEMA }],
           configDir: dir,
+          compareWith: (target) =>
+            openSchemaEngine({
+              files: [{ path: path.join(dir, 'schema.prisma'), content: SCHEMA }],
+              adapter: makeSchemaEngineAdapter(target),
+            }),
           openCopy: () => openSqliteCopy({ driver, cwd: dir }),
         })
       }),

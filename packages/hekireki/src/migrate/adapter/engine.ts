@@ -13,8 +13,19 @@ import { MigrateEngineError } from '../errors.js'
 /** The bindings of the engine, as `@prisma/schema-engine-wasm` declares them. */
 type Bindings = typeof SchemaEngineWasm
 
-/** The engine commands are sent to: one `SchemaEngine`, reading the database through the adapter. */
-export type Engine = Awaited<ReturnType<Bindings['SchemaEngine']['new']>>
+/**
+ * The engine commands are sent to: the commands of `SchemaEngine` Studio sends. The wasm engine
+ * reads the database through the adapter; the native one (`native-engine.ts`) through its URL, and
+ * answers the same commands with the same shapes.
+ */
+export type Engine = Pick<
+  Awaited<ReturnType<Bindings['SchemaEngine']['new']>>,
+  | 'diff'
+  | 'diagnoseMigrationHistory'
+  | 'applyMigrations'
+  | 'markMigrationApplied'
+  | 'markMigrationRolledBack'
+>
 
 const WasmStart = z
   .custom<() => void>((value) => typeof value === 'function')

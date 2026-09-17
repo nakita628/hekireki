@@ -14,12 +14,19 @@ import {
   markMigrationRolledBack,
   migrationDiff,
   migrationStatus,
+  readAppliedMigrations,
 } from '../../../migrate/adapter/commands.js'
 import {
   DECISIONS_FILE,
   readDecisions,
   writeDecisions,
 } from '../../../migrate/adapter/decisions-file.js'
+import {
+  deployWithoutEngine,
+  readHistoryWithoutEngine,
+  recordAppliedWithoutEngine,
+  recordRolledBackWithoutEngine,
+} from '../../../migrate/adapter/history-table.js'
 import { writeMigration } from '../../../migrate/adapter/migrations-dir.js'
 import { countTables, rehearseMigration } from '../../../migrate/adapter/rehearse.js'
 import { checkOpened } from '../../../migrate/check.js'
@@ -76,16 +83,20 @@ function session() {
 export function readMigrateStatus() {
   return Effect.gen(function* () {
     const opened = yield* session()
-    const status = yield* migrationStatus({
-      engine: opened.engine,
-      driver: opened.driver,
-      migrations: opened.migrations,
-      files: opened.files,
-      configDir: opened.schemaDir,
-    })
+    const status =
+      opened.engine === null
+        ? yield* readHistoryWithoutEngine({ driver: opened.driver, migrations: opened.migrations })
+        : yield* migrationStatus({
+            engine: opened.engine,
+            driver: opened.driver,
+            migrations: opened.migrations,
+            files: opened.files,
+            configDir: opened.schemaDir,
+          })
     const result = MigrateStatusSchema.safeParse({
       ...status,
       migrationsDir: opened.migrationsDir,
+      withoutEngine: opened.withoutEngine,
     })
     if (!result.success) {
       return yield* new ContractViolationError({ message: result.error.message })
@@ -102,6 +113,11 @@ export function readMigrateStatus() {
 export function readMigrateDiff() {
   return Effect.gen(function* () {
     const opened = yield* session()
+    if (opened.engine === null) {
+      return yield* new MigrateConfigError({
+        message: `Studio cannot compare this database with the schema (${opened.withoutEngine === 'mysql' ? 'MySQL' : 'a PostgreSQL schema other than public'}): write the migration with \`prisma migrate dev --create-only\`, and it is planned from the migrations directory.`,
+      })
+    }
     const diff = yield* migrationDiff({
       engine: opened.engine,
       files: opened.files,
@@ -156,11 +172,28 @@ const PlanMigrationInput = z
 export function planMigration(input: z.infer<typeof PlanMigrationInput>) {
   return Effect.gen(function* () {
     const opened = yield* session()
-    const diff = yield* migrationDiff({
-      engine: opened.engine,
-      files: opened.files,
-      configDir: opened.schemaDir,
-    })
+    // Without the engine, the migration is the first the database has not run, as Prisma wrote it
+    // to the directory; with it, what the engine writes for the schema.
+    const history =
+      opened.engine === null
+        ? yield* readHistoryWithoutEngine({ driver: opened.driver, migrations: opened.migrations })
+        : null
+    const [pending = null, ...later] = history?.pending ?? []
+    const file =
+      pending === null
+        ? null
+        : opened.migrations.migrationDirectories.find((one) => one.path === pending)
+    const diff =
+      opened.engine === null
+        ? {
+            sql: file?.migrationFile.content.tag === 'ok' ? file.migrationFile.content.value : '',
+            drift: pending !== null,
+          }
+        : yield* migrationDiff({
+            engine: opened.engine,
+            files: opened.files,
+            configDir: opened.schemaDir,
+          })
     // What the rows of the database say about the migration, and the fixes the decisions give
     // for them. It runs on the connection Studio already holds: a second one would read a
     // database of its own, and SQLite would refuse it while this one is open.
@@ -180,16 +213,32 @@ export function planMigration(input: z.infer<typeof PlanMigrationInput>) {
     })
     const plan = makePlan(report, diff.sql, input.batch ?? null)
     const result = MigratePlanSchema.safeParse({
-      name: migrationName({ at: new Date(), name: input.name ?? 'migration' }),
+      name: pending ?? migrationName({ at: new Date(), name: input.name ?? 'migration' }),
+      migration: pending,
       ...plan,
       // Each fixed model as the fixes will leave it, read from the database as it is now.
       previews: report.previews.map((preview) => ({
         modelName: preview.model,
         sql: preview.sql,
       })),
-      notes: diff.drift
-        ? plan.notes
-        : ['The database already matches the schema: there is nothing to migrate.'],
+      notes:
+        opened.engine === null
+          ? pending === null
+            ? [
+                `No migration in ${opened.migrationsDir} is waiting to run. Studio cannot compare this database with the schema: write the migration with \`prisma migrate dev --create-only\`, and it is planned here.`,
+              ]
+            : [
+                `The plan is ${pending} from the migrations directory, with the fixes the decisions make written into it. Studio cannot compare this database with the schema, so what the migration does is what Prisma wrote.`,
+                ...(later.length === 0
+                  ? []
+                  : [
+                      `${later.length} more after it: each is planned once the one before it has run.`,
+                    ]),
+                ...plan.notes,
+              ]
+          : diff.drift
+            ? plan.notes
+            : ['The database already matches the schema: there is nothing to migrate.'],
     })
     if (!result.success) {
       return yield* new ContractViolationError({ message: result.error.message })
@@ -233,6 +282,11 @@ export function applyMigrationStatements(input: z.infer<typeof ApplyStatementsIn
 const CreateMigrationInput = z
   .object({
     name: z.string().meta({ description: 'What to call it.', example: 'profile' }),
+    existing: z.string().optional().meta({
+      description:
+        'The pending migration of the directory to write over, in place of a new one: the plan was made from it.',
+      example: '20260201000000_profile',
+    }),
     sql: z.string().meta({
       description: 'The statements to write.',
       example: 'ALTER TABLE "User" ADD COLUMN "name" TEXT;\n',
@@ -250,7 +304,23 @@ const CreateMigrationInput = z
 export function createMigration(input: z.infer<typeof CreateMigrationInput>) {
   return Effect.gen(function* () {
     const opened = yield* session()
-    const name = migrationName({ at: new Date(), name: input.name })
+    if (input.existing !== undefined) {
+      // Only a migration the directory holds and the database has not run: one that ran would be
+      // recorded with the checksum of a file that is no longer there.
+      const applied = yield* readAppliedMigrations(opened.driver)
+      const there = opened.migrations.migrationDirectories.some(
+        (one) => one.path === input.existing,
+      )
+      const ran = applied.migrations.some(
+        (row) => row.name === input.existing && row.rolledBackAt === null,
+      )
+      if (!there || ran) {
+        return yield* new MigrateConfigError({
+          message: `${input.existing} is not a migration of ${opened.migrationsDir} waiting to run.`,
+        })
+      }
+    }
+    const name = input.existing ?? migrationName({ at: new Date(), name: input.name })
     const written = yield* writeMigration({
       baseDir: opened.migrationsDir,
       name,
@@ -284,12 +354,20 @@ const MarkAppliedInput = z
 export function recordMigrationApplied(input: z.infer<typeof MarkAppliedInput>) {
   return Effect.gen(function* () {
     const opened = yield* session()
-    yield* markMigrationApplied({
-      engine: opened.engine,
-      driver: opened.driver,
-      migrations: opened.migrations,
-      name: input.name,
-    })
+    if (opened.engine === null) {
+      yield* recordAppliedWithoutEngine({
+        driver: opened.driver,
+        migrations: opened.migrations,
+        name: input.name,
+      })
+    } else {
+      yield* markMigrationApplied({
+        engine: opened.engine,
+        driver: opened.driver,
+        migrations: opened.migrations,
+        name: input.name,
+      })
+    }
     return yield* readMigrateStatus()
   })
 }
@@ -302,10 +380,10 @@ export function recordMigrationApplied(input: z.infer<typeof MarkAppliedInput>) 
 export function deployMigrations() {
   return Effect.gen(function* () {
     const opened = yield* session()
-    const deployed = yield* applyPendingMigrations({
-      engine: opened.engine,
-      migrations: opened.migrations,
-    })
+    const deployed =
+      opened.engine === null
+        ? yield* deployWithoutEngine({ driver: opened.driver, migrations: opened.migrations })
+        : yield* applyPendingMigrations({ engine: opened.engine, migrations: opened.migrations })
     const result = DeployedSchema.safeParse(deployed)
     if (!result.success) {
       return yield* new ContractViolationError({ message: result.error.message })
@@ -323,7 +401,11 @@ export function deployMigrations() {
 export function recordMigrationRolledBack(input: z.infer<typeof MarkAppliedInput>) {
   return Effect.gen(function* () {
     const opened = yield* session()
-    yield* markMigrationRolledBack({ engine: opened.engine, name: input.name })
+    if (opened.engine === null) {
+      yield* recordRolledBackWithoutEngine({ driver: opened.driver, name: input.name })
+    } else {
+      yield* markMigrationRolledBack({ engine: opened.engine, name: input.name })
+    }
     return yield* readMigrateStatus()
   })
 }
@@ -415,6 +497,11 @@ export function writeMigrationDecisions(input: z.infer<typeof WriteDecisionsInpu
 export function readMigrateBaseline() {
   return Effect.gen(function* () {
     const opened = yield* session()
+    if (opened.engine === null) {
+      return yield* new MigrateConfigError({
+        message: `Studio cannot replay the migrations to compare them with this database: record each migration it already has with \`prisma migrate resolve --applied <name>\`.`,
+      })
+    }
     const candidates = yield* baselineCandidates({
       engine: opened.engine,
       migrations: opened.migrations,
@@ -439,6 +526,11 @@ export function readMigrateBaseline() {
 export function baselineDatabase(input: z.infer<typeof MarkAppliedInput>) {
   return Effect.gen(function* () {
     const opened = yield* session()
+    if (opened.engine === null) {
+      return yield* new MigrateConfigError({
+        message: `Studio cannot check this database against the migrations before recording them: record each migration it already has with \`prisma migrate resolve --applied <name>\`.`,
+      })
+    }
     yield* baselineMigrations({
       engine: opened.engine,
       driver: opened.driver,
@@ -516,7 +608,15 @@ export function rehearse(input: z.infer<typeof RehearseInput>) {
       steps: input.steps,
       files: opened.files,
       configDir: opened.schemaDir,
-      openCopy: () => MigrateService.openSqliteCopy({ driver: opened.driver, cwd: process.cwd() }),
+      compareWith: opened.rehearsalEngine,
+      openCopy: () =>
+        opened.driver.dialect === 'mysql'
+          ? MigrateService.openMysqlCopy({
+              url: opened.url ?? '',
+              driver: opened.driver,
+              cwd: process.cwd(),
+            })
+          : MigrateService.openSqliteCopy({ driver: opened.driver, cwd: process.cwd() }),
     }).pipe(
       Effect.catchTag('DatabaseError', (error) =>
         Effect.fail(new MigrateDatabaseError({ message: error.cause })),

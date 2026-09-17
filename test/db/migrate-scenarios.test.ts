@@ -890,7 +890,12 @@ for (const target of TARGETS) {
 
     afterAll(async () => {
       if (target.dialect !== 'sqlite') {
-        await Promise.all(SCENARIOS.map((scenario) => target.drop(base, `${RUN}_${scenario.name}`)))
+        // Every scenario's database, and the one two migrations run one after the other in.
+        await Promise.all(
+          [...SCENARIOS.map((scenario) => scenario.name), 'chained'].map((name) =>
+            target.drop(base, `${RUN}_${name}`),
+          ),
+        )
       }
       if (state.dir !== '') rmSync(state.dir, { recursive: true, force: true })
     })

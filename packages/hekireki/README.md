@@ -432,9 +432,25 @@ Prisma Migrate itself does the work: `@prisma/schema-engine-wasm` runs in the St
 reading and writing through the connection the rest of Studio is already on. Nothing is spawned
 and no schema engine is downloaded.
 
-The page works on PostgreSQL and SQLite. Prisma Migrate has no MySQL behind a connection rather
-than a URL, and no way to read a PostgreSQL schema other than `public` that way either, so Studio
-says so for those and leaves them to the command line, where `hekireki migrate check` and
+The page works on SQLite, PostgreSQL and MySQL (MariaDB too). SQLite and PostgreSQL's `public`
+schema go through `@prisma/schema-engine-wasm` in the Studio process. The wasm engine has no MySQL
+connector at all, and reads no PostgreSQL schema other than `public` through a connection, so for
+those Studio starts the native schema engine `@prisma/engines` installs, on the database's URL,
+as the Prisma CLI starts it (`PRISMA_SCHEMA_ENGINE_BINARY` names another binary, as it does for
+the CLI). Everything on the page works the same through it: the database compared with the
+schema, the migration written for it, the history, a baseline, a deploy. A rehearsal on MySQL runs
+on a copy of the database made beside it (its tables, rows and triggers, dropped afterwards), and
+what it leaves is compared with the schema there; on a PostgreSQL schema other than `public` it
+runs in a transaction that is rolled back, which the native engine cannot see into, so what it
+leaves is not compared.
+
+Where no native engine can be run, the migrations directory is the plan: write the migration with
+`prisma migrate dev --create-only`, and the page reads the first migration the database has not
+run, checks the rows against it, writes the fixes of your decisions into its migration.sql,
+rehearses, runs and records it in `_prisma_migrations` row for row as Prisma does, so `prisma
+migrate status` finds the database up to date. A deploy of what is waiting, a failed migration
+marked rolled back, and a migration edited after it ran work there too; comparing the database
+with the schema and checking a baseline do not. The command line's `hekireki migrate check` and
 `hekireki migrate plan --migration` do the same work on every database.
 
 The Prisma Client page runs a call as your code writes it, through the project's own generated

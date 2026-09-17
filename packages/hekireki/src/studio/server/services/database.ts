@@ -692,6 +692,153 @@ export function openSqliteCopy(input: { readonly driver: Driver; readonly cwd: s
 }
 
 /**
+ * A copy of the MySQL database Studio is on, for a rehearsal: a database of its own beside it,
+ * with every table made as `SHOW CREATE TABLE` gives it (foreign keys and `CHECK`s included), its
+ * rows, and its triggers. MySQL commits a DDL statement as it runs, so a rehearsal cannot be a
+ * transaction taken back as it is on PostgreSQL. Views and routines are not copied, and a large
+ * database takes as long to copy as its rows do. Making it takes the CREATE privilege on
+ * databases, which MySQL refuses in so many words when it is missing.
+ *
+ * @example
+ * ```sql
+ * CREATE DATABASE `hk_rehearsal_4f0c…`;
+ * -- on a connection to the copy, foreign key checks off while the rows go in
+ * CREATE TABLE `User` (`id` int NOT NULL AUTO_INCREMENT, …, PRIMARY KEY (`id`)) ENGINE=InnoDB …;
+ * INSERT INTO `User` (`id`, `email`) SELECT `id`, `email` FROM `app`.`User`;
+ * CREATE TRIGGER `User_audit` BEFORE UPDATE ON `User` FOR EACH ROW …;
+ * -- closing the copy
+ * DROP DATABASE IF EXISTS `hk_rehearsal_4f0c…`
+ * ```
+ *
+ * @param input - the database Studio is on: its URL, the open connection, and where drivers are found
+ * @returns a driver on the copy; closing it removes the copy
+ */
+export function openMysqlCopy(input: {
+  readonly url: string
+  readonly driver: Driver
+  readonly cwd: string
+}) {
+  return Effect.gen(function* () {
+    const { driver } = input
+    const found = yield* driver.query({ sql: 'SELECT DATABASE() AS `name`', params: [] })
+    const source = found.rows[0]?.name
+    const name = `hk_rehearsal_${globalThis.crypto.randomUUID().replaceAll('-', '')}`
+    const quoted = SqlDomain.makeIdentifier({ dialect: 'mysql', name })
+    yield* driver.executeScript(`CREATE DATABASE ${quoted}`)
+    const drop = driver.executeScript(`DROP DATABASE IF EXISTS ${quoted}`).pipe(Effect.ignore)
+    const copy = yield* openMysql(
+      Object.assign(new URL(input.url), { pathname: `/${name}` }).toString(),
+      input.cwd,
+    ).pipe(Effect.tapError(() => drop))
+    const close = Effect.all([copy.close, drop], { discard: true })
+    yield* fillMysqlCopy({ driver, copy, source: typeof source === 'string' ? source : '' }).pipe(
+      Effect.tapError(() => close),
+    )
+    // The copy's own URL, for the native schema engine to compare what a rehearsal leaves in it.
+    return {
+      ...copy,
+      close,
+      url: Object.assign(new URL(input.url), { pathname: `/${name}` }).toString(),
+    }
+  }).pipe(
+    Effect.catchTag('DatabaseError', (error) =>
+      Effect.fail(
+        new DatabaseUnavailableError({
+          reason: `The database could not be copied for the rehearsal: ${error.cause}`,
+        }),
+      ),
+    ),
+  )
+}
+
+/** Every table of `source` made in the copy with its rows, foreign key checks off meanwhile, then its triggers. */
+function fillMysqlCopy(input: {
+  readonly driver: Driver
+  readonly copy: Driver
+  readonly source: string
+}) {
+  return Effect.gen(function* () {
+    const { driver, copy } = input
+    const tables = yield* driver.query({
+      sql: "SELECT table_name AS `table` FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE' ORDER BY table_name",
+      params: [],
+    })
+    yield* copy.executeRaw({ sql: 'SET FOREIGN_KEY_CHECKS = 0', params: [] })
+    yield* Effect.forEach(
+      tables.rows.flatMap((row) => (typeof row.table === 'string' ? [row.table] : [])),
+      (table) => copyMysqlTable({ ...input, table }),
+      { discard: true },
+    )
+    yield* copy.executeRaw({ sql: 'SET FOREIGN_KEY_CHECKS = 1', params: [] })
+    const triggers = yield* driver.query({
+      sql: 'SELECT trigger_name AS `name` FROM information_schema.triggers WHERE trigger_schema = DATABASE() ORDER BY 1',
+      params: [],
+    })
+    yield* Effect.forEach(
+      triggers.rows.flatMap((row) => (typeof row.name === 'string' ? [row.name] : [])),
+      (trigger) => copyMysqlTrigger({ driver, copy, trigger }),
+      { discard: true },
+    )
+  })
+}
+
+/** One trigger made again in the copy, as `SHOW CREATE TRIGGER` gives the statement that made it. */
+function copyMysqlTrigger(input: {
+  readonly driver: Driver
+  readonly copy: Driver
+  readonly trigger: string
+}) {
+  return Effect.gen(function* () {
+    const created = yield* input.driver.query({
+      sql: `SHOW CREATE TRIGGER ${SqlDomain.makeIdentifier({ dialect: 'mysql', name: input.trigger })}`,
+      params: [],
+    })
+    const statement = created.rows[0]?.['SQL Original Statement']
+    yield* input.copy.executeRaw({
+      sql: typeof statement === 'string' ? statement : '',
+      params: [],
+    })
+  })
+}
+
+/** One table made in the copy as `SHOW CREATE TABLE` gives it, and its rows copied over but for generated columns. */
+function copyMysqlTable(input: {
+  readonly driver: Driver
+  readonly copy: Driver
+  readonly source: string
+  readonly table: string
+}) {
+  return Effect.gen(function* () {
+    const table = SqlDomain.makeIdentifier({ dialect: 'mysql', name: input.table })
+    const created = yield* input.driver.query({
+      sql: `SHOW CREATE TABLE ${table}`,
+      params: [],
+    })
+    const statement = created.rows[0]?.['Create Table']
+    yield* input.copy.executeRaw({
+      sql: typeof statement === 'string' ? statement : '',
+      params: [],
+    })
+    // A generated column is worked out again in the copy, and takes no value.
+    const columns = yield* input.driver.query({
+      sql: "SELECT column_name AS `column` FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND COALESCE(generation_expression, '') = '' ORDER BY ordinal_position",
+      params: [input.table],
+    })
+    const names = columns.rows
+      .flatMap((row) =>
+        typeof row.column === 'string'
+          ? [SqlDomain.makeIdentifier({ dialect: 'mysql', name: row.column })]
+          : [],
+      )
+      .join(', ')
+    yield* input.copy.executeRaw({
+      sql: `INSERT INTO ${table} (${names}) SELECT ${names} FROM ${SqlDomain.makeIdentifier({ dialect: 'mysql', name: input.source })}.${table}`,
+      params: [],
+    })
+  })
+}
+
+/**
  * An empty database beside the one Studio is on, for the schema engine to replay a migrations
  * directory into and compare with: SQLite in memory, and on PostgreSQL a database of its own,
  * created on the open connection and dropped again when the returned driver is closed. Creating

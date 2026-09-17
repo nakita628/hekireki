@@ -1,11 +1,12 @@
 import { Effect, Ref } from 'effect'
+import type { FileSystem } from 'effect'
 
 import { qualifiedName, quoteIdentifier } from '../../sql/index.js'
 import type { DatabaseUnavailableError } from '../../studio/server/errors/index.js'
 import type { Driver } from '../../studio/server/services/database.js'
+import type { MigrateEngineError } from '../errors.js'
 import { applyStatements, migrationDiff } from './commands.js'
-import { makeSchemaEngineAdapter } from './engine-adapter.js'
-import { openSchemaEngine } from './engine.js'
+import type { Engine } from './engine.js'
 import { introspectDatabase } from './introspect.js'
 
 /** How long a rehearsal on PostgreSQL waits for a lock, in milliseconds, before it gives up. */
@@ -62,11 +63,25 @@ export function rehearseMigration(input: {
   readonly steps: readonly (readonly string[])[]
   readonly files: readonly { readonly path: string; readonly content: string }[]
   readonly configDir: string
-  readonly openCopy: () => Effect.Effect<Driver, DatabaseUnavailableError>
+  /**
+   * The engine that reads the database the steps leave, opened on it; null when none can, and
+   * what the steps left is not compared with the schema.
+   */
+  readonly compareWith:
+    | ((
+        target: Driver & { readonly url?: string },
+      ) => Effect.Effect<Engine, MigrateEngineError, FileSystem.FileSystem>)
+    | null
+  /** A copy to rehearse on, with its URL when it has one of its own. */
+  readonly openCopy: () => Effect.Effect<
+    Driver & { readonly url?: string },
+    DatabaseUnavailableError
+  >
 }) {
   return Effect.gen(function* () {
     const { driver } = input
-    if (driver.dialect === 'sqlite') {
+    // MySQL commits a DDL statement as it runs: nothing of a transaction would be taken back.
+    if (driver.dialect === 'sqlite' || driver.dialect === 'mysql') {
       const copy = yield* input.openCopy()
       return yield* rehearseOn({ ...input, target: copy }).pipe(Effect.ensuring(copy.close))
     }
@@ -88,14 +103,19 @@ export function rehearseMigration(input: {
  * @returns how each step went, the rows of each table, and what still differs from the schema
  */
 function rehearseOn(input: {
-  readonly target: Driver
+  readonly target: Driver & { readonly url?: string }
   readonly steps: readonly (readonly string[])[]
   readonly files: readonly { readonly path: string; readonly content: string }[]
   readonly configDir: string
+  readonly compareWith:
+    | ((
+        target: Driver & { readonly url?: string },
+      ) => Effect.Effect<Engine, MigrateEngineError, FileSystem.FileSystem>)
+    | null
 }) {
   return Effect.gen(function* () {
     const { target } = input
-    const sqlite = target.dialect === 'sqlite'
+    const copied = target.dialect === 'sqlite' || target.dialect === 'mysql'
     const before = yield* countTables(target)
     // A step after one that failed is not run: it was written for a database the failure never made.
     const failedYet = yield* Ref.make(false)
@@ -105,15 +125,14 @@ function rehearseOn(input: {
     const after = yield* countTables(target)
     const ok = results.every((step) => step.ok)
     // What the schema engine makes of the database the steps left: nothing, when it matches.
-    const engine = yield* openSchemaEngine({
-      files: input.files,
-      adapter: makeSchemaEngineAdapter(target),
-    })
-    const diff = yield* migrationDiff({
-      engine,
-      files: input.files,
-      configDir: input.configDir,
-    })
+    const diff =
+      input.compareWith === null
+        ? null
+        : yield* migrationDiff({
+            engine: yield* input.compareWith(target),
+            files: input.files,
+            configDir: input.configDir,
+          })
     return {
       ok,
       steps: results,
@@ -122,9 +141,10 @@ function rehearseOn(input: {
         before: before.find((one) => one.table === table)?.rows ?? null,
         after: after.find((one) => one.table === table)?.rows ?? null,
       })),
-      schemaMatches: !diff.drift,
-      difference: diff.drift ? diff.sql : '',
-      limitations: sqlite
+      /** Null when the engine cannot be asked: the result is not compared with the schema. */
+      schemaMatches: diff === null ? null : !diff.drift,
+      difference: diff?.drift === true ? diff.sql : '',
+      limitations: copied
         ? []
         : [
             ...(input.steps.flat().some((statement) => OUTSIDE_TRANSACTION.test(statement))

@@ -11,8 +11,11 @@ import {
   readMigrationsList,
   resolveMigrationsDir,
 } from '../../../migrate/adapter/migrations-dir.js'
+import {
+  findSchemaEngineBinary,
+  openNativeSchemaEngine,
+} from '../../../migrate/adapter/native-engine.js'
 import { withLockfile } from '../../../migrate/domain/history.js'
-import { MigrateConfigError } from '../../../migrate/errors.js'
 import * as DatabaseService from './database.js'
 
 const OpenMigrateSessionInput = z
@@ -45,7 +48,8 @@ const OpenMigrateSessionInput = z
   .meta({ description: 'The schema and the database one migration command is run against' })
 
 /**
- * The Prisma schema engine on the schema Studio holds now and the database it already has open.
+ * The Prisma schema engine on the schema Studio holds now and the database it already has open,
+ * where it can be given that connection: not for MySQL, nor a PostgreSQL schema other than public.
  * One engine per command: the datamodel is fixed when the engine is made, and Studio reloads the
  * schema whenever the file changes, so an engine kept between commands would go stale.
  *
@@ -54,25 +58,23 @@ const OpenMigrateSessionInput = z
  */
 export function openMigrateSession(input: z.infer<typeof OpenMigrateSessionInput>) {
   return Effect.gen(function* () {
-    // Prisma Migrate has no MySQL behind a driver adapter: `sql-schema-connector` panics with
-    // `Unsupported adapter provider: Mysql` rather than refusing, and a panic in the engine takes
-    // the Studio process with it. Nothing is asked of it for a MySQL database.
-    if (input.driver.dialect === 'mysql') {
-      return yield* new MigrateConfigError({
-        message:
-          'Prisma Migrate cannot read a MySQL or MariaDB database through a connection rather than a URL, so Studio cannot migrate one.\n   Migrate from the command line instead: hekireki migrate check, then hekireki migrate plan --migration.',
-      })
-    }
-    // The schema engine is given a driver adapter, not a URL, so it has nothing to read a
-    // `?schema=` from and asks the catalogue for `public` by name. A connection pointed at
-    // another schema would have every table of it reported as missing, and a migration written
-    // to create the lot. It is refused instead.
+    // The wasm engine Studio runs in its own process has no MySQL connector at all, and given a
+    // connection rather than a URL it asks PostgreSQL's catalogue for `public` by name, so every
+    // table of another schema would read as missing. For those, the native engine the Prisma CLI
+    // runs is started on the URL instead. Without it, nothing is asked of an engine: the
+    // migrations directory is the plan, and Studio keeps the history itself.
     const namespace = input.url === null ? null : makePostgresSchema({ url: input.url })
-    if (input.driver.dialect === 'postgresql' && namespace !== null && namespace !== 'public') {
-      return yield* new MigrateConfigError({
-        message: `The database URL points at the schema "${namespace}", and Prisma Migrate reads "public" when it is given a connection rather than a URL.\n   Migrate from the command line for this database: hekireki migrate check --url ...`,
-      })
-    }
+    const needsNative =
+      input.driver.dialect === 'mysql'
+        ? 'mysql'
+        : input.driver.dialect === 'postgresql' && namespace !== null && namespace !== 'public'
+          ? 'schema'
+          : null
+    const binary =
+      needsNative === null || input.url === null
+        ? null
+        : yield* findSchemaEngineBinary(process.cwd())
+    const withoutEngine = needsNative !== null && binary === null ? needsNative : null
     const directory = yield* isDirectory(input.schemaPath).pipe(Effect.orElseSucceed(() => false))
     // Resolved: the schema path comes from the command line and may be relative, and what is
     // shown and written has to be somewhere a person can find.
@@ -88,19 +90,51 @@ export function openMigrateSession(input: z.infer<typeof OpenMigrateSessionInput
         )
         .find((found) => found !== undefined) ?? input.driver.dialect
     const migrations = withLockfile(yield* readMigrationsList(migrationsDir), provider)
-    const engine = yield* openSchemaEngine({
-      files: input.files,
-      // Checking a baseline replays the migrations into a shadow database beside this one.
-      adapter: makeSchemaEngineAdapter(input.driver, () =>
-        DatabaseService.openShadowDatabase({
-          url: input.url ?? '',
-          driver: input.driver,
-          cwd: process.cwd(),
-        }),
-      ),
-    })
+    const engine =
+      withoutEngine !== null
+        ? null
+        : binary !== null
+          ? openNativeSchemaEngine({
+              binary,
+              files: input.files,
+              url: input.url ?? '',
+              cwd: schemaDir,
+            })
+          : yield* openSchemaEngine({
+              files: input.files,
+              // Checking a baseline replays the migrations into a shadow database beside this one.
+              adapter: makeSchemaEngineAdapter(input.driver, () =>
+                DatabaseService.openShadowDatabase({
+                  url: input.url ?? '',
+                  driver: input.driver,
+                  cwd: process.cwd(),
+                }),
+              ),
+            })
     return {
       engine,
+      /** Why no engine is asked (`mysql`, or a PostgreSQL `schema` other than public, with no native engine to run); null when one is. */
+      withoutEngine,
+      /**
+       * The engine to ask of the database a rehearsal leaves: the wasm engine on the rehearsal's own
+       * connection, or the native one on the URL of the copy it ran on. Null where neither can read
+       * it: a rehearsal inside a transaction of Studio's connection, which another process cannot see.
+       */
+      rehearsalEngine:
+        engine === null || (binary !== null && input.driver.dialect !== 'mysql')
+          ? null
+          : binary !== null
+            ? (target: DatabaseService.Driver & { readonly url?: string }) =>
+                Effect.succeed(
+                  openNativeSchemaEngine({
+                    binary,
+                    files: input.files,
+                    url: target.url ?? '',
+                    cwd: schemaDir,
+                  }),
+                )
+            : (target: DatabaseService.Driver & { readonly url?: string }) =>
+                openSchemaEngine({ files: input.files, adapter: makeSchemaEngineAdapter(target) }),
       migrations,
       migrationsDir,
       schemaDir,

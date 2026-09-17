@@ -2,6 +2,7 @@ import { Effect } from 'effect'
 
 import { quoteIdentifier } from '../../sql/index.js'
 import type { Driver } from '../../studio/server/services/database.js'
+import { MIGRATIONS_TABLE_DDL } from '../domain/history.js'
 import { MigrateConfigError } from '../errors.js'
 import { engineCommand } from './engine.js'
 import type { Engine } from './engine.js'
@@ -9,34 +10,6 @@ import type { MigrationsList } from './migrations-dir.js'
 
 /** The table Prisma Migrate records what it has applied in. */
 const MIGRATIONS_TABLE = '_prisma_migrations'
-
-/**
- * `_prisma_migrations` as the schema engine creates it, character for character (the statements
- * are the ones in `schema-engine-wasm`). The engine creates it when it applies migrations, and not
- * when it only records one as applied, which a database being baselined has to have it for.
- */
-const MIGRATIONS_TABLE_DDL = {
-  sqlite: `CREATE TABLE "_prisma_migrations" (
-    "id"                    TEXT PRIMARY KEY NOT NULL,
-    "checksum"              TEXT NOT NULL,
-    "finished_at"           DATETIME,
-    "migration_name"        TEXT NOT NULL,
-    "logs"                  TEXT,
-    "rolled_back_at"        DATETIME,
-    "started_at"            DATETIME NOT NULL DEFAULT current_timestamp,
-    "applied_steps_count"   INTEGER UNSIGNED NOT NULL DEFAULT 0
-);`,
-  postgresql: `CREATE TABLE _prisma_migrations (
-    id                      VARCHAR(36) PRIMARY KEY NOT NULL,
-    checksum                VARCHAR(64) NOT NULL,
-    finished_at             TIMESTAMPTZ,
-    migration_name          VARCHAR(255) NOT NULL,
-    logs                    TEXT,
-    rolled_back_at          TIMESTAMPTZ,
-    started_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
-    applied_steps_count     INTEGER NOT NULL DEFAULT 0
-);`,
-}
 
 /** Nothing of the schema is left out of a command; `prisma.config.ts` is what excludes a table. */
 const NO_FILTER = { externalTables: [], externalEnums: [] }
@@ -367,12 +340,6 @@ export function markMigrationApplied(input: {
   return Effect.gen(function* () {
     const applied = yield* readAppliedMigrations(input.driver)
     if (!applied.present) {
-      if (input.driver.dialect === 'mysql') {
-        return yield* new MigrateConfigError({
-          message:
-            'Studio cannot record a migration on a MySQL database that has never been migrated: run `prisma migrate resolve --applied`.',
-        })
-      }
       yield* input.driver.executeScript(MIGRATIONS_TABLE_DDL[input.driver.dialect]).pipe(
         Effect.mapError(
           (error) =>
