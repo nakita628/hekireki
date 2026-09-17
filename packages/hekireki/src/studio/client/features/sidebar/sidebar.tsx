@@ -6,6 +6,7 @@ import {
   LuBraces,
   LuFileText,
   LuGitCompare,
+  LuGitPullRequestArrow,
   LuList,
   LuMoon,
   LuPanelLeft,
@@ -159,6 +160,12 @@ export function Sidebar({
             <LuBraces />
           </span>
           <span>Prisma Client</span>
+        </Link>
+        <Link to="/migrate" activeProps={NAV_ACTIVE} inactiveProps={NAV_INACTIVE}>
+          <span className="inline-flex opacity-85">
+            <LuGitPullRequestArrow />
+          </span>
+          <span>Migrate</span>
         </Link>
         <Link to="/docs" activeProps={NAV_ACTIVE} inactiveProps={NAV_INACTIVE}>
           <span className="inline-flex opacity-85">

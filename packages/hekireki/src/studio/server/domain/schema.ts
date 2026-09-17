@@ -152,10 +152,6 @@ const DatamodelEnum = z
   .readonly()
   .meta({ description: 'A DMMF enum as Prisma parsed it' })
 
-function quote(value: string) {
-  return JSON.stringify(value)
-}
-
 const MakeDefaultTextInput = z
   .object({
     kind: z
@@ -184,11 +180,13 @@ export function makeDefaultText(input: z.infer<typeof MakeDefaultTextInput>) {
   const value = input.default
   if (value === undefined) return null
   const scalar = (item: string | number | boolean) =>
-    typeof item === 'string' ? (input.kind === 'enum' ? item : quote(item)) : String(item)
+    typeof item === 'string' ? (input.kind === 'enum' ? item : JSON.stringify(item)) : String(item)
   const result = z.union([DefaultCall, DefaultList]).safeParse(value)
   if (!result.success) return typeof value === 'object' ? JSON.stringify(value) : scalar(value)
   if (Array.isArray(result.data)) return `[${result.data.map(scalar).join(', ')}]`
-  const args = result.data.args.map((arg) => (typeof arg === 'string' ? quote(arg) : String(arg)))
+  const args = result.data.args.map((arg) =>
+    typeof arg === 'string' ? JSON.stringify(arg) : String(arg),
+  )
   return `${result.data.name}(${args.join(', ')})`
 }
 
@@ -231,7 +229,7 @@ export function makeRelationAttribute(input: z.infer<typeof MakeRelationAttribut
   if (field.kind !== 'object') return null
   const customName =
     field.relationName && field.relationName !== makeRelationName({ a: modelName, b: field.type })
-      ? [quote(field.relationName)]
+      ? [JSON.stringify(field.relationName)]
       : []
   const fromFields = field.relationFromFields ?? []
   const toFields = field.relationToFields ?? []
@@ -281,8 +279,8 @@ export function makeIndexAttribute(input: z.infer<typeof MakeIndexAttributeInput
   ]
   const parts = [
     `[${index.fields.map((f) => f.name).join(', ')}]`,
-    ...(index.name ? [`name: ${quote(index.name)}`] : []),
-    ...(index.dbName ? [`map: ${quote(index.dbName)}`] : []),
+    ...(index.name ? [`name: ${JSON.stringify(index.name)}`] : []),
+    ...(index.dbName ? [`map: ${JSON.stringify(index.dbName)}`] : []),
   ]
   return `${keyword}(${parts.join(', ')})`
 }
@@ -336,7 +334,7 @@ function makeField(input: z.infer<typeof MakeFieldInput>) {
     ...(field.isUnique ? ['@unique'] : []),
     ...(defaultValue === null ? [] : [`@default(${defaultValue})`]),
     ...(field.isUpdatedAt ? ['@updatedAt'] : []),
-    ...(field.dbName ? [`@map(${quote(field.dbName)})`] : []),
+    ...(field.dbName ? [`@map(${JSON.stringify(field.dbName)})`] : []),
     ...(nativeType === null ? [] : [nativeType]),
     ...(relationAttribute === null ? [] : [relationAttribute]),
   ]
@@ -460,8 +458,8 @@ function makeModel(input: z.infer<typeof MakeModelInput>) {
     indexes: blockIndexes,
     attributes: [
       ...blockIndexes.map((i) => i.attribute),
-      ...(model.dbName ? [`@@map(${quote(model.dbName)})`] : []),
-      ...(model.schema ? [`@@schema(${quote(model.schema)})`] : []),
+      ...(model.dbName ? [`@@map(${JSON.stringify(model.dbName)})`] : []),
+      ...(model.schema ? [`@@schema(${JSON.stringify(model.schema)})`] : []),
     ],
     location: makeLocation({ blocks, types: ['model', 'view'], name: model.name }),
   }
@@ -732,8 +730,8 @@ const ENUM_COLUMN_TYPES: Readonly<Record<z.infer<typeof AnalysisDialect>, string
 
 function analysisDialect(input: z.infer<typeof MakeAnalysisSchemaInput>) {
   if (input.dialect !== null) return input.dialect
-  const provider = AnalysisDialect.safeParse(input.provider)
-  return provider.success ? provider.data : 'sqlite'
+  const result = AnalysisDialect.safeParse(input.provider)
+  return result.success ? result.data : 'sqlite'
 }
 
 function columnDataType(

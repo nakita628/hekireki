@@ -88,7 +88,10 @@ export const OPERATIONS: Readonly<
   deleteMany: { write: true, detail: 'delete every matching row', args: ['where', 'limit'] },
 }
 
-/** `User` → `user`: the property Prisma Client exposes a model under. */
+/**
+ * `User` → `user`: the property Prisma Client exposes a model under. The browser bundle takes no
+ * runtime code from the server tree, so this one lives here.
+ */
 export function delegateOf(model: string) {
   return `${model.charAt(0).toLowerCase()}${model.slice(1)}`
 }

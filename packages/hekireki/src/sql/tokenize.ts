@@ -67,14 +67,6 @@ const WORD_CHAR = /[A-Za-z0-9_$À-￿]/u
 const NUMBER = /^(?:0[xX][0-9a-fA-F]+|(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)/u
 const DOLLAR_TAG = /^\$([A-Za-z_][A-Za-z0-9_]*)?\$/u
 
-function isWordStart(char: string) {
-  return WORD_START.test(char)
-}
-
-function isWordChar(char: string) {
-  return WORD_CHAR.test(char)
-}
-
 function isDigit(char: string) {
   return char >= '0' && char <= '9'
 }
@@ -104,7 +96,7 @@ function readNumber(text: string, from: number) {
 
 function readWord(text: string, from: number) {
   let at = from
-  while (at < text.length && isWordChar(text[at] ?? '')) at += 1
+  while (at < text.length && WORD_CHAR.test(text[at] ?? '')) at += 1
   return at
 }
 
@@ -187,7 +179,7 @@ function step(text: string, at: number, previous: Token | null): Step {
     (char === ':' || char === '@') &&
     previous?.raw !== ':' &&
     text[at + 1] !== ':' &&
-    isWordStart(text[at + 1] ?? '')
+    WORD_START.test(text[at + 1] ?? '')
   ) {
     const end = readWord(text, at + 1)
     return token('param', text.slice(at, end), text.slice(at, end), at, end)
@@ -196,7 +188,7 @@ function step(text: string, at: number, previous: Token | null): Step {
     const end = readNumber(text, at)
     return token('number', text.slice(at, end), text.slice(at, end), at, end)
   }
-  if (isWordStart(char)) {
+  if (WORD_START.test(char)) {
     const end = readWord(text, at)
     const raw = text.slice(at, end)
     return token('word', raw, raw.toUpperCase(), at, end)

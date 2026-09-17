@@ -1,4 +1,6 @@
 import type { Dialect } from '../database/url.js'
+import { qualifiedName, quoteIdentifier } from '../sql/index.js'
+import { chunks } from '../utils/index.js'
 import type { SeedValue } from './config.js'
 import type { EnumMember, SeedTable, SeedTableRows } from './plan.js'
 
@@ -15,24 +17,8 @@ function isSeedList(value: SeedValue): value is readonly SeedValue[] {
   return Array.isArray(value)
 }
 
-function itemsOf(value: SeedValue) {
-  return isSeedList(value) ? value : [value]
-}
-
 /** Rows per INSERT: PostgreSQL binds at most 65535 parameters, and a literal file stays readable. */
 const INSERT_CHUNK = 200
-
-function quoteIdentifier(dialect: Dialect, name: string) {
-  return dialect === 'mysql'
-    ? `\`${name.replaceAll('`', '``')}\``
-    : `"${name.replaceAll('"', '""')}"`
-}
-
-/** The table, schema-qualified when the model carries `@@schema`. */
-function qualifiedTable(dialect: Dialect, table: SeedTable) {
-  const name = quoteIdentifier(dialect, table.table)
-  return table.schema === null ? name : `${quoteIdentifier(dialect, table.schema)}.${name}`
-}
 
 function columnsOf(table: SeedTable) {
   return table.kind === 'model'
@@ -46,13 +32,10 @@ function columnsOf(table: SeedTable) {
       }))
 }
 
-function pad(n: number, width = 2) {
-  return String(n).padStart(width, '0')
-}
-
-/** `YYYY-MM-DD HH:MM:SS.mmm` in UTC, the form every dialect parses. */
+/** `YYYY-MM-DD HH:MM:SS.mmm` in UTC, the form every dialect parses: the ISO form, its T and Z out. */
 function timestamp(date: Date) {
-  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())} ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())}.${pad(date.getUTCMilliseconds(), 3)}`
+  const iso = date.toISOString()
+  return `${iso.slice(0, 10)} ${iso.slice(11, 23)}`
 }
 
 function enumStored(column: ColumnShape, value: string) {
@@ -86,7 +69,7 @@ function arrayElement(column: ColumnShape, value: SeedValue) {
 export function renderLiteral(dialect: Dialect, column: ColumnShape, value: SeedValue) {
   if (value === null || value === undefined) return 'NULL'
   if (column.isList) {
-    const items = itemsOf(value)
+    const items = isSeedList(value) ? value : [value]
     return dialect === 'postgresql'
       ? quoteString(dialect, `{${items.map((item) => arrayElement(column, item)).join(',')}}`)
       : quoteString(dialect, JSON.stringify(items.map((item) => jsonValue(item))))
@@ -127,12 +110,6 @@ function jsonValue(value: SeedValue): unknown {
   return value
 }
 
-function chunks<T>(items: readonly T[], size: number) {
-  return Array.from({ length: Math.ceil(items.length / size) }, (_, i) =>
-    items.slice(i * size, (i + 1) * size),
-  )
-}
-
 function fieldOf(table: SeedTable, column: ColumnShape) {
   return table.kind === 'model'
     ? (table.columns.find((c) => c.column === column.column)?.field ?? column.column)
@@ -142,7 +119,7 @@ function fieldOf(table: SeedTable, column: ColumnShape) {
 /** The multi-row INSERTs of one table as SQL text with literal values, for a file. */
 export function insertSql(dialect: Dialect, entry: SeedTableRows, chunk = INSERT_CHUNK) {
   const columns = columnsOf(entry.table)
-  const target = qualifiedTable(dialect, entry.table)
+  const target = qualifiedName(dialect, entry.table)
   const names = columns.map((c) => quoteIdentifier(dialect, c.column)).join(', ')
   return chunks(entry.rows, chunk).map(
     (rows) =>
@@ -161,9 +138,7 @@ export function insertSql(dialect: Dialect, entry: SeedTableRows, chunk = INSERT
 
 /** `DELETE FROM` every seeded table, children first, so no foreign key is left dangling. */
 export function resetSql(dialect: Dialect, tables: readonly SeedTable[]) {
-  const deletes = tables
-    .toReversed()
-    .map((table) => `DELETE FROM ${qualifiedTable(dialect, table)}`)
+  const deletes = tables.toReversed().map((table) => `DELETE FROM ${qualifiedName(dialect, table)}`)
   // MySQL checks foreign keys row by row, so a self relation would block its own DELETE.
   return dialect === 'mysql'
     ? ['SET FOREIGN_KEY_CHECKS = 0', ...deletes, 'SET FOREIGN_KEY_CHECKS = 1']
@@ -181,7 +156,7 @@ export function sequenceSql(dialect: Dialect, tables: readonly SeedTable[]) {
       ? table.autoincrement.flatMap((field) => {
           const column = table.columns.find((c) => c.field === field)
           if (column === undefined) return []
-          const target = qualifiedTable(dialect, table)
+          const target = qualifiedName(dialect, table)
           const name = quoteIdentifier(dialect, column.column)
           return [
             `SELECT setval(pg_get_serial_sequence('${target.replaceAll("'", "''")}', '${column.column.replaceAll("'", "''")}'), COALESCE((SELECT MAX(${name}) FROM ${target}), 0) + 1, false)`,

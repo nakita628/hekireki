@@ -14,17 +14,13 @@ const STATIC_DIR = path.resolve(import.meta.dirname, '../studio')
 
 // Checked while the command line is read, so a URL Studio has no driver for is answered by this
 // sentence rather than by whatever the driver says. The schemes are the four `makeDialect` reads.
-const databaseUrlSchema = Schema.String.pipe(
+const DatabaseUrl = Schema.String.pipe(
   Schema.check(
     Schema.isPattern(/^(?:postgres|postgresql|mysql|file):/u, {
       message: 'a postgres://, postgresql://, mysql:// or file: connection string',
     }),
   ),
 )
-
-function userError(message: string) {
-  return new CliError.UserError({ cause: new Error(message), userMessage: message })
-}
 
 /**
  * The explicit schema when it exists, else the first default path that does.
@@ -37,9 +33,9 @@ export function resolveSchemaPath(explicit: string | null, commandPath: readonly
   return Effect.gen(function* () {
     if (explicit !== null) {
       if (yield* exists(explicit)) return explicit
-      return yield* userError(
-        `Schema not found: ${explicit}\n   Check the path passed to --schema.`,
-      )
+      return yield* new CliError.UserError({
+        cause: `Schema not found: ${explicit}\n   Check the path passed to --schema.`,
+      })
     }
     for (const candidate of DEFAULT_SCHEMA_PATHS) {
       if (yield* exists(candidate)) return candidate
@@ -47,9 +43,9 @@ export function resolveSchemaPath(explicit: string | null, commandPath: readonly
     return yield* new CliError.ShowHelp({
       commandPath: [...commandPath],
       errors: [
-        userError(
-          `No Prisma schema found (looked for ${DEFAULT_SCHEMA_PATHS.join(', ')}).\n   Pass --schema <path> to point at your schema.prisma or a directory of .prisma files.`,
-        ),
+        new CliError.UserError({
+          cause: `No Prisma schema found (looked for ${DEFAULT_SCHEMA_PATHS.join(', ')}).\n   Pass --schema <path> to point at your schema.prisma or a directory of .prisma files.`,
+        }),
       ],
     })
   })
@@ -100,7 +96,7 @@ const studioFlags = {
   ),
   url: Flag.string('url').pipe(
     Flag.withAlias('u'),
-    Flag.withSchema(databaseUrlSchema),
+    Flag.withSchema(DatabaseUrl),
     Flag.withDescription(
       'Database connection URL for browsing and editing data (default: `url` in hekireki.config.ts, then the variable datasource.url names in prisma.config.ts or the schema, read from the environment or .env; DATABASE_URL when it names none)',
     ),
@@ -124,12 +120,14 @@ function runStudio(args: Command.Command.Config.Infer<typeof studioFlags>) {
       staticDir: STATIC_DIR,
       databaseUrl: Option.getOrNull(args.url),
     }).pipe(
-      Effect.mapError((error) =>
-        userError(
-          error instanceof ServerListenError && error.code === 'EADDRINUSE'
-            ? `Port ${error.port} is already in use. Pass -p <port> to use another port.`
-            : error.message,
-        ),
+      Effect.mapError(
+        (error) =>
+          new CliError.UserError({
+            cause:
+              error instanceof ServerListenError && error.code === 'EADDRINUSE'
+                ? `Port ${error.port} is already in use. Pass -p <port> to use another port.`
+                : error.message,
+          }),
       ),
     )
     yield* Console.log(
@@ -184,7 +182,7 @@ const seedFlags = {
   ),
   url: Flag.string('url').pipe(
     Flag.withAlias('u'),
-    Flag.withSchema(databaseUrlSchema),
+    Flag.withSchema(DatabaseUrl),
     Flag.withDescription(
       'Database connection URL to insert into (default: `url` in hekireki.config.ts, then the variable datasource.url names in prisma.config.ts or the schema, read from the environment or .env; DATABASE_URL when it names none)',
     ),
@@ -242,7 +240,7 @@ function runSeedCommand(args: Command.Command.Config.Infer<typeof seedFlags>) {
         reset: args.reset,
       },
       process.cwd(),
-    ).pipe(Effect.mapError((error) => userError(error.message)))
+    ).pipe(Effect.mapError((error) => new CliError.UserError({ cause: error.message })))
     yield* Console.log(seedBanner(report))
   })
 }
@@ -271,28 +269,225 @@ const seed = Command.make('seed', seedFlags, runSeedCommand).pipe(
   ]),
 )
 
-const cli = Command.make(COMMAND_NAME).pipe(
-  Command.withDescription('⚡️ Prisma schema tools'),
-  Command.withSubcommands([studio, seed]),
-)
-
-/**
- * `help` spelled as Effect's own `--help` action, wherever it sits in the command path: `hekireki
- * help`, `hekireki help studio` and `hekireki studio help` all render the document the CLI already
- * builds, so there is no second copy of the help text to keep in step with the commands.
- *
- * Only the words before the first flag are a command path, so a value that happens to read `help`
- * (`--schema help`) is left alone.
- */
-export function helpAsFlag(args: readonly string[]) {
-  const flag = args.findIndex((arg) => arg.startsWith('-'))
-  const verbs = flag === -1 ? args : args.slice(0, flag)
-  const at = verbs.indexOf('help')
-  return at === -1 ? args : [...args.slice(0, at), ...args.slice(at + 1), '--help']
+const migrateCheckFlags = {
+  schema: Flag.string('schema').pipe(
+    Flag.withAlias('s'),
+    Flag.withDescription(
+      `Path to the schema about to be migrated: schema.prisma or a directory of .prisma files (default: ${DEFAULT_SCHEMA_PATHS.join(', then ')})`,
+    ),
+    Flag.withMetavar('schema.prisma|dir'),
+    Flag.optional,
+  ),
+  url: Flag.string('url').pipe(
+    Flag.withAlias('u'),
+    Flag.withSchema(DatabaseUrl),
+    Flag.withDescription(
+      'Database connection URL to check, read only (default: `url` in hekireki.config.ts, then the variable datasource.url names in prisma.config.ts or the schema, read from the environment or .env; DATABASE_URL when it names none)',
+    ),
+    Flag.withMetavar('connection-string'),
+    Flag.optional,
+  ),
+  decisions: Flag.string('decisions').pipe(
+    Flag.withAlias('d'),
+    Flag.withDescription(
+      'Path to the decisions made on the Migrate page of `hekireki studio`: what becomes of the rows that stand in the way (default: .hekireki/migrate.json beside the schema)',
+    ),
+    Flag.withMetavar('migrate.json'),
+    Flag.optional,
+  ),
+  timeout: Flag.integer('timeout').pipe(
+    Flag.withDescription(
+      'How long one query may run, in milliseconds, on PostgreSQL and MySQL (default: no limit)',
+    ),
+    Flag.withMetavar('ms'),
+    Flag.optional,
+  ),
+  json: Flag.boolean('json').pipe(
+    Flag.withDescription('Print the report as JSON, every check with its count and SQL'),
+    Flag.withDefault(false),
+  ),
 }
 
+/** The command line of `migrate check` as the runner reads it. */
+function migrateInput(
+  args: {
+    readonly url: Option.Option<string>
+    readonly decisions: Option.Option<string>
+    readonly timeout: Option.Option<number>
+  },
+  schemaPath: string,
+) {
+  return {
+    schemaPath,
+    url: Option.getOrNull(args.url),
+    decisions: Option.getOrNull(args.decisions),
+    timeout: Option.getOrNull(args.timeout),
+    cwd: process.cwd(),
+    env: process.env,
+  }
+}
+
+/** Why the data is not ready, as the command fails with it. */
+function notReady(summary: { readonly blocking: number; readonly failed: number }) {
+  return summary.blocking > 0
+    ? `${summary.blocking} blocking problem${summary.blocking === 1 ? '' : 's'} in the data: fix the rows, or decide what becomes of them on the Migrate page of hekireki studio, before migrating.`
+    : `${summary.failed} check${summary.failed === 1 ? '' : 's'} could not run.`
+}
+
+// The check pulls in the Prisma schema engine and the database drivers, so it is imported when it runs.
+function runMigrateCheckCommand(args: Command.Command.Config.Infer<typeof migrateCheckFlags>) {
+  return Effect.gen(function* () {
+    const schemaPath = yield* resolveSchemaPath(Option.getOrNull(args.schema), [
+      COMMAND_NAME,
+      'migrate',
+      'check',
+    ])
+    const { checkBanner, checkJson, runMigrateCheck, summarize } = yield* Effect.promise(
+      () => import('../migrate/index.js'),
+    )
+    const report = yield* runMigrateCheck(migrateInput(args, schemaPath)).pipe(
+      Effect.mapError((error) => new CliError.UserError({ cause: error.message })),
+    )
+    yield* Console.log(args.json ? checkJson(report) : checkBanner(report))
+    const summary = summarize(report)
+    if (!summary.ok) yield* new CliError.UserError({ cause: notReady(summary) })
+  })
+}
+
+const migrateCheck = Command.make('check', migrateCheckFlags, runMigrateCheckCommand).pipe(
+  Command.withDescription(
+    'Check the rows of the database against the schema about to be migrated: NULLs in a column turning required, duplicates under a new unique key, orphans of a foreign key, values an enum drops, and the data a dropped table or column takes with it. Read only; fails when something blocks.',
+  ),
+  Command.withExamples([
+    {
+      command: `${COMMAND_NAME} migrate check`,
+      description: 'Check the edited schema against the database named by DATABASE_URL',
+    },
+    {
+      command: `${COMMAND_NAME} migrate check --url postgresql://readonly@prod/app`,
+      description: 'Check the production data before `prisma migrate deploy` runs on it',
+    },
+    {
+      command: `${COMMAND_NAME} migrate check --json`,
+      description: 'A report for CI: every check, its count and the SQL that counted it',
+    },
+    {
+      command: `${COMMAND_NAME} migrate check --timeout 30000`,
+      description: 'Stop any query that runs longer than 30 seconds',
+    },
+  ]),
+)
+
+const migratePlanFlags = {
+  schema: migrateCheckFlags.schema,
+  url: migrateCheckFlags.url,
+  decisions: migrateCheckFlags.decisions,
+  timeout: migrateCheckFlags.timeout,
+  migration: Flag.string('migration').pipe(
+    Flag.withAlias('m'),
+    Flag.withDescription(
+      "The migration.sql Prisma wrote for the schema (`prisma migrate dev --create-only`): the plan is then the whole migration, the fixes first and what the migration itself has to do written into Prisma's statements",
+    ),
+    Flag.withMetavar('migration.sql'),
+    Flag.optional,
+  ),
+  batch: Flag.integer('batch').pipe(
+    Flag.withDescription(
+      'Run a fix over more rows than this that many at a time, one statement after another, so none holds its locks for the whole table (default: every fix in one statement; no effect inside the one DO block of PostgreSQL)',
+    ),
+    Flag.withMetavar('rows'),
+    Flag.optional,
+  ),
+  output: Flag.string('output').pipe(
+    Flag.withAlias('o'),
+    Flag.withDescription(
+      'Write the SQL to this file and print the report (default: the SQL to stdout)',
+    ),
+    Flag.withMetavar('fixes.sql'),
+    Flag.optional,
+  ),
+}
+
+function runMigratePlanCommand(args: Command.Command.Config.Infer<typeof migratePlanFlags>) {
+  return Effect.gen(function* () {
+    const schemaPath = yield* resolveSchemaPath(Option.getOrNull(args.schema), [
+      COMMAND_NAME,
+      'migrate',
+      'plan',
+    ])
+    const { checkBanner, planSql, readMigration, runMigrateCheck, summarize, writePlan } =
+      yield* Effect.promise(() => import('../migrate/index.js'))
+    const report = yield* runMigrateCheck(migrateInput(args, schemaPath)).pipe(
+      Effect.mapError((error) => new CliError.UserError({ cause: error.message })),
+    )
+    const migrationPath = Option.getOrNull(args.migration)
+    const migration =
+      migrationPath === null
+        ? null
+        : yield* readMigration(path.resolve(migrationPath)).pipe(
+            Effect.mapError((error) => new CliError.UserError({ cause: error.message })),
+          )
+    const batch = Option.getOrNull(args.batch)
+    if (batch !== null && batch < 1) {
+      yield* new CliError.UserError({ cause: '--batch takes a number of rows, 1 or more.' })
+    }
+    const { sql, errors, notes } = planSql(report, migration, batch)
+    if (errors.length > 0) yield* new CliError.UserError({ cause: errors.join('\n') })
+    const output = Option.getOrNull(args.output)
+    const noted = notes.map((note) => `   ${note}`).join('\n')
+    if (output === null) {
+      // The SQL alone on stdout, to redirect into a file; what to know about it on stderr.
+      yield* Console.log(sql.trimEnd())
+      yield* Console.error(noted)
+    } else {
+      const file = path.resolve(output)
+      yield* writePlan(sql, file).pipe(
+        Effect.mapError((error) => new CliError.UserError({ cause: error.message })),
+      )
+      yield* Console.log(`${checkBanner(report)}\n\n   Plan: ${file}\n${noted}`)
+    }
+    const summary = summarize(report)
+    if (!summary.ok) yield* new CliError.UserError({ cause: notReady(summary) })
+  })
+}
+
+const migratePlan = Command.make('plan', migratePlanFlags, runMigratePlanCommand).pipe(
+  Command.withDescription(
+    'Write the fixes decided on the Migrate page of hekireki studio as SQL to run before the migration: the UPDATEs and DELETEs `migrate check` counted them by. With --migration, the whole migration Prisma wrote, the fixes first and the renames, conversions, fills and new enum members written into it. Reads the database, writes nothing to it; fails when something still blocks.',
+  ),
+  Command.withExamples([
+    {
+      command: `${COMMAND_NAME} migrate plan > fixes.sql`,
+      description: 'The SQL on stdout, to paste at the top of the migration Prisma writes',
+    },
+    {
+      command: `${COMMAND_NAME} migrate plan -o prisma/fixes.sql`,
+      description: 'Write it to a file and print the report of the check',
+    },
+    {
+      command: `${COMMAND_NAME} migrate plan -m prisma/migrations/20260915_rename/migration.sql -o prisma/migrations/20260915_rename/migration.sql`,
+      description:
+        'Rewrite the migration Prisma wrote: the fixes first, renames, conversions and fills in its statements',
+    },
+    {
+      command: `${COMMAND_NAME} migrate plan --batch 10000 -o prisma/fixes.sql`,
+      description: 'On a large table in use: a fix over more than 10000 rows runs 10000 at a time',
+    },
+  ]),
+)
+
+const migrate = Command.make('migrate').pipe(
+  Command.withDescription('Data checks and fixes for a schema migration'),
+  Command.withSubcommands([migrateCheck, migratePlan]),
+)
+
+const cli = Command.make(COMMAND_NAME).pipe(
+  Command.withDescription('⚡️ Prisma schema tools'),
+  Command.withSubcommands([studio, seed, migrate]),
+)
+
 export function hekirekiCli(argv: readonly string[], config: { readonly version: string }) {
-  return Command.runWith(cli, config)(helpAsFlag(argv))
+  return Command.runWith(cli, config)(argv)
 }
 
 /** The entry point the bin runs, reading its arguments the way `Command.run` does. */

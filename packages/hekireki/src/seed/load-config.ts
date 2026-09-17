@@ -5,13 +5,13 @@ import { pathToFileURL } from 'node:url'
 import { Effect, FileSystem, Schema, SchemaIssue } from 'effect'
 
 import { exists, readFile, writeFile } from '../file/index.js'
-import type { LooseFieldRule, SeedValue } from './config.js'
+import type { LooseFieldRule, SeedValue as ConfigSeedValue } from './config.js'
 import { SeedConfigError } from './errors.js'
 
 /** The one file `hekireki seed` and `hekireki studio` look for when `--config` is omitted. */
 export const CONFIG_FILE = 'hekireki.config.ts'
 
-function isSeedValue(value: unknown): value is SeedValue {
+function isSeedValue(value: unknown): value is ConfigSeedValue {
   if (value === null) return true
   if (['string', 'number', 'bigint', 'boolean'].includes(typeof value)) return true
   if (value instanceof Date || value instanceof Uint8Array) return true
@@ -19,26 +19,26 @@ function isSeedValue(value: unknown): value is SeedValue {
   return typeof value === 'object' && Object.values(value).every(isSeedValue)
 }
 
-type Generator = Extract<LooseFieldRule, (...args: never[]) => unknown>
-
-const seedValue = Schema.declare(isSeedValue, {
+const SeedValue = Schema.declare(isSeedValue, {
   expected: 'a string, number, bigint, boolean, Date, bytes, null, or JSON of those',
 })
 
-const generator = Schema.declare((value): value is Generator => typeof value === 'function', {
-  expected: 'a rule function (faker, { index, row }) => value',
-})
+const Generator = Schema.declare(
+  (value): value is Extract<LooseFieldRule, (...args: never[]) => unknown> =>
+    typeof value === 'function',
+  { expected: 'a rule function (faker, { index, row }) => value' },
+)
 
-const clientFactory = Schema.declare(
+const ClientFactory = Schema.declare(
   (value): value is () => unknown => typeof value === 'function',
   { expected: 'a function returning the Prisma Client: () => new PrismaClient({ adapter })' },
 )
 
-const nonNegativeInt = Schema.Int.pipe(Schema.check(Schema.isGreaterThanOrEqualTo(0)))
+const NonNegativeInt = Schema.Int.pipe(Schema.check(Schema.isGreaterThanOrEqualTo(0)))
 
-const rate = Schema.Number.pipe(Schema.check(Schema.isBetween({ minimum: 0, maximum: 1 })))
+const Rate = Schema.Number.pipe(Schema.check(Schema.isBetween({ minimum: 0, maximum: 1 })))
 
-const dateInput = Schema.declare(
+const DateInput = Schema.declare(
   (value): value is string | Date =>
     value instanceof Date ||
     (typeof value === 'string' && !Number.isNaN(new Date(value).getTime())),
@@ -46,7 +46,7 @@ const dateInput = Schema.declare(
 )
 
 /** Whether the window `from`..`to` is the right way round; either edge missing is fine. */
-const ordered = Schema.makeFilter(
+const Ordered = Schema.makeFilter(
   (window: { readonly from?: string | Date; readonly to?: string | Date }) =>
     window.from === undefined ||
     window.to === undefined ||
@@ -54,62 +54,62 @@ const ordered = Schema.makeFilter(
   { expected: 'from at or before to' },
 )
 
-const bounded = Schema.makeFilter(
-  (range: { readonly min?: number; readonly max?: number }) =>
-    range.min === undefined || range.max === undefined || range.min <= range.max,
+const Bounded = Schema.makeFilter(
+  (bounds: { readonly min?: number; readonly max?: number }) =>
+    bounds.min === undefined || bounds.max === undefined || bounds.min <= bounds.max,
   { expected: 'min at or below max' },
 )
 
-const range = Schema.Struct({ min: nonNegativeInt, max: nonNegativeInt }).pipe(
-  Schema.check(bounded),
+const Range = Schema.Struct({ min: NonNegativeInt, max: NonNegativeInt }).pipe(
+  Schema.check(Bounded),
 )
 
-const fieldRuleObject = Schema.Struct({
-  value: Schema.optionalKey(seedValue),
-  values: Schema.optionalKey(Schema.Array(seedValue)),
+const FieldRuleObject = Schema.Struct({
+  value: Schema.optionalKey(SeedValue),
+  values: Schema.optionalKey(Schema.Array(SeedValue)),
   min: Schema.optionalKey(Schema.Number),
   max: Schema.optionalKey(Schema.Number),
-  from: Schema.optionalKey(dateInput),
-  to: Schema.optionalKey(dateInput),
-  length: Schema.optionalKey(Schema.Union([nonNegativeInt, range])),
-  nullRate: Schema.optionalKey(rate),
-}).pipe(Schema.check(bounded, ordered))
+  from: Schema.optionalKey(DateInput),
+  to: Schema.optionalKey(DateInput),
+  length: Schema.optionalKey(Schema.Union([NonNegativeInt, Range])),
+  nullRate: Schema.optionalKey(Rate),
+}).pipe(Schema.check(Bounded, Ordered))
 
-const fieldRule = Schema.Union([generator, fieldRuleObject])
+const FieldRule = Schema.Union([Generator, FieldRuleObject])
 
-const relationRule = Schema.Struct({
-  min: Schema.optionalKey(nonNegativeInt),
-  max: Schema.optionalKey(nonNegativeInt),
-}).pipe(Schema.check(bounded))
+const RelationRule = Schema.Struct({
+  min: Schema.optionalKey(NonNegativeInt),
+  max: Schema.optionalKey(NonNegativeInt),
+}).pipe(Schema.check(Bounded))
 
-const modelRule = Schema.Struct({
-  count: Schema.optionalKey(nonNegativeInt),
-  data: Schema.optionalKey(Schema.Array(Schema.Record(Schema.String, seedValue))),
-  fields: Schema.optionalKey(Schema.Record(Schema.String, fieldRule)),
-  relations: Schema.optionalKey(Schema.Record(Schema.String, relationRule)),
+const ModelRule = Schema.Struct({
+  count: Schema.optionalKey(NonNegativeInt),
+  data: Schema.optionalKey(Schema.Array(Schema.Record(Schema.String, SeedValue))),
+  fields: Schema.optionalKey(Schema.Record(Schema.String, FieldRule)),
+  relations: Schema.optionalKey(Schema.Record(Schema.String, RelationRule)),
 })
 
 /** The loaded config as `hekireki seed` accepts it; the schema module's types are not needed at runtime. */
-const seedConfig = Schema.Struct({
+const SeedConfig = Schema.Struct({
   schema: Schema.optionalKey(Schema.String),
   seed: Schema.optionalKey(Schema.Int),
   locale: Schema.optionalKey(Schema.Union([Schema.String, Schema.Array(Schema.String)])),
-  count: Schema.optionalKey(nonNegativeInt),
-  nullRate: Schema.optionalKey(rate),
+  count: Schema.optionalKey(NonNegativeInt),
+  nullRate: Schema.optionalKey(Rate),
   dates: Schema.optionalKey(
-    Schema.Struct({ from: Schema.optionalKey(dateInput), to: Schema.optionalKey(dateInput) }).pipe(
-      Schema.check(ordered),
+    Schema.Struct({ from: Schema.optionalKey(DateInput), to: Schema.optionalKey(DateInput) }).pipe(
+      Schema.check(Ordered),
     ),
   ),
   output: Schema.optionalKey(Schema.String),
   url: Schema.optionalKey(Schema.String),
   reset: Schema.optionalKey(Schema.Boolean),
-  client: Schema.optionalKey(clientFactory),
-  models: Schema.optionalKey(Schema.Record(Schema.String, modelRule)),
+  client: Schema.optionalKey(ClientFactory),
+  models: Schema.optionalKey(Schema.Record(Schema.String, ModelRule)),
 })
 
 /** Every problem of a config as `path: message`, unknown keys included, so a typo is not ignored. */
-const decodeConfig = Schema.decodeUnknownEffect(seedConfig, {
+const decodeConfig = Schema.decodeUnknownEffect(SeedConfig, {
   errors: 'all',
   onExcessProperty: 'error',
 })
@@ -221,6 +221,12 @@ export function loadSeedConfig(file: string) {
     if (exported === undefined) {
       return yield* new SeedConfigError({
         message: `${file} has no default export.\n   Write \`export default defineConfig({ ... })\`.`,
+      })
+    }
+    // The decisions of a data migration used to be written here; they are made in Studio now.
+    if (typeof exported === 'object' && exported !== null && 'migrate' in exported) {
+      return yield* new SeedConfigError({
+        message: `Invalid config in ${file}:\n   migrate: the config no longer holds the decisions of a data migration.\n   Make them on the Migrate page of hekireki studio, which keeps them in .hekireki/migrate.json beside the schema for hekireki migrate check and plan to read.`,
       })
     }
     return yield* decodeConfig(exported).pipe(

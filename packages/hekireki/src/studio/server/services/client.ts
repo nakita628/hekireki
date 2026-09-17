@@ -8,15 +8,6 @@ import { ClientQueryError } from '../errors/index.js'
 import * as ClientLoadService from './client-load.js'
 import * as TypescriptService from './typescript.js'
 
-function messageOf(error: unknown) {
-  return stripVTControlCharacters(error instanceof Error ? error.message : String(error)).trim()
-}
-
-/** A client that is never there: Studio without a database, and the tests that need none. */
-export function unavailableClient(reason = 'No database is connected.') {
-  return createProjectClient({ target: null, reason, schemaDir: '.', cwd: '.' })
-}
-
 const CreateProjectClientInput = z
   .object({
     target: z
@@ -137,7 +128,13 @@ export function createProjectClient(input: z.infer<typeof CreateProjectClientInp
           return Effect.try({
             try: (): unknown =>
               Reflect.apply(operation, delegate, call.args === undefined ? [] : [call.args]),
-            catch: (error) => new ClientQueryError({ message: messageOf(error) }),
+            catch: (error) =>
+              new ClientQueryError({
+                // Prisma Client colours its messages for a terminal.
+                message: stripVTControlCharacters(
+                  error instanceof Error ? error.message : String(error),
+                ).trim(),
+              }),
           })
         })
         const events: Parameters<NonNullable<typeof holder.sink>>[0][] = []
@@ -152,7 +149,13 @@ export function createProjectClient(input: z.infer<typeof CreateProjectClientInp
             query.transaction
               ? client.$transaction(operations, query.options)
               : Promise.resolve(operations[0]),
-          catch: (error) => new ClientQueryError({ message: messageOf(error) }),
+          catch: (error) =>
+            new ClientQueryError({
+              // Prisma Client colours its messages for a terminal.
+              message: stripVTControlCharacters(
+                error instanceof Error ? error.message : String(error),
+              ).trim(),
+            }),
         }).pipe(
           Effect.ensuring(
             Effect.sync(() => {

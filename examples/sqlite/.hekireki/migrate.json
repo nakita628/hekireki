@@ -1,0 +1,18 @@
+{
+  "decisions": [
+    {
+      "kind": "column-dropped",
+      "modelName": "User",
+      "field": "name",
+      "choice": "move",
+      "value": "Profile.name"
+    },
+    {
+      "kind": "column-added",
+      "modelName": "User",
+      "field": "test",
+      "choice": "value",
+      "value": ""
+    }
+  ]
+}

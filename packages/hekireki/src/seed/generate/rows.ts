@@ -38,7 +38,12 @@ function defaultValue(input: RowInput, field: DMMF.Field) {
   })
 }
 
-/** The scalar columns in declaration order, each generated with the row so far in view. */
+/** A default that is a list of scalars, as the values it holds. */
+function isScalarList(
+  value: DMMF.Field['default'],
+): value is readonly (string | number | boolean)[] {
+  return Array.isArray(value)
+}
 
 /** The scalar columns in declaration order, each generated with the row so far in view. */
 function fillScalars(
@@ -63,14 +68,6 @@ function fillScalars(
   return fillScalars(input, rest, skip, { ...row, [column.field]: value })
 }
 
-function isScalarList(
-  value: DMMF.Field['default'],
-): value is readonly (string | number | boolean)[] {
-  return Array.isArray(value)
-}
-
-/** One omitted column of a real row with its default, as a `[field, value]` entry. */
-
 /** One omitted column of a real row with its default, as a `[field, value]` entry. */
 function defaultEntry(input: RowInput, column: SeedColumn) {
   return Effect.gen(function* () {
@@ -79,8 +76,6 @@ function defaultEntry(input: RowInput, column: SeedColumn) {
     return [column.field, value] as const
   })
 }
-
-/** The columns a real row leaves out, each filled with its default. */
 
 /** The columns a real row leaves out, each filled with its default. */
 function fillDefaults(input: RowInput, skip: ReadonlySet<string>, row: SeedRow) {
@@ -157,12 +152,6 @@ function violated(row: SeedRow, table: ModelTable, seen: ReadonlyMap<string, Rea
  * foreign key column is left alone: its value is a parent's, and changing it would break the
  * relation the constraint sits on.
  */
-
-/**
- * A string field that collided gets the row number worked in, so an email stays an email. A
- * foreign key column is left alone: its value is a parent's, and changing it would break the
- * relation the constraint sits on.
- */
 function disambiguate(row: SeedRow, fields: readonly string[], table: ModelTable, index: number) {
   const keys = new Set(table.foreignKeys.flatMap((fk) => fk.fromFields))
   return fields.flatMap((field): readonly (readonly [string, string])[] => {
@@ -176,11 +165,6 @@ function disambiguate(row: SeedRow, fields: readonly string[], table: ModelTable
     ]
   })
 }
-
-/**
- * Rows until one meets every unique constraint; the last attempt is patched by hand. A given
- * row is taken as written, so a clash in it is reported, not worked around.
- */
 
 /**
  * Rows until one meets every unique constraint; the last attempt is patched by hand. A given

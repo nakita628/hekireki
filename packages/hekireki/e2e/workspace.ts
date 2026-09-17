@@ -59,10 +59,13 @@ export function prepareWorkspace() {
   db.exec(`
     CREATE TABLE "User" (
       "id" INTEGER PRIMARY KEY AUTOINCREMENT,
-      "email" TEXT NOT NULL UNIQUE,
+      "email" TEXT NOT NULL,
       "name" TEXT,
       "role" TEXT NOT NULL DEFAULT 'VIEWER'
     );
+    -- Named as Prisma names it: an inline UNIQUE makes an index SQLite names, which no migration
+    -- can drop, and every plan would carry a step that fails.
+    CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
     CREATE TABLE "Post" (
       "id" INTEGER PRIMARY KEY AUTOINCREMENT,
       "title" TEXT NOT NULL,

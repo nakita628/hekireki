@@ -211,6 +211,15 @@ export default config
     ])
   })
 
+  it('says where the decisions of a data migration went, for a config that still holds them', async () => {
+    const dir = tmp()
+    const file = path.join(dir, 'hekireki.config.ts')
+    writeFileSync(file, `export default { migrate: { models: {} } }\n`)
+    expect(failure(await run(loadSeedConfig(file)))).toContain(
+      'migrate: the config no longer holds the decisions of a data migration.\n   Make them on the Migrate page of hekireki studio',
+    )
+  })
+
   it('reports a module that cannot be imported', async () => {
     const dir = tmp()
     const file = path.join(dir, 'hekireki.config.ts')

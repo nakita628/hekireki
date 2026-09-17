@@ -23,7 +23,10 @@ export function createStudioState(input: z.infer<typeof CreateStudioStateInput>)
   const store: {
     snapshot: z.input<typeof SnapshotSchema>
     docs: z.input<typeof DocsSchema>
+    /** When the migrations directory was last seen to change; what the page reads its history again on. */
+    migrationsUpdatedAt: string
   } = {
+    migrationsUpdatedAt: new Date(0).toISOString(),
     snapshot: {
       schema: null,
       error: null,
@@ -78,5 +81,17 @@ export function createStudioState(input: z.infer<typeof CreateStudioStateInput>)
       return store.snapshot
     })
   }
-  return { schemaPath, snapshot: () => store.snapshot, docs: () => store.docs, reload }
+  /** Notes that the migrations directory changed, for the pages watching it to read it again. */
+  function touchMigrations() {
+    // oxlint-disable-next-line custom/no-mutation -- same cell: when the migrations last changed
+    store.migrationsUpdatedAt = new Date().toISOString()
+  }
+  return {
+    schemaPath,
+    migrationsUpdatedAt: () => store.migrationsUpdatedAt,
+    touchMigrations,
+    snapshot: () => store.snapshot,
+    docs: () => store.docs,
+    reload,
+  }
 }

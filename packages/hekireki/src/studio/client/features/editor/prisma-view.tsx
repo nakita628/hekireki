@@ -6,6 +6,7 @@ import { useMemo, useRef, useState } from 'react'
 import { LuCopy, LuWandSparkles } from 'react-icons/lu'
 
 import { SchemaErrorStatus } from '../../components/schema-error-status.js'
+import { schemaProblems } from '../../components/schema-problems.js'
 import type { PlainFileDiagnostic } from '../../components/schema-problems.js'
 import { useCopy } from '../../hooks/copy.js'
 import { getSchemaQueryKey, usePutSchemaFiles } from '../../hooks/index.js'
@@ -136,8 +137,24 @@ export function PrismaView({
   })
   const { copied, copy } = useCopy()
   // While a line is being typed the schema is briefly invalid and every keystroke saves; the
-  // error chip and the "Saving…" dot only show once those states have held for a moment.
-  const steadyProblems = useSteady(snapshot.error === null ? null : snapshot, 700)
+  // error chip and the "Saving…" dot only show once those states have held for a moment. What
+  // the chip shows is what tells one state from the next: the snapshot is a new object after
+  // every save, and the same error in a new object is not a new error.
+  // What the chip shows is what tells one state from the next: Prisma's error text quotes the
+  // lines around the problem, so it changes with every keystroke even while the problem is the
+  // same one, and keying on it would hide the chip and show it again for each.
+  const problems = useMemo(
+    () =>
+      snapshot.error === null
+        ? null
+        : schemaProblems({ error: snapshot.error, diagnostics: snapshot.diagnostics }),
+    [snapshot.error, snapshot.diagnostics],
+  )
+  const steadyProblems = useSteady(
+    snapshot.error === null ? null : snapshot,
+    700,
+    problems === null ? undefined : `${problems.count}\n${problems.summary}`,
+  )
   const steadySaving = useSteady(save.isPending ? true : null, 300)
 
   // While there is no unsaved draft the editor mirrors the file on disk, so changes made by
@@ -302,9 +319,14 @@ export function PrismaView({
 
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <header className="flex flex-wrap items-center gap-3.5 border-b border-line bg-surface px-6 py-3">
-        <h1 className="page-title">Prisma schema</h1>
-        <span className="text-lead text-muted">
+      {/*
+        One line, whatever is on it. The error chip comes and goes while a line is half-typed, and
+        a header that wrapped to fit it pushed the editor down the page mid-keystroke — the text
+        moved under the cursor. Nothing here wraps: what has no room to be read is cut instead.
+      */}
+      <header className="flex flex-nowrap items-center gap-3.5 border-b border-line bg-surface px-6 py-3">
+        <h1 className="page-title shrink-0">Prisma schema</h1>
+        <span className="hidden shrink-0 text-lead text-muted sm:inline">
           {text.split('\n').length} lines
           {schema?.provider ? ` · ${schema.provider}` : ''}
         </span>
@@ -313,13 +335,14 @@ export function PrismaView({
             error={steadyProblems?.error ?? null}
             diagnostics={steadyProblems?.diagnostics ?? []}
           />
-          <span className={`flex shrink-0 items-center gap-2 text-code ${statusClasses.text}`}>
-            <span className={`size-2 rounded-full ${statusClasses.dot}`} />
-            {status.label}
+          <span className={`flex min-w-0 items-center gap-2 text-code ${statusClasses.text}`}>
+            <span className={`size-2 shrink-0 rounded-full ${statusClasses.dot}`} />
+            {/* The dot carries the state on its own when there is no room for the words. */}
+            <span className="truncate">{status.label}</span>
           </span>
         </span>
         <Tooltip>
-          <Button variant="ghost" onPress={formatDocument}>
+          <Button className="shrink-0" variant="ghost" onPress={formatDocument}>
             <LuWandSparkles size={15} />
             Format
           </Button>
@@ -329,6 +352,7 @@ export function PrismaView({
           </Tooltip.Content>
         </Tooltip>
         <Button
+          className="shrink-0"
           variant="ghost"
           onPress={() => {
             copy(text)

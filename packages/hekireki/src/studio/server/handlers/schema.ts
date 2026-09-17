@@ -139,22 +139,34 @@ export const getSchemaEventsRouteHandler: RouteHandler<typeof getSchemaEventsRou
     await stream.writeSSE({ event: 'ready', data: initial })
     const pump = async (seen: {
       readonly updatedAt: string
+      readonly migrationsUpdatedAt: string
       readonly pingedAt: number
     }): Promise<void> => {
       if (stream.aborted) return
       await stream.sleep(SSE_POLL_MS)
       const current = state.snapshot().updatedAt
+      const migrations = state.migrationsUpdatedAt()
       if (current !== seen.updatedAt) {
         await stream.writeSSE({ event: 'change', data: current })
-        await pump({ updatedAt: current, pingedAt: Date.now() })
+        await pump({ ...seen, updatedAt: current, pingedAt: Date.now() })
+        return
+      }
+      // The migrations directory changed: what the Migrate page reads its history from.
+      if (migrations !== seen.migrationsUpdatedAt) {
+        await stream.writeSSE({ event: 'migrations', data: migrations })
+        await pump({ ...seen, migrationsUpdatedAt: migrations, pingedAt: Date.now() })
         return
       }
       if (Date.now() - seen.pingedAt > SSE_PING_MS) {
         await stream.writeSSE({ event: 'ping', data: '' })
-        await pump({ updatedAt: seen.updatedAt, pingedAt: Date.now() })
+        await pump({ ...seen, pingedAt: Date.now() })
         return
       }
       await pump(seen)
     }
-    await pump({ updatedAt: initial, pingedAt: Date.now() })
+    await pump({
+      updatedAt: initial,
+      migrationsUpdatedAt: state.migrationsUpdatedAt(),
+      pingedAt: Date.now(),
+    })
   })

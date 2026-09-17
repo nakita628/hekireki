@@ -39,10 +39,6 @@ export function clientSource(generators: readonly GeneratorBlock[]) {
     : { source, reason: null }
 }
 
-function messageOf(error: unknown) {
-  return error instanceof Error ? error.message : String(error)
-}
-
 /** A package as the project resolves it, so the adapter and the client are the project's own. */
 function importFromProject(specifier: string, cwd: string) {
   return Effect.tryPromise({
@@ -53,7 +49,7 @@ function importFromProject(specifier: string, cwd: string) {
     },
     catch: (error) =>
       new SeedDatabaseError({
-        message: `Cannot load "${specifier}" from ${cwd}: ${messageOf(error)}`,
+        message: `Cannot load "${specifier}" from ${cwd}: ${error instanceof Error ? error.message : String(error)}`,
       }),
   })
 }
@@ -65,16 +61,6 @@ export const ADAPTERS: Readonly<Record<Dialect, { readonly pkg: string; readonly
     mysql: { pkg: '@prisma/adapter-mariadb', name: 'PrismaMariaDb' },
     sqlite: { pkg: '@prisma/adapter-better-sqlite3', name: 'PrismaBetterSqlite3' },
   }
-
-function isConstructor(value: unknown): value is new (...args: unknown[]) => unknown {
-  return typeof value === 'function'
-}
-
-function isClientConstructor(
-  value: unknown,
-): value is new (options: Readonly<Record<string, unknown>>) => unknown {
-  return typeof value === 'function'
-}
 
 /** The driver adapter for the dialect, built from the project's package, or the reason there is none. */
 function makeAdapter(dialect: Dialect, url: string, cwd: string, schemaDir: string) {
@@ -91,7 +77,7 @@ function makeAdapter(dialect: Dialect, url: string, cwd: string, schemaDir: stri
     )
     if (loaded.module === null) return { adapter: null, reason: loaded.reason }
     const factory = isRecord(loaded.module) ? loaded.module[name] : undefined
-    if (!isConstructor(factory)) {
+    if (typeof factory !== 'function') {
       return { adapter: null, reason: `${pkg} does not export ${name}` }
     }
     // The SQLite file, or the URL — and for PostgreSQL the schema of its `?schema=`, which the pg
@@ -104,8 +90,9 @@ function makeAdapter(dialect: Dialect, url: string, cwd: string, schemaDir: stri
           ? [url]
           : [url, { schema }]
     return yield* Effect.try({
-      try: () => new factory(...args),
-      catch: (error) => new SeedDatabaseError({ message: messageOf(error) }),
+      try: (): unknown => Reflect.construct(factory, [...args]),
+      catch: (error) =>
+        new SeedDatabaseError({ message: error instanceof Error ? error.message : String(error) }),
     }).pipe(
       Effect.match({
         onFailure: (error) => ({
@@ -153,7 +140,10 @@ export function discoverClient(input: {
               )
               return namespace
             },
-            catch: (error) => new SeedDatabaseError({ message: messageOf(error) }),
+            catch: (error) =>
+              new SeedDatabaseError({
+                message: error instanceof Error ? error.message : String(error),
+              }),
           })
     ).pipe(
       Effect.match({
@@ -169,14 +159,16 @@ export function discoverClient(input: {
       }
     }
     const clientClass = isRecord(loaded.value) ? loaded.value.PrismaClient : undefined
-    if (!isClientConstructor(clientClass)) {
+    if (typeof clientClass !== 'function') {
       return { client: null, source, reason: `${source} does not export PrismaClient` }
     }
     const adapter = yield* makeAdapter(input.dialect, input.url, input.cwd, input.schemaDir)
     if (adapter.adapter === null) return { client: null, source, reason: adapter.reason }
     return yield* Effect.try({
-      try: () => new clientClass({ ...input.options, adapter: adapter.adapter }),
-      catch: (error) => new SeedDatabaseError({ message: messageOf(error) }),
+      try: (): unknown =>
+        Reflect.construct(clientClass, [{ ...input.options, adapter: adapter.adapter }]),
+      catch: (error) =>
+        new SeedDatabaseError({ message: error instanceof Error ? error.message : String(error) }),
     }).pipe(
       Effect.match({
         onFailure: (error) => ({

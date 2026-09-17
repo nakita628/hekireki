@@ -1,13 +1,12 @@
 import { graphlib, layout } from '@dagrejs/dagre'
-import * as v from 'valibot'
+import * as z from 'zod'
 
-const LayoutNodeSchema = v.pipe(
-  v.object({
-    x: v.pipe(v.number(), v.description('Centre x in canvas pixels')),
-    y: v.pipe(v.number(), v.description('Centre y in canvas pixels')),
-  }),
-  v.description('A node as dagre placed it'),
-)
+const LayoutNodeSchema = z
+  .object({
+    x: z.number().meta({ description: 'Centre x in canvas pixels', example: 240 }),
+    y: z.number().meta({ description: 'Centre y in canvas pixels', example: 96 }),
+  })
+  .meta({ description: 'A node as dagre placed it' })
 
 export const NODE_WIDTH = 240
 export const NODE_HEADER_HEIGHT = 34
@@ -52,11 +51,11 @@ export function autoLayout(
   return Object.fromEntries(
     nodes.map((node) => {
       const raw: unknown = graph.node(node.id)
-      const placed = v.safeParse(LayoutNodeSchema, raw)
+      const result = LayoutNodeSchema.safeParse(raw)
       return [
         node.id,
-        placed.success
-          ? { x: placed.output.x - NODE_WIDTH / 2, y: placed.output.y - nodeHeight(node) / 2 }
+        result.success
+          ? { x: result.data.x - NODE_WIDTH / 2, y: result.data.y - nodeHeight(node) / 2 }
           : { x: 0, y: 0 },
       ]
     }),

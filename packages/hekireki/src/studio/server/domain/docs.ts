@@ -1,6 +1,8 @@
 import type { DMMF } from '@prisma/generator-helper'
 import * as z from 'zod'
 
+import { lowerFirst } from '../../../utils/index.js'
+
 const MakeDocsInput = z
   .object({
     dmmf: z
@@ -87,10 +89,6 @@ function capitalize(text: string) {
   return text.charAt(0).toUpperCase() + text.slice(1)
 }
 
-function lowerCase(text: string) {
-  return text.charAt(0).toLowerCase() + text.slice(1)
-}
-
 function describeOperation(name: (typeof OPERATIONS)[number], singular: string, plural: string) {
   switch (name) {
     case 'create':
@@ -133,13 +131,13 @@ function usageOf(
       return `// Get all ${plural}\nconst ${plural} = await ${method}()\n// Get first 10 ${plural}\nconst ${plural} = await ${method}({ take: 10 })`
     case 'findUnique':
     case 'findFirst':
-      return `// Get one ${singular}\nconst ${lowerCase(singular)} = await ${method}({\n  where: {\n    // ... provide filter here\n  }\n})`
+      return `// Get one ${singular}\nconst ${lowerFirst(singular)} = await ${method}({\n  where: {\n    // ... provide filter here\n  }\n})`
     case 'update':
-      return `// Update one ${singular}\nconst ${lowerCase(singular)} = await ${method}({\n  where: {\n    // ... provide filter here\n  },\n  data: {\n    // ... provide data here\n  }\n})`
+      return `// Update one ${singular}\nconst ${lowerFirst(singular)} = await ${method}({\n  where: {\n    // ... provide filter here\n  },\n  data: {\n    // ... provide data here\n  }\n})`
     case 'updateMany':
       return `const { count } = await ${method}({\n  where: {\n    // ... provide filter here\n  },\n  data: {\n    // ... provide data here\n  }\n})`
     case 'upsert':
-      return `// Update or create a ${singular}\nconst ${lowerCase(singular)} = await ${method}({\n  create: {\n    // ... data to create a ${singular}\n  },\n  update: {\n    // ... in case it already exists, update\n  },\n  where: {\n    // ... the filter for the ${singular} we want to update\n  }\n})`
+      return `// Update or create a ${singular}\nconst ${lowerFirst(singular)} = await ${method}({\n  create: {\n    // ... data to create a ${singular}\n  },\n  update: {\n    // ... in case it already exists, update\n  },\n  where: {\n    // ... the filter for the ${singular} we want to update\n  }\n})`
     default:
       return name satisfies never
   }
@@ -180,25 +178,25 @@ export function makeDocs(input: z.infer<typeof MakeDocsInput>) {
     const singular = capitalize(model.name)
     const plural = capitalize(singular)
     const mapping = dmmf.mappings.modelOperations.find((m) => m.model === model.name)
-    const legacy = LegacyMapping.safeParse(mapping ?? {})
+    const result = LegacyMapping.safeParse(mapping ?? {})
     const names: Record<(typeof OPERATIONS)[number], string | null | undefined> = {
-      findUnique: legacy.success
-        ? (legacy.data.findSingle ?? legacy.data.findOne ?? mapping?.findUnique)
+      findUnique: result.success
+        ? (result.data.findSingle ?? result.data.findOne ?? mapping?.findUnique)
         : mapping?.findUnique,
       findFirst: mapping?.findFirst,
       findMany: mapping?.findMany,
-      create: legacy.success
-        ? (legacy.data.createOne ?? legacy.data.createSingle ?? mapping?.create)
+      create: result.success
+        ? (result.data.createOne ?? result.data.createSingle ?? mapping?.create)
         : mapping?.create,
-      update: legacy.success
-        ? (legacy.data.updateOne ?? legacy.data.updateSingle ?? mapping?.update)
+      update: result.success
+        ? (result.data.updateOne ?? result.data.updateSingle ?? mapping?.update)
         : mapping?.update,
       updateMany: mapping?.updateMany,
-      upsert: legacy.success
-        ? (legacy.data.upsertOne ?? legacy.data.upsertSingle ?? mapping?.upsert)
+      upsert: result.success
+        ? (result.data.upsertOne ?? result.data.upsertSingle ?? mapping?.upsert)
         : mapping?.upsert,
-      delete: legacy.success
-        ? (legacy.data.deleteOne ?? legacy.data.deleteSingle ?? mapping?.delete)
+      delete: result.success
+        ? (result.data.deleteOne ?? result.data.deleteSingle ?? mapping?.delete)
         : mapping?.delete,
       deleteMany: mapping?.deleteMany,
     }
@@ -228,7 +226,7 @@ export function makeDocs(input: z.infer<typeof MakeDocsInput>) {
         return {
           name,
           description,
-          usage: usageOf(name, singular, plural, `prisma.${lowerCase(model.name)}.${name}`),
+          usage: usageOf(name, singular, plural, `prisma.${lowerFirst(model.name)}.${name}`),
           inputs:
             field?.args.map((arg) => ({
               name: arg.name,

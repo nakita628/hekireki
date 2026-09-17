@@ -4,7 +4,8 @@ import type { GetDMMFError } from '@prisma/get-dmmf'
 import { Effect, Exit } from 'effect'
 import { describe, expect, it } from 'vite-plus/test'
 
-import { delegateName, isSeedClient, seedWithClient } from './client.js'
+import { lowerFirst } from '../utils/index.js'
+import { isSeedClient, seedWithClient } from './client.js'
 import { makeSeedPlan } from './plan.js'
 import type { SeedTableRows } from './plan.js'
 
@@ -68,7 +69,7 @@ function fakeClient(models: readonly string[]) {
       log.push('disconnect')
       return Promise.resolve()
     },
-    ...Object.fromEntries(models.map((model) => [delegateName(model), delegate(model)])),
+    ...Object.fromEntries(models.map((model) => [lowerFirst(model), delegate(model)])),
   }
   return { client, log }
 }
@@ -91,14 +92,6 @@ const ENTRIES: readonly SeedTableRows[] = [
     ],
   },
 ]
-
-describe('delegateName', () => {
-  it('lower-cases the first letter, as Prisma Client names its delegates', () => {
-    expect(delegateName('User')).toBe('user')
-    expect(delegateName('OrderItem')).toBe('orderItem')
-    expect(delegateName('order_line_item')).toBe('order_line_item')
-  })
-})
 
 describe('isSeedClient', () => {
   it('asks for a transaction, raw SQL and disconnect', () => {
@@ -366,18 +359,5 @@ describe('seedWithClient, the edges', () => {
       }).pipe(Effect.flip),
     )
     expect(Exit.isSuccess(exit) ? exit.value.message : '').toBe('unique constraint')
-  })
-})
-
-describe('delegateName, the edges', () => {
-  it.each([
-    ['User', 'user'],
-    ['OrderItem', 'orderItem'],
-    ['URLThing', 'uRLThing'],
-    ['A', 'a'],
-    ['user', 'user'],
-    ['_Private', '_Private'],
-  ])('%s → %s', (model, delegate) => {
-    expect(delegateName(model)).toBe(delegate)
   })
 })

@@ -1,0 +1,24 @@
+// Before: the schema the database was made from.
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String
+  fullName  String
+  role      String
+  age       String?
+  nickname  String?
+  createdAt DateTime @default(now())
+  posts     Post[]
+}
+
+model Post {
+  id       Int     @id @default(autoincrement())
+  title    String
+  status   String
+  authorId Int?
+  author   User?   @relation(fields: [authorId], references: [id])
+}

@@ -20,10 +20,6 @@ const YEAR = 365 * 24 * 60 * 60 * 1000
 
 type ObjectRule = Exclude<LooseFieldRule, (...args: never[]) => unknown>
 
-function ruleObject(rule: LooseFieldRule | undefined) {
-  return rule === undefined || typeof rule === 'function' ? {} : rule
-}
-
 function normalizedName(name: string) {
   return name.toLowerCase().replaceAll(/[_-]/gu, '')
 }
@@ -311,7 +307,7 @@ export function makeFieldValue(input: {
 }) {
   const { faker, field, enumValues, bounds, index, row } = input
   if (typeof input.rule === 'function') return input.rule(faker, { index, row })
-  const rule = ruleObject(input.rule)
+  const rule = input.rule === undefined || typeof input.rule === 'function' ? {} : input.rule
   if (rule.value !== undefined) return rule.value
   if (!field.isRequired && !field.isList) {
     const nullRate = rule.nullRate ?? bounds.nullRate ?? 0

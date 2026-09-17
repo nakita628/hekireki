@@ -101,6 +101,7 @@ describe('makeClientTouched', () => {
     [
       'nothing for keys that are neither an argument the model knows nor one of its fields',
       'User',
+      // cspell:ignore emial
       { where: { emial: 'x', posts: { every: { nope: 1 } } }, take: 10 },
       [
         { model: 'User', fields: ['posts'] },

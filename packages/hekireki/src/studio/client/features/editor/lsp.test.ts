@@ -44,10 +44,51 @@ describe('toCompletions', () => {
       },
     ])
     expect(items.map((i) => [i.label, i.kind, i.sortText, i.isSnippet])).toStrictEqual([
-      ['@id', 'Property', '0000', true],
+      // A snippet with nothing to fill in is plain text: see `textOf`.
+      ['@id', 'Property', '0000', false],
       ['@unique', 'Property', '0002', false],
     ])
     expect(items[0]?.documentation).toBe('Defines a single-field ID')
+  })
+
+  it('keeps a snippet that has somewhere to put the cursor, and unwraps one that has not', () => {
+    const items = toCompletions([
+      // The Prisma language server marks every attribute a snippet. A tab stop at the very end
+      // only says where the cursor lands, which is where it would land anyway; one in the middle
+      // is the point of the snippet.
+      {
+        label: '@db',
+        kind: 10,
+        detail: null,
+        documentation: null,
+        insertText: '@db$0',
+        insertTextFormat: 'snippet',
+        sortText: null,
+      },
+      {
+        label: '@map',
+        kind: 10,
+        detail: null,
+        documentation: null,
+        insertText: '@map("$0")',
+        insertTextFormat: 'snippet',
+        sortText: null,
+      },
+      {
+        label: '@relation',
+        kind: 10,
+        detail: null,
+        documentation: null,
+        insertText: '@relation($0)',
+        insertTextFormat: 'snippet',
+        sortText: null,
+      },
+    ])
+    expect(items.map((i) => [i.insertText, i.isSnippet])).toStrictEqual([
+      ['@db', false],
+      ['@map("$0")', true],
+      ['@relation($0)', true],
+    ])
   })
 })
 

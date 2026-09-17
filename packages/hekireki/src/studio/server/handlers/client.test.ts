@@ -17,12 +17,7 @@ import { afterEach, describe, expect, it } from 'vite-plus/test'
 
 import { fileSystemLayer } from '../../../file/index.js'
 import { createStudioApp } from '../app.js'
-import {
-  createProjectClient,
-  createStudioState,
-  disconnectedDatabase,
-  unavailableClient,
-} from '../services/index.js'
+import { createProjectClient, createStudioState, disconnectedDatabase } from '../services/index.js'
 
 const dirs: string[] = []
 const clients: ReturnType<typeof createProjectClient>[] = []
@@ -628,7 +623,15 @@ describe('client routes', () => {
   })
 
   it('says why the editor cannot complete against the types when there is no TypeScript 5', async () => {
-    const { call } = await setup({ client: () => unavailableClient() })
+    const { call } = await setup({
+      client: () =>
+        createProjectClient({
+          target: null,
+          reason: 'No database is connected.',
+          schemaDir: '.',
+          cwd: '.',
+        }),
+    })
     expect(await call('/api/client/complete', { query: 'prisma.', offset: 7 })).toStrictEqual({
       status: 503,
       json: {
@@ -643,7 +646,15 @@ describe('client routes', () => {
   })
 
   it('analyzes a query against the models without loading the client', async () => {
-    const { call } = await setup({ client: () => unavailableClient() })
+    const { call } = await setup({
+      client: () =>
+        createProjectClient({
+          target: null,
+          reason: 'No database is connected.',
+          schemaDir: '.',
+          cwd: '.',
+        }),
+    })
     expect(
       await call('/api/client/analyze', {
         query: 'prisma.$transaction([prisma.usr.count(), prisma.post.deleteMany()])',
@@ -680,7 +691,10 @@ describe('client routes', () => {
   })
 
   it('says why there is no client: no database, or no generator in the schema', async () => {
-    const offline = await setup({ client: () => unavailableClient('No DATABASE_URL.') })
+    const offline = await setup({
+      client: () =>
+        createProjectClient({ target: null, reason: 'No DATABASE_URL.', schemaDir: '.', cwd: '.' }),
+    })
     expect(await offline.call('/api/client')).toStrictEqual({
       status: 200,
       json: {
@@ -869,7 +883,15 @@ describe('client routes', () => {
     ['/api/client/signature', { query: 'prisma.user.findMany(', offset: 21 }],
     ['/api/client/check', { query: 'prisma.user.findMany()' }],
   ])('answers %s with why there are no types, when there are none', async (url, body) => {
-    const { call } = await setup({ client: () => unavailableClient() })
+    const { call } = await setup({
+      client: () =>
+        createProjectClient({
+          target: null,
+          reason: 'No database is connected.',
+          schemaDir: '.',
+          cwd: '.',
+        }),
+    })
     expect(await call(url, body)).toStrictEqual({
       status: 503,
       json: {
@@ -884,7 +906,15 @@ describe('client routes', () => {
   })
 
   it('lays the query out as the TypeScript formatter writes it, and reports a text it cannot read', async () => {
-    const { call } = await setup({ client: () => unavailableClient() })
+    const { call } = await setup({
+      client: () =>
+        createProjectClient({
+          target: null,
+          reason: 'No database is connected.',
+          schemaDir: '.',
+          cwd: '.',
+        }),
+    })
     expect(
       await call('/api/client/format', {
         query:

@@ -3,7 +3,6 @@ import { describe, expect, it, test } from 'vite-plus/test'
 
 import plugin, {
   isServiceModulePath,
-  isTestPath,
   isUseCaseModulePath,
   isUseCaseSpecifier,
   layerModuleOf,
@@ -44,8 +43,6 @@ describe('path helpers', () => {
     expect(isUseCaseModulePath('src\\studio\\server\\usecases\\schema.ts')).toBe(true)
     expect(isServiceModulePath('src/studio/server/services/query.ts')).toBe(true)
     expect(isServiceModulePath('src/studio/server/services/index.ts')).toBe(false)
-    expect(isTestPath('a/b.test.tsx')).toBe(true)
-    expect(isTestPath('a/b.tsx')).toBe(false)
   })
 
   it('recognises usecase import targets', () => {
@@ -137,8 +134,17 @@ tester.run('schema-pascal-case', rule('schema-pascal-case'), {
     tsCase(`const UserInput = z.object({}).meta({ description: 'x' })`),
     tsCase(`const result = z.safeParse(UserInput, value)`),
     tsCase(`const Theme = v.picklist(['a'])`),
+    // Effect's Schema namespace: a shape, a check, and a decoder made out of one.
+    tsCase(`const Rate = Schema.Number.pipe(Schema.check(Schema.isBetween({ minimum: 0 })))`),
+    tsCase(`const Ordered = Schema.makeFilter((value) => value, { expected: 'x' })`),
+    tsCase(`const Members = Schema.Array(Schema.String).pipe(Schema.check(Schema.isUnique))`),
+    tsCase(`const decodeConfig = Schema.decodeUnknownEffect(SeedConfig, { errors: 'all' })`),
   ],
-  invalid: [{ ...tsCase(`const userInput = z.object({})`), errors: 1 }],
+  invalid: [
+    { ...tsCase(`const userInput = z.object({})`), errors: 1 },
+    { ...tsCase(`const seedConfig = Schema.Struct({ url: Schema.String })`), errors: 1 },
+    { ...tsCase(`const fixValue = Schema.declare(isFixValue, { expected: 'x' })`), errors: 1 },
+  ],
 })
 
 tester.run('schema-meta', rule('schema-meta'), {
@@ -233,6 +239,8 @@ tester.run('logic-camel-case', rule('logic-camel-case'), {
     tsCase(`const readRows = () => 1`),
     tsCase(`const MAX_TAKE = 1`),
     tsCase(`const Row = z.record(z.string(), z.string()).meta({ description: 'r' })`),
+    // An Effect schema names a shape, so PascalCase is its own rule's business, not this one's.
+    tsCase(`const SeedConfig = Schema.Struct({ url: Schema.String })`),
     tsCase(`function makeSchema() {}`),
   ],
   invalid: [
@@ -410,6 +418,26 @@ tester.run('no-mutation', rule('no-mutation'), {
     { ...tsCase(`delete a.x`), errors: 1 },
     { ...tsCase(`values.push(1)`), errors: 1 },
     { ...tsCase(`values.sort()`), errors: 1 },
+  ],
+})
+
+tester.run('no-pass-through', rule('no-pass-through'), {
+  valid: [
+    tsCase(`function messageOf(error: unknown) { return String(error).trim() }`),
+    tsCase(`function rowsOf(table: string, limit: number) { return read(limit, table) }`),
+    tsCase(
+      `function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' }`,
+    ),
+    tsCase(`function defineSchema<S extends Shape>(schema: S) { return schema }`),
+    tsCase(`function countOf(rows: readonly string[]) { return rows.length }`),
+    // A test spells its fixtures out.
+    testCase(`function mockSchema(schema: string) { return schema }`),
+  ],
+  invalid: [
+    { ...tsCase(`function parseExpr(p: Parser) { return parseOr(p) }`), errors: 1 },
+    { ...tsCase(`function uriOf(path: string) { return Uri.parse(path) }`), errors: 1 },
+    { ...tsCase(`function asIs(name: string) { return name }`), errors: 1 },
+    { ...tsCase(`const isFunction = (value: unknown) => typeof value === 'function'`), errors: 1 },
   ],
 })
 

@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vite-plus/test'
 
 import {
+  chunks,
   extractObjectType,
   getBool,
   getString,
   getStrings,
   groupByModel,
   isFields,
+  lowerFirst,
   makeCommentBlock,
   makeSnakeCase,
   makeValidationExtractor,
@@ -521,5 +523,29 @@ describe('isLoopbackHostname', () => {
     expect(isLoopbackHostname('192.168.1.20')).toBe(false)
     expect(isLoopbackHostname('localhost.example')).toBe(false)
     expect(isLoopbackHostname('')).toBe(false)
+  })
+})
+
+// `User` → `user`: the property Prisma Client exposes a model under, and the label of a type.
+describe('lowerFirst', () => {
+  it.each([
+    ['User', 'user'],
+    ['OrderItem', 'orderItem'],
+    ['URLThing', 'uRLThing'],
+    ['A', 'a'],
+    ['user', 'user'],
+    ['order_line_item', 'order_line_item'],
+    ['_Private', '_Private'],
+    ['', ''],
+  ])('%s → %s', (text, lowered) => {
+    expect(lowerFirst(text)).toBe(lowered)
+  })
+})
+
+describe('chunks', () => {
+  it('cuts the items into runs of at most the size, in order', () => {
+    expect(chunks([1, 2, 3, 4, 5], 2)).toStrictEqual([[1, 2], [3, 4], [5]])
+    expect(chunks([1, 2], 5)).toStrictEqual([[1, 2]])
+    expect(chunks([], 3)).toStrictEqual([])
   })
 })

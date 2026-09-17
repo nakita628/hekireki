@@ -6,6 +6,7 @@ import { Effect } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
 import { fileSystemLayer } from '../../../file/index.js'
+import { DatabaseError } from '../errors/index.js'
 import { connectDatabase, disconnectedDatabase } from './database.js'
 
 const dirs: string[] = []
@@ -279,5 +280,69 @@ describe('connectDatabase', () => {
     await Effect.runPromise(driver.query({ sql: 'CREATE TABLE marker (id INTEGER)', params: [] }))
     expect(existsSync(path.join(schemaDir, 'dev.db'))).toBe(true)
     expect(existsSync(path.join(cwd, 'dev.db'))).toBe(false)
+  })
+})
+
+// What the driver hands back, and what it says when it cannot: the message of the database
+// itself, with what to do when the table is not there.
+describe('the sqlite driver', () => {
+  async function driverOf(dir: string) {
+    const db = await connect({ explicitUrl: 'file:./dev.db', cwd: dir, schemaDir: dir })
+    return Effect.runPromise(db.driver)
+  }
+
+  it('reads rows with their columns, and counts the rows a write changes', async () => {
+    const driver = await driverOf(tmp())
+    const run = (sql: string, params: readonly unknown[] = []) =>
+      Effect.runPromise(driver.query({ sql, params }))
+    await run('CREATE TABLE "User" ("id" INTEGER PRIMARY KEY, "name" TEXT)')
+    expect(
+      await run('INSERT INTO "User" VALUES (?, ?), (?, ?)', [1, 'Ann', 2, 'Bo']),
+    ).toStrictEqual({ columns: [], rows: [], rowCount: 2 })
+    const read = await run('SELECT "id", "name" FROM "User" WHERE "id" = ?', [2])
+    expect({ ...read, rows: read.rows.map((row) => structuredClone(row)) }).toStrictEqual({
+      columns: ['id', 'name'],
+      rows: [{ id: 2, name: 'Bo' }],
+      rowCount: 1,
+    })
+  })
+
+  it("passes the database's message on, with what to do when the table is not there", async () => {
+    const driver = await driverOf(tmp())
+    const missing = await Effect.runPromise(
+      Effect.flip(driver.query({ sql: 'SELECT * FROM "missing"', params: [] })),
+    )
+    expect(missing).toBeInstanceOf(DatabaseError)
+    expect(missing.cause).toContain('no such table: missing')
+    expect(missing.cause).toContain('run `prisma db push`')
+    const explained = await Effect.runPromise(
+      Effect.flip(driver.explain({ sql: 'SELECT * FROM "missing"', params: [] })),
+    )
+    expect(explained.cause).toContain('no such table: missing')
+    const syntax = await Effect.runPromise(
+      Effect.flip(driver.query({ sql: 'SELECT FROM "User"', params: [] })),
+    )
+    expect(syntax.cause).toBe('near "FROM": syntax error')
+  })
+
+  it('says why a file it cannot open is not connected, in the words of node:sqlite', async () => {
+    const dir = tmp()
+    const db = await connect({ explicitUrl: 'file:./no/such/dir/dev.db', cwd: dir, schemaDir: dir })
+    expect(db.status.connected).toBe(false)
+    expect(db.status.error).toBe('unable to open database file')
+    const failure = await Effect.runPromise(Effect.flip(db.driver))
+    expect(failure.reason).toBe('unable to open database file')
+  })
+})
+
+describe('the drivers of the project', () => {
+  it("says why a server cannot be reached, in the driver's words", async () => {
+    const postgres = await connect({ explicitUrl: 'postgresql://u:p@127.0.0.1:1/app' })
+    expect(postgres.status).toMatchObject({ connected: false, dialect: null })
+    expect(postgres.status.error).toBe('connect ECONNREFUSED 127.0.0.1:1')
+    const mysql = await connect({ explicitUrl: 'mysql://u:p@127.0.0.1:1/app' })
+    expect(mysql.status.error).toBe('connect ECONNREFUSED 127.0.0.1:1')
+    const failure = await Effect.runPromise(Effect.flip(mysql.driver))
+    expect(failure.reason).toBe('connect ECONNREFUSED 127.0.0.1:1')
   })
 })

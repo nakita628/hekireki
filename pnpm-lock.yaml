@@ -58,6 +58,15 @@ importers:
 
   example: {}
 
+  examples/migrate:
+    devDependencies:
+      hekireki:
+        specifier: workspace:*
+        version: link:../../packages/hekireki
+      prisma:
+        specifier: 8.1.0-dev.6
+        version: 8.1.0-dev.6(@types/react-dom@19.2.5(@types/react@19.2.17))(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2)
+
   examples/mysql:
     devDependencies:
       hekireki:
@@ -83,7 +92,7 @@ importers:
         version: link:../../packages/hekireki
       prisma:
         specifier: 8.1.0-dev.6
-        version: 8.1.0-dev.6(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@5.9.3)
+        version: 8.1.0-dev.6(@types/react-dom@19.2.5(@types/react@19.2.17))(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@5.9.3)
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -120,6 +129,9 @@ importers:
       '@prisma/prisma-schema-wasm':
         specifier: 8.1.0-2.59be4fda12412a79eeb9c2ae727b6aa723593323
         version: 8.1.0-2.59be4fda12412a79eeb9c2ae727b6aa723593323
+      '@prisma/schema-engine-wasm':
+        specifier: 8.1.0-2.59be4fda12412a79eeb9c2ae727b6aa723593323
+        version: 8.1.0-2.59be4fda12412a79eeb9c2ae727b6aa723593323
       '@resvg/resvg-js':
         specifier: ^2.6.2
         version: 2.6.2
@@ -150,9 +162,6 @@ importers:
       uuid:
         specifier: ^14.0.1
         version: 14.0.2
-      valibot:
-        specifier: 1.4.2
-        version: 1.4.2(typescript@7.0.2)
       vscode-languageserver-textdocument:
         specifier: ^1.0.12
         version: 1.0.14
@@ -2143,6 +2152,9 @@ packages:
 
   '@prisma/query-plan-executor@7.2.0':
     resolution: {integrity: sha512-EOZmNzcV8uJ0mae3DhTsiHgoNCuu1J9mULQpGCh62zN3PxPTd+qI9tJvk5jOst8WHKQNwJWR3b39t0XvfBB0WQ==}
+
+  '@prisma/schema-engine-wasm@8.1.0-2.59be4fda12412a79eeb9c2ae727b6aa723593323':
+    resolution: {integrity: sha512-gwMxP1eCE8q5kRjXqfO4rrPvJ3Y3jQ4ZPQJiGi/Z+ZA48Y+0WVrvZpANMZCynXVSD88Aqf+z8NoMCfRCX9O9bA==}
 
   '@prisma/schema-files-loader@7.9.0-dev.4':
     resolution: {integrity: sha512-APiVjNmgHcJ4+mUxbR9JhhqN3wgXoVHr9xBdL/w2ATBLiioMts91Oit2ePRQWGqgqnW918INessR5jazYYpkZg==}
@@ -7540,6 +7552,8 @@ snapshots:
 
   '@prisma/query-plan-executor@7.2.0': {}
 
+  '@prisma/schema-engine-wasm@8.1.0-2.59be4fda12412a79eeb9c2ae727b6aa723593323': {}
+
   '@prisma/schema-files-loader@7.9.0-dev.4':
     dependencies:
       '@prisma/prisma-schema-wasm': 7.8.0-6.3c6e192761c0362d496ed980de936e2f3cebcd3a
@@ -10567,6 +10581,24 @@ snapshots:
       ansi-styles: 5.2.0
       react-is: 17.0.2
 
+  prisma@8.1.0-dev.6(@types/react-dom@19.2.5(@types/react@19.2.17))(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@5.9.3):
+    dependencies:
+      '@prisma/config': 8.1.0-dev.6(magicast@0.5.3)
+      '@prisma/dev': 0.24.17(typescript@5.9.3)
+      '@prisma/engines': 8.1.0-dev.6
+      '@prisma/studio-core': 0.33.0(@types/react-dom@19.2.5(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      mysql2: 3.15.3
+      postgres: 3.4.7
+    optionalDependencies:
+      better-sqlite3: 12.11.1
+      typescript: 5.9.3
+    transitivePeerDependencies:
+      - '@types/react'
+      - '@types/react-dom'
+      - magicast
+      - react
+      - react-dom
+
   prisma@8.1.0-dev.6(@types/react-dom@19.2.5(@types/react@19.2.17))(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2):
     dependencies:
       '@prisma/config': 8.1.0-dev.6(magicast@0.5.3)
@@ -10578,24 +10610,6 @@ snapshots:
     optionalDependencies:
       better-sqlite3: 12.11.1
       typescript: 7.0.2
-    transitivePeerDependencies:
-      - '@types/react'
-      - '@types/react-dom'
-      - magicast
-      - react
-      - react-dom
-
-  prisma@8.1.0-dev.6(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@5.9.3):
-    dependencies:
-      '@prisma/config': 8.1.0-dev.6(magicast@0.5.3)
-      '@prisma/dev': 0.24.17(typescript@5.9.3)
-      '@prisma/engines': 8.1.0-dev.6
-      '@prisma/studio-core': 0.33.0(@types/react-dom@19.2.5(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      mysql2: 3.15.3
-      postgres: 3.4.7
-    optionalDependencies:
-      better-sqlite3: 12.11.1
-      typescript: 5.9.3
     transitivePeerDependencies:
       - '@types/react'
       - '@types/react-dom'

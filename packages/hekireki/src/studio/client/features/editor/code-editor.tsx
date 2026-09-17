@@ -8,6 +8,7 @@ import {
   applyMarkers,
   bindEditorContext,
   EDITOR_OPTIONS,
+  refuseTextSubstitutions,
   setupMonaco,
   syncFileModels,
   themeName,
@@ -93,6 +94,7 @@ export function CodeEditor({
 
   const onMount: OnMount = (editor) => {
     onReady(editor)
+    refuseTextSubstitutions(editor)
     // Monaco binds Ctrl+Shift+I on Linux; the header advertises Shift+Alt+F, so bind it everywhere.
     editor.addCommand(
       // oxlint-disable-next-line no-bitwise -- Monaco keybindings are bit flags by design

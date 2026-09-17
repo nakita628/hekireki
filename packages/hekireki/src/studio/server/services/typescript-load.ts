@@ -27,10 +27,6 @@ const ModuleNamespace = z
   })
   .meta({ description: 'An imported module namespace' })
 
-function messageOf(error: unknown) {
-  return error instanceof Error ? error.message : String(error)
-}
-
 /** The project's own `typescript`: Studio ships none, and the types are checked the way the project checks them. */
 export function loadTypeScript(cwd: string) {
   return Effect.gen(function* () {
@@ -43,7 +39,7 @@ export function loadTypeScript(cwd: string) {
       },
       catch: (error) =>
         new ClientUnavailableError({
-          reason: `Cannot load "typescript" from ${cwd}: ${messageOf(error)}\n   Install it with \`npm install -D typescript@5\` so the editor can complete against the client's types.`,
+          reason: `Cannot load "typescript" from ${cwd}: ${error instanceof Error ? error.message : String(error)}\n   Install it with \`npm install -D typescript@5\` so the editor can complete against the client's types.`,
         }),
     })
     const result = TypeScriptModule.safeParse(namespace)

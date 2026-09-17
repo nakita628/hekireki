@@ -2191,6 +2191,916 @@ export const CodeActionBodySchema = z
   })
   .openapi('CodeActionBody')
 
+export const MigrationRecordSchema = z
+  .object({
+    name: z.string().openapi({ description: 'The directory name of the migration' }),
+    startedAt: z
+      .string()
+      .nullable()
+      .openapi({ description: 'When it started, as the database recorded it' }),
+    finishedAt: z
+      .string()
+      .nullable()
+      .openapi({ description: 'When it finished; null while it is running or if it failed' }),
+    rolledBackAt: z
+      .string()
+      .nullable()
+      .openapi({ description: 'When it was marked rolled back, if it was' }),
+    appliedStepsCount: z.int32().openapi({ description: 'How many statements of it ran' }),
+    checksum: z
+      .string()
+      .openapi({ description: 'The checksum of the migration file as it was when it ran' }),
+  })
+  .openapi({
+    required: ['name', 'startedAt', 'finishedAt', 'rolledBackAt', 'appliedStepsCount', 'checksum'],
+    description: 'One migration the database has recorded in `_prisma_migrations`.',
+    example: {
+      name: '20260101000000_init',
+      startedAt: '2026-01-01T00:00:00.000Z',
+      finishedAt: '2026-01-01T00:00:01.000Z',
+      rolledBackAt: null,
+      appliedStepsCount: 1,
+      checksum: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+    },
+  })
+  .openapi('MigrationRecord')
+
+export const DivergenceSchema = z
+  .enum(['databaseIsBehind', 'migrationsDirectoryIsBehind', 'historiesDiverge'])
+  .openapi({
+    description:
+      'How the migration history of the directory and the database differ, when they do.',
+  })
+  .openapi('Divergence')
+
+export const MigrateStatusSchema = z
+  .object({
+    migrationsDir: z
+      .string()
+      .openapi({ description: 'Where the migrations of the project are read from' }),
+    hasMigrationsTable: z
+      .boolean()
+      .openapi({
+        description:
+          'Whether the database has `_prisma_migrations`; a database never migrated has not',
+      }),
+    applied: z
+      .array(MigrationRecordSchema)
+      .openapi({ description: 'Every migration the database has recorded, oldest first' }),
+    pending: z
+      .array(z.string())
+      .openapi({ description: 'Migrations in the directory the database has not applied' }),
+    failed: z
+      .array(z.string())
+      .openapi({ description: 'Migrations that failed and were never resolved' }),
+    edited: z
+      .array(z.string())
+      .openapi({ description: 'Migrations whose file changed after the database ran it' }),
+    divergence: DivergenceSchema.nullable().openapi({
+      description: 'How the two histories differ, when they do',
+    }),
+    drift: z
+      .boolean()
+      .openapi({ description: 'Whether the database differs from the schema, migrations aside' }),
+    baselineNeeded: z
+      .boolean()
+      .openapi({
+        description:
+          'Whether the database has tables and no migration history, which `prisma migrate deploy`\nrefuses (P3005): it has to be baselined at the migration it already matches',
+      }),
+    missingFiles: z
+      .array(z.string())
+      .openapi({
+        description:
+          'Migrations the database has recorded whose directory the migrations directory does not hold',
+      }),
+  })
+  .brand<'MigrateStatus'>()
+  .openapi({
+    required: [
+      'migrationsDir',
+      'hasMigrationsTable',
+      'applied',
+      'pending',
+      'failed',
+      'edited',
+      'divergence',
+      'drift',
+      'baselineNeeded',
+      'missingFiles',
+    ],
+    description:
+      'The state of the migration history, and whether the database has drifted from the schema.',
+    example: {
+      migrationsDir: '/app/prisma/migrations',
+      hasMigrationsTable: true,
+      applied: [],
+      pending: ['20260201000000_profile'],
+      failed: [],
+      edited: [],
+      divergence: null,
+      drift: true,
+      baselineNeeded: false,
+      missingFiles: [],
+    },
+  })
+  .openapi('MigrateStatus')
+
+export const BaselineCandidateSchema = z
+  .object({
+    name: z.string().openapi({ description: 'The directory name of the migration' }),
+    matches: z
+      .boolean()
+      .openapi({
+        description:
+          'Whether the database is what this migration and those before it make of an empty one',
+      }),
+    difference: z
+      .string()
+      .openapi({
+        description:
+          'The SQL that would take what the migrations make to the database; empty when it matches',
+      }),
+  })
+  .openapi({
+    required: ['name', 'matches', 'difference'],
+    description: 'One migration the database could be baselined at, and whether it matches.',
+    example: { name: '20260101000000_init', matches: true, difference: '' },
+  })
+  .openapi('BaselineCandidate')
+
+export const MigrateBaselineSchema = z
+  .object({
+    candidates: z
+      .array(BaselineCandidateSchema)
+      .openapi({ description: 'Every migration of the directory, oldest first' }),
+  })
+  .brand<'MigrateBaseline'>()
+  .openapi({
+    required: ['candidates'],
+    description:
+      'Where the database could be baselined: each migration, replayed into a shadow database.',
+    example: { candidates: [] },
+  })
+  .openapi('MigrateBaseline')
+
+export const MarkAppliedBodySchema = z
+  .object({
+    name: z.string().openapi({ description: 'The directory name of the migration to record' }),
+  })
+  .openapi({
+    required: ['name'],
+    description: 'A migration whose statements have already been run.',
+    example: { name: '20260201000000_profile' },
+  })
+  .openapi('MarkAppliedBody')
+
+export const MigrateDiffSchema = z
+  .object({
+    sql: z
+      .string()
+      .openapi({
+        description:
+          'The migration Prisma Migrate would write, empty when the database matches the schema',
+      }),
+    drift: z.boolean().openapi({ description: 'Whether there was anything to write' }),
+  })
+  .brand<'MigrateDiff'>()
+  .openapi({
+    required: ['sql', 'drift'],
+    description: 'The statements that would take the database to the schema.',
+    example: { sql: '-- AlterTable\nALTER TABLE "User" ADD COLUMN "name" TEXT;\n', drift: true },
+  })
+  .openapi('MigrateDiff')
+
+export const StepKindSchema = z
+  .enum(['fix', 'migration'])
+  .openapi({ description: 'What a step of a plan does, which says how much care it needs.' })
+  .openapi('StepKind')
+
+export const MigrationChangeSchema = z
+  .object({
+    kind: z
+      .string()
+      .openapi({
+        description:
+          '`create-enum`, `create-table`, `rebuild-table`, `copy-rows`, `drop-table`, `add-column`,\n`drop-column`, `foreign-key`, `unique` or `index`',
+      }),
+    table: z.string().openapi({ description: 'The table it is about' }),
+    columns: z
+      .array(z.string())
+      .openapi({ description: 'The columns it is about, when it is about some' }),
+    target: z
+      .string()
+      .nullable()
+      .openapi({ description: 'The table a foreign key points at; null otherwise' }),
+  })
+  .openapi({
+    required: ['kind', 'table', 'columns', 'target'],
+    description: 'One change a step makes, for the page to say in its own language.',
+    example: { kind: 'foreign-key', table: 'Post', columns: ['categoryId'], target: 'Category' },
+  })
+  .openapi('MigrationChange')
+
+export const MigrationStepSchema = z
+  .object({
+    title: z
+      .string()
+      .openapi({ description: 'What the step does, for the person deciding whether to run it' }),
+    kind: StepKindSchema.openapi({ description: 'Whether it changes rows or the schema' }),
+    statements: z
+      .array(z.string())
+      .openapi({ description: 'The statements of the step, in the order they must run' }),
+    changes: z
+      .array(MigrationChangeSchema)
+      .openapi({
+        description:
+          'What it does, one change each, in the words of the schema rather than of the database',
+      }),
+    destructive: z
+      .boolean()
+      .openapi({
+        description:
+          'Whether it loses rows or what a column holds; a table rebuilt in place loses neither',
+      }),
+    rows: z
+      .int32()
+      .nullable()
+      .openapi({
+        description:
+          'How many rows a fix will change, counted against the database now; null for a schema step',
+      }),
+    subject: z
+      .string()
+      .nullable()
+      .openapi({
+        description:
+          'The field or relation a fix changes the rows of (`User.email`); null for a schema step',
+      }),
+    fixKind: z
+      .string()
+      .nullable()
+      .openapi({
+        description:
+          'What a fix does to them: `nulls`, `values`, `duplicates`, `orphans`, `invalid`, `convert` or\n`fill`; null for a schema step',
+      }),
+  })
+  .openapi({
+    required: [
+      'title',
+      'kind',
+      'statements',
+      'changes',
+      'destructive',
+      'rows',
+      'subject',
+      'fixKind',
+    ],
+    description: 'One step of a plan: statements that are run, and reported, together.',
+    example: {
+      title: 'Add the column',
+      kind: 'migration',
+      statements: ['ALTER TABLE "User" ADD COLUMN "name" TEXT'],
+      changes: [{ kind: 'add-column', table: 'User', columns: ['name'], target: null }],
+      destructive: false,
+      rows: null,
+      subject: null,
+      fixKind: null,
+    },
+  })
+  .openapi('MigrationStep')
+
+export const MigrationSuggestionSchema = z
+  .object({
+    choice: z.string().openapi({ description: 'One of the choices of the check' }),
+    value: z
+      .string()
+      .nullable()
+      .openapi({ description: 'What the choice needs, as a decision carries it' }),
+    reason: z
+      .string()
+      .openapi({
+        description:
+          'Why it is offered: `schema-default`, `uuid`, `random-id`, `now`, `from-key`, `empty-string`,\n`zero`, `false`, `empty-object`, `first-referenced`, `enum-first`, `enum-default`,\n`enum-same-name`, `enum-replaced`, `oldest`, `first-by-key`, `optional-relation`,\n`required-relation`, `renamed`, `moved`, `convert-number`, `clamp`,\n`truncate`, `nullable` or `not-nullable`',
+      }),
+  })
+  .openapi({
+    required: ['choice', 'value', 'reason'],
+    description: 'A decision offered ready-made: nothing is decided until it is taken.',
+    example: { choice: 'keep-first-delete', value: 'createdAt', reason: 'oldest' },
+  })
+  .openapi('MigrationSuggestion')
+
+export const MigrationDestinationSchema = z
+  .object({
+    choice: z
+      .string()
+      .openapi({
+        description: '`rename` for a column of the same table, `move` for one of a related model',
+      }),
+    value: z
+      .string()
+      .openapi({ description: 'What the decision names: the field, or `Model.field` for a move' }),
+    type: z.string().openapi({ description: 'The Prisma type of the column' }),
+    fits: z.boolean().openapi({ description: 'Whether the values fit its kind (text takes any)' }),
+    relation: z
+      .string()
+      .openapi({
+        description:
+          "How the tables are related: `same` table, the destination's rows `points-here` (a profile at\nits user), or this table's rows point at the destination's (`pointed-at`)",
+      }),
+    via: z
+      .string()
+      .nullable()
+      .openapi({
+        description:
+          'The foreign key the values move along, `Profile.userId → User.id`; null for a rename',
+      }),
+    created: z
+      .boolean()
+      .openapi({
+        description:
+          "Whether the migration creates the destination's table, whose rows are made from the values",
+      }),
+  })
+  .openapi({
+    required: ['choice', 'value', 'type', 'fits', 'relation', 'via', 'created'],
+    description: 'A column the migration adds that the values of a dropped column could go to.',
+    example: {
+      choice: 'move',
+      value: 'Profile.nickname',
+      type: 'String',
+      fits: true,
+      relation: 'points-here',
+      via: 'Profile.userId → User.id',
+      created: true,
+    },
+  })
+  .openapi('MigrationDestination')
+
+export const CheckStatusSchema = z
+  .enum(['passed', 'blocking', 'warning', 'failed', 'guaranteed'])
+  .openapi({
+    description:
+      'How a check came out: nothing found, something that blocks, or a query that failed.',
+  })
+  .openapi('CheckStatus')
+
+export const MigrationCheckSchema = z
+  .object({
+    kind: z
+      .string()
+      .openapi({
+        description: 'Which check it is (`not-null`, `unique`, `enum`, `foreign-key`, ...)',
+      }),
+    modelName: z.string().openapi({ description: 'The model it is about' }),
+    subject: z.string().openapi({ description: 'The model and field it is about' }),
+    what: z.string().openapi({ description: 'What the migration asks of them' }),
+    hint: z.string().openapi({ description: 'What to do about it, in a sentence' }),
+    field: z
+      .string()
+      .openapi({
+        description: 'The field, or the relation for a foreign key, a decision about it is made on',
+      }),
+    choices: z
+      .array(z.string())
+      .openapi({ description: 'What can be decided about it on the page, empty when nothing can' }),
+    facts: z
+      .record(z.string(), z.string())
+      .openapi({
+        description:
+          'What to read it by, for the page to say in its own language: `model`, `field`, `what`, and by\nkind `type`, `enum`, `removed`, `members`, `member`, `fields`, `orderBy`, `target`, `column`,\n`renamedTo`, `from`, `to`, `default` or `table`',
+      }),
+    lost: z
+      .string()
+      .nullable()
+      .openapi({
+        description:
+          'A query for the rows and values the change loses, as the database holds them now (a column or\ntable dropped, a column added again); null when it loses none',
+      }),
+    suggestion: MigrationSuggestionSchema.nullable().openapi({
+      description:
+        'The decision read from the schema and the database as the likeliest fit; null when there is none',
+    }),
+    candidates: z
+      .array(MigrationSuggestionSchema)
+      .openapi({
+        description:
+          'Where the values of a dropped column could have gone, the likeliest first: a column of the same\ntable (`rename`) or of a related model (`move`) the migration adds, by the likeness of its name\nand kind, each with why (`same-name`, `similar-name`, `same-name-related` or\n`similar-name-related`). Empty when nowhere reads as one, and the values are lost.',
+      }),
+    destinations: z
+      .array(MigrationDestinationSchema)
+      .openapi({
+        description:
+          'Every column the migration adds that the values of a dropped column could go to, whatever its\nname: for the page to complete the field a rename or a move names, and to show how it moves',
+      }),
+    status: CheckStatusSchema.openapi({ description: 'How it came out' }),
+    count: z
+      .int32()
+      .nullable()
+      .openapi({ description: "How many rows fail it; null when the check's query failed" }),
+    error: z
+      .string()
+      .nullable()
+      .openapi({ description: 'Why the check could not be counted, when it could not' }),
+  })
+  .openapi({
+    required: [
+      'kind',
+      'modelName',
+      'subject',
+      'what',
+      'hint',
+      'field',
+      'choices',
+      'facts',
+      'lost',
+      'suggestion',
+      'candidates',
+      'destinations',
+      'status',
+      'count',
+      'error',
+    ],
+    description: 'One thing the migration needs of the rows the database holds now.',
+    example: {
+      kind: 'unique',
+      modelName: 'User',
+      subject: 'User.email',
+      what: 'unique',
+      hint: 'Delete the duplicates before the key is made, or say which stays on the Migrate page.',
+      field: 'email',
+      choices: ['keep-first-delete'],
+      facts: { model: 'User', field: 'email', what: 'unique', fields: 'email' },
+      lost: null,
+      suggestion: { choice: 'keep-first-delete', value: null, reason: 'first-by-key' },
+      candidates: [],
+      destinations: [],
+      status: 'blocking',
+      count: 2,
+      error: null,
+    },
+  })
+  .openapi('MigrationCheck')
+
+export const UnfitDecisionSchema = z
+  .object({
+    kind: z.string().openapi({ description: 'The check it answered' }),
+    modelName: z.string().openapi({ description: 'The model it is about' }),
+    field: z.string().openapi({ description: 'The field, or the relation for a foreign key' }),
+    choice: z.string().openapi({ description: 'What it said to do' }),
+    value: z
+      .string()
+      .nullable()
+      .openapi({ description: 'What the choice was given; null when it needed nothing' }),
+    reasons: z
+      .array(z.string())
+      .openapi({ description: 'What no longer fits, as the check says it' }),
+  })
+  .openapi({
+    required: ['kind', 'modelName', 'field', 'choice', 'value', 'reasons'],
+    description: 'A kept decision that no longer fits, and why.',
+    example: {
+      kind: 'column-added',
+      modelName: 'User',
+      field: 'hekireki',
+      choice: 'value',
+      value: '',
+      reasons: ['User.hekireki: User has no field hekireki.'],
+    },
+  })
+  .openapi('UnfitDecision')
+
+export const MigrationPreviewSchema = z
+  .object({
+    modelName: z.string().openapi({ description: 'The model the rows belong to' }),
+    sql: z
+      .string()
+      .openapi({ description: 'The query that shows them; it reads, and changes nothing' }),
+  })
+  .openapi({
+    required: ['modelName', 'sql'],
+    description:
+      'The rows of one model as the fixes will leave them, from a query that writes nothing.',
+    example: {
+      modelName: 'User',
+      sql: 'WITH hk_fix_0 AS (...) SELECT * FROM hk_fix_0 ORDER BY id',
+    },
+  })
+  .openapi('MigrationPreview')
+
+export const MigratePlanSchema = z
+  .object({
+    name: z
+      .string()
+      .openapi({ description: 'The directory name the migration would be written under' }),
+    steps: z
+      .array(MigrationStepSchema)
+      .openapi({ description: 'The steps, in the order they must run' }),
+    checks: z
+      .array(MigrationCheckSchema)
+      .openapi({ description: 'What the migration needs of the rows the database holds now' }),
+    unfit: z
+      .array(UnfitDecisionSchema)
+      .openapi({
+        description:
+          'Kept decisions set aside because they no longer fit the schema or the database: a field or\nmodel the schema has lost since they were made. The plan is made without them.',
+      }),
+    previews: z
+      .array(MigrationPreviewSchema)
+      .openapi({
+        description: "Each fixed model's rows as the fixes will leave them, before anything is run",
+      }),
+    notes: z.array(z.string()).openapi({ description: 'What the person running it needs to know' }),
+    errors: z
+      .array(z.string())
+      .openapi({ description: 'Why the plan cannot be run as it is, when it cannot' }),
+  })
+  .brand<'MigratePlan'>()
+  .openapi({
+    required: ['name', 'steps', 'checks', 'unfit', 'previews', 'notes', 'errors'],
+    description: 'A migration laid out as steps that can be run one at a time.',
+    example: {
+      name: '20260201000000_profile',
+      steps: [],
+      checks: [],
+      unfit: [],
+      previews: [],
+      notes: [],
+      errors: [],
+    },
+  })
+  .openapi('MigratePlan')
+
+export const MigrationDecisionSchema = z
+  .object({
+    kind: z
+      .string()
+      .openapi({ description: 'The check it answers (`not-null`, `unique`, `foreign-key`, ...)' }),
+    modelName: z.string().openapi({ description: 'The model it is about' }),
+    field: z.string().openapi({ description: 'The field, or the relation for a foreign key' }),
+    choice: z.string().openapi({ description: 'What to do, from the choices the check offers' }),
+    value: z
+      .string()
+      .exactOptional()
+      .openapi({
+        description:
+          'What a choice needs, when it needs something: the value or SQL written, the field a rename\nbecame, the `STORED=MEMBER` pairs of an enum, or the field duplicates are ordered by',
+      }),
+  })
+  .openapi({
+    required: ['kind', 'modelName', 'field', 'choice'],
+    description:
+      'A decision made on the page: which check it answers, what it is about, and what to do. Studio\nkeeps them in `.hekireki/migrate.json` beside the schema, and `hekireki migrate check` and\n`hekireki migrate plan` read the same file, so the command line makes the same plan.',
+    example: {
+      kind: 'not-null',
+      modelName: 'User',
+      field: 'name',
+      choice: 'value',
+      value: 'unknown',
+    },
+  })
+  .openapi('MigrationDecision')
+
+export const PlanBodySchema = z
+  .object({
+    name: z
+      .string()
+      .exactOptional()
+      .openapi({ description: 'What to call it; the timestamp is put in front' }),
+    decisions: z
+      .array(MigrationDecisionSchema)
+      .exactOptional()
+      .openapi({
+        description:
+          'Every decision to plan with, in place of the ones kept; the kept ones when left out',
+      }),
+    batch: z
+      .int32()
+      .min(1)
+      .exactOptional()
+      .openapi({
+        description:
+          'The most rows one statement of a fix changes: a fix over more is run that many at a time, so\nnone holds its locks on the whole table; all of them at once when left out',
+      }),
+  })
+  .openapi({
+    description: 'The name to propose for a migration, and the decisions made for it on the page.',
+    example: { name: 'profile', decisions: [] },
+  })
+  .openapi('PlanBody')
+
+export const StatementResultSchema = z
+  .object({
+    sql: z.string().openapi({ description: 'The statement as it was sent' }),
+    affected: z
+      .int32()
+      .nullable()
+      .openapi({ description: 'How many rows it changed; null when it failed' }),
+    error: z
+      .string()
+      .nullable()
+      .openapi({ description: 'What the database said, when it refused' }),
+  })
+  .openapi({
+    required: ['sql', 'affected', 'error'],
+    description: 'What one statement did, or why the database refused it.',
+    example: { sql: 'ALTER TABLE "User" ADD COLUMN "name" TEXT', affected: 0, error: null },
+  })
+  .openapi('StatementResult')
+
+export const ApplyResultSchema = z
+  .object({
+    results: z
+      .array(StatementResultSchema)
+      .openapi({
+        description:
+          'One result per statement attempted; the ones after a failure are not attempted',
+      }),
+    failedAt: z
+      .int32()
+      .nullable()
+      .openapi({ description: 'The index of the statement that failed, null when none did' }),
+    ok: z.boolean().openapi({ description: 'Whether every statement ran' }),
+  })
+  .brand<'ApplyResult'>()
+  .openapi({
+    required: ['results', 'failedAt', 'ok'],
+    description: 'How far a staged apply got.',
+    example: { results: [], failedAt: null, ok: true },
+  })
+  .openapi('ApplyResult')
+
+export const ApplyBodySchema = z
+  .object({
+    statements: z
+      .array(z.string())
+      .openapi({ description: 'The statements, in the order they must run' }),
+  })
+  .openapi({
+    required: ['statements'],
+    description: 'Statements to run, one at a time.',
+    example: { statements: ['ALTER TABLE "User" ADD COLUMN "name" TEXT'] },
+  })
+  .openapi('ApplyBody')
+
+export const RehearsalStepSchema = z
+  .object({
+    ran: z
+      .boolean()
+      .openapi({ description: 'Whether it was run; a step after one that failed is not' }),
+    ok: z.boolean().openapi({ description: 'Whether every statement of it went through' }),
+    affected: z
+      .int32()
+      .nullable()
+      .openapi({ description: 'The rows its statements changed; null when it was not run' }),
+    error: z
+      .string()
+      .nullable()
+      .openapi({ description: 'What the database said to the statement it refused' }),
+    statement: z.string().nullable().openapi({ description: 'The statement it refused' }),
+  })
+  .openapi({
+    required: ['ran', 'ok', 'affected', 'error', 'statement'],
+    description: 'How one step went in the rehearsal.',
+    example: { ran: true, ok: true, affected: 2, error: null, statement: null },
+  })
+  .openapi('RehearsalStep')
+
+export const TableRowsSchema = z
+  .object({
+    table: z.string().openapi({ description: 'The table, as the database names it' }),
+    before: z
+      .int32()
+      .nullable()
+      .openapi({
+        description: 'Its rows before; null when it was not there, or could not be counted',
+      }),
+    after: z
+      .int32()
+      .nullable()
+      .openapi({ description: 'Its rows after; null when it is gone, or could not be counted' }),
+  })
+  .openapi({
+    required: ['table', 'before', 'after'],
+    description: "A table's rows, counted before and after.",
+    example: { table: 'User', before: 5, after: 4 },
+  })
+  .openapi('TableRows')
+
+export const RehearsalSchema = z
+  .object({
+    ok: z.boolean().openapi({ description: 'Whether every step went through' }),
+    steps: z.array(RehearsalStepSchema).openapi({ description: 'How each step went, in order' }),
+    tables: z
+      .array(TableRowsSchema)
+      .openapi({ description: "Every table's rows before the steps and after them" }),
+    schemaMatches: z
+      .boolean()
+      .openapi({ description: 'Whether the database the steps left matches the schema' }),
+    difference: z
+      .string()
+      .openapi({
+        description:
+          'What still differs from the schema, as the SQL that would close it; empty when it matches',
+      }),
+    limitations: z
+      .array(z.string())
+      .openapi({
+        description:
+          'What the rehearsal could not show: `outside-transaction` when a step (an index made\nCONCURRENTLY, an enum value added) cannot run in the transaction PostgreSQL rehearses in.\nWhat it cost: `locks-tables` when it ran in a transaction on the database itself, which\nholds the locks of its steps until the rollback (it waits five seconds for one, no longer)',
+      }),
+  })
+  .brand<'Rehearsal'>()
+  .openapi({
+    required: ['ok', 'steps', 'tables', 'schemaMatches', 'difference', 'limitations'],
+    description:
+      'The migration run for real and taken back: on SQLite on a copy of the file, on PostgreSQL in a\ntransaction rolled back whatever happens. Nothing of it remains in the database.',
+    example: {
+      ok: true,
+      steps: [],
+      tables: [],
+      schemaMatches: true,
+      difference: '',
+      limitations: [],
+    },
+  })
+  .openapi('Rehearsal')
+
+export const RehearseBodySchema = z
+  .object({
+    steps: z
+      .array(z.array(z.string()))
+      .openapi({ description: "Each step's statements, in the order they run" }),
+  })
+  .openapi({
+    required: ['steps'],
+    description: 'The steps of a plan, to rehearse.',
+    example: { steps: [['ALTER TABLE "User" ADD COLUMN "name" TEXT']] },
+  })
+  .openapi('RehearseBody')
+
+export const TableCountsSchema = z
+  .object({
+    tables: z
+      .array(TableRowsSchema)
+      .openapi({
+        description: 'Each table and its rows; `before` is null and `after` is the count',
+      }),
+  })
+  .brand<'TableCounts'>()
+  .openapi({
+    required: ['tables'],
+    description: 'The rows of every table of the database now.',
+    example: { tables: [] },
+  })
+  .openapi('TableCounts')
+
+export const BackupSchema = z
+  .object({
+    name: z.string().openapi({ description: 'What it is called: when it was taken' }),
+    location: z.string().openapi({ description: 'The file on SQLite, the schema on PostgreSQL' }),
+    size: z
+      .int32()
+      .nullable()
+      .openapi({ description: "The file's size in bytes; null for a schema" }),
+    restorable: z
+      .boolean()
+      .openapi({
+        description:
+          'Whether Studio can restore it: a SQLite file, or a PostgreSQL schema that keeps the statements\nof its restore; one taken before Studio kept them is its rows only, in the schema named',
+      }),
+  })
+  .openapi({
+    required: ['name', 'location', 'size', 'restorable'],
+    description: 'A copy of the database taken before a migration that loses data.',
+    example: {
+      name: 'backup_20260917101500123',
+      location: '/app/prisma/.hekireki/backups/backup_20260917101500123.db',
+      size: 356352,
+      restorable: true,
+    },
+  })
+  .openapi('Backup')
+
+export const BackupsSchema = z
+  .object({ backups: z.array(BackupSchema).openapi({ description: 'Newest first' }) })
+  .brand<'Backups'>()
+  .openapi({
+    required: ['backups'],
+    description: 'The backups there are, newest first.',
+    example: { backups: [] },
+  })
+  .openapi('Backups')
+
+export const RestoreBodySchema = z
+  .object({
+    name: z.string().openapi({ description: "The backup's name" }),
+    migration: z
+      .string()
+      .exactOptional()
+      .openapi({
+        description:
+          'The migration written by the run the backup was taken for, to remove from the directory',
+      }),
+  })
+  .openapi({
+    required: ['name'],
+    description: 'A backup to restore, and the migration the restore undoes.',
+    example: { name: 'backup_20260917101500123', migration: '20260917101530_profile' },
+  })
+  .openapi('RestoreBody')
+
+export const MigrationFileSchema = z
+  .object({
+    name: z.string().openapi({ description: 'The directory name of the migration' }),
+    file: z.string().openapi({ description: 'Where its migration.sql is' }),
+    sql: z.string().openapi({ description: 'What the migration.sql holds' }),
+  })
+  .brand<'MigrationFile'>()
+  .openapi({
+    required: ['name', 'file', 'sql'],
+    description: 'One migration of the directory, and the SQL it holds.',
+    example: {
+      name: '20260201000000_profile',
+      file: '/app/prisma/migrations/20260201000000_profile/migration.sql',
+      sql: '-- AlterTable\nALTER TABLE "User" ADD COLUMN "name" TEXT;\n',
+    },
+  })
+  .openapi('MigrationFile')
+
+export const CreatedMigrationSchema = z
+  .object({
+    name: z.string().openapi({ description: 'The directory name it was written under' }),
+    file: z.string().openapi({ description: 'The migration.sql that was written' }),
+  })
+  .brand<'CreatedMigration'>()
+  .openapi({
+    required: ['name', 'file'],
+    description: 'Where a migration was written.',
+    example: {
+      name: '20260201000000_profile',
+      file: '/app/prisma/migrations/20260201000000_profile/migration.sql',
+    },
+  })
+  .openapi('CreatedMigration')
+
+export const CreateMigrationBodySchema = z
+  .object({
+    name: z.string().openapi({ description: 'What to call it; the timestamp is put in front' }),
+    sql: z.string().openapi({ description: 'The statements to write to migration.sql' }),
+  })
+  .openapi({
+    required: ['name', 'sql'],
+    description: 'A migration to write to the migrations directory.',
+    example: { name: 'profile', sql: 'ALTER TABLE "User" ADD COLUMN "name" TEXT;\n' },
+  })
+  .openapi('CreateMigrationBody')
+
+export const MigrationDecisionsSchema = z
+  .object({
+    file: z
+      .string()
+      .openapi({ description: 'The file the decisions are kept in, beside the schema' }),
+    decisions: z
+      .array(MigrationDecisionSchema)
+      .openapi({ description: 'The decisions, in the order they were made' }),
+  })
+  .brand<'MigrationDecisions'>()
+  .openapi({
+    required: ['file', 'decisions'],
+    description: 'What has been decided on the page, and where Studio keeps it.',
+    example: { file: '/app/prisma/.hekireki/migrate.json', decisions: [] },
+  })
+  .openapi('MigrationDecisions')
+
+export const DecisionsBodySchema = z
+  .object({
+    decisions: z
+      .array(MigrationDecisionSchema)
+      .openapi({ description: 'All of them: what is left out is forgotten' }),
+  })
+  .openapi({
+    required: ['decisions'],
+    description: 'Decisions to keep, replacing the ones kept now.',
+    example: { decisions: [] },
+  })
+  .openapi('DecisionsBody')
+
+export const DeployedSchema = z
+  .object({
+    applied: z
+      .array(z.string())
+      .openapi({ description: 'The migrations that were applied, oldest first' }),
+  })
+  .brand<'Deployed'>()
+  .openapi({
+    required: ['applied'],
+    description: 'The migrations a deploy ran.',
+    example: { applied: ['20260201000000_profile'] },
+  })
+  .openapi('Deployed')
+
 export const DocsDirectiveSchema = z
   .object({
     name: z.string().openapi({ description: 'The attribute name' }),
@@ -2536,7 +3446,7 @@ export const getSchemaEventsRoute = createRoute({
   path: '/schema/events',
   tags: ['schema'],
   description:
-    'Server-sent events: `ready` (data: the current `updatedAt`) on connect, `change` (data: the\nnew `updatedAt`) after every reload, and `ping` every 15 seconds to keep the connection open.',
+    'Server-sent events: `ready` (data: the current `updatedAt`) on connect, `change` (data: the\nnew `updatedAt`) after every reload, `migrations` (data: when it was seen) after the\nmigrations directory changes, and `ping` every 15 seconds to keep the connection open.',
   operationId: 'readSchemaEvents',
   responses: {
     200: {
@@ -3346,6 +4256,499 @@ export const postPrismaCodeActionsRoute = createRoute({
     500: {
       description: '500 Internal Server Error (`application/problem+json`)',
       content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+  },
+})
+
+export const getMigrateRoute = createRoute({
+  method: 'get',
+  path: '/migrate',
+  tags: ['migrate'],
+  description:
+    'The migration history of the database against the migrations directory, and whether the\ndatabase has drifted from the schema. Reads only.',
+  operationId: 'readMigrateStatus',
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: MigrateStatusSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+    503: {
+      description: '503 Service Unavailable (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
+    },
+  },
+})
+
+export const getMigrateBaselineRoute = createRoute({
+  method: 'get',
+  path: '/migrate/baseline',
+  tags: ['migrate'],
+  description:
+    'Which migrations the database already matches, for a database with tables and no history:\neach migration and those before it replayed into a shadow database and compared with it.\nReads the database; writes nothing to it.',
+  operationId: 'readMigrateBaseline',
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: MigrateBaselineSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+    503: {
+      description: '503 Service Unavailable (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
+    },
+  },
+})
+
+export const postMigrateBaselineRoute = createRoute({
+  method: 'post',
+  path: '/migrate/baseline',
+  tags: ['migrate'],
+  description:
+    'Baselines the database: records the migration named and every one before it as applied,\nwithout running them. Refused when the database does not match them.',
+  operationId: 'baselineMigrations',
+  request: {
+    body: { content: { 'application/json': { schema: MarkAppliedBodySchema } }, required: true },
+  },
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: MigrateStatusSchema } },
+    },
+    422: {
+      description: '422 Unprocessable Content (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ValidationProblemSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+    503: {
+      description: '503 Service Unavailable (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
+    },
+  },
+})
+
+export const getMigrateDiffRoute = createRoute({
+  method: 'get',
+  path: '/migrate/diff',
+  tags: ['migrate'],
+  description:
+    'The migration that would take the database to the schema, as Prisma Migrate would write it.\nReads the database; writes nothing to it.',
+  operationId: 'readMigrateDiff',
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: MigrateDiffSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+    503: {
+      description: '503 Service Unavailable (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
+    },
+  },
+})
+
+export const postMigratePlanRoute = createRoute({
+  method: 'post',
+  path: '/migrate/plan',
+  tags: ['migrate'],
+  description:
+    'The migration laid out as steps that can be run one at a time, the statements that change\nrows before the ones that change the schema.',
+  operationId: 'planMigration',
+  request: {
+    body: { content: { 'application/json': { schema: PlanBodySchema } }, required: true },
+  },
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: MigratePlanSchema } },
+    },
+    422: {
+      description: '422 Unprocessable Content (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ValidationProblemSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+    503: {
+      description: '503 Service Unavailable (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
+    },
+  },
+})
+
+export const postMigrateApplyRoute = createRoute({
+  method: 'post',
+  path: '/migrate/apply',
+  tags: ['migrate'],
+  description:
+    'Runs the statements one at a time and stops at the first the database refuses. What ran\nstays run: none of the three databases undoes a DDL statement already done.',
+  operationId: 'applyMigrationStatements',
+  request: {
+    body: { content: { 'application/json': { schema: ApplyBodySchema } }, required: true },
+  },
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: ApplyResultSchema } },
+    },
+    422: {
+      description: '422 Unprocessable Content (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ValidationProblemSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+    503: {
+      description: '503 Service Unavailable (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
+    },
+  },
+})
+
+export const postMigrateRehearseRoute = createRoute({
+  method: 'post',
+  path: '/migrate/rehearse',
+  tags: ['migrate'],
+  description:
+    'The migration run for real and taken back, to see before it runs whether it goes through,\nwhat it does to the rows of each table, and whether the database then matches the schema.',
+  operationId: 'rehearseMigration',
+  request: {
+    body: { content: { 'application/json': { schema: RehearseBodySchema } }, required: true },
+  },
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: RehearsalSchema } },
+    },
+    422: {
+      description: '422 Unprocessable Content (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ValidationProblemSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+    503: {
+      description: '503 Service Unavailable (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
+    },
+  },
+})
+
+export const getMigrateTablesRoute = createRoute({
+  method: 'get',
+  path: '/migrate/tables',
+  tags: ['migrate'],
+  description: 'The rows of every table of the database now, to compare a run with.',
+  operationId: 'readTableCounts',
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: TableCountsSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+    503: {
+      description: '503 Service Unavailable (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
+    },
+  },
+})
+
+export const getMigrateBackupsRoute = createRoute({
+  method: 'get',
+  path: '/migrate/backups',
+  tags: ['migrate'],
+  description: 'The backups taken before migrations, newest first.',
+  operationId: 'readBackups',
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: BackupsSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+    503: {
+      description: '503 Service Unavailable (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
+    },
+  },
+})
+
+export const postMigrateBackupsRoute = createRoute({
+  method: 'post',
+  path: '/migrate/backups',
+  tags: ['migrate'],
+  description: 'Takes a backup of the database as it is now.',
+  operationId: 'createBackup',
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: BackupSchema } },
+    },
+    422: {
+      description: '422 Unprocessable Content (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ValidationProblemSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+    503: {
+      description: '503 Service Unavailable (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
+    },
+  },
+})
+
+export const postMigrateBackupsRestoreRoute = createRoute({
+  method: 'post',
+  path: '/migrate/backups/restore',
+  tags: ['migrate'],
+  description:
+    'Puts the database back as a backup has it (SQLite), and removes from the directory the\nmigration the run it undoes wrote.',
+  operationId: 'restoreBackup',
+  request: {
+    body: { content: { 'application/json': { schema: RestoreBodySchema } }, required: true },
+  },
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: MigrateStatusSchema } },
+    },
+    422: {
+      description: '422 Unprocessable Content (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ValidationProblemSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+    503: {
+      description: '503 Service Unavailable (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
+    },
+  },
+})
+
+export const getMigrateMigrationsMigrationNameRoute = createRoute({
+  method: 'get',
+  path: '/migrate/migrations/{migrationName}',
+  tags: ['migrate'],
+  description:
+    'The migration.sql of one migration of the directory; 404 when the directory holds none of that name.',
+  operationId: 'readMigrationFile',
+  request: {
+    params: z.object({
+      migrationName: z
+        .string()
+        .openapi({
+          param: { name: 'migrationName', in: 'path', required: true, schema: { type: 'string' } },
+        }),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: MigrationFileSchema } },
+    },
+    404: {
+      description: '404 Not Found (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: NotFoundProblemSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+    503: {
+      description: '503 Service Unavailable (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
+    },
+  },
+})
+
+export const postMigrateMigrationsRoute = createRoute({
+  method: 'post',
+  path: '/migrate/migrations',
+  tags: ['migrate'],
+  description:
+    'Writes a migration.sql to the migrations directory, so Prisma Migrate owns it from now on.',
+  operationId: 'createMigration',
+  request: {
+    body: {
+      content: { 'application/json': { schema: CreateMigrationBodySchema } },
+      required: true,
+    },
+  },
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: CreatedMigrationSchema } },
+    },
+    422: {
+      description: '422 Unprocessable Content (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ValidationProblemSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+    503: {
+      description: '503 Service Unavailable (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
+    },
+  },
+})
+
+export const postMigrateMigrationsAppliedRoute = createRoute({
+  method: 'post',
+  path: '/migrate/migrations/applied',
+  tags: ['migrate'],
+  description:
+    'Records a migration as applied without running it, for one whose statements were run a step\nat a time. The database must have been migrated at least once.',
+  operationId: 'markMigrationApplied',
+  request: {
+    body: { content: { 'application/json': { schema: MarkAppliedBodySchema } }, required: true },
+  },
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: MigrateStatusSchema } },
+    },
+    422: {
+      description: '422 Unprocessable Content (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ValidationProblemSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+    503: {
+      description: '503 Service Unavailable (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
+    },
+  },
+})
+
+export const postMigrateMigrationsRolledBackRoute = createRoute({
+  method: 'post',
+  path: '/migrate/migrations/rolled-back',
+  tags: ['migrate'],
+  description:
+    'Records a migration as rolled back, for one that failed and left the database as it was. It\nstops counting as failed, which a database has to have before anything else reaches it.',
+  operationId: 'markMigrationRolledBack',
+  request: {
+    body: { content: { 'application/json': { schema: MarkAppliedBodySchema } }, required: true },
+  },
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: MigrateStatusSchema } },
+    },
+    422: {
+      description: '422 Unprocessable Content (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ValidationProblemSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+    503: {
+      description: '503 Service Unavailable (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
+    },
+  },
+})
+
+export const getMigrateDecisionsRoute = createRoute({
+  method: 'get',
+  path: '/migrate/decisions',
+  tags: ['migrate'],
+  description: 'What has been decided on the page about the checks, as Studio kept it.',
+  operationId: 'readMigrationDecisions',
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: MigrationDecisionsSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+    503: {
+      description: '503 Service Unavailable (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
+    },
+  },
+})
+
+export const putMigrateDecisionsRoute = createRoute({
+  method: 'put',
+  path: '/migrate/decisions',
+  tags: ['migrate'],
+  description:
+    'Keeps the decisions, so the same plan is made the next time the page is opened, and by\n`hekireki migrate check` and `hekireki migrate plan` from the command line.',
+  operationId: 'writeMigrationDecisions',
+  request: {
+    body: { content: { 'application/json': { schema: DecisionsBodySchema } }, required: true },
+  },
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: MigrationDecisionsSchema } },
+    },
+    422: {
+      description: '422 Unprocessable Content (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ValidationProblemSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+    503: {
+      description: '503 Service Unavailable (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
+    },
+  },
+})
+
+export const postMigrateDeployRoute = createRoute({
+  method: 'post',
+  path: '/migrate/deploy',
+  tags: ['migrate'],
+  description:
+    'Applies every migration the database has not run yet, as `prisma migrate deploy` does.',
+  operationId: 'deployMigrations',
+  responses: {
+    200: {
+      description: 'The request has succeeded.',
+      content: { 'application/json': { schema: DeployedSchema } },
+    },
+    500: {
+      description: '500 Internal Server Error (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
+    },
+    503: {
+      description: '503 Service Unavailable (`application/problem+json`)',
+      content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
     },
   },
 })

@@ -12,8 +12,8 @@
 //   custom/function-declaration     a module-level function is a `function` declaration, not an
 //                                   anonymous function bound to a const (an annotated const such as
 //                                   `const h: RouteHandler<...> = (c) => ...` keeps its contextual type)
-//   custom/schema-pascal-case       zod/valibot schemas (variables initialized by a `z.*` / `v.*`
-//                                   call) are PascalCase - a schema names a shape
+//   custom/schema-pascal-case       schemas (variables initialized by a `z.*` / `v.*` call, or by
+//                                   Effect's `Schema.*`) are PascalCase - a schema names a shape
 //   custom/schema-meta              schemas document themselves - zod needs `.meta({...})` or
 //                                   `.describe()`, valibot needs `v.metadata()` / `v.description()`
 //                                   in the chain (same idea as `@example` in main.tsp)
@@ -37,6 +37,10 @@
 //   custom/no-mutation              no writing through a const binding - member assignment,
 //                                   `delete`, ++/-- on a property, and the mutating array methods
 //                                   are banned
+//   custom/no-pass-through          no function that only returns its argument, forwards its
+//                                   arguments to another call unchanged, or renames a built-in
+//                                   check - it is written at the call sites (a type guard and a
+//                                   generic identity are exempt: they carry a type)
 //   custom/predicate-is-name        a pure boolean predicate is `is*` (schema `Is*Input`),
 //                                   never `readIs*`
 //   custom/layer-namespace-import   a usecases/services/domain module is imported as a whole and
@@ -48,7 +52,7 @@
 //                                   cycle; the client imports lib through lib/index.js; every
 //                                   other namespace import stays banned (zod/valibot aside)
 // Tests are exempt from the structural rules (effect-gen-return, function-declaration, no-let,
-// no-mutation): a test arranges and asserts imperatively when that is the clearest way to spell
+// no-mutation, no-pass-through): a test arranges and asserts imperatively when that is the clearest way to spell
 // the fixture out.
 const PASCAL_CASE = /^[A-Z][A-Za-z0-9]*$/u
 const CAMEL_CASE = /^[a-z][A-Za-z0-9]*$/u
@@ -103,16 +107,6 @@ export function isServiceModulePath(filename) {
  */
 export function isUseCaseSpecifier(source) {
   return source.startsWith('./') ? true : /(^|\/)usecases(\/|$)/u.test(source)
-}
-
-/**
- * Whether the file under lint is a test file (exempt from the structural rules).
- *
- * @param filename - path of the file under lint
- * @returns true for `*.test.ts` / `*.test.tsx`
- */
-export function isTestPath(filename) {
-  return TEST_FILE.test(filename)
 }
 
 function filenameOf(context) {
@@ -270,6 +264,35 @@ function isDerivedSchemaInit(init) {
   const root = rootIdentifier(init)
   if (root === null || !PASCAL_CASE.test(root)) return false
   return chainMethodNames(init).some((name) => DERIVATION_METHODS.has(name))
+}
+
+// Effect's Schema namespace names shapes the same way: `Schema.Struct({...})`,
+// `Schema.Int.pipe(...)`, `Schema.declare(...)` and `Schema.makeFilter(...)` are values that name
+// a shape or a check, so they read as PascalCase. The verbs of the namespace
+// (`Schema.decodeUnknownEffect(...)`) make a function out of a schema, and stay camelCase.
+const EFFECT_SCHEMA_FACTORIES = new Set(['declare', 'makeFilter'])
+
+function isEffectSchemaInit(init) {
+  if (init?.type !== 'CallExpression' || rootIdentifier(init) !== 'Schema') return false
+  const member = namespaceMember(init)
+  return member !== null && (PASCAL_CASE.test(member) || EFFECT_SCHEMA_FACTORIES.has(member))
+}
+
+// The property read straight off the namespace: `Schema.Int.pipe(...)` -> 'Int'.
+function namespaceMember(node) {
+  if (node?.type === 'CallExpression') return namespaceMember(node.callee)
+  if (node?.type !== 'MemberExpression') return null
+  if (node.object.type !== 'Identifier') return namespaceMember(node.object)
+  return node.property.type === 'Identifier' ? node.property.name : null
+}
+
+/** The one expression a function returns, or null when its body is more than that. */
+function returnedExpression(node) {
+  if (node.body.type !== 'BlockStatement') return node.body
+  const [statement] = node.body.body
+  return node.body.body.length === 1 && statement?.type === 'ReturnStatement'
+    ? statement.argument
+    : null
 }
 
 // "Is this a zod/valibot schema definition" is decided by the initializer rooting at z / v
@@ -568,7 +591,7 @@ const plugin = {
         },
       },
       create(context) {
-        if (isTestPath(filenameOf(context))) return {}
+        if (TEST_FILE.test(filenameOf(context))) return {}
         return {
           CallExpression(node) {
             if (effectMember(node.callee) !== 'gen') return
@@ -659,7 +682,7 @@ const plugin = {
         docs: { description: 'module-level functions are function declarations' },
       },
       create(context) {
-        if (isTestPath(filenameOf(context))) return {}
+        if (TEST_FILE.test(filenameOf(context))) return {}
         return {
           Program(node) {
             for (const statement of node.body) {
@@ -685,12 +708,12 @@ const plugin = {
           VariableDeclarator(node) {
             if (
               node.id.type === 'Identifier' &&
-              isSchemaInit(node.init) &&
+              (isSchemaInit(node.init) || isEffectSchemaInit(node.init)) &&
               !PASCAL_CASE.test(node.id.name)
             ) {
               context.report({
                 node: node.id,
-                message: `Schema \`${node.id.name}\` must be PascalCase (zod/valibot schemas are values that name a shape).`,
+                message: `Schema \`${node.id.name}\` must be PascalCase (a schema is a value that names a shape).`,
               })
             }
           },
@@ -868,7 +891,13 @@ const plugin = {
         }
         return {
           VariableDeclarator(node) {
-            if (node.id.type === 'Identifier' && !isSchemaInit(node.init)) check(node.id)
+            if (
+              node.id.type === 'Identifier' &&
+              !isSchemaInit(node.init) &&
+              !isEffectSchemaInit(node.init)
+            ) {
+              check(node.id)
+            }
           },
           FunctionDeclaration(node) {
             if (node.id) check(node.id)
@@ -885,7 +914,7 @@ const plugin = {
       },
       create(context) {
         const filename = filenameOf(context)
-        if (isTestPath(filename)) return {}
+        if (TEST_FILE.test(filename)) return {}
         const client = STUDIO_CLIENT.test(filename)
         if (!client && !STUDIO_SERVER.test(filename)) return {}
         return {
@@ -1078,7 +1107,7 @@ const plugin = {
     'no-let': {
       meta: { docs: { description: 'no let outside a for statement head' } },
       create(context) {
-        if (isTestPath(filenameOf(context))) return {}
+        if (TEST_FILE.test(filenameOf(context))) return {}
         const forHeads = new Set()
         return {
           ForStatement(node) {
@@ -1098,7 +1127,7 @@ const plugin = {
     'no-mutation': {
       meta: { docs: { description: 'no writing through a const binding' } },
       create(context) {
-        if (isTestPath(filenameOf(context))) return {}
+        if (TEST_FILE.test(filenameOf(context))) return {}
         function reportWrite(node, target, wrote) {
           if (target.type !== 'MemberExpression') return
           if (memberRootObject(target).type === 'ThisExpression') return
@@ -1137,6 +1166,81 @@ const plugin = {
         }
       },
     },
+    // A function that does nothing of its own: it returns its argument, hands it to another
+    // call unchanged, or renames a built-in check. Each one is a name to look up and a jump to
+    // make for no gain, so it belongs at its call sites. A type guard is exempt: it carries a
+    // type its callers cannot write inline. A generic identity (`defineSchema`) is exempt too:
+    // it exists to pin a type, not to run.
+    'no-pass-through': {
+      meta: {
+        docs: {
+          description:
+            'no function that only forwards, returns its argument or renames a built-in check',
+        },
+      },
+      create(context) {
+        if (TEST_FILE.test(filenameOf(context))) return {}
+        function reason(node) {
+          if (node.typeParameters ?? node.returnType?.typeAnnotation?.type === 'TSTypePredicate') {
+            return null
+          }
+          if (node.params.some((param) => param.type !== 'Identifier')) return null
+          const names = node.params.map((param) => param.name)
+          const returned = returnedExpression(node)
+          if (!returned) return null
+          if (returned.type === 'Identifier' && names.includes(returned.name)) {
+            return 'returns its own argument'
+          }
+          const passesParams = (args) =>
+            args.length === names.length &&
+            args.every(
+              (argument, index) => argument.type === 'Identifier' && argument.name === names[index],
+            )
+          if (
+            returned.type === 'CallExpression' &&
+            (returned.callee.type === 'Identifier' ||
+              (returned.callee.type === 'MemberExpression' && !returned.callee.computed)) &&
+            passesParams(returned.arguments)
+          ) {
+            return 'hands its arguments to another call unchanged'
+          }
+          if (
+            returned.type === 'BinaryExpression' &&
+            returned.operator === '===' &&
+            returned.left.type === 'UnaryExpression' &&
+            returned.left.operator === 'typeof' &&
+            returned.left.argument.type === 'Identifier' &&
+            names.includes(returned.left.argument.name)
+          ) {
+            return 'renames a built-in check'
+          }
+          return null
+        }
+        function check(idNode, node) {
+          const why = reason(node)
+          if (why === null) return
+          context.report({
+            node: idNode,
+            message: `\`${idNode.name}\` ${why}: write it at the call sites instead of naming it here.`,
+          })
+        }
+        return {
+          FunctionDeclaration(node) {
+            if (node.id) check(node.id, node)
+          },
+          VariableDeclarator(node) {
+            if (
+              node.id.type === 'Identifier' &&
+              (node.init?.type === 'ArrowFunctionExpression' ||
+                node.init?.type === 'FunctionExpression')
+            ) {
+              check(node.id, node.init)
+            }
+          },
+        }
+      },
+    },
+
     'predicate-is-name': {
       meta: { docs: { description: 'a pure boolean predicate is named is*, never readIs*' } },
       create(context) {

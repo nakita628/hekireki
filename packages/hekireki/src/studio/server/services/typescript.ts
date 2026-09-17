@@ -1,7 +1,6 @@
 import path from 'node:path'
 
 import { Effect, Semaphore } from 'effect'
-import type ts from 'typescript-5'
 import * as z from 'zod'
 
 import { clientSource } from '../../../seed/discover.js'
@@ -213,18 +212,19 @@ export function createTypeChecker(input: z.infer<typeof CreateTypeCheckerInput>)
       return ask(files, text, offset, ({ ts: typescript, service, file, position }) => {
         const help = service.getSignatureHelpItems(file, position, undefined)
         if (help === undefined) return { signatures: [], activeSignature: 0, activeParameter: 0 }
-        const print = (parts: ts.SymbolDisplayPart[]) => typescript.displayPartsToString(parts)
         return {
           signatures: help.items.map((item) => {
             const parameters = item.parameters.map((parameter) => ({
-              label: print(parameter.displayParts),
-              documentation: print(parameter.documentation) || null,
+              label: typescript.displayPartsToString(parameter.displayParts),
+              documentation: typescript.displayPartsToString(parameter.documentation) || null,
             }))
             return {
-              label: `${print(item.prefixDisplayParts)}${parameters
+              label: `${typescript.displayPartsToString(item.prefixDisplayParts)}${parameters
                 .map((parameter) => parameter.label)
-                .join(print(item.separatorDisplayParts))}${print(item.suffixDisplayParts)}`,
-              documentation: print(item.documentation) || null,
+                .join(
+                  typescript.displayPartsToString(item.separatorDisplayParts),
+                )}${typescript.displayPartsToString(item.suffixDisplayParts)}`,
+              documentation: typescript.displayPartsToString(item.documentation) || null,
               parameters,
             }
           }),

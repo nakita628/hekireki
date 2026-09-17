@@ -2,6 +2,8 @@ import { parse } from 'acorn'
 import type { Expression, PrivateIdentifier, SpreadElement } from 'acorn'
 import * as z from 'zod'
 
+import { lowerFirst } from '../../../utils/index.js'
+
 /** The model operations that only read, in the order the Prisma docs list them. */
 const READ_OPERATIONS = [
   'findUnique',
@@ -292,11 +294,6 @@ function programOf(text: string) {
   }
 }
 
-/** `User` → `user`, `OrderItem` → `orderItem`: the property Prisma Client exposes a model under. */
-function delegateOf(model: string) {
-  return `${model.charAt(0).toLowerCase()}${model.slice(1)}`
-}
-
 const MakeClientQueryInput = z
   .object({
     text: z.string().meta({
@@ -333,7 +330,7 @@ export function makeClientQuery(input: z.infer<typeof MakeClientQueryInput>) {
       diagnostics: [{ message, range: { start, end } }],
     }
   }
-  const known = input.models.map((model) => ({ model, delegate: delegateOf(model) }))
+  const known = input.models.map((model) => ({ model, delegate: lowerFirst(model) }))
   const resolved = result.value.calls.map((call) => {
     const model = known.find((entry) => entry.delegate === call.delegate.name)?.model ?? null
     const operation = OPERATIONS.includes(call.operation.name) ? call.operation.name : null

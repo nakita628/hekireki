@@ -1,5 +1,5 @@
 import { graphlib, layout } from '@dagrejs/dagre'
-import * as v from 'valibot'
+import * as z from 'zod'
 
 export type Position = { readonly x: number; readonly y: number }
 
@@ -89,15 +89,14 @@ export function enumHeight(value: DiagramEnum) {
   return NODE_HEADER_HEIGHT + NODE_PADDING + value.values.length * NODE_ROW_HEIGHT + NODE_PADDING
 }
 
-const LayoutNodeSchema = v.pipe(
-  v.object({
-    x: v.pipe(v.number(), v.description('Left edge in canvas pixels')),
-    y: v.pipe(v.number(), v.description('Top edge in canvas pixels')),
-    width: v.pipe(v.number(), v.description('Node width in pixels')),
-    height: v.pipe(v.number(), v.description('Node height in pixels')),
-  }),
-  v.description('A positioned node of the ER diagram'),
-)
+const LayoutNodeSchema = z
+  .object({
+    x: z.number().meta({ description: 'Left edge in canvas pixels', example: 120 }),
+    y: z.number().meta({ description: 'Top edge in canvas pixels', example: 48 }),
+    width: z.number().meta({ description: 'Node width in pixels', example: 260 }),
+    height: z.number().meta({ description: 'Node height in pixels', example: 180 }),
+  })
+  .meta({ description: 'A positioned node of the ER diagram' })
 
 export type DiagramSchema = {
   readonly models: readonly (DiagramModel & { readonly name: string })[]
@@ -153,11 +152,14 @@ export function autoLayout(schema: DiagramSchema): LayoutPositions {
   return Object.fromEntries(
     [...names].map((name) => {
       const raw: unknown = graph.node(name)
-      const node = v.safeParse(LayoutNodeSchema, raw)
+      const result = LayoutNodeSchema.safeParse(raw)
       return [
         name,
-        node.success
-          ? { x: node.output.x - node.output.width / 2, y: node.output.y - node.output.height / 2 }
+        result.success
+          ? {
+              x: result.data.x - result.data.width / 2,
+              y: result.data.y - result.data.height / 2,
+            }
           : { x: 0, y: 0 },
       ]
     }),

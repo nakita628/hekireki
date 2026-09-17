@@ -102,6 +102,7 @@ export default defineConfig({
       'custom/no-dual-absence': 'error',
       'custom/no-let': 'error',
       'custom/no-mutation': 'error',
+      'custom/no-pass-through': 'error',
       'custom/predicate-is-name': 'error',
       // Doc comments. The `jsdoc` plugin is off by default and enables nothing on its own, so
       // every rule is named here. Doc comments in this package are TSDoc: the type lives in the
@@ -668,6 +669,40 @@ export default defineConfig({
         },
       },
       {
+        // migrate/domain is the pure half of `hekireki migrate`: the schema and the database's
+        // catalogue in; checks, fixes and SQL out. It opens no connection, reads no file and
+        // runs no Effect (the data types of `effect`, such as Result, are fine): that is
+        // migrate/adapter, and migrate/check.ts puts the two together.
+        files: ['src/migrate/domain/**'],
+        rules: {
+          'no-restricted-imports': [
+            'error',
+            {
+              paths: [
+                { name: 'node:fs', message: 'file I/O belongs in src/file' },
+                { name: 'node:fs/promises', message: 'file I/O belongs in src/file' },
+                {
+                  // Effect's data types (Result, Option, Array) are values; its runtime is not.
+                  name: 'effect',
+                  importNames: ['Effect', 'Layer', 'Stream', 'Ref', 'Semaphore', 'Scope'],
+                  message: 'migrate/domain is pure: an Effect belongs in adapter',
+                },
+              ],
+              patterns: [
+                {
+                  regex: '^(\\.\\./)+(bin|cli|core|emit|file|format|generator|studio)(/.*)?$',
+                  message: 'migrate/domain may only import sql, and types of database and seed',
+                },
+                {
+                  regex: '^(\\.\\./)+(adapter/.*|check\\.js|report\\.js|errors\\.js|index\\.js)$',
+                  message: 'migrate/domain must stay pure: no adapter, no check flow, no errors',
+                },
+              ],
+            },
+          ],
+        },
+      },
+      {
         // The studio client is browser code bundled by Vite: it only takes the contract types
         // from the server side.
         files: ['src/studio/client/**'],
@@ -896,6 +931,7 @@ export default defineConfig({
           'src/seed/load-config.ts',
           'src/database/url.ts',
           'src/core/errors.ts',
+          'src/migrate/errors.ts',
           'src/format/index.ts',
           'src/seed/errors.ts',
           'src/studio/server/errors/index.ts',

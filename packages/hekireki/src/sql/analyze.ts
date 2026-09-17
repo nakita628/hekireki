@@ -1475,7 +1475,7 @@ function buildSelect(
   }
 
   if (core.where !== null) {
-    const nodeId = nextIdReserved(ctx)
+    const nodeId = nextId(ctx)
     const typing: Typing = {
       ctx,
       scope,
@@ -1540,7 +1540,7 @@ function buildSelect(
 
   // Select aliases are visible to ORDER BY (and, in SQLite / MySQL, to HAVING); they are typed
   // before HAVING so that both can read them.
-  const projectId = nextIdReserved(ctx)
+  const projectId = nextId(ctx)
   const lookups = new Map(
     core.columns.flatMap((item) =>
       subqueriesOf(item.expr).map((query) => [query, projectId] as const),
@@ -1575,7 +1575,7 @@ function buildSelect(
   )
 
   if (core.having !== null) {
-    const havingId = nextIdReserved(ctx)
+    const havingId = nextId(ctx)
     const havingTyping: Typing = {
       ctx,
       scope,
@@ -1618,11 +1618,6 @@ function buildSelect(
     scope,
     aliases,
   }
-}
-
-/** Reserves an id for a node that is added after the expressions it holds have been typed (so lookups can point at it). */
-function nextIdReserved(ctx: Context) {
-  return nextId(ctx)
 }
 
 function aggregateCalls(expr: Expr): readonly Extract<Expr, { type: 'call' }>[] {
@@ -1735,7 +1730,7 @@ function buildCtes(ctx: Context, ctes: readonly Cte[], recursive: boolean, scope
       // The anchor's columns are unknown until the CTE is built; a self-reference reads an open relation.
       registered.set(cte.name.toLowerCase(), { nodeId: '', columns: [] })
     }
-    const placeholder = recursive ? nextIdReserved(ctx) : null
+    const placeholder = recursive ? nextId(ctx) : null
     if (placeholder !== null) {
       registered.set(cte.name.toLowerCase(), { nodeId: placeholder, columns: [] })
     }
@@ -1796,7 +1791,7 @@ function buildReturning(
   scopeName: string,
 ): readonly Resolved[] {
   if (items === null) return []
-  const nodeId = nextIdReserved(ctx)
+  const nodeId = nextId(ctx)
   const typing: Typing = { ctx, scope, aliases: null, lookups: new Map() }
   const columns = items.flatMap((item): Resolved[] => {
     if (item.expr.type === 'star') return [...expandStar(ctx, scope, item.expr).columns]
@@ -1982,7 +1977,7 @@ function buildUpdate(
     chain.current = joinId
   }
   if (statement.where !== null) {
-    const nodeId = nextIdReserved(ctx)
+    const nodeId = nextId(ctx)
     const typing: Typing = {
       ctx,
       scope: rowScope,
@@ -2005,7 +2000,7 @@ function buildUpdate(
   } else {
     warn(ctx, 'UPDATE without WHERE changes every row', statement.range)
   }
-  const updateId = nextIdReserved(ctx)
+  const updateId = nextId(ctx)
   const typing: Typing = {
     ctx,
     scope: rowScope,
@@ -2083,7 +2078,7 @@ function buildDelete(
     chain.current = joinId
   }
   if (statement.where !== null) {
-    const nodeId = nextIdReserved(ctx)
+    const nodeId = nextId(ctx)
     const typing: Typing = {
       ctx,
       scope: rowScope,
@@ -2126,13 +2121,9 @@ function tsUnion(type: TypeInfo) {
   return base
 }
 
-function isPlainKey(name: string) {
-  return /^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(name)
-}
-
 function rowTypeOf(columns: readonly Resolved[], kind: StatementKind) {
   if (columns.length === 0) return kind === 'select' ? '{}' : 'never'
-  return `{ ${columns.map((column) => `${isPlainKey(column.name) ? column.name : JSON.stringify(column.name)}: ${tsUnion(column)}`).join('; ')} }`
+  return `{ ${columns.map((column) => `${/^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(column.name) ? column.name : JSON.stringify(column.name)}: ${tsUnion(column)}`).join('; ')} }`
 }
 
 /** Placeholders in the order a driver binds them: positional as written, `$n` by number, named by first appearance. */

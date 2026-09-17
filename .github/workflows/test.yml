@@ -33,3 +33,8 @@ jobs:
       # packages/hekireki only: the `test` package needs the Go / Rust / Python /
       # Elixir / Ruby / PHP toolchains and is owned by the Lang Check matrix.
       - run: vp run --filter ./packages/hekireki test
+
+      # examples/migrate end to end on SQLite: the check, the migration Prisma wrote rewritten by
+      # `hekireki migrate plan --migration`, `prisma migrate deploy`, and no difference left
+      # between the database and the schema.
+      - run: vp run --filter ./examples/migrate demo

@@ -11,10 +11,6 @@ type JsonValue =
   | readonly JsonValue[]
   | { readonly [key: string]: JsonValue }
 
-function isFunction(value: unknown): value is (...args: never[]) => unknown {
-  return typeof value === 'function'
-}
-
 function jsonOf(value: unknown): JsonValue {
   if (value === null || value === undefined) return null
   if (typeof value === 'string' || typeof value === 'boolean') return value
@@ -30,7 +26,7 @@ function jsonOf(value: unknown): JsonValue {
   }
   // A Decimal (and anything else with a JSON form of its own) says how it wants to be written.
   const toJson: unknown = Reflect.get(value, 'toJSON')
-  const written: unknown = isFunction(toJson) ? Reflect.apply(toJson, value, []) : null
+  const written: unknown = typeof toJson === 'function' ? Reflect.apply(toJson, value, []) : null
   return typeof written === 'object' ? null : jsonOf(written)
 }
 

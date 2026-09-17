@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 
 import { NodeServices } from '@effect/platform-node'
 import { Effect, Exit } from 'effect'
@@ -10,7 +11,7 @@ import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 
 import { fileSystemLayer } from '../file/index.js'
 import { DEFAULT_SCHEMA_PATHS } from './constants.js'
-import { hekirekiCli, helpAsFlag, resolveSchemaPath, studioBanner } from './index.js'
+import { hekirekiCli, resolveSchemaPath, studioBanner } from './index.js'
 
 const dirs: string[] = []
 const cwd = process.cwd()
@@ -26,7 +27,8 @@ afterEach(() => {
 /** The sentence a failure carries, whichever of the two shapes `resolveSchemaPath` answered with. */
 function userMessageOf(error: unknown): string {
   if (error instanceof CliError.ShowHelp) return userMessageOf(error.errors[0])
-  return (error instanceof CliError.UserError ? error.userMessage : undefined) ?? String(error)
+  // What the CLI prints of it.
+  return error instanceof CliError.UserError ? error.message : String(error)
 }
 
 function tmp() {
@@ -67,6 +69,7 @@ describe('hekireki --help', () => {
     expect(out).toContain('USAGE')
     expect(out).toContain('hekireki <subcommand>')
     expect(out).toContain('studio')
+    expect(out).toContain('migrate')
   })
 
   it('prints the version', async () => {
@@ -85,24 +88,29 @@ describe('hekireki --help', () => {
 })
 
 describe('hekireki help', () => {
-  it('prints what --help prints', async () => {
+  // `help` is not a command of the CLI: Effect's runner renders the document and fails, where
+  // the flag it stands for succeeds.
+  it('prints what --help prints, and fails as no command of its own', async () => {
     const help = await cli(['help'])
     const flag = await cli(['--help'])
-    expect(Exit.isSuccess(help.exit)).toBe(true)
     expect(help.out).toBe(flag.out)
+    expect(Exit.isSuccess(help.exit)).toBe(false)
+    expect(Exit.isSuccess(flag.exit)).toBe(true)
   })
 
-  it('takes the command to explain, before or after it', async () => {
+  // Effect's CLI explains the command it has read so far, so `help` after one explains it.
+  it('explains the command it follows, and the root command before one', async () => {
     const studio = await cli(['studio', '--help'])
-    const before = await cli(['help', 'studio'])
     const after = await cli(['studio', 'help'])
-    expect(before.out).toBe(studio.out)
     expect(after.out).toBe(studio.out)
+    const root = await cli(['--help'])
+    const before = await cli(['help', 'studio'])
+    expect(before.out).toBe(root.out)
   })
 
-  it('leaves a flag value that reads `help` alone', () => {
-    expect(helpAsFlag(['studio', '--schema', 'help'])).toStrictEqual(['studio', '--schema', 'help'])
-    expect(helpAsFlag(['studio', '-p', '3000'])).toStrictEqual(['studio', '-p', '3000'])
+  it('leaves a flag value that reads `help` alone', async () => {
+    const { printed } = await cli(['studio', '--schema', 'help'])
+    expect(printed).toContain('Schema not found: help')
   })
 })
 
@@ -388,10 +396,9 @@ describe('hekireki seed, the command line itself', () => {
     )
   })
 
-  it('renders the same document for `help seed` and `seed --help`', async () => {
+  it('renders the same document for `seed help` and `seed --help`', async () => {
     const direct = await cli(['seed', '--help'])
-    const viaHelp = await cli(['help', 'seed'])
-    expect(Exit.isSuccess(viaHelp.exit)).toBe(true)
+    const viaHelp = await cli(['seed', 'help'])
     expect(viaHelp.out).toBe(direct.out)
   })
 
@@ -425,5 +432,165 @@ describe('hekireki seed, the command line itself', () => {
     // The same command line writes the same script.
     await cli(['seed', '-s', 'schema.prisma', '-n', '2', '-l', 'ja', '--sql', 'out/again.sql'])
     expect(readFileSync(path.join(dir, 'out', 'again.sql'), 'utf8')).toBe(script)
+  })
+})
+
+describe('hekireki migrate check', () => {
+  const SCHEMA = `datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id    Int    @id
+  email String @unique
+  name  String
+}
+`
+
+  function project(rows: string) {
+    const dir = tmp()
+    writeFileSync(path.join(dir, 'schema.prisma'), SCHEMA)
+    const db = new DatabaseSync(path.join(dir, 'dev.db'))
+    db.exec(
+      `CREATE TABLE "User" ("id" INTEGER NOT NULL PRIMARY KEY, "email" TEXT NOT NULL, "name" TEXT); ${rows}`,
+    )
+    db.close()
+    process.chdir(dir)
+    return dir
+  }
+
+  it('documents its flags, and `migrate` lists it', async () => {
+    const { exit, out } = await cli(['migrate', 'check', '--help'])
+    expect(Exit.isSuccess(exit)).toBe(true)
+    for (const flag of ['--schema', '--url', '--json']) {
+      expect(out).toContain(flag)
+    }
+    expect(out).toContain('hekireki migrate check --json')
+    const migrate = await cli(['migrate', '--help'])
+    expect(migrate.out).toContain('check')
+    const viaHelp = await cli(['migrate', 'check', 'help'])
+    expect(viaHelp.out).toBe(out)
+  })
+
+  it('rejects a database URL it has no driver for', async () => {
+    const { exit, printed } = await cli(['migrate', 'check', '--url', 'mongodb://localhost/app'])
+    expect(Exit.isFailure(exit)).toBe(true)
+    expect(printed).toContain('a postgres://, postgresql://, mysql:// or file: connection string')
+  })
+
+  it('prints the report and fails when rows block the migration', async () => {
+    project(`INSERT INTO "User" VALUES (1, 'a@example.com', NULL), (2, 'a@example.com', 'Bo');`)
+    const { exit, out, printed } = await cli(['migrate', 'check', '-u', 'file:./dev.db'])
+    expect(Exit.isFailure(exit)).toBe(true)
+    expect(out).toContain('⚡️ Migration check: 2 blocking problems')
+    expect(out).toContain('User.name   column becomes NOT NULL  1 NULL row')
+    expect(out).toContain('User.email  unique                   1 duplicate group')
+    expect(printed).toContain(
+      '2 blocking problems in the data: fix the rows, or decide what becomes of them on the Migrate page of hekireki studio, before migrating.',
+    )
+  })
+
+  it('takes the decisions Studio kept beside the schema, and plan writes them as SQL', async () => {
+    const dir = project(
+      `INSERT INTO "User" VALUES (1, 'a@example.com', NULL), (2, 'a@example.com', 'Bo');`,
+    )
+    mkdirSync(path.join(dir, '.hekireki'))
+    writeFileSync(
+      path.join(dir, '.hekireki', 'migrate.json'),
+      JSON.stringify({
+        decisions: [
+          { kind: 'not-null', modelName: 'User', field: 'name', choice: 'value', value: 'unknown' },
+          {
+            kind: 'unique',
+            modelName: 'User',
+            field: 'email',
+            choice: 'keep-last-delete',
+            value: null,
+          },
+        ],
+      }),
+    )
+    const checked = await cli(['migrate', 'check', '-u', 'file:./dev.db'])
+    expect(Exit.isSuccess(checked.exit)).toBe(true)
+    expect(checked.out).toContain('⚡️ Migration check: the data is ready for this schema')
+    expect(checked.out).toContain('User.name   NULLs set to "unknown"')
+    const planned = await cli(['migrate', 'plan', '-u', 'file:./dev.db'])
+    expect(Exit.isSuccess(planned.exit)).toBe(true)
+    // stdout is the SQL alone, to redirect into a file; what to know about it goes to stderr.
+    expect(planned.out).toBe(`-- hekireki migrate plan
+
+UPDATE "User" SET "name" = 'unknown' WHERE "name" IS NULL;
+
+DELETE FROM "User" WHERE "id" IN (SELECT "id" FROM (SELECT "id", "email", ROW_NUMBER() OVER (PARTITION BY "email" ORDER BY "id" DESC) AS "hk_rank" FROM "User") AS "hk_ranked" WHERE "hk_rank" > 1 AND "email" IS NOT NULL);`)
+    expect(planned.err).toBe(
+      [
+        '   Put it at the top of the migration Prisma writes for the schema (`prisma migrate dev --create-only` writes one to edit), or pass that migration with --migration.',
+        '   Prisma runs a migration a statement at a time, with no transaction around it: if a statement fails, the ones before it, the fixes included, stay done.',
+        '   The check counted the rows as they were when it ran. Rows written since are not in it: stop what writes to these tables while the plan runs, or run `hekireki migrate check` again right before it.',
+        '   It deletes rows, drops what holds them or writes over values, and nothing here undoes a statement that has run: take a backup before it.',
+      ].join('\n'),
+    )
+    const written = await cli(['migrate', 'plan', '-u', 'file:./dev.db', '-o', 'out/fixes.sql'])
+    expect(Exit.isSuccess(written.exit)).toBe(true)
+    expect(written.out).toContain(
+      `Plan: ${path.join(dir, 'out', 'fixes.sql')}\n   Put it at the top of the migration Prisma writes`,
+    )
+    expect(readFileSync(path.join(dir, 'out', 'fixes.sql'), 'utf8')).toBe(`${planned.out}\n`)
+    // Nothing reached the database: the plan is for the migration to run.
+    const db = new DatabaseSync(path.join(dir, 'dev.db'))
+    expect({
+      ...db.prepare('SELECT COUNT(*) AS n FROM "User" WHERE "name" IS NULL').get(),
+    }).toStrictEqual({ n: 1 })
+    db.close()
+  })
+
+  it('reads the decisions named by --decisions, and says what in them does not fit', async () => {
+    const dir = project(`INSERT INTO "User" VALUES (1, 'a@example.com', 'Al');`)
+    writeFileSync(
+      path.join(dir, 'decisions.json'),
+      JSON.stringify({
+        decisions: [
+          { kind: 'not-null', modelName: 'User', field: 'nmae', choice: 'value', value: 'x' },
+        ],
+      }),
+    )
+    const { exit, printed } = await cli([
+      'migrate',
+      'check',
+      '-u',
+      'file:./dev.db',
+      '-d',
+      'decisions.json',
+    ])
+    expect(Exit.isFailure(exit)).toBe(true)
+    expect(printed).toContain(
+      `The decisions in ${path.join(dir, 'decisions.json')} do not fit the schema and the database:`,
+    )
+    expect(printed).toContain('User.nmae: User has no field nmae.')
+    const typo = await cli(['migrate', 'check', '-u', 'file:./dev.db', '--timeout', 'soon'])
+    expect(Exit.isFailure(typo.exit)).toBe(true)
+  })
+
+  it('documents plan, and migrate lists both', async () => {
+    const { exit, out } = await cli(['migrate', 'plan', '--help'])
+    expect(Exit.isSuccess(exit)).toBe(true)
+    for (const flag of ['--schema', '--url', '--decisions', '--timeout', '--output']) {
+      expect(out).toContain(flag)
+    }
+    const migrate = await cli(['migrate', '--help'])
+    expect(migrate.out).toContain('plan')
+    expect(migrate.out).toContain('check')
+  })
+
+  it('passes, with JSON on stdout, when the rows fit the schema', async () => {
+    project(`INSERT INTO "User" VALUES (1, 'a@example.com', 'Al'), (2, 'b@example.com', 'Bo');`)
+    const { exit, out } = await cli(['migrate', 'check', '--url', 'file:./dev.db', '--json'])
+    expect(Exit.isSuccess(exit)).toBe(true)
+    const report: unknown = JSON.parse(out)
+    expect(report).toMatchObject({
+      ok: true,
+      summary: { blocking: 0, warning: 0, failed: 0, passed: 2, guaranteed: 3 },
+      database: { dialect: 'sqlite', url: 'file:./dev.db' },
+    })
   })
 })

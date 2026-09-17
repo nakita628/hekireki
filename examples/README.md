@@ -1,18 +1,28 @@
 # examples
 
-Three small projects to try `hekireki seed` and `hekireki studio` on, one per database. Each is a
+`migrate/` is a data migration end to end on SQLite: two schemas, rows the second does not take
+as they are (a renamed column, strings becoming enums, text becoming a number, duplicates under a
+new unique key, a new required column, a relation made required), and what becomes of them
+decided on the Migrate page of `hekireki studio`, rehearsed, and run. `pnpm run demo` in it does
+the same from the command line; see [migrate/README.md](migrate/README.md).
+
+The other three are small projects to try `hekireki seed` and `hekireki studio` on, one per database. Each is a
 `schema.prisma` with the `prisma-client` and `hekireki-seed` generators, the schema module the
 latter writes (committed, so the config type-checks before `pnpm setup` has run), and a typed
 `hekireki.config.ts` that names the database in its `url`: no flag and no `.env` needed.
 
-- `sqlite/`: `seed.db` next to the schema. Faker rows plus real `Tag` rows; `hekireki.data.config.ts`
-  gives every model as real rows.
+- `sqlite/`: `seed.db` next to the schema. The widest schema of the three — every relation
+  cardinality, a composite primary key, a self relation, an implicit many-to-many, and a column of
+  every scalar Prisma has: `Decimal`, `BigInt`, `Bytes`, `Json` and `Float` beside the usual ones,
+  with a table, columns and enum members the database holds under `@map`ped names. Faker rows plus
+  real `Tag` rows; `hekireki.data.config.ts` gives every model as real rows.
 - `mysql/`: `mysql://root:root@localhost:3306/seed`. Faker rows bounded per parent, real tags and
   categories.
 - `postgresql/`: `postgresql://postgres:postgres@localhost:5432/seed`. The same config on PostgreSQL.
 
-`docker compose -f examples/compose.yaml up -d` starts the MySQL and PostgreSQL of the table.
-SQLite needs nothing.
+`docker compose -f examples/compose.yaml up -d postgres mysql` starts the MySQL and PostgreSQL of
+the table (without the service names it also starts the CockroachDB and MariaDB the migration
+tests use). SQLite needs nothing.
 
 ```bash
 cd examples/sqlite          # or mysql, postgresql

@@ -137,9 +137,9 @@ const MakePostgresPlanInput = z
 /** PostgreSQL's `EXPLAIN (FORMAT JSON)`: a tree of `Plan` objects, flattened parents-first. */
 export function makePostgresPlan(input: z.infer<typeof MakePostgresPlanInput>) {
   const document = typeof input.document === 'string' ? parseJson(input.document) : input.document
-  const root = PostgresRoot.safeParse(document)
-  const nodes = root.success
-    ? root.data.flatMap((entry, index) => flattenPostgres(entry.Plan, null, String(index + 1)))
+  const result = PostgresRoot.safeParse(document)
+  const nodes = result.success
+    ? result.data.flatMap((entry, index) => flattenPostgres(entry.Plan, null, String(index + 1)))
     : []
   return { nodes, raw: JSON.stringify(document, null, 2) }
 }
@@ -230,36 +230,36 @@ function flattenMysql(
   if (typeof value !== 'object' || value === null) return []
   const record = z.record(z.string(), z.unknown()).parse(value)
   if (key === 'table') {
-    const table = MysqlTable.safeParse(record)
-    if (!table.success) return []
+    const result = MysqlTable.safeParse(record)
+    if (!result.success) return []
     const parts = [
-      table.data.key === undefined ? null : `key ${table.data.key}`,
-      table.data.attached_condition ?? null,
+      result.data.key === undefined ? null : `key ${result.data.key}`,
+      result.data.attached_condition ?? null,
     ].filter((part) => part !== null)
     const node = {
       id,
       parent,
-      label: `${table.data.access_type ?? 'scan'} ${table.data.table_name}`,
+      label: `${result.data.access_type ?? 'scan'} ${result.data.table_name}`,
       detail: parts.length === 0 ? null : parts.join(' · '),
       cost:
         Number(
-          table.data.cost_info?.prefix_cost ?? table.data.cost_info?.read_cost ?? Number.NaN,
+          result.data.cost_info?.prefix_cost ?? result.data.cost_info?.read_cost ?? Number.NaN,
         ) || null,
-      rows: table.data.rows_produced_per_join ?? table.data.rows_examined_per_scan ?? null,
+      rows: result.data.rows_produced_per_join ?? result.data.rows_examined_per_scan ?? null,
     }
     return [node, ...childrenOfMysql(record, id, id)]
   }
   if (key === 'query_block') {
-    const block = MysqlBlock.safeParse(record)
+    const result = MysqlBlock.safeParse(record)
     const node = {
       id,
       parent,
       label:
-        block.success && block.data.select_id !== undefined
-          ? `query block #${block.data.select_id}`
+        result.success && result.data.select_id !== undefined
+          ? `query block #${result.data.select_id}`
           : 'query block',
-      detail: block.success ? (block.data.message ?? null) : null,
-      cost: block.success ? Number(block.data.cost_info?.query_cost ?? Number.NaN) || null : null,
+      detail: result.success ? (result.data.message ?? null) : null,
+      cost: result.success ? Number(result.data.cost_info?.query_cost ?? Number.NaN) || null : null,
       rows: null,
     }
     return [node, ...childrenOfMysql(record, id, id)]

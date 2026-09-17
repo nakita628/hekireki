@@ -6,6 +6,13 @@ import {
   getDbRouteHandler,
   getDbRowsModelNameRouteHandler,
   getDocsRouteHandler,
+  getMigrateBackupsRouteHandler,
+  getMigrateBaselineRouteHandler,
+  getMigrateDecisionsRouteHandler,
+  getMigrateDiffRouteHandler,
+  getMigrateMigrationsMigrationNameRouteHandler,
+  getMigrateRouteHandler,
+  getMigrateTablesRouteHandler,
   getSchemaEventsRouteHandler,
   getSchemaRouteHandler,
   patchDbRowsModelNameRouteHandler,
@@ -22,6 +29,16 @@ import {
   postDbExplainRouteHandler,
   postDbRowsModelNameRouteHandler,
   postDbSqlRouteHandler,
+  postMigrateApplyRouteHandler,
+  postMigrateBackupsRestoreRouteHandler,
+  postMigrateBackupsRouteHandler,
+  postMigrateBaselineRouteHandler,
+  postMigrateDeployRouteHandler,
+  postMigrateMigrationsAppliedRouteHandler,
+  postMigrateMigrationsRolledBackRouteHandler,
+  postMigrateMigrationsRouteHandler,
+  postMigratePlanRouteHandler,
+  postMigrateRehearseRouteHandler,
   postPrismaCodeActionsRouteHandler,
   postPrismaCompleteRouteHandler,
   postPrismaDefinitionRouteHandler,
@@ -32,6 +49,7 @@ import {
   postPrismaRenameRouteHandler,
   postPrismaSymbolsRouteHandler,
   postSchemaReloadRouteHandler,
+  putMigrateDecisionsRouteHandler,
   putSchemaFilesRouteHandler,
 } from './handlers'
 import {
@@ -41,6 +59,13 @@ import {
   getDbRoute,
   getDbRowsModelNameRoute,
   getDocsRoute,
+  getMigrateBackupsRoute,
+  getMigrateBaselineRoute,
+  getMigrateDecisionsRoute,
+  getMigrateDiffRoute,
+  getMigrateMigrationsMigrationNameRoute,
+  getMigrateRoute,
+  getMigrateTablesRoute,
   getSchemaEventsRoute,
   getSchemaRoute,
   patchDbRowsModelNameRoute,
@@ -57,6 +82,16 @@ import {
   postDbExplainRoute,
   postDbRowsModelNameRoute,
   postDbSqlRoute,
+  postMigrateApplyRoute,
+  postMigrateBackupsRestoreRoute,
+  postMigrateBackupsRoute,
+  postMigrateBaselineRoute,
+  postMigrateDeployRoute,
+  postMigrateMigrationsAppliedRoute,
+  postMigrateMigrationsRolledBackRoute,
+  postMigrateMigrationsRoute,
+  postMigratePlanRoute,
+  postMigrateRehearseRoute,
   postPrismaCodeActionsRoute,
   postPrismaCompleteRoute,
   postPrismaDefinitionRoute,
@@ -67,6 +102,7 @@ import {
   postPrismaRenameRoute,
   postPrismaSymbolsRoute,
   postSchemaReloadRoute,
+  putMigrateDecisionsRoute,
   putSchemaFilesRoute,
 } from './routes'
 
@@ -105,6 +141,24 @@ export const api = app
   .openapi(postPrismaReferencesRoute, postPrismaReferencesRouteHandler)
   .openapi(postPrismaRenameRoute, postPrismaRenameRouteHandler)
   .openapi(postPrismaCodeActionsRoute, postPrismaCodeActionsRouteHandler)
+  .openapi(getMigrateRoute, getMigrateRouteHandler)
+  .openapi(getMigrateBaselineRoute, getMigrateBaselineRouteHandler)
+  .openapi(postMigrateBaselineRoute, postMigrateBaselineRouteHandler)
+  .openapi(getMigrateDiffRoute, getMigrateDiffRouteHandler)
+  .openapi(postMigratePlanRoute, postMigratePlanRouteHandler)
+  .openapi(postMigrateApplyRoute, postMigrateApplyRouteHandler)
+  .openapi(postMigrateRehearseRoute, postMigrateRehearseRouteHandler)
+  .openapi(getMigrateTablesRoute, getMigrateTablesRouteHandler)
+  .openapi(getMigrateBackupsRoute, getMigrateBackupsRouteHandler)
+  .openapi(postMigrateBackupsRoute, postMigrateBackupsRouteHandler)
+  .openapi(postMigrateBackupsRestoreRoute, postMigrateBackupsRestoreRouteHandler)
+  .openapi(getMigrateMigrationsMigrationNameRoute, getMigrateMigrationsMigrationNameRouteHandler)
+  .openapi(postMigrateMigrationsRoute, postMigrateMigrationsRouteHandler)
+  .openapi(postMigrateMigrationsAppliedRoute, postMigrateMigrationsAppliedRouteHandler)
+  .openapi(postMigrateMigrationsRolledBackRoute, postMigrateMigrationsRolledBackRouteHandler)
+  .openapi(getMigrateDecisionsRoute, getMigrateDecisionsRouteHandler)
+  .openapi(putMigrateDecisionsRoute, putMigrateDecisionsRouteHandler)
+  .openapi(postMigrateDeployRoute, postMigrateDeployRouteHandler)
   .openapi(getDocsRoute, getDocsRouteHandler)
 
 export default app

@@ -11,7 +11,6 @@ export declare function isServiceModulePath(filename: string): boolean
 export declare function isUseCaseSpecifier(source: string): boolean
 
 /** Whether a path is a test file (exempt from the structural rules). */
-export declare function isTestPath(filename: string): boolean
 
 /** Import-target check behind `custom/layer-namespace-import`: the layer module an import points at. */
 export declare function layerModuleOf(

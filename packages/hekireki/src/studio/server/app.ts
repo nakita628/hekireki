@@ -26,7 +26,12 @@ const loopbackOnly = createMiddleware((c, next) =>
 export function createStudioApi(
   state: ReturnType<typeof StateService.createStudioState>,
   db: ReturnType<typeof DatabaseService.disconnectedDatabase>,
-  client: ReturnType<typeof ClientService.createProjectClient> = ClientService.unavailableClient(),
+  client: ReturnType<typeof ClientService.createProjectClient> = ClientService.createProjectClient({
+    target: null,
+    reason: 'No database is connected.',
+    schemaDir: '.',
+    cwd: '.',
+  }),
 ) {
   RuntimeService.configureRuntime({ state, db, client })
   const app = new OpenAPIHono({
@@ -82,7 +87,12 @@ export function createStudioApp(
   state: ReturnType<typeof StateService.createStudioState>,
   staticDir: string,
   db: ReturnType<typeof DatabaseService.disconnectedDatabase>,
-  client: ReturnType<typeof ClientService.createProjectClient> = ClientService.unavailableClient(),
+  client: ReturnType<typeof ClientService.createProjectClient> = ClientService.createProjectClient({
+    target: null,
+    reason: 'No database is connected.',
+    schemaDir: '.',
+    cwd: '.',
+  }),
 ) {
   const app = createStudioApi(state, db, client)
   app.use('/*', serveStatic({ root: staticDir }))

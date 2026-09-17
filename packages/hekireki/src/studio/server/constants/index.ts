@@ -30,3 +30,6 @@ export const PRISMA_FILE_URI = 'file:///schema.prisma'
  * SQL_ROW_LIMIT: a `findMany` without `take` would otherwise send the whole table.
  */
 export const CLIENT_ROW_LIMIT = 500
+
+/** How often the migrations directory is read for a change. */
+export const MIGRATIONS_POLL_MS = 1000

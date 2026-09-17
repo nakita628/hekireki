@@ -5,10 +5,11 @@ import type { ServerType } from '@hono/node-server'
 import { Effect } from 'effect'
 
 import { isDirectory } from '../../file/index.js'
+import { resolveMigrationsDir } from '../../migrate/adapter/migrations-dir.js'
 import { readConfigUrl } from '../../seed/load-config.js'
 import { withTypeScriptImports } from '../../seed/resolve.js'
 import { createStudioApp } from './app.js'
-import { RELOAD_DEBOUNCE_MS, STUDIO_HOSTNAME } from './constants/index.js'
+import { MIGRATIONS_POLL_MS, RELOAD_DEBOUNCE_MS, STUDIO_HOSTNAME } from './constants/index.js'
 import { SchemaLoadError, ServerListenError } from './errors/index.js'
 import * as ClientService from './services/index.js'
 import * as DatabaseService from './services/index.js'
@@ -92,6 +93,16 @@ export function startStudioServer(options: {
     })
     yield* Effect.addFinalizer(() => client.close)
     yield* WatchService.watchSchema({ state, dir: watchDir, debounceMs: RELOAD_DEBOUNCE_MS })
+    // The migrations Prisma Migrate reads, so the Migrate page follows the files as they change.
+    const migrationsDir = yield* resolveMigrationsDir({
+      cwd: process.cwd(),
+      schemaDir: path.resolve(watchDir),
+    })
+    yield* WatchService.watchMigrations({
+      state,
+      dir: migrationsDir,
+      intervalMs: MIGRATIONS_POLL_MS,
+    })
     const app = createStudioApp(state, options.staticDir, db, client)
     const server = yield* listen({ fetch: app.fetch, port: options.port })
     return { snapshot, database: db.status, server }

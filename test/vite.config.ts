@@ -6,9 +6,10 @@ export default defineConfig({
     // regenerated from prisma/schema.prisma and then checked in its own toolchain. A
     // toolchain that is not installed skips rather than fails, so `vp test`
     // stays runnable without every language present.
-    // db/*.test.ts runs `hekireki seed` and the Prisma Client page of `hekireki studio` against
-    // real PostgreSQL and MySQL servers named by HEKIREKI_SEED_PG / HEKIREKI_SEED_MYSQL, and skips
-    // without them (see examples/compose.yaml).
+    // db/*.test.ts runs `hekireki seed`, the Prisma Client page of `hekireki studio` and
+    // `hekireki migrate check` / `plan` against real PostgreSQL and MySQL servers named by
+    // HEKIREKI_SEED_PG / HEKIREKI_SEED_MYSQL (the migration tests also on CockroachDB, named by
+    // HEKIREKI_SEED_COCKROACH), and skips without them (see examples/compose.yaml).
     include: ['lang/*.test.ts', 'db/*.test.ts'],
     globalSetup: ['./lang/setup.ts'],
     // cargo check, bundle install and mix deps.get dominate; they share one

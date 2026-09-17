@@ -1,6 +1,7 @@
 import { Effect } from 'effect'
 
 import type { Dialect } from '../database/url.js'
+import { chunks, lowerFirst } from '../utils/index.js'
 import type { SeedRow, SeedValue } from './config.js'
 import { SeedDatabaseError } from './errors.js'
 import type { JoinTable, ModelTable, SeedTableRows } from './plan.js'
@@ -26,15 +27,11 @@ type Delegate = {
   }) => unknown
 }
 
-function isFunction(value: unknown): value is (...args: never[]) => unknown {
-  return typeof value === 'function'
-}
-
 function hasFunctions(value: unknown, names: readonly string[]) {
   return (
     typeof value === 'object' &&
     value !== null &&
-    names.every((name) => isFunction(Reflect.get(value, name)))
+    names.every((name) => typeof Reflect.get(value, name) === 'function')
   )
 }
 
@@ -47,26 +44,15 @@ function isDelegate(value: unknown): value is Delegate {
   return hasFunctions(value, ['createMany', 'deleteMany', 'update'])
 }
 
-/** `User` → `user`, `OrderItem` → `orderItem`: the property Prisma Client exposes a model under. */
-export function delegateName(model: string) {
-  return `${model.charAt(0).toLowerCase()}${model.slice(1)}`
-}
-
 function delegateOf(client: SeedClient, model: string) {
   return Effect.gen(function* () {
-    const name = delegateName(model)
+    const name = lowerFirst(model)
     const delegate: unknown = Reflect.get(client, name)
     if (isDelegate(delegate)) return delegate
     return yield* new SeedDatabaseError({
       message: `The Prisma Client has no model delegate \`${name}\` with createMany, deleteMany and update.\n   Run \`prisma generate\` so the client knows ${model}.`,
     })
   })
-}
-
-function chunks<T>(items: readonly T[], size: number) {
-  return Array.from({ length: Math.ceil(items.length / size) }, (_, i) =>
-    items.slice(i * size, (i + 1) * size),
-  )
 }
 
 /** The `update` calls that link the rows of an implicit many-to-many relation, one per row with partners. */
@@ -120,18 +106,19 @@ export function seedWithClient(input: {
         Effect.map(delegateOf(client, entry.table.name), (d) => [entry.table.name, d] as const),
       ),
     )
-    const delegate = (model: string) => delegates.get(model)
     // Implicit join tables empty themselves: their foreign keys cascade from both sides.
     const resets = input.reset
-      ? models.toReversed().flatMap((entry) => delegate(entry.table.name)?.deleteMany({}) ?? [])
+      ? models
+          .toReversed()
+          .flatMap((entry) => delegates.get(entry.table.name)?.deleteMany({}) ?? [])
       : []
     const creates = models.flatMap((entry) =>
       chunks(entry.rows, CREATE_CHUNK).flatMap(
-        (rows) => delegate(entry.table.name)?.createMany({ data: rows }) ?? [],
+        (rows) => delegates.get(entry.table.name)?.createMany({ data: rows }) ?? [],
       ),
     )
     const connects = joins.flatMap((entry) => {
-      const owner = delegate(entry.table.sides[0].model)
+      const owner = delegates.get(entry.table.sides[0].model)
       return owner === undefined ? [] : connectOperations(owner, entry.table, entry.rows)
     })
     const sequences =
