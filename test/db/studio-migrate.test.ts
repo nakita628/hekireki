@@ -477,6 +477,8 @@ describe.each(TARGETS)('the Migrate page on $dialect', (target) => {
       expect(rest.json).toMatchObject({ ok: true })
       expect(await sql(nameless)).toStrictEqual([{ rows: 0 }])
       for (const step of migration) {
+        // A migration is an order, not a set: each step runs on what the one before it left.
+        // oxlint-disable-next-line no-await-in-loop -- sequential by definition
         const applied = await call('/api/migrate/apply', { statements: step.statements })
         expect(applied.json).toMatchObject({ ok: true })
       }

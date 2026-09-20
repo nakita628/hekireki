@@ -1,14 +1,6 @@
 import { spawn, spawnSync } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  realpathSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -192,8 +184,14 @@ describe.each(TARGETS)('the Migrate page through the native schema engine on $na
     const empty = join(state.dir, 'empty.prisma')
     writeFileSync(empty, `datasource db {\n  provider = "${target.provider}"\n}\n`)
     const init = writeMigration('20260101000000_init', 'empty.prisma', 'optional.prisma')
-    expect(init).toContain('CREATE TABLE')
-    expect(prismaIn(['migrate', 'deploy']).status).toBe(0)
+    // A hook says what went wrong by throwing: an `expect` here is read as a test of its own.
+    if (!init.includes('CREATE TABLE')) {
+      throw new Error(`the first migration created no table:\n${init}`)
+    }
+    const deployed = prismaIn(['migrate', 'deploy'])
+    if (deployed.status !== 0) {
+      throw new Error(`prisma migrate deploy failed:\n${deployed.out}`)
+    }
     await target.sql(
       state.url,
       `INSERT INTO ${target.q('User')} (${target.q('email')}, ${target.q('name')}) VALUES ('ann@example.com', 'Ann'), ('bob@example.com', NULL), ('cy@example.com', NULL)`,
@@ -203,7 +201,9 @@ describe.each(TARGETS)('the Migrate page through the native schema engine on $na
       [cli, 'studio', '--schema', 'schema.prisma', '--url', state.url, '-p', String(target.port)],
       { cwd: state.dir, stdio: 'ignore' },
     )
-    expect(await serving(`${base}/api/schema`, Date.now() + 30_000)).toBe(true)
+    if (!(await serving(`${base}/api/schema`, Date.now() + 30_000))) {
+      throw new Error(`studio did not answer on ${base} within 30s`)
+    }
   })
 
   afterAll(async () => {
@@ -265,9 +265,11 @@ describe.each(TARGETS)('the Migrate page through the native schema engine on $na
         matches: target.compared ? true : null,
       })
       const nameless = `SELECT COUNT(*) AS ${target.q('rows')} FROM ${target.q('User')} WHERE ${target.q('name')} IS NULL`
-      expect(Number((await target.sql(state.url, nameless))[0]?.rows)).toBe(2)
+      expect(Number(Object.values((await target.sql(state.url, nameless))[0] ?? {})[0])).toBe(2)
 
       for (const step of steps) {
+        // A migration is an order, not a set: each step runs on what the one before it left.
+        // oxlint-disable-next-line no-await-in-loop -- sequential by definition
         const applied = await call('/api/migrate/apply', { statements: step.statements })
         expect(applied.json).toMatchObject({ ok: true })
       }
@@ -278,7 +280,7 @@ describe.each(TARGETS)('the Migrate page through the native schema engine on $na
       expect(recorded.status).toBe(200)
       expect(recorded.json).toMatchObject({ pending: [], failed: [], drift: false })
 
-      expect(Number((await target.sql(state.url, nameless))[0]?.rows)).toBe(0)
+      expect(Number(Object.values((await target.sql(state.url, nameless))[0] ?? {})[0])).toBe(0)
       const prismaStatus = prismaIn(['migrate', 'status'])
       expect({ status: prismaStatus.status, out: prismaStatus.out }).toMatchObject({ status: 0 })
       expect(prismaStatus.out).toContain('Database schema is up to date')

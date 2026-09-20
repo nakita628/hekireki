@@ -76,7 +76,10 @@ for (const target of TARGETS) {
           ['db', 'push', '--schema', 'old.prisma', '--url', state.url],
           state.dir,
         )
-        expect({ status: pushed.status, out: pushed.out }).toMatchObject({ status: 0 })
+        // A hook says what went wrong by throwing: an `expect` here is read as a test of its own.
+        if (pushed.status !== 0) {
+          throw new Error(`prisma db push failed:\n${pushed.out}`)
+        }
         // One at a time: a trigger's body is not a statement to split a script at.
         await (guards ?? []).reduce(
           (done, sql) => done.then(() => target.exec(state.url, RUN, sql)),
@@ -160,7 +163,7 @@ for (const target of TARGETS) {
             `UPDATE ${q('User')} SET ${q('name')} = '' WHERE ${q('name')} IS NULL`,
           )
         }
-        await expect(refused()).rejects.toThrow()
+        await expect(refused()).rejects.toBeInstanceOf(Error)
       })
 
       it('passes a fix the constraint takes, the trigger still said', () => {
@@ -197,7 +200,7 @@ for (const target of TARGETS) {
               : `ALTER TABLE ${q('Item')} ALTER COLUMN ${q('score')} TYPE INTEGER USING (${converted})`,
           )
         }
-        await expect(migrated()).rejects.toThrow()
+        await expect(migrated()).rejects.toBeInstanceOf(Error)
       })
     },
   )

@@ -53,7 +53,10 @@ for (const target of TARGETS) {
         ['db', 'push', '--schema', 'old.prisma', '--url', state.url],
         state.dir,
       )
-      expect({ status: pushed.status, out: pushed.out }).toMatchObject({ status: 0 })
+      // A hook says what went wrong by throwing: an `expect` here is read as a test of its own.
+      if (pushed.status !== 0) {
+        throw new Error(`prisma db push failed:\n${pushed.out}`)
+      }
       // 25 events, 17 of them without a name; 7 tags of one label and one of another.
       const events = Array.from(
         { length: 25 },
