@@ -1,10 +1,9 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { afterAll, beforeAll, describe, expect, it } from 'vite-plus/test'
 
-import { cli, decide, diff, prisma, run, TARGETS } from './migrate-harness.ts'
+import { cli, decide, diff, prisma, run, TARGETS, workspace } from './migrate-harness.ts'
 import type { Decision, Row, Target } from './migrate-harness.ts'
 
 // `hekireki migrate check` and `plan --migration` end to end, scenario by scenario, on every
@@ -885,7 +884,7 @@ for (const target of TARGETS) {
     const state = { dir: '' }
 
     beforeAll(() => {
-      state.dir = mkdtempSync(join(tmpdir(), `hekireki-scenario-${target.dialect}-`))
+      state.dir = workspace(`hekireki-scenario-${target.dialect}-`)
     })
 
     afterAll(async () => {

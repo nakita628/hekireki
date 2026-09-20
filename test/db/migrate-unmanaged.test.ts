@@ -1,10 +1,9 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { afterAll, beforeAll, describe, expect, it } from 'vite-plus/test'
 
-import { cli, decide, prisma, run, TARGETS } from './migrate-harness.ts'
+import { cli, decide, prisma, run, TARGETS, workspace } from './migrate-harness.ts'
 
 // What Prisma's schema does not describe, read from the catalogue of every database there is: a
 // CHECK constraint a fix has to pass, and a trigger its write sets off. The check has to find both
@@ -65,7 +64,7 @@ for (const target of TARGETS) {
       const state = { dir: '', url: '' }
 
       beforeAll(async () => {
-        state.dir = mkdtempSync(join(tmpdir(), `hekireki-unmanaged-${target.dialect}-`))
+        state.dir = workspace(`hekireki-unmanaged-${target.dialect}-`)
         mkdirSync(state.dir, { recursive: true })
         state.url = target.isolate(base, RUN, state.dir)
         const datasource = `datasource db {\n  provider = "${target.dialect}"\n}\n\n`
