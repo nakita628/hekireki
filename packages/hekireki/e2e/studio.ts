@@ -13,9 +13,17 @@ export { expect } from '@playwright/test'
 
 type Problems = { readonly errors: readonly string[] }
 
-export const test = base.extend<{ readonly problems: Problems }>({
+export const test = base.extend<{
+  readonly problems: Problems
+  /**
+   * What a test provokes on purpose and says so: `test.use({ expectedProblems: [/422/u] })`
+   * lets the console line of a refused request through, and nothing else.
+   */
+  readonly expectedProblems: readonly RegExp[]
+}>({
+  expectedProblems: [[], { option: true }],
   problems: [
-    async ({ page }, use) => {
+    async ({ page, expectedProblems }, use) => {
       // The one mutable cell of a test: what the page reported while it ran.
       const errors: string[] = []
       const report = (entry: string) => {
@@ -34,7 +42,10 @@ export const test = base.extend<{ readonly problems: Problems }>({
         }
       })
       await use({ errors })
-      expect(errors, 'the page reported errors').toStrictEqual([])
+      const unexpected = errors.filter(
+        (entry) => !expectedProblems.some((pattern) => pattern.test(entry)),
+      )
+      expect(unexpected, 'the page reported errors').toStrictEqual([])
     },
     { auto: true },
   ],

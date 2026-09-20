@@ -1,57 +1,22 @@
 import { Editor } from '@monaco-editor/react'
 import type { OnMount } from '@monaco-editor/react'
+import type { editor as MonacoEditor } from 'monaco-editor/editor/editor.api.js'
 import { useCallback, useEffect, useRef } from 'react'
 
 import type { Theme } from '../../lib/index.js'
 import {
   applyMarkers,
   bindEditorContext,
-  EDITOR_FONT,
+  EDITOR_OPTIONS,
+  refuseTextSubstitutions,
   setupMonaco,
   syncFileModels,
   themeName,
 } from './monaco.js'
-import type { EditorServices, MonacoEditor, PlainSymbol } from './monaco.js'
+import type { EditorServices, PlainSymbol } from './monaco.js'
 import { PRISMA_LANGUAGE_ID } from './prisma-monarch.js'
 
-export type { EditorServices, MonacoEditor, PlainSymbol } from './monaco.js'
-
 const ANALYZE_DEBOUNCE_MS = 400
-
-const OPTIONS: MonacoEditor.IStandaloneEditorConstructionOptions = {
-  // Monaco 0.56 defaults its input to the experimental `EditContext`, which drives a plain
-  // `<div class="native-edit-context">` — no `contenteditable`, no textarea. In Chromium a letter
-  // reaches it as a `beforeinput`, and the space bar does not: the key arrives, nothing cancels
-  // it, and no text is ever inserted. Typing `model User` in the schema editor writes `modelUser`.
-  // The textarea this turns back on is the input path Monaco used for a decade.
-  editContext: false,
-  fontFamily: EDITOR_FONT,
-  fontSize: 12.5,
-  lineHeight: 20,
-  tabSize: 2,
-  insertSpaces: true,
-  minimap: { enabled: false },
-  scrollBeyondLastLine: false,
-  automaticLayout: true,
-  padding: { top: 12, bottom: 12 },
-  renderLineHighlight: 'line',
-  lineNumbersMinChars: 3,
-  glyphMargin: false,
-  folding: true,
-  wordBasedSuggestions: 'off',
-  quickSuggestions: { other: true, comments: false, strings: false },
-  suggest: { showWords: false, preview: true },
-  bracketPairColorization: { enabled: false },
-  guides: { bracketPairs: false, indentation: true },
-  stickyScroll: { enabled: false },
-  overviewRulerLanes: 0,
-  hideCursorInOverviewRuler: true,
-  scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8, useShadows: false },
-  fixedOverflowWidgets: true,
-  smoothScrolling: true,
-  cursorBlinking: 'smooth',
-  renderWhitespace: 'none',
-}
 
 export function CodeEditor({
   value,
@@ -129,6 +94,7 @@ export function CodeEditor({
 
   const onMount: OnMount = (editor) => {
     onReady(editor)
+    refuseTextSubstitutions(editor)
     // Monaco binds Ctrl+Shift+I on Linux; the header advertises Shift+Alt+F, so bind it everywhere.
     editor.addCommand(
       // oxlint-disable-next-line no-bitwise -- Monaco keybindings are bit flags by design
@@ -155,7 +121,7 @@ export function CodeEditor({
       language={PRISMA_LANGUAGE_ID}
       value={value}
       theme={themeName(theme)}
-      options={OPTIONS}
+      options={EDITOR_OPTIONS}
       keepCurrentModel
       loading={<div className="p-4 text-code text-muted">Loading editor…</div>}
       onMount={onMount}

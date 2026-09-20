@@ -1,16 +1,20 @@
 import { createFileRoute } from '@tanstack/react-router'
-import * as v from 'valibot'
+import * as z from 'zod'
 
 import { NotFound } from '../components/not-found.js'
 import { ModelView } from '../features/data/model-view.js'
 import { SchemaGate } from '../features/shell/schema-gate.js'
 
 export const Route = createFileRoute('/models/$name')({
-  validateSearch: v.object({
-    tab: v.optional(
-      v.pipe(v.picklist(['data', 'fields']), v.description('The tab of the model page')),
-    ),
-    field: v.optional(v.pipe(v.string(), v.description('The field to open the page on'))),
+  validateSearch: z.object({
+    tab: z
+      .enum(['data', 'fields'])
+      .optional()
+      .meta({ description: 'The tab of the model page', example: 'fields' }),
+    field: z
+      .string()
+      .optional()
+      .meta({ description: 'The field to open the page on', example: 'email' }),
   }),
   component: ModelPage,
 })

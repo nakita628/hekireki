@@ -1,24 +1,19 @@
-import * as v from 'valibot'
+import * as z from 'zod'
 
 import type { LayoutPositions } from '../../../diagram/layout.js'
 
-export type { LayoutPositions, Position } from '../../../diagram/layout.js'
+const PositionSchema = z
+  .object({
+    x: z.number().meta({ description: 'Left edge in canvas pixels', example: 120 }),
+    y: z.number().meta({ description: 'Top edge in canvas pixels', example: 48 }),
+  })
+  .meta({ description: 'A remembered node position' })
 
-const PositionSchema = v.pipe(
-  v.object({
-    x: v.pipe(v.number(), v.description('Left edge in canvas pixels')),
-    y: v.pipe(v.number(), v.description('Top edge in canvas pixels')),
-  }),
-  v.description('A remembered node position'),
-)
-
-// `record` would read an array's indexes as model names, so arrays are rejected up front.
-const StoredLayoutSchema = v.pipe(
-  v.unknown(),
-  v.check((value) => !Array.isArray(value)),
-  v.record(v.string(), v.unknown()),
-  v.description('The per-schema layout map as stored in localStorage'),
-)
+// One position that does not read is left out rather than taking the whole layout with it: what
+// is not a position reads as null, and the entries that are null are dropped below.
+const StoredLayoutSchema = z
+  .record(z.string(), z.union([PositionSchema, z.unknown().transform(() => null)]))
+  .meta({ description: 'The per-schema layout map as stored in localStorage' })
 
 export function layoutStorageKey(schemaPath: string) {
   return `hekireki-studio:layout:${schemaPath}`
@@ -28,14 +23,13 @@ export function loadLayout(key: string): LayoutPositions {
   try {
     const raw = globalThis.localStorage.getItem(key)
     if (raw === null) return {}
-    const parsed: unknown = JSON.parse(raw)
-    const stored = v.safeParse(StoredLayoutSchema, parsed)
-    if (!stored.success) return {}
+    const json: unknown = JSON.parse(raw)
+    const result = StoredLayoutSchema.safeParse(json)
+    if (!result.success) return {}
     return Object.fromEntries(
-      Object.entries(stored.output).flatMap(([name, position]) => {
-        const checked = v.safeParse(PositionSchema, position)
-        return checked.success ? [[name, checked.output]] : []
-      }),
+      Object.entries(result.data).flatMap(([name, position]) =>
+        position === null ? [] : [[name, { x: position.x, y: position.y }]],
+      ),
     )
   } catch {
     return {}

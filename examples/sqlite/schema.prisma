@@ -1,0 +1,137 @@
+// A schema with every shape `hekireki seed` has to get right, on SQLite so nothing needs to run.
+// `pnpm setup` writes generated/seed/schema.ts for hekireki.config.ts and creates seed.db.
+
+datasource db {
+  provider = "sqlite"
+}
+
+// The Prisma Client `hekireki seed` writes through when it finds one.
+generator client {
+  provider = "prisma-client"
+  output   = "generated/client"
+}
+
+// The schema module hekireki.config.ts is typed against.
+generator Hekireki-Seed {
+  provider = "hekireki-seed"
+  output   = "generated/seed"
+}
+
+enum Role {
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+/// Members the database holds under other names: what `@map` does to an enum.
+enum Visibility {
+  PUBLIC   @map("public")
+  UNLISTED @map("unlisted")
+  PRIVATE  @map("private")
+}
+
+/// UUID v7 ids, a unique email, an enum default, timestamps, and relations of every cardinality.
+model User {
+  id        String    @id @default(uuid(7))
+  email     String    @unique
+  role      Role      @default(VIEWER)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  profile   Profile?
+  posts     Post[]
+  comments  Comment[]
+  followers Follow[]  @relation("following")
+  following Follow[]  @relation("follower")
+}
+
+/// One-to-one: every profile gets a user of its own.
+model Profile {
+  id       String  @id @default(cuid(2))
+  userId   String  @unique
+  name     String
+  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  website  String?
+  age      Int?
+  rating   Float?
+  verified Boolean @default(false)
+}
+
+/// Autoincrement id, a required author, an implicit many-to-many to Tag, a mapped enum, a JSON
+/// document, a big count, and a table and columns the database knows under other names.
+model Post {
+  id         Int        @id @default(autoincrement())
+  title      String
+  body       String?
+  published  Boolean    @default(false)
+  visibility Visibility @default(PUBLIC)
+  viewCount  Int        @default(0) @map("view_count")
+  wordCount  BigInt?    @map("word_count")
+  metadata   Json?
+  authorId   String     @map("author_id")
+  author     User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  tags       Tag[]
+  comments   Comment[]
+  createdAt  DateTime   @default(now()) @map("created_at")
+
+  @@index([authorId, published])
+  @@map("posts")
+}
+
+/// The money and the bytes: a decimal price, a big stock count, an image, and a code the
+/// database holds under another name.
+model Product {
+  id         Int       @id @default(autoincrement())
+  sku        String    @unique @map("sku_code")
+  test       String
+  name       String
+  price      Decimal
+  stock      BigInt    @default(0)
+  image      Bytes?
+  releasedAt DateTime?
+
+  @@index([name])
+}
+
+/// Real rows in hekireki.config.ts: only `label` has to be given.
+model Tag {
+  id    Int    @id @default(autoincrement())
+  label String @unique
+  posts Post[]
+}
+
+/// An optional foreign key: some comments are anonymous.
+model Comment {
+  id        Int      @id @default(autoincrement())
+  body      String
+  postId    Int
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId  String?
+  author    User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+}
+
+/// Composite primary key over two foreign keys to the same model.
+model Follow {
+  followerId  String
+  followingId String
+  follower    User     @relation("follower", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User     @relation("following", fields: [followingId], references: [id], onDelete: Cascade)
+  since       DateTime @default(now())
+
+  @@id([followerId, followingId])
+}
+
+/// Self relation: a tree of categories.
+model Category {
+  id       Int        @id @default(autoincrement())
+  name     String
+  parentId Int?
+  parent   Category?  @relation("tree", fields: [parentId], references: [id])
+  children Category[] @relation("tree")
+
+  @@unique([parentId, name])
+}
+
+model Draft {
+  id Int @id
+}

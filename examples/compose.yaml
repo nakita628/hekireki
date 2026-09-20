@@ -1,0 +1,36 @@
+# The databases the tests under test/db/ run against. `docker compose -f examples/compose.yaml up -d`,
+# then export the URLs the tests read:
+#
+#   HEKIREKI_SEED_PG=postgresql://postgres:postgres@localhost:5432/seed
+#   HEKIREKI_SEED_MYSQL=mysql://root:root@localhost:3306/seed
+#   HEKIREKI_SEED_COCKROACH=postgresql://root@localhost:26257/defaultdb?sslmode=disable
+#
+# test/db/migrate.test.ts and test/db/migrate-rewrite.test.ts also run on CockroachDB, and on
+# MariaDB with HEKIREKI_SEED_MYSQL=mysql://root:root@localhost:3307/seed in place of MySQL's.
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: seed
+    ports:
+      - '5432:5432'
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: seed
+    ports:
+      - '3306:3306'
+  cockroach:
+    image: cockroachdb/cockroach:v25.3.1
+    command: start-single-node --insecure
+    ports:
+      - '26257:26257'
+  mariadb:
+    image: mariadb:10.11
+    environment:
+      MARIADB_ROOT_PASSWORD: root
+      MARIADB_DATABASE: seed
+    ports:
+      - '3307:3306'

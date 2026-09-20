@@ -78,7 +78,10 @@ async function setup() {
     Effect.provide(
       connectDatabase({
         explicitUrl: null,
+        configUrl: null,
+        configError: null,
         schemaProvider: snapshot.schema?.provider ?? null,
+        schemaText: null,
         cwd: dir,
         schemaDir: dir,
         env: {},
@@ -115,6 +118,42 @@ async function setup() {
 }
 
 describe('data routes over sqlite', () => {
+  it('reports a connection whose URL came from hekireki.config.ts', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'hekireki-studio-db-'))
+    dirs.push(dir)
+    const schemaPath = path.join(dir, 'schema.prisma')
+    writeFileSync(schemaPath, SCHEMA)
+    const state = createStudioState({ schemaPath })
+    await Effect.runPromise(Effect.provide(state.reload(), fileSystemLayer))
+    const db = await Effect.runPromise(
+      Effect.provide(
+        connectDatabase({
+          explicitUrl: null,
+          configUrl: 'file:./config.db',
+          configError: null,
+          schemaProvider: 'sqlite',
+          schemaText: null,
+          cwd: dir,
+          schemaDir: dir,
+          env: {},
+        }),
+        fileSystemLayer,
+      ),
+    )
+    states.push(db)
+    const response = await createStudioApp(state, dir, db).request('/api/db')
+    expect({ status: response.status, json: await response.json() }).toStrictEqual({
+      status: 200,
+      json: {
+        connected: true,
+        dialect: 'sqlite',
+        url: 'file:./config.db',
+        source: 'hekireki',
+        error: null,
+      },
+    })
+  })
+
   it('reports the connection', async () => {
     const { call } = await setup()
     expect(await call('/api/db', 'GET')).toStrictEqual({

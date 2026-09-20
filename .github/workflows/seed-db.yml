@@ -1,0 +1,97 @@
+name: Seed DB
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+# `hekireki seed` against real PostgreSQL and MySQL servers: the rows Prisma's own `db push`
+# tables accept, the foreign keys they enforce, the sequences, and the SQL script variant. And the
+# Prisma Client page of `hekireki studio` on the same servers: calls run through a generated
+# client and the adapter of the dialect, with the statements Prisma Client sent. And
+# `hekireki migrate check` and `migrate plan --migration` on both, on CockroachDB and on MariaDB:
+# the rows that break a new schema, counted from the catalogue and the constraints Prisma creates
+# and held to Prisma's own migration, and the migration rewritten for the config's fixes, which
+# has to leave the database as the schema and the rows as the config says.
+jobs:
+  seed-db:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: seed
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: seed
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
+      # MariaDB converts text to numbers otherwise than MySQL, which the check tells apart.
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: seed
+        ports:
+          - 3307:3306
+        options: >-
+          --health-cmd "mariadb-admin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: voidzero-dev/setup-vp@313600b80b104eadebb9111787d37a2e83e014ca # v1.17.0
+        with:
+          node-version: '24'
+          cache: true
+
+      - run: vp install --frozen-lockfile
+
+      # A service container cannot be given the command CockroachDB starts with.
+      - name: Start CockroachDB
+        run: |
+          docker run -d --name cockroach -p 26257:26257 cockroachdb/cockroach:v25.3.1 start-single-node --insecure
+          for attempt in $(seq 1 60); do
+            if docker exec cockroach ./cockroach sql --insecure -e 'SELECT 1' > /dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs cockroach
+          exit 1
+
+      - run: vp run hekireki#build
+
+      - run: vp run --filter ./test test db/seed.test.ts db/studio-client.test.ts db/studio-migrate.test.ts db/studio-migrate-native.test.ts db/migrate.test.ts db/migrate-rewrite.test.ts db/migrate-scenarios.test.ts db/migrate-unmanaged.test.ts db/migrate-batch.test.ts
+        env:
+          HEKIREKI_SEED_PG: postgresql://postgres:postgres@localhost:5432/seed
+          HEKIREKI_SEED_MYSQL: mysql://root:root@localhost:3306/seed
+          HEKIREKI_SEED_COCKROACH: postgresql://root@localhost:26257/defaultdb?sslmode=disable
+
+      - name: Migration check on MariaDB
+        run: vp run --filter ./test test db/studio-migrate-native.test.ts db/migrate.test.ts db/migrate-rewrite.test.ts db/migrate-scenarios.test.ts db/migrate-unmanaged.test.ts db/migrate-batch.test.ts
+        env:
+          HEKIREKI_SEED_MYSQL: mysql://root:root@localhost:3307/seed

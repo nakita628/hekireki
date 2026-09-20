@@ -1,3 +1,0 @@
-# The database is rebuilt by `pnpm setup`; nothing here is worth committing.
-*.db
-*.db-journal

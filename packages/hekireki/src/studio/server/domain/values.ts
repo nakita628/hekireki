@@ -62,8 +62,8 @@ export function makeDbValue(input: z.infer<typeof MakeDbValueInput>): unknown {
     case 'Float': {
       if (typeof value === 'number') return value
       if (typeof value === 'boolean') return value ? 1 : 0
-      const parsed = Number(value)
-      return Number.isNaN(parsed) ? value : parsed
+      const result = Number(value)
+      return Number.isNaN(result) ? value : result
     }
     case 'BigInt':
     case 'Decimal':
@@ -126,7 +126,7 @@ const MakeBindValueInput = z
   })
 
 /** The driver value for a JSON parameter: SQLite has no booleans, so they bind as 0 / 1. */
-export function makeBindValue(input: z.infer<typeof MakeBindValueInput>): unknown {
+export function makeBindValue(input: z.infer<typeof MakeBindValueInput>) {
   if (typeof input.value === 'boolean' && input.dialect === 'sqlite') return input.value ? 1 : 0
   return input.value
 }

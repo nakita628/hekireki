@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test'
 
+import { splitStatements } from '../../../sql/index.js'
 import {
   makeCountStatement,
   makeDeleteStatement,
@@ -9,7 +10,6 @@ import {
   makePlaceholder,
   makeSelectStatement,
   makeUpdateStatement,
-  splitStatements,
 } from './sql.js'
 
 describe('makeIdentifier and makePlaceholder', () => {
@@ -141,14 +141,14 @@ describe('makeUpdateStatement and makeDeleteStatement', () => {
   })
 })
 
+// The splitting the SQL console runs each statement of its text by.
 describe('splitStatements', () => {
   it('splits at semicolons outside quotes and comments and drops empty statements', () => {
-    expect(
-      splitStatements({
-        sql: "SELECT ';' AS a; SELECT 2 /* three; */ ;\n\n",
-      }),
-    ).toStrictEqual(["SELECT ';' AS a", 'SELECT 2 /* three; */'])
-    expect(splitStatements({ sql: '  ;; ' })).toStrictEqual([])
+    expect(splitStatements("SELECT ';' AS a; SELECT 2 /* three; */ ;\n\n")).toStrictEqual([
+      "SELECT ';' AS a",
+      'SELECT 2 /* three; */',
+    ])
+    expect(splitStatements('  ;; ')).toStrictEqual([])
   })
 })
 

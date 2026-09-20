@@ -41,3 +41,30 @@ export function splitStatements(text: string): readonly string[] {
     .map((end, index) => text.slice(index === 0 ? 0 : (bounds[index - 1] ?? 0) + 1, end).trim())
     .filter((statement) => statement !== '')
 }
+
+/**
+ * Splits at the commas outside parentheses and quotes: the clauses of an ALTER TABLE, the items
+ * of a list.
+ */
+export function splitTopLevel(text: string): readonly string[] {
+  const parts: string[] = []
+  let current = ''
+  let depth = 0
+  let quote = ''
+  for (const char of text) {
+    current += char
+    if (quote !== '') {
+      if (char === quote) quote = ''
+    } else if (char === "'" || char === '"' || char === '`') {
+      quote = char
+    } else if (char === '(') {
+      depth += 1
+    } else if (char === ')') {
+      depth -= 1
+    } else if (char === ',' && depth === 0) {
+      parts.push(current.slice(0, -1).trim())
+      current = ''
+    }
+  }
+  return [...parts, current.trim()].filter((part) => part !== '')
+}

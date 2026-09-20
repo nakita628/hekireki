@@ -21,6 +21,14 @@ export class DatabaseError extends Data.TaggedError('DatabaseError')<{
   readonly cause: string
 }> {}
 
+export class ClientUnavailableError extends Data.TaggedError('ClientUnavailableError')<{
+  readonly reason: string
+}> {}
+
+export class ClientQueryError extends Data.TaggedError('ClientQueryError')<{
+  readonly message: string
+}> {}
+
 export class InvalidInputError extends Data.TaggedError('InvalidInputError')<{
   readonly field: string
   readonly message: string

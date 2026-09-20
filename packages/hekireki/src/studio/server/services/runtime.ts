@@ -3,6 +3,7 @@ import type { FileSystem } from 'effect'
 import * as z from 'zod'
 
 import { fileSystemLayer } from '../../../file/index.js'
+import type * as ClientService from './client.js'
 import type * as DatabaseService from './database.js'
 import type * as StateService from './state.js'
 
@@ -17,6 +18,11 @@ export class DatabaseTag extends Context.Service<
   ReturnType<typeof DatabaseService.disconnectedDatabase>
 >()('hekireki/Database') {}
 
+export class ClientTag extends Context.Service<
+  ClientTag,
+  ReturnType<typeof ClientService.createProjectClient>
+>()('hekireki/Client') {}
+
 const ConfigureRuntimeInput = z
   .object({
     state: z
@@ -25,13 +31,18 @@ const ConfigureRuntimeInput = z
     db: z
       .custom<ReturnType<typeof DatabaseService.disconnectedDatabase>>()
       .meta({ description: 'The database connection state.' }),
+    client: z
+      .custom<ReturnType<typeof ClientService.createProjectClient>>()
+      .meta({ description: "The project's Prisma Client, loaded on first use." }),
   })
   .readonly()
-  .meta({ description: 'The schema state and database connection the handlers serve' })
+  .meta({
+    description: 'The schema state, database connection and Prisma Client the handlers serve',
+  })
 
 const holder: {
   current: ManagedRuntime.ManagedRuntime<
-    StudioStateTag | DatabaseTag | FileSystem.FileSystem,
+    StudioStateTag | DatabaseTag | ClientTag | FileSystem.FileSystem,
     never
   > | null
 } = { current: null }
@@ -44,6 +55,7 @@ export function configureRuntime(input: z.infer<typeof ConfigureRuntimeInput>) {
     Layer.mergeAll(
       Layer.succeed(StudioStateTag, input.state),
       Layer.succeed(DatabaseTag, input.db),
+      Layer.succeed(ClientTag, input.client),
       fileSystemLayer,
     ),
   )

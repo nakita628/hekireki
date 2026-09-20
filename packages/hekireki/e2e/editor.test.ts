@@ -71,6 +71,38 @@ test('marks an unknown type, offers the quick fixes and clears once fixed', asyn
   await expect.poll(() => fileOnDisk(request, 'base.prisma')).toContain('role  Role')
 })
 
+test('an error that has not gone away stays put while the file keeps saving', async ({ page }) => {
+  const editor = editorOf(page)
+  // `role  Role   @default(VIEWER)`: the type is replaced by one that does not exist.
+  await editor.goto(11, 9)
+  await page.keyboard.press('Shift+End')
+  await editor.type('Rol')
+  await expect(page.locator('header')).toContainText(/1 error/u)
+
+  // Every autosave gives the page a new snapshot object, and a reload follows it over the event
+  // stream. The error is the same error each time, and the chip has to stay where it is: it used
+  // to go away with each one and come back a moment later, which is a blink for every keystroke.
+  const sampling = page.evaluate(async () => {
+    const header = document.querySelector('header')
+    const seen: boolean[] = []
+    await new Promise<void>((_resolve) => {
+      const timer = setInterval(() => {
+        seen.push((header?.textContent ?? '').includes('error'))
+        if (seen.length >= 60) {
+          clearInterval(timer)
+          _resolve()
+        }
+      }, 40)
+    })
+    return seen
+  })
+  await page.keyboard.press('End')
+  await editor.type('   ')
+  const samples = await sampling
+  expect(samples).toHaveLength(60)
+  expect(samples.filter((shown) => !shown)).toStrictEqual([])
+})
+
 test('the space bar reaches the editor', async ({ page }) => {
   const editor = editorOf(page)
   await editor.goto(10, 1)
@@ -80,6 +112,31 @@ test('the space bar reaches the editor', async ({ page }) => {
   // Monaco's experimental EditContext took the key and inserted nothing, so this read
   // `nicknameString?`; the textarea the editor is configured back onto does not.
   await expect.poll(() => editor.lines()).toContain('  nickname String?')
+})
+
+test('Enter finishes a half-typed word and ends a line that is already written', async ({
+  page,
+  request,
+}) => {
+  const editor = editorOf(page)
+  await editor.goto(10, 1)
+  await page.keyboard.press('End')
+  await page.keyboard.press('Enter')
+
+  // Half a type with the list open: Enter finishes it, and does not also break the line.
+  await editor.type('createdAt DateTi')
+  await expect(page.locator('.suggest-widget.visible')).toBeVisible()
+  await page.keyboard.press('Enter')
+  await expect.poll(() => fileOnDisk(request, 'base.prisma')).toContain('createdAt DateTime')
+
+  // The list is open for most of a schema, so Enter at the end of a line that is written out
+  // has to be the newline it was meant to be rather than the word already under the cursor.
+  await page.keyboard.press('End')
+  await page.keyboard.press('Enter')
+  await editor.type('nickname String')
+  await expect
+    .poll(() => fileOnDisk(request, 'base.prisma'))
+    .toContain('createdAt DateTime\n  nickname String')
 })
 
 test('completes attributes from the language server', async ({ page }) => {

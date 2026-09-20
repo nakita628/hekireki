@@ -1,16 +1,23 @@
 import { createFileRoute } from '@tanstack/react-router'
-import * as v from 'valibot'
+import * as z from 'zod'
 
 import { PrismaView } from '../features/editor/prisma-view.js'
 import { useSchema } from '../hooks/index.js'
 
 export const Route = createFileRoute('/prisma')({
-  validateSearch: v.object({
-    focus: v.optional(v.pipe(v.string(), v.description('The block to scroll the editor to'))),
-    file: v.optional(
-      v.pipe(v.string(), v.description('The schema file to open, as Studio loaded it')),
-    ),
-    line: v.optional(v.pipe(v.number(), v.description('The 1-based line to put the cursor on'))),
+  validateSearch: z.object({
+    focus: z
+      .string()
+      .optional()
+      .meta({ description: 'The block to scroll the editor to', example: 'User' }),
+    file: z.string().optional().meta({
+      description: 'The schema file to open, as Studio loaded it',
+      example: 'user.prisma',
+    }),
+    line: z
+      .number()
+      .optional()
+      .meta({ description: 'The 1-based line to put the cursor on', example: 12 }),
   }),
   component: PrismaPage,
 })

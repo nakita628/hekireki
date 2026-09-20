@@ -6,8 +6,15 @@ import { Effect } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
 import { fileSystemLayer } from '../../../file/index.js'
+import { createProjectClient } from './client.js'
 import { disconnectedDatabase } from './database.js'
-import { configureRuntime, DatabaseTag, studioRuntime, StudioStateTag } from './runtime.js'
+import {
+  ClientTag,
+  configureRuntime,
+  DatabaseTag,
+  studioRuntime,
+  StudioStateTag,
+} from './runtime.js'
 import { createStudioState } from './state.js'
 
 const dirs: string[] = []
@@ -35,13 +42,15 @@ describe('studioRuntime', () => {
 })
 
 describe('configureRuntime', () => {
-  it('provides the state and database it was given to the effects it runs', async () => {
+  it('provides the state, database and client it was given to the effects it runs', async () => {
     const studioState = await state()
     const db = disconnectedDatabase('none')
-    const runtime = configureRuntime({ state: studioState, db })
+    const client = createProjectClient({ target: null, reason: 'none', schemaDir: '.', cwd: '.' })
+    const runtime = configureRuntime({ state: studioState, db, client })
     expect(studioRuntime()).toBe(runtime)
     expect(runtime.runSync(StudioStateTag)).toBe(studioState)
     expect(runtime.runSync(DatabaseTag)).toBe(db)
+    expect(runtime.runSync(ClientTag)).toBe(client)
     expect(
       runtime
         .runSync(StudioStateTag)
@@ -51,8 +60,26 @@ describe('configureRuntime', () => {
   })
 
   it('replaces the previous runtime, so handlers see the latest state', async () => {
-    const first = configureRuntime({ state: await state(), db: disconnectedDatabase() })
-    const second = configureRuntime({ state: await state(), db: disconnectedDatabase() })
+    const first = configureRuntime({
+      state: await state(),
+      db: disconnectedDatabase(),
+      client: createProjectClient({
+        target: null,
+        reason: 'No database is connected.',
+        schemaDir: '.',
+        cwd: '.',
+      }),
+    })
+    const second = configureRuntime({
+      state: await state(),
+      db: disconnectedDatabase(),
+      client: createProjectClient({
+        target: null,
+        reason: 'No database is connected.',
+        schemaDir: '.',
+        cwd: '.',
+      }),
+    })
     expect(second).not.toBe(first)
     expect(studioRuntime()).toBe(second)
   })

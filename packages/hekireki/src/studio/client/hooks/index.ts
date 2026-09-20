@@ -15,12 +15,20 @@ import type { ClientRequestOptions, InferRequestType } from 'hono/client'
 import { parseResponse } from 'hono/client'
 import { client } from '../lib/index.js'
 
+export function getClientKey() {
+  return ['client'] as const
+}
+
 export function getDbKey() {
   return ['db'] as const
 }
 
 export function getDocsKey() {
   return ['docs'] as const
+}
+
+export function getMigrateKey() {
+  return ['migrate'] as const
 }
 
 export function getPrismaKey() {
@@ -656,6 +664,377 @@ export function usePostDbAnalyze<TError = unknown>(options?: {
   })
 }
 
+export function getClientQueryKey() {
+  return ['client', '/client'] as const
+}
+
+export function getClientQueryOptions(options?: ClientRequestOptions) {
+  return queryOptions({
+    queryKey: getClientQueryKey(),
+    queryFn({ signal }) {
+      return parseResponse(
+        client.client.$get(undefined, { ...options, init: { ...options?.init, signal } }),
+      )
+    },
+  })
+}
+
+export function useClient<
+  TData = Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.$get>>>>>,
+  TError = unknown,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.$get>>>>>,
+    TError,
+    TData
+  >
+  options?: ClientRequestOptions
+}) {
+  const { query: queryOptions, options: clientOptions } = options ?? {}
+  return useQuery({
+    ...queryOptions,
+    queryKey: getClientQueryKey(),
+    queryFn({ signal }: QueryFunctionContext) {
+      return parseResponse(
+        client.client.$get(undefined, {
+          ...clientOptions,
+          init: { ...clientOptions?.init, signal },
+        }),
+      )
+    },
+  })
+}
+
+export function useSuspenseClient<
+  TData = Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.$get>>>>>,
+  TError = unknown,
+>(options?: {
+  query?: UseSuspenseQueryOptions<
+    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.$get>>>>>,
+    TError,
+    TData
+  >
+  options?: ClientRequestOptions
+}) {
+  const { query: queryOptions, options: clientOptions } = options ?? {}
+  return useSuspenseQuery({
+    ...queryOptions,
+    queryKey: getClientQueryKey(),
+    queryFn({ signal }: QueryFunctionContext) {
+      return parseResponse(
+        client.client.$get(undefined, {
+          ...clientOptions,
+          init: { ...clientOptions?.init, signal },
+        }),
+      )
+    },
+  })
+}
+
+export function getPostClientAnalyzeMutationOptions<TError = unknown>(
+  options?: ClientRequestOptions,
+) {
+  return mutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.analyze.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.client.analyze.$post>
+  >({
+    mutationKey: ['client', '/client/analyze', 'POST'] as const,
+    async mutationFn(args: InferRequestType<typeof client.client.analyze.$post>) {
+      return parseResponse(client.client.analyze.$post(args, options))
+    },
+  })
+}
+
+export function usePostClientAnalyze<TError = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.analyze.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.client.analyze.$post>
+  >
+  options?: ClientRequestOptions
+}) {
+  const { mutation: mutationOptions, options: clientOptions } = options ?? {}
+  return useMutation({
+    ...mutationOptions,
+    ...getPostClientAnalyzeMutationOptions<TError>(clientOptions),
+  })
+}
+
+export function getPostClientCompleteMutationOptions<TError = unknown>(
+  options?: ClientRequestOptions,
+) {
+  return mutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.complete.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.client.complete.$post>
+  >({
+    mutationKey: ['client', '/client/complete', 'POST'] as const,
+    async mutationFn(args: InferRequestType<typeof client.client.complete.$post>) {
+      return parseResponse(client.client.complete.$post(args, options))
+    },
+  })
+}
+
+export function usePostClientComplete<TError = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.complete.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.client.complete.$post>
+  >
+  options?: ClientRequestOptions
+}) {
+  const { mutation: mutationOptions, options: clientOptions } = options ?? {}
+  return useMutation({
+    ...mutationOptions,
+    ...getPostClientCompleteMutationOptions<TError>(clientOptions),
+  })
+}
+
+export function getPostClientCompleteDetailMutationOptions<TError = unknown>(
+  options?: ClientRequestOptions,
+) {
+  return mutationOptions<
+    Awaited<
+      ReturnType<
+        typeof parseResponse<Awaited<ReturnType<typeof client.client.complete.detail.$post>>>
+      >
+    >,
+    TError,
+    InferRequestType<typeof client.client.complete.detail.$post>
+  >({
+    mutationKey: ['client', '/client/complete/detail', 'POST'] as const,
+    async mutationFn(args: InferRequestType<typeof client.client.complete.detail.$post>) {
+      return parseResponse(client.client.complete.detail.$post(args, options))
+    },
+  })
+}
+
+export function usePostClientCompleteDetail<TError = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof parseResponse<Awaited<ReturnType<typeof client.client.complete.detail.$post>>>
+      >
+    >,
+    TError,
+    InferRequestType<typeof client.client.complete.detail.$post>
+  >
+  options?: ClientRequestOptions
+}) {
+  const { mutation: mutationOptions, options: clientOptions } = options ?? {}
+  return useMutation({
+    ...mutationOptions,
+    ...getPostClientCompleteDetailMutationOptions<TError>(clientOptions),
+  })
+}
+
+export function getPostClientHoverMutationOptions<TError = unknown>(
+  options?: ClientRequestOptions,
+) {
+  return mutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.hover.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.client.hover.$post>
+  >({
+    mutationKey: ['client', '/client/hover', 'POST'] as const,
+    async mutationFn(args: InferRequestType<typeof client.client.hover.$post>) {
+      return parseResponse(client.client.hover.$post(args, options))
+    },
+  })
+}
+
+export function usePostClientHover<TError = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.hover.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.client.hover.$post>
+  >
+  options?: ClientRequestOptions
+}) {
+  const { mutation: mutationOptions, options: clientOptions } = options ?? {}
+  return useMutation({
+    ...mutationOptions,
+    ...getPostClientHoverMutationOptions<TError>(clientOptions),
+  })
+}
+
+export function getPostClientSignatureMutationOptions<TError = unknown>(
+  options?: ClientRequestOptions,
+) {
+  return mutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.signature.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.client.signature.$post>
+  >({
+    mutationKey: ['client', '/client/signature', 'POST'] as const,
+    async mutationFn(args: InferRequestType<typeof client.client.signature.$post>) {
+      return parseResponse(client.client.signature.$post(args, options))
+    },
+  })
+}
+
+export function usePostClientSignature<TError = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.signature.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.client.signature.$post>
+  >
+  options?: ClientRequestOptions
+}) {
+  const { mutation: mutationOptions, options: clientOptions } = options ?? {}
+  return useMutation({
+    ...mutationOptions,
+    ...getPostClientSignatureMutationOptions<TError>(clientOptions),
+  })
+}
+
+export function getPostClientFormatMutationOptions<TError = unknown>(
+  options?: ClientRequestOptions,
+) {
+  return mutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.format.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.client.format.$post>
+  >({
+    mutationKey: ['client', '/client/format', 'POST'] as const,
+    async mutationFn(args: InferRequestType<typeof client.client.format.$post>) {
+      return parseResponse(client.client.format.$post(args, options))
+    },
+  })
+}
+
+export function usePostClientFormat<TError = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.format.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.client.format.$post>
+  >
+  options?: ClientRequestOptions
+}) {
+  const { mutation: mutationOptions, options: clientOptions } = options ?? {}
+  return useMutation({
+    ...mutationOptions,
+    ...getPostClientFormatMutationOptions<TError>(clientOptions),
+  })
+}
+
+export function getPostClientCheckMutationOptions<TError = unknown>(
+  options?: ClientRequestOptions,
+) {
+  return mutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.check.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.client.check.$post>
+  >({
+    mutationKey: ['client', '/client/check', 'POST'] as const,
+    async mutationFn(args: InferRequestType<typeof client.client.check.$post>) {
+      return parseResponse(client.client.check.$post(args, options))
+    },
+  })
+}
+
+export function usePostClientCheck<TError = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.check.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.client.check.$post>
+  >
+  options?: ClientRequestOptions
+}) {
+  const { mutation: mutationOptions, options: clientOptions } = options ?? {}
+  return useMutation({
+    ...mutationOptions,
+    ...getPostClientCheckMutationOptions<TError>(clientOptions),
+  })
+}
+
+export function getPostClientPreviewMutationOptions<TError = unknown>(
+  options?: ClientRequestOptions,
+) {
+  return mutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.preview.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.client.preview.$post>
+  >({
+    mutationKey: ['client', '/client/preview', 'POST'] as const,
+    async mutationFn(args: InferRequestType<typeof client.client.preview.$post>) {
+      return parseResponse(client.client.preview.$post(args, options))
+    },
+  })
+}
+
+export function usePostClientPreview<TError = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.preview.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.client.preview.$post>
+  >
+  options?: ClientRequestOptions
+}) {
+  const { mutation: mutationOptions, options: clientOptions } = options ?? {}
+  return useMutation({
+    ...mutationOptions,
+    ...getPostClientPreviewMutationOptions<TError>(clientOptions),
+  })
+}
+
+export function getPostClientRunMutationOptions<TError = unknown>(options?: ClientRequestOptions) {
+  return mutationOptions<
+    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.run.$post>>>>>,
+    TError,
+    InferRequestType<typeof client.client.run.$post>
+  >({
+    mutationKey: ['client', '/client/run', 'POST'] as const,
+    async mutationFn(args: InferRequestType<typeof client.client.run.$post>) {
+      return parseResponse(client.client.run.$post(args, options))
+    },
+  })
+}
+
+export function usePostClientRun<TError = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.run.$post>>>>>,
+    TError,
+    InferRequestType<typeof client.client.run.$post>
+  >
+  options?: ClientRequestOptions
+}) {
+  const { mutation: mutationOptions, options: clientOptions } = options ?? {}
+  return useMutation({
+    ...mutationOptions,
+    ...getPostClientRunMutationOptions<TError>(clientOptions),
+  })
+}
+
 export function getPostPrismaFormatMutationOptions<TError = unknown>(
   options?: ClientRequestOptions,
 ) {
@@ -957,6 +1336,948 @@ export function usePostPrismaCodeActions<TError = unknown>(options?: {
   return useMutation({
     ...mutationOptions,
     ...getPostPrismaCodeActionsMutationOptions<TError>(clientOptions),
+  })
+}
+
+export function getMigrateQueryKey() {
+  return ['migrate', '/migrate'] as const
+}
+
+export function getMigrateQueryOptions(options?: ClientRequestOptions) {
+  return queryOptions({
+    queryKey: getMigrateQueryKey(),
+    queryFn({ signal }) {
+      return parseResponse(
+        client.migrate.$get(undefined, { ...options, init: { ...options?.init, signal } }),
+      )
+    },
+  })
+}
+
+export function useMigrate<
+  TData = Awaited<
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.$get>>>>
+  >,
+  TError = unknown,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.$get>>>>>,
+    TError,
+    TData
+  >
+  options?: ClientRequestOptions
+}) {
+  const { query: queryOptions, options: clientOptions } = options ?? {}
+  return useQuery({
+    ...queryOptions,
+    queryKey: getMigrateQueryKey(),
+    queryFn({ signal }: QueryFunctionContext) {
+      return parseResponse(
+        client.migrate.$get(undefined, {
+          ...clientOptions,
+          init: { ...clientOptions?.init, signal },
+        }),
+      )
+    },
+  })
+}
+
+export function useSuspenseMigrate<
+  TData = Awaited<
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.$get>>>>
+  >,
+  TError = unknown,
+>(options?: {
+  query?: UseSuspenseQueryOptions<
+    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.$get>>>>>,
+    TError,
+    TData
+  >
+  options?: ClientRequestOptions
+}) {
+  const { query: queryOptions, options: clientOptions } = options ?? {}
+  return useSuspenseQuery({
+    ...queryOptions,
+    queryKey: getMigrateQueryKey(),
+    queryFn({ signal }: QueryFunctionContext) {
+      return parseResponse(
+        client.migrate.$get(undefined, {
+          ...clientOptions,
+          init: { ...clientOptions?.init, signal },
+        }),
+      )
+    },
+  })
+}
+
+export function getMigrateBaselineQueryKey() {
+  return ['migrate', '/migrate/baseline'] as const
+}
+
+export function getMigrateBaselineQueryOptions(options?: ClientRequestOptions) {
+  return queryOptions({
+    queryKey: getMigrateBaselineQueryKey(),
+    queryFn({ signal }) {
+      return parseResponse(
+        client.migrate.baseline.$get(undefined, { ...options, init: { ...options?.init, signal } }),
+      )
+    },
+  })
+}
+
+export function useMigrateBaseline<
+  TData = Awaited<
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.baseline.$get>>>>
+  >,
+  TError = unknown,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.baseline.$get>>>>
+    >,
+    TError,
+    TData
+  >
+  options?: ClientRequestOptions
+}) {
+  const { query: queryOptions, options: clientOptions } = options ?? {}
+  return useQuery({
+    ...queryOptions,
+    queryKey: getMigrateBaselineQueryKey(),
+    queryFn({ signal }: QueryFunctionContext) {
+      return parseResponse(
+        client.migrate.baseline.$get(undefined, {
+          ...clientOptions,
+          init: { ...clientOptions?.init, signal },
+        }),
+      )
+    },
+  })
+}
+
+export function useSuspenseMigrateBaseline<
+  TData = Awaited<
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.baseline.$get>>>>
+  >,
+  TError = unknown,
+>(options?: {
+  query?: UseSuspenseQueryOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.baseline.$get>>>>
+    >,
+    TError,
+    TData
+  >
+  options?: ClientRequestOptions
+}) {
+  const { query: queryOptions, options: clientOptions } = options ?? {}
+  return useSuspenseQuery({
+    ...queryOptions,
+    queryKey: getMigrateBaselineQueryKey(),
+    queryFn({ signal }: QueryFunctionContext) {
+      return parseResponse(
+        client.migrate.baseline.$get(undefined, {
+          ...clientOptions,
+          init: { ...clientOptions?.init, signal },
+        }),
+      )
+    },
+  })
+}
+
+export function getPostMigrateBaselineMutationOptions<TError = unknown>(
+  options?: ClientRequestOptions,
+) {
+  return mutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.baseline.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.migrate.baseline.$post>
+  >({
+    mutationKey: ['migrate', '/migrate/baseline', 'POST'] as const,
+    async mutationFn(args: InferRequestType<typeof client.migrate.baseline.$post>) {
+      return parseResponse(client.migrate.baseline.$post(args, options))
+    },
+  })
+}
+
+export function usePostMigrateBaseline<TError = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.baseline.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.migrate.baseline.$post>
+  >
+  options?: ClientRequestOptions
+}) {
+  const { mutation: mutationOptions, options: clientOptions } = options ?? {}
+  return useMutation({
+    ...mutationOptions,
+    ...getPostMigrateBaselineMutationOptions<TError>(clientOptions),
+  })
+}
+
+export function getMigrateDiffQueryKey() {
+  return ['migrate', '/migrate/diff'] as const
+}
+
+export function getMigrateDiffQueryOptions(options?: ClientRequestOptions) {
+  return queryOptions({
+    queryKey: getMigrateDiffQueryKey(),
+    queryFn({ signal }) {
+      return parseResponse(
+        client.migrate.diff.$get(undefined, { ...options, init: { ...options?.init, signal } }),
+      )
+    },
+  })
+}
+
+export function useMigrateDiff<
+  TData = Awaited<
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.diff.$get>>>>
+  >,
+  TError = unknown,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.diff.$get>>>>>,
+    TError,
+    TData
+  >
+  options?: ClientRequestOptions
+}) {
+  const { query: queryOptions, options: clientOptions } = options ?? {}
+  return useQuery({
+    ...queryOptions,
+    queryKey: getMigrateDiffQueryKey(),
+    queryFn({ signal }: QueryFunctionContext) {
+      return parseResponse(
+        client.migrate.diff.$get(undefined, {
+          ...clientOptions,
+          init: { ...clientOptions?.init, signal },
+        }),
+      )
+    },
+  })
+}
+
+export function useSuspenseMigrateDiff<
+  TData = Awaited<
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.diff.$get>>>>
+  >,
+  TError = unknown,
+>(options?: {
+  query?: UseSuspenseQueryOptions<
+    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.diff.$get>>>>>,
+    TError,
+    TData
+  >
+  options?: ClientRequestOptions
+}) {
+  const { query: queryOptions, options: clientOptions } = options ?? {}
+  return useSuspenseQuery({
+    ...queryOptions,
+    queryKey: getMigrateDiffQueryKey(),
+    queryFn({ signal }: QueryFunctionContext) {
+      return parseResponse(
+        client.migrate.diff.$get(undefined, {
+          ...clientOptions,
+          init: { ...clientOptions?.init, signal },
+        }),
+      )
+    },
+  })
+}
+
+export function getPostMigratePlanMutationOptions<TError = unknown>(
+  options?: ClientRequestOptions,
+) {
+  return mutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.plan.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.migrate.plan.$post>
+  >({
+    mutationKey: ['migrate', '/migrate/plan', 'POST'] as const,
+    async mutationFn(args: InferRequestType<typeof client.migrate.plan.$post>) {
+      return parseResponse(client.migrate.plan.$post(args, options))
+    },
+  })
+}
+
+export function usePostMigratePlan<TError = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.plan.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.migrate.plan.$post>
+  >
+  options?: ClientRequestOptions
+}) {
+  const { mutation: mutationOptions, options: clientOptions } = options ?? {}
+  return useMutation({
+    ...mutationOptions,
+    ...getPostMigratePlanMutationOptions<TError>(clientOptions),
+  })
+}
+
+export function getPostMigrateApplyMutationOptions<TError = unknown>(
+  options?: ClientRequestOptions,
+) {
+  return mutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.apply.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.migrate.apply.$post>
+  >({
+    mutationKey: ['migrate', '/migrate/apply', 'POST'] as const,
+    async mutationFn(args: InferRequestType<typeof client.migrate.apply.$post>) {
+      return parseResponse(client.migrate.apply.$post(args, options))
+    },
+  })
+}
+
+export function usePostMigrateApply<TError = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.apply.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.migrate.apply.$post>
+  >
+  options?: ClientRequestOptions
+}) {
+  const { mutation: mutationOptions, options: clientOptions } = options ?? {}
+  return useMutation({
+    ...mutationOptions,
+    ...getPostMigrateApplyMutationOptions<TError>(clientOptions),
+  })
+}
+
+export function getPostMigrateRehearseMutationOptions<TError = unknown>(
+  options?: ClientRequestOptions,
+) {
+  return mutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.rehearse.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.migrate.rehearse.$post>
+  >({
+    mutationKey: ['migrate', '/migrate/rehearse', 'POST'] as const,
+    async mutationFn(args: InferRequestType<typeof client.migrate.rehearse.$post>) {
+      return parseResponse(client.migrate.rehearse.$post(args, options))
+    },
+  })
+}
+
+export function usePostMigrateRehearse<TError = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.rehearse.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.migrate.rehearse.$post>
+  >
+  options?: ClientRequestOptions
+}) {
+  const { mutation: mutationOptions, options: clientOptions } = options ?? {}
+  return useMutation({
+    ...mutationOptions,
+    ...getPostMigrateRehearseMutationOptions<TError>(clientOptions),
+  })
+}
+
+export function getMigrateTablesQueryKey() {
+  return ['migrate', '/migrate/tables'] as const
+}
+
+export function getMigrateTablesQueryOptions(options?: ClientRequestOptions) {
+  return queryOptions({
+    queryKey: getMigrateTablesQueryKey(),
+    queryFn({ signal }) {
+      return parseResponse(
+        client.migrate.tables.$get(undefined, { ...options, init: { ...options?.init, signal } }),
+      )
+    },
+  })
+}
+
+export function useMigrateTables<
+  TData = Awaited<
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.tables.$get>>>>
+  >,
+  TError = unknown,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.tables.$get>>>>
+    >,
+    TError,
+    TData
+  >
+  options?: ClientRequestOptions
+}) {
+  const { query: queryOptions, options: clientOptions } = options ?? {}
+  return useQuery({
+    ...queryOptions,
+    queryKey: getMigrateTablesQueryKey(),
+    queryFn({ signal }: QueryFunctionContext) {
+      return parseResponse(
+        client.migrate.tables.$get(undefined, {
+          ...clientOptions,
+          init: { ...clientOptions?.init, signal },
+        }),
+      )
+    },
+  })
+}
+
+export function useSuspenseMigrateTables<
+  TData = Awaited<
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.tables.$get>>>>
+  >,
+  TError = unknown,
+>(options?: {
+  query?: UseSuspenseQueryOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.tables.$get>>>>
+    >,
+    TError,
+    TData
+  >
+  options?: ClientRequestOptions
+}) {
+  const { query: queryOptions, options: clientOptions } = options ?? {}
+  return useSuspenseQuery({
+    ...queryOptions,
+    queryKey: getMigrateTablesQueryKey(),
+    queryFn({ signal }: QueryFunctionContext) {
+      return parseResponse(
+        client.migrate.tables.$get(undefined, {
+          ...clientOptions,
+          init: { ...clientOptions?.init, signal },
+        }),
+      )
+    },
+  })
+}
+
+export function getMigrateBackupsQueryKey() {
+  return ['migrate', '/migrate/backups'] as const
+}
+
+export function getMigrateBackupsQueryOptions(options?: ClientRequestOptions) {
+  return queryOptions({
+    queryKey: getMigrateBackupsQueryKey(),
+    queryFn({ signal }) {
+      return parseResponse(
+        client.migrate.backups.$get(undefined, { ...options, init: { ...options?.init, signal } }),
+      )
+    },
+  })
+}
+
+export function useMigrateBackups<
+  TData = Awaited<
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.backups.$get>>>>
+  >,
+  TError = unknown,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.backups.$get>>>>
+    >,
+    TError,
+    TData
+  >
+  options?: ClientRequestOptions
+}) {
+  const { query: queryOptions, options: clientOptions } = options ?? {}
+  return useQuery({
+    ...queryOptions,
+    queryKey: getMigrateBackupsQueryKey(),
+    queryFn({ signal }: QueryFunctionContext) {
+      return parseResponse(
+        client.migrate.backups.$get(undefined, {
+          ...clientOptions,
+          init: { ...clientOptions?.init, signal },
+        }),
+      )
+    },
+  })
+}
+
+export function useSuspenseMigrateBackups<
+  TData = Awaited<
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.backups.$get>>>>
+  >,
+  TError = unknown,
+>(options?: {
+  query?: UseSuspenseQueryOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.backups.$get>>>>
+    >,
+    TError,
+    TData
+  >
+  options?: ClientRequestOptions
+}) {
+  const { query: queryOptions, options: clientOptions } = options ?? {}
+  return useSuspenseQuery({
+    ...queryOptions,
+    queryKey: getMigrateBackupsQueryKey(),
+    queryFn({ signal }: QueryFunctionContext) {
+      return parseResponse(
+        client.migrate.backups.$get(undefined, {
+          ...clientOptions,
+          init: { ...clientOptions?.init, signal },
+        }),
+      )
+    },
+  })
+}
+
+export function getPostMigrateBackupsMutationOptions<TError = unknown>(
+  options?: ClientRequestOptions,
+) {
+  return mutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.backups.$post>>>>
+    >,
+    TError,
+    void
+  >({
+    mutationKey: ['migrate', '/migrate/backups', 'POST'] as const,
+    async mutationFn() {
+      return parseResponse(client.migrate.backups.$post(undefined, options))
+    },
+  })
+}
+
+export function usePostMigrateBackups<TError = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.backups.$post>>>>
+    >,
+    TError,
+    void
+  >
+  options?: ClientRequestOptions
+}) {
+  const { mutation: mutationOptions, options: clientOptions } = options ?? {}
+  return useMutation({
+    ...mutationOptions,
+    ...getPostMigrateBackupsMutationOptions<TError>(clientOptions),
+  })
+}
+
+export function getPostMigrateBackupsRestoreMutationOptions<TError = unknown>(
+  options?: ClientRequestOptions,
+) {
+  return mutationOptions<
+    Awaited<
+      ReturnType<
+        typeof parseResponse<Awaited<ReturnType<typeof client.migrate.backups.restore.$post>>>
+      >
+    >,
+    TError,
+    InferRequestType<typeof client.migrate.backups.restore.$post>
+  >({
+    mutationKey: ['migrate', '/migrate/backups/restore', 'POST'] as const,
+    async mutationFn(args: InferRequestType<typeof client.migrate.backups.restore.$post>) {
+      return parseResponse(client.migrate.backups.restore.$post(args, options))
+    },
+  })
+}
+
+export function usePostMigrateBackupsRestore<TError = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof parseResponse<Awaited<ReturnType<typeof client.migrate.backups.restore.$post>>>
+      >
+    >,
+    TError,
+    InferRequestType<typeof client.migrate.backups.restore.$post>
+  >
+  options?: ClientRequestOptions
+}) {
+  const { mutation: mutationOptions, options: clientOptions } = options ?? {}
+  return useMutation({
+    ...mutationOptions,
+    ...getPostMigrateBackupsRestoreMutationOptions<TError>(clientOptions),
+  })
+}
+
+export function getMigrateMigrationsMigrationNameQueryKey(
+  args: InferRequestType<(typeof client.migrate.migrations)[':migrationName']['$get']>,
+) {
+  return ['migrate', '/migrate/migrations/:migrationName', args] as const
+}
+
+export function getMigrateMigrationsMigrationNameQueryOptions(
+  args: InferRequestType<(typeof client.migrate.migrations)[':migrationName']['$get']>,
+  options?: ClientRequestOptions,
+) {
+  return queryOptions({
+    queryKey: getMigrateMigrationsMigrationNameQueryKey(args),
+    queryFn({ signal }) {
+      return parseResponse(
+        client.migrate.migrations[':migrationName'].$get(args, {
+          ...options,
+          init: { ...options?.init, signal },
+        }),
+      )
+    },
+  })
+}
+
+export function useMigrateMigrationsMigrationName<
+  TData = Awaited<
+    ReturnType<
+      typeof parseResponse<
+        Awaited<ReturnType<(typeof client.migrate.migrations)[':migrationName']['$get']>>
+      >
+    >
+  >,
+  TError = unknown,
+>(
+  args: InferRequestType<(typeof client.migrate.migrations)[':migrationName']['$get']>,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<
+        ReturnType<
+          typeof parseResponse<
+            Awaited<ReturnType<(typeof client.migrate.migrations)[':migrationName']['$get']>>
+          >
+        >
+      >,
+      TError,
+      TData
+    >
+    options?: ClientRequestOptions
+  },
+) {
+  const { query: queryOptions, options: clientOptions } = options ?? {}
+  return useQuery({
+    ...queryOptions,
+    queryKey: getMigrateMigrationsMigrationNameQueryKey(args),
+    queryFn({ signal }: QueryFunctionContext) {
+      return parseResponse(
+        client.migrate.migrations[':migrationName'].$get(args, {
+          ...clientOptions,
+          init: { ...clientOptions?.init, signal },
+        }),
+      )
+    },
+  })
+}
+
+export function useSuspenseMigrateMigrationsMigrationName<
+  TData = Awaited<
+    ReturnType<
+      typeof parseResponse<
+        Awaited<ReturnType<(typeof client.migrate.migrations)[':migrationName']['$get']>>
+      >
+    >
+  >,
+  TError = unknown,
+>(
+  args: InferRequestType<(typeof client.migrate.migrations)[':migrationName']['$get']>,
+  options?: {
+    query?: UseSuspenseQueryOptions<
+      Awaited<
+        ReturnType<
+          typeof parseResponse<
+            Awaited<ReturnType<(typeof client.migrate.migrations)[':migrationName']['$get']>>
+          >
+        >
+      >,
+      TError,
+      TData
+    >
+    options?: ClientRequestOptions
+  },
+) {
+  const { query: queryOptions, options: clientOptions } = options ?? {}
+  return useSuspenseQuery({
+    ...queryOptions,
+    queryKey: getMigrateMigrationsMigrationNameQueryKey(args),
+    queryFn({ signal }: QueryFunctionContext) {
+      return parseResponse(
+        client.migrate.migrations[':migrationName'].$get(args, {
+          ...clientOptions,
+          init: { ...clientOptions?.init, signal },
+        }),
+      )
+    },
+  })
+}
+
+export function getPostMigrateMigrationsMutationOptions<TError = unknown>(
+  options?: ClientRequestOptions,
+) {
+  return mutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.migrations.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.migrate.migrations.$post>
+  >({
+    mutationKey: ['migrate', '/migrate/migrations', 'POST'] as const,
+    async mutationFn(args: InferRequestType<typeof client.migrate.migrations.$post>) {
+      return parseResponse(client.migrate.migrations.$post(args, options))
+    },
+  })
+}
+
+export function usePostMigrateMigrations<TError = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.migrations.$post>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.migrate.migrations.$post>
+  >
+  options?: ClientRequestOptions
+}) {
+  const { mutation: mutationOptions, options: clientOptions } = options ?? {}
+  return useMutation({
+    ...mutationOptions,
+    ...getPostMigrateMigrationsMutationOptions<TError>(clientOptions),
+  })
+}
+
+export function getPostMigrateMigrationsAppliedMutationOptions<TError = unknown>(
+  options?: ClientRequestOptions,
+) {
+  return mutationOptions<
+    Awaited<
+      ReturnType<
+        typeof parseResponse<Awaited<ReturnType<typeof client.migrate.migrations.applied.$post>>>
+      >
+    >,
+    TError,
+    InferRequestType<typeof client.migrate.migrations.applied.$post>
+  >({
+    mutationKey: ['migrate', '/migrate/migrations/applied', 'POST'] as const,
+    async mutationFn(args: InferRequestType<typeof client.migrate.migrations.applied.$post>) {
+      return parseResponse(client.migrate.migrations.applied.$post(args, options))
+    },
+  })
+}
+
+export function usePostMigrateMigrationsApplied<TError = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof parseResponse<Awaited<ReturnType<typeof client.migrate.migrations.applied.$post>>>
+      >
+    >,
+    TError,
+    InferRequestType<typeof client.migrate.migrations.applied.$post>
+  >
+  options?: ClientRequestOptions
+}) {
+  const { mutation: mutationOptions, options: clientOptions } = options ?? {}
+  return useMutation({
+    ...mutationOptions,
+    ...getPostMigrateMigrationsAppliedMutationOptions<TError>(clientOptions),
+  })
+}
+
+export function getPostMigrateMigrationsRolledBackMutationOptions<TError = unknown>(
+  options?: ClientRequestOptions,
+) {
+  return mutationOptions<
+    Awaited<
+      ReturnType<
+        typeof parseResponse<
+          Awaited<ReturnType<(typeof client.migrate.migrations)['rolled-back']['$post']>>
+        >
+      >
+    >,
+    TError,
+    InferRequestType<(typeof client.migrate.migrations)['rolled-back']['$post']>
+  >({
+    mutationKey: ['migrate', '/migrate/migrations/rolled-back', 'POST'] as const,
+    async mutationFn(
+      args: InferRequestType<(typeof client.migrate.migrations)['rolled-back']['$post']>,
+    ) {
+      return parseResponse(client.migrate.migrations['rolled-back'].$post(args, options))
+    },
+  })
+}
+
+export function usePostMigrateMigrationsRolledBack<TError = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof parseResponse<
+          Awaited<ReturnType<(typeof client.migrate.migrations)['rolled-back']['$post']>>
+        >
+      >
+    >,
+    TError,
+    InferRequestType<(typeof client.migrate.migrations)['rolled-back']['$post']>
+  >
+  options?: ClientRequestOptions
+}) {
+  const { mutation: mutationOptions, options: clientOptions } = options ?? {}
+  return useMutation({
+    ...mutationOptions,
+    ...getPostMigrateMigrationsRolledBackMutationOptions<TError>(clientOptions),
+  })
+}
+
+export function getMigrateDecisionsQueryKey() {
+  return ['migrate', '/migrate/decisions'] as const
+}
+
+export function getMigrateDecisionsQueryOptions(options?: ClientRequestOptions) {
+  return queryOptions({
+    queryKey: getMigrateDecisionsQueryKey(),
+    queryFn({ signal }) {
+      return parseResponse(
+        client.migrate.decisions.$get(undefined, {
+          ...options,
+          init: { ...options?.init, signal },
+        }),
+      )
+    },
+  })
+}
+
+export function useMigrateDecisions<
+  TData = Awaited<
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.decisions.$get>>>>
+  >,
+  TError = unknown,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.decisions.$get>>>>
+    >,
+    TError,
+    TData
+  >
+  options?: ClientRequestOptions
+}) {
+  const { query: queryOptions, options: clientOptions } = options ?? {}
+  return useQuery({
+    ...queryOptions,
+    queryKey: getMigrateDecisionsQueryKey(),
+    queryFn({ signal }: QueryFunctionContext) {
+      return parseResponse(
+        client.migrate.decisions.$get(undefined, {
+          ...clientOptions,
+          init: { ...clientOptions?.init, signal },
+        }),
+      )
+    },
+  })
+}
+
+export function useSuspenseMigrateDecisions<
+  TData = Awaited<
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.decisions.$get>>>>
+  >,
+  TError = unknown,
+>(options?: {
+  query?: UseSuspenseQueryOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.decisions.$get>>>>
+    >,
+    TError,
+    TData
+  >
+  options?: ClientRequestOptions
+}) {
+  const { query: queryOptions, options: clientOptions } = options ?? {}
+  return useSuspenseQuery({
+    ...queryOptions,
+    queryKey: getMigrateDecisionsQueryKey(),
+    queryFn({ signal }: QueryFunctionContext) {
+      return parseResponse(
+        client.migrate.decisions.$get(undefined, {
+          ...clientOptions,
+          init: { ...clientOptions?.init, signal },
+        }),
+      )
+    },
+  })
+}
+
+export function getPutMigrateDecisionsMutationOptions<TError = unknown>(
+  options?: ClientRequestOptions,
+) {
+  return mutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.decisions.$put>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.migrate.decisions.$put>
+  >({
+    mutationKey: ['migrate', '/migrate/decisions', 'PUT'] as const,
+    async mutationFn(args: InferRequestType<typeof client.migrate.decisions.$put>) {
+      return parseResponse(client.migrate.decisions.$put(args, options))
+    },
+  })
+}
+
+export function usePutMigrateDecisions<TError = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.decisions.$put>>>>
+    >,
+    TError,
+    InferRequestType<typeof client.migrate.decisions.$put>
+  >
+  options?: ClientRequestOptions
+}) {
+  const { mutation: mutationOptions, options: clientOptions } = options ?? {}
+  return useMutation({
+    ...mutationOptions,
+    ...getPutMigrateDecisionsMutationOptions<TError>(clientOptions),
+  })
+}
+
+export function getPostMigrateDeployMutationOptions<TError = unknown>(
+  options?: ClientRequestOptions,
+) {
+  return mutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.deploy.$post>>>>
+    >,
+    TError,
+    void
+  >({
+    mutationKey: ['migrate', '/migrate/deploy', 'POST'] as const,
+    async mutationFn() {
+      return parseResponse(client.migrate.deploy.$post(undefined, options))
+    },
+  })
+}
+
+export function usePostMigrateDeploy<TError = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.deploy.$post>>>>
+    >,
+    TError,
+    void
+  >
+  options?: ClientRequestOptions
+}) {
+  const { mutation: mutationOptions, options: clientOptions } = options ?? {}
+  return useMutation({
+    ...mutationOptions,
+    ...getPostMigrateDeployMutationOptions<TError>(clientOptions),
   })
 }
 

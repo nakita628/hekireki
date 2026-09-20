@@ -2,7 +2,7 @@
 // Nothing is interpreted here: LSP numbers become Monaco enum names, LSP severities Monaco's.
 // The wire shapes: the brands the server puts on checked lines and columns do not apply to
 // what the editor sends and receives.
-export type PlainPosition = { readonly line: number; readonly character: number }
+type PlainPosition = { readonly line: number; readonly character: number }
 
 export type PlainRange = { readonly start: PlainPosition; readonly end: PlainPosition }
 
@@ -24,7 +24,7 @@ export type Completion = {
 }
 
 /** The LSP CompletionItemKind values by number, named as Monaco names them. */
-export const LSP_COMPLETION_KINDS = [
+const LSP_COMPLETION_KINDS = [
   'Text',
   'Text',
   'Method',
@@ -60,7 +60,7 @@ export function completionKindName(kind: number | null): CompletionKindName {
 }
 
 /** The LSP SymbolKind values by number, named as Monaco names them. */
-export const LSP_SYMBOL_KINDS = [
+const LSP_SYMBOL_KINDS = [
   'File',
   'File',
   'Module',
@@ -106,6 +106,24 @@ type EditorCompletion = {
   readonly sortText: string
 }
 
+/**
+ * The text of a completion, and whether the editor has to read it as a snippet. The Prisma
+ * language server marks every attribute as one, `@ignore` and `@db$0` included, though a tab stop
+ * at the very end only says where the cursor lands — which is where it would land anyway.
+ *
+ * It matters because the editor takes a suggestion on Enter whenever it is a snippet, without
+ * asking whether it would change the line: with `@unique` already written out, Enter would take
+ * `@unique` again and swallow the newline it was pressed for. A text whose only tab stop is the
+ * last thing in it is handed over as plain text, so Enter can tell the two apart.
+ */
+function textOf(item: Completion) {
+  if (item.insertTextFormat !== 'snippet') return { insertText: item.insertText, isSnippet: false }
+  const trimmed = item.insertText.replace(/\$0$/u, '')
+  return trimmed.includes('$')
+    ? { insertText: item.insertText, isSnippet: true }
+    : { insertText: trimmed, isSnippet: false }
+}
+
 /** The server's completions in the server's order: an item without a sort key keeps its place. */
 export function toCompletions(items: readonly Completion[]): readonly EditorCompletion[] {
   return items.map((item, index) => ({
@@ -113,14 +131,13 @@ export function toCompletions(items: readonly Completion[]): readonly EditorComp
     kind: completionKindName(item.kind),
     detail: item.detail,
     documentation: item.documentation,
-    insertText: item.insertText,
-    isSnippet: item.insertTextFormat === 'snippet',
+    ...textOf(item),
     sortText: item.sortText ?? String(index).padStart(4, '0'),
   }))
 }
 
 /** The LSP severities as Monaco's MarkerSeverity names them. */
-export const MARKER_SEVERITIES = {
+const MARKER_SEVERITIES = {
   error: 'Error',
   warning: 'Warning',
   information: 'Info',

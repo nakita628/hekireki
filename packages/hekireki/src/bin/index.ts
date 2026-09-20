@@ -17,6 +17,7 @@ import { gorm } from '../core/gorm.js'
 import { kysely } from '../core/kysely.js'
 import { pydantic } from '../core/pydantic.js'
 import { seaOrm } from '../core/sea-orm.js'
+import { seed } from '../core/seed.js'
 import { sqlalchemy } from '../core/sqlalchemy.js'
 import { typebox } from '../core/typebox.js'
 import { valibot } from '../core/valibot.js'
@@ -41,6 +42,8 @@ const GENERATORS = {
   kysely: { prettyName: 'Hekireki-Kysely', handler: kysely },
   pydantic: { prettyName: 'Hekireki-Pydantic', handler: pydantic },
   'sea-orm': { prettyName: 'Hekireki-SeaORM', handler: seaOrm },
+  // Not a code target: the schema module hekireki.config.ts types its seed rules against.
+  seed: { prettyName: 'Hekireki-Seed', handler: seed },
   sqlalchemy: { prettyName: 'Hekireki-SQLAlchemy', handler: sqlalchemy },
   typebox: { prettyName: 'Hekireki-TypeBox', handler: typebox },
   valibot: { prettyName: 'Hekireki-Valibot', handler: valibot },

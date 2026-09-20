@@ -1,17 +1,16 @@
-import * as v from 'valibot'
+import * as z from 'zod'
 
-const ThemeSchema = v.pipe(
-  v.picklist(['light', 'dark']),
-  v.description('The colour theme stored in localStorage'),
-)
+const ThemeSchema = z
+  .enum(['light', 'dark'])
+  .meta({ description: 'The colour theme stored in localStorage', example: 'dark' })
 
-export type Theme = v.InferOutput<typeof ThemeSchema>
+export type Theme = z.infer<typeof ThemeSchema>
 
 export const THEME_KEY = 'hekireki-studio:theme'
 
 export function resolveTheme(stored: string | null, prefersDark: boolean) {
-  const parsed = v.safeParse(ThemeSchema, stored)
-  if (parsed.success) return parsed.output
+  const result = ThemeSchema.safeParse(stored)
+  if (result.success) return result.data
   return prefersDark ? 'dark' : 'light'
 }
 

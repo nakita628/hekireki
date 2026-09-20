@@ -3,8 +3,10 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import {
   LuBook,
+  LuBraces,
   LuFileText,
   LuGitCompare,
+  // LuGitPullRequestArrow, // Migrate ページと一緒に寝かせている
   LuList,
   LuMoon,
   LuPanelLeft,
@@ -147,12 +149,27 @@ export function Sidebar({
           </span>
           <span>Prisma schema</span>
         </Link>
-        <Link to="/sql" activeProps={NAV_ACTIVE} inactiveProps={NAV_INACTIVE}>
+        <Link to="/sql" search={{}} activeProps={NAV_ACTIVE} inactiveProps={NAV_INACTIVE}>
           <span className="inline-flex opacity-85">
             <LuTerminal />
           </span>
           <span>SQL</span>
         </Link>
+        <Link to="/client" activeProps={NAV_ACTIVE} inactiveProps={NAV_INACTIVE}>
+          <span className="inline-flex opacity-85">
+            <LuBraces />
+          </span>
+          <span>Prisma Client</span>
+        </Link>
+        {/* Migrate は Studio に出さない。機能は残してあるので、戻すときはここと
+            routes/migrate.tsx のコメントを外す。
+        <Link to="/migrate" activeProps={NAV_ACTIVE} inactiveProps={NAV_INACTIVE}>
+          <span className="inline-flex opacity-85">
+            <LuGitPullRequestArrow />
+          </span>
+          <span>Migrate</span>
+        </Link>
+        */}
         <Link to="/docs" activeProps={NAV_ACTIVE} inactiveProps={NAV_INACTIVE}>
           <span className="inline-flex opacity-85">
             <LuBook />

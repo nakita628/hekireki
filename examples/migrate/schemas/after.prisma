@@ -1,0 +1,50 @@
+// After: the schema the database is migrated to.
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+enum PostStatus {
+  DRAFT
+  PUBLISHED
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  /// Duplicates are in the way of the unique key.
+  email     String   @unique
+  /// `fullName`, renamed: its values have to come along.
+  name      String
+  /// A string that becomes an enum: `admin` and `member` are not members.
+  role      Role     @default(MEMBER)
+  /// Text that becomes a number.
+  age       Int?
+  /// A new required, unique column: every row already there needs a value of its own.
+  handle    String   @unique
+  createdAt DateTime @default(now())
+  posts     Post[]
+  profile   Profile?
+}
+
+/// New: `User.nickname` moves here, one profile for each user with one.
+model Profile {
+  id       Int     @id @default(autoincrement())
+  userId   Int     @unique
+  user     User    @relation(fields: [userId], references: [id])
+  nickname String?
+}
+
+model Post {
+  id       Int        @id @default(autoincrement())
+  title    String
+  /// `archived` is not a member.
+  status   PostStatus @default(DRAFT)
+  /// Required now: posts with no author are in the way.
+  authorId Int
+  author   User       @relation(fields: [authorId], references: [id])
+}

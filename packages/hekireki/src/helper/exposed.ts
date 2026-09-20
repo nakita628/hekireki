@@ -352,7 +352,7 @@ export function relationMaps(source: string) {
  * @param source - The Prisma schema as written (all of its files, merged).
  * @returns The name of each view.
  */
-export function viewNames(source: string) {
+function viewNames(source: string) {
   return new Set(
     prismaBlocks(source)
       .filter((block) => block.keyword === 'view')
@@ -366,7 +366,7 @@ export function viewNames(source: string) {
  * @param source - The Prisma schema as written (all of its files, merged).
  * @returns The relation mode, `foreignKeys` unless the datasource names another.
  */
-export function relationMode(source: string) {
+function relationMode(source: string) {
   const setting = prismaBlocks(source)
     .filter((block) => block.keyword === 'datasource')
     .flatMap((block) => block.lines)
@@ -416,7 +416,7 @@ function attributeArguments(tokens: readonly string[]) {
 }
 
 /** What a partial index's `where` says: raw SQL, or equalities of fields to values. */
-export type IndexCondition =
+type IndexCondition =
   | { readonly kind: 'raw'; readonly sql: string }
   | {
       readonly kind: 'fields'
@@ -450,7 +450,7 @@ function indexCondition(tokens: readonly string[]): IndexCondition | null {
  * @param source - The Prisma schema as written (all of its files, merged).
  * @returns Each index that has a `where`.
  */
-export function indexConditions(source: string) {
+function indexConditions(source: string) {
   return prismaBlocks(source)
     .filter((block) => block.keyword === 'model')
     .flatMap((block) =>
@@ -493,7 +493,7 @@ export function indexConditions(source: string) {
  * @param source - The Prisma schema as written (all of its files, merged).
  * @returns The literal of each field whose default is a number.
  */
-export function numericDefaults(source: string) {
+function numericDefaults(source: string) {
   return new Map(
     prismaBlocks(source)
       .filter((block) => block.keyword === 'model')
@@ -823,20 +823,12 @@ type Names = {
   readonly entries: ReadonlyMap<string, ReadonlyMap<string, string>>
 }
 
-function lowerCase(name: string) {
-  return name.toLowerCase()
-}
-
-function asIs(name: string) {
-  return name
-}
-
 function scalarFields(model: DMMF.Model) {
   return model.fields.filter((f) => f.kind === 'scalar' || f.kind === 'enum')
 }
 
 /** Everything the files are written from: the schema, what it implies, and the Kotlin names. */
-export type ExposedPlan = {
+type ExposedPlan = {
   readonly names: Names
   readonly dao: boolean
   readonly models: readonly DMMF.Model[]
@@ -991,7 +983,7 @@ function planNames(schema: SchemaInfo, packageName: string) {
     ],
     // ColumnTypes.kt's top-level functions compile into the class ColumnTypesKt.
     [SCHEMA_OBJECT, SUPPORT_FILE, `${SUPPORT_FILE}Kt`, ...SUPPORT_TYPES],
-    lowerCase,
+    (name) => name.toLowerCase(),
   )
   const typeOf = (key: string) => types.get(key) ?? key
   return {
@@ -1023,7 +1015,7 @@ function planNames(schema: SchemaInfo, packageName: string) {
             .filter((f) => f.name !== keyField)
             .map((f) => ({ key: f.name, candidate: propertyName(f.name) })),
           reserved,
-          asIs,
+          (name) => name,
         )
         return [
           model.name,
@@ -1049,7 +1041,7 @@ function planNames(schema: SchemaInfo, packageName: string) {
                 )
                 .map((f) => ({ key: f.name, candidate: propertyName(f.name) })),
               ENTITY_MEMBERS,
-              asIs,
+              (name) => name,
             ),
           ]
         }),
@@ -1060,7 +1052,7 @@ function planNames(schema: SchemaInfo, packageName: string) {
         allocate(
           e.values.map((v) => ({ key: v.name, candidate: enumEntryName(v.name) })),
           [],
-          asIs,
+          (name) => name,
         ),
       ]),
     ),
@@ -1767,10 +1759,6 @@ function foreignKeyArgs(fk: ForeignKey, nameArg: 'fkName' | 'name') {
   ]
 }
 
-function fieldMapping(plan: ExposedPlan, field: DMMF.Field) {
-  return postgresMapping(plan, field)
-}
-
 // The indexes of a model that Exposed can declare: DMMF leaves out an `Unsupported` field, and so
 // the table has no column for an index over one.
 function modelIndexesOf(plan: ExposedPlan, model: DMMF.Model) {
@@ -1812,7 +1800,7 @@ function isReferenceColumn(schema: Pick<SchemaInfo, 'keyOf'>, fk: ForeignKey | u
 }
 
 function columnCalls(plan: ExposedPlan, model: DMMF.Model, field: DMMF.Field) {
-  const map = fieldMapping(plan, field)
+  const map = postgresMapping(plan, field)
   const key = plan.keyOf(model)
   const isSingleKey = key.kind === 'single' && key.field.name === field.name
   const fk = inlineForeignKey(plan, model, field)
@@ -2196,7 +2184,7 @@ function renderFile(packageName: string, types: ReadonlySet<string>, blocks: rea
       candidate: aliasCandidate(fullName, packageName),
     })),
     taken,
-    asIs,
+    (name) => name,
   )
   const resolve = (kind: string, fullName: string, scope: Scope) =>
     isSimple(kind, fullName, scope) ? simpleName(fullName) : (aliases.get(fullName) ?? fullName)
@@ -2421,7 +2409,7 @@ function tableBlocks(plan: ExposedPlan, model: DMMF.Model) {
   const key = plan.keyOf(model)
   const base =
     key.kind === 'single'
-      ? `${typeRef(KT.IdTable)}<${fieldMapping(plan, key.field).kotlin}>`
+      ? `${typeRef(KT.IdTable)}<${postgresMapping(plan, key.field).kotlin}>`
       : key.kind === 'composite'
         ? typeRef(KT.CompositeIdTable)
         : typeRef(KT.Table)
@@ -2561,7 +2549,7 @@ function flushLines(plan: ExposedPlan, model: DMMF.Model) {
       '        if (writeValues.isNotEmpty()) {',
     ]),
     ...stamps.map((field): Lines => {
-      const map = fieldMapping(plan, field)
+      const map = postgresMapping(plan, field)
       const now = map.temporal === null ? '' : nowExpr(map.temporal)
       const member = kotlinName(entityProperty(plan, model, field.name))
       // flush's parameter is `batch`.
@@ -2603,7 +2591,7 @@ function entityBlocks(plan: ExposedPlan, model: DMMF.Model) {
   const key = plan.keyOf(model)
   const isComposite = key.kind === 'composite'
   const keyType =
-    key.kind === 'single' ? fieldMapping(plan, key.field).kotlin : typeRef(KT.CompositeID)
+    key.kind === 'single' ? postgresMapping(plan, key.field).kotlin : typeRef(KT.CompositeID)
   const heading = textLines([
     `class ${name}(`,
     `    id: ${typeRef(KT.EntityID)}<${keyType}>,`,

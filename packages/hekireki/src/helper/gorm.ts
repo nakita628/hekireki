@@ -366,7 +366,7 @@ export function goFieldName(name: string) {
   return GENERATED_METHOD_NAMES.has(pascal) ? `${pascal}_` : pascal
 }
 
-export function goModelName(name: string) {
+function goModelName(name: string) {
   return splitGoWords(name).join('')
 }
 

@@ -1,21 +1,25 @@
 import { symbolKindName } from './lsp.js'
 
-/** A block of a schema file, as the language server's document outline lists it. */
-export type PlainSymbol = {
-  readonly name: string
-  readonly kind: number
-  readonly range: {
-    readonly start: { readonly line: number; readonly character: number }
-    readonly end: { readonly line: number; readonly character: number }
-  }
-}
-
 // The blocks that hold data, as the language server's outline kinds them: models and views are
 // classes, enums enums, composite types interfaces; datasources and generators are neither.
 const DATA_KINDS = new Set(['Class', 'Enum', 'Interface'])
 
-/** The model, enum or type whose block contains the 1-based line, or null between blocks. */
-export function blockAtLine(symbols: readonly PlainSymbol[], line: number) {
+/**
+ * The model, enum or type whose block contains the 1-based line, or null between blocks.
+ *
+ * @param symbols - the blocks of the file, as the language server's document outline lists them
+ */
+export function blockAtLine(
+  symbols: readonly {
+    readonly name: string
+    readonly kind: number
+    readonly range: {
+      readonly start: { readonly line: number }
+      readonly end: { readonly line: number }
+    }
+  }[],
+  line: number,
+) {
   return (
     symbols
       .filter((symbol) => DATA_KINDS.has(symbolKindName(symbol.kind)))

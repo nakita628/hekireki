@@ -209,10 +209,6 @@ function parseAlias(p: Parser) {
 
 // --- expressions ------------------------------------------------------------------------------
 
-function parseExpr(p: Parser): Expr {
-  return parseOr(p)
-}
-
 function parseOr(p: Parser): Expr {
   const start = peek(p).start
   const first = parseAnd(p)
@@ -459,8 +455,8 @@ function parsePostfix(p: Parser, start: number, expr: Expr): Expr {
   }
   if (atPunct(p, '[')) {
     advance(p)
-    const index = parseExpr(p)
-    if (acceptPunct(p, ':')) parseExpr(p)
+    const index = parseOr(p)
+    if (acceptPunct(p, ':')) parseOr(p)
     expectPunct(p, ']')
     return parsePostfix(p, start, {
       type: 'binary',
@@ -497,8 +493,8 @@ function parseTypeName(p: Parser) {
 }
 
 function parseExprList(p: Parser): Expr[] {
-  const items = [parseExpr(p)]
-  while (acceptPunct(p, ',')) items.push(parseExpr(p))
+  const items = [parseOr(p)]
+  while (acceptPunct(p, ',')) items.push(parseOr(p))
   return items
 }
 
@@ -658,22 +654,22 @@ function parseCall(p: Parser, start: number, name: string): Expr {
       advance(p)
       args.push({ type: 'star', table: null, range: rangeFrom(p, start) })
     } else {
-      args.push(parseExpr(p))
+      args.push(parseOr(p))
       // `extract(year FROM d)`, `substring(s FROM 1 FOR 2)`, `trim(both 'x' FROM s)`
       while (acceptPunct(p, ',') || atWord(p, 'FROM') || atWord(p, 'FOR')) {
         if (atWord(p, 'FROM') || atWord(p, 'FOR')) advance(p)
-        args.push(parseExpr(p))
+        args.push(parseOr(p))
       }
     }
     // `ORDER BY` inside an aggregate (`string_agg(x, ',' ORDER BY x)`) narrows nothing here.
     if (acceptWords(p, 'ORDER', 'BY')) parseOrderItems(p)
-    if (acceptWord(p, 'SEPARATOR')) parseExpr(p)
+    if (acceptWord(p, 'SEPARATOR')) parseOr(p)
   }
   expectPunct(p, ')')
   if (acceptWord(p, 'FILTER')) {
     expectPunct(p, '(')
     expectWord(p, 'WHERE')
-    parseExpr(p)
+    parseOr(p)
     expectPunct(p, ')')
   }
   if (acceptWord(p, 'WITHIN')) {
@@ -722,16 +718,16 @@ function parseWindow(p: Parser): WindowSpec {
 function parseCase(p: Parser): Expr {
   const start = peek(p).start
   expectWord(p, 'CASE')
-  const operand = atWord(p, 'WHEN') ? null : parseExpr(p)
+  const operand = atWord(p, 'WHEN') ? null : parseOr(p)
   const whens: CaseBranch[] = []
   while (acceptWord(p, 'WHEN')) {
-    const when = parseExpr(p)
+    const when = parseOr(p)
     expectWord(p, 'THEN')
-    const result = parseExpr(p)
+    const result = parseOr(p)
     whens.push({ when, result })
   }
   if (whens.length === 0) fail(p, 'Expected WHEN')
-  const otherwise = acceptWord(p, 'ELSE') ? parseExpr(p) : null
+  const otherwise = acceptWord(p, 'ELSE') ? parseOr(p) : null
   expectWord(p, 'END')
   return { type: 'case', operand, whens, otherwise, range: rangeFrom(p, start) }
 }
@@ -740,7 +736,7 @@ function parseCast(p: Parser): Expr {
   const start = peek(p).start
   expectWord(p, 'CAST')
   expectPunct(p, '(')
-  const expr = parseExpr(p)
+  const expr = parseOr(p)
   expectWord(p, 'AS')
   const to = parseTypeName(p)
   expectPunct(p, ')')
@@ -751,7 +747,7 @@ function parseOrderItems(p: Parser): OrderItem[] {
   const items: OrderItem[] = []
   do {
     const start = peek(p).start
-    const expr = parseExpr(p)
+    const expr = parseOr(p)
     const direction = acceptWord(p, 'ASC') ? 'ASC' : acceptWord(p, 'DESC') ? 'DESC' : null
     if (acceptWord(p, 'NULLS') && !acceptWord(p, 'FIRST') && !acceptWord(p, 'LAST')) {
       fail(p, 'Expected FIRST or LAST')
@@ -810,10 +806,10 @@ function parseNameList(p: Parser) {
 
 function parseLimit(p: Parser): { readonly limit: Expr | null; readonly offset: Expr | null } {
   if (acceptWord(p, 'LIMIT')) {
-    const first = acceptWord(p, 'ALL') ? null : parseExpr(p)
+    const first = acceptWord(p, 'ALL') ? null : parseOr(p)
     if (acceptPunct(p, ',')) {
       // MySQL's `LIMIT offset, count`.
-      const count = parseExpr(p)
+      const count = parseOr(p)
       return { limit: count, offset: first }
     }
     const offset = acceptWord(p, 'OFFSET') ? parseOffsetValue(p) : null
@@ -823,17 +819,17 @@ function parseLimit(p: Parser): { readonly limit: Expr | null; readonly offset: 
     const offset = parseOffsetValue(p)
     if (acceptWord(p, 'FETCH')) {
       if (!acceptWord(p, 'FIRST') && !acceptWord(p, 'NEXT')) fail(p, 'Expected FIRST or NEXT')
-      const limit = atWord(p, 'ROW') || atWord(p, 'ROWS') ? null : parseExpr(p)
+      const limit = atWord(p, 'ROW') || atWord(p, 'ROWS') ? null : parseOr(p)
       if (!acceptWord(p, 'ROWS') && !acceptWord(p, 'ROW')) fail(p, 'Expected ROWS')
       expectWord(p, 'ONLY')
       return { limit, offset }
     }
-    const limit = acceptWord(p, 'LIMIT') ? parseExpr(p) : null
+    const limit = acceptWord(p, 'LIMIT') ? parseOr(p) : null
     return { limit, offset }
   }
   if (acceptWord(p, 'FETCH')) {
     if (!acceptWord(p, 'FIRST') && !acceptWord(p, 'NEXT')) fail(p, 'Expected FIRST or NEXT')
-    const limit = atWord(p, 'ROW') || atWord(p, 'ROWS') ? null : parseExpr(p)
+    const limit = atWord(p, 'ROW') || atWord(p, 'ROWS') ? null : parseOr(p)
     if (!acceptWord(p, 'ROWS') && !acceptWord(p, 'ROW')) fail(p, 'Expected ROWS')
     expectWord(p, 'ONLY')
     return { limit, offset: null }
@@ -842,7 +838,7 @@ function parseLimit(p: Parser): { readonly limit: Expr | null; readonly offset: 
 }
 
 function parseOffsetValue(p: Parser) {
-  const value = parseExpr(p)
+  const value = parseOr(p)
   if (!acceptWord(p, 'ROWS')) acceptWord(p, 'ROW')
   return value
 }
@@ -893,9 +889,9 @@ function parseSelectCore(p: Parser): SelectCore {
   }
   const columns = parseSelectItems(p)
   const from = acceptWord(p, 'FROM') ? parseFromList(p) : []
-  const where = acceptWord(p, 'WHERE') ? parseExpr(p) : null
+  const where = acceptWord(p, 'WHERE') ? parseOr(p) : null
   const groupBy = acceptWords(p, 'GROUP', 'BY') ? parseGroupBy(p) : []
-  const having = acceptWord(p, 'HAVING') ? parseExpr(p) : null
+  const having = acceptWord(p, 'HAVING') ? parseOr(p) : null
   if (acceptWord(p, 'WINDOW')) {
     do {
       expectName(p, 'a window name')
@@ -933,7 +929,7 @@ function parseGroupBy(p: Parser): Expr[] {
         })
       }
     } else {
-      items.push(parseExpr(p))
+      items.push(parseOr(p))
     }
   } while (acceptPunct(p, ','))
   if (acceptWord(p, 'WITH')) expectWord(p, 'ROLLUP')
@@ -948,7 +944,7 @@ function parseSelectItems(p: Parser): SelectItem[] {
   const items: SelectItem[] = []
   do {
     const start = peek(p).start
-    const expr = parseExpr(p)
+    const expr = parseOr(p)
     const alias = expr.type === 'star' ? null : parseAlias(p)
     items.push({ expr, alias, range: rangeFrom(p, start) })
   } while (acceptPunct(p, ','))
@@ -973,7 +969,7 @@ function parseJoinTail(p: Parser, start: number, left: FromItem): FromItem {
   const natural = acceptWord(p, 'NATURAL')
   const joinType = parseJoinType(p)
   const right = parseFromItem(p)
-  const on = acceptWord(p, 'ON') ? parseExpr(p) : null
+  const on = acceptWord(p, 'ON') ? parseOr(p) : null
   const using = on === null && acceptWord(p, 'USING') ? parseNameList(p) : null
   return parseJoinTail(p, start, {
     type: 'join',
@@ -1153,13 +1149,13 @@ function parseUpdate(p: Parser, start: number, ctes: readonly Cte[]): Statement 
     advance(p)
     const value = acceptWord(p, 'DEFAULT')
       ? { type: 'raw' as const, text: 'DEFAULT', range: rangeFrom(p, itemStart) }
-      : parseExpr(p)
+      : parseOr(p)
     set.push({ column, value, range: rangeFrom(p, itemStart) })
   } while (acceptPunct(p, ','))
   const from = acceptWord(p, 'FROM') ? parseFromList(p) : []
-  const where = acceptWord(p, 'WHERE') ? parseExpr(p) : null
+  const where = acceptWord(p, 'WHERE') ? parseOr(p) : null
   if (acceptWords(p, 'ORDER', 'BY')) parseOrderItems(p)
-  if (acceptWord(p, 'LIMIT')) parseExpr(p)
+  if (acceptWord(p, 'LIMIT')) parseOr(p)
   const returning = parseReturning(p)
   return {
     type: 'update',
@@ -1182,9 +1178,9 @@ function parseDelete(p: Parser, start: number, ctes: readonly Cte[]): Statement 
   const alias =
     atWord(p, 'USING') || atWord(p, 'WHERE') || atWord(p, 'RETURNING') ? null : parseAlias(p)
   const using = acceptWord(p, 'USING') ? parseFromList(p) : []
-  const where = acceptWord(p, 'WHERE') ? parseExpr(p) : null
+  const where = acceptWord(p, 'WHERE') ? parseOr(p) : null
   if (acceptWords(p, 'ORDER', 'BY')) parseOrderItems(p)
-  if (acceptWord(p, 'LIMIT')) parseExpr(p)
+  if (acceptWord(p, 'LIMIT')) parseOr(p)
   const returning = parseReturning(p)
   return { type: 'delete', ctes, table, alias, using, where, returning, range: rangeFrom(p, start) }
 }
@@ -1275,10 +1271,4 @@ export function parseStatements(text: string): readonly Statement[] {
     acceptPunct(p, ';')
   }
   return statements
-}
-
-/** The first statement of the text as a SELECT query, for callers that only take a query. */
-export function parseQueryText(text: string) {
-  const [first] = parseStatements(text)
-  return first?.type === 'select' ? first.query : null
 }

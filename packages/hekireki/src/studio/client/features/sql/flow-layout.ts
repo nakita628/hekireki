@@ -1,16 +1,12 @@
 import { graphlib, layout } from '@dagrejs/dagre'
-import * as v from 'valibot'
+import * as z from 'zod'
 
-import type { LayoutPositions } from '../../lib/index.js'
-import type { GraphEdge, GraphNode } from './analysis.js'
-
-const LayoutNodeSchema = v.pipe(
-  v.object({
-    x: v.pipe(v.number(), v.description('Centre x in canvas pixels')),
-    y: v.pipe(v.number(), v.description('Centre y in canvas pixels')),
-  }),
-  v.description('A node as dagre placed it'),
-)
+const LayoutNodeSchema = z
+  .object({
+    x: z.number().meta({ description: 'Centre x in canvas pixels', example: 240 }),
+    y: z.number().meta({ description: 'Centre y in canvas pixels', example: 96 }),
+  })
+  .meta({ description: 'A node as dagre placed it' })
 
 export const NODE_WIDTH = 240
 export const NODE_HEADER_HEIGHT = 34
@@ -19,7 +15,11 @@ export const NODE_PADDING = 10
 export const MAX_LINES = 8
 
 /** The lines a node shows under its caption: its columns for a relation, its details otherwise. */
-export function nodeLines(node: GraphNode): readonly string[] {
+export function nodeLines(node: {
+  readonly kind: string
+  readonly columns: readonly { readonly name: string }[]
+  readonly details: readonly string[]
+}) {
   const lines =
     node.kind === 'table' || node.kind === 'cte' || node.kind === 'subquery'
       ? node.columns.map((column) => column.name)
@@ -29,16 +29,16 @@ export function nodeLines(node: GraphNode): readonly string[] {
     : lines
 }
 
-export function nodeHeight(node: GraphNode) {
+export function nodeHeight(node: Parameters<typeof nodeLines>[0]) {
   const lines = nodeLines(node).length
   return NODE_HEADER_HEIGHT + (lines === 0 ? 0 : lines * NODE_LINE_HEIGHT + NODE_PADDING)
 }
 
 /** Left-to-right layers: sources on the left, the result on the right. */
 export function autoLayout(
-  nodes: readonly GraphNode[],
-  edges: readonly GraphEdge[],
-): LayoutPositions {
+  nodes: readonly (Parameters<typeof nodeLines>[0] & { readonly id: string })[],
+  edges: readonly { readonly source: string; readonly target: string }[],
+) {
   const graph = new graphlib.Graph()
   graph.setGraph({ rankdir: 'LR', nodesep: 28, ranksep: 70, marginx: 24, marginy: 24 })
   graph.setDefaultEdgeLabel(() => ({}))
@@ -51,11 +51,11 @@ export function autoLayout(
   return Object.fromEntries(
     nodes.map((node) => {
       const raw: unknown = graph.node(node.id)
-      const placed = v.safeParse(LayoutNodeSchema, raw)
+      const result = LayoutNodeSchema.safeParse(raw)
       return [
         node.id,
-        placed.success
-          ? { x: placed.output.x - NODE_WIDTH / 2, y: placed.output.y - nodeHeight(node) / 2 }
+        result.success
+          ? { x: result.data.x - NODE_WIDTH / 2, y: result.data.y - nodeHeight(node) / 2 }
           : { x: 0, y: 0 },
       ]
     }),

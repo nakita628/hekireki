@@ -1,8 +1,7 @@
 import type { Edge, Node } from '@xyflow/react'
 
-import type { DiagramIndex } from '../../../../diagram/layout.js'
+import type { DiagramIndex, LayoutPositions } from '../../../../diagram/layout.js'
 import { edgeCaption } from '../../../../diagram/svg.js'
-import type { LayoutPositions } from '../../lib/index.js'
 import { diagramFields } from './layout.js'
 
 type Field = {
@@ -63,7 +62,7 @@ type Schema = {
 }
 
 /** What a card is told about the statement being drawn: whether it takes part, and which fields it reads. */
-export type ModelHighlight = {
+type ModelHighlight = {
   readonly dim: boolean
   readonly used: ReadonlySet<string>
 }
@@ -143,7 +142,7 @@ export function buildNodes(
 }
 
 /** The id of the IE (crow's foot) marker an end is drawn with; React Flow turns it into `url(#id)`. */
-export function cardinalityMarker(cardinality: Cardinality) {
+function cardinalityMarker(cardinality: Cardinality) {
   return `er-${cardinality}`
 }
 

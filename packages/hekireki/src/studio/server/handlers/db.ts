@@ -87,15 +87,14 @@ export const getDbCountsRouteHandler: RouteHandler<typeof getDbCountsRoute> = (c
   )
 
 export const getDbRowsModelNameRouteHandler: RouteHandler<typeof getDbRowsModelNameRoute> = (c) => {
-  const param = c.req.valid('param')
-  const query = c.req.valid('query')
+  const data = { ...c.req.valid('param'), ...c.req.valid('query') }
   return RuntimeService.studioRuntime().runPromise(
     Effect.matchEffect(
       DatabaseUseCase.readRows({
-        modelName: param.modelName,
-        skip: query.skip,
-        take: query.take,
-        search: query.search,
+        modelName: data.modelName,
+        skip: data.skip,
+        take: data.take,
+        search: data.search,
       }),
       {
         onSuccess: (value) => Effect.succeed(c.json(value, 200)),
@@ -175,11 +174,10 @@ export const getDbRowsModelNameRouteHandler: RouteHandler<typeof getDbRowsModelN
 export const postDbRowsModelNameRouteHandler: RouteHandler<typeof postDbRowsModelNameRoute> = (
   c,
 ) => {
-  const param = c.req.valid('param')
-  const data = c.req.valid('json')
+  const data = { ...c.req.valid('param'), ...c.req.valid('json') }
   return RuntimeService.studioRuntime().runPromise(
     Effect.matchEffect(
-      DatabaseUseCase.insertRow({ modelName: param.modelName, values: data.values }),
+      DatabaseUseCase.insertRow({ modelName: data.modelName, values: data.values }),
       {
         onSuccess: (value) => Effect.succeed(c.json(value, 200)),
         onFailure: (error) =>
@@ -258,12 +256,11 @@ export const postDbRowsModelNameRouteHandler: RouteHandler<typeof postDbRowsMode
 export const patchDbRowsModelNameRouteHandler: RouteHandler<typeof patchDbRowsModelNameRoute> = (
   c,
 ) => {
-  const param = c.req.valid('param')
-  const data = c.req.valid('json')
+  const data = { ...c.req.valid('param'), ...c.req.valid('json') }
   return RuntimeService.studioRuntime().runPromise(
     Effect.matchEffect(
       DatabaseUseCase.updateRow({
-        modelName: param.modelName,
+        modelName: data.modelName,
         where: data.where,
         values: data.values,
       }),
@@ -361,11 +358,10 @@ export const patchDbRowsModelNameRouteHandler: RouteHandler<typeof patchDbRowsMo
 export const deleteDbRowsModelNameRouteHandler: RouteHandler<typeof deleteDbRowsModelNameRoute> = (
   c,
 ) => {
-  const param = c.req.valid('param')
-  const data = c.req.valid('json')
+  const data = { ...c.req.valid('param'), ...c.req.valid('json') }
   return RuntimeService.studioRuntime().runPromise(
     Effect.matchEffect(
-      DatabaseUseCase.deleteRow({ modelName: param.modelName, where: data.where }),
+      DatabaseUseCase.deleteRow({ modelName: data.modelName, where: data.where }),
       {
         onSuccess: (value) => Effect.succeed(c.json(value, 200)),
         onFailure: (error) =>

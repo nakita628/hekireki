@@ -11,8 +11,6 @@ const PlanNode = z
   })
   .meta({ description: 'One step of an execution plan, flattened' })
 
-type Node = z.infer<typeof PlanNode>
-
 const SqliteRow = z
   .object({
     id: z.coerce.number().meta({ description: 'The step id.', example: 3 }),
@@ -36,11 +34,11 @@ const MakeSqlitePlanInput = z
 /** SQLite's `EXPLAIN QUERY PLAN` rows: `id`, `parent` (0 for a root) and `detail`. */
 export function makeSqlitePlan(input: z.infer<typeof MakeSqlitePlanInput>) {
   const rows = input.rows.flatMap((row) => {
-    const parsed = SqliteRow.safeParse(row)
-    return parsed.success ? [parsed.data] : []
+    const result = SqliteRow.safeParse(row)
+    return result.success ? [result.data] : []
   })
   const ids = new Set(rows.map((row) => row.id))
-  const nodes: readonly Node[] = rows.map((row) => ({
+  const nodes: readonly z.infer<typeof PlanNode>[] = rows.map((row) => ({
     id: String(row.id),
     parent: row.parent === 0 || !ids.has(row.parent) ? null : String(row.parent),
     label: row.detail,
@@ -101,15 +99,19 @@ function postgresDetail(plan: z.infer<typeof PostgresPlan>) {
   return parts.length === 0 ? null : parts.join(' · ')
 }
 
-function flattenPostgres(value: unknown, parent: string | null, id: string): readonly Node[] {
-  const parsed = PostgresPlan.safeParse(value)
-  if (!parsed.success) return []
-  const plan = parsed.data
+function flattenPostgres(
+  value: unknown,
+  parent: string | null,
+  id: string,
+): readonly z.infer<typeof PlanNode>[] {
+  const result = PostgresPlan.safeParse(value)
+  if (!result.success) return []
+  const plan = result.data
   const target = plan['Relation Name'] ?? plan['CTE Name']
   const alias = plan.Alias !== undefined && plan.Alias !== target ? ` ${plan.Alias}` : ''
   const join = plan['Join Type'] === undefined ? '' : ` (${plan['Join Type']})`
   const label = `${plan['Node Type']}${target === undefined ? '' : ` on ${target}${alias}`}${join}`
-  const node: Node = {
+  const node = {
     id,
     parent,
     label: plan['Subplan Name'] === undefined ? label : `${plan['Subplan Name']}: ${label}`,
@@ -135,9 +137,9 @@ const MakePostgresPlanInput = z
 /** PostgreSQL's `EXPLAIN (FORMAT JSON)`: a tree of `Plan` objects, flattened parents-first. */
 export function makePostgresPlan(input: z.infer<typeof MakePostgresPlanInput>) {
   const document = typeof input.document === 'string' ? parseJson(input.document) : input.document
-  const root = PostgresRoot.safeParse(document)
-  const nodes = root.success
-    ? root.data.flatMap((entry, index) => flattenPostgres(entry.Plan, null, String(index + 1)))
+  const result = PostgresRoot.safeParse(document)
+  const nodes = result.success
+    ? result.data.flatMap((entry, index) => flattenPostgres(entry.Plan, null, String(index + 1)))
     : []
   return { nodes, raw: JSON.stringify(document, null, 2) }
 }
@@ -209,10 +211,10 @@ function flattenMysql(
   parent: string | null,
   id: string,
   key: string,
-): readonly Node[] {
+): readonly z.infer<typeof PlanNode>[] {
   if (Array.isArray(value)) {
     // `nested_loop` and its kin hold one entry per input; the array is the operation, its entries feed it.
-    const node: Node = {
+    const node = {
       id,
       parent,
       label: key.replaceAll('_', ' '),
@@ -228,42 +230,42 @@ function flattenMysql(
   if (typeof value !== 'object' || value === null) return []
   const record = z.record(z.string(), z.unknown()).parse(value)
   if (key === 'table') {
-    const table = MysqlTable.safeParse(record)
-    if (!table.success) return []
+    const result = MysqlTable.safeParse(record)
+    if (!result.success) return []
     const parts = [
-      table.data.key === undefined ? null : `key ${table.data.key}`,
-      table.data.attached_condition ?? null,
+      result.data.key === undefined ? null : `key ${result.data.key}`,
+      result.data.attached_condition ?? null,
     ].filter((part) => part !== null)
-    const node: Node = {
+    const node = {
       id,
       parent,
-      label: `${table.data.access_type ?? 'scan'} ${table.data.table_name}`,
+      label: `${result.data.access_type ?? 'scan'} ${result.data.table_name}`,
       detail: parts.length === 0 ? null : parts.join(' · '),
       cost:
         Number(
-          table.data.cost_info?.prefix_cost ?? table.data.cost_info?.read_cost ?? Number.NaN,
+          result.data.cost_info?.prefix_cost ?? result.data.cost_info?.read_cost ?? Number.NaN,
         ) || null,
-      rows: table.data.rows_produced_per_join ?? table.data.rows_examined_per_scan ?? null,
+      rows: result.data.rows_produced_per_join ?? result.data.rows_examined_per_scan ?? null,
     }
     return [node, ...childrenOfMysql(record, id, id)]
   }
   if (key === 'query_block') {
-    const block = MysqlBlock.safeParse(record)
-    const node: Node = {
+    const result = MysqlBlock.safeParse(record)
+    const node = {
       id,
       parent,
       label:
-        block.success && block.data.select_id !== undefined
-          ? `query block #${block.data.select_id}`
+        result.success && result.data.select_id !== undefined
+          ? `query block #${result.data.select_id}`
           : 'query block',
-      detail: block.success ? (block.data.message ?? null) : null,
-      cost: block.success ? Number(block.data.cost_info?.query_cost ?? Number.NaN) || null : null,
+      detail: result.success ? (result.data.message ?? null) : null,
+      cost: result.success ? Number(result.data.cost_info?.query_cost ?? Number.NaN) || null : null,
       rows: null,
     }
     return [node, ...childrenOfMysql(record, id, id)]
   }
   if (MYSQL_OPERATIONS.has(key)) {
-    const node: Node = {
+    const node = {
       id,
       parent,
       label: key.replaceAll('_', ' '),
@@ -277,7 +279,11 @@ function flattenMysql(
 }
 
 /** The operations nested in an object, numbered under `base` (`1.2` → `1.2.1`, `1.2.2`, ...). */
-function childrenOfMysql(value: unknown, parent: string | null, base: string): readonly Node[] {
+function childrenOfMysql(
+  value: unknown,
+  parent: string | null,
+  base: string,
+): readonly z.infer<typeof PlanNode>[] {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return []
   const record = z.record(z.string(), z.unknown()).parse(value)
   return Object.entries(record)

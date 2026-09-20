@@ -735,6 +735,45 @@ export const castRelations = relations(cast, ({ one }) => ({ actor: one(actor, {
     )
   })
 
+  it('names a composite @@unique after its map:, and leaves an unmapped one to drizzle', () => {
+    const datamodel = makeDatamodel([
+      makeModel({
+        name: 'Member',
+        uniqueFields: [
+          ['tenantId', 'email'],
+          ['tenantId', 'loginName'],
+        ],
+        fields: [
+          makeField({ name: 'tenantId', type: 'Int' }),
+          makeField({ name: 'email', type: 'String' }),
+          makeField({ name: 'loginName', type: 'String' }),
+        ],
+      }),
+    ])
+
+    expect(
+      drizzleSchema(datamodel, 'postgresql', [
+        {
+          model: 'Member',
+          type: 'unique',
+          isDefinedOnField: false,
+          dbName: 'member_tenant_email',
+          fields: [{ name: 'tenantId' }, { name: 'email' }],
+        },
+        {
+          model: 'Member',
+          type: 'unique',
+          isDefinedOnField: false,
+          // `name:` names the compound key on the Client and nothing in the database.
+          name: 'tenantLogin',
+          fields: [{ name: 'tenantId' }, { name: 'loginName' }],
+        },
+      ]),
+    ).toContain(
+      "(table) => [unique('member_tenant_email').on(table.tenantId, table.email), unique().on(table.tenantId, table.loginName)]",
+    )
+  })
+
   it('emits a composite FK as a table-level foreignKey() and a full-column one()', () => {
     const datamodel = makeDatamodel([
       makeModel({
@@ -786,7 +825,16 @@ export const castRelations = relations(cast, ({ one }) => ({ actor: one(actor, {
       }),
     ])
 
-    expect(drizzleSchema(datamodel, 'postgresql', [])).toBe(
+    expect(
+      drizzleSchema(datamodel, 'postgresql', [
+        {
+          model: 'Warehouse',
+          type: 'unique',
+          isDefinedOnField: false,
+          fields: [{ name: 'country' }, { name: 'code' }],
+        },
+      ]),
+    ).toBe(
       `import { foreignKey, pgTable, serial, text, unique } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 

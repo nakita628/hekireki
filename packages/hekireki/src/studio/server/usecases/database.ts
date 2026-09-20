@@ -1,7 +1,7 @@
 import { Effect, Option } from 'effect'
 import * as z from 'zod'
 
-import { analyze } from '../../../sql/index.js'
+import { analyze, splitStatements } from '../../../sql/index.js'
 import { SQL_ROW_LIMIT } from '../constants/index.js'
 import * as DefaultsDomain from '../domain/index.js'
 import * as ModelDomain from '../domain/index.js'
@@ -426,7 +426,7 @@ export function runSql(input: z.infer<typeof RunSqlInput>) {
   return Effect.gen(function* () {
     const db = yield* RuntimeService.DatabaseTag
     const driver = yield* db.driver
-    const statements = SqlDomain.splitStatements({ sql: input.sql })
+    const statements = splitStatements(input.sql)
     if (statements.length === 0) {
       return yield* new InvalidInputError({ field: 'sql', message: 'holds no statement' })
     }
@@ -464,7 +464,7 @@ export function explainSql(input: z.infer<typeof RunSqlInput>) {
   return Effect.gen(function* () {
     const db = yield* RuntimeService.DatabaseTag
     const driver = yield* db.driver
-    const [first] = SqlDomain.splitStatements({ sql: input.sql })
+    const [first] = splitStatements(input.sql)
     if (first === undefined) {
       return yield* new InvalidInputError({ field: 'sql', message: 'holds no statement' })
     }

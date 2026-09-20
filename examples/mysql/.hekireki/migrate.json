@@ -1,0 +1,11 @@
+{
+  "decisions": [
+    {
+      "kind": "column-dropped",
+      "modelName": "User",
+      "field": "test",
+      "choice": "drop",
+      "value": null
+    }
+  ]
+}

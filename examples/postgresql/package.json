@@ -1,0 +1,15 @@
+{
+  "name": "@hekireki/example-postgresql",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "setup": "prisma validate && prisma generate && prisma db push --url postgresql://postgres:postgres@localhost:5432/seed",
+    "seed": "hekireki seed --reset",
+    "seed:sql": "hekireki seed --sql seed.sql",
+    "studio": "hekireki studio --schema schema.prisma"
+  },
+  "devDependencies": {
+    "hekireki": "workspace:*",
+    "prisma": "8.1.0-dev.6"
+  }
+}

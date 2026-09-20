@@ -1,0 +1,60 @@
+{
+  "decisions": [
+    {
+      "kind": "enum",
+      "modelName": "User",
+      "field": "role",
+      "choice": "map",
+      "value": "admin=ADMIN, member=MEMBER"
+    },
+    {
+      "kind": "column-type",
+      "modelName": "User",
+      "field": "age",
+      "choice": "sql",
+      "value": "CAST(NULLIF(TRIM(\"age\"), '') AS INTEGER)"
+    },
+    {
+      "kind": "column-added",
+      "modelName": "User",
+      "field": "handle",
+      "choice": "sql",
+      "value": "'handle-' || \"id\""
+    },
+    {
+      "kind": "unique",
+      "modelName": "User",
+      "field": "email",
+      "choice": "keep-first-delete",
+      "value": "createdAt"
+    },
+    {
+      "kind": "column-dropped",
+      "modelName": "User",
+      "field": "fullName",
+      "choice": "rename",
+      "value": "name"
+    },
+    {
+      "kind": "enum",
+      "modelName": "Post",
+      "field": "status",
+      "choice": "map",
+      "value": "published=PUBLISHED, draft=DRAFT, archived=DRAFT"
+    },
+    {
+      "kind": "not-null",
+      "modelName": "Post",
+      "field": "authorId",
+      "choice": "sql",
+      "value": "(SELECT MIN(\"id\") FROM \"User\")"
+    },
+    {
+      "kind": "column-dropped",
+      "modelName": "User",
+      "field": "nickname",
+      "choice": "move",
+      "value": "Profile.nickname"
+    }
+  ]
+}

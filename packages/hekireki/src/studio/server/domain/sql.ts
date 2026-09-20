@@ -1,6 +1,6 @@
 import * as z from 'zod'
 
-import { splitStatements as splitSqlStatements } from '../../../sql/index.js'
+import { placeholder, quoteIdentifier } from '../../../sql/index.js'
 
 const Dialect = z
   .enum(['postgresql', 'mysql', 'sqlite'])
@@ -19,9 +19,7 @@ const MakeIdentifierInput = z
 
 /** Quotes a table or column name for the dialect, escaping embedded quotes. */
 export function makeIdentifier(input: z.infer<typeof MakeIdentifierInput>) {
-  return input.dialect === 'mysql'
-    ? `\`${input.name.replaceAll('`', '``')}\``
-    : `"${input.name.replaceAll('"', '""')}"`
+  return quoteIdentifier(input.dialect, input.name)
 }
 
 const IsReadStatementInput = z
@@ -53,7 +51,7 @@ const MakePlaceholderInput = z
 
 /** The bound-parameter placeholder: `$n` for PostgreSQL, `?` elsewhere. */
 export function makePlaceholder(input: z.infer<typeof MakePlaceholderInput>) {
-  return input.dialect === 'postgresql' ? `$${input.index}` : '?'
+  return placeholder(input.dialect, input.index)
 }
 
 function searchClause(
@@ -238,21 +236,6 @@ export function makeDeleteStatement(input: z.infer<typeof MakeDeleteStatementInp
     sql: `DELETE FROM ${makeIdentifier({ dialect, name: input.table })} WHERE ${where.sql}`,
     params: where.params,
   }
-}
-
-const SplitStatementsInput = z
-  .object({
-    sql: z.string().meta({ description: 'SQL text.', example: 'SELECT 1; SELECT 2' }),
-  })
-  .readonly()
-  .meta({ description: 'Text that may hold several statements', example: { sql: 'SELECT 1' } })
-
-/**
- * The statements of the text, split at `;` outside quotes and comments. A driver runs one
- * statement per call, and a result page belongs to the last one, as a console would show it.
- */
-export function splitStatements(input: z.infer<typeof SplitStatementsInput>) {
-  return splitSqlStatements(input.sql)
 }
 
 const MakeExplainStatementInput = z

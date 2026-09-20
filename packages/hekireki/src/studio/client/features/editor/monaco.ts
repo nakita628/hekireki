@@ -29,10 +29,7 @@ import {
   PRISMA_MONARCH,
 } from './prisma-monarch.js'
 
-export type { editor as MonacoEditor } from 'monaco-editor/editor/editor.api.js'
-export type { PlainDiagnostic } from './lsp.js'
-
-export const monaco = { editor, languages, KeyCode, KeyMod, MarkerSeverity, Position, Range, Uri }
+const monaco = { editor, languages, KeyCode, KeyMod, MarkerSeverity, Position, Range, Uri }
 
 // The wire shapes of what the server returns for a text: brands do not survive JSON.
 type PlainHover = { readonly contents: string | null; readonly range: PlainRange | null }
@@ -104,9 +101,95 @@ export type EditorServices = {
   readonly save: (path: string, content: string) => void
 }
 
-export const MARKER_OWNER = 'prisma'
-export const EDITOR_FONT =
+const MARKER_OWNER = 'prisma'
+const EDITOR_FONT =
   'ui-monospace, SF Mono, Menlo, Consolas, Liberation Mono, DejaVu Sans Mono, monospace'
+
+/**
+ * What the operating system would rather you had typed. macOS turns two spaces into a period and
+ * a space, straight quotes into curly ones, two hyphens into a dash; it does that to a
+ * `<textarea>`, which is what drives Monaco here (`editContext` below turns the space bar back
+ * on, and a textarea is what that costs). None of it belongs in a schema: a period is not what
+ * the space bar was pressed for, and a curly quote is a parse error.
+ *
+ * Each arrives as one `insertText` carrying the substituted text, so each is answered with what
+ * the keys actually said.
+ */
+const SUBSTITUTIONS: Readonly<Record<string, string>> = {
+  '. ': ' ',
+  '\u201C': '"',
+  '\u201D': '"',
+  '\u2018': "'",
+  '\u2019': "'",
+  '\u2013': '-',
+  '\u2014': '-',
+  '\u2026': '...',
+}
+
+/**
+ * Refuses those substitutions on the editor's input area and types what was meant instead.
+ *
+ * @param code - the editor whose input area to watch
+ * @returns how to stop watching it
+ */
+export function refuseTextSubstitutions(code: editor.IStandaloneCodeEditor) {
+  const area = code.getDomNode()?.querySelector('textarea.inputarea')
+  if (!(area instanceof HTMLTextAreaElement)) return () => undefined
+  const refuse = (event: Event) => {
+    if (!(event instanceof InputEvent) || event.inputType !== 'insertText') return
+    const meant = event.data === null ? undefined : SUBSTITUTIONS[event.data]
+    if (meant === undefined) return
+    // The substitution replaces what is already there, so cancelling it leaves that alone; what
+    // the key press was worth goes in through Monaco, with its undo and its auto-closing.
+    event.preventDefault()
+    code.trigger('keyboard', 'type', { text: meant })
+  }
+  area.addEventListener('beforeinput', refuse, { capture: true })
+  return () => {
+    area.removeEventListener('beforeinput', refuse, { capture: true })
+  }
+}
+
+export const EDITOR_OPTIONS: editor.IStandaloneEditorConstructionOptions = {
+  // Monaco 0.56 defaults its input to the experimental `EditContext`, which drives a plain
+  // `<div class="native-edit-context">` — no `contenteditable`, no textarea. In Chromium a letter
+  // reaches it as a `beforeinput`, and the space bar does not: the key arrives, nothing cancels
+  // it, and no text is ever inserted. Typing `model User` in the schema editor writes `modelUser`.
+  // The textarea this turns back on is the input path Monaco used for a decade.
+  editContext: false,
+  fontFamily: EDITOR_FONT,
+  fontSize: 12.5,
+  lineHeight: 20,
+  tabSize: 2,
+  insertSpaces: true,
+  minimap: { enabled: false },
+  scrollBeyondLastLine: false,
+  automaticLayout: true,
+  padding: { top: 12, bottom: 12 },
+  renderLineHighlight: 'line',
+  lineNumbersMinChars: 3,
+  glyphMargin: false,
+  folding: true,
+  wordBasedSuggestions: 'off',
+  quickSuggestions: { other: true, comments: false, strings: false },
+  // Enter takes the highlighted item when there is something left to finish, and breaks the line
+  // when there is not. The list is open for most of a schema — every type and every attribute is
+  // a completion — so plain `on` would swallow the newline at the end of a line that is already
+  // written out: `title String` would take `String` and stay put. `smart` only takes an item that
+  // changes the line, which is the difference between finishing a word and ending it.
+  acceptSuggestionOnEnter: 'smart',
+  suggest: { showWords: false, preview: true },
+  bracketPairColorization: { enabled: false },
+  guides: { bracketPairs: false, indentation: true },
+  stickyScroll: { enabled: false },
+  overviewRulerLanes: 0,
+  hideCursorInOverviewRuler: true,
+  scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8, useShadows: false },
+  fixedOverflowWidgets: true,
+  smoothScrolling: true,
+  cursorBlinking: 'smooth',
+  renderWhitespace: 'none',
+}
 
 const PALETTE = {
   light: {
@@ -172,6 +255,12 @@ function themeData(theme: Theme): editor.IStandaloneThemeData {
       { token: 'comment.doc', foreground: c.docComment.slice(1), fontStyle: 'italic' },
       { token: 'function', foreground: c.fn.slice(1) },
       { token: 'identifier', foreground: c.ink.slice(1) },
+      // A Prisma Client call: the client, its model delegate, the argument keys, the literals.
+      { token: 'variable.predefined', foreground: c.annotation.slice(1) },
+      { token: 'member', foreground: c.blockName.slice(1), fontStyle: 'bold' },
+      { token: 'key', foreground: c.type.slice(1) },
+      { token: 'keyword.literal', foreground: c.keyword.slice(1) },
+      { token: 'operator', foreground: c.muted.slice(1) },
       { token: 'delimiter', foreground: c.muted.slice(1) },
     ],
     colors: {
@@ -223,11 +312,6 @@ export function themeName(theme: Theme) {
   return theme === 'dark' ? 'hekireki-dark' : 'hekireki-light'
 }
 
-/** The model URI of a loaded file: the same the React wrapper derives from its `path` prop. */
-export function uriOf(path: string) {
-  return Uri.parse(path)
-}
-
 // The providers are registered once per language; they read the services and the file of
 // whichever editor is mounted through this registry. The other loaded files have models too,
 // so definitions, references and renames reach across files; `paths` maps their URIs back.
@@ -262,7 +346,7 @@ export function syncFileModels(
   activePath: string,
 ) {
   for (const file of files) {
-    const uri = uriOf(file.path)
+    const uri = Uri.parse(file.path)
     const key = uri.toString()
     registry.paths.set(key, file.path)
     const model = editor.getModel(uri) ?? editor.createModel(file.content, PRISMA_LANGUAGE_ID, uri)
@@ -311,6 +395,28 @@ function wordRange(model: editor.ITextModel, position: Position) {
   return new Range(position.lineNumber, word.startColumn, position.lineNumber, position.column)
 }
 
+/** The column the `@` or `@@` in front of the word starts at, when there is one. */
+function attributeStart(model: editor.ITextModel, lineNumber: number, startColumn: number) {
+  const before = model.getValueInRange(new Range(lineNumber, 1, lineNumber, startColumn))
+  const marker = /@{1,2}$/u.exec(before)
+  return marker === null ? startColumn : startColumn - marker[0].length
+}
+
+/**
+ * What one completion replaces. An attribute item carries its own `@`, so the range has to reach
+ * back over the one already typed: Monaco takes a suggestion on Enter only when it would change
+ * the line, and it measures that by the length of what is replaced. A range that stops after the
+ * `@` makes `@unique` look like a change to `unique`, so Enter takes a suggestion that writes the
+ * same text back and swallows the newline it was pressed for.
+ */
+function rangeFor(model: editor.ITextModel, position: Position, insertText: string) {
+  const word = model.getWordUntilPosition(position)
+  const startColumn = insertText.startsWith('@')
+    ? attributeStart(model, position.lineNumber, word.startColumn)
+    : word.startColumn
+  return new Range(position.lineNumber, startColumn, position.lineNumber, position.column)
+}
+
 function wholeWordRange(model: editor.ITextModel, position: Position) {
   const word = model.getWordAtPosition(position)
   return word
@@ -331,7 +437,6 @@ function completionProvider(): languages.CompletionItemProvider {
               ? (context.triggerCharacter ?? null)
               : null,
         })) ?? []
-      const range = wordRange(model, position)
       const suggestions = toCompletions(items).map((item) => ({
         label: item.label,
         kind: languages.CompletionItemKind[item.kind],
@@ -342,7 +447,7 @@ function completionProvider(): languages.CompletionItemProvider {
           ? languages.CompletionItemInsertTextRule.InsertAsSnippet
           : languages.CompletionItemInsertTextRule.None,
         sortText: item.sortText,
-        range,
+        range: rangeFor(model, position, item.insertText),
       }))
       return { suggestions }
     },
@@ -369,7 +474,7 @@ function definitionProvider(): languages.DefinitionProvider {
     provideDefinition: async (model, position) => {
       const locations = (await registry.services?.definition(requestAt(model, position))) ?? []
       return locations.map((location) => ({
-        uri: uriOf(location.path),
+        uri: Uri.parse(location.path),
         range: toRange(location.selection),
       }))
     },
@@ -381,7 +486,7 @@ function referenceProvider(): languages.ReferenceProvider {
     provideReferences: async (model, position) => {
       const locations = (await registry.services?.references(requestAt(model, position))) ?? []
       return locations.map((location) => ({
-        uri: uriOf(location.path),
+        uri: Uri.parse(location.path),
         range: toRange(location.range),
       }))
     },
@@ -394,7 +499,7 @@ function documentHighlightProvider(): languages.DocumentHighlightProvider {
     provideDocumentHighlights: async (model, position) => {
       const locations = (await registry.services?.references(requestAt(model, position))) ?? []
       return locations
-        .filter((location) => uriOf(location.path).toString() === model.uri.toString())
+        .filter((location) => Uri.parse(location.path).toString() === model.uri.toString())
         .map((location) => ({
           range: toRange(location.range),
           kind: languages.DocumentHighlightKind.Text,
@@ -405,7 +510,7 @@ function documentHighlightProvider(): languages.DocumentHighlightProvider {
 
 function workspaceEdits(changes: readonly LspFileEdit[]) {
   return changes.flatMap((change) => {
-    const uri = uriOf(change.path)
+    const uri = Uri.parse(change.path)
     const model = editor.getModel(uri)
     return model === null
       ? []

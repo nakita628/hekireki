@@ -3,6 +3,7 @@ import { defineConfig } from 'vite-plus'
 export default defineConfig({
   pack: {
     entry: {
+      index: './src/index.ts',
       'bin/hekireki': './src/bin/hekireki.ts',
       'bin/atlas': './src/bin/atlas.ts',
       'bin/zod': './src/bin/zod.ts',
@@ -20,6 +21,7 @@ export default defineConfig({
       'bin/kysely': './src/bin/kysely.ts',
       'bin/pydantic': './src/bin/pydantic.ts',
       'bin/sea-orm': './src/bin/sea-orm.ts',
+      'bin/seed': './src/bin/seed.ts',
       'bin/activerecord': './src/bin/activerecord.ts',
       'bin/eloquent': './src/bin/eloquent.ts',
       'bin/exposed': './src/bin/exposed.ts',
@@ -56,6 +58,9 @@ export default defineConfig({
       'src/studio/server/handlers/index.ts',
       // An ambient wildcard module (Vite's `?worker`) has to be a script file, which import/unambiguous rejects.
       'src/studio/client/vite-env.d.ts',
+      // The Migrate page is not shipped for now: the route it held is commented out, which leaves
+      // a file with no import or export for import/unambiguous to reject.
+      'src/studio/client/routes/migrate.tsx',
     ],
     // Setting `plugins` replaces oxlint's default list — restate the defaults, then add import.
     plugins: ['typescript', 'unicorn', 'oxc', 'import', 'promise', 'node', 'jsdoc'],
@@ -100,6 +105,7 @@ export default defineConfig({
       'custom/no-dual-absence': 'error',
       'custom/no-let': 'error',
       'custom/no-mutation': 'error',
+      'custom/no-pass-through': 'error',
       'custom/predicate-is-name': 'error',
       // Doc comments. The `jsdoc` plugin is off by default and enables nothing on its own, so
       // every rule is named here. Doc comments in this package are TSDoc: the type lives in the
@@ -666,6 +672,40 @@ export default defineConfig({
         },
       },
       {
+        // migrate/domain is the pure half of `hekireki migrate`: the schema and the database's
+        // catalogue in; checks, fixes and SQL out. It opens no connection, reads no file and
+        // runs no Effect (the data types of `effect`, such as Result, are fine): that is
+        // migrate/adapter, and migrate/check.ts puts the two together.
+        files: ['src/migrate/domain/**'],
+        rules: {
+          'no-restricted-imports': [
+            'error',
+            {
+              paths: [
+                { name: 'node:fs', message: 'file I/O belongs in src/file' },
+                { name: 'node:fs/promises', message: 'file I/O belongs in src/file' },
+                {
+                  // Effect's data types (Result, Option, Array) are values; its runtime is not.
+                  name: 'effect',
+                  importNames: ['Effect', 'Layer', 'Stream', 'Ref', 'Semaphore', 'Scope'],
+                  message: 'migrate/domain is pure: an Effect belongs in adapter',
+                },
+              ],
+              patterns: [
+                {
+                  regex: '^(\\.\\./)+(bin|cli|core|emit|file|format|generator|studio)(/.*)?$',
+                  message: 'migrate/domain may only import sql, and types of database and seed',
+                },
+                {
+                  regex: '^(\\.\\./)+(adapter/.*|check\\.js|report\\.js|errors\\.js|index\\.js)$',
+                  message: 'migrate/domain must stay pure: no adapter, no check flow, no errors',
+                },
+              ],
+            },
+          ],
+        },
+      },
+      {
         // The studio client is browser code bundled by Vite: it only takes the contract types
         // from the server side.
         files: ['src/studio/client/**'],
@@ -887,10 +927,16 @@ export default defineConfig({
         },
       },
       {
-        // Effect's Data.TaggedError / Context.Tag are called as capitalised factories by design.
+        // Effect's Data.TaggedError / Context.Tag are called as capitalised factories by design;
+        // discover.ts constructs a Prisma Client and an adapter class it only knows by value.
         files: [
+          'src/seed/discover.ts',
+          'src/seed/load-config.ts',
+          'src/database/url.ts',
           'src/core/errors.ts',
+          'src/migrate/errors.ts',
           'src/format/index.ts',
+          'src/seed/errors.ts',
           'src/studio/server/errors/index.ts',
           'src/studio/server/services/runtime.ts',
         ],

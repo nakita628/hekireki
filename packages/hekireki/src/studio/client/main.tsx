@@ -8,7 +8,7 @@ import { IconContext } from 'react-icons'
 
 import { routeTree } from './routeTree.gen.js'
 
-export const queryClient = new QueryClient()
+const queryClient = new QueryClient()
 
 const router = createRouter({ routeTree, context: { queryClient } })
 

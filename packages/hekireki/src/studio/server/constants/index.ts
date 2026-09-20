@@ -24,3 +24,12 @@ export const SQL_ROW_LIMIT = 500
 
 /** The URI the Prisma language server sees for the single in-memory schema document. */
 export const PRISMA_FILE_URI = 'file:///schema.prisma'
+
+/**
+ * How many rows of an array a Prisma Client call returns to the browser, for the same reason as
+ * SQL_ROW_LIMIT: a `findMany` without `take` would otherwise send the whole table.
+ */
+export const CLIENT_ROW_LIMIT = 500
+
+/** How often the migrations directory is read for a change. */
+export const MIGRATIONS_POLL_MS = 1000

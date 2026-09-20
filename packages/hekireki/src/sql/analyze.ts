@@ -26,13 +26,13 @@ import { parseStatements } from './parse.js'
 import { literalDataType, toTsType } from './types.js'
 import type { Dialect } from './types.js'
 
-export type SchemaColumn = {
+type SchemaColumn = {
   readonly name: string
   readonly dataType: string
   readonly nullable: boolean
 }
 
-export type SchemaTable = {
+type SchemaTable = {
   readonly name: string
   readonly columns: readonly SchemaColumn[]
 }
@@ -42,7 +42,7 @@ export type AnalysisSchema = {
   readonly tables: readonly SchemaTable[]
 }
 
-export type NodeKind =
+type NodeKind =
   | 'table'
   | 'cte'
   | 'subquery'
@@ -62,13 +62,13 @@ export type NodeKind =
   | 'delete'
   | 'returning'
 
-export type NodeColumn = {
+type NodeColumn = {
   readonly name: string
   readonly dataType: string | null
   readonly used: boolean
 }
 
-export type GraphNode = {
+type GraphNode = {
   readonly id: string
   readonly kind: NodeKind
   readonly label: string
@@ -78,7 +78,7 @@ export type GraphNode = {
   readonly columns: readonly NodeColumn[]
 }
 
-export type GraphEdge = {
+type GraphEdge = {
   readonly id: string
   readonly source: string
   readonly target: string
@@ -86,9 +86,9 @@ export type GraphEdge = {
   readonly kind: 'flow' | 'lookup'
 }
 
-export type ColumnSource = { readonly table: string; readonly column: string }
+type ColumnSource = { readonly table: string; readonly column: string }
 
-export type OutputColumn = {
+type OutputColumn = {
   readonly name: string
   readonly expression: string
   readonly dataType: string | null
@@ -97,7 +97,7 @@ export type OutputColumn = {
   readonly sources: readonly ColumnSource[]
 }
 
-export type TableRef = {
+type TableRef = {
   readonly nodeId: string
   readonly name: string
   readonly alias: string | null
@@ -107,7 +107,7 @@ export type TableRef = {
   readonly range: Range
 }
 
-export type Parameter = {
+type Parameter = {
   readonly index: number
   readonly placeholder: string
   readonly dataType: string | null
@@ -116,13 +116,13 @@ export type Parameter = {
   readonly context: string
 }
 
-export type Diagnostic = {
+type Diagnostic = {
   readonly severity: 'error' | 'warning' | 'info'
   readonly message: string
   readonly range: Range | null
 }
 
-export type StatementKind = 'select' | 'insert' | 'update' | 'delete' | 'other' | 'invalid'
+type StatementKind = 'select' | 'insert' | 'update' | 'delete' | 'other' | 'invalid'
 
 export type StatementAnalysis = {
   readonly kind: StatementKind
@@ -138,7 +138,7 @@ export type StatementAnalysis = {
   readonly paramsType: string
 }
 
-export type Analysis = { readonly statements: readonly StatementAnalysis[] }
+type Analysis = { readonly statements: readonly StatementAnalysis[] }
 
 // --- internal shapes ---------------------------------------------------------------------------
 
@@ -302,12 +302,20 @@ function sourcesOf(...types: readonly TypeInfo[]): readonly ColumnSource[] {
 
 // --- column resolution ---------------------------------------------------------------------------
 
-function findRelation(scope: Scope | null, qualifier: string): Relation | null {
+function findRelationByKey(scope: Scope | null, key: string): Relation | null {
   if (scope === null) return null
-  const key = qualifier.toLowerCase()
   return (
-    scope.relations.find((relation) => relation.key === key) ?? findRelation(scope.outer, qualifier)
+    scope.relations.find((relation) => relation.key === key) ?? findRelationByKey(scope.outer, key)
   )
+}
+
+function findRelation(scope: Scope | null, qualifier: string): Relation | null {
+  const key = qualifier.toLowerCase()
+  const exact = findRelationByKey(scope, key)
+  if (exact !== null || !key.includes('.')) return exact
+  // `schema.table.column`, as Prisma Client writes every reference (`main`.`User`.`id`,
+  // "public"."User"."id"): the table is the last part of the qualifier.
+  return findRelationByKey(scope, key.split('.').at(-1) ?? key)
 }
 
 function columnOf(relation: Relation, name: string) {
@@ -1467,7 +1475,7 @@ function buildSelect(
   }
 
   if (core.where !== null) {
-    const nodeId = nextIdReserved(ctx)
+    const nodeId = nextId(ctx)
     const typing: Typing = {
       ctx,
       scope,
@@ -1532,7 +1540,7 @@ function buildSelect(
 
   // Select aliases are visible to ORDER BY (and, in SQLite / MySQL, to HAVING); they are typed
   // before HAVING so that both can read them.
-  const projectId = nextIdReserved(ctx)
+  const projectId = nextId(ctx)
   const lookups = new Map(
     core.columns.flatMap((item) =>
       subqueriesOf(item.expr).map((query) => [query, projectId] as const),
@@ -1567,7 +1575,7 @@ function buildSelect(
   )
 
   if (core.having !== null) {
-    const havingId = nextIdReserved(ctx)
+    const havingId = nextId(ctx)
     const havingTyping: Typing = {
       ctx,
       scope,
@@ -1610,11 +1618,6 @@ function buildSelect(
     scope,
     aliases,
   }
-}
-
-/** Reserves an id for a node that is added after the expressions it holds have been typed (so lookups can point at it). */
-function nextIdReserved(ctx: Context) {
-  return nextId(ctx)
 }
 
 function aggregateCalls(expr: Expr): readonly Extract<Expr, { type: 'call' }>[] {
@@ -1727,7 +1730,7 @@ function buildCtes(ctx: Context, ctes: readonly Cte[], recursive: boolean, scope
       // The anchor's columns are unknown until the CTE is built; a self-reference reads an open relation.
       registered.set(cte.name.toLowerCase(), { nodeId: '', columns: [] })
     }
-    const placeholder = recursive ? nextIdReserved(ctx) : null
+    const placeholder = recursive ? nextId(ctx) : null
     if (placeholder !== null) {
       registered.set(cte.name.toLowerCase(), { nodeId: placeholder, columns: [] })
     }
@@ -1788,7 +1791,7 @@ function buildReturning(
   scopeName: string,
 ): readonly Resolved[] {
   if (items === null) return []
-  const nodeId = nextIdReserved(ctx)
+  const nodeId = nextId(ctx)
   const typing: Typing = { ctx, scope, aliases: null, lookups: new Map() }
   const columns = items.flatMap((item): Resolved[] => {
     if (item.expr.type === 'star') return [...expandStar(ctx, scope, item.expr).columns]
@@ -1974,7 +1977,7 @@ function buildUpdate(
     chain.current = joinId
   }
   if (statement.where !== null) {
-    const nodeId = nextIdReserved(ctx)
+    const nodeId = nextId(ctx)
     const typing: Typing = {
       ctx,
       scope: rowScope,
@@ -1997,7 +2000,7 @@ function buildUpdate(
   } else {
     warn(ctx, 'UPDATE without WHERE changes every row', statement.range)
   }
-  const updateId = nextIdReserved(ctx)
+  const updateId = nextId(ctx)
   const typing: Typing = {
     ctx,
     scope: rowScope,
@@ -2075,7 +2078,7 @@ function buildDelete(
     chain.current = joinId
   }
   if (statement.where !== null) {
-    const nodeId = nextIdReserved(ctx)
+    const nodeId = nextId(ctx)
     const typing: Typing = {
       ctx,
       scope: rowScope,
@@ -2118,13 +2121,9 @@ function tsUnion(type: TypeInfo) {
   return base
 }
 
-function isPlainKey(name: string) {
-  return /^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(name)
-}
-
 function rowTypeOf(columns: readonly Resolved[], kind: StatementKind) {
   if (columns.length === 0) return kind === 'select' ? '{}' : 'never'
-  return `{ ${columns.map((column) => `${isPlainKey(column.name) ? column.name : JSON.stringify(column.name)}: ${tsUnion(column)}`).join('; ')} }`
+  return `{ ${columns.map((column) => `${/^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(column.name) ? column.name : JSON.stringify(column.name)}: ${tsUnion(column)}`).join('; ')} }`
 }
 
 /** Placeholders in the order a driver binds them: positional as written, `$n` by number, named by first appearance. */

@@ -17,5 +17,6 @@
     }
   },
   "include": ["**/src/**/*"],
-  "exclude": ["**/src/**/*.test.ts", "src/studio/client/**/*"]
+  // The client is checked by its own build; everything else, tests included, is checked here.
+  "exclude": ["src/studio/client/**/*"]
 }

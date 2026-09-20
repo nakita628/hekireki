@@ -1,11 +1,10 @@
-import * as v from 'valibot'
+import * as z from 'zod'
 
 import { loadString, saveString } from '../../lib/index.js'
 
-const HiddenColumnsSchema = v.pipe(
-  v.array(v.pipe(v.string(), v.description('A field name the grid is not showing'))),
-  v.description('The columns folded away on one model, as stored in localStorage'),
-)
+const HiddenColumnsSchema = z
+  .array(z.string().meta({ description: 'A field name the grid is not showing', example: 'bio' }))
+  .meta({ description: 'The columns folded away on one model, as stored in localStorage' })
 
 /** Where one model's folded-away columns are remembered; each model keeps its own. */
 export function columnsStorageKey(model: string) {
@@ -20,9 +19,9 @@ export function loadHiddenColumns(model: string): ReadonlySet<string> {
   try {
     const raw = loadString(columnsStorageKey(model))
     if (raw === null) return new Set()
-    const stored: unknown = JSON.parse(raw)
-    const checked = v.safeParse(HiddenColumnsSchema, stored)
-    return new Set(checked.success ? checked.output : [])
+    const json: unknown = JSON.parse(raw)
+    const result = HiddenColumnsSchema.safeParse(json)
+    return new Set(result.success ? result.data : [])
   } catch {
     return new Set()
   }

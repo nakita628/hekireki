@@ -1,0 +1,27 @@
+{
+  "name": "@hekireki/example-migrate",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "clean": "rm -rf dev.db dev.db-journal migrations .hekireki",
+    "schema:before": "cp schemas/before.prisma schema.prisma",
+    "schema:after": "cp schemas/after.prisma schema.prisma",
+    "migration:init": "mkdir -p migrations/20260101000000_init && prisma migrate diff --from-empty --to-schema schema.prisma --script -o migrations/20260101000000_init/migration.sql",
+    "migration:lock": "printf 'provider = \"sqlite\"\\n' > migrations/migration_lock.toml",
+    "migration:next": "mkdir -p migrations/20260201000000_users_and_posts && prisma migrate diff --from-config-datasource --to-schema schema.prisma --script -o migrations/20260201000000_users_and_posts/migration.sql",
+    "migrate:deploy": "prisma migrate deploy",
+    "migrate:check": "hekireki migrate check --schema schema.prisma",
+    "data": "prisma db execute --file data.sql",
+    "decide": "mkdir -p .hekireki && cp decisions.json .hekireki/migrate.json",
+    "plan": "hekireki migrate plan --schema schema.prisma --migration migrations/20260201000000_users_and_posts/migration.sql --output migrations/20260201000000_users_and_posts/migration.sql",
+    "plan:show": "cat migrations/20260201000000_users_and_posts/migration.sql",
+    "setup": "pnpm run clean && pnpm run schema:before && pnpm run migration:init && pnpm run migration:lock && pnpm run migrate:deploy && pnpm run data",
+    "studio": "hekireki studio --schema schema.prisma",
+    "rows": "node show.ts",
+    "demo": "pnpm run setup && pnpm run rows && pnpm run schema:after && (pnpm run migrate:check || true) && pnpm run decide && pnpm run migrate:check && pnpm run migration:next && pnpm run plan && pnpm run plan:show && pnpm run migrate:deploy && pnpm run rows"
+  },
+  "devDependencies": {
+    "hekireki": "workspace:*",
+    "prisma": "8.1.0-dev.6"
+  }
+}

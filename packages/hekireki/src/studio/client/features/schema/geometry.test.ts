@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vite-plus/test'
 import type { Box, Point } from '../../../../diagram/edge.js'
 import { NODE_WIDTH } from '../../../../diagram/layout.js'
 import { diagramGeometry } from './geometry.js'
-import type { GeometryCard, GeometryEdge } from './geometry.js'
 import { loopTargetHandle, sourceHandle, targetHandle } from './graph.js'
 
 const ROW_HEIGHT = 22
@@ -14,7 +13,7 @@ const CARD_HEIGHT = 120
  * A card with one handle per named row, hung the way `ModelNode` hangs them: a source and a loop
  * target on the right of every row, a target on the left.
  */
-function card(x: number, y: number, rows: readonly string[]): GeometryCard {
+function card(x: number, y: number, rows: readonly string[]) {
   const rowY = (index: number) => y + FIRST_ROW + index * ROW_HEIGHT
   return {
     box: { x, y, width: NODE_WIDTH, height: CARD_HEIGHT },
@@ -35,7 +34,7 @@ function edge(
   from: readonly [string, string],
   to: readonly [string, string],
   caption: readonly string[] = [],
-): GeometryEdge {
+) {
   return {
     id,
     source: from[0],
@@ -79,7 +78,20 @@ function overlaps(a: Box, b: Box) {
   return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height
 }
 
-/** Whether a chip covers any stretch of a wire, which is what hides the relation it names. */
+/** Whether a chip leaves nothing of a wire showing, which is what hides the relation it names. */
+function hidesWire(box: Box, points: readonly Point[]) {
+  return points.slice(0, -1).every((a, index) => {
+    const b = points[index + 1] ?? a
+    return (
+      box.x <= Math.min(a.x, b.x) &&
+      Math.max(a.x, b.x) <= box.x + box.width &&
+      box.y <= Math.min(a.y, b.y) &&
+      Math.max(a.y, b.y) <= box.y + box.height
+    )
+  })
+}
+
+/** Whether a chip sits on any stretch of a wire, which is how it says which relation it names. */
 function coversWire(box: Box, points: readonly Point[]) {
   return points.slice(0, -1).some((a, index) => {
     const b = points[index + 1] ?? a
@@ -134,9 +146,10 @@ describe('diagramGeometry', () => {
     expect(Math.max(...points.map((point) => point.x))).toBeGreaterThan(NODE_WIDTH)
   })
 
-  // The bug this pass exists for: the caption used to be centred on the loop, and the loop of two
-  // neighbouring rows is short enough that the chip hid all of it.
-  it('keeps the caption of a self relation off the loop, however short the loop', () => {
+  // A chip says which relation it names by sitting on its wire. The loop of a self relation
+  // between two neighbouring rows is short enough that a chip centred on it would swallow the
+  // whole loop, so the chip hangs off to one side: on the loop, and with the loop still showing.
+  it('writes the caption of a self relation on its loop without hiding the loop', () => {
     const caption = ['CategoryTree · one to many']
     const geometry = diagramGeometry(
       [edge('self', ['Category', 'parentId'], ['Category', 'id'], caption)],
@@ -144,9 +157,9 @@ describe('diagramGeometry', () => {
     )
     const wire = geometry.get('self')
     expect(wire?.caption).toBeDefined()
-    expect(wire?.caption && coversWire(captionBoxAt(wire.caption, caption), wire.points)).toBe(
-      false,
-    )
+    const box = wire?.caption ? captionBoxAt(wire.caption, caption) : null
+    expect(box && coversWire(box, wire?.points ?? [])).toBe(true)
+    expect(box && hidesWire(box, wire?.points ?? [])).toBe(false)
   })
 
   it('keeps a caption off the models', () => {

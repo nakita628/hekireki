@@ -43,27 +43,28 @@ import {
 } from '@codemirror/view'
 import type { DecorationSet } from '@codemirror/view'
 import { classHighlighter } from '@lezer/highlight'
+import type { InferResponseType } from 'hono/client'
 import { useEffect, useRef } from 'react'
 
-import type { Diagnostic, Range } from './analysis.js'
+import type { client } from '../../lib/index.js'
 
 type Dialect = 'postgresql' | 'mysql' | 'sqlite' | null
 
-/** A column as the editor completes and explains it: the name the database knows and its Prisma type. */
-export type EditorColumn = {
+/**
+ * A table as the editor completes and explains it: the name the database knows, the model it is,
+ * and its columns, each with the name the database knows and its Prisma type.
+ */
+type EditorTable = {
   readonly name: string
   readonly detail: string
+  readonly columns: readonly { readonly name: string; readonly detail: string }[]
 }
 
-/** A table as the editor completes and explains it: the name the database knows, the model it is, and its columns. */
-export type EditorTable = {
-  readonly name: string
-  readonly detail: string
-  readonly columns: readonly EditorColumn[]
-}
-
-const setHighlight = StateEffect.define<Range | null>()
-const setDiagnostics = StateEffect.define<readonly Diagnostic[]>()
+const setHighlight = StateEffect.define<{ readonly start: number; readonly end: number } | null>()
+const setDiagnostics =
+  StateEffect.define<
+    InferResponseType<typeof client.db.analyze.$post, 200>['statements'][number]['diagnostics']
+  >()
 
 const highlightMark = Decoration.mark({ class: 'cm-node-range' })
 
@@ -73,7 +74,7 @@ const diagnosticMarks = {
   info: Decoration.mark({ class: 'cm-diagnostic-info' }),
 }
 
-function clamp(range: Range, length: number) {
+function clamp(range: { readonly start: number; readonly end: number }, length: number) {
   const start = Math.max(0, Math.min(range.start, length))
   const end = Math.max(start, Math.min(range.end, length))
   return { start, end }
@@ -261,8 +262,11 @@ export function SqlEditor({
   readonly onRun: () => void
   readonly dialect: Dialect
   readonly tables: readonly EditorTable[]
-  readonly highlight: Range | null
-  readonly diagnostics: readonly Diagnostic[]
+  readonly highlight: { readonly start: number; readonly end: number } | null
+  readonly diagnostics: InferResponseType<
+    typeof client.db.analyze.$post,
+    200
+  >['statements'][number]['diagnostics']
 }) {
   const host = useRef<HTMLDivElement | null>(null)
   const view = useRef<EditorView | null>(null)

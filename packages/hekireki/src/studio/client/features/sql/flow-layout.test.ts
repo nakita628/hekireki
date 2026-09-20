@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import type { GraphEdge, GraphNode } from './analysis.js'
 import {
   autoLayout,
   MAX_LINES,
@@ -14,27 +13,21 @@ import {
 
 function node(
   id: string,
-  kind: GraphNode['kind'],
-  overrides: Partial<Pick<GraphNode, 'details' | 'columns'>> = {},
-): GraphNode {
-  return {
-    id,
-    kind,
-    label: id,
-    details: [],
-    range: null,
-    scope: 'main',
-    columns: [],
-    ...overrides,
-  }
+  kind: string,
+  {
+    details = [],
+    columns = [],
+  }: { readonly details?: readonly string[]; readonly columns?: readonly { name: string }[] } = {},
+) {
+  return { id, kind, details, columns }
 }
 
 function column(name: string) {
-  return { name, dataType: 'TEXT', used: true }
+  return { name }
 }
 
-function edge(source: string, target: string): GraphEdge {
-  return { id: `${source}->${target}`, source, target, kind: 'flow', label: null }
+function edge(source: string, target: string) {
+  return { source, target }
 }
 
 describe('nodeLines', () => {

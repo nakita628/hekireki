@@ -31,7 +31,9 @@
     "pnpm-lock.yaml",
     "test/harness",
     "example/generated",
-    "sandbox",
+    "examples/*/generated",
+    // `pnpm seed:sql` output: faker text, committed so the example can be loaded without Node.js.
+    "examples/*/prisma/seed.sql",
     "packages/hekireki/docs/studio-api.md",
     "packages/hekireki/src/studio/server/routes/index.ts",
     "packages/hekireki/src/studio/client/hooks/index.ts",

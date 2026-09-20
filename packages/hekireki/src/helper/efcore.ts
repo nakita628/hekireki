@@ -320,14 +320,6 @@ type Names = {
   readonly generators: ReadonlyMap<string, string>
 }
 
-function lowerCase(name: string) {
-  return name.toLowerCase()
-}
-
-function asIs(name: string) {
-  return name
-}
-
 function planNames(
   models: readonly DMMF.Model[],
   enums: readonly DMMF.DatamodelEnum[],
@@ -343,7 +335,7 @@ function planNames(
       ...generatorKeys.map((key) => ({ key: `generator:${key}`, candidate: key })),
     ],
     [options.context],
-    lowerCase,
+    (name) => name.toLowerCase(),
   )
   const typeName = (key: string) => types.get(key) ?? key
   const classes = new Map(models.map((m) => [m.name, typeName(`model:${m.name}`)]))
@@ -360,7 +352,7 @@ function planNames(
         allocate(
           model.fields.map((f) => ({ key: f.name, candidate: pascalCase(f.name) })),
           [classes.get(model.name) ?? model.name, ...OBJECT_MEMBERS],
-          asIs,
+          (name) => name,
         ),
       ]),
     ),
@@ -370,14 +362,14 @@ function planNames(
         allocate(
           e.values.map((v) => ({ key: v.name, candidate: pascalCase(v.name) })),
           [],
-          asIs,
+          (name) => name,
         ),
       ]),
     ),
     dbSets: allocate(
       models.map((m) => ({ key: m.name, candidate: pluralize(classes.get(m.name) ?? m.name) })),
       [options.context, ...DB_CONTEXT_MEMBERS, ...GENERATED_CONTEXT_MEMBERS],
-      asIs,
+      (name) => name,
     ),
   }
 }
@@ -868,7 +860,7 @@ function joinBlocks(blocks: readonly (readonly string[])[]) {
 }
 
 /** Everything the files are written from: the schema, what it implies, and the C# names. */
-export type EfCorePlan = {
+type EfCorePlan = {
   readonly names: Names
   readonly models: readonly DMMF.Model[]
   readonly enums: readonly DMMF.DatamodelEnum[]

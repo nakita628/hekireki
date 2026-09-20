@@ -31,7 +31,7 @@ function loadImage(svg: string) {
 }
 
 /** Draws the diagram to a PNG through a canvas; the SVG is the same one `exportSvg` writes. */
-export async function renderDiagramPng(input: DiagramInput) {
+async function renderDiagramPng(input: DiagramInput) {
   const svg = renderDiagramSvg(input)
   const image = await loadImage(svg)
   const canvas = document.createElement('canvas')

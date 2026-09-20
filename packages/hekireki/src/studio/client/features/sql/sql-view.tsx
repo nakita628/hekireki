@@ -3,8 +3,10 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useMemo, useState } from 'react'
 import { LuPlay } from 'react-icons/lu'
 
+import { DiagnosticsList } from '../../components/diagnostics-list.js'
 import { fieldTypeLabel } from '../../components/labels.js'
 import { ResultTable } from '../../components/result-table.js'
+import { SplitPane } from '../../components/split-pane.js'
 import { useDebounced } from '../../hooks/debounce.js'
 import {
   getDbCountsQueryKey,
@@ -14,18 +16,13 @@ import {
   useSchema,
 } from '../../hooks/index.js'
 import { SchemaCanvas } from '../schema/schema-view.js'
-import type { SchemaHighlight } from '../schema/schema-view.js'
 import { useAnalysis } from './analysis.js'
-import type { Range, StatementAnalysis } from './analysis.js'
 import { ColumnsView } from './columns-view.js'
-import { DiagnosticsList } from './diagnostics-list.js'
 import { FlowView } from './flow-view.js'
 import { ParamsPanel } from './params-panel.js'
-import { bindValues } from './params.js'
+import { bindValues, paramInputsOf } from './params.js'
 import { PlanView } from './plan-view.js'
-import { SplitPane } from './split-pane.js'
 import { SqlEditor } from './sql-editor.js'
-import type { EditorTable } from './sql-editor.js'
 import { TypeView } from './type-view.js'
 
 // How the page is shared out: the editor beside the schema, and the editor above the views.
@@ -47,14 +44,21 @@ function problemDetail(error: unknown) {
   return 'The statement could not be run.'
 }
 
-function statementLabel(statement: StatementAnalysis, index: number) {
+function statementLabel(
+  statement: { readonly text: string; readonly kind: string },
+  index: number,
+) {
   const first = statement.text.trim().split('\n')[0]?.trim() ?? ''
   const short = first.length > 28 ? `${first.slice(0, 27)}…` : first
   return `${index + 1} · ${short === '' ? statement.kind : short}`
 }
 
 /** The tables a statement touches and the columns it reads from each, keyed by lowercased table name. */
-function highlightOf(statement: StatementAnalysis | null): SchemaHighlight | null {
+function highlightOf(
+  statement: {
+    readonly tables: readonly { readonly name: string; readonly columnsUsed: readonly string[] }[]
+  } | null,
+) {
   if (statement === null || statement.tables.length === 0) return null
   const map = new Map<string, Set<string>>()
   for (const table of statement.tables) {
@@ -74,17 +78,29 @@ function tabOf(key: string | number): Tab {
 }
 
 /** The SQL page: the editor and what the analysis says on the left, the models it runs against on the right. */
-export function SqlView() {
+export function SqlView({
+  initialSql,
+  initialParams,
+}: {
+  readonly initialSql: string
+  readonly initialParams: readonly (string | number | boolean | null)[]
+}) {
   const queryClient = useQueryClient()
   const database = useDb().data ?? null
   const schema = useSchema().data?.schema ?? null
-  // The editor is empty on every visit: what is run here is typed here.
-  const [sql, setSql] = useState('')
+  // The editor is empty on every visit, unless a page hands a statement over (the Prisma Client
+  // page opens what the client sent, with the values it was bound with).
+  const [sql, setSql] = useState(initialSql)
   const [tab, setTab] = useState<Tab>('flow')
   const [statementIndex, setStatementIndex] = useState(0)
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
-  const [pickedRange, setPickedRange] = useState<Range | null>(null)
-  const [paramInputs, setParamInputs] = useState<Readonly<Record<string, string>>>({})
+  const [pickedRange, setPickedRange] = useState<{
+    readonly start: number
+    readonly end: number
+  } | null>(null)
+  const [paramInputs, setParamInputs] = useState<Readonly<Record<string, string>>>(() =>
+    paramInputsOf(initialParams),
+  )
 
   const settled = useDebounced(sql, ANALYZE_DEBOUNCE_MS)
   const analysis = useAnalysis(settled)
@@ -149,7 +165,7 @@ export function SqlView() {
   // Completion and hovers offer the names the database knows — `@@map` / `@map` over the Prisma
   // names — with the Prisma type beside each one.
   const tables = useMemo(
-    (): readonly EditorTable[] =>
+    () =>
       (schema?.models ?? []).map((model) => ({
         name: model.dbName ?? model.name,
         detail: `model ${model.name}`,
@@ -282,7 +298,7 @@ export function SqlView() {
     <div className="flex min-h-0 min-w-0 flex-col">
       <header className="flex flex-wrap items-center gap-3.5 border-b border-line bg-surface px-6 py-3">
         <h1 className="page-title">SQL</h1>
-        <span className="text-lead text-muted">
+        <span className="min-w-0 text-lead [overflow-wrap:anywhere] text-muted">
           {database?.connected
             ? `${database.dialect ?? ''} · ${database.url ?? ''}`
             : 'No database connected'}

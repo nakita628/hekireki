@@ -17,12 +17,18 @@
     "test": "vp run --filter ./packages/hekireki test",
     "lang": "vp run hekireki#build && vp run --filter ./test test",
     "example": "vp run hekireki#build && vp run --filter ./example generate",
-    "studio": "vp run hekireki#build && hekireki studio --schema example/schema.prisma"
+    "studio": "vp run hekireki#build && hekireki studio --schema example/schema.prisma",
+    "seed": "vp run hekireki#build && vp run --filter ./examples/sqlite seed"
   },
   "dependencies": {
     "hekireki": "link:packages/hekireki"
   },
   "devDependencies": {
+    "@prisma/adapter-better-sqlite3": "8.1.0-dev.6",
+    "@prisma/adapter-mariadb": "8.1.0-dev.6",
+    "@prisma/adapter-pg": "8.1.0-dev.6",
+    "@prisma/client": "8.1.0-dev.6",
+    "@types/pg": "^8.23.1",
     "actionlint": "^2.0.6",
     "cspell": "^10.2.2",
     "markdownlint-cli2": "^0.23.2",

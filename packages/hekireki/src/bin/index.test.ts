@@ -41,6 +41,7 @@ const SHIMS = [
   'kysely',
   'pydantic',
   'sea-orm',
+  'seed',
   'sqlalchemy',
   'typebox',
   'valibot',

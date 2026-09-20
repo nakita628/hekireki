@@ -17,6 +17,7 @@ export {
   NODE_ROW_HEIGHT,
   NODE_WIDTH,
   nodeHeight,
+  uniqueColumns,
 } from '../../../../diagram/layout.js'
 
 // Stored positions win; blocks the store does not know are placed by dagre and blocks that

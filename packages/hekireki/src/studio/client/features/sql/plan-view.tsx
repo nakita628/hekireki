@@ -1,23 +1,15 @@
 import { Button } from '@heroui/react'
+import type { InferResponseType } from 'hono/client'
 import { LuRefreshCw } from 'react-icons/lu'
 
-type PlanNode = {
-  readonly id: string
-  readonly parent: string | null
-  readonly label: string
-  readonly detail: string | null
-  readonly cost: number | null
-  readonly rows: number | null
-}
-
-type Plan = { readonly dialect: string; readonly nodes: readonly PlanNode[]; readonly raw: string }
+import type { client } from '../../lib/index.js'
 
 function PlanTree({
   nodes,
   parent,
   depth,
 }: {
-  readonly nodes: readonly PlanNode[]
+  readonly nodes: InferResponseType<typeof client.db.explain.$post, 200>['nodes']
   readonly parent: string | null
   readonly depth: number
 }) {
@@ -57,7 +49,7 @@ export function PlanView({
   error,
   onExplain,
 }: {
-  readonly plan: Plan | null
+  readonly plan: InferResponseType<typeof client.db.explain.$post, 200> | null
   readonly pending: boolean
   readonly error: string | null
   readonly onExplain: () => void

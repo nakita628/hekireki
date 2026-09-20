@@ -2,7 +2,7 @@ import type { DMMF } from '@prisma/generator-helper'
 
 import { autoLayout } from '../diagram/layout.js'
 import { svgToPng } from '../diagram/png.js'
-import { renderDiagramSvg } from '../diagram/svg.js'
+import { renderDiagramSvg, withRasterFonts } from '../diagram/svg.js'
 import type { DiagramTheme } from '../diagram/svg.js'
 import { annotatedDbmlRefs, makeEnums, makeRelations, makeTables } from '../helper/dbml.js'
 import { makeSchema } from '../studio/server/domain/schema.js'
@@ -35,7 +35,11 @@ export function erDiagramSvg(datamodel: DMMF.Datamodel, theme: DiagramTheme = 'l
   })
 }
 
-/** The ER diagram as Studio draws it, rasterised to PNG at 2x. */
+/**
+ * The ER diagram as Studio draws it, rasterised to PNG at 2x. The font stacks are swapped for the
+ * ones that put CJK first: resvg draws no text at all for a family that lacks the glyphs, where
+ * the browser the SVG is written for falls back a glyph at a time.
+ */
 export function erDiagramPng(datamodel: DMMF.Datamodel, theme: DiagramTheme = 'light') {
-  return svgToPng(erDiagramSvg(datamodel, theme))
+  return svgToPng(withRasterFonts(erDiagramSvg(datamodel, theme)))
 }

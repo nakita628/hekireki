@@ -232,7 +232,8 @@ curl http://localhost:5555/schema/events
 `GET /schema/events`
 
 Server-sent events: `ready` (data: the current `updatedAt`) on connect, `change` (data: the
-new `updatedAt`) after every reload, and `ping` every 15 seconds to keep the connection open.
+new `updatedAt`) after every reload, `migrations` (data: when it was seen) after the
+migrations directory changes, and `ping` every 15 seconds to keep the connection open.
 
 <h3 id="readschemaevents-responses">Responses</h3>
 
@@ -868,6 +869,647 @@ Analyze the statements against the Prisma schema's tables: data flow, lineage, r
 This operation does not require authentication
 </aside>
 
+<h1 id="hekireki-studio-api-client">client</h1>
+
+## readClientStatus
+
+<a id="opIdreadClientStatus"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/client \
+  -H 'Accept: application/json'
+```
+
+`GET /client`
+
+Load the project's Prisma Client, the first time it is asked for, and say whether it could.
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "available": true,
+  "source": "generated/client",
+  "error": null,
+  "typescript": "5.9.3",
+  "typesError": null
+}
+```
+
+<h3 id="readclientstatus-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[ClientStatus](#schemaclientstatus)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## analyzeClientQuery
+
+<a id="opIdanalyzeClientQuery"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/client/analyze \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{
+    "query": "prisma.user.findMany({ where: { email: { contains: \"ann\" } }, take: 10 })"
+  }'
+```
+
+`POST /client/analyze`
+
+Read the query against the schema's models, without running it: its calls and its problems.
+
+> Body parameter
+
+```json
+{
+  "query": "prisma.user.findMany({ where: { email: { contains: \"ann\" } }, take: 10 })"
+}
+```
+
+<h3 id="analyzeclientquery-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|
+|---|---|---|---|---|
+|body|body|[ClientQueryBody](#schemaclientquerybody)|true|none|
+|» query|body|object|true|The call, as TypeScript would write it|
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "calls": [
+    {
+      "model": "User",
+      "operation": "findMany",
+      "write": false,
+      "range": {
+        "start": 0,
+        "end": 22
+      }
+    }
+  ],
+  "transaction": false,
+  "touched": [
+    {
+      "model": "User",
+      "fields": [
+        "email"
+      ]
+    }
+  ],
+  "diagnostics": []
+}
+```
+
+<h3 id="analyzeclientquery-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[ClientAnalysis](#schemaclientanalysis)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## completeClientQuery
+
+<a id="opIdcompleteClientQuery"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/client/complete \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{
+    "query": "prisma.user.findMany({ wh",
+    "offset": 25
+  }'
+```
+
+`POST /client/complete`
+
+The completions TypeScript offers at a position, against the client's types.
+
+> Body parameter
+
+```json
+{
+  "query": "prisma.user.findMany({ wh",
+  "offset": 25
+}
+```
+
+<h3 id="completeclientquery-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|
+|---|---|---|---|---|
+|body|body|[ClientPositionBody](#schemaclientpositionbody)|true|none|
+|» query|body|object|true|The query text as typed so far|
+|» offset|body|object|true|Where the cursor is|
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "items": [
+    {
+      "label": "where",
+      "kind": "property",
+      "sortText": "11",
+      "insertText": null
+    }
+  ]
+}
+```
+
+<h3 id="completeclientquery-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[ClientCompletions](#schemaclientcompletions)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## detailClientCompletion
+
+<a id="opIddetailClientCompletion"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/client/complete/detail \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{
+    "query": "prisma.user.findMany({ wh",
+    "offset": 25,
+    "name": "where"
+  }'
+```
+
+`POST /client/complete/detail`
+
+The type and documentation of one completion item.
+
+> Body parameter
+
+```json
+{
+  "query": "prisma.user.findMany({ wh",
+  "offset": 25,
+  "name": "where"
+}
+```
+
+<h3 id="detailclientcompletion-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|
+|---|---|---|---|---|
+|body|body|[ClientCompletionDetailBody](#schemaclientcompletiondetailbody)|true|none|
+|» query|body|object|true|The query text as typed so far|
+|» offset|body|object|true|Where the cursor is|
+|» name|body|string|true|The label of the item|
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "detail": "(property) where?: UserWhereInput",
+  "documentation": null
+}
+```
+
+<h3 id="detailclientcompletion-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[ClientCompletionDetail](#schemaclientcompletiondetail)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## hoverClientQuery
+
+<a id="opIdhoverClientQuery"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/client/hover \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{
+    "query": "prisma.user.findMany({ wh",
+    "offset": 25
+  }'
+```
+
+`POST /client/hover`
+
+What TypeScript says about the symbol at a position.
+
+> Body parameter
+
+```json
+{
+  "query": "prisma.user.findMany({ wh",
+  "offset": 25
+}
+```
+
+<h3 id="hoverclientquery-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|
+|---|---|---|---|---|
+|body|body|[ClientPositionBody](#schemaclientpositionbody)|true|none|
+|» query|body|object|true|The query text as typed so far|
+|» offset|body|object|true|Where the cursor is|
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "contents": "```typescript\n(property) take?: number\n```",
+  "range": {
+    "start": 22,
+    "end": 26
+  }
+}
+```
+
+<h3 id="hoverclientquery-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[ClientHover](#schemaclienthover)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## signatureClientQuery
+
+<a id="opIdsignatureClientQuery"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/client/signature \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{
+    "query": "prisma.user.findMany({ wh",
+    "offset": 25
+  }'
+```
+
+`POST /client/signature`
+
+The signatures of the call the cursor is inside.
+
+> Body parameter
+
+```json
+{
+  "query": "prisma.user.findMany({ wh",
+  "offset": 25
+}
+```
+
+<h3 id="signatureclientquery-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|
+|---|---|---|---|---|
+|body|body|[ClientPositionBody](#schemaclientpositionbody)|true|none|
+|» query|body|object|true|The query text as typed so far|
+|» offset|body|object|true|Where the cursor is|
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "signatures": [],
+  "activeSignature": 0,
+  "activeParameter": 0
+}
+```
+
+<h3 id="signatureclientquery-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[ClientSignatureHelp](#schemaclientsignaturehelp)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## formatClientQuery
+
+<a id="opIdformatClientQuery"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/client/format \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{
+    "query": "prisma.user.findMany({ where: { email: { contains: \"ann\" } }, take: 10 })"
+  }'
+```
+
+`POST /client/format`
+
+The query laid out as the TypeScript formatter writes it; a query that does not parse is reported on `query`.
+
+> Body parameter
+
+```json
+{
+  "query": "prisma.user.findMany({ where: { email: { contains: \"ann\" } }, take: 10 })"
+}
+```
+
+<h3 id="formatclientquery-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|
+|---|---|---|---|---|
+|body|body|[ClientQueryBody](#schemaclientquerybody)|true|none|
+|» query|body|object|true|The call, as TypeScript would write it|
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "text": "prisma.user.findMany({ take: 10 })"
+}
+```
+
+<h3 id="formatclientquery-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[ClientFormatted](#schemaclientformatted)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## checkClientQuery
+
+<a id="opIdcheckClientQuery"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/client/check \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{
+    "query": "prisma.user.findMany({ where: { email: { contains: \"ann\" } }, take: 10 })"
+  }'
+```
+
+`POST /client/check`
+
+What TypeScript finds wrong with the query, checked against the client's types.
+
+> Body parameter
+
+```json
+{
+  "query": "prisma.user.findMany({ where: { email: { contains: \"ann\" } }, take: 10 })"
+}
+```
+
+<h3 id="checkclientquery-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|
+|---|---|---|---|---|
+|body|body|[ClientQueryBody](#schemaclientquerybody)|true|none|
+|» query|body|object|true|The call, as TypeScript would write it|
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "diagnostics": []
+}
+```
+
+<h3 id="checkclientquery-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[ClientTypeDiagnostics](#schemaclienttypediagnostics)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## previewClientQuery
+
+<a id="opIdpreviewClientQuery"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/client/preview \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{
+    "query": "prisma.user.findMany({ where: { email: { contains: \"ann\" } }, take: 10 })"
+  }'
+```
+
+`POST /client/preview`
+
+Run a query that only reads to show the SQL it sends while it is typed; a write is refused on `query`.
+
+> Body parameter
+
+```json
+{
+  "query": "prisma.user.findMany({ where: { email: { contains: \"ann\" } }, take: 10 })"
+}
+```
+
+<h3 id="previewclientquery-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|
+|---|---|---|---|---|
+|body|body|[ClientQueryBody](#schemaclientquerybody)|true|none|
+|» query|body|object|true|The call, as TypeScript would write it|
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "queries": [
+    {
+      "sql": "SELECT `main`.`User`.`id` FROM `main`.`User` LIMIT ? OFFSET ?",
+      "formatted": "SELECT\n  `main`.`User`.`id`\nFROM `main`.`User`\nLIMIT ?\nOFFSET ?",
+      "params": [
+        "10",
+        "0"
+      ],
+      "durationMs": 0.4
+    }
+  ],
+  "durationMs": 3.2
+}
+```
+
+<h3 id="previewclientquery-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[ClientPreview](#schemaclientpreview)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## runClientQuery
+
+<a id="opIdrunClientQuery"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/client/run \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{
+    "query": "prisma.user.findMany({ where: { email: { contains: \"ann\" } }, take: 10 })"
+  }'
+```
+
+`POST /client/run`
+
+Run the query through the project's Prisma Client and return its result with the SQL it sent.
+
+> Body parameter
+
+```json
+{
+  "query": "prisma.user.findMany({ where: { email: { contains: \"ann\" } }, take: 10 })"
+}
+```
+
+<h3 id="runclientquery-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|
+|---|---|---|---|---|
+|body|body|[ClientQueryBody](#schemaclientquerybody)|true|none|
+|» query|body|object|true|The call, as TypeScript would write it|
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "result": [
+    {
+      "id": 1,
+      "email": "ann@example.com"
+    }
+  ],
+  "rowCount": 1,
+  "truncated": false,
+  "queries": [
+    {
+      "sql": "SELECT `main`.`User`.`id` FROM `main`.`User` LIMIT ? OFFSET ?",
+      "formatted": "SELECT\n  `main`.`User`.`id`\nFROM `main`.`User`\nLIMIT ?\nOFFSET ?",
+      "params": [
+        "10",
+        "0"
+      ],
+      "durationMs": 0.4
+    }
+  ],
+  "durationMs": 3.2
+}
+```
+
+<h3 id="runclientquery-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[ClientResult](#schemaclientresult)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
 <h1 id="hekireki-studio-api-prisma">prisma</h1>
 
 ## formatSchemaText
@@ -1471,6 +2113,987 @@ The quick fixes the Prisma language server offers for the diagnostics in a range
 |200|OK|The request has succeeded.|[CodeActions](#schemacodeactions)|
 |422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
 |500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+<h1 id="hekireki-studio-api-migrate">migrate</h1>
+
+## readMigrateStatus
+
+<a id="opIdreadMigrateStatus"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/migrate \
+  -H 'Accept: application/json'
+```
+
+`GET /migrate`
+
+The migration history of the database against the migrations directory, and whether the
+database has drifted from the schema. Reads only.
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "migrationsDir": "/app/prisma/migrations",
+  "hasMigrationsTable": true,
+  "applied": [],
+  "pending": [
+    "20260201000000_profile"
+  ],
+  "failed": [],
+  "edited": [],
+  "divergence": null,
+  "drift": true,
+  "baselineNeeded": false,
+  "missingFiles": []
+}
+```
+
+<h3 id="readmigratestatus-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[MigrateStatus](#schemamigratestatus)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## readMigrateBaseline
+
+<a id="opIdreadMigrateBaseline"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/migrate/baseline \
+  -H 'Accept: application/json'
+```
+
+`GET /migrate/baseline`
+
+Which migrations the database already matches, for a database with tables and no history:
+each migration and those before it replayed into a shadow database and compared with it.
+Reads the database; writes nothing to it.
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "candidates": []
+}
+```
+
+<h3 id="readmigratebaseline-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[MigrateBaseline](#schemamigratebaseline)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## baselineMigrations
+
+<a id="opIdbaselineMigrations"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/migrate/baseline \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{
+    "name": "20260201000000_profile"
+  }'
+```
+
+`POST /migrate/baseline`
+
+Baselines the database: records the migration named and every one before it as applied,
+without running them. Refused when the database does not match them.
+
+> Body parameter
+
+```json
+{
+  "name": "20260201000000_profile"
+}
+```
+
+<h3 id="baselinemigrations-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|
+|---|---|---|---|---|
+|body|body|[MarkAppliedBody](#schemamarkappliedbody)|true|none|
+|» name|body|string|true|The directory name of the migration to record|
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "migrationsDir": "/app/prisma/migrations",
+  "hasMigrationsTable": true,
+  "applied": [],
+  "pending": [
+    "20260201000000_profile"
+  ],
+  "failed": [],
+  "edited": [],
+  "divergence": null,
+  "drift": true,
+  "baselineNeeded": false,
+  "missingFiles": []
+}
+```
+
+<h3 id="baselinemigrations-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[MigrateStatus](#schemamigratestatus)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## readMigrateDiff
+
+<a id="opIdreadMigrateDiff"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/migrate/diff \
+  -H 'Accept: application/json'
+```
+
+`GET /migrate/diff`
+
+The migration that would take the database to the schema, as Prisma Migrate would write it.
+Reads the database; writes nothing to it.
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "sql": "-- AlterTable\nALTER TABLE \"User\" ADD COLUMN \"name\" TEXT;\n",
+  "drift": true
+}
+```
+
+<h3 id="readmigratediff-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[MigrateDiff](#schemamigratediff)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## planMigration
+
+<a id="opIdplanMigration"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/migrate/plan \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{
+    "name": "profile",
+    "decisions": []
+  }'
+```
+
+`POST /migrate/plan`
+
+The migration laid out as steps that can be run one at a time, the statements that change
+rows before the ones that change the schema.
+
+> Body parameter
+
+```json
+{
+  "name": "profile",
+  "decisions": []
+}
+```
+
+<h3 id="planmigration-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|
+|---|---|---|---|---|
+|body|body|[PlanBody](#schemaplanbody)|true|none|
+|» name|body|string|false|What to call it; the timestamp is put in front|
+|» decisions|body|[[MigrationDecision](#schemamigrationdecision)]|false|Every decision to plan with, in place of the ones kept; the kept ones when left out|
+|» batch|body|integer(int32)|false|The most rows one statement of a fix changes: a fix over more is run that many at a time, so
+none holds its locks on the whole table; all of them at once when left out|
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "name": "20260201000000_profile",
+  "steps": [],
+  "checks": [],
+  "unfit": [],
+  "previews": [],
+  "notes": [],
+  "errors": []
+}
+```
+
+<h3 id="planmigration-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[MigratePlan](#schemamigrateplan)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## applyMigrationStatements
+
+<a id="opIdapplyMigrationStatements"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/migrate/apply \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{
+    "statements": [
+      "ALTER TABLE \"User\" ADD COLUMN \"name\" TEXT"
+    ]
+  }'
+```
+
+`POST /migrate/apply`
+
+Runs the statements one at a time and stops at the first the database refuses. What ran
+stays run: none of the three databases undoes a DDL statement already done.
+
+> Body parameter
+
+```json
+{
+  "statements": [
+    "ALTER TABLE \"User\" ADD COLUMN \"name\" TEXT"
+  ]
+}
+```
+
+<h3 id="applymigrationstatements-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|
+|---|---|---|---|---|
+|body|body|[ApplyBody](#schemaapplybody)|true|none|
+|» statements|body|[string]|true|The statements, in the order they must run|
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "results": [],
+  "failedAt": null,
+  "ok": true
+}
+```
+
+<h3 id="applymigrationstatements-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[ApplyResult](#schemaapplyresult)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## rehearseMigration
+
+<a id="opIdrehearseMigration"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/migrate/rehearse \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{
+    "steps": [
+      [
+        "ALTER TABLE \"User\" ADD COLUMN \"name\" TEXT"
+      ]
+    ]
+  }'
+```
+
+`POST /migrate/rehearse`
+
+The migration run for real and taken back, to see before it runs whether it goes through,
+what it does to the rows of each table, and whether the database then matches the schema.
+
+> Body parameter
+
+```json
+{
+  "steps": [
+    [
+      "ALTER TABLE \"User\" ADD COLUMN \"name\" TEXT"
+    ]
+  ]
+}
+```
+
+<h3 id="rehearsemigration-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|
+|---|---|---|---|---|
+|body|body|[RehearseBody](#schemarehearsebody)|true|none|
+|» steps|body|[[string]]|true|Each step's statements, in the order they run|
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "ok": true,
+  "steps": [],
+  "tables": [],
+  "schemaMatches": true,
+  "difference": "",
+  "limitations": []
+}
+```
+
+<h3 id="rehearsemigration-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[Rehearsal](#schemarehearsal)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## readTableCounts
+
+<a id="opIdreadTableCounts"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/migrate/tables \
+  -H 'Accept: application/json'
+```
+
+`GET /migrate/tables`
+
+The rows of every table of the database now, to compare a run with.
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "tables": []
+}
+```
+
+<h3 id="readtablecounts-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[TableCounts](#schematablecounts)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## readBackups
+
+<a id="opIdreadBackups"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/migrate/backups \
+  -H 'Accept: application/json'
+```
+
+`GET /migrate/backups`
+
+The backups taken before migrations, newest first.
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "backups": []
+}
+```
+
+<h3 id="readbackups-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[Backups](#schemabackups)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## createBackup
+
+<a id="opIdcreateBackup"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/migrate/backups \
+  -X POST \
+  -H 'Accept: application/json'
+```
+
+`POST /migrate/backups`
+
+Takes a backup of the database as it is now.
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "name": "backup_20260917101500123",
+  "location": "/app/prisma/.hekireki/backups/backup_20260917101500123.db",
+  "size": 356352,
+  "restorable": true
+}
+```
+
+<h3 id="createbackup-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[Backup](#schemabackup)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## restoreBackup
+
+<a id="opIdrestoreBackup"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/migrate/backups/restore \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{
+    "name": "backup_20260917101500123",
+    "migration": "20260917101530_profile"
+  }'
+```
+
+`POST /migrate/backups/restore`
+
+Puts the database back as a backup has it (SQLite), and removes from the directory the
+migration the run it undoes wrote.
+
+> Body parameter
+
+```json
+{
+  "name": "backup_20260917101500123",
+  "migration": "20260917101530_profile"
+}
+```
+
+<h3 id="restorebackup-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|
+|---|---|---|---|---|
+|body|body|[RestoreBody](#schemarestorebody)|true|none|
+|» name|body|string|true|The backup's name|
+|» migration|body|string|false|The migration written by the run the backup was taken for, to remove from the directory|
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "migrationsDir": "/app/prisma/migrations",
+  "hasMigrationsTable": true,
+  "applied": [],
+  "pending": [
+    "20260201000000_profile"
+  ],
+  "failed": [],
+  "edited": [],
+  "divergence": null,
+  "drift": true,
+  "baselineNeeded": false,
+  "missingFiles": []
+}
+```
+
+<h3 id="restorebackup-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[MigrateStatus](#schemamigratestatus)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## readMigrationFile
+
+<a id="opIdreadMigrationFile"></a>
+
+> Code samples
+
+```bash
+curl 'http://localhost:5555/migrate/migrations/{migrationName}' \
+  -H 'Accept: application/json'
+```
+
+`GET /migrate/migrations/{migrationName}`
+
+The migration.sql of one migration of the directory; 404 when the directory holds none of that name.
+
+<h3 id="readmigrationfile-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|
+|---|---|---|---|---|
+|migrationName|path|string|true|none|
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "name": "20260201000000_profile",
+  "file": "/app/prisma/migrations/20260201000000_profile/migration.sql",
+  "sql": "-- AlterTable\nALTER TABLE \"User\" ADD COLUMN \"name\" TEXT;\n"
+}
+```
+
+<h3 id="readmigrationfile-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[MigrationFile](#schemamigrationfile)|
+|404|Not Found|404 Not Found (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## createMigration
+
+<a id="opIdcreateMigration"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/migrate/migrations \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{
+    "name": "profile",
+    "sql": "ALTER TABLE \"User\" ADD COLUMN \"name\" TEXT;\n"
+  }'
+```
+
+`POST /migrate/migrations`
+
+Writes a migration.sql to the migrations directory, so Prisma Migrate owns it from now on.
+
+> Body parameter
+
+```json
+{
+  "name": "profile",
+  "sql": "ALTER TABLE \"User\" ADD COLUMN \"name\" TEXT;\n"
+}
+```
+
+<h3 id="createmigration-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|
+|---|---|---|---|---|
+|body|body|[CreateMigrationBody](#schemacreatemigrationbody)|true|none|
+|» name|body|string|true|What to call it; the timestamp is put in front|
+|» sql|body|string|true|The statements to write to migration.sql|
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "name": "20260201000000_profile",
+  "file": "/app/prisma/migrations/20260201000000_profile/migration.sql"
+}
+```
+
+<h3 id="createmigration-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[CreatedMigration](#schemacreatedmigration)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## markMigrationApplied
+
+<a id="opIdmarkMigrationApplied"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/migrate/migrations/applied \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{
+    "name": "20260201000000_profile"
+  }'
+```
+
+`POST /migrate/migrations/applied`
+
+Records a migration as applied without running it, for one whose statements were run a step
+at a time. The database must have been migrated at least once.
+
+> Body parameter
+
+```json
+{
+  "name": "20260201000000_profile"
+}
+```
+
+<h3 id="markmigrationapplied-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|
+|---|---|---|---|---|
+|body|body|[MarkAppliedBody](#schemamarkappliedbody)|true|none|
+|» name|body|string|true|The directory name of the migration to record|
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "migrationsDir": "/app/prisma/migrations",
+  "hasMigrationsTable": true,
+  "applied": [],
+  "pending": [
+    "20260201000000_profile"
+  ],
+  "failed": [],
+  "edited": [],
+  "divergence": null,
+  "drift": true,
+  "baselineNeeded": false,
+  "missingFiles": []
+}
+```
+
+<h3 id="markmigrationapplied-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[MigrateStatus](#schemamigratestatus)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## markMigrationRolledBack
+
+<a id="opIdmarkMigrationRolledBack"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/migrate/migrations/rolled-back \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{
+    "name": "20260201000000_profile"
+  }'
+```
+
+`POST /migrate/migrations/rolled-back`
+
+Records a migration as rolled back, for one that failed and left the database as it was. It
+stops counting as failed, which a database has to have before anything else reaches it.
+
+> Body parameter
+
+```json
+{
+  "name": "20260201000000_profile"
+}
+```
+
+<h3 id="markmigrationrolledback-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|
+|---|---|---|---|---|
+|body|body|[MarkAppliedBody](#schemamarkappliedbody)|true|none|
+|» name|body|string|true|The directory name of the migration to record|
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "migrationsDir": "/app/prisma/migrations",
+  "hasMigrationsTable": true,
+  "applied": [],
+  "pending": [
+    "20260201000000_profile"
+  ],
+  "failed": [],
+  "edited": [],
+  "divergence": null,
+  "drift": true,
+  "baselineNeeded": false,
+  "missingFiles": []
+}
+```
+
+<h3 id="markmigrationrolledback-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[MigrateStatus](#schemamigratestatus)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## readMigrationDecisions
+
+<a id="opIdreadMigrationDecisions"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/migrate/decisions \
+  -H 'Accept: application/json'
+```
+
+`GET /migrate/decisions`
+
+What has been decided on the page about the checks, as Studio kept it.
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "file": "/app/prisma/.hekireki/migrate.json",
+  "decisions": []
+}
+```
+
+<h3 id="readmigrationdecisions-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[MigrationDecisions](#schemamigrationdecisions)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## writeMigrationDecisions
+
+<a id="opIdwriteMigrationDecisions"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/migrate/decisions \
+  -X PUT \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{
+    "decisions": []
+  }'
+```
+
+`PUT /migrate/decisions`
+
+Keeps the decisions, so the same plan is made the next time the page is opened, and by
+`hekireki migrate check` and `hekireki migrate plan` from the command line.
+
+> Body parameter
+
+```json
+{
+  "decisions": []
+}
+```
+
+<h3 id="writemigrationdecisions-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|
+|---|---|---|---|---|
+|body|body|[DecisionsBody](#schemadecisionsbody)|true|none|
+|» decisions|body|[[MigrationDecision](#schemamigrationdecision)]|true|All of them: what is left out is forgotten|
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "file": "/app/prisma/.hekireki/migrate.json",
+  "decisions": []
+}
+```
+
+<h3 id="writemigrationdecisions-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[MigrationDecisions](#schemamigrationdecisions)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+
+<aside class="success">
+This operation does not require authentication
+</aside>
+
+## deployMigrations
+
+<a id="opIddeployMigrations"></a>
+
+> Code samples
+
+```bash
+curl http://localhost:5555/migrate/deploy \
+  -X POST \
+  -H 'Accept: application/json'
+```
+
+`POST /migrate/deploy`
+
+Applies every migration the database has not run yet, as `prisma migrate deploy` does.
+
+> Example responses
+
+> 200 Response
+
+```json
+{
+  "applied": [
+    "20260201000000_profile"
+  ]
+}
+```
+
+<h3 id="deploymigrations-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|OK|The request has succeeded.|[Deployed](#schemadeployed)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
 
 <aside class="success">
 This operation does not require authentication
@@ -3221,6 +4844,581 @@ This operation does not require authentication
 |---|---|---|---|---|
 |sql|object|true|none|The statements|
 
+<h2 id="tocS_ClientStatus">ClientStatus</h2>
+<!-- backwards compatibility -->
+<a id="schemaclientstatus"></a>
+<a id="schema_ClientStatus"></a>
+<a id="tocSclientstatus"></a>
+<a id="tocsclientstatus"></a>
+
+```json
+{
+  "available": true,
+  "source": "generated/client",
+  "error": null,
+  "typescript": "5.9.3",
+  "typesError": null
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|available|boolean|true|none|Whether the client is loaded and connected through the project's driver adapter|
+|source|string|true|none|Where the client was loaded from: the generator output, or `@prisma/client`|
+|error|string|true|none|Why the client could not be loaded, when it could not|
+|typescript|string|true|none|The version of the project's TypeScript the editor completes with, or null without one|
+|typesError|string|true|none|Why the editor cannot complete against the client's types, when it cannot|
+
+<h2 id="tocS_ClientCall">ClientCall</h2>
+<!-- backwards compatibility -->
+<a id="schemaclientcall"></a>
+<a id="schema_ClientCall"></a>
+<a id="tocSclientcall"></a>
+<a id="tocsclientcall"></a>
+
+```json
+{
+  "model": "User",
+  "operation": "findMany",
+  "write": false,
+  "range": {
+    "start": 0,
+    "end": 22
+  }
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|model|string|true|none|The model the delegate stands for (`prisma.user` → `User`)|
+|operation|string|true|none|The operation called on it (`findMany`, `create`, ...)|
+|write|boolean|true|none|Whether the operation writes|
+|range|object|true|none|Where the call sits in the text|
+
+<h2 id="tocS_ClientTouchedModel">ClientTouchedModel</h2>
+<!-- backwards compatibility -->
+<a id="schemaclienttouchedmodel"></a>
+<a id="schema_ClientTouchedModel"></a>
+<a id="tocSclienttouchedmodel"></a>
+<a id="tocsclienttouchedmodel"></a>
+
+```json
+{
+  "model": "User",
+  "fields": [
+    "email",
+    "posts"
+  ]
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|model|string|true|none|The model, as the schema declares it|
+|fields|[string]|true|none|The fields of the model the arguments name: scalars they filter, select, order or write, relations they follow|
+
+<h2 id="tocS_ClientDiagnostic">ClientDiagnostic</h2>
+<!-- backwards compatibility -->
+<a id="schemaclientdiagnostic"></a>
+<a id="schema_ClientDiagnostic"></a>
+<a id="tocSclientdiagnostic"></a>
+<a id="tocsclientdiagnostic"></a>
+
+```json
+{
+  "message": "Unknown model delegate \"usr\"",
+  "range": {
+    "start": 7,
+    "end": 10
+  }
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|message|string|true|none|What is wrong|
+|range|object|true|none|Where|
+
+<h2 id="tocS_ClientAnalysis">ClientAnalysis</h2>
+<!-- backwards compatibility -->
+<a id="schemaclientanalysis"></a>
+<a id="schema_ClientAnalysis"></a>
+<a id="tocSclientanalysis"></a>
+<a id="tocsclientanalysis"></a>
+
+```json
+{
+  "calls": [
+    {
+      "model": "User",
+      "operation": "findMany",
+      "write": false,
+      "range": {
+        "start": 0,
+        "end": 22
+      }
+    }
+  ],
+  "transaction": false,
+  "touched": [
+    {
+      "model": "User",
+      "fields": [
+        "email"
+      ]
+    }
+  ],
+  "diagnostics": []
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|calls|[[ClientCall](#schemaclientcall)]|true|none|The calls, in order (empty when the text does not parse)|
+|transaction|boolean|true|none|Whether the calls are batched in one `$transaction`|
+|touched|[[ClientTouchedModel](#schemaclienttouchedmodel)]|true|none|The models the calls are made on and the ones their relations reach, in the order they are reached|
+|diagnostics|[[ClientDiagnostic](#schemaclientdiagnostic)]|true|none|What keeps the query from being run (empty when it can be)|
+
+<h2 id="tocS_clientQuery">clientQuery</h2>
+<!-- backwards compatibility -->
+<a id="schemaclientquery"></a>
+<a id="schema_clientQuery"></a>
+<a id="tocSclientquery"></a>
+<a id="tocsclientquery"></a>
+
+```json
+"string"
+```
+
+<h2 id="tocS_ClientQueryBody">ClientQueryBody</h2>
+<!-- backwards compatibility -->
+<a id="schemaclientquerybody"></a>
+<a id="schema_ClientQueryBody"></a>
+<a id="tocSclientquerybody"></a>
+<a id="tocsclientquerybody"></a>
+
+```json
+{
+  "query": "prisma.user.findMany({ where: { email: { contains: \"ann\" } }, take: 10 })"
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|query|object|true|none|The call, as TypeScript would write it|
+
+<h2 id="tocS_ClientCompletionItem">ClientCompletionItem</h2>
+<!-- backwards compatibility -->
+<a id="schemaclientcompletionitem"></a>
+<a id="schema_ClientCompletionItem"></a>
+<a id="tocSclientcompletionitem"></a>
+<a id="tocsclientcompletionitem"></a>
+
+```json
+{
+  "label": "where",
+  "kind": "property",
+  "sortText": "11",
+  "insertText": null
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|label|string|true|none|What is inserted, and shown|
+|kind|string|true|none|The TypeScript element kind (`property`, `method`, `keyword`, ...)|
+|sortText|string|true|none|The order TypeScript ranks the item in|
+|insertText|string|true|none|The text to insert when it differs from the label (a quoted key), else null|
+
+<h2 id="tocS_ClientCompletions">ClientCompletions</h2>
+<!-- backwards compatibility -->
+<a id="schemaclientcompletions"></a>
+<a id="schema_ClientCompletions"></a>
+<a id="tocSclientcompletions"></a>
+<a id="tocsclientcompletions"></a>
+
+```json
+{
+  "items": [
+    {
+      "label": "where",
+      "kind": "property",
+      "sortText": "11",
+      "insertText": null
+    }
+  ]
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|items|[[ClientCompletionItem](#schemaclientcompletionitem)]|true|none|The items, unordered; `sortText` orders them|
+
+<h2 id="tocS_queryOffset">queryOffset</h2>
+<!-- backwards compatibility -->
+<a id="schemaqueryoffset"></a>
+<a id="schema_queryOffset"></a>
+<a id="tocSqueryoffset"></a>
+<a id="tocsqueryoffset"></a>
+
+```json
+0
+```
+
+<h2 id="tocS_ClientPositionBody">ClientPositionBody</h2>
+<!-- backwards compatibility -->
+<a id="schemaclientpositionbody"></a>
+<a id="schema_ClientPositionBody"></a>
+<a id="tocSclientpositionbody"></a>
+<a id="tocsclientpositionbody"></a>
+
+```json
+{
+  "query": "prisma.user.findMany({ wh",
+  "offset": 25
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|query|object|true|none|The query text as typed so far|
+|offset|object|true|none|Where the cursor is|
+
+<h2 id="tocS_ClientCompletionDetail">ClientCompletionDetail</h2>
+<!-- backwards compatibility -->
+<a id="schemaclientcompletiondetail"></a>
+<a id="schema_ClientCompletionDetail"></a>
+<a id="tocSclientcompletiondetail"></a>
+<a id="tocsclientcompletiondetail"></a>
+
+```json
+{
+  "detail": "(property) where?: UserWhereInput",
+  "documentation": null
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|detail|string|true|none|The item's signature as TypeScript prints it|
+|documentation|string|true|none|Its doc comment, as Markdown|
+
+<h2 id="tocS_ClientCompletionDetailBody">ClientCompletionDetailBody</h2>
+<!-- backwards compatibility -->
+<a id="schemaclientcompletiondetailbody"></a>
+<a id="schema_ClientCompletionDetailBody"></a>
+<a id="tocSclientcompletiondetailbody"></a>
+<a id="tocsclientcompletiondetailbody"></a>
+
+```json
+{
+  "query": "prisma.user.findMany({ wh",
+  "offset": 25,
+  "name": "where"
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|query|object|true|none|The query text as typed so far|
+|offset|object|true|none|Where the cursor is|
+|name|string|true|none|The label of the item|
+
+<h2 id="tocS_ClientHover">ClientHover</h2>
+<!-- backwards compatibility -->
+<a id="schemaclienthover"></a>
+<a id="schema_ClientHover"></a>
+<a id="tocSclienthover"></a>
+<a id="tocsclienthover"></a>
+
+```json
+{
+  "contents": "```typescript\n(property) take?: number\n```",
+  "range": {
+    "start": 22,
+    "end": 26
+  }
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|contents|string|true|none|The type and documentation as Markdown, or null when nothing is there|
+|range|object|true|none|The symbol the hover is about|
+
+<h2 id="tocS_ClientSignatureParameter">ClientSignatureParameter</h2>
+<!-- backwards compatibility -->
+<a id="schemaclientsignatureparameter"></a>
+<a id="schema_ClientSignatureParameter"></a>
+<a id="tocSclientsignatureparameter"></a>
+<a id="tocsclientsignatureparameter"></a>
+
+```json
+{
+  "label": "args?: UserFindManyArgs",
+  "documentation": null
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|label|string|true|none|The parameter as TypeScript prints it|
+|documentation|string|true|none|Its doc comment|
+
+<h2 id="tocS_ClientSignature">ClientSignature</h2>
+<!-- backwards compatibility -->
+<a id="schemaclientsignature"></a>
+<a id="schema_ClientSignature"></a>
+<a id="tocSclientsignature"></a>
+<a id="tocsclientsignature"></a>
+
+```json
+{
+  "label": "findMany(args?: UserFindManyArgs): PrismaPromise<User[]>",
+  "documentation": "Find zero or more Users that matches the filter.",
+  "parameters": [
+    {
+      "label": "args?: UserFindManyArgs",
+      "documentation": null
+    }
+  ]
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|label|string|true|none|The whole signature|
+|documentation|string|true|none|Its doc comment|
+|parameters|[[ClientSignatureParameter](#schemaclientsignatureparameter)]|true|none|The parameters, in order|
+
+<h2 id="tocS_ClientSignatureHelp">ClientSignatureHelp</h2>
+<!-- backwards compatibility -->
+<a id="schemaclientsignaturehelp"></a>
+<a id="schema_ClientSignatureHelp"></a>
+<a id="tocSclientsignaturehelp"></a>
+<a id="tocsclientsignaturehelp"></a>
+
+```json
+{
+  "signatures": [],
+  "activeSignature": 0,
+  "activeParameter": 0
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|signatures|[[ClientSignature](#schemaclientsignature)]|true|none|The overloads; empty when the cursor is not inside a call|
+|activeSignature|integer(int32)|true|none|The overload the arguments so far match|
+|activeParameter|integer(int32)|true|none|The parameter the cursor is on|
+
+<h2 id="tocS_ClientFormatted">ClientFormatted</h2>
+<!-- backwards compatibility -->
+<a id="schemaclientformatted"></a>
+<a id="schema_ClientFormatted"></a>
+<a id="tocSclientformatted"></a>
+<a id="tocsclientformatted"></a>
+
+```json
+{
+  "text": "prisma.user.findMany({ take: 10 })"
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|text|string|true|none|The whole text, formatted; the same text when it already is|
+
+<h2 id="tocS_TypeSeverity">TypeSeverity</h2>
+<!-- backwards compatibility -->
+<a id="schematypeseverity"></a>
+<a id="schema_TypeSeverity"></a>
+<a id="tocStypeseverity"></a>
+<a id="tocstypeseverity"></a>
+
+```json
+"error"
+```
+
+<h2 id="tocS_ClientTypeDiagnostic">ClientTypeDiagnostic</h2>
+<!-- backwards compatibility -->
+<a id="schemaclienttypediagnostic"></a>
+<a id="schema_ClientTypeDiagnostic"></a>
+<a id="tocSclienttypediagnostic"></a>
+<a id="tocsclienttypediagnostic"></a>
+
+```json
+{
+  "message": "Object literal may only specify known properties.",
+  "severity": "error",
+  "range": {
+    "start": 22,
+    "end": 26
+  }
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|message|string|true|none|What is wrong|
+|severity|object|true|none|How serious it is|
+|range|object|true|none|Where|
+
+<h2 id="tocS_ClientTypeDiagnostics">ClientTypeDiagnostics</h2>
+<!-- backwards compatibility -->
+<a id="schemaclienttypediagnostics"></a>
+<a id="schema_ClientTypeDiagnostics"></a>
+<a id="tocSclienttypediagnostics"></a>
+<a id="tocsclienttypediagnostics"></a>
+
+```json
+{
+  "diagnostics": []
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|diagnostics|[[ClientTypeDiagnostic](#schemaclienttypediagnostic)]|true|none|The problems, in order of position|
+
+<h2 id="tocS_ClientSqlQuery">ClientSqlQuery</h2>
+<!-- backwards compatibility -->
+<a id="schemaclientsqlquery"></a>
+<a id="schema_ClientSqlQuery"></a>
+<a id="tocSclientsqlquery"></a>
+<a id="tocsclientsqlquery"></a>
+
+```json
+{
+  "sql": "SELECT `main`.`User`.`id` FROM `main`.`User` LIMIT ? OFFSET ?",
+  "formatted": "SELECT\n  `main`.`User`.`id`\nFROM `main`.`User`\nLIMIT ?\nOFFSET ?",
+  "params": [
+    "10",
+    "0"
+  ],
+  "durationMs": 0.4
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|sql|string|true|none|The statement as the driver received it, from Prisma Client's own query event|
+|formatted|string|true|none|The same statement laid out a clause per line for reading: only its whitespace differs|
+|params|[object]|true|none|The values bound to its placeholders, in order|
+|durationMs|number(double)|true|none|How long the database took, in milliseconds|
+
+<h2 id="tocS_ClientPreview">ClientPreview</h2>
+<!-- backwards compatibility -->
+<a id="schemaclientpreview"></a>
+<a id="schema_ClientPreview"></a>
+<a id="tocSclientpreview"></a>
+<a id="tocsclientpreview"></a>
+
+```json
+{
+  "queries": [
+    {
+      "sql": "SELECT `main`.`User`.`id` FROM `main`.`User` LIMIT ? OFFSET ?",
+      "formatted": "SELECT\n  `main`.`User`.`id`\nFROM `main`.`User`\nLIMIT ?\nOFFSET ?",
+      "params": [
+        "10",
+        "0"
+      ],
+      "durationMs": 0.4
+    }
+  ],
+  "durationMs": 3.2
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|queries|[[ClientSqlQuery](#schemaclientsqlquery)]|true|none|The statements the client sent, in order|
+|durationMs|number(double)|true|none|Wall time of the whole call in milliseconds|
+
+<h2 id="tocS_ClientResult">ClientResult</h2>
+<!-- backwards compatibility -->
+<a id="schemaclientresult"></a>
+<a id="schema_ClientResult"></a>
+<a id="tocSclientresult"></a>
+<a id="tocsclientresult"></a>
+
+```json
+{
+  "result": [
+    {
+      "id": 1,
+      "email": "ann@example.com"
+    }
+  ],
+  "rowCount": 1,
+  "truncated": false,
+  "queries": [
+    {
+      "sql": "SELECT `main`.`User`.`id` FROM `main`.`User` LIMIT ? OFFSET ?",
+      "formatted": "SELECT\n  `main`.`User`.`id`\nFROM `main`.`User`\nLIMIT ?\nOFFSET ?",
+      "params": [
+        "10",
+        "0"
+      ],
+      "durationMs": 0.4
+    }
+  ],
+  "durationMs": 3.2
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|result|object|true|none|The value the call resolved to, as JSON: dates are ISO strings, bigints and decimals are
+strings, bytes are base64. A `$transaction` resolves to the array of its results.|
+|rowCount|integer(int32)|true|none|The length of the result, when it is an array|
+|truncated|boolean|true|none|Whether only the first rows of the array are in `result`|
+|queries|[[ClientSqlQuery](#schemaclientsqlquery)]|true|none|The statements the client sent, in order|
+|durationMs|number(double)|true|none|Wall time of the whole call in milliseconds|
+
 <h2 id="tocS_LspTextEdit">LspTextEdit</h2>
 <!-- backwards compatibility -->
 <a id="schemalsptextedit"></a>
@@ -3827,6 +6025,906 @@ This operation does not require authentication
 |path|string|false|none|The file the text belongs to, so the other loaded schema files are seen; the first file when omitted|
 |range|object|true|none|The range the actions are asked for|
 |diagnostics|[[LspDiagnostic](#schemalspdiagnostic)]|true|none|The diagnostics in that range, as the lint route returned them|
+
+<h2 id="tocS_MigrationRecord">MigrationRecord</h2>
+<!-- backwards compatibility -->
+<a id="schemamigrationrecord"></a>
+<a id="schema_MigrationRecord"></a>
+<a id="tocSmigrationrecord"></a>
+<a id="tocsmigrationrecord"></a>
+
+```json
+{
+  "name": "20260101000000_init",
+  "startedAt": "2026-01-01T00:00:00.000Z",
+  "finishedAt": "2026-01-01T00:00:01.000Z",
+  "rolledBackAt": null,
+  "appliedStepsCount": 1,
+  "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|name|string|true|none|The directory name of the migration|
+|startedAt|string|true|none|When it started, as the database recorded it|
+|finishedAt|string|true|none|When it finished; null while it is running or if it failed|
+|rolledBackAt|string|true|none|When it was marked rolled back, if it was|
+|appliedStepsCount|integer(int32)|true|none|How many statements of it ran|
+|checksum|string|true|none|The checksum of the migration file as it was when it ran|
+
+<h2 id="tocS_Divergence">Divergence</h2>
+<!-- backwards compatibility -->
+<a id="schemadivergence"></a>
+<a id="schema_Divergence"></a>
+<a id="tocSdivergence"></a>
+<a id="tocsdivergence"></a>
+
+```json
+"databaseIsBehind"
+```
+
+<h2 id="tocS_MigrateStatus">MigrateStatus</h2>
+<!-- backwards compatibility -->
+<a id="schemamigratestatus"></a>
+<a id="schema_MigrateStatus"></a>
+<a id="tocSmigratestatus"></a>
+<a id="tocsmigratestatus"></a>
+
+```json
+{
+  "migrationsDir": "/app/prisma/migrations",
+  "hasMigrationsTable": true,
+  "applied": [],
+  "pending": [
+    "20260201000000_profile"
+  ],
+  "failed": [],
+  "edited": [],
+  "divergence": null,
+  "drift": true,
+  "baselineNeeded": false,
+  "missingFiles": []
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|migrationsDir|string|true|none|Where the migrations of the project are read from|
+|hasMigrationsTable|boolean|true|none|Whether the database has `_prisma_migrations`; a database never migrated has not|
+|applied|[[MigrationRecord](#schemamigrationrecord)]|true|none|Every migration the database has recorded, oldest first|
+|pending|[string]|true|none|Migrations in the directory the database has not applied|
+|failed|[string]|true|none|Migrations that failed and were never resolved|
+|edited|[string]|true|none|Migrations whose file changed after the database ran it|
+|divergence|object|true|none|How the two histories differ, when they do|
+|drift|boolean|true|none|Whether the database differs from the schema, migrations aside|
+|baselineNeeded|boolean|true|none|Whether the database has tables and no migration history, which `prisma migrate deploy`
+refuses (P3005): it has to be baselined at the migration it already matches|
+|missingFiles|[string]|true|none|Migrations the database has recorded whose directory the migrations directory does not hold|
+
+<h2 id="tocS_BaselineCandidate">BaselineCandidate</h2>
+<!-- backwards compatibility -->
+<a id="schemabaselinecandidate"></a>
+<a id="schema_BaselineCandidate"></a>
+<a id="tocSbaselinecandidate"></a>
+<a id="tocsbaselinecandidate"></a>
+
+```json
+{
+  "name": "20260101000000_init",
+  "matches": true,
+  "difference": ""
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|name|string|true|none|The directory name of the migration|
+|matches|boolean|true|none|Whether the database is what this migration and those before it make of an empty one|
+|difference|string|true|none|The SQL that would take what the migrations make to the database; empty when it matches|
+
+<h2 id="tocS_MigrateBaseline">MigrateBaseline</h2>
+<!-- backwards compatibility -->
+<a id="schemamigratebaseline"></a>
+<a id="schema_MigrateBaseline"></a>
+<a id="tocSmigratebaseline"></a>
+<a id="tocsmigratebaseline"></a>
+
+```json
+{
+  "candidates": []
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|candidates|[[BaselineCandidate](#schemabaselinecandidate)]|true|none|Every migration of the directory, oldest first|
+
+<h2 id="tocS_MarkAppliedBody">MarkAppliedBody</h2>
+<!-- backwards compatibility -->
+<a id="schemamarkappliedbody"></a>
+<a id="schema_MarkAppliedBody"></a>
+<a id="tocSmarkappliedbody"></a>
+<a id="tocsmarkappliedbody"></a>
+
+```json
+{
+  "name": "20260201000000_profile"
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|name|string|true|none|The directory name of the migration to record|
+
+<h2 id="tocS_MigrateDiff">MigrateDiff</h2>
+<!-- backwards compatibility -->
+<a id="schemamigratediff"></a>
+<a id="schema_MigrateDiff"></a>
+<a id="tocSmigratediff"></a>
+<a id="tocsmigratediff"></a>
+
+```json
+{
+  "sql": "-- AlterTable\nALTER TABLE \"User\" ADD COLUMN \"name\" TEXT;\n",
+  "drift": true
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|sql|string|true|none|The migration Prisma Migrate would write, empty when the database matches the schema|
+|drift|boolean|true|none|Whether there was anything to write|
+
+<h2 id="tocS_StepKind">StepKind</h2>
+<!-- backwards compatibility -->
+<a id="schemastepkind"></a>
+<a id="schema_StepKind"></a>
+<a id="tocSstepkind"></a>
+<a id="tocsstepkind"></a>
+
+```json
+"fix"
+```
+
+<h2 id="tocS_MigrationChange">MigrationChange</h2>
+<!-- backwards compatibility -->
+<a id="schemamigrationchange"></a>
+<a id="schema_MigrationChange"></a>
+<a id="tocSmigrationchange"></a>
+<a id="tocsmigrationchange"></a>
+
+```json
+{
+  "kind": "foreign-key",
+  "table": "Post",
+  "columns": [
+    "categoryId"
+  ],
+  "target": "Category"
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|kind|string|true|none|`create-enum`, `create-table`, `rebuild-table`, `copy-rows`, `drop-table`, `add-column`,
+`drop-column`, `foreign-key`, `unique` or `index`|
+|table|string|true|none|The table it is about|
+|columns|[string]|true|none|The columns it is about, when it is about some|
+|target|string|true|none|The table a foreign key points at; null otherwise|
+
+<h2 id="tocS_MigrationStep">MigrationStep</h2>
+<!-- backwards compatibility -->
+<a id="schemamigrationstep"></a>
+<a id="schema_MigrationStep"></a>
+<a id="tocSmigrationstep"></a>
+<a id="tocsmigrationstep"></a>
+
+```json
+{
+  "title": "Add the column",
+  "kind": "migration",
+  "statements": [
+    "ALTER TABLE \"User\" ADD COLUMN \"name\" TEXT"
+  ],
+  "changes": [
+    {
+      "kind": "add-column",
+      "table": "User",
+      "columns": [
+        "name"
+      ],
+      "target": null
+    }
+  ],
+  "destructive": false,
+  "rows": null,
+  "subject": null,
+  "fixKind": null
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|title|string|true|none|What the step does, for the person deciding whether to run it|
+|kind|object|true|none|Whether it changes rows or the schema|
+|statements|[string]|true|none|The statements of the step, in the order they must run|
+|changes|[[MigrationChange](#schemamigrationchange)]|true|none|What it does, one change each, in the words of the schema rather than of the database|
+|destructive|boolean|true|none|Whether it loses rows or what a column holds; a table rebuilt in place loses neither|
+|rows|integer(int32)|true|none|How many rows a fix will change, counted against the database now; null for a schema step|
+|subject|string|true|none|The field or relation a fix changes the rows of (`User.email`); null for a schema step|
+|fixKind|string|true|none|What a fix does to them: `nulls`, `values`, `duplicates`, `orphans`, `invalid`, `convert` or
+`fill`; null for a schema step|
+
+<h2 id="tocS_MigrationSuggestion">MigrationSuggestion</h2>
+<!-- backwards compatibility -->
+<a id="schemamigrationsuggestion"></a>
+<a id="schema_MigrationSuggestion"></a>
+<a id="tocSmigrationsuggestion"></a>
+<a id="tocsmigrationsuggestion"></a>
+
+```json
+{
+  "choice": "keep-first-delete",
+  "value": "createdAt",
+  "reason": "oldest"
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|choice|string|true|none|One of the choices of the check|
+|value|string|true|none|What the choice needs, as a decision carries it|
+|reason|string|true|none|Why it is offered: `schema-default`, `uuid`, `random-id`, `now`, `from-key`, `empty-string`,
+`zero`, `false`, `empty-object`, `first-referenced`, `enum-first`, `enum-default`,
+`enum-same-name`, `enum-replaced`, `oldest`, `first-by-key`, `optional-relation`,
+`required-relation`, `renamed`, `moved`, `convert-number`, `clamp`,
+`truncate`, `nullable` or `not-nullable`|
+
+<h2 id="tocS_MigrationDestination">MigrationDestination</h2>
+<!-- backwards compatibility -->
+<a id="schemamigrationdestination"></a>
+<a id="schema_MigrationDestination"></a>
+<a id="tocSmigrationdestination"></a>
+<a id="tocsmigrationdestination"></a>
+
+```json
+{
+  "choice": "move",
+  "value": "Profile.nickname",
+  "type": "String",
+  "fits": true,
+  "relation": "points-here",
+  "via": "Profile.userId → User.id",
+  "created": true
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|choice|string|true|none|`rename` for a column of the same table, `move` for one of a related model|
+|value|string|true|none|What the decision names: the field, or `Model.field` for a move|
+|type|string|true|none|The Prisma type of the column|
+|fits|boolean|true|none|Whether the values fit its kind (text takes any)|
+|relation|string|true|none|How the tables are related: `same` table, the destination's rows `points-here` (a profile at
+its user), or this table's rows point at the destination's (`pointed-at`)|
+|via|string|true|none|The foreign key the values move along, `Profile.userId → User.id`; null for a rename|
+|created|boolean|true|none|Whether the migration creates the destination's table, whose rows are made from the values|
+
+<h2 id="tocS_CheckStatus">CheckStatus</h2>
+<!-- backwards compatibility -->
+<a id="schemacheckstatus"></a>
+<a id="schema_CheckStatus"></a>
+<a id="tocScheckstatus"></a>
+<a id="tocscheckstatus"></a>
+
+```json
+"passed"
+```
+
+<h2 id="tocS_MigrationCheck">MigrationCheck</h2>
+<!-- backwards compatibility -->
+<a id="schemamigrationcheck"></a>
+<a id="schema_MigrationCheck"></a>
+<a id="tocSmigrationcheck"></a>
+<a id="tocsmigrationcheck"></a>
+
+```json
+{
+  "kind": "unique",
+  "modelName": "User",
+  "subject": "User.email",
+  "what": "unique",
+  "hint": "Delete the duplicates before the key is made, or say which stays on the Migrate page.",
+  "field": "email",
+  "choices": [
+    "keep-first-delete"
+  ],
+  "facts": {
+    "model": "User",
+    "field": "email",
+    "what": "unique",
+    "fields": "email"
+  },
+  "lost": null,
+  "suggestion": {
+    "choice": "keep-first-delete",
+    "value": null,
+    "reason": "first-by-key"
+  },
+  "candidates": [],
+  "destinations": [],
+  "status": "blocking",
+  "count": 2,
+  "error": null
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|kind|string|true|none|Which check it is (`not-null`, `unique`, `enum`, `foreign-key`, ...)|
+|modelName|string|true|none|The model it is about|
+|subject|string|true|none|The model and field it is about|
+|what|string|true|none|What the migration asks of them|
+|hint|string|true|none|What to do about it, in a sentence|
+|field|string|true|none|The field, or the relation for a foreign key, a decision about it is made on|
+|choices|[string]|true|none|What can be decided about it on the page, empty when nothing can|
+|facts|object|true|none|What to read it by, for the page to say in its own language: `model`, `field`, `what`, and by
+kind `type`, `enum`, `removed`, `members`, `member`, `fields`, `orderBy`, `target`, `column`,
+`renamedTo`, `from`, `to`, `default` or `table`|
+|lost|string|true|none|A query for the rows and values the change loses, as the database holds them now (a column or
+table dropped, a column added again); null when it loses none|
+|suggestion|object|true|none|The decision read from the schema and the database as the likeliest fit; null when there is none|
+|candidates|[[MigrationSuggestion](#schemamigrationsuggestion)]|true|none|Where the values of a dropped column could have gone, the likeliest first: a column of the same
+table (`rename`) or of a related model (`move`) the migration adds, by the likeness of its name
+and kind, each with why (`same-name`, `similar-name`, `same-name-related` or
+`similar-name-related`). Empty when nowhere reads as one, and the values are lost.|
+|destinations|[[MigrationDestination](#schemamigrationdestination)]|true|none|Every column the migration adds that the values of a dropped column could go to, whatever its
+name: for the page to complete the field a rename or a move names, and to show how it moves|
+|status|object|true|none|How it came out|
+|count|integer(int32)|true|none|How many rows fail it; null when the check's query failed|
+|error|string|true|none|Why the check could not be counted, when it could not|
+
+<h2 id="tocS_UnfitDecision">UnfitDecision</h2>
+<!-- backwards compatibility -->
+<a id="schemaunfitdecision"></a>
+<a id="schema_UnfitDecision"></a>
+<a id="tocSunfitdecision"></a>
+<a id="tocsunfitdecision"></a>
+
+```json
+{
+  "kind": "column-added",
+  "modelName": "User",
+  "field": "hekireki",
+  "choice": "value",
+  "value": "",
+  "reasons": [
+    "User.hekireki: User has no field hekireki."
+  ]
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|kind|string|true|none|The check it answered|
+|modelName|string|true|none|The model it is about|
+|field|string|true|none|The field, or the relation for a foreign key|
+|choice|string|true|none|What it said to do|
+|value|string|true|none|What the choice was given; null when it needed nothing|
+|reasons|[string]|true|none|What no longer fits, as the check says it|
+
+<h2 id="tocS_MigrationPreview">MigrationPreview</h2>
+<!-- backwards compatibility -->
+<a id="schemamigrationpreview"></a>
+<a id="schema_MigrationPreview"></a>
+<a id="tocSmigrationpreview"></a>
+<a id="tocsmigrationpreview"></a>
+
+```json
+{
+  "modelName": "User",
+  "sql": "WITH hk_fix_0 AS (...) SELECT * FROM hk_fix_0 ORDER BY id"
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|modelName|string|true|none|The model the rows belong to|
+|sql|string|true|none|The query that shows them; it reads, and changes nothing|
+
+<h2 id="tocS_MigratePlan">MigratePlan</h2>
+<!-- backwards compatibility -->
+<a id="schemamigrateplan"></a>
+<a id="schema_MigratePlan"></a>
+<a id="tocSmigrateplan"></a>
+<a id="tocsmigrateplan"></a>
+
+```json
+{
+  "name": "20260201000000_profile",
+  "steps": [],
+  "checks": [],
+  "unfit": [],
+  "previews": [],
+  "notes": [],
+  "errors": []
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|name|string|true|none|The directory name the migration would be written under|
+|steps|[[MigrationStep](#schemamigrationstep)]|true|none|The steps, in the order they must run|
+|checks|[[MigrationCheck](#schemamigrationcheck)]|true|none|What the migration needs of the rows the database holds now|
+|unfit|[[UnfitDecision](#schemaunfitdecision)]|true|none|Kept decisions set aside because they no longer fit the schema or the database: a field or
+model the schema has lost since they were made. The plan is made without them.|
+|previews|[[MigrationPreview](#schemamigrationpreview)]|true|none|Each fixed model's rows as the fixes will leave them, before anything is run|
+|notes|[string]|true|none|What the person running it needs to know|
+|errors|[string]|true|none|Why the plan cannot be run as it is, when it cannot|
+
+<h2 id="tocS_MigrationDecision">MigrationDecision</h2>
+<!-- backwards compatibility -->
+<a id="schemamigrationdecision"></a>
+<a id="schema_MigrationDecision"></a>
+<a id="tocSmigrationdecision"></a>
+<a id="tocsmigrationdecision"></a>
+
+```json
+{
+  "kind": "not-null",
+  "modelName": "User",
+  "field": "name",
+  "choice": "value",
+  "value": "unknown"
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|kind|string|true|none|The check it answers (`not-null`, `unique`, `foreign-key`, ...)|
+|modelName|string|true|none|The model it is about|
+|field|string|true|none|The field, or the relation for a foreign key|
+|choice|string|true|none|What to do, from the choices the check offers|
+|value|string|false|none|What a choice needs, when it needs something: the value or SQL written, the field a rename
+became, the `STORED=MEMBER` pairs of an enum, or the field duplicates are ordered by|
+
+<h2 id="tocS_PlanBody">PlanBody</h2>
+<!-- backwards compatibility -->
+<a id="schemaplanbody"></a>
+<a id="schema_PlanBody"></a>
+<a id="tocSplanbody"></a>
+<a id="tocsplanbody"></a>
+
+```json
+{
+  "name": "profile",
+  "decisions": []
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|name|string|false|none|What to call it; the timestamp is put in front|
+|decisions|[[MigrationDecision](#schemamigrationdecision)]|false|none|Every decision to plan with, in place of the ones kept; the kept ones when left out|
+|batch|integer(int32)|false|none|The most rows one statement of a fix changes: a fix over more is run that many at a time, so
+none holds its locks on the whole table; all of them at once when left out|
+
+<h2 id="tocS_StatementResult">StatementResult</h2>
+<!-- backwards compatibility -->
+<a id="schemastatementresult"></a>
+<a id="schema_StatementResult"></a>
+<a id="tocSstatementresult"></a>
+<a id="tocsstatementresult"></a>
+
+```json
+{
+  "sql": "ALTER TABLE \"User\" ADD COLUMN \"name\" TEXT",
+  "affected": 0,
+  "error": null
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|sql|string|true|none|The statement as it was sent|
+|affected|integer(int32)|true|none|How many rows it changed; null when it failed|
+|error|string|true|none|What the database said, when it refused|
+
+<h2 id="tocS_ApplyResult">ApplyResult</h2>
+<!-- backwards compatibility -->
+<a id="schemaapplyresult"></a>
+<a id="schema_ApplyResult"></a>
+<a id="tocSapplyresult"></a>
+<a id="tocsapplyresult"></a>
+
+```json
+{
+  "results": [],
+  "failedAt": null,
+  "ok": true
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|results|[[StatementResult](#schemastatementresult)]|true|none|One result per statement attempted; the ones after a failure are not attempted|
+|failedAt|integer(int32)|true|none|The index of the statement that failed, null when none did|
+|ok|boolean|true|none|Whether every statement ran|
+
+<h2 id="tocS_ApplyBody">ApplyBody</h2>
+<!-- backwards compatibility -->
+<a id="schemaapplybody"></a>
+<a id="schema_ApplyBody"></a>
+<a id="tocSapplybody"></a>
+<a id="tocsapplybody"></a>
+
+```json
+{
+  "statements": [
+    "ALTER TABLE \"User\" ADD COLUMN \"name\" TEXT"
+  ]
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|statements|[string]|true|none|The statements, in the order they must run|
+
+<h2 id="tocS_RehearsalStep">RehearsalStep</h2>
+<!-- backwards compatibility -->
+<a id="schemarehearsalstep"></a>
+<a id="schema_RehearsalStep"></a>
+<a id="tocSrehearsalstep"></a>
+<a id="tocsrehearsalstep"></a>
+
+```json
+{
+  "ran": true,
+  "ok": true,
+  "affected": 2,
+  "error": null,
+  "statement": null
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|ran|boolean|true|none|Whether it was run; a step after one that failed is not|
+|ok|boolean|true|none|Whether every statement of it went through|
+|affected|integer(int32)|true|none|The rows its statements changed; null when it was not run|
+|error|string|true|none|What the database said to the statement it refused|
+|statement|string|true|none|The statement it refused|
+
+<h2 id="tocS_TableRows">TableRows</h2>
+<!-- backwards compatibility -->
+<a id="schematablerows"></a>
+<a id="schema_TableRows"></a>
+<a id="tocStablerows"></a>
+<a id="tocstablerows"></a>
+
+```json
+{
+  "table": "User",
+  "before": 5,
+  "after": 4
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|table|string|true|none|The table, as the database names it|
+|before|integer(int32)|true|none|Its rows before; null when it was not there, or could not be counted|
+|after|integer(int32)|true|none|Its rows after; null when it is gone, or could not be counted|
+
+<h2 id="tocS_Rehearsal">Rehearsal</h2>
+<!-- backwards compatibility -->
+<a id="schemarehearsal"></a>
+<a id="schema_Rehearsal"></a>
+<a id="tocSrehearsal"></a>
+<a id="tocsrehearsal"></a>
+
+```json
+{
+  "ok": true,
+  "steps": [],
+  "tables": [],
+  "schemaMatches": true,
+  "difference": "",
+  "limitations": []
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|ok|boolean|true|none|Whether every step went through|
+|steps|[[RehearsalStep](#schemarehearsalstep)]|true|none|How each step went, in order|
+|tables|[[TableRows](#schematablerows)]|true|none|Every table's rows before the steps and after them|
+|schemaMatches|boolean|true|none|Whether the database the steps left matches the schema; null when the schema engine cannot be
+asked of this database, and the result is not compared|
+|difference|string|true|none|What still differs from the schema, as the SQL that would close it; empty when it matches|
+|limitations|[string]|true|none|What the rehearsal could not show: `outside-transaction` when a step (an index made
+CONCURRENTLY, an enum value added) cannot run in the transaction PostgreSQL rehearses in.
+What it cost: `locks-tables` when it ran in a transaction on the database itself, which
+holds the locks of its steps until the rollback (it waits five seconds for one, no longer)|
+
+<h2 id="tocS_RehearseBody">RehearseBody</h2>
+<!-- backwards compatibility -->
+<a id="schemarehearsebody"></a>
+<a id="schema_RehearseBody"></a>
+<a id="tocSrehearsebody"></a>
+<a id="tocsrehearsebody"></a>
+
+```json
+{
+  "steps": [
+    [
+      "ALTER TABLE \"User\" ADD COLUMN \"name\" TEXT"
+    ]
+  ]
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|steps|[[string]]|true|none|Each step's statements, in the order they run|
+
+<h2 id="tocS_TableCounts">TableCounts</h2>
+<!-- backwards compatibility -->
+<a id="schematablecounts"></a>
+<a id="schema_TableCounts"></a>
+<a id="tocStablecounts"></a>
+<a id="tocstablecounts"></a>
+
+```json
+{
+  "tables": []
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|tables|[[TableRows](#schematablerows)]|true|none|Each table and its rows; `before` is null and `after` is the count|
+
+<h2 id="tocS_Backup">Backup</h2>
+<!-- backwards compatibility -->
+<a id="schemabackup"></a>
+<a id="schema_Backup"></a>
+<a id="tocSbackup"></a>
+<a id="tocsbackup"></a>
+
+```json
+{
+  "name": "backup_20260917101500123",
+  "location": "/app/prisma/.hekireki/backups/backup_20260917101500123.db",
+  "size": 356352,
+  "restorable": true
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|name|string|true|none|What it is called: when it was taken|
+|location|string|true|none|The file on SQLite, the schema on PostgreSQL|
+|size|integer(int32)|true|none|The file's size in bytes; null for a schema|
+|restorable|boolean|true|none|Whether Studio can restore it: a SQLite file, or a PostgreSQL schema that keeps the statements
+of its restore; one taken before Studio kept them is its rows only, in the schema named|
+
+<h2 id="tocS_Backups">Backups</h2>
+<!-- backwards compatibility -->
+<a id="schemabackups"></a>
+<a id="schema_Backups"></a>
+<a id="tocSbackups"></a>
+<a id="tocsbackups"></a>
+
+```json
+{
+  "backups": []
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|backups|[[Backup](#schemabackup)]|true|none|Newest first|
+
+<h2 id="tocS_RestoreBody">RestoreBody</h2>
+<!-- backwards compatibility -->
+<a id="schemarestorebody"></a>
+<a id="schema_RestoreBody"></a>
+<a id="tocSrestorebody"></a>
+<a id="tocsrestorebody"></a>
+
+```json
+{
+  "name": "backup_20260917101500123",
+  "migration": "20260917101530_profile"
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|name|string|true|none|The backup's name|
+|migration|string|false|none|The migration written by the run the backup was taken for, to remove from the directory|
+
+<h2 id="tocS_MigrationFile">MigrationFile</h2>
+<!-- backwards compatibility -->
+<a id="schemamigrationfile"></a>
+<a id="schema_MigrationFile"></a>
+<a id="tocSmigrationfile"></a>
+<a id="tocsmigrationfile"></a>
+
+```json
+{
+  "name": "20260201000000_profile",
+  "file": "/app/prisma/migrations/20260201000000_profile/migration.sql",
+  "sql": "-- AlterTable\nALTER TABLE \"User\" ADD COLUMN \"name\" TEXT;\n"
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|name|string|true|none|The directory name of the migration|
+|file|string|true|none|Where its migration.sql is|
+|sql|string|true|none|What the migration.sql holds|
+
+<h2 id="tocS_CreatedMigration">CreatedMigration</h2>
+<!-- backwards compatibility -->
+<a id="schemacreatedmigration"></a>
+<a id="schema_CreatedMigration"></a>
+<a id="tocScreatedmigration"></a>
+<a id="tocscreatedmigration"></a>
+
+```json
+{
+  "name": "20260201000000_profile",
+  "file": "/app/prisma/migrations/20260201000000_profile/migration.sql"
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|name|string|true|none|The directory name it was written under|
+|file|string|true|none|The migration.sql that was written|
+
+<h2 id="tocS_CreateMigrationBody">CreateMigrationBody</h2>
+<!-- backwards compatibility -->
+<a id="schemacreatemigrationbody"></a>
+<a id="schema_CreateMigrationBody"></a>
+<a id="tocScreatemigrationbody"></a>
+<a id="tocscreatemigrationbody"></a>
+
+```json
+{
+  "name": "profile",
+  "sql": "ALTER TABLE \"User\" ADD COLUMN \"name\" TEXT;\n"
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|name|string|true|none|What to call it; the timestamp is put in front|
+|sql|string|true|none|The statements to write to migration.sql|
+
+<h2 id="tocS_MigrationDecisions">MigrationDecisions</h2>
+<!-- backwards compatibility -->
+<a id="schemamigrationdecisions"></a>
+<a id="schema_MigrationDecisions"></a>
+<a id="tocSmigrationdecisions"></a>
+<a id="tocsmigrationdecisions"></a>
+
+```json
+{
+  "file": "/app/prisma/.hekireki/migrate.json",
+  "decisions": []
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|file|string|true|none|The file the decisions are kept in, beside the schema|
+|decisions|[[MigrationDecision](#schemamigrationdecision)]|true|none|The decisions, in the order they were made|
+
+<h2 id="tocS_DecisionsBody">DecisionsBody</h2>
+<!-- backwards compatibility -->
+<a id="schemadecisionsbody"></a>
+<a id="schema_DecisionsBody"></a>
+<a id="tocSdecisionsbody"></a>
+<a id="tocsdecisionsbody"></a>
+
+```json
+{
+  "decisions": []
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|decisions|[[MigrationDecision](#schemamigrationdecision)]|true|none|All of them: what is left out is forgotten|
+
+<h2 id="tocS_Deployed">Deployed</h2>
+<!-- backwards compatibility -->
+<a id="schemadeployed"></a>
+<a id="schema_Deployed"></a>
+<a id="tocSdeployed"></a>
+<a id="tocsdeployed"></a>
+
+```json
+{
+  "applied": [
+    "20260201000000_profile"
+  ]
+}
+```
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|applied|[string]|true|none|The migrations that were applied, oldest first|
 
 <h2 id="tocS_DocsDirective">DocsDirective</h2>
 <!-- backwards compatibility -->

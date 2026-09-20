@@ -8,7 +8,7 @@
 /** Character offsets into the statement text, end exclusive. */
 export type Range = { readonly start: number; readonly end: number }
 
-export type ColumnRef = {
+type ColumnRef = {
   readonly type: 'column'
   /** The qualifier as written (`u` in `u.id`), or null for a bare name. */
   readonly table: string | null
@@ -16,7 +16,7 @@ export type ColumnRef = {
   readonly range: Range
 }
 
-export type Literal = {
+type Literal = {
   readonly type: 'literal'
   readonly kind: 'string' | 'number' | 'boolean' | 'null'
   readonly value: string
@@ -194,7 +194,7 @@ export type InsertSource =
   | { readonly type: 'query'; readonly query: Query; readonly range: Range }
   | { readonly type: 'default'; readonly range: Range }
 
-export type SetItem = { readonly column: string; readonly value: Expr; readonly range: Range }
+type SetItem = { readonly column: string; readonly value: Expr; readonly range: Range }
 
 export type Statement =
   | { readonly type: 'select'; readonly query: Query; readonly range: Range }

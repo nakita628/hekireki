@@ -10,7 +10,11 @@ import type { Plugin } from 'vite-plus'
 
 import { fileSystemLayer } from './src/file/index.js'
 import { createStudioApi } from './src/studio/server/app.js'
-import { connectDatabase, createStudioState } from './src/studio/server/services/index.js'
+import {
+  connectDatabase,
+  createProjectClient,
+  createStudioState,
+} from './src/studio/server/services/index.js'
 
 const CLIENT_ROOT = path.resolve(import.meta.dirname, 'src/studio/client')
 const OUT_DIR = path.resolve(import.meta.dirname, 'dist/studio')
@@ -33,6 +37,9 @@ function studioApi(): Plugin {
         Effect.provide(
           connectDatabase({
             explicitUrl: process.env.HEKIREKI_DATABASE_URL ?? null,
+            configUrl: null,
+            configError: null,
+            schemaText: snapshot.files.map((file) => file.content).join('\n'),
             schemaProvider: snapshot.schema?.provider ?? null,
             cwd: process.cwd(),
             schemaDir: path.dirname(schemaPath),
@@ -41,7 +48,13 @@ function studioApi(): Plugin {
           fileSystemLayer,
         ),
       )
-      const api = createStudioApi(state, db)
+      const client = createProjectClient({
+        target: db.target,
+        reason: db.status.error,
+        schemaDir: path.dirname(schemaPath),
+        cwd: process.cwd(),
+      })
+      const api = createStudioApi(state, db, client)
       const listener = getRequestListener((request) => api.fetch(request))
       server.watcher.add(schemaPath)
       server.watcher.on('change', (file) => {
@@ -55,6 +68,33 @@ function studioApi(): Plugin {
         }
         next()
       })
+    },
+  }
+}
+
+const MONACO_CHUNK = 'monaco'
+
+/** The size past which a chunk slows the first visit to a page down (Vite's default). */
+const CHUNK_SIZE_LIMIT = 500 * 1024
+
+/**
+ * The build's chunk size warning for every chunk but the Monaco core, which is as large as it is
+ * and loads only with the editor pages.
+ */
+function chunkSizeWarning(): Plugin {
+  return {
+    name: 'hekireki-chunk-size',
+    apply: 'build',
+    generateBundle(_options, bundle) {
+      for (const chunk of Object.values(bundle)) {
+        if (chunk.type !== 'chunk' || chunk.name === MONACO_CHUNK) continue
+        const size = Buffer.byteLength(chunk.code)
+        if (size > CHUNK_SIZE_LIMIT) {
+          this.warn(
+            `${chunk.fileName} is ${Math.round(size / 1024)} kB, over ${CHUNK_SIZE_LIMIT / 1024} kB: split it with a dynamic import() or a codeSplitting group.`,
+          )
+        }
+      }
     },
   }
 }
@@ -74,9 +114,22 @@ export default defineConfig({
     tailwindcss(),
     react(),
     studioApi(),
+    chunkSizeWarning(),
   ],
   build: {
     outDir: OUT_DIR,
     emptyOutDir: true,
+    // Monaco's own warning is replaced by the plugin below, which keeps it for every other chunk.
+    chunkSizeWarningLimit: Number.POSITIVE_INFINITY,
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          // The Monaco core in one chunk of a known name: the two editor pages load it, nothing
+          // else does, and it cannot be cut further — its services register themselves in module
+          // order, and split across chunks the editor fails to start (`serviceIds` of undefined).
+          groups: [{ name: MONACO_CHUNK, test: /node_modules[\\/]monaco-editor[\\/]/u }],
+        },
+      },
+    },
   },
 })
