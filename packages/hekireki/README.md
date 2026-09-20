@@ -58,9 +58,13 @@ npx hekireki studio                  # ./prisma/schema.prisma or ./schema.prisma
 npx hekireki studio --url file:./dev.db
 ```
 
-The ER diagram, the rows of each model, a Prisma schema editor, a SQL console, a Prisma Client
-playground and a Migrate page, in the browser. The database is the one Prisma connects to (or
-`--url`). Works with SQLite, PostgreSQL and MySQL.
+The ER diagram, the rows of each model, a Prisma schema editor, a SQL console and a Prisma Client
+playground, in the browser. The database is the one Prisma connects to (or `--url`). Works with
+SQLite, PostgreSQL and MySQL.
+
+<!-- The Migrate page is not shipped for now. It is still in the source, commented out at
+src/studio/client/routes/migrate.tsx and in the sidebar; when it comes back, this list names
+"a Prisma Client playground and a Migrate page" again. -->
 
 ## Seed
 
@@ -95,10 +99,13 @@ npx hekireki migrate check           # Rows the new schema breaks (NULLs, duplic
 npx hekireki migrate plan -m prisma/migrations/<name>/migration.sql -o prisma/migrations/<name>/migration.sql
 ```
 
-Decide what becomes of those rows on the Migrate page of `hekireki studio` (fill, keep one,
-delete, rename, convert). The decisions are kept in `.hekireki/migrate.json`, and `migrate plan`
-writes them into the migration Prisma wrote. The page can also rehearse, run and record the
-migration, and back up the database first (SQLite, PostgreSQL).
+What becomes of those rows (fill, keep one, delete, rename, convert) is written in
+`.hekireki/migrate.json` beside the schema, or in the file `--decisions` names, and `migrate plan`
+writes the decisions into the migration Prisma wrote.
+
+<!-- The Migrate page of `hekireki studio` made those decisions, and could rehearse, run and
+record the migration and back up the database first (SQLite, PostgreSQL). It is not shipped for
+now; the page is still in the source. -->
 
 ## License
 

@@ -6,7 +6,7 @@ import {
   LuBraces,
   LuFileText,
   LuGitCompare,
-  LuGitPullRequestArrow,
+  // LuGitPullRequestArrow, // Migrate ページと一緒に寝かせている
   LuList,
   LuMoon,
   LuPanelLeft,
@@ -161,12 +161,15 @@ export function Sidebar({
           </span>
           <span>Prisma Client</span>
         </Link>
+        {/* Migrate は Studio に出さない。機能は残してあるので、戻すときはここと
+            routes/migrate.tsx のコメントを外す。
         <Link to="/migrate" activeProps={NAV_ACTIVE} inactiveProps={NAV_INACTIVE}>
           <span className="inline-flex opacity-85">
             <LuGitPullRequestArrow />
           </span>
           <span>Migrate</span>
         </Link>
+        */}
         <Link to="/docs" activeProps={NAV_ACTIVE} inactiveProps={NAV_INACTIVE}>
           <span className="inline-flex opacity-85">
             <LuBook />

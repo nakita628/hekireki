@@ -12,7 +12,6 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ClientRouteImport } from './routes/client'
 import { Route as DocsRouteImport } from './routes/docs'
-import { Route as MigrateRouteImport } from './routes/migrate'
 import { Route as PrismaRouteImport } from './routes/prisma'
 import { Route as SqlRouteImport } from './routes/sql'
 import { Route as EnumsNameRouteImport } from './routes/enums.$name'
@@ -31,11 +30,6 @@ const ClientRoute = ClientRouteImport.update({
 const DocsRoute = DocsRouteImport.update({
   id: '/docs',
   path: '/docs',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MigrateRoute = MigrateRouteImport.update({
-  id: '/migrate',
-  path: '/migrate',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PrismaRoute = PrismaRouteImport.update({
@@ -63,7 +57,6 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/client': typeof ClientRoute
   '/docs': typeof DocsRoute
-  '/migrate': typeof MigrateRoute
   '/prisma': typeof PrismaRoute
   '/sql': typeof SqlRoute
   '/enums/$name': typeof EnumsNameRoute
@@ -73,7 +66,6 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/client': typeof ClientRoute
   '/docs': typeof DocsRoute
-  '/migrate': typeof MigrateRoute
   '/prisma': typeof PrismaRoute
   '/sql': typeof SqlRoute
   '/enums/$name': typeof EnumsNameRoute
@@ -84,7 +76,6 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/client': typeof ClientRoute
   '/docs': typeof DocsRoute
-  '/migrate': typeof MigrateRoute
   '/prisma': typeof PrismaRoute
   '/sql': typeof SqlRoute
   '/enums/$name': typeof EnumsNameRoute
@@ -96,7 +87,6 @@ export interface FileRouteTypes {
     | '/'
     | '/client'
     | '/docs'
-    | '/migrate'
     | '/prisma'
     | '/sql'
     | '/enums/$name'
@@ -106,7 +96,6 @@ export interface FileRouteTypes {
     | '/'
     | '/client'
     | '/docs'
-    | '/migrate'
     | '/prisma'
     | '/sql'
     | '/enums/$name'
@@ -116,7 +105,6 @@ export interface FileRouteTypes {
     | '/'
     | '/client'
     | '/docs'
-    | '/migrate'
     | '/prisma'
     | '/sql'
     | '/enums/$name'
@@ -127,7 +115,6 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ClientRoute: typeof ClientRoute
   DocsRoute: typeof DocsRoute
-  MigrateRoute: typeof MigrateRoute
   PrismaRoute: typeof PrismaRoute
   SqlRoute: typeof SqlRoute
   EnumsNameRoute: typeof EnumsNameRoute
@@ -155,13 +142,6 @@ declare module '@tanstack/react-router' {
       path: '/docs'
       fullPath: '/docs'
       preLoaderRoute: typeof DocsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/migrate': {
-      id: '/migrate'
-      path: '/migrate'
-      fullPath: '/migrate'
-      preLoaderRoute: typeof MigrateRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/prisma': {
@@ -199,7 +179,6 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ClientRoute: ClientRoute,
   DocsRoute: DocsRoute,
-  MigrateRoute: MigrateRoute,
   PrismaRoute: PrismaRoute,
   SqlRoute: SqlRoute,
   EnumsNameRoute: EnumsNameRoute,

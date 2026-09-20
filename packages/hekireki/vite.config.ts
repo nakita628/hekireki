@@ -58,6 +58,9 @@ export default defineConfig({
       'src/studio/server/handlers/index.ts',
       // An ambient wildcard module (Vite's `?worker`) has to be a script file, which import/unambiguous rejects.
       'src/studio/client/vite-env.d.ts',
+      // The Migrate page is not shipped for now: the route it held is commented out, which leaves
+      // a file with no import or export for import/unambiguous to reject.
+      'src/studio/client/routes/migrate.tsx',
     ],
     // Setting `plugins` replaces oxlint's default list — restate the defaults, then add import.
     plugins: ['typescript', 'unicorn', 'oxc', 'import', 'promise', 'node', 'jsdoc'],

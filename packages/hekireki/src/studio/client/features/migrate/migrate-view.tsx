@@ -1,12 +1,9 @@
 import { Button, Input, Label, TextField, toast } from '@heroui/react'
 import { useQueryClient } from '@tanstack/react-query'
-import type { InferResponseType } from 'hono/client'
 import { useEffect, useState } from 'react'
 import {
-  LuArchiveRestore,
   LuChevronDown,
   LuChevronRight,
-  LuCircleAlert,
   LuCircleCheck,
   LuLanguages,
   LuPlay,
@@ -15,7 +12,6 @@ import {
   LuSparkles,
   LuTrash2,
   LuTriangleAlert,
-  LuX,
 } from 'react-icons/lu'
 
 import { CodeBlock } from '../../components/code-block.js'
@@ -25,38 +21,33 @@ import {
   getMigrateBaselineQueryKey,
   getMigrateDecisionsQueryKey,
   getMigrateQueryKey,
-  getMigrateQueryOptions,
-  getMigrateTablesQueryOptions,
   useDb,
   useMigrate,
   useMigrateDecisions,
-  usePostMigrateApply,
-  usePostMigrateBackups,
   usePostMigrateBackupsRestore,
   usePostMigrateBaseline,
   usePostMigrateDeploy,
-  usePostMigrateMigrations,
-  usePostMigrateMigrationsApplied,
   usePostMigrateMigrationsRolledBack,
   usePostMigratePlan,
   usePostMigrateRehearse,
   usePutMigrateDecisions,
 } from '../../hooks/index.js'
-import type { client } from '../../lib/index.js'
 import { Backups } from './backups.js'
 import { Baseline } from './baseline.js'
 import { CheckCard } from './check-card.js'
+import { FailureAlert } from './failure-alert.js'
+import { useFailure } from './failure.js'
 import { History } from './history.js'
 import { Impact } from './impact.js'
 import { useLanguageStore, useMessages } from './language.js'
 import { losesData } from './loss.js'
 import { BACKUPS, BASELINE, CHOICES, DIVERGENCE, PAGE, RESULT, UNFIT } from './messages.js'
 import { outcomeOf } from './outcome.js'
-import type { StepOutcome } from './outcome.js'
 import { Previews } from './previews.js'
 import { problemReason } from './problem.js'
 import { Rehearsal } from './rehearsal.js'
-import { RowCounts } from './row-counts.js'
+import { RunResult } from './run-result.js'
+import { useMigrationRun } from './run.js'
 import { Steps } from './steps.js'
 import { useCheckText, useStepLines } from './text.js'
 
@@ -65,9 +56,6 @@ type Plan = Awaited<ReturnType<ReturnType<typeof usePostMigratePlan>['mutateAsyn
 
 /** How the rehearsal of a plan went. */
 type RehearsalResult = Awaited<ReturnType<ReturnType<typeof usePostMigrateRehearse>['mutateAsync']>>
-
-/** Each table's rows as the API counts them now (in `after`). */
-type TableCounts = InferResponseType<typeof client.migrate.tables.$get, 200>['tables']
 
 /** The word typed to run a migration that loses data. */
 const CONFIRM_WORD = 'migrate'
@@ -162,75 +150,30 @@ export function MigrateView() {
   const [name, setName] = useState('')
   // Empty for every fix in one statement; the plan is made again when it changes.
   const [batch, setBatch] = useState('')
-  const [outcomes, setOutcomes] = useState<Readonly<Record<number, StepOutcome>>>({})
-  const [progress, setProgress] = useState<number | null>(null)
   const [confirming, setConfirming] = useState<'all' | number | null>(null)
   const [stepwise, setStepwise] = useState(false)
-  // The rehearsal, the counts and the backup belong to the SQL they were made for: a plan whose
-  // statements changed (a decision, the schema saved) has to be rehearsed again, and one compared
-  // again to the same statements does not.
+  // The rehearsal belongs to the SQL it was made for: a plan whose statements changed (a decision,
+  // the schema saved) has to be rehearsed again, and one compared again to the same statements
+  // does not.
   const [rehearsal, setRehearsal] = useState<{
     readonly sql: string
     readonly result: RehearsalResult
   } | null>(null)
-  const [prepared, setPrepared] = useState<{
-    readonly sql: string
-    readonly tables: TableCounts | null
-    readonly backup: { readonly name: string; readonly restorable: boolean } | null
-  } | null>(null)
-  const [backupWanted, setBackupWanted] = useState(true)
   const [typed, setTyped] = useState('')
-  // What the last run did, checked after it: kept until dismissed, whatever the page compares next.
-  const [finished, setFinished] = useState<{
-    readonly name: string
-    /** Null when Studio cannot compare this database with the schema. */
-    readonly matches: boolean
-    readonly tables: readonly {
-      readonly table: string
-      readonly before: number | null
-      readonly after: number | null
-    }[]
-    readonly backup: { readonly name: string; readonly restorable: boolean } | null
-  } | null>(null)
-  // What went wrong last, with the server's own words for why: a toast is gone before a database
-  // error can be read, so the reason stays on the page until it is dismissed or the next try.
-  // What failed is kept as which message it is, so switching the language says it again in the other.
-  const [failure, setFailure] = useState<{
-    readonly what:
-      | 'planFailed'
-      | 'keepFailed'
-      | 'deployFailed'
-      | 'recordFailed'
-      | 'writeFailed'
-      | 'stepFailed'
-      | 'baselineFailed'
-      | 'rehearseFailed'
-      | 'backupFailed'
-      | 'restoreFailed'
-    readonly step: number | null
-    readonly reason: string | null
-  } | null>(null)
   const language = useLanguageStore((s) => s.language)
   const toggleLanguage = useLanguageStore((s) => s.toggle)
-  /** Says a request failed and why, on the page and in a toast. */
-  const fail = (
-    what:
-      | 'planFailed'
-      | 'keepFailed'
-      | 'deployFailed'
-      | 'recordFailed'
-      | 'writeFailed'
-      | 'stepFailed'
-      | 'baselineFailed'
-      | 'rehearseFailed'
-      | 'backupFailed'
-      | 'restoreFailed',
-    error: unknown,
-  ) => {
-    const reason = problemReason(error)
-    setFailure({ what, step: null, reason })
-    toast.danger(t[what], reason === null ? undefined : { description: reason })
-  }
+  const failures = useFailure()
+  const { failure, setFailure, fail } = failures
+  const canBackup = dialect === 'sqlite' || dialect === 'postgresql'
+  const run = useMigrationRun({
+    plan,
+    name,
+    canBackup,
+    failures,
+    onRecorded: () => {
+      setPlan(null)
+    },
+  })
   const decisions: Readonly<Record<string, Decision>> = Object.fromEntries(
     (kept.data?.decisions ?? []).map((decision) => [
       keyOf(decision),
@@ -245,16 +188,13 @@ export function MigrateView() {
     mutation: {
       onSuccess: (made) => {
         setPlan(made)
-        setOutcomes({})
+        run.clearOutcomes()
       },
       onError: (error) => {
         fail('planFailed', error)
       },
     },
   })
-  const applying = usePostMigrateApply()
-  const creating = usePostMigrateMigrations()
-  const marking = usePostMigrateMigrationsApplied()
   const keeping = usePutMigrateDecisions({
     mutation: {
       onSuccess: async () => {
@@ -295,13 +235,10 @@ export function MigrateView() {
       },
     },
   })
-  const backingUp = usePostMigrateBackups()
   const restoring = usePostMigrateBackupsRestore({
     mutation: {
       onSuccess: async (_, request) => {
-        setFinished(null)
-        setPrepared(null)
-        setOutcomes({})
+        run.forget()
         setFailure(null)
         await invalidate()
         await queries.invalidateQueries({ queryKey: getMigrateBackupsQueryKey() })
@@ -324,17 +261,13 @@ export function MigrateView() {
     },
   })
   const busy =
-    applying.isPending ||
-    creating.isPending ||
-    marking.isPending ||
+    run.pending ||
     resolving.isPending ||
     keeping.isPending ||
     deploying.isPending ||
     baselining.isPending ||
     rehearsing.isPending ||
-    backingUp.isPending ||
-    restoring.isPending ||
-    progress !== null
+    restoring.isPending
 
   const replan = (made: Readonly<Record<string, Decision>>) => {
     const rows = Number.parseInt(batch, 10)
@@ -358,7 +291,7 @@ export function MigrateView() {
   // whose steps have started running is kept, since it says how far they got.
   const drift = status.data?.drift === true && !status.data.baselineNeeded
   const ready = kept.isFetched
-  const running = progress !== null || Object.keys(outcomes).length > 0
+  const running = run.progress !== null || Object.keys(run.outcomes).length > 0
   useEffect(() => {
     if (!ready || running || planning.isPending) return
     if (drift) replan(decisions)
@@ -459,11 +392,11 @@ export function MigrateView() {
       ),
   )
   // A step that failed leaves the database somewhere the plan no longer describes.
-  const stale = steps.some((_, index) => outcomeOf(outcomes[index]).failed)
+  const stale = steps.some((_, index) => outcomeOf(run.outcomes[index]).failed)
   const ranEvery =
     steps.length > 0 &&
     steps.every((_, index) => {
-      const outcome = outcomeOf(outcomes[index])
+      const outcome = outcomeOf(run.outcomes[index])
       return outcome.ran && !outcome.failed
     })
   // What the plan cannot do that is not a check waiting for a decision: a migration it cannot rewrite.
@@ -475,276 +408,44 @@ export function MigrateView() {
   )
   const destructive = steps.filter((step) => step.destructive)
   const losses = checks.filter(losesData)
-  // A run that loses data waits for a rehearsal of this very plan that went through.
-  const lossy = destructive.length > 0 || losses.length > 0
-  const statementsKey = plan === null ? null : JSON.stringify(steps.map((step) => step.statements))
+  const { lossy, statementsKey } = run
   const rehearsed = rehearsal?.sql === statementsKey ? rehearsal.result : null
-  const canBackup = dialect === 'sqlite' || dialect === 'postgresql'
   const runnable = plan !== null && blockingLeft === 0 && otherErrors.length === 0 && !stale
   const canRun = runnable && (!lossy || rehearsed?.ok === true)
-  const ownPrepared = prepared?.sql === statementsKey ? prepared : null
-
-  /**
-   * What is done once before the first step of a plan runs: the rows of every table counted, to
-   * set the result against, and, for a run that loses data, a backup. A backup that cannot be
-   * taken stops the run before anything has changed.
-   */
-  const prepare = async () => {
-    if (statementsKey === null) return null
-    if (ownPrepared !== null) return ownPrepared
-    const tables = await queries
-      .query(getMigrateTablesQueryOptions())
-      .then((counted) => counted.tables)
-      .catch(() => null)
-    const wanted = lossy && backupWanted && canBackup
-    const backup = wanted
-      ? await backingUp.mutateAsync().then(
-          (taken) => ({ name: taken.name, restorable: taken.restorable }),
-          (e: unknown) => {
-            fail('backupFailed', e)
-            return null
-          },
-        )
-      : null
-    if (wanted && backup === null) return null
-    if (backup !== null) {
-      await queries.invalidateQueries({ queryKey: getMigrateBackupsQueryKey() })
-      toast.success(tk.taken(backup.name))
-    }
-    const made = { sql: statementsKey, tables, backup }
-    setPrepared(made)
-    return made
-  }
-  /** The run checked once it is recorded: every table's rows before and after, and the schema. */
-  const verify = async (
-    recorded: string,
-    before: {
-      readonly tables: TableCounts | null
-      readonly backup: { readonly name: string; readonly restorable: boolean } | null
-    },
-  ) => {
-    const after = await queries
-      .query(getMigrateTablesQueryOptions())
-      .then((counted) => counted.tables)
-      .catch(() => null)
-    const history = await queries.query(getMigrateQueryOptions()).catch(() => null)
-    const names = [...new Set([...(before.tables ?? []), ...(after ?? [])].map((one) => one.table))]
-    setFinished({
-      name: recorded,
-      matches: history === null ? false : !history.drift,
-      tables: names.map((table) => ({
-        table,
-        before: before.tables?.find((one) => one.table === table)?.after ?? null,
-        after: after?.find((one) => one.table === table)?.after ?? null,
-      })),
-      backup: before.backup,
-    })
-  }
-
-  /**
-   * Runs one step, and keeps what it did. A statement the database refuses is part of the result,
-   * not an error of the request: it is said as the reason the step did not go through.
-   */
-  const runStep = async (index: number) => {
-    const step = steps[index]
-    if (step === undefined) return false
-    setFailure(null)
-    try {
-      const result = await applying.mutateAsync({ json: { statements: [...step.statements] } })
-      const failed = result.results.find((one) => one.error !== null)
-      setOutcomes((done) => ({
-        ...done,
-        [index]: {
-          ran: true,
-          affected: result.results.reduce((sum, one) => sum + (one.affected ?? 0), 0),
-          error: failed?.error ?? null,
-        },
-      }))
-      if (failed !== undefined) {
-        setFailure({
-          what: 'stepFailed',
-          step: index + 1,
-          reason: `${failed.error ?? ''}\n\n${failed.sql}`,
-        })
-      }
-      return failed === undefined
-    } catch (e) {
-      fail('stepFailed', e)
-      return false
-    }
-  }
-  /** Writes migration.sql and records it as applied, once every step has run. */
-  const record = async () => {
-    if (plan === null) return null
-    setFailure(null)
-    try {
-      const created = await creating.mutateAsync({
-        json: {
-          name: name === '' ? 'migration' : name,
-          sql: plan.steps.flatMap((step) => step.statements.map((sql) => `${sql};`)).join('\n'),
-        },
-      })
-      // Written but not recorded is its own failure: the file is there, and Prisma does not know it ran.
-      try {
-        await marking.mutateAsync({ json: { name: created.name } })
-      } catch (e) {
-        fail('recordFailed', e)
-        return null
-      }
-      setPlan(null)
-      setOutcomes({})
-      await invalidate()
-      toast.success(t.recorded(created.name))
-      return created.name
-    } catch (e) {
-      fail('writeFailed', e)
-      return null
-    }
-  }
-  const runAll = async () => {
+  /** Closes the confirmation, whichever run it asked about. */
+  const confirmed = () => {
     setConfirming(null)
     setTyped('')
-    setFinished(null)
-    try {
-      setProgress(0)
-      const before = await prepare()
-      if (before === null) return
-      for (const [index] of steps.entries()) {
-        setProgress(index + 1)
-        // oxlint-disable-next-line no-await-in-loop -- each step runs after the one before it has
-        if (!(await runStep(index))) return
-      }
-      const recorded = await record()
-      if (recorded !== null) await verify(recorded, before)
-    } finally {
-      setProgress(null)
-    }
-  }
-  /** Runs one step by itself, the preparation first when it is the first of the plan. */
-  const runOne = async (index: number) => {
-    setConfirming(null)
-    setTyped('')
-    setFinished(null)
-    if ((await prepare()) === null) return
-    await runStep(index)
-  }
-  /** Records the steps run one at a time, and checks the result. */
-  const recordStepwise = async () => {
-    const before = ownPrepared
-    const recorded = await record()
-    if (recorded !== null && before !== null) await verify(recorded, before)
   }
 
   return (
     <div lang={language} className="flex min-h-0 flex-1 flex-col gap-7 overflow-y-auto p-6">
       {header}
       {failure === null ? null : (
-        <div
-          role="alert"
-          className="flex gap-2.5 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2.5 text-danger"
-        >
-          <LuCircleAlert className="mt-0.5 shrink-0" size={16} />
-          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-            <span className="font-semibold">
-              {failure.step === null ? t[failure.what] : t.stepFailedAt(failure.step)}
-            </span>
-            {failure.reason === null ? null : (
-              <div className="flex flex-col gap-0.5">
-                <span className="text-code">{t.reason}</span>
-                <pre className="m-0 max-h-60 overflow-auto rounded-md bg-surface px-2.5 py-2 font-mono text-code whitespace-pre-wrap text-ink">
-                  {failure.reason}
-                </pre>
-              </div>
-            )}
-            <span className="text-body text-ink">{t.failureHint}</span>
-            {ownPrepared?.backup?.restorable === true &&
-            (failure.what === 'stepFailed' || failure.what === 'writeFailed') ? (
-              <Button
-                className="self-start"
-                size="sm"
-                variant="secondary"
-                isDisabled={busy}
-                onPress={() => {
-                  if (ownPrepared.backup !== null) {
-                    restoring.mutate({ json: { name: ownPrepared.backup.name } })
-                  }
-                }}
-              >
-                <LuArchiveRestore size={13} />
-                {tk.failureRestore}
-              </Button>
-            ) : null}
-          </div>
-          <Button
-            size="sm"
-            variant="ghost"
-            isIconOnly
-            aria-label={t.dismiss}
-            onPress={() => {
-              setFailure(null)
-            }}
-          >
-            <LuX size={14} />
-          </Button>
-        </div>
+        <FailureAlert
+          failure={failure}
+          backup={run.prepared?.backup ?? null}
+          busy={busy}
+          onRestore={(backup) => {
+            restoring.mutate({ json: { name: backup } })
+          }}
+          onDismiss={() => {
+            setFailure(null)
+          }}
+        />
       )}
 
-      {finished === null ? null : (
-        <div
-          data-testid="migrate-result"
-          className="flex flex-col gap-2.5 rounded-lg border border-ok/40 bg-ok/5 px-3 py-2.5"
-        >
-          <div className="flex items-center gap-2">
-            <LuCircleCheck className="text-ok" size={16} />
-            <span className="font-semibold">{tf.title(finished.name)}</span>
-            <Button
-              className="ml-auto"
-              size="sm"
-              variant="ghost"
-              isIconOnly
-              aria-label={tf.dismiss}
-              onPress={() => {
-                setFinished(null)
-              }}
-            >
-              <LuX size={14} />
-            </Button>
-          </div>
-          <span
-            className={`flex items-center gap-1.5 text-body ${finished.matches ? 'text-ok' : 'text-danger'}`}
-          >
-            {finished.matches ? <LuCircleCheck size={14} /> : <LuCircleAlert size={14} />}
-            {finished.matches ? tf.matches : tf.differs}
-          </span>
-          {finished.tables.length === 0 ? null : (
-            <div className="flex flex-col gap-1">
-              <span className="text-body font-semibold">{tf.rows}</span>
-              <RowCounts tables={finished.tables} />
-            </div>
-          )}
-          {finished.backup?.restorable === true ? (
-            <div className="flex flex-wrap items-center gap-2.5">
-              <Button
-                size="sm"
-                variant="secondary"
-                isDisabled={busy}
-                onPress={() => {
-                  if (finished.backup !== null) {
-                    restoring.mutate({
-                      json: { name: finished.backup.name, migration: finished.name },
-                    })
-                  }
-                }}
-              >
-                <LuArchiveRestore size={13} />
-                {tk.undoRun}
-              </Button>
-              <span className="text-code text-muted">{tk.undoNote(finished.backup.name)}</span>
-            </div>
-          ) : finished.backup === null ? null : (
-            <span className="text-code text-muted">{tk.taken(finished.backup.name)}</span>
-          )}
-        </div>
+      {run.finished === null ? null : (
+        <RunResult
+          finished={run.finished}
+          busy={busy}
+          onUndo={(backup) => {
+            if (run.finished !== null) {
+              restoring.mutate({ json: { name: backup, migration: run.finished.name } })
+            }
+          }}
+          onDismiss={run.dismiss}
+        />
       )}
 
       <section className="flex flex-col gap-2.5">
@@ -1039,7 +740,7 @@ export function MigrateView() {
                     {t.losesData(destructive.length)}
                   </p>
                 )}
-                <Steps plan={plan} outcomes={outcomes} running onRun={null} />
+                <Steps plan={plan} outcomes={run.outcomes} running onRun={null} />
                 <details className="rounded-lg border border-line bg-surface px-3 py-2">
                   <summary className="cursor-pointer font-semibold">{t.fullSql}</summary>
                   <p className="my-1.5 text-code text-muted">{t.fullSqlNote}</p>
@@ -1097,15 +798,15 @@ export function MigrateView() {
                     <input
                       className="mt-1"
                       type="checkbox"
-                      checked={backupWanted}
+                      checked={run.backupWanted}
                       onChange={(event) => {
-                        setBackupWanted(event.target.checked)
+                        run.setBackupWanted(event.target.checked)
                       }}
                     />
                     <span className="flex flex-col">
                       <span className="font-semibold">{tk.take}</span>
                       <span className="text-code text-muted">
-                        {backupWanted
+                        {run.backupWanted
                           ? dialect === 'postgresql'
                             ? tk.takePostgres
                             : tk.takeNoteSqlite
@@ -1137,17 +838,17 @@ export function MigrateView() {
                     isDisabled={busy || planning.isPending || !canRun}
                     onPress={() => {
                       if (lossy) setConfirming('all')
-                      else void runAll()
+                      else void run.runAll()
                     }}
                   >
                     <LuPlay size={14} />
                     {t.runAll}
                   </Button>
                   <span className="text-body text-muted">
-                    {progress !== null
-                      ? progress === 0
+                    {run.progress !== null
+                      ? run.progress === 0
                         ? tk.taking
-                        : t.running(progress, steps.length)
+                        : t.running(run.progress, steps.length)
                       : blockingLeft > 0
                         ? t.blocked
                         : runnable && lossy && rehearsed === null
@@ -1171,11 +872,11 @@ export function MigrateView() {
                   <>
                     <Steps
                       plan={plan}
-                      outcomes={outcomes}
+                      outcomes={run.outcomes}
                       running={busy || !canRun}
                       onRun={(index) => {
                         if (steps[index]?.destructive ?? false) setConfirming(index)
-                        else void runOne(index)
+                        else void run.runOne(index)
                       }}
                     />
                     <div className="flex items-center gap-3">
@@ -1183,7 +884,7 @@ export function MigrateView() {
                         variant="primary"
                         isDisabled={busy || !ranEvery || stale}
                         onPress={() => {
-                          void recordStepwise()
+                          void run.recordStepwise()
                         }}
                       >
                         <LuCircleCheck size={14} />
@@ -1227,9 +928,9 @@ export function MigrateView() {
             )}
             <span className="text-muted">{t.confirmNote}</span>
             <span className="text-body">
-              {ownPrepared?.backup
-                ? tk.taken(ownPrepared.backup.name)
-                : backupWanted && canBackup
+              {run.prepared?.backup
+                ? tk.taken(run.prepared.backup.name)
+                : run.backupWanted && canBackup
                   ? `${tk.take}: ${dialect === 'postgresql' ? tk.takePostgres : tk.takeNoteSqlite}`
                   : t.noBackup}
             </span>
@@ -1242,14 +943,13 @@ export function MigrateView() {
         confirmLabel={t.confirmRun}
         isPending={busy || typed.trim() !== CONFIRM_WORD}
         onConfirm={() => {
-          if (confirming === 'all') void runAll()
-          else if (confirming !== null) void runOne(confirming)
+          const chosen = confirming
+          confirmed()
+          if (chosen === 'all') void run.runAll()
+          else if (chosen !== null) void run.runOne(chosen)
         }}
         onOpenChange={(open) => {
-          if (!open) {
-            setConfirming(null)
-            setTyped('')
-          }
+          if (!open) confirmed()
         }}
       />
     </div>

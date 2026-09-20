@@ -8,6 +8,9 @@ import { BASE_URL } from './e2e/workspace.js'
 export default defineConfig({
   testDir: './e2e',
   testMatch: '**/*.test.ts',
+  // The Migrate page is not shipped for now (the route and the sidebar link are commented out),
+  // so the suite that drives it is left out. Delete this line when the page comes back.
+  testIgnore: '**/migrate.test.ts',
   // The editor autosaves to disk and the grid writes to the database: the tests share one
   // server and one workspace, so they run one at a time.
   fullyParallel: false,
