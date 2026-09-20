@@ -1,10 +1,9 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { afterAll, beforeAll, describe, expect, it } from 'vite-plus/test'
 
-import { cli, decide, diff, prisma, run, TARGETS } from './migrate-harness.ts'
+import { cli, decide, diff, prisma, run, TARGETS, workspace } from './migrate-harness.ts'
 import type { Row, Target } from './migrate-harness.ts'
 
 // `hekireki migrate plan --migration` against real databases, held to Prisma itself: the old
@@ -176,7 +175,7 @@ for (const target of TARGETS) {
 
       beforeAll(() => {
         if (target.url === undefined) return
-        state.dir = mkdtempSync(join(tmpdir(), `hekireki-rewrite-${target.dialect}-`))
+        state.dir = workspace(`hekireki-rewrite-${target.dialect}-`)
         state.rewrite = target.isolate(base, `${RUN}_rewrite`, state.dir)
         state.tree = target.isolate(base, `${RUN}_tree`, state.dir)
         state.tiers = target.isolate(base, `${RUN}_tiers`, state.dir)

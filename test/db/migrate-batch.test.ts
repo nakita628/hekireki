@@ -1,10 +1,9 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { afterAll, beforeAll, describe, expect, it } from 'vite-plus/test'
 
-import { cli, decide, prisma, run, statementsOf, TARGETS } from './migrate-harness.ts'
+import { cli, decide, prisma, run, statementsOf, TARGETS, workspace } from './migrate-harness.ts'
 
 // `hekireki migrate plan --batch`: a fix over more rows than the batch is written as that many
 // rows at a time, and each database names "some of the rows" its own way (a LIMIT on the
@@ -42,7 +41,7 @@ for (const target of TARGETS) {
       Number(Object.values((await target.rows(state.url, RUN, sql))[0] ?? {})[0])
 
     beforeAll(async () => {
-      state.dir = mkdtempSync(join(tmpdir(), `hekireki-batch-${target.dialect}-`))
+      state.dir = workspace(`hekireki-batch-${target.dialect}-`)
       mkdirSync(state.dir, { recursive: true })
       state.url = target.isolate(base, RUN, state.dir)
       const datasource = `datasource db {\n  provider = "${target.dialect}"\n}\n\n`

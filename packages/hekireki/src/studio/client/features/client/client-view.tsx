@@ -10,13 +10,7 @@ import { DiagnosticsList } from '../../components/diagnostics-list.js'
 import { SplitPane } from '../../components/split-pane.js'
 import { useCopy } from '../../hooks/copy.js'
 import { useDebounced } from '../../hooks/debounce.js'
-import {
-  getDbCountsQueryKey,
-  useClient,
-  useDb,
-  usePostClientRun,
-  useSchema,
-} from '../../hooks/index.js'
+import { useClient, useDb, usePostClientRun, useSchema } from '../../hooks/index.js'
 import { SchemaCanvas } from '../schema/schema-view.js'
 import { ClientEditor } from './client-editor.js'
 import { readAnalysis, useClientAnalysis, useClientPreview, useTypeCheck } from './queries.js'
@@ -69,12 +63,8 @@ export function ClientView() {
 
   const run = usePostClientRun({
     mutation: {
-      // A write through the client changes what the model pages and the sidebar counts show.
-      onSuccess: () =>
-        Promise.all([
-          queryClient.invalidateQueries({ queryKey: ['db', '/db/rows/:modelName'] }),
-          queryClient.invalidateQueries({ queryKey: getDbCountsQueryKey() }),
-        ]),
+      // A write through the client changes what the model pages show.
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: ['db', '/db/rows/:modelName'] }),
     },
   })
   const result = run.data ?? null
@@ -299,12 +289,9 @@ export function ClientView() {
           Run
         </Button>
       </header>
+      {/* Without the project's TypeScript the editor completes from the schema, and says nothing. */}
       {status !== null && !status.available ? (
         <pre className="error-box m-4 whitespace-pre-wrap">{status.error}</pre>
-      ) : status !== null && status.typesError !== null ? (
-        <pre className="m-4 mb-0 rounded-lg border border-line bg-surface-2 px-4 py-3 font-mono text-code whitespace-pre-wrap text-muted">
-          {status.typesError}
-        </pre>
       ) : null}
       <SplitPane
         direction="column"

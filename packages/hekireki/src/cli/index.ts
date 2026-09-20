@@ -1,6 +1,6 @@
 import path from 'node:path'
 
-import { Config, Console, Effect, Option, Schema, Stdio } from 'effect'
+import { Console, Effect, Option, Schema, Stdio } from 'effect'
 import { CliError, Command, Flag } from 'effect/unstable/cli'
 
 import { exists } from '../file/index.js'
@@ -75,18 +75,21 @@ export function studioBanner(options: {
   return lines.join('\n')
 }
 
+// An integer in 1–65535, the same check `Config.Port` makes: a port no listener could bind is
+// rejected while the command line is read.
+const Port = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65_535 }))
+
 const studioFlags = {
-  // `Config.Port` (an integer in 1–65535) rejects a port no listener could bind up front.
-  port: Flag.integer('port').pipe(
+  port: Flag.Int('port').pipe(
     Flag.withAlias('p'),
-    Flag.withSchema(Config.Port),
+    Flag.withSchema(Port),
     Flag.withDescription(`Port to listen on (default: ${DEFAULT_PORT})`),
     Flag.withMetavar('port'),
     Flag.withDefault(DEFAULT_PORT),
   ),
-  // `Flag.string`, not `Flag.path`: the path primitive rewrites its value to an absolute one, and
+  // `Flag.String`, not `Flag.Path`: the path primitive rewrites its value to an absolute one, and
   // this flag also takes a directory and reports a missing path in its own words.
-  schema: Flag.string('schema').pipe(
+  schema: Flag.String('schema').pipe(
     Flag.withAlias('s'),
     Flag.withDescription(
       `Path to schema.prisma or a directory of .prisma files (default: ${DEFAULT_SCHEMA_PATHS.join(', then ')})`,
@@ -94,7 +97,7 @@ const studioFlags = {
     Flag.withMetavar('schema.prisma|dir'),
     Flag.optional,
   ),
-  url: Flag.string('url').pipe(
+  url: Flag.String('url').pipe(
     Flag.withAlias('u'),
     Flag.withSchema(DatabaseUrl),
     Flag.withDescription(
@@ -164,7 +167,7 @@ const studio = Command.make('studio', studioFlags, runStudio).pipe(
 )
 
 const seedFlags = {
-  config: Flag.string('config').pipe(
+  config: Flag.String('config').pipe(
     Flag.withAlias('c'),
     Flag.withDescription(
       'Path to the config, a TypeScript file (default: hekireki.config.ts in the working directory)',
@@ -172,7 +175,7 @@ const seedFlags = {
     Flag.withMetavar('hekireki.config.ts'),
     Flag.optional,
   ),
-  schema: Flag.string('schema').pipe(
+  schema: Flag.String('schema').pipe(
     Flag.withAlias('s'),
     Flag.withDescription(
       `Path to schema.prisma or a directory of .prisma files (default: \`schema\` in the config, then ${DEFAULT_SCHEMA_PATHS.join(', then ')})`,
@@ -180,7 +183,7 @@ const seedFlags = {
     Flag.withMetavar('schema.prisma|dir'),
     Flag.optional,
   ),
-  url: Flag.string('url').pipe(
+  url: Flag.String('url').pipe(
     Flag.withAlias('u'),
     Flag.withSchema(DatabaseUrl),
     Flag.withDescription(
@@ -189,19 +192,19 @@ const seedFlags = {
     Flag.withMetavar('connection-string'),
     Flag.optional,
   ),
-  sql: Flag.string('sql').pipe(
+  sql: Flag.String('sql').pipe(
     Flag.withDescription('Write the rows to this SQL file instead of inserting them'),
     Flag.withMetavar('seed.sql'),
     Flag.optional,
   ),
-  seed: Flag.integer('seed').pipe(
+  seed: Flag.Int('seed').pipe(
     Flag.withDescription(
       'The faker seed; the same seed always gives the same rows (left out: every run differs)',
     ),
     Flag.withMetavar('n'),
     Flag.optional,
   ),
-  count: Flag.integer('count').pipe(
+  count: Flag.Int('count').pipe(
     Flag.withAlias('n'),
     Flag.withDescription(
       'Rows for every faker model, over the per-model counts of the config; models given as data keep their rows (left out: the config decides, and only the configured models are seeded)',
@@ -209,7 +212,7 @@ const seedFlags = {
     Flag.withMetavar('rows'),
     Flag.optional,
   ),
-  locale: Flag.string('locale').pipe(
+  locale: Flag.String('locale').pipe(
     Flag.withAlias('l'),
     Flag.withDescription(
       "Faker locale, or a comma-separated list tried in order (left out: faker's English)",
@@ -217,7 +220,7 @@ const seedFlags = {
     Flag.withMetavar('ja,en'),
     Flag.optional,
   ),
-  reset: Flag.boolean('reset').pipe(
+  reset: Flag.Boolean('reset').pipe(
     Flag.withDescription('Delete every row of the seeded tables before inserting'),
     Flag.withDefault(false),
   ),
@@ -270,7 +273,7 @@ const seed = Command.make('seed', seedFlags, runSeedCommand).pipe(
 )
 
 const migrateCheckFlags = {
-  schema: Flag.string('schema').pipe(
+  schema: Flag.String('schema').pipe(
     Flag.withAlias('s'),
     Flag.withDescription(
       `Path to the schema about to be migrated: schema.prisma or a directory of .prisma files (default: ${DEFAULT_SCHEMA_PATHS.join(', then ')})`,
@@ -278,7 +281,7 @@ const migrateCheckFlags = {
     Flag.withMetavar('schema.prisma|dir'),
     Flag.optional,
   ),
-  url: Flag.string('url').pipe(
+  url: Flag.String('url').pipe(
     Flag.withAlias('u'),
     Flag.withSchema(DatabaseUrl),
     Flag.withDescription(
@@ -287,7 +290,7 @@ const migrateCheckFlags = {
     Flag.withMetavar('connection-string'),
     Flag.optional,
   ),
-  decisions: Flag.string('decisions').pipe(
+  decisions: Flag.String('decisions').pipe(
     Flag.withAlias('d'),
     Flag.withDescription(
       'Path to the decisions made on the Migrate page of `hekireki studio`: what becomes of the rows that stand in the way (default: .hekireki/migrate.json beside the schema)',
@@ -295,14 +298,14 @@ const migrateCheckFlags = {
     Flag.withMetavar('migrate.json'),
     Flag.optional,
   ),
-  timeout: Flag.integer('timeout').pipe(
+  timeout: Flag.Int('timeout').pipe(
     Flag.withDescription(
       'How long one query may run, in milliseconds, on PostgreSQL and MySQL (default: no limit)',
     ),
     Flag.withMetavar('ms'),
     Flag.optional,
   ),
-  json: Flag.boolean('json').pipe(
+  json: Flag.Boolean('json').pipe(
     Flag.withDescription('Print the report as JSON, every check with its count and SQL'),
     Flag.withDefault(false),
   ),
@@ -383,7 +386,7 @@ const migratePlanFlags = {
   url: migrateCheckFlags.url,
   decisions: migrateCheckFlags.decisions,
   timeout: migrateCheckFlags.timeout,
-  migration: Flag.string('migration').pipe(
+  migration: Flag.String('migration').pipe(
     Flag.withAlias('m'),
     Flag.withDescription(
       "The migration.sql Prisma wrote for the schema (`prisma migrate dev --create-only`): the plan is then the whole migration, the fixes first and what the migration itself has to do written into Prisma's statements",
@@ -391,14 +394,14 @@ const migratePlanFlags = {
     Flag.withMetavar('migration.sql'),
     Flag.optional,
   ),
-  batch: Flag.integer('batch').pipe(
+  batch: Flag.Int('batch').pipe(
     Flag.withDescription(
       'Run a fix over more rows than this that many at a time, one statement after another, so none holds its locks for the whole table (default: every fix in one statement; no effect inside the one DO block of PostgreSQL)',
     ),
     Flag.withMetavar('rows'),
     Flag.optional,
   ),
-  output: Flag.string('output').pipe(
+  output: Flag.String('output').pipe(
     Flag.withAlias('o'),
     Flag.withDescription(
       'Write the SQL to this file and print the report (default: the SQL to stdout)',

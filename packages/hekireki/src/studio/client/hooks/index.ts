@@ -7,9 +7,10 @@ import {
 } from '@tanstack/react-query'
 import type {
   UseQueryOptions,
-  QueryFunctionContext,
   UseSuspenseQueryOptions,
   UseMutationOptions,
+  DefaultError,
+  QueryClient,
 } from '@tanstack/react-query'
 import type { ClientRequestOptions, InferRequestType } from 'hono/client'
 import { parseResponse } from 'hono/client'
@@ -43,8 +44,16 @@ export function getSchemaQueryKey() {
   return ['schema', '/schema'] as const
 }
 
-export function getSchemaQueryOptions(options?: ClientRequestOptions) {
-  return queryOptions({
+export function getSchemaQueryOptions<
+  TData = Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.$get>>>>>,
+  TError = DefaultError,
+>(options?: ClientRequestOptions) {
+  return queryOptions<
+    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.$get>>>>>,
+    TError,
+    TData,
+    ReturnType<typeof getSchemaQueryKey>
+  >({
     queryKey: getSchemaQueryKey(),
     queryFn({ signal }) {
       return parseResponse(
@@ -56,124 +65,175 @@ export function getSchemaQueryOptions(options?: ClientRequestOptions) {
 
 export function useSchema<
   TData = Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.$get>>>>>,
-  TError = unknown,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.$get>>>>>,
-    TError,
-    TData
-  >
-  options?: ClientRequestOptions
-}) {
+  TError = DefaultError,
+>(
+  options?: {
+    query?: Omit<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.$get>>>>>,
+        TError,
+        TData,
+        ReturnType<typeof getSchemaQueryKey>
+      >,
+      'queryKey' | 'queryFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { query: queryOptions, options: clientOptions } = options ?? {}
-  return useQuery({
-    ...queryOptions,
-    queryKey: getSchemaQueryKey(),
-    queryFn({ signal }: QueryFunctionContext) {
-      return parseResponse(
-        client.schema.$get(undefined, {
-          ...clientOptions,
-          init: { ...clientOptions?.init, signal },
-        }),
-      )
-    },
-  })
+  return useQuery(
+    { ...getSchemaQueryOptions<TData, TError>(clientOptions), ...queryOptions },
+    queryClient,
+  )
 }
 
 export function useSuspenseSchema<
   TData = Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.$get>>>>>,
-  TError = unknown,
->(options?: {
-  query?: UseSuspenseQueryOptions<
-    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.$get>>>>>,
-    TError,
-    TData
-  >
-  options?: ClientRequestOptions
-}) {
+  TError = DefaultError,
+>(
+  options?: {
+    query?: Omit<
+      UseSuspenseQueryOptions<
+        Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.$get>>>>>,
+        TError,
+        TData,
+        ReturnType<typeof getSchemaQueryKey>
+      >,
+      'queryKey' | 'queryFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { query: queryOptions, options: clientOptions } = options ?? {}
-  return useSuspenseQuery({
-    ...queryOptions,
-    queryKey: getSchemaQueryKey(),
-    queryFn({ signal }: QueryFunctionContext) {
-      return parseResponse(
-        client.schema.$get(undefined, {
-          ...clientOptions,
-          init: { ...clientOptions?.init, signal },
-        }),
-      )
-    },
-  })
+  return useSuspenseQuery(
+    { ...getSchemaQueryOptions<TData, TError>(clientOptions), ...queryOptions },
+    queryClient,
+  )
 }
 
-export function getPostSchemaReloadMutationOptions<TError = unknown>(
-  options?: ClientRequestOptions,
-) {
+export function getPostSchemaReloadMutationKey() {
+  return ['schema', '/schema/reload', 'POST'] as const
+}
+
+export function getPostSchemaReloadMutationOptions<
+  TError = DefaultError,
+  TOnMutateResult = unknown,
+>(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
       ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.reload.$post>>>>
     >,
     TError,
-    void
+    void,
+    TOnMutateResult
   >({
-    mutationKey: ['schema', '/schema/reload', 'POST'] as const,
+    mutationKey: getPostSchemaReloadMutationKey(),
     async mutationFn() {
       return parseResponse(client.schema.reload.$post(undefined, options))
     },
   })
 }
 
-export function usePostSchemaReload<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.reload.$post>>>>
-    >,
-    TError,
-    void
-  >
-  options?: ClientRequestOptions
-}) {
+export function usePostSchemaReload<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.reload.$post>>>>
+        >,
+        TError,
+        void,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({
-    ...mutationOptions,
-    ...getPostSchemaReloadMutationOptions<TError>(clientOptions),
-  })
+  const mutationDefaults = getPostSchemaReloadMutationOptions<TError, TOnMutateResult>(
+    clientOptions,
+  )
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
-export function getPutSchemaFilesMutationOptions<TError = unknown>(options?: ClientRequestOptions) {
+export function getPutSchemaFilesMutationKey() {
+  return ['schema', '/schema/files', 'PUT'] as const
+}
+
+export function getPutSchemaFilesMutationOptions<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: ClientRequestOptions,
+) {
   return mutationOptions<
     Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.files.$put>>>>>,
     TError,
-    InferRequestType<typeof client.schema.files.$put>
+    InferRequestType<typeof client.schema.files.$put>,
+    TOnMutateResult
   >({
-    mutationKey: ['schema', '/schema/files', 'PUT'] as const,
+    mutationKey: getPutSchemaFilesMutationKey(),
     async mutationFn(args: InferRequestType<typeof client.schema.files.$put>) {
       return parseResponse(client.schema.files.$put(args, options))
     },
   })
 }
 
-export function usePutSchemaFiles<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.files.$put>>>>>,
-    TError,
-    InferRequestType<typeof client.schema.files.$put>
-  >
-  options?: ClientRequestOptions
-}) {
+export function usePutSchemaFiles<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.files.$put>>>>
+        >,
+        TError,
+        InferRequestType<typeof client.schema.files.$put>,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({
-    ...mutationOptions,
-    ...getPutSchemaFilesMutationOptions<TError>(clientOptions),
-  })
+  const mutationDefaults = getPutSchemaFilesMutationOptions<TError, TOnMutateResult>(clientOptions)
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
 export function getSchemaEventsQueryKey() {
   return ['schema', '/schema/events'] as const
 }
 
-export function getSchemaEventsQueryOptions(options?: ClientRequestOptions) {
-  return queryOptions({
+export function getSchemaEventsQueryOptions<
+  TData = Awaited<
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.events.$get>>>>
+  >,
+  TError = DefaultError,
+>(options?: ClientRequestOptions) {
+  return queryOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.events.$get>>>>
+    >,
+    TError,
+    TData,
+    ReturnType<typeof getSchemaEventsQueryKey>
+  >({
     queryKey: getSchemaEventsQueryKey(),
     queryFn({ signal }) {
       return parseResponse(
@@ -187,68 +247,74 @@ export function useSchemaEvents<
   TData = Awaited<
     ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.events.$get>>>>
   >,
-  TError = unknown,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.events.$get>>>>
-    >,
-    TError,
-    TData
-  >
-  options?: ClientRequestOptions
-}) {
+  TError = DefaultError,
+>(
+  options?: {
+    query?: Omit<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.events.$get>>>>
+        >,
+        TError,
+        TData,
+        ReturnType<typeof getSchemaEventsQueryKey>
+      >,
+      'queryKey' | 'queryFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { query: queryOptions, options: clientOptions } = options ?? {}
-  return useQuery({
-    ...queryOptions,
-    queryKey: getSchemaEventsQueryKey(),
-    queryFn({ signal }: QueryFunctionContext) {
-      return parseResponse(
-        client.schema.events.$get(undefined, {
-          ...clientOptions,
-          init: { ...clientOptions?.init, signal },
-        }),
-      )
-    },
-  })
+  return useQuery(
+    { ...getSchemaEventsQueryOptions<TData, TError>(clientOptions), ...queryOptions },
+    queryClient,
+  )
 }
 
 export function useSuspenseSchemaEvents<
   TData = Awaited<
     ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.events.$get>>>>
   >,
-  TError = unknown,
->(options?: {
-  query?: UseSuspenseQueryOptions<
-    Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.events.$get>>>>
-    >,
-    TError,
-    TData
-  >
-  options?: ClientRequestOptions
-}) {
+  TError = DefaultError,
+>(
+  options?: {
+    query?: Omit<
+      UseSuspenseQueryOptions<
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.events.$get>>>>
+        >,
+        TError,
+        TData,
+        ReturnType<typeof getSchemaEventsQueryKey>
+      >,
+      'queryKey' | 'queryFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { query: queryOptions, options: clientOptions } = options ?? {}
-  return useSuspenseQuery({
-    ...queryOptions,
-    queryKey: getSchemaEventsQueryKey(),
-    queryFn({ signal }: QueryFunctionContext) {
-      return parseResponse(
-        client.schema.events.$get(undefined, {
-          ...clientOptions,
-          init: { ...clientOptions?.init, signal },
-        }),
-      )
-    },
-  })
+  return useSuspenseQuery(
+    { ...getSchemaEventsQueryOptions<TData, TError>(clientOptions), ...queryOptions },
+    queryClient,
+  )
 }
 
 export function getDbQueryKey() {
   return ['db', '/db'] as const
 }
 
-export function getDbQueryOptions(options?: ClientRequestOptions) {
-  return queryOptions({
+export function getDbQueryOptions<
+  TData = Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.$get>>>>>,
+  TError = DefaultError,
+>(options?: ClientRequestOptions) {
+  return queryOptions<
+    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.$get>>>>>,
+    TError,
+    TData,
+    ReturnType<typeof getDbQueryKey>
+  >({
     queryKey: getDbQueryKey(),
     queryFn({ signal }) {
       return parseResponse(
@@ -260,56 +326,70 @@ export function getDbQueryOptions(options?: ClientRequestOptions) {
 
 export function useDb<
   TData = Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.$get>>>>>,
-  TError = unknown,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.$get>>>>>,
-    TError,
-    TData
-  >
-  options?: ClientRequestOptions
-}) {
+  TError = DefaultError,
+>(
+  options?: {
+    query?: Omit<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.$get>>>>>,
+        TError,
+        TData,
+        ReturnType<typeof getDbQueryKey>
+      >,
+      'queryKey' | 'queryFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { query: queryOptions, options: clientOptions } = options ?? {}
-  return useQuery({
-    ...queryOptions,
-    queryKey: getDbQueryKey(),
-    queryFn({ signal }: QueryFunctionContext) {
-      return parseResponse(
-        client.db.$get(undefined, { ...clientOptions, init: { ...clientOptions?.init, signal } }),
-      )
-    },
-  })
+  return useQuery(
+    { ...getDbQueryOptions<TData, TError>(clientOptions), ...queryOptions },
+    queryClient,
+  )
 }
 
 export function useSuspenseDb<
   TData = Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.$get>>>>>,
-  TError = unknown,
->(options?: {
-  query?: UseSuspenseQueryOptions<
-    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.$get>>>>>,
-    TError,
-    TData
-  >
-  options?: ClientRequestOptions
-}) {
+  TError = DefaultError,
+>(
+  options?: {
+    query?: Omit<
+      UseSuspenseQueryOptions<
+        Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.$get>>>>>,
+        TError,
+        TData,
+        ReturnType<typeof getDbQueryKey>
+      >,
+      'queryKey' | 'queryFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { query: queryOptions, options: clientOptions } = options ?? {}
-  return useSuspenseQuery({
-    ...queryOptions,
-    queryKey: getDbQueryKey(),
-    queryFn({ signal }: QueryFunctionContext) {
-      return parseResponse(
-        client.db.$get(undefined, { ...clientOptions, init: { ...clientOptions?.init, signal } }),
-      )
-    },
-  })
+  return useSuspenseQuery(
+    { ...getDbQueryOptions<TData, TError>(clientOptions), ...queryOptions },
+    queryClient,
+  )
 }
 
 export function getDbCountsQueryKey() {
   return ['db', '/db/counts'] as const
 }
 
-export function getDbCountsQueryOptions(options?: ClientRequestOptions) {
-  return queryOptions({
+export function getDbCountsQueryOptions<
+  TData = Awaited<
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.counts.$get>>>>
+  >,
+  TError = DefaultError,
+>(options?: ClientRequestOptions) {
+  return queryOptions<
+    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.counts.$get>>>>>,
+    TError,
+    TData,
+    ReturnType<typeof getDbCountsQueryKey>
+  >({
     queryKey: getDbCountsQueryKey(),
     queryFn({ signal }) {
       return parseResponse(
@@ -323,56 +403,58 @@ export function useDbCounts<
   TData = Awaited<
     ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.counts.$get>>>>
   >,
-  TError = unknown,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.counts.$get>>>>>,
-    TError,
-    TData
-  >
-  options?: ClientRequestOptions
-}) {
+  TError = DefaultError,
+>(
+  options?: {
+    query?: Omit<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.counts.$get>>>>
+        >,
+        TError,
+        TData,
+        ReturnType<typeof getDbCountsQueryKey>
+      >,
+      'queryKey' | 'queryFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { query: queryOptions, options: clientOptions } = options ?? {}
-  return useQuery({
-    ...queryOptions,
-    queryKey: getDbCountsQueryKey(),
-    queryFn({ signal }: QueryFunctionContext) {
-      return parseResponse(
-        client.db.counts.$get(undefined, {
-          ...clientOptions,
-          init: { ...clientOptions?.init, signal },
-        }),
-      )
-    },
-  })
+  return useQuery(
+    { ...getDbCountsQueryOptions<TData, TError>(clientOptions), ...queryOptions },
+    queryClient,
+  )
 }
 
 export function useSuspenseDbCounts<
   TData = Awaited<
     ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.counts.$get>>>>
   >,
-  TError = unknown,
->(options?: {
-  query?: UseSuspenseQueryOptions<
-    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.counts.$get>>>>>,
-    TError,
-    TData
-  >
-  options?: ClientRequestOptions
-}) {
+  TError = DefaultError,
+>(
+  options?: {
+    query?: Omit<
+      UseSuspenseQueryOptions<
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.counts.$get>>>>
+        >,
+        TError,
+        TData,
+        ReturnType<typeof getDbCountsQueryKey>
+      >,
+      'queryKey' | 'queryFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { query: queryOptions, options: clientOptions } = options ?? {}
-  return useSuspenseQuery({
-    ...queryOptions,
-    queryKey: getDbCountsQueryKey(),
-    queryFn({ signal }: QueryFunctionContext) {
-      return parseResponse(
-        client.db.counts.$get(undefined, {
-          ...clientOptions,
-          init: { ...clientOptions?.init, signal },
-        }),
-      )
-    },
-  })
+  return useSuspenseQuery(
+    { ...getDbCountsQueryOptions<TData, TError>(clientOptions), ...queryOptions },
+    queryClient,
+  )
 }
 
 export function getDbRowsModelNameQueryKey(
@@ -381,11 +463,27 @@ export function getDbRowsModelNameQueryKey(
   return ['db', '/db/rows/:modelName', args] as const
 }
 
-export function getDbRowsModelNameQueryOptions(
+export function getDbRowsModelNameQueryOptions<
+  TData = Awaited<
+    ReturnType<
+      typeof parseResponse<Awaited<ReturnType<(typeof client.db.rows)[':modelName']['$get']>>>
+    >
+  >,
+  TError = DefaultError,
+>(
   args: InferRequestType<(typeof client.db.rows)[':modelName']['$get']>,
   options?: ClientRequestOptions,
 ) {
-  return queryOptions({
+  return queryOptions<
+    Awaited<
+      ReturnType<
+        typeof parseResponse<Awaited<ReturnType<(typeof client.db.rows)[':modelName']['$get']>>>
+      >
+    >,
+    TError,
+    TData,
+    ReturnType<typeof getDbRowsModelNameQueryKey>
+  >({
     queryKey: getDbRowsModelNameQueryKey(args),
     queryFn({ signal }) {
       return parseResponse(
@@ -401,35 +499,32 @@ export function useDbRowsModelName<
       typeof parseResponse<Awaited<ReturnType<(typeof client.db.rows)[':modelName']['$get']>>>
     >
   >,
-  TError = unknown,
+  TError = DefaultError,
 >(
   args: InferRequestType<(typeof client.db.rows)[':modelName']['$get']>,
   options?: {
-    query?: UseQueryOptions<
-      Awaited<
-        ReturnType<
-          typeof parseResponse<Awaited<ReturnType<(typeof client.db.rows)[':modelName']['$get']>>>
-        >
+    query?: Omit<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<(typeof client.db.rows)[':modelName']['$get']>>>
+          >
+        >,
+        TError,
+        TData,
+        ReturnType<typeof getDbRowsModelNameQueryKey>
       >,
-      TError,
-      TData
+      'queryKey' | 'queryFn'
     >
     options?: ClientRequestOptions
   },
+  queryClient?: QueryClient,
 ) {
   const { query: queryOptions, options: clientOptions } = options ?? {}
-  return useQuery({
-    ...queryOptions,
-    queryKey: getDbRowsModelNameQueryKey(args),
-    queryFn({ signal }: QueryFunctionContext) {
-      return parseResponse(
-        client.db.rows[':modelName'].$get(args, {
-          ...clientOptions,
-          init: { ...clientOptions?.init, signal },
-        }),
-      )
-    },
-  })
+  return useQuery(
+    { ...getDbRowsModelNameQueryOptions<TData, TError>(args, clientOptions), ...queryOptions },
+    queryClient,
+  )
 }
 
 export function useSuspenseDbRowsModelName<
@@ -438,40 +533,42 @@ export function useSuspenseDbRowsModelName<
       typeof parseResponse<Awaited<ReturnType<(typeof client.db.rows)[':modelName']['$get']>>>
     >
   >,
-  TError = unknown,
+  TError = DefaultError,
 >(
   args: InferRequestType<(typeof client.db.rows)[':modelName']['$get']>,
   options?: {
-    query?: UseSuspenseQueryOptions<
-      Awaited<
-        ReturnType<
-          typeof parseResponse<Awaited<ReturnType<(typeof client.db.rows)[':modelName']['$get']>>>
-        >
+    query?: Omit<
+      UseSuspenseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<(typeof client.db.rows)[':modelName']['$get']>>>
+          >
+        >,
+        TError,
+        TData,
+        ReturnType<typeof getDbRowsModelNameQueryKey>
       >,
-      TError,
-      TData
+      'queryKey' | 'queryFn'
     >
     options?: ClientRequestOptions
   },
+  queryClient?: QueryClient,
 ) {
   const { query: queryOptions, options: clientOptions } = options ?? {}
-  return useSuspenseQuery({
-    ...queryOptions,
-    queryKey: getDbRowsModelNameQueryKey(args),
-    queryFn({ signal }: QueryFunctionContext) {
-      return parseResponse(
-        client.db.rows[':modelName'].$get(args, {
-          ...clientOptions,
-          init: { ...clientOptions?.init, signal },
-        }),
-      )
-    },
-  })
+  return useSuspenseQuery(
+    { ...getDbRowsModelNameQueryOptions<TData, TError>(args, clientOptions), ...queryOptions },
+    queryClient,
+  )
 }
 
-export function getPostDbRowsModelNameMutationOptions<TError = unknown>(
-  options?: ClientRequestOptions,
-) {
+export function getPostDbRowsModelNameMutationKey() {
+  return ['db', '/db/rows/:modelName', 'POST'] as const
+}
+
+export function getPostDbRowsModelNameMutationOptions<
+  TError = DefaultError,
+  TOnMutateResult = unknown,
+>(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
       ReturnType<
@@ -479,37 +576,59 @@ export function getPostDbRowsModelNameMutationOptions<TError = unknown>(
       >
     >,
     TError,
-    InferRequestType<(typeof client.db.rows)[':modelName']['$post']>
+    InferRequestType<(typeof client.db.rows)[':modelName']['$post']>,
+    TOnMutateResult
   >({
-    mutationKey: ['db', '/db/rows/:modelName', 'POST'] as const,
+    mutationKey: getPostDbRowsModelNameMutationKey(),
     async mutationFn(args: InferRequestType<(typeof client.db.rows)[':modelName']['$post']>) {
       return parseResponse(client.db.rows[':modelName'].$post(args, options))
     },
   })
 }
 
-export function usePostDbRowsModelName<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<
-      ReturnType<
-        typeof parseResponse<Awaited<ReturnType<(typeof client.db.rows)[':modelName']['$post']>>>
-      >
-    >,
-    TError,
-    InferRequestType<(typeof client.db.rows)[':modelName']['$post']>
-  >
-  options?: ClientRequestOptions
-}) {
+export function usePostDbRowsModelName<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof parseResponse<
+              Awaited<ReturnType<(typeof client.db.rows)[':modelName']['$post']>>
+            >
+          >
+        >,
+        TError,
+        InferRequestType<(typeof client.db.rows)[':modelName']['$post']>,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({
-    ...mutationOptions,
-    ...getPostDbRowsModelNameMutationOptions<TError>(clientOptions),
-  })
+  const mutationDefaults = getPostDbRowsModelNameMutationOptions<TError, TOnMutateResult>(
+    clientOptions,
+  )
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
-export function getDeleteDbRowsModelNameMutationOptions<TError = unknown>(
-  options?: ClientRequestOptions,
-) {
+export function getDeleteDbRowsModelNameMutationKey() {
+  return ['db', '/db/rows/:modelName', 'DELETE'] as const
+}
+
+export function getDeleteDbRowsModelNameMutationOptions<
+  TError = DefaultError,
+  TOnMutateResult = unknown,
+>(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
       ReturnType<
@@ -517,37 +636,59 @@ export function getDeleteDbRowsModelNameMutationOptions<TError = unknown>(
       >
     >,
     TError,
-    InferRequestType<(typeof client.db.rows)[':modelName']['$delete']>
+    InferRequestType<(typeof client.db.rows)[':modelName']['$delete']>,
+    TOnMutateResult
   >({
-    mutationKey: ['db', '/db/rows/:modelName', 'DELETE'] as const,
+    mutationKey: getDeleteDbRowsModelNameMutationKey(),
     async mutationFn(args: InferRequestType<(typeof client.db.rows)[':modelName']['$delete']>) {
       return parseResponse(client.db.rows[':modelName'].$delete(args, options))
     },
   })
 }
 
-export function useDeleteDbRowsModelName<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<
-      ReturnType<
-        typeof parseResponse<Awaited<ReturnType<(typeof client.db.rows)[':modelName']['$delete']>>>
-      >
-    >,
-    TError,
-    InferRequestType<(typeof client.db.rows)[':modelName']['$delete']>
-  >
-  options?: ClientRequestOptions
-}) {
+export function useDeleteDbRowsModelName<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof parseResponse<
+              Awaited<ReturnType<(typeof client.db.rows)[':modelName']['$delete']>>
+            >
+          >
+        >,
+        TError,
+        InferRequestType<(typeof client.db.rows)[':modelName']['$delete']>,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({
-    ...mutationOptions,
-    ...getDeleteDbRowsModelNameMutationOptions<TError>(clientOptions),
-  })
+  const mutationDefaults = getDeleteDbRowsModelNameMutationOptions<TError, TOnMutateResult>(
+    clientOptions,
+  )
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
-export function getPatchDbRowsModelNameMutationOptions<TError = unknown>(
-  options?: ClientRequestOptions,
-) {
+export function getPatchDbRowsModelNameMutationKey() {
+  return ['db', '/db/rows/:modelName', 'PATCH'] as const
+}
+
+export function getPatchDbRowsModelNameMutationOptions<
+  TError = DefaultError,
+  TOnMutateResult = unknown,
+>(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
       ReturnType<
@@ -555,121 +696,210 @@ export function getPatchDbRowsModelNameMutationOptions<TError = unknown>(
       >
     >,
     TError,
-    InferRequestType<(typeof client.db.rows)[':modelName']['$patch']>
+    InferRequestType<(typeof client.db.rows)[':modelName']['$patch']>,
+    TOnMutateResult
   >({
-    mutationKey: ['db', '/db/rows/:modelName', 'PATCH'] as const,
+    mutationKey: getPatchDbRowsModelNameMutationKey(),
     async mutationFn(args: InferRequestType<(typeof client.db.rows)[':modelName']['$patch']>) {
       return parseResponse(client.db.rows[':modelName'].$patch(args, options))
     },
   })
 }
 
-export function usePatchDbRowsModelName<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<
-      ReturnType<
-        typeof parseResponse<Awaited<ReturnType<(typeof client.db.rows)[':modelName']['$patch']>>>
-      >
-    >,
-    TError,
-    InferRequestType<(typeof client.db.rows)[':modelName']['$patch']>
-  >
-  options?: ClientRequestOptions
-}) {
+export function usePatchDbRowsModelName<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof parseResponse<
+              Awaited<ReturnType<(typeof client.db.rows)[':modelName']['$patch']>>
+            >
+          >
+        >,
+        TError,
+        InferRequestType<(typeof client.db.rows)[':modelName']['$patch']>,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({
-    ...mutationOptions,
-    ...getPatchDbRowsModelNameMutationOptions<TError>(clientOptions),
-  })
+  const mutationDefaults = getPatchDbRowsModelNameMutationOptions<TError, TOnMutateResult>(
+    clientOptions,
+  )
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
-export function getPostDbSqlMutationOptions<TError = unknown>(options?: ClientRequestOptions) {
+export function getPostDbSqlMutationKey() {
+  return ['db', '/db/sql', 'POST'] as const
+}
+
+export function getPostDbSqlMutationOptions<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: ClientRequestOptions,
+) {
   return mutationOptions<
     Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.sql.$post>>>>>,
     TError,
-    InferRequestType<typeof client.db.sql.$post>
+    InferRequestType<typeof client.db.sql.$post>,
+    TOnMutateResult
   >({
-    mutationKey: ['db', '/db/sql', 'POST'] as const,
+    mutationKey: getPostDbSqlMutationKey(),
     async mutationFn(args: InferRequestType<typeof client.db.sql.$post>) {
       return parseResponse(client.db.sql.$post(args, options))
     },
   })
 }
 
-export function usePostDbSql<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.sql.$post>>>>>,
-    TError,
-    InferRequestType<typeof client.db.sql.$post>
-  >
-  options?: ClientRequestOptions
-}) {
+export function usePostDbSql<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.sql.$post>>>>>,
+        TError,
+        InferRequestType<typeof client.db.sql.$post>,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({ ...mutationOptions, ...getPostDbSqlMutationOptions<TError>(clientOptions) })
+  const mutationDefaults = getPostDbSqlMutationOptions<TError, TOnMutateResult>(clientOptions)
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
-export function getPostDbExplainMutationOptions<TError = unknown>(options?: ClientRequestOptions) {
+export function getPostDbExplainMutationKey() {
+  return ['db', '/db/explain', 'POST'] as const
+}
+
+export function getPostDbExplainMutationOptions<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: ClientRequestOptions,
+) {
   return mutationOptions<
     Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.explain.$post>>>>>,
     TError,
-    InferRequestType<typeof client.db.explain.$post>
+    InferRequestType<typeof client.db.explain.$post>,
+    TOnMutateResult
   >({
-    mutationKey: ['db', '/db/explain', 'POST'] as const,
+    mutationKey: getPostDbExplainMutationKey(),
     async mutationFn(args: InferRequestType<typeof client.db.explain.$post>) {
       return parseResponse(client.db.explain.$post(args, options))
     },
   })
 }
 
-export function usePostDbExplain<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.explain.$post>>>>>,
-    TError,
-    InferRequestType<typeof client.db.explain.$post>
-  >
-  options?: ClientRequestOptions
-}) {
+export function usePostDbExplain<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.explain.$post>>>>
+        >,
+        TError,
+        InferRequestType<typeof client.db.explain.$post>,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({
-    ...mutationOptions,
-    ...getPostDbExplainMutationOptions<TError>(clientOptions),
-  })
+  const mutationDefaults = getPostDbExplainMutationOptions<TError, TOnMutateResult>(clientOptions)
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
-export function getPostDbAnalyzeMutationOptions<TError = unknown>(options?: ClientRequestOptions) {
+export function getPostDbAnalyzeMutationKey() {
+  return ['db', '/db/analyze', 'POST'] as const
+}
+
+export function getPostDbAnalyzeMutationOptions<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: ClientRequestOptions,
+) {
   return mutationOptions<
     Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.analyze.$post>>>>>,
     TError,
-    InferRequestType<typeof client.db.analyze.$post>
+    InferRequestType<typeof client.db.analyze.$post>,
+    TOnMutateResult
   >({
-    mutationKey: ['db', '/db/analyze', 'POST'] as const,
+    mutationKey: getPostDbAnalyzeMutationKey(),
     async mutationFn(args: InferRequestType<typeof client.db.analyze.$post>) {
       return parseResponse(client.db.analyze.$post(args, options))
     },
   })
 }
 
-export function usePostDbAnalyze<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.analyze.$post>>>>>,
-    TError,
-    InferRequestType<typeof client.db.analyze.$post>
-  >
-  options?: ClientRequestOptions
-}) {
+export function usePostDbAnalyze<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.analyze.$post>>>>
+        >,
+        TError,
+        InferRequestType<typeof client.db.analyze.$post>,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({
-    ...mutationOptions,
-    ...getPostDbAnalyzeMutationOptions<TError>(clientOptions),
-  })
+  const mutationDefaults = getPostDbAnalyzeMutationOptions<TError, TOnMutateResult>(clientOptions)
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
 export function getClientQueryKey() {
   return ['client', '/client'] as const
 }
 
-export function getClientQueryOptions(options?: ClientRequestOptions) {
-  return queryOptions({
+export function getClientQueryOptions<
+  TData = Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.$get>>>>>,
+  TError = DefaultError,
+>(options?: ClientRequestOptions) {
+  return queryOptions<
+    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.$get>>>>>,
+    TError,
+    TData,
+    ReturnType<typeof getClientQueryKey>
+  >({
     queryKey: getClientQueryKey(),
     queryFn({ signal }) {
       return parseResponse(
@@ -681,127 +911,170 @@ export function getClientQueryOptions(options?: ClientRequestOptions) {
 
 export function useClient<
   TData = Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.$get>>>>>,
-  TError = unknown,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.$get>>>>>,
-    TError,
-    TData
-  >
-  options?: ClientRequestOptions
-}) {
+  TError = DefaultError,
+>(
+  options?: {
+    query?: Omit<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.$get>>>>>,
+        TError,
+        TData,
+        ReturnType<typeof getClientQueryKey>
+      >,
+      'queryKey' | 'queryFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { query: queryOptions, options: clientOptions } = options ?? {}
-  return useQuery({
-    ...queryOptions,
-    queryKey: getClientQueryKey(),
-    queryFn({ signal }: QueryFunctionContext) {
-      return parseResponse(
-        client.client.$get(undefined, {
-          ...clientOptions,
-          init: { ...clientOptions?.init, signal },
-        }),
-      )
-    },
-  })
+  return useQuery(
+    { ...getClientQueryOptions<TData, TError>(clientOptions), ...queryOptions },
+    queryClient,
+  )
 }
 
 export function useSuspenseClient<
   TData = Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.$get>>>>>,
-  TError = unknown,
->(options?: {
-  query?: UseSuspenseQueryOptions<
-    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.$get>>>>>,
-    TError,
-    TData
-  >
-  options?: ClientRequestOptions
-}) {
+  TError = DefaultError,
+>(
+  options?: {
+    query?: Omit<
+      UseSuspenseQueryOptions<
+        Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.$get>>>>>,
+        TError,
+        TData,
+        ReturnType<typeof getClientQueryKey>
+      >,
+      'queryKey' | 'queryFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { query: queryOptions, options: clientOptions } = options ?? {}
-  return useSuspenseQuery({
-    ...queryOptions,
-    queryKey: getClientQueryKey(),
-    queryFn({ signal }: QueryFunctionContext) {
-      return parseResponse(
-        client.client.$get(undefined, {
-          ...clientOptions,
-          init: { ...clientOptions?.init, signal },
-        }),
-      )
-    },
-  })
+  return useSuspenseQuery(
+    { ...getClientQueryOptions<TData, TError>(clientOptions), ...queryOptions },
+    queryClient,
+  )
 }
 
-export function getPostClientAnalyzeMutationOptions<TError = unknown>(
-  options?: ClientRequestOptions,
-) {
+export function getPostClientAnalyzeMutationKey() {
+  return ['client', '/client/analyze', 'POST'] as const
+}
+
+export function getPostClientAnalyzeMutationOptions<
+  TError = DefaultError,
+  TOnMutateResult = unknown,
+>(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
       ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.analyze.$post>>>>
     >,
     TError,
-    InferRequestType<typeof client.client.analyze.$post>
+    InferRequestType<typeof client.client.analyze.$post>,
+    TOnMutateResult
   >({
-    mutationKey: ['client', '/client/analyze', 'POST'] as const,
+    mutationKey: getPostClientAnalyzeMutationKey(),
     async mutationFn(args: InferRequestType<typeof client.client.analyze.$post>) {
       return parseResponse(client.client.analyze.$post(args, options))
     },
   })
 }
 
-export function usePostClientAnalyze<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.analyze.$post>>>>
-    >,
-    TError,
-    InferRequestType<typeof client.client.analyze.$post>
-  >
-  options?: ClientRequestOptions
-}) {
+export function usePostClientAnalyze<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.analyze.$post>>>>
+        >,
+        TError,
+        InferRequestType<typeof client.client.analyze.$post>,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({
-    ...mutationOptions,
-    ...getPostClientAnalyzeMutationOptions<TError>(clientOptions),
-  })
+  const mutationDefaults = getPostClientAnalyzeMutationOptions<TError, TOnMutateResult>(
+    clientOptions,
+  )
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
-export function getPostClientCompleteMutationOptions<TError = unknown>(
-  options?: ClientRequestOptions,
-) {
+export function getPostClientCompleteMutationKey() {
+  return ['client', '/client/complete', 'POST'] as const
+}
+
+export function getPostClientCompleteMutationOptions<
+  TError = DefaultError,
+  TOnMutateResult = unknown,
+>(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
       ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.complete.$post>>>>
     >,
     TError,
-    InferRequestType<typeof client.client.complete.$post>
+    InferRequestType<typeof client.client.complete.$post>,
+    TOnMutateResult
   >({
-    mutationKey: ['client', '/client/complete', 'POST'] as const,
+    mutationKey: getPostClientCompleteMutationKey(),
     async mutationFn(args: InferRequestType<typeof client.client.complete.$post>) {
       return parseResponse(client.client.complete.$post(args, options))
     },
   })
 }
 
-export function usePostClientComplete<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.complete.$post>>>>
-    >,
-    TError,
-    InferRequestType<typeof client.client.complete.$post>
-  >
-  options?: ClientRequestOptions
-}) {
+export function usePostClientComplete<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.complete.$post>>>>
+        >,
+        TError,
+        InferRequestType<typeof client.client.complete.$post>,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({
-    ...mutationOptions,
-    ...getPostClientCompleteMutationOptions<TError>(clientOptions),
-  })
+  const mutationDefaults = getPostClientCompleteMutationOptions<TError, TOnMutateResult>(
+    clientOptions,
+  )
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
-export function getPostClientCompleteDetailMutationOptions<TError = unknown>(
-  options?: ClientRequestOptions,
-) {
+export function getPostClientCompleteDetailMutationKey() {
+  return ['client', '/client/complete/detail', 'POST'] as const
+}
+
+export function getPostClientCompleteDetailMutationOptions<
+  TError = DefaultError,
+  TOnMutateResult = unknown,
+>(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
       ReturnType<
@@ -809,35 +1082,54 @@ export function getPostClientCompleteDetailMutationOptions<TError = unknown>(
       >
     >,
     TError,
-    InferRequestType<typeof client.client.complete.detail.$post>
+    InferRequestType<typeof client.client.complete.detail.$post>,
+    TOnMutateResult
   >({
-    mutationKey: ['client', '/client/complete/detail', 'POST'] as const,
+    mutationKey: getPostClientCompleteDetailMutationKey(),
     async mutationFn(args: InferRequestType<typeof client.client.complete.detail.$post>) {
       return parseResponse(client.client.complete.detail.$post(args, options))
     },
   })
 }
 
-export function usePostClientCompleteDetail<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<
-      ReturnType<
-        typeof parseResponse<Awaited<ReturnType<typeof client.client.complete.detail.$post>>>
-      >
-    >,
-    TError,
-    InferRequestType<typeof client.client.complete.detail.$post>
-  >
-  options?: ClientRequestOptions
-}) {
+export function usePostClientCompleteDetail<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof client.client.complete.detail.$post>>>
+          >
+        >,
+        TError,
+        InferRequestType<typeof client.client.complete.detail.$post>,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({
-    ...mutationOptions,
-    ...getPostClientCompleteDetailMutationOptions<TError>(clientOptions),
-  })
+  const mutationDefaults = getPostClientCompleteDetailMutationOptions<TError, TOnMutateResult>(
+    clientOptions,
+  )
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
-export function getPostClientHoverMutationOptions<TError = unknown>(
+export function getPostClientHoverMutationKey() {
+  return ['client', '/client/hover', 'POST'] as const
+}
+
+export function getPostClientHoverMutationOptions<TError = DefaultError, TOnMutateResult = unknown>(
   options?: ClientRequestOptions,
 ) {
   return mutationOptions<
@@ -845,101 +1137,160 @@ export function getPostClientHoverMutationOptions<TError = unknown>(
       ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.hover.$post>>>>
     >,
     TError,
-    InferRequestType<typeof client.client.hover.$post>
+    InferRequestType<typeof client.client.hover.$post>,
+    TOnMutateResult
   >({
-    mutationKey: ['client', '/client/hover', 'POST'] as const,
+    mutationKey: getPostClientHoverMutationKey(),
     async mutationFn(args: InferRequestType<typeof client.client.hover.$post>) {
       return parseResponse(client.client.hover.$post(args, options))
     },
   })
 }
 
-export function usePostClientHover<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.hover.$post>>>>
-    >,
-    TError,
-    InferRequestType<typeof client.client.hover.$post>
-  >
-  options?: ClientRequestOptions
-}) {
+export function usePostClientHover<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.hover.$post>>>>
+        >,
+        TError,
+        InferRequestType<typeof client.client.hover.$post>,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({
-    ...mutationOptions,
-    ...getPostClientHoverMutationOptions<TError>(clientOptions),
-  })
+  const mutationDefaults = getPostClientHoverMutationOptions<TError, TOnMutateResult>(clientOptions)
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
-export function getPostClientSignatureMutationOptions<TError = unknown>(
-  options?: ClientRequestOptions,
-) {
+export function getPostClientSignatureMutationKey() {
+  return ['client', '/client/signature', 'POST'] as const
+}
+
+export function getPostClientSignatureMutationOptions<
+  TError = DefaultError,
+  TOnMutateResult = unknown,
+>(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
       ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.signature.$post>>>>
     >,
     TError,
-    InferRequestType<typeof client.client.signature.$post>
+    InferRequestType<typeof client.client.signature.$post>,
+    TOnMutateResult
   >({
-    mutationKey: ['client', '/client/signature', 'POST'] as const,
+    mutationKey: getPostClientSignatureMutationKey(),
     async mutationFn(args: InferRequestType<typeof client.client.signature.$post>) {
       return parseResponse(client.client.signature.$post(args, options))
     },
   })
 }
 
-export function usePostClientSignature<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.signature.$post>>>>
-    >,
-    TError,
-    InferRequestType<typeof client.client.signature.$post>
-  >
-  options?: ClientRequestOptions
-}) {
+export function usePostClientSignature<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof client.client.signature.$post>>>
+          >
+        >,
+        TError,
+        InferRequestType<typeof client.client.signature.$post>,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({
-    ...mutationOptions,
-    ...getPostClientSignatureMutationOptions<TError>(clientOptions),
-  })
+  const mutationDefaults = getPostClientSignatureMutationOptions<TError, TOnMutateResult>(
+    clientOptions,
+  )
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
-export function getPostClientFormatMutationOptions<TError = unknown>(
-  options?: ClientRequestOptions,
-) {
+export function getPostClientFormatMutationKey() {
+  return ['client', '/client/format', 'POST'] as const
+}
+
+export function getPostClientFormatMutationOptions<
+  TError = DefaultError,
+  TOnMutateResult = unknown,
+>(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
       ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.format.$post>>>>
     >,
     TError,
-    InferRequestType<typeof client.client.format.$post>
+    InferRequestType<typeof client.client.format.$post>,
+    TOnMutateResult
   >({
-    mutationKey: ['client', '/client/format', 'POST'] as const,
+    mutationKey: getPostClientFormatMutationKey(),
     async mutationFn(args: InferRequestType<typeof client.client.format.$post>) {
       return parseResponse(client.client.format.$post(args, options))
     },
   })
 }
 
-export function usePostClientFormat<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.format.$post>>>>
-    >,
-    TError,
-    InferRequestType<typeof client.client.format.$post>
-  >
-  options?: ClientRequestOptions
-}) {
+export function usePostClientFormat<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.format.$post>>>>
+        >,
+        TError,
+        InferRequestType<typeof client.client.format.$post>,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({
-    ...mutationOptions,
-    ...getPostClientFormatMutationOptions<TError>(clientOptions),
-  })
+  const mutationDefaults = getPostClientFormatMutationOptions<TError, TOnMutateResult>(
+    clientOptions,
+  )
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
-export function getPostClientCheckMutationOptions<TError = unknown>(
+export function getPostClientCheckMutationKey() {
+  return ['client', '/client/check', 'POST'] as const
+}
+
+export function getPostClientCheckMutationOptions<TError = DefaultError, TOnMutateResult = unknown>(
   options?: ClientRequestOptions,
 ) {
   return mutationOptions<
@@ -947,225 +1298,364 @@ export function getPostClientCheckMutationOptions<TError = unknown>(
       ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.check.$post>>>>
     >,
     TError,
-    InferRequestType<typeof client.client.check.$post>
+    InferRequestType<typeof client.client.check.$post>,
+    TOnMutateResult
   >({
-    mutationKey: ['client', '/client/check', 'POST'] as const,
+    mutationKey: getPostClientCheckMutationKey(),
     async mutationFn(args: InferRequestType<typeof client.client.check.$post>) {
       return parseResponse(client.client.check.$post(args, options))
     },
   })
 }
 
-export function usePostClientCheck<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.check.$post>>>>
-    >,
-    TError,
-    InferRequestType<typeof client.client.check.$post>
-  >
-  options?: ClientRequestOptions
-}) {
+export function usePostClientCheck<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.check.$post>>>>
+        >,
+        TError,
+        InferRequestType<typeof client.client.check.$post>,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({
-    ...mutationOptions,
-    ...getPostClientCheckMutationOptions<TError>(clientOptions),
-  })
+  const mutationDefaults = getPostClientCheckMutationOptions<TError, TOnMutateResult>(clientOptions)
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
-export function getPostClientPreviewMutationOptions<TError = unknown>(
-  options?: ClientRequestOptions,
-) {
+export function getPostClientPreviewMutationKey() {
+  return ['client', '/client/preview', 'POST'] as const
+}
+
+export function getPostClientPreviewMutationOptions<
+  TError = DefaultError,
+  TOnMutateResult = unknown,
+>(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
       ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.preview.$post>>>>
     >,
     TError,
-    InferRequestType<typeof client.client.preview.$post>
+    InferRequestType<typeof client.client.preview.$post>,
+    TOnMutateResult
   >({
-    mutationKey: ['client', '/client/preview', 'POST'] as const,
+    mutationKey: getPostClientPreviewMutationKey(),
     async mutationFn(args: InferRequestType<typeof client.client.preview.$post>) {
       return parseResponse(client.client.preview.$post(args, options))
     },
   })
 }
 
-export function usePostClientPreview<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.preview.$post>>>>
-    >,
-    TError,
-    InferRequestType<typeof client.client.preview.$post>
-  >
-  options?: ClientRequestOptions
-}) {
+export function usePostClientPreview<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.preview.$post>>>>
+        >,
+        TError,
+        InferRequestType<typeof client.client.preview.$post>,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({
-    ...mutationOptions,
-    ...getPostClientPreviewMutationOptions<TError>(clientOptions),
-  })
+  const mutationDefaults = getPostClientPreviewMutationOptions<TError, TOnMutateResult>(
+    clientOptions,
+  )
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
-export function getPostClientRunMutationOptions<TError = unknown>(options?: ClientRequestOptions) {
+export function getPostClientRunMutationKey() {
+  return ['client', '/client/run', 'POST'] as const
+}
+
+export function getPostClientRunMutationOptions<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: ClientRequestOptions,
+) {
   return mutationOptions<
     Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.run.$post>>>>>,
     TError,
-    InferRequestType<typeof client.client.run.$post>
+    InferRequestType<typeof client.client.run.$post>,
+    TOnMutateResult
   >({
-    mutationKey: ['client', '/client/run', 'POST'] as const,
+    mutationKey: getPostClientRunMutationKey(),
     async mutationFn(args: InferRequestType<typeof client.client.run.$post>) {
       return parseResponse(client.client.run.$post(args, options))
     },
   })
 }
 
-export function usePostClientRun<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.run.$post>>>>>,
-    TError,
-    InferRequestType<typeof client.client.run.$post>
-  >
-  options?: ClientRequestOptions
-}) {
+export function usePostClientRun<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.run.$post>>>>
+        >,
+        TError,
+        InferRequestType<typeof client.client.run.$post>,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({
-    ...mutationOptions,
-    ...getPostClientRunMutationOptions<TError>(clientOptions),
-  })
+  const mutationDefaults = getPostClientRunMutationOptions<TError, TOnMutateResult>(clientOptions)
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
-export function getPostPrismaFormatMutationOptions<TError = unknown>(
-  options?: ClientRequestOptions,
-) {
+export function getPostPrismaFormatMutationKey() {
+  return ['prisma', '/prisma/format', 'POST'] as const
+}
+
+export function getPostPrismaFormatMutationOptions<
+  TError = DefaultError,
+  TOnMutateResult = unknown,
+>(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
       ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.format.$post>>>>
     >,
     TError,
-    InferRequestType<typeof client.prisma.format.$post>
+    InferRequestType<typeof client.prisma.format.$post>,
+    TOnMutateResult
   >({
-    mutationKey: ['prisma', '/prisma/format', 'POST'] as const,
+    mutationKey: getPostPrismaFormatMutationKey(),
     async mutationFn(args: InferRequestType<typeof client.prisma.format.$post>) {
       return parseResponse(client.prisma.format.$post(args, options))
     },
   })
 }
 
-export function usePostPrismaFormat<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.format.$post>>>>
-    >,
-    TError,
-    InferRequestType<typeof client.prisma.format.$post>
-  >
-  options?: ClientRequestOptions
-}) {
+export function usePostPrismaFormat<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.format.$post>>>>
+        >,
+        TError,
+        InferRequestType<typeof client.prisma.format.$post>,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({
-    ...mutationOptions,
-    ...getPostPrismaFormatMutationOptions<TError>(clientOptions),
-  })
+  const mutationDefaults = getPostPrismaFormatMutationOptions<TError, TOnMutateResult>(
+    clientOptions,
+  )
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
-export function getPostPrismaLintMutationOptions<TError = unknown>(options?: ClientRequestOptions) {
+export function getPostPrismaLintMutationKey() {
+  return ['prisma', '/prisma/lint', 'POST'] as const
+}
+
+export function getPostPrismaLintMutationOptions<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: ClientRequestOptions,
+) {
   return mutationOptions<
     Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.lint.$post>>>>>,
     TError,
-    InferRequestType<typeof client.prisma.lint.$post>
+    InferRequestType<typeof client.prisma.lint.$post>,
+    TOnMutateResult
   >({
-    mutationKey: ['prisma', '/prisma/lint', 'POST'] as const,
+    mutationKey: getPostPrismaLintMutationKey(),
     async mutationFn(args: InferRequestType<typeof client.prisma.lint.$post>) {
       return parseResponse(client.prisma.lint.$post(args, options))
     },
   })
 }
 
-export function usePostPrismaLint<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.lint.$post>>>>>,
-    TError,
-    InferRequestType<typeof client.prisma.lint.$post>
-  >
-  options?: ClientRequestOptions
-}) {
+export function usePostPrismaLint<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.lint.$post>>>>
+        >,
+        TError,
+        InferRequestType<typeof client.prisma.lint.$post>,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({
-    ...mutationOptions,
-    ...getPostPrismaLintMutationOptions<TError>(clientOptions),
-  })
+  const mutationDefaults = getPostPrismaLintMutationOptions<TError, TOnMutateResult>(clientOptions)
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
-export function getPostPrismaSymbolsMutationOptions<TError = unknown>(
-  options?: ClientRequestOptions,
-) {
+export function getPostPrismaSymbolsMutationKey() {
+  return ['prisma', '/prisma/symbols', 'POST'] as const
+}
+
+export function getPostPrismaSymbolsMutationOptions<
+  TError = DefaultError,
+  TOnMutateResult = unknown,
+>(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
       ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.symbols.$post>>>>
     >,
     TError,
-    InferRequestType<typeof client.prisma.symbols.$post>
+    InferRequestType<typeof client.prisma.symbols.$post>,
+    TOnMutateResult
   >({
-    mutationKey: ['prisma', '/prisma/symbols', 'POST'] as const,
+    mutationKey: getPostPrismaSymbolsMutationKey(),
     async mutationFn(args: InferRequestType<typeof client.prisma.symbols.$post>) {
       return parseResponse(client.prisma.symbols.$post(args, options))
     },
   })
 }
 
-export function usePostPrismaSymbols<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.symbols.$post>>>>
-    >,
-    TError,
-    InferRequestType<typeof client.prisma.symbols.$post>
-  >
-  options?: ClientRequestOptions
-}) {
+export function usePostPrismaSymbols<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.symbols.$post>>>>
+        >,
+        TError,
+        InferRequestType<typeof client.prisma.symbols.$post>,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({
-    ...mutationOptions,
-    ...getPostPrismaSymbolsMutationOptions<TError>(clientOptions),
-  })
+  const mutationDefaults = getPostPrismaSymbolsMutationOptions<TError, TOnMutateResult>(
+    clientOptions,
+  )
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
-export function getPostPrismaCompleteMutationOptions<TError = unknown>(
-  options?: ClientRequestOptions,
-) {
+export function getPostPrismaCompleteMutationKey() {
+  return ['prisma', '/prisma/complete', 'POST'] as const
+}
+
+export function getPostPrismaCompleteMutationOptions<
+  TError = DefaultError,
+  TOnMutateResult = unknown,
+>(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
       ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.complete.$post>>>>
     >,
     TError,
-    InferRequestType<typeof client.prisma.complete.$post>
+    InferRequestType<typeof client.prisma.complete.$post>,
+    TOnMutateResult
   >({
-    mutationKey: ['prisma', '/prisma/complete', 'POST'] as const,
+    mutationKey: getPostPrismaCompleteMutationKey(),
     async mutationFn(args: InferRequestType<typeof client.prisma.complete.$post>) {
       return parseResponse(client.prisma.complete.$post(args, options))
     },
   })
 }
 
-export function usePostPrismaComplete<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.complete.$post>>>>
-    >,
-    TError,
-    InferRequestType<typeof client.prisma.complete.$post>
-  >
-  options?: ClientRequestOptions
-}) {
+export function usePostPrismaComplete<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.complete.$post>>>>
+        >,
+        TError,
+        InferRequestType<typeof client.prisma.complete.$post>,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({
-    ...mutationOptions,
-    ...getPostPrismaCompleteMutationOptions<TError>(clientOptions),
-  })
+  const mutationDefaults = getPostPrismaCompleteMutationOptions<TError, TOnMutateResult>(
+    clientOptions,
+  )
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
-export function getPostPrismaHoverMutationOptions<TError = unknown>(
+export function getPostPrismaHoverMutationKey() {
+  return ['prisma', '/prisma/hover', 'POST'] as const
+}
+
+export function getPostPrismaHoverMutationOptions<TError = DefaultError, TOnMutateResult = unknown>(
   options?: ClientRequestOptions,
 ) {
   return mutationOptions<
@@ -1173,137 +1663,219 @@ export function getPostPrismaHoverMutationOptions<TError = unknown>(
       ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.hover.$post>>>>
     >,
     TError,
-    InferRequestType<typeof client.prisma.hover.$post>
+    InferRequestType<typeof client.prisma.hover.$post>,
+    TOnMutateResult
   >({
-    mutationKey: ['prisma', '/prisma/hover', 'POST'] as const,
+    mutationKey: getPostPrismaHoverMutationKey(),
     async mutationFn(args: InferRequestType<typeof client.prisma.hover.$post>) {
       return parseResponse(client.prisma.hover.$post(args, options))
     },
   })
 }
 
-export function usePostPrismaHover<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.hover.$post>>>>
-    >,
-    TError,
-    InferRequestType<typeof client.prisma.hover.$post>
-  >
-  options?: ClientRequestOptions
-}) {
+export function usePostPrismaHover<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.hover.$post>>>>
+        >,
+        TError,
+        InferRequestType<typeof client.prisma.hover.$post>,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({
-    ...mutationOptions,
-    ...getPostPrismaHoverMutationOptions<TError>(clientOptions),
-  })
+  const mutationDefaults = getPostPrismaHoverMutationOptions<TError, TOnMutateResult>(clientOptions)
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
-export function getPostPrismaDefinitionMutationOptions<TError = unknown>(
-  options?: ClientRequestOptions,
-) {
+export function getPostPrismaDefinitionMutationKey() {
+  return ['prisma', '/prisma/definition', 'POST'] as const
+}
+
+export function getPostPrismaDefinitionMutationOptions<
+  TError = DefaultError,
+  TOnMutateResult = unknown,
+>(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
       ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.definition.$post>>>>
     >,
     TError,
-    InferRequestType<typeof client.prisma.definition.$post>
+    InferRequestType<typeof client.prisma.definition.$post>,
+    TOnMutateResult
   >({
-    mutationKey: ['prisma', '/prisma/definition', 'POST'] as const,
+    mutationKey: getPostPrismaDefinitionMutationKey(),
     async mutationFn(args: InferRequestType<typeof client.prisma.definition.$post>) {
       return parseResponse(client.prisma.definition.$post(args, options))
     },
   })
 }
 
-export function usePostPrismaDefinition<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.definition.$post>>>>
-    >,
-    TError,
-    InferRequestType<typeof client.prisma.definition.$post>
-  >
-  options?: ClientRequestOptions
-}) {
+export function usePostPrismaDefinition<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof client.prisma.definition.$post>>>
+          >
+        >,
+        TError,
+        InferRequestType<typeof client.prisma.definition.$post>,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({
-    ...mutationOptions,
-    ...getPostPrismaDefinitionMutationOptions<TError>(clientOptions),
-  })
+  const mutationDefaults = getPostPrismaDefinitionMutationOptions<TError, TOnMutateResult>(
+    clientOptions,
+  )
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
-export function getPostPrismaReferencesMutationOptions<TError = unknown>(
-  options?: ClientRequestOptions,
-) {
+export function getPostPrismaReferencesMutationKey() {
+  return ['prisma', '/prisma/references', 'POST'] as const
+}
+
+export function getPostPrismaReferencesMutationOptions<
+  TError = DefaultError,
+  TOnMutateResult = unknown,
+>(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
       ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.references.$post>>>>
     >,
     TError,
-    InferRequestType<typeof client.prisma.references.$post>
+    InferRequestType<typeof client.prisma.references.$post>,
+    TOnMutateResult
   >({
-    mutationKey: ['prisma', '/prisma/references', 'POST'] as const,
+    mutationKey: getPostPrismaReferencesMutationKey(),
     async mutationFn(args: InferRequestType<typeof client.prisma.references.$post>) {
       return parseResponse(client.prisma.references.$post(args, options))
     },
   })
 }
 
-export function usePostPrismaReferences<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.references.$post>>>>
-    >,
-    TError,
-    InferRequestType<typeof client.prisma.references.$post>
-  >
-  options?: ClientRequestOptions
-}) {
+export function usePostPrismaReferences<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof client.prisma.references.$post>>>
+          >
+        >,
+        TError,
+        InferRequestType<typeof client.prisma.references.$post>,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({
-    ...mutationOptions,
-    ...getPostPrismaReferencesMutationOptions<TError>(clientOptions),
-  })
+  const mutationDefaults = getPostPrismaReferencesMutationOptions<TError, TOnMutateResult>(
+    clientOptions,
+  )
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
-export function getPostPrismaRenameMutationOptions<TError = unknown>(
-  options?: ClientRequestOptions,
-) {
+export function getPostPrismaRenameMutationKey() {
+  return ['prisma', '/prisma/rename', 'POST'] as const
+}
+
+export function getPostPrismaRenameMutationOptions<
+  TError = DefaultError,
+  TOnMutateResult = unknown,
+>(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
       ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.rename.$post>>>>
     >,
     TError,
-    InferRequestType<typeof client.prisma.rename.$post>
+    InferRequestType<typeof client.prisma.rename.$post>,
+    TOnMutateResult
   >({
-    mutationKey: ['prisma', '/prisma/rename', 'POST'] as const,
+    mutationKey: getPostPrismaRenameMutationKey(),
     async mutationFn(args: InferRequestType<typeof client.prisma.rename.$post>) {
       return parseResponse(client.prisma.rename.$post(args, options))
     },
   })
 }
 
-export function usePostPrismaRename<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.rename.$post>>>>
-    >,
-    TError,
-    InferRequestType<typeof client.prisma.rename.$post>
-  >
-  options?: ClientRequestOptions
-}) {
+export function usePostPrismaRename<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.rename.$post>>>>
+        >,
+        TError,
+        InferRequestType<typeof client.prisma.rename.$post>,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({
-    ...mutationOptions,
-    ...getPostPrismaRenameMutationOptions<TError>(clientOptions),
-  })
+  const mutationDefaults = getPostPrismaRenameMutationOptions<TError, TOnMutateResult>(
+    clientOptions,
+  )
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
-export function getPostPrismaCodeActionsMutationOptions<TError = unknown>(
-  options?: ClientRequestOptions,
-) {
+export function getPostPrismaCodeActionsMutationKey() {
+  return ['prisma', '/prisma/code-actions', 'POST'] as const
+}
+
+export function getPostPrismaCodeActionsMutationOptions<
+  TError = DefaultError,
+  TOnMutateResult = unknown,
+>(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
       ReturnType<
@@ -1311,40 +1883,67 @@ export function getPostPrismaCodeActionsMutationOptions<TError = unknown>(
       >
     >,
     TError,
-    InferRequestType<(typeof client.prisma)['code-actions']['$post']>
+    InferRequestType<(typeof client.prisma)['code-actions']['$post']>,
+    TOnMutateResult
   >({
-    mutationKey: ['prisma', '/prisma/code-actions', 'POST'] as const,
+    mutationKey: getPostPrismaCodeActionsMutationKey(),
     async mutationFn(args: InferRequestType<(typeof client.prisma)['code-actions']['$post']>) {
       return parseResponse(client.prisma['code-actions'].$post(args, options))
     },
   })
 }
 
-export function usePostPrismaCodeActions<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<
-      ReturnType<
-        typeof parseResponse<Awaited<ReturnType<(typeof client.prisma)['code-actions']['$post']>>>
-      >
-    >,
-    TError,
-    InferRequestType<(typeof client.prisma)['code-actions']['$post']>
-  >
-  options?: ClientRequestOptions
-}) {
+export function usePostPrismaCodeActions<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof parseResponse<
+              Awaited<ReturnType<(typeof client.prisma)['code-actions']['$post']>>
+            >
+          >
+        >,
+        TError,
+        InferRequestType<(typeof client.prisma)['code-actions']['$post']>,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({
-    ...mutationOptions,
-    ...getPostPrismaCodeActionsMutationOptions<TError>(clientOptions),
-  })
+  const mutationDefaults = getPostPrismaCodeActionsMutationOptions<TError, TOnMutateResult>(
+    clientOptions,
+  )
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
 export function getMigrateQueryKey() {
   return ['migrate', '/migrate'] as const
 }
 
-export function getMigrateQueryOptions(options?: ClientRequestOptions) {
-  return queryOptions({
+export function getMigrateQueryOptions<
+  TData = Awaited<
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.$get>>>>
+  >,
+  TError = DefaultError,
+>(options?: ClientRequestOptions) {
+  return queryOptions<
+    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.$get>>>>>,
+    TError,
+    TData,
+    ReturnType<typeof getMigrateQueryKey>
+  >({
     queryKey: getMigrateQueryKey(),
     queryFn({ signal }) {
       return parseResponse(
@@ -1358,64 +1957,74 @@ export function useMigrate<
   TData = Awaited<
     ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.$get>>>>
   >,
-  TError = unknown,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.$get>>>>>,
-    TError,
-    TData
-  >
-  options?: ClientRequestOptions
-}) {
+  TError = DefaultError,
+>(
+  options?: {
+    query?: Omit<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.$get>>>>>,
+        TError,
+        TData,
+        ReturnType<typeof getMigrateQueryKey>
+      >,
+      'queryKey' | 'queryFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { query: queryOptions, options: clientOptions } = options ?? {}
-  return useQuery({
-    ...queryOptions,
-    queryKey: getMigrateQueryKey(),
-    queryFn({ signal }: QueryFunctionContext) {
-      return parseResponse(
-        client.migrate.$get(undefined, {
-          ...clientOptions,
-          init: { ...clientOptions?.init, signal },
-        }),
-      )
-    },
-  })
+  return useQuery(
+    { ...getMigrateQueryOptions<TData, TError>(clientOptions), ...queryOptions },
+    queryClient,
+  )
 }
 
 export function useSuspenseMigrate<
   TData = Awaited<
     ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.$get>>>>
   >,
-  TError = unknown,
->(options?: {
-  query?: UseSuspenseQueryOptions<
-    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.$get>>>>>,
-    TError,
-    TData
-  >
-  options?: ClientRequestOptions
-}) {
+  TError = DefaultError,
+>(
+  options?: {
+    query?: Omit<
+      UseSuspenseQueryOptions<
+        Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.$get>>>>>,
+        TError,
+        TData,
+        ReturnType<typeof getMigrateQueryKey>
+      >,
+      'queryKey' | 'queryFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { query: queryOptions, options: clientOptions } = options ?? {}
-  return useSuspenseQuery({
-    ...queryOptions,
-    queryKey: getMigrateQueryKey(),
-    queryFn({ signal }: QueryFunctionContext) {
-      return parseResponse(
-        client.migrate.$get(undefined, {
-          ...clientOptions,
-          init: { ...clientOptions?.init, signal },
-        }),
-      )
-    },
-  })
+  return useSuspenseQuery(
+    { ...getMigrateQueryOptions<TData, TError>(clientOptions), ...queryOptions },
+    queryClient,
+  )
 }
 
 export function getMigrateBaselineQueryKey() {
   return ['migrate', '/migrate/baseline'] as const
 }
 
-export function getMigrateBaselineQueryOptions(options?: ClientRequestOptions) {
-  return queryOptions({
+export function getMigrateBaselineQueryOptions<
+  TData = Awaited<
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.baseline.$get>>>>
+  >,
+  TError = DefaultError,
+>(options?: ClientRequestOptions) {
+  return queryOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.baseline.$get>>>>
+    >,
+    TError,
+    TData,
+    ReturnType<typeof getMigrateBaselineQueryKey>
+  >({
     queryKey: getMigrateBaselineQueryKey(),
     queryFn({ signal }) {
       return parseResponse(
@@ -1429,102 +2038,132 @@ export function useMigrateBaseline<
   TData = Awaited<
     ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.baseline.$get>>>>
   >,
-  TError = unknown,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.baseline.$get>>>>
-    >,
-    TError,
-    TData
-  >
-  options?: ClientRequestOptions
-}) {
+  TError = DefaultError,
+>(
+  options?: {
+    query?: Omit<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.baseline.$get>>>>
+        >,
+        TError,
+        TData,
+        ReturnType<typeof getMigrateBaselineQueryKey>
+      >,
+      'queryKey' | 'queryFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { query: queryOptions, options: clientOptions } = options ?? {}
-  return useQuery({
-    ...queryOptions,
-    queryKey: getMigrateBaselineQueryKey(),
-    queryFn({ signal }: QueryFunctionContext) {
-      return parseResponse(
-        client.migrate.baseline.$get(undefined, {
-          ...clientOptions,
-          init: { ...clientOptions?.init, signal },
-        }),
-      )
-    },
-  })
+  return useQuery(
+    { ...getMigrateBaselineQueryOptions<TData, TError>(clientOptions), ...queryOptions },
+    queryClient,
+  )
 }
 
 export function useSuspenseMigrateBaseline<
   TData = Awaited<
     ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.baseline.$get>>>>
   >,
-  TError = unknown,
->(options?: {
-  query?: UseSuspenseQueryOptions<
-    Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.baseline.$get>>>>
-    >,
-    TError,
-    TData
-  >
-  options?: ClientRequestOptions
-}) {
+  TError = DefaultError,
+>(
+  options?: {
+    query?: Omit<
+      UseSuspenseQueryOptions<
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.baseline.$get>>>>
+        >,
+        TError,
+        TData,
+        ReturnType<typeof getMigrateBaselineQueryKey>
+      >,
+      'queryKey' | 'queryFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { query: queryOptions, options: clientOptions } = options ?? {}
-  return useSuspenseQuery({
-    ...queryOptions,
-    queryKey: getMigrateBaselineQueryKey(),
-    queryFn({ signal }: QueryFunctionContext) {
-      return parseResponse(
-        client.migrate.baseline.$get(undefined, {
-          ...clientOptions,
-          init: { ...clientOptions?.init, signal },
-        }),
-      )
-    },
-  })
+  return useSuspenseQuery(
+    { ...getMigrateBaselineQueryOptions<TData, TError>(clientOptions), ...queryOptions },
+    queryClient,
+  )
 }
 
-export function getPostMigrateBaselineMutationOptions<TError = unknown>(
-  options?: ClientRequestOptions,
-) {
+export function getPostMigrateBaselineMutationKey() {
+  return ['migrate', '/migrate/baseline', 'POST'] as const
+}
+
+export function getPostMigrateBaselineMutationOptions<
+  TError = DefaultError,
+  TOnMutateResult = unknown,
+>(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
       ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.baseline.$post>>>>
     >,
     TError,
-    InferRequestType<typeof client.migrate.baseline.$post>
+    InferRequestType<typeof client.migrate.baseline.$post>,
+    TOnMutateResult
   >({
-    mutationKey: ['migrate', '/migrate/baseline', 'POST'] as const,
+    mutationKey: getPostMigrateBaselineMutationKey(),
     async mutationFn(args: InferRequestType<typeof client.migrate.baseline.$post>) {
       return parseResponse(client.migrate.baseline.$post(args, options))
     },
   })
 }
 
-export function usePostMigrateBaseline<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.baseline.$post>>>>
-    >,
-    TError,
-    InferRequestType<typeof client.migrate.baseline.$post>
-  >
-  options?: ClientRequestOptions
-}) {
+export function usePostMigrateBaseline<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof client.migrate.baseline.$post>>>
+          >
+        >,
+        TError,
+        InferRequestType<typeof client.migrate.baseline.$post>,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({
-    ...mutationOptions,
-    ...getPostMigrateBaselineMutationOptions<TError>(clientOptions),
-  })
+  const mutationDefaults = getPostMigrateBaselineMutationOptions<TError, TOnMutateResult>(
+    clientOptions,
+  )
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
 export function getMigrateDiffQueryKey() {
   return ['migrate', '/migrate/diff'] as const
 }
 
-export function getMigrateDiffQueryOptions(options?: ClientRequestOptions) {
-  return queryOptions({
+export function getMigrateDiffQueryOptions<
+  TData = Awaited<
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.diff.$get>>>>
+  >,
+  TError = DefaultError,
+>(options?: ClientRequestOptions) {
+  return queryOptions<
+    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.diff.$get>>>>>,
+    TError,
+    TData,
+    ReturnType<typeof getMigrateDiffQueryKey>
+  >({
     queryKey: getMigrateDiffQueryKey(),
     queryFn({ signal }) {
       return parseResponse(
@@ -1538,59 +2177,65 @@ export function useMigrateDiff<
   TData = Awaited<
     ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.diff.$get>>>>
   >,
-  TError = unknown,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.diff.$get>>>>>,
-    TError,
-    TData
-  >
-  options?: ClientRequestOptions
-}) {
+  TError = DefaultError,
+>(
+  options?: {
+    query?: Omit<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.diff.$get>>>>
+        >,
+        TError,
+        TData,
+        ReturnType<typeof getMigrateDiffQueryKey>
+      >,
+      'queryKey' | 'queryFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { query: queryOptions, options: clientOptions } = options ?? {}
-  return useQuery({
-    ...queryOptions,
-    queryKey: getMigrateDiffQueryKey(),
-    queryFn({ signal }: QueryFunctionContext) {
-      return parseResponse(
-        client.migrate.diff.$get(undefined, {
-          ...clientOptions,
-          init: { ...clientOptions?.init, signal },
-        }),
-      )
-    },
-  })
+  return useQuery(
+    { ...getMigrateDiffQueryOptions<TData, TError>(clientOptions), ...queryOptions },
+    queryClient,
+  )
 }
 
 export function useSuspenseMigrateDiff<
   TData = Awaited<
     ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.diff.$get>>>>
   >,
-  TError = unknown,
->(options?: {
-  query?: UseSuspenseQueryOptions<
-    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.diff.$get>>>>>,
-    TError,
-    TData
-  >
-  options?: ClientRequestOptions
-}) {
+  TError = DefaultError,
+>(
+  options?: {
+    query?: Omit<
+      UseSuspenseQueryOptions<
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.diff.$get>>>>
+        >,
+        TError,
+        TData,
+        ReturnType<typeof getMigrateDiffQueryKey>
+      >,
+      'queryKey' | 'queryFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { query: queryOptions, options: clientOptions } = options ?? {}
-  return useSuspenseQuery({
-    ...queryOptions,
-    queryKey: getMigrateDiffQueryKey(),
-    queryFn({ signal }: QueryFunctionContext) {
-      return parseResponse(
-        client.migrate.diff.$get(undefined, {
-          ...clientOptions,
-          init: { ...clientOptions?.init, signal },
-        }),
-      )
-    },
-  })
+  return useSuspenseQuery(
+    { ...getMigrateDiffQueryOptions<TData, TError>(clientOptions), ...queryOptions },
+    queryClient,
+  )
 }
 
-export function getPostMigratePlanMutationOptions<TError = unknown>(
+export function getPostMigratePlanMutationKey() {
+  return ['migrate', '/migrate/plan', 'POST'] as const
+}
+
+export function getPostMigratePlanMutationOptions<TError = DefaultError, TOnMutateResult = unknown>(
   options?: ClientRequestOptions,
 ) {
   return mutationOptions<
@@ -1598,106 +2243,173 @@ export function getPostMigratePlanMutationOptions<TError = unknown>(
       ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.plan.$post>>>>
     >,
     TError,
-    InferRequestType<typeof client.migrate.plan.$post>
+    InferRequestType<typeof client.migrate.plan.$post>,
+    TOnMutateResult
   >({
-    mutationKey: ['migrate', '/migrate/plan', 'POST'] as const,
+    mutationKey: getPostMigratePlanMutationKey(),
     async mutationFn(args: InferRequestType<typeof client.migrate.plan.$post>) {
       return parseResponse(client.migrate.plan.$post(args, options))
     },
   })
 }
 
-export function usePostMigratePlan<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.plan.$post>>>>
-    >,
-    TError,
-    InferRequestType<typeof client.migrate.plan.$post>
-  >
-  options?: ClientRequestOptions
-}) {
+export function usePostMigratePlan<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.plan.$post>>>>
+        >,
+        TError,
+        InferRequestType<typeof client.migrate.plan.$post>,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({
-    ...mutationOptions,
-    ...getPostMigratePlanMutationOptions<TError>(clientOptions),
-  })
+  const mutationDefaults = getPostMigratePlanMutationOptions<TError, TOnMutateResult>(clientOptions)
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
-export function getPostMigrateApplyMutationOptions<TError = unknown>(
-  options?: ClientRequestOptions,
-) {
+export function getPostMigrateApplyMutationKey() {
+  return ['migrate', '/migrate/apply', 'POST'] as const
+}
+
+export function getPostMigrateApplyMutationOptions<
+  TError = DefaultError,
+  TOnMutateResult = unknown,
+>(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
       ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.apply.$post>>>>
     >,
     TError,
-    InferRequestType<typeof client.migrate.apply.$post>
+    InferRequestType<typeof client.migrate.apply.$post>,
+    TOnMutateResult
   >({
-    mutationKey: ['migrate', '/migrate/apply', 'POST'] as const,
+    mutationKey: getPostMigrateApplyMutationKey(),
     async mutationFn(args: InferRequestType<typeof client.migrate.apply.$post>) {
       return parseResponse(client.migrate.apply.$post(args, options))
     },
   })
 }
 
-export function usePostMigrateApply<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.apply.$post>>>>
-    >,
-    TError,
-    InferRequestType<typeof client.migrate.apply.$post>
-  >
-  options?: ClientRequestOptions
-}) {
+export function usePostMigrateApply<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.apply.$post>>>>
+        >,
+        TError,
+        InferRequestType<typeof client.migrate.apply.$post>,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({
-    ...mutationOptions,
-    ...getPostMigrateApplyMutationOptions<TError>(clientOptions),
-  })
+  const mutationDefaults = getPostMigrateApplyMutationOptions<TError, TOnMutateResult>(
+    clientOptions,
+  )
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
-export function getPostMigrateRehearseMutationOptions<TError = unknown>(
-  options?: ClientRequestOptions,
-) {
+export function getPostMigrateRehearseMutationKey() {
+  return ['migrate', '/migrate/rehearse', 'POST'] as const
+}
+
+export function getPostMigrateRehearseMutationOptions<
+  TError = DefaultError,
+  TOnMutateResult = unknown,
+>(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
       ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.rehearse.$post>>>>
     >,
     TError,
-    InferRequestType<typeof client.migrate.rehearse.$post>
+    InferRequestType<typeof client.migrate.rehearse.$post>,
+    TOnMutateResult
   >({
-    mutationKey: ['migrate', '/migrate/rehearse', 'POST'] as const,
+    mutationKey: getPostMigrateRehearseMutationKey(),
     async mutationFn(args: InferRequestType<typeof client.migrate.rehearse.$post>) {
       return parseResponse(client.migrate.rehearse.$post(args, options))
     },
   })
 }
 
-export function usePostMigrateRehearse<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.rehearse.$post>>>>
-    >,
-    TError,
-    InferRequestType<typeof client.migrate.rehearse.$post>
-  >
-  options?: ClientRequestOptions
-}) {
+export function usePostMigrateRehearse<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof client.migrate.rehearse.$post>>>
+          >
+        >,
+        TError,
+        InferRequestType<typeof client.migrate.rehearse.$post>,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({
-    ...mutationOptions,
-    ...getPostMigrateRehearseMutationOptions<TError>(clientOptions),
-  })
+  const mutationDefaults = getPostMigrateRehearseMutationOptions<TError, TOnMutateResult>(
+    clientOptions,
+  )
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
 export function getMigrateTablesQueryKey() {
   return ['migrate', '/migrate/tables'] as const
 }
 
-export function getMigrateTablesQueryOptions(options?: ClientRequestOptions) {
-  return queryOptions({
+export function getMigrateTablesQueryOptions<
+  TData = Awaited<
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.tables.$get>>>>
+  >,
+  TError = DefaultError,
+>(options?: ClientRequestOptions) {
+  return queryOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.tables.$get>>>>
+    >,
+    TError,
+    TData,
+    ReturnType<typeof getMigrateTablesQueryKey>
+  >({
     queryKey: getMigrateTablesQueryKey(),
     queryFn({ signal }) {
       return parseResponse(
@@ -1711,68 +2423,78 @@ export function useMigrateTables<
   TData = Awaited<
     ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.tables.$get>>>>
   >,
-  TError = unknown,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.tables.$get>>>>
-    >,
-    TError,
-    TData
-  >
-  options?: ClientRequestOptions
-}) {
+  TError = DefaultError,
+>(
+  options?: {
+    query?: Omit<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.tables.$get>>>>
+        >,
+        TError,
+        TData,
+        ReturnType<typeof getMigrateTablesQueryKey>
+      >,
+      'queryKey' | 'queryFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { query: queryOptions, options: clientOptions } = options ?? {}
-  return useQuery({
-    ...queryOptions,
-    queryKey: getMigrateTablesQueryKey(),
-    queryFn({ signal }: QueryFunctionContext) {
-      return parseResponse(
-        client.migrate.tables.$get(undefined, {
-          ...clientOptions,
-          init: { ...clientOptions?.init, signal },
-        }),
-      )
-    },
-  })
+  return useQuery(
+    { ...getMigrateTablesQueryOptions<TData, TError>(clientOptions), ...queryOptions },
+    queryClient,
+  )
 }
 
 export function useSuspenseMigrateTables<
   TData = Awaited<
     ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.tables.$get>>>>
   >,
-  TError = unknown,
->(options?: {
-  query?: UseSuspenseQueryOptions<
-    Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.tables.$get>>>>
-    >,
-    TError,
-    TData
-  >
-  options?: ClientRequestOptions
-}) {
+  TError = DefaultError,
+>(
+  options?: {
+    query?: Omit<
+      UseSuspenseQueryOptions<
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.tables.$get>>>>
+        >,
+        TError,
+        TData,
+        ReturnType<typeof getMigrateTablesQueryKey>
+      >,
+      'queryKey' | 'queryFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { query: queryOptions, options: clientOptions } = options ?? {}
-  return useSuspenseQuery({
-    ...queryOptions,
-    queryKey: getMigrateTablesQueryKey(),
-    queryFn({ signal }: QueryFunctionContext) {
-      return parseResponse(
-        client.migrate.tables.$get(undefined, {
-          ...clientOptions,
-          init: { ...clientOptions?.init, signal },
-        }),
-      )
-    },
-  })
+  return useSuspenseQuery(
+    { ...getMigrateTablesQueryOptions<TData, TError>(clientOptions), ...queryOptions },
+    queryClient,
+  )
 }
 
 export function getMigrateBackupsQueryKey() {
   return ['migrate', '/migrate/backups'] as const
 }
 
-export function getMigrateBackupsQueryOptions(options?: ClientRequestOptions) {
-  return queryOptions({
+export function getMigrateBackupsQueryOptions<
+  TData = Awaited<
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.backups.$get>>>>
+  >,
+  TError = DefaultError,
+>(options?: ClientRequestOptions) {
+  return queryOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.backups.$get>>>>
+    >,
+    TError,
+    TData,
+    ReturnType<typeof getMigrateBackupsQueryKey>
+  >({
     queryKey: getMigrateBackupsQueryKey(),
     queryFn({ signal }) {
       return parseResponse(
@@ -1786,99 +2508,122 @@ export function useMigrateBackups<
   TData = Awaited<
     ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.backups.$get>>>>
   >,
-  TError = unknown,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.backups.$get>>>>
-    >,
-    TError,
-    TData
-  >
-  options?: ClientRequestOptions
-}) {
+  TError = DefaultError,
+>(
+  options?: {
+    query?: Omit<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.backups.$get>>>>
+        >,
+        TError,
+        TData,
+        ReturnType<typeof getMigrateBackupsQueryKey>
+      >,
+      'queryKey' | 'queryFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { query: queryOptions, options: clientOptions } = options ?? {}
-  return useQuery({
-    ...queryOptions,
-    queryKey: getMigrateBackupsQueryKey(),
-    queryFn({ signal }: QueryFunctionContext) {
-      return parseResponse(
-        client.migrate.backups.$get(undefined, {
-          ...clientOptions,
-          init: { ...clientOptions?.init, signal },
-        }),
-      )
-    },
-  })
+  return useQuery(
+    { ...getMigrateBackupsQueryOptions<TData, TError>(clientOptions), ...queryOptions },
+    queryClient,
+  )
 }
 
 export function useSuspenseMigrateBackups<
   TData = Awaited<
     ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.backups.$get>>>>
   >,
-  TError = unknown,
->(options?: {
-  query?: UseSuspenseQueryOptions<
-    Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.backups.$get>>>>
-    >,
-    TError,
-    TData
-  >
-  options?: ClientRequestOptions
-}) {
+  TError = DefaultError,
+>(
+  options?: {
+    query?: Omit<
+      UseSuspenseQueryOptions<
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.backups.$get>>>>
+        >,
+        TError,
+        TData,
+        ReturnType<typeof getMigrateBackupsQueryKey>
+      >,
+      'queryKey' | 'queryFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { query: queryOptions, options: clientOptions } = options ?? {}
-  return useSuspenseQuery({
-    ...queryOptions,
-    queryKey: getMigrateBackupsQueryKey(),
-    queryFn({ signal }: QueryFunctionContext) {
-      return parseResponse(
-        client.migrate.backups.$get(undefined, {
-          ...clientOptions,
-          init: { ...clientOptions?.init, signal },
-        }),
-      )
-    },
-  })
+  return useSuspenseQuery(
+    { ...getMigrateBackupsQueryOptions<TData, TError>(clientOptions), ...queryOptions },
+    queryClient,
+  )
 }
 
-export function getPostMigrateBackupsMutationOptions<TError = unknown>(
-  options?: ClientRequestOptions,
-) {
+export function getPostMigrateBackupsMutationKey() {
+  return ['migrate', '/migrate/backups', 'POST'] as const
+}
+
+export function getPostMigrateBackupsMutationOptions<
+  TError = DefaultError,
+  TOnMutateResult = unknown,
+>(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
       ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.backups.$post>>>>
     >,
     TError,
-    void
+    void,
+    TOnMutateResult
   >({
-    mutationKey: ['migrate', '/migrate/backups', 'POST'] as const,
+    mutationKey: getPostMigrateBackupsMutationKey(),
     async mutationFn() {
       return parseResponse(client.migrate.backups.$post(undefined, options))
     },
   })
 }
 
-export function usePostMigrateBackups<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.backups.$post>>>>
-    >,
-    TError,
-    void
-  >
-  options?: ClientRequestOptions
-}) {
+export function usePostMigrateBackups<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.backups.$post>>>>
+        >,
+        TError,
+        void,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({
-    ...mutationOptions,
-    ...getPostMigrateBackupsMutationOptions<TError>(clientOptions),
-  })
+  const mutationDefaults = getPostMigrateBackupsMutationOptions<TError, TOnMutateResult>(
+    clientOptions,
+  )
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
-export function getPostMigrateBackupsRestoreMutationOptions<TError = unknown>(
-  options?: ClientRequestOptions,
-) {
+export function getPostMigrateBackupsRestoreMutationKey() {
+  return ['migrate', '/migrate/backups/restore', 'POST'] as const
+}
+
+export function getPostMigrateBackupsRestoreMutationOptions<
+  TError = DefaultError,
+  TOnMutateResult = unknown,
+>(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
       ReturnType<
@@ -1886,32 +2631,47 @@ export function getPostMigrateBackupsRestoreMutationOptions<TError = unknown>(
       >
     >,
     TError,
-    InferRequestType<typeof client.migrate.backups.restore.$post>
+    InferRequestType<typeof client.migrate.backups.restore.$post>,
+    TOnMutateResult
   >({
-    mutationKey: ['migrate', '/migrate/backups/restore', 'POST'] as const,
+    mutationKey: getPostMigrateBackupsRestoreMutationKey(),
     async mutationFn(args: InferRequestType<typeof client.migrate.backups.restore.$post>) {
       return parseResponse(client.migrate.backups.restore.$post(args, options))
     },
   })
 }
 
-export function usePostMigrateBackupsRestore<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<
-      ReturnType<
-        typeof parseResponse<Awaited<ReturnType<typeof client.migrate.backups.restore.$post>>>
-      >
-    >,
-    TError,
-    InferRequestType<typeof client.migrate.backups.restore.$post>
-  >
-  options?: ClientRequestOptions
-}) {
+export function usePostMigrateBackupsRestore<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof client.migrate.backups.restore.$post>>>
+          >
+        >,
+        TError,
+        InferRequestType<typeof client.migrate.backups.restore.$post>,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({
-    ...mutationOptions,
-    ...getPostMigrateBackupsRestoreMutationOptions<TError>(clientOptions),
-  })
+  const mutationDefaults = getPostMigrateBackupsRestoreMutationOptions<TError, TOnMutateResult>(
+    clientOptions,
+  )
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
 export function getMigrateMigrationsMigrationNameQueryKey(
@@ -1920,11 +2680,31 @@ export function getMigrateMigrationsMigrationNameQueryKey(
   return ['migrate', '/migrate/migrations/:migrationName', args] as const
 }
 
-export function getMigrateMigrationsMigrationNameQueryOptions(
+export function getMigrateMigrationsMigrationNameQueryOptions<
+  TData = Awaited<
+    ReturnType<
+      typeof parseResponse<
+        Awaited<ReturnType<(typeof client.migrate.migrations)[':migrationName']['$get']>>
+      >
+    >
+  >,
+  TError = DefaultError,
+>(
   args: InferRequestType<(typeof client.migrate.migrations)[':migrationName']['$get']>,
   options?: ClientRequestOptions,
 ) {
-  return queryOptions({
+  return queryOptions<
+    Awaited<
+      ReturnType<
+        typeof parseResponse<
+          Awaited<ReturnType<(typeof client.migrate.migrations)[':migrationName']['$get']>>
+        >
+      >
+    >,
+    TError,
+    TData,
+    ReturnType<typeof getMigrateMigrationsMigrationNameQueryKey>
+  >({
     queryKey: getMigrateMigrationsMigrationNameQueryKey(args),
     queryFn({ signal }) {
       return parseResponse(
@@ -1945,37 +2725,37 @@ export function useMigrateMigrationsMigrationName<
       >
     >
   >,
-  TError = unknown,
+  TError = DefaultError,
 >(
   args: InferRequestType<(typeof client.migrate.migrations)[':migrationName']['$get']>,
   options?: {
-    query?: UseQueryOptions<
-      Awaited<
-        ReturnType<
-          typeof parseResponse<
-            Awaited<ReturnType<(typeof client.migrate.migrations)[':migrationName']['$get']>>
+    query?: Omit<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof parseResponse<
+              Awaited<ReturnType<(typeof client.migrate.migrations)[':migrationName']['$get']>>
+            >
           >
-        >
+        >,
+        TError,
+        TData,
+        ReturnType<typeof getMigrateMigrationsMigrationNameQueryKey>
       >,
-      TError,
-      TData
+      'queryKey' | 'queryFn'
     >
     options?: ClientRequestOptions
   },
+  queryClient?: QueryClient,
 ) {
   const { query: queryOptions, options: clientOptions } = options ?? {}
-  return useQuery({
-    ...queryOptions,
-    queryKey: getMigrateMigrationsMigrationNameQueryKey(args),
-    queryFn({ signal }: QueryFunctionContext) {
-      return parseResponse(
-        client.migrate.migrations[':migrationName'].$get(args, {
-          ...clientOptions,
-          init: { ...clientOptions?.init, signal },
-        }),
-      )
+  return useQuery(
+    {
+      ...getMigrateMigrationsMigrationNameQueryOptions<TData, TError>(args, clientOptions),
+      ...queryOptions,
     },
-  })
+    queryClient,
+  )
 }
 
 export function useSuspenseMigrateMigrationsMigrationName<
@@ -1986,76 +2766,103 @@ export function useSuspenseMigrateMigrationsMigrationName<
       >
     >
   >,
-  TError = unknown,
+  TError = DefaultError,
 >(
   args: InferRequestType<(typeof client.migrate.migrations)[':migrationName']['$get']>,
   options?: {
-    query?: UseSuspenseQueryOptions<
-      Awaited<
-        ReturnType<
-          typeof parseResponse<
-            Awaited<ReturnType<(typeof client.migrate.migrations)[':migrationName']['$get']>>
+    query?: Omit<
+      UseSuspenseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof parseResponse<
+              Awaited<ReturnType<(typeof client.migrate.migrations)[':migrationName']['$get']>>
+            >
           >
-        >
+        >,
+        TError,
+        TData,
+        ReturnType<typeof getMigrateMigrationsMigrationNameQueryKey>
       >,
-      TError,
-      TData
+      'queryKey' | 'queryFn'
     >
     options?: ClientRequestOptions
   },
+  queryClient?: QueryClient,
 ) {
   const { query: queryOptions, options: clientOptions } = options ?? {}
-  return useSuspenseQuery({
-    ...queryOptions,
-    queryKey: getMigrateMigrationsMigrationNameQueryKey(args),
-    queryFn({ signal }: QueryFunctionContext) {
-      return parseResponse(
-        client.migrate.migrations[':migrationName'].$get(args, {
-          ...clientOptions,
-          init: { ...clientOptions?.init, signal },
-        }),
-      )
+  return useSuspenseQuery(
+    {
+      ...getMigrateMigrationsMigrationNameQueryOptions<TData, TError>(args, clientOptions),
+      ...queryOptions,
     },
-  })
+    queryClient,
+  )
 }
 
-export function getPostMigrateMigrationsMutationOptions<TError = unknown>(
-  options?: ClientRequestOptions,
-) {
+export function getPostMigrateMigrationsMutationKey() {
+  return ['migrate', '/migrate/migrations', 'POST'] as const
+}
+
+export function getPostMigrateMigrationsMutationOptions<
+  TError = DefaultError,
+  TOnMutateResult = unknown,
+>(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
       ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.migrations.$post>>>>
     >,
     TError,
-    InferRequestType<typeof client.migrate.migrations.$post>
+    InferRequestType<typeof client.migrate.migrations.$post>,
+    TOnMutateResult
   >({
-    mutationKey: ['migrate', '/migrate/migrations', 'POST'] as const,
+    mutationKey: getPostMigrateMigrationsMutationKey(),
     async mutationFn(args: InferRequestType<typeof client.migrate.migrations.$post>) {
       return parseResponse(client.migrate.migrations.$post(args, options))
     },
   })
 }
 
-export function usePostMigrateMigrations<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.migrations.$post>>>>
-    >,
-    TError,
-    InferRequestType<typeof client.migrate.migrations.$post>
-  >
-  options?: ClientRequestOptions
-}) {
+export function usePostMigrateMigrations<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof client.migrate.migrations.$post>>>
+          >
+        >,
+        TError,
+        InferRequestType<typeof client.migrate.migrations.$post>,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({
-    ...mutationOptions,
-    ...getPostMigrateMigrationsMutationOptions<TError>(clientOptions),
-  })
+  const mutationDefaults = getPostMigrateMigrationsMutationOptions<TError, TOnMutateResult>(
+    clientOptions,
+  )
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
-export function getPostMigrateMigrationsAppliedMutationOptions<TError = unknown>(
-  options?: ClientRequestOptions,
-) {
+export function getPostMigrateMigrationsAppliedMutationKey() {
+  return ['migrate', '/migrate/migrations/applied', 'POST'] as const
+}
+
+export function getPostMigrateMigrationsAppliedMutationOptions<
+  TError = DefaultError,
+  TOnMutateResult = unknown,
+>(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
       ReturnType<
@@ -2063,37 +2870,59 @@ export function getPostMigrateMigrationsAppliedMutationOptions<TError = unknown>
       >
     >,
     TError,
-    InferRequestType<typeof client.migrate.migrations.applied.$post>
+    InferRequestType<typeof client.migrate.migrations.applied.$post>,
+    TOnMutateResult
   >({
-    mutationKey: ['migrate', '/migrate/migrations/applied', 'POST'] as const,
+    mutationKey: getPostMigrateMigrationsAppliedMutationKey(),
     async mutationFn(args: InferRequestType<typeof client.migrate.migrations.applied.$post>) {
       return parseResponse(client.migrate.migrations.applied.$post(args, options))
     },
   })
 }
 
-export function usePostMigrateMigrationsApplied<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<
-      ReturnType<
-        typeof parseResponse<Awaited<ReturnType<typeof client.migrate.migrations.applied.$post>>>
-      >
-    >,
-    TError,
-    InferRequestType<typeof client.migrate.migrations.applied.$post>
-  >
-  options?: ClientRequestOptions
-}) {
+export function usePostMigrateMigrationsApplied<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof parseResponse<
+              Awaited<ReturnType<typeof client.migrate.migrations.applied.$post>>
+            >
+          >
+        >,
+        TError,
+        InferRequestType<typeof client.migrate.migrations.applied.$post>,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({
-    ...mutationOptions,
-    ...getPostMigrateMigrationsAppliedMutationOptions<TError>(clientOptions),
-  })
+  const mutationDefaults = getPostMigrateMigrationsAppliedMutationOptions<TError, TOnMutateResult>(
+    clientOptions,
+  )
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
-export function getPostMigrateMigrationsRolledBackMutationOptions<TError = unknown>(
-  options?: ClientRequestOptions,
-) {
+export function getPostMigrateMigrationsRolledBackMutationKey() {
+  return ['migrate', '/migrate/migrations/rolled-back', 'POST'] as const
+}
+
+export function getPostMigrateMigrationsRolledBackMutationOptions<
+  TError = DefaultError,
+  TOnMutateResult = unknown,
+>(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
       ReturnType<
@@ -2103,9 +2932,10 @@ export function getPostMigrateMigrationsRolledBackMutationOptions<TError = unkno
       >
     >,
     TError,
-    InferRequestType<(typeof client.migrate.migrations)['rolled-back']['$post']>
+    InferRequestType<(typeof client.migrate.migrations)['rolled-back']['$post']>,
+    TOnMutateResult
   >({
-    mutationKey: ['migrate', '/migrate/migrations/rolled-back', 'POST'] as const,
+    mutationKey: getPostMigrateMigrationsRolledBackMutationKey(),
     async mutationFn(
       args: InferRequestType<(typeof client.migrate.migrations)['rolled-back']['$post']>,
     ) {
@@ -2114,33 +2944,63 @@ export function getPostMigrateMigrationsRolledBackMutationOptions<TError = unkno
   })
 }
 
-export function usePostMigrateMigrationsRolledBack<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<
-      ReturnType<
-        typeof parseResponse<
-          Awaited<ReturnType<(typeof client.migrate.migrations)['rolled-back']['$post']>>
-        >
-      >
-    >,
-    TError,
-    InferRequestType<(typeof client.migrate.migrations)['rolled-back']['$post']>
-  >
-  options?: ClientRequestOptions
-}) {
+export function usePostMigrateMigrationsRolledBack<
+  TError = DefaultError,
+  TOnMutateResult = unknown,
+>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof parseResponse<
+              Awaited<ReturnType<(typeof client.migrate.migrations)['rolled-back']['$post']>>
+            >
+          >
+        >,
+        TError,
+        InferRequestType<(typeof client.migrate.migrations)['rolled-back']['$post']>,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({
-    ...mutationOptions,
-    ...getPostMigrateMigrationsRolledBackMutationOptions<TError>(clientOptions),
-  })
+  const mutationDefaults = getPostMigrateMigrationsRolledBackMutationOptions<
+    TError,
+    TOnMutateResult
+  >(clientOptions)
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
 export function getMigrateDecisionsQueryKey() {
   return ['migrate', '/migrate/decisions'] as const
 }
 
-export function getMigrateDecisionsQueryOptions(options?: ClientRequestOptions) {
-  return queryOptions({
+export function getMigrateDecisionsQueryOptions<
+  TData = Awaited<
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.decisions.$get>>>>
+  >,
+  TError = DefaultError,
+>(options?: ClientRequestOptions) {
+  return queryOptions<
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.decisions.$get>>>>
+    >,
+    TError,
+    TData,
+    ReturnType<typeof getMigrateDecisionsQueryKey>
+  >({
     queryKey: getMigrateDecisionsQueryKey(),
     queryFn({ signal }) {
       return parseResponse(
@@ -2157,136 +3017,188 @@ export function useMigrateDecisions<
   TData = Awaited<
     ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.decisions.$get>>>>
   >,
-  TError = unknown,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.decisions.$get>>>>
-    >,
-    TError,
-    TData
-  >
-  options?: ClientRequestOptions
-}) {
+  TError = DefaultError,
+>(
+  options?: {
+    query?: Omit<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof client.migrate.decisions.$get>>>
+          >
+        >,
+        TError,
+        TData,
+        ReturnType<typeof getMigrateDecisionsQueryKey>
+      >,
+      'queryKey' | 'queryFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { query: queryOptions, options: clientOptions } = options ?? {}
-  return useQuery({
-    ...queryOptions,
-    queryKey: getMigrateDecisionsQueryKey(),
-    queryFn({ signal }: QueryFunctionContext) {
-      return parseResponse(
-        client.migrate.decisions.$get(undefined, {
-          ...clientOptions,
-          init: { ...clientOptions?.init, signal },
-        }),
-      )
-    },
-  })
+  return useQuery(
+    { ...getMigrateDecisionsQueryOptions<TData, TError>(clientOptions), ...queryOptions },
+    queryClient,
+  )
 }
 
 export function useSuspenseMigrateDecisions<
   TData = Awaited<
     ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.decisions.$get>>>>
   >,
-  TError = unknown,
->(options?: {
-  query?: UseSuspenseQueryOptions<
-    Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.decisions.$get>>>>
-    >,
-    TError,
-    TData
-  >
-  options?: ClientRequestOptions
-}) {
+  TError = DefaultError,
+>(
+  options?: {
+    query?: Omit<
+      UseSuspenseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof client.migrate.decisions.$get>>>
+          >
+        >,
+        TError,
+        TData,
+        ReturnType<typeof getMigrateDecisionsQueryKey>
+      >,
+      'queryKey' | 'queryFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { query: queryOptions, options: clientOptions } = options ?? {}
-  return useSuspenseQuery({
-    ...queryOptions,
-    queryKey: getMigrateDecisionsQueryKey(),
-    queryFn({ signal }: QueryFunctionContext) {
-      return parseResponse(
-        client.migrate.decisions.$get(undefined, {
-          ...clientOptions,
-          init: { ...clientOptions?.init, signal },
-        }),
-      )
-    },
-  })
+  return useSuspenseQuery(
+    { ...getMigrateDecisionsQueryOptions<TData, TError>(clientOptions), ...queryOptions },
+    queryClient,
+  )
 }
 
-export function getPutMigrateDecisionsMutationOptions<TError = unknown>(
-  options?: ClientRequestOptions,
-) {
+export function getPutMigrateDecisionsMutationKey() {
+  return ['migrate', '/migrate/decisions', 'PUT'] as const
+}
+
+export function getPutMigrateDecisionsMutationOptions<
+  TError = DefaultError,
+  TOnMutateResult = unknown,
+>(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
       ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.decisions.$put>>>>
     >,
     TError,
-    InferRequestType<typeof client.migrate.decisions.$put>
+    InferRequestType<typeof client.migrate.decisions.$put>,
+    TOnMutateResult
   >({
-    mutationKey: ['migrate', '/migrate/decisions', 'PUT'] as const,
+    mutationKey: getPutMigrateDecisionsMutationKey(),
     async mutationFn(args: InferRequestType<typeof client.migrate.decisions.$put>) {
       return parseResponse(client.migrate.decisions.$put(args, options))
     },
   })
 }
 
-export function usePutMigrateDecisions<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.decisions.$put>>>>
-    >,
-    TError,
-    InferRequestType<typeof client.migrate.decisions.$put>
-  >
-  options?: ClientRequestOptions
-}) {
+export function usePutMigrateDecisions<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof client.migrate.decisions.$put>>>
+          >
+        >,
+        TError,
+        InferRequestType<typeof client.migrate.decisions.$put>,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({
-    ...mutationOptions,
-    ...getPutMigrateDecisionsMutationOptions<TError>(clientOptions),
-  })
+  const mutationDefaults = getPutMigrateDecisionsMutationOptions<TError, TOnMutateResult>(
+    clientOptions,
+  )
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
-export function getPostMigrateDeployMutationOptions<TError = unknown>(
-  options?: ClientRequestOptions,
-) {
+export function getPostMigrateDeployMutationKey() {
+  return ['migrate', '/migrate/deploy', 'POST'] as const
+}
+
+export function getPostMigrateDeployMutationOptions<
+  TError = DefaultError,
+  TOnMutateResult = unknown,
+>(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
       ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.deploy.$post>>>>
     >,
     TError,
-    void
+    void,
+    TOnMutateResult
   >({
-    mutationKey: ['migrate', '/migrate/deploy', 'POST'] as const,
+    mutationKey: getPostMigrateDeployMutationKey(),
     async mutationFn() {
       return parseResponse(client.migrate.deploy.$post(undefined, options))
     },
   })
 }
 
-export function usePostMigrateDeploy<TError = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.deploy.$post>>>>
-    >,
-    TError,
-    void
-  >
-  options?: ClientRequestOptions
-}) {
+export function usePostMigrateDeploy<TError = DefaultError, TOnMutateResult = unknown>(
+  options?: {
+    mutation?: Omit<
+      UseMutationOptions<
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.deploy.$post>>>>
+        >,
+        TError,
+        void,
+        TOnMutateResult
+      >,
+      'mutationFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { mutation: mutationOptions, options: clientOptions } = options ?? {}
-  return useMutation({
-    ...mutationOptions,
-    ...getPostMigrateDeployMutationOptions<TError>(clientOptions),
-  })
+  const mutationDefaults = getPostMigrateDeployMutationOptions<TError, TOnMutateResult>(
+    clientOptions,
+  )
+  return useMutation(
+    {
+      ...mutationOptions,
+      ...mutationDefaults,
+      mutationKey: mutationOptions?.mutationKey ?? mutationDefaults.mutationKey,
+    },
+    queryClient,
+  )
 }
 
 export function getDocsQueryKey() {
   return ['docs', '/docs'] as const
 }
 
-export function getDocsQueryOptions(options?: ClientRequestOptions) {
-  return queryOptions({
+export function getDocsQueryOptions<
+  TData = Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.docs.$get>>>>>,
+  TError = DefaultError,
+>(options?: ClientRequestOptions) {
+  return queryOptions<
+    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.docs.$get>>>>>,
+    TError,
+    TData,
+    ReturnType<typeof getDocsQueryKey>
+  >({
     queryKey: getDocsQueryKey(),
     queryFn({ signal }) {
       return parseResponse(
@@ -2298,46 +3210,50 @@ export function getDocsQueryOptions(options?: ClientRequestOptions) {
 
 export function useDocs<
   TData = Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.docs.$get>>>>>,
-  TError = unknown,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.docs.$get>>>>>,
-    TError,
-    TData
-  >
-  options?: ClientRequestOptions
-}) {
+  TError = DefaultError,
+>(
+  options?: {
+    query?: Omit<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.docs.$get>>>>>,
+        TError,
+        TData,
+        ReturnType<typeof getDocsQueryKey>
+      >,
+      'queryKey' | 'queryFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { query: queryOptions, options: clientOptions } = options ?? {}
-  return useQuery({
-    ...queryOptions,
-    queryKey: getDocsQueryKey(),
-    queryFn({ signal }: QueryFunctionContext) {
-      return parseResponse(
-        client.docs.$get(undefined, { ...clientOptions, init: { ...clientOptions?.init, signal } }),
-      )
-    },
-  })
+  return useQuery(
+    { ...getDocsQueryOptions<TData, TError>(clientOptions), ...queryOptions },
+    queryClient,
+  )
 }
 
 export function useSuspenseDocs<
   TData = Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.docs.$get>>>>>,
-  TError = unknown,
->(options?: {
-  query?: UseSuspenseQueryOptions<
-    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.docs.$get>>>>>,
-    TError,
-    TData
-  >
-  options?: ClientRequestOptions
-}) {
+  TError = DefaultError,
+>(
+  options?: {
+    query?: Omit<
+      UseSuspenseQueryOptions<
+        Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.docs.$get>>>>>,
+        TError,
+        TData,
+        ReturnType<typeof getDocsQueryKey>
+      >,
+      'queryKey' | 'queryFn'
+    >
+    options?: ClientRequestOptions
+  },
+  queryClient?: QueryClient,
+) {
   const { query: queryOptions, options: clientOptions } = options ?? {}
-  return useSuspenseQuery({
-    ...queryOptions,
-    queryKey: getDocsQueryKey(),
-    queryFn({ signal }: QueryFunctionContext) {
-      return parseResponse(
-        client.docs.$get(undefined, { ...clientOptions, init: { ...clientOptions?.init, signal } }),
-      )
-    },
-  })
+  return useSuspenseQuery(
+    { ...getDocsQueryOptions<TData, TError>(clientOptions), ...queryOptions },
+    queryClient,
+  )
 }

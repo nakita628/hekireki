@@ -13,10 +13,8 @@ function tickBox(row: Locator) {
   return row.locator('label', { has: row.page().getByRole('checkbox') })
 }
 
-test('the sidebar counts rows and the grid shows them', async ({ page }) => {
+test('the grid shows the rows and the pager counts them', async ({ page }) => {
   await page.goto('/models/User?tab=data')
-  await expect(page.getByRole('complementary').getByText('(rows)')).toBeVisible()
-  await expect(page.getByText('3 rows', { exact: true })).toBeVisible()
   const grid = page.getByRole('grid')
   await expectTexts(grid, ['id', 'email', 'name', 'role'])
   await expect(grid.getByRole('row')).toHaveCount(4)
@@ -51,7 +49,7 @@ test('searches, edits a cell, adds and deletes a row', async ({ page }) => {
   await page.getByRole('button', { name: 'Add row' }).click()
   await grid.getByPlaceholder('required').fill('dee@example.com')
   await grid.getByRole('button', { name: 'Save row' }).click()
-  await expect(page.getByText('4 rows', { exact: true })).toBeVisible()
+  await expect(page.getByText('1–4 of 4 rows')).toBeVisible()
   await expect(grid).toContainText('dee@example.com')
 
   // Deleting it again, through the row menu and the dialog that names the row.
@@ -63,7 +61,7 @@ test('searches, edits a cell, adds and deletes a row', async ({ page }) => {
   await page.getByRole('menuitem', { name: 'Delete row' }).click()
   await expect(page.getByRole('button', { name: 'Delete 1 row' })).toBeVisible()
   await page.getByRole('button', { name: 'Delete 1 row' }).click()
-  await expect(page.getByText('3 rows', { exact: true })).toBeVisible()
+  await expect(page.getByText('1–3 of 3 rows')).toBeVisible()
   await expect(grid).not.toContainText('dee@example.com')
 
   // Put Bob's name back for the other tests.
@@ -85,7 +83,7 @@ test('ticking rows deletes them together', async ({ page }) => {
       await grid.getByRole('button', { name: 'Save row' }).click()
       await expect(grid).toContainText(email)
     }
-    await expect(page.getByText('5 rows', { exact: true })).toBeVisible()
+    await expect(page.getByText('1–5 of 5 rows')).toBeVisible()
 
     for (const email of emails) {
       await tickBox(grid.getByRole('row').filter({ hasText: email })).check()
@@ -93,7 +91,7 @@ test('ticking rows deletes them together', async ({ page }) => {
     await expect(page.getByText('2 rows selected')).toBeVisible()
     await page.getByRole('button', { name: 'Delete', exact: true }).click()
     await page.getByRole('button', { name: 'Delete 2 rows' }).click()
-    await expect(page.getByText('3 rows', { exact: true })).toBeVisible()
+    await expect(page.getByText('1–3 of 3 rows')).toBeVisible()
     await expect(page.getByText('2 rows selected')).toBeHidden()
   } finally {
     // A run that stops half way would leave the two rows behind, and a retry would then fail on

@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
@@ -15,6 +16,17 @@ export const root = resolve(import.meta.dirname, '..', '..')
 const pkg = join(root, 'packages', 'hekireki')
 export const cli = join(pkg, 'dist', 'bin', 'hekireki.js')
 export const prisma = join(pkg, 'node_modules', '.bin', 'prisma')
+
+/**
+ * A work directory of a run's own, outside any project, with the repository's `node_modules`
+ * beside it: the CLI loads `pg` and `mysql2` from the directory it is run in, as it does in a
+ * user's project, and under the system's temporary directory it would find neither.
+ */
+export function workspace(prefix: string) {
+  const dir = mkdtempSync(join(tmpdir(), prefix))
+  symlinkSync(join(root, 'node_modules'), join(dir, 'node_modules'), 'dir')
+  return dir
+}
 
 export type Row = Readonly<Record<string, unknown>>
 

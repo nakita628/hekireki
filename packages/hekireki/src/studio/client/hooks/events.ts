@@ -3,7 +3,6 @@ import { useEffect } from 'react'
 
 import { useUiStore } from '../lib/index.js'
 import {
-  getDbCountsQueryKey,
   getDocsQueryKey,
   getMigrateBaselineQueryKey,
   getMigrateQueryKey,
@@ -23,7 +22,6 @@ export function useStudioEvents() {
     })
     events.addEventListener('change', () => {
       void queryClient.invalidateQueries({ queryKey: getSchemaQueryKey() })
-      void queryClient.invalidateQueries({ queryKey: getDbCountsQueryKey() })
       void queryClient.invalidateQueries({ queryKey: getDocsQueryKey() })
       // Whether the database is in step with the schema is a question of the schema too.
       void queryClient.invalidateQueries({ queryKey: getMigrateQueryKey() })

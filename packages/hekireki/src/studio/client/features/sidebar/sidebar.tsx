@@ -1,5 +1,4 @@
 import { Button } from '@heroui/react'
-import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import {
   LuBook,
@@ -16,17 +15,13 @@ import {
   LuZap,
 } from 'react-icons/lu'
 
-import { getDbCountsQueryOptions, useDb } from '../../hooks/index.js'
+import { useDb } from '../../hooks/index.js'
 import { useUiStore } from '../../lib/index.js'
 import { PaletteButton } from '../palette/palette.js'
-import { diagramFields } from '../schema/layout.js'
 
 type Schema = {
-  readonly models: readonly {
-    readonly name: string
-    readonly fields: readonly { readonly kind: string }[]
-  }[]
-  readonly enums: readonly { readonly name: string; readonly values: readonly unknown[] }[]
+  readonly models: readonly { readonly name: string }[]
+  readonly enums: readonly { readonly name: string }[]
 }
 
 const NAV = 'flex items-center gap-2.5 rounded-lg px-3 py-2 text-lead'
@@ -43,12 +38,10 @@ function EntityLink({
   to,
   name,
   icon,
-  count,
 }: {
   readonly to: '/models/$name' | '/enums/$name'
   readonly name: string
   readonly icon: React.ReactNode
-  readonly count: number | null
 }) {
   return (
     <Link to={to} params={{ name }} activeProps={ENTITY_ACTIVE} inactiveProps={ENTITY_INACTIVE}>
@@ -56,11 +49,6 @@ function EntityLink({
         <>
           <span className={`shrink-0 ${isActive ? 'text-accent' : 'text-faint'}`}>{icon}</span>
           <span className="flex-1 truncate">{name}</span>
-          {count === null ? null : (
-            <span className="rounded-full border border-line bg-canvas px-2 py-px font-sans text-code text-muted">
-              {count}
-            </span>
-          )}
         </>
       )}
     </Link>
@@ -88,7 +76,6 @@ export function Sidebar({
   const toggleSidebar = useUiStore((s) => s.toggleSidebar)
   const database = useDb().data ?? null
   const connected = database?.connected ?? false
-  const counts = useQuery({ ...getDbCountsQueryOptions(), enabled: connected }).data?.counts ?? null
   const models = schema?.models ?? []
   const enums = schema?.enums ?? []
   const status =
@@ -178,35 +165,22 @@ export function Sidebar({
         </Link>
       </nav>
       <div className="px-2.5 pb-2.5">
-        <div className="heading px-3 pt-2.5 pb-1.5">
-          Models · {models.length}
-          {connected ? <span className="ml-1 tracking-normal normal-case">(rows)</span> : null}
-        </div>
+        <div className="heading px-3 pt-2.5 pb-1.5">Models</div>
         <ul className="m-0 list-none p-0">
           {models.map((model) => (
             <li key={model.name}>
-              <EntityLink
-                to="/models/$name"
-                name={model.name}
-                icon={<LuTable size={15} />}
-                count={connected ? (counts?.[model.name] ?? null) : diagramFields(model).length}
-              />
+              <EntityLink to="/models/$name" name={model.name} icon={<LuTable size={15} />} />
             </li>
           ))}
         </ul>
       </div>
       {enums.length > 0 ? (
         <div className="px-2.5 pb-2.5">
-          <div className="heading px-3 pt-2.5 pb-1.5">Enums · {enums.length}</div>
+          <div className="heading px-3 pt-2.5 pb-1.5">Enums</div>
           <ul className="m-0 list-none p-0">
             {enums.map((value) => (
               <li key={value.name}>
-                <EntityLink
-                  to="/enums/$name"
-                  name={value.name}
-                  icon={<LuList size={15} />}
-                  count={value.values.length}
-                />
+                <EntityLink to="/enums/$name" name={value.name} icon={<LuList size={15} />} />
               </li>
             ))}
           </ul>
