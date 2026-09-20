@@ -3,8 +3,7 @@
 # Hekireki
 
 **[Hekireki](https://www.npmjs.com/package/hekireki)** generates validation schemas, ORM models and
-ER diagrams from a [Prisma](https://www.prisma.io/) schema, seeds a database, and helps you migrate
-it without breaking the data in it.
+ER diagrams from a [Prisma](https://www.prisma.io/) schema, and seeds a database.
 
 ## Installation
 
@@ -54,23 +53,18 @@ model User {
 ## Studio
 
 ```bash
-npx hekireki studio                  # ./prisma/schema.prisma or ./schema.prisma, on port 5555
+npx hekireki studio                  # ./prisma/schema.prisma or ./schema.prisma, port 5555
 npx hekireki studio --url file:./dev.db
 ```
 
-The ER diagram, the rows of each model, a Prisma schema editor, a SQL console and a Prisma Client
-playground, in the browser. The database is the one Prisma connects to (or `--url`). Works with
-SQLite, PostgreSQL and MySQL.
-
-<!-- The Migrate page is not shipped for now. It is still in the source, commented out at
-src/studio/client/routes/migrate.tsx and in the sidebar; when it comes back, this list names
-"a Prisma Client playground and a Migrate page" again. -->
+The ER diagram, the rows of each model, a schema editor, a SQL console and a Prisma Client
+playground, in the browser. SQLite, PostgreSQL and MySQL.
 
 ## Seed
 
 ```bash
-npx hekireki seed                    # Insert rows through the project's Prisma Client
-npx hekireki seed --sql seed.sql     # Or write a SQL script
+npx hekireki seed                    # Through the project's Prisma Client
+npx hekireki seed --sql seed.sql     # Or as a SQL script
 ```
 
 ```ts
@@ -88,25 +82,8 @@ export default defineConfig(schema, {
 })
 ```
 
-Every foreign key, unique constraint and enum in the schema is respected.
-
-## Migrate
-
-Before a migration, check what it does to the rows the database holds:
-
-```bash
-npx hekireki migrate check           # Rows the new schema breaks (NULLs, duplicates, orphans, ...)
-npx hekireki migrate plan -m prisma/migrations/<name>/migration.sql -o prisma/migrations/<name>/migration.sql
-```
-
-What becomes of those rows (fill, keep one, delete, rename, convert) is written in
-`.hekireki/migrate.json` beside the schema, or in the file `--decisions` names, and `migrate plan`
-writes the decisions into the migration Prisma wrote.
-
-<!-- The Migrate page of `hekireki studio` made those decisions, and could rehearse, run and
-record the migration and back up the database first (SQLite, PostgreSQL). It is not shipped for
-now; the page is still in the source. -->
+Every foreign key, unique constraint and enum is respected.
 
 ## License
 
-Distributed under the MIT License. See [LICENSE](https://github.com/nakita628/hekireki?tab=MIT-1-ov-file) for more information.
+MIT. See [LICENSE](https://github.com/nakita628/hekireki?tab=MIT-1-ov-file).
