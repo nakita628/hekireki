@@ -927,9 +927,11 @@ export default defineConfig({
         },
       },
       {
-        // Effect's Data.TaggedError / Context.Tag are called as capitalised factories by design;
+        // Effect's Data.TaggedError / Context.Tag are called as capitalised factories by design,
+        // as are the `Flag.Int` / `Flag.String` constructors of `effect/unstable/cli` in the CLI;
         // discover.ts constructs a Prisma Client and an adapter class it only knows by value.
         files: [
+          'src/cli/index.ts',
           'src/seed/discover.ts',
           'src/seed/load-config.ts',
           'src/database/url.ts',

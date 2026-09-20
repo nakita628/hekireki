@@ -67,7 +67,7 @@ export function DetailsPanel({
   return (
     <aside className="overflow-y-auto border-l border-line bg-surface px-5 pt-4 pb-6 text-body">
       <div className="mb-[22px]">
-        <div className="heading">Fields · {model.fields.length}</div>
+        <div className="heading">Fields</div>
         {model.fields.map((field) => (
           <div key={field.name} className="mb-3">
             <div className="flex items-center gap-1.5">
@@ -87,7 +87,7 @@ export function DetailsPanel({
         ))}
       </div>
       <div className="mb-[22px]">
-        <div className="heading">Relations · {relations.length}</div>
+        <div className="heading">Relations</div>
         {relations.length === 0 ? <div className="text-muted">No relations</div> : null}
         {relations.map((relation) => {
           const outgoing = relation.from.model === model.name
@@ -125,7 +125,7 @@ export function DetailsPanel({
         })}
       </div>
       <div className="mb-[22px]">
-        <div className="heading">Indexes · {model.indexes.length}</div>
+        <div className="heading">Indexes</div>
         {model.indexes.length === 0 ? (
           <div className="text-muted">No block-level indexes</div>
         ) : null}
@@ -137,7 +137,7 @@ export function DetailsPanel({
       </div>
       {modelAttributes.length > 0 ? (
         <div className="mb-[22px]">
-          <div className="heading">Attributes · {modelAttributes.length}</div>
+          <div className="heading">Attributes</div>
           {modelAttributes.map((a) => (
             <div key={a} className={ATTRIBUTE}>
               {a}
@@ -147,7 +147,7 @@ export function DetailsPanel({
       ) : null}
       {model.annotations.length > 0 ? (
         <div className="mb-[22px]">
-          <div className="heading">Annotations · {model.annotations.length}</div>
+          <div className="heading">Annotations</div>
           {model.annotations.map((a) => (
             <div key={a} className={ATTRIBUTE}>
               {a}

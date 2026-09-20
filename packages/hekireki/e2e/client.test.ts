@@ -406,18 +406,22 @@ test('opens from the palette', async ({ page }) => {
   await expect(page).toHaveURL(/\/client$/u)
 })
 
-test('updates the row counts of the sidebar after a write, and after undoing it', async ({
+test('a write through the client reaches the model page, and undoing it takes it back', async ({
   page,
 }) => {
-  const posts = page.getByRole('link', { name: /^Post \d+$/u })
-  const countOf = async () => {
-    const label = await posts.innerText()
-    return Number(label.replaceAll(/\D/gu, ''))
+  // What the model page's pager says the table holds: "1–4 of 4 rows".
+  const rowsOf = async () => {
+    await page.goto('/models/Post?tab=data')
+    const pager = page.getByText(/^1–\d+ of \d+ rows/u)
+    await expect(pager).toBeVisible()
+    const text = await pager.innerText()
+    return Number(text.match(/of (\d+) rows/u)?.[1])
   }
-  await expect(posts).toBeVisible()
-  const before = await countOf()
+  const before = await rowsOf()
 
   const run = async (query: string) => {
+    await page.goto('/client')
+    await expect(page.getByRole('button', { name: 'Run', exact: true })).toBeEnabled()
     await typeQuery(page, query)
     await page.keyboard.press('ControlOrMeta+Enter')
     const dialog = page.getByRole('alertdialog', { name: 'Run a write?' })
@@ -425,9 +429,9 @@ test('updates the row counts of the sidebar after a write, and after undoing it'
     await expect(dialog).toBeHidden()
   }
   await run('prisma.post.create({ data: { title: "e2e write", authorId: 1 } })')
-  await expect.poll(countOf).toBe(before + 1)
+  expect(await rowsOf()).toBe(before + 1)
   await run('prisma.post.deleteMany({ where: { title: "e2e write" } })')
-  await expect.poll(countOf).toBe(before)
+  expect(await rowsOf()).toBe(before)
 })
 
 test.describe('when a call is refused', () => {

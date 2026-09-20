@@ -10,7 +10,7 @@ import {
 } from 'react-icons/lu'
 
 import { CodeBlock } from '../../components/code-block.js'
-import { getMigrateBaselineQueryKey, useMigrateBaseline } from '../../hooks/index.js'
+import { useMigrateBaseline } from '../../hooks/index.js'
 import { useMessages } from './language.js'
 import { BASELINE } from './messages.js'
 import { problemReason } from './problem.js'
@@ -97,11 +97,7 @@ export function Baseline({
   const t = useMessages(BASELINE)
   // Each comparison replays migrations into a shadow database: done once, not on every focus.
   const baseline = useMigrateBaseline({
-    query: {
-      queryKey: getMigrateBaselineQueryKey(),
-      retry: false,
-      refetchOnWindowFocus: false,
-    },
+    query: { retry: false, refetchOnWindowFocus: false },
   })
   const candidates = baseline.data?.candidates ?? []
   const suggested = candidates.findLast((candidate) => candidate.matches)?.name ?? null

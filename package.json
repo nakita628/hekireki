@@ -24,19 +24,19 @@
     "hekireki": "link:packages/hekireki"
   },
   "devDependencies": {
-    "@prisma/adapter-better-sqlite3": "8.1.0-dev.6",
-    "@prisma/adapter-mariadb": "8.1.0-dev.6",
-    "@prisma/adapter-pg": "8.1.0-dev.6",
-    "@prisma/client": "8.1.0-dev.6",
+    "@prisma/adapter-better-sqlite3": "8.1.0-dev.7",
+    "@prisma/adapter-mariadb": "8.1.0-dev.7",
+    "@prisma/adapter-pg": "8.1.0-dev.7",
+    "@prisma/client": "8.1.0-dev.7",
     "@types/pg": "^8.23.1",
     "actionlint": "^2.0.6",
-    "cspell": "^10.2.2",
+    "cspell": "^10.3.3",
     "markdownlint-cli2": "^0.23.2",
-    "mysql2": "^3.23.1",
-    "pg": "^8.22.0",
+    "mysql2": "^3.24.4",
+    "pg": "^8.23.0",
     "textlint": "^15.8.0",
     "textlint-rule-terminology": "^5.2.16",
-    "vite-plus": "0.3.0"
+    "vite-plus": "0.3.3"
   },
   "packageManager": "pnpm@11.25.0"
 }

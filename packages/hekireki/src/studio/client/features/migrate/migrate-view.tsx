@@ -144,7 +144,7 @@ export function MigrateView() {
   const stepLines = useStepLines()
   const queries = useQueryClient()
   // A database Prisma Migrate cannot read this way is refused, and refused again on every retry.
-  const status = useMigrate({ query: { queryKey: getMigrateQueryKey(), retry: false } })
+  const status = useMigrate({ query: { retry: false } })
   const kept = useMigrateDecisions()
   const [plan, setPlan] = useState<Plan | null>(null)
   const [name, setName] = useState('')

@@ -445,7 +445,13 @@ export function DataGrid({
             anywhere on a row tick it, and a click here picks the value under the pointer. The
             ticks are the checkbox column's alone, and its checkboxes step out of the table's
             `selection` slot (`slot={null}`) since nothing is providing it. */}
-        <Table.Content aria-label={`${model.name} rows`} className="font-mono text-code">
+        {/* HeroUI's Table defaults to `tab` from 3.2.6, where the arrow keys skip a cell's own
+            buttons; `arrow` is React Aria's own, and what the key handling above relies on. */}
+        <Table.Content
+          aria-label={`${model.name} rows`}
+          className="font-mono text-code"
+          keyboardNavigationBehavior="arrow"
+        >
           <Table.Header>
             {/* The checkbox and the row menu share one column, and it leads. A wide table scrolls
                 sideways, and what a row can have done to it has to stay where it can be reached. */}

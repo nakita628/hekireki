@@ -8,13 +8,7 @@ import { fieldTypeLabel } from '../../components/labels.js'
 import { ResultTable } from '../../components/result-table.js'
 import { SplitPane } from '../../components/split-pane.js'
 import { useDebounced } from '../../hooks/debounce.js'
-import {
-  getDbCountsQueryKey,
-  useDb,
-  usePostDbExplain,
-  usePostDbSql,
-  useSchema,
-} from '../../hooks/index.js'
+import { useDb, usePostDbExplain, usePostDbSql, useSchema } from '../../hooks/index.js'
 import { SchemaCanvas } from '../schema/schema-view.js'
 import { useAnalysis } from './analysis.js'
 import { ColumnsView } from './columns-view.js'
@@ -130,11 +124,7 @@ export function SqlView({
 
   const run = usePostDbSql({
     mutation: {
-      onSuccess: () =>
-        Promise.all([
-          queryClient.invalidateQueries({ queryKey: ['db', '/db/rows/:modelName'] }),
-          queryClient.invalidateQueries({ queryKey: getDbCountsQueryKey() }),
-        ]),
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: ['db', '/db/rows/:modelName'] }),
     },
   })
   const explain = usePostDbExplain()

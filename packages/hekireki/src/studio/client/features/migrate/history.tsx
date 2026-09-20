@@ -13,10 +13,7 @@ import {
 } from 'react-icons/lu'
 
 import { CodeBlock } from '../../components/code-block.js'
-import {
-  getMigrateMigrationsMigrationNameQueryKey,
-  useMigrateMigrationsMigrationName,
-} from '../../hooks/index.js'
+import { useMigrateMigrationsMigrationName } from '../../hooks/index.js'
 import type { client } from '../../lib/index.js'
 import { useLanguage, useMessages } from './language.js'
 import { HISTORY } from './messages.js'
@@ -63,7 +60,7 @@ function MigrationSql({ name }: { readonly name: string }) {
   const t = useMessages(HISTORY)
   const args = { param: { migrationName: name } }
   const file = useMigrateMigrationsMigrationName(args, {
-    query: { queryKey: getMigrateMigrationsMigrationNameQueryKey(args), retry: false },
+    query: { retry: false },
   })
   if (file.isPending) return <p className="m-0 text-code text-muted">{t.readingSql}</p>
   if (file.data === undefined) {

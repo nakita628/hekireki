@@ -15,10 +15,10 @@ test.afterEach(async ({ request }) => {
 test('the schema page lays out the sidebar and the diagram', async ({ page }) => {
   await page.goto('/')
   const sidebar = page.getByRole('complementary')
-  await expect(sidebar.getByText('Models · 2')).toBeVisible()
+  await expect(sidebar.getByText('Models', { exact: true })).toBeVisible()
   await expect(sidebar.getByRole('link', { name: /User/u })).toBeVisible()
   await expect(sidebar.getByRole('link', { name: /Post/u })).toBeVisible()
-  await expect(sidebar.getByText('Enums · 1')).toBeVisible()
+  await expect(sidebar.getByText('Enums', { exact: true })).toBeVisible()
   await expect(sidebar.getByText(/sqlite ·/u)).toBeVisible()
   await expect(sidebar.getByText(/Watching ·/u)).toBeVisible()
 

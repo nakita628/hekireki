@@ -21,7 +21,6 @@ import { FieldsTable } from '../../components/fields-table.js'
 import { copyText } from '../../hooks/copy.js'
 import { useDebounced } from '../../hooks/debounce.js'
 import {
-  getDbCountsQueryKey,
   getDbRowsModelNameQueryOptions,
   useDb,
   useDeleteDbRowsModelName,
@@ -165,10 +164,7 @@ export function ModelView({
     placeholderData: keepPreviousData,
   })
   const invalidate = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['db', '/db/rows/:modelName'] }),
-      queryClient.invalidateQueries({ queryKey: getDbCountsQueryKey() }),
-    ])
+    await queryClient.invalidateQueries({ queryKey: ['db', '/db/rows/:modelName'] })
   }
   const insert = usePostDbRowsModelName({
     mutation: {
@@ -197,7 +193,6 @@ export function ModelView({
   const page = rows.data ?? null
   const rowKey = page?.key ?? []
   const scalars = model.fields.filter((f) => f.kind !== 'object').map((f) => f.name)
-  const scalarCount = scalars.length
   const columns = scalars.filter((name) => !hidden.has(name))
   const param = { modelName: model.name }
   const pageRows = page?.rows ?? []
@@ -261,11 +256,6 @@ export function ModelView({
           {model.dbName ? (
             <span className="font-mono text-ui text-muted">{model.dbName}</span>
           ) : null}
-          <span className="text-ui leading-tight text-muted">
-            {activeTab === 'data' && page
-              ? `${page.total.toLocaleString()} ${plural(page.total)}${applied === '' ? '' : ' matching'}`
-              : `${scalarCount} ${scalarCount === 1 ? 'field' : 'fields'}`}
-          </span>
           <SearchField
             className="min-w-[200px] flex-1"
             aria-label={activeTab === 'data' ? 'Search every column' : 'Search every field'}
