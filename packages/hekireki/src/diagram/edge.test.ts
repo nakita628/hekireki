@@ -162,12 +162,12 @@ describe('round', () => {
 describe('placeCaptions', () => {
   const caption = ['one to many', 'on delete cascade']
 
-  it('puts a caption beside its wire rather than across it', () => {
+  it('writes a caption on its wire, so the relation it names runs under it', () => {
     const points = routePoints(source, { x: 700, y: 300 }, [])
     const [placed] = placeCaptions([{ caption, points }], [])
     expect(placed).toBeDefined()
-    // The channel the edge runs down is at x = 520; the chip clears it on one side.
-    expect(placed && (placed.box.x > 520 || placed.box.x + placed.box.width < 520)).toBe(true)
+    // The channel the edge runs down is at x = 520; the chip sits astride it.
+    expect(placed && placed.box.x < 520 && placed.box.x + placed.box.width > 520).toBe(true)
   })
 
   it('keeps a caption off the models', () => {
@@ -210,11 +210,56 @@ describe('placeCaptions', () => {
     expect(placed && coversWire(placed.box, neighbour)).toBe(false)
   })
 
+  // Not merely off it: a wire is a box a pixel or two wide, so a chip that only avoids overlapping
+  // one still ends up a hair from four others in a bus, near everything and naming nothing.
+  it('keeps a margin from a wire that belongs to another edge', () => {
+    const points = routePoints(source, { x: 700, y: 300 }, [])
+    const neighbour = routePoints({ x: 340, y: 160 }, { x: 700, y: 360 }, [])
+    const [placed] = placeCaptions(
+      [
+        { caption, points },
+        { caption: [], points: neighbour },
+      ],
+      [],
+    )
+    expect(placed).toBeDefined()
+    const room = placed === undefined ? null : { ...placed.box }
+    expect(
+      room &&
+        coversWire(
+          { x: room.x - 4, y: room.y - 4, width: room.width + 8, height: room.height + 8 },
+          neighbour,
+        ),
+    ).toBe(false)
+  })
+
+  // The loop of a self relation between two neighbouring rows is shorter than the chip is wide,
+  // so a chip centred on it would swallow the whole loop. It hangs off one side instead.
+  it('writes the caption of a self relation on its loop without hiding the loop', () => {
+    const points = selfLoopPoints(source, { x: 340, y: 122 })
+    const [placed] = placeCaptions([{ caption: ['tree · one to many'], points }], [])
+    expect(placed).toBeDefined()
+    expect(placed && coversWire(placed.box, points)).toBe(true)
+    const inside = (point: { x: number; y: number }, box: Box) =>
+      box.x <= point.x &&
+      point.x <= box.x + box.width &&
+      box.y <= point.y &&
+      point.y <= box.y + box.height
+    expect(placed && points.every((point) => inside(point, placed.box))).toBe(false)
+  })
+
   it('falls back to the middle of an edge with nowhere to put a caption', () => {
     // Two ends a few pixels apart: every segment is a corner, so no spot qualifies.
     const points = routePoints({ x: 0, y: 0 }, { x: 6, y: 2 }, [])
     const [placed] = placeCaptions([{ caption, points }], [])
     expect(placed?.box).toStrictEqual(captionBox(caption, { x: 3, y: 1 }))
+  })
+
+  // A relation may be named in any language: `@relation("フォロー")` draws about twice as wide as
+  // its character count suggests, and a chip sized from the count is too narrow for its own text.
+  it('sizes a chip that holds full-width text to the width it draws at', () => {
+    expect(captionWidth(['あいう'])).toBe(captionWidth(['abcdef']))
+    expect(captionWidth(['あいう'])).toBeGreaterThan(captionWidth(['abc']))
   })
 
   it('sizes a chip from its longest line and its line count', () => {

@@ -68,9 +68,41 @@ export function fieldRowHeight(field: DiagramField) {
   return NODE_ROW_HEIGHT + (fieldDetail(field) === '' ? 0 : NODE_DESCRIPTION_HEIGHT)
 }
 
-/** The block attributes a model node lists under its fields, in declaration order. */
+// The order a node lists its block attributes in: the key, then what is unique, then the plain
+// indexes. Prisma hands them over grouped by kind and keeps no trace of the order they were
+// written in, and the group it happens to list first puts `@@index` above `@@unique`.
+const CONSTRAINT_ORDER = { id: 0, unique: 1, normal: 2, fulltext: 2 } as const
+
+/**
+ * The block attributes a model node lists under its fields: the key, the unique constraints, then
+ * the indexes. Two schemas that declare the same attributes in a different order draw the same
+ * node, because the order they were written in does not reach here.
+ *
+ * Every `@@` attribute gets a row, a single-column `@@unique` included — the row is the attribute,
+ * the `UK` beside the field is the column, the same two things `@@id` says with its row and the
+ * key beside each of its columns.
+ */
 export function diagramConstraints(model: { readonly indexes?: readonly DiagramIndex[] }) {
-  return model.indexes ?? []
+  return (model.indexes ?? []).toSorted(
+    (a, b) => CONSTRAINT_ORDER[a.type] - CONSTRAINT_ORDER[b.type],
+  )
+}
+
+/**
+ * Every column a unique constraint covers: its own `@unique`, and each column of a `@@unique` it
+ * takes part in — so a composite constraint marks its columns the way a composite key marks its
+ * own. Whether the mark is drawn is the node's call; a column of the primary key wears the key.
+ */
+export function uniqueColumns(model: {
+  readonly fields: readonly { readonly name: string; readonly isUnique?: boolean }[]
+  readonly indexes?: readonly DiagramIndex[]
+}): ReadonlySet<string> {
+  return new Set([
+    ...model.fields.filter((field) => field.isUnique === true).map((field) => field.name),
+    ...(model.indexes ?? [])
+      .filter((index) => index.type === 'unique')
+      .flatMap((index) => index.fields),
+  ])
 }
 
 export function nodeHeight(model: DiagramModel) {

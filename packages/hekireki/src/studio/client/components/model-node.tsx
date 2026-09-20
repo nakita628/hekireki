@@ -16,6 +16,7 @@ import {
   fieldRowHeight,
   NODE_CONSTRAINT_HEIGHT,
   NODE_ROW_HEIGHT,
+  uniqueColumns,
 } from '../features/schema/layout.js'
 import { BADGE, CONSTRAINT_STYLES, fieldTypeLabel, UNIQUE_BADGE } from './labels.js'
 import { OpenNodeLink } from './open-node-link.js'
@@ -47,6 +48,7 @@ function FieldIcon({ field }: { readonly field: Field }) {
 function ModelNodeComponent({ data, selected }: NodeProps<ModelNodeType>) {
   const { model, fields, highlight } = data
   const primaryKey = new Set(model.primaryKey)
+  const unique = uniqueColumns(model)
   const constraints = diagramConstraints(model)
   const dim = highlight?.dim ?? false
   return (
@@ -117,7 +119,7 @@ function ModelNodeComponent({ data, selected }: NodeProps<ModelNodeType>) {
                     title="Read by the statement"
                   />
                 ) : null}
-                {field.isUnique && !(field.isId || primaryKey.has(field.name)) ? (
+                {unique.has(field.name) && !(field.isId || primaryKey.has(field.name)) ? (
                   <span className={`${BADGE} ${UNIQUE_BADGE} shrink-0`}>UK</span>
                 ) : null}
                 <span

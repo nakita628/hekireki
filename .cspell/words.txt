@@ -75,6 +75,7 @@ Excee
 FAVX
 fkey
 FLOA
+Fullwidth
 Generateds
 ghijklmnopqrstu
 gofmt
@@ -87,6 +88,7 @@ habtm
 hclfmt
 hekireki
 heroui
+Hiragino
 IHDR
 impls
 indexdef
@@ -102,6 +104,7 @@ initcap
 inputarea
 inspectdb
 inspectdb's
+IPAP
 javax
 jsonbs
 jsons
@@ -115,6 +118,7 @@ lezer
 marginx
 marginy
 maße
+Meiryo
 Memberwise
 Monarches
 msgpackr
@@ -131,9 +135,10 @@ nodesep
 nodrag
 NOLOGO
 nopan
+Noto
 notused
-Npgsql
 npgsql
+Npgsql
 nspname
 ntile
 ntoa

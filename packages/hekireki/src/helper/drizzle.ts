@@ -532,11 +532,23 @@ function makeCompositeConstraints(
       })()
     : null
 
-  const uniqueLines = model.uniqueFields
-    .filter((fields) => fields.length > 1)
-    .map((fields) => {
+  // Read from the datamodel indexes rather than `model.uniqueFields`, which is column names and
+  // nothing else: `map:` names the constraint in the database, so it has to reach the output, the
+  // way it already does for `@@index` below. Prisma's `name:` does not — it names the compound
+  // key on the Client and means nothing to the database. A `@@unique` on a single column arrives
+  // on the field as `isUnique`, and is written there.
+  const uniqueLines = indexes
+    .filter(
+      (idx) =>
+        idx.model === model.name &&
+        idx.type === 'unique' &&
+        !idx.isDefinedOnField &&
+        idx.fields.length > 1,
+    )
+    .map((idx) => {
       imports.core.add('unique')
-      return `unique().on(${fields.map((f) => `table.${f}`).join(', ')})`
+      const columns = idx.fields.map((f) => `table.${f.name}`).join(', ')
+      return idx.dbName ? `unique('${idx.dbName}').on(${columns})` : `unique().on(${columns})`
     })
 
   const indexLines = indexes

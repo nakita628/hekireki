@@ -22,8 +22,10 @@ import {
   NODE_ROW_HEIGHT,
   NODE_WIDTH,
   nodeHeight,
+  uniqueColumns,
 } from './layout.js'
 import type { DiagramIndex, LayoutPositions, Position } from './layout.js'
+import { textUnits, truncateLabel } from './text.js'
 
 export type DiagramTheme = 'light' | 'dark'
 
@@ -120,6 +122,21 @@ const FONT_MONO =
 const FONT_SANS =
   'ui-sans-serif, -apple-system, Segoe UI, Roboto, Helvetica Neue, Arial, DejaVu Sans, sans-serif'
 
+// The same two stacks with the families that cover CJK in front. A browser picks a font per
+// glyph, so the stacks above are what the SVG carries; resvg stops at the first family the
+// machine has and never looks further for a glyph that family lacks, so with a Latin face in
+// front it drops Japanese text — the whole text run, not just the glyphs it cannot draw.
+const FONT_MONO_RASTER = `Noto Sans Mono CJK JP, Source Han Mono, BIZ UDGothic, MS Gothic, IPAGothic, ${FONT_MONO}`
+const FONT_SANS_RASTER = `Noto Sans CJK JP, Hiragino Sans, Yu Gothic UI, Meiryo, IPAPGothic, ${FONT_SANS}`
+
+/**
+ * The drawing with the raster font stacks in place of the ones a browser reads, for a rasteriser
+ * without per-glyph fallback. A machine with none of those families draws what it drew before.
+ */
+export function withRasterFonts(svg: string) {
+  return svg.replaceAll(FONT_MONO, FONT_MONO_RASTER).replaceAll(FONT_SANS, FONT_SANS_RASTER)
+}
+
 // Glyph advance as a fraction of the font size; used to right-align, truncate and size labels.
 const MONO_ADVANCE = 0.6
 const MONO_BOLD_ADVANCE = 0.66
@@ -192,18 +209,11 @@ function escapeXml(text: string) {
 }
 
 function monoWidth(text: string, fontSize: number) {
-  return text.length * fontSize * MONO_ADVANCE
+  return textUnits(text) * fontSize * MONO_ADVANCE
 }
 
 function sansWidth(text: string, fontSize: number) {
-  return text.length * fontSize * SANS_ADVANCE
-}
-
-/** Cuts a label to the width it may take, ending it with an ellipsis like `truncate` does. */
-export function truncateLabel(text: string, maxWidth: number, advance: number) {
-  const capacity = Math.floor(maxWidth / advance)
-  if (text.length <= capacity) return text
-  return capacity <= 1 ? '…' : `${text.slice(0, capacity - 1)}…`
+  return textUnits(text) * fontSize * SANS_ADVANCE
 }
 
 export function fieldTypeLabel(field: Field) {
@@ -335,20 +345,23 @@ function badgeWidth(label: string) {
   return sansWidth(label, BADGE_FONT_SIZE) + BADGE_PADDING_X * 2
 }
 
-/** The constraint a field carries on its own: `@unique`, on a field that is not the key already. */
-function uniqueBadge(field: Field, primaryKey: ReadonlySet<string>) {
-  return field.isUnique === true && !(field.isId || primaryKey.has(field.name)) ? 'UK' : null
+/** The `UK` a field carries: covered by a unique constraint, and not already wearing the key. */
+function uniqueBadge(field: Field, primaryKey: ReadonlySet<string>, unique: ReadonlySet<string>) {
+  return unique.has(field.name) && !(field.isId || primaryKey.has(field.name)) ? 'UK' : null
 }
 
 function renderRow(node: PlacedNode, field: Field, top: number, palette: Palette) {
   const primaryKey = new Set(node.model.primaryKey)
+  const unique = uniqueColumns(node.model)
   const left = node.x + HEADER_PADDING_X
   const right = node.x + node.width - HEADER_PADDING_X
   const centerY = top + NODE_ROW_HEIGHT / 2
   const icon = fieldIcon(field, primaryKey, palette)
-  const type = fieldTypeLabel(field)
+  // The type is drawn from the right edge inwards, so without a bound of its own a long one runs
+  // out of the card and off the drawing. Six tenths of the row leaves the name something to sit in.
+  const type = truncateLabel(fieldTypeLabel(field), (right - left) * 0.6, 11 * MONO_ADVANCE)
   const typeWidth = monoWidth(type, 11)
-  const badge = uniqueBadge(field, primaryKey)
+  const badge = uniqueBadge(field, primaryKey, unique)
   const badgeRoom = badge === null ? 0 : badgeWidth(badge) + ROW_GAP
   const badgeSvg =
     badge === null
@@ -413,10 +426,14 @@ function renderCard(
   header: { readonly name: string; readonly dbName: string | null; readonly pill: string | null },
   palette: Palette,
 ) {
-  const nameWidth = header.name.length * 13 * MONO_BOLD_ADVANCE
   const pillWidth = header.pill === null ? 0 : sansWidth(header.pill, 11) + 16
   const pillX = card.x + card.width - HEADER_PADDING_X - pillWidth
-  const dbNameLeft = card.x + HEADER_PADDING_X + nameWidth + 8
+  const nameLeft = card.x + HEADER_PADDING_X
+  // Cut to the room before the pill: a long model or enum name used to run out of the header,
+  // over the `enum` pill and past the edge of the drawing.
+  const name = truncateLabel(header.name, pillX - 8 - nameLeft, 13 * MONO_BOLD_ADVANCE)
+  const nameWidth = textUnits(name) * 13 * MONO_BOLD_ADVANCE
+  const dbNameLeft = nameLeft + nameWidth + 8
   const dbName = header.dbName
     ? truncateLabel(header.dbName, pillX - 8 - dbNameLeft, 11 * MONO_ADVANCE)
     : ''
@@ -426,7 +443,7 @@ function renderCard(
     `<rect x="${round(card.x)}" y="${round(card.y)}" width="${round(card.width)}" height="${round(card.height)}" rx="${NODE_RADIUS}" fill="${palette.surface}" stroke="${palette.lineStrong}" filter="url(#node-shadow)"/>`,
     `<rect x="${round(card.x)}" y="${round(card.y)}" width="${round(card.width)}" height="${NODE_HEADER_HEIGHT}" fill="${palette.node}" clip-path="url(#${id})"/>`,
     // One text run, so the table name follows the model name at its real width whatever font is used.
-    `<text x="${round(card.x + HEADER_PADDING_X)}" y="${round(headerCenter + 13 * 0.36)}" font-family="${FONT_MONO}" font-size="13" font-weight="700" fill="${palette.nodeText}">${escapeXml(header.name)}${
+    `<text x="${round(nameLeft)}" y="${round(headerCenter + 13 * 0.36)}" font-family="${FONT_MONO}" font-size="13" font-weight="700" fill="${palette.nodeText}">${escapeXml(name)}${
       dbName
         ? `<tspan dx="8" font-size="11" font-weight="400" opacity="0.6">${escapeXml(dbName)}</tspan>`
         : ''
@@ -491,10 +508,17 @@ function renderEnum(card: PlacedEnum, index: number, palette: Palette) {
     ),
     ...value.values.map((member, position) => {
       const centerY = top + position * NODE_ROW_HEIGHT + NODE_ROW_HEIGHT / 2
-      const stored = member.dbName
-        ? `<text x="${round(right)}" y="${round(centerY + 11 * 0.36)}" font-family="${FONT_MONO}" font-size="11" text-anchor="end" fill="${palette.faint}">${escapeXml(member.dbName)}</text>`
+      // Both are cut, and the member name takes only what the stored name leaves: each is drawn
+      // from its own edge, so an uncut one runs over the other and out of the card.
+      const dbName = member.dbName
+        ? truncateLabel(member.dbName, (right - left) * 0.5, 11 * MONO_ADVANCE)
         : ''
-      return `<text x="${round(left)}" y="${round(centerY + 12 * 0.36)}" font-family="${FONT_MONO}" font-size="12" fill="${palette.enumeration}">${escapeXml(truncateLabel(member.name, right - left, 12 * MONO_ADVANCE))}</text>${stored}`
+      const stored =
+        dbName === ''
+          ? ''
+          : `<text x="${round(right)}" y="${round(centerY + 11 * 0.36)}" font-family="${FONT_MONO}" font-size="11" text-anchor="end" fill="${palette.faint}">${escapeXml(dbName)}</text>`
+      const nameRoom = right - left - (dbName === '' ? 0 : monoWidth(dbName, 11) + ROW_GAP)
+      return `<text x="${round(left)}" y="${round(centerY + 12 * 0.36)}" font-family="${FONT_MONO}" font-size="12" fill="${palette.enumeration}">${escapeXml(truncateLabel(member.name, nameRoom, 12 * MONO_ADVANCE))}</text>${stored}`
     }),
     `</g>`,
   ].join('')

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vite-plus/test'
 
 import { polylinePath, smoothStepPoints } from './edge.js'
 import { NODE_HEADER_HEIGHT, NODE_PADDING, NODE_ROW_HEIGHT, NODE_WIDTH } from './layout.js'
-import { PALETTES, edgeCaption, fieldTypeLabel, renderDiagramSvg, truncateLabel } from './svg.js'
+import { PALETTES, edgeCaption, fieldTypeLabel, renderDiagramSvg, withRasterFonts } from './svg.js'
 
 type Field = {
   readonly name: string
@@ -236,12 +236,6 @@ describe('labels', () => {
     expect(fieldTypeLabel(field('a', { isRequired: false }))).toBe('String?')
     expect(fieldTypeLabel(field('a', { isList: true, isRequired: false }))).toBe('String[]')
   })
-
-  it('truncates with an ellipsis at the available width', () => {
-    expect(truncateLabel('createdAt', 100, 7.2)).toBe('createdAt')
-    expect(truncateLabel('averyveryverylongname', 72, 7.2)).toBe('averyvery…')
-    expect(truncateLabel('ab', 5, 7.2)).toBe('…')
-  })
 })
 
 /** The label chips of a rendered diagram, as boxes. */
@@ -361,6 +355,23 @@ describe('constraints', () => {
     expect(svg).toContain('>UNIQUE</text>')
     expect(svg).toContain('>INDEX</text>')
     expect(svg).toContain('>followerId, followingId</text>')
+  })
+
+  it('marks every column a @@unique covers, and lists the constraint under them', () => {
+    const svg = renderDiagramSvg({
+      models: [
+        constrained(
+          'Member',
+          [field('tenantId'), field('loginName'), field('other')],
+          [{ type: 'unique', fields: ['tenantId', 'loginName'] }],
+        ),
+      ],
+      relations: [],
+      positions: { Member: { x: 0, y: 0 } },
+    })
+    // A composite constraint marks its columns the way a composite key marks its own.
+    expect(svg.match(/>UK</gu)).toHaveLength(2)
+    expect(svg).toContain('>tenantId, loginName</text>')
   })
 
   it('makes room for them in the card', () => {
@@ -524,5 +535,98 @@ describe('the palette the export paints with', () => {
     expect(
       Object.keys(NAMES).map((key) => [key, palette[key as keyof typeof NAMES]]),
     ).toStrictEqual(Object.entries(NAMES).map(([key, token]) => [key, tokens[token]]))
+  })
+})
+
+// Nothing a card draws may leave it: the drawing is sized from the cards, so a label that runs
+// past one runs off the edge of the document, where it is cut by the canvas instead of by us.
+describe('labels that do not fit', () => {
+  const longName = 'OrganizationMembershipInvitationAuditLogEntryRecord'
+  const longType = 'OrganizationMembershipInvitationAuditLogEntryKindEnumeration'
+
+  it('cuts a model name to the header rather than letting it run out of the card', () => {
+    const svg = renderDiagramSvg({
+      models: [model(longName, [field('id', { isId: true })])],
+      relations: [],
+      positions: { [longName]: { x: 0, y: 0 } },
+    })
+    expect(svg).not.toContain(`>${longName}<`)
+    expect(svg).toContain('…</text>')
+  })
+
+  it('cuts an enum name so it stops before the `enum` pill', () => {
+    const svg = renderDiagramSvg({
+      models: [],
+      relations: [],
+      enums: [{ name: longName, dbName: null, values: [{ name: 'ONE', dbName: null }] }],
+      positions: { [longName]: { x: 0, y: 0 } },
+    })
+    expect(svg).not.toContain(`>${longName}<`)
+    expect(svg).toContain('>enum</text>')
+  })
+
+  // The type is drawn from the right edge inwards, so an uncut one runs out of the card's left.
+  it('cuts a type label', () => {
+    const svg = renderDiagramSvg({
+      models: [model('A', [field('kind', { kind: 'enum', type: longType })])],
+      relations: [],
+      positions: { A: { x: 0, y: 0 } },
+    })
+    expect(svg).not.toContain(`>${longType}<`)
+    expect(svg).toContain('…</text>')
+  })
+
+  it('cuts an enum member and the value the database stores, each in its own half', () => {
+    const svg = renderDiagramSvg({
+      models: [],
+      relations: [],
+      enums: [
+        {
+          name: 'Kind',
+          dbName: null,
+          values: [{ name: `${longName}_MEMBER`, dbName: `${longName}_stored` }],
+        },
+      ],
+      positions: { Kind: { x: 0, y: 0 } },
+    })
+    expect(svg).not.toContain(`>${longName}_MEMBER<`)
+    expect(svg).not.toContain(`>${longName}_stored<`)
+    expect(svg.match(/…<\/text>/gu)).toHaveLength(2)
+  })
+
+  // A Japanese doc comment draws about twice as wide as its character count suggests.
+  it('cuts a full-width detail line where a Latin one of the same length still fits', () => {
+    const drawn = (documentation: string) =>
+      renderDiagramSvg({
+        models: [model('A', [field('id', { isId: true, documentation })])],
+        relations: [],
+        positions: { A: { x: 0, y: 0 } },
+      })
+    const latin = 'abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstu'
+    const wide = 'あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめも'
+    expect(drawn(latin)).toContain(`>${latin}</text>`)
+    expect(drawn(wide)).not.toContain(`>${wide}</text>`)
+  })
+})
+
+describe('withRasterFonts', () => {
+  // resvg stops at the first family the machine has and never looks further for a glyph that one
+  // lacks, so a Latin face in front of the stack drops Japanese text from the PNG altogether.
+  it('puts families that cover CJK in front of the ones the SVG carries', () => {
+    // A documented field, so the drawing carries the sans stack of the detail line as well.
+    const svg = renderDiagramSvg({
+      models: [model('A', [field('id', { isId: true, documentation: 'The key' })])],
+      relations: [],
+      positions: { A: { x: 0, y: 0 } },
+    })
+    const raster = withRasterFonts(svg)
+    expect(svg).toContain('font-family="ui-monospace, SF Mono')
+    expect(raster).toContain('font-family="Noto Sans Mono CJK JP')
+    expect(raster).toContain('IPAGothic, ui-monospace, SF Mono')
+    expect(raster).toContain('Noto Sans CJK JP, Hiragino Sans')
+    // Only the font stacks change; the drawing is the same one.
+    expect(raster.replaceAll(/font-family="[^"]*"/gu, '')).toBe(
+      svg.replaceAll(/font-family="[^"]*"/gu, ''),
+    )
   })
 })

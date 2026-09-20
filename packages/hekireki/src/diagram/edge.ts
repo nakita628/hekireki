@@ -1,6 +1,7 @@
 // How a relation is drawn between two cards and where its caption sits, shared by the exported
 // SVG (svg.ts) and the Studio canvas (studio/client/features/schema) so the two agree.
 import { NODE_ROW_HEIGHT } from './layout.js'
+import { textUnits } from './text.js'
 
 export type Point = { readonly x: number; readonly y: number }
 
@@ -189,13 +190,28 @@ export function selfLoopPoints(source: Point, target: Point): readonly Point[] {
 }
 
 export function captionWidth(caption: readonly string[]) {
-  return Math.max(...caption.map((line) => line.length * EDGE_LABEL_FONT_SIZE * MONO_ADVANCE)) + 10
+  // A relation may be named in any language — `@relation("フォロー")` — so the chip is measured
+  // the way a card measures a name, or a caption in Japanese draws half again as wide as its box.
+  return (
+    Math.max(...caption.map((line) => textUnits(line) * EDGE_LABEL_FONT_SIZE * MONO_ADVANCE)) + 10
+  )
+}
+
+function captionHeight(caption: readonly string[]) {
+  return caption.length * EDGE_LABEL_LINE_HEIGHT + EDGE_LABEL_PADDING
 }
 
 export function captionBox(caption: readonly string[], center: Point): Box {
   const width = captionWidth(caption)
-  const height = caption.length * EDGE_LABEL_LINE_HEIGHT + EDGE_LABEL_PADDING
+  const height = captionHeight(caption)
   return { x: center.x - width / 2, y: center.y - height / 2, width, height }
+}
+
+/** How far two boxes lie apart, zero once they touch. */
+function boxGap(a: Box, b: Box) {
+  const x = Math.max(b.x - (a.x + a.width), a.x - (b.x + b.width), 0)
+  const y = Math.max(b.y - (a.y + a.height), a.y - (b.y + b.height), 0)
+  return Math.hypot(x, y)
 }
 
 /** How much of two boxes cover each other, counting the breathing room around them. */
@@ -210,11 +226,25 @@ function overlapArea(a: Box, b: Box, margin: number) {
 // is one row tall. Below these, a segment is a corner rather than somewhere a caption can live.
 const ALONG_WIRE = 24
 const BESIDE_WIRE = 12
+// How far inside the chip the wire runs when the chip hangs off to one side instead of straddling
+// the wire in the middle. Far enough in to read as "this line", near enough the edge to leave the
+// chip somewhere else to be.
+const EDGE_INSET = 12
+
+// Where along a segment a caption may sit: the middle first, then outwards in small steps to
+// either end. A chip whose middle is taken slides along its own wire rather than stepping off it,
+// which is what keeps it on the line it names — the offsets below are the last resort, not this.
+const CAPTION_STOPS = Array.from({ length: 17 }, (_, index) => {
+  const step = Math.ceil(index / 2) * 0.05
+  return 0.5 + (index % 2 === 0 ? -step : step)
+})
 
 // Where a caption may sit: along the segments of its own edge, the vertical ones first — they are
 // the part of a smoothstep edge that belongs to it alone, so the labels of a shared bus fan out.
-// Beside the wire counts too, for a label too wide to straddle it.
-function captionSpots(points: readonly Point[], width: number): readonly Point[] {
+// Off the wire counts too — beside a vertical stretch for a label too wide to straddle it, above
+// or below a horizontal one — which is what a caption needs where several edges run the same
+// corridor and every spot on the wire is already somebody's.
+function captionSpots(points: readonly Point[], width: number, height: number): readonly Point[] {
   const segments = points
     .slice(0, -1)
     .map((a, index) => {
@@ -226,15 +256,38 @@ function captionSpots(points: readonly Point[], width: number): readonly Point[]
       a.vertical === b.vertical ? b.length - a.length : Number(b.vertical) - Number(a.vertical),
     )
   const beside = width / 2 + CAPTION_GAP
+  const clear = height / 2 + CAPTION_GAP
+  // Hanging the chip off to one side with the wire still under it, near its edge rather than its
+  // middle. A self relation loops a short way out of its own node, so a chip centred on the loop
+  // reaches back over the model; hung to the outside it stays on the wire and off the card.
+  const hugs = [width / 2 - EDGE_INSET, height / 2 - EDGE_INSET].map((half) =>
+    half > EDGE_INSET ? [half, -half] : [],
+  )
+  // Two rings out from the wire, not one: in a corridor where several edges run together the
+  // first ring is still inside the bus, and a label with nowhere clear to go settles among wires
+  // it does not name. The second ring clears a whole chip's width, which is enough to leave it.
+  const rings = [0, height + CAPTION_GAP]
+  // How far off the wire a spot sits, across a vertical stretch or along a horizontal one. Zero
+  // comes first in both: a chip written on its own wire says which relation it names without the
+  // reader having to guess, which is what a label beside a bus of parallel wires cannot do. The
+  // chip is opaque, so the line it names runs under it and out the other side. The offsets are
+  // what it falls back to when the wire is somewhere it cannot sit — over a model, or over a
+  // label already placed.
+  const across = [
+    0,
+    ...(hugs[0] ?? []),
+    ...rings.flatMap((ring) => [beside + ring, -beside - ring]),
+  ]
+  const along = [0, ...(hugs[1] ?? []), ...rings.flatMap((ring) => [-clear - ring, clear + ring])]
   return segments.flatMap((segment) =>
-    [0.5, 0.3, 0.7, 0.15, 0.85].flatMap((t) => {
+    CAPTION_STOPS.flatMap((t) => {
       const on = {
         x: segment.a.x + (segment.b.x - segment.a.x) * t,
         y: segment.a.y + (segment.b.y - segment.a.y) * t,
       }
       return segment.vertical
-        ? [{ x: on.x + beside, y: on.y }, { x: on.x - beside, y: on.y }, on]
-        : [on]
+        ? across.map((offset) => ({ x: on.x + offset, y: on.y }))
+        : along.map((offset) => ({ x: on.x, y: on.y + offset }))
     }),
   )
 }
@@ -257,24 +310,49 @@ type PlacedCaption<E extends CaptionedEdge> = {
   readonly box: Box
 }
 
+// What a pixel of a model costs a caption that covers it. A row buried under a chip is the one
+// thing the reader loses outright — the chip still reads, the field under it does not — so this
+// outweighs sitting off the wire, which only costs the reader a moment's tracing.
+const CARD_CLASH = 3
 // How much worse it is to cover a caption already placed than to cover a model: two labels on top
 // of each other read as neither, while a chip over a model still reads as itself.
 const CAPTION_CLASH = 4
-// A caption that straddles a wire hides the relation it names — the whole point of the chip — so
-// covering one costs this much more per pixel than covering a model does. It stays below the
+// A caption that straddles another edge's wire hides the relation that one names, so covering it
+// costs this much more per pixel than covering a model does. Its own wire is free: sitting on the
+// edge it names is what the chip is for. It stays below the
 // price of burying a model row, which a reader loses outright.
 const WIRE_CLASH = 5
+// The clearance a caption keeps from somebody else's wire, and what a pixel of it costs. Without
+// them a wire is a box one or two pixels wide, grazing one costs almost nothing, and every label
+// of a bus settles in the middle of it a few pixels from four other wires — near everything, and
+// therefore naming nothing. Crowding stays cheaper per pixel than covering a model, which is the
+// one thing a reader loses outright: a chip that is merely close to a wire it does not name is
+// still read, a model row underneath one is not.
+const WIRE_CLEARANCE = 10
+const WIRE_CROWDING = 0.25
+// What a pixel of distance from its own wire costs, per pixel of the chip's width — so the term
+// is an area, like the rest of the cost. A chip that drifts reads as belonging to nothing, so it
+// only goes where it has to: a ring further out is worth about a third of one crowding wire, and
+// is taken when the near spot is in the bus and the far one is not.
+const OFF_WIRE = 1
 
 /** The segments of every edge as thin boxes, so a caption can be scored against the wires. */
-function wireBoxes(edges: readonly CaptionedEdge[]): readonly Box[] {
+// Each stretch of wire with the edge it belongs to: a caption is meant to sit on its own edge, so
+// what it has to stay off is everybody else's.
+function wireBoxes<E extends CaptionedEdge>(
+  edges: readonly E[],
+): readonly { readonly edge: E; readonly box: Box }[] {
   return edges.flatMap((edge) =>
     edge.points.slice(0, -1).map((a, index) => {
       const b = edge.points[index + 1] ?? a
       return {
-        x: Math.min(a.x, b.x) - 1,
-        y: Math.min(a.y, b.y) - 1,
-        width: Math.abs(b.x - a.x) + 2,
-        height: Math.abs(b.y - a.y) + 2,
+        edge,
+        box: {
+          x: Math.min(a.x, b.x) - 1,
+          y: Math.min(a.y, b.y) - 1,
+          width: Math.abs(b.x - a.x) + 2,
+          height: Math.abs(b.y - a.y) + 2,
+        },
       }
     }),
   )
@@ -309,20 +387,32 @@ export function placeCaptions<E extends CaptionedEdge>(
     (state, edge) => {
       const { caption } = edge
       if (caption.length === 0) return state
-      const boxes = captionSpots(edge.points, captionWidth(caption)).map((spot) =>
-        captionBox(caption, spot),
+      const boxes = captionSpots(edge.points, captionWidth(caption), captionHeight(caption)).map(
+        (spot) => captionBox(caption, spot),
       )
       // Every spot lies along this edge, so only what is near it can be in the way.
-      const reach = around(boxes, 4)
+      const reach = around(boxes, WIRE_CLEARANCE)
       const near = cards.filter((card) => meets(reach, card))
-      const crossed = wires.filter((wire) => meets(reach, wire))
+      const own = wires.filter((wire) => wire.edge === edge)
+      const crossed = wires.filter((wire) => wire.edge !== edge && meets(reach, wire.box))
       const taken = state.placed.filter((other) => meets(reach, other.box))
       const best = boxes.reduce<{ readonly box: Box; readonly cost: number } | null>(
         (found, box) => {
+          // How far the chip sits from the wire it names. Every pixel of it counts, so the spot
+          // on the wire wins whenever it is free and the chip steps off only when staying would
+          // cost it a model row — a chip on its line needs no tracing at all.
+          const drift = Math.min(...own.map((wire) => boxGap(box, wire.box)))
           const cost =
-            near.reduce((sum, card) => sum + overlapArea(box, card, 4), 0) +
+            near.reduce((sum, card) => sum + overlapArea(box, card, 4) * CARD_CLASH, 0) +
             taken.reduce((sum, other) => sum + overlapArea(box, other.box, 2) * CAPTION_CLASH, 0) +
-            crossed.reduce((sum, wire) => sum + overlapArea(box, wire, 0), 0) * WIRE_CLASH
+            crossed.reduce(
+              (sum, wire) =>
+                sum +
+                overlapArea(box, wire.box, 0) * WIRE_CLASH +
+                overlapArea(box, wire.box, WIRE_CLEARANCE) * WIRE_CROWDING,
+              0,
+            ) +
+            drift * box.width * OFF_WIRE
           return found === null || cost < found.cost ? { box, cost } : found
         },
         null,

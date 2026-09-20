@@ -16,6 +16,7 @@ import {
   NODE_ROW_HEIGHT,
   NODE_WIDTH,
   nodeHeight,
+  uniqueColumns,
 } from './layout.js'
 import type { DiagramField } from './layout.js'
 
@@ -92,6 +93,52 @@ describe('diagramConstraints', () => {
     const indexes = [{ type: 'unique' as const, fields: ['a', 'b'] }]
     expect(diagramConstraints({ indexes })).toStrictEqual(indexes)
     expect(diagramConstraints({})).toStrictEqual([])
+  })
+
+  it('puts the key first, then what is unique, then the indexes, whatever order they arrive in', () => {
+    const indexes = [
+      { type: 'normal' as const, fields: ['c'] },
+      { type: 'unique' as const, fields: ['a', 'b'] },
+      { type: 'id' as const, fields: ['a', 'b'] },
+      { type: 'fulltext' as const, fields: ['d'] },
+    ]
+    expect(diagramConstraints({ indexes })).toStrictEqual([
+      { type: 'id', fields: ['a', 'b'] },
+      { type: 'unique', fields: ['a', 'b'] },
+      { type: 'normal', fields: ['c'] },
+      { type: 'fulltext', fields: ['d'] },
+    ])
+  })
+
+  it('keeps a @@unique on a single column: the row is the attribute, the UK is the column', () => {
+    const indexes = [
+      { type: 'unique' as const, fields: ['email'] },
+      { type: 'unique' as const, fields: ['tenantId', 'email'] },
+    ]
+    expect(diagramConstraints({ indexes })).toStrictEqual(indexes)
+  })
+})
+
+describe('uniqueColumns', () => {
+  it('covers a field @unique and every column of a @@unique', () => {
+    expect(
+      uniqueColumns({
+        fields: [{ name: 'email', isUnique: true }, { name: 'tenantId' }, { name: 'loginName' }],
+        indexes: [{ type: 'unique', fields: ['tenantId', 'loginName'] }],
+      }),
+    ).toStrictEqual(new Set(['email', 'tenantId', 'loginName']))
+  })
+
+  it('takes no column from an index that is not unique', () => {
+    expect(
+      uniqueColumns({
+        fields: [{ name: 'a' }],
+        indexes: [
+          { type: 'normal', fields: ['a'] },
+          { type: 'id', fields: ['a'] },
+        ],
+      }),
+    ).toStrictEqual(new Set())
   })
 })
 
