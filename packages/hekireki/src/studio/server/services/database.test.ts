@@ -335,12 +335,20 @@ describe('the sqlite driver', () => {
   })
 })
 
+// Studio ships no drivers: it loads `pg` and `mysql2` from the project it is pointed at. A run
+// from a bare temp directory resolves them only if the test runner is patching resolution, which
+// it does not always do, so this names the directory that really holds them — this package.
+const PROJECT = path.resolve(import.meta.dirname, '..', '..', '..', '..')
+
 describe('the drivers of the project', () => {
   it("says why a server cannot be reached, in the driver's words", async () => {
-    const postgres = await connect({ explicitUrl: 'postgresql://u:p@127.0.0.1:1/app' })
+    const postgres = await connect({
+      explicitUrl: 'postgresql://u:p@127.0.0.1:1/app',
+      cwd: PROJECT,
+    })
     expect(postgres.status).toMatchObject({ connected: false, dialect: null })
     expect(postgres.status.error).toBe('connect ECONNREFUSED 127.0.0.1:1')
-    const mysql = await connect({ explicitUrl: 'mysql://u:p@127.0.0.1:1/app' })
+    const mysql = await connect({ explicitUrl: 'mysql://u:p@127.0.0.1:1/app', cwd: PROJECT })
     expect(mysql.status.error).toBe('connect ECONNREFUSED 127.0.0.1:1')
     const failure = await Effect.runPromise(Effect.flip(mysql.driver))
     expect(failure.reason).toBe('connect ECONNREFUSED 127.0.0.1:1')
