@@ -1,10 +1,13 @@
 name: Seed DB
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
+  # Off for now: the job brings up four database servers before it runs anything, which is the
+  # longest part of CI. The triggers stay here to be uncommented; until then it runs by hand.
+  # push:
+  #   branches:
+  #     - main
+  # pull_request:
+  workflow_dispatch: {}
 
 permissions:
   contents: read
