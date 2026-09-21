@@ -89,7 +89,7 @@ describe('drizzleSchema', () => {
       const result = drizzleSchema(datamodel, 'postgresql', [])
 
       expect(result).toBe(
-        "import { integer, pgTable, serial, text } from 'drizzle-orm/pg-core'\nimport { relations } from 'drizzle-orm'\n\nexport const user = pgTable('user', { id: serial('id').primaryKey(), name: text('name').notNull(), email: text('email').notNull().unique() })\n\nexport const post = pgTable('post', { id: serial('id').primaryKey(), title: text('title').notNull(), userId: integer('userId').notNull().references(() => user.id) })\n\nexport const userRelations = relations(user, ({ many }) => ({ posts: many(post) }))\n\nexport const postRelations = relations(post, ({ one }) => ({ author: one(user, { fields: [post.userId], references: [user.id] }) }))",
+        "import { integer, pgTable, serial, text } from 'drizzle-orm/pg-core'\nimport { relations } from 'drizzle-orm'\n\nexport const user = pgTable('User', { id: serial('id').primaryKey(), name: text('name').notNull(), email: text('email').notNull().unique() })\n\nexport const post = pgTable('Post', { id: serial('id').primaryKey(), title: text('title').notNull(), userId: integer('userId').notNull().references(() => user.id) })\n\nexport const userRelations = relations(user, ({ many }) => ({ posts: many(post) }))\n\nexport const postRelations = relations(post, ({ one }) => ({ author: one(user, { fields: [post.userId], references: [user.id] }) }))",
       )
     })
   })
@@ -117,7 +117,7 @@ describe('drizzleSchema', () => {
       const result = drizzleSchema(datamodel, 'sqlite', [])
 
       expect(result).toBe(
-        "import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'\n\nexport const user = sqliteTable('user', { id: integer('id').primaryKey({ autoIncrement: true }), name: text('name').notNull(), active: integer('active', { mode: 'boolean' }).notNull(), createdAt: integer('createdAt', { mode: 'timestamp_ms' }).notNull() })",
+        "import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'\n\nexport const user = sqliteTable('User', { id: integer('id').primaryKey({ autoIncrement: true }), name: text('name').notNull(), active: integer('active', { mode: 'boolean' }).notNull(), createdAt: integer('createdAt', { mode: 'timestamp_ms' }).notNull() })",
       )
     })
   })
@@ -143,7 +143,7 @@ describe('drizzleSchema', () => {
       const result = drizzleSchema(datamodel, 'mysql', [])
 
       expect(result).toBe(
-        "import { int, mysqlTable, text } from 'drizzle-orm/mysql-core'\n\nexport const user = mysqlTable('user', { id: int('id').primaryKey().autoincrement(), name: text('name').notNull() })",
+        "import { int, mysqlTable, text } from 'drizzle-orm/mysql-core'\n\nexport const user = mysqlTable('User', { id: int('id').primaryKey().autoincrement(), name: text('name').notNull() })",
       )
     })
   })
@@ -181,7 +181,7 @@ describe('drizzleSchema', () => {
       const result = drizzleSchema(datamodel, 'postgresql', [])
 
       expect(result).toBe(
-        "import { pgEnum, pgTable, serial } from 'drizzle-orm/pg-core'\n\nexport const roleEnum = pgEnum('Role', ['ADMIN', 'USER'])\n\nexport const user = pgTable('user', { id: serial('id').primaryKey(), role: roleEnum('role').notNull() })",
+        "import { pgEnum, pgTable, serial } from 'drizzle-orm/pg-core'\n\nexport const roleEnum = pgEnum('Role', ['ADMIN', 'USER'])\n\nexport const user = pgTable('User', { id: serial('id').primaryKey(), role: roleEnum('role').notNull() })",
       )
     })
 
@@ -218,7 +218,7 @@ describe('drizzleSchema', () => {
       const result = drizzleSchema(datamodel, 'postgresql', [])
 
       expect(result).toBe(
-        "import { pgEnum, pgTable, serial } from 'drizzle-orm/pg-core'\n\nexport const roleEnum = pgEnum('Role', ['ADMIN', 'USER'])\n\nexport const user = pgTable('user', { id: serial('id').primaryKey(), role: roleEnum('role').notNull(), backupRole: roleEnum('backupRole') })",
+        "import { pgEnum, pgTable, serial } from 'drizzle-orm/pg-core'\n\nexport const roleEnum = pgEnum('Role', ['ADMIN', 'USER'])\n\nexport const user = pgTable('User', { id: serial('id').primaryKey(), role: roleEnum('role').notNull(), backupRole: roleEnum('backupRole') })",
       )
     })
 
@@ -242,7 +242,7 @@ describe('drizzleSchema', () => {
       const result = drizzleSchema(datamodel, 'postgresql', [])
 
       expect(result).toBe(
-        "import { pgTable, serial, text } from 'drizzle-orm/pg-core'\n\nexport const account = pgTable('account', { id: serial('id').primaryKey(), tags: text('tags').array().notNull() })",
+        "import { pgTable, serial, text } from 'drizzle-orm/pg-core'\n\nexport const account = pgTable('Account', { id: serial('id').primaryKey(), tags: text('tags').array().notNull() })",
       )
     })
 
@@ -278,7 +278,7 @@ describe('drizzleSchema', () => {
       const result = drizzleSchema(datamodel, 'sqlite', [])
 
       expect(result).toBe(
-        "import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'\n\nexport const user = sqliteTable('user', { id: integer('id').primaryKey({ autoIncrement: true }), role: text('role', { enum: ['ADMIN', 'USER'] }).notNull() })",
+        "import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'\n\nexport const user = sqliteTable('User', { id: integer('id').primaryKey({ autoIncrement: true }), role: text('role', { enum: ['ADMIN', 'USER'] }).notNull() })",
       )
     })
   })
@@ -305,7 +305,7 @@ describe('drizzleSchema', () => {
       const result = drizzleSchema(datamodel, 'postgresql', [])
 
       expect(result).toBe(
-        "import { integer, pgTable, serial, text } from 'drizzle-orm/pg-core'\n\nexport const profile = pgTable('profile', { id: serial('id').primaryKey(), bio: text('bio'), age: integer('age') })",
+        "import { integer, pgTable, serial, text } from 'drizzle-orm/pg-core'\n\nexport const profile = pgTable('Profile', { id: serial('id').primaryKey(), bio: text('bio'), age: integer('age') })",
       )
     })
   })
@@ -336,7 +336,7 @@ describe('drizzleSchema', () => {
       const result = drizzleSchema(datamodel, 'postgresql', [])
 
       expect(result).toBe(
-        "import { pgTable, serial, text } from 'drizzle-orm/pg-core'\n\nexport const config = pgTable('config', { id: serial('id').primaryKey(), locale: text('locale').notNull().default('en') })",
+        "import { pgTable, serial, text } from 'drizzle-orm/pg-core'\n\nexport const config = pgTable('Config', { id: serial('id').primaryKey(), locale: text('locale').notNull().default('en') })",
       )
     })
 
@@ -365,7 +365,7 @@ describe('drizzleSchema', () => {
       const result = drizzleSchema(datamodel, 'postgresql', [])
 
       expect(result).toBe(
-        "import { pgTable, serial, timestamp } from 'drizzle-orm/pg-core'\n\nexport const event = pgTable('event', { id: serial('id').primaryKey(), createdAt: timestamp('createdAt').notNull().defaultNow() })",
+        "import { pgTable, serial, timestamp } from 'drizzle-orm/pg-core'\n\nexport const event = pgTable('Event', { id: serial('id').primaryKey(), createdAt: timestamp('createdAt').notNull().defaultNow() })",
       )
     })
 
@@ -394,7 +394,7 @@ describe('drizzleSchema', () => {
       const result = drizzleSchema(datamodel, 'sqlite', [])
 
       expect(result).toBe(
-        "import { integer, sqliteTable } from 'drizzle-orm/sqlite-core'\nimport { sql } from 'drizzle-orm'\n\nexport const event = sqliteTable('event', { id: integer('id').primaryKey({ autoIncrement: true }), createdAt: integer('createdAt', { mode: 'timestamp_ms' }).notNull().default(sql`(unixepoch() * 1000)`) })",
+        "import { integer, sqliteTable } from 'drizzle-orm/sqlite-core'\nimport { sql } from 'drizzle-orm'\n\nexport const event = sqliteTable('Event', { id: integer('id').primaryKey({ autoIncrement: true }), createdAt: integer('createdAt', { mode: 'timestamp_ms' }).notNull().default(sql`(unixepoch() * 1000)`) })",
       )
     })
 
@@ -423,7 +423,7 @@ describe('drizzleSchema', () => {
       const result = drizzleSchema(datamodel, 'postgresql', [])
 
       expect(result).toBe(
-        "import { integer, pgTable, serial } from 'drizzle-orm/pg-core'\n\nexport const counter = pgTable('counter', { id: serial('id').primaryKey(), count: integer('count').notNull().default(0) })",
+        "import { integer, pgTable, serial } from 'drizzle-orm/pg-core'\n\nexport const counter = pgTable('Counter', { id: serial('id').primaryKey(), count: integer('count').notNull().default(0) })",
       )
     })
 
@@ -452,7 +452,7 @@ describe('drizzleSchema', () => {
       const result = drizzleSchema(datamodel, 'postgresql', [])
 
       expect(result).toBe(
-        "import { boolean, pgTable, serial } from 'drizzle-orm/pg-core'\n\nexport const feature = pgTable('feature', { id: serial('id').primaryKey(), enabled: boolean('enabled').notNull().default(false) })",
+        "import { boolean, pgTable, serial } from 'drizzle-orm/pg-core'\n\nexport const feature = pgTable('Feature', { id: serial('id').primaryKey(), enabled: boolean('enabled').notNull().default(false) })",
       )
     })
 
@@ -475,7 +475,7 @@ describe('drizzleSchema', () => {
       const result = drizzleSchema(datamodel, 'postgresql', [])
 
       expect(result).toBe(
-        "import { pgTable, text } from 'drizzle-orm/pg-core'\nimport cuid from 'cuid'\n\nexport const user = pgTable('user', { id: text('id').primaryKey().$defaultFn(() => cuid()) })",
+        "import { pgTable, text } from 'drizzle-orm/pg-core'\nimport cuid from 'cuid'\n\nexport const user = pgTable('User', { id: text('id').primaryKey().$defaultFn(() => cuid()) })",
       )
     })
 
@@ -498,7 +498,7 @@ describe('drizzleSchema', () => {
       const result = drizzleSchema(datamodel, 'postgresql', [])
 
       expect(result).toBe(
-        "import { pgTable, text } from 'drizzle-orm/pg-core'\nimport cuid from 'cuid'\n\nexport const user = pgTable('user', { id: text('id').primaryKey().$defaultFn(() => cuid()) })",
+        "import { pgTable, text } from 'drizzle-orm/pg-core'\nimport cuid from 'cuid'\n\nexport const user = pgTable('User', { id: text('id').primaryKey().$defaultFn(() => cuid()) })",
       )
     })
 
@@ -521,7 +521,7 @@ describe('drizzleSchema', () => {
       const result = drizzleSchema(datamodel, 'postgresql', [])
 
       expect(result).toBe(
-        "import { pgTable, text } from 'drizzle-orm/pg-core'\nimport { createId } from '@paralleldrive/cuid2'\n\nexport const user = pgTable('user', { id: text('id').primaryKey().$defaultFn(() => createId()) })",
+        "import { pgTable, text } from 'drizzle-orm/pg-core'\nimport { createId } from '@paralleldrive/cuid2'\n\nexport const user = pgTable('User', { id: text('id').primaryKey().$defaultFn(() => createId()) })",
       )
     })
 
@@ -544,7 +544,7 @@ describe('drizzleSchema', () => {
       const result = drizzleSchema(datamodel, 'postgresql', [])
 
       expect(result).toBe(
-        "import { pgTable, text } from 'drizzle-orm/pg-core'\nimport { nanoid } from 'nanoid'\n\nexport const user = pgTable('user', { id: text('id').primaryKey().$defaultFn(() => nanoid()) })",
+        "import { pgTable, text } from 'drizzle-orm/pg-core'\nimport { nanoid } from 'nanoid'\n\nexport const user = pgTable('User', { id: text('id').primaryKey().$defaultFn(() => nanoid()) })",
       )
     })
 
@@ -567,7 +567,7 @@ describe('drizzleSchema', () => {
       const result = drizzleSchema(datamodel, 'postgresql', [])
 
       expect(result).toBe(
-        "import { pgTable, text } from 'drizzle-orm/pg-core'\nimport { ulid } from 'ulidx'\n\nexport const user = pgTable('user', { id: text('id').primaryKey().$defaultFn(() => ulid()) })",
+        "import { pgTable, text } from 'drizzle-orm/pg-core'\nimport { ulid } from 'ulidx'\n\nexport const user = pgTable('User', { id: text('id').primaryKey().$defaultFn(() => ulid()) })",
       )
     })
 
@@ -590,7 +590,7 @@ describe('drizzleSchema', () => {
       const result = drizzleSchema(datamodel, 'postgresql', [])
 
       expect(result).toBe(
-        "import { pgTable, text } from 'drizzle-orm/pg-core'\n\nexport const user = pgTable('user', { id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()) })",
+        "import { pgTable, text } from 'drizzle-orm/pg-core'\n\nexport const user = pgTable('User', { id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()) })",
       )
     })
 
@@ -641,7 +641,7 @@ export const roleEnum = pgEnum('Role', ['ADMIN', 'USER'])
 
 export const statusEnum = pgEnum('Status', ['ACTIVE', 'INACTIVE'])
 
-export const user = pgTable('user', { id: serial('id').primaryKey(), role: roleEnum('role').notNull(), status: statusEnum('status').notNull() })`,
+export const user = pgTable('User', { id: serial('id').primaryKey(), role: roleEnum('role').notNull(), status: statusEnum('status').notNull() })`,
       )
     })
 
@@ -664,7 +664,7 @@ export const user = pgTable('user', { id: serial('id').primaryKey(), role: roleE
       const result = drizzleSchema(datamodel, 'postgresql', [])
 
       expect(result).toBe(
-        "import { pgTable, text } from 'drizzle-orm/pg-core'\nimport { v7 as uuidv7 } from 'uuid'\n\nexport const user = pgTable('user', { id: text('id').primaryKey().$defaultFn(() => uuidv7()) })",
+        "import { pgTable, text } from 'drizzle-orm/pg-core'\nimport { v7 as uuidv7 } from 'uuid'\n\nexport const user = pgTable('User', { id: text('id').primaryKey().$defaultFn(() => uuidv7()) })",
       )
     })
   })
@@ -721,9 +721,9 @@ describe('torture corners', () => {
       `import { integer, pgTable, primaryKey, serial } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 
-export const actor = pgTable('actor', { id: serial('id').primaryKey() })
+export const actor = pgTable('Actor', { id: serial('id').primaryKey() })
 
-export const film = pgTable('film', { id: serial('id').primaryKey() })
+export const film = pgTable('Film', { id: serial('id').primaryKey() })
 
 export const cast = pgTable('_cast', { A: integer('A').notNull().references(() => actor.id, { onDelete: 'cascade' }), B: integer('B').notNull().references(() => film.id, { onDelete: 'cascade' }) }, (table) => [primaryKey({ columns: [table.A, table.B] })])
 
@@ -838,9 +838,9 @@ export const castRelations = relations(cast, ({ one }) => ({ actor: one(actor, {
       `import { foreignKey, pgTable, serial, text, unique } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 
-export const warehouse = pgTable('warehouse', { id: serial('id').primaryKey(), country: text('country').notNull(), code: text('code').notNull() }, (table) => [unique().on(table.country, table.code)])
+export const warehouse = pgTable('Warehouse', { id: serial('id').primaryKey(), country: text('country').notNull(), code: text('code').notNull() }, (table) => [unique().on(table.country, table.code)])
 
-export const stock = pgTable('stock', { id: serial('id').primaryKey(), country: text('country').notNull(), code: text('code').notNull() }, (table) => [foreignKey({ columns: [table.country, table.code], foreignColumns: [warehouse.country, warehouse.code] }).onDelete('cascade')])
+export const stock = pgTable('Stock', { id: serial('id').primaryKey(), country: text('country').notNull(), code: text('code').notNull() }, (table) => [foreignKey({ columns: [table.country, table.code], foreignColumns: [warehouse.country, warehouse.code] }).onDelete('cascade')])
 
 export const warehouseRelations = relations(warehouse, ({ many }) => ({ stocks: many(stock) }))
 
@@ -890,7 +890,7 @@ export const stockRelations = relations(stock, ({ one }) => ({ warehouse: one(wa
 
 export const visibilityEnum = pgEnum('visibility_level', ['public', 'private', 'link_only'])
 
-export const board = pgTable('board', { id: serial('id').primaryKey(), visibility: visibilityEnum('visibility').notNull().default('link_only'), audiences: visibilityEnum('audiences').array().notNull() })`,
+export const board = pgTable('Board', { id: serial('id').primaryKey(), visibility: visibilityEnum('visibility').notNull().default('link_only'), audiences: visibilityEnum('audiences').array().notNull() })`,
     )
   })
 
@@ -932,7 +932,7 @@ export const board = pgTable('board', { id: serial('id').primaryKey(), visibilit
       `import { bigint, bigserial, pgTable, text, timestamp } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
 
-export const torture = pgTable('torture', { id: bigserial('id', { mode: 'bigint' }).primaryKey(), big: bigint('big', { mode: 'bigint' }).notNull().default(sql\`9007199254740993\`), quoted: text('quoted').notNull().default('it\\'s a "quote" and a \\\\ backslash'), born: timestamp('born').notNull().default(new Date('2020-02-29T23:59:59.999+00:00')) })`,
+export const torture = pgTable('Torture', { id: bigserial('id', { mode: 'bigint' }).primaryKey(), big: bigint('big', { mode: 'bigint' }).notNull().default(sql\`9007199254740993\`), quoted: text('quoted').notNull().default('it\\'s a "quote" and a \\\\ backslash'), born: timestamp('born').notNull().default(new Date('2020-02-29T23:59:59.999+00:00')) })`,
     )
   })
 })
@@ -1182,7 +1182,7 @@ describe('native database types', () => {
       expect(drizzleSchema(datamodel, 'postgresql', [])).toBe(
         `import { ${imports} } from 'drizzle-orm/pg-core'
 
-export const row = pgTable('row', { id: integer('id').primaryKey(), value: ${column}.notNull() })`,
+export const row = pgTable('Row', { id: integer('id').primaryKey(), value: ${column}.notNull() })`,
       )
     },
   )
@@ -1202,7 +1202,7 @@ export const row = pgTable('row', { id: integer('id').primaryKey(), value: ${col
       expect(drizzleSchema(datamodel, 'mysql', [])).toBe(
         `import { ${imports} } from 'drizzle-orm/mysql-core'
 
-export const row = mysqlTable('row', { id: int('id').primaryKey(), value: ${column}.notNull() })`,
+export const row = mysqlTable('Row', { id: int('id').primaryKey(), value: ${column}.notNull() })`,
       )
     },
   )
@@ -1222,7 +1222,7 @@ export const row = mysqlTable('row', { id: int('id').primaryKey(), value: ${colu
       expect(drizzleSchema(datamodel, 'sqlite', [])).toBe(
         `import { ${imports} } from 'drizzle-orm/sqlite-core'
 
-export const row = sqliteTable('row', { id: integer('id').primaryKey(), value: ${column}.notNull() })`,
+export const row = sqliteTable('Row', { id: integer('id').primaryKey(), value: ${column}.notNull() })`,
       )
     },
   )

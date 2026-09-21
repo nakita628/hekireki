@@ -179,7 +179,7 @@ describe('buildGormTags', () => {
       hasDefaultValue: false,
     } as any
     expect(buildGormTags(field, false, false, [])).toStrictEqual(
-      '`gorm:"column:updated_at;autoUpdateTime;not null" json:"updated_at"`',
+      '`gorm:"column:updatedAt;autoUpdateTime;not null" json:"updatedAt"`',
     )
   })
 
@@ -248,7 +248,7 @@ describe('buildGormTags', () => {
       hasDefaultValue: false,
     } as any
     expect(buildGormTags(field, false, false, ['index:idx_user_id'])).toStrictEqual(
-      '`gorm:"column:user_id;index:idx_user_id;not null" json:"user_id"`',
+      '`gorm:"column:userId;index:idx_user_id;not null" json:"userId"`',
     )
   })
 })
@@ -294,6 +294,10 @@ type User struct {
 	ID string \`gorm:"column:id;primaryKey;type:char(36)" json:"id"\`
 }
 
+func (User) TableName() string {
+	return "User"
+}
+
 func (m *User) BeforeCreate(_ *gorm.DB) error {
 	if m.ID == "" {
 		m.ID = uuid.NewString()
@@ -303,6 +307,10 @@ func (m *User) BeforeCreate(_ *gorm.DB) error {
 
 type Event struct {
 	ID string \`gorm:"column:id;primaryKey;type:char(36)" json:"id"\`
+}
+
+func (Event) TableName() string {
+	return "Event"
 }
 
 func (m *Event) BeforeCreate(_ *gorm.DB) error {
@@ -353,6 +361,10 @@ import (
 
 type Ticket struct {
 	ID string \`gorm:"column:id;primaryKey;type:char(26)" json:"id"\`
+}
+
+func (Ticket) TableName() string {
+	return "Ticket"
 }
 
 func (m *Ticket) BeforeCreate(_ *gorm.DB) error {

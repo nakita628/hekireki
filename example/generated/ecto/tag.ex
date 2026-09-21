@@ -12,7 +12,7 @@ defmodule Example.Tag do
           posts: [Example.Post.t()]
         }
 
-  schema "tag" do
+  schema "Tag" do
     field(:label, :string)
     many_to_many(:posts, Example.Post, join_through: "_PostToTag", join_keys: [B: :id, A: :id])
   end

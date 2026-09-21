@@ -1,6 +1,9 @@
-# Child of Order with a composite unique constraint.
 class OrderItem < ApplicationRecord
-  self.table_name = "order_items"
+  attribute :qty, default: 1
 
-  belongs_to :order, class_name: "Order", foreign_key: "order_id"
+  validates :order_id, uniqueness: { scope: :sku }
+  validates :sku, presence: true, length: { maximum: 32 }
+  validates :price, presence: true
+
+  belongs_to :order, inverse_of: :items
 end

@@ -174,6 +174,12 @@ describe('utils', () => {
   })
 
   describe('stripAnnotations', () => {
+    it('drops an @ar. line as any other annotation', () => {
+      expect(
+        stripAnnotations('The title.\n@ar.length(maximum: 140, message: { ja: "x" })\nMore.'),
+      ).toBe('The title.\nMore.')
+    })
+
     it('strips all annotation types', () => {
       expect(
         stripAnnotations(

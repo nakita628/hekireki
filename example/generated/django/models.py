@@ -54,7 +54,7 @@ class Profile(models.Model):
     last_seen = models.DateTimeField(null=True)
 
     class Meta:
-        db_table = "profile"
+        db_table = "Profile"
 
 
 class Post(models.Model):
@@ -80,7 +80,7 @@ class Tag(models.Model):
     label = models.TextField(unique=True)
 
     class Meta:
-        db_table = "tag"
+        db_table = "Tag"
 
 
 class Comment(models.Model):
@@ -113,9 +113,9 @@ class Category(models.Model):
     parent = models.ForeignKey("self", on_delete=models.SET_NULL, related_name="children", null=True, db_index=False)
 
     class Meta:
-        db_table = "category"
+        db_table = "Category"
         constraints = [
-            models.UniqueConstraint(fields=["parent", "name"], name="category_parent_id_name_key"),
+            models.UniqueConstraint(fields=["parent", "name"], name="Category_parent_id_name_key"),
         ]
 
 
@@ -160,7 +160,7 @@ class Actor(models.Model):
     films: "models.ManyToManyField[Film, Cast]" = models.ManyToManyField("Film", through="Cast", related_name="actors")
 
     class Meta:
-        db_table = "actor"
+        db_table = "Actor"
 
 
 class Film(models.Model):
@@ -168,7 +168,7 @@ class Film(models.Model):
     title = models.TextField()
 
     class Meta:
-        db_table = "film"
+        db_table = "Film"
 
 
 class PostToTag(models.Model):

@@ -40,22 +40,11 @@ export function makeValidationExtractor(annotationPrefix: `@${string}.`) {
 }
 
 export function parseDocumentWithoutAnnotations(documentation: string | undefined) {
-  if (!documentation) return []
-  const annotationPrefixes = ['@z.', '@v.', '@a.', '@e.', '@t.', '@j.', '@p.']
-  const annotationExact = new Set(['@z', '@v', '@a', '@e', '@t', '@j', '@p'])
-  return documentation
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(
-      (line) =>
-        line.length > 0 &&
-        !annotationPrefixes.some((p) => line.startsWith(p)) &&
-        !annotationExact.has(line),
-    )
+  return documentationLines(documentation).filter((line) => line.length > 0)
 }
 
-const ANNOTATION_PREFIXES = ['@z.', '@v.', '@a.', '@e.', '@t.', '@j.', '@p.', '@relation']
-const ANNOTATION_EXACT = new Set(['@z', '@v', '@a', '@e', '@t', '@j', '@p'])
+const ANNOTATION_PREFIXES = ['@z.', '@v.', '@a.', '@e.', '@t.', '@j.', '@p.', '@ar.', '@relation']
+const ANNOTATION_EXACT = new Set(['@z', '@v', '@a', '@e', '@t', '@j', '@p', '@ar'])
 
 export function isAnnotationLine(line: string) {
   const trimmed = line.trim()
@@ -63,13 +52,36 @@ export function isAnnotationLine(line: string) {
 }
 
 export function stripAnnotations(doc: string | undefined) {
-  if (!doc) return undefined
-  const result = doc
-    .split('\n')
-    .filter((line) => !isAnnotationLine(line))
-    .join('\n')
-    .trim()
+  const result = documentationLines(doc).join('\n').trim()
   return result.length > 0 ? result : undefined
+}
+
+/** The lines of a doc comment that are prose: annotation lines are dropped. */
+export function documentationLines(doc: string | undefined) {
+  return (doc ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => !isAnnotationLine(line))
+}
+
+/** Opening minus closing parentheses outside string literals. */
+export function parenBalance(text: string) {
+  let depth = 0
+  let quote: string | null = null
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i]
+    if (quote !== null) {
+      if (ch === '\\') i += 1
+      else if (ch === quote) quote = null
+    } else if (ch === '"' || ch === "'") {
+      quote = ch
+    } else if (ch === '(') {
+      depth += 1
+    } else if (ch === ')') {
+      depth -= 1
+    }
+  }
+  return depth
 }
 
 export function isLoopbackHostname(hostname: string) {

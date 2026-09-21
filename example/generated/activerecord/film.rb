@@ -1,5 +1,7 @@
 class Film < ApplicationRecord
-  self.table_name = "film"
+  self.table_name = "Film"
 
-  has_and_belongs_to_many :actors, class_name: "Actor", join_table: "_cast", foreign_key: "B", association_foreign_key: "A"
+  validates :title, presence: true
+
+  has_and_belongs_to_many :actors, join_table: "_cast", foreign_key: "B", association_foreign_key: "A"
 end

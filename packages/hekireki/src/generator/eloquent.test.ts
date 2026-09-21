@@ -99,7 +99,7 @@ use Illuminate\\Database\\Eloquent\\Relations\\HasMany;
  */
 class User extends Model
 {
-    protected $table = 'user';
+    protected $table = 'User';
 
     public $incrementing = false;
 
@@ -131,7 +131,7 @@ use Illuminate\\Database\\Eloquent\\Relations\\BelongsTo;
 
 class BlogPost extends Model
 {
-    protected $table = 'blog_post';
+    protected $table = 'BlogPost';
 
     public $incrementing = false;
 
@@ -185,7 +185,7 @@ use Illuminate\\Database\\Eloquent\\Model;
 
 class Bare extends Model
 {
-    protected $table = 'bare';
+    protected $table = 'Bare';
 
     public $incrementing = false;
 

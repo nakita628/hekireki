@@ -13,7 +13,7 @@ defmodule Example.Actor do
           films: [Example.Film.t()]
         }
 
-  schema "actor" do
+  schema "Actor" do
     field(:name, :string)
     many_to_many(:films, Example.Film, join_through: "_cast", join_keys: [A: :id, B: :id])
   end

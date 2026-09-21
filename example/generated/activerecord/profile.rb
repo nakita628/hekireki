@@ -1,8 +1,13 @@
-# One-to-one relation with native @db.* types, literal defaults,
-# and optional scalars of every flavour. ConfigDict passthrough: the
-# Pydantic model rejects unknown keys (extra='forbid').
 class Profile < ApplicationRecord
-  self.table_name = "profile"
+  self.table_name = "Profile"
 
-  belongs_to :user, class_name: "User", foreign_key: "user_id"
+  attribute :id, default: -> { Cuid2.call }
+  attribute :nickname, default: "anonymous"
+  attribute :balance, default: BigDecimal("0")
+  attribute :verified, default: false
+
+  validates :user_id, uniqueness: true
+  validates :nickname, length: { maximum: 64 }
+
+  belongs_to :user
 end

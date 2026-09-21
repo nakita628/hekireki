@@ -209,16 +209,19 @@ function snakeToCamel(name: string) {
 }
 
 function resolveTableName(model: DMMF.Model) {
-  return model.dbName ?? makeSnakeCase(model.name)
+  return model.dbName ?? model.name
 }
 
+// The export is the table's name as a camelCase identifier: `users` for
+// @@map("users"), `orderLineItem` for a snake_case table, `todo` for "Todo".
 function resolveVarName(model: DMMF.Model) {
-  return snakeToCamel(resolveTableName(model))
+  const name = snakeToCamel(resolveTableName(model))
+  return `${name.charAt(0).toLowerCase()}${name.slice(1)}`
 }
 
 function resolveVarNameByType(type: string, models: readonly DMMF.Model[]) {
   const target = models.find((m) => m.name === type)
-  return snakeToCamel(target ? resolveTableName(target) : makeSnakeCase(type))
+  return target ? resolveVarName(target) : `${type.charAt(0).toLowerCase()}${type.slice(1)}`
 }
 
 function isFieldDefault(v: unknown) {

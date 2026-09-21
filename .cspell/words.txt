@@ -144,6 +144,7 @@ ntile
 ntoa
 objectagg
 oklog
+omakase
 ondelete
 openssf
 OPTOUT
@@ -173,6 +174,7 @@ renameable
 requiredness
 resvg
 RUSTFLAGS
+rubocop
 schemaname
 Segoe
 seqcache

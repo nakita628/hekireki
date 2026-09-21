@@ -129,30 +129,30 @@ def _query_smoke() -> None:
     all produce a wrong join here while passing everything above."""
 
     # Forward and reverse traversal across a ForeignKey and a OneToOneField.
-    assert '"post"."author_id" = "accounts"."id"' in str(
+    assert '"Post"."authorId" = "accounts"."id"' in str(
         Post.objects.select_related("author").filter(author__status="ACTIVE").query
     )
-    assert '"profile"."account_id"' in str(Account.objects.filter(profile__verified=True).query)
+    assert '"Profile"."accountId"' in str(Account.objects.filter(profile__verified=True).query)
 
     # The many-to-many joins through Prisma's own table and its "A"/"B" columns,
     # in both directions.
     post_to_tag = str(Post.objects.filter(tags__label="a").query)
-    assert 'INNER JOIN "_PostToTag" ON ("post"."id" = "_PostToTag"."A")' in post_to_tag
-    assert 'INNER JOIN "tag" ON ("_PostToTag"."B" = "tag"."id")' in post_to_tag
+    assert 'INNER JOIN "_PostToTag" ON ("Post"."id" = "_PostToTag"."A")' in post_to_tag
+    assert 'INNER JOIN "Tag" ON ("_PostToTag"."B" = "Tag"."id")' in post_to_tag
     tag_to_post = str(Tag.objects.filter(posts__title="x").query)
-    assert 'INNER JOIN "_PostToTag" ON ("tag"."id" = "_PostToTag"."B")' in tag_to_post
+    assert 'INNER JOIN "_PostToTag" ON ("Tag"."id" = "_PostToTag"."B")' in tag_to_post
 
     # Two relations to the same model must not collapse into one join.
     followers = str(Account.objects.filter(followers__follower__id="1").query)
-    assert '"follow"."following_id"' in followers
-    assert '"follow"."follower_id"' in followers
+    assert '"Follow"."followingId"' in followers
+    assert '"Follow"."followerId"' in followers
 
     # Self-relations join the table to an alias of itself.
-    assert 'INNER JOIN "category" T2' in str(Category.objects.filter(children__name="x").query)
-    assert 'INNER JOIN "monarch" T2' in str(Monarch.objects.filter(predecessor__name="x").query)
+    assert 'INNER JOIN "Category" T2' in str(Category.objects.filter(children__name="x").query)
+    assert 'INNER JOIN "Monarch" T2' in str(Monarch.objects.filter(predecessor__name="x").query)
 
     # A foreign key aimed at a unique column that is not the primary key.
-    assert 'INNER JOIN "handle" ON ("claim"."slug" = "handle"."slug")' in str(
+    assert 'INNER JOIN "Handle" ON ("Claim"."slug" = "Handle"."slug")' in str(
         Claim.objects.select_related("handle").query
     )
 

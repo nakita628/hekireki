@@ -1,7 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 import { describe, expect, it } from 'vite-plus/test'
 
-import { activeRecordModelFiles } from './activerecord.js'
+import { APPLICATION_RECORD_FILE, activeRecordModelFiles } from './activerecord.js'
 
 function makeField(overrides: Partial<DMMF.Field> & { name: string; type: string }): DMMF.Field {
   return {
@@ -83,26 +83,31 @@ const bare = [
 ]
 
 describe('activeRecordModelFiles', () => {
-  it('writes one snake_case .rb file per model', () => {
+  it('writes one snake_case .rb file per model, ending in a newline', () => {
     expect(activeRecordModelFiles(models, enums)).toStrictEqual([
       {
         fileName: 'user.rb',
-        code: `# A person.
-class User < ApplicationRecord
-  self.table_name = "user"
+        code: `class User < ApplicationRecord
+  self.table_name = "User"
 
-  enum :role, { USER: "USER", ADMIN: "ADMIN" }
+  enum :role, { user: "USER", admin: "ADMIN" }, validate: true
 
-  has_many :posts, class_name: "BlogPost", foreign_key: "authorId"
-end`,
+  validates :name, presence: true
+
+  has_many :posts, class_name: "BlogPost", foreign_key: "authorId", inverse_of: :author, dependent: :restrict_with_error
+end
+`,
       },
       {
         fileName: 'blog_post.rb',
         code: `class BlogPost < ApplicationRecord
-  self.table_name = "blog_post"
+  self.table_name = "BlogPost"
 
-  belongs_to :author, class_name: "User", foreign_key: "authorId"
-end`,
+  validates :title, presence: true
+
+  belongs_to :author, class_name: "User", foreign_key: "authorId", inverse_of: :posts
+end
+`,
       },
     ])
   })
@@ -112,10 +117,21 @@ end`,
       {
         fileName: 'bare.rb',
         code: `class Bare < ApplicationRecord
-  self.table_name = "bare"
-end`,
+  self.table_name = "Bare"
+end
+`,
       },
     ])
+  })
+
+  it('carries the ApplicationRecord Rails itself would write', () => {
+    expect(APPLICATION_RECORD_FILE).toStrictEqual({
+      fileName: 'application_record.rb',
+      code: `class ApplicationRecord < ActiveRecord::Base
+  primary_abstract_class
+end
+`,
+    })
   })
 
   it('emits nothing for a schema without models', () => {

@@ -108,31 +108,6 @@ describe('findNameConflicts', () => {
     expect(findNameConflicts(models)).toStrictEqual([])
   })
 
-  it('reports two models that snake_case onto one table', () => {
-    const models = [
-      makeModel('user_role', [makeField({ name: 'id', type: 'Int', isId: true })]),
-      makeModel('UserRole', [makeField({ name: 'id', type: 'Int', isId: true })]),
-    ]
-
-    expect(findNameConflicts(models)).toStrictEqual([
-      'models user_role and UserRole both map to the table "user_role". Add @@map to one of them.',
-    ])
-  })
-
-  it('reports two fields that snake_case onto one column', () => {
-    const models = [
-      makeModel('M', [
-        makeField({ name: 'id', type: 'Int', isId: true }),
-        makeField({ name: 'myValue', type: 'String' }),
-        makeField({ name: 'my_value', type: 'String' }),
-      ]),
-    ]
-
-    expect(findNameConflicts(models)).toStrictEqual([
-      'fields myValue and my_value of model M both map to the column "my_value". Add @map to one of them.',
-    ])
-  })
-
   it('reports two enums that produce one Python class', () => {
     const enums: DMMF.DatamodelEnum[] = [
       { name: 'user_role', dbName: null, values: [{ name: 'A', dbName: null }] },
@@ -193,7 +168,7 @@ class User(models.Model):
     email = models.TextField(unique=True)
 
     class Meta:
-        db_table = "user"
+        db_table = "User"
 `,
     )
   })
@@ -222,8 +197,8 @@ class User(models.Model):
 
 class BlogPost(models.Model):
     id = models.AutoField(primary_key=True)
-    view_count = models.IntegerField()
-    created_on = models.DateTimeField()
+    view_count = models.IntegerField(db_column="viewCount")
+    created_at = models.DateTimeField(db_column="created_on")
 
     class Meta:
         db_table = "blog_posts"
@@ -253,7 +228,7 @@ class Sequence(models.Model):
     name = models.TextField()
 
     class Meta:
-        db_table = "sequence"
+        db_table = "Sequence"
 `,
     )
   })
@@ -279,7 +254,7 @@ class Tiny(models.Model):
     id = models.SmallAutoField(primary_key=True)
 
     class Meta:
-        db_table = "tiny"
+        db_table = "Tiny"
 `,
     )
   })
@@ -305,7 +280,7 @@ class Session(models.Model):
     id = models.TextField(primary_key=True, default=uuid4_str)
 
     class Meta:
-        db_table = "session"
+        db_table = "Session"
 `,
     )
   })
@@ -358,28 +333,28 @@ class Event(models.Model):
     id = models.TextField(primary_key=True, default=uuid7_str)
 
     class Meta:
-        db_table = "event"
+        db_table = "Event"
 
 
 class Ticket(models.Model):
     id = models.TextField(primary_key=True, default=ulid_str)
 
     class Meta:
-        db_table = "ticket"
+        db_table = "Ticket"
 
 
 class Device(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4)
 
     class Meta:
-        db_table = "device"
+        db_table = "Device"
 
 
 class Beacon(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid6.uuid7)
 
     class Meta:
-        db_table = "beacon"
+        db_table = "Beacon"
 `,
     )
   })
@@ -401,7 +376,7 @@ class Badge(models.Model):
     code = models.TextField()
 
     class Meta:
-        db_table = "badge"
+        db_table = "Badge"
 `,
     )
   })
@@ -427,14 +402,14 @@ class Fixed(models.Model):
     id = models.IntegerField(primary_key=True)
 
     class Meta:
-        db_table = "fixed"
+        db_table = "Fixed"
 
 
 class Uuid(models.Model):
     id = models.UUIDField(primary_key=True)
 
     class Meta:
-        db_table = "uuid"
+        db_table = "Uuid"
 `,
     )
   })
@@ -496,12 +471,12 @@ class NativeGrid(models.Model):
     address = models.GenericIPAddressField()
     mask = models.TextField()
     markup = models.TextField()
-    big_count = models.BigIntegerField()
+    big_count = models.BigIntegerField(db_column="bigCount")
     flagged = models.BooleanField()
     mystery = models.TextField()
 
     class Meta:
-        db_table = "native_grid"
+        db_table = "NativeGrid"
 `,
     )
   })
@@ -534,7 +509,7 @@ class Keyword(models.Model):
     self_field = models.TextField(db_column="self")
 
     class Meta:
-        db_table = "keyword"
+        db_table = "Keyword"
 `,
     )
   })
@@ -569,7 +544,7 @@ class Stamped(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "stamped"
+        db_table = "Stamped"
 `,
     )
   })
@@ -602,7 +577,7 @@ class Computed(models.Model):
     when = models.DateTimeField(db_default=RawSQL("now() + interval '1 day'", []))
 
     class Meta:
-        db_table = "computed"
+        db_table = "Computed"
 `,
     )
   })
@@ -638,15 +613,15 @@ from django.db import models
 
 class Torture(models.Model):
     id = models.AutoField(primary_key=True)
-    big_pos = models.BigIntegerField(default=9007199254740993)
+    big_pos = models.BigIntegerField(db_column="bigPos", default=9007199254740993)
     precise = models.DecimalField(max_digits=65, decimal_places=30, default=Decimal("12345.6789"))
-    exact_str = models.DecimalField(max_digits=65, decimal_places=30, default=Decimal("99.5"))
+    exact_str = models.DecimalField(max_digits=65, decimal_places=30, db_column="exactStr", default=Decimal("99.5"))
     born = models.DateTimeField(default=datetime.fromisoformat("2020-02-29T23:59:59.999+00:00"))
     quoted = models.TextField(default="it's a \\"quote\\" and a \\\\ backslash")
     empty = models.TextField(default="")
 
     class Meta:
-        db_table = "torture"
+        db_table = "Torture"
 `,
     )
   })
@@ -693,15 +668,15 @@ def payload_json_num_default() -> float:
 
 class Payload(models.Model):
     id = models.AutoField(primary_key=True)
-    json_obj = models.JSONField(default=payload_json_obj_default)
-    json_arr = models.JSONField(default=list)
-    json_empty_obj = models.JSONField(default=dict)
-    json_list = models.JSONField(default=payload_json_list_default)
-    json_str = models.JSONField(default=payload_json_str_default)
-    json_num = models.JSONField(default=payload_json_num_default)
+    json_obj = models.JSONField(db_column="jsonObj", default=payload_json_obj_default)
+    json_arr = models.JSONField(db_column="jsonArr", default=list)
+    json_empty_obj = models.JSONField(db_column="jsonEmptyObj", default=dict)
+    json_list = models.JSONField(db_column="jsonList", default=payload_json_list_default)
+    json_str = models.JSONField(db_column="jsonStr", default=payload_json_str_default)
+    json_num = models.JSONField(db_column="jsonNum", default=payload_json_num_default)
 
     class Meta:
-        db_table = "payload"
+        db_table = "Payload"
 `,
     )
   })
@@ -747,7 +722,7 @@ class Inventory(models.Model):
     stamps = ArrayField(models.DateTimeField())
 
     class Meta:
-        db_table = "inventory"
+        db_table = "Inventory"
 `,
     )
   })
@@ -796,7 +771,7 @@ class Board(models.Model):
     audiences = ArrayField(models.TextField(choices=Visibility.choices))
 
     class Meta:
-        db_table = "board"
+        db_table = "Board"
 `,
     )
   })
@@ -846,7 +821,7 @@ class Author(models.Model):
     id = models.AutoField(primary_key=True)
 
     class Meta:
-        db_table = "author"
+        db_table = "Author"
 
 
 class Post(models.Model):
@@ -854,7 +829,7 @@ class Post(models.Model):
     author = models.ForeignKey("Author", on_delete=models.CASCADE, related_name="posts", db_index=False)
 
     class Meta:
-        db_table = "post"
+        db_table = "Post"
 `,
     )
   })
@@ -971,19 +946,19 @@ class Parent(models.Model):
     id = models.AutoField(primary_key=True)
 
     class Meta:
-        db_table = "parent"
+        db_table = "Parent"
 
 
 class Child(models.Model):
     id = models.AutoField(primary_key=True)
-    strict = models.ForeignKey("Parent", on_delete=models.RESTRICT, related_name="strict", db_index=False)
-    loose = models.ForeignKey("Parent", on_delete=models.SET_NULL, related_name="loose", null=True, db_index=False)
-    no_action = models.ForeignKey("Parent", on_delete=models.DO_NOTHING, related_name="noacts", db_index=False)
-    restrict = models.ForeignKey("Parent", on_delete=models.RESTRICT, related_name="restricts", db_index=False)
-    set_default = models.ForeignKey("Parent", on_delete=models.SET_DEFAULT, related_name="defaults", db_index=False, default=1)
+    strict = models.ForeignKey("Parent", on_delete=models.RESTRICT, related_name="strict", db_column="strictId", db_index=False)
+    loose = models.ForeignKey("Parent", on_delete=models.SET_NULL, related_name="loose", db_column="looseId", null=True, db_index=False)
+    no_action = models.ForeignKey("Parent", on_delete=models.DO_NOTHING, related_name="noacts", db_column="noActionId", db_index=False)
+    restrict = models.ForeignKey("Parent", on_delete=models.RESTRICT, related_name="restricts", db_column="restrictId", db_index=False)
+    set_default = models.ForeignKey("Parent", on_delete=models.SET_DEFAULT, related_name="defaults", db_column="setDefaultId", db_index=False, default=1)
 
     class Meta:
-        db_table = "child"
+        db_table = "Child"
 `,
     )
   })
@@ -1033,15 +1008,15 @@ class Account(models.Model):
     id = models.AutoField(primary_key=True)
 
     class Meta:
-        db_table = "account"
+        db_table = "Account"
 
 
 class Profile(models.Model):
     id = models.AutoField(primary_key=True)
-    account = models.OneToOneField("Account", on_delete=models.CASCADE, related_name="profile")
+    account = models.OneToOneField("Account", on_delete=models.CASCADE, related_name="profile", db_column="accountId")
 
     class Meta:
-        db_table = "profile"
+        db_table = "Profile"
 `,
     )
   })
@@ -1083,10 +1058,10 @@ class Profile(models.Model):
 class Category(models.Model):
     id = models.AutoField(primary_key=True)
     name = models.TextField()
-    parent = models.ForeignKey("self", on_delete=models.SET_NULL, related_name="children", null=True, db_index=False)
+    parent = models.ForeignKey("self", on_delete=models.SET_NULL, related_name="children", db_column="parentId", null=True, db_index=False)
 
     class Meta:
-        db_table = "category"
+        db_table = "Category"
 `,
     )
   })
@@ -1126,10 +1101,10 @@ class Category(models.Model):
 
 class Monarch(models.Model):
     id = models.AutoField(primary_key=True)
-    successor = models.OneToOneField("self", on_delete=models.SET_NULL, related_name="predecessor", null=True)
+    successor = models.OneToOneField("self", on_delete=models.SET_NULL, related_name="predecessor", db_column="successorId", null=True)
 
     class Meta:
-        db_table = "monarch"
+        db_table = "Monarch"
 `,
     )
   })
@@ -1181,7 +1156,7 @@ class Handle(models.Model):
     slug = models.TextField(unique=True)
 
     class Meta:
-        db_table = "handle"
+        db_table = "Handle"
 
 
 class Claim(models.Model):
@@ -1189,7 +1164,7 @@ class Claim(models.Model):
     handle = models.ForeignKey("Handle", on_delete=models.CASCADE, related_name="claims", to_field="slug", db_column="slug", db_index=False)
 
     class Meta:
-        db_table = "claim"
+        db_table = "Claim"
 `,
     )
   })
@@ -1260,16 +1235,16 @@ class Account(models.Model):
     id = models.TextField(primary_key=True, default=uuid4_str)
 
     class Meta:
-        db_table = "account"
+        db_table = "Account"
 
 
 class Follow(models.Model):
     pk = models.CompositePrimaryKey("follower_id", "following_id")
-    follower = models.ForeignKey("Account", on_delete=models.CASCADE, related_name="following", db_index=False)
-    following = models.ForeignKey("Account", on_delete=models.CASCADE, related_name="followers", db_index=False)
+    follower = models.ForeignKey("Account", on_delete=models.CASCADE, related_name="following", db_column="followerId", db_index=False)
+    following = models.ForeignKey("Account", on_delete=models.CASCADE, related_name="followers", db_column="followingId", db_index=False)
 
     class Meta:
-        db_table = "follow"
+        db_table = "Follow"
 `,
     )
   })
@@ -1321,7 +1296,7 @@ class GridCell(models.Model):
     y = models.IntegerField()
 
     class Meta:
-        db_table = "grid_cell"
+        db_table = "GridCell"
 
 
 class Mark(models.Model):
@@ -1330,7 +1305,7 @@ class Mark(models.Model):
     y = models.IntegerField()
 
     class Meta:
-        db_table = "mark"
+        db_table = "Mark"
 `,
     )
   })
@@ -1378,14 +1353,14 @@ class Post(models.Model):
     tags: "models.ManyToManyField[Tag, PostToTag]" = models.ManyToManyField("Tag", through="PostToTag", related_name="posts")
 
     class Meta:
-        db_table = "post"
+        db_table = "Post"
 
 
 class Tag(models.Model):
     id = models.AutoField(primary_key=True)
 
     class Meta:
-        db_table = "tag"
+        db_table = "Tag"
 
 
 class PostToTag(models.Model):
@@ -1445,14 +1420,14 @@ class Actor(models.Model):
     films: "models.ManyToManyField[Film, Cast]" = models.ManyToManyField("Film", through="Cast", related_name="actors")
 
     class Meta:
-        db_table = "actor"
+        db_table = "Actor"
 
 
 class Film(models.Model):
     id = models.AutoField(primary_key=True)
 
     class Meta:
-        db_table = "film"
+        db_table = "Film"
 
 
 class Cast(models.Model):
@@ -1504,7 +1479,7 @@ class User(models.Model):
     friends: "models.ManyToManyField[User, Friendship]" = models.ManyToManyField("User", through="Friendship", through_fields=("a", "b"), related_name="friend_of")
 
     class Meta:
-        db_table = "user"
+        db_table = "User"
 
 
 class Friendship(models.Model):
@@ -1569,9 +1544,9 @@ class Article(models.Model):
     view_count = models.IntegerField()
 
     class Meta:
-        db_table = "article"
+        db_table = "Article"
         constraints = [
-            models.UniqueConstraint(fields=["slug", "locale"], name="article_slug_locale_key"),
+            models.UniqueConstraint(fields=["slug", "locale"], name="Article_slug_locale_key"),
         ]
         indexes = [
             models.Index(fields=["view_count"]),
@@ -1619,7 +1594,7 @@ class Article(models.Model):
     locale = models.TextField()
 
     class Meta:
-        db_table = "article"
+        db_table = "Article"
         indexes = [
             models.Index(fields=["slug"]),
             models.Index(fields=["locale"]),
@@ -1685,7 +1660,7 @@ class Author(models.Model):
     id = models.AutoField(primary_key=True)
 
     class Meta:
-        db_table = "author"
+        db_table = "Author"
 
 
 class Post(models.Model):
@@ -1694,9 +1669,9 @@ class Post(models.Model):
     author = models.ForeignKey("Author", on_delete=models.CASCADE, related_name="posts", db_index=False)
 
     class Meta:
-        db_table = "post"
+        db_table = "Post"
         constraints = [
-            models.UniqueConstraint(fields=["author", "title"], name="post_author_id_title_key"),
+            models.UniqueConstraint(fields=["author", "title"], name="Post_author_id_title_key"),
         ]
         indexes = [
             models.Index(fields=["author"]),
@@ -1726,7 +1701,7 @@ class WithPk(models.Model):
     id = models.AutoField(primary_key=True)
 
     class Meta:
-        db_table = "with_pk"
+        db_table = "WithPk"
 `,
     )
   })
@@ -1755,7 +1730,7 @@ class WithPk(models.Model):
     id = models.AutoField(primary_key=True)
 
     class Meta:
-        db_table = "with_pk"
+        db_table = "WithPk"
 `,
     )
   })
@@ -1802,7 +1777,7 @@ class Fixed(models.Model):
     id = models.IntegerField(primary_key=True)
 
     class Meta:
-        db_table = "fixed"
+        db_table = "Fixed"
 `,
     )
   })
@@ -1844,7 +1819,7 @@ class Quiz(models.Model):
     answer = models.TextField(choices=Answer.choices, default=Answer.None_)
 
     class Meta:
-        db_table = "quiz"
+        db_table = "Quiz"
 `,
     )
   })
@@ -1893,7 +1868,7 @@ class Doc(models.Model):
     kind = models.TextField(choices=Kind.choices, default=Kind.choices_)
 
     class Meta:
-        db_table = "doc"
+        db_table = "Doc"
 `,
     )
   })
@@ -1924,7 +1899,7 @@ class Edge(models.Model):
     both_ends_field = models.TextField(db_column="both__ends_")
 
     class Meta:
-        db_table = "edge"
+        db_table = "Edge"
 `,
     )
   })
@@ -1958,7 +1933,7 @@ class Doc(models.Model):
     bag = ArrayField(models.JSONField(), default=doc_bag_default)
 
     class Meta:
-        db_table = "doc"
+        db_table = "Doc"
 `,
     )
   })
@@ -2016,7 +1991,7 @@ class Inventory(models.Model):
     flags = ArrayField(models.BooleanField(), default=inventory_flags_default)
 
     class Meta:
-        db_table = "inventory"
+        db_table = "Inventory"
 `,
     )
   })
@@ -2070,7 +2045,7 @@ class Cast(models.Model):
     id = models.AutoField(primary_key=True)
 
     class Meta:
-        db_table = "cast"
+        db_table = "Cast"
 
 
 class Actor(models.Model):
@@ -2078,14 +2053,14 @@ class Actor(models.Model):
     films: "models.ManyToManyField[Film, CastThrough]" = models.ManyToManyField("Film", through="CastThrough", related_name="actors")
 
     class Meta:
-        db_table = "actor"
+        db_table = "Actor"
 
 
 class Film(models.Model):
     id = models.AutoField(primary_key=True)
 
     class Meta:
-        db_table = "film"
+        db_table = "Film"
 
 
 class CastThrough(models.Model):
@@ -2156,14 +2131,14 @@ class Actor(models.Model):
     films: "models.ManyToManyField[Film, CastThrough]" = models.ManyToManyField("Film", through="CastThrough", related_name="actors")
 
     class Meta:
-        db_table = "actor"
+        db_table = "Actor"
 
 
 class Film(models.Model):
     id = models.AutoField(primary_key=True)
 
     class Meta:
-        db_table = "film"
+        db_table = "Film"
 
 
 class CastThrough(models.Model):
@@ -2245,7 +2220,7 @@ class Sorted(models.Model):
     d = models.TextField()
 
     class Meta:
-        db_table = "sorted"
+        db_table = "Sorted"
         constraints = [
             models.UniqueConstraint(fields=["a", "b"], name="custom_unique_name"),
         ]
@@ -2282,7 +2257,7 @@ class M(models.Model):
     value_field_2 = models.TextField(db_column="value_field")
 
     class Meta:
-        db_table = "m"
+        db_table = "M"
 `,
     )
   })
@@ -2325,10 +2300,10 @@ def foo_bar_baz_default_2() -> dict[str, Any]:
 
 class Foo(models.Model):
     id = models.AutoField(primary_key=True)
-    bar_baz = models.JSONField(default=foo_bar_baz_default)
+    bar_baz = models.JSONField(db_column="barBaz", default=foo_bar_baz_default)
 
     class Meta:
-        db_table = "foo"
+        db_table = "Foo"
 
 
 class FooBar(models.Model):
@@ -2336,7 +2311,7 @@ class FooBar(models.Model):
     baz = models.JSONField(default=foo_bar_baz_default_2)
 
     class Meta:
-        db_table = "foo_bar"
+        db_table = "FooBar"
 `,
     )
   })
@@ -2389,7 +2364,7 @@ class B(models.Model):
     vs = ArrayField(models.TextField(choices=V.choices), default=b_vs_default)
 
     class Meta:
-        db_table = "b"
+        db_table = "B"
 `,
     )
   })
@@ -2416,7 +2391,7 @@ class B(models.Model):
     raw = models.BinaryField(default=b"\\x01\\x02\\x03")
 
     class Meta:
-        db_table = "b"
+        db_table = "B"
 `,
     )
   })

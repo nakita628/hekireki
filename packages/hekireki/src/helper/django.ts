@@ -249,7 +249,7 @@ function scalarElementLiteral(type: string, value: unknown) {
 }
 
 function fieldColumnName(field: DMMF.Field) {
-  return field.dbName ?? makeSnakeCase(field.name)
+  return field.dbName ?? field.name
 }
 
 // Prisma field names are unique per model and model names are unique, so a
@@ -303,7 +303,7 @@ function modelAttrNames(
       names.set(field.name, attr)
       continue
     }
-    names.set(field.name, claimName(djangoAttrName(fieldColumnName(field)), taken))
+    names.set(field.name, claimName(djangoAttrName(makeSnakeCase(field.name)), taken))
   }
 
   return names
@@ -347,7 +347,7 @@ function attrNameOf(names: Names, model: DMMF.Model, field: DMMF.Field) {
 function helperNameOf(names: Names, model: DMMF.Model, field: DMMF.Field) {
   return (
     names.helper.get(nameKey(model.name, field.name)) ??
-    `${makeSnakeCase(model.name)}_${djangoAttrName(fieldColumnName(field))}_default`
+    `${makeSnakeCase(model.name)}_${djangoAttrName(makeSnakeCase(field.name))}_default`
   )
 }
 
@@ -806,7 +806,7 @@ function singleColumnBelongsTo(model: DMMF.Model) {
 }
 
 function generateMetaLines(model: DMMF.Model, indexes: readonly DMMF.Index[], names: Names) {
-  const tableName = model.dbName ?? makeSnakeCase(model.name)
+  const tableName = model.dbName ?? model.name
 
   // Meta constraints/indexes name Django *fields*: a column held by a
   // ForeignKey is reached through the relation attribute, not the raw column,
@@ -815,7 +815,7 @@ function generateMetaLines(model: DMMF.Model, indexes: readonly DMMF.Index[], na
     names.attr.get(nameKey(model.name, prismaFieldName)) ?? makeSnakeCase(prismaFieldName)
   const columnRef = (prismaFieldName: string) => {
     const fieldObj = model.fields.find((f) => f.name === prismaFieldName)
-    return fieldObj ? fieldColumnName(fieldObj) : makeSnakeCase(prismaFieldName)
+    return fieldObj ? fieldColumnName(fieldObj) : prismaFieldName
   }
 
   // A @@unique carries its own name only when it was given one with map:;
@@ -892,44 +892,15 @@ function compositePkLine(model: DMMF.Model, names: Names) {
   return `    pk = models.CompositePrimaryKey(${attnames.join(', ')})`
 }
 
-// Names are snake_cased when the schema does not map them, so two Prisma names
-// can land on one database name — `myValue` and `my_value` on the column
-// `my_value`, `UserRole` and `user_role` on the table `user_role`. One of the
-// two would be silently dropped, so the schema is reported instead. A Python
-// identifier that collides is stepped aside rather than reported, because that
-// one is losslessly renameable; a database name is not.
+// Two enum names can differ only in a way PascalCase erases (`UserRole` and
+// `user_role`), and every field that names one would then reference the wrong
+// class; the schema is reported rather than one of them silently dropped. A
+// Python identifier that collides is stepped aside instead, because that one
+// is losslessly renameable.
 export function findNameConflicts(
   models: readonly DMMF.Model[],
   enums?: readonly DMMF.DatamodelEnum[],
 ) {
-  const byTable = new Map<string, string[]>()
-  for (const model of models) {
-    const table = model.dbName ?? makeSnakeCase(model.name)
-    byTable.set(table, [...(byTable.get(table) ?? []), model.name])
-  }
-
-  const tableConflicts = [...byTable]
-    .filter(([, owners]) => owners.length > 1)
-    .map(
-      ([table, owners]) =>
-        `models ${owners.join(' and ')} both map to the table "${table}". Add @@map to one of them.`,
-    )
-
-  const columnConflicts = models.flatMap((model) => {
-    const byColumn = new Map<string, string[]>()
-    for (const field of model.fields) {
-      if (field.kind === 'object') continue
-      const column = fieldColumnName(field)
-      byColumn.set(column, [...(byColumn.get(column) ?? []), field.name])
-    }
-    return [...byColumn]
-      .filter(([, owners]) => owners.length > 1)
-      .map(
-        ([column, owners]) =>
-          `fields ${owners.join(' and ')} of model ${model.name} both map to the column "${column}". Add @map to one of them.`,
-      )
-  })
-
   // Two enums can only differ in a way PascalCase erases, and every field that
   // names one would then reference the wrong class.
   const byEnumClass = new Map<string, string[]>()
@@ -944,7 +915,7 @@ export function findNameConflicts(
         `enums ${owners.join(' and ')} both produce the Python class ${className}. Rename one of them.`,
     )
 
-  return [...tableConflicts, ...columnConflicts, ...enumConflicts]
+  return enumConflicts
 }
 
 // Every Django model needs a primary key, so a Prisma model without one is not

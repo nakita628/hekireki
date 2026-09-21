@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class Profile extends Model
 {
-    protected $table = 'profile';
+    protected $table = 'Profile';
 
     protected $keyType = 'string';
 

@@ -148,7 +148,7 @@ class User extends Model
 {
     use HasVersion4Uuids;
 
-    protected $table = 'user';
+    protected $table = 'User';
 
     protected $keyType = 'string';
 
@@ -178,7 +178,7 @@ class Post extends Model
 {
     use HasVersion4Uuids;
 
-    protected $table = 'post';
+    protected $table = 'Post';
 
     protected $keyType = 'string';
 
@@ -221,7 +221,7 @@ use Illuminate\\Database\\Eloquent\\Model;
 
 class User extends Model
 {
-    protected $table = 'user';
+    protected $table = 'User';
 
     public $timestamps = false;
 
@@ -267,7 +267,7 @@ class Agent extends Model
     const CREATED_AT = 'createdAt';
     const UPDATED_AT = 'updatedAt';
 
-    protected $table = 'agent';
+    protected $table = 'Agent';
 
     protected $keyType = 'string';
 
@@ -311,7 +311,7 @@ class Agent extends Model
 {
     use HasVersion4Uuids;
 
-    protected $table = 'agent';
+    protected $table = 'Agent';
 
     protected $keyType = 'string';
 
@@ -353,7 +353,7 @@ class Log extends Model
     const CREATED_AT = 'createdAt';
     const UPDATED_AT = null;
 
-    protected $table = 'log';
+    protected $table = 'Log';
 
     protected $keyType = 'string';
 
@@ -393,7 +393,7 @@ class Mission extends Model
 {
     use HasVersion4Uuids;
 
-    protected $table = 'mission';
+    protected $table = 'Mission';
 
     protected $keyType = 'string';
 
@@ -457,7 +457,7 @@ class User extends Model
 {
     use HasVersion4Uuids;
 
-    protected $table = 'user';
+    protected $table = 'User';
 
     protected $keyType = 'string';
 
@@ -521,7 +521,7 @@ use Illuminate\\Database\\Eloquent\\Relations\\BelongsTo;
 
 class Like extends Model
 {
-    protected $table = 'like';
+    protected $table = 'Like';
 
     protected $primaryKey = null;
 
@@ -593,7 +593,7 @@ class Post extends Model
 {
     use HasVersion4Uuids;
 
-    protected $table = 'post';
+    protected $table = 'Post';
 
     protected $keyType = 'string';
 
@@ -619,7 +619,7 @@ class Tag extends Model
 {
     use HasVersion4Uuids;
 
-    protected $table = 'tag';
+    protected $table = 'Tag';
 
     protected $keyType = 'string';
 
@@ -686,7 +686,7 @@ class Tag extends Model
 {
     use HasVersion4Uuids;
 
-    protected $table = 'tag';
+    protected $table = 'Tag';
 
     protected $keyType = 'string';
 
@@ -839,7 +839,7 @@ class User extends Model
 {
     use HasVersion4Uuids;
 
-    protected $table = 'user';
+    protected $table = 'User';
 
     protected $keyType = 'string';
 
@@ -919,7 +919,7 @@ class Follow extends Model
 {
     use HasVersion4Uuids;
 
-    protected $table = 'follow';
+    protected $table = 'Follow';
 
     protected $keyType = 'string';
 
@@ -955,7 +955,7 @@ class User extends Model
 {
     use HasVersion4Uuids;
 
-    protected $table = 'user';
+    protected $table = 'User';
 
     protected $keyType = 'string';
 
@@ -1004,7 +1004,7 @@ class Revision extends Model
     const CREATED_AT = null;
     const UPDATED_AT = 'updatedAt';
 
-    protected $table = 'revision';
+    protected $table = 'Revision';
 
     protected $keyType = 'string';
 
@@ -1047,7 +1047,7 @@ class Document extends Model
     const CREATED_AT = 'createdAt';
     const UPDATED_AT = 'revisedAt';
 
-    protected $table = 'document';
+    protected $table = 'Document';
 
     protected $keyType = 'string';
 
@@ -1072,7 +1072,7 @@ use Illuminate\\Database\\Eloquent\\Model;
 
 class Counter extends Model
 {
-    protected $table = 'counter';
+    protected $table = 'Counter';
 
     public $incrementing = false;
 
@@ -1142,7 +1142,7 @@ class User extends Model
 {
     use HasVersion4Uuids;
 
-    protected $table = 'user';
+    protected $table = 'User';
 
     protected $keyType = 'string';
 
@@ -1185,7 +1185,7 @@ class Event extends Model
 {
     use HasUuids;
 
-    protected $table = 'event';
+    protected $table = 'Event';
 
     protected $keyType = 'string';
 
@@ -1227,7 +1227,7 @@ class Ticket extends Model
 {
     use HasUlids;
 
-    protected $table = 'ticket';
+    protected $table = 'Ticket';
 
     protected $keyType = 'string';
 

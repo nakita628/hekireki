@@ -1,9 +1,18 @@
 # Deterministic dependency set for the Active Record conformance harness;
 # Gemfile.lock pins the transitive tree and bumps go through Renovate.
-# 7.2 is the newest series that still supports the Ruby 3.1 floor of local
-# dev machines; composite primary keys (7.1+) are covered.
+# The newest Rails series, on the newest Ruby (CI's ruby-version): what the
+# generator writes (composite keys, aliased timestamps, enum default:) is
+# 7.1+, and a machine whose Ruby is older than the series needs skips the
+# harness rather than failing to bundle.
 source "https://rubygems.org"
 
-gem "activerecord", "~> 7.2.0"
-# Generated ulid() attribute defaults call ULID.generate.
+gem "activerecord", "~> 8.1"
+# json 3.0 made JSON.parse's options keyword-only; Active Support 8.1.3 still
+# passes them positionally, so any JSON column read raises until Rails catches up.
+gem "json", "< 3"
+# Generated ulid(), cuid(), cuid(2) and nanoid() attribute defaults call
+# ULID.generate, Cuid.generate, Cuid2.call and Nanoid.generate.
 gem "ulid", "~> 1.4"
+gem "cuid", "~> 1.0"
+gem "cuid2", "~> 1.0"
+gem "nanoid", "~> 2.0"

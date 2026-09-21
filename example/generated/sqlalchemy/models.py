@@ -14,14 +14,14 @@ post_to_tag = Table(
     "_PostToTag",
     Base.metadata,
     Column("A", String, ForeignKey("posts.id"), primary_key=True),
-    Column("B", Integer, ForeignKey("tag.id"), primary_key=True),
+    Column("B", Integer, ForeignKey("Tag.id"), primary_key=True),
 )
 
 cast = Table(
     "_cast",
     Base.metadata,
-    Column("A", Integer, ForeignKey("actor.id"), primary_key=True),
-    Column("B", Integer, ForeignKey("film.id"), primary_key=True),
+    Column("A", Integer, ForeignKey("Actor.id"), primary_key=True),
+    Column("B", Integer, ForeignKey("Film.id"), primary_key=True),
 )
 
 
@@ -44,7 +44,7 @@ class User(Base):
     profile: Mapped[Optional["Profile"]] = relationship(back_populates="user")
 
 class Profile(Base):
-    __tablename__ = "profile"
+    __tablename__ = "Profile"
 
     id: Mapped[str] = mapped_column(primary_key=True)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True)
@@ -72,7 +72,7 @@ class Post(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     __table_args__ = (
-        Index("idx_posts_author_id", "author_id"),
+        Index("posts_author_id_idx", "author_id"),
     )
 
     author: Mapped["User"] = relationship(back_populates="posts")
@@ -80,7 +80,7 @@ class Post(Base):
     tags: Mapped[list["Tag"]] = relationship(secondary=post_to_tag, back_populates="posts")
 
 class Tag(Base):
-    __tablename__ = "tag"
+    __tablename__ = "Tag"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     label: Mapped[str] = mapped_column(unique=True)
@@ -97,7 +97,7 @@ class Comment(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     __table_args__ = (
-        Index("idx_comments_post_id_created_at", "post_id", "created_at"),
+        Index("comments_post_id_created_at_idx", "post_id", "created_at"),
     )
 
     post: Mapped["Post"] = relationship(back_populates="comments")
@@ -114,11 +114,11 @@ class Follow(Base):
     following: Mapped["User"] = relationship(foreign_keys=[following_id], back_populates="followers")
 
 class Category(Base):
-    __tablename__ = "category"
+    __tablename__ = "Category"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str]
-    parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("category.id"))
+    parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("Category.id"))
 
     __table_args__ = (
         UniqueConstraint("parent_id", "name"),
@@ -163,7 +163,7 @@ class AuditLog(Base):
     logged_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
 
 class Actor(Base):
-    __tablename__ = "actor"
+    __tablename__ = "Actor"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str]
@@ -171,7 +171,7 @@ class Actor(Base):
     films: Mapped[list["Film"]] = relationship(secondary=cast, back_populates="actors")
 
 class Film(Base):
-    __tablename__ = "film"
+    __tablename__ = "Film"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     title: Mapped[str]
