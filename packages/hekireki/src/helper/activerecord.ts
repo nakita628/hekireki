@@ -94,14 +94,15 @@ function rubyCall(method: string, positional: readonly string[], keywords: reado
 
 // The `/// @ar.` calls of a doc comment, after the prefix, one call to a
 // line. On a field each is a validator, `presence(message: "Title is
-// required")` or `presence`; on a model each is a whole line for the class
-// body, `validates :a, :b, presence: true, on: :create`. The prose comes
-// first: once an `@ar.` call has been written, a line that is neither a call,
-// a blank nor another annotation is a problem, as is a call that opens a
-// parenthesis its line does not close (a call is not continued on the next
-// `///`, so the line has to end in `)`) or that is not `name` or
-// `name(arguments)`.
-function arCalls(documentation: string | undefined) {
+// required")` or `presence`, which becomes an option of the field's
+// `validates`; on a model each is a whole Ruby line for the class body,
+// `validates :a, :b, presence: true, on: :create` or `normalizes :title,
+// with: ->(title) { title.strip }`, written as it is. The prose comes first:
+// once an `@ar.` call has been written, a line that is neither a call, a
+// blank nor another annotation is a problem. A call is not continued on the
+// next `///`: a field's call opens its parentheses and closes them on the
+// same line, and a model's line does not end in a comma.
+function arCalls(documentation: string | undefined, on: 'model' | 'field') {
   const calls: string[] = []
   const problems: string[] = []
   let annotated = false
@@ -111,15 +112,22 @@ function arCalls(documentation: string | undefined) {
       annotated = true
       const call = line.slice('@ar.'.length).trim()
       calls.push(call)
-      if (call.includes('(') && !call.endsWith(')')) {
+      if (on === 'field') {
+        if (call.includes('(') && !call.endsWith(')')) {
+          problems.push(
+            `the @ar. call "${call}" does not close its parentheses on its line; an @ar. call is one /// line`,
+          )
+        } else if (!/^[a-z_][a-z0-9_]*(?:\s*\([\s\S]*\))?$/u.test(call)) {
+          problems.push(`the @ar. call "${call}" is not name or name(arguments)`)
+        }
+      } else if (call.endsWith(',')) {
         problems.push(
-          `the @ar. call "${call}" does not close its parentheses on its line; an @ar. call is one /// line`,
+          `the @ar. line "${call}" ends in a comma as if it went on; an @ar. call is one /// line`,
         )
-      } else if (
-        !/^[a-z_][a-z0-9_]*(?:\s*\([\s\S]*\))?$/u.test(call) &&
-        !call.startsWith('validates ')
-      ) {
-        problems.push(`the @ar. call "${call}" is not name or name(arguments)`)
+      } else if (!/^[a-z_][a-z0-9_]*[!?]?(?:\s*\([\s\S]*\)|\s[\s\S]*)?$/u.test(call)) {
+        problems.push(
+          `the @ar. line "${call}" is not a Ruby call, name, name(arguments) or name arguments`,
+        )
       }
     } else if (line !== '' && !isAnnotationLine(line) && annotated) {
       problems.push(`the line "${line}" comes after an @ar. call; write the description above them`)
@@ -135,9 +143,9 @@ function arCalls(documentation: string | undefined) {
  */
 export function activeRecordProblems(models: readonly DMMF.Model[]) {
   return models.flatMap((model) => [
-    ...arCalls(model.documentation).problems.map((problem) => `model ${model.name}: ${problem}`),
+    ...arCalls(model.documentation, 'model').problems.map((problem) => `model ${model.name}: ${problem}`),
     ...model.fields.flatMap((field) =>
-      arCalls(field.documentation).problems.map(
+      arCalls(field.documentation, 'field').problems.map(
         (problem) => `field ${model.name}.${field.name}: ${problem}`,
       ),
     ),
@@ -349,7 +357,7 @@ export function activeRecordLocaleFiles(models: readonly DMMF.Model[]) {
       trees.set(locale, found)
       return found
     }
-    for (const call of arCalls(model.documentation).calls) {
+    for (const call of arCalls(model.documentation, 'model').calls) {
       const { validator, messages } = validatorCall(call)
       if (validator !== 'name') continue
       for (const m of messages) {
@@ -359,7 +367,7 @@ export function activeRecordLocaleFiles(models: readonly DMMF.Model[]) {
     for (const field of model.fields) {
       if (field.kind === 'object') continue
       const attribute = field.dbName ?? field.name
-      for (const call of arCalls(field.documentation).calls) {
+      for (const call of arCalls(field.documentation, 'field').calls) {
         const { validator, messages } = validatorCall(call)
         for (const m of messages) {
           setPath(
@@ -835,7 +843,7 @@ export function activeRecordModels(
                       : `uniqueness: { ${opts.join(', ')} }`
                   })(),
                 ]
-          const own = arCalls(f.documentation).calls.flatMap((call) => {
+          const own = arCalls(f.documentation, 'field').calls.flatMap((call) => {
             const { option } = validatorCall(call)
             return option === null ? [] : [option]
           })
@@ -850,7 +858,7 @@ export function activeRecordModels(
             ? []
             : [rubyCall('validates', [`:${f.dbName ?? f.name}`], rules)]
         }),
-        ...arCalls(model.documentation).calls.filter(
+        ...arCalls(model.documentation, 'model').calls.filter(
           (call) => validatorCall(call).validator !== 'name',
         ),
       ]

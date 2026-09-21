@@ -440,6 +440,7 @@ model Locked {
 
 /// @p.ConfigDict(extra='allow')
 /// @ar.validates :name, :contact, presence: true, on: :create
+/// @ar.normalizes :name, with: ->(name) { name.strip }
 /// @ar.name(ja: "公開情報", en: { one: "Open record", other: "Open records" })
 model Open {
   id      Int      @id @default(autoincrement())

@@ -69,6 +69,7 @@ raise "enum validate expected" unless Board.validators_on(:visibility).any? { |v
 # subdirectories; outside Rails the glob says so.
 raise "@ar. field option expected" unless Open.validators_on(:contact).any? { |v| v.kind == :format && !v.options.key?(:message) }
 raise "@ar. model line expected" unless Open.validators_on(:name).any? { |v| v.kind == :presence && v.options[:on] == :create }
+raise "@ar. normalizes line expected" unless Open.normalize_value_for(:name, "  x  ") == "x"
 I18n.load_path += Dir[File.expand_path("config/locales/**/*.yml", __dir__)]
 I18n.available_locales = %i[en ja]
 I18n.with_locale(:ja) do

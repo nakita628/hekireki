@@ -102,10 +102,12 @@ The files are laid out as the guide's
 has them, `models/<model>/<locale>.yml`, one directory per model and one file per locale it names,
 so model and attribute names stay apart from the text of the views and from the defaults; Rails
 loads `config/locales` through its subdirectories. `locales` names that directory; from
-`app/models` it is `config/locales`. The comment has one shape: the description first, then the `@ar.` calls, each `name` or `name(arguments)` with its
-parentheses closed on that line; a description line after a call, a call that runs on to the next
-`///` or a call of another shape stops `prisma generate` with the model and field it is on. Rails
-joins attribute and message with a space (`errors.format`), which Japanese does not want: the
+`app/models` it is `config/locales`. The comment has one shape: the description first, then the
+`@ar.` calls, one to a `///` line. On a field each is `name` or `name(arguments)` with its
+parentheses closed on that line; on the model each is a Ruby line as the class body would have it
+(`validates :a, :b, presence: true`, `normalizes :title, with: ->(title) { title.strip }`), not
+ending in a comma. A description line after a call, a call that runs on to the next `///` or a
+call of another shape stops `prisma generate` with the model and field it is on. Rails joins attribute and message with a space (`errors.format`), which Japanese does not want: the
 `rails-i18n` gem's `ja.yml` sets it to `%{attribute}%{message}`, and the generated files sit beside
 it. Point `output` at `app/models`, and `todo.rb` is the model, nothing left to edit by hand:
 

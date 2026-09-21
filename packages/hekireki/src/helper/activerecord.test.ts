@@ -1816,6 +1816,43 @@ describe('@ar. problems', () => {
     ])
   })
 
+  it('writes a model line as it is, a lambda and all, and refuses one that ends in a comma', () => {
+    const line = 'normalizes :title, with: ->(title) { title.strip }'
+    const model = makeModel({
+      name: 'Todo',
+      documentation: `@ar.${line}`,
+      fields: [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'title', type: 'String' }),
+      ],
+    })
+    expect(activeRecordProblems([model])).toStrictEqual([])
+    expect(activeRecordModels([model])).toContain(`\n  ${line}\n`)
+    const open = makeModel({
+      name: 'Todo',
+      documentation: '@ar.validates :title,\npresence: true',
+      fields: [makeField({ name: 'id', type: 'Int', isId: true })],
+    })
+    expect(activeRecordProblems([open])).toStrictEqual([
+      'model Todo: the @ar. line "validates :title," ends in a comma as if it went on; an @ar. call is one /// line',
+      'model Todo: the line "presence: true" comes after an @ar. call; write the description above them',
+    ])
+    const notRuby = makeModel({
+      name: 'Todo',
+      documentation: '@ar.: title',
+      fields: [makeField({ name: 'id', type: 'Int', isId: true })],
+    })
+    expect(activeRecordProblems([notRuby])).toStrictEqual([
+      'model Todo: the @ar. line ": title" is not a Ruby call, name, name(arguments) or name arguments',
+    ])
+  })
+
+  it('holds a field to name or name(arguments): a model line does not belong on it', () => {
+    expect(activeRecordProblems([todo('@ar.validates :title, presence: true')])).toStrictEqual([
+      'field Todo.title: the @ar. call "validates :title, presence: true" is not name or name(arguments)',
+    ])
+  })
+
   it('names the model for a problem on its own comment', () => {
     const model = makeModel({
       name: 'Todo',
