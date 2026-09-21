@@ -143,7 +143,9 @@ function arCalls(documentation: string | undefined, on: 'model' | 'field') {
  */
 export function activeRecordProblems(models: readonly DMMF.Model[]) {
   return models.flatMap((model) => [
-    ...arCalls(model.documentation, 'model').problems.map((problem) => `model ${model.name}: ${problem}`),
+    ...arCalls(model.documentation, 'model').problems.map(
+      (problem) => `model ${model.name}: ${problem}`,
+    ),
     ...model.fields.flatMap((field) =>
       arCalls(field.documentation, 'field').problems.map(
         (problem) => `field ${model.name}.${field.name}: ${problem}`,
