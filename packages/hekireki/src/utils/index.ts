@@ -64,26 +64,6 @@ export function documentationLines(doc: string | undefined) {
     .filter((line) => !isAnnotationLine(line))
 }
 
-/** Opening minus closing parentheses outside string literals. */
-export function parenBalance(text: string) {
-  let depth = 0
-  let quote: string | null = null
-  for (let i = 0; i < text.length; i += 1) {
-    const ch = text[i]
-    if (quote !== null) {
-      if (ch === '\\') i += 1
-      else if (ch === quote) quote = null
-    } else if (ch === '"' || ch === "'") {
-      quote = ch
-    } else if (ch === '(') {
-      depth += 1
-    } else if (ch === ')') {
-      depth -= 1
-    }
-  }
-  return depth
-}
-
 export function isLoopbackHostname(hostname: string) {
   const bare = hostname.replace(/^\[(.*)\]$/u, '$1').toLowerCase()
   return (

@@ -1672,10 +1672,10 @@ describe('translated messages', () => {
 end`)
   })
 
-  it('writes one locale file per language under the keys Rails reads', () => {
+  it('writes models/<model>/<locale>.yml, one per language, under the keys Rails reads', () => {
     expect(activeRecordLocaleFiles([todo])).toStrictEqual([
       {
-        fileName: 'activerecord.en.yml',
+        fileName: 'models/todo/en.yml',
         code: `en:
   activerecord:
     models:
@@ -1693,7 +1693,7 @@ end`)
 `,
       },
       {
-        fileName: 'activerecord.ja.yml',
+        fileName: 'models/todo/ja.yml',
         code: `ja:
   activerecord:
     models:
@@ -1723,6 +1723,37 @@ end`)
       fields: [makeField({ name: 'id', type: 'Int', isId: true, documentation: '@ar.presence' })],
     })
     expect(activeRecordLocaleFiles([bare])).toStrictEqual([])
+  })
+
+  // The guide's layout keeps each model's names and messages in its own
+  // directory: a second model never joins the first's file, a locale only one
+  // of them names is only that one's file, and a model with nothing
+  // translated has no directory at all.
+  it('gives each model its own directory with only the locales it names', () => {
+    const tag = makeModel({
+      name: 'Tag',
+      fields: [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'label', type: 'String', documentation: '@ar.name(ja: "ラベル")' }),
+      ],
+    })
+    const bare = makeModel({
+      name: 'Bare',
+      fields: [makeField({ name: 'id', type: 'Int', isId: true, documentation: '@ar.presence' })],
+    })
+    const files = activeRecordLocaleFiles([todo, bare, tag])
+    expect(files.map((f) => f.fileName)).toStrictEqual([
+      'models/todo/en.yml',
+      'models/todo/ja.yml',
+      'models/tag/ja.yml',
+    ])
+    expect(files[2]?.code).toBe(`ja:
+  activerecord:
+    attributes:
+      tag:
+        label: "ラベル"
+`)
+    expect(files[1]?.code).not.toContain('tag')
   })
 })
 
@@ -1877,7 +1908,7 @@ describe('plural forms', () => {
     )
     expect(activeRecordLocaleFiles([todo])).toStrictEqual([
       {
-        fileName: 'activerecord.en.yml',
+        fileName: 'models/todo/en.yml',
         code: `en:
   activerecord:
     models:
@@ -1895,7 +1926,7 @@ describe('plural forms', () => {
 `,
       },
       {
-        fileName: 'activerecord.ja.yml',
+        fileName: 'models/todo/ja.yml',
         code: `ja:
   activerecord:
     models:

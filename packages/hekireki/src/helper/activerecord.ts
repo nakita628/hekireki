@@ -1,11 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import {
-  isAnnotationLine,
-  makePascalCase,
-  makeSnakeCase,
-  parenBalance,
-} from '../utils/index.js'
+import { isAnnotationLine, makePascalCase, makeSnakeCase } from '../utils/index.js'
 import { RAILS_RESERVED_NAMES } from './activerecord-reserved.js'
 import { pluralize } from './humanizer.js'
 
@@ -102,9 +97,10 @@ function rubyCall(method: string, positional: readonly string[], keywords: reado
 // required")` or `presence`; on a model each is a whole line for the class
 // body, `validates :a, :b, presence: true, on: :create`. The prose comes
 // first: once an `@ar.` call has been written, a line that is neither a call,
-// a blank nor another annotation is a problem, as is a call whose
-// parentheses do not close on its own line (a call is not continued on the
-// next `///`) or that is not `name` or `name(arguments)`.
+// a blank nor another annotation is a problem, as is a call that opens a
+// parenthesis its line does not close (a call is not continued on the next
+// `///`, so the line has to end in `)`) or that is not `name` or
+// `name(arguments)`.
 function arCalls(documentation: string | undefined) {
   const calls: string[] = []
   const problems: string[] = []
@@ -115,7 +111,7 @@ function arCalls(documentation: string | undefined) {
       annotated = true
       const call = line.slice('@ar.'.length).trim()
       calls.push(call)
-      if (parenBalance(line) !== 0) {
+      if (call.includes('(') && !call.endsWith(')')) {
         problems.push(
           `the @ar. call "${call}" does not close its parentheses on its line; an @ar. call is one /// line`,
         )
@@ -275,7 +271,10 @@ function validatorCall(call: string) {
     return { validator, option: null, messages }
   }
   const kept: string[] = []
-  const translated: { name: string; found: { locale: string; form: string | null; text: string }[] }[] = []
+  const translated: {
+    name: string
+    found: { locale: string; form: string | null; text: string }[]
+  }[] = []
   for (const argument of splitArguments(args)) {
     const pair = argument.match(/^([a-z_][a-z0-9_]*):\s*([\s\S]+)$/u)
     const found = pair ? translations(pair[2] ?? '') : null
@@ -333,20 +332,23 @@ function yamlLines(tree: LocaleTree, depth: number): string[] {
 }
 
 /**
- * One `activerecord.<locale>.yml` per locale the schema's `@ar.` calls
- * name: model and attribute names from `@ar.name(ja: "...")`, error
- * messages from a validator's translated options, under the keys Rails
- * reads (`activerecord.errors.models.todo.attributes.title.blank`).
+ * The locale files of the schema's `@ar.` calls, laid out as the Rails i18n
+ * guide organises them: `models/<model>/<locale>.yml`, one directory per
+ * model and one file per locale it names, so model and attribute names stay
+ * apart from the views' text and the defaults. Each holds that model's name
+ * from `@ar.name(ja: "...")`, its attributes' names, and the error messages
+ * of its validators' translated options, under the keys Rails reads
+ * (`activerecord.errors.models.todo.attributes.title.blank`).
  */
 export function activeRecordLocaleFiles(models: readonly DMMF.Model[]) {
-  const trees = new Map<string, LocaleTree>()
-  const tree = (locale: string) => {
-    const found = trees.get(locale) ?? {}
-    trees.set(locale, found)
-    return found
-  }
-  for (const model of models) {
+  return models.flatMap((model) => {
     const modelKey = makeSnakeCase(model.name)
+    const trees = new Map<string, LocaleTree>()
+    const tree = (locale: string) => {
+      const found = trees.get(locale) ?? {}
+      trees.set(locale, found)
+      return found
+    }
     for (const call of arCalls(model.documentation).calls) {
       const { validator, messages } = validatorCall(call)
       if (validator !== 'name') continue
@@ -379,13 +381,13 @@ export function activeRecordLocaleFiles(models: readonly DMMF.Model[]) {
         }
       }
     }
-  }
-  return [...trees]
-    .toSorted(([a], [b]) => a.localeCompare(b))
-    .map(([locale, content]) => ({
-      fileName: `activerecord.${locale}.yml`,
-      code: `${yamlLines({ [locale]: content }, 0).join('\n')}\n`,
-    }))
+    return [...trees]
+      .toSorted(([a], [b]) => a.localeCompare(b))
+      .map(([locale, content]) => ({
+        fileName: `models/${modelKey}/${locale}.yml`,
+        code: `${yamlLines({ [locale]: content }, 0).join('\n')}\n`,
+      }))
+  })
 }
 
 // A Ruby symbol key in a hash literal: bare when it is an identifier, quoted

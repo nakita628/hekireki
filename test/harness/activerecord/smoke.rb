@@ -64,10 +64,12 @@ raise "enum validate expected" unless Board.validators_on(:visibility).any? { |v
 
 # `/// @ar.` calls reach the model: a field's options join its validation, a
 # model's line is written as it is, and a translated message goes to
-# config/locales instead of the model, under the key Rails reads for it.
+# config/locales/models/<model>/<locale>.yml instead of the model, under the
+# key Rails reads for it. Rails loads config/locales through its
+# subdirectories; outside Rails the glob says so.
 raise "@ar. field option expected" unless Open.validators_on(:contact).any? { |v| v.kind == :format && !v.options.key?(:message) }
 raise "@ar. model line expected" unless Open.validators_on(:name).any? { |v| v.kind == :presence && v.options[:on] == :create }
-I18n.load_path += Dir[File.expand_path("config/locales/*.yml", __dir__)]
+I18n.load_path += Dir[File.expand_path("config/locales/**/*.yml", __dir__)]
 I18n.available_locales = %i[en ja]
 I18n.with_locale(:ja) do
   raise "model name" unless Open.model_name.human == "公開情報"

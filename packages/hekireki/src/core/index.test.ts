@@ -315,6 +315,82 @@ describe.each([
 })
 
 describe('generator config', () => {
+  // A `@ar.` translation leaves the model for config/locales, laid out as the
+  // Rails i18n guide organises locale files: models/<model>/<locale>.yml.
+  // The directories under `locales` are the generator's to create, and a
+  // model with nothing translated (Post) gets none.
+  const translated = (output: string, config: Record<string, string> = {}) => {
+    const base = options(output, config)
+    const [user, ...rest] = base.dmmf.datamodel.models
+    const fields = user?.fields ?? []
+    const name = fields.findIndex((f) => f.name === 'name')
+    return {
+      ...base,
+      dmmf: {
+        datamodel: {
+          ...base.dmmf.datamodel,
+          models: [
+            {
+              ...user,
+              documentation: 'A user.\n@ar.name(ja: "利用者", en: "User")',
+              fields: fields.with(name, {
+                ...fields[name],
+                documentation: '@ar.presence(message: { ja: "を入力してください" })',
+              }),
+            },
+            ...rest,
+          ],
+        },
+      },
+    } as unknown as GeneratorOptions
+  }
+
+  it('writes Active Record locale files as models/<model>/<locale>.yml beside app/models', async () => {
+    const root = tmp()
+    const output = path.join(root, 'app', 'models')
+    const exit = await Effect.runPromiseExit(
+      Effect.provide(activerecord(translated(output)), fileSystemLayer),
+    )
+    expect(Exit.isSuccess(exit)).toBe(true)
+    const locales = path.join(root, 'config', 'locales')
+    expect(readdirSync(locales)).toStrictEqual(['models'])
+    expect(readdirSync(path.join(locales, 'models'))).toStrictEqual(['user'])
+    expect(new Set(readdirSync(path.join(locales, 'models', 'user')))).toStrictEqual(
+      new Set(['en.yml', 'ja.yml']),
+    )
+    expect(readFileSync(path.join(locales, 'models', 'user', 'ja.yml'), 'utf8')).toBe(`ja:
+  activerecord:
+    models:
+      user: "利用者"
+    errors:
+      models:
+        user:
+          attributes:
+            name:
+              blank: "を入力してください"
+`)
+    expect(readFileSync(path.join(output, 'user.rb'), 'utf8')).not.toContain('利用者')
+  })
+
+  it('puts the locale tree under the `locales` directory when it is configured', async () => {
+    const root = tmp()
+    const output = path.join(root, 'out')
+    const exit = await Effect.runPromiseExit(
+      Effect.provide(activerecord(translated(output, { locales: '../i18n' })), fileSystemLayer),
+    )
+    expect(Exit.isSuccess(exit)).toBe(true)
+    expect(new Set(readdirSync(path.join(root, 'i18n', 'models', 'user')))).toStrictEqual(
+      new Set(['en.yml', 'ja.yml']),
+    )
+  })
+
+  it('asks for `locales` when a translation has nowhere to go', async () => {
+    const exit = await Effect.runPromiseExit(
+      Effect.provide(activerecord(translated(path.join(tmp(), 'out'))), fileSystemLayer),
+    )
+    expect(failure(exit)).toContain('locales is required for Hekireki-ActiveRecord')
+  })
+
   it('defaults the Ecto app module to MyApp and reads the one that is configured', async () => {
     const fallback = tmp()
     const configured = tmp()

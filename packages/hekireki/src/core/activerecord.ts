@@ -3,7 +3,7 @@ import path from 'node:path'
 import type { GeneratorOptions } from '@prisma/generator-helper'
 import { Effect } from 'effect'
 
-import { emitMany } from '../emit/index.js'
+import { emitMany, emitRaw } from '../emit/index.js'
 import { APPLICATION_RECORD_FILE, activeRecordModelFiles } from '../generator/activerecord.js'
 import { activeRecordLocaleFiles, activeRecordProblems } from '../helper/activerecord.js'
 import { getString } from '../utils/index.js'
@@ -34,8 +34,10 @@ export function activerecord(options: GeneratorOptions) {
     const withBase =
       path.basename(outDir) === 'models' ? [APPLICATION_RECORD_FILE, ...files] : files
     // Translated `@ar.` messages and names go to config/locales as
-    // activerecord.<locale>.yml: `locales` names the directory, and from
-    // app/models it is the application's own.
+    // models/<model>/<locale>.yml, the layout the Rails i18n guide gives for
+    // keeping model names apart from the views' text: `locales` names the
+    // directory, and from app/models it is the application's own. Rails
+    // reads config/locales down through its subdirectories.
     const localeFiles = activeRecordLocaleFiles(options.dmmf.datamodel.models)
     if (localeFiles.length > 0) {
       const locales = getString(options.generator.config?.locales)
@@ -48,7 +50,14 @@ export function activerecord(options: GeneratorOptions) {
                 message:
                   'locales is required for Hekireki-ActiveRecord when a `@ar.` message names a locale: the directory config/locales is written to, relative to output.',
               })
-      yield* emitMany(localeFiles, localesDir)
+      yield* Effect.forEach(
+        localeFiles,
+        (f) => {
+          const output = path.join(localesDir, f.fileName)
+          return emitRaw(f.code, path.dirname(output), output)
+        },
+        { discard: true },
+      )
     }
     return yield* emitMany(withBase, outDir)
   })
