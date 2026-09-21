@@ -206,7 +206,7 @@ export function buildSeaOrmAttributes(
 
   // column_name: emit when the real column differs from the one sea-orm derives
   // from the (possibly keyword-escaped) Rust field identifier.
-  const columnName = field.dbName ?? makeSnakeCase(field.name)
+  const columnName = field.dbName ?? field.name
   const snakeName = derivedColumn ?? makeSnakeCase(field.name)
   if (columnName !== snakeName) {
     columnParts.push(`column_name = "${columnName}"`)
@@ -566,7 +566,7 @@ export function generateEntityFile(
 
   if (!(idField || isCompositePk)) return ''
 
-  const tableName = model.dbName ?? makeSnakeCase(model.name)
+  const tableName = model.dbName ?? model.name
   const associations = getAssociations(model, allModels)
   const enumNames = new Set(enums.map((e) => e.name))
 

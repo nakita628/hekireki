@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { makePascalCase, makeSnakeCase, stripAnnotations } from '../utils/index.js'
+import { makePascalCase, stripAnnotations } from '../utils/index.js'
 
 export function prismaTypeToEloquentCast(type: string) {
   if (type === 'Int') return 'integer'
@@ -148,7 +148,7 @@ export function eloquentModels(
   return models
     .map((model) => {
       const associations = getAssociations(model, contextModels)
-      const tableName = model.dbName ?? makeSnakeCase(model.name)
+      const tableName = model.dbName ?? model.name
       const idField = model.fields.find((f) => f.isId)
       const compositePkFields = model.primaryKey?.fields ?? []
       const timestamps = findTimestamps(model.fields)

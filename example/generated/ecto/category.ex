@@ -13,7 +13,7 @@ defmodule Example.Category do
           children: [Example.Category.t()]
         }
 
-  schema "category" do
+  schema "Category" do
     field(:name, :string)
     belongs_to(:parent, Example.Category, foreign_key: :parent_id)
     has_many(:children, Example.Category, foreign_key: :parent_id)

@@ -48,6 +48,10 @@ type Profile struct {
 	User User
 }
 
+func (Profile) TableName() string {
+	return "Profile"
+}
+
 type Post struct {
 	ID string `gorm:"column:id;primaryKey;type:char(36)" json:"id"`
 	Title string `gorm:"column:title;not null" json:"title"`
@@ -55,7 +59,7 @@ type Post struct {
 	Visibility string `gorm:"column:visibility;default:'link_only';not null" json:"visibility"`
 	Published bool `gorm:"column:published;default:false;not null" json:"published"`
 	ViewCount int `gorm:"column:view_count;default:0;not null" json:"view_count"`
-	AuthorID string `gorm:"column:author_id;index:idx_posts_author_id;not null" json:"author_id"`
+	AuthorID string `gorm:"column:author_id;index:posts_author_id_idx;not null" json:"author_id"`
 	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime;not null" json:"created_at"`
 	Author User `gorm:"foreignKey:AuthorID"`
 	Comments []Comment `gorm:"foreignKey:PostID;constraint:OnDelete:CASCADE"`
@@ -79,12 +83,16 @@ type Tag struct {
 	Posts []Post `gorm:"many2many:_PostToTag;"`
 }
 
+func (Tag) TableName() string {
+	return "Tag"
+}
+
 type Comment struct {
 	ID int `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
 	Body string `gorm:"column:body;not null" json:"body"`
-	PostID string `gorm:"column:post_id;index:idx_comments_post_id_created_at;not null" json:"post_id"`
+	PostID string `gorm:"column:post_id;index:comments_post_id_created_at_idx;not null" json:"post_id"`
 	AuthorID *string `gorm:"column:author_id" json:"author_id"`
-	CreatedAt time.Time `gorm:"column:created_at;index:idx_comments_post_id_created_at;autoCreateTime;not null" json:"created_at"`
+	CreatedAt time.Time `gorm:"column:created_at;index:comments_post_id_created_at_idx;autoCreateTime;not null" json:"created_at"`
 	Post Post
 	Author User `gorm:"foreignKey:AuthorID"`
 }
@@ -107,10 +115,14 @@ func (Follow) TableName() string {
 
 type Category struct {
 	ID int `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	Name string `gorm:"column:name;uniqueIndex:idx_category_parent_id_name_unique;not null" json:"name"`
-	ParentID *int `gorm:"column:parent_id;uniqueIndex:idx_category_parent_id_name_unique" json:"parent_id"`
+	Name string `gorm:"column:name;uniqueIndex:Category_parent_id_name_key;not null" json:"name"`
+	ParentID *int `gorm:"column:parent_id;uniqueIndex:Category_parent_id_name_key" json:"parent_id"`
 	Parent *Category `gorm:"foreignKey:ParentID"`
 	Children []Category `gorm:"foreignKey:ParentID"`
+}
+
+func (Category) TableName() string {
+	return "Category"
 }
 
 type Order struct {
@@ -128,8 +140,8 @@ func (Order) TableName() string {
 
 type OrderItem struct {
 	ID int64 `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	OrderID int64 `gorm:"column:order_id;uniqueIndex:idx_order_items_order_id_sku_unique;not null" json:"order_id"`
-	Sku string `gorm:"column:sku;uniqueIndex:idx_order_items_order_id_sku_unique;type:varchar(32);not null" json:"sku"`
+	OrderID int64 `gorm:"column:order_id;uniqueIndex:order_items_order_id_sku_key;not null" json:"order_id"`
+	Sku string `gorm:"column:sku;uniqueIndex:order_items_order_id_sku_key;type:varchar(32);not null" json:"sku"`
 	Qty int `gorm:"column:qty;default:1;not null" json:"qty"`
 	Price float64 `gorm:"column:price;type:decimal(12,2);not null" json:"price"`
 	Order Order
@@ -157,8 +169,16 @@ type Actor struct {
 	Films []Film `gorm:"many2many:_cast;"`
 }
 
+func (Actor) TableName() string {
+	return "Actor"
+}
+
 type Film struct {
 	ID int `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
 	Title string `gorm:"column:title;not null" json:"title"`
 	Actors []Actor `gorm:"many2many:_cast;"`
+}
+
+func (Film) TableName() string {
+	return "Film"
 }

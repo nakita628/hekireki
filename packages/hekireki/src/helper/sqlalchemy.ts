@@ -277,10 +277,10 @@ export function collectManyToManyTables(allModels: readonly DMMF.Model[]) {
             tableName: `_${relationName}`,
             varName: makeSnakeCase(relationName),
             leftModel: leftName,
-            leftTable: leftModelObj?.dbName ?? makeSnakeCase(leftName),
+            leftTable: leftModelObj?.dbName ?? leftName,
             leftPkField: leftModelObj?.fields.find((f) => f.isId),
             rightModel: rightName,
-            rightTable: rightModelObj?.dbName ?? makeSnakeCase(rightName),
+            rightTable: rightModelObj?.dbName ?? rightName,
             rightPkField: rightModelObj?.fields.find((f) => f.isId),
           },
         },
@@ -308,10 +308,8 @@ export function generateAssociationTable(info: {
 }) {
   const leftSaType = info.leftPkField ? resolveNativeType(info.leftPkField) : 'String'
   const rightSaType = info.rightPkField ? resolveNativeType(info.rightPkField) : 'String'
-  const leftPkCol =
-    info.leftPkField?.dbName ?? (info.leftPkField ? makeSnakeCase(info.leftPkField.name) : 'id')
-  const rightPkCol =
-    info.rightPkField?.dbName ?? (info.rightPkField ? makeSnakeCase(info.rightPkField.name) : 'id')
+  const leftPkCol = info.leftPkField?.dbName ?? info.leftPkField?.name ?? 'id'
+  const rightPkCol = info.rightPkField?.dbName ?? info.rightPkField?.name ?? 'id'
 
   return [
     `${info.varName} = Table(`,
@@ -475,8 +473,10 @@ function generateColumn(
   allModels: readonly DMMF.Model[],
   enumMap: ReadonlyMap<string, DMMF.DatamodelEnum>,
 ) {
-  const columnName = field.dbName ?? makeSnakeCase(field.name)
-  const attrName = pythonAttrName(columnName)
+  // The attribute is the field in Python's case; the column is Prisma's, named
+  // positionally whenever the two differ.
+  const columnName = field.dbName ?? field.name
+  const attrName = pythonAttrName(makeSnakeCase(field.name))
   const elemPythonType = field.kind === 'enum' ? 'str' : pythonTypeForNative(field)
   // A scalar list is a collection; collapsing it to its element type silently
   // drops the array. Lists are non-Optional (an empty array, not None).
@@ -510,8 +510,9 @@ function generateColumn(
     // and emit a half-join against a non-unique column.
     if (assoc?.foreignKeys.length === 1) {
       const targetModelObj = allModels.find((m) => m.name === assoc.targetModel)
-      const targetTable = targetModelObj?.dbName ?? makeSnakeCase(assoc.targetModel)
-      const targetCol = makeSnakeCase(assoc.references)
+      const targetTable = targetModelObj?.dbName ?? assoc.targetModel
+      const targetField = targetModelObj?.fields.find((f) => f.name === assoc.references)
+      const targetCol = targetField?.dbName ?? assoc.references
       const fkActions = [
         assoc.onDelete && SQL_ACTION[assoc.onDelete]
           ? `, ondelete="${SQL_ACTION[assoc.onDelete]}"`
@@ -591,7 +592,7 @@ function generateTableArgs(
   const uniqueConstraints = model.uniqueFields.map((fields) => {
     const cols = fields.map((f) => {
       const fieldObj = model.fields.find((mf) => mf.name === f)
-      return `"${fieldObj?.dbName ?? makeSnakeCase(f)}"`
+      return `"${fieldObj?.dbName ?? f}"`
     })
     return `UniqueConstraint(${cols.join(', ')})`
   })
@@ -604,10 +605,10 @@ function generateTableArgs(
       const idxName =
         idx.dbName ??
         idx.name ??
-        `idx_${model.dbName ?? makeSnakeCase(model.name)}_${idx.fields.map((f) => makeSnakeCase(f.name)).join('_')}`
+        `${model.dbName ?? model.name}_${idx.fields.map((f) => model.fields.find((mf) => mf.name === f.name)?.dbName ?? f.name).join('_')}_idx`
       const cols = idx.fields.map((f) => {
         const fieldObj = model.fields.find((mf) => mf.name === f.name)
-        return `"${fieldObj?.dbName ?? makeSnakeCase(f.name)}"`
+        return `"${fieldObj?.dbName ?? f.name}"`
       })
       return `Index("${idxName}", ${cols.join(', ')})`
     })
@@ -622,14 +623,14 @@ function generateTableArgs(
     )
     .map((f) => {
       const target = allModels.find((m) => m.name === f.type)
-      const targetTable = target?.dbName ?? makeSnakeCase(f.type)
+      const targetTable = target?.dbName ?? f.type
       const localCols = (f.relationFromFields ?? []).map((c) => {
         const fieldObj = model.fields.find((mf) => mf.name === c)
-        return `"${fieldObj?.dbName ?? makeSnakeCase(c)}"`
+        return `"${fieldObj?.dbName ?? c}"`
       })
       const targetCols = (f.relationToFields ?? []).map((c) => {
         const fieldObj = target?.fields.find((mf) => mf.name === c)
-        return `"${targetTable}.${fieldObj?.dbName ?? makeSnakeCase(c)}"`
+        return `"${targetTable}.${fieldObj?.dbName ?? c}"`
       })
       const actions = [
         f.relationOnDelete && SQL_ACTION[f.relationOnDelete]
@@ -655,8 +656,7 @@ function generateBelongsToRelationships(
 ) {
   return associations.belongsTo.map((assoc) => {
     const snakeName = makeSnakeCase(assoc.name)
-    const fkFieldObj = model.fields.find((f) => f.name === assoc.foreignKey)
-    const snakeFk = fkFieldObj?.dbName ?? makeSnakeCase(assoc.foreignKey)
+    const snakeFk = makeSnakeCase(assoc.foreignKey)
     const backPop = findBackPopulates(
       assoc.targetModel,
       model.name,
@@ -671,7 +671,7 @@ function generateBelongsToRelationships(
     const pkField = model.fields.find((f) => f.isId)
     const remoteClause =
       assoc.targetModel === model.name && pkField
-        ? `remote_side=[${pkField.dbName ?? makeSnakeCase(pkField.name)}], `
+        ? `remote_side=[${makeSnakeCase(pkField.name)}], `
         : ''
     const mappedType = assoc.optional
       ? `Optional["${makePascalCase(assoc.targetModel)}"]`
@@ -795,7 +795,7 @@ export function generateModelBody(
 
   const enumMap = new Map<string, DMMF.DatamodelEnum>((enums ?? []).map((e) => [e.name, e]))
 
-  const tableName = model.dbName ?? makeSnakeCase(model.name)
+  const tableName = model.dbName ?? model.name
   const scalarFields = model.fields.filter((f) => f.kind !== 'object')
 
   const columnLines = scalarFields.map((field) => {

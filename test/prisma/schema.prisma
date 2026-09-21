@@ -48,6 +48,7 @@ generator Hekireki-Kysely {
 generator Hekireki-ActiveRecord {
   provider = "hekireki-activerecord"
   output   = "../harness/activerecord/models"
+  locales  = "../config/locales"
 }
 
 generator Hekireki-Eloquent {
@@ -176,10 +177,14 @@ model Event {
 
 // ULID primary key: client-side ULID generation in every ORM
 // (ulidx / python-ulid / oklog/ulid / ulid crate / Ecto.ULID / ulid gem /
-// HasUlids).
+// HasUlids). Timestamps under Prisma's own names, unmapped: @updatedAt is
+// set by the client, so an ORM whose timestamp convention is created_at /
+// updated_at (Active Record, Eloquent) must point it at these columns.
 model Ticket {
-  id    String @id @default(ulid())
-  label String
+  id        String   @id @default(ulid())
+  label     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // Field names that are reserved words in Rust (type/match/self) and Python
@@ -434,10 +439,16 @@ model Locked {
 }
 
 /// @p.ConfigDict(extra='allow')
+/// @ar.validates :name, :contact, presence: true, on: :create
+/// @ar.normalizes :name, with: ->(name) { name.strip }
+/// @ar.name(ja: "公開情報", en: { one: "Open record", other: "Open records" })
 model Open {
   id      Int      @id @default(autoincrement())
+  /// @ar.name(ja: "名前", en: "Name")
+  /// @ar.length(maximum: 40, too_long: { ja: "%{count}文字以内で入力してください", en: { one: "is too long (maximum is 1 character)", other: "is too long (maximum is %{count} characters)" } })
   name    String
   /// @p.EmailStr
+  /// @ar.format(with: URI::MailTo::EMAIL_REGEXP, message: { ja: "の形式が正しくありません", en: "is not an email address" })
   contact String
   /// @p.HttpUrl
   site    String

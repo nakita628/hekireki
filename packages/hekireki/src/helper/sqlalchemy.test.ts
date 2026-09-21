@@ -137,7 +137,7 @@ class Base(DeclarativeBase):
 
 
 class User(Base):
-    __tablename__ = "user"
+    __tablename__ = "User"
 
     id: Mapped[str] = mapped_column(primary_key=True)
     name: Mapped[str]
@@ -170,7 +170,7 @@ class Base(DeclarativeBase):
 
 
 class Post(Base):
-    __tablename__ = "post"
+    __tablename__ = "Post"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     title: Mapped[str]
@@ -202,7 +202,7 @@ class Base(DeclarativeBase):
 
 
 class Item(Base):
-    __tablename__ = "item"
+    __tablename__ = "Item"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     label: Mapped[str]
@@ -227,7 +227,7 @@ class Base(DeclarativeBase):
 
 
 class Account(Base):
-    __tablename__ = "account"
+    __tablename__ = "Account"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     email: Mapped[str] = mapped_column(unique=True)
@@ -259,10 +259,10 @@ class Base(DeclarativeBase):
 
 
 class Event(Base):
-    __tablename__ = "event"
+    __tablename__ = "Event"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column("createdAt", server_default=func.now())
 `,
     )
   })
@@ -286,10 +286,10 @@ class Base(DeclarativeBase):
 
 
 class Record(Base):
-    __tablename__ = "record"
+    __tablename__ = "Record"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    updated_at: Mapped[datetime] = mapped_column(default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column("updatedAt", default=func.now(), onupdate=func.now())
 `,
     )
   })
@@ -316,7 +316,7 @@ class Base(DeclarativeBase):
 
 
 class Setting(Base):
-    __tablename__ = "setting"
+    __tablename__ = "Setting"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     active: Mapped[bool] = mapped_column(default=True)
@@ -346,7 +346,7 @@ class Base(DeclarativeBase):
 
 
 class Flag(Base):
-    __tablename__ = "flag"
+    __tablename__ = "Flag"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     enabled: Mapped[bool] = mapped_column(default=False)
@@ -376,7 +376,7 @@ class Base(DeclarativeBase):
 
 
 class Config(Base):
-    __tablename__ = "config"
+    __tablename__ = "Config"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     status: Mapped[str] = mapped_column(default="active")
@@ -406,10 +406,10 @@ class Base(DeclarativeBase):
 
 
 class Limit(Base):
-    __tablename__ = "limit"
+    __tablename__ = "Limit"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    max_retries: Mapped[int] = mapped_column(default=3)
+    max_retries: Mapped[int] = mapped_column("maxRetries", default=3)
 `,
     )
   })
@@ -441,7 +441,7 @@ class Base(DeclarativeBase):
 
 
 class User(Base):
-    __tablename__ = "user"
+    __tablename__ = "User"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     role: Mapped[str] = mapped_column(Enum("ADMIN", "USER", name="role"))
@@ -482,7 +482,7 @@ class Base(DeclarativeBase):
 
 
 class User(Base):
-    __tablename__ = "user"
+    __tablename__ = "User"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     role: Mapped[str] = mapped_column(Enum("ADMIN", "USER", name="role"), default="USER")
@@ -529,7 +529,7 @@ class Base(DeclarativeBase):
 
 
 class User(Base):
-    __tablename__ = "user"
+    __tablename__ = "User"
 
     id: Mapped[str] = mapped_column(primary_key=True)
     name: Mapped[str]
@@ -537,11 +537,11 @@ class User(Base):
     posts: Mapped[list["Post"]] = relationship(back_populates="user")
 
 class Post(Base):
-    __tablename__ = "post"
+    __tablename__ = "Post"
 
     id: Mapped[str] = mapped_column(primary_key=True)
     title: Mapped[str]
-    user_id: Mapped[str] = mapped_column(ForeignKey("user.id"))
+    user_id: Mapped[str] = mapped_column("userId", ForeignKey("User.id"))
 
     user: Mapped["User"] = relationship(back_populates="posts")
 `,
@@ -587,7 +587,7 @@ class Base(DeclarativeBase):
 
 
 class User(Base):
-    __tablename__ = "user"
+    __tablename__ = "User"
 
     id: Mapped[str] = mapped_column(primary_key=True)
     name: Mapped[str]
@@ -595,11 +595,11 @@ class User(Base):
     profile: Mapped[Optional["Profile"]] = relationship(back_populates="user")
 
 class Profile(Base):
-    __tablename__ = "profile"
+    __tablename__ = "Profile"
 
     id: Mapped[str] = mapped_column(primary_key=True)
     bio: Mapped[str]
-    user_id: Mapped[str] = mapped_column(ForeignKey("user.id"), unique=True)
+    user_id: Mapped[str] = mapped_column("userId", ForeignKey("User.id"), unique=True)
 
     user: Mapped["User"] = relationship(back_populates="profile")
 `,
@@ -630,7 +630,7 @@ class UserProfile(Base):
     __tablename__ = "user_profiles"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    display_name: Mapped[str]
+    display_name: Mapped[str] = mapped_column("displayName")
 `,
     )
   })
@@ -658,14 +658,14 @@ class Base(DeclarativeBase):
 
 
 class Membership(Base):
-    __tablename__ = "membership"
+    __tablename__ = "Membership"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[str]
-    org_id: Mapped[str]
+    user_id: Mapped[str] = mapped_column("userId")
+    org_id: Mapped[str] = mapped_column("orgId")
 
     __table_args__ = (
-        UniqueConstraint("user_id", "org_id"),
+        UniqueConstraint("userId", "orgId"),
     )
 `,
     )
@@ -697,7 +697,7 @@ class Base(DeclarativeBase):
 
 
 class Article(Base):
-    __tablename__ = "article"
+    __tablename__ = "Article"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     slug: Mapped[str]
@@ -731,7 +731,7 @@ class Base(DeclarativeBase):
 
 
 class Tag(Base):
-    __tablename__ = "tag"
+    __tablename__ = "Tag"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     label: Mapped[str] = mapped_column(String(255))
@@ -761,7 +761,7 @@ class Base(DeclarativeBase):
 
 
 class Code(Base):
-    __tablename__ = "code"
+    __tablename__ = "Code"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     code: Mapped[str] = mapped_column(String(6))
@@ -792,7 +792,7 @@ class Base(DeclarativeBase):
 
 
 class Entity(Base):
-    __tablename__ = "entity"
+    __tablename__ = "Entity"
 
     id: Mapped[uuid_mod.UUID] = mapped_column(Uuid, primary_key=True)
 `,
@@ -822,7 +822,7 @@ class Base(DeclarativeBase):
 
 
 class Product(Base):
-    __tablename__ = "product"
+    __tablename__ = "Product"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     price: Mapped[DecimalType] = mapped_column(Numeric(precision=10, scale=2))
@@ -852,7 +852,7 @@ class Base(DeclarativeBase):
 
 
 class Note(Base):
-    __tablename__ = "note"
+    __tablename__ = "Note"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     body: Mapped[str] = mapped_column(Text)
@@ -882,7 +882,7 @@ class Base(DeclarativeBase):
 
 
 class Sensor(Base):
-    __tablename__ = "sensor"
+    __tablename__ = "Sensor"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     value: Mapped[int] = mapped_column(SmallInteger)
@@ -912,7 +912,7 @@ class Base(DeclarativeBase):
 
 
 class Measurement(Base):
-    __tablename__ = "measurement"
+    __tablename__ = "Measurement"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     reading: Mapped[float] = mapped_column(Double)
@@ -943,7 +943,7 @@ class Base(DeclarativeBase):
 
 
 class Birthday(Base):
-    __tablename__ = "birthday"
+    __tablename__ = "Birthday"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     day: Mapped[date] = mapped_column(Date)
@@ -974,10 +974,10 @@ class Base(DeclarativeBase):
 
 
 class Schedule(Base):
-    __tablename__ = "schedule"
+    __tablename__ = "Schedule"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    start_time: Mapped[time_type] = mapped_column(Time)
+    start_time: Mapped[time_type] = mapped_column("startTime", Time)
 `,
     )
   })
@@ -1005,7 +1005,7 @@ class Base(DeclarativeBase):
 
 
 class Doc(Base):
-    __tablename__ = "doc"
+    __tablename__ = "Doc"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     data: Mapped[dict[str, Any]] = mapped_column(JSON)
@@ -1067,13 +1067,13 @@ class Base(DeclarativeBase):
 post_to_tag = Table(
     "_PostToTag",
     Base.metadata,
-    Column("A", Integer, ForeignKey("post.id"), primary_key=True),
-    Column("B", Integer, ForeignKey("tag.id"), primary_key=True),
+    Column("A", Integer, ForeignKey("Post.id"), primary_key=True),
+    Column("B", Integer, ForeignKey("Tag.id"), primary_key=True),
 )
 
 
 class Post(Base):
-    __tablename__ = "post"
+    __tablename__ = "Post"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str]
@@ -1081,7 +1081,7 @@ class Post(Base):
     tags: Mapped[list["Tag"]] = relationship(secondary=post_to_tag, back_populates="posts")
 
 class Tag(Base):
-    __tablename__ = "tag"
+    __tablename__ = "Tag"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str]
@@ -1155,7 +1155,7 @@ class Base(DeclarativeBase):
 
 
 class User(Base):
-    __tablename__ = "user"
+    __tablename__ = "User"
 
     id: Mapped[str] = mapped_column(primary_key=True)
     name: Mapped[str]
@@ -1163,7 +1163,7 @@ class User(Base):
     likes: Mapped[list["Like"]] = relationship(back_populates="user")
 
 class Post(Base):
-    __tablename__ = "post"
+    __tablename__ = "Post"
 
     id: Mapped[str] = mapped_column(primary_key=True)
     title: Mapped[str]
@@ -1171,10 +1171,10 @@ class Post(Base):
     likes: Mapped[list["Like"]] = relationship(back_populates="post")
 
 class Like(Base):
-    __tablename__ = "like"
+    __tablename__ = "Like"
 
-    user_id: Mapped[str] = mapped_column(ForeignKey("user.id"), primary_key=True)
-    post_id: Mapped[str] = mapped_column(ForeignKey("post.id"), primary_key=True)
+    user_id: Mapped[str] = mapped_column("userId", ForeignKey("User.id"), primary_key=True)
+    post_id: Mapped[str] = mapped_column("postId", ForeignKey("Post.id"), primary_key=True)
 
     user: Mapped["User"] = relationship(back_populates="likes")
     post: Mapped["Post"] = relationship(back_populates="likes")
@@ -1238,7 +1238,7 @@ class Base(DeclarativeBase):
 
 
 class User(Base):
-    __tablename__ = "user"
+    __tablename__ = "User"
 
     id: Mapped[str] = mapped_column(primary_key=True)
     name: Mapped[str]
@@ -1247,11 +1247,11 @@ class User(Base):
     following: Mapped[list["Follow"]] = relationship(foreign_keys="Follow.follower_id", back_populates="follower")
 
 class Follow(Base):
-    __tablename__ = "follow"
+    __tablename__ = "Follow"
 
     id: Mapped[str] = mapped_column(primary_key=True)
-    follower_id: Mapped[str] = mapped_column(ForeignKey("user.id"))
-    following_id: Mapped[str] = mapped_column(ForeignKey("user.id"))
+    follower_id: Mapped[str] = mapped_column("followerId", ForeignKey("User.id"))
+    following_id: Mapped[str] = mapped_column("followingId", ForeignKey("User.id"))
 
     follower: Mapped["User"] = relationship(foreign_keys=[follower_id], back_populates="following")
     following: Mapped["User"] = relationship(foreign_keys=[following_id], back_populates="followers")
@@ -1280,13 +1280,13 @@ class Base(DeclarativeBase):
 
 
 class User(Base):
-    __tablename__ = "user"
+    __tablename__ = "User"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str]
 
 class Post(Base):
-    __tablename__ = "post"
+    __tablename__ = "Post"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str]
@@ -1314,7 +1314,7 @@ class Base(DeclarativeBase):
 
 
 class Blob(Base):
-    __tablename__ = "blob"
+    __tablename__ = "Blob"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     data: Mapped[bytes]
@@ -1342,7 +1342,7 @@ class Base(DeclarativeBase):
 
 
 class Metric(Base):
-    __tablename__ = "metric"
+    __tablename__ = "Metric"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     counter: Mapped[int] = mapped_column(BigInteger)
@@ -1368,7 +1368,7 @@ class Base(DeclarativeBase):
 
 
 class User(Base):
-    __tablename__ = "user"
+    __tablename__ = "User"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     first_name: Mapped[str]
@@ -1417,15 +1417,15 @@ class Base(DeclarativeBase):
 
 
 class Article(Base):
-    __tablename__ = "article"
+    __tablename__ = "Article"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     title: Mapped[str]
     slug: Mapped[str] = mapped_column(unique=True)
     body: Mapped[Optional[str]]
     published: Mapped[bool] = mapped_column(default=False)
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column("createdAt", server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column("updatedAt", default=func.now(), onupdate=func.now())
 `,
     )
   })
@@ -1465,12 +1465,12 @@ class Base(DeclarativeBase):
 
 
 class User(Base):
-    __tablename__ = "user"
+    __tablename__ = "User"
 
     id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid_mod.uuid4()))
 
 class Event(Base):
-    __tablename__ = "event"
+    __tablename__ = "Event"
 
     id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid6.uuid7()))
 `,
@@ -1503,7 +1503,7 @@ class Base(DeclarativeBase):
 
 
 class Ticket(Base):
-    __tablename__ = "ticket"
+    __tablename__ = "Ticket"
 
     id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(ULID()))
     label: Mapped[str]
@@ -1548,20 +1548,20 @@ class Base(DeclarativeBase):
 post_tags = Table(
     "_PostTags",
     Base.metadata,
-    Column("A", String, ForeignKey("post.id"), primary_key=True),
-    Column("B", String, ForeignKey("tag.id"), primary_key=True),
+    Column("A", String, ForeignKey("Post.id"), primary_key=True),
+    Column("B", String, ForeignKey("Tag.id"), primary_key=True),
 )
 
 
 class Post(Base):
-    __tablename__ = "post"
+    __tablename__ = "Post"
 
     id: Mapped[str] = mapped_column(primary_key=True)
 
     tags: Mapped[list["Tag"]] = relationship(secondary=post_tags, back_populates="posts")
 
 class Tag(Base):
-    __tablename__ = "tag"
+    __tablename__ = "Tag"
 
     id: Mapped[str] = mapped_column(primary_key=True)
 
@@ -1601,10 +1601,10 @@ class Base(DeclarativeBase):
 
 
 class Sensor(Base):
-    __tablename__ = "sensor"
+    __tablename__ = "Sensor"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    seen_at: Mapped[Optional[datetime]] = mapped_column("seenAt", DateTime(timezone=True))
 `)
   })
 })
@@ -1624,182 +1624,182 @@ const NATIVE_TYPES: readonly (readonly [
     'String',
     '@db.VarChar(255)',
     ['VarChar', ['255']],
-    'from sqlalchemy import String\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'from sqlalchemy import String\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[str] = mapped_column(String(255))\n',
   ],
   [
     'String',
     '@db.VarChar',
     ['VarChar', []],
-    'from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[str]\n',
   ],
   [
     'String',
     '@db.Char(10)',
     ['Char', ['10']],
-    'from sqlalchemy import String\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'from sqlalchemy import String\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[str] = mapped_column(String(10))\n',
   ],
   [
     'String',
     '@db.Char',
     ['Char', []],
-    'from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[str]\n',
   ],
   [
     'String',
     '@db.Text',
     ['Text', []],
-    'from sqlalchemy import Text\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'from sqlalchemy import Text\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[str] = mapped_column(Text)\n',
   ],
   [
     'String',
     '@db.MediumText',
     ['MediumText', []],
-    'from sqlalchemy import Text\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'from sqlalchemy import Text\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[str] = mapped_column(Text)\n',
   ],
   [
     'String',
     '@db.LongText',
     ['LongText', []],
-    'from sqlalchemy import Text\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'from sqlalchemy import Text\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[str] = mapped_column(Text)\n',
   ],
   [
     'String',
     '@db.TinyText',
     ['TinyText', []],
-    'from sqlalchemy import Text\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'from sqlalchemy import Text\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[str] = mapped_column(Text)\n',
   ],
   [
     'Int',
     '@db.SmallInt',
     ['SmallInt', []],
-    'from sqlalchemy import SmallInteger\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'from sqlalchemy import SmallInteger\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[int] = mapped_column(SmallInteger)\n',
   ],
   [
     'Int',
     '@db.TinyInt',
     ['TinyInt', []],
-    'from sqlalchemy import SmallInteger\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'from sqlalchemy import SmallInteger\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[int] = mapped_column(SmallInteger)\n',
   ],
   [
     'Int',
     '@db.MediumInt',
     ['MediumInt', []],
-    'from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[int]\n',
   ],
   [
     'Float',
     '@db.DoublePrecision',
     ['DoublePrecision', []],
-    'from sqlalchemy import Double\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'from sqlalchemy import Double\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[float] = mapped_column(Double)\n',
   ],
   [
     'Float',
     '@db.Double',
     ['Double', []],
-    'from sqlalchemy import Double\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'from sqlalchemy import Double\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[float] = mapped_column(Double)\n',
   ],
   [
     'Float',
     '@db.Real',
     ['Real', []],
-    'from sqlalchemy import REAL\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'from sqlalchemy import REAL\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[float] = mapped_column(REAL)\n',
   ],
   [
     'Decimal',
     '@db.Decimal(10, 2)',
     ['Decimal', ['10', '2']],
-    'from sqlalchemy import Numeric\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom decimal import Decimal as DecimalType\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'from sqlalchemy import Numeric\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom decimal import Decimal as DecimalType\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[DecimalType] = mapped_column(Numeric(precision=10, scale=2))\n',
   ],
   [
     'Decimal',
     '@db.Decimal',
     ['Decimal', []],
-    'from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom decimal import Decimal as DecimalType\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom decimal import Decimal as DecimalType\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[DecimalType]\n',
   ],
   [
     'Decimal',
     '@db.Money(10, 2)',
     ['Money', ['10', '2']],
-    'from sqlalchemy import Numeric\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom decimal import Decimal as DecimalType\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'from sqlalchemy import Numeric\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom decimal import Decimal as DecimalType\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[DecimalType] = mapped_column(Numeric(precision=10, scale=2))\n',
   ],
   [
     'String',
     '@db.Uuid',
     ['Uuid', []],
-    'from sqlalchemy import Uuid\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nimport uuid as uuid_mod\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'from sqlalchemy import Uuid\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nimport uuid as uuid_mod\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[uuid_mod.UUID] = mapped_column(Uuid)\n',
   ],
   [
     'DateTime',
     '@db.Timestamp',
     ['Timestamp', []],
-    'from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import datetime\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import datetime\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[datetime]\n',
   ],
   [
     'DateTime',
     '@db.Timestamptz',
     ['Timestamptz', []],
-    'from sqlalchemy import DateTime\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import datetime\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'from sqlalchemy import DateTime\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import datetime\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[datetime] = mapped_column(DateTime(timezone=True))\n',
   ],
   [
     'DateTime',
     '@db.Date',
     ['Date', []],
-    'from sqlalchemy import Date\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import datetime, date\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'from sqlalchemy import Date\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import datetime, date\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[date] = mapped_column(Date)\n',
   ],
   [
     'DateTime',
     '@db.Time',
     ['Time', []],
-    'from sqlalchemy import Time\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import datetime, time as time_type\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'from sqlalchemy import Time\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import datetime, time as time_type\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[time_type] = mapped_column(Time)\n',
   ],
   [
     'DateTime',
     '@db.Timetz',
     ['Timetz', []],
-    'from sqlalchemy import Time\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import datetime\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'from sqlalchemy import Time\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import datetime\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[time_type] = mapped_column(Time(timezone=True))\n',
   ],
   [
     'Json',
     '@db.JsonB',
     ['JsonB', []],
-    'from sqlalchemy import JSON\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom typing import Any\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'from sqlalchemy import JSON\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom typing import Any\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[dict[str, Any]] = mapped_column(JSON)\n',
   ],
   [
     'String',
     '@db.Xml',
     ['Xml', []],
-    'from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[str]\n',
   ],
   [
     'String',
     '@db.Nope',
     ['Nope', []],
-    'from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "row"\n\n',
+    'from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[str]\n',
   ],
 ]

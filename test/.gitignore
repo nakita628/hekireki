@@ -9,6 +9,7 @@ harness/ecto/lib/
 harness/drizzle/schema.ts
 harness/kysely/types.ts
 harness/activerecord/models/
+harness/activerecord/config/
 harness/eloquent/models/
 harness/atlas/schema.hcl
 harness/efcore/Models/

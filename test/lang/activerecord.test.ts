@@ -5,7 +5,15 @@ import { join, resolve } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vite-plus/test'
 
 const harness = resolve(import.meta.dirname, '..', 'harness', 'activerecord')
-const hasRuby = spawnSync('ruby', ['--version'], { stdio: 'ignore' }).status === 0
+// The Gemfile's Rails series needs Ruby 3.2 or newer; an older local Ruby
+// skips like a machine without one, instead of failing at bundle install.
+const rubyVersion = spawnSync('ruby', ['-e', 'print RUBY_VERSION'], { encoding: 'utf8' })
+const hasRuby =
+  rubyVersion.status === 0 &&
+  (() => {
+    const [major = 0, minor = 0] = rubyVersion.stdout.split('.').map(Number)
+    return major > 3 || (major === 3 && minor >= 2)
+  })()
 
 describe('activerecord', () => {
   // Skipping keeps `vp test` runnable without Ruby installed; a CI leg that

@@ -1,17 +1,16 @@
-# Application user. Fully annotated for every validator generator,
-# with a UUIDv7 primary key, enum default, scalar list, @map columns,
-# @updatedAt, and relations of every cardinality.
 class User < ApplicationRecord
-  self.table_name = "users"
-
   attribute :id, default: -> { SecureRandom.uuid_v7 }
+  attribute :interests, default: -> { [] }
 
-  enum :role, { ADMIN: "ADMIN", EDITOR: "EDITOR", VIEWER: "VIEWER" }
+  enum :role, { admin: "ADMIN", editor: "EDITOR", viewer: "VIEWER" }, default: :viewer, validate: true
 
-  has_one :profile, class_name: "Profile", foreign_key: "user_id"
-  has_many :posts, class_name: "Post", foreign_key: "author_id"
-  has_many :comments, class_name: "Comment", foreign_key: "author_id"
-  has_many :orders, class_name: "Order", foreign_key: "user_id"
-  has_many :followers, class_name: "Follow", foreign_key: "following_id"
-  has_many :following, class_name: "Follow", foreign_key: "follower_id"
+  validates :email, presence: true, uniqueness: true
+  validates :name, presence: true
+
+  has_one :profile, dependent: :destroy
+  has_many :posts, foreign_key: "author_id", inverse_of: :author, dependent: :destroy
+  has_many :comments, foreign_key: "author_id", inverse_of: :author, dependent: :nullify
+  has_many :orders, dependent: :restrict_with_error
+  has_many :followers, class_name: "Follow", foreign_key: "following_id", inverse_of: :following, dependent: :destroy
+  has_many :following, class_name: "Follow", foreign_key: "follower_id", inverse_of: :follower, dependent: :destroy
 end

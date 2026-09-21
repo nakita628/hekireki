@@ -102,7 +102,7 @@ describe('ectoSchemaFiles', () => {
           posts: [MyApp.BlogPost.t()]
         }
 
-  schema "user" do
+  schema "User" do
     field(:id, :integer, primary_key: true)
     field(:name, :string)
     field(:role, Ecto.Enum, values: [:USER, :ADMIN])
@@ -124,7 +124,7 @@ end`,
           author: MyApp.User.t() | nil
         }
 
-  schema "blog_post" do
+  schema "BlogPost" do
     field(:id, :integer, primary_key: true)
     field(:title, :string)
     field(:author_id, :id, source: :authorId)
@@ -154,7 +154,7 @@ end`,
           posts: [My.App.BlogPost.t()]
         }
 
-  schema "user" do
+  schema "User" do
     field(:id, :integer, primary_key: true)
     field(:name, :string)
     field(:role, Ecto.Enum, values: [:USER, :ADMIN])
@@ -176,7 +176,7 @@ end`,
           author: My.App.User.t() | nil
         }
 
-  schema "blog_post" do
+  schema "BlogPost" do
     field(:id, :integer, primary_key: true)
     field(:title, :string)
     field(:author_id, :id, source: :authorId)
@@ -201,7 +201,7 @@ end`,
           id: integer()
         }
 
-  schema "bare" do
+  schema "Bare" do
     field(:id, :integer, primary_key: true)
   end
 end`,

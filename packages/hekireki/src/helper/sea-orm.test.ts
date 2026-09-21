@@ -217,7 +217,7 @@ describe('generateEntityFile with renameAll', () => {
       '#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]',
     )
     expect(result).toContain('#[serde(rename_all = "camelCase")]')
-    expect(result).toContain('#[sea_orm(table_name = "user")]')
+    expect(result).toContain('#[sea_orm(table_name = "User")]')
   })
 
   it('does not generate serde rename_all when renameAll is not set', () => {
@@ -369,7 +369,7 @@ use sea_orm::Set;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
-#[sea_orm(table_name = "user")]
+#[sea_orm(table_name = "User")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: String,
@@ -409,7 +409,7 @@ use sea_orm::Set;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
-#[sea_orm(table_name = "event")]
+#[sea_orm(table_name = "Event")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: String,
@@ -461,7 +461,7 @@ use sea_orm::Set;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
-#[sea_orm(table_name = "ticket")]
+#[sea_orm(table_name = "Ticket")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: String,
@@ -593,7 +593,7 @@ use sea_orm::Set;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
-#[sea_orm(table_name = "account")]
+#[sea_orm(table_name = "Account")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: String,

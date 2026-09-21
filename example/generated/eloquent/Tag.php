@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
  */
 class Tag extends Model
 {
-    protected $table = 'tag';
+    protected $table = 'Tag';
 
     public $timestamps = false;
 

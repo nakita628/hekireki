@@ -484,7 +484,7 @@ export function ectoSchemas(
         '',
         ...typeSpecLines,
         '',
-        `  schema "${model.dbName ?? makeSnakeCase(model.name)}" do`,
+        `  schema "${model.dbName ?? model.name}" do`,
         ...schemaFields,
         ...fkFieldLines,
         ...belongsToLines,

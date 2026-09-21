@@ -1,7 +1,5 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { makeSnakeCase } from '../utils/index.js'
-
 const PRISMA_TO_GO: { [k: string]: string } = {
   String: 'string',
   Int: 'int',
@@ -217,7 +215,7 @@ export function buildGormTags(
   compositeIndexTags: readonly string[],
   enums?: readonly DMMF.DatamodelEnum[],
 ) {
-  const columnName = field.dbName ?? makeSnakeCase(field.name)
+  const columnName = field.dbName ?? field.name
   const isUuidDefault = isFunctionDefault(field.default) && field.default.name === 'uuid'
   const isUlidDefault = isFunctionDefault(field.default) && field.default.name === 'ulid'
   const isNowDefault =
@@ -269,18 +267,19 @@ export function buildGormTags(
 }
 
 function collectCompositeIndexTags(model: DMMF.Model, indexes: readonly DMMF.Index[]) {
-  // Index names are global (per-schema) in PostgreSQL, so qualify with the table
-  // name to avoid `idx_user_id` colliding across tables during AutoMigrate.
-  const tableName = model.dbName ?? makeSnakeCase(model.name)
+  // An index Prisma left unnamed is named as Prisma Migrate names it
+  // (`Post_authorId_idx`, `User_email_key`), so AutoMigrate and the migration
+  // agree; index names are global per schema in PostgreSQL either way.
+  const tableName = model.dbName ?? model.name
 
   const uniqueTags = model.uniqueFields
     .filter((fields) => fields.length > 1)
     .flatMap((fields) => {
       const cols = fields.map((f) => {
         const fo = model.fields.find((mf) => mf.name === f)
-        return fo?.dbName ?? makeSnakeCase(f)
+        return fo?.dbName ?? f
       })
-      const idxName = `idx_${tableName}_${cols.join('_')}_unique`
+      const idxName = `${tableName}_${cols.join('_')}_key`
       return fields.map((f): [string, string] => [f, `uniqueIndex:${idxName}`])
     })
 
@@ -290,7 +289,7 @@ function collectCompositeIndexTags(model: DMMF.Model, indexes: readonly DMMF.Ind
       const idxName =
         idx.dbName ??
         idx.name ??
-        `idx_${tableName}_${idx.fields.map((f) => makeSnakeCase(f.name)).join('_')}`
+        `${tableName}_${idx.fields.map((f) => model.fields.find((mf) => mf.name === f.name)?.dbName ?? f.name).join('_')}_idx`
       return idx.fields.map((f): [string, string] => [f.name, `index:${idxName}`])
     })
 
@@ -537,7 +536,7 @@ export function generateModelStruct(
 
   const compositeTagMap = collectCompositeIndexTags(model, indexes)
 
-  const tableName = model.dbName ?? makeSnakeCase(model.name)
+  const tableName = model.dbName ?? model.name
   const scalarFields = model.fields.filter((f) => f.kind !== 'object')
 
   const fieldLines = scalarFields.map((field) => {
@@ -548,15 +547,14 @@ export function generateModelStruct(
 
   const relationLines = generateRelationFields(model, associations)
 
-  const tableNameMethod =
-    tableName !== makeSnakeCase(model.name)
-      ? [
-          '',
-          `func (${goModelName(model.name)}) TableName() string {`,
-          `\treturn "${tableName}"`,
-          '}',
-        ]
-      : []
+  // GORM would pluralise the snake_cased struct name (Warehouse -> warehouses);
+  // the table is Prisma's, so every model says which.
+  const tableNameMethod = [
+    '',
+    `func (${goModelName(model.name)}) TableName() string {`,
+    `\treturn "${tableName}"`,
+    '}',
+  ]
 
   return [
     `type ${goModelName(model.name)} struct {`,

@@ -21,7 +21,7 @@ defmodule Example.Profile do
           user: Example.User.t() | nil
         }
 
-  schema "profile" do
+  schema "Profile" do
     field(:id, :string, primary_key: true)
     field(:bio, :string)
     field(:nickname, :string, default: "anonymous")

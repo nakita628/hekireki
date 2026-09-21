@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
  */
 class Actor extends Model
 {
-    protected $table = 'actor';
+    protected $table = 'Actor';
 
     public $timestamps = false;
 

@@ -40,7 +40,7 @@ export const users = pgTable('users', {
     .$onUpdate(() => new Date()),
 })
 
-export const profile = pgTable('profile', {
+export const profile = pgTable('Profile', {
   id: text('id')
     .primaryKey()
     .$defaultFn(() => createId()),
@@ -77,7 +77,7 @@ export const posts = pgTable(
   (table) => [index('idx_posts_authorId').on(table.authorId)],
 )
 
-export const tag = pgTable('tag', {
+export const tag = pgTable('Tag', {
   id: serial('id').primaryKey(),
   label: text('label').notNull().unique(),
 })
@@ -111,7 +111,7 @@ export const follows = pgTable(
 )
 
 export const category = pgTable(
-  'category',
+  'Category',
   { id: serial('id').primaryKey(), name: text('name').notNull(), parentId: integer('parent_id') },
   (table) => [unique().on(table.parentId, table.name)],
 )
@@ -151,12 +151,12 @@ export const auditLogs = pgTable('audit_logs', {
     .default(sql`now()`),
 })
 
-export const actor = pgTable('actor', {
+export const actor = pgTable('Actor', {
   id: serial('id').primaryKey(),
   name: text('name').notNull(),
 })
 
-export const film = pgTable('film', {
+export const film = pgTable('Film', {
   id: serial('id').primaryKey(),
   title: text('title').notNull(),
 })
