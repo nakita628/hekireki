@@ -1,0 +1,11 @@
+ja:
+  activerecord:
+    attributes:
+      profile:
+        bio: "自己紹介"
+    errors:
+      models:
+        profile:
+          attributes:
+            bio:
+              too_long: "は%{count}文字以内で入力してください"

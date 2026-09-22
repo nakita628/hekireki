@@ -6,6 +6,15 @@ new unique key, a new required column, a relation made required), and what becom
 decided on the Migrate page of `hekireki studio`, rehearsed, and run. `pnpm run demo` in it does
 the same from the command line; see [migrate/README.md](migrate/README.md).
 
+`active-record/` runs the models `hekireki-activerecord` writes against the real Active Record on
+SQLite: the `User` and `Session` of `rails generate authentication` and a blog around them, with a
+Ruby check for each of the bugs reported on schemas of that shape (a doubled blank-password error,
+an untranslated `belongs_to` error, a `has_many :through` defined before its through) and for each
+thing the schema promises: validations and their translations, defaults, enums, timestamps, a uuid
+key, every `onDelete`, a self relation, an implicit many-to-many, a composite key. `pnpm run demo`
+in it generates, creates the database, runs the check and RuboCop; see
+[active-record/README.md](active-record/README.md).
+
 The other three are small projects to try `hekireki seed` and `hekireki studio` on, one per database. Each is a
 `schema.prisma` with the `prisma-client` and `hekireki-seed` generators, the schema module the
 latter writes (committed, so the config type-checks before `pnpm setup` has run), and a typed

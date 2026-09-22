@@ -1,8 +1,7 @@
 class OrderItem < ApplicationRecord
   attribute :qty, default: 1
 
-  validates :order_id, uniqueness: { scope: :sku }
-  validates :sku, presence: true, length: { maximum: 32 }
+  validates :sku, presence: true, length: { maximum: 32 }, uniqueness: { scope: :order_id }
   validates :price, presence: true
 
   belongs_to :order, inverse_of: :items

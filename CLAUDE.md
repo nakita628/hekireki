@@ -113,4 +113,8 @@ pnpm build
 From the repository root: `npx vp fmt --check` and `pnpm lint` (markdown, prose, spelling,
 workflows). The database-backed tests under `test/db/` need the servers named in
 [CONTRIBUTING.md](CONTRIBUTING.md) and skip without them; `examples/migrate` runs the migration
-flow end to end on SQLite with `pnpm demo`.
+flow end to end on SQLite with `pnpm demo`. A change to the Active Record generator is run in
+`examples/active-record` (`pnpm run demo`: generate, `prisma db push`, `check.rb` against Active
+Record 8.1 on SQLite, RuboCop), which needs Ruby 3.2 or newer. Where the Ruby on the machine is
+older, a `ruby:4.0` container with the example directory mounted does it; the official image
+points `BUNDLE_APP_CONFIG` elsewhere, so set it to the example's `.bundle` for the path to hold.

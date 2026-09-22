@@ -21,6 +21,7 @@ on:
       # generator change.
       - packages/hekireki/src/**
       - test/**
+      - examples/active-record/**
       - .github/workflows/lang-check.yml
   workflow_dispatch: {}
 
@@ -144,6 +145,20 @@ jobs:
       # silently failed cannot pass by skipping.
       - name: Lang check (generate + syntax + type check)
         run: vp run --filter ./test test lang/${{ matrix.lang }}.test.ts
+
+      # examples/active-record end to end: the models `rails generate authentication` would write
+      # and a blog around them, generated, pushed to SQLite and run against Active Record itself
+      # (validations, defaults, enums, timestamps, every onDelete, a has_many :through), then read
+      # by rubocop-rails-omakase. Its own Gemfile adds sqlite3, bcrypt and RuboCop to the harness's.
+      # The example's gems (sqlite3, bcrypt, RuboCop and its tree) are its own bundle, cached
+      # on its lockfile; setup-ruby's cache above is the harness's.
+      - if: matrix.lang == 'activerecord'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: examples/active-record/vendor/bundle
+          key: active-record-gems-${{ runner.os }}-${{ hashFiles('examples/active-record/Gemfile.lock') }}
+      - if: matrix.lang == 'activerecord'
+        run: vp run --filter ./examples/active-record demo
 
   # Prove the published tarball still ships dist/ only. The language harnesses
   # now live in test/ rather than inside the package, so nothing under

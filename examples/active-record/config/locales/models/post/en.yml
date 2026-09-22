@@ -1,0 +1,16 @@
+en:
+  activerecord:
+    models:
+      post: "Post"
+    attributes:
+      post:
+        title: "Title"
+    errors:
+      models:
+        post:
+          attributes:
+            title:
+              too_long: "is too long (maximum is %{count} characters)"
+            views:
+              not_a_number: "must be 0 or more"
+              greater_than_or_equal_to: "must be 0 or more"

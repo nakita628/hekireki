@@ -1,0 +1,8 @@
+en:
+  activerecord:
+    models:
+      session: "Session"
+    attributes:
+      session:
+        user_id: "User ID"
+        user: "User"
