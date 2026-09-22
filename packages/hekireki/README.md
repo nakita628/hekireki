@@ -129,8 +129,28 @@ npx hekireki studio                  # ./prisma/schema.prisma or ./schema.prisma
 npx hekireki studio --url file:./dev.db
 ```
 
-The ER diagram, the rows of each model, a schema editor, a SQL console and a Prisma Client
-playground, in the browser. SQLite, PostgreSQL and MySQL.
+Your schema and database in the browser, on SQLite, PostgreSQL and MySQL.
+
+**Browse the rows** of each model: search, add, edit and export them.
+
+![The rows of the User model](https://raw.githubusercontent.com/nakita628/hekireki/refs/heads/main/assets/img/studio-data.png)
+
+**Run SQL** with completion from the schema. The ER diagram marks the tables a statement reads,
+and the result comes with the TypeScript types of its rows.
+
+![A SELECT typed in the SQL console](https://raw.githubusercontent.com/nakita628/hekireki/refs/heads/main/assets/img/studio-sql.gif)
+
+**Try Prisma Client calls** and see the SQL each one sends.
+
+![prisma.user.findMany() in the Prisma Client playground](https://raw.githubusercontent.com/nakita628/hekireki/refs/heads/main/assets/img/studio-prisma-client.gif)
+
+**Edit the schema** beside its ER diagram, which follows the file as it changes.
+
+![The Prisma schema editor and the ER diagram](https://raw.githubusercontent.com/nakita628/hekireki/refs/heads/main/assets/img/studio-prisma-schema.png)
+
+**Read the docs** of every model: its fields, and an example of each operation.
+
+![The generated docs of the User model](https://raw.githubusercontent.com/nakita628/hekireki/refs/heads/main/assets/img/studio-docs.png)
 
 ## Seed
 
