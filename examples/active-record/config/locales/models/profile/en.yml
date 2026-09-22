@@ -1,0 +1,11 @@
+en:
+  activerecord:
+    attributes:
+      profile:
+        bio: "Bio"
+    errors:
+      models:
+        profile:
+          attributes:
+            bio:
+              too_long: "is too long (maximum is %{count} characters)"

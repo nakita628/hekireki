@@ -1,0 +1,169 @@
+// The models of `rails generate authentication`, a blog around them, and a has_many :through, on
+// SQLite so nothing needs to run. `pnpm run demo` writes app/models and config/locales/models,
+// creates dev.db and runs check.rb against them with the real Active Record: each thing the
+// generator writes into a model is used there, not only loaded.
+
+datasource db {
+  provider = "sqlite"
+}
+
+generator Hekireki-ActiveRecord {
+  provider = "hekireki-activerecord"
+  output   = "app/models"
+}
+
+/// A person who signs in. has_secure_password reads and writes password_digest and reports a
+/// blank password on `password`, so the column gets no `presence` of its own.
+/// @ar.name(ja: "ユーザー", en: "User")
+/// @ar.has_secure_password
+/// @ar.normalizes :email_address, with: ->(e) { e.strip.downcase }
+/// @ar.before_validation { self.display_name = email_address.to_s.split("@").first if display_name.blank? }
+model User {
+  id             Int       @id @default(autoincrement())
+  /// @ar.name(ja: "メールアドレス", en: "Email address")
+  /// @ar.format(with: URI::MailTo::EMAIL_REGEXP, message: { ja: "の形式が正しくありません", en: "is not an email address" })
+  emailAddress   String    @unique @map("email_address")
+  passwordDigest String    @map("password_digest")
+  /// NOT NULL, but filled from the address before validation when left empty: the presence the
+  /// schema implies is taken away.
+  /// @ar.presence(false)
+  displayName    String    @map("display_name")
+  admin          Boolean   @default(false)
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  sessions       Session[]
+  profile        Profile?
+  posts          Post[]
+  comments       Comment[]
+
+  @@map("users")
+}
+
+/// A signed-in browser. Rails reports a missing belongs_to on the association, `user`, and reads
+/// the column's name for `user_id`: each has its own @ar.name.
+/// @ar.name(ja: "セッション", en: "Session")
+model Session {
+  id        Int      @id @default(autoincrement())
+  /// @ar.name(ja: "ユーザーID", en: "User ID")
+  userId    Int      @map("user_id")
+  /// @ar.name(ja: "ユーザー", en: "User")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("sessions")
+}
+
+/// One per user: a has_one from the user's side, destroyed with the user.
+model Profile {
+  id     Int     @id @default(autoincrement())
+  userId Int     @unique @map("user_id")
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// @ar.name(ja: "自己紹介", en: "Bio")
+  /// @ar.length(maximum: 140, too_long: { ja: "は%{count}文字以内で入力してください", en: "is too long (maximum is %{count} characters)" })
+  bio    String?
+
+  @@map("profiles")
+}
+
+/// Members the database holds under other names: what `@map` does to an enum. `public` and
+/// `private` are methods of every Ruby module, so the predicates carry the attribute's prefix.
+enum Visibility {
+  PUBLIC  @map("public")
+  PRIVATE @map("private")
+  UNLISTED
+}
+
+enum PostStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+/// The model's own lines come after the generated associations, so a has_many :through finds
+/// the has_many it goes through, and a scope may use the enum's.
+/// @ar.name(ja: "記事", en: "Post")
+/// @ar.has_many :tags, through: :post_tags
+/// @ar.scope :recent, -> { order(created_at: :desc) }
+model Post {
+  id         Int        @id @default(autoincrement())
+  /// @ar.name(ja: "タイトル", en: "Title")
+  /// @ar.length(maximum: 80, too_long: { ja: "は%{count}文字以内で入力してください", en: "is too long (maximum is %{count} characters)" })
+  title      String
+  body       String     @default("")
+  status     PostStatus @default(DRAFT)
+  visibility Visibility @default(PUBLIC)
+  /// @ar.numericality(greater_than_or_equal_to: 0, message: { ja: "は0以上で入力してください", en: "must be 0 or more" })
+  views      Int        @default(0)
+  /// A post keeps its author's id when the author is optional, and loses it when the author goes.
+  authorId   Int?       @map("author_id")
+  author     User?      @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  /// Rails' single-table inheritance column, which this model does not use.
+  type       String?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  postTags   PostTag[]
+  comments   Comment[]
+  categories Category[]
+
+  @@map("posts")
+}
+
+/// A random primary key: `first` and `last` order by the created timestamp instead.
+/// @ar.has_many :posts, through: :post_tags
+model Tag {
+  id        String    @id @default(uuid())
+  name      String    @unique
+  createdAt DateTime  @default(now()) @map("created_at")
+  postTags  PostTag[]
+
+  @@map("tags")
+}
+
+model PostTag {
+  postId Int    @map("post_id")
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tagId  String @map("tag_id")
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([postId, tagId])
+  @@map("post_tags")
+}
+
+/// An implicit many-to-many: Prisma's own join table, _CategoryToPost with columns A and B. A
+/// tree as well: a name is unique among the children of one parent, and the index counts the
+/// roots apart (NULL is distinct), so two roots may share a name.
+model Category {
+  id       Int        @id @default(autoincrement())
+  name     String
+  parentId Int?       @map("parent_id")
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children Category[] @relation("CategoryTree")
+  posts    Post[]
+
+  @@unique([parentId, name])
+  @@map("categories")
+}
+
+/// A self relation for replies, and a unique pair: one comment per user per post carries a
+/// `slot`, unique within the post.
+/// @ar.name(ja: "コメント", en: "Comment")
+model Comment {
+  id       Int       @id @default(autoincrement())
+  /// @ar.name(ja: "本文", en: "Body")
+  body     String
+  slot     Int
+  postId   Int       @map("post_id")
+  post     Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId   Int       @map("user_id")
+  /// The author, who cannot be deleted while a comment of theirs stands.
+  user     User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  parentId Int?      @map("parent_id")
+  parent   Comment?  @relation("Replies", fields: [parentId], references: [id], onDelete: SetNull)
+  replies  Comment[] @relation("Replies")
+
+  @@unique([postId, slot])
+  @@map("comments")
+}

@@ -1,0 +1,7 @@
+en:
+  activerecord:
+    models:
+      comment: "Comment"
+    attributes:
+      comment:
+        body: "Body"

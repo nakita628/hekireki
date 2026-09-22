@@ -20,6 +20,8 @@
     "packages/hekireki/docs/studio-api.md",
     "example/generated/**",
     "examples/*/generated/**",
+    // The gems `pnpm run demo` in examples/active-record installs beside the check.
+    "examples/*/vendor/**",
     // What a Playwright run leaves behind.
     "**/e2e/.results/**",
     "**/e2e/.workspace/**",

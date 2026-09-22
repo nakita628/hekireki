@@ -1,0 +1,16 @@
+ja:
+  activerecord:
+    models:
+      post: "記事"
+    attributes:
+      post:
+        title: "タイトル"
+    errors:
+      models:
+        post:
+          attributes:
+            title:
+              too_long: "は%{count}文字以内で入力してください"
+            views:
+              not_a_number: "は0以上で入力してください"
+              greater_than_or_equal_to: "は0以上で入力してください"

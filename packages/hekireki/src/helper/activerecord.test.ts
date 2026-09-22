@@ -1375,6 +1375,172 @@ end`)
   validates :shelf_no, presence: true
 end`)
   })
+
+  it('validates a @@unique pair on its own column, scoped by the foreign key', () => {
+    const comment = makeModel({
+      name: 'Comment',
+      dbName: 'comments',
+      uniqueFields: [
+        ['postId', 'slot'],
+        ['postId', 'userId'],
+      ],
+      fields: [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'slot', type: 'Int' }),
+        makeField({ name: 'postId', type: 'Int', dbName: 'post_id' }),
+        makeField({
+          name: 'post',
+          type: 'Post',
+          kind: 'object',
+          relationName: 'CommentToPost',
+          relationFromFields: ['postId'],
+          relationToFields: ['id'],
+        }),
+        makeField({ name: 'userId', type: 'Int', dbName: 'user_id' }),
+        makeField({
+          name: 'user',
+          type: 'User',
+          kind: 'object',
+          relationName: 'CommentToUser',
+          relationFromFields: ['userId'],
+          relationToFields: ['id'],
+        }),
+      ],
+    })
+    expect(activeRecordModels([comment]))
+      .toContain(`  validates :slot, presence: true, uniqueness: { scope: :post_id }
+  validates :post_id, uniqueness: { scope: :user_id }
+`)
+  })
+
+  it('gives each unique set its own column, and a column its own line for a second set', () => {
+    const member = makeModel({
+      name: 'Member',
+      dbName: 'members',
+      uniqueFields: [
+        ['tenantId', 'email'],
+        ['tenantId', 'handle'],
+        ['email', 'handle'],
+      ],
+      fields: [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'tenantId', type: 'Int', dbName: 'tenant_id' }),
+        makeField({ name: 'email', type: 'String' }),
+        makeField({ name: 'handle', type: 'String', isRequired: false }),
+      ],
+    })
+    // tenantId is no foreign key here, so the first set is its own; the
+    // second passes over tenantId, which the first took, for handle; the
+    // third takes email, still free.
+    expect(activeRecordModels([member])).toBe(`class Member < ApplicationRecord
+  validates :tenant_id, presence: true, uniqueness: { scope: :email }
+  validates :email, presence: true, uniqueness: { scope: :handle, conditions: -> { where.not(handle: nil) } }
+  validates :handle, uniqueness: { scope: :tenant_id, allow_nil: true }
+end`)
+    // Two sets with one column that is not a foreign key: both are that
+    // column's, the second on a line of its own, and an @ar.uniqueness on the
+    // column replaces both.
+    const code = (documentation?: string) =>
+      makeModel({
+        name: 'Code',
+        dbName: 'codes',
+        uniqueFields: [
+          ['code', 'postId'],
+          ['code', 'userId'],
+        ],
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({ name: 'code', type: 'String', documentation }),
+          makeField({ name: 'postId', type: 'Int', dbName: 'post_id' }),
+          makeField({
+            name: 'post',
+            type: 'Post',
+            kind: 'object',
+            relationName: 'CodeToPost',
+            relationFromFields: ['postId'],
+            relationToFields: ['id'],
+          }),
+          makeField({ name: 'userId', type: 'Int', dbName: 'user_id' }),
+          makeField({
+            name: 'user',
+            type: 'User',
+            kind: 'object',
+            relationName: 'CodeToUser',
+            relationFromFields: ['userId'],
+            relationToFields: ['id'],
+          }),
+        ],
+      })
+    expect(activeRecordModels([code()]))
+      .toContain(`  validates :code, presence: true, uniqueness: { scope: :post_id }
+  validates :code, uniqueness: { scope: :user_id }
+`)
+    // The own uniqueness stands in for the set on the column's line; the other set is another constraint.
+    expect(activeRecordModels([code('@ar.uniqueness(scope: :post_id, case_sensitive: false)')]))
+      .toContain(`  validates :code, presence: true, uniqueness: { scope: :post_id, case_sensitive: false }
+  validates :code, uniqueness: { scope: :user_id }
+`)
+  })
+
+  it('keeps rows with an empty nullable scope column out of the check, as the index does', () => {
+    const category = makeModel({
+      name: 'Category',
+      dbName: 'categories',
+      uniqueFields: [['parentId', 'name']],
+      fields: [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'name', type: 'String' }),
+        makeField({ name: 'parentId', type: 'Int', isRequired: false, dbName: 'parent_id' }),
+        makeField({
+          name: 'parent',
+          type: 'Category',
+          kind: 'object',
+          isRequired: false,
+          relationName: 'Tree',
+          relationFromFields: ['parentId'],
+          relationToFields: ['id'],
+        }),
+        makeField({
+          name: 'children',
+          type: 'Category',
+          kind: 'object',
+          isList: true,
+          isRequired: false,
+          relationName: 'Tree',
+        }),
+      ],
+    })
+    expect(activeRecordModels([category])).toContain(
+      '  validates :name, presence: true, uniqueness: { scope: :parent_id, conditions: -> { where.not(parent_id: nil) } }\n',
+    )
+  })
+
+  it('leaves an enum or list member of a @@unique set to the scope', () => {
+    const enums: DMMF.DatamodelEnum[] = [
+      { name: 'Role', values: [{ name: 'ADMIN', dbName: null }], dbName: null },
+    ]
+    const membership = makeModel({
+      name: 'Membership',
+      dbName: 'memberships',
+      uniqueFields: [['userId', 'role']],
+      fields: [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'userId', type: 'Int', dbName: 'user_id' }),
+        makeField({
+          name: 'user',
+          type: 'User',
+          kind: 'object',
+          relationName: 'MembershipToUser',
+          relationFromFields: ['userId'],
+          relationToFields: ['id'],
+        }),
+        makeField({ name: 'role', type: 'Role', kind: 'enum' }),
+      ],
+    })
+    expect(activeRecordModels([membership], [membership], enums)).toContain(
+      '  validates :user_id, uniqueness: { scope: :role }\n',
+    )
+  })
 })
 
 describe('a whole model from its constraints', () => {
@@ -1632,9 +1798,123 @@ describe('@ar. annotations', () => {
   validates :note, presence: true
   validates :age, numericality: { only_integer: true, greater_than: 0 }
   validates :role, inclusion: { in: %w[ADMIN] }
+
   validates :title, :note, presence: true, on: :create
 end`)
     expect(activeRecordModels([todo], [todo], enums)).not.toContain('A thing to do.')
+  })
+
+  it('writes the model lines after the associations, so a has_many :through finds its through', () => {
+    const post = makeModel({
+      name: 'Post',
+      dbName: 'posts',
+      documentation: '@ar.has_many :tags, through: :post_tags',
+      fields: [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'title', type: 'String' }),
+        makeField({
+          name: 'postTags',
+          type: 'PostTag',
+          kind: 'object',
+          isList: true,
+          isRequired: false,
+          relationName: 'PostToPostTag',
+        }),
+      ],
+    })
+    const postTag = makeModel({
+      name: 'PostTag',
+      dbName: 'post_tags',
+      primaryKey: { name: null, fields: ['postId', 'tagId'] },
+      fields: [
+        makeField({ name: 'postId', type: 'Int', dbName: 'post_id' }),
+        makeField({
+          name: 'post',
+          type: 'Post',
+          kind: 'object',
+          relationName: 'PostToPostTag',
+          relationFromFields: ['postId'],
+          relationToFields: ['id'],
+          relationOnDelete: 'Cascade',
+        }),
+        makeField({ name: 'tagId', type: 'Int', dbName: 'tag_id' }),
+      ],
+    })
+    expect(activeRecordModels([post], [post, postTag])).toBe(`class Post < ApplicationRecord
+  validates :title, presence: true
+
+  has_many :post_tags, dependent: :destroy
+
+  has_many :tags, through: :post_tags
+end`)
+  })
+
+  it('leaves the digest of has_secure_password to it, which reports a blank password once', () => {
+    const user = (line: string, digest: string) =>
+      makeModel({
+        name: 'User',
+        dbName: 'users',
+        documentation: `@ar.${line}`,
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({
+            name: 'emailAddress',
+            type: 'String',
+            isUnique: true,
+            dbName: 'email_address',
+          }),
+          makeField({ name: 'digest', type: 'String', dbName: digest }),
+        ],
+      })
+    expect(activeRecordModels([user('has_secure_password', 'password_digest')]))
+      .toBe(`class User < ApplicationRecord
+  validates :email_address, presence: true, uniqueness: true
+
+  has_secure_password
+end`)
+    // A named password validates through its own name; the default one keeps its presence.
+    expect(
+      activeRecordModels([user('has_secure_password :recovery', 'recovery_digest')]),
+    ).toContain(
+      `  validates :email_address, presence: true, uniqueness: true
+
+  has_secure_password :recovery
+end`,
+    )
+    expect(
+      activeRecordModels([
+        user('has_secure_password :recovery, validations: false', 'password_digest'),
+      ]),
+    ).toContain('validates :password_digest, presence: true')
+    // validations: false adds no error on the password: the column keeps its own.
+    expect(
+      activeRecordModels([user('has_secure_password validations: false', 'password_digest')]),
+    ).toContain('validates :password_digest, presence: true')
+  })
+
+  it('drops the validator the schema implied when its call says false', () => {
+    const model = makeModel({
+      name: 'Todo',
+      fields: [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'title', type: 'String', documentation: '@ar.presence(false)' }),
+        makeField({ name: 'done', type: 'Boolean', documentation: '@ar.presence(false)' }),
+        makeField({ name: 'meta', type: 'Json', documentation: '@ar.presence(false)' }),
+        makeField({
+          name: 'slug',
+          type: 'String',
+          isUnique: true,
+          nativeType: ['VarChar', ['40']],
+          documentation: '@ar.uniqueness(false)\n@ar.length(false)',
+        }),
+      ],
+    })
+    expect(activeRecordProblems([model])).toStrictEqual([])
+    expect(activeRecordModels([model])).toBe(`class Todo < ApplicationRecord
+  self.table_name = "Todo"
+
+  validates :slug, presence: true
+end`)
   })
 })
 
@@ -1729,6 +2009,89 @@ end`)
   // directory: a second model never joins the first's file, a locale only one
   // of them names is only that one's file, and a model with nothing
   // translated has no directory at all.
+  it('writes a relation field name under the association, which the belongs_to error names', () => {
+    const session = makeModel({
+      name: 'Session',
+      dbName: 'sessions',
+      fields: [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({
+          name: 'userId',
+          type: 'Int',
+          dbName: 'user_id',
+          documentation: '@ar.name(ja: "ユーザーID", en: "User ID")',
+        }),
+        makeField({
+          name: 'user',
+          type: 'User',
+          kind: 'object',
+          relationName: 'SessionToUser',
+          relationFromFields: ['userId'],
+          relationToFields: ['id'],
+          documentation: '@ar.name(ja: "ユーザー", en: "User")',
+        }),
+        makeField({
+          name: 'refreshedBy',
+          type: 'User',
+          kind: 'object',
+          isRequired: false,
+          relationName: 'RefreshedSessions',
+          relationFromFields: ['refreshedById'],
+          relationToFields: ['id'],
+          documentation: '@ar.name(ja: "更新者")',
+        }),
+        makeField({ name: 'refreshedById', type: 'Int', isRequired: false }),
+      ],
+    })
+    expect(activeRecordProblems([session])).toStrictEqual([])
+    expect(activeRecordLocaleFiles([session]).find((f) => f.fileName.endsWith('ja.yml'))?.code)
+      .toBe(`ja:
+  activerecord:
+    attributes:
+      session:
+        user_id: "ユーザーID"
+        user: "ユーザー"
+        refreshed_by: "更新者"
+`)
+    // The association is validated by its belongs_to, or by a line on the model.
+    const presence = makeModel({
+      name: 'Session',
+      fields: [
+        makeField({
+          name: 'user',
+          type: 'User',
+          kind: 'object',
+          relationName: 'SessionToUser',
+          relationFromFields: ['userId'],
+          relationToFields: ['id'],
+          documentation:
+            '@ar.name(ja: "ユーザー")\n@ar.presence(message: { ja: "を選んでください" })',
+        }),
+      ],
+    })
+    expect(activeRecordProblems([presence])).toStrictEqual([
+      'field Session.user: the @ar. call "presence(message: { ja: "を選んでください" })" is on a relation field, which takes only @ar.name; validate the association with an @ar. line on the model',
+    ])
+    // A call arCalls refused already is one problem, not two.
+    const open = makeModel({
+      name: 'Session',
+      fields: [
+        makeField({
+          name: 'user',
+          type: 'User',
+          kind: 'object',
+          relationName: 'SessionToUser',
+          relationFromFields: ['userId'],
+          relationToFields: ['id'],
+          documentation: '@ar.presence(message: "x"',
+        }),
+      ],
+    })
+    expect(activeRecordProblems([open])).toStrictEqual([
+      'field Session.user: the @ar. call "presence(message: "x"" does not close its parentheses on its line; an @ar. call is one /// line',
+    ])
+  })
+
   it('gives each model its own directory with only the locales it names', () => {
     const tag = makeModel({
       name: 'Tag',

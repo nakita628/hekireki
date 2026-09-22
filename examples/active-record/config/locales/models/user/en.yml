@@ -1,0 +1,13 @@
+en:
+  activerecord:
+    models:
+      user: "User"
+    attributes:
+      user:
+        email_address: "Email address"
+    errors:
+      models:
+        user:
+          attributes:
+            email_address:
+              invalid: "is not an email address"

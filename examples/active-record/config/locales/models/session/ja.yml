@@ -1,0 +1,8 @@
+ja:
+  activerecord:
+    models:
+      session: "セッション"
+    attributes:
+      session:
+        user_id: "ユーザーID"
+        user: "ユーザー"

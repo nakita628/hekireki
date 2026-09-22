@@ -172,7 +172,11 @@ function namedValue(
   options: {
     readonly rule?: unknown
     readonly seed?: number
-    readonly bounds?: { nullRate: number | null; dates: { from: Date; to: Date } | null }
+    readonly bounds?: {
+      nullRate: number | null
+      dates: { from: Date; to: Date } | null
+      stringLength?: number | null
+    }
     readonly from?: Map<string, DMMF.Field>
   } = {},
 ) {
@@ -258,6 +262,24 @@ describe('makeFieldValue', () => {
   it('reads the field name: an email is an email, a name a name', () => {
     expect(value('email')).toMatch(/^[^@\s]+@[^@\s]+\.[a-z]+$/u)
     expect(value('name')).toMatch(/^\S+ \S+/u)
+  })
+
+  it("cuts a String with no @db type to the length the database gives it, MySQL's 191", () => {
+    const mysql = { nullRate: null, dates: null, stringLength: 191 }
+    const lengths = Array.from({ length: 200 }, (_, seed) => {
+      const body = namedValue('body', { seed, bounds: mysql })
+      return typeof body === 'string' ? body.length : -1
+    })
+    expect(Math.max(...lengths)).toBe(191)
+    expect(Math.min(...lengths)).toBeGreaterThan(0)
+    // With no limit, faker's paragraph runs past it; a rule's length still narrows.
+    const unbounded = Array.from({ length: 200 }, (_, seed) => {
+      const body = namedValue('body', { seed })
+      return typeof body === 'string' ? body.length : -1
+    })
+    expect(Math.max(...unbounded)).toBeGreaterThan(191)
+    const ruled = namedValue('body', { bounds: mysql, rule: { length: 10 } })
+    expect(typeof ruled === 'string' && ruled.length <= 10).toBe(true)
   })
 
   it('cuts strings to the native length and lets a rule cut further', () => {

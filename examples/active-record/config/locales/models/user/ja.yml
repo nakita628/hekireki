@@ -1,0 +1,13 @@
+ja:
+  activerecord:
+    models:
+      user: "ユーザー"
+    attributes:
+      user:
+        email_address: "メールアドレス"
+    errors:
+      models:
+        user:
+          attributes:
+            email_address:
+              invalid: "の形式が正しくありません"

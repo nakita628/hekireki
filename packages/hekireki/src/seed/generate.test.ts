@@ -329,6 +329,24 @@ describe('generateSeedRows', () => {
     ).toBe(true)
   })
 
+  it('keeps a String with no @db type inside the VARCHAR(191) MySQL makes of it', () => {
+    const config = resolveSeedConfig({
+      nullRate: 0,
+      models: { User: { count: 40 }, Profile: { count: 40 } },
+    })
+    const bios = (dialect: 'mysql' | 'postgresql') => {
+      const faker = new Faker({ locale: [allLocales.en, allLocales.base] })
+      faker.seed(42)
+      const entries = Effect.runSync(generateSeedRows({ tables: TABLES, config, faker, dialect }))
+      return rowsOf(entries, 'Profile').map((row) =>
+        typeof row.bio === 'string' ? row.bio.length : -1,
+      )
+    }
+    expect(Math.max(...bios('mysql'))).toBeLessThanOrEqual(191)
+    // PostgreSQL makes it text: the same paragraphs go in whole.
+    expect(Math.max(...bios('postgresql'))).toBeGreaterThan(191)
+  })
+
   it('draws fresh rows without a seed, and dates from the year before the run without a window', () => {
     const faker = new Faker({ locale: [allLocales.en, allLocales.base] })
     const rows = Effect.runSync(

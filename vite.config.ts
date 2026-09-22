@@ -23,6 +23,9 @@ export default defineConfig({
     // hono-takibi.config.ts). Workspace-level `fmt.ignorePatterns` never reach oxfmt.
     ignorePatterns: [
       'example/generated/**',
+      // What `prisma generate` writes in examples/active-record, committed as the generator has it.
+      'examples/active-record/app/**',
+      'examples/active-record/config/locales/models/**',
       'packages/hekireki/docs/studio-api.md',
       'packages/hekireki/src/studio/client/hooks/index.ts',
       'packages/hekireki/src/studio/client/routeTree.gen.ts',

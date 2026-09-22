@@ -210,7 +210,12 @@ function seedProgram(overrides: SeedOverrides, cwd: string) {
     const schema = yield* parseSchema(files)
     const tables = yield* makeSeedPlan(schema.datamodel)
     const faker = yield* makeFaker(config.seed, config.locale)
-    const entries = yield* generateSeedRows({ tables, config, faker })
+    const entries = yield* generateSeedRows({
+      tables,
+      config,
+      faker,
+      dialect: dialectOf(schema.provider),
+    })
     const report = {
       seed: config.seed,
       locale: config.locale ?? [],

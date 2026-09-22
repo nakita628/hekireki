@@ -146,11 +146,27 @@ export function activeRecordProblems(models: readonly DMMF.Model[]) {
     ...arCalls(model.documentation, 'model').problems.map(
       (problem) => `model ${model.name}: ${problem}`,
     ),
-    ...model.fields.flatMap((field) =>
-      arCalls(field.documentation, 'field').problems.map(
+    ...model.fields.flatMap((field) => {
+      const { calls, problems } = arCalls(field.documentation, 'field')
+      // The association a relation field stands for is validated by its
+      // `belongs_to`, or by a line on the model; the field itself only
+      // carries the name Rails reports that on.
+      const notNames =
+        field.kind === 'object'
+          ? calls
+              .filter((call) => {
+                const { validator } = validatorCall(call)
+                return validator !== null && validator !== 'name'
+              })
+              .map(
+                (call) =>
+                  `the @ar. call "${call}" is on a relation field, which takes only @ar.name; validate the association with an @ar. line on the model`,
+              )
+          : []
+      return [...problems, ...notNames].map(
         (problem) => `field ${model.name}.${field.name}: ${problem}`,
-      ),
-    ),
+      )
+    }),
   ])
 }
 
@@ -280,6 +296,10 @@ function validatorCall(call: string) {
     }
     return { validator, option: null, messages }
   }
+  // `presence(false)` is Rails' own way of saying no (`validates` skips an
+  // option that is false): the validator the schema implied is dropped and
+  // nothing is written for it.
+  if (args.trim() === 'false') return { validator, option: null, messages }
   const kept: string[] = []
   const translated: {
     name: string
@@ -366,11 +386,15 @@ export function activeRecordLocaleFiles(models: readonly DMMF.Model[]) {
         setPath(tree(m.locale), ['activerecord', 'models', modelKey, ...form(m)], m.text)
       }
     }
+    // A relation field is the association, which Rails names in snake_case
+    // (`belongs_to :user`) and reports a missing `belongs_to` on: its name
+    // goes under `user`, the foreign key's under the column, `user_id`.
     for (const field of model.fields) {
-      if (field.kind === 'object') continue
-      const attribute = field.dbName ?? field.name
+      const attribute =
+        field.kind === 'object' ? makeSnakeCase(field.name) : (field.dbName ?? field.name)
       for (const call of arCalls(field.documentation, 'field').calls) {
         const { validator, messages } = validatorCall(call)
+        if (field.kind === 'object' && validator !== 'name') continue
         for (const m of messages) {
           setPath(
             tree(m.locale),
@@ -798,72 +822,118 @@ export function activeRecordModels(
         model.fields.flatMap((f) => (f.kind === 'object' ? (f.relationFromFields ?? []) : [])),
       )
       const compositeKeyFields = new Set(model.primaryKey?.fields)
+      // A @@unique pair is validated on the column a person fills in and
+      // scoped by the rest, as a Rails developer writes it: `validates :slot,
+      // uniqueness: { scope: :post_id }`, so the error lands on `slot`. A
+      // foreign key is the scope, unless the set is nothing but foreign keys;
+      // a column that already answers for another set is passed over, so
+      // `@@unique([tenantId, email])` and `@@unique([tenantId, handle])` are
+      // one error on email and one on handle.
+      // An enum or list member is scope only: `validates` is written for
+      // scalar columns, so the set is the first scalar's.
+      const scalarColumns = new Set(
+        model.fields.filter((f) => f.kind === 'scalar' && !f.isList).map((f) => f.name),
+      )
+      const taken = new Set(model.fields.filter((f) => f.isUnique && !f.isId).map((f) => f.name))
       const uniqueSets = [
         ...model.fields.filter((f) => f.isUnique && !f.isId).map((f) => [f.name]),
-        ...model.uniqueFields,
-      ]
-      // A field's own `@ar.` validators come after what the schema implies; one
-      // the schema also wrote (`length`) replaces it, message and all.
-      const validationLines = [
-        ...model.fields.flatMap((f) => {
-          if (!(f.kind === 'scalar' || f.kind === 'enum')) return []
-          const column = f.kind === 'scalar' && !f.isList
-          const required =
-            column &&
-            f.isRequired &&
-            !f.hasDefaultValue &&
-            !f.isId &&
-            !f.isUpdatedAt &&
-            !foreignKeyFields.has(f.name) &&
-            !compositeKeyFields.has(f.name) &&
-            f !== createdField &&
-            f !== updatedField
-          const presence = !required
-            ? []
-            : f.type === 'Boolean'
-              ? ['inclusion: { in: [ true, false ] }']
-              : f.type === 'Json' || f.type === 'Bytes'
-                ? ['exclusion: { in: [ nil ] }']
-                : ['presence: true']
-          const length = column && f.type === 'String' ? nativeLength(f) : null
-          const lengthOpt = length === null ? [] : [`length: { maximum: ${length} }`]
-          const uniqueSet = column ? uniqueSets.find((set) => set[0] === f.name) : undefined
-          const uniqueness =
-            uniqueSet === undefined
-              ? []
-              : [
-                  (() => {
-                    const scope = uniqueSet.slice(1).map((name) => `:${fieldColumn(model, name)}`)
-                    const opts = [
-                      ...(scope.length === 0
-                        ? []
-                        : [`scope: ${scope.length === 1 ? scope[0] : rubyArray(scope)}`]),
-                      ...(f.isRequired ? [] : ['allow_nil: true']),
-                    ]
-                    return opts.length === 0
-                      ? 'uniqueness: true'
-                      : `uniqueness: { ${opts.join(', ')} }`
-                  })(),
-                ]
-          const own = arCalls(f.documentation, 'field').calls.flatMap((call) => {
-            const { option } = validatorCall(call)
-            return option === null ? [] : [option]
-          })
-          const rules = [
-            ...[...presence, ...lengthOpt, ...uniqueness].filter(
-              (rule) =>
-                !own.some((line) => new RegExp(`(^|[,\\s])${rule.split(':')[0]}:`, 'u').test(line)),
-            ),
-            ...own,
-          ]
-          return rules.length === 0
-            ? []
-            : [rubyCall('validates', [`:${f.dbName ?? f.name}`], rules)]
+        ...model.uniqueFields.map((set) => {
+          const columns = set.filter((name) => scalarColumns.has(name))
+          const own =
+            columns.find((name) => !foreignKeyFields.has(name) && !taken.has(name)) ??
+            columns.find((name) => !foreignKeyFields.has(name)) ??
+            columns[0] ??
+            set[0] ??
+            ''
+          taken.add(own)
+          return [own, ...set.filter((name) => name !== own)]
         }),
-        ...arCalls(model.documentation, 'model').calls.filter(
-          (call) => validatorCall(call).validator !== 'name',
-        ),
       ]
+      // The model's own `@ar.` lines, written into the class as they are;
+      // `name(...)` is a translation and goes to the locale files instead.
+      const modelLines = arCalls(model.documentation, 'model').calls.filter(
+        (call) => validatorCall(call).validator !== 'name',
+      )
+      // `has_secure_password` (or `has_secure_password :recovery`) validates
+      // the password through `password`, adding `blank` there when the digest
+      // is empty: a `presence` on `password_digest` would report it twice.
+      // With `validations: false` it adds nothing, and the column keeps its own.
+      const digestColumns = new Set(
+        modelLines.flatMap((line) => {
+          const m = line.match(/^has_secure_password(?:\s*\(?\s*:([a-z_][a-z0-9_]*))?/u)
+          return m && !/validations:\s*false/u.test(line) ? [`${m[1] ?? 'password'}_digest`] : []
+        }),
+      )
+      // A field's own `@ar.` validators come after what the schema implies; one
+      // the schema also wrote (`length`) replaces it, message and all, and
+      // `presence(false)` takes it away.
+      const validationLines = model.fields.flatMap((f) => {
+        if (!(f.kind === 'scalar' || f.kind === 'enum')) return []
+        const column = f.kind === 'scalar' && !f.isList
+        const own = arCalls(f.documentation, 'field').calls.map((call) => validatorCall(call))
+        // `presence(false)` says the column is filled some other way, whatever
+        // the schema's requirement would have been written as (`inclusion`
+        // for a Boolean, `exclusion` for Json and Bytes).
+        const required =
+          column &&
+          !own.some(({ validator, option }) => validator === 'presence' && option === null) &&
+          f.isRequired &&
+          !f.hasDefaultValue &&
+          !f.isId &&
+          !f.isUpdatedAt &&
+          !foreignKeyFields.has(f.name) &&
+          !compositeKeyFields.has(f.name) &&
+          !digestColumns.has(f.dbName ?? f.name) &&
+          f !== createdField &&
+          f !== updatedField
+        const presence = !required
+          ? []
+          : f.type === 'Boolean'
+            ? ['inclusion: { in: [ true, false ] }']
+            : f.type === 'Json' || f.type === 'Bytes'
+              ? ['exclusion: { in: [ nil ] }']
+              : ['presence: true']
+        const length = column && f.type === 'String' ? nativeLength(f) : null
+        const lengthOpt = length === null ? [] : [`length: { maximum: ${length} }`]
+        // Every set this column answers for: the first joins the column's
+        // `validates`, and any other is a `validates` of its own, a hash
+        // taking one `uniqueness:`.
+        // A unique index counts no row whose scope column is NULL (NULLs are
+        // distinct), so a nullable scope column keeps those rows out of the
+        // check too: `conditions: -> { where.not(parent_id: nil) }` is empty
+        // for a record with no parent and exact for one with a parent.
+        const uniqueness = (column ? uniqueSets.filter((set) => set[0] === f.name) : []).map(
+          (set) => {
+            const scope = set.slice(1).map((name) => `:${fieldColumn(model, name)}`)
+            const nullable = set
+              .slice(1)
+              .filter((name) => model.fields.some((g) => g.name === name && !g.isRequired))
+              .map((name) => `where.not(${fieldColumn(model, name)}: nil)`)
+            const opts = [
+              ...(scope.length === 0
+                ? []
+                : [`scope: ${scope.length === 1 ? scope[0] : rubyArray(scope)}`]),
+              ...(nullable.length === 0 ? [] : [`conditions: -> { ${nullable.join('.')} }`]),
+              ...(f.isRequired ? [] : ['allow_nil: true']),
+            ]
+            return opts.length === 0 ? 'uniqueness: true' : `uniqueness: { ${opts.join(', ')} }`
+          },
+        )
+        // An own `uniqueness` stands in for the set on the column's line; a
+        // set on a line of its own is another constraint and stays.
+        const rules = [
+          ...[...presence, ...lengthOpt, ...uniqueness.slice(0, 1)].filter(
+            (rule) => !own.some(({ validator }) => validator === rule.split(':')[0]),
+          ),
+          ...own.flatMap(({ option }) => (option === null ? [] : [option])),
+        ]
+        return [
+          ...(rules.length === 0 ? [] : [rubyCall('validates', [`:${f.dbName ?? f.name}`], rules)]),
+          ...uniqueness
+            .slice(1)
+            .map((rule) => rubyCall('validates', [`:${f.dbName ?? f.name}`], [rule])),
+        ]
+      })
 
       // Rails derives class_name from the association name (author -> Author,
       // posts -> Post), foreign_key from the name on the belongs_to side
@@ -965,13 +1035,17 @@ export function activeRecordModels(
 
       const associationLines = [...belongsToLines, ...hasOneLines, ...hasManyLines, ...habtmLines]
 
-      // One blank line between the groups that have anything to say.
+      // One blank line between the groups that have anything to say. The
+      // model's own lines come last, after the associations: a `has_many
+      // :tags, through: :post_tags` raises HasManyThroughOrderError when it
+      // is defined before the `has_many :post_tags` it goes through.
       const body = [
         [...tableNameLines, ...primaryKeyLines, ...inheritanceColumnLines, ...orderColumnLines],
         [...attributeLines, ...timestampLines],
         enumLines,
         validationLines,
         associationLines,
+        modelLines,
       ]
         .filter((group) => group.length > 0)
         .map((group) => group.join('\n'))

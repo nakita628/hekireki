@@ -1,0 +1,10 @@
+# What the rails-i18n gem gives a Rails application for Japanese, as far as this check reads it:
+# attribute and message joined without a space, and the messages of a blank value and of a
+# belongs_to without its owner (`required`, the same words). The generated names sit beside it in
+# models/.
+ja:
+  errors:
+    format: '%{attribute}%{message}'
+    messages:
+      blank: 'を入力してください'
+      required: 'を入力してください'

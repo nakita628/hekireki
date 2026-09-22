@@ -15,3 +15,7 @@ migrate/dev.db-journal
 migrate/schema.prisma
 migrate/migrations/
 migrate/.hekireki/
+# What `pnpm run demo` in active-record/ installs beside the check: the gems and bundler's path to
+# them. The models and locale files it generates are committed, to be read without running it.
+active-record/vendor/
+active-record/.bundle/
