@@ -7,9 +7,9 @@
     "generate": "prisma validate && prisma generate",
     "db": "prisma db push --url file:./dev.db",
     "bundle": "bundle config set --local path vendor/bundle && bundle install --quiet",
-    "check": "bundle exec ruby check.rb",
+    "verify": "bundle exec ruby check.rb",
     "rubocop": "bundle exec rubocop app/models",
-    "demo": "pnpm run clean && pnpm run generate && pnpm run db && pnpm run bundle && pnpm run check && pnpm run rubocop"
+    "demo": "pnpm run clean && pnpm run generate && pnpm run db && pnpm run bundle && pnpm run verify && pnpm run rubocop"
   },
   "devDependencies": {
     "hekireki": "workspace:*",
