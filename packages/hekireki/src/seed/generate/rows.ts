@@ -19,7 +19,7 @@ import { pickParent } from './parents.js'
 function defaultValue(input: RowInput, field: DMMF.Field) {
   return Effect.gen(function* () {
     const { context, table, index } = input
-    const bounds = { nullRate: 0, dates: context.config.dates }
+    const bounds = { nullRate: 0, dates: context.config.dates, stringLength: context.stringLength }
     const generated = fieldDefault(field)
     if (generated?.name === 'autoincrement') {
       return field.type === 'BigInt' ? BigInt(index + 1) : index + 1
@@ -61,7 +61,11 @@ function fillScalars(
     field,
     enumValues: column.enumValues,
     rule: input.context.config.models[input.table.name]?.fields?.[column.field],
-    bounds: { nullRate: input.context.config.nullRate, dates: input.context.config.dates },
+    bounds: {
+      nullRate: input.context.config.nullRate,
+      dates: input.context.config.dates,
+      stringLength: input.context.stringLength,
+    },
     index: input.index,
     row,
   })

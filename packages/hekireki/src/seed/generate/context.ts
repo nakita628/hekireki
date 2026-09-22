@@ -98,6 +98,8 @@ export function isSeedList(value: SeedValue): value is readonly SeedValue[] {
 export type Context = {
   readonly faker: Faker
   readonly config: ResolvedSeedConfig
+  /** The length a `String` with no `@db.*` type holds in the database; null where it has none. */
+  readonly stringLength: number | null
   readonly tables: readonly SeedTable[]
   readonly rowsByModel: ReadonlyMap<string, readonly SeedRow[]>
   /** Real rows nested under a parent, per child model, their key to the parent already filled. */

@@ -1,6 +1,7 @@
 import type { Faker } from '@faker-js/faker'
 import { Effect } from 'effect'
 
+import type { Dialect } from '../../database/url.js'
 import type { SeedRow } from '../config.js'
 import type { ResolvedSeedConfig } from '../options.js'
 import type { ModelTable, SeedTable, SeedTableRows } from '../plan.js'
@@ -124,6 +125,8 @@ export function generateSeedRows(input: {
   readonly tables: readonly SeedTable[]
   readonly config: ResolvedSeedConfig
   readonly faker: Faker
+  /** The database the rows are for; a MySQL `String` with no `@db.*` type is VARCHAR(191). */
+  readonly dialect?: Dialect | null
 }) {
   return Effect.gen(function* () {
     yield* checkRules(input.tables, input.config)
@@ -131,6 +134,7 @@ export function generateSeedRows(input: {
     const context: Context = {
       faker: input.faker,
       config: input.config,
+      stringLength: input.dialect === 'mysql' ? 191 : null,
       tables: input.tables,
       rowsByModel,
       pending: new Map(),

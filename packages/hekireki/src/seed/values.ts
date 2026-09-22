@@ -10,10 +10,14 @@ import type { LooseFieldRule, SeedRow } from './config.js'
 import type { EnumMember } from './plan.js'
 import { fieldDefault } from './plan.js'
 
-/** What the config says for every field: a null rate and a date window, or nothing. */
+/**
+ * What holds for every field: the config's null rate and date window, and the length a `String`
+ * with no `@db.*` type holds in the database (null where it has no limit).
+ */
 type Bounds = {
   readonly nullRate: number | null
   readonly dates: { readonly from: Date; readonly to: Date } | null
+  readonly stringLength?: number | null
 }
 
 const YEAR = 365 * 24 * 60 * 60 * 1000
@@ -149,20 +153,26 @@ function makeText(faker: Faker, name: string) {
   return match === undefined ? faker.lorem.words({ min: 1, max: 3 }) : match[1](faker)
 }
 
-function maxLength(field: DMMF.Field, rule: ObjectRule) {
+// The column's own length (`@db.VarChar(64)`), or with no `@db.*` type the one the database gives
+// a plain `String` (MySQL's VARCHAR(191)); a rule's `length` narrows either.
+function maxLength(field: DMMF.Field, rule: ObjectRule, stringLength: number | null) {
   const native = nativeTypeOf(field)
   const declared =
-    native.name !== null && /^(Var|N|NVar)?Char$/u.test(native.name) ? native.args[0] : undefined
+    native.name === null
+      ? (stringLength ?? undefined)
+      : /^(Var|N|NVar)?Char$/u.test(native.name)
+        ? native.args[0]
+        : undefined
   const ruled = typeof rule.length === 'number' ? rule.length : rule.length?.max
   const bounds = [declared, ruled].filter((n): n is number => n !== undefined && n > 0)
   return bounds.length === 0 ? null : Math.min(...bounds)
 }
 
-function makeString(faker: Faker, field: DMMF.Field, rule: ObjectRule) {
+function makeString(faker: Faker, field: DMMF.Field, rule: ObjectRule, bounds: Bounds) {
   const native = nativeTypeOf(field)
   const text =
     native.name === 'Uuid' ? faker.string.uuid() : makeText(faker, normalizedName(field.name))
-  const limit = maxLength(field, rule)
+  const limit = maxLength(field, rule, bounds.stringLength ?? null)
   return limit === null ? text : text.slice(0, limit)
 }
 
@@ -254,7 +264,7 @@ function makeScalar(
   }
   switch (field.type) {
     case 'String':
-      return makeString(faker, field, rule)
+      return makeString(faker, field, rule, bounds)
     case 'Int':
       return field.isId && rule.min === undefined && rule.max === undefined
         ? index + 1
@@ -280,7 +290,7 @@ function makeScalar(
         Buffer.from(faker.string.hexadecimal({ length: 32, prefix: '', casing: 'lower' }), 'hex'),
       )
     default:
-      return makeString(faker, field, rule)
+      return makeString(faker, field, rule, bounds)
   }
 }
 
