@@ -1498,11 +1498,12 @@ export function activeRecordModels(
           //   the database from the milliseconds Prisma sends, and truncated by
           //   Active Record to the column's precision before sending, so 05.678
           //   is 06 from one and 05 from the other. precision: 3 sends what
-          //   Prisma sends and leaves the rounding to the database. On SQL
-          //   Server (DateTime2, DateTimeOffset and Time take 0 to 7 digits)
-          //   the type is the adapter's own of that name: a `:datetime` there
-          //   is Active Record's generic one, which the adapter quotes as a
-          //   legacy datetime, rounded to its 1/300 s (05.678 is 05.679).
+          //   Prisma sends and leaves the rounding to the database.
+          // - SQL Server's DateTime (1/300 s) is rounded by the adapter by an
+          //   approximation of its own, and a SmallDateTime cut to the second;
+          //   PrismaDateTime (prisma_date_time.rb) sends milliseconds for the
+          //   server to round, typed as the column. DateTime2,
+          //   DateTimeOffset and Time take no precision in Prisma (7 digits).
           // - A Timetz column has no Active Record type and reads as a String.
           const [nativeName, nativeArgs] = f.nativeType ?? ['', []]
           const secondDigits =
@@ -1518,9 +1519,11 @@ export function activeRecordModels(
               : provider === 'sqlite'
                 ? ['PrismaDateTime.new']
                 : provider === 'sqlserver'
-                  ? ['DateTime2', 'DateTimeOffset', 'Time'].includes(nativeName) && secondDigits < 3
-                    ? [`ActiveRecord::Type::SQLServer::${nativeName}.new(precision: 3)`]
-                    : []
+                  ? nativeName === 'DateTime'
+                    ? ['PrismaDateTime.new']
+                    : nativeName === 'SmallDateTime'
+                      ? ['PrismaDateTime.new("smalldatetime")']
+                      : []
                   : ['Timestamp', 'Timestamptz', 'Time', 'Timetz', 'DateTime'].includes(
                         nativeName,
                       ) && secondDigits < 3

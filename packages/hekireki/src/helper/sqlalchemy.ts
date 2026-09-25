@@ -90,20 +90,58 @@ export function pythonAttrName(columnName: string) {
     : columnName
 }
 
-// The column type of a DateTime with no native type: the precision Prisma Migrate gives it, on
-// the UTC type the module defines (SQLite has no precision to give).
-function dateTimeType(provider: string) {
-  if (provider === 'sqlite') return 'UtcDateTime'
-  return provider === 'mysql' ? 'UtcDateTime(fsp=3)' : 'UtcDateTime(precision=3)'
+// The column type Prisma Migrate gives a field with no native type, as SQLAlchemy writes it. A
+// DateTime is the UTC type the module defines, to the millisecond (SQLite has no precision to
+// give); SQLite's Json is Prisma's JSONB, holding the JSON text.
+function plainType(type: string, provider: string) {
+  switch (type) {
+    case 'DateTime':
+      if (provider === 'sqlite') return 'UtcDateTime'
+      return provider === 'mysql' ? 'UtcDateTime(fsp=3)' : 'UtcDateTime(precision=3)'
+    case 'String':
+      return provider === 'mysql' ? 'String(191)' : 'Text'
+    case 'Float':
+      return provider === 'sqlite' ? 'REAL' : 'Double'
+    case 'Decimal':
+      return provider === 'sqlite' ? 'DECIMAL' : 'Numeric(precision=65, scale=30)'
+    case 'Bytes':
+      return provider === 'mysql' ? 'LONGBLOB' : 'LargeBinary'
+    case 'Json':
+      if (provider === 'sqlite') return 'Jsonb'
+      return provider === 'mysql' ? 'JSON' : 'JSONB'
+    default:
+      return prismaTypeToSQLAlchemyType(type)
+  }
 }
 
+// What SQLAlchemy maps a Python type to where the provider's plain type is another: the entries
+// of the base's type_annotation_map, for the Python types the columns use.
+function annotationMapEntries(models: readonly DMMF.Model[], provider: string) {
+  const plainFields = models.flatMap((m) =>
+    m.fields.filter((f) => f.kind === 'scalar' && !f.isList && !f.nativeType),
+  )
+  const uses = (type: string) => plainFields.some((f) => f.type === type)
+  return [
+    uses('DateTime') || usesUtcDateTime(models)
+      ? `datetime: ${plainType('DateTime', provider)}`
+      : null,
+    uses('String') ? `str: ${plainType('String', provider)}` : null,
+    uses('Float') && provider === 'sqlite' ? 'float: REAL' : null,
+    uses('Decimal') ? `DecimalType: ${plainType('Decimal', provider)}` : null,
+    uses('Bytes') && provider === 'mysql' ? 'bytes: LONGBLOB' : null,
+  ].filter((entry) => entry !== null)
+}
+
+// The column type of a field, as Prisma Migrate creates it: the plain type, or the one its
+// `@db.*` names, in SQLAlchemy's generic type where that writes the same DDL and the dialect's
+// where only it carries a length, a precision or `unsigned`.
 function resolveNativeType(field: DMMF.Field, provider: string) {
-  const baseType =
-    field.type === 'DateTime' ? dateTimeType(provider) : prismaTypeToSQLAlchemyType(field.type)
+  const baseType = plainType(field.type, provider)
   if (!field.nativeType) return baseType
 
   const [nativeName, nativeArgs] = field.nativeType
   const args = nativeArgs ?? []
+  const length = args.length > 0 ? args[0] : ''
   // A bare `@db.Timestamp` or `@db.DateTime` is the database's own precision, as Prisma Migrate
   // writes it: timestamp (6) on PostgreSQL, TIMESTAMP and DATETIME (0) on MySQL.
   const precision = args.length > 0 ? `precision=${args[0]}` : ''
@@ -111,26 +149,76 @@ function resolveNativeType(field: DMMF.Field, provider: string) {
 
   switch (nativeName) {
     case 'VarChar':
+      return args.length > 0 ? `String(${length})` : 'String'
     case 'Char':
-      return args.length > 0 ? `String(${args[0]})` : 'String'
+      return length ? `CHAR(${length})` : 'CHAR'
     case 'Text':
+      return 'Text'
+    case 'TinyText':
     case 'MediumText':
     case 'LongText':
-    case 'TinyText':
-      return 'Text'
+      return nativeName.toUpperCase()
+    case 'Bit':
+      return length ? `BIT(${length})` : 'BIT'
+    case 'VarBit':
+      return length ? `BIT(${length}, varying=True)` : 'BIT(varying=True)'
+    case 'Xml':
+      return 'Xml'
+    case 'Inet':
+      return 'INET'
+    case 'Citext':
+      return 'CITEXT'
+    case 'Oid':
+      return 'OID'
+    case 'Integer':
+    case 'Int':
+      return 'Integer'
     case 'SmallInt':
-    case 'TinyInt':
       return 'SmallInteger'
     case 'MediumInt':
-      return 'Integer'
+      return 'MEDIUMINT'
+    case 'TinyInt':
+      // A Boolean's TINYINT is BOOL's tinyint(1).
+      return field.type === 'Boolean' ? 'Boolean' : 'TINYINT'
+    case 'UnsignedInt':
+      return 'INTEGER(unsigned=True)'
+    case 'UnsignedSmallInt':
+      return 'SMALLINT(unsigned=True)'
+    case 'UnsignedMediumInt':
+      return 'MEDIUMINT(unsigned=True)'
+    case 'UnsignedTinyInt':
+      return 'TINYINT(unsigned=True)'
+    case 'UnsignedBigInt':
+      return 'BIGINT(unsigned=True)'
+    case 'Year':
+      return 'YEAR'
+    case 'BigInt':
+      return 'BigInteger'
     case 'DoublePrecision':
     case 'Double':
       return 'Double'
+    case 'Float':
+      return 'Float'
     case 'Real':
       return 'REAL'
     case 'Decimal':
-    case 'Money':
       return args.length >= 2 ? `Numeric(precision=${args[0]}, scale=${args[1]})` : 'Numeric'
+    case 'Money':
+      return 'MONEY'
+    case 'Boolean':
+      return 'Boolean'
+    case 'ByteA':
+      return 'LargeBinary'
+    case 'Binary':
+      return length ? `BINARY(${length})` : 'BINARY'
+    case 'VarBinary':
+      return length ? `VARBINARY(${length})` : 'VARBINARY'
+    case 'TinyBlob':
+    case 'MediumBlob':
+    case 'LongBlob':
+      return nativeName.toUpperCase()
+    case 'Blob':
+      return 'BLOB'
     case 'Uuid':
       return 'Uuid'
     case 'Timestamp':
@@ -148,19 +236,41 @@ function resolveNativeType(field: DMMF.Field, provider: string) {
       return provider === 'mysql' ? `TIME(${fsp})` : `TIME(${precision})`
     case 'Timetz':
       return args.length === 0 ? 'Time(timezone=True)' : `TIME(${precision}, timezone=True)`
-    case 'JsonB':
+    case 'Json':
       return 'JSON'
-    case 'Xml':
-      return 'String'
+    case 'JsonB':
+      return 'JSONB'
     default:
       return baseType
   }
 }
 
-// The date-time types the module defines rather than imports from sqlalchemy.
-const UTC_TYPES = new Set(['UtcDateTime', 'UtcDateTimeTz', 'UtcTimestamp'])
-// The types imported from the dialect, whose own type takes the precision sqlalchemy's does not.
-const DIALECT_TYPES = new Set(['TIME'])
+// The types the module defines rather than imports: the UTC date-times, and the columns whose
+// DDL no SQLAlchemy type writes.
+const MODULE_TYPES = new Set(['UtcDateTime', 'UtcDateTimeTz', 'UtcTimestamp', 'Jsonb', 'Xml'])
+// The types imported from the dialect: its own spelling of a column, or the one that takes the
+// precision, length or `unsigned` sqlalchemy's does not.
+const DIALECT_TYPES = new Set([
+  'TIME',
+  'JSONB',
+  'BIT',
+  'INET',
+  'CITEXT',
+  'OID',
+  'MONEY',
+  'TINYTEXT',
+  'MEDIUMTEXT',
+  'LONGTEXT',
+  'MEDIUMINT',
+  'TINYINT',
+  'INTEGER',
+  'SMALLINT',
+  'BIGINT',
+  'YEAR',
+  'TINYBLOB',
+  'MEDIUMBLOB',
+  'LONGBLOB',
+])
 
 function needsExplicitSaType(field: DMMF.Field, provider: string) {
   if (field.kind === 'enum') return true
@@ -1078,7 +1188,7 @@ export function collectGlobalImports(
   const lines: string[] = []
 
   const sortedSa = [...saImports]
-    .filter((name) => !UTC_TYPES.has(name) && !DIALECT_TYPES.has(name))
+    .filter((name) => !MODULE_TYPES.has(name) && !DIALECT_TYPES.has(name))
     .toSorted()
   if (sortedSa.length > 0) {
     lines.push(`from sqlalchemy import ${sortedSa.join(', ')}`)

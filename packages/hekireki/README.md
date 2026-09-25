@@ -93,11 +93,11 @@ model User {
 ### Rails
 
 `hekireki-activerecord` writes `app/models` from the schema: `application_record.rb` and one model
-per Prisma model, as a Rails developer would write them (and on SQLite, `prisma_date_time.rb`). What Rails works out on its own
-(`table_name`, `class_name`, `foreign_key`, `inverse_of` where the names follow its conventions)
-is left unsaid; what the schema promises is written: `attribute` defaults, `enum`, timestamps,
-associations with `dependent:` from `onDelete`, and validations from the columns (`presence`,
-`uniqueness`, `length`).
+per Prisma model, as a Rails developer would write them (and `prisma_date_time.rb` where a column
+needs it). What Rails works out on its own (`table_name`, `class_name`, `foreign_key`,
+`inverse_of` where the names follow its conventions) is left unsaid; what the schema promises is
+written: `attribute` defaults, `enum`, timestamps, associations with `dependent:` from `onDelete`,
+and validations from the columns (`presence`, `uniqueness`, `length`).
 
 A `/// @ar.` line on a field is a validator (`presence`, `length(maximum: 255)`) added to that
 field's `validates`; on a model it is a Ruby line written into the class as it is
@@ -158,17 +158,19 @@ create the test database with `prisma migrate deploy`.
 
 A `DateTime` is stored as Prisma Client stores it. Every `@updatedAt` column is bumped, not only
 the one aliased to `updated_at`. A column holding fewer than three digits of a second
-(`@db.Timestamp(0)`, MySQL's bare `@db.DateTime`, SQL Server's `@db.DateTime2(0)`) is sent
-Prisma's milliseconds for the database to round (`precision: 3`), where Active Record would cut
-them off first; a `@db.Timetz` column is read as a time, not a String (Active Record still warns
-`unknown OID 1266` once as it reads the table's columns, before the declared type takes over). On
-SQLite every `DateTime` column is declared with `PrismaDateTime`, which writes Prisma's text
-(`2030-01-02T03:04:05.678+00:00`) so that comparisons, unique indexes and ordering see both
-clients' rows alike. It is generated into `prisma_date_time.rb` beside the models, so Zeitwerk
-loads it from wherever it loads them, whatever `output` is. On SQLite and SQL Server, whose
-`CURRENT_TIMESTAMP` is text of another shape or the server's local time, `now()` is filled in by
-the model. Keep `config.active_record.default_timezone` at `:utc`, Rails' default: with `:local`,
-a `timestamp` column is written in the process's zone and Prisma reads it as UTC.
+(`@db.Timestamp(0)`, MySQL's bare `@db.DateTime`) is sent Prisma's milliseconds for the database
+to round (`precision: 3`), where Active Record would cut them off first; a `@db.Timetz` column is
+read as a time, not a String (Active Record still warns `unknown OID 1266` once as it reads the
+table's columns, before the declared type takes over). On SQLite every `DateTime` column is
+declared with `PrismaDateTime`, which writes Prisma's text (`2030-01-02T03:04:05.678+00:00`) so
+that comparisons, unique indexes and ordering see both clients' rows alike; on SQL Server a
+`@db.DateTime` or `@db.SmallDateTime` column is, which sends milliseconds for the server to round
+to 1/300 s or to the minute as Prisma's are, where the adapter would round or cut them first. It is
+generated into `prisma_date_time.rb` beside the models, so Zeitwerk loads it from wherever it
+loads them, whatever `output` is. On SQLite and SQL Server, whose `CURRENT_TIMESTAMP` is text of
+another shape or the server's local time, `now()` is filled in by the model. Keep
+`config.active_record.default_timezone` at `:utc`, Rails' default: with `:local`, a `timestamp`
+column is written in the process's zone and Prisma reads it as UTC.
 
 `examples/active-record` in the repository
 runs a fuller schema against Active Record on SQLite, and is the place to read what each thing
