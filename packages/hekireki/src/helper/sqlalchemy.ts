@@ -177,16 +177,23 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
     foreignKeys: readonly string[]
     referencesList: readonly string[]
     optional: boolean
-    onDelete?: string
-    onUpdate?: string
+    onDelete: string
+    onUpdate: string
   }[] = []
-  const hasMany: { name: string; targetModel: string; foreignKey: string; isList: boolean }[] = []
+  const hasMany: {
+    name: string
+    targetModel: string
+    foreignKey: string
+    isList: boolean
+    onDelete: string
+  }[] = []
   const hasOne: {
     name: string
     targetModel: string
     foreignKey: string
     isList: boolean
     optional: boolean
+    onDelete: string
   }[] = []
   const manyToMany: { name: string; targetModel: string; relationName: string }[] = []
 
@@ -202,8 +209,10 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
         foreignKeys: field.relationFromFields,
         referencesList: field.relationToFields ?? ['id'],
         optional: !field.isRequired,
-        onDelete: field.relationOnDelete,
-        onUpdate: field.relationOnUpdate,
+        // What Prisma Migrate writes when the schema names no action: the database has it, so
+        // the model says it too.
+        onDelete: field.relationOnDelete ?? (field.isRequired ? 'Restrict' : 'SetNull'),
+        onUpdate: field.relationOnUpdate ?? 'Cascade',
       })
       continue
     }
@@ -232,10 +241,17 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
         f.relationFromFields.length > 0,
     )
     const foreignKey = fkField?.relationFromFields?.[0]
-    if (!foreignKey) continue
+    if (!(fkField && foreignKey)) continue
+    const onDelete = fkField.relationOnDelete ?? (fkField.isRequired ? 'Restrict' : 'SetNull')
 
     if (field.isList) {
-      hasMany.push({ name: field.name, targetModel: field.type, foreignKey, isList: true })
+      hasMany.push({
+        name: field.name,
+        targetModel: field.type,
+        foreignKey,
+        isList: true,
+        onDelete,
+      })
     } else {
       hasOne.push({
         name: field.name,
@@ -243,6 +259,7 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
         foreignKey,
         isList: false,
         optional: !field.isRequired,
+        onDelete,
       })
     }
   }
@@ -315,8 +332,11 @@ export function generateAssociationTable(info: {
     `${info.varName} = Table(`,
     `    "${info.tableName}",`,
     '    Base.metadata,',
-    `    Column("A", ${leftSaType}, ForeignKey("${info.leftTable}.${leftPkCol}"), primary_key=True),`,
-    `    Column("B", ${rightSaType}, ForeignKey("${info.rightTable}.${rightPkCol}"), primary_key=True),`,
+    // Prisma's join table goes with either row: both keys cascade.
+    `    Column("A", ${leftSaType}, ForeignKey("${info.leftTable}.${leftPkCol}", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True),`,
+    `    Column("B", ${rightSaType}, ForeignKey("${info.rightTable}.${rightPkCol}", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True),`,
+    // The index Prisma adds for reading the relation from its B side.
+    `    Index("${info.tableName}_B_index", "B"),`,
     ')',
   ].join('\n')
 }
@@ -447,22 +467,27 @@ function findBackPopulates(
       : false
   })
 
-  return backField ? makeSnakeCase(backField.name) : makeSnakeCase(sourceModelName)
+  return pythonAttrName(makeSnakeCase(backField ? backField.name : sourceModelName))
 }
 
 function findM2MBackPopulates(
   targetModelName: string,
   sourceModelName: string,
+  sourceFieldName: string,
   relationName: string,
   allModels: readonly DMMF.Model[],
 ) {
   const targetModel = allModels.find((m) => m.name === targetModelName)
-  if (!targetModel) return makeSnakeCase(sourceModelName)
-
-  const backField = targetModel.fields.find(
-    (f) => f.kind === 'object' && f.type === sourceModelName && f.relationName === relationName,
+  // A self many-to-many holds both ends in one model: the other end is the field that is not
+  // this one.
+  const backField = targetModel?.fields.find(
+    (f) =>
+      f.kind === 'object' &&
+      f.type === sourceModelName &&
+      f.relationName === relationName &&
+      !(targetModelName === sourceModelName && f.name === sourceFieldName),
   )
-  return backField ? makeSnakeCase(backField.name) : makeSnakeCase(sourceModelName)
+  return pythonAttrName(makeSnakeCase(backField ? backField.name : sourceModelName))
 }
 
 function generateColumn(
@@ -500,7 +525,12 @@ function generateColumn(
   } else if (field.isList) {
     colArgs.push(`ARRAY(${prismaTypeToSQLAlchemyType(field.type)})`)
   } else if (needsExplicitSaType(field)) {
-    colArgs.push(resolveNativeType(field))
+    const saType = resolveNativeType(field)
+    // SQLAlchemy writes None into a JSON column as the JSON text `null`, which `IS NULL` does not
+    // find; the None of an optional Json field is the column's NULL, as Prisma's DbNull is.
+    colArgs.push(
+      field.type === 'Json' && !field.isRequired ? `${saType}(none_as_null=True)` : saType,
+    )
   }
 
   if (isFk) {
@@ -514,12 +544,8 @@ function generateColumn(
       const targetField = targetModelObj?.fields.find((f) => f.name === assoc.references)
       const targetCol = targetField?.dbName ?? assoc.references
       const fkActions = [
-        assoc.onDelete && SQL_ACTION[assoc.onDelete]
-          ? `, ondelete="${SQL_ACTION[assoc.onDelete]}"`
-          : '',
-        assoc.onUpdate && SQL_ACTION[assoc.onUpdate]
-          ? `, onupdate="${SQL_ACTION[assoc.onUpdate]}"`
-          : '',
+        SQL_ACTION[assoc.onDelete] ? `, ondelete="${SQL_ACTION[assoc.onDelete]}"` : '',
+        SQL_ACTION[assoc.onUpdate] ? `, onupdate="${SQL_ACTION[assoc.onUpdate]}"` : '',
       ].join('')
       colArgs.push(`ForeignKey("${targetTable}.${targetCol}"${fkActions})`)
     }
@@ -632,13 +658,11 @@ function generateTableArgs(
         const fieldObj = target?.fields.find((mf) => mf.name === c)
         return `"${targetTable}.${fieldObj?.dbName ?? c}"`
       })
+      const onDelete = f.relationOnDelete ?? (f.isRequired ? 'Restrict' : 'SetNull')
+      const onUpdate = f.relationOnUpdate ?? 'Cascade'
       const actions = [
-        f.relationOnDelete && SQL_ACTION[f.relationOnDelete]
-          ? `, ondelete="${SQL_ACTION[f.relationOnDelete]}"`
-          : '',
-        f.relationOnUpdate && SQL_ACTION[f.relationOnUpdate]
-          ? `, onupdate="${SQL_ACTION[f.relationOnUpdate]}"`
-          : '',
+        SQL_ACTION[onDelete] ? `, ondelete="${SQL_ACTION[onDelete]}"` : '',
+        SQL_ACTION[onUpdate] ? `, onupdate="${SQL_ACTION[onUpdate]}"` : '',
       ].join('')
       return `ForeignKeyConstraint([${localCols.join(', ')}], [${targetCols.join(', ')}]${actions})`
     })
@@ -649,14 +673,25 @@ function generateTableArgs(
   return ['', '    __table_args__ = (', ...allConstraints.map((c) => `        ${c},`), '    )']
 }
 
+// What the ORM does with the children of a row it deletes, from what the database does with
+// them. Left to its default, the ORM sets their foreign key to NULL first: right for SetNull,
+// a NOT NULL failure for Cascade, and for Restrict a delete the database would have refused.
+// Cascade deletes the children it has loaded and leaves the rest to the database; every other
+// action is the database's alone.
+function deleteClause(onDelete: string) {
+  if (onDelete === 'SetNull') return ''
+  if (onDelete === 'Cascade') return 'cascade="all, delete", passive_deletes=True, '
+  return 'passive_deletes="all", '
+}
+
 function generateBelongsToRelationships(
   associations: ReturnType<typeof getAssociations>,
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
 ) {
   return associations.belongsTo.map((assoc) => {
-    const snakeName = makeSnakeCase(assoc.name)
-    const snakeFk = makeSnakeCase(assoc.foreignKey)
+    const snakeName = pythonAttrName(makeSnakeCase(assoc.name))
+    const snakeFk = pythonAttrName(makeSnakeCase(assoc.foreignKey))
     const backPop = findBackPopulates(
       assoc.targetModel,
       model.name,
@@ -671,7 +706,7 @@ function generateBelongsToRelationships(
     const pkField = model.fields.find((f) => f.isId)
     const remoteClause =
       assoc.targetModel === model.name && pkField
-        ? `remote_side=[${makeSnakeCase(pkField.name)}], `
+        ? `remote_side=[${pythonAttrName(makeSnakeCase(pkField.name))}], `
         : ''
     const mappedType = assoc.optional
       ? `Optional["${makePascalCase(assoc.targetModel)}"]`
@@ -686,7 +721,7 @@ function generateHasManyRelationships(
   allModels: readonly DMMF.Model[],
 ) {
   return associations.hasMany.map((assoc) => {
-    const snakeName = makeSnakeCase(assoc.name)
+    const snakeName = pythonAttrName(makeSnakeCase(assoc.name))
     const backPop = findBackPopulates(
       assoc.targetModel,
       model.name,
@@ -698,11 +733,11 @@ function generateHasManyRelationships(
     const needsFkParam = targetModel
       ? needsForeignKeysParam(model.name, getAssociations(targetModel, allModels).belongsTo)
       : false
-    const targetFkSnake = makeSnakeCase(assoc.foreignKey)
+    const targetFkSnake = pythonAttrName(makeSnakeCase(assoc.foreignKey))
     const fkClause = needsFkParam
       ? `foreign_keys="${makePascalCase(assoc.targetModel)}.${targetFkSnake}", `
       : ''
-    return `    ${snakeName}: Mapped[list["${makePascalCase(assoc.targetModel)}"]] = relationship(${fkClause}back_populates="${backPop}")`
+    return `    ${snakeName}: Mapped[list["${makePascalCase(assoc.targetModel)}"]] = relationship(${fkClause}${deleteClause(assoc.onDelete)}back_populates="${backPop}")`
   })
 }
 
@@ -712,7 +747,7 @@ function generateHasOneRelationships(
   allModels: readonly DMMF.Model[],
 ) {
   return associations.hasOne.map((assoc) => {
-    const snakeName = makeSnakeCase(assoc.name)
+    const snakeName = pythonAttrName(makeSnakeCase(assoc.name))
     const backPop = findBackPopulates(
       assoc.targetModel,
       model.name,
@@ -724,14 +759,14 @@ function generateHasOneRelationships(
     const needsFkParam = targetModel
       ? needsForeignKeysParam(model.name, getAssociations(targetModel, allModels).belongsTo)
       : false
-    const targetFkSnake = makeSnakeCase(assoc.foreignKey)
+    const targetFkSnake = pythonAttrName(makeSnakeCase(assoc.foreignKey))
     const fkClause = needsFkParam
       ? `foreign_keys="${makePascalCase(assoc.targetModel)}.${targetFkSnake}", `
       : ''
     const mappedType = assoc.optional
       ? `Optional["${makePascalCase(assoc.targetModel)}"]`
       : `"${makePascalCase(assoc.targetModel)}"`
-    return `    ${snakeName}: Mapped[${mappedType}] = relationship(${fkClause}back_populates="${backPop}")`
+    return `    ${snakeName}: Mapped[${mappedType}] = relationship(${fkClause}${deleteClause(assoc.onDelete)}back_populates="${backPop}")`
   })
 }
 
@@ -752,10 +787,11 @@ function generateManyToManyRelationships(
   }[],
 ) {
   return associations.manyToMany.map((assoc) => {
-    const snakeName = makeSnakeCase(assoc.name)
+    const snakeName = pythonAttrName(makeSnakeCase(assoc.name))
     const backPop = findM2MBackPopulates(
       assoc.targetModel,
       model.name,
+      assoc.name,
       assoc.relationName,
       allModels,
     )
@@ -763,7 +799,21 @@ function generateManyToManyRelationships(
     const table = m2mTables.find((t) => t.relationName === assoc.relationName)
     const secondaryVar = table?.varName ?? makeSnakeCase(assoc.relationName)
 
-    return `    ${snakeName}: Mapped[list["${makePascalCase(assoc.targetModel)}"]] = relationship(secondary=${secondaryVar}, back_populates="${backPop}")`
+    // Both columns of a self join table reference the same table, so the relationship is told
+    // which one holds this row. Prisma orders the two fields by name: the one that sorts first
+    // lists the B of the rows whose A is this row, the other the A of the rows whose B is.
+    const pkField = model.fields.find((f) => f.isId)
+    const other = model.fields.find(
+      (f) => f.kind === 'object' && f.relationName === assoc.relationName && f.name !== assoc.name,
+    )
+    const [own, far] = other && other.name < assoc.name ? ['B', 'A'] : ['A', 'B']
+    const pk = `${makePascalCase(model.name)}.${pythonAttrName(makeSnakeCase(pkField?.name ?? 'id'))}`
+    const joinClause =
+      assoc.targetModel === model.name && other
+        ? `primaryjoin=lambda: ${pk} == ${secondaryVar}.c.${own}, secondaryjoin=lambda: ${pk} == ${secondaryVar}.c.${far}, `
+        : ''
+
+    return `    ${snakeName}: Mapped[list["${makePascalCase(assoc.targetModel)}"]] = relationship(secondary=${secondaryVar}, ${joinClause}back_populates="${backPop}")`
   })
 }
 
@@ -921,6 +971,7 @@ export function collectGlobalImports(
   if (m2mTables.length > 0) {
     saImports.add('Column')
     saImports.add('ForeignKey')
+    saImports.add('Index')
     saImports.add('Table')
     for (const info of m2mTables) {
       const leftType = info.leftPkField ? resolveNativeType(info.leftPkField) : 'String'

@@ -2,7 +2,7 @@ import type { DMMF } from '@prisma/generator-helper'
 
 import { makePascalCase, makeSnakeCase } from '../utils/index.js'
 
-const SCALAR_TYPE_MAP: { [k: string]: string } = {
+export const SCALAR_TYPE_MAP: { readonly [k: string]: string } = {
   String: 'string',
   Boolean: 'boolean',
   Int: 'number',
@@ -12,6 +12,21 @@ const SCALAR_TYPE_MAP: { [k: string]: string } = {
   DateTime: 'Timestamp',
   Json: 'unknown',
   Bytes: 'Buffer',
+}
+
+// better-sqlite3, the driver of Kysely's SqliteDialect, binds numbers, strings, bigints, buffers
+// and null, and reads back what SQLite keeps: a Boolean is 0 or 1, a DateTime the text it was
+// given (CURRENT_TIMESTAMP writes `YYYY-MM-DD HH:MM:SS`), a Decimal a REAL, and a BigInt a
+// number unless the connection turns on safeIntegers (which makes every INTEGER a bigint). Prisma
+// declares a Json column JSONB, which has numeric affinity: a document that is a bare number is
+// kept, and read back, as one.
+export const SQLITE_SCALAR_TYPE_MAP: { readonly [k: string]: string } = {
+  ...SCALAR_TYPE_MAP,
+  Boolean: 'number',
+  BigInt: 'ColumnType<number, number | bigint, number | bigint>',
+  Decimal: 'ColumnType<number, number | string, number | string>',
+  DateTime: 'string',
+  Json: 'ColumnType<string | number, string, string>',
 }
 
 // Prisma runs uuid()/cuid()/ulid()/nanoid()/auto() in the client, so migrate
@@ -32,28 +47,34 @@ export function isDbGenerated(field: DMMF.Field) {
   )
 }
 
+// A database name is any string: an enum value @map-ped to `rock 'n' roll` or a column to
+// `last-modified` is quoted and escaped, or the generated file does not parse.
+function makeStringLiteral(value: string) {
+  return `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`
+}
+
 function makePropertyKey(name: string) {
-  return /^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(name)
-    ? name
-    : `'${name.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(name) ? name : makeStringLiteral(name)
 }
 
-function scalarTsType(type: string) {
-  return SCALAR_TYPE_MAP[type] ?? 'unknown'
-}
-
-function makeColumnType(field: DMMF.Field) {
-  const base = field.kind === 'enum' ? field.type : scalarTsType(field.type)
+function makeColumnType(field: DMMF.Field, scalarTypes: { readonly [k: string]: string }) {
+  const base = field.kind === 'enum' ? field.type : (scalarTypes[field.type] ?? 'unknown')
   const listed = field.isList ? `${base}[]` : base
   // `unknown | null` collapses to `unknown`, so the union would be redundant.
   const nullable = field.isRequired || listed === 'unknown' ? listed : `${listed} | null`
   return isDbGenerated(field) ? `Generated<${nullable}>` : nullable
 }
 
-export function makeTableInterface(model: DMMF.Model) {
+export function makeTableInterface(
+  model: DMMF.Model,
+  scalarTypes: { readonly [k: string]: string },
+) {
   const columns = model.fields
     .filter((field) => field.kind === 'scalar' || field.kind === 'enum')
-    .map((field) => `  ${makePropertyKey(field.dbName ?? field.name)}: ${makeColumnType(field)}`)
+    .map(
+      (field) =>
+        `  ${makePropertyKey(field.dbName ?? field.name)}: ${makeColumnType(field, scalarTypes)}`,
+    )
   return columns.length > 0
     ? `export interface ${model.name} {\n${columns.join('\n')}\n}`
     : `export interface ${model.name} {}`
@@ -70,7 +91,7 @@ export function makeEnumDeclarations(
     .filter((e) => usedEnumNames.has(e.name))
     .map(
       (e) =>
-        `export type ${e.name} = ${e.values.map((v) => `'${v.dbName ?? v.name}'`).join(' | ')}`,
+        `export type ${e.name} = ${e.values.map((v) => makeStringLiteral(v.dbName ?? v.name)).join(' | ')}`,
     )
 }
 
@@ -84,15 +105,22 @@ function isImplicitM2M(field: DMMF.Field, models: readonly DMMF.Model[]) {
   return otherSide?.isList === true
 }
 
-function pkTsType(modelName: string, models: readonly DMMF.Model[]) {
+function pkTsType(
+  modelName: string,
+  models: readonly DMMF.Model[],
+  scalarTypes: { readonly [k: string]: string },
+) {
   const pkField = models.find((m) => m.name === modelName)?.fields.find((f) => f.isId)
-  return pkField ? scalarTsType(pkField.type) : 'string'
+  return pkField ? (scalarTypes[pkField.type] ?? 'unknown') : 'string'
 }
 
 // Prisma's implicit join table: `_<relationName>`, FK columns "A"/"B" typed
 // after each side's PK (models in alphabetical order). Without it a Kysely
 // query against the m2m storage has no table type at all.
-export function collectM2MJoinEntries(models: readonly DMMF.Model[]) {
+export function collectM2MJoinEntries(
+  models: readonly DMMF.Model[],
+  scalarTypes: { readonly [k: string]: string },
+) {
   const pairs = models.flatMap((model) =>
     model.fields
       .filter((field) => isImplicitM2M(field, models))
@@ -112,8 +140,8 @@ export function collectM2MJoinEntries(models: readonly DMMF.Model[]) {
     .map((pair) => ({
       interfaceName: makePascalCase(makeSnakeCase(pair.relationName)),
       tableName: `_${pair.relationName}`,
-      aType: pkTsType(pair.left, models),
-      bType: pkTsType(pair.right, models),
+      aType: pkTsType(pair.left, models, scalarTypes),
+      bType: pkTsType(pair.right, models, scalarTypes),
     }))
 }
 

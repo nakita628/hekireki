@@ -1,6 +1,11 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { collectImports, formatImports, generateModelStruct } from '../helper/gorm.js'
+import {
+  collectImports,
+  formatImports,
+  generateModelStruct,
+  generateNamingStrategy,
+} from '../helper/gorm.js'
 
 export function generateGormModels(
   models: readonly DMMF.Model[],
@@ -17,6 +22,7 @@ export function generateGormModels(
   return [
     `package ${packageName}`,
     ...formatImports(collectImports(models)),
+    ...generateNamingStrategy(models, packageName),
     '',
     modelBodies.join('\n\n'),
     '',

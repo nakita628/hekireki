@@ -1,0 +1,21 @@
+{
+  "name": "@hekireki/example-kysely",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "clean": "rm -rf src/db dev.db dev.db-journal",
+    "generate": "prisma validate && prisma generate",
+    "db": "prisma db push --url file:./dev.db",
+    "typecheck": "tsc -p tsconfig.json",
+    "verify": "node check.ts",
+    "demo": "pnpm run clean && pnpm run generate && pnpm run db && pnpm run typecheck && pnpm run verify"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "better-sqlite3": "^13.0.3",
+    "hekireki": "workspace:*",
+    "kysely": "^0.29.6",
+    "prisma": "8.1.0-dev.7",
+    "typescript": "^7.0.2"
+  }
+}

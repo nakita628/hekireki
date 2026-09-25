@@ -13,15 +13,17 @@ class Base(DeclarativeBase):
 post_to_tag = Table(
     "_PostToTag",
     Base.metadata,
-    Column("A", String, ForeignKey("posts.id"), primary_key=True),
-    Column("B", Integer, ForeignKey("Tag.id"), primary_key=True),
+    Column("A", String, ForeignKey("posts.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True),
+    Column("B", Integer, ForeignKey("Tag.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True),
+    Index("_PostToTag_B_index", "B"),
 )
 
 cast = Table(
     "_cast",
     Base.metadata,
-    Column("A", Integer, ForeignKey("Actor.id"), primary_key=True),
-    Column("B", Integer, ForeignKey("Film.id"), primary_key=True),
+    Column("A", Integer, ForeignKey("Actor.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True),
+    Column("B", Integer, ForeignKey("Film.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True),
+    Index("_cast_B_index", "B"),
 )
 
 
@@ -36,24 +38,24 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(default=func.now(), onupdate=func.now())
 
-    posts: Mapped[list["Post"]] = relationship(back_populates="author")
+    posts: Mapped[list["Post"]] = relationship(cascade="all, delete", passive_deletes=True, back_populates="author")
     comments: Mapped[list["Comment"]] = relationship(back_populates="author")
-    orders: Mapped[list["Order"]] = relationship(back_populates="user")
-    followers: Mapped[list["Follow"]] = relationship(foreign_keys="Follow.following_id", back_populates="following")
-    following: Mapped[list["Follow"]] = relationship(foreign_keys="Follow.follower_id", back_populates="follower")
-    profile: Mapped[Optional["Profile"]] = relationship(back_populates="user")
+    orders: Mapped[list["Order"]] = relationship(passive_deletes="all", back_populates="user")
+    followers: Mapped[list["Follow"]] = relationship(foreign_keys="Follow.following_id", cascade="all, delete", passive_deletes=True, back_populates="following")
+    following: Mapped[list["Follow"]] = relationship(foreign_keys="Follow.follower_id", cascade="all, delete", passive_deletes=True, back_populates="follower")
+    profile: Mapped[Optional["Profile"]] = relationship(cascade="all, delete", passive_deletes=True, back_populates="user")
 
 class Profile(Base):
     __tablename__ = "Profile"
 
     id: Mapped[str] = mapped_column(primary_key=True)
-    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE", onupdate="CASCADE"), unique=True)
     bio: Mapped[Optional[str]] = mapped_column(Text)
     nickname: Mapped[str] = mapped_column(String(64), default="anonymous")
     age: Mapped[Optional[int]] = mapped_column(SmallInteger)
     balance: Mapped[DecimalType] = mapped_column(Numeric(precision=10, scale=2), default=DecimalType("0"))
     verified: Mapped[bool] = mapped_column(default=False)
-    meta: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON)
+    meta: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON(none_as_null=True))
     avatar: Mapped[Optional[bytes]]
     last_seen: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
@@ -68,7 +70,7 @@ class Post(Base):
     visibility: Mapped[str] = mapped_column(Enum("public", "private", "link_only", name="visibility_level"), default="link_only")
     published: Mapped[bool] = mapped_column(default=False)
     view_count: Mapped[int] = mapped_column(default=0)
-    author_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    author_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE", onupdate="CASCADE"))
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     __table_args__ = (
@@ -76,7 +78,7 @@ class Post(Base):
     )
 
     author: Mapped["User"] = relationship(back_populates="posts")
-    comments: Mapped[list["Comment"]] = relationship(back_populates="post")
+    comments: Mapped[list["Comment"]] = relationship(cascade="all, delete", passive_deletes=True, back_populates="post")
     tags: Mapped[list["Tag"]] = relationship(secondary=post_to_tag, back_populates="posts")
 
 class Tag(Base):
@@ -92,8 +94,8 @@ class Comment(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     body: Mapped[str]
-    post_id: Mapped[str] = mapped_column(ForeignKey("posts.id", ondelete="CASCADE"))
-    author_id: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    post_id: Mapped[str] = mapped_column(ForeignKey("posts.id", ondelete="CASCADE", onupdate="CASCADE"))
+    author_id: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL", onupdate="CASCADE"))
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     __table_args__ = (
@@ -106,8 +108,8 @@ class Comment(Base):
 class Follow(Base):
     __tablename__ = "follows"
 
-    follower_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
-    following_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    follower_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True)
+    following_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True)
     since: Mapped[datetime] = mapped_column(server_default=func.now())
 
     follower: Mapped["User"] = relationship(foreign_keys=[follower_id], back_populates="following")
@@ -118,7 +120,7 @@ class Category(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str]
-    parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("Category.id"))
+    parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("Category.id", ondelete="SET NULL", onupdate="CASCADE"))
 
     __table_args__ = (
         UniqueConstraint("parent_id", "name"),
@@ -131,18 +133,18 @@ class Order(Base):
     __tablename__ = "orders"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT", onupdate="CASCADE"))
     total: Mapped[DecimalType] = mapped_column(Numeric(precision=12, scale=2))
     placed_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     user: Mapped["User"] = relationship(back_populates="orders")
-    items: Mapped[list["OrderItem"]] = relationship(back_populates="order")
+    items: Mapped[list["OrderItem"]] = relationship(cascade="all, delete", passive_deletes=True, back_populates="order")
 
 class OrderItem(Base):
     __tablename__ = "order_items"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    order_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("orders.id", ondelete="CASCADE"))
+    order_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("orders.id", ondelete="CASCADE", onupdate="CASCADE"))
     sku: Mapped[str] = mapped_column(String(32))
     qty: Mapped[int] = mapped_column(default=1)
     price: Mapped[DecimalType] = mapped_column(Numeric(precision=12, scale=2))

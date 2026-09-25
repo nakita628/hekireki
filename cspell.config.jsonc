@@ -29,6 +29,9 @@
     "node_modules",
     "dist",
     "pnpm-lock.yaml",
+    // The module paths and checksums `go mod tidy` writes.
+    "**/go.mod",
+    "**/go.sum",
     "test/harness",
     "example/generated",
     "examples/*/generated",

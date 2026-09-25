@@ -187,25 +187,31 @@ function isAutoincrement(field: DMMF.Field) {
   return isFunctionDefault(field.default) && field.default.name === 'autoincrement'
 }
 
-function formatGoDefault(def: DMMF.Field['default']) {
+function formatGoDefault(def: DMMF.Field['default'], type: string, kind: DMMF.FieldKind) {
   if (def === undefined || def === null) return null
   if (typeof def === 'boolean') return def ? 'true' : 'false'
   if (typeof def === 'number') return String(def)
-  // String/enum literals must be SQL-quoted: bare `default:USER` is read as the
-  // identifier/reserved word `USER` (CURRENT_USER), not the literal 'USER'.
+  if (typeof def !== 'string') return null
+  // BigInt and Decimal literals reach the DMMF as strings; GORM parses an
+  // integer or float column's default with strconv, which a quote fails.
+  if (type === 'BigInt' || type === 'Decimal') return def
   // The value lives inside a backtick struct tag, so `"` and `\` are written
   // as the two-character sequences \" and \\ (reflect.StructTag unquotes
-  // them); the SQL single quote doubles per the SQL standard.
-  if (typeof def === 'string') {
-    const escaped = def
-      .replaceAll('\\', '\\\\')
-      .replaceAll('"', '\\"')
-      .replaceAll("'", "''")
-      .replaceAll('\n', '\\n')
-      .replaceAll('\r', '\\r')
-    return `'${escaped}'`
-  }
-  return null
+  // them), and a `;` as \\; (GORM's tag parser rejoins what it escapes).
+  // Quoted, so `default:USER` is not read as the identifier USER. A string
+  // column's default is a value to GORM: it trims the quotes and writes the
+  // rest into the row, so a `'` inside is not doubled. Every other default,
+  // and a string with parentheses, is an SQL expression GORM puts into DDL as
+  // it is, where the SQL quote doubles.
+  const isValue =
+    (type === 'String' || kind === 'enum') && !(def.includes('(') && def.includes(')'))
+  const escaped = (isValue ? def : def.replaceAll("'", "''"))
+    .replaceAll('\\', '\\\\')
+    .replaceAll('"', '\\"')
+    .replaceAll(';', '\\\\;')
+    .replaceAll('\n', '\\n')
+    .replaceAll('\r', '\\r')
+  return `'${escaped}'`
 }
 
 export function buildGormTags(
@@ -237,12 +243,12 @@ export function buildGormTags(
     const value = enums
       ?.find((e) => e.name === field.type)
       ?.values.find((v) => v.name === field.default)
-    return formatGoDefault(value?.dbName ?? field.default)
+    return formatGoDefault(value?.dbName ?? field.default, field.type, field.kind)
   })()
   const defaultVal =
     dbGeneratedExpr ??
     ((!isPk || isCompositePk) && !isNowDefault && !field.isUpdatedAt
-      ? (enumMappedDefault ?? formatGoDefault(field.default))
+      ? (enumMappedDefault ?? formatGoDefault(field.default, field.type, field.kind))
       : null)
 
   const parts = [
@@ -377,6 +383,16 @@ function generatedIdExpr(field: DMMF.Field) {
   // ulid.Make() draws from time-seeded math/rand; feed crypto/rand instead so
   // generated IDs are unpredictable like every other language target.
   if (field.default.name === 'ulid') return 'ulid.MustNew(ulid.Now(), rand.Reader).String()'
+  // Prisma makes these in its client, not in the database: without a hook the
+  // key would be "" for the first row and a conflict for the second.
+  if (field.default.name === 'cuid') {
+    return field.default.args[0] === 2 ? 'cuid2.Generate()' : 'cuid.New()'
+  }
+  if (field.default.name === 'nanoid') {
+    return typeof field.default.args[0] === 'number'
+      ? `gonanoid.Must(${field.default.args[0]})`
+      : 'gonanoid.Must()'
+  }
   return null
 }
 
@@ -418,22 +434,31 @@ function generateStructField(
   enums?: readonly DMMF.DatamodelEnum[],
 ) {
   const fieldName = goFieldName(field.name)
+  // GORM skips a zero value in a column with a default and lets the default
+  // in: `false` under `@default(true)` would be stored as true. A pointer
+  // tells the two apart, as GORM's documentation advises: nil takes the
+  // default, a pointer to the zero value is stored as it is.
+  const def = field.default
+  const hasNonZeroDefault =
+    field.kind === 'scalar' &&
+    !isPk &&
+    ['Int', 'BigInt', 'Float', 'Decimal', 'Boolean', 'String'].includes(field.type) &&
+    (def === true ||
+      (typeof def === 'number' && def !== 0) ||
+      (typeof def === 'string' && (field.type === 'String' ? def !== '' : Number(def) !== 0)))
   const scalarType =
     field.kind === 'enum'
       ? field.isRequired
         ? 'string'
         : '*string'
-      : prismaTypeToGoType(field.type, field.isRequired)
+      : prismaTypeToGoType(field.type, field.isRequired && !hasNonZeroDefault)
   // A scalar list (e.g. `tags String[]`) is a collection, not a scalar; collapse
   // it to a single value loses data. Emit a slice of the element type.
   const goType = field.isList
     ? `[]${field.kind === 'enum' ? 'string' : prismaTypeToGoType(field.type, true)}`
     : scalarType
 
-  const tag = buildGormTags(field, isPk, isCompositePk, compositeIndexTags, enums)
-  const tagStr = tag ? ` ${tag}` : ''
-
-  return `\t${fieldName} ${goType}${tagStr}`
+  return [fieldName, goType, buildGormTags(field, isPk, isCompositePk, compositeIndexTags, enums)]
 }
 
 function needsReferencesTag(references: string) {
@@ -472,8 +497,11 @@ function generateRelationFields(
     const isAmbiguous =
       fieldName !== goModelName(assoc.targetModel) ||
       associations.belongsTo.filter((a) => a.targetModel === assoc.targetModel).length > 1
+    // GORM guesses a belongs-to key as the field's name and the referenced
+    // field's (`User` + `ID`); a key named otherwise (`ownerId`) is named.
+    const isGuessed = fkFieldName === `${fieldName}${refsFieldName}`
     const tagParts = [
-      isAmbiguous || isComposite ? `foreignKey:${fkFieldName}` : null,
+      isAmbiguous || isComposite || !isGuessed ? `foreignKey:${fkFieldName}` : null,
       isComposite || needsReferencesTag(assoc.references) ? `references:${refsFieldName}` : null,
     ].filter((p) => p !== null)
     // A relation back to the owning model must be a pointer: a struct that
@@ -483,8 +511,8 @@ function generateRelationFields(
         ? `*${goModelName(assoc.targetModel)}`
         : goModelName(assoc.targetModel)
     return tagParts.length > 0
-      ? `\t${fieldName} ${targetType} ${buildRelationTag(tagParts)}`
-      : `\t${fieldName} ${targetType}`
+      ? [fieldName, targetType, buildRelationTag(tagParts)]
+      : [fieldName, targetType]
   })
 
   const hasManyLines = associations.hasMany.map((assoc) => {
@@ -495,7 +523,11 @@ function generateRelationFields(
         : []),
       ...[constraintTag(assoc.onDelete, assoc.onUpdate)].filter((c) => c !== null),
     ]
-    return `\t${goFieldName(assoc.name)} []${goModelName(assoc.targetModel)} ${buildRelationTag(tagParts)}`
+    return [
+      goFieldName(assoc.name),
+      `[]${goModelName(assoc.targetModel)}`,
+      buildRelationTag(tagParts),
+    ]
   })
 
   const hasOneLines = associations.hasOne.map((assoc) => {
@@ -509,15 +541,54 @@ function generateRelationFields(
     // A has-one is always a pointer: the paired belongs_to embeds this model
     // by value, so a value here is an illegal mutually recursive type in Go,
     // and Prisma requires the 1:1 back side to be optional anyway.
-    return `\t${goFieldName(assoc.name)} *${goModelName(assoc.targetModel)} ${buildRelationTag(tagParts)}`
+    return [
+      goFieldName(assoc.name),
+      `*${goModelName(assoc.targetModel)}`,
+      buildRelationTag(tagParts),
+    ]
   })
 
+  // Prisma's join table has two columns, A for the model whose name sorts
+  // first and B for the other, where GORM would look for `post_id`/`tag_id`.
   const manyToManyLines = associations.manyToMany.map((assoc) => {
     const joinTable = `_${assoc.relationName}`
-    return `\t${goFieldName(assoc.name)} []${goModelName(assoc.targetModel)} \`gorm:"many2many:${joinTable};"\``
+    const [own, related] = model.name < assoc.targetModel ? ['A', 'B'] : ['B', 'A']
+    return [
+      goFieldName(assoc.name),
+      `[]${goModelName(assoc.targetModel)}`,
+      `\`gorm:"many2many:${joinTable};joinForeignKey:${own};joinReferences:${related}"\``,
+    ]
   })
 
   return [...belongsToLines, ...hasManyLines, ...hasOneLines, ...manyToManyLines]
+}
+
+/**
+ * Lays struct fields out as gofmt does: each column is as wide as its widest
+ * cell plus one space, over a run of lines that all have a cell after it. A
+ * field without a tag ends the run of the type column, not of the names.
+ *
+ * @example
+ * ```go
+ * 	ID        int       `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+ * 	UserID    *string   `gorm:"column:userId" json:"userId"`
+ * 	CreatedAt time.Time `gorm:"column:createdAt;autoCreateTime;not null" json:"createdAt"`
+ * 	User      User
+ * 	Comments  []Comment `gorm:"foreignKey:PostID"`
+ * ```
+ */
+function alignFields(rows: readonly (readonly string[])[]) {
+  const width = (i: number, column: number) => {
+    const breaks = (row: readonly string[]) => row.length - 1 <= column
+    const start = rows.slice(0, i).findLastIndex(breaks) + 1
+    const end = rows.findIndex((row, j) => j > i && breaks(row))
+    const run = rows.slice(start, end === -1 ? rows.length : end)
+    return Math.max(...run.map((row) => row[column].length)) + 1
+  }
+  return rows.map(
+    (row, i) =>
+      `\t${row.map((cell, column) => (column < row.length - 1 ? cell.padEnd(width(i, column)) : cell)).join('')}`,
+  )
 }
 
 export function generateModelStruct(
@@ -558,12 +629,35 @@ export function generateModelStruct(
 
   return [
     `type ${goModelName(model.name)} struct {`,
-    ...fieldLines,
-    ...relationLines,
+    ...alignFields([...fieldLines, ...relationLines]),
     '}',
     ...tableNameMethod,
     ...generateBeforeCreateHook(model),
   ].join('\n')
+}
+
+function hasImplicitManyToMany(models: readonly DMMF.Model[]) {
+  return models.some((model) => getAssociations(model, models).manyToMany.length > 0)
+}
+
+/**
+ * GORM's default naming strategy snake_cases and pluralises a join table's
+ * name (`_PostToTag` becomes `_post_to_tags`) and lowercases its columns (`A`
+ * becomes `a`). Prisma's implicit many-to-many tables keep their names only
+ * under a strategy that leaves names as they are; every other name in the
+ * file is given in a tag or by `TableName()`, so nothing else changes with it.
+ */
+export function generateNamingStrategy(models: readonly DMMF.Model[], packageName: string) {
+  if (!hasImplicitManyToMany(models)) return []
+  return [
+    '',
+    '// NamingStrategy keeps the names Prisma gave its many-to-many join tables',
+    '// (`_AToB`, columns `A` and `B`), which GORM would otherwise snake_case,',
+    '// pluralise and lowercase. Open the connection with it:',
+    '//',
+    `//\tgorm.Open(dialector, &gorm.Config{NamingStrategy: ${packageName}.NamingStrategy})`,
+    'var NamingStrategy = schema.NamingStrategy{SingularTable: true, NoLowerCase: true}',
+  ]
 }
 
 export function collectImports(models: readonly DMMF.Model[]) {
@@ -573,24 +667,43 @@ export function collectImports(models: readonly DMMF.Model[]) {
   const needsDatatypes = models.some((m) =>
     m.fields.some((f) => f.kind !== 'object' && f.type === 'Json'),
   )
-  const needsUuid = models.some((m) =>
-    generatedIdFields(m).some((f) => isFunctionDefault(f.default) && f.default.name === 'uuid'),
+  const generators = new Set(
+    models.flatMap((m) =>
+      generatedIdFields(m).flatMap((f) =>
+        isFunctionDefault(f.default)
+          ? [f.default.name === 'cuid' && f.default.args[0] === 2 ? 'cuid2' : f.default.name]
+          : [],
+      ),
+    ),
   )
-  const needsUlid = models.some((m) =>
-    generatedIdFields(m).some((f) => isFunctionDefault(f.default) && f.default.name === 'ulid'),
-  )
-  return [
-    needsUlid ? '"crypto/rand"' : null,
-    needsTime ? '"time"' : null,
-    needsUuid ? '"github.com/google/uuid"' : null,
-    needsUlid ? '"github.com/oklog/ulid/v2"' : null,
+  // Standard library first, then the modules, each group sorted by path, as
+  // gofmt keeps them.
+  const standard = [generators.has('ulid') ? '"crypto/rand"' : null, needsTime ? '"time"' : null]
+  const modules = [
+    generators.has('uuid') ? '"github.com/google/uuid"' : null,
+    generators.has('cuid') ? '"github.com/lucsky/cuid"' : null,
+    generators.has('nanoid') ? 'gonanoid "github.com/matoous/go-nanoid/v2"' : null,
+    generators.has('cuid2') ? '"github.com/nrednav/cuid2"' : null,
+    generators.has('ulid') ? '"github.com/oklog/ulid/v2"' : null,
     needsDatatypes ? '"gorm.io/datatypes"' : null,
-    needsUuid || needsUlid ? '"gorm.io/gorm"' : null,
-  ].filter((i) => i !== null)
+    generators.size > 0 ? '"gorm.io/gorm"' : null,
+    hasImplicitManyToMany(models) ? '"gorm.io/gorm/schema"' : null,
+  ]
+  return [standard.filter((i) => i !== null), modules.filter((i) => i !== null)]
 }
 
-export function formatImports(imports: readonly string[]) {
+export function formatImports(groups: readonly (readonly string[])[]) {
+  const imports = groups.filter((group) => group.length > 0)
   if (imports.length === 0) return []
-  if (imports.length === 1) return ['', `import ${imports[0]}`]
-  return ['', 'import (', ...imports.map((imp) => `\t${imp}`), ')']
+  if (imports.length === 1 && imports[0].length === 1) return ['', `import ${imports[0][0]}`]
+  return [
+    '',
+    'import (',
+    // A blank line between the groups.
+    ...imports
+      .map((group) => group.map((imp) => `\t${imp}`).join('\n'))
+      .join('\n\n')
+      .split('\n'),
+    ')',
+  ]
 }

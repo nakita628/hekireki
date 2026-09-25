@@ -534,14 +534,14 @@ class User(Base):
     id: Mapped[str] = mapped_column(primary_key=True)
     name: Mapped[str]
 
-    posts: Mapped[list["Post"]] = relationship(back_populates="user")
+    posts: Mapped[list["Post"]] = relationship(passive_deletes="all", back_populates="user")
 
 class Post(Base):
     __tablename__ = "Post"
 
     id: Mapped[str] = mapped_column(primary_key=True)
     title: Mapped[str]
-    user_id: Mapped[str] = mapped_column("userId", ForeignKey("User.id"))
+    user_id: Mapped[str] = mapped_column("userId", ForeignKey("User.id", ondelete="RESTRICT", onupdate="CASCADE"))
 
     user: Mapped["User"] = relationship(back_populates="posts")
 `,
@@ -592,14 +592,14 @@ class User(Base):
     id: Mapped[str] = mapped_column(primary_key=True)
     name: Mapped[str]
 
-    profile: Mapped[Optional["Profile"]] = relationship(back_populates="user")
+    profile: Mapped[Optional["Profile"]] = relationship(passive_deletes="all", back_populates="user")
 
 class Profile(Base):
     __tablename__ = "Profile"
 
     id: Mapped[str] = mapped_column(primary_key=True)
     bio: Mapped[str]
-    user_id: Mapped[str] = mapped_column("userId", ForeignKey("User.id"), unique=True)
+    user_id: Mapped[str] = mapped_column("userId", ForeignKey("User.id", ondelete="RESTRICT", onupdate="CASCADE"), unique=True)
 
     user: Mapped["User"] = relationship(back_populates="profile")
 `,
@@ -1057,7 +1057,7 @@ class Base(DeclarativeBase):
     ])
 
     expect(generateSingleFile([postModel, tagModel])).toBe(
-      `from sqlalchemy import Column, ForeignKey, Integer, Table
+      `from sqlalchemy import Column, ForeignKey, Index, Integer, Table
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -1067,8 +1067,9 @@ class Base(DeclarativeBase):
 post_to_tag = Table(
     "_PostToTag",
     Base.metadata,
-    Column("A", Integer, ForeignKey("Post.id"), primary_key=True),
-    Column("B", Integer, ForeignKey("Tag.id"), primary_key=True),
+    Column("A", Integer, ForeignKey("Post.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True),
+    Column("B", Integer, ForeignKey("Tag.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True),
+    Index("_PostToTag_B_index", "B"),
 )
 
 
@@ -1160,7 +1161,7 @@ class User(Base):
     id: Mapped[str] = mapped_column(primary_key=True)
     name: Mapped[str]
 
-    likes: Mapped[list["Like"]] = relationship(back_populates="user")
+    likes: Mapped[list["Like"]] = relationship(passive_deletes="all", back_populates="user")
 
 class Post(Base):
     __tablename__ = "Post"
@@ -1168,13 +1169,13 @@ class Post(Base):
     id: Mapped[str] = mapped_column(primary_key=True)
     title: Mapped[str]
 
-    likes: Mapped[list["Like"]] = relationship(back_populates="post")
+    likes: Mapped[list["Like"]] = relationship(passive_deletes="all", back_populates="post")
 
 class Like(Base):
     __tablename__ = "Like"
 
-    user_id: Mapped[str] = mapped_column("userId", ForeignKey("User.id"), primary_key=True)
-    post_id: Mapped[str] = mapped_column("postId", ForeignKey("Post.id"), primary_key=True)
+    user_id: Mapped[str] = mapped_column("userId", ForeignKey("User.id", ondelete="RESTRICT", onupdate="CASCADE"), primary_key=True)
+    post_id: Mapped[str] = mapped_column("postId", ForeignKey("Post.id", ondelete="RESTRICT", onupdate="CASCADE"), primary_key=True)
 
     user: Mapped["User"] = relationship(back_populates="likes")
     post: Mapped["Post"] = relationship(back_populates="likes")
@@ -1243,15 +1244,15 @@ class User(Base):
     id: Mapped[str] = mapped_column(primary_key=True)
     name: Mapped[str]
 
-    followers: Mapped[list["Follow"]] = relationship(foreign_keys="Follow.following_id", back_populates="following")
-    following: Mapped[list["Follow"]] = relationship(foreign_keys="Follow.follower_id", back_populates="follower")
+    followers: Mapped[list["Follow"]] = relationship(foreign_keys="Follow.following_id", passive_deletes="all", back_populates="following")
+    following: Mapped[list["Follow"]] = relationship(foreign_keys="Follow.follower_id", passive_deletes="all", back_populates="follower")
 
 class Follow(Base):
     __tablename__ = "Follow"
 
     id: Mapped[str] = mapped_column(primary_key=True)
-    follower_id: Mapped[str] = mapped_column("followerId", ForeignKey("User.id"))
-    following_id: Mapped[str] = mapped_column("followingId", ForeignKey("User.id"))
+    follower_id: Mapped[str] = mapped_column("followerId", ForeignKey("User.id", ondelete="RESTRICT", onupdate="CASCADE"))
+    following_id: Mapped[str] = mapped_column("followingId", ForeignKey("User.id", ondelete="RESTRICT", onupdate="CASCADE"))
 
     follower: Mapped["User"] = relationship(foreign_keys=[follower_id], back_populates="following")
     following: Mapped["User"] = relationship(foreign_keys=[following_id], back_populates="followers")
@@ -1538,7 +1539,7 @@ describe('named implicit many-to-many', () => {
     ]
 
     expect(generateSingleFile(models))
-      .toBe(`from sqlalchemy import Column, ForeignKey, String, Table
+      .toBe(`from sqlalchemy import Column, ForeignKey, Index, String, Table
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -1548,8 +1549,9 @@ class Base(DeclarativeBase):
 post_tags = Table(
     "_PostTags",
     Base.metadata,
-    Column("A", String, ForeignKey("Post.id"), primary_key=True),
-    Column("B", String, ForeignKey("Tag.id"), primary_key=True),
+    Column("A", String, ForeignKey("Post.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True),
+    Column("B", String, ForeignKey("Tag.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True),
+    Index("_PostTags_B_index", "B"),
 )
 
 
@@ -1867,5 +1869,240 @@ describe('pythonAttrName', () => {
 
   it.each(['email', 'createdAt', 'Class', 'metadata_'])('leaves %s alone', (name) => {
     expect(pythonAttrName(name)).toBe(name)
+  })
+})
+
+// Corners examples/sqlalchemy runs against SQLite: each of these once imported, configured or
+// behaved differently from the tables Prisma made.
+describe('relations as the database has them', () => {
+  const account = (extra: DMMF.Field[]) =>
+    makeModel('Account', [makeField({ name: 'id', type: 'Int', isId: true }), ...extra], {
+      dbName: 'accounts',
+    })
+
+  it('gives a relation named after a Python keyword a trailing underscore, on both sides', () => {
+    const models = [
+      account([
+        makeField({
+          name: 'sent',
+          type: 'Transfer',
+          kind: 'object',
+          isList: true,
+          relationName: 'Sent',
+        }),
+        makeField({
+          name: 'received',
+          type: 'Transfer',
+          kind: 'object',
+          isList: true,
+          relationName: 'Received',
+        }),
+      ]),
+      makeModel('Transfer', [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'fromId', type: 'Int' }),
+        makeField({
+          name: 'from',
+          type: 'Account',
+          kind: 'object',
+          relationName: 'Sent',
+          relationFromFields: ['fromId'],
+          relationToFields: ['id'],
+          relationOnDelete: 'NoAction',
+        }),
+        makeField({ name: 'toId', type: 'Int' }),
+        makeField({
+          name: 'to',
+          type: 'Account',
+          kind: 'object',
+          relationName: 'Received',
+          relationFromFields: ['toId'],
+          relationToFields: ['id'],
+          relationOnDelete: 'Cascade',
+        }),
+      ]),
+    ]
+
+    expect(generateSingleFile(models)).toBe(`from sqlalchemy import ForeignKey
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class Account(Base):
+    __tablename__ = "accounts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    sent: Mapped[list["Transfer"]] = relationship(foreign_keys="Transfer.from_id", passive_deletes="all", back_populates="from_")
+    received: Mapped[list["Transfer"]] = relationship(foreign_keys="Transfer.to_id", cascade="all, delete", passive_deletes=True, back_populates="to")
+
+class Transfer(Base):
+    __tablename__ = "Transfer"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    from_id: Mapped[int] = mapped_column("fromId", ForeignKey("accounts.id", ondelete="NO ACTION", onupdate="CASCADE"))
+    to_id: Mapped[int] = mapped_column("toId", ForeignKey("accounts.id", ondelete="CASCADE", onupdate="CASCADE"))
+
+    from_: Mapped["Account"] = relationship(foreign_keys=[from_id], back_populates="sent")
+    to: Mapped["Account"] = relationship(foreign_keys=[to_id], back_populates="received")
+`)
+  })
+
+  it('writes the actions Prisma Migrate implies when the schema names none', () => {
+    const models = [
+      account([
+        makeField({
+          name: 'orders',
+          type: 'Order',
+          kind: 'object',
+          isList: true,
+          relationName: 'Buyer',
+        }),
+        makeField({
+          name: 'notes',
+          type: 'Order',
+          kind: 'object',
+          isList: true,
+          relationName: 'Reviewer',
+        }),
+      ]),
+      makeModel('Order', [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'buyerId', type: 'Int' }),
+        makeField({
+          name: 'buyer',
+          type: 'Account',
+          kind: 'object',
+          relationName: 'Buyer',
+          relationFromFields: ['buyerId'],
+          relationToFields: ['id'],
+        }),
+        makeField({ name: 'reviewerId', type: 'Int', isRequired: false }),
+        makeField({
+          name: 'reviewer',
+          type: 'Account',
+          kind: 'object',
+          isRequired: false,
+          relationName: 'Reviewer',
+          relationFromFields: ['reviewerId'],
+          relationToFields: ['id'],
+        }),
+      ]),
+    ]
+
+    const code = generateSingleFile(models)
+    // Required: RESTRICT, which the session leaves to the database instead of nulling the key.
+    expect(code).toContain(
+      'buyer_id: Mapped[int] = mapped_column("buyerId", ForeignKey("accounts.id", ondelete="RESTRICT", onupdate="CASCADE"))',
+    )
+    expect(code).toContain(
+      'orders: Mapped[list["Order"]] = relationship(foreign_keys="Order.buyer_id", passive_deletes="all", back_populates="buyer")',
+    )
+    // Optional: SET NULL, which is what the session does on its own.
+    expect(code).toContain(
+      'reviewer_id: Mapped[Optional[int]] = mapped_column("reviewerId", ForeignKey("accounts.id", ondelete="SET NULL", onupdate="CASCADE"))',
+    )
+    expect(code).toContain(
+      'notes: Mapped[list["Order"]] = relationship(foreign_keys="Order.reviewer_id", back_populates="reviewer")',
+    )
+  })
+
+  it('cascades a 1-1 delete in the session and leaves the rest to the database', () => {
+    const models = [
+      account([
+        makeField({
+          name: 'profile',
+          type: 'Profile',
+          kind: 'object',
+          isRequired: false,
+          relationName: 'P',
+        }),
+      ]),
+      makeModel('Profile', [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'accountId', type: 'Int', isUnique: true }),
+        makeField({
+          name: 'account',
+          type: 'Account',
+          kind: 'object',
+          relationName: 'P',
+          relationFromFields: ['accountId'],
+          relationToFields: ['id'],
+          relationOnDelete: 'Cascade',
+        }),
+      ]),
+    ]
+
+    expect(generateSingleFile(models)).toContain(
+      'profile: Mapped[Optional["Profile"]] = relationship(cascade="all, delete", passive_deletes=True, back_populates="account")',
+    )
+  })
+
+  // Prisma Client writes `ann.following.connect(bob)` as A = bob, B = ann: the field whose name
+  // sorts first lists the B of the rows whose A is the row.
+  it('tells a self many-to-many which join column holds the row', () => {
+    const models = [
+      account([
+        makeField({
+          name: 'following',
+          type: 'Account',
+          kind: 'object',
+          isList: true,
+          relationName: 'Follows',
+        }),
+        makeField({
+          name: 'followers',
+          type: 'Account',
+          kind: 'object',
+          isList: true,
+          relationName: 'Follows',
+        }),
+      ]),
+    ]
+
+    expect(generateSingleFile(models))
+      .toBe(`from sqlalchemy import Column, ForeignKey, Index, Integer, Table
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+
+class Base(DeclarativeBase):
+    pass
+
+follows = Table(
+    "_Follows",
+    Base.metadata,
+    Column("A", Integer, ForeignKey("accounts.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True),
+    Column("B", Integer, ForeignKey("accounts.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True),
+    Index("_Follows_B_index", "B"),
+)
+
+
+class Account(Base):
+    __tablename__ = "accounts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    following: Mapped[list["Account"]] = relationship(secondary=follows, primaryjoin=lambda: Account.id == follows.c.B, secondaryjoin=lambda: Account.id == follows.c.A, back_populates="followers")
+    followers: Mapped[list["Account"]] = relationship(secondary=follows, primaryjoin=lambda: Account.id == follows.c.A, secondaryjoin=lambda: Account.id == follows.c.B, back_populates="following")
+`)
+  })
+
+  it('stores the None of an optional Json as NULL, and of a required one as JSON null', () => {
+    const models = [
+      makeModel('Row', [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'data', type: 'Json' }),
+        makeField({ name: 'extra', type: 'Json', isRequired: false }),
+      ]),
+    ]
+
+    const code = generateSingleFile(models)
+    expect(code).toContain('    data: Mapped[dict[str, Any]] = mapped_column(JSON)\n')
+    expect(code).toContain(
+      '    extra: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON(none_as_null=True))\n',
+    )
   })
 })

@@ -15,7 +15,26 @@ key, every `onDelete`, a self relation, an implicit many-to-many, a composite ke
 in it generates, creates the database, runs the check and RuboCop; see
 [active-record/README.md](active-record/README.md).
 
-The other three are small projects to try `hekireki seed` and `hekireki studio` on, one per database. Each is a
+Four more do the same for other generators, each on a schema written the way a Prisma schema is
+written with a corner of the target language in every model: every scalar SQLite has, every kind
+of `@default`, `@map` on models, fields and enum values, composite keys, a self relation, explicit
+and implicit many-to-many, every `onDelete`, and names the target language reserves. None of them
+creates a table of its own; each check reads and writes the tables `prisma db push` made, through
+the names the generator gave them, and prints one `ok:` line per check. `pnpm run demo` in each
+starts from nothing.
+
+- `kysely/`: the `DB` interface `hekireki-kysely` writes, queried through Kysely over
+  better-sqlite3, with type-level checks that what the tables refuse does not compile; see
+  [kysely/README.md](kysely/README.md).
+- `gorm/`: the structs `hekireki-gorm` writes, read and written by GORM through the pure-Go SQLite
+  driver, after `gofmt` and `go vet`; see [gorm/README.md](gorm/README.md). Go 1.23 or newer.
+- `sqlalchemy/`: the models `hekireki-sqlalchemy` writes, compared with the database by
+  `inspect(engine)` and used through SQLAlchemy 2.1 sessions, after mypy `--strict`; see
+  [sqlalchemy/README.md](sqlalchemy/README.md). Python 3.11 or newer, in a virtualenv of its own.
+- `ecto/`: the schemas `hekireki-ecto` writes, compiled with warnings as errors and used through
+  Ecto on `ecto_sqlite3`; see [ecto/README.md](ecto/README.md). Elixir 1.14 or newer.
+
+`sqlite/`, `mysql/` and `postgresql/` are small projects to try `hekireki seed` and `hekireki studio` on, one per database. Each is a
 `schema.prisma` with the `prisma-client` and `hekireki-seed` generators, the schema module the
 latter writes (committed, so the config type-checks before `pnpm setup` has run), and a typed
 `hekireki.config.ts` that names the database in its `url`: no flag and no `.env` needed.

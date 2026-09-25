@@ -265,7 +265,7 @@ end`)
       )
     })
 
-    it('ignores function defaults like now()', () => {
+    it('reads back a now() default the database fills', () => {
       const model = makeModel({
         name: 'Event',
         fields: [
@@ -288,7 +288,7 @@ end`)
       const result = ectoSchemas([model], 'App')
 
       expect(result).toBe(
-        'defmodule App.Event do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          occurred_at: DateTime.t()\n        }\n\n  schema "Event" do\n    field(:occurred_at, :utc_datetime, source: :occurredAt)\n  end\nend',
+        'defmodule App.Event do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          occurred_at: DateTime.t()\n        }\n\n  schema "Event" do\n    field(:occurred_at, :utc_datetime, read_after_writes: true, source: :occurredAt)\n  end\nend',
       )
     })
   })
@@ -2079,5 +2079,398 @@ describe('Json defaults', () => {
     ]
     const lines = ectoSchemas(models, 'App', models).split('\n')
     expect(lines.find((line) => line.includes(':meta'))).toBe(expected)
+  })
+})
+
+// What examples/ecto found running the generated schemas against Ecto on SQLite.
+describe('keys and references Ecto names differently from Prisma', () => {
+  const account = makeModel({
+    name: 'Account',
+    fields: [
+      makeField({
+        name: 'id',
+        type: 'Int',
+        isId: true,
+        hasDefaultValue: true,
+        default: { name: 'autoincrement', args: [] },
+      }),
+      makeField({ name: 'handle', type: 'String', isUnique: true }),
+      makeField({
+        name: 'orders',
+        type: 'Order',
+        kind: 'object',
+        isList: true,
+        relationName: 'Orders',
+      }),
+      makeField({
+        name: 'gifts',
+        type: 'Order',
+        kind: 'object',
+        isList: true,
+        relationName: 'Gifts',
+      }),
+      makeField({
+        name: 'wishlist',
+        type: 'Wishlist',
+        kind: 'object',
+        isRequired: false,
+        relationName: 'AccountToWishlist',
+      }),
+    ],
+  })
+  const order = makeModel({
+    name: 'Order',
+    fields: [
+      makeField({
+        name: 'number',
+        type: 'Int',
+        dbName: 'order_number',
+        isId: true,
+        hasDefaultValue: true,
+        default: { name: 'autoincrement', args: [] },
+      }),
+      makeField({ name: 'accountId', type: 'Int', dbName: 'account_id' }),
+      makeField({
+        name: 'account',
+        type: 'Account',
+        kind: 'object',
+        relationName: 'Orders',
+        relationFromFields: ['accountId'],
+        relationToFields: ['id'],
+      }),
+      makeField({ name: 'giftFor', type: 'String', dbName: 'gift_for', isRequired: false }),
+      makeField({
+        name: 'giftTarget',
+        type: 'Account',
+        kind: 'object',
+        isRequired: false,
+        relationName: 'Gifts',
+        relationFromFields: ['giftFor'],
+        relationToFields: ['handle'],
+      }),
+      makeField({
+        name: 'lineItems',
+        type: 'LineItem',
+        kind: 'object',
+        isList: true,
+        relationName: 'LineItemToOrder',
+      }),
+    ],
+  })
+  const lineItem = makeModel({
+    name: 'LineItem',
+    primaryKey: { name: null, fields: ['orderNumber', 'sku'] },
+    fields: [
+      makeField({ name: 'orderNumber', type: 'Int', dbName: 'order_number' }),
+      makeField({
+        name: 'order',
+        type: 'Order',
+        kind: 'object',
+        relationName: 'LineItemToOrder',
+        relationFromFields: ['orderNumber'],
+        relationToFields: ['number'],
+      }),
+      makeField({ name: 'sku', type: 'String' }),
+    ],
+  })
+  const wishlist = makeModel({
+    name: 'Wishlist',
+    fields: [
+      makeField({
+        name: 'id',
+        type: 'String',
+        isId: true,
+        hasDefaultValue: true,
+        default: { name: 'uuid', args: [4] },
+      }),
+      makeField({ name: 'accountId', type: 'Int', dbName: 'account_id', isUnique: true }),
+      makeField({
+        name: 'account',
+        type: 'Account',
+        kind: 'object',
+        relationName: 'AccountToWishlist',
+        relationFromFields: ['accountId'],
+        relationToFields: ['id'],
+      }),
+    ],
+  })
+  const models = [account, order, lineItem, wishlist]
+
+  it('references a primary key Ecto calls :id by that name', () => {
+    expect(ectoSchemas([lineItem], 'App', models)).toBe(`defmodule App.LineItem do
+  use Ecto.Schema
+  @moduledoc false
+
+  @primary_key false
+
+  @type t :: %__MODULE__{
+          order_number: term(),
+          sku: String.t(),
+          order: App.Order.t() | nil
+        }
+
+  schema "LineItem" do
+    field(:sku, :string, primary_key: true)
+    field(:order_number, :id, primary_key: true)
+    belongs_to(:order, App.Order, foreign_key: :order_number, define_field: false)
+  end
+end`)
+  })
+
+  it('types a key after the unique field it references, and says it on both sides', () => {
+    expect(ectoSchemas([order], 'App', models)).toBe(`defmodule App.Order do
+  use Ecto.Schema
+  @moduledoc false
+
+  @primary_key {:id, :id, autogenerate: true, source: :order_number}
+
+  @type t :: %__MODULE__{
+          id: integer(),
+          account: App.Account.t() | nil,
+          gift_target: App.Account.t() | nil,
+          line_items: [App.LineItem.t()]
+        }
+
+  schema "Order" do
+    belongs_to(:account, App.Account, foreign_key: :account_id)
+    belongs_to(:gift_target, App.Account, foreign_key: :gift_for, type: :string, references: :handle)
+    has_many(:line_items, App.LineItem, foreign_key: :order_number)
+  end
+end`)
+    expect(ectoSchemas([account], 'App', models)).toBe(`defmodule App.Account do
+  use Ecto.Schema
+  @moduledoc false
+
+  @primary_key {:id, :id, autogenerate: true}
+
+  @type t :: %__MODULE__{
+          id: integer(),
+          handle: String.t(),
+          wishlist: App.Wishlist.t() | nil,
+          orders: [App.Order.t()],
+          gifts: [App.Order.t()]
+        }
+
+  schema "Account" do
+    field(:handle, :string)
+    has_one(:wishlist, App.Wishlist, foreign_key: :account_id)
+    has_many(:orders, App.Order, foreign_key: :account_id)
+    has_many(:gifts, App.Order, foreign_key: :gift_for, references: :handle)
+  end
+end`)
+  })
+
+  it('keeps an integer key of a uuid-keyed model out of its @foreign_key_type', () => {
+    expect(ectoSchemas([wishlist], 'App', models)).toBe(`defmodule App.Wishlist do
+  use Ecto.Schema
+  @moduledoc false
+
+  @primary_key {:id, :binary_id, autogenerate: true}
+  @foreign_key_type :binary_id
+
+  @type t :: %__MODULE__{
+          id: Ecto.UUID.t(),
+          account: App.Account.t() | nil
+        }
+
+  schema "Wishlist" do
+    belongs_to(:account, App.Account, foreign_key: :account_id, type: :id)
+  end
+end`)
+  })
+})
+
+describe('implicit many-to-many of a model with itself', () => {
+  it('reads its own key from "A" on the field whose name sorts first, and from "B" on the other', () => {
+    const account = makeModel({
+      name: 'Account',
+      fields: [
+        makeField({
+          name: 'number',
+          type: 'Int',
+          isId: true,
+          hasDefaultValue: true,
+          default: { name: 'autoincrement', args: [] },
+        }),
+        makeField({
+          name: 'following',
+          type: 'Account',
+          kind: 'object',
+          isList: true,
+          relationName: 'Follows',
+        }),
+        makeField({
+          name: 'followers',
+          type: 'Account',
+          kind: 'object',
+          isList: true,
+          relationName: 'Follows',
+        }),
+      ],
+    })
+
+    expect(ectoSchemas([account], 'App', [account])).toBe(`defmodule App.Account do
+  use Ecto.Schema
+  @moduledoc false
+
+  @primary_key {:id, :id, autogenerate: true, source: :number}
+
+  @type t :: %__MODULE__{
+          id: integer(),
+          following: [App.Account.t()],
+          followers: [App.Account.t()]
+        }
+
+  schema "Account" do
+    many_to_many(:following, App.Account, join_through: "_Follows", join_keys: [B: :id, A: :id])
+    many_to_many(:followers, App.Account, join_through: "_Follows", join_keys: [A: :id, B: :id])
+  end
+end`)
+  })
+
+  it('takes a self relation whose list side comes first for a has_many, not a many_to_many', () => {
+    const category = makeModel({
+      name: 'Category',
+      fields: [
+        makeField({
+          name: 'id',
+          type: 'Int',
+          isId: true,
+          hasDefaultValue: true,
+          default: { name: 'autoincrement', args: [] },
+        }),
+        makeField({
+          name: 'children',
+          type: 'Category',
+          kind: 'object',
+          isList: true,
+          relationName: 'Tree',
+        }),
+        makeField({ name: 'parentId', type: 'Int', isRequired: false }),
+        makeField({
+          name: 'parent',
+          type: 'Category',
+          kind: 'object',
+          isRequired: false,
+          relationName: 'Tree',
+          relationFromFields: ['parentId'],
+          relationToFields: ['id'],
+        }),
+      ],
+    })
+
+    expect(ectoSchemas([category], 'App', [category])).toBe(`defmodule App.Category do
+  use Ecto.Schema
+  @moduledoc false
+
+  @primary_key {:id, :id, autogenerate: true}
+
+  @type t :: %__MODULE__{
+          id: integer(),
+          parent: App.Category.t() | nil,
+          children: [App.Category.t()]
+        }
+
+  schema "Category" do
+    field(:parent_id, :id, source: :parentId)
+    belongs_to(:parent, App.Category, foreign_key: :parent_id, define_field: false)
+    has_many(:children, App.Category, foreign_key: :parent_id)
+  end
+end`)
+  })
+})
+
+describe('defaults Ecto has to know about', () => {
+  it('counts up a BigInt autoincrement key, gives a foreign key its default and makes a uuid() column', () => {
+    const category = makeModel({
+      name: 'Category',
+      fields: [
+        makeField({
+          name: 'id',
+          type: 'Int',
+          isId: true,
+          hasDefaultValue: true,
+          default: { name: 'autoincrement', args: [] },
+        }),
+      ],
+    })
+    const event = makeModel({
+      name: 'Event',
+      fields: [
+        makeField({
+          name: 'id',
+          type: 'BigInt',
+          isId: true,
+          hasDefaultValue: true,
+          default: { name: 'autoincrement', args: [] },
+        }),
+        makeField({
+          name: 'token',
+          type: 'String',
+          hasDefaultValue: true,
+          default: { name: 'uuid', args: [4] },
+        }),
+        makeField({
+          name: 'category_id',
+          type: 'Int',
+          hasDefaultValue: true,
+          default: 1,
+        }),
+        makeField({
+          name: 'category',
+          type: 'Category',
+          kind: 'object',
+          relationName: 'CategoryToEvent',
+          relationFromFields: ['category_id'],
+          relationToFields: ['id'],
+        }),
+      ],
+    })
+
+    expect(ectoSchemas([event], 'App', [category, event])).toBe(`defmodule App.Event do
+  use Ecto.Schema
+  @moduledoc false
+
+  @primary_key {:id, :id, autogenerate: true}
+
+  @type t :: %__MODULE__{
+          id: integer(),
+          token: String.t(),
+          category: App.Category.t() | nil
+        }
+
+  schema "Event" do
+    field(:token, :string, autogenerate: {Ecto.UUID, :generate, []})
+    field(:category_id, :id, default: 1)
+    belongs_to(:category, App.Category, foreign_key: :category_id, define_field: false)
+  end
+end`)
+  })
+})
+
+describe('@moduledoc', () => {
+  it('keeps a doc comment as text: no interpolation, escape or end of the heredoc', () => {
+    const model = makeModel({
+      name: 'Note',
+      documentation: 'Says #{name}, a backslash \\n and a """ quote.',
+      fields: [makeField({ name: 'id', type: 'Int', isId: true })],
+    })
+
+    expect(ectoSchemas([model], 'App')).toBe(`defmodule App.Note do
+  use Ecto.Schema
+  @moduledoc """
+  Says \\#{name}, a backslash \\\\n and a \\""" quote.
+  """
+
+  @primary_key false
+
+  @type t :: %__MODULE__{
+          id: integer()
+        }
+
+  schema "Note" do
+    field(:id, :integer, primary_key: true)
+  end
+end`)
   })
 })

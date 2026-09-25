@@ -4,7 +4,7 @@ defmodule Example.Order do
   BigInt autoincrement primary key (bigserial) and money as Decimal.
   """
 
-  @primary_key false
+  @primary_key {:id, :id, autogenerate: true}
 
   @type t :: %__MODULE__{
           id: integer(),
@@ -15,9 +15,8 @@ defmodule Example.Order do
         }
 
   schema "orders" do
-    field(:id, :integer, primary_key: true)
     field(:total, :decimal)
-    field(:placed_at, :utc_datetime)
+    field(:placed_at, :utc_datetime, read_after_writes: true)
     belongs_to(:user, Example.User, foreign_key: :user_id, type: :binary_id)
     has_many(:items, Example.OrderItem, foreign_key: :order_id)
   end
