@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Product extends Model
 {
     use HasVersion4Uuids;
+    use PrismaDates;
 
     const CREATED_AT = 'createdAt';
     const UPDATED_AT = 'updatedAt';
@@ -43,7 +44,7 @@ class Product extends Model
         'weight' => 0.0,
         'stock' => -1,
         'label' => 'it\'s "quoted" \\ back',
-        'released_at' => '2020-01-01T00:00:00.000Z',
+        'released_at' => '2020-01-01T00:00:00.000+00:00',
         'category_id' => 1,
     ];
 
@@ -57,20 +58,6 @@ class Product extends Model
         'released_at' => 'datetime',
         'category_id' => 'integer',
     ];
-
-    public function fromDateTime($value)
-    {
-        return empty($value) ? $value : parent::asDateTime($value)->setTimezone('UTC')->format('Y-m-d\TH:i:s.v\Z');
-    }
-
-    protected function asDateTime($value)
-    {
-        if (is_string($value) && preg_match('/^\d{4}-\d\d-\d\d[ T][\d:.]+$/', $value)) {
-            $value .= '+00:00';
-        }
-
-        return parent::asDateTime($value);
-    }
 
     public function category(): BelongsTo
     {

@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { ectoSchemas } from '../helper/ecto.js'
+import { dateTimeFields, dateTimeModule, ectoDateTypes, ectoSchemas } from '../helper/ecto.js'
 import { makeSnakeCase } from '../utils/index.js'
 
 export function ectoSchemaFiles(
@@ -14,10 +14,19 @@ export function ectoSchemaFiles(
     readonly relationMode?: string
   } = {},
 ) {
-  return models
-    .map((model) => ({
+  return [
+    ...models.map((model) => ({
       fileName: `${makeSnakeCase(model.name)}.ex`,
       code: ectoSchemas([model], app, models, enums, options),
-    }))
-    .filter((entry) => entry.code.trim().length > 0)
+    })),
+    // The types a DateTime is kept in, written beside the schemas that name them.
+    {
+      fileName: 'prisma_date_time.ex',
+      code: ectoDateTypes(
+        Array.isArray(app) ? app.join('.') : app,
+        options.provider,
+        new Set(models.flatMap((model) => dateTimeFields(model).map(dateTimeModule))),
+      ),
+    },
+  ].filter((entry) => entry.code.trim().length > 0)
 }

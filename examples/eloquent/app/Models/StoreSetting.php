@@ -10,6 +10,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 class StoreSetting extends Model
 {
+    use PrismaDates;
+
     const CREATED_AT = null;
 
     protected $table = 'store_setting';
@@ -39,19 +41,5 @@ class StoreSetting extends Model
         }
 
         return $this;
-    }
-
-    public function fromDateTime($value)
-    {
-        return empty($value) ? $value : parent::asDateTime($value)->setTimezone('UTC')->format('Y-m-d\TH:i:s.v\Z');
-    }
-
-    protected function asDateTime($value)
-    {
-        if (is_string($value) && preg_match('/^\d{4}-\d\d-\d\d[ T][\d:.]+$/', $value)) {
-            $value .= '+00:00';
-        }
-
-        return parent::asDateTime($value);
     }
 }

@@ -22,8 +22,8 @@ export function eloquentModelFiles(
     fileName: `${enumDef.name}.php`,
     code: eloquentEnum(enumDef, resolvedNamespace),
   }))
-  // The casts and the query builder the models name, written beside them.
-  const supportFiles = eloquentSupportFiles(models, resolvedNamespace)
+  // The casts, the trait and the query classes the models name, written beside them.
+  const supportFiles = eloquentSupportFiles(models, resolvedNamespace, options.provider)
   return [...modelFiles, ...enumFiles, ...supportFiles].filter(
     (entry) => entry.code.trim().length > 0,
   )

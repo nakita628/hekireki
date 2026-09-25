@@ -2,10 +2,18 @@
 // Ecto has to express placed where a real schema would put them. `pnpm run demo` writes lib/shop,
 // creates dev.db with `prisma db push` and runs check.exs with the real Ecto and ecto_sqlite3: each
 // schema the generator writes is inserted, read back, updated, preloaded and deleted there, not
-// only compiled. The tables are Prisma's; nothing here runs an Ecto migration.
+// only compiled. The tables are Prisma's; nothing here runs an Ecto migration. Prisma Client shares
+// the database: interop.ts reads what Ecto wrote and writes rows for interop.exs to read through
+// the schemas.
 
 datasource db {
   provider = "sqlite"
+}
+
+generator client {
+  provider            = "prisma-client"
+  output              = "generated/client"
+  importFileExtension = "ts"
 }
 
 generator Hekireki-Ecto {
@@ -94,7 +102,8 @@ model Product {
   dimensions Json?
   /// A string default Elixir would interpolate if it were not escaped.
   label      String     @default("#{name} \"quoted\" \\ back")
-  releasedAt DateTime   @default("2020-01-01T00:00:00Z") @map("released_at")
+  /// A DateTime literal written with an offset: the instant is 2020-01-01T00:00:00Z.
+  releasedAt DateTime   @default("2020-01-01T09:00:00+09:00") @map("released_at")
   /// Category 1 is "Uncategorised": a product whose category is removed goes back to it.
   categoryId Int        @default(1) @map("category_id")
   category   Category   @relation(fields: [categoryId], references: [id], onDelete: SetDefault)
@@ -144,8 +153,10 @@ model Order {
   status     OrderStatus @default(PENDING)
   note       String?
   placedAt   DateTime    @default(now()) @map("placed_at")
-  /// The only timestamp, and not under a conventional name: `@updatedAt` alone.
+  /// Not under a conventional name, and with no inserted-at beside it: `@updatedAt` alone.
   changedAt  DateTime    @updatedAt @map("changed_at")
+  /// A second `@updatedAt`, which Prisma Client stamps as it stamps the first.
+  syncedAt   DateTime    @updatedAt @map("synced_at")
   lineItems  LineItem[]
   /// An order is shipped to an address kept by handle, not by key: `references:` another unique.
   giftFor    String?     @map("gift_for")
@@ -237,8 +248,7 @@ model Keyword {
   /// cell left to its default and refuses the row.
   rescue    Boolean?
   in        Int?
-  /// A timestamp Prisma fills with the database's clock, with no Ecto default: Ecto has to read it
-  /// back.
+  /// A now() that is not a timestamp: Prisma Client fills it with its own clock, and so does Ecto.
   at        DateTime  @default(now())
 
   @@map("keywords")

@@ -14,6 +14,8 @@ use Illuminate\Support\Str;
  */
 class Order extends Model
 {
+    use PrismaDates;
+
     const CREATED_AT = null;
     const UPDATED_AT = 'changed_at';
 
@@ -52,20 +54,6 @@ class Order extends Model
         }
 
         return parent::save($options);
-    }
-
-    public function fromDateTime($value)
-    {
-        return empty($value) ? $value : parent::asDateTime($value)->setTimezone('UTC')->format('Y-m-d\TH:i:s.v\Z');
-    }
-
-    protected function asDateTime($value)
-    {
-        if (is_string($value) && preg_match('/^\d{4}-\d\d-\d\d[ T][\d:.]+$/', $value)) {
-            $value .= '+00:00';
-        }
-
-        return parent::asDateTime($value);
     }
 
     public function account(): BelongsTo

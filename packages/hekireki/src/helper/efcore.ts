@@ -43,14 +43,17 @@ function exprRef(fullName: string) {
 
 const CS = {
   BitArray: 'System.Collections.BitArray',
+  ArgumentOutOfRangeException: 'System.ArgumentOutOfRangeException',
   CancellationToken: 'System.Threading.CancellationToken',
   Convert: 'System.Convert',
+  CultureInfo: 'System.Globalization.CultureInfo',
   Cuid: 'Visus.Cuid.Cuid',
   Cuid2: 'Visus.Cuid.Cuid2',
   DateOnly: 'System.DateOnly',
   DateTime: 'System.DateTime',
   DateTimeKind: 'System.DateTimeKind',
   DateTimeOffset: 'System.DateTimeOffset',
+  DateTimeStyles: 'System.Globalization.DateTimeStyles',
   DbContext: 'Microsoft.EntityFrameworkCore.DbContext',
   DbContextOptions: 'Microsoft.EntityFrameworkCore.DbContextOptions',
   DbSet: 'Microsoft.EntityFrameworkCore.DbSet',
@@ -69,13 +72,16 @@ const CS = {
   NpgsqlDbContextOptionsBuilder:
     'Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure.NpgsqlDbContextOptionsBuilder',
   NpgsqlInet: 'NpgsqlTypes.NpgsqlInet',
+  NumberStyles: 'System.Globalization.NumberStyles',
   NpgsqlValueGenerationStrategy:
     'Npgsql.EntityFrameworkCore.PostgreSQL.Metadata.NpgsqlValueGenerationStrategy',
   PgName: 'NpgsqlTypes.PgName',
   RandomNumberGenerator: 'System.Security.Cryptography.RandomNumberGenerator',
   Task: 'System.Threading.Tasks.Task',
   TimeOnly: 'System.TimeOnly',
+  TimeSpan: 'System.TimeSpan',
   Ulid: 'System.Ulid',
+  ValueConverter: 'Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter',
   ValueGenerator: 'Microsoft.EntityFrameworkCore.ValueGeneration.ValueGenerator',
 } as const
 
@@ -306,7 +312,7 @@ const GENERATED_CONTEXT_MEMBERS = [
   'ConfigureConventionsPartial',
   'MapEnums',
   'OnModelCreatingPartial',
-  'StampUpdatedAt',
+  'StampTimestamps',
 ]
 
 type Names = {
@@ -426,17 +432,27 @@ function lengthArg(args: readonly string[]) {
   return length !== undefined && /^\d+$/u.test(length) ? length : null
 }
 
-// The column of each Prisma type, described as `dotnet ef dbcontext scaffold` describes the same
-// column with Npgsql: nothing where Npgsql maps the CLR type to that column already, a facet (max
-// length, precision) where that is enough, the store type otherwise.
-function postgresMapping(field: DMMF.Field, names: Names) {
+/** The datasource providers the generated DbContext is written for. */
+type Provider = 'postgresql' | 'mysql' | 'sqlite'
+
+function fieldMapping(field: DMMF.Field, names: Names, provider: Provider) {
   if (field.kind === 'enum') {
     return mapping(typeRef(generatedRef(names, enumName(names, field.type))), true)
   }
-  return (field.nativeType ? nativeMapping(...field.nativeType) : null) ?? scalarMapping(field.type)
+  const native = field.nativeType ?? null
+  if (provider === 'postgresql') {
+    return (native ? postgresNativeMapping(...native) : null) ?? postgresScalarMapping(field.type)
+  }
+  if (provider === 'mysql') {
+    return (native ? mysqlNativeMapping(...native) : null) ?? mysqlScalarMapping(field.type)
+  }
+  return sqliteMapping(field.type)
 }
 
-function nativeMapping(nativeName: string, args: readonly string[]) {
+// The column of each Prisma type, described as `dotnet ef dbcontext scaffold` describes the same
+// column with Npgsql: nothing where Npgsql maps the CLR type to that column already, a facet (max
+// length, precision) where that is enough, the store type otherwise.
+function postgresNativeMapping(nativeName: string, args: readonly string[]) {
   const length = lengthArg(args)
   switch (nativeName) {
     case 'Text':
@@ -544,7 +560,7 @@ function nativeMapping(nativeName: string, args: readonly string[]) {
   }
 }
 
-function scalarMapping(type: string) {
+function postgresScalarMapping(type: string) {
   switch (type) {
     case 'Int':
       return mapping('int', true)
@@ -570,6 +586,93 @@ function scalarMapping(type: string) {
       return mapping('byte[]', false)
     default:
       return mapping('string', false)
+  }
+}
+
+// The temporal types keep their store type, which is what decides a DateTime's precision; the
+// others take the CLR type Prisma's type reads into, which MySQL converts to and from the column.
+function mysqlNativeMapping(nativeName: string, args: readonly string[]) {
+  const precision = lengthArg(args) ?? '0'
+  switch (nativeName) {
+    case 'DateTime':
+      return mapping(
+        typeRef(CS.DateTime),
+        true,
+        [columnType(`datetime(${precision})`)],
+        null,
+        'timestamp',
+      )
+    case 'Timestamp':
+      return mapping(
+        typeRef(CS.DateTime),
+        true,
+        [columnType(`timestamp(${precision})`)],
+        null,
+        'timestamp',
+      )
+    case 'Date':
+      return mapping(typeRef(CS.DateOnly), true, [], null, 'date')
+    case 'Time':
+      return mapping(typeRef(CS.TimeOnly), true, [columnType(`time(${precision})`)], null, 'time')
+    default:
+      return null
+  }
+}
+
+function mysqlScalarMapping(type: string) {
+  switch (type) {
+    case 'Decimal':
+      return mapping('decimal', true, ['.HasPrecision(65, 30)'])
+    case 'DateTime':
+      return mapping(typeRef(CS.DateTime), true, [columnType('datetime(3)')], null, 'timestamp')
+    case 'Json':
+      return mapping('string', false, [columnType('json')])
+    default:
+      return sqliteMapping(type)
+  }
+}
+
+function sqliteMapping(type: string) {
+  switch (type) {
+    case 'Int':
+      return mapping('int', true)
+    case 'BigInt':
+      return mapping('long', true)
+    case 'Float':
+      return mapping('double', true)
+    case 'Decimal':
+      return mapping('decimal', true)
+    case 'Boolean':
+      return mapping('bool', true)
+    case 'DateTime':
+      return mapping(typeRef(CS.DateTime), true, [], null, 'timestamp')
+    case 'Bytes':
+      return mapping('byte[]', false)
+    default:
+      return mapping('string', false)
+  }
+}
+
+/**
+ * The converter of `PrismaValues` a property of this kind is stored through, so that it holds what
+ * Prisma Client writes: the UTC instant to the millisecond, and on SQLite in Prisma's text form.
+ *
+ * @param temporal - The kind of the column.
+ * @param provider - The datasource provider.
+ * @returns The converter's field name, or null for a date, which has no zone and no fraction.
+ */
+function dateConverter(temporal: TemporalKind | null, provider: Provider) {
+  switch (temporal) {
+    case 'timestamp':
+      return provider === 'sqlite' ? 'DateTimeText' : 'DateTimeUtcClock'
+    case 'timestamptz':
+      return 'DateTimeUtc'
+    case 'time':
+      return 'TimeOnlyMilliseconds'
+    case 'timetz':
+      return 'DateTimeOffsetUtc'
+    default:
+      return null
   }
 }
 
@@ -620,22 +723,16 @@ function doubleLiteral(value: number) {
   return /^-?\d+$/u.test(text) ? `${text}.0` : text
 }
 
+// Prisma Client holds a DateTime as a JavaScript Date, which keeps milliseconds: a literal's
+// microseconds never reach the row it writes.
 function clockArgs(moment: ReturnType<typeof shift>) {
-  const millisecond = Math.trunc(moment.microsecond / 1000)
-  const microsecond = moment.microsecond % 1000
-  return [
-    moment.hour,
-    moment.minute,
-    moment.second,
-    millisecond,
-    ...(microsecond > 0 ? [microsecond] : []),
-  ]
+  return [moment.hour, moment.minute, moment.second, Math.trunc(moment.microsecond / 1000)]
 }
 
 // A timestamp default as the value Prisma Client writes for it: the instant the literal names, in
-// UTC — the UTC clock in a column without a time zone, the UTC date in a date column. (The DEFAULT
-// Prisma Migrate writes is the literal itself, which PostgreSQL reads with the offset dropped for
-// those columns; see `defaultPlan`.)
+// UTC — the UTC date in a date column, the UTC clock in a time column. (The DEFAULT Prisma Migrate
+// writes is the literal itself, which PostgreSQL reads with the offset dropped for a column
+// without a time zone; see `defaultPlan`.)
 function temporalLiteral(value: string, temporal: TemporalKind) {
   const parsed = parseDateTimeDefault(value)
   if (!parsed || temporal === 'timetz') return null
@@ -645,8 +742,7 @@ function temporalLiteral(value: string, temporal: TemporalKind) {
     return `new ${typeRef(CS.DateOnly)}(${moment.year}, ${moment.month}, ${moment.day})`
   }
   if (temporal === 'time') return `new ${typeRef(CS.TimeOnly)}(${clockArgs(moment).join(', ')})`
-  const kind = temporal === 'timestamptz' ? 'Utc' : 'Unspecified'
-  return `new ${typeRef(CS.DateTime)}(${[moment.year, moment.month, moment.day, ...clockArgs(moment)].join(', ')}, ${exprRef(CS.DateTimeKind)}.${kind})`
+  return `new ${typeRef(CS.DateTime)}(${[moment.year, moment.month, moment.day, ...clockArgs(moment)].join(', ')}, ${exprRef(CS.DateTimeKind)}.Utc)`
 }
 
 // A default as a C# expression of the property's type, or null when the value has no spelling

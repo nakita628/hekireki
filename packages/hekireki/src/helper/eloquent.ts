@@ -206,7 +206,15 @@ function phpDefault(
   if (field.type === 'BigInt') return def
   if (field.type === 'DateTime') {
     const iso = new Date(def).toISOString()
-    return phpString(provider === 'sqlite' ? iso : iso.slice(0, 23).replace('T', ' '))
+    if (field.nativeType?.[0] === 'Date') return phpString(iso.slice(0, 10))
+    if (field.nativeType?.[0] === 'Time' || field.nativeType?.[0] === 'Timetz') {
+      return phpString(iso.slice(11, 23))
+    }
+    if (provider === 'sqlite') return phpString(iso.replace('Z', '+00:00'))
+    const naive = iso.slice(0, 23).replace('T', ' ')
+    return phpString(
+      provider === 'postgresql' || provider === 'cockroachdb' ? `${naive}+00:00` : naive,
+    )
   }
   if (field.type === 'Bytes') return null
   return phpString(def)
@@ -565,10 +573,200 @@ class CompositeKeyCollection extends Collection
 }`
 }
 
+// The form a DateTime is written in, in UTC with milliseconds: what Prisma Client writes on
+// SQLite, where the column is text compared as text (`…T…sss+00:00`, as its adapter turns
+// `toISOString()`'s `Z` into `+00:00`); with the offset on PostgreSQL, which a `timestamp` column
+// ignores and a `timestamptz` column honours whatever the session's time zone is; and without a
+// zone elsewhere, as MySQL moves an offset into the session's time zone.
+function dateFormat(provider: string | undefined) {
+  if (provider === 'sqlite') return 'Y-m-d\\TH:i:s.vP'
+  if (provider === 'postgresql' || provider === 'cockroachdb') return 'Y-m-d H:i:s.vP'
+  return 'Y-m-d H:i:s.v'
+}
+
+/**
+ * What a model with a DateTime uses to read and write it as Prisma Client does. Prisma keeps a
+ * DateTime in UTC with milliseconds, and on SQLite, where it is text compared and sorted as text,
+ * as ISO 8601 with its offset (`2030-01-01T09:00:00.000+00:00`, which the adapter writes for
+ * `toISOString()`: a `Z` there would compare as other text, and `where: { at }` would miss the
+ * row). Eloquent writes `Y-m-d H:i:s` in the app's timezone: under Asia/Tokyo a row would be
+ * nine hours off, the milliseconds would be lost, and on SQLite a row written later the same day
+ * would sort first.
+ *
+ * `fromDateTime()` writes Prisma's form, in UTC; a value the caller gives with no zone is read in
+ * the app's timezone, as Eloquent reads one. `asDateTime()` reads a string from the table as UTC
+ * where it names no zone of its own: the only strings it is handed are the table's and the ones
+ * `fromDateTime()` wrote. The model's queries are a PrismaQueryBuilder, which binds a date the
+ * same way.
+ */
+export function eloquentDatesTrait(namespace: string) {
+  return `<?php
+
+namespace ${namespace};
+
+use Illuminate\\Support\\Facades\\Date;
+
+/**
+ * A DateTime as Prisma Client keeps it: in UTC with milliseconds, in PrismaQueryBuilder's
+ * DATE_FORMAT. A value the caller gives with no zone is in the app's timezone, as Eloquent reads
+ * one; one the table holds with no zone is UTC, as Prisma wrote it. The model's queries bind a
+ * date the same way.
+ */
+trait PrismaDates
+{
+    public function fromDateTime($value)
+    {
+        return empty($value) ? $value : parent::asDateTime($value)->setTimezone('UTC')->format(PrismaQueryBuilder::DATE_FORMAT);
+    }
+
+    protected function asDateTime($value)
+    {
+        return is_string($value) ? Date::parse($value, 'UTC') : parent::asDateTime($value);
+    }
+
+    protected function newBaseQueryBuilder()
+    {
+        $connection = $this->getConnection();
+
+        return new PrismaQueryBuilder($connection, $connection->getQueryGrammar(), $connection->getPostProcessor());
+    }
+}`
+}
+
+/**
+ * The query a model with a DateTime runs. Laravel binds a date in `Y-m-d H:i:s`, in the zone the
+ * value has: under Asia/Tokyo a `where('placed_at', '>', now())` would compare nine hours off,
+ * and on SQLite, which compares the text, it would miss rows written in Prisma's form. Every
+ * binding (`where`, `whereBetween`, `whereIn`, `update`, `insert`) passes through `castBinding()`,
+ * which writes a date as the models do; `whereDate()` and the other date parts take the UTC date
+ * of the value, as the column holds it.
+ */
+export function eloquentQueryBuilder(namespace: string, provider?: string) {
+  return `<?php
+
+namespace ${namespace};
+
+use DateTimeImmutable;
+use DateTimeInterface;
+use DateTimeZone;
+use Illuminate\\Database\\Query\\Builder;
+
+/**
+ * The query of a model with a DateTime: a date is bound as Prisma Client writes one, in UTC with
+ * milliseconds, and whereDate() and the other date parts take its UTC date.
+ */
+class PrismaQueryBuilder extends Builder
+{
+    const DATE_FORMAT = '${dateFormat(provider)}';
+
+    public function castBinding($value)
+    {
+        return $value instanceof DateTimeInterface
+            ? DateTimeImmutable::createFromInterface($value)->setTimezone(new DateTimeZone('UTC'))->format(self::DATE_FORMAT)
+            : parent::castBinding($value);
+    }
+
+    protected function flattenValue($value)
+    {
+        $value = parent::flattenValue($value);
+
+        return $value instanceof DateTimeInterface
+            ? DateTimeImmutable::createFromInterface($value)->setTimezone(new DateTimeZone('UTC'))
+            : $value;
+    }
+}`
+}
+
+/**
+ * The cast of a `@db.Date` column: the UTC date of the value, written `Y-m-d`, and read as
+ * midnight UTC, as Prisma reads one.
+ */
+export function eloquentDateCast(namespace: string) {
+  return `<?php
+
+namespace ${namespace};
+
+use Illuminate\\Contracts\\Database\\Eloquent\\CastsAttributes;
+use Illuminate\\Database\\Eloquent\\Model;
+use Illuminate\\Support\\Facades\\Date;
+
+/**
+ * A @db.Date column, as Prisma Client keeps one: the UTC date of the value, read as midnight UTC.
+ * A value the caller gives with no zone is in the app's timezone.
+ */
+class AsPrismaDate implements CastsAttributes
+{
+    public function get(Model $model, string $key, mixed $value, array $attributes): mixed
+    {
+        return $value === null ? null : Date::parse(substr((string) $value, 0, 10), 'UTC');
+    }
+
+    public function set(Model $model, string $key, mixed $value, array $attributes): ?string
+    {
+        return $value === null ? null : Date::parse($value)->setTimezone('UTC')->format('Y-m-d');
+    }
+}`
+}
+
+/**
+ * The cast of a `@db.Time` or `@db.Timetz` column: the UTC time of the value, written `H:i:s.v`,
+ * and read on 1970-01-01 UTC with any offset the column gives dropped, as Prisma reads one.
+ */
+export function eloquentTimeCast(namespace: string) {
+  return `<?php
+
+namespace ${namespace};
+
+use Illuminate\\Contracts\\Database\\Eloquent\\CastsAttributes;
+use Illuminate\\Database\\Eloquent\\Model;
+use Illuminate\\Support\\Facades\\Date;
+
+/**
+ * A @db.Time or @db.Timetz column, as Prisma Client keeps one: the UTC time of the value, read on
+ * 1970-01-01 UTC, the offset a timetz gives dropped. A value the caller gives with no zone is in
+ * the app's timezone.
+ */
+class AsPrismaTime implements CastsAttributes
+{
+    public function get(Model $model, string $key, mixed $value, array $attributes): mixed
+    {
+        return $value === null ? null : Date::parse('1970-01-01 ' . preg_replace('/[+-]\\d\\d(:?\\d\\d)?$/', '', (string) $value), 'UTC');
+    }
+
+    public function set(Model $model, string $key, mixed $value, array $attributes): ?string
+    {
+        return $value === null ? null : Date::parse($value)->setTimezone('UTC')->format('H:i:s.v');
+    }
+}`
+}
+
 // The classes written beside the models, each where a model needs it.
 function supportClasses(models: readonly DMMF.Model[]) {
   const fields = models.flatMap((model) => model.fields.filter((f) => !f.isList))
   return [
+    ...(fields.some((f) => f.type === 'DateTime')
+      ? [
+          {
+            name: 'PrismaDates',
+            why: 'the trait a model with a DateTime uses',
+            code: eloquentDatesTrait,
+          },
+          {
+            name: 'PrismaQueryBuilder',
+            why: 'the query of a model with a DateTime',
+            code: eloquentQueryBuilder,
+          },
+        ]
+      : []),
+    ...(fields.some((f) => f.type === 'DateTime' && f.nativeType?.[0] === 'Date')
+      ? [{ name: 'AsPrismaDate', why: 'the cast of @db.Date columns', code: eloquentDateCast }]
+      : []),
+    ...(fields.some(
+      (f) =>
+        f.type === 'DateTime' && (f.nativeType?.[0] === 'Time' || f.nativeType?.[0] === 'Timetz'),
+    )
+      ? [{ name: 'AsPrismaTime', why: 'the cast of @db.Time columns', code: eloquentTimeCast }]
+      : []),
     ...(fields.some((f) => f.type === 'Bytes')
       ? [{ name: 'AsBytes', why: 'the cast of Bytes columns', code: eloquentBytesCast }]
       : []),
@@ -592,11 +790,15 @@ function supportClasses(models: readonly DMMF.Model[]) {
   ]
 }
 
-/** What is written beside the models: the casts and the query builder they name. */
-export function eloquentSupportFiles(models: readonly DMMF.Model[], namespace: string) {
+/** What is written beside the models: the casts, the trait and the query classes they name. */
+export function eloquentSupportFiles(
+  models: readonly DMMF.Model[],
+  namespace: string,
+  provider?: string,
+) {
   return supportClasses(models).map(({ name, code }) => ({
     fileName: `${name}.php`,
-    code: code(namespace),
+    code: code(namespace, provider),
   }))
 }
 
@@ -737,6 +939,8 @@ export function eloquentModels(
       const key = modelKey(model)
       const idField = key.field
       const timestamps = findTimestamps(model.fields)
+      // A model with a DateTime reads and writes it as Prisma Client does, through PrismaDates.
+      const writesDates = model.fields.some((f) => f.type === 'DateTime' && !f.isList)
 
       const pkColumn = idField ? (idField.dbName ?? idField.name) : null
       const pkUuidTrait = (() => {
@@ -903,7 +1107,13 @@ export function eloquentModels(
         if (f.type === 'Bytes') return [`        ${phpString(column)} => AsBytes::class,`]
         if (f.type === 'Decimal') return [`        ${phpString(column)} => AsDecimal::class,`]
         if (f.type === 'DateTime' && f.nativeType?.[0] === 'Date') {
-          return [`        ${phpString(column)} => 'date',`]
+          return [`        ${phpString(column)} => AsPrismaDate::class,`]
+        }
+        if (
+          f.type === 'DateTime' &&
+          (f.nativeType?.[0] === 'Time' || f.nativeType?.[0] === 'Timetz')
+        ) {
+          return [`        ${phpString(column)} => AsPrismaTime::class,`]
         }
         const cast = prismaTypeToEloquentCast(f.type)
         return cast ? [`        ${phpString(column)} => '${cast}',`] : []
@@ -913,7 +1123,14 @@ export function eloquentModels(
         castEntries.length > 0 ? ['    protected $casts = [', ...castEntries, '    ];'] : []
 
       const propertyBlocks = [
-        ...(pkUuidTrait !== null ? [[`    use ${ref(`${CONCERNS}${pkUuidTrait}`)};`]] : []),
+        ...(pkUuidTrait !== null || writesDates
+          ? [
+              [
+                ...(pkUuidTrait !== null ? [`    use ${ref(`${CONCERNS}${pkUuidTrait}`)};`] : []),
+                ...(writesDates ? ['    use PrismaDates;'] : []),
+              ],
+            ]
+          : []),
         ...(constLines.length > 0 ? [constLines] : []),
         [`    protected $table = ${phpString(tableName)};`],
         ...(pkColumn !== null && pkColumn !== 'id'
@@ -973,34 +1190,6 @@ export function eloquentModels(
         `        return (string) ${ref(STR)}::ulid();`,
         '    }',
       ]
-      // Prisma Client keeps a DateTime in UTC with milliseconds, and on SQLite, where it is text
-      // compared and sorted as text, in ISO 8601. Eloquent writes `Y-m-d H:i:s` in the app's
-      // timezone: under Asia/Tokyo a row would be nine hours off, the milliseconds would be lost,
-      // and on SQLite a row written later the same day would sort first. The model writes
-      // Prisma's form. A value the caller gives is read in the app's timezone, as Eloquent reads
-      // it; one read from the table without a zone is UTC.
-      const dateMethods = [
-        [
-          '    public function fromDateTime($value)',
-          '    {',
-          `        return empty($value) ? $value : parent::asDateTime($value)->setTimezone('UTC')->format('${options.provider === 'sqlite' ? 'Y-m-d\\TH:i:s.v\\Z' : 'Y-m-d H:i:s.v'}');`,
-          '    }',
-        ],
-        [
-          '    protected function asDateTime($value)',
-          '    {',
-          "        if (is_string($value) && preg_match('/^\\d{4}-\\d\\d-\\d\\d[ T][\\d:.]+$/', $value)) {",
-          "            $value .= '+00:00';",
-          '        }',
-          '',
-          '        return parent::asDateTime($value);',
-          '    }',
-        ],
-      ]
-      const writesDates =
-        model.fields.some((f) => f.type === 'DateTime' && !f.isList) ||
-        timestamps.createdColumn !== null ||
-        timestamps.updatedColumn !== null
       // What Prisma Client fills on an insert and the table does not, or fills in another form,
       // the model fills as it saves: a uuid() or ulid() that is not the key (the traits make only
       // the key), and a now(), which Prisma Client fills from its own clock in UTC and the table
@@ -1067,7 +1256,6 @@ export function eloquentModels(
         ...(insertLines.length > 0 ? [saveMethod] : []),
         ...(extraUpdated.length > 0 ? [timestampsMethod] : []),
         ...(pkUuidTrait === 'HasUlids' ? [ulidMethod] : []),
-        ...(writesDates ? dateMethods : []),
         ...(compositeColumns.length > 0 ? compositeKeyMethods : []),
         ...belongsToMethods,
         ...hasOneMethods,

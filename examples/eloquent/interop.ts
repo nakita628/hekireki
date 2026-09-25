@@ -44,6 +44,12 @@ await check('Prisma Client reads each type Eloquent wrote', async () => {
     expect(product.barcode, 2n ** 53n + 1n, 'BigInt beyond 2^53'),
     expect(product.attributes, { nested: { list: [1, 'two', null] }, flag: true }, 'Json'),
     expect(product.releasedAt.toISOString(), '2021-02-03T04:05:06.789Z', 'DateTime, in UTC'),
+    // SQLite compares the text: a row written `…Z` where Prisma writes `…+00:00` is not found.
+    expect(
+      (await prisma.product.findFirst({ where: { releasedAt: product.releasedAt } }))?.sku,
+      'TYPES',
+      'found by the DateTime Eloquent wrote',
+    ),
     expect(product.label, 'it\'s "quoted" \\ back', 'a default Eloquent carried'),
     expect(product.createdAt instanceof Date, true, 'a timestamp Eloquent filled'),
     expect([...(profile.avatar ?? [])], [0, 255, 80, 78, 71, 10], 'Bytes, a BLOB'),

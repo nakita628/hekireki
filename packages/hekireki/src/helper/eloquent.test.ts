@@ -270,6 +270,7 @@ use Illuminate\\Database\\Eloquent\\Model;
 class Agent extends Model
 {
     use HasVersion4Uuids;
+    use PrismaDates;
 
     const CREATED_AT = 'createdAt';
     const UPDATED_AT = 'updatedAt';
@@ -283,20 +284,6 @@ class Agent extends Model
     protected $fillable = [
         'name',
     ];
-
-    public function fromDateTime($value)
-    {
-        return empty($value) ? $value : parent::asDateTime($value)->setTimezone('UTC')->format('Y-m-d H:i:s.v');
-    }
-
-    protected function asDateTime($value)
-    {
-        if (is_string($value) && preg_match('/^\\d{4}-\\d\\d-\\d\\d[ T][\\d:.]+$/', $value)) {
-            $value .= '+00:00';
-        }
-
-        return parent::asDateTime($value);
-    }
 }`)
   })
 
@@ -331,26 +318,13 @@ use Illuminate\\Database\\Eloquent\\Model;
 class Agent extends Model
 {
     use HasVersion4Uuids;
+    use PrismaDates;
 
     protected $table = 'Agent';
 
     protected $keyType = 'string';
 
     public $incrementing = false;
-
-    public function fromDateTime($value)
-    {
-        return empty($value) ? $value : parent::asDateTime($value)->setTimezone('UTC')->format('Y-m-d H:i:s.v');
-    }
-
-    protected function asDateTime($value)
-    {
-        if (is_string($value) && preg_match('/^\\d{4}-\\d\\d-\\d\\d[ T][\\d:.]+$/', $value)) {
-            $value .= '+00:00';
-        }
-
-        return parent::asDateTime($value);
-    }
 }`)
   })
 
@@ -384,6 +358,7 @@ use Illuminate\\Database\\Eloquent\\Model;
 class Log extends Model
 {
     use HasVersion4Uuids;
+    use PrismaDates;
 
     const CREATED_AT = 'createdAt';
     const UPDATED_AT = null;
@@ -393,20 +368,6 @@ class Log extends Model
     protected $keyType = 'string';
 
     public $incrementing = false;
-
-    public function fromDateTime($value)
-    {
-        return empty($value) ? $value : parent::asDateTime($value)->setTimezone('UTC')->format('Y-m-d H:i:s.v');
-    }
-
-    protected function asDateTime($value)
-    {
-        if (is_string($value) && preg_match('/^\\d{4}-\\d\\d-\\d\\d[ T][\\d:.]+$/', $value)) {
-            $value .= '+00:00';
-        }
-
-        return parent::asDateTime($value);
-    }
 }`)
   })
 
@@ -441,6 +402,7 @@ use Illuminate\\Database\\Eloquent\\Model;
 class Mission extends Model
 {
     use HasVersion4Uuids;
+    use PrismaDates;
 
     protected $table = 'Mission';
 
@@ -467,20 +429,6 @@ class Mission extends Model
         'startedAt' => 'datetime',
         'metadata' => 'array',
     ];
-
-    public function fromDateTime($value)
-    {
-        return empty($value) ? $value : parent::asDateTime($value)->setTimezone('UTC')->format('Y-m-d H:i:s.v');
-    }
-
-    protected function asDateTime($value)
-    {
-        if (is_string($value) && preg_match('/^\\d{4}-\\d\\d-\\d\\d[ T][\\d:.]+$/', $value)) {
-            $value .= '+00:00';
-        }
-
-        return parent::asDateTime($value);
-    }
 }`)
   })
 
@@ -1134,6 +1082,7 @@ use Illuminate\\Database\\Eloquent\\Model;
 class Revision extends Model
 {
     use HasVersion4Uuids;
+    use PrismaDates;
 
     const CREATED_AT = null;
     const UPDATED_AT = 'updatedAt';
@@ -1143,20 +1092,6 @@ class Revision extends Model
     protected $keyType = 'string';
 
     public $incrementing = false;
-
-    public function fromDateTime($value)
-    {
-        return empty($value) ? $value : parent::asDateTime($value)->setTimezone('UTC')->format('Y-m-d H:i:s.v');
-    }
-
-    protected function asDateTime($value)
-    {
-        if (is_string($value) && preg_match('/^\\d{4}-\\d\\d-\\d\\d[ T][\\d:.]+$/', $value)) {
-            $value .= '+00:00';
-        }
-
-        return parent::asDateTime($value);
-    }
 }`)
   })
 
@@ -1191,6 +1126,7 @@ use Illuminate\\Database\\Eloquent\\Model;
 class Document extends Model
 {
     use HasVersion4Uuids;
+    use PrismaDates;
 
     const CREATED_AT = 'createdAt';
     const UPDATED_AT = 'revisedAt';
@@ -1200,20 +1136,6 @@ class Document extends Model
     protected $keyType = 'string';
 
     public $incrementing = false;
-
-    public function fromDateTime($value)
-    {
-        return empty($value) ? $value : parent::asDateTime($value)->setTimezone('UTC')->format('Y-m-d H:i:s.v');
-    }
-
-    protected function asDateTime($value)
-    {
-        if (is_string($value) && preg_match('/^\\d{4}-\\d\\d-\\d\\d[ T][\\d:.]+$/', $value)) {
-            $value .= '+00:00';
-        }
-
-        return parent::asDateTime($value);
-    }
 }`)
   })
 
@@ -1632,26 +1554,32 @@ class Note extends Model`)
     const sqlite = eloquentModels([model], 'App\\Models', undefined, undefined, {
       provider: 'sqlite',
     })
-    expect(sqlite).toContain(`        'at' => '2020-01-01T00:00:00.000Z',`)
-    expect(sqlite).toContain(`    public function fromDateTime($value)
-    {
-        return empty($value) ? $value : parent::asDateTime($value)->setTimezone('UTC')->format('Y-m-d\\TH:i:s.v\\Z');
-    }
-
-    protected function asDateTime($value)
-    {
-        if (is_string($value) && preg_match('/^\\d{4}-\\d\\d-\\d\\d[ T][\\d:.]+$/', $value)) {
-            $value .= '+00:00';
-        }
-
-        return parent::asDateTime($value);
-    }`)
+    expect(sqlite).toContain(`class Event extends Model
+{
+    use PrismaDates;
+`)
+    expect(sqlite).toContain(`        'at' => '2020-01-01T00:00:00.000+00:00',`)
     const postgres = eloquentModels([model], 'App\\Models', undefined, undefined, {
       provider: 'postgresql',
     })
     expect(postgres).toContain(`        'at' => '2020-01-01 00:00:00.000',`)
-    expect(postgres).toContain(
-      `        return empty($value) ? $value : parent::asDateTime($value)->setTimezone('UTC')->format('Y-m-d H:i:s.v');`,
+
+    const [trait] = eloquentSupportFiles([model], 'App\\Models', 'sqlite')
+    expect(trait?.fileName).toBe('PrismaDates.php')
+    expect(trait?.code).toContain(`trait PrismaDates
+{
+    public function fromDateTime($value)
+    {
+        return empty($value) ? $value : parent::asDateTime($value)->setTimezone('UTC')->format('Y-m-d\\TH:i:s.vP');
+    }
+
+    protected function asDateTime($value)
+    {
+        return is_string($value) ? Date::parse($value, 'UTC') : parent::asDateTime($value);
+    }
+}`)
+    expect(eloquentSupportFiles([model], 'App\\Models', 'postgresql')[0]?.code).toContain(
+      `->setTimezone('UTC')->format('Y-m-d H:i:s.v');`,
     )
   })
 

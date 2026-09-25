@@ -13,6 +13,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  */
 class Account extends Model
 {
+    use PrismaDates;
+
     protected $table = 'accounts';
 
     protected $fillable = [
@@ -32,20 +34,6 @@ class Account extends Model
         'role' => Role::class,
         'active' => 'boolean',
     ];
-
-    public function fromDateTime($value)
-    {
-        return empty($value) ? $value : parent::asDateTime($value)->setTimezone('UTC')->format('Y-m-d\TH:i:s.v\Z');
-    }
-
-    protected function asDateTime($value)
-    {
-        if (is_string($value) && preg_match('/^\d{4}-\d\d-\d\d[ T][\d:.]+$/', $value)) {
-            $value .= '+00:00';
-        }
-
-        return parent::asDateTime($value);
-    }
 
     public function profile(): HasOne
     {

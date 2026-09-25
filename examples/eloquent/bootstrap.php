@@ -7,8 +7,12 @@
 //   ELOQUENT_MODELS    the directory of models to load; app/Models when unset. provider.ts
 //                      writes one per database, as the schema's provider changes what they say
 //   ELOQUENT_LARAVEL   1 to open the connection as a Laravel application would: with an event
-//                      dispatcher, and Asia/Tokyo for the app's timezone. Otherwise Capsule on
-//                      its own, which drops model events, in UTC.
+//                      dispatcher, and Asia/Tokyo for the app's timezone and for PostgreSQL's
+//                      session. Otherwise Capsule on its own, which drops model events, in UTC.
+//
+// MySQL's session is UTC in both: a TIMESTAMP column moves what it is given from the session's
+// time zone, as Prisma's adapter leaves it, and Prisma's server is UTC. PostgreSQL's may be
+// Asia/Tokyo: the models write a date with its offset, which a timestamptz column honours.
 declare(strict_types=1);
 
 require __DIR__ . '/vendor/autoload.php';
@@ -34,7 +38,7 @@ date_default_timezone_set($laravel ? 'Asia/Tokyo' : 'UTC');
 $capsule = new Capsule();
 $url = getenv('ELOQUENT_DATABASE');
 $capsule->addConnection($url
-    ? ['url' => $url]
+    ? ['url' => $url, 'timezone' => str_starts_with($url, 'mysql:') ? '+00:00' : ($laravel ? 'Asia/Tokyo' : 'UTC')]
     : ['driver' => 'sqlite', 'database' => __DIR__ . '/dev.db', 'foreign_key_constraints' => true]);
 if ($laravel) {
     $capsule->setEventDispatcher(new Dispatcher(new Container()));
@@ -77,7 +81,7 @@ function thrown(callable $body): ?string
 function stored(string $iso): string
 {
     $time = Carbon::parse($iso)->utc();
-    return $GLOBALS['driver'] === 'sqlite' ? $time->format('Y-m-d\TH:i:s.v\Z') : $time->format('Y-m-d H:i:s.v');
+    return $GLOBALS['driver'] === 'sqlite' ? $time->format('Y-m-d\TH:i:s.vP') : $time->format('Y-m-d H:i:s.v');
 }
 
 /** The instant a column holds, in UTC ISO 8601: a value with no zone is UTC, as Prisma reads it. */

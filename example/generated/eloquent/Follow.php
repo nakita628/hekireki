@@ -10,6 +10,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class Follow extends Model
 {
+    use PrismaDates;
+
     const KEY_COLUMNS = ['follower_id', 'following_id'];
 
     protected $table = 'follows';
@@ -39,20 +41,6 @@ class Follow extends Model
         }
 
         return parent::save($options);
-    }
-
-    public function fromDateTime($value)
-    {
-        return empty($value) ? $value : parent::asDateTime($value)->setTimezone('UTC')->format('Y-m-d H:i:s.v');
-    }
-
-    protected function asDateTime($value)
-    {
-        if (is_string($value) && preg_match('/^\d{4}-\d\d-\d\d[ T][\d:.]+$/', $value)) {
-            $value .= '+00:00';
-        }
-
-        return parent::asDateTime($value);
     }
 
     public function getKey()

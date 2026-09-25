@@ -49,14 +49,18 @@ function resolveNativeType(field: DMMF.Field) {
       return args.length >= 2 ? `decimal(${args[0]},${args[1]})` : 'decimal'
     case 'Uuid':
       return 'char(36)'
+    // A time's precision and zone are kept: `timestamp` would turn a timestamptz column into
+    // one without a zone, and a (0) into the dialect's default.
     case 'Timestamp':
     case 'Timestamptz':
-      return 'timestamp'
+    case 'DateTime':
+    case 'Time':
+    case 'Timetz': {
+      const name = nativeName.toLowerCase()
+      return args.length > 0 ? `${name}(${args[0]})` : name
+    }
     case 'Date':
       return 'date'
-    case 'Time':
-    case 'Timetz':
-      return 'time'
     case 'JsonB':
       return 'jsonb'
     case 'Xml':
@@ -214,12 +218,28 @@ function formatGoDefault(def: DMMF.Field['default'], type: string, kind: DMMF.Fi
   return `'${escaped}'`
 }
 
+/** Whether a field is one DateTime, held by one of the time types written beside the models. */
+function isDateTimeScalar(field: DMMF.Field) {
+  return field.kind === 'scalar' && field.type === 'DateTime' && !field.isList
+}
+
+/**
+ * The type written beside the models that holds a DateTime field: a date or a time of day where
+ * the native type keeps only that much of it, an instant otherwise.
+ */
+function dateTimeGoType(field: DMMF.Field) {
+  const nativeName = field.nativeType?.[0]
+  if (nativeName === 'Date') return 'Date'
+  return nativeName === 'Time' || nativeName === 'Timetz' ? 'TimeOfDay' : 'DateTime'
+}
+
 export function buildGormTags(
   field: DMMF.Field,
   isPk: boolean,
   isCompositePk: boolean,
   compositeIndexTags: readonly string[],
   enums?: readonly DMMF.DatamodelEnum[],
+  provider?: string,
 ) {
   const columnName = field.dbName ?? field.name
   const isUuidDefault = isFunctionDefault(field.default) && field.default.name === 'uuid'
@@ -245,11 +265,29 @@ export function buildGormTags(
       ?.values.find((v) => v.name === field.default)
     return formatGoDefault(value?.dbName ?? field.default, field.type, field.kind)
   })()
+  // A DateTime literal is written as the model writes the value (BeforeCreate fills it, so this
+  // is what the table's DDL and a create that skips hooks see): an ISO string on SQLite, where
+  // the text is compared, and the UTC value elsewhere.
+  const dateTimeDefault = (() => {
+    if (!(isDateTimeScalar(field) && typeof field.default === 'string')) return null
+    const iso = new Date(field.default).toISOString()
+    const goType = dateTimeGoType(field)
+    if (goType === 'Date') return `'${iso.slice(0, 10)}'`
+    if (goType === 'TimeOfDay') return `'${iso.slice(11, 23)}'`
+    return provider === 'sqlite'
+      ? `'${iso.replace('Z', '+00:00')}'`
+      : `'${iso.slice(0, 10)} ${iso.slice(11, 23)}'`
+  })()
   const defaultVal =
     dbGeneratedExpr ??
+    dateTimeDefault ??
     ((!isPk || isCompositePk) && !isNowDefault && !field.isUpdatedAt
       ? (enumMappedDefault ?? formatGoDefault(field.default, field.type, field.kind))
       : null)
+  // GORM fills a time field named CreatedAt or UpdatedAt on its own, with the application's
+  // clock bound as a time.Time the driver formats; the hooks fill what the schema asks for.
+  const fieldName = goFieldName(field.name)
+  const isDateTime = isDateTimeScalar(field)
 
   const parts = [
     `column:${columnName}`,
@@ -263,9 +301,9 @@ export function buildGormTags(
     // Scalar lists need a serializer so GORM can persist the slice; the built-in
     // json serializer works on every dialect without extra deps.
     field.isList && field.kind !== 'object' ? 'serializer:json' : null,
-    isNowDefault ? 'autoCreateTime' : null,
     defaultVal !== null ? `default:${defaultVal}` : null,
-    field.isUpdatedAt ? 'autoUpdateTime' : null,
+    isDateTime && fieldName === 'CreatedAt' ? 'autoCreateTime:false' : null,
+    isDateTime && fieldName === 'UpdatedAt' ? 'autoUpdateTime:false' : null,
     field.isRequired && !isPk ? 'not null' : null,
   ].filter((p) => p !== null)
 
@@ -364,7 +402,7 @@ function splitGoWords(name: string) {
 
 // Struct methods this generator itself may emit: a column whose Go name
 // matches would be a field and a method with the same name (compile error).
-const GENERATED_METHOD_NAMES = new Set(['TableName', 'BeforeCreate'])
+const GENERATED_METHOD_NAMES = new Set(['TableName', 'BeforeCreate', 'BeforeUpdate'])
 
 export function goFieldName(name: string) {
   const pascal = splitGoWords(name).join('')
@@ -402,25 +440,84 @@ function generatedIdFields(model: DMMF.Model) {
   )
 }
 
+/**
+ * The value Prisma Client gives a DateTime on create when none is given: `now` (the clock of the
+ * hook) for `now()` and `@updatedAt`, the instant of a literal default, or null where it gives
+ * none.
+ *
+ * @example
+ * ```go
+ * time.Date(2020, 2, 29, 23, 59, 59, 999000000, time.UTC)
+ * ```
+ */
+function createdTimeExpr(field: DMMF.Field) {
+  if (!isDateTimeScalar(field)) return null
+  if (field.isUpdatedAt || (isFunctionDefault(field.default) && field.default.name === 'now')) {
+    return 'now'
+  }
+  if (typeof field.default !== 'string') return null
+  const at = new Date(field.default)
+  return `time.Date(${at.getUTCFullYear()}, ${at.getUTCMonth() + 1}, ${at.getUTCDate()}, ${at.getUTCHours()}, ${at.getUTCMinutes()}, ${at.getUTCSeconds()}, ${at.getUTCMilliseconds() * 1_000_000}, time.UTC)`
+}
+
+// Prisma Client makes these values itself rather than leave them to the table: a key from
+// uuid(), cuid(), ulid() or nanoid(), and a DateTime from now(), @updatedAt or a literal, in UTC
+// to the millisecond (SQLite's CURRENT_TIMESTAMP writes other text). A value the caller set is
+// kept.
 function generateBeforeCreateHook(model: DMMF.Model) {
-  const idFields = generatedIdFields(model)
-  if (idFields.length === 0) return []
-  const assignments = idFields.flatMap((field) => {
+  const assignments = model.fields.flatMap((field) => {
     const fieldName = goFieldName(field.name)
-    const expr = generatedIdExpr(field)
+    const idExpr =
+      field.kind === 'scalar' && field.type === 'String' && !field.isList
+        ? generatedIdExpr(field)
+        : null
+    if (idExpr !== null) {
+      return field.isRequired
+        ? [`\tif m.${fieldName} == "" {`, `\t\tm.${fieldName} = ${idExpr}`, '\t}']
+        : [
+            `\tif m.${fieldName} == nil {`,
+            `\t\tgenerated := ${idExpr}`,
+            `\t\tm.${fieldName} = &generated`,
+            '\t}',
+          ]
+    }
+    const timeExpr = createdTimeExpr(field)
+    if (timeExpr === null) return []
+    const value = `${dateTimeGoType(field)}{Time: ${timeExpr}}`
     return field.isRequired
-      ? [`\tif m.${fieldName} == "" {`, `\t\tm.${fieldName} = ${expr}`, '\t}']
-      : [
-          `\tif m.${fieldName} == nil {`,
-          `\t\tgenerated := ${expr}`,
-          `\t\tm.${fieldName} = &generated`,
-          '\t}',
-        ]
+      ? [`\tif m.${fieldName}.IsZero() {`, `\t\tm.${fieldName} = ${value}`, '\t}']
+      : [`\tif m.${fieldName} == nil {`, `\t\tm.${fieldName} = &${value}`, '\t}']
   })
+  if (assignments.length === 0) return []
+  const usesNow = model.fields.some((field) => createdTimeExpr(field) === 'now')
   return [
     '',
-    `func (m *${goModelName(model.name)}) BeforeCreate(_ *gorm.DB) error {`,
+    `func (m *${goModelName(model.name)}) BeforeCreate(${usesNow ? 'tx' : '_'} *gorm.DB) error {`,
+    ...(usesNow ? ['\tnow := tx.NowFunc().UTC().Truncate(time.Millisecond)'] : []),
     ...assignments,
+    '\treturn nil',
+    '}',
+  ]
+}
+
+// Prisma Client stamps every @updatedAt on each update; GORM's own autoUpdateTime binds the
+// application's clock as a time.Time, past the generated type, and GORM calls this hook on
+// Update, Updates and Save alike. A value the update sets itself is kept.
+function generateBeforeUpdateHook(model: DMMF.Model) {
+  const stamped = model.fields.filter((field) => isDateTimeScalar(field) && field.isUpdatedAt)
+  if (stamped.length === 0) return []
+  return [
+    '',
+    `func (*${goModelName(model.name)}) BeforeUpdate(tx *gorm.DB) error {`,
+    '\tnow := tx.NowFunc().UTC().Truncate(time.Millisecond)',
+    ...stamped.flatMap((field) => {
+      const fieldName = goFieldName(field.name)
+      return [
+        `\tif !tx.Statement.Changed("${fieldName}") {`,
+        `\t\ttx.Statement.SetColumn("${fieldName}", ${field.isRequired ? '' : '&'}${dateTimeGoType(field)}{Time: now})`,
+        '\t}',
+      ]
+    }),
     '\treturn nil',
     '}',
   ]
@@ -432,6 +529,7 @@ function generateStructField(
   isCompositePk: boolean,
   compositeIndexTags: readonly string[],
   enums?: readonly DMMF.DatamodelEnum[],
+  provider?: string,
 ) {
   const fieldName = goFieldName(field.name)
   // GORM skips a zero value in a column with a default and lets the default
@@ -456,9 +554,15 @@ function generateStructField(
   // it to a single value loses data. Emit a slice of the element type.
   const goType = field.isList
     ? `[]${field.kind === 'enum' ? 'string' : prismaTypeToGoType(field.type, true)}`
-    : scalarType
+    : isDateTimeScalar(field)
+      ? `${field.isRequired ? '' : '*'}${dateTimeGoType(field)}`
+      : scalarType
 
-  return [fieldName, goType, buildGormTags(field, isPk, isCompositePk, compositeIndexTags, enums)]
+  return [
+    fieldName,
+    goType,
+    buildGormTags(field, isPk, isCompositePk, compositeIndexTags, enums, provider),
+  ]
 }
 
 function needsReferencesTag(references: string) {
@@ -596,6 +700,7 @@ export function generateModelStruct(
   allModels: readonly DMMF.Model[],
   enums: readonly DMMF.DatamodelEnum[] | undefined,
   indexes: readonly DMMF.Index[],
+  provider?: string,
 ) {
   const idField = model.fields.find((f) => f.isId)
   const compositePkFieldNames = new Set(model.primaryKey?.fields)
@@ -613,7 +718,7 @@ export function generateModelStruct(
   const fieldLines = scalarFields.map((field) => {
     const isPk = field.isId || compositePkFieldNames.has(field.name)
     const fieldIndexTags = compositeTagMap.get(field.name) ?? []
-    return generateStructField(field, isPk, isCompositePk, fieldIndexTags, enums)
+    return generateStructField(field, isPk, isCompositePk, fieldIndexTags, enums, provider)
   })
 
   const relationLines = generateRelationFields(model, associations)
@@ -633,6 +738,7 @@ export function generateModelStruct(
     '}',
     ...tableNameMethod,
     ...generateBeforeCreateHook(model),
+    ...generateBeforeUpdateHook(model),
   ].join('\n')
 }
 
@@ -660,9 +766,223 @@ export function generateNamingStrategy(models: readonly DMMF.Model[], packageNam
   ]
 }
 
+/** The time types a schema's DateTime fields are held in, in the order they are written. */
+function dateTypes(models: readonly DMMF.Model[]) {
+  const used = new Set(
+    models.flatMap((m) => m.fields.filter(isDateTimeScalar).map((f) => dateTimeGoType(f))),
+  )
+  return ['DateTime', 'Date', 'TimeOfDay'].filter((name) => used.has(name))
+}
+
+/**
+ * The types a DateTime field is held in, written beside the models: each writes the value as
+ * Prisma Client writes it for this provider and reads what the column holds as Prisma Client
+ * reads it, so the models and Prisma Client can share the tables. A named type is the one hook
+ * GORM calls both when it writes a model and when it binds the value in a query.
+ *
+ * - SQLite compares and sorts the text, so an instant is written as Prisma writes it,
+ *   `2030-01-01T09:00:00.000+00:00`: UTC, three fraction digits.
+ * - PostgreSQL is given a time.Time in UTC: the wall clock of a `timestamp` is UTC, and a
+ *   `timestamptz` holds the instant whatever the session's time zone.
+ * - MySQL is given the text `2030-01-01 09:00:00.000` in UTC, which go-sql-driver/mysql sends as
+ *   it is; a time.Time it would convert to its `loc`. A `DATETIME` read back is in `loc` too, so
+ *   its wall clock is read as UTC.
+ *
+ * A date column holds the UTC date (`@db.Date`) and a time column the UTC time of day on
+ * 1970-01-01 (`@db.Time`, `@db.Timetz`), as Prisma Client writes and reads them.
+ */
+export function generateDateTypes(models: readonly DMMF.Model[], provider?: string) {
+  const types = dateTypes(models)
+  if (types.length === 0) return []
+  const value =
+    provider === 'sqlite'
+      ? [
+          '// Value writes the instant as Prisma Client does on SQLite: `2006-01-02T15:04:05.000+00:00`,',
+          '// in UTC, the text SQLite compares and sorts.',
+          'func (dateTime DateTime) Value() (driver.Value, error) {',
+          '\treturn dateTime.UTC().Truncate(time.Millisecond).Format("2006-01-02T15:04:05.000-07:00"), nil',
+          '}',
+        ]
+      : provider === 'mysql'
+        ? [
+            '// Value writes the instant as Prisma Client does on MySQL: `2006-01-02 15:04:05.000` in UTC,',
+            '// text the driver sends as it is, where it would convert a time.Time to its loc.',
+            'func (dateTime DateTime) Value() (driver.Value, error) {',
+            '\treturn dateTime.UTC().Truncate(time.Millisecond).Format("2006-01-02 15:04:05.000"), nil',
+            '}',
+          ]
+        : [
+            '// Value writes the instant in UTC to the millisecond, as Prisma Client does: the wall clock of',
+            '// a timestamp column is UTC, and a timestamptz column holds the instant whatever the',
+            "// session's time zone.",
+            'func (dateTime DateTime) Value() (driver.Value, error) {',
+            '\treturn dateTime.UTC().Truncate(time.Millisecond), nil',
+            '}',
+          ]
+  const fromDriver =
+    provider === 'mysql'
+      ? [
+          "\t\t// The driver gives a DATETIME back in its loc; the table's wall clock is UTC.",
+          '\t\treturn time.Date(value.Year(), value.Month(), value.Day(), value.Hour(), value.Minute(), value.Second(), value.Nanosecond(), time.UTC).Truncate(time.Millisecond), nil',
+        ]
+      : ['\t\treturn value.UTC().Truncate(time.Millisecond), nil']
+  const dateTime = [
+    '',
+    '// DateTime is a Prisma DateTime as Prisma Client keeps it: an instant in UTC, to the',
+    '// millisecond, whatever zone the time.Time is in. Bind a time.Time through it in a query of',
+    '// your own, `db.Where("at > ?", DateTime{Time: at})`: the driver formats a bare time.Time',
+    '// its own way.',
+    'type DateTime struct{ time.Time }',
+    '',
+    '// GormDataType has GORM treat the column as it treats a time.Time.',
+    'func (DateTime) GormDataType() string {',
+    '\treturn "time"',
+    '}',
+    '',
+    ...value,
+    '',
+    '// Scan reads the column as Prisma Client does (see readPrismaTime).',
+    'func (dateTime *DateTime) Scan(src any) error {',
+    '\tread, err := readPrismaTime(src)',
+    '\tdateTime.Time = read',
+    '\treturn err',
+    '}',
+  ]
+  const date = [
+    '',
+    '// Date is a Prisma DateTime in a date column (@db.Date): the UTC date of the instant, read',
+    '// back as midnight UTC, as Prisma Client keeps it.',
+    'type Date struct{ time.Time }',
+    '',
+    '// GormDataType has GORM treat the column as it treats a time.Time.',
+    'func (Date) GormDataType() string {',
+    '\treturn "time"',
+    '}',
+    '',
+    '// Value writes the UTC date, `2006-01-02`.',
+    'func (date Date) Value() (driver.Value, error) {',
+    '\treturn date.UTC().Format("2006-01-02"), nil',
+    '}',
+    '',
+    '// Scan reads the date as midnight UTC.',
+    'func (date *Date) Scan(src any) error {',
+    '\tread, err := readPrismaTime(src)',
+    '\tif err != nil || read.IsZero() {',
+    '\t\tdate.Time = time.Time{}',
+    '\t\treturn err',
+    '\t}',
+    '\tdate.Time = time.Date(read.Year(), read.Month(), read.Day(), 0, 0, 0, 0, time.UTC)',
+    '\treturn nil',
+    '}',
+  ]
+  const timeOfDay = [
+    '',
+    '// TimeOfDay is a Prisma DateTime in a time column (@db.Time, @db.Timetz): the UTC time of day',
+    '// of the instant to the millisecond, read back on 1970-01-01 UTC, as Prisma Client keeps it.',
+    'type TimeOfDay struct{ time.Time }',
+    '',
+    '// GormDataType has GORM treat the column as it treats a time.Time.',
+    'func (TimeOfDay) GormDataType() string {',
+    '\treturn "time"',
+    '}',
+    '',
+    "// Value writes the UTC time, `15:04:05.000`, with no offset: a timetz column takes the",
+    "// session's, as it does from Prisma Client.",
+    'func (clock TimeOfDay) Value() (driver.Value, error) {',
+    '\treturn clock.UTC().Truncate(time.Millisecond).Format("15:04:05.000"), nil',
+    '}',
+    '',
+    '// Scan reads the time on 1970-01-01 UTC, and drops the offset a timetz column holds, as',
+    '// Prisma Client does.',
+    'func (clock *TimeOfDay) Scan(src any) error {',
+    '\tswitch value := src.(type) {',
+    '\tcase nil:',
+    '\t\tclock.Time = time.Time{}',
+    '\t\treturn nil',
+    '\tcase []byte:',
+    '\t\treturn clock.Scan(string(value))',
+    '\tcase string:',
+    '\t\tif end := strings.IndexAny(value, "+-Z"); end > 0 {',
+    '\t\t\tvalue = value[:end]',
+    '\t\t}',
+    '\t\tread, err := time.Parse("15:04:05.999999999", value)',
+    '\t\tif err != nil {',
+    '\t\t\treturn fmt.Errorf("a time column held %q", value)',
+    '\t\t}',
+    '\t\tclock.Time = time.Date(1970, 1, 1, read.Hour(), read.Minute(), read.Second(), read.Nanosecond(), time.UTC).Truncate(time.Millisecond)',
+    '\t\treturn nil',
+    '\t}',
+    '\tread, err := readPrismaTime(src)',
+    '\tclock.Time = time.Date(1970, 1, 1, read.Hour(), read.Minute(), read.Second(), read.Nanosecond(), time.UTC)',
+    '\treturn err',
+    '}',
+  ]
+  return [
+    ...(types.includes('DateTime') ? dateTime : []),
+    ...(types.includes('Date') ? date : []),
+    ...(types.includes('TimeOfDay') ? timeOfDay : []),
+    '',
+    '// prismaTimeLayouts are the texts readPrismaTime reads, as Prisma Client reads them: with an',
+    '// offset or `Z`, or with none, which is UTC; a date alone is midnight UTC.',
+    'var prismaTimeLayouts = []string{',
+    '\t"2006-01-02T15:04:05.999999999Z07:00",',
+    '\t"2006-01-02 15:04:05.999999999Z07:00",',
+    '\t"2006-01-02 15:04:05.999999999Z07",',
+    '\t"2006-01-02T15:04:05.999999999",',
+    '\t"2006-01-02 15:04:05.999999999",',
+    '\t"2006-01-02",',
+    '}',
+    '',
+    '// readPrismaTime reads a DateTime column as Prisma Client reads it: text with no zone is UTC, an',
+    '// offset is kept, digits are milliseconds since 1970, and what is past the millisecond is',
+    '// dropped.',
+    'func readPrismaTime(src any) (time.Time, error) {',
+    '\tswitch value := src.(type) {',
+    '\tcase nil:',
+    '\t\treturn time.Time{}, nil',
+    '\tcase time.Time:',
+    ...fromDriver,
+    '\tcase int64:',
+    '\t\treturn time.UnixMilli(value).UTC(), nil',
+    '\tcase []byte:',
+    '\t\treturn readPrismaTime(string(value))',
+    '\tcase string:',
+    '\t\tif millis, err := strconv.ParseInt(value, 10, 64); err == nil {',
+    '\t\t\treturn time.UnixMilli(millis).UTC(), nil',
+    '\t\t}',
+    '\t\tfor _, layout := range prismaTimeLayouts {',
+    '\t\t\tif read, err := time.Parse(layout, value); err == nil {',
+    '\t\t\t\treturn read.UTC().Truncate(time.Millisecond), nil',
+    '\t\t\t}',
+    '\t\t}',
+    '\t\treturn time.Time{}, fmt.Errorf("a DateTime column held %q", value)',
+    '\t}',
+    '\treturn time.Time{}, fmt.Errorf("a DateTime column held %T", src)',
+    '}',
+  ]
+}
+
+/**
+ * What keeps the schema from becoming models that compile: a model whose Go name is that of a
+ * time type written beside the models, where the schema needs that type.
+ */
+export function gormProblems(models: readonly DMMF.Model[]) {
+  const types = dateTypes(models)
+  return models
+    .filter((model) => types.includes(goModelName(model.name)))
+    .map(
+      (model) =>
+        `model ${model.name}: its Go name is ${goModelName(model.name)}, the type the models hold a DateTime in; rename the model and keep its table with @@map`,
+    )
+}
+
 export function collectImports(models: readonly DMMF.Model[]) {
   const needsTime = models.some((m) =>
     m.fields.some((f) => f.kind !== 'object' && f.type === 'DateTime'),
+  )
+  const types = dateTypes(models)
+  const fillsTimes = models.some((m) =>
+    m.fields.some((f) => createdTimeExpr(f) !== null || (isDateTimeScalar(f) && f.isUpdatedAt)),
   )
   const needsDatatypes = models.some((m) =>
     m.fields.some((f) => f.kind !== 'object' && f.type === 'Json'),
@@ -678,7 +998,14 @@ export function collectImports(models: readonly DMMF.Model[]) {
   )
   // Standard library first, then the modules, each group sorted by path, as
   // gofmt keeps them.
-  const standard = [generators.has('ulid') ? '"crypto/rand"' : null, needsTime ? '"time"' : null]
+  const standard = [
+    generators.has('ulid') ? '"crypto/rand"' : null,
+    types.length > 0 ? '"database/sql/driver"' : null,
+    types.length > 0 ? '"fmt"' : null,
+    types.length > 0 ? '"strconv"' : null,
+    types.includes('TimeOfDay') ? '"strings"' : null,
+    needsTime ? '"time"' : null,
+  ]
   const modules = [
     generators.has('uuid') ? '"github.com/google/uuid"' : null,
     generators.has('cuid') ? '"github.com/lucsky/cuid"' : null,
@@ -686,7 +1013,7 @@ export function collectImports(models: readonly DMMF.Model[]) {
     generators.has('cuid2') ? '"github.com/nrednav/cuid2"' : null,
     generators.has('ulid') ? '"github.com/oklog/ulid/v2"' : null,
     needsDatatypes ? '"gorm.io/datatypes"' : null,
-    generators.size > 0 ? '"gorm.io/gorm"' : null,
+    generators.size > 0 || fillsTimes ? '"gorm.io/gorm"' : null,
     hasImplicitManyToMany(models) ? '"gorm.io/gorm/schema"' : null,
   ]
   return [standard.filter((i) => i !== null), modules.filter((i) => i !== null)]

@@ -26,6 +26,7 @@ use App\Models\Profile;
 use App\Models\Review;
 use App\Models\Role;
 use App\Models\Shipment;
+use App\Models\Slot;
 use App\Models\StoreSetting;
 use App\Models\Tag;
 use App\Models\Wishlist;
@@ -153,7 +154,7 @@ check('literal defaults are on a new model before it is saved', function () {
 
 // Prisma Client fills now() from its own clock, in UTC; the table fills it from the server's, and
 // SQLite's CURRENT_TIMESTAMP writes `2030-01-01 10:00:00` where Prisma writes
-// `2030-01-01T09:00:00.000Z`: left to the table, a row Eloquent wrote later in the day would sort
+// `2030-01-01T09:00:00.000+00:00`: left to the table, a row Eloquent wrote later in the day would sort
 // before one Prisma wrote.
 check('a now() default is filled by the model as Prisma Client fills it, not by the table', function () use ($db, $driver, $account) {
     $order = Order::create(['account_id' => $account('clock')->id]);
@@ -164,7 +165,7 @@ check('a now() default is filled by the model as Prisma Client fills it, not by 
     return [
         expect($order->placed_at instanceof CarbonInterface, true, 'on the model once it is saved'),
         expect(instant($raw($order)), $order->placed_at->utc()->format('Y-m-d\TH:i:s.v\Z'), 'the same instant in the row'),
-        $driver === 'sqlite' ? expect((bool) preg_match('/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/', $raw($order)), true, 'in ISO 8601 with milliseconds') : null,
+        $driver === 'sqlite' ? expect((bool) preg_match('/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}\+00:00$/', $raw($order)), true, 'in ISO 8601 with milliseconds') : null,
         expect(instant($raw($given)), '2030-01-01T09:00:00.000Z', 'a value given is kept'),
         expect(instant($raw($local)), Carbon::parse('2030-01-01 09:00:00', date_default_timezone_get())->utc()->format('Y-m-d\TH:i:s.v\Z'), 'a value with no zone, in the app timezone'),
     ];
@@ -500,12 +501,75 @@ check('a DateTime is written as Prisma Client writes it, so the rows of both sor
     $between->save();
     $raw = $db->table('accounts')->where('id', $between->id)->first();
     return [
-        $driver === 'sqlite' ? expect((bool) preg_match('/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/', $raw->updated_at), true, 'updated_at in ISO 8601 with milliseconds') : null,
+        $driver === 'sqlite' ? expect((bool) preg_match('/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}\+00:00$/', $raw->updated_at), true, 'updated_at in ISO 8601 with milliseconds') : null,
         expect(instant($raw->created_at), '2030-01-01T09:30:00.250Z', 'a value set by hand, in UTC with its milliseconds'),
         expect(Account::whereIn('handle', ['early', 'mid', 'late'])->orderBy('created_at')->pluck('handle')->all(), ['early', 'mid', 'late'], 'ordered by the database'),
         expect(Account::where('handle', 'late')->firstOrFail()->created_at->utc()->format('H:i'), '10:00', 'a row Prisma wrote, read as UTC'),
     ];
 });
+
+// Laravel binds a date as `Y-m-d H:i:s` in the zone the value has: under Asia/Tokyo nine hours
+// off, and on SQLite, which compares the text, not Prisma's form, so an equal instant is not equal.
+check('a date a query binds is written as the models write one, and finds the rows Prisma wrote', function () use ($db, $driver, $account) {
+    $owner = $account('bound');
+    $at = Carbon::parse('2030-06-01T09:00:00.250Z');
+    $order = Order::create(['account_id' => $owner->id, 'placed_at' => $at]);
+    // A row Prisma Client wrote three hours later, in its own form.
+    $db->table('orders')->insert(['account_id' => $owner->id, 'public_id' => 'PRISMA-BOUND', 'placed_at' => stored('2030-06-01T12:00:00Z'), 'changed_at' => stored('2030-06-01T12:00:00Z')]);
+    $tokyo = $at->copy()->setTimezone('Asia/Tokyo');
+    $bounds = [Carbon::parse('2030-06-01T09:00:00.250Z'), Carbon::parse('2030-06-01T21:00:00', 'Asia/Tokyo')];
+    $found = [
+        expect(Order::where('placed_at', $tokyo)->value('order_number'), $order->order_number, 'where = a date in another zone'),
+        expect(Order::where('placed_at', Carbon::parse('2030-06-01T12:00:00Z'))->value('public_id'), 'PRISMA-BOUND', "where = a row in Prisma's form"),
+        expect(Order::whereBetween('placed_at', $bounds)->count(), 2, 'whereBetween, both ends in'),
+        expect(Order::where('placed_at', '>', $tokyo)->whereYear('placed_at', 2030)->pluck('public_id')->all(), ['PRISMA-BOUND'], 'where >'),
+        // 03:00 on 2030-06-02 in Tokyo is 18:00 on 2030-06-01 in UTC, the date both rows hold.
+        expect(Order::whereDate('placed_at', Carbon::parse('2030-06-02 03:00', 'Asia/Tokyo'))->count(), 2, 'whereDate, the UTC date'),
+        expect(Order::whereIn('placed_at', [$tokyo])->count(), 1, 'whereIn'),
+    ];
+    Order::whereKey($order->order_number)->update(['placed_at' => $tokyo->copy()->addHour()]);
+    $raw = $db->table('orders')->where('order_number', $order->order_number)->value('placed_at');
+    return [
+        ...$found,
+        expect(instant($raw), '2030-06-01T10:00:00.250Z', 'update() through the query, in UTC'),
+        $driver === 'sqlite' ? expect($raw, '2030-06-01T10:00:00.250+00:00', "update() through the query, in Prisma's form") : null,
+    ];
+});
+
+// SQLite has no date or time types: provider.ts adds Slot on PostgreSQL and MySQL.
+if ($driver !== 'sqlite') {
+    check('a @db.Date is the UTC date, a @db.Time the UTC time on 1970-01-01, and microseconds are cut to milliseconds', function () use ($db, $driver) {
+        // 02:30 on 2030-01-01 in Tokyo is 17:30 on 2029-12-31 in UTC.
+        $at = Carbon::parse('2030-01-01 02:30:00.123456', 'Asia/Tokyo');
+        $utc = fn (?CarbonInterface $time) => $time?->copy()->utc()->format('Y-m-d\TH:i:s.v\Z');
+        $slot = Slot::create(['day' => $at, 'opens_at' => $at, 'precise' => $at, ...($driver === 'mysql' ? ['wide' => $at] : ['zoned' => $at, 'zoned_time' => $at])]);
+        $row = $db->table('slots')->where('id', $slot->id)->first();
+        $found = Slot::findOrFail($slot->id);
+        return [
+            expect(substr((string) $row->day, 0, 10), '2029-12-31', '@db.Date holds the UTC date'),
+            expect(substr((string) $row->opens_at, 0, 12), '17:30:00.123', '@db.Time holds the UTC time'),
+            expect(instant($row->precise), '2029-12-31T17:30:00.123Z', '@db.Timestamp(6) holds milliseconds, as Prisma writes'),
+            expect($utc($found->day), '2029-12-31T00:00:00.000Z', '@db.Date read as midnight UTC'),
+            expect($utc($found->opens_at), '1970-01-01T17:30:00.123Z', '@db.Time read on 1970-01-01 UTC'),
+            expect($utc($found->precise), '2029-12-31T17:30:00.123Z', '@db.Timestamp(6) read'),
+            expect($utc((new Slot())->default_day), '2030-01-02T00:00:00.000Z', 'a @db.Date default on a new model'),
+            expect(Slot::where('precise', $at)->whereKey($slot->id)->exists(), true, 'found by the time it was given'),
+            expect(Slot::whereDate('day', $at)->whereKey($slot->id)->exists(), true, 'whereDate on a @db.Date'),
+            ...($driver === 'mysql'
+                ? [
+                    expect(instant($row->wide), '2029-12-31T17:30:00.123Z', '@db.DateTime(6)'),
+                    expect($utc($found->wide), '2029-12-31T17:30:00.123Z', '@db.DateTime(6) read'),
+                ]
+                : [
+                    // Laravel mode runs PostgreSQL's session in Asia/Tokyo: the offset the model
+                    // writes keeps the instant.
+                    expect(instant($row->zoned), '2029-12-31T17:30:00.123Z', '@db.Timestamptz holds the instant, whatever the session zone'),
+                    expect($utc($found->zoned), '2029-12-31T17:30:00.123Z', '@db.Timestamptz read'),
+                    expect($utc($found->zoned_time), '1970-01-01T17:30:00.123Z', '@db.Timetz read as Prisma reads it, the offset dropped'),
+                ]),
+        ];
+    });
+}
 
 // --- Timestamps -----------------------------------------------------------------------------
 

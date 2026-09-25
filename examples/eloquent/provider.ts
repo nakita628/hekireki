@@ -30,6 +30,25 @@ if (url === undefined) {
 
 const dir = path.resolve('.provider', provider)
 mkdirSync(dir, { recursive: true })
+// The date and time types SQLite has not, on the provider that has each.
+const SLOT = `
+/// Native date and time types, which SQLite has not: a date, a time, microseconds, and on
+/// PostgreSQL a timestamptz and a timetz, on MySQL a TIMESTAMP and a DATETIME(6).
+model Slot {
+  id         Int      @id @default(autoincrement())
+  day        DateTime @db.Date
+  defaultDay DateTime @default("2030-01-02T00:00:00Z") @db.Date @map("default_day")
+  opensAt    DateTime @db.Time(3) @map("opens_at")
+  precise    DateTime @db.Timestamp(6)
+${
+  provider === 'mysql'
+    ? '  wide       DateTime @db.DateTime(6)'
+    : '  zoned      DateTime @db.Timestamptz(3)\n  zonedTime  DateTime @db.Timetz(3) @map("zoned_time")'
+}
+
+  @@map("slots")
+}
+`
 const schema = readFileSync('schema.prisma', 'utf8')
   .replace('provider = "sqlite"', `provider = "${provider}"`)
   .replace(`@map("it's fine")`, '@map("it is fine")')
@@ -38,7 +57,7 @@ const schema = readFileSync('schema.prisma', 'utf8')
     '@map("back\\\\slash")',
     provider === 'mysql' ? '@map("back/slash")' : '@map("back\\\\slash")',
   )
-writeFileSync(path.join(dir, 'schema.prisma'), schema)
+writeFileSync(path.join(dir, 'schema.prisma'), schema + SLOT)
 
 const run = (command: string, args: readonly string[], env: Record<string, string> = {}) =>
   execFileSync(command, args, { stdio: 'inherit', env: { ...process.env, ...env } })

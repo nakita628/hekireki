@@ -12,6 +12,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class Profile extends Model
 {
+    use PrismaDates;
+
     protected $table = 'Profile';
 
     protected $keyType = 'string';
@@ -47,20 +49,6 @@ class Profile extends Model
         'avatar' => AsBytes::class,
         'last_seen' => 'datetime',
     ];
-
-    public function fromDateTime($value)
-    {
-        return empty($value) ? $value : parent::asDateTime($value)->setTimezone('UTC')->format('Y-m-d H:i:s.v');
-    }
-
-    protected function asDateTime($value)
-    {
-        if (is_string($value) && preg_match('/^\d{4}-\d\d-\d\d[ T][\d:.]+$/', $value)) {
-            $value .= '+00:00';
-        }
-
-        return parent::asDateTime($value);
-    }
 
     public function user(): BelongsTo
     {
