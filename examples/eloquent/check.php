@@ -1,17 +1,20 @@
 <?php
 
-// The generated models in app/Models against the real Eloquent, on the SQLite database
-// `prisma db push` made from schema.prisma. Everything the generator writes into a model is used
-// here, not only loaded: each column is filled and read back, each cast answers with its type, each
-// key is made where Prisma makes it, each relation is followed both ways and each ON DELETE is left
-// to the database. Each check prints `ok: <name>`, or stops with what it saw.
+// The generated models against the real Eloquent, on the database `prisma db push` made from
+// schema.prisma: dev.db, or with ELOQUENT_DATABASE the PostgreSQL or MySQL one provider.ts made
+// (see bootstrap.php). Everything the generator writes into a model is used here, not only
+// loaded: each column is filled and read back, each cast answers with its type, each key is made
+// where Prisma makes it, each relation is followed both ways and each ON DELETE is left to the
+// database. Nothing here is written for one database: tables and rows go through the query
+// builder, and a time is compared as the instant it names.
 declare(strict_types=1);
 
-require __DIR__ . '/vendor/autoload.php';
+require __DIR__ . '/bootstrap.php';
 
 use App\Models\Account;
 use App\Models\Category;
 use App\Models\Coupon;
+use App\Models\ExchangeRate;
 use App\Models\Keyword;
 use App\Models\Kind;
 use App\Models\LineItem;
@@ -23,58 +26,23 @@ use App\Models\Profile;
 use App\Models\Review;
 use App\Models\Role;
 use App\Models\Shipment;
+use App\Models\StoreSetting;
 use App\Models\Tag;
 use App\Models\Wishlist;
+use Carbon\Carbon;
 use Carbon\CarbonInterface;
-use Illuminate\Database\Capsule\Manager as Capsule;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
 
-$capsule = new Capsule();
-$capsule->addConnection([
-    'driver' => 'sqlite',
-    'database' => __DIR__ . '/dev.db',
-    'foreign_key_constraints' => true,
-]);
-$capsule->setAsGlobal();
-$capsule->bootEloquent();
-$db = $capsule->getConnection();
-
-/** @param callable(): list<string|null> $body */
-function check(string $name, callable $body): void
-{
-    $problems = array_values(array_filter($body(), fn (?string $p) => $p !== null));
-    if ($problems !== []) {
-        fwrite(STDERR, "{$name}: " . implode(', ', $problems) . "\n");
-        exit(1);
+// From empty tables each time, so the check can be run again, and with the counters back at the
+// start, so category 1 is the first one made below.
+$db->getSchemaBuilder()->withoutForeignKeyConstraints(function () use ($db) {
+    foreach (['_ProductToTag', '_Wished', '_Follows', 'shipments', 'line_items', 'reviews', 'orders', 'profiles', 'Wishlist', 'Product', 'Tag', 'Coupon', 'categories', 'accounts', 'keywords', 'store_setting', 'exchange_rates'] as $table) {
+        $db->table($table)->truncate();
     }
-    echo "ok: {$name}\n";
-}
-
-function expect(mixed $got, mixed $want, string $label): ?string
-{
-    return $got === $want ? null : "{$label}: expected " . var_export($want, true) . ', got ' . var_export($got, true);
-}
-
-/** @return string|null what was thrown, by its class, or null when nothing was */
-function thrown(callable $body): ?string
-{
-    try {
-        $body();
-    } catch (Throwable $e) {
-        return $e::class;
-    }
-    return null;
-}
-
-// From empty tables each time, so the check can be run again: the join tables first, then the
-// tables in the order their foreign keys allow.
-foreach (['_ProductToTag', '_Wished', '_Follows', 'shipments', 'line_items', 'reviews', 'orders', 'profiles', 'Wishlist', 'Product', 'Tag', 'Coupon', 'categories', 'accounts', 'keywords'] as $table) {
-    $db->statement("DELETE FROM \"{$table}\"");
-}
-// And the counters, so category 1 is the first one made below.
-$db->statement('DELETE FROM sqlite_sequence');
+});
 
 $uncategorised = Category::create(['name' => 'Uncategorised']);
 $account = fn (string $handle): Account => Account::create(['email_address' => "{$handle}@example.com", 'handle' => $handle]);
@@ -87,37 +55,35 @@ $product = fn (string $sku, array $extra = []): Product => Product::create([
 ]);
 
 check('foreign keys are enforced on the connection Eloquent opens', fn () => [
-    expect($db->selectOne('PRAGMA foreign_keys')->foreign_keys, 1, 'PRAGMA foreign_keys'),
+    expect(thrown(fn () => Profile::create(['account_id' => 999999])), QueryException::class, 'a profile of no account'),
     expect($uncategorised->id, 1, 'category 1, the default a product falls back to'),
 ]);
 
 // --- Tables and columns ---------------------------------------------------------------------
 
-check("every model names a table Prisma made, and every column of it", function () use ($db) {
+check('every model names a table Prisma made, and every column of it', function () use ($db, $models) {
     $problems = [];
-    foreach (glob(__DIR__ . '/app/Models/*.php') as $file) {
+    foreach (glob("{$models}/*.php") as $file) {
         $class = 'App\\Models\\' . basename($file, '.php');
-        if (!is_subclass_of($class, Model::class)) {
+        if (! is_subclass_of($class, Model::class)) {
             continue;
         }
         $model = new $class();
-        $columns = array_map(fn ($c) => $c->name, $db->select("PRAGMA table_info(\"{$model->getTable()}\")"));
+        $columns = $db->getSchemaBuilder()->getColumnListing($model->getTable());
         if ($columns === []) {
             $problems[] = "{$class}: no table {$model->getTable()}";
             continue;
         }
+        // A composite key's columns are fillable: they are what the caller gives.
         $known = [
             ...$model->getFillable(),
             ...(is_string($model->getKeyName()) ? [$model->getKeyName()] : []),
             ...array_filter([$model->usesTimestamps() ? $model->getCreatedAtColumn() : null, $model->usesTimestamps() ? $model->getUpdatedAtColumn() : null]),
         ];
-        $unknown = array_diff($known, $columns);
-        $unsaid = array_diff($columns, $known);
-        if ($unknown !== []) {
+        if (($unknown = array_diff($known, $columns)) !== []) {
             $problems[] = "{$class} names columns the table has not: " . implode(', ', $unknown);
         }
-        // A composite key's columns are fillable: they are what the caller gives.
-        if ($unsaid !== []) {
+        if (($unsaid = array_diff($columns, $known)) !== []) {
             $problems[] = "{$class} says nothing of " . implode(', ', $unsaid);
         }
     }
@@ -126,41 +92,46 @@ check("every model names a table Prisma made, and every column of it", function 
 
 // --- Types ----------------------------------------------------------------------------------
 
-check('every scalar type SQLite has is written and read back as it was', function () use ($db, $account, $product) {
+check('every scalar type is written and read back as it was', function () use ($db, $driver, $account, $product) {
     $avatar = "\x00\xffPNG\n";
+    $json = ['nested' => ['list' => [1, 'two', null]], 'flag' => true];
     $owner = $account('types');
     Profile::create(['account_id' => $owner->id, 'bio' => "two\nlines", 'avatar' => $avatar, 'mood' => Mood::FINE]);
     $made = $product('TYPES', [
         'price' => '12.34',
         'weight' => 1.5,
         'barcode' => 2 ** 53 + 1,
-        'attributes' => ['nested' => ['list' => [1, 'two', null]], 'flag' => true],
-        'released_at' => '2021-02-03 04:05:06',
+        'attributes' => $json,
+        'released_at' => '2021-02-03T04:05:06.789Z',
     ]);
     $found = Product::findOrFail($made->id);
     $profile = Profile::where('account_id', $owner->id)->firstOrFail();
 
     return [
-        expect((string) $found->price, '12.34', 'Decimal'),
+        // SQLite hands a Decimal back as a float, PostgreSQL and MySQL padded to scale 30.
+        expect($found->price, '12.34', 'Decimal, the string Prisma prints'),
+        expect(ExchangeRate::create(['base' => 'X', 'quote' => 'Y', 'rate' => '10.00'])->fresh()->rate, '10', 'a Decimal with no fraction'),
         expect($found->weight, 1.5, 'Float'),
         expect($found->barcode, 2 ** 53 + 1, 'BigInt beyond 2^53'),
-        expect($found->attributes, ['nested' => ['list' => [1, 'two', null]], 'flag' => true], 'Json, in a column named attributes'),
+        expect(sorted($found->attributes), sorted($json), 'Json, in a column named attributes'),
         expect($found->dimensions, null, 'optional Json'),
-        expect($found->released_at instanceof CarbonInterface ? $found->released_at->format('Y-m-d H:i:s') : $found->released_at, '2021-02-03 04:05:06', 'DateTime'),
+        expect(instant($db->table('Product')->where('id', $made->id)->value('released_at')), '2021-02-03T04:05:06.789Z', 'DateTime, in UTC with milliseconds'),
+        expect($found->released_at->getTimestampMs(), Carbon::parse('2021-02-03T04:05:06.789Z')->getTimestampMs(), 'DateTime, read back'),
         expect(Account::findOrFail($owner->id)->active, true, 'Boolean'),
         expect($profile->avatar, $avatar, 'Bytes with a zero byte'),
         // A string would be TEXT, which Prisma Client refuses to read as bytes.
-        expect($db->selectOne('SELECT typeof(avatar) AS t FROM profiles WHERE id = ?', [$profile->id])->t, 'blob', 'Bytes stored as a BLOB'),
+        $driver === 'sqlite' ? expect($db->selectOne('SELECT typeof(avatar) AS t FROM profiles WHERE id = ?', [$profile->id])->t, 'blob', 'Bytes stored as a BLOB') : null,
         expect($profile->bio, "two\nlines", 'String with a newline'),
+        // json_encode refuses bytes that are not UTF-8: they are base64, as Prisma writes Bytes.
+        expect(json_decode($profile->toJson(), true)['avatar'] ?? null, base64_encode($avatar), 'Bytes in toJson(), base64'),
     ];
 });
 
 check('an optional field left out is null, in the row and on the model', function () use ($db, $account) {
     $made = $account('optional');
-    $found = Account::findOrFail($made->id);
     return [
-        expect($found->display_name, null, 'display_name'),
-        expect($db->selectOne('SELECT display_name FROM accounts WHERE id = ?', [$made->id])->display_name, null, 'row'),
+        expect(Account::findOrFail($made->id)->display_name, null, 'display_name'),
+        expect($db->table('accounts')->where('id', $made->id)->value('display_name'), null, 'row'),
     ];
 });
 
@@ -172,7 +143,7 @@ check('literal defaults are on a new model before it is saved', function () {
         expect($new->weight, 0.0, 'a Float the schema writes as 0'),
         expect($new->stock, -1, 'a negative Int'),
         expect($new->label, 'it\'s "quoted" \\ back', 'a String with quotes and a backslash'),
-        expect($new->released_at instanceof CarbonInterface ? $new->released_at->format('Y-m-d H:i:s') : $new->released_at, '2020-01-01 00:00:00', 'a DateTime literal'),
+        expect($new->released_at->getTimestampMs(), Carbon::parse('2020-01-01T00:00:00Z')->getTimestampMs(), 'a DateTime literal, in UTC'),
         expect($new->category_id, 1, 'a foreign key'),
         expect($account->role, Role::CUSTOMER, 'an enum member'),
         expect($account->active, true, 'a Boolean'),
@@ -180,10 +151,22 @@ check('literal defaults are on a new model before it is saved', function () {
     ];
 });
 
-check('a default the database fills from its clock is there once the row is read again', function () use ($account) {
+// Prisma Client fills now() from its own clock, in UTC; the table fills it from the server's, and
+// SQLite's CURRENT_TIMESTAMP writes `2030-01-01 10:00:00` where Prisma writes
+// `2030-01-01T09:00:00.000Z`: left to the table, a row Eloquent wrote later in the day would sort
+// before one Prisma wrote.
+check('a now() default is filled by the model as Prisma Client fills it, not by the table', function () use ($db, $driver, $account) {
     $order = Order::create(['account_id' => $account('clock')->id]);
+    $given = Order::create(['account_id' => $order->account_id, 'placed_at' => '2030-01-01T09:00:00Z']);
+    // A time with no zone is the app's, as Eloquent reads one.
+    $local = Order::create(['account_id' => $order->account_id, 'placed_at' => '2030-01-01 09:00:00']);
+    $raw = fn (Order $o) => $db->table('orders')->where('order_number', $o->order_number)->value('placed_at');
     return [
-        expect($order->fresh()->placed_at instanceof CarbonInterface, true, 'placed_at'),
+        expect($order->placed_at instanceof CarbonInterface, true, 'on the model once it is saved'),
+        expect(instant($raw($order)), $order->placed_at->utc()->format('Y-m-d\TH:i:s.v\Z'), 'the same instant in the row'),
+        $driver === 'sqlite' ? expect((bool) preg_match('/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/', $raw($order)), true, 'in ISO 8601 with milliseconds') : null,
+        expect(instant($raw($given)), '2030-01-01T09:00:00.000Z', 'a value given is kept'),
+        expect(instant($raw($local)), Carbon::parse('2030-01-01 09:00:00', date_default_timezone_get())->utc()->format('Y-m-d\TH:i:s.v\Z'), 'a value with no zone, in the app timezone'),
     ];
 });
 
@@ -204,6 +187,11 @@ check('keys are made where Prisma makes them', function () use ($account, $produ
         expect(Wishlist::findOrFail($wishlist->id)->account_id, $first->id, 'a uuid-keyed row found by its key'),
         expect($order->order_number, Order::max('order_number'), 'a key named order_number, read back after insert'),
         expect(Order::findOrFail($order->order_number)->account_id, $first->id, 'found by it'),
+        // Neither trait makes a column that is not the key: the model does, as Prisma Client would.
+        expect((bool) preg_match('/^[0-9A-HJKMNP-TV-Z]{26}$/', (string) $order->public_id), true, "a ulid() that is not the key: {$order->public_id}"),
+        expect((bool) preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/', (string) $wishlist->share_token), true, "a uuid() that is not the key: {$wishlist->share_token}"),
+        expect($wishlist->share_token !== $wishlist->id, true, 'a uuid of its own'),
+        expect(Order::create(['account_id' => $first->id, 'public_id' => 'GIVEN'])->fresh()->public_id, 'GIVEN', 'a value given is kept'),
     ];
 });
 
@@ -215,13 +203,102 @@ check("a cuid() key is Prisma's to make: Eloquent has to be given one", function
     ];
 });
 
+check('a model with no @id is keyed by its @unique', function () use ($db) {
+    $setting = StoreSetting::create(['key' => 'currency', 'value' => 'EUR']);
+    StoreSetting::create(['key' => 'locale', 'value' => 'en']);
+    StoreSetting::findOrFail('currency')->update(['value' => 'JPY']);
+    StoreSetting::destroy('locale');
+    return [
+        expect($setting->getKeyName(), 'key', 'a @unique is the key'),
+        expect($setting->getIncrementing(), false, 'and is given, not counted'),
+        expect($db->table('store_setting')->pluck('value', 'key')->all(), ['currency' => 'JPY'], 'found, updated and destroyed by it'),
+    ];
+});
+
+// Eloquent has no composite key: a key of several columns is an array of each by name, and
+// CompositeKeyBuilder takes it where Eloquent takes a key.
+check('a composite primary key is an array of its columns: find(), findOrFail(), destroy() and whereKey() take one', function () use ($db, $account, $product) {
+    $order = Order::create(['account_id' => $account('composite')->id]);
+    $n = $order->order_number;
+    [$one, $two, $three, $four] = array_map(fn (string $sku) => $product($sku), ['COMPOSITE1', 'COMPOSITE2', 'COMPOSITE3', 'COMPOSITE4']);
+    foreach ([$one, $two, $three, $four] as $i => $made) {
+        LineItem::create(['order_number' => $n, 'product_id' => $made->id, 'unit_price' => '1.00', 'quantity' => $i + 1]);
+    }
+    $key = fn (Product $made) => ['order_number' => $n, 'product_id' => $made->id];
+    $item = LineItem::find($key($one));
+    $item->update(['quantity' => 10]);
+    $rows = fn () => $db->table('line_items')->where('order_number', $n)->orderBy('quantity')->pluck('quantity')->all();
+    return [
+        expect($item->getKey(), $key($one), 'getKey(), the array of its columns'),
+        expect(LineItem::find($key($one))->quantity, 10, 'find() by the key, after update() by it'),
+        expect($item->is(LineItem::find($key($one))), true, 'is() the same row'),
+        expect($item->is(LineItem::find($key($two))), false, 'is() not another'),
+        expect(LineItem::findMany([$key($one), $key($two)])->count(), 2, 'findMany()'),
+        expect(LineItem::find([$key($two), $key($three)])->pluck('quantity')->sort()->values()->all(), [2, 3], 'find() of a list of keys'),
+        expect(LineItem::findOrFail($key($two))->quantity, 2, 'findOrFail()'),
+        expect(thrown(fn () => LineItem::findOrFail(['order_number' => $n, 'product_id' => 'missing'])), ModelNotFoundException::class, 'findOrFail() of no row'),
+        expect(thrown(fn () => LineItem::findOrFail([$key($two), ['order_number' => $n, 'product_id' => 'missing']])), ModelNotFoundException::class, 'findOrFail() of a list with one missing'),
+        expect(LineItem::whereKeyNot($key($one))->where('order_number', $n)->count(), 3, 'whereKeyNot()'),
+        expect($order->lineItems()->find($key($three))?->quantity, 3, 'find() through a relation'),
+        // A part of a key would reach every row the rest of it matches: every line of the order.
+        expect(thrown(fn () => LineItem::find($n)), InvalidArgumentException::class, 'find() by one column'),
+        expect(thrown(fn () => LineItem::find(['order_number' => $n])), InvalidArgumentException::class, 'find() by a part of the key'),
+        expect(thrown(fn () => LineItem::destroy($n)), InvalidArgumentException::class, 'destroy() by one column'),
+        expect($rows(), [2, 3, 4, 10], 'nothing destroyed by a part of a key'),
+        expect(LineItem::destroy($key($one)), 1, 'destroy() by the key'),
+        expect(LineItem::destroy([$key($two), $key($three)]), 2, 'destroy() of a list of keys'),
+        expect(LineItem::destroy([]), 0, 'destroy() of no key'),
+        expect($rows(), [4], 'the row no key named, left'),
+        expect(thrown(fn () => LineItem::create(['order_number' => $n, 'product_id' => $four->id, 'unit_price' => '3.00'])), UniqueConstraintViolationException::class, 'a second row with the key'),
+        expect($order->lineItems()->count(), 1, 'hasMany on a key named order_number'),
+    ];
+});
+
+check('a collection of models with a composite key tells them apart by it', function () use ($account, $product) {
+    $order = Order::create(['account_id' => $account('collected')->id]);
+    $n = $order->order_number;
+    $made = array_map(fn (string $sku) => $product($sku), ['COLLECTED1', 'COLLECTED2', 'COLLECTED3']);
+    foreach ($made as $i => $one) {
+        LineItem::create(['order_number' => $n, 'product_id' => $one->id, 'unit_price' => '1.00', 'quantity' => $i + 1]);
+    }
+    [$first, $second] = array_map(fn (Product $one) => ['order_number' => $n, 'product_id' => $one->id], $made);
+    $all = LineItem::where('order_number', $n)->orderBy('quantity')->get();
+    $quantities = fn ($items) => $items->pluck('quantity')->sort()->values()->all();
+    return [
+        // Eloquent's own collection keys them all by the string `Array`: unique() leaves one.
+        expect($all->unique()->count(), 3, 'unique()'),
+        expect($all->find($second)?->quantity, 2, 'find() by a key'),
+        expect($quantities($all->find([$first, $second])), [1, 2], 'find() of a list of keys'),
+        expect(thrown(fn () => $all->findOrFail(['order_number' => $n, 'product_id' => 'missing'])), ModelNotFoundException::class, 'findOrFail() of no model'),
+        expect($quantities($all->only([$first])), [1], 'only()'),
+        expect($quantities($all->except($first)), [2, 3], 'except() of a key'),
+        expect($quantities($all->diff($all->take(1))), [2, 3], 'diff()'),
+        expect($quantities($all->intersect($all->take(2))), [1, 2], 'intersect()'),
+        expect($all->contains($all->last()), true, 'contains()'),
+        expect($quantities($all->fresh()), [1, 2, 3], 'fresh()'),
+        expect($all->toQuery()->count(), 3, 'toQuery(), by whereKey()'),
+    ];
+});
+
+check('a model with no @id and no single unique is keyed by its @@unique, as a composite key', function () {
+    ExchangeRate::create(['base' => 'EUR', 'quote' => 'JPY', 'rate' => '160.50']);
+    ExchangeRate::create(['base' => 'EUR', 'quote' => 'USD', 'rate' => '1.00']);
+    ExchangeRate::find(['base' => 'EUR', 'quote' => 'JPY'])->update(['rate' => '161.25']);
+    ExchangeRate::where(['base' => 'EUR', 'quote' => 'USD'])->firstOrFail()->delete();
+    return [
+        expect((new ExchangeRate())->getKeyName(), null, 'no one column'),
+        expect(ExchangeRate::where('base', 'EUR')->pluck('rate', 'quote')->all(), ['JPY' => '161.25'], 'the pair found, updated and deleted by both columns'),
+        expect(thrown(fn () => ExchangeRate::find('EUR')), InvalidArgumentException::class, 'find() by one column'),
+    ];
+});
+
 check('@@map and @map name the tables and columns, and the models read them by those names', function () use ($db, $account) {
     $made = $account('names');
     $made->update(['display_name' => 'Named']);
     return [
         expect((new Account())->getTable(), 'accounts', '@@map'),
         expect((new Product())->getTable(), 'Product', 'no @@map'),
-        expect($db->selectOne('SELECT display_name FROM accounts WHERE id = ?', [$made->id])->display_name, 'Named', '@map column'),
+        expect($db->table('accounts')->where('id', $made->id)->value('display_name'), 'Named', '@map column'),
         expect(Account::where('email_address', 'names@example.com')->value('handle'), 'names', 'queried by column'),
     ];
 });
@@ -234,28 +311,33 @@ check("PHP's words are plain columns: type, class, function, match, list, static
         expect(array_intersect_key($found->toArray(), $attributes), $attributes, 'read back'),
         expect(Keyword::where('match', 'm')->value('class'), 'c', 'query'),
         expect($found->kind, Kind::CLASS_, 'the case CLASS, named CLASS_'),
-        expect($db->selectOne('SELECT kind FROM keywords WHERE id = ?', [$made->id])->kind, 'CLASS', 'stored as CLASS'),
+        expect($db->table('keywords')->where('id', $made->id)->value('kind'), 'CLASS', 'stored as CLASS'),
     ];
 });
 
 check("a doc comment is the class's docblock, a */ in it written *\\/ so the block goes on", fn () => [
     expect(str_contains((string) (new ReflectionClass(Keyword::class))->getDocComment(), 'early: *\\/ and a'), true, 'docblock'),
+    expect(str_contains((string) (new ReflectionClass(Mood::class))->getDocComment(), 'an apostrophe and a backslash'), true, "an enum's"),
 ]);
 
 // --- Enums ----------------------------------------------------------------------------------
 
-check('an enum stores its @map value, loads it back as the case, and refuses others', function () use ($db, $account) {
+check('an enum stores its @map value, loads it back as the case, and refuses others', function () use ($db, $driver, $account) {
     $staff = Account::create(['email_address' => 's@example.com', 'handle' => 'staff', 'role' => Role::STAFF]);
     $admin = Account::create(['email_address' => 'a@example.com', 'handle' => 'admin', 'role' => Role::ADMIN]);
-    $db->insert("INSERT INTO accounts (email_address, handle, role, updated_at) VALUES ('raw@example.com', 'raw', 'customer', '2025-01-01 00:00:00')");
+    $db->table('accounts')->insert(['email_address' => 'raw@example.com', 'handle' => 'raw', 'role' => 'customer', 'updated_at' => stored('2025-01-01T00:00:00Z')]);
     $owner = $account('moody');
     Profile::create(['account_id' => $owner->id, 'mood' => Mood::FINE]);
     $order = Order::create(['account_id' => $staff->id, 'status' => OrderStatus::PAID]);
     return [
-        expect(array_map(fn ($r) => $r->role, $db->select('SELECT role FROM accounts WHERE id IN (?, ?) ORDER BY id', [$staff->id, $admin->id])), ['staff', 'ADMIN'], 'stored'),
+        expect($db->table('accounts')->whereIn('id', [$staff->id, $admin->id])->orderBy('id')->pluck('role')->all(), ['staff', 'ADMIN'], 'stored'),
         expect(Account::where('handle', 'raw')->firstOrFail()->role, Role::CUSTOMER, 'loaded from customer'),
-        expect($db->selectOne('SELECT mood FROM profiles WHERE account_id = ?', [$owner->id])->mood, "it's fine", 'a value with an apostrophe'),
-        expect(Mood::ESCAPED->value, 'back\\slash', 'a value with a backslash'),
+        expect($db->table('profiles')->where('account_id', $owner->id)->value('mood'), Mood::FINE->value, 'a value with an apostrophe'),
+        // provider.ts takes the apostrophe out where `prisma db push` cannot write it, and on
+        // MySQL the backslash.
+        $driver === 'sqlite' ? expect(Mood::FINE->value, "it's fine", "it's fine") : null,
+        expect(Profile::create(['account_id' => $account('escaped')->id, 'mood' => Mood::ESCAPED])->fresh()->mood, Mood::ESCAPED, 'a value with a backslash, read back'),
+        $driver !== 'mysql' ? expect(Mood::ESCAPED->value, 'back\\slash', 'back\\slash') : null,
         expect(Order::findOrFail($order->order_number)->status, OrderStatus::PAID, 'unmapped enum'),
         expect(thrown(fn () => new Account(['role' => 'owner'])), ValueError::class, 'a value outside the enum'),
     ];
@@ -270,30 +352,6 @@ check('@unique and @@unique refuse a second row', function () use ($account, $pr
     return [
         expect(thrown(fn () => $account('unique')), UniqueConstraintViolationException::class, '@unique'),
         expect(thrown(fn () => Review::create(['product_id' => $made->id, 'account_id' => $owner->id, 'rating' => 1])), UniqueConstraintViolationException::class, '@@unique'),
-    ];
-});
-
-check('a composite primary key updates and deletes one row by every column, and refuses a second', function () use ($db, $account, $product) {
-    $order = Order::create(['account_id' => $account('composite')->id]);
-    $one = $product('COMPOSITE1');
-    $two = $product('COMPOSITE2');
-    LineItem::create(['order_number' => $order->order_number, 'product_id' => $one->id, 'unit_price' => '1.00']);
-    LineItem::create(['order_number' => $order->order_number, 'product_id' => $two->id, 'unit_price' => '2.00']);
-    $item = LineItem::where(['order_number' => $order->order_number, 'product_id' => $one->id])->firstOrFail();
-    $item->update(['quantity' => 3]);
-    $updated = $item->fresh()->quantity;
-    $item->delete();
-    return [
-        expect($updated, 3, 'the row updated, read again by both columns'),
-        expect(thrown(fn () => LineItem::create(['order_number' => $order->order_number, 'product_id' => $two->id, 'unit_price' => '3.00'])), UniqueConstraintViolationException::class, 'a second row'),
-        expect(LineItem::where('order_number', $order->order_number)->pluck('quantity', 'product_id')->all(), [$two->id => 1], 'one row left, the other untouched'),
-        // No column stands for the key, so neither reaches every row of the order: find() names
-        // no column and fails, and destroy() asks for a column named "", which SQLite reads as
-        // the empty string and PostgreSQL and MySQL refuse.
-        expect(thrown(fn () => LineItem::find($order->order_number)), QueryException::class, 'find() by one column'),
-        expect(LineItem::destroy($order->order_number), 0, 'destroy() by one column'),
-        expect($db->table('line_items')->where('order_number', $order->order_number)->count(), 1, 'the row destroy() did not reach'),
-        expect($order->lineItems()->count(), 1, 'hasMany on a key named order_number'),
     ];
 });
 
@@ -340,7 +398,7 @@ check("an implicit many-to-many goes through Prisma's _ProductToTag, A the produ
     $tag = Tag::create(['name' => 'tagged']);
     $made->tags()->attach($tag->id);
     return [
-        expect(array_map(fn ($r) => (array) $r, $db->select('SELECT "A", "B" FROM "_ProductToTag"')), [['A' => $made->id, 'B' => $tag->id]], 'the row'),
+        expect($db->table('_ProductToTag')->get(['A', 'B'])->map(fn ($r) => (array) $r)->all(), [['A' => $made->id, 'B' => $tag->id]], 'the row'),
         expect($made->tags()->pluck('name')->all(), ['tagged'], 'product to tags'),
         expect($tag->products()->pluck('sku')->all(), ['TAGGED'], 'tag to products'),
     ];
@@ -351,7 +409,7 @@ check('a named implicit many-to-many is _Wished, not _ProductToWishlist', functi
     $wishlist = Wishlist::create(['account_id' => $account('wisher')->id]);
     $wishlist->products()->attach($made->id);
     return [
-        expect(array_map(fn ($r) => (array) $r, $db->select('SELECT "A", "B" FROM "_Wished"')), [['A' => $made->id, 'B' => $wishlist->id]], 'the row'),
+        expect($db->table('_Wished')->get(['A', 'B'])->map(fn ($r) => (array) $r)->all(), [['A' => $made->id, 'B' => $wishlist->id]], 'the row'),
         expect($made->wishlists()->count(), 1, 'product to wishlists'),
     ];
 });
@@ -361,7 +419,7 @@ check('a model related to itself many-to-many reads _Follows as Prisma writes it
     $bob = $account('bob');
     // What Prisma Client writes for `bob.following.connect(alice)`: of the two fields, `followers`
     // sorts first, so its model's key is A: A is followed (alice), B is the follower (bob).
-    $db->insert('INSERT INTO "_Follows" ("A", "B") VALUES (?, ?)', [$alice->id, $bob->id]);
+    $db->table('_Follows')->insert(['A' => $alice->id, 'B' => $bob->id]);
     return [
         expect($alice->followers()->pluck('handle')->all(), ['bob'], "alice's followers"),
         expect($bob->following()->pluck('handle')->all(), ['alice'], 'who bob follows'),
@@ -409,12 +467,15 @@ check('onDelete: SetNull empties the key, through a referenced handle as well', 
     ];
 });
 
-check('onDelete: SetDefault moves a product back to category 1', function () use ($product) {
-    $category = Category::create(['name' => 'Seasonal']);
-    $made = $product('SEASONAL', ['category_id' => $category->id]);
-    $category->delete();
-    return [expect($made->fresh()->category_id, 1, 'category_id')];
-});
+// InnoDB refuses ON DELETE SET DEFAULT: provider.ts leaves it out on MySQL.
+if ($driver !== 'mysql') {
+    check('onDelete: SetDefault moves a product back to category 1', function () use ($product) {
+        $category = Category::create(['name' => 'Seasonal']);
+        $made = $product('SEASONAL', ['category_id' => $category->id]);
+        $category->delete();
+        return [expect($made->fresh()->category_id, 1, 'category_id')];
+    });
+}
 
 check('onDelete: Restrict and NoAction refuse to delete a row something still points at', function () use ($account, $product) {
     $owner = $account('restrict');
@@ -427,32 +488,35 @@ check('onDelete: Restrict and NoAction refuse to delete a row something still po
     ];
 });
 
-check('a DateTime is written as Prisma Client writes it on SQLite, so the rows of both sort together', function () use ($db, $account) {
+// --- Time -----------------------------------------------------------------------------------
+
+check('a DateTime is written as Prisma Client writes it, so the rows of both sort together', function () use ($db, $driver, $account) {
     $early = $account('early');
-    $db->update('UPDATE accounts SET created_at = ? WHERE id = ?', ['2030-01-01T09:00:00.000Z', $early->id]);
+    $db->table('accounts')->where('id', $early->id)->update(['created_at' => stored('2030-01-01T09:00:00Z')]);
     // A row Prisma Client wrote an hour later the same day.
-    $db->insert("INSERT INTO accounts (email_address, handle, created_at, updated_at) VALUES ('late@example.com', 'late', '2030-01-01T10:00:00.000Z', '2030-01-01T10:00:00.000Z')");
+    $db->table('accounts')->insert(['email_address' => 'late@example.com', 'handle' => 'late', 'created_at' => stored('2030-01-01T10:00:00Z'), 'updated_at' => stored('2030-01-01T10:00:00Z')]);
     $between = Account::create(['email_address' => 'mid@example.com', 'handle' => 'mid']);
-    $between->created_at = '2030-01-01 09:30:00';
+    $between->created_at = '2030-01-01T09:30:00.250Z';
     $between->save();
+    $raw = $db->table('accounts')->where('id', $between->id)->first();
     return [
-        expect((bool) preg_match('/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/', $db->selectOne('SELECT updated_at FROM accounts WHERE id = ?', [$between->id])->updated_at), true, 'updated_at in ISO 8601 with milliseconds'),
-        expect($db->selectOne('SELECT created_at FROM accounts WHERE id = ?', [$between->id])->created_at, '2030-01-01T09:30:00.000Z', 'a value set by hand'),
+        $driver === 'sqlite' ? expect((bool) preg_match('/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/', $raw->updated_at), true, 'updated_at in ISO 8601 with milliseconds') : null,
+        expect(instant($raw->created_at), '2030-01-01T09:30:00.250Z', 'a value set by hand, in UTC with its milliseconds'),
         expect(Account::whereIn('handle', ['early', 'mid', 'late'])->orderBy('created_at')->pluck('handle')->all(), ['early', 'mid', 'late'], 'ordered by the database'),
-        expect(Account::where('handle', 'late')->firstOrFail()->created_at->format('H:i'), '10:00', "a row Prisma wrote, read"),
+        expect(Account::where('handle', 'late')->firstOrFail()->created_at->utc()->format('H:i'), '10:00', 'a row Prisma wrote, read as UTC'),
     ];
 });
 
 // --- Timestamps -----------------------------------------------------------------------------
 
 check("timestamps are filled under Prisma's column names and bumped by an update", function () use ($db, $account, $product) {
-    $past = '2000-01-01 00:00:00';
+    $past = '2000-01-01T00:00:00Z';
     $owner = $account('stamped');
     $order = Order::create(['account_id' => $owner->id]);
     $made = $product('STAMPED');
-    $db->update('UPDATE accounts SET updated_at = ? WHERE id = ?', [$past, $owner->id]);
-    $db->update('UPDATE orders SET changed_at = ? WHERE order_number = ?', [$past, $order->order_number]);
-    $db->update('UPDATE "Product" SET "updatedAt" = ? WHERE id = ?', [$past, $made->id]);
+    $db->table('accounts')->where('id', $owner->id)->update(['updated_at' => stored($past)]);
+    $db->table('orders')->where('order_number', $order->order_number)->update(['changed_at' => stored($past)]);
+    $db->table('Product')->where('id', $made->id)->update(['updatedAt' => stored($past)]);
     $owner->fresh()->update(['display_name' => 'Stamped']);
     $order->fresh()->update(['note' => 'changed']);
     $made->fresh()->update(['stock' => 1]);
@@ -464,5 +528,25 @@ check("timestamps are filled under Prisma's column names and bumped by an update
         expect($made->fresh()->updatedAt->greaterThan($past), true, 'Product.updatedAt bumped'),
         expect(Order::CREATED_AT, null, 'an order has no created-at'),
         expect((new Profile())->usesTimestamps(), false, 'a profile has none'),
+    ];
+});
+
+check('a second @updatedAt is filled and bumped with the one Eloquent keeps, and a value given is kept', function () use ($db) {
+    $past = '2000-01-01T00:00:00.000Z';
+    $row = fn () => $db->table('store_setting')->where('key', 'synced')->first();
+    $setting = StoreSetting::create(['key' => 'synced', 'value' => 'a']);
+    $filled = $row();
+    $db->table('store_setting')->where('key', 'synced')->update(['updated_at' => stored($past), 'synced_at' => stored($past)]);
+    StoreSetting::findOrFail('synced')->save();
+    $untouched = instant($row()->synced_at);
+    StoreSetting::findOrFail('synced')->update(['value' => 'b']);
+    $bumped = $row();
+    StoreSetting::findOrFail('synced')->update(['value' => 'c', 'synced_at' => '2020-01-01T00:00:00Z']);
+    return [
+        expect($setting->synced_at instanceof CarbonInterface, true, 'on the model once it is saved'),
+        expect(instant($filled->synced_at), instant($filled->updated_at), 'filled at the same moment as updated_at'),
+        expect($untouched, $past, 'a save with nothing changed changes nothing'),
+        expect(instant($bumped->synced_at) > $past && instant($bumped->synced_at) === instant($bumped->updated_at), true, 'both bumped together by an update'),
+        expect(instant($row()->synced_at), '2020-01-01T00:00:00.000Z', 'a value given'),
     ];
 });

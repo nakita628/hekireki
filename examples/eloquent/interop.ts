@@ -4,10 +4,23 @@
 import { isDeepStrictEqual } from 'node:util'
 
 import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3'
+import { PrismaMariaDb } from '@prisma/adapter-mariadb'
+import { PrismaPg } from '@prisma/adapter-pg'
 
-import { PrismaClient } from './generated/client/client.ts'
+import type { PrismaClient as Client } from './generated/client/client.ts'
 
-const prisma = new PrismaClient({ adapter: new PrismaBetterSqlite3({ url: 'file:./dev.db' }) })
+// The database and the client of bootstrap.php's run: dev.db and generated/client, or the ones
+// provider.ts made for ELOQUENT_DATABASE. The clients of every provider have one API.
+const url = process.env.ELOQUENT_DATABASE
+const { PrismaClient } = (await import(
+  process.env.ELOQUENT_CLIENT ?? './generated/client/client.ts'
+)) as { PrismaClient: typeof Client }
+const adapter = url?.startsWith('postgresql:')
+  ? new PrismaPg(url)
+  : url?.startsWith('mysql:')
+    ? new PrismaMariaDb(url)
+    : new PrismaBetterSqlite3({ url: 'file:./dev.db' })
+const prisma = new PrismaClient({ adapter })
 
 async function check(name: string, body: () => Promise<readonly (string | null)[]>) {
   const problems = (await body()).filter((problem) => problem !== null)
@@ -30,7 +43,7 @@ await check('Prisma Client reads each type Eloquent wrote', async () => {
     expect(product.price.toString(), '12.34', 'Decimal'),
     expect(product.barcode, 2n ** 53n + 1n, 'BigInt beyond 2^53'),
     expect(product.attributes, { nested: { list: [1, 'two', null] }, flag: true }, 'Json'),
-    expect(product.releasedAt.toISOString(), '2021-02-03T04:05:06.000Z', 'DateTime'),
+    expect(product.releasedAt.toISOString(), '2021-02-03T04:05:06.789Z', 'DateTime, in UTC'),
     expect(product.label, 'it\'s "quoted" \\ back', 'a default Eloquent carried'),
     expect(product.createdAt instanceof Date, true, 'a timestamp Eloquent filled'),
     expect([...(profile.avatar ?? [])], [0, 255, 80, 78, 71, 10], 'Bytes, a BLOB'),
@@ -42,10 +55,25 @@ await check('Prisma Client reads the keys and enums Eloquent made', async () => 
   const tag = await prisma.tag.findFirstOrThrow({ where: { name: 'keys' } })
   const staff = await prisma.account.findFirstOrThrow({ where: { handle: 'staff' } })
   const order = await prisma.order.findFirstOrThrow({ where: { status: 'PAID' } })
+  const wishlist = await prisma.wishlist.findFirstOrThrow()
+  const setting = await prisma.store_setting.findUniqueOrThrow({ where: { key: 'currency' } })
+  const rate = await prisma.exchangeRate.findUniqueOrThrow({
+    where: { base_quote: { base: 'EUR', quote: 'JPY' } },
+  })
   return [
     expect(/^[0-9A-Z]{26}$/u.test(tag.id), true, `a ULID in upper case: ${tag.id}`),
     expect(staff.role, 'STAFF', 'an enum stored as its @map value'),
     expect(order.accountId, staff.id, 'an order under a key named order_number'),
+    expect(
+      /^[0-9A-Z]{26}$/u.test(order.publicId),
+      true,
+      `a ulid() that is not the key: ${order.publicId}`,
+    ),
+    expect(order.placedAt instanceof Date, true, 'a now() the model filled'),
+    expect(wishlist.shareToken !== wishlist.id, true, 'a uuid() that is not the key'),
+    expect(setting.value, 'JPY', 'a row of a model with no @id'),
+    expect(setting.syncedAt.getTime(), setting.updatedAt.getTime(), 'a second @updatedAt'),
+    expect(rate.rate.toString(), '161.25', 'a Decimal, by a pair of columns'),
   ]
 })
 
@@ -76,6 +104,10 @@ const product = await prisma.product.create({
 await prisma.wishlist.create({
   data: { accountId: bob.id, products: { connect: { id: product.id } } },
 })
+// An order Prisma places now, for interop.php to place one after and sort the two by placed_at.
+await prisma.order.create({ data: { accountId: alice.id, note: 'placed by Prisma' } })
+await prisma.store_setting.create({ data: { key: 'prisma', value: 'written by Prisma' } })
+await prisma.exchangeRate.create({ data: { base: 'USD', quote: 'EUR', rate: '0.90' } })
 
 await check('Prisma Client writes the rows interop.php reads', async () => [
   expect(/^[0-9A-Z]{26}$/u.test(tag.id), true, `a ULID Prisma made: ${tag.id}`),

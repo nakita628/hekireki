@@ -34,4 +34,18 @@ class AuditLog extends Model
         'signature' => AsBytes::class,
         'logged_at' => 'datetime',
     ];
+
+    public function fromDateTime($value)
+    {
+        return empty($value) ? $value : parent::asDateTime($value)->setTimezone('UTC')->format('Y-m-d H:i:s.v');
+    }
+
+    protected function asDateTime($value)
+    {
+        if (is_string($value) && preg_match('/^\d{4}-\d\d-\d\d[ T][\d:.]+$/', $value)) {
+            $value .= '+00:00';
+        }
+
+        return parent::asDateTime($value);
+    }
 }

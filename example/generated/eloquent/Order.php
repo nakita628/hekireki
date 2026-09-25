@@ -22,8 +22,34 @@ class Order extends Model
     ];
 
     protected $casts = [
+        'total' => AsDecimal::class,
         'placed_at' => 'datetime',
     ];
+
+    public function save(array $options = [])
+    {
+        if (! $this->exists) {
+            if (! array_key_exists('placed_at', $this->attributes)) {
+                $this->setAttribute('placed_at', $this->freshTimestamp());
+            }
+        }
+
+        return parent::save($options);
+    }
+
+    public function fromDateTime($value)
+    {
+        return empty($value) ? $value : parent::asDateTime($value)->setTimezone('UTC')->format('Y-m-d H:i:s.v');
+    }
+
+    protected function asDateTime($value)
+    {
+        if (is_string($value) && preg_match('/^\d{4}-\d\d-\d\d[ T][\d:.]+$/', $value)) {
+            $value .= '+00:00';
+        }
+
+        return parent::asDateTime($value);
+    }
 
     public function user(): BelongsTo
     {

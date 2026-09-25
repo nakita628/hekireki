@@ -201,6 +201,17 @@ class Bare extends Model
     ])
   })
 
+  it('names the file after the class, as PSR-4 autoloading looks for it', () => {
+    const introspected = makeModel({
+      name: 'store_setting',
+      fields: [makeField({ name: 'key', type: 'String', isUnique: true })],
+    })
+
+    const [file] = eloquentModelFiles([introspected], 'App')
+    expect(file?.fileName).toBe('StoreSetting.php')
+    expect(file?.code).toContain('class StoreSetting extends Model')
+  })
+
   it('emits nothing for a schema without models or enums', () => {
     expect(eloquentModelFiles([], 'App')).toStrictEqual([])
   })

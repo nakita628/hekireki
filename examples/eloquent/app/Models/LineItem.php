@@ -10,6 +10,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class LineItem extends Model
 {
+    const KEY_COLUMNS = ['order_number', 'product_id'];
+
     protected $table = 'line_items';
 
     protected $primaryKey = null;
@@ -32,11 +34,44 @@ class LineItem extends Model
     protected $casts = [
         'order_number' => 'integer',
         'quantity' => 'integer',
+        'unit_price' => AsDecimal::class,
     ];
+
+    public function getKey()
+    {
+        $key = [];
+        foreach (static::KEY_COLUMNS as $column) {
+            $key[$column] = $this->getAttribute($column);
+        }
+
+        return $key;
+    }
+
+    public function newEloquentBuilder($query)
+    {
+        return new CompositeKeyBuilder($query);
+    }
+
+    public function newCollection(array $models = [])
+    {
+        return new CompositeKeyCollection($models);
+    }
+
+    public static function destroy($ids)
+    {
+        $count = 0;
+        foreach ((new static())->newQuery()->whereKey(func_num_args() > 1 ? func_get_args() : $ids)->get() as $model) {
+            if ($model->delete()) {
+                $count++;
+            }
+        }
+
+        return $count;
+    }
 
     protected function setKeysForSaveQuery($query)
     {
-        foreach (['order_number', 'product_id'] as $column) {
+        foreach (static::KEY_COLUMNS as $column) {
             $query->where($column, '=', $this->original[$column] ?? $this->getAttribute($column));
         }
 
@@ -45,7 +80,7 @@ class LineItem extends Model
 
     protected function setKeysForSelectQuery($query)
     {
-        foreach (['order_number', 'product_id'] as $column) {
+        foreach (static::KEY_COLUMNS as $column) {
             $query->where($column, '=', $this->original[$column] ?? $this->getAttribute($column));
         }
 
@@ -73,7 +108,7 @@ class LineItem extends Model
 
     public function order(): BelongsTo
     {
-        return $this->belongsTo(Order::class, 'order_number', 'order_number');
+        return $this->belongsTo(Order::class, 'order_number');
     }
 
     public function product(): BelongsTo

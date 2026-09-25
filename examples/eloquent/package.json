@@ -3,13 +3,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "clean": "rm -rf app generated dev.db dev.db-journal",
+    "clean": "rm -rf app generated dev.db dev.db-journal .provider",
     "generate": "prisma validate && prisma generate",
     "db": "prisma db push --url file:./dev.db",
     "setup": "composer install --quiet --no-interaction",
-    "lint": "for f in app/Models/*.php check.php interop.php; do php -l \"$f\" > /dev/null || exit 1; done",
-    "verify": "php check.php && node interop.ts && php interop.php",
-    "demo": "pnpm run clean && pnpm run generate && pnpm run db && pnpm run setup && pnpm run lint && pnpm run verify"
+    "lint": "for f in app/Models/*.php bootstrap.php check.php interop.php; do php -l \"$f\" > /dev/null || exit 1; done",
+    "verify": "php check.php && ELOQUENT_LARAVEL=1 php check.php && node interop.ts && ELOQUENT_LARAVEL=1 php interop.php",
+    "demo": "pnpm run clean && pnpm run generate && pnpm run db && pnpm run setup && pnpm run lint && pnpm run verify",
+    "demo:postgresql": "pnpm run setup && node provider.ts postgresql",
+    "demo:mysql": "pnpm run setup && node provider.ts mysql"
   },
   "devDependencies": {
     "hekireki": "workspace:*",

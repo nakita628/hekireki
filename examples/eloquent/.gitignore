@@ -1,3 +1,5 @@
 # What `pnpm run setup` installs beside the check. dev.db is ignored by examples/.gitignore; the
 # models `prisma generate` writes in app/Models are committed, to be read without running it.
 /vendor/
+# What provider.ts writes and generates for PostgreSQL and MySQL: made from schema.prisma each run.
+/.provider/

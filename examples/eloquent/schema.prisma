@@ -155,9 +155,12 @@ model Order {
   account    Account     @relation("Orders", fields: [accountId], references: [id], onDelete: NoAction)
   status     OrderStatus @default(PENDING)
   note       String?
+  /// now(): SQLite's CURRENT_TIMESTAMP is `Y-m-d H:i:s`, and Prisma Client writes ISO 8601.
   placedAt   DateTime    @default(now()) @map("placed_at")
   changedAt  DateTime    @updatedAt @map("changed_at")
   lineItems  LineItem[]
+  /// The reference a customer sees: a ulid() that is not the key, which HasUlids does not make.
+  publicId   String      @unique @default(ulid()) @map("public_id")
   /// A gift names its account by handle, not by key: `references:` another unique.
   giftFor    String?     @map("gift_for")
   giftTarget Account?    @relation("Gifts", fields: [giftFor], references: [handle], onDelete: SetNull)
@@ -211,16 +214,18 @@ model Review {
 /// A saved list, one per account, holding products through a named implicit relation: the join
 /// table is `_Wished`, not `_ProductToWishlist`.
 model Wishlist {
-  id        String    @id @default(uuid())
-  accountId Int       @unique @map("account_id")
-  account   Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  products  Product[] @relation("Wished")
+  id         String    @id @default(uuid())
+  accountId  Int       @unique @map("account_id")
+  account    Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  products   Product[] @relation("Wished")
+  /// A link to share the list by: a second uuid(), beside the key's.
+  shareToken String    @unique @default(uuid()) @map("share_token")
 }
 
 /// Column names that are words of PHP. A doc comment that ends a PHPDoc block early: */ and a
 /// $variable PHP would not interpolate in a comment anyway.
 model Keyword {
-  id       Int     @id @default(autoincrement())
+  id       Int      @id @default(autoincrement())
   type     String
   class    String?
   function String?
@@ -230,4 +235,24 @@ model Keyword {
   kind     Kind?
 
   @@map("keywords")
+}
+
+/// A table as `prisma db pull` names it: lower case and snake case, and no @id, only a unique key.
+/// Two @updatedAt: Eloquent keeps one as UPDATED_AT, and Prisma bumps both.
+model store_setting {
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at")
+  syncedAt  DateTime @updatedAt @map("synced_at")
+}
+
+/// No @id and no single unique field: the pair is what names a row. A Decimal SQLite would hand
+/// back as a float.
+model ExchangeRate {
+  base  String
+  quote String
+  rate  Decimal
+
+  @@unique([base, quote])
+  @@map("exchange_rates")
 }

@@ -1,6 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { eloquentBytesCast, eloquentEnum, eloquentModels } from '../helper/eloquent.js'
+import { eloquentEnum, eloquentModels, eloquentSupportFiles } from '../helper/eloquent.js'
+import { makePascalCase } from '../utils/index.js'
 
 export function eloquentModelFiles(
   models: readonly DMMF.Model[],
@@ -11,19 +12,19 @@ export function eloquentModelFiles(
   const resolvedNamespace = (
     Array.isArray(namespace) ? namespace.join('\\') : namespace
   ).replaceAll('.', '\\')
+  // The file is named after the class, as PSR-4 autoloading looks for it: `user_role` is
+  // UserRole.php.
   const modelFiles = models.map((model) => ({
-    fileName: `${model.name}.php`,
+    fileName: `${makePascalCase(model.name)}.php`,
     code: eloquentModels([model], resolvedNamespace, models, enums, options),
   }))
   const enumFiles = (enums ?? []).map((enumDef) => ({
     fileName: `${enumDef.name}.php`,
     code: eloquentEnum(enumDef, resolvedNamespace),
   }))
-  // The cast the Bytes columns name, written beside the models that use it.
-  const castFiles = models.some((model) =>
-    model.fields.some((f) => f.type === 'Bytes' && !f.isList),
+  // The casts and the query builder the models name, written beside them.
+  const supportFiles = eloquentSupportFiles(models, resolvedNamespace)
+  return [...modelFiles, ...enumFiles, ...supportFiles].filter(
+    (entry) => entry.code.trim().length > 0,
   )
-    ? [{ fileName: 'AsBytes.php', code: eloquentBytesCast(resolvedNamespace) }]
-    : []
-  return [...modelFiles, ...enumFiles, ...castFiles].filter((entry) => entry.code.trim().length > 0)
 }

@@ -48,6 +48,7 @@ class Product extends Model
     ];
 
     protected $casts = [
+        'price' => AsDecimal::class,
         'weight' => 'float',
         'barcode' => 'integer',
         'stock' => 'integer',
@@ -59,7 +60,16 @@ class Product extends Model
 
     public function fromDateTime($value)
     {
-        return empty($value) ? $value : $this->asDateTime($value)->setTimezone('UTC')->format('Y-m-d\TH:i:s.v\Z');
+        return empty($value) ? $value : parent::asDateTime($value)->setTimezone('UTC')->format('Y-m-d\TH:i:s.v\Z');
+    }
+
+    protected function asDateTime($value)
+    {
+        if (is_string($value) && preg_match('/^\d{4}-\d\d-\d\d[ T][\d:.]+$/', $value)) {
+            $value .= '+00:00';
+        }
+
+        return parent::asDateTime($value);
     }
 
     public function category(): BelongsTo

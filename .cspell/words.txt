@@ -6,6 +6,7 @@ apikey
 AQID
 arktype
 arrayagg
+Arrayable
 attcollation
 attgenerated
 attidentity

@@ -6,6 +6,7 @@ import {
   eloquentEnum,
   eloquentModels,
   eloquentProblems,
+  eloquentSupportFiles,
   prismaTypeToEloquentCast,
 } from './eloquent.js'
 
@@ -282,6 +283,20 @@ class Agent extends Model
     protected $fillable = [
         'name',
     ];
+
+    public function fromDateTime($value)
+    {
+        return empty($value) ? $value : parent::asDateTime($value)->setTimezone('UTC')->format('Y-m-d H:i:s.v');
+    }
+
+    protected function asDateTime($value)
+    {
+        if (is_string($value) && preg_match('/^\\d{4}-\\d\\d-\\d\\d[ T][\\d:.]+$/', $value)) {
+            $value .= '+00:00';
+        }
+
+        return parent::asDateTime($value);
+    }
 }`)
   })
 
@@ -322,6 +337,20 @@ class Agent extends Model
     protected $keyType = 'string';
 
     public $incrementing = false;
+
+    public function fromDateTime($value)
+    {
+        return empty($value) ? $value : parent::asDateTime($value)->setTimezone('UTC')->format('Y-m-d H:i:s.v');
+    }
+
+    protected function asDateTime($value)
+    {
+        if (is_string($value) && preg_match('/^\\d{4}-\\d\\d-\\d\\d[ T][\\d:.]+$/', $value)) {
+            $value .= '+00:00';
+        }
+
+        return parent::asDateTime($value);
+    }
 }`)
   })
 
@@ -364,6 +393,20 @@ class Log extends Model
     protected $keyType = 'string';
 
     public $incrementing = false;
+
+    public function fromDateTime($value)
+    {
+        return empty($value) ? $value : parent::asDateTime($value)->setTimezone('UTC')->format('Y-m-d H:i:s.v');
+    }
+
+    protected function asDateTime($value)
+    {
+        if (is_string($value) && preg_match('/^\\d{4}-\\d\\d-\\d\\d[ T][\\d:.]+$/', $value)) {
+            $value .= '+00:00';
+        }
+
+        return parent::asDateTime($value);
+    }
 }`)
   })
 
@@ -424,6 +467,20 @@ class Mission extends Model
         'startedAt' => 'datetime',
         'metadata' => 'array',
     ];
+
+    public function fromDateTime($value)
+    {
+        return empty($value) ? $value : parent::asDateTime($value)->setTimezone('UTC')->format('Y-m-d H:i:s.v');
+    }
+
+    protected function asDateTime($value)
+    {
+        if (is_string($value) && preg_match('/^\\d{4}-\\d\\d-\\d\\d[ T][\\d:.]+$/', $value)) {
+            $value .= '+00:00';
+        }
+
+        return parent::asDateTime($value);
+    }
 }`)
   })
 
@@ -481,7 +538,7 @@ class User extends Model
 }`)
   })
 
-  it('keeps a composite key out of $primaryKey, and names every column of it to save, select or delete', () => {
+  it('keeps a composite key out of $primaryKey, and takes it as an array of its columns to find, destroy, save, select or delete', () => {
     const like = makeModel({
       name: 'Like',
       primaryKey: { name: null, fields: ['userId', 'postId'] },
@@ -527,6 +584,8 @@ use Illuminate\\Database\\Eloquent\\Relations\\BelongsTo;
 
 class Like extends Model
 {
+    const KEY_COLUMNS = ['userId', 'postId'];
+
     protected $table = 'Like';
 
     protected $primaryKey = null;
@@ -540,9 +599,41 @@ class Like extends Model
         'postId',
     ];
 
+    public function getKey()
+    {
+        $key = [];
+        foreach (static::KEY_COLUMNS as $column) {
+            $key[$column] = $this->getAttribute($column);
+        }
+
+        return $key;
+    }
+
+    public function newEloquentBuilder($query)
+    {
+        return new CompositeKeyBuilder($query);
+    }
+
+    public function newCollection(array $models = [])
+    {
+        return new CompositeKeyCollection($models);
+    }
+
+    public static function destroy($ids)
+    {
+        $count = 0;
+        foreach ((new static())->newQuery()->whereKey(func_num_args() > 1 ? func_get_args() : $ids)->get() as $model) {
+            if ($model->delete()) {
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
     protected function setKeysForSaveQuery($query)
     {
-        foreach (['userId', 'postId'] as $column) {
+        foreach (static::KEY_COLUMNS as $column) {
             $query->where($column, '=', $this->original[$column] ?? $this->getAttribute($column));
         }
 
@@ -551,7 +642,7 @@ class Like extends Model
 
     protected function setKeysForSelectQuery($query)
     {
-        foreach (['userId', 'postId'] as $column) {
+        foreach (static::KEY_COLUMNS as $column) {
             $query->where($column, '=', $this->original[$column] ?? $this->getAttribute($column));
         }
 
@@ -818,7 +909,7 @@ class User extends Model
 
     public function posts(): HasMany
     {
-        return $this->hasMany(Post::class, 'author_id', 'user_id');
+        return $this->hasMany(Post::class, 'author_id');
     }
 }`)
 
@@ -848,7 +939,7 @@ class Post extends Model
 
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'author_id', 'user_id');
+        return $this->belongsTo(User::class, 'author_id');
     }
 }`)
   })
@@ -1052,6 +1143,20 @@ class Revision extends Model
     protected $keyType = 'string';
 
     public $incrementing = false;
+
+    public function fromDateTime($value)
+    {
+        return empty($value) ? $value : parent::asDateTime($value)->setTimezone('UTC')->format('Y-m-d H:i:s.v');
+    }
+
+    protected function asDateTime($value)
+    {
+        if (is_string($value) && preg_match('/^\\d{4}-\\d\\d-\\d\\d[ T][\\d:.]+$/', $value)) {
+            $value .= '+00:00';
+        }
+
+        return parent::asDateTime($value);
+    }
 }`)
   })
 
@@ -1095,6 +1200,20 @@ class Document extends Model
     protected $keyType = 'string';
 
     public $incrementing = false;
+
+    public function fromDateTime($value)
+    {
+        return empty($value) ? $value : parent::asDateTime($value)->setTimezone('UTC')->format('Y-m-d H:i:s.v');
+    }
+
+    protected function asDateTime($value)
+    {
+        if (is_string($value) && preg_match('/^\\d{4}-\\d\\d-\\d\\d[ T][\\d:.]+$/', $value)) {
+            $value .= '+00:00';
+        }
+
+        return parent::asDateTime($value);
+    }
 }`)
   })
 
@@ -1444,7 +1563,7 @@ class Note extends Model`)
         'big' => 9007199254740993,
         'active' => true,
         'label' => 'it\\'s "quoted" \\\\ back',
-        'released_at' => '2020-01-01 00:00:00',
+        'released_at' => '2020-01-01 00:00:00.000',
         'role' => 'customer',
     ];`)
   })
@@ -1496,7 +1615,7 @@ class Note extends Model`)
     expect(eloquentBytesCast('App\\Models')).toContain(`class AsBytes implements CastsAttributes`)
   })
 
-  it('writes a DateTime on SQLite as Prisma Client does, a default included', () => {
+  it('writes a DateTime as Prisma Client does, in UTC with milliseconds, a default included', () => {
     const model = makeModel({
       name: 'Event',
       fields: [
@@ -1516,13 +1635,24 @@ class Note extends Model`)
     expect(sqlite).toContain(`        'at' => '2020-01-01T00:00:00.000Z',`)
     expect(sqlite).toContain(`    public function fromDateTime($value)
     {
-        return empty($value) ? $value : $this->asDateTime($value)->setTimezone('UTC')->format('Y-m-d\\TH:i:s.v\\Z');
+        return empty($value) ? $value : parent::asDateTime($value)->setTimezone('UTC')->format('Y-m-d\\TH:i:s.v\\Z');
+    }
+
+    protected function asDateTime($value)
+    {
+        if (is_string($value) && preg_match('/^\\d{4}-\\d\\d-\\d\\d[ T][\\d:.]+$/', $value)) {
+            $value .= '+00:00';
+        }
+
+        return parent::asDateTime($value);
     }`)
     const postgres = eloquentModels([model], 'App\\Models', undefined, undefined, {
       provider: 'postgresql',
     })
-    expect(postgres).toContain(`        'at' => '2020-01-01 00:00:00',`)
-    expect(postgres).not.toContain('fromDateTime')
+    expect(postgres).toContain(`        'at' => '2020-01-01 00:00:00.000',`)
+    expect(postgres).toContain(
+      `        return empty($value) ? $value : parent::asDateTime($value)->setTimezone('UTC')->format('Y-m-d H:i:s.v');`,
+    )
   })
 
   it('names a relation Eloquent would read as something else', () => {
@@ -1552,6 +1682,381 @@ class Note extends Model`)
     expect(eloquentProblems([model])).toStrictEqual([
       "field Post.Push: Push() is a method of Eloquent's Model; rename the relation field",
       'field Post.author: a column of Post has the name too, and $model->author would read the column; rename the relation field or @map the column',
+    ])
+  })
+})
+
+describe('corners of a schema, each run in examples/eloquent', () => {
+  const autoincrementId = makeField({
+    name: 'id',
+    type: 'Int',
+    isId: true,
+    hasDefaultValue: true,
+    default: { name: 'autoincrement', args: [] },
+  })
+
+  it('keys a model with no @id by its @unique, or by its @@unique column by column', () => {
+    const setting = makeModel({
+      name: 'Setting',
+      fields: [
+        makeField({ name: 'key', type: 'String', isUnique: true }),
+        makeField({ name: 'value', type: 'String' }),
+      ],
+    })
+    const rate = makeModel({
+      name: 'Rate',
+      fields: [
+        makeField({ name: 'base', type: 'String' }),
+        makeField({ name: 'quote', type: 'String' }),
+        makeField({ name: 'note', type: 'String', isRequired: false, isUnique: true }),
+      ],
+      uniqueFields: [['base', 'quote']],
+    })
+
+    const single = eloquentModels([setting], 'App\\Models')
+    expect(single).toContain(`    protected $primaryKey = 'key';
+
+    protected $keyType = 'string';
+
+    public $incrementing = false;`)
+    expect(single).toContain(`    protected $fillable = [
+        'key',
+        'value',
+    ];`)
+    // An optional @unique cannot name a row: the required pair does.
+    const pair = eloquentModels([rate], 'App\\Models')
+    expect(pair).toContain('    protected $primaryKey = null;')
+    expect(pair).toContain(`    const KEY_COLUMNS = ['base', 'quote'];`)
+  })
+
+  it('fills a uuid() or ulid() that is not the key, and a now(), as the model saves', () => {
+    const order = makeModel({
+      name: 'Order',
+      fields: [
+        autoincrementId,
+        makeField({
+          name: 'publicId',
+          type: 'String',
+          dbName: 'public_id',
+          hasDefaultValue: true,
+          default: { name: 'ulid', args: [] },
+        }),
+        makeField({
+          name: 'token',
+          type: 'String',
+          hasDefaultValue: true,
+          default: { name: 'uuid', args: [7] },
+        }),
+        makeField({
+          name: 'placedAt',
+          type: 'DateTime',
+          dbName: 'placed_at',
+          hasDefaultValue: true,
+          default: { name: 'now', args: [] },
+        }),
+      ],
+    })
+
+    const sqlite = eloquentModels([order], 'App\\Models', undefined, undefined, {
+      provider: 'sqlite',
+    })
+    expect(sqlite).toContain('use Illuminate\\Support\\Str;')
+    expect(sqlite).toContain(`    public function save(array $options = [])
+    {
+        if (! $this->exists) {
+            if (! array_key_exists('public_id', $this->attributes)) {
+                $this->setAttribute('public_id', (string) Str::ulid());
+            }
+            if (! array_key_exists('token', $this->attributes)) {
+                $this->setAttribute('token', (string) Str::uuid7());
+            }
+            if (! array_key_exists('placed_at', $this->attributes)) {
+                $this->setAttribute('placed_at', $this->freshTimestamp());
+            }
+        }
+
+        return parent::save($options);
+    }`)
+    // Prisma Client fills now() itself on every database, from its own clock in UTC.
+    const postgres = eloquentModels([order], 'App\\Models', undefined, undefined, {
+      provider: 'postgresql',
+    })
+    expect(postgres).toContain(
+      `                $this->setAttribute('placed_at', $this->freshTimestamp());`,
+    )
+  })
+
+  it('stamps a second @updatedAt with the time Eloquent gives UPDATED_AT', () => {
+    const model = makeModel({
+      name: 'Setting',
+      fields: [
+        autoincrementId,
+        makeField({ name: 'updatedAt', type: 'DateTime', isUpdatedAt: true }),
+        makeField({
+          name: 'syncedAt',
+          type: 'DateTime',
+          dbName: 'synced_at',
+          isUpdatedAt: true,
+        }),
+      ],
+    })
+
+    expect(eloquentModels([model], 'App\\Models')).toContain(`    public function updateTimestamps()
+    {
+        $givenSyncedAt = $this->isDirty('synced_at');
+        parent::updateTimestamps();
+        if (! $givenSyncedAt) {
+            $this->setAttribute('synced_at', $this->getAttribute($this->getUpdatedAtColumn()));
+        }
+
+        return $this;
+    }`)
+  })
+
+  it('casts a Decimal through AsDecimal, and a date without a time to a date', () => {
+    const model = makeModel({
+      name: 'Price',
+      fields: [
+        autoincrementId,
+        makeField({ name: 'amount', type: 'Decimal' }),
+        makeField({ name: 'exact', type: 'Decimal', nativeType: ['Decimal', ['10', '2']] }),
+        makeField({ name: 'day', type: 'DateTime', nativeType: ['Date', []] }),
+      ],
+    })
+
+    expect(eloquentModels([model], 'App\\Models')).toContain(`    protected $casts = [
+        'amount' => AsDecimal::class,
+        'exact' => AsDecimal::class,
+        'day' => 'date',
+    ];`)
+  })
+
+  it('names the key of a relation wherever it is not the key Eloquent takes', () => {
+    const legacy = makeModel({
+      name: 'Legacy',
+      fields: [
+        makeField({ name: 'code', type: 'String', isId: true }),
+        makeField({ name: 'id', type: 'Int', isUnique: true }),
+        makeField({
+          name: 'notes',
+          type: 'Note',
+          kind: 'object',
+          isList: true,
+          relationName: 'LegacyToNote',
+        }),
+      ],
+    })
+    const note = makeModel({
+      name: 'Note',
+      fields: [
+        autoincrementId,
+        makeField({ name: 'legacyId', type: 'Int' }),
+        makeField({
+          name: 'legacy',
+          type: 'Legacy',
+          kind: 'object',
+          relationName: 'LegacyToNote',
+          relationFromFields: ['legacyId'],
+          relationToFields: ['id'],
+        }),
+      ],
+    })
+
+    const models = [legacy, note]
+    // `id` is a column of Legacy, but its key is `code`: Eloquent would take that.
+    expect(eloquentModels([note], 'App\\Models', models)).toContain(
+      `        return $this->belongsTo(Legacy::class, 'legacyId', 'id');`,
+    )
+    expect(eloquentModels([legacy], 'App\\Models', models)).toContain(
+      `        return $this->hasMany(Note::class, 'legacyId', 'id');`,
+    )
+  })
+
+  it("writes Laravel's classes in full where a model or enum of the namespace has the name", () => {
+    const model = makeModel({
+      name: 'Model',
+      fields: [
+        makeField({
+          name: 'id',
+          type: 'String',
+          isId: true,
+          hasDefaultValue: true,
+          default: { name: 'ulid', args: [] },
+        }),
+        makeField({ name: 'kind', type: 'Str', kind: 'enum' }),
+        makeField({
+          name: 'items',
+          type: 'HasMany',
+          kind: 'object',
+          isList: true,
+          relationName: 'Items',
+        }),
+      ],
+    })
+    const hasMany = makeModel({
+      name: 'HasMany',
+      fields: [
+        autoincrementId,
+        makeField({ name: 'modelId', type: 'String' }),
+        makeField({
+          name: 'model',
+          type: 'Model',
+          kind: 'object',
+          relationName: 'Items',
+          relationFromFields: ['modelId'],
+          relationToFields: ['id'],
+        }),
+      ],
+    })
+    const str: DMMF.DatamodelEnum = {
+      name: 'Str',
+      dbName: null,
+      values: [{ name: 'A', dbName: null }],
+    }
+
+    const result = eloquentModels([model], 'App\\Models', [model, hasMany], [str])
+    expect(result).toContain(`namespace App\\Models;
+
+use Illuminate\\Database\\Eloquent\\Concerns\\HasUlids;
+
+class Model extends \\Illuminate\\Database\\Eloquent\\Model`)
+    expect(result).toContain(`        'kind' => Str::class,`)
+    expect(result).toContain(`        return (string) \\Illuminate\\Support\\Str::ulid();`)
+    expect(result)
+      .toContain(`    public function items(): \\Illuminate\\Database\\Eloquent\\Relations\\HasMany
+    {
+        return $this->hasMany(HasMany::class, 'modelId');
+    }`)
+  })
+
+  it('writes the doc comment of an enum as its docblock', () => {
+    const mood: DMMF.DatamodelEnum = {
+      name: 'Mood',
+      dbName: null,
+      documentation: 'Values PHP has to quote: */ ends nothing.',
+      values: [{ name: 'FINE', dbName: null }],
+    }
+
+    expect(eloquentEnum(mood, 'App\\Models')).toContain(`/**
+ * Values PHP has to quote: *\\/ ends nothing.
+ */
+enum Mood: string`)
+  })
+
+  it('serializes Bytes as base64, which json_encode takes', () => {
+    expect(eloquentBytesCast('App\\Models')).toContain(
+      `class AsBytes implements CastsAttributes, SerializesCastableAttributes`,
+    )
+    expect(eloquentBytesCast('App\\Models')).toContain(
+      `        return $value === null ? null : base64_encode($value);`,
+    )
+  })
+
+  it('writes beside the models only the casts and the query builder they name', () => {
+    const plain = makeModel({ name: 'Plain', fields: [autoincrementId] })
+    const priced = makeModel({
+      name: 'Priced',
+      fields: [autoincrementId, makeField({ name: 'price', type: 'Decimal' })],
+    })
+    const pair = makeModel({
+      name: 'Pair',
+      fields: [makeField({ name: 'a', type: 'Int' }), makeField({ name: 'b', type: 'Int' })],
+      primaryKey: { name: null, fields: ['a', 'b'] },
+    })
+
+    expect(eloquentSupportFiles([plain], 'App')).toStrictEqual([])
+    expect(
+      eloquentSupportFiles([plain, priced, pair], 'App').map((file) => file.fileName),
+    ).toStrictEqual(['AsDecimal.php', 'CompositeKeyBuilder.php', 'CompositeKeyCollection.php'])
+  })
+
+  it('reads a Decimal as the string Prisma prints, without the zeros of a scale', () => {
+    const [cast] = eloquentSupportFiles(
+      [makeModel({ name: 'P', fields: [makeField({ name: 'price', type: 'Decimal' })] })],
+      'App\\Models',
+    )
+    expect(cast?.code).toContain(`class AsDecimal implements CastsAttributes`)
+    expect(cast?.code).toContain(`        if (str_contains($number, '.')) {
+            $number = rtrim(rtrim($number, '0'), '.');
+        }`)
+  })
+
+  it('takes a composite key as an array of every column of it, and refuses a part of one', () => {
+    const [builder] = eloquentSupportFiles(
+      [
+        makeModel({
+          name: 'Pair',
+          fields: [makeField({ name: 'a', type: 'Int' }), makeField({ name: 'b', type: 'Int' })],
+          primaryKey: { name: null, fields: ['a', 'b'] },
+        }),
+      ],
+      'App\\Models',
+    )
+    expect(builder?.code).toContain('class CompositeKeyBuilder extends Builder')
+    for (const method of ['find', 'findMany', 'findOrFail', 'whereKey', 'whereKeyNot']) {
+      expect(builder?.code).toContain(`    public function ${method}(`)
+    }
+    expect(builder?.code).toContain(
+      `        if (! is_array($key) || count($key) !== count($columns) || array_diff($columns, array_keys($key)) !== []) {
+            throw new InvalidArgumentException($this->refusal($key));
+        }`,
+    )
+  })
+
+  it('keys a collection of models with a composite key by the JSON of the key', () => {
+    const [, collection] = eloquentSupportFiles(
+      [
+        makeModel({
+          name: 'Pair',
+          fields: [makeField({ name: 'a', type: 'Int' }), makeField({ name: 'b', type: 'Int' })],
+          primaryKey: { name: null, fields: ['a', 'b'] },
+        }),
+      ],
+      'App\\Models',
+    )
+    expect(collection?.code).toContain('class CompositeKeyCollection extends Collection')
+    expect(collection?.code).toContain(`        ksort($attribute);
+
+        return json_encode(array_map(fn ($value) => is_scalar($value) ? (string) $value : $value, $attribute));`)
+  })
+
+  it('names a model or enum that has the name of a class written beside the models', () => {
+    const pair = makeModel({
+      name: 'CompositeKeyBuilder',
+      fields: [makeField({ name: 'a', type: 'Int' }), makeField({ name: 'b', type: 'Int' })],
+      primaryKey: { name: null, fields: ['a', 'b'] },
+    })
+    const asDecimal: DMMF.DatamodelEnum = { name: 'AsDecimal', dbName: null, values: [] }
+
+    // No Decimal: AsDecimal is not written, and the enum may have the name.
+    expect(eloquentProblems([pair], [asDecimal])).toStrictEqual([
+      'model CompositeKeyBuilder: CompositeKeyBuilder is the query of a model keyed by several columns, written beside the models; rename the model',
+    ])
+  })
+
+  it('names the class, column and relation names Eloquent or PHP would take for something else', () => {
+    const list = makeModel({
+      name: 'list',
+      fields: [
+        autoincrementId,
+        makeField({ name: 'exists', type: 'Boolean' }),
+        makeField({ name: 'avatar', type: 'Bytes' }),
+        makeField({ name: 'hidden', type: 'Boolean', dbName: 'timestamps' }),
+        makeField({ name: 'posts', type: 'Post', kind: 'object', isList: true, relationName: 'A' }),
+        makeField({ name: 'Posts', type: 'Post', kind: 'object', isList: true, relationName: 'B' }),
+      ],
+    })
+    const snake = makeModel({ name: 'user_role', fields: [autoincrementId] })
+    const pascal = makeModel({ name: 'UserRole', fields: [autoincrementId] })
+    const asBytes: DMMF.DatamodelEnum = { name: 'AsBytes', dbName: null, values: [] }
+
+    expect(eloquentProblems([list, snake, pascal], [asBytes])).toStrictEqual([
+      'model list: PHP keeps List for itself and cannot name a class after it; rename the model and @@map the table',
+      'enum AsBytes: AsBytes is the cast of Bytes columns, written beside the models; rename the enum',
+      'model UserRole: its class UserRole is the class of model user_role too, as PHP compares class names without regard to case; rename one of them',
+      "field list.exists: $model->exists is a property of Eloquent's Model, not the column; @map the column to another name",
+      "field list.hidden: $model->timestamps is a property of Eloquent's Model, not the column; @map the column to another name",
+      'field list.Posts: another relation of list has the name but for case, and PHP would take the two methods for one; rename one of them',
     ])
   })
 })

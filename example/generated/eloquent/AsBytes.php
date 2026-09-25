@@ -3,13 +3,14 @@
 namespace App\Models;
 
 use Illuminate\Contracts\Database\Eloquent\CastsAttributes;
+use Illuminate\Contracts\Database\Eloquent\SerializesCastableAttributes;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * A Prisma Bytes column: written as a stream, which PDO binds as a LOB, and read back as the
- * string of its bytes.
+ * A Prisma Bytes column: written as a stream, which PDO binds as a LOB, read back as the string of
+ * its bytes, and serialized as base64.
  */
-class AsBytes implements CastsAttributes
+class AsBytes implements CastsAttributes, SerializesCastableAttributes
 {
     public function get(Model $model, string $key, mixed $value, array $attributes): ?string
     {
@@ -32,5 +33,10 @@ class AsBytes implements CastsAttributes
         rewind($stream);
 
         return $stream;
+    }
+
+    public function serialize(Model $model, string $key, mixed $value, array $attributes): ?string
+    {
+        return $value === null ? null : base64_encode($value);
     }
 }

@@ -1,9 +1,10 @@
 {
-  "description": "The models hekireki-eloquent writes, run against the real Eloquent on SQLite.",
+  "description": "The models hekireki-eloquent writes, run against the real Eloquent on SQLite, PostgreSQL and MySQL.",
   "require": {
     "php": ">=8.2",
     "ext-pdo_sqlite": "*",
     "illuminate/database": "~12.0",
+    "illuminate/events": "~12.0",
     "ramsey/uuid": "^4.7",
     "symfony/uid": "^7.0"
   },

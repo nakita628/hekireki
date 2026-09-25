@@ -15,7 +15,7 @@ export function eloquent(options: GeneratorOptions) {
       })
     }
     const outDir = options.generator.output.value
-    const problems = eloquentProblems(options.dmmf.datamodel.models)
+    const problems = eloquentProblems(options.dmmf.datamodel.models, options.dmmf.datamodel.enums)
     if (problems.length > 0) {
       return yield* new GeneratorConfigError({
         message: `Hekireki-Eloquent cannot write this schema:\n${problems.map((p) => `  - ${p}`).join('\n')}`,

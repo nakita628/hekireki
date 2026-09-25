@@ -1,5 +1,6 @@
 // cspell:disable -- the method names are PHP's, lower-cased and run together.
-// The methods of Eloquent's Model, public and protected, as Laravel 12.69 has them, lower-cased:
+// The methods of Eloquent's Model, public and protected, as Laravel 12.69 has them, and of the
+// HasUuids/HasUlids traits a generated key may use, lower-cased:
 // PHP matches a method name without regard to case, so a relation method of the same name would
 // redeclare one, and either break what Eloquent does with it or fail to load.
 export const ELOQUENT_MODEL_METHODS = new Set(
@@ -85,6 +86,7 @@ export const ELOQUENT_MODEL_METHODS = new Set(
   whenbooted with withoutappends withoutbroadcasting withoutevents withoutrecursion withoutrelation
   withoutrelations withouttimestamps withouttimestampson withouttouching withouttouchingon
   withrelationshipautoloading
+  handleinvaliduniqueid initializehasuniquestringids isvaliduniqueid
 `
     .split(/\s+/u)
     .filter((name) => name !== ''),

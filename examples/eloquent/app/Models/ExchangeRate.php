@@ -3,16 +3,16 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * Composite primary key + two named relations to the same model.
+ * No @id and no single unique field: the pair is what names a row. A Decimal SQLite would hand
+ * back as a float.
  */
-class Follow extends Model
+class ExchangeRate extends Model
 {
-    const KEY_COLUMNS = ['follower_id', 'following_id'];
+    const KEY_COLUMNS = ['base', 'quote'];
 
-    protected $table = 'follows';
+    protected $table = 'exchange_rates';
 
     protected $primaryKey = null;
 
@@ -21,39 +21,14 @@ class Follow extends Model
     public $timestamps = false;
 
     protected $fillable = [
-        'follower_id',
-        'following_id',
-        'since',
+        'base',
+        'quote',
+        'rate',
     ];
 
     protected $casts = [
-        'since' => 'datetime',
+        'rate' => AsDecimal::class,
     ];
-
-    public function save(array $options = [])
-    {
-        if (! $this->exists) {
-            if (! array_key_exists('since', $this->attributes)) {
-                $this->setAttribute('since', $this->freshTimestamp());
-            }
-        }
-
-        return parent::save($options);
-    }
-
-    public function fromDateTime($value)
-    {
-        return empty($value) ? $value : parent::asDateTime($value)->setTimezone('UTC')->format('Y-m-d H:i:s.v');
-    }
-
-    protected function asDateTime($value)
-    {
-        if (is_string($value) && preg_match('/^\d{4}-\d\d-\d\d[ T][\d:.]+$/', $value)) {
-            $value .= '+00:00';
-        }
-
-        return parent::asDateTime($value);
-    }
 
     public function getKey()
     {
@@ -122,15 +97,5 @@ class Follow extends Model
         $this->fireModelEvent('deleted', false);
 
         return true;
-    }
-
-    public function follower(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'follower_id');
-    }
-
-    public function following(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'following_id');
     }
 }
