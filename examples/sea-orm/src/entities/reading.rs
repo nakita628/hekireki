@@ -1,3 +1,4 @@
+use super::prisma_date_time::PrismaDateTime;
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -7,7 +8,7 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub sensor: String,
     #[sea_orm(primary_key, auto_increment = false)]
-    pub at: DateTime,
+    pub at: PrismaDateTime,
     pub value: f64,
 }
 

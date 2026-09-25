@@ -80,9 +80,23 @@ Then each thing the schema promises, as Ecto keeps it:
   refusal is an `Ecto.ConstraintError`.
 - **Timestamps.** `timestamps()` fills `created_at`/`updated_at`, `createdAt`/`updatedAt` and an
   `@updatedAt` alone (`changed_at`, with no inserted-at), and an update bumps each.
+- **DateTime.** A DateTime is kept in `Shop.PrismaDateTime`, which writes and reads it as Prisma
+  Client does: the instant in UTC in milliseconds, on SQLite as the text
+  `2024-02-29T23:59:58.000+00:00`, so a value read back is `~U[2024-02-29 23:59:58.000Z]`,
+  whatever the process's `TZ`. On PostgreSQL and MySQL the generated module says which session
+  time zone to set (`@db.Timestamptz`, `@db.Timetz`, MySQL's `TIMESTAMP`).
+- **An optional `@updatedAt` set to null on insert.** `nil` is the struct's default, so the insert
+  does not count it as a change and fills it with now. To store null, as Prisma Client does for an
+  explicit `null`, give it with `Ecto.Changeset.force_change(changeset, :field, nil)`.
 
 ## Left out
 
+- **One `now()` to an insert.** Ecto calls `autogenerate/0` once to a `timestamps()` and once to
+  an `autogenerate: true` field, so the fields of one insert can be 1 ms apart, where Prisma gives
+  them one `now()`.
+- **A DateTime literal default filled by SQLite.** Prisma Migrate writes it as
+  `DEFAULT '2024-01-15 10:30:00 +00:00'`. Ecto reads such a row (from `insert_all` or raw SQL), but
+  an equality on it matches neither Ecto's nor Prisma's text, and Prisma Client reads it as null.
 - **A Json `@default`.** `prisma db push` writes it into SQLite's `CREATE TABLE` unquoted
   (`DEFAULT {"color": "none"}`), and SQLite refuses the table: a Prisma bug, not the generator's.
 - **A `BigInt` `autoincrement()` key.** On SQLite `prisma db push` makes it `BIGINT NOT NULL

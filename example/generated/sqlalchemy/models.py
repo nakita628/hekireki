@@ -1,14 +1,50 @@
-from sqlalchemy import ARRAY, BigInteger, Column, DateTime, Enum, ForeignKey, Index, Integer, JSON, Numeric, SmallInteger, String, Table, Text, UniqueConstraint, Uuid, func, text
+from sqlalchemy import ARRAY, BigInteger, Column, Dialect, Enum, ForeignKey, Index, Integer, JSON, Numeric, SmallInteger, String, Table, Text, TypeDecorator, UniqueConstraint, Uuid, func, text
+from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from typing import Any, Optional
 from decimal import Decimal as DecimalType
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid as uuid_mod
 import uuid6
 
 
+class UtcDateTime(TypeDecorator[datetime]):
+    """A timestamp without time zone that holds UTC: an aware value is stored in UTC."""
+
+    impl = TIMESTAMP
+    cache_ok = True
+
+    def process_bind_param(self, value: Optional[datetime], dialect: Dialect) -> Optional[datetime]:
+        if value is None or value.tzinfo is None:
+            return value
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+    def process_result_value(self, value: Optional[datetime], dialect: Dialect) -> Optional[datetime]:
+        return None if value is None else value.replace(tzinfo=timezone.utc)
+
+
+class UtcDateTimeTz(TypeDecorator[datetime]):
+    """A timestamptz: a naive value is UTC, not the session's zone, and reads are UTC."""
+
+    impl = TIMESTAMP
+    cache_ok = True
+
+    def __init__(self, precision: Optional[int] = None) -> None:
+        super().__init__(timezone=True, precision=precision)
+
+    def process_bind_param(self, value: Optional[datetime], dialect: Dialect) -> Optional[datetime]:
+        return value if value is None or value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+    def process_result_value(self, value: Optional[datetime], dialect: Dialect) -> Optional[datetime]:
+        return None if value is None else value.astimezone(timezone.utc)
+
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
 class Base(DeclarativeBase):
-    pass
+    type_annotation_map = {datetime: UtcDateTime(precision=3)}
 
 post_to_tag = Table(
     "_PostToTag",
@@ -35,8 +71,8 @@ class User(Base):
     name: Mapped[str]
     role: Mapped[str] = mapped_column(Enum("ADMIN", "EDITOR", "VIEWER", name="role"), default="VIEWER")
     interests: Mapped[list[str]] = mapped_column(ARRAY(String), default=lambda: [])
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(default=utc_now, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(default=utc_now, onupdate=utc_now)
 
     posts: Mapped[list["Post"]] = relationship(cascade="all, delete", passive_deletes=True, back_populates="author")
     comments: Mapped[list["Comment"]] = relationship(back_populates="author")
@@ -57,7 +93,7 @@ class Profile(Base):
     verified: Mapped[bool] = mapped_column(default=False)
     meta: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON(none_as_null=True))
     avatar: Mapped[Optional[bytes]]
-    last_seen: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    last_seen: Mapped[Optional[datetime]] = mapped_column(UtcDateTimeTz(precision=6))
 
     user: Mapped["User"] = relationship(back_populates="profile")
 
@@ -71,7 +107,7 @@ class Post(Base):
     published: Mapped[bool] = mapped_column(default=False)
     view_count: Mapped[int] = mapped_column(default=0)
     author_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE", onupdate="CASCADE"))
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(default=utc_now, server_default=func.now())
 
     __table_args__ = (
         Index("posts_author_id_idx", "author_id"),
@@ -96,7 +132,7 @@ class Comment(Base):
     body: Mapped[str]
     post_id: Mapped[str] = mapped_column(ForeignKey("posts.id", ondelete="CASCADE", onupdate="CASCADE"))
     author_id: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL", onupdate="CASCADE"))
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(default=utc_now, server_default=func.now())
 
     __table_args__ = (
         Index("comments_post_id_created_at_idx", "post_id", "created_at"),
@@ -110,7 +146,7 @@ class Follow(Base):
 
     follower_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True)
     following_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True)
-    since: Mapped[datetime] = mapped_column(server_default=func.now())
+    since: Mapped[datetime] = mapped_column(default=utc_now, server_default=func.now())
 
     follower: Mapped["User"] = relationship(foreign_keys=[follower_id], back_populates="following")
     following: Mapped["User"] = relationship(foreign_keys=[following_id], back_populates="followers")
@@ -135,7 +171,7 @@ class Order(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT", onupdate="CASCADE"))
     total: Mapped[DecimalType] = mapped_column(Numeric(precision=12, scale=2))
-    placed_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    placed_at: Mapped[datetime] = mapped_column(default=utc_now, server_default=func.now())
 
     user: Mapped["User"] = relationship(back_populates="orders")
     items: Mapped[list["OrderItem"]] = relationship(cascade="all, delete", passive_deletes=True, back_populates="order")

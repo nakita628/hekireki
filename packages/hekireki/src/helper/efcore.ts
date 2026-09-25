@@ -43,7 +43,6 @@ function exprRef(fullName: string) {
 
 const CS = {
   BitArray: 'System.Collections.BitArray',
-  ArgumentOutOfRangeException: 'System.ArgumentOutOfRangeException',
   CancellationToken: 'System.Threading.CancellationToken',
   Convert: 'System.Convert',
   CultureInfo: 'System.Globalization.CultureInfo',
@@ -59,11 +58,13 @@ const CS = {
   DbSet: 'Microsoft.EntityFrameworkCore.DbSet',
   DeleteBehavior: 'Microsoft.EntityFrameworkCore.DeleteBehavior',
   Dictionary: 'System.Collections.Generic.Dictionary',
+  Enum: 'System.Enum',
   EntityEntry: 'Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry',
   EntityState: 'Microsoft.EntityFrameworkCore.EntityState',
   ForeignKeyIndexConvention:
     'Microsoft.EntityFrameworkCore.Metadata.Conventions.ForeignKeyIndexConvention',
   Guid: 'System.Guid',
+  HashCode: 'System.HashCode',
   ICollection: 'System.Collections.Generic.ICollection',
   List: 'System.Collections.Generic.List',
   ModelBuilder: 'Microsoft.EntityFrameworkCore.ModelBuilder',
@@ -72,7 +73,6 @@ const CS = {
   NpgsqlDbContextOptionsBuilder:
     'Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure.NpgsqlDbContextOptionsBuilder',
   NpgsqlInet: 'NpgsqlTypes.NpgsqlInet',
-  NumberStyles: 'System.Globalization.NumberStyles',
   NpgsqlValueGenerationStrategy:
     'Npgsql.EntityFrameworkCore.PostgreSQL.Metadata.NpgsqlValueGenerationStrategy',
   PgName: 'NpgsqlTypes.PgName',
@@ -81,6 +81,7 @@ const CS = {
   TimeOnly: 'System.TimeOnly',
   TimeSpan: 'System.TimeSpan',
   Ulid: 'System.Ulid',
+  ValueComparer: 'Microsoft.EntityFrameworkCore.ChangeTracking.ValueComparer',
   ValueConverter: 'Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter',
   ValueGenerator: 'Microsoft.EntityFrameworkCore.ValueGeneration.ValueGenerator',
 } as const
@@ -312,7 +313,7 @@ const GENERATED_CONTEXT_MEMBERS = [
   'ConfigureConventionsPartial',
   'MapEnums',
   'OnModelCreatingPartial',
-  'StampTimestamps',
+  'StampUpdatedAt',
 ]
 
 type Names = {
@@ -323,13 +324,14 @@ type Names = {
   readonly properties: ReadonlyMap<string, ReadonlyMap<string, string>>
   readonly enumMembers: ReadonlyMap<string, ReadonlyMap<string, string>>
   readonly dbSets: ReadonlyMap<string, string>
-  readonly generators: ReadonlyMap<string, string>
+  /** The `file` classes of the context file: value generators, converters and comparers. */
+  readonly fileClasses: ReadonlyMap<string, string>
 }
 
 function planNames(
   models: readonly DMMF.Model[],
   enums: readonly DMMF.DatamodelEnum[],
-  generatorKeys: readonly string[],
+  fileClasses: readonly { readonly key: string; readonly candidate: string }[],
   options: { readonly namespace: string; readonly context: string },
 ): Names {
   // Each type is written to `<Name>.cs` beside the others, so type names are unique regardless of
@@ -338,7 +340,7 @@ function planNames(
     [
       ...models.map((m) => ({ key: `model:${m.name}`, candidate: pascalCase(m.name) })),
       ...enums.map((e) => ({ key: `enum:${e.name}`, candidate: pascalCase(e.name) })),
-      ...generatorKeys.map((key) => ({ key: `generator:${key}`, candidate: key })),
+      ...fileClasses.map(({ key, candidate }) => ({ key: `file:${key}`, candidate })),
     ],
     [options.context],
     (name) => name.toLowerCase(),
@@ -350,7 +352,7 @@ function planNames(
     context: options.context,
     classes,
     enums: new Map(enums.map((e) => [e.name, typeName(`enum:${e.name}`)])),
-    generators: new Map(generatorKeys.map((key) => [key, typeName(`generator:${key}`)])),
+    fileClasses: new Map(fileClasses.map(({ key }) => [key, typeName(`file:${key}`)])),
     // A member cannot share its class's name, and one named like a member of object would hide it.
     properties: new Map(
       models.map((model) => [
@@ -433,7 +435,7 @@ function lengthArg(args: readonly string[]) {
 }
 
 /** The datasource providers the generated DbContext is written for. */
-type Provider = 'postgresql' | 'mysql' | 'sqlite'
+export type Provider = 'postgresql' | 'mysql' | 'sqlite'
 
 function fieldMapping(field: DMMF.Field, names: Names, provider: Provider) {
   if (field.kind === 'enum') {
@@ -611,7 +613,7 @@ function mysqlNativeMapping(nativeName: string, args: readonly string[]) {
         'timestamp',
       )
     case 'Date':
-      return mapping(typeRef(CS.DateOnly), true, [], null, 'date')
+      return mapping(typeRef(CS.DateOnly), true, [columnType('date')], null, 'date')
     case 'Time':
       return mapping(typeRef(CS.TimeOnly), true, [columnType(`time(${precision})`)], null, 'time')
     default:
@@ -654,26 +656,35 @@ function sqliteMapping(type: string) {
 }
 
 /**
- * The converter of `PrismaValues` a property of this kind is stored through, so that it holds what
- * Prisma Client writes: the UTC instant to the millisecond, and on SQLite in Prisma's text form.
+ * The value converter a property of this kind is stored through, so that it holds what Prisma
+ * Client writes whatever `DateTimeKind` the caller's value has: the UTC instant — a local
+ * `DateTime` converted, any other taken as UTC — and read back marked `Utc`. The context file
+ * writes each one as a `file` class of this name.
  *
- * @param temporal - The kind of the column.
+ * - `UtcClockConverter`: a column without a time zone (PostgreSQL `timestamp`, MySQL `datetime` and
+ *   `timestamp`) holds the UTC clock, written `Unspecified` since Npgsql refuses a `Utc` value there.
+ * - `UtcConverter`: a PostgreSQL `timestamptz`, which Npgsql writes only from a `Utc` value.
+ * - `UtcTextConverter`: SQLite keeps the text Prisma writes, `2030-01-02T03:04:05.678+00:00`, which
+ *   compares and sorts as text beside Prisma's own rows.
+ * - `UtcClockListConverter` / `UtcListConverter`: a `DateTime[]`, converted as a whole list, since
+ *   Npgsql does not apply an element's converter to an array.
+ * - `DateOnlyDateTimeConverter` / `TimeOnlyTimeSpanConverter`: MySQL's provider binds `DateOnly` and
+ *   `TimeOnly` to nothing, and a `date` or `time` column as `DateTime` or `TimeSpan`.
+ *
+ * @param clr - The property's mapping.
+ * @param isList - Whether the property is a list.
  * @param provider - The datasource provider.
- * @returns The converter's field name, or null for a date, which has no zone and no fraction.
+ * @returns The converter's class key, or null for a property stored as it is.
  */
-function dateConverter(temporal: TemporalKind | null, provider: Provider) {
-  switch (temporal) {
-    case 'timestamp':
-      return provider === 'sqlite' ? 'DateTimeText' : 'DateTimeUtcClock'
-    case 'timestamptz':
-      return 'DateTimeUtc'
-    case 'time':
-      return 'TimeOnlyMilliseconds'
-    case 'timetz':
-      return 'DateTimeOffsetUtc'
-    default:
-      return null
+function dateConverter(clr: ClrMapping, isList: boolean, provider: Provider) {
+  if (clr.temporal === 'timestamp') {
+    if (provider === 'sqlite') return 'UtcTextConverter'
+    return isList ? 'UtcClockListConverter' : 'UtcClockConverter'
   }
+  if (clr.temporal === 'timestamptz') return isList ? 'UtcListConverter' : 'UtcConverter'
+  if (provider !== 'mysql') return null
+  if (clr.temporal === 'date') return 'DateOnlyDateTimeConverter'
+  return clr.temporal === 'time' ? 'TimeOnlyTimeSpanConverter' : null
 }
 
 type ValueGeneratorKind =
@@ -681,6 +692,7 @@ type ValueGeneratorKind =
   | { readonly kind: 'ulid' }
   | { readonly kind: 'cuid'; readonly version: 1 | 2 }
   | { readonly kind: 'nanoid'; readonly size: number }
+  | { readonly kind: 'now'; readonly clr: 'DateTime' | 'DateOnly' | 'TimeOnly' }
 
 function generatorKey(generator: ValueGeneratorKind) {
   if (generator.kind === 'uuid') {
@@ -688,6 +700,13 @@ function generatorKey(generator: ValueGeneratorKind) {
   }
   if (generator.kind === 'ulid') return 'UlidGenerator'
   if (generator.kind === 'cuid') return generator.version === 2 ? 'Cuid2Generator' : 'CuidGenerator'
+  if (generator.kind === 'now') {
+    return generator.clr === 'DateTime'
+      ? 'UtcNowGenerator'
+      : generator.clr === 'DateOnly'
+        ? 'UtcTodayGenerator'
+        : 'UtcTimeOfDayGenerator'
+  }
   return `Nanoid${generator.size}Generator`
 }
 
@@ -709,6 +728,14 @@ function valueGeneratorOf(field: DMMF.Field, clr: ClrMapping): ValueGeneratorKin
       return isString
         ? { kind: 'nanoid', size: typeof arg === 'number' && arg > 0 ? arg : 21 }
         : null
+    // Prisma Client sends now() itself, the instant of the query in UTC; the DEFAULT the database
+    // has would take the session's time zone for a column without one.
+    case 'now':
+      if (clr.temporal === 'timestamp' || clr.temporal === 'timestamptz') {
+        return { kind: 'now', clr: 'DateTime' }
+      }
+      if (clr.temporal === 'date') return { kind: 'now', clr: 'DateOnly' }
+      return clr.temporal === 'time' ? { kind: 'now', clr: 'TimeOnly' } : null
     default:
       return null
   }
@@ -808,9 +835,18 @@ type DefaultPlan =
   | { readonly kind: 'sql'; readonly sql: string }
   | { readonly kind: 'generated' }
   | { readonly kind: 'autoincrement' }
-  | { readonly kind: 'generator'; readonly generator: ValueGeneratorKind }
-  /** A generated value the property starts out with, the database having no default for it. */
-  | { readonly kind: 'initializer'; readonly generator: ValueGeneratorKind }
+  /** A value generated on insert; the column's DEFAULT is `sql` when it is given. */
+  | {
+      readonly kind: 'generator'
+      readonly generator: ValueGeneratorKind
+      readonly sql: string | null
+    }
+  /** A generated value the property starts out with; the column's DEFAULT is `sql` when given. */
+  | {
+      readonly kind: 'initializer'
+      readonly generator: ValueGeneratorKind
+      readonly sql: string | null
+    }
 
 function defaultPlan(
   field: DMMF.Field,
@@ -823,18 +859,21 @@ function defaultPlan(
   if (isFunctionDefault(def)) {
     const [arg] = def.args
     if (def.name === 'autoincrement') return { kind: 'autoincrement' }
-    if (def.name === 'now') return { kind: 'sql', sql: 'CURRENT_TIMESTAMP' }
     if (def.name === 'dbgenerated') {
       return typeof arg === 'string' && arg.length > 0
         ? { kind: 'sql', sql: arg }
         : { kind: 'generated' }
     }
+    // now() keeps the DEFAULT Prisma Migrate writes, for a row inserted some other way.
+    const sql = def.name === 'now' ? 'CURRENT_TIMESTAMP' : null
     const generator = valueGeneratorOf(field, clr)
-    if (!generator) return null
+    if (!generator) return sql === null ? null : { kind: 'sql', sql }
     // A value generator fires for a property left null. That is what leaving a required field out
     // means, but an optional field can be set to null on purpose, which Prisma stores as NULL; so an
     // optional field starts out with its generated value instead, and null stays NULL.
-    return field.isRequired ? { kind: 'generator', generator } : { kind: 'initializer', generator }
+    return field.isRequired
+      ? { kind: 'generator', generator, sql }
+      : { kind: 'initializer', generator, sql }
   }
   // A timestamp literal means one thing to Prisma Client and another to the DEFAULT clause Prisma
   // Migrate writes for it, so the column keeps the literal verbatim while the property holds what
@@ -957,6 +996,7 @@ function joinBlocks(blocks: readonly (readonly string[])[]) {
 
 /** Everything the files are written from: the schema, what it implies, and the C# names. */
 type EfCorePlan = {
+  readonly provider: Provider
   readonly names: Names
   readonly models: readonly DMMF.Model[]
   readonly enums: readonly DMMF.DatamodelEnum[]
@@ -970,11 +1010,11 @@ function scalarFields(model: DMMF.Model) {
 }
 
 function fieldPlan(plan: EfCorePlan, field: DMMF.Field) {
-  const clr = postgresMapping(field, plan.names)
+  const clr = fieldMapping(field, plan.names, plan.provider)
   return { clr, def: defaultPlan(field, clr, plan.names, plan.enums) }
 }
 
-function valueGenerators(plan: Omit<EfCorePlan, 'names'> & { readonly names: Names }) {
+function valueGenerators(plan: EfCorePlan) {
   return [
     ...new Map(
       plan.models.flatMap((model) =>
@@ -989,11 +1029,30 @@ function valueGenerators(plan: Omit<EfCorePlan, 'names'> & { readonly names: Nam
   ]
 }
 
+function dateConverters(plan: EfCorePlan) {
+  return [
+    ...new Set(
+      plan.models.flatMap((model) =>
+        scalarFields(model).flatMap((field) => {
+          const converter = dateConverter(fieldPlan(plan, field).clr, field.isList, plan.provider)
+          return converter === null ? [] : [converter]
+        }),
+      ),
+    ),
+  ]
+}
+
+// Npgsql maps an enum to the PostgreSQL enum type; MySQL and SQLite hold its label as text, which
+// EF Core reads and writes through a converter of each enum.
+function enumConverters(plan: EfCorePlan) {
+  return plan.provider === 'postgresql' ? [] : plan.enums
+}
+
 /**
  * Reads the schema into what the files are written from.
  *
  * @param datamodel - The DMMF datamodel.
- * @param options - The namespace and the DbContext class name.
+ * @param options - The namespace, the DbContext class name and the datasource provider.
  * @returns The plan the file writers take.
  */
 export function planEfCore(
@@ -1002,24 +1061,37 @@ export function planEfCore(
     readonly enums: readonly DMMF.DatamodelEnum[]
     readonly indexes?: readonly DMMF.Index[]
   },
-  options: { readonly namespace: string; readonly context: string },
+  options: { readonly namespace: string; readonly context: string; readonly provider: Provider },
 ): EfCorePlan {
   const indexesOf = (model: DMMF.Model) => modelIndexes(model, datamodel.indexes ?? [])
   const schema = {
+    provider: options.provider,
     models: datamodel.models,
     enums: datamodel.enums,
     indexesOf,
     foreignKeys: foreignKeys(datamodel.models, indexesOf),
     manyToMany: manyToManyRelations(datamodel.models),
   }
-  // The value generators become classes of their own, so their names join the other type names —
-  // and which of them the schema needs is only known once its fields have been read.
+  // The value generators and converters become classes of their own, so their names join the other
+  // type names — and which of them the schema needs is only known once its fields have been read.
   const preliminary = {
     ...schema,
     names: planNames(datamodel.models, datamodel.enums, [], options),
   }
-  const generatorKeys = valueGenerators(preliminary).map(([key]) => key)
-  return { ...schema, names: planNames(datamodel.models, datamodel.enums, generatorKeys, options) }
+  const converters = dateConverters(preliminary)
+  const fileClasses = [
+    ...valueGenerators(preliminary).map(([key]) => key),
+    ...converters,
+    ...(converters.some((key) => key.endsWith('ListConverter')) ? ['DateTimeListComparer'] : []),
+  ].map((key) => ({ key, candidate: key }))
+  const enumClasses = enumConverters(preliminary).map((e) => ({
+    key: `enum:${e.name}`,
+    candidate: `${pascalCase(e.name)}Converter`,
+  }))
+  return {
+    ...schema,
+    names: planNames(datamodel.models, datamodel.enums, [...fileClasses, ...enumClasses], options),
+  }
 }
 
 function generatedTypes(plan: EfCorePlan) {
@@ -1027,7 +1099,7 @@ function generatedTypes(plan: EfCorePlan) {
     plan.names.context,
     ...plan.names.classes.values(),
     ...plan.names.enums.values(),
-    ...plan.names.generators.values(),
+    ...plan.names.fileClasses.values(),
   ])
 }
 
@@ -1107,8 +1179,9 @@ export function entityFile(plan: EfCorePlan, model: DMMF.Model) {
 }
 
 /**
- * The C# enum of a Prisma enum. Each member names its PostgreSQL label through `[PgName]`, which
- * is how Npgsql maps it — the label is the value's `@map`, or its name.
+ * The C# enum of a Prisma enum. On PostgreSQL each member names its label through `[PgName]`, which
+ * is how Npgsql maps it — the label is the value's `@map`, or its name; on MySQL and SQLite the
+ * context file's converter of the enum holds the labels.
  *
  * @param plan - The plan.
  * @param e - The enum.
@@ -1117,7 +1190,9 @@ export function entityFile(plan: EfCorePlan, model: DMMF.Model) {
 export function enumFile(plan: EfCorePlan, e: DMMF.DatamodelEnum) {
   const name = enumName(plan.names, e.name)
   const members = e.values.map((value) => [
-    `    [${typeRef(CS.PgName)}(${csharpString(value.dbName ?? value.name)})]`,
+    ...(plan.provider === 'postgresql'
+      ? [`    [${typeRef(CS.PgName)}(${csharpString(value.dbName ?? value.name)})]`]
+      : []),
     `    ${plan.names.enumMembers.get(e.name)?.get(value.name) ?? value.name},`,
   ])
   const body = [`public enum ${name}`, '{', ...joinBlocks(members), '}', ''].join('\n')
@@ -1138,15 +1213,20 @@ function valueGenerationCalls(
 ) {
   if (def === null) return isConventionallyGenerated ? ['.ValueGeneratedNever()'] : []
   if (def.kind === 'autoincrement') {
-    return [...(isConventionallyGenerated ? [] : ['.ValueGeneratedOnAdd()']), '.UseSerialColumn()']
+    return [
+      ...(isConventionallyGenerated ? [] : ['.ValueGeneratedOnAdd()']),
+      ...(plan.provider === 'postgresql' ? ['.UseSerialColumn()'] : []),
+    ]
   }
   if (def.kind === 'generated') return ['.ValueGeneratedOnAdd()']
   if (def.kind === 'generator') {
-    return [`.HasValueGenerator<${plan.names.generators.get(generatorKey(def.generator))}>()`]
+    return [`.HasValueGenerator<${plan.names.fileClasses.get(generatorKey(def.generator))}>()`]
   }
   // The property starts out holding its default, so EF Core writes whatever it holds — an explicit
   // 0 or false included — instead of leaving a CLR default to the database.
-  if (def.kind === 'literal') return ['.ValueGeneratedNever()']
+  if (def.kind === 'literal' || (def.kind === 'initializer' && def.sql !== null)) {
+    return ['.ValueGeneratedNever()']
+  }
   return []
 }
 
@@ -1174,14 +1254,27 @@ function propertyConfig(
   // Npgsql makes an integer property that is generated on insert an identity column; one the
   // database fills some other way (a trigger, say) is left as the column Prisma creates.
   const isTriggerFilledInteger =
-    def?.kind === 'generated' && !field.isList && ['int', 'long', 'short'].includes(clr.clr)
+    plan.provider === 'postgresql' &&
+    def?.kind === 'generated' &&
+    !field.isList &&
+    ['int', 'long', 'short'].includes(clr.clr)
+  const dateKey = dateConverter(clr, field.isList, plan.provider)
+  const converter =
+    dateKey ??
+    (field.kind === 'enum' && plan.provider !== 'postgresql' ? `enum:${field.type}` : null)
+  const comparer = dateKey?.endsWith('ListConverter')
+    ? `, ${plan.names.fileClasses.get('DateTimeListComparer')}`
+    : ''
   const calls = [
     ...valueGeneration,
     ...facets.filter((f) => !f.startsWith('.HasColumnType')),
     ...(def?.kind === 'literal' && def.sql === null ? [`.HasDefaultValue(${def.expr})`] : []),
-    ...((def?.kind === 'literal' || def?.kind === 'sql') && def.sql !== null
+    ...(def !== null && 'sql' in def && def.sql !== null
       ? [`.HasDefaultValueSql(${csharpString(def.sql)})`]
       : []),
+    ...(converter === null
+      ? []
+      : [`.HasConversion<${plan.names.fileClasses.get(converter)}${comparer}>()`]),
     ...facets.filter((f) => f.startsWith('.HasColumnType')),
     ...(column === name ? [] : [`.HasColumnName(${csharpString(column)})`]),
     ...(isTriggerFilledInteger
@@ -1303,10 +1396,13 @@ function indexConfig(
     )
   }
   const descending = index.fields.map((f) => f.sortOrder === 'desc')
-  const method = index.algorithm === undefined ? undefined : INDEX_METHODS[index.algorithm]
+  // An index method and operator classes are Npgsql's; Prisma takes them only on PostgreSQL.
+  const isPostgres = plan.provider === 'postgresql'
+  const method =
+    index.algorithm === undefined || !isPostgres ? undefined : INDEX_METHODS[index.algorithm]
   // Npgsql writes no operator class for a column given an empty one: that column keeps the default.
   const operators = index.fields.map((f) =>
-    f.operatorClass === undefined
+    f.operatorClass === undefined || !isPostgres
       ? ''
       : operatorClassName(
           f.operatorClass,
@@ -1377,14 +1473,12 @@ function entityConfig(plan: EfCorePlan, model: DMMF.Model) {
   ]
 }
 
+// A DateTime is written through its column's converter, which takes the UTC instant as it is.
 function updatedAtValue(clr: ClrMapping) {
-  if (clr.temporal === 'timestamptz') return 'now'
   if (clr.temporal === 'date') return `${exprRef(CS.DateOnly)}.FromDateTime(now)`
   if (clr.temporal === 'time') return `${exprRef(CS.TimeOnly)}.FromDateTime(now)`
   if (clr.temporal === 'timetz') return `new ${typeRef(CS.DateTimeOffset)}(now)`
-  // Npgsql writes a DateTime to a column without a time zone only when it is not marked UTC; the
-  // value is UTC all the same, as Prisma writes it.
-  return `${exprRef(CS.DateTime)}.SpecifyKind(now, ${exprRef(CS.DateTimeKind)}.Unspecified)`
+  return 'now'
 }
 
 // Prisma sets an @updatedAt field on every write of the row, unless the write sets it.
@@ -1445,6 +1539,10 @@ function nextValue(generator: ValueGeneratorKind) {
       ? `new ${typeRef(CS.Cuid2)}().ToString()`
       : `${exprRef(CS.Cuid)}.NewCuid().ToString()`
   }
+  if (generator.kind === 'now') {
+    const now = `${exprRef(CS.DateTime)}.UtcNow`
+    return generator.clr === 'DateTime' ? now : `${exprRef(CS[generator.clr])}.FromDateTime(${now})`
+  }
   // Nano ID's alphabet: the 64 URL-safe characters, drawn from a cryptographic source.
   return `${exprRef(CS.RandomNumberGenerator)}.GetString("_-0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ", ${generator.size})`
 }
@@ -1458,7 +1556,11 @@ function withCuidV1(generator: ValueGeneratorKind, lines: readonly string[]) {
 
 function generatorClass(name: string, generator: ValueGeneratorKind) {
   const valueType =
-    generator.kind === 'uuid' && generator.clr === 'Guid' ? typeRef(CS.Guid) : 'string'
+    generator.kind === 'now'
+      ? typeRef(CS[generator.clr])
+      : generator.kind === 'uuid' && generator.clr === 'Guid'
+        ? typeRef(CS.Guid)
+        : 'string'
   const next = nextValue(generator)
   const nextLine = `    public override ${valueType} Next(${typeRef(CS.EntityEntry)} entry) => ${next};`
   return [
@@ -1471,10 +1573,106 @@ function generatorClass(name: string, generator: ValueGeneratorKind) {
   ]
 }
 
+// A DateTime as the instant it names in UTC: a local one converted, any other taken as UTC.
+function localToUtc(value: string) {
+  return `${value}.Kind == ${exprRef(CS.DateTimeKind)}.Local ? ${value}.ToUniversalTime() : ${value}`
+}
+
+// The value's type, the column's, and each direction of a `dateConverter` class.
+function dateConversion(key: string) {
+  const dateTime = exprRef(CS.DateTime)
+  const kind = exprRef(CS.DateTimeKind)
+  const dateTimeList = `${typeRef(CS.List)}<${typeRef(CS.DateTime)}>`
+  switch (key) {
+    case 'UtcClockConverter':
+      return [
+        typeRef(CS.DateTime),
+        typeRef(CS.DateTime),
+        `v => ${dateTime}.SpecifyKind(${localToUtc('v')}, ${kind}.Unspecified)`,
+        `v => ${dateTime}.SpecifyKind(v, ${kind}.Utc)`,
+      ]
+    case 'UtcConverter':
+      return [
+        typeRef(CS.DateTime),
+        typeRef(CS.DateTime),
+        `v => ${dateTime}.SpecifyKind(${localToUtc('v')}, ${kind}.Utc)`,
+        'v => v',
+      ]
+    case 'UtcTextConverter': {
+      const culture = `${exprRef(CS.CultureInfo)}.InvariantCulture`
+      const styles = exprRef(CS.DateTimeStyles)
+      return [
+        typeRef(CS.DateTime),
+        'string',
+        `v => (${localToUtc('v')}).ToString(${csharpString("yyyy-MM-dd'T'HH:mm:ss.fff'+00:00'")}, ${culture})`,
+        `v => ${dateTime}.Parse(v, ${culture}, ${styles}.AdjustToUniversal | ${styles}.AssumeUniversal)`,
+      ]
+    }
+    case 'UtcClockListConverter':
+      return [
+        dateTimeList,
+        dateTimeList,
+        `v => v.Select(d => ${dateTime}.SpecifyKind(${localToUtc('d')}, ${kind}.Unspecified)).ToList()`,
+        `v => v.Select(d => ${dateTime}.SpecifyKind(d, ${kind}.Utc)).ToList()`,
+      ]
+    case 'UtcListConverter':
+      return [
+        dateTimeList,
+        dateTimeList,
+        `v => v.Select(d => ${dateTime}.SpecifyKind(${localToUtc('d')}, ${kind}.Utc)).ToList()`,
+        'v => v',
+      ]
+    case 'DateOnlyDateTimeConverter':
+      return [
+        typeRef(CS.DateOnly),
+        typeRef(CS.DateTime),
+        `v => v.ToDateTime(${exprRef(CS.TimeOnly)}.MinValue)`,
+        `v => ${exprRef(CS.DateOnly)}.FromDateTime(v)`,
+      ]
+    default:
+      return [
+        typeRef(CS.TimeOnly),
+        typeRef(CS.TimeSpan),
+        'v => v.ToTimeSpan()',
+        `v => ${exprRef(CS.TimeOnly)}.FromTimeSpan(v)`,
+      ]
+  }
+}
+
+// A class that only hands its base the expressions it is built from.
+function fileClass(name: string, base: string, args: readonly string[]) {
+  return [
+    `file sealed class ${name} : ${base}`,
+    '{',
+    `    public ${name}()`,
+    `        : base(${args.join(', ')})`,
+    '    {',
+    '    }',
+    '}',
+  ]
+}
+
+// An enum as the label Prisma stores, the value's `@map` or its name; any other text is left to
+// Enum.Parse, which fails on one that names no member.
+function enumConverter(plan: EfCorePlan, name: string, e: DMMF.DatamodelEnum) {
+  const enumType = generatedRef(plan.names, enumName(plan.names, e.name))
+  const members = e.values.map((value) => ({
+    member: `${exprRef(enumType)}.${plan.names.enumMembers.get(e.name)?.get(value.name) ?? value.name}`,
+    label: csharpString(value.dbName ?? value.name),
+  }))
+  const toLabel = members.map(({ member, label }) => `v == ${member} ? ${label} : `).join('')
+  const fromLabel = members.map(({ member, label }) => `v == ${label} ? ${member} : `).join('')
+  return fileClass(name, `${typeRef(CS.ValueConverter)}<${typeRef(enumType)}, string>`, [
+    `v => ${toLabel}v.ToString()`,
+    `v => ${fromLabel}${exprRef(CS.Enum)}.Parse<${typeRef(enumType)}>(v)`,
+  ])
+}
+
 /**
  * The DbContext: a DbSet per model, the Fluent API mapping of every model onto the tables Prisma
- * Migrate creates, the enum mappings Npgsql needs, @updatedAt, and the value generators of
- * `uuid()`, `ulid()`, `cuid()` and `nanoid()`.
+ * Migrate creates, the enum mappings Npgsql needs (converters to the labels on MySQL and SQLite),
+ * `@updatedAt`, the value generators of `uuid()`, `ulid()`, `cuid()`, `nanoid()` and `now()`, and
+ * the converters that store a date or time as Prisma Client does.
  *
  * @param plan - The plan.
  * @returns The file, as `{ fileName, code }`.
@@ -1493,12 +1691,15 @@ export function contextFile(plan: EfCorePlan) {
     ),
     '    }',
   ]
-  const enumMappings = [
-    ...mapEnums('npgsql', CS.NpgsqlDbContextOptionsBuilder),
-    '',
-    ...mapEnums('dataSource', CS.NpgsqlDataSourceBuilder),
-    '',
-  ]
+  const isPostgres = plan.provider === 'postgresql'
+  const enumMappings = isPostgres
+    ? [
+        ...mapEnums('npgsql', CS.NpgsqlDbContextOptionsBuilder),
+        '',
+        ...mapEnums('dataSource', CS.NpgsqlDataSourceBuilder),
+        '',
+      ]
+    : []
   const updatedAt = stampUpdatedAt(plan)
   const classBody = [
     `public partial class ${context} : ${typeRef(CS.DbContext)}`,
@@ -1528,10 +1729,12 @@ export function contextFile(plan: EfCorePlan) {
     ...joinBlocks([
       // MapEnum alone creates each type with its labels sorted, while PostgreSQL orders enum values
       // as they are declared; this states Prisma's declaration order.
-      plan.enums.map(
-        (e) =>
-          `        modelBuilder.HasPostgresEnum<${enumType(e)}>(name: ${csharpString(e.dbName ?? e.name)});`,
-      ),
+      isPostgres
+        ? plan.enums.map(
+            (e) =>
+              `        modelBuilder.HasPostgresEnum<${enumType(e)}>(name: ${csharpString(e.dbName ?? e.name)});`,
+          )
+        : [],
       ...plan.models.map((model) => entityConfig(plan, model)),
       ['        OnModelCreatingPartial(modelBuilder);'],
     ]),
@@ -1542,10 +1745,38 @@ export function contextFile(plan: EfCorePlan) {
     '}',
     '',
   ].join('\n')
-  const generators = valueGenerators(plan).map(([key, generator]) =>
-    generatorClass(names.generators.get(key) ?? key, generator).join('\n'),
-  )
-  const body = generators.length > 0 ? `${classBody}\n${generators.join('\n\n')}\n` : classBody
+  const fileClassName = (key: string) => names.fileClasses.get(key) ?? key
+  const converters = dateConverters(plan)
+  const lists = converters.some((key) => key.endsWith('ListConverter'))
+  const fileClasses = [
+    ...valueGenerators(plan).map(([key, generator]) =>
+      generatorClass(fileClassName(key), generator),
+    ),
+    ...converters.map((key) => {
+      const [value, column, toColumn, fromColumn] = dateConversion(key)
+      return fileClass(fileClassName(key), `${typeRef(CS.ValueConverter)}<${value}, ${column}>`, [
+        toColumn,
+        fromColumn,
+      ])
+    }),
+    // A list of DateTime compared, hashed and copied element by element, as EF Core does a list
+    // it converts nothing of.
+    ...(lists
+      ? [
+          fileClass(
+            fileClassName('DateTimeListComparer'),
+            `${typeRef(CS.ValueComparer)}<${typeRef(CS.List)}<${typeRef(CS.DateTime)}>>`,
+            [
+              '(l, r) => l == null ? r == null : r != null && l.SequenceEqual(r)',
+              `v => v.Aggregate(0, (h, d) => ${exprRef(CS.HashCode)}.Combine(h, d))`,
+              'v => v.ToList()',
+            ],
+          ),
+        ]
+      : []),
+    ...enumConverters(plan).map((e) => enumConverter(plan, fileClassName(`enum:${e.name}`), e)),
+  ].map((lines) => lines.join('\n'))
+  const body = fileClasses.length > 0 ? `${classBody}\n${fileClasses.join('\n\n')}\n` : classBody
   const contextMembers = new Map(
     [...names.dbSets.values(), ...DB_CONTEXT_MEMBERS, ...GENERATED_CONTEXT_MEMBERS].map(
       (member) => [member, null] as const,
@@ -1558,7 +1789,8 @@ export function contextFile(plan: EfCorePlan) {
       types: generatedTypes(plan),
       // The extension methods — UseNpgsql, HasPostgresEnum, ToTable, HasColumnType, ... — live in
       // this namespace, whether or not a type from it is named here.
-      usings: ['Microsoft.EntityFrameworkCore'],
+      // Select, ToList and the rest of LINQ, for a converter of a list.
+      usings: ['Microsoft.EntityFrameworkCore', ...(lists ? ['System.Linq'] : [])],
       membersAt: (offset) => (offset < classBody.length ? contextMembers : new Map()),
     }),
   }

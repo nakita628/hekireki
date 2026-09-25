@@ -17,7 +17,7 @@ object DefaultsTable : IdTable<Int>("\"Defaults\"") {
     val zoned = pgTimestamptz("zoned", 6).default(Instant.parse("2020-01-01T03:34:56.789Z"))
     val day = pgDate("day").databaseDefault("'2020-01-01 01:00:00 +09:00'") { LocalDate.parse("2019-12-31") }
     val clock = pgTime("clock", 3).databaseDefault("'2020-01-01 09:30:00 +09:00'") { LocalTime.parse("00:30:00") }
-    val zonedClock = pgTimetz("zoned_clock", 3).databaseDefault("'2020-01-01 09:30:00.500 +09:00'")
+    val zonedClock = pgTimetz("zoned_clock", 3).databaseDefault("'2020-01-01 09:30:00.500 +09:00'") { OffsetTime.parse("00:30:00.5Z") }
     val stampedOn = pgDate("stamped_on").databaseDefault("CURRENT_TIMESTAMP") { LocalDate.now(ZoneOffset.UTC) }
     val stampedAt =
         pgTime("stamped_at", 3).databaseDefault("CURRENT_TIMESTAMP") { LocalTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MILLIS) }

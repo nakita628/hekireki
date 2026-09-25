@@ -89,7 +89,7 @@ function pgNativeType(name: string, args: readonly string[]) {
     case 'Time':
       return args[0] ? `utcTime({ precision: ${args[0]} })` : 'utcTime()'
     case 'Timetz':
-      return `utcTime({ ${args[0] ? `precision: ${args[0]}, ` : ''}withTimezone: true })`
+      return args[0] ? `utcTimetz({ precision: ${args[0]} })` : 'utcTimetz()'
     case 'Json':
       return 'json()'
     case 'JsonB':
@@ -138,9 +138,9 @@ function mysqlNativeType(name: string, args: readonly string[]) {
     case 'Time':
       return args[0] ? `utcTime({ precision: ${args[0]} })` : 'utcTime()'
     case 'DateTime':
-      return `datetime({ fsp: ${args[0] ?? 3} })`
+      return `datetime({ fsp: ${args[0] ?? 0} })`
     case 'Timestamp':
-      return `timestamp({ fsp: ${args[0] ?? 3} })`
+      return `timestamp({ fsp: ${args[0] ?? 0} })`
     case 'Json':
       return 'json()'
     case 'Binary':
@@ -161,7 +161,7 @@ const DATE_HELPERS: { readonly [name: string]: string } = {
   toDriver: (value) => value.toISOString().replace('Z', '+00:00'),
   fromDriver: (value) => {
     if (typeof value === 'number' || /^-?\\d+$/u.test(value)) return new Date(Number(value))
-    const iso = value.replace(' ', 'T')
+    const iso = value.replace(' ', 'T').replace(/ (?=[+-]\\d\\d:?\\d\\d$)/u, '')
     return new Date(/T[\\d:.]+$/u.test(iso) ? \`\${iso}Z\` : iso)
   },
 })`,
@@ -173,11 +173,20 @@ const DATE_HELPERS: { readonly [name: string]: string } = {
   utcTime: `const utcTime = customType<{
   data: Date
   driverData: string
-  config: { precision?: number; withTimezone?: boolean }
+  config: { precision?: number }
+}>({
+  dataType: (config) => \`time\${config?.precision === undefined ? '' : \`(\${config.precision})\`}\`,
+  toDriver: (value) => value.toISOString().slice(11, 23),
+  fromDriver: (value) => new Date(\`1970-01-01T\${value}Z\`),
+})`,
+  utcTimetz: `const utcTimetz = customType<{
+  data: Date
+  driverData: string
+  config: { precision?: number }
 }>({
   dataType: (config) =>
-    \`time\${config?.precision === undefined ? '' : \`(\${config.precision})\`}\${config?.withTimezone ? ' with time zone' : ''}\`,
-  toDriver: (value) => value.toISOString().slice(11, 23),
+    \`time\${config?.precision === undefined ? '' : \`(\${config.precision})\`} with time zone\`,
+  toDriver: (value) => \`\${value.toISOString().slice(11, 23)}+00\`,
   fromDriver: (value) => new Date(\`1970-01-01T\${value.replace(/[+-]\\d\\d(:?\\d\\d)?$/u, '')}Z\`),
 })`,
   utcNow: `const utcNow = (() => {
@@ -418,15 +427,17 @@ function resolveDefaultValue(
       // Prisma Client sends now() itself; the table's default is for the DDL drizzle-kit writes,
       // and on SQLite, where drizzle would send that default in place of the function's value,
       // there is none: CURRENT_TIMESTAMP writes `2030-01-01 09:00:00`, not Prisma's form.
-      case 'now':
+      // Elsewhere it is Prisma's CURRENT_TIMESTAMP, at the column's precision on MySQL, which
+      // refuses any other; `defaultNow()` is not on a customType column.
+      case 'now': {
         if (provider === 'sqlite') return { chain: '.$defaultFn(utcNow)', imports: [] }
-        if (provider === 'mysql') {
-          return {
-            chain: '.default(sql`CURRENT_TIMESTAMP(3)`).$defaultFn(utcNow)',
-            imports: [SQL_IMPORT],
-          }
+        const fsp =
+          provider === 'mysql' ? (field.nativeType ? (field.nativeType[1][0] ?? '0') : '3') : '0'
+        return {
+          chain: `.default(sql\`CURRENT_TIMESTAMP${fsp === '0' ? '' : `(${fsp})`}\`).$defaultFn(utcNow)`,
+          imports: [SQL_IMPORT],
         }
-        return { chain: '.defaultNow().$defaultFn(utcNow)', imports: [] }
+      }
       case 'uuid':
         return dflt.args[0] === 7
           ? {
@@ -563,7 +574,11 @@ function makeColumn(
         ? '.primaryKey({ autoIncrement: true })'
         : '.primaryKey()'
       : '',
-    field.isRequired && !field.isId && !(isAutoincrement && provider === 'postgresql')
+    // A scalar list is a nullable array column in the table Prisma makes.
+    field.isRequired &&
+    !field.isList &&
+    !field.isId &&
+    !(isAutoincrement && provider === 'postgresql')
       ? '.notNull()'
       : '',
     field.isUnique ? '.unique()' : '',

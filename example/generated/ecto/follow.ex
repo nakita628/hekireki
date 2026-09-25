@@ -15,7 +15,7 @@ defmodule Example.Follow do
         }
 
   schema "follows" do
-    field(:since, :utc_datetime, read_after_writes: true)
+    field(:since, Example.PrismaDateTime, autogenerate: true)
     field(:follower_id, :binary_id, primary_key: true)
     field(:following_id, :binary_id, primary_key: true)
     belongs_to(:follower, Example.User, foreign_key: :follower_id, define_field: false, type: :binary_id)

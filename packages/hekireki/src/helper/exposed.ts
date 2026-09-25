@@ -1425,12 +1425,13 @@ function pad(value: number, width = 2) {
 }
 
 // A timestamp default as the value Prisma Client writes for it: the instant the literal names, in
-// UTC — the UTC clock in a column without a time zone, the UTC date in a date column. (The DEFAULT
-// Prisma Migrate writes is the literal itself, which PostgreSQL reads with the offset dropped for
-// those columns; see `defaultPlan`.)
+// UTC — the UTC clock in a column without a time zone, the UTC date in a date column, the UTC time
+// of day at offset zero in a timetz column. (The DEFAULT Prisma Migrate writes is the literal
+// itself, which PostgreSQL reads with the offset dropped for the columns without a time zone and
+// with the offset kept for timetz; see `defaultPlan`.)
 function temporalLiteral(value: string, kind: TemporalKind) {
   const parsed = parseDateTimeDefault(value)
-  if (!parsed || kind === 'timetz') return null
+  if (!parsed) return null
   const moment = shift(parsed, parsed.offsetMinutes)
   if (moment.year > 9999) return null
   const date = `${pad(moment.year, 4)}-${pad(moment.month)}-${pad(moment.day)}`
@@ -1439,6 +1440,7 @@ function temporalLiteral(value: string, kind: TemporalKind) {
   const time = `${pad(moment.hour)}:${pad(moment.minute)}:${pad(moment.second)}${fraction}`
   if (kind === 'date') return `${exprRef(KT.LocalDate)}.parse(${kotlinString(date)})`
   if (kind === 'time') return `${exprRef(KT.LocalTime)}.parse(${kotlinString(time)})`
+  if (kind === 'timetz') return `${exprRef(KT.OffsetTime)}.parse(${kotlinString(`${time}Z`)})`
   return `${exprRef(KT.Instant)}.parse(${kotlinString(`${date}T${time}Z`)})`
 }
 
@@ -2715,7 +2717,9 @@ function unexpected(subject: string) {
 }
 
 // A column type of java.time values, bound and read as the java.time class JDBC 4.2 maps the
-// PostgreSQL type to, so that no conversion goes through the JVM's default time zone.
+// PostgreSQL type to, so that no conversion goes through the JVM's default time zone. `read` is
+// appended to what the column read: Prisma Client holds a DateTime as a JavaScript Date, so a value
+// is written and read to the millisecond and a zoned time at UTC, whatever precision the column has.
 function temporalClass(
   name: string,
   kotlin: string,
@@ -2723,6 +2727,7 @@ function temporalClass(
   precision: boolean,
   readAs: string,
   fromRead: string,
+  read: string,
   toDb: string | null,
 ) {
   const header = precision
@@ -2744,7 +2749,7 @@ function temporalClass(
     `            is ${x(kotlin)} -> value`,
     ...(readAs === kotlin ? [] : [`            is ${x(readAs)} -> ${fromRead}`]),
     `            else -> ${unexpected('')}`,
-    '        }',
+    `        }${read}`,
     '',
     ...readObjectLines(`rs.getObject(index, ${x(readAs)}::class.java)`),
     ...(toDb === null
@@ -2778,6 +2783,7 @@ function stringFactory(name: string, sqlType: string, cast: string) {
 }
 
 const utc = `${x(KT.ZoneOffset)}.UTC`
+const millis = `truncatedTo(${x(KT.ChronoUnit)}.MILLIS)`
 
 // Each declaration the tables may use, in the order the support file writes them, with the other
 // declarations it uses.
@@ -2796,6 +2802,11 @@ const SUPPORT: readonly Declaration[] = [
       '}',
     ],
   },
+  // The column's DEFAULT is `sql`, the clause Prisma Migrate writes. With a `value`, every insert
+  // writes that instead, as Prisma Client does: a DSL insert leaves a column with a database default
+  // out of the statement, and CURRENT_TIMESTAMP in a column without a time zone is then the clock
+  // of the session's TimeZone, which pgjdbc sets to the JVM's. So the value is a client default and
+  // the DEFAULT only a clause of the column's definition.
   {
     name: 'databaseDefault',
     needs: ['SqlExpression'],
@@ -2803,7 +2814,10 @@ const SUPPORT: readonly Declaration[] = [
       `internal fun <T> ${t(KT.Column)}<T>.databaseDefault(`,
       `    sql: ${t(KT.String)},`,
       '    value: (() -> T)? = null,',
-      `): ${t(KT.Column)}<T> = with(table) { defaultExpression(SqlExpression(sql, columnType)).also { it.defaultValueFun = value } }`,
+      `): ${t(KT.Column)}<T> =`,
+      '    with(table) {',
+      '        if (value == null) defaultExpression(SqlExpression(sql, columnType)) else clientDefault(value).withDefinition("DEFAULT $sql")',
+      '    }',
     ],
   },
   {
@@ -2843,7 +2857,8 @@ const SUPPORT: readonly Declaration[] = [
       true,
       KT.LocalDateTime,
       `value.toInstant(${utc})`,
-      `${x(KT.LocalDateTime)}.ofInstant(value, ${utc})`,
+      `.${millis}`,
+      `${x(KT.LocalDateTime)}.ofInstant(value.${millis}, ${utc})`,
     ),
   },
   {
@@ -2861,7 +2876,8 @@ const SUPPORT: readonly Declaration[] = [
       true,
       KT.OffsetDateTime,
       'value.toInstant()',
-      `value.atOffset(${utc})`,
+      `.${millis}`,
+      `value.${millis}.atOffset(${utc})`,
     ),
   },
   {
@@ -2872,7 +2888,16 @@ const SUPPORT: readonly Declaration[] = [
   {
     name: 'PgDateColumnType',
     needs: [],
-    lines: temporalClass('PgDateColumnType', KT.LocalDate, 'DATE', false, KT.LocalDate, '', null),
+    lines: temporalClass(
+      'PgDateColumnType',
+      KT.LocalDate,
+      'DATE',
+      false,
+      KT.LocalDate,
+      '',
+      '',
+      null,
+    ),
   },
   {
     name: 'pgDate',
@@ -2882,7 +2907,16 @@ const SUPPORT: readonly Declaration[] = [
   {
     name: 'PgTimeColumnType',
     needs: [],
-    lines: temporalClass('PgTimeColumnType', KT.LocalTime, 'TIME', true, KT.LocalTime, '', null),
+    lines: temporalClass(
+      'PgTimeColumnType',
+      KT.LocalTime,
+      'TIME',
+      true,
+      KT.LocalTime,
+      '',
+      `.${millis}`,
+      `value.${millis}`,
+    ),
   },
   {
     name: 'pgTime',
@@ -2899,7 +2933,8 @@ const SUPPORT: readonly Declaration[] = [
       true,
       KT.OffsetTime,
       '',
-      null,
+      `.withOffsetSameInstant(${utc}).${millis}`,
+      `value.withOffsetSameInstant(${utc}).${millis}`,
     ),
   },
   {

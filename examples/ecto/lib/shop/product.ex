@@ -8,6 +8,7 @@ defmodule Shop.Product do
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
+  @timestamps_opts [type: Shop.PrismaDateTime, autogenerate: {Shop.PrismaDateTime, :autogenerate, []}]
 
   @type t :: %__MODULE__{
           id: Ecto.UUID.t(),
@@ -21,6 +22,8 @@ defmodule Shop.Product do
           dimensions: map() | nil,
           label: String.t(),
           released_at: DateTime.t(),
+          inserted_at: DateTime.t(),
+          updated_at: DateTime.t(),
           category: Shop.Category.t() | nil,
           line_items: [Shop.LineItem.t()],
           reviews: [Shop.Review.t()],
@@ -38,13 +41,13 @@ defmodule Shop.Product do
     field(:attributes, :map)
     field(:dimensions, :map)
     field(:label, :string, default: "\#{name} \"quoted\" \\ back")
-    field(:released_at, :utc_datetime, default: ~U[2020-01-01 00:00:00Z])
+    field(:released_at, Shop.PrismaDateTime, default: ~U[2020-01-01 00:00:00.000Z])
     field(:category_id, :id, default: 1)
     belongs_to(:category, Shop.Category, foreign_key: :category_id, define_field: false, type: :id)
     has_many(:line_items, Shop.LineItem, foreign_key: :product_id)
     has_many(:reviews, Shop.Review, foreign_key: :product_id)
     many_to_many(:tags, Shop.Tag, join_through: "_ProductToTag", join_keys: [A: :id, B: :id])
     many_to_many(:wishlists, Shop.Wishlist, join_through: "_Wished", join_keys: [A: :id, B: :id])
-    timestamps(type: :utc_datetime, inserted_at_source: :createdAt, updated_at_source: :updatedAt)
+    timestamps(inserted_at_source: :createdAt, updated_at_source: :updatedAt)
   end
 end

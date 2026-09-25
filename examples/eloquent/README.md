@@ -33,6 +33,11 @@ client there (a model says per provider how it writes a DateTime), and pushes th
 changes two things on the way, for bugs of `prisma db push` below. When the schema has changed
 since the database was made, drop the database first.
 
+**MySQL's connection has to be opened with `'timezone' => '+00:00'`**, as `bootstrap.php` does:
+a `TIMESTAMP` column moves what it is given from the session's time zone, and Prisma writes and
+reads it as UTC, so under a `+09:00` session each client would read the other's rows nine hours
+off. PostgreSQL's session may be in any zone, as the models write a date with its offset.
+
 PHP 8.2 or newer is needed, with `pdo_sqlite`, and `pdo_pgsql` and `pdo_mysql` for the other two. Eloquent is `illuminate/database` 12 without the
 rest of Laravel, so `composer.json` asks for what a Laravel application would bring along and the
 generated models need: `ramsey/uuid` for the `uuid()` keys `HasVersion4Uuids` makes and
@@ -81,11 +86,18 @@ Then each thing the schema promises, as Eloquent keeps it:
   DateTime goes through `PrismaDates`, a trait written beside the models, which writes it as Prisma
   Client does: in UTC with milliseconds, and on SQLite as ISO 8601 text, so the rows of both
   clients compare and sort as text in time order. One given with no zone is in the app's timezone,
-  as Eloquent reads it; one the table holds with no zone is UTC, as Prisma reads it.
+  as Eloquent reads it; one the table holds with no zone is UTC, as Prisma reads it. The models'
+  queries are a `PrismaQueryBuilder`, which binds a date in the same form, and takes the date and
+  time of `whereDate()` and `whereTime()` in UTC, of a PostgreSQL `timestamptz` too whatever the
+  session's zone. A `@db.Date` goes through `AsPrismaDate` (the UTC date, read as midnight UTC), a
+  `@db.Time` or `@db.Timetz` through `AsPrismaTime` (the UTC time on 1970-01-01), and a
+  PostgreSQL `DateTime[]` through `AsPrismaDateList`, a list of Carbon. A `Y-m-d` or `H:i:s` string
+  is stored as given. A `@db.Timestamp(6)` holds milliseconds, as Prisma Client writes it.
 - **Defaults.** Literal defaults are on a new model before it is saved, as the database holds
   them: `0.0` for a Float the schema writes as `0`, a string with quotes and a backslash, a
   DateTime literal, an enum member's `@map` value, a foreign key. A `now()` is filled by the model
-  as it saves, as Prisma Client fills it, not left to the table's clock.
+  as it saves, as Prisma Client fills it, not left to the table's clock, and so is a
+  `dbgenerated("CURRENT_TIMESTAMP")`, which PostgreSQL would read in the session's zone.
 - **Keys.** An `autoincrement()` key is counted up by SQLite and read back, a `uuid()` key is made
   by `HasVersion4Uuids` and a `ulid()` key by `HasUlids`, a `cuid()` key has to be given (Eloquent
   has no cuid), and a key named `number` stored as `order_number` is the model's `$primaryKey`. A
@@ -161,6 +173,3 @@ and the short name is the model's.
 - **Aggregates loaded onto a collection with a composite key.** `loadCount()` and
   `loadAggregate()` select and key the models by `getKeyName()`, which is null here. Count through
   the query (`withCount()`), or per model.
-- **A query that binds a date.** `where('created_at', '>', $carbon)` binds the date in the
-  connection's own format, not the one the models write on SQLite; compare against a string in
-  Prisma's form, or order by the column.

@@ -9,6 +9,7 @@ defmodule Shop.Account do
   """
 
   @primary_key {:id, :id, autogenerate: true}
+  @timestamps_opts [type: Shop.PrismaDateTime, autogenerate: {Shop.PrismaDateTime, :autogenerate, []}]
 
   @type t :: %__MODULE__{
           id: integer(),
@@ -17,6 +18,8 @@ defmodule Shop.Account do
           display_name: String.t() | nil,
           role: atom(),
           active: boolean(),
+          inserted_at: DateTime.t(),
+          updated_at: DateTime.t(),
           profile: Shop.Profile.t() | nil,
           wishlist: Shop.Wishlist.t() | nil,
           orders: [Shop.Order.t()],
@@ -41,7 +44,7 @@ defmodule Shop.Account do
     has_many(:audit_events, Shop.AuditEvent, foreign_key: :account_id)
     many_to_many(:followers, Shop.Account, join_through: "_Follows", join_keys: [A: :id, B: :id])
     many_to_many(:following, Shop.Account, join_through: "_Follows", join_keys: [B: :id, A: :id])
-    timestamps(type: :utc_datetime, inserted_at_source: :created_at)
+    timestamps(inserted_at_source: :created_at)
   end
 
   @spec changeset(t(), map()) :: Ecto.Changeset.t()

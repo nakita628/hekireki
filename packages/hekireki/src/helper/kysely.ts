@@ -40,10 +40,15 @@ function isFunctionDefault(
   return def !== null && typeof def === 'object' && !Array.isArray(def) && 'name' in def
 }
 
-export function isDbGenerated(field: DMMF.Field) {
+// Prisma Client writes a DateTime default itself as well, `now()` and a literal alike. On SQLite
+// the column's own default is other text for the instant (`CURRENT_TIMESTAMP` writes
+// `YYYY-MM-DD HH:MM:SS`, a literal is kept as the migration wrote it, which Prisma reads as an
+// Invalid Date), and a DateTime there is compared as text: an insert gives it, as Prisma does.
+export function isDbGenerated(field: DMMF.Field, provider = 'postgresql') {
   return (
     field.hasDefaultValue &&
-    !(isFunctionDefault(field.default) && CLIENT_SIDE_DEFAULTS.has(field.default.name))
+    !(isFunctionDefault(field.default) && CLIENT_SIDE_DEFAULTS.has(field.default.name)) &&
+    !(provider === 'sqlite' && field.type === 'DateTime')
   )
 }
 
@@ -57,23 +62,50 @@ function makePropertyKey(name: string) {
   return /^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(name) ? name : makeStringLiteral(name)
 }
 
-function makeColumnType(field: DMMF.Field, scalarTypes: { readonly [k: string]: string }) {
-  const base = field.kind === 'enum' ? field.type : (scalarTypes[field.type] ?? 'unknown')
-  const listed = field.isList ? `${base}[]` : base
+// pg and mysql2 read a time column as its text (`03:04:05.678`, `03:04:05.678+00` for timetz),
+// and PostgreSQL refuses the full timestamp a bound Date is sent as.
+const TIME_OF_DAY = new Set(['Time', 'Timetz'])
+
+export function makeColumnType(
+  field: DMMF.Field,
+  scalarTypes: { readonly [k: string]: string },
+  provider = 'postgresql',
+) {
+  const base =
+    field.kind === 'enum'
+      ? field.type
+      : field.type === 'DateTime' && TIME_OF_DAY.has(field.nativeType?.[0] ?? '')
+        ? 'string'
+        : (scalarTypes[field.type] ?? 'unknown')
+  // A list of `Timestamp` would select as the ColumnType objects: the list is one ColumnType.
+  const listed = !field.isList
+    ? base
+    : base === 'Timestamp'
+      ? 'ColumnType<Date[], (Date | string)[], (Date | string)[]>'
+      : `${base}[]`
+  // Prisma sets an optional @updatedAt on create as well, so an insert is asked for it.
   // `unknown | null` collapses to `unknown`, so the union would be redundant.
-  const nullable = field.isRequired || listed === 'unknown' ? listed : `${listed} | null`
-  return isDbGenerated(field) ? `Generated<${nullable}>` : nullable
+  const nullable =
+    field.isRequired || listed === 'unknown'
+      ? listed
+      : field.isUpdatedAt && listed === 'Timestamp'
+        ? 'ColumnType<Date | null, Date | string, Date | string | null>'
+        : field.isUpdatedAt
+          ? `ColumnType<${listed} | null, ${listed}, ${listed} | null>`
+          : `${listed} | null`
+  return isDbGenerated(field, provider) ? `Generated<${nullable}>` : nullable
 }
 
 export function makeTableInterface(
   model: DMMF.Model,
   scalarTypes: { readonly [k: string]: string },
+  provider = 'postgresql',
 ) {
   const columns = model.fields
     .filter((field) => field.kind === 'scalar' || field.kind === 'enum')
     .map(
       (field) =>
-        `  ${makePropertyKey(field.dbName ?? field.name)}: ${makeColumnType(field, scalarTypes)}`,
+        `  ${makePropertyKey(field.dbName ?? field.name)}: ${makeColumnType(field, scalarTypes, provider)}`,
     )
   return columns.length > 0
     ? `export interface ${model.name} {\n${columns.join('\n')}\n}`

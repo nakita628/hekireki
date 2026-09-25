@@ -1,6 +1,9 @@
 package model
 
 import (
+	"database/sql/driver"
+	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -23,8 +26,8 @@ type User struct {
 	Name      string    `gorm:"column:name;not null" json:"name"`
 	Role      string    `gorm:"column:role;default:'VIEWER';not null" json:"role"`
 	Interests []string  `gorm:"column:interests;serializer:json;not null" json:"interests"`
-	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime;not null" json:"created_at"`
-	UpdatedAt time.Time `gorm:"column:updated_at;autoUpdateTime;not null" json:"updated_at"`
+	CreatedAt DateTime  `gorm:"column:created_at;autoCreateTime:false;not null" json:"created_at"`
+	UpdatedAt DateTime  `gorm:"column:updated_at;autoUpdateTime:false;not null" json:"updated_at"`
 	Posts     []Post    `gorm:"foreignKey:AuthorID;constraint:OnDelete:CASCADE"`
 	Comments  []Comment `gorm:"foreignKey:AuthorID;constraint:OnDelete:SET NULL"`
 	Orders    []Order   `gorm:"foreignKey:UserID"`
@@ -37,9 +40,24 @@ func (User) TableName() string {
 	return "users"
 }
 
-func (m *User) BeforeCreate(_ *gorm.DB) error {
+func (m *User) BeforeCreate(tx *gorm.DB) error {
+	now := tx.NowFunc().UTC().Truncate(time.Millisecond)
 	if m.ID == "" {
 		m.ID = uuid.Must(uuid.NewV7()).String()
+	}
+	if m.CreatedAt.IsZero() {
+		m.CreatedAt = DateTime{Time: now}
+	}
+	if m.UpdatedAt.IsZero() {
+		m.UpdatedAt = DateTime{Time: now}
+	}
+	return nil
+}
+
+func (*User) BeforeUpdate(tx *gorm.DB) error {
+	now := tx.NowFunc().UTC().Truncate(time.Millisecond)
+	if !tx.Statement.Changed("UpdatedAt") {
+		tx.Statement.SetColumn("UpdatedAt", DateTime{Time: now})
 	}
 	return nil
 }
@@ -54,7 +72,7 @@ type Profile struct {
 	Verified bool           `gorm:"column:verified;default:false;not null" json:"verified"`
 	Meta     datatypes.JSON `gorm:"column:meta" json:"meta"`
 	Avatar   []byte         `gorm:"column:avatar" json:"avatar"`
-	LastSeen *time.Time     `gorm:"column:last_seen;type:timestamp" json:"last_seen"`
+	LastSeen *DateTime      `gorm:"column:last_seen;type:timestamptz(6)" json:"last_seen"`
 	User     User
 }
 
@@ -77,7 +95,7 @@ type Post struct {
 	Published  bool      `gorm:"column:published;default:false;not null" json:"published"`
 	ViewCount  int       `gorm:"column:view_count;default:0;not null" json:"view_count"`
 	AuthorID   string    `gorm:"column:author_id;index:posts_author_id_idx;not null" json:"author_id"`
-	CreatedAt  time.Time `gorm:"column:created_at;autoCreateTime;not null" json:"created_at"`
+	CreatedAt  DateTime  `gorm:"column:created_at;autoCreateTime:false;not null" json:"created_at"`
 	Author     User      `gorm:"foreignKey:AuthorID"`
 	Comments   []Comment `gorm:"foreignKey:PostID;constraint:OnDelete:CASCADE"`
 	Tags       []Tag     `gorm:"many2many:_PostToTag;joinForeignKey:A;joinReferences:B"`
@@ -87,9 +105,13 @@ func (Post) TableName() string {
 	return "posts"
 }
 
-func (m *Post) BeforeCreate(_ *gorm.DB) error {
+func (m *Post) BeforeCreate(tx *gorm.DB) error {
+	now := tx.NowFunc().UTC().Truncate(time.Millisecond)
 	if m.ID == "" {
 		m.ID = uuid.NewString()
+	}
+	if m.CreatedAt.IsZero() {
+		m.CreatedAt = DateTime{Time: now}
 	}
 	return nil
 }
@@ -105,11 +127,11 @@ func (Tag) TableName() string {
 }
 
 type Comment struct {
-	ID        int       `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	Body      string    `gorm:"column:body;not null" json:"body"`
-	PostID    string    `gorm:"column:post_id;index:comments_post_id_created_at_idx;not null" json:"post_id"`
-	AuthorID  *string   `gorm:"column:author_id" json:"author_id"`
-	CreatedAt time.Time `gorm:"column:created_at;index:comments_post_id_created_at_idx;autoCreateTime;not null" json:"created_at"`
+	ID        int      `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	Body      string   `gorm:"column:body;not null" json:"body"`
+	PostID    string   `gorm:"column:post_id;index:comments_post_id_created_at_idx;not null" json:"post_id"`
+	AuthorID  *string  `gorm:"column:author_id" json:"author_id"`
+	CreatedAt DateTime `gorm:"column:created_at;index:comments_post_id_created_at_idx;autoCreateTime:false;not null" json:"created_at"`
 	Post      Post
 	Author    User `gorm:"foreignKey:AuthorID"`
 }
@@ -118,16 +140,32 @@ func (Comment) TableName() string {
 	return "comments"
 }
 
+func (m *Comment) BeforeCreate(tx *gorm.DB) error {
+	now := tx.NowFunc().UTC().Truncate(time.Millisecond)
+	if m.CreatedAt.IsZero() {
+		m.CreatedAt = DateTime{Time: now}
+	}
+	return nil
+}
+
 type Follow struct {
-	FollowerID  string    `gorm:"column:follower_id;primaryKey" json:"follower_id"`
-	FollowingID string    `gorm:"column:following_id;primaryKey" json:"following_id"`
-	Since       time.Time `gorm:"column:since;autoCreateTime;not null" json:"since"`
-	Follower    User      `gorm:"foreignKey:FollowerID"`
-	Following   User      `gorm:"foreignKey:FollowingID"`
+	FollowerID  string   `gorm:"column:follower_id;primaryKey" json:"follower_id"`
+	FollowingID string   `gorm:"column:following_id;primaryKey" json:"following_id"`
+	Since       DateTime `gorm:"column:since;not null" json:"since"`
+	Follower    User     `gorm:"foreignKey:FollowerID"`
+	Following   User     `gorm:"foreignKey:FollowingID"`
 }
 
 func (Follow) TableName() string {
 	return "follows"
+}
+
+func (m *Follow) BeforeCreate(tx *gorm.DB) error {
+	now := tx.NowFunc().UTC().Truncate(time.Millisecond)
+	if m.Since.IsZero() {
+		m.Since = DateTime{Time: now}
+	}
+	return nil
 }
 
 type Category struct {
@@ -143,16 +181,24 @@ func (Category) TableName() string {
 }
 
 type Order struct {
-	ID       int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	UserID   string    `gorm:"column:user_id;not null" json:"user_id"`
-	Total    float64   `gorm:"column:total;type:decimal(12,2);not null" json:"total"`
-	PlacedAt time.Time `gorm:"column:placed_at;autoCreateTime;not null" json:"placed_at"`
+	ID       int64    `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	UserID   string   `gorm:"column:user_id;not null" json:"user_id"`
+	Total    float64  `gorm:"column:total;type:decimal(12,2);not null" json:"total"`
+	PlacedAt DateTime `gorm:"column:placed_at;not null" json:"placed_at"`
 	User     User
 	Items    []OrderItem `gorm:"foreignKey:OrderID;constraint:OnDelete:CASCADE"`
 }
 
 func (Order) TableName() string {
 	return "orders"
+}
+
+func (m *Order) BeforeCreate(tx *gorm.DB) error {
+	now := tx.NowFunc().UTC().Truncate(time.Millisecond)
+	if m.PlacedAt.IsZero() {
+		m.PlacedAt = DateTime{Time: now}
+	}
+	return nil
 }
 
 type OrderItem struct {
@@ -173,7 +219,7 @@ type AuditLog struct {
 	Action    string         `gorm:"column:action;not null" json:"action"`
 	Payload   datatypes.JSON `gorm:"column:payload;default:'{}';not null" json:"payload"`
 	Signature []byte         `gorm:"column:signature" json:"signature"`
-	LoggedAt  time.Time      `gorm:"column:logged_at;default:now();not null" json:"logged_at"`
+	LoggedAt  DateTime       `gorm:"column:logged_at;default:now();not null" json:"logged_at"`
 }
 
 func (AuditLog) TableName() string {
@@ -198,4 +244,67 @@ type Film struct {
 
 func (Film) TableName() string {
 	return "Film"
+}
+
+// DateTime is a Prisma DateTime as Prisma Client keeps it: an instant in UTC, to the
+// millisecond, whatever zone the time.Time is in. Bind a time.Time through it in a query of
+// your own, `db.Where("at > ?", DateTime{Time: at})`: the driver formats a bare time.Time
+// its own way.
+type DateTime struct{ time.Time }
+
+// GormDataType has GORM treat the column as it treats a time.Time.
+func (DateTime) GormDataType() string {
+	return "time"
+}
+
+// Value writes the instant in UTC to the millisecond, as Prisma Client does: the wall clock of
+// a timestamp column is UTC, and a timestamptz column holds the instant whatever the
+// session's time zone.
+func (dateTime DateTime) Value() (driver.Value, error) {
+	return dateTime.UTC().Truncate(time.Millisecond), nil
+}
+
+// Scan reads the column as Prisma Client does (see readPrismaTime).
+func (dateTime *DateTime) Scan(src any) error {
+	read, err := readPrismaTime(src)
+	dateTime.Time = read
+	return err
+}
+
+// prismaTimeLayouts are the texts readPrismaTime reads, as Prisma Client reads them: with an
+// offset or `Z`, or with none, which is UTC; a date alone is midnight UTC.
+var prismaTimeLayouts = []string{
+	"2006-01-02T15:04:05.999999999Z07:00",
+	"2006-01-02 15:04:05.999999999Z07:00",
+	"2006-01-02 15:04:05.999999999Z07",
+	"2006-01-02T15:04:05.999999999",
+	"2006-01-02 15:04:05.999999999",
+	"2006-01-02",
+}
+
+// readPrismaTime reads a DateTime column as Prisma Client reads it: text with no zone is UTC, an
+// offset is kept, digits are milliseconds since 1970, and what is past the millisecond is
+// dropped.
+func readPrismaTime(src any) (time.Time, error) {
+	switch value := src.(type) {
+	case nil:
+		return time.Time{}, nil
+	case time.Time:
+		return value.UTC().Truncate(time.Millisecond), nil
+	case int64:
+		return time.UnixMilli(value).UTC(), nil
+	case []byte:
+		return readPrismaTime(string(value))
+	case string:
+		if millis, err := strconv.ParseInt(value, 10, 64); err == nil {
+			return time.UnixMilli(millis).UTC(), nil
+		}
+		for _, layout := range prismaTimeLayouts {
+			if read, err := time.Parse(layout, value); err == nil {
+				return read.UTC().Truncate(time.Millisecond), nil
+			}
+		}
+		return time.Time{}, fmt.Errorf("a DateTime column held %q", value)
+	}
+	return time.Time{}, fmt.Errorf("a DateTime column held %T", src)
 }

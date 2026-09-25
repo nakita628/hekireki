@@ -14,6 +14,8 @@ class Profile extends Model
 {
     use PrismaDates;
 
+    const ZONED_DATES = ['last_seen'];
+
     protected $table = 'Profile';
 
     protected $keyType = 'string';

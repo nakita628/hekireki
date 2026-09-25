@@ -34,6 +34,7 @@ describe('efcoreFiles', () => {
       efcoreFiles(result.datamodel, {
         namespace: 'Models',
         context: 'AppDbContext',
+        provider: 'postgresql',
       }),
     ).toStrictEqual([
       {

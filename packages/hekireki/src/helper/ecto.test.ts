@@ -2,7 +2,13 @@ import type { DMMF } from '@prisma/generator-helper'
 import { describe, expect, it } from 'vite-plus/test'
 
 import { relationMaps } from '../utils/prisma-schema-text.js'
-import { ectoProblems, ectoSchemas, ectoTypeToTypespec, prismaTypeToEctoType } from './ecto.js'
+import {
+  ectoDateTypes,
+  ectoProblems,
+  ectoSchemas,
+  ectoTypeToTypespec,
+  prismaTypeToEctoType,
+} from './ecto.js'
 
 function makeModel(overrides: Partial<DMMF.Model> & { name: string }): DMMF.Model {
   return {
@@ -64,15 +70,18 @@ describe('ectoSchemas', () => {
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
+  @timestamps_opts [type: App.PrismaDateTime, autogenerate: {App.PrismaDateTime, :autogenerate, []}]
 
   @type t :: %__MODULE__{
           id: Ecto.UUID.t(),
-          name: String.t()
+          name: String.t(),
+          inserted_at: DateTime.t(),
+          updated_at: DateTime.t()
         }
 
   schema "Agent" do
     field(:name, :string)
-    timestamps(type: :utc_datetime, inserted_at_source: :createdAt, updated_at_source: :updatedAt)
+    timestamps(inserted_at_source: :createdAt, updated_at_source: :updatedAt)
   end
 end`)
     })
@@ -89,7 +98,12 @@ end`)
             default: { name: 'uuid', args: [4] },
           }),
           makeField({ name: 'title', type: 'String' }),
-          makeField({ name: 'inserted_at', type: 'DateTime' }),
+          makeField({
+            name: 'inserted_at',
+            type: 'DateTime',
+            hasDefaultValue: true,
+            default: { name: 'now', args: [] },
+          }),
           makeField({ name: 'updated_at', type: 'DateTime', isUpdatedAt: true }),
         ],
       })
@@ -102,15 +116,18 @@ end`)
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
+  @timestamps_opts [type: App.PrismaDateTime, autogenerate: {App.PrismaDateTime, :autogenerate, []}]
 
   @type t :: %__MODULE__{
           id: Ecto.UUID.t(),
-          title: String.t()
+          title: String.t(),
+          inserted_at: DateTime.t(),
+          updated_at: DateTime.t()
         }
 
   schema "Post" do
     field(:title, :string)
-    timestamps(type: :utc_datetime)
+    timestamps()
   end
 end`)
     })
@@ -266,7 +283,7 @@ end`)
       )
     })
 
-    it('reads back a now() default the database fills', () => {
+    it("fills a now() default from the type's autogenerate/0", () => {
       const model = makeModel({
         name: 'Event',
         fields: [
@@ -289,7 +306,7 @@ end`)
       const result = ectoSchemas([model], 'App')
 
       expect(result).toBe(
-        'defmodule App.Event do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          occurred_at: DateTime.t()\n        }\n\n  schema "Event" do\n    field(:occurred_at, :utc_datetime, read_after_writes: true, source: :occurredAt)\n  end\nend',
+        'defmodule App.Event do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          occurred_at: DateTime.t()\n        }\n\n  schema "Event" do\n    field(:occurred_at, App.PrismaDateTime, autogenerate: true, source: :occurredAt)\n  end\nend',
       )
     })
   })
@@ -403,7 +420,7 @@ end`)
       const result = ectoSchemas([model], 'App')
 
       expect(result).toBe(
-        'defmodule App.TypeTest do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          text: String.t(),\n          count: integer(),\n          flag: boolean(),\n          at: DateTime.t()\n        }\n\n  schema "TypeTest" do\n    field(:text, :string)\n    field(:count, :integer)\n    field(:flag, :boolean)\n    field(:at, :utc_datetime)\n  end\nend',
+        'defmodule App.TypeTest do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          text: String.t(),\n          count: integer(),\n          flag: boolean(),\n          at: DateTime.t()\n        }\n\n  schema "TypeTest" do\n    field(:text, :string)\n    field(:count, :integer)\n    field(:flag, :boolean)\n    field(:at, App.PrismaDateTime)\n  end\nend',
       )
     })
 
@@ -428,7 +445,7 @@ end`)
       const result = ectoSchemas([model], 'App')
 
       expect(result).toBe(
-        'defmodule App.TypeTest do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          text: String.t(),\n          count: integer(),\n          flag: boolean(),\n          at: DateTime.t()\n        }\n\n  schema "TypeTest" do\n    field(:text, :string)\n    field(:count, :integer)\n    field(:flag, :boolean)\n    field(:at, :utc_datetime)\n  end\nend',
+        'defmodule App.TypeTest do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          text: String.t(),\n          count: integer(),\n          flag: boolean(),\n          at: DateTime.t()\n        }\n\n  schema "TypeTest" do\n    field(:text, :string)\n    field(:count, :integer)\n    field(:flag, :boolean)\n    field(:at, App.PrismaDateTime)\n  end\nend',
       )
     })
   })
@@ -836,11 +853,14 @@ end`)
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
+  @timestamps_opts [type: App.PrismaDateTime, autogenerate: {App.PrismaDateTime, :autogenerate, []}]
 
   @type t :: %__MODULE__{
           id: Ecto.UUID.t(),
           code_name: String.t(),
           active: boolean(),
+          inserted_at: DateTime.t(),
+          updated_at: DateTime.t(),
           profile: App.Profile.t() | nil,
           reports: [App.Report.t()]
         }
@@ -850,7 +870,7 @@ end`)
     field(:active, :boolean, default: true)
     has_one(:profile, App.Profile, foreign_key: :agent_id)
     has_many(:reports, App.Report, foreign_key: :agent_id)
-    timestamps(type: :utc_datetime, inserted_at_source: :createdAt, updated_at_source: :updatedAt)
+    timestamps(inserted_at_source: :createdAt, updated_at_source: :updatedAt)
   end
 end`)
     })
@@ -1275,7 +1295,7 @@ end`)
       const result = ectoSchemas([likeModel], 'App', allModels)
 
       expect(result).toBe(
-        'defmodule App.Like do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key false\n\n  @type t :: %__MODULE__{\n          user_id: Ecto.UUID.t(),\n          post_id: Ecto.UUID.t(),\n          user: App.User.t() | nil,\n          post: App.Post.t() | nil\n        }\n\n  schema "Like" do\n    field(:user_id, :binary_id, primary_key: true, source: :userId)\n    field(:post_id, :binary_id, primary_key: true, source: :postId)\n    belongs_to(:user, App.User, foreign_key: :user_id, define_field: false, type: :binary_id)\n    belongs_to(:post, App.Post, foreign_key: :post_id, define_field: false, type: :binary_id)\n    timestamps(type: :utc_datetime, inserted_at_source: :createdAt, updated_at: false)\n  end\nend',
+        'defmodule App.Like do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key false\n  @timestamps_opts [type: App.PrismaDateTime, autogenerate: {App.PrismaDateTime, :autogenerate, []}]\n\n  @type t :: %__MODULE__{\n          user_id: Ecto.UUID.t(),\n          post_id: Ecto.UUID.t(),\n          inserted_at: DateTime.t(),\n          user: App.User.t() | nil,\n          post: App.Post.t() | nil\n        }\n\n  schema "Like" do\n    field(:user_id, :binary_id, primary_key: true, source: :userId)\n    field(:post_id, :binary_id, primary_key: true, source: :postId)\n    belongs_to(:user, App.User, foreign_key: :user_id, define_field: false, type: :binary_id)\n    belongs_to(:post, App.Post, foreign_key: :post_id, define_field: false, type: :binary_id)\n    timestamps(inserted_at_source: :createdAt, updated_at: false)\n  end\nend',
       )
     })
 
@@ -1694,9 +1714,6 @@ end`)
     it('converts Boolean to boolean', () => {
       expect(prismaTypeToEctoType('Boolean')).toBe('boolean')
     })
-    it('converts DateTime to utc_datetime', () => {
-      expect(prismaTypeToEctoType('DateTime')).toBe('utc_datetime')
-    })
     it('maps Float to float', () => {
       expect(prismaTypeToEctoType('Float')).toBe('float')
     })
@@ -2027,7 +2044,6 @@ describe('prismaTypeToEctoType', () => {
     ['Decimal', 'decimal'],
     ['String', 'string'],
     ['Boolean', 'boolean'],
-    ['DateTime', 'utc_datetime'],
     ['Json', 'map'],
     ['Bytes', 'binary'],
     ['Role', 'string'],
@@ -3128,5 +3144,94 @@ describe('ectoProblems', () => {
       'field User.posts: validate_length is on a relation field, which takes assoc_constraint or no_assoc_constraint; write it as an @ecto. line on the model',
       'field User.bio: the @ecto. call "validate_length 50" is not name or name(arguments)',
     ])
+  })
+})
+
+describe('timestamps in @type t', () => {
+  it('lists every field the timestamps() calls add, nil where it is optional', () => {
+    const model = makeModel({
+      name: 'Stamp',
+      fields: [
+        makeField({
+          name: 'id',
+          type: 'Int',
+          isId: true,
+          hasDefaultValue: true,
+          default: { name: 'autoincrement', args: [] },
+        }),
+        makeField({
+          name: 'createdAt',
+          type: 'DateTime',
+          hasDefaultValue: true,
+          default: { name: 'now', args: [] },
+        }),
+        makeField({ name: 'updatedAt', type: 'DateTime', isUpdatedAt: true }),
+        makeField({ name: 'touchedAt', type: 'DateTime', isUpdatedAt: true }),
+        makeField({ name: 'maybeAt', type: 'DateTime', isUpdatedAt: true, isRequired: false }),
+      ],
+    })
+
+    expect(ectoSchemas([model], 'App')).toBe(`defmodule App.Stamp do
+  use Ecto.Schema
+  @moduledoc false
+
+  @primary_key {:id, :id, autogenerate: true}
+  @timestamps_opts [type: App.PrismaDateTime, autogenerate: {App.PrismaDateTime, :autogenerate, []}]
+
+  @type t :: %__MODULE__{
+          id: integer(),
+          inserted_at: DateTime.t(),
+          updated_at: DateTime.t(),
+          touched_at: DateTime.t(),
+          maybe_at: DateTime.t() | nil
+        }
+
+  schema "Stamp" do
+    timestamps(inserted_at_source: :createdAt, updated_at_source: :updatedAt)
+    timestamps(inserted_at: false, updated_at: :touched_at, updated_at_source: :touchedAt)
+    timestamps(inserted_at: false, updated_at: :maybe_at, updated_at_source: :maybeAt)
+  end
+end`)
+  })
+})
+
+describe('ectoDateTypes', () => {
+  const all = new Set(['PrismaDateTime', 'PrismaDate', 'PrismaTime'])
+
+  // Ecto 3.13 declares autogenerate/0 as an optional callback, so without @impl it warns.
+  it('marks every autogenerate/0 as the Ecto.Type callback', () => {
+    const code = ectoDateTypes('App', 'postgresql', all)
+    expect(code.split('  def autogenerate')).toHaveLength(4)
+    expect(code.split('  @impl true\n  def autogenerate')).toHaveLength(4)
+  })
+
+  // Prisma Migrate writes a literal default on SQLite as `2024-01-15 10:30:00 +00:00`, which
+  // DateTime.from_iso8601/1 rejects for the space before the offset.
+  it('drops the space before an offset before reading text', () => {
+    expect(ectoDateTypes('App', 'sqlite', all)).toContain(
+      '    value = String.replace(value, ~r/\\s+(?=[+-]\\d\\d:?\\d\\d\\z)/, "")\n\n    case DateTime.from_iso8601(value) do',
+    )
+  })
+
+  it('says how an optional @updatedAt stores null on insert', () => {
+    expect(ectoDateTypes('App', 'sqlite', all)).toContain(
+      '  `@updatedAt` left `nil` on insert is filled with now; to store null, as Prisma Client does\n' +
+        '  for an explicit null, give it with `Ecto.Changeset.force_change(changeset, field, nil)`.',
+    )
+  })
+
+  it("warns on PostgreSQL of Prisma Client's session for a @db.Timetz too, on both types", () => {
+    const code = ectoDateTypes('App', 'postgresql', all)
+    const warning =
+      '  A `@db.Timestamptz` or `@db.Timetz` column holds the instant whatever the session'
+    expect(code.split(warning)).toHaveLength(3)
+    expect(code).toContain('session\'s wall time, UTC with `parameters: [timezone: "UTC"]`.')
+    expect(code).not.toContain('or the\n  two read different instants')
+  })
+
+  it("warns on MySQL of the repo's session on PrismaDateTime alone", () => {
+    const code = ectoDateTypes('App', 'mysql', all)
+    expect(code.split('SET time_zone')).toHaveLength(2)
+    expect(code).not.toContain('@db.Timetz` column')
   })
 })

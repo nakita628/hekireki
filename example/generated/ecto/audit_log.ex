@@ -19,6 +19,6 @@ defmodule Example.AuditLog do
     field(:action, :string)
     field(:payload, :map, default: %{})
     field(:signature, :binary)
-    field(:logged_at, :utc_datetime, read_after_writes: true)
+    field(:logged_at, Example.PrismaDateTime, read_after_writes: true)
   end
 end

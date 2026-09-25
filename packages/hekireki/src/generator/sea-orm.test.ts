@@ -1,6 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 import { describe, expect, it } from 'vite-plus/test'
 
+import { PRISMA_DATE_TIME_RS } from '../helper/sea-orm.js'
 import { seaOrmFiles } from './sea-orm.js'
 
 function makeField(overrides: Partial<DMMF.Field> & { name: string; type: string }): DMMF.Field {
@@ -83,7 +84,7 @@ const bare = [
 ]
 
 describe('seaOrmFiles', () => {
-  it('writes the enums, the entities, the prelude and a mod.rs that lists them in order', () => {
+  it('writes the enums, the entities, and a prelude and mod.rs that list them in order', () => {
     expect(seaOrmFiles(models, enums, { renameAll: 'camelCase' })).toStrictEqual([
       {
         fileName: 'role.rs',
@@ -103,9 +104,9 @@ pub enum Role {
       },
       {
         fileName: 'user.rs',
-        code: `use sea_orm::entity::prelude::*;
+        code: `use super::role::Role;
+use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
-use super::role::Role;
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -129,7 +130,8 @@ impl Related<super::blog_post::Entity> for Entity {
     }
 }
 
-impl ActiveModelBehavior for ActiveModel {}`,
+impl ActiveModelBehavior for ActiveModel {}
+`,
       },
       {
         fileName: 'blog_post.rs',
@@ -163,12 +165,13 @@ impl Related<super::user::Entity> for Entity {
     }
 }
 
-impl ActiveModelBehavior for ActiveModel {}`,
+impl ActiveModelBehavior for ActiveModel {}
+`,
       },
       {
         fileName: 'prelude.rs',
-        code: `pub use super::user::Entity as User;
-pub use super::blog_post::Entity as BlogPost;
+        code: `pub use super::blog_post::Entity as BlogPost;
+pub use super::user::Entity as User;
 `,
       },
       {
@@ -199,7 +202,8 @@ pub struct Model {
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {}
 
-impl ActiveModelBehavior for ActiveModel {}`,
+impl ActiveModelBehavior for ActiveModel {}
+`,
       },
       {
         fileName: 'prelude.rs',
@@ -212,6 +216,37 @@ impl ActiveModelBehavior for ActiveModel {}`,
 pub mod prelude;
 `,
       },
+    ])
+  })
+
+  it('writes prisma_date_time.rs beside the entities for a DateTime on SQLite', () => {
+    const stamped = [
+      makeModel({
+        name: 'Event',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({ name: 'at', type: 'DateTime' }),
+        ],
+      }),
+    ]
+    const files = seaOrmFiles(stamped, [], {}, 'sqlite')
+    expect(files.map((file) => file.fileName)).toStrictEqual([
+      'event.rs',
+      'prisma_date_time.rs',
+      'prelude.rs',
+      'mod.rs',
+    ])
+    expect(files.find((file) => file.fileName === 'prisma_date_time.rs')?.code).toBe(
+      PRISMA_DATE_TIME_RS,
+    )
+    expect(files.at(-1)?.code).toBe(`pub mod event;
+pub mod prelude;
+pub mod prisma_date_time;
+`)
+    expect(seaOrmFiles(stamped, [], {}, 'postgresql').map((file) => file.fileName)).toStrictEqual([
+      'event.rs',
+      'prelude.rs',
+      'mod.rs',
     ])
   })
 

@@ -311,16 +311,17 @@ fun read(db: Database) {
             event.zonedList to listOf(MILLIS, Instant.parse("1999-12-31T23:59:59.999Z")),
             (event.updatedAt == event.syncedAt) to true,
         )
-        fun found(op: () -> org.jetbrains.exposed.v1.core.Op<Boolean>) = EventTable.selectAll().where(op).map { it[EventTable.name] }
+        fun found(op: () -> org.jetbrains.exposed.v1.core.Op<Boolean>) = EventTable.selectAll().where(op).map { it[EventTable.name] }.sorted()
+        // Exposed's row from `seed` holds the same values.
         check(
-            "and finds Prisma Client's row by each of them, given with nanoseconds or in another offset",
-            found { EventTable.at eq FINE } to listOf("prisma"),
-            found { EventTable.micros eq FINE } to listOf("prisma"),
-            found { EventTable.zoned eq FINE } to listOf("prisma"),
-            found { EventTable.zonedFine eq FINE } to listOf("prisma"),
-            found { EventTable.clock eq LocalTime.parse("09:00:00.123999999") } to listOf("prisma"),
-            found { EventTable.fineClock eq LocalTime.parse("09:00:00.123999999") } to listOf("prisma"),
-            found { EventTable.zonedTime eq OffsetTime.parse("18:00:00.123999999+09:00") } to listOf("prisma"),
+            "and finds Prisma Client's row and its own by each of them, given with nanoseconds or in another offset",
+            found { EventTable.at eq FINE } to listOf("exposed", "prisma"),
+            found { EventTable.micros eq FINE } to listOf("exposed", "prisma"),
+            found { EventTable.zoned eq FINE } to listOf("exposed", "prisma"),
+            found { EventTable.zonedFine eq FINE } to listOf("exposed", "prisma"),
+            found { EventTable.clock eq LocalTime.parse("09:00:00.123999999") } to listOf("exposed", "prisma"),
+            found { EventTable.fineClock eq LocalTime.parse("09:00:00.123999999") } to listOf("exposed", "prisma"),
+            found { EventTable.zonedTime eq OffsetTime.parse("18:00:00.123999999+09:00") } to listOf("exposed", "prisma"),
             found { EventTable.createdAt eq event.createdAt } to listOf("prisma"),
         )
         val key =
@@ -340,7 +341,11 @@ fun read(db: Database) {
 
 fun main(args: Array<String>) {
     val (mode, url) = args
-    val db = Database.connect(url)
+    // pgjdbc sets the session's TimeZone to the JVM's zone. The generated tables bind and read every
+    // DateTime without it, but what PostgreSQL computes itself does not: a
+    // @default(dbgenerated("CURRENT_TIMESTAMP")), or now() in SQL, cast to a column without a time
+    // zone. Prisma Client's session is in the server's zone, UTC; this one is too.
+    val db = Database.connect(url, setupConnection = { it.createStatement().use { s -> s.execute("SET TIME ZONE 'UTC'") } })
     println("JVM zone ${ZoneId.systemDefault()}, $mode")
     when (mode) {
         "check" -> exposedAlone(db)

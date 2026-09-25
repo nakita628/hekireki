@@ -1,6 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { contextFile, entityFile, enumFile, planEfCore } from '../helper/efcore.js'
+import type { Provider } from '../helper/efcore.js'
 
 export function efcoreFiles(
   datamodel: {
@@ -8,7 +9,7 @@ export function efcoreFiles(
     readonly enums: readonly DMMF.DatamodelEnum[]
     readonly indexes?: readonly DMMF.Index[]
   },
-  options: { readonly namespace: string; readonly context: string },
+  options: { readonly namespace: string; readonly context: string; readonly provider: Provider },
 ) {
   const plan = planEfCore(datamodel, options)
   return [

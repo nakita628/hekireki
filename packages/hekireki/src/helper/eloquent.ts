@@ -597,9 +597,10 @@ function dateFormat(provider: string | undefined) {
  * the app's timezone, as Eloquent reads one. `asDateTime()` reads a string from the table as UTC
  * where it names no zone of its own: the only strings it is handed are the table's and the ones
  * `fromDateTime()` wrote. The model's queries are a PrismaQueryBuilder, which binds a date the
- * same way.
+ * same way, and on PostgreSQL is told the model's `timestamptz` columns, its ZONED_DATES.
  */
-export function eloquentDatesTrait(namespace: string) {
+export function eloquentDatesTrait(namespace: string, provider?: string) {
+  const zoned = provider === 'postgresql' || provider === 'cockroachdb'
   return `<?php
 
 namespace ${namespace};
@@ -627,8 +628,15 @@ trait PrismaDates
     protected function newBaseQueryBuilder()
     {
         $connection = $this->getConnection();
+${
+  zoned
+    ? `        $query = new PrismaQueryBuilder($connection, $connection->getQueryGrammar(), $connection->getPostProcessor());
+        $query->zonedDates = defined(static::class . '::ZONED_DATES') ? static::ZONED_DATES : [];
 
-        return new PrismaQueryBuilder($connection, $connection->getQueryGrammar(), $connection->getPostProcessor());
+        return $query;`
+    : `
+        return new PrismaQueryBuilder($connection, $connection->getQueryGrammar(), $connection->getPostProcessor());`
+}
     }
 }`
 }
@@ -639,9 +647,12 @@ trait PrismaDates
  * and on SQLite, which compares the text, it would miss rows written in Prisma's form. Every
  * binding (`where`, `whereBetween`, `whereIn`, `update`, `insert`) passes through `castBinding()`,
  * which writes a date as the models do; `whereDate()` and the other date parts take the UTC date
- * of the value, as the column holds it.
+ * of the value, as the column holds it. On PostgreSQL a `timestamptz` column gives its date and
+ * time in the session's time zone: those of the model's ZONED_DATES are taken `at time zone
+ * 'UTC'`, as Prisma's own session sees them.
  */
 export function eloquentQueryBuilder(namespace: string, provider?: string) {
+  const zoned = provider === 'postgresql' || provider === 'cockroachdb'
   return `<?php
 
 namespace ${namespace};
@@ -649,7 +660,7 @@ namespace ${namespace};
 use DateTimeImmutable;
 use DateTimeInterface;
 use DateTimeZone;
-use Illuminate\\Database\\Query\\Builder;
+use Illuminate\\Database\\Query\\Builder;${zoned ? '\nuse Illuminate\\Database\\Query\\Expression;' : ''}
 
 /**
  * The query of a model with a DateTime: a date is bound as Prisma Client writes one, in UTC with
@@ -658,7 +669,23 @@ use Illuminate\\Database\\Query\\Builder;
 class PrismaQueryBuilder extends Builder
 {
     const DATE_FORMAT = '${dateFormat(provider)}';
+${
+  zoned
+    ? `
+    /** @var list<string> the model's timestamptz columns, whose date and time are taken in UTC */
+    public array $zonedDates = [];
 
+    protected function addDateBasedWhere($type, $column, $operator, $value, $boolean = 'and')
+    {
+        if (is_string($column) && in_array(last(explode('.', $column)), $this->zonedDates, true)) {
+            $column = new Expression('(' . $this->grammar->wrap($column) . " at time zone 'UTC')");
+        }
+
+        return parent::addDateBasedWhere($type, $column, $operator, $value, $boolean);
+    }
+`
+    : ''
+}
     public function castBinding($value)
     {
         return $value instanceof DateTimeInterface
@@ -679,7 +706,8 @@ class PrismaQueryBuilder extends Builder
 
 /**
  * The cast of a `@db.Date` column: the UTC date of the value, written `Y-m-d`, and read as
- * midnight UTC, as Prisma reads one.
+ * midnight UTC, as Prisma reads one. A date given as the text the column holds (`2030-01-02`) is
+ * written as it is: read in the app's timezone, it would be the day before east of UTC.
  */
 export function eloquentDateCast(namespace: string) {
   return `<?php
@@ -692,7 +720,8 @@ use Illuminate\\Support\\Facades\\Date;
 
 /**
  * A @db.Date column, as Prisma Client keeps one: the UTC date of the value, read as midnight UTC.
- * A value the caller gives with no zone is in the app's timezone.
+ * A date given as \`Y-m-d\` is written as it is; any other value with no zone is in the app's
+ * timezone.
  */
 class AsPrismaDate implements CastsAttributes
 {
@@ -703,6 +732,10 @@ class AsPrismaDate implements CastsAttributes
 
     public function set(Model $model, string $key, mixed $value, array $attributes): ?string
     {
+        if (is_string($value) && preg_match('/^\\d{4}-\\d{2}-\\d{2}$/', $value)) {
+            return $value;
+        }
+
         return $value === null ? null : Date::parse($value)->setTimezone('UTC')->format('Y-m-d');
     }
 }`
@@ -710,9 +743,13 @@ class AsPrismaDate implements CastsAttributes
 
 /**
  * The cast of a `@db.Time` or `@db.Timetz` column: the UTC time of the value, written `H:i:s.v`,
- * and read on 1970-01-01 UTC with any offset the column gives dropped, as Prisma reads one.
+ * and read on 1970-01-01 UTC with any offset the column gives dropped, as Prisma reads one. On
+ * PostgreSQL the time is written with its offset, `+00:00`, which a `time` ignores and a `timetz`
+ * keeps: without one a `timetz` takes the session's. A time given as the text the column holds
+ * (`03:04:05.678`) is that time in UTC.
  */
-export function eloquentTimeCast(namespace: string) {
+export function eloquentTimeCast(namespace: string, provider?: string) {
+  const offset = provider === 'postgresql' || provider === 'cockroachdb' ? '+00:00' : ''
   return `<?php
 
 namespace ${namespace};
@@ -723,8 +760,8 @@ use Illuminate\\Support\\Facades\\Date;
 
 /**
  * A @db.Time or @db.Timetz column, as Prisma Client keeps one: the UTC time of the value, read on
- * 1970-01-01 UTC, the offset a timetz gives dropped. A value the caller gives with no zone is in
- * the app's timezone.
+ * 1970-01-01 UTC, the offset a timetz gives dropped. A time given as \`H:i:s\` is that time in
+ * UTC; any other value with no zone is in the app's timezone.
  */
 class AsPrismaTime implements CastsAttributes
 {
@@ -735,7 +772,68 @@ class AsPrismaTime implements CastsAttributes
 
     public function set(Model $model, string $key, mixed $value, array $attributes): ?string
     {
-        return $value === null ? null : Date::parse($value)->setTimezone('UTC')->format('H:i:s.v');
+        if (is_string($value) && preg_match('/^\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?$/', $value)) {
+            return $value${offset === '' ? '' : ` . '${offset}'`};
+        }
+
+        return $value === null ? null : Date::parse($value)->setTimezone('UTC')->format('H:i:s.v${offset === '' ? '' : 'P'}');
+    }
+}`
+}
+
+/**
+ * The cast of a PostgreSQL `DateTime[]`: a list of Carbon, read from the array literal the column
+ * holds as `AsPrismaDate` and `AsPrismaTime` read one value, and written as that literal in
+ * UTC, each with its offset. Its argument is the native type of the items: `date` for
+ * `@db.Date`, `time` for `@db.Time` and `@db.Timetz`, none for a timestamp. A string is
+ * written as it is, as the literal the column takes.
+ */
+export function eloquentDateListCast(namespace: string) {
+  return `<?php
+
+namespace ${namespace};
+
+use Illuminate\\Contracts\\Database\\Eloquent\\CastsAttributes;
+use Illuminate\\Database\\Eloquent\\Model;
+use Illuminate\\Support\\Facades\\Date;
+
+/**
+ * A PostgreSQL DateTime[] column, as Prisma Client keeps one: a list of Carbon, written as the
+ * array literal in UTC. Its argument is the type of the items: date, time, or none for a
+ * timestamp. A string is written as it is, as the literal the column takes.
+ */
+class AsPrismaDateList implements CastsAttributes
+{
+    public function __construct(private string $kind = 'timestamp')
+    {
+    }
+
+    public function get(Model $model, string $key, mixed $value, array $attributes): ?array
+    {
+        if ($value === null) {
+            return null;
+        }
+        $items = str_getcsv(substr((string) $value, 1, -1), ',', '"', '\\\\');
+
+        return $items === [null] || $items === [''] ? [] : array_map(fn (string $item) => match ($this->kind) {
+            'date' => Date::parse(substr($item, 0, 10), 'UTC'),
+            'time' => Date::parse('1970-01-01 ' . preg_replace('/[+-]\\d\\d(:?\\d\\d)?$/', '', $item), 'UTC'),
+            default => Date::parse($item, 'UTC'),
+        }, $items);
+    }
+
+    public function set(Model $model, string $key, mixed $value, array $attributes): ?string
+    {
+        if ($value === null || is_string($value)) {
+            return $value;
+        }
+        $format = match ($this->kind) {
+            'date' => 'Y-m-d',
+            'time' => 'H:i:s.vP',
+            default => 'Y-m-d H:i:s.vP',
+        };
+
+        return '{' . implode(',', array_map(fn ($item) => '"' . Date::parse($item)->setTimezone('UTC')->format($format) . '"', $value)) . '}';
     }
 }`
 }
@@ -766,6 +864,15 @@ function supportClasses(models: readonly DMMF.Model[]) {
         f.type === 'DateTime' && (f.nativeType?.[0] === 'Time' || f.nativeType?.[0] === 'Timetz'),
     )
       ? [{ name: 'AsPrismaTime', why: 'the cast of @db.Time columns', code: eloquentTimeCast }]
+      : []),
+    ...(models.some((model) => model.fields.some((f) => f.type === 'DateTime' && f.isList))
+      ? [
+          {
+            name: 'AsPrismaDateList',
+            why: 'the cast of DateTime[] columns',
+            code: eloquentDateListCast,
+          },
+        ]
       : []),
     ...(fields.some((f) => f.type === 'Bytes')
       ? [{ name: 'AsBytes', why: 'the cast of Bytes columns', code: eloquentBytesCast }]
@@ -1088,8 +1195,20 @@ export function eloquentModels(
         ],
       ]
 
+      // On PostgreSQL, the columns whose date and time PrismaQueryBuilder takes in UTC.
+      const zonedColumns =
+        options.provider === 'postgresql' || options.provider === 'cockroachdb'
+          ? model.fields
+              .filter(
+                (f) => f.type === 'DateTime' && !f.isList && f.nativeType?.[0] === 'Timestamptz',
+              )
+              .map((f) => phpString(f.dbName ?? f.name))
+          : []
       const constLines = [
         ...timestampConstLines,
+        ...(zonedColumns.length > 0
+          ? [`    const ZONED_DATES = [${zonedColumns.join(', ')}];`]
+          : []),
         ...(compositeColumns.length > 0
           ? [`    const KEY_COLUMNS = [${compositeColumns.map(phpString).join(', ')}];`]
           : []),
@@ -1097,9 +1216,21 @@ export function eloquentModels(
 
       const castEntries = attributeFields.flatMap((f) => {
         const column = f.dbName ?? f.name
-        // Prisma scalar lists are native arrays (e.g. text[] on PostgreSQL),
+        // A DateTime[] is a list of Carbon, through AsPrismaDateList; its argument is the
+        // native type of the items.
+        if (f.isList && f.type === 'DateTime') {
+          const kind = f.nativeType?.[0]
+          const argument =
+            kind === 'Date'
+              ? " . ':date'"
+              : kind === 'Time' || kind === 'Timetz'
+                ? " . ':time'"
+                : ''
+          return [`        ${phpString(column)} => AsPrismaDateList::class${argument},`]
+        }
+        // Other Prisma scalar lists are native arrays (e.g. text[] on PostgreSQL),
         // not serialized JSON: Laravel's 'array' cast would json_decode/encode
-        // and break both reads and writes, so lists get no cast.
+        // and break both reads and writes, so they get no cast.
         if (f.isList) return []
         if (f.kind === 'enum' && enumNames.has(f.type)) {
           return [`        ${phpString(column)} => ${f.type}::class,`]
@@ -1206,16 +1337,19 @@ export function eloquentModels(
         const version = 'args' in def && def.args[0] === 7 ? 'uuid7' : 'orderedUuid'
         return [[column, `(string) ${ref(STR)}::${version}()`]]
       })
+      // A `dbgenerated("CURRENT_TIMESTAMP")` is filled so too: the table's clock is read in the
+      // session's time zone, and a `timestamp` column under Asia/Tokyo would be nine hours off.
       const clockDefaults = attributeFields.flatMap((f) => {
         const def = f.default
-        return !f.isList &&
-          !f.isUpdatedAt &&
-          def &&
-          typeof def === 'object' &&
-          'name' in def &&
-          def.name === 'now'
-          ? [[phpString(f.dbName ?? f.name), '$this->freshTimestamp()']]
-          : []
+        if (f.isList || f.isUpdatedAt || !(def && typeof def === 'object' && 'name' in def)) {
+          return []
+        }
+        const clock =
+          def.name === 'now' ||
+          (def.name === 'dbgenerated' &&
+            f.type === 'DateTime' &&
+            /^(current_timestamp(\(\d*\))?|now\(\))$/iu.test(String(def.args[0] ?? '').trim()))
+        return clock ? [[phpString(f.dbName ?? f.name), '$this->freshTimestamp()']] : []
       })
       const insertLines = [...madeIds, ...clockDefaults].flatMap(([column, value]) => [
         `            if (! array_key_exists(${column}, $this->attributes)) {`,

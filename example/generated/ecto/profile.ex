@@ -30,7 +30,7 @@ defmodule Example.Profile do
     field(:verified, :boolean, default: false)
     field(:meta, :map)
     field(:avatar, :binary)
-    field(:last_seen, :utc_datetime)
+    field(:last_seen, Example.PrismaDateTime)
     belongs_to(:user, Example.User, foreign_key: :user_id, type: :binary_id)
   end
 end

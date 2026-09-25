@@ -27,6 +27,8 @@
     "examples/*/deps/**",
     "examples/*/_build/**",
     "examples/*/.venv/**",
+    // The date checks kept beside an example while it is compared with Prisma Client (git-ignored).
+    "examples/*/.datecheck/**",
     // What a Playwright run leaves behind.
     "**/e2e/.results/**",
     "**/e2e/.workspace/**",

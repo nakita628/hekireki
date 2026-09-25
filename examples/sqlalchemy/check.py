@@ -7,7 +7,7 @@ import sqlite3
 import uuid
 import warnings
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -178,7 +178,8 @@ def _() -> str | None:
 
 # --- Columns ----------------------------------------------------------------------------------
 
-RELEASED = datetime(2026, 4, 1, 9, 30, 15, 123456)
+# Prisma keeps a DateTime to the millisecond, as a UTC instant: the model reads it back aware.
+RELEASED = datetime(2026, 4, 1, 9, 30, 15, 123000, tzinfo=timezone.utc)
 
 
 @check("every scalar type round-trips: Int, BigInt, Float, Decimal, Boolean, String, DateTime, Json, Bytes")
@@ -217,9 +218,10 @@ def _() -> str | None:
         )
         if seen != expected:
             return f"expected {expected}, got {seen}"
-        # What SQLite holds: an integer past 2^53 is still exact, the bytes are a BLOB.
-        stored = raw("SELECT views, typeof(thumbnail) FROM products WHERE id = :id", id=key)
-        return None if stored == [(2**53 + 1, "blob")] else f"stored {stored}"
+        # What SQLite holds: an integer past 2^53 is still exact, the bytes are a BLOB, and the
+        # DateTime is the UTC text Prisma Client writes.
+        stored = raw("SELECT views, typeof(thumbnail), released_at FROM products WHERE id = :id", id=key)
+        return None if stored == [(2**53 + 1, "blob", "2026-04-01T09:30:15.123+00:00")] else f"stored {stored}"
 
 
 @check("optional fields left out are None, and NULL in the table")
@@ -264,16 +266,16 @@ def _() -> str | None:
         return None if seen == expected else f"expected {expected}, got {seen}"
 
 
-@check("now() is the database's default, @updatedAt is set on INSERT and bumped on UPDATE")
+@check("now() and @updatedAt are the clock in UTC, set on INSERT and bumped on UPDATE")
 def _() -> str | None:
     with Session(engine) as session:
         account = Account(email="clock@example.com")
         session.add(account)
         session.commit()
         created, updated = account.created_at, account.updated_at
-        if not (isinstance(created, datetime) and isinstance(updated, datetime)):
+        if not (created.tzinfo == timezone.utc and updated.tzinfo == timezone.utc):
             return f"created_at {created!r}, updated_at {updated!r}"
-        # CURRENT_TIMESTAMP counts whole seconds: the row is put back a day, so a bump shows.
+        # The row is put back to 2000, so a bump shows whatever the clock's resolution.
         raw_update = "UPDATE accounts SET updated_at = '2000-01-01 00:00:00' WHERE id = :id"
         with engine.begin() as connection:
             connection.execute(text(raw_update), {"id": account.id})

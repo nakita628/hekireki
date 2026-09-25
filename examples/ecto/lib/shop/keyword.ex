@@ -28,16 +28,16 @@ defmodule Shop.Keyword do
 
   schema "keywords" do
     field(:type, :string)
-    field(:end, :utc_datetime)
+    field(:end, Shop.PrismaDateTime)
     field(:do, :string)
     field(:fn, :string)
-    field(:when, :utc_datetime)
+    field(:when, Shop.PrismaDateTime)
     field(:schema, :string)
     field(:changeset, :string)
     field(:meta, :string, source: :__meta__)
     field(:rescue, :boolean)
     field(:in, :integer)
-    field(:at, :utc_datetime, read_after_writes: true)
+    field(:at, Shop.PrismaDateTime, autogenerate: true)
   end
 
   @spec changeset(t(), map()) :: Ecto.Changeset.t()

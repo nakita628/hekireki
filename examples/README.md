@@ -37,6 +37,12 @@ starts from nothing.
   (`illuminate/database` 12) on SQLite, with Prisma Client reading what they wrote and writing what
   they read; see [eloquent/README.md](eloquent/README.md). PHP 8.2 or newer with `pdo_sqlite`.
 
+`django/` runs the models `hekireki-django` writes through the Django 5.2 ORM on a blog with a
+corner of how Prisma keeps a `DateTime` in each model, after mypy `--strict` with django-stubs,
+with Prisma Client reading what they wrote and writing what they read, in `Asia/Tokyo` and in UTC,
+on SQLite, PostgreSQL or MySQL; see [django/README.md](django/README.md). Python 3.10 or newer, in
+a virtualenv of its own.
+
 `sqlite/`, `mysql/` and `postgresql/` are small projects to try `hekireki seed` and `hekireki studio` on, one per database. Each is a
 `schema.prisma` with the `prisma-client` and `hekireki-seed` generators, the schema module the
 latter writes (committed, so the config type-checks before `pnpm setup` has run), and a typed

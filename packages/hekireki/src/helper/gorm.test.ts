@@ -180,7 +180,7 @@ describe('buildGormTags', () => {
       hasDefaultValue: false,
     } as any
     expect(buildGormTags(field, false, false, [])).toStrictEqual(
-      '`gorm:"column:updatedAt;autoUpdateTime;not null" json:"updatedAt"`',
+      '`gorm:"column:updatedAt;autoUpdateTime:false;not null" json:"updatedAt"`',
     )
   })
 
@@ -484,7 +484,7 @@ const NATIVE_TYPES: readonly (readonly [
     'DateTime',
     '@db.Timestamptz',
     ['Timestamptz', []],
-    '`gorm:"column:value;type:timestamp;not null" json:"value"`',
+    '`gorm:"column:value;type:timestamptz;not null" json:"value"`',
   ],
   ['DateTime', '@db.Date', ['Date', []], '`gorm:"column:value;type:date;not null" json:"value"`'],
   ['DateTime', '@db.Time', ['Time', []], '`gorm:"column:value;type:time;not null" json:"value"`'],
@@ -492,7 +492,7 @@ const NATIVE_TYPES: readonly (readonly [
     'DateTime',
     '@db.Timetz',
     ['Timetz', []],
-    '`gorm:"column:value;type:time;not null" json:"value"`',
+    '`gorm:"column:value;type:timetz;not null" json:"value"`',
   ],
   ['Json', '@db.JsonB', ['JsonB', []], '`gorm:"column:value;type:jsonb;not null" json:"value"`'],
   ['String', '@db.Xml', ['Xml', []], '`gorm:"column:value;type:xml;not null" json:"value"`'],
@@ -524,15 +524,17 @@ describe('buildGormTags native types', () => {
   )
 })
 
-function gormFor(schema: string) {
+function gormFor(schema: string, provider = 'sqlite') {
   const result = getDMMF({
-    datamodel: [['schema.prisma', `datasource db {\n  provider = "sqlite"\n}\n${schema}`]],
+    datamodel: [['schema.prisma', `datasource db {\n  provider = "${provider}"\n}\n${schema}`]],
   })
   if ('type' in result) throw new Error(result.error.message)
   return generateGormModels(
     result.datamodel.models,
     result.datamodel.enums,
     result.datamodel.indexes,
+    'model',
+    provider,
   )
 }
 
@@ -564,6 +566,9 @@ model Comment {
     ).toBe(`package model
 
 import (
+	"database/sql/driver"
+	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -571,15 +576,23 @@ import (
 )
 
 type Post struct {
-	ID        int       \`gorm:"column:id;primaryKey;autoIncrement" json:"id"\`
-	UserID    *string   \`gorm:"column:userId" json:"userId"\`
-	CreatedAt time.Time \`gorm:"column:createdAt;autoCreateTime;not null" json:"createdAt"\`
+	ID        int      \`gorm:"column:id;primaryKey;autoIncrement" json:"id"\`
+	UserID    *string  \`gorm:"column:userId" json:"userId"\`
+	CreatedAt DateTime \`gorm:"column:createdAt;autoCreateTime:false;not null" json:"createdAt"\`
 	User      User
 	Comments  []Comment \`gorm:"foreignKey:PostID"\`
 }
 
 func (Post) TableName() string {
 	return "Post"
+}
+
+func (m *Post) BeforeCreate(tx *gorm.DB) error {
+	now := tx.NowFunc().UTC().Truncate(time.Millisecond)
+	if m.CreatedAt.IsZero() {
+		m.CreatedAt = DateTime{Time: now}
+	}
+	return nil
 }
 
 type User struct {
@@ -606,6 +619,68 @@ type Comment struct {
 
 func (Comment) TableName() string {
 	return "Comment"
+}
+
+// DateTime is a Prisma DateTime as Prisma Client keeps it: an instant in UTC, to the
+// millisecond, whatever zone the time.Time is in. Bind a time.Time through it in a query of
+// your own, \`db.Where("at > ?", DateTime{Time: at})\`: the driver formats a bare time.Time
+// its own way.
+type DateTime struct{ time.Time }
+
+// GormDataType has GORM treat the column as it treats a time.Time.
+func (DateTime) GormDataType() string {
+	return "time"
+}
+
+// Value writes the instant as Prisma Client does on SQLite: \`2006-01-02T15:04:05.000+00:00\`,
+// in UTC, the text SQLite compares and sorts.
+func (dateTime DateTime) Value() (driver.Value, error) {
+	return dateTime.UTC().Truncate(time.Millisecond).Format("2006-01-02T15:04:05.000-07:00"), nil
+}
+
+// Scan reads the column as Prisma Client does (see readPrismaTime).
+func (dateTime *DateTime) Scan(src any) error {
+	read, err := readPrismaTime(src)
+	dateTime.Time = read
+	return err
+}
+
+// prismaTimeLayouts are the texts readPrismaTime reads, as Prisma Client reads them: with an
+// offset or \`Z\`, or with none, which is UTC; a date alone is midnight UTC.
+var prismaTimeLayouts = []string{
+	"2006-01-02T15:04:05.999999999Z07:00",
+	"2006-01-02 15:04:05.999999999Z07:00",
+	"2006-01-02 15:04:05.999999999Z07",
+	"2006-01-02T15:04:05.999999999",
+	"2006-01-02 15:04:05.999999999",
+	"2006-01-02",
+}
+
+// readPrismaTime reads a DateTime column as Prisma Client reads it: text with no zone is UTC, an
+// offset is kept, digits are milliseconds since 1970, and what is past the millisecond is
+// dropped.
+func readPrismaTime(src any) (time.Time, error) {
+	switch value := src.(type) {
+	case nil:
+		return time.Time{}, nil
+	case time.Time:
+		return value.UTC().Truncate(time.Millisecond), nil
+	case int64:
+		return time.UnixMilli(value).UTC(), nil
+	case []byte:
+		return readPrismaTime(string(value))
+	case string:
+		if millis, err := strconv.ParseInt(value, 10, 64); err == nil {
+			return time.UnixMilli(millis).UTC(), nil
+		}
+		for _, layout := range prismaTimeLayouts {
+			if read, err := time.Parse(layout, value); err == nil {
+				return read.UTC().Truncate(time.Millisecond), nil
+			}
+		}
+		return time.Time{}, fmt.Errorf("a DateTime column held %q", value)
+	}
+	return time.Time{}, fmt.Errorf("a DateTime column held %T", src)
 }
 `)
   })
@@ -792,5 +867,110 @@ func (m *Key) BeforeCreate(_ *gorm.DB) error {
 	return nil
 }
 `)
+  })
+})
+
+// Each was checked against Prisma Client on the same tables (sqlite, postgresql, mysql; TZ=UTC
+// and Asia/Tokyo): a row either side writes reads back on the other as the same instant.
+describe('generateGormModels DateTime as Prisma Client keeps it', () => {
+  it('holds a DateTime[] on PostgreSQL in an array of the element type, not JSON', () => {
+    const code = gormFor(
+      `
+model Stamp {
+  id     Int        @id
+  list   DateTime[]
+  days   DateTime[] @db.Date
+  clocks DateTime[] @db.Timetz
+}
+`,
+      'postgresql',
+    )
+    expect(code).toContain(
+      [
+        '\tList   DateTimeList  `gorm:"column:list;type:timestamp(3)[];not null" json:"list"`',
+        '\tDays   DateList      `gorm:"column:days;type:date[];not null" json:"days"`',
+        '\tClocks TimeOfDayList `gorm:"column:clocks;type:timetz[];not null" json:"clocks"`',
+      ].join('\n'),
+    )
+    expect(code).not.toContain('serializer:json')
+    expect(code).toContain(
+      [
+        '// DateTimeList is a Prisma DateTime[] held as DateTimes: a PostgreSQL array, each element',
+        '// written and read as DateTime writes and reads one.',
+        'type DateTimeList []DateTime',
+        '',
+        '// Value writes the array as Prisma Client does, `{"2030-01-02 03:04:05.678"}`.',
+        'func (list DateTimeList) Value() (driver.Value, error) {',
+        '\treturn arrayText(list)',
+        '}',
+        '',
+        '// Scan reads each element of the array as DateTime does.',
+        'func (list *DateTimeList) Scan(src any) error {',
+        '\treturn scanArray(src, (*[]DateTime)(list))',
+        '}',
+      ].join('\n'),
+    )
+    expect(code).toContain('type DateList []Date')
+    expect(code).toContain('type TimeOfDayList []TimeOfDay')
+    expect(code).toContain('func arrayText[T driver.Valuer](list []T) (driver.Value, error) {')
+    expect(code).toContain('\t"database/sql"\n\t"database/sql/driver"\n')
+    expect(code).toContain('\t"strings"\n')
+  })
+
+  it('writes an instant as the UTC wall clock text on MySQL and reads a DATETIME in UTC', () => {
+    const code = gormFor(
+      `
+model Stamp {
+  id  Int       @id
+  at  DateTime  @db.DateTime(3)
+  ts  DateTime? @db.Timestamp(0)
+  day DateTime  @default("2030-01-02T00:00:00.000Z") @db.Date
+}
+`,
+      'mysql',
+    )
+    expect(code).toContain(
+      [
+        '\tAt  DateTime  `gorm:"column:at;type:datetime(3);not null" json:"at"`',
+        '\tTs  *DateTime `gorm:"column:ts;type:timestamp(0)" json:"ts"`',
+        '\tDay Date      `gorm:"column:day;type:date;default:\'2030-01-02\';not null" json:"day"`',
+      ].join('\n'),
+    )
+    expect(code).toContain(
+      '\treturn dateTime.UTC().Truncate(time.Millisecond).Format("2006-01-02 15:04:05.000"), nil',
+    )
+    expect(code).toContain(
+      '\t\treturn time.Date(value.Year(), value.Month(), value.Day(), value.Hour(), value.Minute(), value.Second(), value.Nanosecond(), time.UTC).Truncate(time.Millisecond), nil',
+    )
+    expect(code).not.toContain('DateTimeList')
+  })
+
+  it('keeps a timestamptz and its precision on PostgreSQL, and fills a literal default in UTC', () => {
+    const code = gormFor(
+      `
+model Stamp {
+  id        Int       @id
+  at        DateTime  @default("2030-01-02T03:04:05.678Z") @db.Timestamptz(3)
+  day       DateTime? @db.Date
+  clock     DateTime  @db.Time(3)
+  updatedAt DateTime  @updatedAt
+}
+`,
+      'postgresql',
+    )
+    expect(code).toContain(
+      [
+        '\tAt        DateTime  `gorm:"column:at;type:timestamptz(3);default:\'2030-01-02 03:04:05.678\';not null" json:"at"`',
+        '\tDay       *Date     `gorm:"column:day;type:date" json:"day"`',
+        '\tClock     TimeOfDay `gorm:"column:clock;type:time(3);not null" json:"clock"`',
+        '\tUpdatedAt DateTime  `gorm:"column:updatedAt;autoUpdateTime:false;not null" json:"updatedAt"`',
+      ].join('\n'),
+    )
+    expect(code).toContain(
+      '\t\tm.At = DateTime{Time: time.Date(2030, 1, 2, 3, 4, 5, 678000000, time.UTC)}',
+    )
+    expect(code).toContain('\t\ttx.Statement.SetColumn("UpdatedAt", DateTime{Time: now})')
+    expect(code).toContain('\treturn dateTime.UTC().Truncate(time.Millisecond), nil')
+    expect(code).not.toContain('arrayText')
   })
 })

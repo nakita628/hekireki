@@ -38,8 +38,11 @@ Then each thing the schema promises, as Rails keeps it:
 - **Attributes.** Literal defaults are on a new record before it is saved; an enum validates a
   value outside it instead of raising, stores the `@map` value, and takes `visibility_public?` where
   Ruby already has `public`; a column named `type` is a plain column; `createdAt` and `updatedAt`
-  are filled, bumped by `update` and `touch`, and ordered by through their aliases; a `uuid()` key
-  is made in Ruby and `first`/`last` follow `created_at`.
+  are filled, bumped by `update` and `touch`, and ordered by through their aliases; a `DateTime`
+  is stored as the text Prisma writes on SQLite (`2030-01-02T03:04:05.678+00:00`, through the
+  `PrismaDateTime` type in `application_record.rb`), not Active Record's
+  `2030-01-02 03:04:05.678000`, and a `where` on the instant finds it; a `uuid()` key is made in
+  Ruby and `first`/`last` follow `created_at`.
 - **Associations.** `has_one` built from its owner and destroyed with it; `onDelete: SetNull`
   nullifies and the optional `belongs_to` may be empty; `Restrict` refuses to destroy an owner
   with children, as an error on the record; `Cascade` destroys the children; a self relation

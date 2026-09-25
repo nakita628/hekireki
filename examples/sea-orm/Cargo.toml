@@ -5,7 +5,7 @@ edition = "2021"
 publish = false
 
 # Which provider's entities the check is built with: src/entities for SQLite, or the ones
-# provider.ts generates under .provider/<provider>/ for the others.
+# provider.ts generates under .provider/<provider>/src/entities for the others (src/lib.rs).
 [features]
 sqlite = []
 postgresql = []
@@ -14,11 +14,20 @@ mysql = []
 [dependencies]
 # sea-orm 1.1, as the generator's language check (test/harness/sea-orm) builds against. Every sqlx
 # driver is on, so one build of sea-orm serves the three providers.
-sea-orm = { version = "1.1.20", features = ["sqlx-sqlite", "sqlx-postgres", "sqlx-mysql", "runtime-tokio", "postgres-array"] }
+sea-orm = { version = "1.1.20", features = [
+  "sqlx-sqlite",
+  "sqlx-postgres",
+  "sqlx-mysql",
+  "runtime-tokio",
+  "postgres-array",
+] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+# What the generated entities use beside sea-orm: chrono for a DateTime default or @updatedAt,
+# async-trait for the before_save that fills them, uuid for a uuid() key.
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+async-trait = "0.1"
 uuid = { version = "1", features = ["v4"] }
 
 [profile.dev]

@@ -52,7 +52,7 @@ end)
 # --- Types ------------------------------------------------------------------------------------
 
 check("every scalar type SQLite has is written and read back as it was", fn ->
-  released = ~U[2024-02-29 23:59:58Z]
+  released = ~U[2024-02-29 23:59:58.000Z]
   avatar = <<0, 255, 1, 0>>
 
   product =
@@ -118,7 +118,7 @@ check("literal defaults are on a new struct before it is saved", fn ->
     expect(product.weight, 0.0, "Float @default(0)"),
     expect(product.stock, -1, "Int @default(-1)"),
     expect(product.label, ~S(#{name} "quoted" \ back), "String default, not interpolated"),
-    expect(product.released_at, ~U[2020-01-01 00:00:00Z], "DateTime literal"),
+    expect(product.released_at, ~U[2020-01-01 00:00:00.000Z], "DateTime literal"),
     expect(product.category_id, 1, "a foreign key's default"),
     expect(%Account{}.role, :CUSTOMER, "enum default"),
     expect(%Account{}.active, true, "Boolean default"),
@@ -194,7 +194,7 @@ check("@@map and @map name the tables and columns, the schemas keep Elixir's nam
 end)
 
 check("Elixir's words are plain columns: type, end, do, fn, when, schema, changeset, rescue, in", fn ->
-  at = ~U[2025-01-01 00:00:00Z]
+  at = ~U[2025-01-01 00:00:00.000Z]
 
   attrs = [
     type: "t",
@@ -220,7 +220,7 @@ check("Elixir's words are plain columns: type, end, do, fn, when, schema, change
     expect(errors(long), %{do: ["should be at most 1 character(s)"]}, "validate_length(:do, ...)"),
     expect(
       row(~s(SELECT "__meta__", "end", "rescue" FROM keywords WHERE id = ?), [keyword.id]),
-      [["m", "2025-01-01T00:00:00Z", 1]],
+      [["m", "2025-01-01T00:00:00.000+00:00", 1]],
       "row"
     ),
     expect(Repo.one(from(k in Shop.Keyword, where: k.do == "d" and k.in == 3, select: k.fn)), "f", "query")

@@ -1,11 +1,52 @@
 import uuid
+from datetime import datetime
+from datetime import timezone as dt_timezone
 from decimal import Decimal
+from typing import Any, TypeVar
 
 import uuid6
+from django.conf import settings
 from django.contrib.postgres.fields import ArrayField
 from django.db import models
+from django.db.backends.base.base import BaseDatabaseWrapper
 from django.db.models.expressions import RawSQL
-from django.db.models.functions import Now
+from django.utils import timezone
+
+
+class UtcDateTimeField(models.DateTimeField):  # type: ignore[type-arg]
+    """A timestamp without a zone holding UTC, as ISO 8601 text on SQLite."""
+
+    def get_db_prep_value(self, value: Any, connection: BaseDatabaseWrapper, prepared: bool = False) -> Any:
+        if not prepared:
+            value = self.get_prep_value(value)
+        if not isinstance(value, datetime):
+            return super().get_db_prep_value(value, connection, prepared=True)
+        if timezone.is_naive(value):
+            value = timezone.make_aware(value, timezone.get_default_timezone())
+        value = value.astimezone(dt_timezone.utc)
+        if connection.vendor == "sqlite":
+            return value.isoformat(timespec="milliseconds")
+        return connection.ops.adapt_datetimefield_value(value.replace(tzinfo=None))
+
+    def from_db_value(self, value: datetime | None, expression: Any, connection: BaseDatabaseWrapper) -> datetime | None:
+        if value is None:
+            return None
+        if timezone.is_naive(value):
+            value = value.replace(tzinfo=dt_timezone.utc)
+        return value if settings.USE_TZ else timezone.make_naive(value, timezone.get_default_timezone())
+
+
+_M = TypeVar("_M", bound=models.Model)
+
+
+class AutoNowQuerySet(models.QuerySet[_M]):
+    """update(), and bulk_update() through it, set the auto_now fields as save() does."""
+
+    def update(self, **kwargs: Any) -> int:
+        for field in self.model._meta.concrete_fields:
+            if getattr(field, "auto_now", False):
+                kwargs.setdefault(field.name, getattr(field, "stamp", timezone.now)())
+        return super().update(**kwargs)
 
 
 def uuid4_str() -> str:
@@ -34,8 +75,9 @@ class User(models.Model):
     name = models.TextField()
     role = models.TextField(choices=Role.choices, default=Role.VIEWER)
     interests = ArrayField(models.TextField(), default=list)
-    created_at = models.DateTimeField(db_default=Now())
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = UtcDateTimeField(default=timezone.now)
+    updated_at = UtcDateTimeField(auto_now=True)
+    objects = AutoNowQuerySet.as_manager()
 
     class Meta:
         db_table = "users"
@@ -66,7 +108,7 @@ class Post(models.Model):
     view_count = models.IntegerField(default=0)
     author = models.ForeignKey("User", on_delete=models.CASCADE, related_name="posts", db_index=False)
     tags: "models.ManyToManyField[Tag, PostToTag]" = models.ManyToManyField("Tag", through="PostToTag", related_name="posts")
-    created_at = models.DateTimeField(db_default=Now())
+    created_at = UtcDateTimeField(default=timezone.now)
 
     class Meta:
         db_table = "posts"
@@ -88,7 +130,7 @@ class Comment(models.Model):
     body = models.TextField()
     post = models.ForeignKey("Post", on_delete=models.CASCADE, related_name="comments", db_index=False)
     author = models.ForeignKey("User", on_delete=models.SET_NULL, related_name="comments", null=True, db_index=False)
-    created_at = models.DateTimeField(db_default=Now())
+    created_at = UtcDateTimeField(default=timezone.now)
 
     class Meta:
         db_table = "comments"
@@ -101,7 +143,7 @@ class Follow(models.Model):
     pk = models.CompositePrimaryKey("follower_id", "following_id")
     follower = models.ForeignKey("User", on_delete=models.CASCADE, related_name="following", db_index=False)
     following = models.ForeignKey("User", on_delete=models.CASCADE, related_name="followers", db_index=False)
-    since = models.DateTimeField(db_default=Now())
+    since = UtcDateTimeField(default=timezone.now)
 
     class Meta:
         db_table = "follows"
@@ -123,7 +165,7 @@ class Order(models.Model):
     id = models.BigAutoField(primary_key=True)
     user = models.ForeignKey("User", on_delete=models.RESTRICT, related_name="orders", db_index=False)
     total = models.DecimalField(max_digits=12, decimal_places=2)
-    placed_at = models.DateTimeField(db_default=Now())
+    placed_at = UtcDateTimeField(default=timezone.now)
 
     class Meta:
         db_table = "orders"
@@ -148,7 +190,7 @@ class AuditLog(models.Model):
     action = models.TextField()
     payload = models.JSONField(default=dict)
     signature = models.BinaryField(null=True)
-    logged_at = models.DateTimeField(db_default=RawSQL("now()", []))
+    logged_at = UtcDateTimeField(db_default=RawSQL("now()", []))
 
     class Meta:
         db_table = "audit_logs"

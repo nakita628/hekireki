@@ -1,13 +1,36 @@
-from sqlalchemy import BigInteger, Column, Enum, ForeignKey, Index, Integer, JSON, String, Table, UniqueConstraint, func
+from sqlalchemy import BigInteger, Column, Dialect, Enum, ForeignKey, Index, Integer, JSON, String, Table, TypeDecorator, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from typing import Any, Optional
 from decimal import Decimal as DecimalType
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid as uuid_mod
 
 
+class UtcDateTime(TypeDecorator[datetime]):
+    """UTC text with milliseconds, `2030-01-02T03:04:05.678+00:00`; a naive value is UTC."""
+
+    impl = String
+    cache_ok = True
+
+    def process_bind_param(self, value: Optional[datetime], dialect: Dialect) -> Optional[str]:
+        if value is None:
+            return None
+        aware = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        return aware.astimezone(timezone.utc).isoformat(timespec="milliseconds")
+
+    def process_result_value(self, value: Optional[str], dialect: Dialect) -> Optional[datetime]:
+        if value is None:
+            return None
+        read = datetime.fromisoformat(value)
+        return read.replace(tzinfo=timezone.utc) if read.tzinfo is None else read.astimezone(timezone.utc)
+
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
 class Base(DeclarativeBase):
-    pass
+    type_annotation_map = {datetime: UtcDateTime}
 
 follows = Table(
     "_Follows",
@@ -36,8 +59,8 @@ class Account(Base):
     registry_: Mapped[Optional[str]] = mapped_column("registry")
     class_: Mapped[Optional[str]] = mapped_column("class")
     locale: Mapped[str] = mapped_column(default="en")
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(default=utc_now, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(default=utc_now, onupdate=utc_now)
     manager_id: Mapped[Optional[int]] = mapped_column(ForeignKey("accounts.id", ondelete="SET NULL", onupdate="CASCADE"))
 
     manager: Mapped[Optional["Account"]] = relationship(remote_side=[id], back_populates="reports")
@@ -105,7 +128,7 @@ class Order(Base):
     status: Mapped[str] = mapped_column(Enum("pending", "paid", "cancelled", name="order_status"), default="pending")
     account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="RESTRICT", onupdate="CASCADE"))
     note: Mapped[Optional[str]]
-    placed_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    placed_at: Mapped[datetime] = mapped_column(default=utc_now, server_default=func.now())
 
     __table_args__ = (
         Index("orders_by_account", "account_id", "status"),

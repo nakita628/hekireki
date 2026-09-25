@@ -36,4 +36,15 @@ class AuditLog extends Model
         'signature' => AsBytes::class,
         'logged_at' => 'datetime',
     ];
+
+    public function save(array $options = [])
+    {
+        if (! $this->exists) {
+            if (! array_key_exists('logged_at', $this->attributes)) {
+                $this->setAttribute('logged_at', $this->freshTimestamp());
+            }
+        }
+
+        return parent::save($options);
+    }
 }

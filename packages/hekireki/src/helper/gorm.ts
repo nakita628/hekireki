@@ -223,14 +223,25 @@ function isDateTimeScalar(field: DMMF.Field) {
   return field.kind === 'scalar' && field.type === 'DateTime' && !field.isList
 }
 
+/** Whether a field is a DateTime[] (PostgreSQL), held by one of the list types beside the models. */
+function isDateTimeList(field: DMMF.Field) {
+  return field.kind === 'scalar' && field.type === 'DateTime' && field.isList
+}
+
 /**
  * The type written beside the models that holds a DateTime field: a date or a time of day where
- * the native type keeps only that much of it, an instant otherwise.
+ * the native type keeps only that much of it, an instant otherwise; a list of them for a
+ * DateTime[].
  */
 function dateTimeGoType(field: DMMF.Field) {
   const nativeName = field.nativeType?.[0]
-  if (nativeName === 'Date') return 'Date'
-  return nativeName === 'Time' || nativeName === 'Timetz' ? 'TimeOfDay' : 'DateTime'
+  const element =
+    nativeName === 'Date'
+      ? 'Date'
+      : nativeName === 'Time' || nativeName === 'Timetz'
+        ? 'TimeOfDay'
+        : 'DateTime'
+  return field.isList ? (`${element}List` as const) : element
 }
 
 export function buildGormTags(
@@ -297,10 +308,16 @@ export function buildGormTags(
     isPk && isUlidDefault ? 'type:char(26)' : null,
     field.isUnique ? 'uniqueIndex' : null,
     ...compositeIndexTags,
-    includeNativeType ? `type:${nativeType}` : null,
-    // Scalar lists need a serializer so GORM can persist the slice; the built-in
+    // A DateTime[] is a PostgreSQL array, `timestamp(3)[]` unless the native type says otherwise,
+    // which the list type writes and reads as Prisma Client does.
+    isDateTimeList(field)
+      ? `type:${nativeType ?? 'timestamp(3)'}[]`
+      : includeNativeType
+        ? `type:${nativeType}`
+        : null,
+    // Other scalar lists need a serializer so GORM can persist the slice; the built-in
     // json serializer works on every dialect without extra deps.
-    field.isList && field.kind !== 'object' ? 'serializer:json' : null,
+    field.isList && field.kind !== 'object' && !isDateTimeList(field) ? 'serializer:json' : null,
     defaultVal !== null ? `default:${defaultVal}` : null,
     isDateTime && fieldName === 'CreatedAt' ? 'autoCreateTime:false' : null,
     isDateTime && fieldName === 'UpdatedAt' ? 'autoUpdateTime:false' : null,
@@ -552,11 +569,13 @@ function generateStructField(
       : prismaTypeToGoType(field.type, field.isRequired && !hasNonZeroDefault)
   // A scalar list (e.g. `tags String[]`) is a collection, not a scalar; collapse
   // it to a single value loses data. Emit a slice of the element type.
-  const goType = field.isList
-    ? `[]${field.kind === 'enum' ? 'string' : prismaTypeToGoType(field.type, true)}`
-    : isDateTimeScalar(field)
-      ? `${field.isRequired ? '' : '*'}${dateTimeGoType(field)}`
-      : scalarType
+  const goType = isDateTimeList(field)
+    ? dateTimeGoType(field)
+    : field.isList
+      ? `[]${field.kind === 'enum' ? 'string' : prismaTypeToGoType(field.type, true)}`
+      : isDateTimeScalar(field)
+        ? `${field.isRequired ? '' : '*'}${dateTimeGoType(field)}`
+        : scalarType
 
   return [
     fieldName,
@@ -766,12 +785,23 @@ export function generateNamingStrategy(models: readonly DMMF.Model[], packageNam
   ]
 }
 
-/** The time types a schema's DateTime fields are held in, in the order they are written. */
+/**
+ * The time types a schema's DateTime fields are held in, in the order they are written: a list
+ * type brings the type of its elements with it.
+ */
 function dateTypes(models: readonly DMMF.Model[]) {
-  const used = new Set(
-    models.flatMap((m) => m.fields.filter(isDateTimeScalar).map((f) => dateTimeGoType(f))),
+  const used = new Set<string>(
+    models.flatMap((m) =>
+      m.fields.flatMap((f) =>
+        f.kind === 'scalar' && f.type === 'DateTime'
+          ? [dateTimeGoType(f), dateTimeGoType({ ...f, isList: false })]
+          : [],
+      ),
+    ),
   )
-  return ['DateTime', 'Date', 'TimeOfDay'].filter((name) => used.has(name))
+  return ['DateTime', 'Date', 'TimeOfDay', 'DateTimeList', 'DateList', 'TimeOfDayList'].filter(
+    (name) => used.has(name),
+  )
 }
 
 /**
@@ -886,7 +916,7 @@ export function generateDateTypes(models: readonly DMMF.Model[], provider?: stri
     '\treturn "time"',
     '}',
     '',
-    "// Value writes the UTC time, `15:04:05.000`, with no offset: a timetz column takes the",
+    '// Value writes the UTC time, `15:04:05.000`, with no offset: a timetz column takes the',
     "// session's, as it does from Prisma Client.",
     'func (clock TimeOfDay) Value() (driver.Value, error) {',
     '\treturn clock.UTC().Truncate(time.Millisecond).Format("15:04:05.000"), nil',
@@ -917,10 +947,88 @@ export function generateDateTypes(models: readonly DMMF.Model[], provider?: stri
     '\treturn err',
     '}',
   ]
+  // A DateTime[] is a PostgreSQL array; each element is written and read as the type of one is.
+  const lists = [
+    { name: 'DateTimeList', element: 'DateTime', example: '{"2030-01-02 03:04:05.678"}' },
+    { name: 'DateList', element: 'Date', example: '{"2030-01-02"}' },
+    { name: 'TimeOfDayList', element: 'TimeOfDay', example: '{"03:04:05.678"}' },
+  ]
+    .filter((list) => types.includes(list.name))
+    .flatMap(({ name, element, example }) => [
+      '',
+      `// ${name} is a Prisma DateTime[] held as ${element}s: a PostgreSQL array, each element`,
+      `// written and read as ${element} writes and reads one.`,
+      `type ${name} []${element}`,
+      '',
+      `// Value writes the array as Prisma Client does, \`${example}\`.`,
+      `func (list ${name}) Value() (driver.Value, error) {`,
+      '\treturn arrayText(list)',
+      '}',
+      '',
+      `// Scan reads each element of the array as ${element} does.`,
+      `func (list *${name}) Scan(src any) error {`,
+      `\treturn scanArray(src, (*[]${element})(list))`,
+      '}',
+    ])
+  const arrays = types.some((name) => name.endsWith('List'))
+    ? [
+        '',
+        '// arrayText writes a PostgreSQL array literal, each element as its type writes it; an instant',
+        '// as the UTC wall clock, as Prisma Client writes it.',
+        'func arrayText[T driver.Valuer](list []T) (driver.Value, error) {',
+        '\titems := make([]string, len(list))',
+        '\tfor i, item := range list {',
+        '\t\tvalue, err := item.Value()',
+        '\t\tif err != nil {',
+        '\t\t\treturn nil, err',
+        '\t\t}',
+        '\t\tif at, ok := value.(time.Time); ok {',
+        '\t\t\tvalue = at.Format("2006-01-02 15:04:05.000")',
+        '\t\t}',
+        '\t\titems[i] = fmt.Sprintf("%q", value)',
+        '\t}',
+        '\treturn "{" + strings.Join(items, ",") + "}", nil',
+        '}',
+        '',
+        '// scanArray reads a PostgreSQL array, each element as its type reads one.',
+        'func scanArray[T any, P interface {',
+        '\t*T',
+        '\tsql.Scanner',
+        '}](src any, list *[]T) error {',
+        '\tvar text string',
+        '\tswitch value := src.(type) {',
+        '\tcase nil:',
+        '\t\t*list = nil',
+        '\t\treturn nil',
+        '\tcase []byte:',
+        '\t\ttext = string(value)',
+        '\tcase string:',
+        '\t\ttext = value',
+        '\tdefault:',
+        '\t\treturn fmt.Errorf("a DateTime[] column held %T", src)',
+        '\t}',
+        '\ttext = strings.TrimSuffix(strings.TrimPrefix(text, "{"), "}")',
+        '\t*list = []T{}',
+        '\tif text == "" {',
+        '\t\treturn nil',
+        '\t}',
+        '\tfor _, part := range strings.Split(text, ",") {',
+        '\t\tvar item T',
+        '\t\tif err := P(&item).Scan(strings.Trim(part, `"`)); err != nil {',
+        '\t\t\treturn err',
+        '\t\t}',
+        '\t\t*list = append(*list, item)',
+        '\t}',
+        '\treturn nil',
+        '}',
+      ]
+    : []
   return [
     ...(types.includes('DateTime') ? dateTime : []),
     ...(types.includes('Date') ? date : []),
     ...(types.includes('TimeOfDay') ? timeOfDay : []),
+    ...lists,
+    ...arrays,
     '',
     '// prismaTimeLayouts are the texts readPrismaTime reads, as Prisma Client reads them: with an',
     '// offset or `Z`, or with none, which is UTC; a date alone is midnight UTC.',
@@ -981,6 +1089,7 @@ export function collectImports(models: readonly DMMF.Model[]) {
     m.fields.some((f) => f.kind !== 'object' && f.type === 'DateTime'),
   )
   const types = dateTypes(models)
+  const lists = types.some((name) => name.endsWith('List'))
   const fillsTimes = models.some((m) =>
     m.fields.some((f) => createdTimeExpr(f) !== null || (isDateTimeScalar(f) && f.isUpdatedAt)),
   )
@@ -1000,10 +1109,11 @@ export function collectImports(models: readonly DMMF.Model[]) {
   // gofmt keeps them.
   const standard = [
     generators.has('ulid') ? '"crypto/rand"' : null,
+    lists ? '"database/sql"' : null,
     types.length > 0 ? '"database/sql/driver"' : null,
     types.length > 0 ? '"fmt"' : null,
     types.length > 0 ? '"strconv"' : null,
-    types.includes('TimeOfDay') ? '"strings"' : null,
+    types.includes('TimeOfDay') || lists ? '"strings"' : null,
     needsTime ? '"time"' : null,
   ]
   const modules = [

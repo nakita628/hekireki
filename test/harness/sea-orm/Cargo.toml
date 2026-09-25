@@ -12,6 +12,10 @@ serde = { version = "1", features = ["derive"] }
 # Prisma @default(uuid()) / @default(uuid(7)) / @default(ulid()).
 uuid = { version = "1", features = ["v4", "v7"] }
 ulid = "3"
+# A DateTime now() default or @updatedAt is filled in ActiveModelBehavior::before_save, as Prisma
+# Client fills it: chrono for the time, async-trait for the hook.
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+async-trait = "0.1"
 
 [lib]
 path = "src/lib.rs"

@@ -3,6 +3,8 @@ class Post < ApplicationRecord
 
   attribute :body, default: ""
   attribute :views, default: 0
+  attribute :createdAt, PrismaDateTime.new, default: -> { Time.current }
+  attribute :updatedAt, PrismaDateTime.new
   alias_attribute :created_at, :createdAt
   alias_attribute :updated_at, :updatedAt
 

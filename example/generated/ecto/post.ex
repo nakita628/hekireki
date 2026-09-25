@@ -7,6 +7,7 @@ defmodule Example.Post do
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
+  @timestamps_opts [type: Example.PrismaDateTime, autogenerate: {Example.PrismaDateTime, :autogenerate, []}]
 
   @type t :: %__MODULE__{
           id: Ecto.UUID.t(),
@@ -15,6 +16,7 @@ defmodule Example.Post do
           visibility: atom(),
           published: boolean(),
           view_count: integer(),
+          inserted_at: DateTime.t(),
           author: Example.User.t() | nil,
           comments: [Example.Comment.t()],
           tags: [Example.Tag.t()]
@@ -29,6 +31,6 @@ defmodule Example.Post do
     belongs_to(:author, Example.User, foreign_key: :author_id)
     has_many(:comments, Example.Comment, foreign_key: :post_id)
     many_to_many(:tags, Example.Tag, join_through: "_PostToTag", join_keys: [A: :id, B: :id])
-    timestamps(type: :utc_datetime, inserted_at_source: :created_at, updated_at: false)
+    timestamps(inserted_at_source: :created_at, updated_at: false)
   end
 end

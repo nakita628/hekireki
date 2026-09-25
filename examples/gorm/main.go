@@ -144,8 +144,8 @@ func scalars() {
 			BooleanOpt:  ptr(false),
 			String:      `日本語 🔥 'single' "double" \ ; end`,
 			StringOpt:   ptr(""),
-			DateTime:    at,
-			DateTimeOpt: ptr(at.Add(-24 * time.Hour)),
+			DateTime:    models.DateTime{Time: at},
+			DateTimeOpt: ptr(models.DateTime{Time: at.Add(-24 * time.Hour)}),
 			JSON:        datatypes.JSON(`{"a":1,"b":[true,null,"x"]}`),
 			JSONOpt:     datatypes.JSON(`[]`),
 			Bytes:       []byte{0, 1, 2, 255},
@@ -173,7 +173,7 @@ func scalars() {
 		if err := db.First(&got, want.ID).Error; err != nil {
 			return err
 		}
-		if !got.DateTime.Equal(want.DateTime) || !got.DateTimeOpt.Equal(*want.DateTimeOpt) {
+		if !got.DateTime.Equal(want.DateTime.Time) || !got.DateTimeOpt.Equal(want.DateTimeOpt.Time) {
 			return fmt.Errorf("times: got %v and %v", got.DateTime, got.DateTimeOpt)
 		}
 		if !jsonEqual(got.JSON, want.JSON) || !jsonEqual(got.JSONOpt, want.JSONOpt) {
@@ -188,7 +188,7 @@ func scalars() {
 	})
 
 	check("an optional field left nil is NULL, and reads back nil", func() error {
-		row := models.Sample{Int: 1, BigInt: 1, Float: 1, Decimal: 1, String: "s", DateTime: time.Now(), JSON: datatypes.JSON(`{}`), Bytes: []byte{1}, Role: "member"}
+		row := models.Sample{Int: 1, BigInt: 1, Float: 1, Decimal: 1, String: "s", DateTime: models.DateTime{Time: time.Now()}, JSON: datatypes.JSON(`{}`), Bytes: []byte{1}, Role: "member"}
 		if err := db.Create(&row).Error; err != nil {
 			return err
 		}
@@ -249,7 +249,7 @@ func defaults() {
 		if *got.Slug != "untitled" || got.Status != "DRAFT" || got.Views != 0 || *got.CategoryID != 1 || got.AuthorID != nil {
 			return fmt.Errorf("post read back as slug %q status %q views %d category %d author %v", *got.Slug, got.Status, got.Views, *got.CategoryID, got.AuthorID)
 		}
-		sample := models.Sample{Int: 1, BigInt: 1, Float: 1, Decimal: 1, String: "s", DateTime: time.Now(), JSON: datatypes.JSON(`{}`), Bytes: []byte{1}, Role: "GUEST"}
+		sample := models.Sample{Int: 1, BigInt: 1, Float: 1, Decimal: 1, String: "s", DateTime: models.DateTime{Time: time.Now()}, JSON: datatypes.JSON(`{}`), Bytes: []byte{1}, Role: "GUEST"}
 		if err := db.Create(&sample).Error; err != nil {
 			return err
 		}
@@ -272,7 +272,7 @@ func defaults() {
 		if err := db.Create(&post).Error; err != nil {
 			return err
 		}
-		sample := models.Sample{Int: 1, BigInt: 1, Float: 1, Decimal: 1, String: "s", DateTime: time.Now(), JSON: datatypes.JSON(`{}`), Bytes: []byte{1}, Role: "GUEST",
+		sample := models.Sample{Int: 1, BigInt: 1, Float: 1, Decimal: 1, String: "s", DateTime: models.DateTime{Time: time.Now()}, JSON: datatypes.JSON(`{}`), Bytes: []byte{1}, Role: "GUEST",
 			Type: ptr(""), Quoted: ptr(""), Ratio: ptr(0.0), Price: ptr(0.0), Big: ptr(int64(0))}
 		if err := db.Create(&sample).Error; err != nil {
 			return err
@@ -309,7 +309,7 @@ func defaults() {
 		if err := db.First(&got, post.ID).Error; err != nil {
 			return err
 		}
-		if !got.UpdatedAt.After(updated) || !got.CreatedAt.Equal(created) {
+		if !got.UpdatedAt.After(updated.Time) || !got.CreatedAt.Equal(created.Time) {
 			return fmt.Errorf("after the update: created %v (was %v), updated %v (was %v)", got.CreatedAt, created, got.UpdatedAt, updated)
 		}
 		var at, since time.Time

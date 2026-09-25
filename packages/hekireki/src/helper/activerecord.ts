@@ -1378,6 +1378,7 @@ export function activeRecordModels(
   models: readonly DMMF.Model[],
   allModels?: readonly DMMF.Model[],
   enums?: readonly DMMF.DatamodelEnum[],
+  provider?: string,
 ) {
   const contextModels = allModels ?? models
   const enumMap = new Map((enums ?? []).map((e) => [e.name, e.values]))
@@ -1435,6 +1436,17 @@ export function activeRecordModels(
             !f.isList &&
             ['updatedAt', 'updated_at', 'modifiedAt', 'modified_at'].includes(f.name),
         )
+      // Prisma bumps every @updatedAt column; Active Record only updated_at
+      // and updated_on (or the column aliased to updated_at), so the rest are added
+      // to the list it fills on create and bumps on update and `touch`.
+      const otherUpdatedColumns = model.fields
+        .filter(
+          (f) =>
+            f.isUpdatedAt &&
+            f !== updatedField &&
+            !['updated_at', 'updated_on'].includes(f.dbName ?? f.name),
+        )
+        .map((f) => `"${f.dbName ?? f.name}"`)
       const timestampLines = [
         ...(createdField &&
         !['created_at', 'created_on'].includes(createdField.dbName ?? createdField.name)
@@ -1443,6 +1455,14 @@ export function activeRecordModels(
         ...(updatedField &&
         !['updated_at', 'updated_on'].includes(updatedField.dbName ?? updatedField.name)
           ? [`alias_attribute :updated_at, :${updatedField.dbName ?? updatedField.name}`]
+          : []),
+        ...(otherUpdatedColumns.length > 0
+          ? [
+              'def self.timestamp_attributes_for_update',
+              `  super + ${rubyArray(otherUpdatedColumns)}`,
+              'end',
+              'private_class_method :timestamp_attributes_for_update',
+            ]
           : []),
       ]
 
@@ -1466,20 +1486,67 @@ export function activeRecordModels(
           (f) => (f.kind === 'scalar' || f.kind === 'enum') && (f.isList || f.kind === 'scalar'),
         )
         .flatMap((f) => {
+          const column = f.dbName ?? f.name
+          // Where Active Record's own type for a DateTime column would not
+          // store what Prisma Client stores:
+          // - SQLite keeps it as text. Prisma writes 2030-01-02T03:04:05.678+00:00
+          //   and Active Record 2030-01-02 03:04:05.678000, which compare, sort
+          //   and index as different values; PrismaDateTime (application_record.rb)
+          //   writes Prisma's text.
+          // - A column holding fewer than three digits of a second (Timestamp(0),
+          //   Time(0), MySQL's bare DateTime, Timestamp and Time) is rounded by
+          //   the database from the milliseconds Prisma sends, and truncated by
+          //   Active Record to the column's precision before sending, so 05.678
+          //   is 06 from one and 05 from the other. precision: 3 sends what
+          //   Prisma sends and leaves the rounding to the database.
+          // - A Timetz column has no Active Record type and reads as a String.
+          const [nativeName, nativeArgs] = f.nativeType ?? ['', []]
+          const secondDigits =
+            nativeArgs[0] !== undefined
+              ? Number(nativeArgs[0])
+              : provider === 'mysql' && ['DateTime', 'Timestamp', 'Time'].includes(nativeName)
+                ? 0
+                : 3
+          const timeOfDay = nativeName === 'Time' || nativeName === 'Timetz'
+          const castType =
+            f.type !== 'DateTime' || f.isList
+              ? []
+              : provider === 'sqlite'
+                ? ['PrismaDateTime.new']
+                : ['Timestamp', 'Timestamptz', 'Time', 'Timetz', 'DateTime'].includes(nativeName) &&
+                    secondDigits < 3
+                  ? [timeOfDay ? ':time' : ':datetime', 'precision: 3']
+                  : nativeName === 'Timetz'
+                    ? [':time']
+                    : []
+          const attribute = (value: string | null) =>
+            castType.length === 0 && value === null
+              ? []
+              : [
+                  rubyCall(
+                    'attribute',
+                    [`:${column}`, ...castType],
+                    value === null ? [] : [`default: ${value}`],
+                  ),
+                ]
           const def = f.default
           // A list without a default is a nullable array column that the
           // Prisma client reads and writes as []: so does the model.
-          if (def === undefined) {
-            return f.isList ? [`attribute :${f.dbName ?? f.name}, default: -> { [] }`] : []
-          }
+          if (def === undefined) return attribute(f.isList ? '-> { [] }' : null)
           if (f.kind === 'enum') return []
+          // Prisma Client fills now() itself. The database's CURRENT_TIMESTAMP
+          // is the same instant elsewhere, but on SQLite it is text of another
+          // shape (2030-01-02 03:04:05), so there the model fills it as well.
+          if (typeof def === 'object' && 'name' in def && def.name === 'now') {
+            return attribute(provider === 'sqlite' ? '-> { Time.current }' : null)
+          }
           // SecureRandom.uuid_v7 requires Ruby 3.3+; ULID.generate, Cuid.generate,
           // Cuid2.call and Nanoid.generate come from the ulid, cuid, cuid2 and
           // nanoid gems. No cast type is passed: a symbol type resolves through
           // the connection adapter at class load, while a bare default keeps
           // the column type untouched.
           if (typeof def === 'object' && 'name' in def) {
-            if (f.type !== 'String') return []
+            if (f.type !== 'String') return attribute(null)
             const generator =
               def.name === 'uuid'
                 ? def.args[0] === 7
@@ -1496,24 +1563,19 @@ export function activeRecordModels(
                         ? `Nanoid.generate(size: ${def.args[0]})`
                         : 'Nanoid.generate'
                       : null
-            if (generator === null) return []
-            return [`attribute :${f.dbName ?? f.name}, default: -> { ${generator} }`]
+            return attribute(generator === null ? null : `-> { ${generator} }`)
           }
           // A literal default is written into the model so a record built in
           // Ruby carries it before it is saved, whatever the table says. A
           // list or JSON value is mutable, so a lambda hands out a fresh one.
           if (typeof def === 'object') {
             const items = def.map((item) => rubyDefault(f.type, item))
-            if (!f.isList || items.some((item) => item === null)) return []
-            return [
-              `attribute :${f.dbName ?? f.name}, default: -> { ${rubyArray(items.map(String))} }`,
-            ]
+            if (!f.isList || items.some((item) => item === null)) return attribute(null)
+            return attribute(`-> { ${rubyArray(items.map(String))} }`)
           }
           const literal = rubyDefault(f.type, def)
-          if (literal === null) return []
-          return [
-            `attribute :${f.dbName ?? f.name}, default: ${f.type === 'Json' ? `-> { ${literal} }` : literal}`,
-          ]
+          if (literal === null) return attribute(null)
+          return attribute(f.type === 'Json' ? `-> { ${literal} }` : literal)
         })
 
       // Array enum columns get no `enum` DSL (it casts a scalar column). Keys

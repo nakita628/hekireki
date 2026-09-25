@@ -143,6 +143,11 @@ function isNowDefault(field: DMMF.Field) {
   return typeof def === 'object' && def !== null && 'name' in def && def.name === 'now'
 }
 
+// A DateTime field a `timestamps()` call can hold.
+function isStamped(field: DMMF.Field) {
+  return field.kind === 'scalar' && field.type === 'DateTime' && !field.isList
+}
+
 /**
  * The DateTime fields Prisma Client fills itself, as `timestamps()` calls, which fill them the same
  * way: on insert when the caller gives none, and an `updated_at` on every update that changes
@@ -152,8 +157,14 @@ function isNowDefault(field: DMMF.Field) {
  * other `@updatedAt` is a call of its own with no `inserted_at`, as a schema can have one
  * `updated_at` to a call. A field keeps its own name where Ecto's is taken by another field.
  *
+ * Ecto calls `autogenerate/0` once to a call and once to an `autogenerate: true` field, so the
+ * fields of one insert can be a millisecond apart where Prisma Client gives them one `now()`: Ecto
+ * has no option that fills fields of several calls from one value. An optional `@updatedAt` left
+ * `nil` on insert is filled, as nil is a struct's default and the insert does not count it as a
+ * change; `force_change(changeset, field, nil)` stores null, as Prisma does for an explicit null.
+ *
  * The type most of them have, `PrismaDateTime`, is `@timestamps_opts` (`attribute`); a call for
- * a `@db.Date` or `@db.Time` names its own.
+ * a `@db.Date` or `@db.Time` names its own. `types` are the fields the calls add, for `@type t`.
  *
  * @example
  * ```elixir
@@ -165,55 +176,51 @@ function isNowDefault(field: DMMF.Field) {
  */
 function makeTimestampsLines(fields: readonly DMMF.Field[], appName: string) {
   const insertedAliases = new Set(['inserted_at', 'created_at', 'createdAt'])
-  const stamped = (f: DMMF.Field) => f.kind === 'scalar' && f.type === 'DateTime' && !f.isList
   const inserted = fields.find(
-    (f) => stamped(f) && insertedAliases.has(f.name) && isNowDefault(f) && !f.isUpdatedAt,
+    (f) => isStamped(f) && insertedAliases.has(f.name) && isNowDefault(f) && !f.isUpdatedAt,
   )
-  const updated = fields.filter((f) => stamped(f) && f.isUpdatedAt)
+  const updated = fields.filter((f) => isStamped(f) && f.isUpdatedAt)
   const exclude = new Set([...(inserted ? [inserted.name] : []), ...updated.map((f) => f.name)])
   // Ecto's name for the field, unless another field of the model has it.
   const named = (field: DMMF.Field, ecto: string) =>
     fields.some((f) => f !== field && makeSnakeCase(f.name) === ecto)
       ? makeSnakeCase(field.name)
       : ecto
-  const options = (key: 'inserted_at' | 'updated_at', field: DMMF.Field, name: string) => {
+  const [first, ...others] = updated
+  const stamps = [
+    ...(inserted
+      ? [{ key: 'inserted_at', field: inserted, name: named(inserted, 'inserted_at') }]
+      : []),
+    ...(first ? [{ key: 'updated_at', field: first, name: named(first, 'updated_at') }] : []),
+    ...others.map((field) => ({
+      key: 'updated_at',
+      field,
+      name: named(field, makeSnakeCase(field.name)),
+    })),
+  ]
+  const options = ({ key, field, name }: (typeof stamps)[number]) => {
     const source = field.dbName ?? field.name
     return [
       ...(name === key ? [] : [`${key}: :${name}`]),
       ...(source === name ? [] : [`${key}_source: :${source}`]),
     ]
   }
-  const [first, ...others] = updated
   const together = inserted && first && dateTimeModule(inserted) === dateTimeModule(first)
-  const calls = [
-    ...(inserted
-      ? [
-          {
-            module: dateTimeModule(inserted),
-            options: [
-              ...options('inserted_at', inserted, named(inserted, 'inserted_at')),
-              ...(together ? options('updated_at', first, named(first, 'updated_at')) : []),
-              ...(together ? [] : ['updated_at: false']),
-            ],
-          },
-        ]
-      : []),
-    ...(first && !together
-      ? [
-          {
-            module: dateTimeModule(first),
-            options: ['inserted_at: false', ...options('updated_at', first, named(first, 'updated_at'))],
-          },
-        ]
-      : []),
-    ...others.map((field) => ({
-      module: dateTimeModule(field),
-      options: [
-        'inserted_at: false',
-        ...options('updated_at', field, named(field, makeSnakeCase(field.name))),
-      ],
-    })),
-  ]
+  const calls = together
+    ? [
+        { module: dateTimeModule(inserted), options: stamps.slice(0, 2).flatMap(options) },
+        ...stamps.slice(2).map((stamp) => ({
+          module: dateTimeModule(stamp.field),
+          options: ['inserted_at: false', ...options(stamp)],
+        })),
+      ]
+    : stamps.map((stamp) => ({
+        module: dateTimeModule(stamp.field),
+        options:
+          stamp.key === 'inserted_at'
+            ? [...options(stamp), 'updated_at: false']
+            : ['inserted_at: false', ...options(stamp)],
+      }))
   const typed = (module: string) =>
     `type: ${appName}.${module}, autogenerate: {${appName}.${module}, :autogenerate, []}`
   return {
@@ -223,6 +230,10 @@ function makeTimestampsLines(fields: readonly DMMF.Field[], appName: string) {
     lines: calls.map(
       (call) =>
         `    timestamps(${[...(call.module === 'PrismaDateTime' ? [] : [typed(call.module)]), ...call.options].join(', ')})`,
+    ),
+    types: stamps.map(
+      ({ field, name }) =>
+        `${name}: ${ectoTypeToTypespec(dateTimeModule(field))}${field.isRequired ? '' : ' | nil'}`,
     ),
     exclude,
   }
@@ -977,6 +988,7 @@ export function ectoSchemas(
           const typeSpec = f.isList ? `[${baseTypeSpec}]` : baseTypeSpec
           return `${makeSnakeCase(f.name)}: ${typeSpec}${nullSuffix}`
         }),
+        ...timestamps.types,
         ...associations.belongsTo.map(
           (a) => `${makeSnakeCase(a.name)}: ${appName}.${makePascalCase(a.targetModel)}.t() | nil`,
         ),
@@ -1184,21 +1196,22 @@ export function ectoDateTypes(
     provider === 'postgresql' || provider === 'cockroachdb'
       ? [
           '',
-          '  A `@db.Timestamptz` column holds the instant whatever the session, as Postgrex sends it,',
-          '  but Prisma Client writes it as UTC text with no zone, which PostgreSQL reads in the',
-          "  session's time zone, and reads the offset back as `+00:00`: connect Prisma Client with",
-          "  `options: '-c TimeZone=UTC'`, and the repo with `parameters: [timezone: \"UTC\"]`, or the",
-          '  two read different instants.',
+          '  A `@db.Timestamptz` or `@db.Timetz` column holds the instant whatever the session, as',
+          '  Postgrex sends it, but Prisma Client writes it as UTC text with no zone, which PostgreSQL',
+          "  reads in the session's time zone, and reads the offset back as `+00:00`: connect Prisma",
+          "  Client with `options: '-c TimeZone=UTC'` where the server's zone is not UTC. The repo's",
+          '  session changes no value Ecto writes or reads; only a value the database fills in a column',
+          '  with no zone (`dbgenerated("CURRENT_TIMESTAMP")`, a `DEFAULT CURRENT_TIMESTAMP` on a row',
+          '  from `insert_all`) is that session\'s wall time, UTC with `parameters: [timezone: "UTC"]`.',
         ]
-      : provider === 'mysql'
-        ? [
-            '',
-            '  MySQL converts a `TIMESTAMP` column from the session\'s `time_zone` and back, for Ecto as',
-            '  for Prisma Client, which writes UTC: connect the repo with',
-            "  `after_connect: {MyXQL, :query!, [\"SET time_zone = '+00:00'\", []]}` where the server's",
-            '  zone is not UTC.',
-          ]
-        : []
+      : []
+  const mysqlSession = [
+    '',
+    "  MySQL converts a `TIMESTAMP` column from the session's `time_zone` and back, for Ecto as",
+    '  for Prisma Client, which writes UTC: connect the repo with',
+    "  `after_connect: {MyXQL, :query!, [\"SET time_zone = '+00:00'\", []]}` where the server's",
+    '  zone is not UTC.',
+  ]
   const dateTime = [
     `defmodule ${app}.PrismaDateTime do`,
     '  @moduledoc """',
@@ -1217,8 +1230,11 @@ export function ectoDateTypes(
     '',
     '  A value read is the instant Prisma reads: text with no zone is UTC, an offset is honoured, a',
     '  date alone is midnight UTC, digits are epoch milliseconds. A `NaiveDateTime` is UTC, as',
-    '  `:utc_datetime` takes one; a `DateTime` in another zone is moved to UTC.',
+    '  `:utc_datetime` takes one; a `DateTime` in another zone is moved to UTC. An optional',
+    '  `@updatedAt` left `nil` on insert is filled with now; to store null, as Prisma Client does',
+    '  for an explicit null, give it with `Ecto.Changeset.force_change(changeset, field, nil)`.',
     ...session,
+    ...(provider === 'mysql' ? mysqlSession : []),
     '  """',
     '  use Ecto.Type',
     '',
@@ -1236,6 +1252,9 @@ export function ectoDateTypes(
     '  def load(value) when is_integer(value), do: {:ok, value |> DateTime.from_unix!(:millisecond) |> utc()}',
     '',
     '  def load(value) when is_binary(value) do',
+    '    # SQLite keeps a literal default as Prisma Migrate writes it: `2024-01-15 10:30:00 +00:00`.',
+    '    value = String.replace(value, ~r/\\s+(?=[+-]\\d\\d:?\\d\\d\\z)/, "")',
+    '',
     '    case DateTime.from_iso8601(value) do',
     '      {:ok, datetime, _offset} -> load(datetime)',
     '      {:error, :missing_offset} -> load(NaiveDateTime.from_iso8601!(value))',
@@ -1260,7 +1279,11 @@ export function ectoDateTypes(
     '  def equal?(%DateTime{} = left, %DateTime{} = right), do: DateTime.compare(left, right) == :eq',
     '  def equal?(left, right), do: left == right',
     '',
-    '  @doc "Now, as Prisma Client fills `now()` and `@updatedAt`."',
+    '  @doc """',
+    '  Now, as Prisma Client fills `now()` and `@updatedAt`. Ecto calls it once to a `timestamps()`',
+    '  and to an `autogenerate: true` field, so the fields of one insert can be 1 ms apart.',
+    '  """',
+    '  @impl true',
     '  def autogenerate, do: utc(DateTime.utc_now())',
     '',
     '  # A date alone, or epoch milliseconds as digits.',
@@ -1309,6 +1332,7 @@ export function ectoDateTypes(
     '  def dump(_), do: :error',
     '',
     '  @doc "Today in UTC, as Prisma Client fills `now()` and `@updatedAt`."',
+    '  @impl true',
     '  def autogenerate, do: Date.utc_today()',
     'end',
   ]
@@ -1319,6 +1343,7 @@ export function ectoDateTypes(
     '  day of the instant it is given, in milliseconds, and reads it on 1970-01-01 in UTC. A',
     '  `DateTime` is cast to its UTC time, and so is a time written with an offset, which `:time`',
     '  would drop.',
+    ...session,
     '  """',
     '  use Ecto.Type',
     '',
@@ -1347,6 +1372,7 @@ export function ectoDateTypes(
     '  def dump(_), do: :error',
     '',
     '  @doc "The time of day in UTC, as Prisma Client fills `now()` and `@updatedAt`."',
+    '  @impl true',
     '  def autogenerate, do: milliseconds(Time.utc_now())',
     '',
     '  defp milliseconds(%Time{microsecond: {microsecond, _}} = time) do',

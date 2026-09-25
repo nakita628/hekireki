@@ -1,3 +1,5 @@
+import { stripTypeScriptTypes } from 'node:module'
+
 import type { DMMF } from '@prisma/generator-helper'
 import { describe, expect, it } from 'vite-plus/test'
 
@@ -114,11 +116,12 @@ describe('drizzleSchema', () => {
         }),
       ])
 
-      const result = drizzleSchema(datamodel, 'sqlite', [])
+      const lines = drizzleSchema(datamodel, 'sqlite', []).split('\n')
 
-      expect(result).toBe(
-        "import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'\n\nexport const user = sqliteTable('User', { id: integer('id').primaryKey({ autoIncrement: true }), name: text('name').notNull(), active: integer('active', { mode: 'boolean' }).notNull(), createdAt: integer('createdAt', { mode: 'timestamp_ms' }).notNull() })",
-      )
+      expect([lines[0], lines.at(-1)]).toStrictEqual([
+        "import { customType, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'",
+        "export const user = sqliteTable('User', { id: integer('id').primaryKey({ autoIncrement: true }), name: text('name').notNull(), active: integer('active', { mode: 'boolean' }).notNull(), createdAt: utcDateTime('createdAt').notNull() })",
+      ])
     })
   })
 
@@ -222,7 +225,7 @@ describe('drizzleSchema', () => {
       )
     })
 
-    it('wraps a scalar list with array() before notNull()', () => {
+    it('wraps a scalar list with array() and leaves it nullable, as Prisma makes it', () => {
       const datamodel = makeDatamodel([
         makeModel({
           name: 'Account',
@@ -242,7 +245,7 @@ describe('drizzleSchema', () => {
       const result = drizzleSchema(datamodel, 'postgresql', [])
 
       expect(result).toBe(
-        "import { pgTable, serial, text } from 'drizzle-orm/pg-core'\n\nexport const account = pgTable('Account', { id: serial('id').primaryKey(), tags: text('tags').array().notNull() })",
+        "import { pgTable, serial, text } from 'drizzle-orm/pg-core'\n\nexport const account = pgTable('Account', { id: serial('id').primaryKey(), tags: text('tags').array() })",
       )
     })
 
@@ -362,14 +365,18 @@ describe('drizzleSchema', () => {
         }),
       ])
 
-      const result = drizzleSchema(datamodel, 'postgresql', [])
+      const lines = drizzleSchema(datamodel, 'postgresql', []).split('\n')
 
-      expect(result).toBe(
-        "import { pgTable, serial, timestamp } from 'drizzle-orm/pg-core'\n\nexport const event = pgTable('Event', { id: serial('id').primaryKey(), createdAt: timestamp('createdAt').notNull().defaultNow() })",
+      expect(lines.slice(0, 2)).toStrictEqual([
+        "import { pgTable, serial, timestamp } from 'drizzle-orm/pg-core'",
+        "import { sql } from 'drizzle-orm'",
+      ])
+      expect(lines.at(-1)).toBe(
+        "export const event = pgTable('Event', { id: serial('id').primaryKey(), createdAt: timestamp('createdAt', { precision: 3 }).notNull().default(sql`CURRENT_TIMESTAMP`).$defaultFn(utcNow) })",
       )
     })
 
-    it('should handle now() default on SQLite with sql`(unixepoch())`', () => {
+    it('should leave now() to the client on SQLite', () => {
       const datamodel = makeDatamodel([
         makeModel({
           name: 'Event',
@@ -391,11 +398,12 @@ describe('drizzleSchema', () => {
         }),
       ])
 
-      const result = drizzleSchema(datamodel, 'sqlite', [])
+      const lines = drizzleSchema(datamodel, 'sqlite', []).split('\n')
 
-      expect(result).toBe(
-        "import { integer, sqliteTable } from 'drizzle-orm/sqlite-core'\nimport { sql } from 'drizzle-orm'\n\nexport const event = sqliteTable('Event', { id: integer('id').primaryKey({ autoIncrement: true }), createdAt: integer('createdAt', { mode: 'timestamp_ms' }).notNull().default(sql`(unixepoch() * 1000)`) })",
-      )
+      expect([lines[0], lines.at(-1)]).toStrictEqual([
+        "import { customType, integer, sqliteTable } from 'drizzle-orm/sqlite-core'",
+        "export const event = sqliteTable('Event', { id: integer('id').primaryKey({ autoIncrement: true }), createdAt: utcDateTime('createdAt').notNull().$defaultFn(utcNow) })",
+      ])
     })
 
     it('should handle numeric default', () => {
@@ -890,7 +898,7 @@ export const stockRelations = relations(stock, ({ one }) => ({ warehouse: one(wa
 
 export const visibilityEnum = pgEnum('visibility_level', ['public', 'private', 'link_only'])
 
-export const board = pgTable('Board', { id: serial('id').primaryKey(), visibility: visibilityEnum('visibility').notNull().default('link_only'), audiences: visibilityEnum('audiences').array().notNull() })`,
+export const board = pgTable('Board', { id: serial('id').primaryKey(), visibility: visibilityEnum('visibility').notNull().default('link_only'), audiences: visibilityEnum('audiences').array() })`,
     )
   })
 
@@ -932,7 +940,7 @@ export const board = pgTable('Board', { id: serial('id').primaryKey(), visibilit
       `import { bigint, bigserial, pgTable, text, timestamp } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
 
-export const torture = pgTable('Torture', { id: bigserial('id', { mode: 'bigint' }).primaryKey(), big: bigint('big', { mode: 'bigint' }).notNull().default(sql\`9007199254740993\`), quoted: text('quoted').notNull().default('it\\'s a "quote" and a \\\\ backslash'), born: timestamp('born').notNull().default(new Date('2020-02-29T23:59:59.999+00:00')) })`,
+export const torture = pgTable('Torture', { id: bigserial('id', { mode: 'bigint' }).primaryKey(), big: bigint('big', { mode: 'bigint' }).notNull().default(sql\`9007199254740993\`), quoted: text('quoted').notNull().default('it\\'s a "quote" and a \\\\ backslash'), born: timestamp('born', { precision: 3 }).notNull().default(new Date('2020-02-29T23:59:59.999+00:00')) })`,
     )
   })
 })
@@ -1026,15 +1034,23 @@ const PG_NATIVE_TYPES: readonly (readonly [
     'integer, pgTable, timestamp',
     "timestamp('value', { withTimezone: true })",
   ],
-  ['DateTime', '@db.Date', ['Date', []], 'date, integer, pgTable', "date('value')"],
+  ['DateTime', '@db.Date', ['Date', []], 'customType, integer, pgTable', "utcDate('value')"],
   [
     'DateTime',
     '@db.Time(3)',
     ['Time', ['3']],
-    'integer, pgTable, time',
-    "time('value', { precision: 3 })",
+    'customType, integer, pgTable',
+    "utcTime('value', { precision: 3 })",
   ],
-  ['DateTime', '@db.Time', ['Time', []], 'integer, pgTable, time', "time('value')"],
+  ['DateTime', '@db.Time', ['Time', []], 'customType, integer, pgTable', "utcTime('value')"],
+  [
+    'DateTime',
+    '@db.Timetz(3)',
+    ['Timetz', ['3']],
+    'customType, integer, pgTable',
+    "utcTimetz('value', { precision: 3 })",
+  ],
+  ['DateTime', '@db.Timetz', ['Timetz', []], 'customType, integer, pgTable', "utcTimetz('value')"],
   ['Json', '@db.Json', ['Json', []], 'integer, json, pgTable', "json('value')"],
   ['Json', '@db.JsonB', ['JsonB', []], 'integer, jsonb, pgTable', "jsonb('value')"],
   ['Bytes', '@db.ByteA', ['ByteA', []], 'integer, pgTable, text', "text('value')"],
@@ -1108,7 +1124,7 @@ const MYSQL_NATIVE_TYPES: readonly (readonly [
     '@db.DateTime',
     ['DateTime', []],
     'datetime, int, mysqlTable',
-    "datetime('value', { fsp: 3 })",
+    "datetime('value', { fsp: 0 })",
   ],
   [
     'DateTime',
@@ -1122,17 +1138,17 @@ const MYSQL_NATIVE_TYPES: readonly (readonly [
     '@db.Timestamp',
     ['Timestamp', []],
     'int, mysqlTable, timestamp',
-    "timestamp('value', { fsp: 3 })",
+    "timestamp('value', { fsp: 0 })",
   ],
-  ['DateTime', '@db.Date', ['Date', []], 'date, int, mysqlTable', "date('value')"],
+  ['DateTime', '@db.Date', ['Date', []], 'customType, int, mysqlTable', "utcDate('value')"],
   [
     'DateTime',
     '@db.Time(3)',
     ['Time', ['3']],
-    'int, mysqlTable, time',
-    "time('value', { fsp: 3 })",
+    'customType, int, mysqlTable',
+    "utcTime('value', { precision: 3 })",
   ],
-  ['DateTime', '@db.Time', ['Time', []], 'int, mysqlTable, time', "time('value')"],
+  ['DateTime', '@db.Time', ['Time', []], 'customType, int, mysqlTable', "utcTime('value')"],
   [
     'Bytes',
     '@db.Binary(16)',
@@ -1179,11 +1195,12 @@ describe('native database types', () => {
           ],
         }),
       ])
-      expect(drizzleSchema(datamodel, 'postgresql', [])).toBe(
-        `import { ${imports} } from 'drizzle-orm/pg-core'
-
-export const row = pgTable('Row', { id: integer('id').primaryKey(), value: ${column}.notNull() })`,
-      )
+      // A date helper, when the column is one, is declared between the two.
+      const lines = drizzleSchema(datamodel, 'postgresql', []).split('\n')
+      expect([lines[0], lines.at(-1)]).toStrictEqual([
+        `import { ${imports} } from 'drizzle-orm/pg-core'`,
+        `export const row = pgTable('Row', { id: integer('id').primaryKey(), value: ${column}.notNull() })`,
+      ])
     },
   )
 
@@ -1199,11 +1216,12 @@ export const row = pgTable('Row', { id: integer('id').primaryKey(), value: ${col
           ],
         }),
       ])
-      expect(drizzleSchema(datamodel, 'mysql', [])).toBe(
-        `import { ${imports} } from 'drizzle-orm/mysql-core'
-
-export const row = mysqlTable('Row', { id: int('id').primaryKey(), value: ${column}.notNull() })`,
-      )
+      // A date helper, when the column is one, is declared between the two.
+      const lines = drizzleSchema(datamodel, 'mysql', []).split('\n')
+      expect([lines[0], lines.at(-1)]).toStrictEqual([
+        `import { ${imports} } from 'drizzle-orm/mysql-core'`,
+        `export const row = mysqlTable('Row', { id: int('id').primaryKey(), value: ${column}.notNull() })`,
+      ])
     },
   )
 
@@ -1219,11 +1237,136 @@ export const row = mysqlTable('Row', { id: int('id').primaryKey(), value: ${colu
           ],
         }),
       ])
-      expect(drizzleSchema(datamodel, 'sqlite', [])).toBe(
-        `import { ${imports} } from 'drizzle-orm/sqlite-core'
-
-export const row = sqliteTable('Row', { id: integer('id').primaryKey(), value: ${column}.notNull() })`,
-      )
+      // A date helper, when the column is one, is declared between the two.
+      const lines = drizzleSchema(datamodel, 'sqlite', []).split('\n')
+      expect([lines[0], lines.at(-1)]).toStrictEqual([
+        `import { ${imports} } from 'drizzle-orm/sqlite-core'`,
+        `export const row = sqliteTable('Row', { id: integer('id').primaryKey(), value: ${column}.notNull() })`,
+      ])
     },
   )
+})
+
+// Imports the date helpers a generated schema declares, with a customType that hands back its options.
+async function importDateHelpers(schema: string) {
+  const declarations = schema.split('\n\n').filter((block) => block.startsWith('const '))
+  const names = declarations.map((block) => block.match(/^const (\w+)/u)?.[1]).join(', ')
+  const code = `const customType = (options) => () => options\n${stripTypeScriptTypes(declarations.join('\n'))}\nexport { ${names} }`
+  return import(/* @vite-ignore */ `data:text/javascript,${encodeURIComponent(code)}`)
+}
+
+describe('dates', () => {
+  const nowField = (name: string, nativeType?: [string, string[]]) =>
+    makeField({
+      name,
+      type: 'DateTime',
+      hasDefaultValue: true,
+      default: { name: 'now', args: [] },
+      ...(nativeType ? { nativeType } : {}),
+    })
+
+  it('defaults now() to CURRENT_TIMESTAMP on a PostgreSQL date or time helper', () => {
+    const datamodel = makeDatamodel([
+      makeModel({
+        name: 'Row',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          nowField('d', ['Date', []]),
+          nowField('t', ['Time', ['3']]),
+          nowField('tz', ['Timetz', ['3']]),
+        ],
+      }),
+    ])
+    expect(drizzleSchema(datamodel, 'postgresql', []).split('\n').at(-1)).toBe(
+      "export const row = pgTable('Row', { id: integer('id').primaryKey(), d: utcDate('d').notNull().default(sql`CURRENT_TIMESTAMP`).$defaultFn(utcNow), t: utcTime('t', { precision: 3 }).notNull().default(sql`CURRENT_TIMESTAMP`).$defaultFn(utcNow), tz: utcTimetz('tz', { precision: 3 }).notNull().default(sql`CURRENT_TIMESTAMP`).$defaultFn(utcNow) })",
+    )
+  })
+
+  it('writes a timetz with the UTC offset and reads it back', async () => {
+    const datamodel = makeDatamodel([
+      makeModel({
+        name: 'Row',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({ name: 'tz', type: 'DateTime', nativeType: ['Timetz', ['3']] }),
+        ],
+      }),
+    ])
+    const { utcTimetz } = await importDateHelpers(drizzleSchema(datamodel, 'postgresql', []))
+    const column = utcTimetz()
+    expect(column.dataType({ precision: 3 })).toBe('time(3) with time zone')
+    expect(column.toDriver(new Date('1970-01-01T03:04:05.678Z'))).toBe('03:04:05.678+00')
+    expect(column.fromDriver('03:04:05.678+00').toISOString()).toBe('1970-01-01T03:04:05.678Z')
+  })
+
+  it('reads the literal default Prisma writes into a SQLite DateTime column', async () => {
+    const datamodel = makeDatamodel([
+      makeModel({
+        name: 'Row',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({ name: 'at', type: 'DateTime' }),
+        ],
+      }),
+    ])
+    const { utcDateTime } = await importDateHelpers(drizzleSchema(datamodel, 'sqlite', []))
+    const column = utcDateTime()
+    expect(
+      ['2024-01-15 10:30:00 +00:00', '2024-01-15T10:30:00.000+00:00', '2024-01-15 10:30:00'].map(
+        (value) => column.fromDriver(value).toISOString(),
+      ),
+    ).toStrictEqual(Array.from({ length: 3 }, () => '2024-01-15T10:30:00.000Z'))
+  })
+
+  it("gives MySQL's bare @db.DateTime and @db.Timestamp fsp 0, and now() the column's precision", () => {
+    const datamodel = makeDatamodel([
+      makeModel({
+        name: 'Row',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          nowField('plain'),
+          nowField('ts', ['Timestamp', []]),
+          nowField('dt6', ['DateTime', ['6']]),
+        ],
+      }),
+    ])
+    expect(drizzleSchema(datamodel, 'mysql', []).split('\n').at(-1)).toBe(
+      "export const row = mysqlTable('Row', { id: int('id').primaryKey(), plain: datetime('plain', { fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`).$defaultFn(utcNow), ts: timestamp('ts', { fsp: 0 }).notNull().default(sql`CURRENT_TIMESTAMP`).$defaultFn(utcNow), dt6: datetime('dt6', { fsp: 6 }).notNull().default(sql`CURRENT_TIMESTAMP(6)`).$defaultFn(utcNow) })",
+    )
+  })
+
+  it('says a MySQL timestamp needs a UTC session, only where there is one', () => {
+    const schema = (nativeType: [string, string[]]) =>
+      drizzleSchema(
+        makeDatamodel([
+          makeModel({
+            name: 'Row',
+            fields: [
+              makeField({ name: 'id', type: 'Int', isId: true }),
+              makeField({ name: 'at', type: 'DateTime', nativeType }),
+            ],
+          }),
+        ]),
+        'mysql',
+        [],
+      )
+    const note = "// timestamp() holds UTC only on a connection whose time_zone is '+00:00'"
+    expect(schema(['Timestamp', ['3']]).split('\n')[2]).toBe(note)
+    expect(schema(['DateTime', ['3']])).not.toContain(note)
+  })
+
+  it('leaves a DateTime list nullable on PostgreSQL', () => {
+    const datamodel = makeDatamodel([
+      makeModel({
+        name: 'Row',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({ name: 'at', type: 'DateTime', isList: true }),
+        ],
+      }),
+    ])
+    expect(drizzleSchema(datamodel, 'postgresql', []).split('\n').at(-1)).toBe(
+      "export const row = pgTable('Row', { id: integer('id').primaryKey(), at: timestamp('at', { precision: 3 }).array() })",
+    )
+  })
 })

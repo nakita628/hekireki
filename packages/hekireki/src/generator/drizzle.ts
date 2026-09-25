@@ -47,6 +47,10 @@ export function drizzleSchema(
   return [
     generateImports(imports, db),
     '',
+    // MySQL converts a TIMESTAMP through the session's zone and drizzle reads and writes UTC.
+    ...(db === 'mysql' && imports.core.has('timestamp')
+      ? ["// timestamp() holds UTC only on a connection whose time_zone is '+00:00'", '']
+      : []),
     ...dateHelpers.flatMap((helper) => [helper, '']),
     ...(enumLinesWithGap.length > 0 ? [...enumLinesWithGap, ''] : []),
     ...tableLinesWithGap,

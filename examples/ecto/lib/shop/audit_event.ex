@@ -19,7 +19,7 @@ defmodule Shop.AuditEvent do
   schema "audit_events" do
     field(:action, :string)
     field(:payload, :map)
-    field(:at, :utc_datetime, read_after_writes: true)
+    field(:at, Shop.PrismaDateTime, autogenerate: true)
     belongs_to(:account, Shop.Account, foreign_key: :account_id)
   end
 end

@@ -1,7 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 import { describe, expect, it } from 'vite-plus/test'
 
-import { APPLICATION_RECORD_FILE, activeRecordModelFiles } from './activerecord.js'
+import { activeRecordModelFiles, applicationRecordFile } from './activerecord.js'
 
 function makeField(overrides: Partial<DMMF.Field> & { name: string; type: string }): DMMF.Field {
   return {
@@ -125,13 +125,53 @@ end
   })
 
   it('carries the ApplicationRecord Rails itself would write', () => {
-    expect(APPLICATION_RECORD_FILE).toStrictEqual({
+    expect(applicationRecordFile('postgresql')).toStrictEqual({
       fileName: 'application_record.rb',
       code: `class ApplicationRecord < ActiveRecord::Base
   primary_abstract_class
 end
 `,
     })
+  })
+
+  it('carries the DateTime type the models are declared with on SQLite', () => {
+    expect(applicationRecordFile('sqlite')).toStrictEqual({
+      fileName: 'application_record.rb',
+      code: `class ApplicationRecord < ActiveRecord::Base
+  primary_abstract_class
+
+  class PrismaDateTime < ActiveRecord::Type::DateTime
+    def serialize(value)
+      time = super
+      time.respond_to?(:getutc) ? time.getutc.strftime("%Y-%m-%dT%H:%M:%S.%L+00:00") : time
+    end
+  end
+end
+`,
+    })
+  })
+
+  it('declares the DateTime columns with that type on SQLite', () => {
+    const event = makeModel({
+      name: 'Event',
+      fields: [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'at', type: 'DateTime' }),
+      ],
+    })
+    expect(activeRecordModelFiles([event], [], 'sqlite')).toStrictEqual([
+      {
+        fileName: 'event.rb',
+        code: `class Event < ApplicationRecord
+  self.table_name = "Event"
+
+  attribute :at, PrismaDateTime.new
+
+  validates :at, presence: true
+end
+`,
+      },
+    ])
   })
 
   it('emits nothing for a schema without models', () => {

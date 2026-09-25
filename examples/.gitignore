@@ -22,3 +22,6 @@ migrate/.hekireki/
 # them. The models and locale files it generates are committed, to be read without running it.
 active-record/vendor/
 active-record/.bundle/
+# The date checks each example keeps beside it while its generator's DateTime handling is compared
+# with Prisma Client on real databases: scratch harnesses, caches, databases and logs.
+*/.datecheck/

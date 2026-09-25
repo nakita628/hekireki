@@ -1776,6 +1776,7 @@ import org.jetbrains.exposed.v1.core.dao.id.IdTable
 import org.jetbrains.exposed.v1.core.java.javaUUID
 import org.jetbrains.exposed.v1.json.jsonb
 import java.math.BigDecimal
+import java.time.OffsetTime
 import java.util.Base64
 import java.util.UUID
 
@@ -1784,7 +1785,7 @@ object OddTable : IdTable<Int>("\\"Odd\\"") {
     val small = short("small").default(7)
     val yes = bool("yes").default(false)
     val guid = javaUUID("guid").default(UUID.fromString("8f1d3b4a-2c6e-4f7a-9b0c-1d2e3f4a5b6c"))
-    val zone = pgTimetz("zone", 3).databaseDefault("'2024-01-02 03:04:05 +02:00'")
+    val zone = pgTimetz("zone", 3).databaseDefault("'2024-01-02 03:04:05 +02:00'") { OffsetTime.parse("01:04:05Z") }
     val blobs =
         array("blobs", BasicBinaryColumnType())
             .nullable()
@@ -1808,6 +1809,30 @@ import org.jetbrains.exposed.v1.core.dao.id.IdTable
 object NumberedTable : IdTable<Long>("\\"Numbered\\"") {
     override val id = pgOid("id").entityId()
     override val primaryKey = PrimaryKey(id, name = "\\"Numbered_pkey\\"")
+}
+`,
+    })
+  })
+
+  it('gives a timetz literal the UTC time Prisma Client writes for it', () => {
+    const { datamodel, plan } = fixture(`model Clock {
+  id    Int      @id
+  utc   DateTime @default("2024-01-02T03:04:05.5Z") @db.Timetz(3)
+  tokyo DateTime @default("2024-01-02T09:30:00+09:00") @db.Timetz
+}
+`)
+    expect(tableFile(plan, model(datamodel, 'Clock'))).toStrictEqual({
+      fileName: 'ClockTable.kt',
+      code: `package models
+
+import org.jetbrains.exposed.v1.core.dao.id.IdTable
+import java.time.OffsetTime
+
+object ClockTable : IdTable<Int>("\\"Clock\\"") {
+    override val id = integer("id").entityId()
+    val utc = pgTimetz("utc", 3).default(OffsetTime.parse("03:04:05.5Z"))
+    val tokyo = pgTimetz("tokyo").databaseDefault("'2024-01-02 09:30:00 +09:00'") { OffsetTime.parse("00:30:00Z") }
+    override val primaryKey = PrimaryKey(id, name = "\\"Clock_pkey\\"")
 }
 `,
     })
@@ -3219,6 +3244,7 @@ import org.jetbrains.exposed.v1.core.statements.api.RowApi
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneOffset
+import java.time.temporal.ChronoUnit
 
 internal class PgTimestampColumnType(
     val precision: Int? = null,
@@ -3230,14 +3256,14 @@ internal class PgTimestampColumnType(
             is Instant -> value
             is LocalDateTime -> value.toInstant(ZoneOffset.UTC)
             else -> error("Unexpected value of type \${value::class.qualifiedName}: $value")
-        }
+        }.truncatedTo(ChronoUnit.MILLIS)
 
     override fun readObject(
         rs: RowApi,
         index: Int,
     ): Any? = rs.getObject(index, LocalDateTime::class.java)
 
-    override fun notNullValueToDB(value: Instant): Any = LocalDateTime.ofInstant(value, ZoneOffset.UTC)
+    override fun notNullValueToDB(value: Instant): Any = LocalDateTime.ofInstant(value.truncatedTo(ChronoUnit.MILLIS), ZoneOffset.UTC)
 
     override fun nonNullValueToString(value: Instant): String = "'\${notNullValueToDB(value)}'"
 }
@@ -3583,6 +3609,7 @@ import java.time.LocalTime
 import java.time.OffsetDateTime
 import java.time.OffsetTime
 import java.time.ZoneOffset
+import java.time.temporal.ChronoUnit
 import java.util.UUID
 import java.sql.Array as SqlArray
 
@@ -3598,7 +3625,10 @@ internal class SqlExpression<T>(
 internal fun <T> Column<T>.databaseDefault(
     sql: String,
     value: (() -> T)? = null,
-): Column<T> = with(table) { defaultExpression(SqlExpression(sql, columnType)).also { it.defaultValueFun = value } }
+): Column<T> =
+    with(table) {
+        if (value == null) defaultExpression(SqlExpression(sql, columnType)) else clientDefault(value).withDefinition("DEFAULT $sql")
+    }
 
 internal fun indexExpression(sql: String): Function<String> = SqlExpression(sql, TextColumnType())
 
@@ -3612,14 +3642,14 @@ internal class PgTimestampColumnType(
             is Instant -> value
             is LocalDateTime -> value.toInstant(ZoneOffset.UTC)
             else -> error("Unexpected value of type \${value::class.qualifiedName}: $value")
-        }
+        }.truncatedTo(ChronoUnit.MILLIS)
 
     override fun readObject(
         rs: RowApi,
         index: Int,
     ): Any? = rs.getObject(index, LocalDateTime::class.java)
 
-    override fun notNullValueToDB(value: Instant): Any = LocalDateTime.ofInstant(value, ZoneOffset.UTC)
+    override fun notNullValueToDB(value: Instant): Any = LocalDateTime.ofInstant(value.truncatedTo(ChronoUnit.MILLIS), ZoneOffset.UTC)
 
     override fun nonNullValueToString(value: Instant): String = "'\${notNullValueToDB(value)}'"
 }
@@ -3639,14 +3669,14 @@ internal class PgTimestamptzColumnType(
             is Instant -> value
             is OffsetDateTime -> value.toInstant()
             else -> error("Unexpected value of type \${value::class.qualifiedName}: $value")
-        }
+        }.truncatedTo(ChronoUnit.MILLIS)
 
     override fun readObject(
         rs: RowApi,
         index: Int,
     ): Any? = rs.getObject(index, OffsetDateTime::class.java)
 
-    override fun notNullValueToDB(value: Instant): Any = value.atOffset(ZoneOffset.UTC)
+    override fun notNullValueToDB(value: Instant): Any = value.truncatedTo(ChronoUnit.MILLIS).atOffset(ZoneOffset.UTC)
 
     override fun nonNullValueToString(value: Instant): String = "'\${notNullValueToDB(value)}'"
 }
@@ -3684,14 +3714,16 @@ internal class PgTimeColumnType(
         when (value) {
             is LocalTime -> value
             else -> error("Unexpected value of type \${value::class.qualifiedName}: $value")
-        }
+        }.truncatedTo(ChronoUnit.MILLIS)
 
     override fun readObject(
         rs: RowApi,
         index: Int,
     ): Any? = rs.getObject(index, LocalTime::class.java)
 
-    override fun nonNullValueToString(value: LocalTime): String = "'$value'"
+    override fun notNullValueToDB(value: LocalTime): Any = value.truncatedTo(ChronoUnit.MILLIS)
+
+    override fun nonNullValueToString(value: LocalTime): String = "'\${notNullValueToDB(value)}'"
 }
 
 internal fun Table.pgTime(
@@ -3708,14 +3740,16 @@ internal class PgTimetzColumnType(
         when (value) {
             is OffsetTime -> value
             else -> error("Unexpected value of type \${value::class.qualifiedName}: $value")
-        }
+        }.withOffsetSameInstant(ZoneOffset.UTC).truncatedTo(ChronoUnit.MILLIS)
 
     override fun readObject(
         rs: RowApi,
         index: Int,
     ): Any? = rs.getObject(index, OffsetTime::class.java)
 
-    override fun nonNullValueToString(value: OffsetTime): String = "'$value'"
+    override fun notNullValueToDB(value: OffsetTime): Any = value.withOffsetSameInstant(ZoneOffset.UTC).truncatedTo(ChronoUnit.MILLIS)
+
+    override fun nonNullValueToString(value: OffsetTime): String = "'\${notNullValueToDB(value)}'"
 }
 
 internal fun Table.pgTimetz(

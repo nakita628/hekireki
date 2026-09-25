@@ -209,6 +209,7 @@ sslmode
 Stampeds
 stringbool
 subplan
+subsecs
 Tabler
 takibi
 textbg
@@ -218,6 +219,7 @@ tgname
 tgrelid
 thibaultmeyer
 timestampdiff
+timespec
 tinys
 treeify
 triggerdef
@@ -253,3 +255,12 @@ zizmor
 zoomable
 über
 ünter
+Errorf
+Milli
+pgjdbc
+Duser
+datecheck
+libpq
+myxql
+jvmargs
+Linq

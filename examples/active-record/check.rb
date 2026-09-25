@@ -199,6 +199,17 @@ check "Prisma-named timestamps are filled, bumped and ordered by through their a
   reasons.empty? ? nil : reasons.join(", ")
 end
 
+check "a DateTime is written as the text Prisma writes, and found again by its instant" do
+  at = Time.utc(2030, 1, 2, 3, 4, Rational("5.678"))
+  post = Post.create!(title: "Dated", createdAt: at)
+  stored = Post.connection.select_value(Post.where(id: post.id).select(:createdAt).to_sql)
+  if stored != "2030-01-02T03:04:05.678+00:00"
+    "stored #{stored.inspect}, Prisma writes 2030-01-02T03:04:05.678+00:00"
+  elsif Post.find_by(createdAt: at) != post
+    "find_by(createdAt:) missed the row"
+  end
+end
+
 check "a uuid primary key is made in Ruby and first/last order by created_at" do
   older = Tag.create!(name: "older", created_at: 2.days.ago)
   newer = Tag.create!(name: "newer", created_at: 1.day.ago)

@@ -53,6 +53,37 @@ Then each thing the schema promises, as GORM keeps it:
   deleted category's posts to category 1; `Restrict` and `NoAction` refuse to delete an owner with
   children; `onUpdate: Cascade` carries a changed email into the audit log.
 
+## DateTime
+
+A `DateTime` field is held in a type the generator writes beside the models, not a bare
+`time.Time`: `DateTime` for an instant, `Date` for `@db.Date`, `TimeOfDay` for `@db.Time` and
+`@db.Timetz`, and `DateTimeList`, `DateList` and `TimeOfDayList` for a `DateTime[]` on
+PostgreSQL, which is a PostgreSQL array, not JSON. Each writes the value as Prisma Client writes it
+and reads it as Prisma Client reads it, so a row either side writes reads back on the other as the
+same instant, in UTC to the millisecond, whatever the process's `TZ`:
+
+- On SQLite the text Prisma writes, `2030-01-02T03:04:05.678+00:00`, which SQLite compares and
+  sorts as text.
+- On PostgreSQL the instant in UTC; a `timestamp` column's wall clock is UTC, as Prisma's is.
+- On MySQL the UTC wall clock as text, `2030-01-02 03:04:05.678`, which `go-sql-driver/mysql` sends
+  as it is whatever its `parseTime` and `loc`; a `DATETIME` it reads back is read as UTC.
+- A date column holds the UTC date and a time column the UTC time of day, read back on
+  1970-01-01, as Prisma Client keeps them.
+
+`now()`, `@updatedAt` and a literal default are filled in `BeforeCreate` and `BeforeUpdate` from
+`tx.NowFunc()` in UTC, as Prisma Client fills them rather than leaving them to the table. Wrap a
+`time.Time` you bind in a query of your own, `db.Where("at > ?", models.DateTime{Time: at})`: the
+driver would format a bare one its own way.
+
+Set on the connection what Prisma Client assumes:
+
+- PostgreSQL: the session's time zone UTC. It is the server's default; where a server or database
+  sets another, add `timezone=UTC` to GORM's DSN and set `options` on Prisma's URL to
+  `-c TimeZone=UTC`. Under another session time zone Prisma Client itself writes a `timestamptz` as that zone's
+  wall clock.
+- MySQL: the same `time_zone` on both sides (the server's default, or the same `time_zone=` on
+  GORM's DSN and `timezone=` on Prisma's URL), since a `TIMESTAMP` column converts by it.
+
 `main.go` opens the connection with two things GORM leaves to the application: foreign keys, which
 SQLite turns on per connection (`_pragma=foreign_keys(1)`), and `TranslateError`, which turns the
 driver's constraint codes into GORM's errors. It passes `models.NamingStrategy`, which the

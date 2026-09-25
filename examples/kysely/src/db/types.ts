@@ -5,6 +5,8 @@ export type Generated<T> =
     ? ColumnType<S, I | undefined, U>
     : ColumnType<T, T | undefined, T>
 
+// A DateTime column holds the text date.toISOString().replace('Z', '+00:00')
+
 export type Role = 'customer' | 'staff' | 'ADMIN'
 
 export type Genre = "rock 'n' roll" | 'hip-hop' | 'jazz' | 'CLASSICAL'
@@ -17,7 +19,7 @@ export interface User {
   display_name: string | null
   role: Generated<Role>
   is_active: Generated<number>
-  created_at: Generated<string>
+  created_at: string
   updated_at: string
   referrer_id: number | null
 }
@@ -48,7 +50,7 @@ export interface Record {
   genre: Genre
   format: Generated<Format>
   artist_id: number
-  created_at: Generated<string>
+  created_at: string
   updated_at: string
 }
 
@@ -60,7 +62,7 @@ export interface Tag {
 export interface Order {
   id: string
   customer_id: Generated<number>
-  placed_at: Generated<string>
+  placed_at: string
   note: string | null
 }
 
@@ -86,7 +88,7 @@ export interface Setting {
   default: string | null
   delete: Generated<number>
   constructor: string | null
-  'last-modified': Generated<string>
+  'last-modified': string
 }
 
 export interface Wishlist {

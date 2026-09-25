@@ -90,12 +90,24 @@ export function pythonAttrName(columnName: string) {
     : columnName
 }
 
-function resolveNativeType(field: DMMF.Field) {
-  const baseType = prismaTypeToSQLAlchemyType(field.type)
+// The column type of a DateTime with no native type: the precision Prisma Migrate gives it, on
+// the UTC type the module defines (SQLite has no precision to give).
+function dateTimeType(provider: string) {
+  if (provider === 'sqlite') return 'UtcDateTime'
+  return provider === 'mysql' ? 'UtcDateTime(fsp=3)' : 'UtcDateTime(precision=3)'
+}
+
+function resolveNativeType(field: DMMF.Field, provider: string) {
+  const baseType =
+    field.type === 'DateTime' ? dateTimeType(provider) : prismaTypeToSQLAlchemyType(field.type)
   if (!field.nativeType) return baseType
 
   const [nativeName, nativeArgs] = field.nativeType
   const args = nativeArgs ?? []
+  // A bare `@db.Timestamp` or `@db.DateTime` is the database's own precision, as Prisma Migrate
+  // writes it: timestamp (6) on PostgreSQL, TIMESTAMP and DATETIME (0) on MySQL.
+  const precision = args.length > 0 ? `precision=${args[0]}` : ''
+  const fsp = args.length > 0 ? `fsp=${args[0]}` : ''
 
   switch (nativeName) {
     case 'VarChar':
@@ -122,9 +134,11 @@ function resolveNativeType(field: DMMF.Field) {
     case 'Uuid':
       return 'Uuid'
     case 'Timestamp':
-      return 'DateTime'
+      return provider === 'mysql' ? `UtcTimestamp(${fsp})` : `UtcDateTime(${precision})`
+    case 'DateTime':
+      return `UtcDateTime(${fsp})`
     case 'Timestamptz':
-      return 'DateTime(timezone=True)'
+      return `UtcDateTimeTz(${precision})`
     case 'Date':
       return 'Date'
     case 'Time':
@@ -140,7 +154,10 @@ function resolveNativeType(field: DMMF.Field) {
   }
 }
 
-function needsExplicitSaType(field: DMMF.Field) {
+// The date-time types the module defines rather than imports from sqlalchemy.
+const UTC_TYPES = new Set(['UtcDateTime', 'UtcDateTimeTz', 'UtcTimestamp'])
+
+function needsExplicitSaType(field: DMMF.Field, provider: string) {
   if (field.kind === 'enum') return true
   // dict is not in SQLAlchemy's default type_annotation_map: a bare
   // Mapped[dict[str, Any]] raises MappedAnnotationError at import time.
@@ -148,9 +165,10 @@ function needsExplicitSaType(field: DMMF.Field) {
   // A bare Mapped[int] maps to Integer; a Prisma BigInt column must stay
   // BIGINT in the DDL.
   if (field.type === 'BigInt') return true
+  // A native type that comes out as the column's plain type is left to type_annotation_map.
   if (field.nativeType) {
-    const resolved = resolveNativeType(field)
-    if (resolved !== prismaTypeToSQLAlchemyType(field.type)) return true
+    const plain = resolveNativeType({ ...field, nativeType: null }, provider)
+    if (resolveNativeType(field, provider) !== plain) return true
   }
   return false
 }
@@ -313,18 +331,21 @@ export function collectManyToManyTables(allModels: readonly DMMF.Model[]) {
   })
 }
 
-export function generateAssociationTable(info: {
-  tableName: string
-  varName: string
-  leftModel: string
-  leftTable: string
-  leftPkField: DMMF.Field | undefined
-  rightModel: string
-  rightTable: string
-  rightPkField: DMMF.Field | undefined
-}) {
-  const leftSaType = info.leftPkField ? resolveNativeType(info.leftPkField) : 'String'
-  const rightSaType = info.rightPkField ? resolveNativeType(info.rightPkField) : 'String'
+export function generateAssociationTable(
+  info: {
+    tableName: string
+    varName: string
+    leftModel: string
+    leftTable: string
+    leftPkField: DMMF.Field | undefined
+    rightModel: string
+    rightTable: string
+    rightPkField: DMMF.Field | undefined
+  },
+  provider: string,
+) {
+  const leftSaType = info.leftPkField ? resolveNativeType(info.leftPkField, provider) : 'String'
+  const rightSaType = info.rightPkField ? resolveNativeType(info.rightPkField, provider) : 'String'
   const leftPkCol = info.leftPkField?.dbName ?? info.leftPkField?.name ?? 'id'
   const rightPkCol = info.rightPkField?.dbName ?? info.rightPkField?.name ?? 'id'
 
@@ -396,7 +417,16 @@ function formatDefault(field: DMMF.Field, enumDef?: DMMF.DatamodelEnum) {
     // strings, and Json defaults as JSON text; each needs its Python shape,
     // not a bare quoted string.
     if (field.type === 'BigInt') return def
-    if (field.type === 'DateTime') return `datetime.fromisoformat(${toPythonString(def)})`
+    // A @db.Date or @db.Time column holds a date or a time: its default is the part of the
+    // instant, in UTC, the column keeps.
+    if (field.type === 'DateTime') {
+      const iso = new Date(def).toISOString()
+      const nativeName = field.nativeType?.[0]
+      if (nativeName === 'Date') return `date.fromisoformat("${iso.slice(0, 10)}")`
+      if (nativeName === 'Time') return `time_type.fromisoformat("${iso.slice(11, 23)}")`
+      if (nativeName === 'Timetz') return `time_type.fromisoformat("${iso.slice(11, 23)}+00:00")`
+      return `datetime.fromisoformat(${toPythonString(def)})`
+    }
     if (field.type === 'Json') {
       const parsed: unknown = JSON.parse(def)
       return typeof parsed === 'object' && parsed !== null
@@ -412,6 +442,16 @@ function isFunctionDefault(
   def: DMMF.Field['default'],
 ): def is { readonly name: string; readonly args: readonly (string | number)[] } {
   return def !== null && typeof def === 'object' && 'name' in def
+}
+
+function isNowDefault(field: DMMF.Field) {
+  return (
+    field.type === 'DateTime' && isFunctionDefault(field.default) && field.default.name === 'now'
+  )
+}
+
+function usesNativeType(models: readonly DMMF.Model[], names: readonly string[]) {
+  return models.some((m) => m.fields.some((f) => names.includes(f.nativeType?.[0] ?? '')))
 }
 
 function isAutoincrement(field: DMMF.Field) {
@@ -497,6 +537,7 @@ function generateColumn(
   associations: ReturnType<typeof getAssociations>,
   allModels: readonly DMMF.Model[],
   enumMap: ReadonlyMap<string, DMMF.DatamodelEnum>,
+  provider: string,
 ) {
   // The attribute is the field in Python's case; the column is Prisma's, named
   // positionally whenever the two differ.
@@ -523,9 +564,9 @@ function generateColumn(
     const enumType = `Enum(${valuesStr}, name="${enumName}")`
     colArgs.push(field.isList ? `ARRAY(${enumType})` : enumType)
   } else if (field.isList) {
-    colArgs.push(`ARRAY(${prismaTypeToSQLAlchemyType(field.type)})`)
-  } else if (needsExplicitSaType(field)) {
-    const saType = resolveNativeType(field)
+    colArgs.push(`ARRAY(${resolveNativeType(field, provider)})`)
+  } else if (needsExplicitSaType(field, provider)) {
+    const saType = resolveNativeType(field, provider)
     // SQLAlchemy writes None into a JSON column as the JSON text `null`, which `IS NULL` does not
     // find; the None of an optional Json field is the column's NULL, as Prisma's DbNull is.
     colArgs.push(
@@ -555,6 +596,26 @@ function generateColumn(
   if (isPk && isAutoincrement(field)) colArgs.push('autoincrement=True')
   if (field.isUnique) colArgs.push('unique=True')
 
+  // now() and @updatedAt take the clock of the process, in UTC: the database's NOW() is the
+  // session zone's wall time in a timestamp column and drops MySQL's milliseconds. The
+  // server_default is for the DDL, where MySQL holds NOW() to the column's precision.
+  const hasNowDefault = isNowDefault(field)
+  const nativeName = field.nativeType?.[0]
+  const utcNow =
+    nativeName === 'Date'
+      ? 'lambda: utc_now().date()'
+      : nativeName === 'Time'
+        ? 'lambda: utc_now().time()'
+        : nativeName === 'Timetz'
+          ? 'lambda: utc_now().timetz()'
+          : 'utc_now'
+  // A DateTime with no native type is Prisma's DATETIME(3).
+  const fsp = field.nativeType ? field.nativeType[1][0] : '3'
+  const nowSql =
+    provider === 'mysql' && utcNow === 'utc_now' && fsp !== undefined && fsp !== '0'
+      ? `func.now(${fsp})`
+      : 'func.now()'
+
   const uuidVersion = uuidDefaultVersion(field)
   const dbGeneratedExpr =
     isFunctionDefault(field.default) &&
@@ -565,12 +626,8 @@ function generateColumn(
   if (dbGeneratedExpr !== null) {
     // dbgenerated() is a raw DDL expression no client library can evaluate.
     colArgs.push(`server_default=text(${toPythonString(dbGeneratedExpr)})`)
-  } else if (
-    field.type === 'DateTime' &&
-    isFunctionDefault(field.default) &&
-    field.default.name === 'now'
-  ) {
-    colArgs.push('server_default=func.now()')
+  } else if (hasNowDefault) {
+    colArgs.push(`default=${utcNow}`, `server_default=${nowSql}`)
   } else if (uuidVersion !== null) {
     // uuid6.uuid7 covers Python < 3.14 (stdlib uuid gains uuid7 in 3.14).
     const isNativeUuid = field.nativeType?.[0] === 'Uuid'
@@ -595,12 +652,8 @@ function generateColumn(
   // Prisma's @updatedAt also sets the value on create; without an insert
   // default the NOT NULL column fails on the first INSERT.
   if (field.isUpdatedAt) {
-    const hasNowServerDefault =
-      field.type === 'DateTime' && isFunctionDefault(field.default) && field.default.name === 'now'
-    if (!hasNowServerDefault) {
-      colArgs.push('default=func.now()')
-    }
-    colArgs.push('onupdate=func.now()')
+    if (!hasNowDefault) colArgs.push(`default=${utcNow}`)
+    colArgs.push(`onupdate=${utcNow}`)
   }
 
   if (colArgs.length === 0) {
@@ -833,6 +886,7 @@ export function generateModelBody(
     rightTable: string
     rightPkField: DMMF.Field | undefined
   }[],
+  provider: string,
 ) {
   const idField = model.fields.find((f) => f.isId)
   const compositePkFieldNames = new Set(model.primaryKey?.fields)
@@ -851,7 +905,7 @@ export function generateModelBody(
   const columnLines = scalarFields.map((field) => {
     const isPk = field.isId || compositePkFieldNames.has(field.name)
     const isFk = belongsToFkFields.has(field.name)
-    return generateColumn(field, isPk, isFk, associations, allModels, enumMap)
+    return generateColumn(field, isPk, isFk, associations, allModels, enumMap, provider)
   })
 
   const tableArgsLines = generateTableArgs(model, allModels, indexes)
@@ -890,23 +944,19 @@ export function collectGlobalImports(
     rightTable: string
     rightPkField: DMMF.Field | undefined
   }[],
+  provider: string,
 ) {
   const saImports = new Set<string>()
-  const needsOptional = models.some((m) =>
-    m.fields.some((f) => f.kind !== 'object' && !f.isRequired),
-  )
+  const needsDatetime = models.some((m) => m.fields.some((f) => f.type === 'DateTime'))
+  // The UTC types take and return an Optional.
+  const needsOptional =
+    needsDatetime || models.some((m) => m.fields.some((f) => f.kind !== 'object' && !f.isRequired))
+  const needsUtcTimestamp = provider === 'mysql' && usesNativeType(models, ['Timestamp'])
   const hasRelationship = models.some((m) => m.fields.some((f) => f.kind === 'object'))
-  const needsFunc = models.some((m) =>
-    m.fields.some(
-      (f) =>
-        (f.type === 'DateTime' && isFunctionDefault(f.default) && f.default.name === 'now') ||
-        f.isUpdatedAt,
-    ),
-  )
+  const needsFunc = needsUtcTimestamp || models.some((m) => m.fields.some(isNowDefault))
   const needsAny = models.some((m) => m.fields.some((f) => f.type === 'Json'))
   const needsArray = models.some((m) => m.fields.some((f) => f.kind !== 'object' && f.isList))
   const needsDecimal = models.some((m) => m.fields.some((f) => f.type === 'Decimal'))
-  const needsDatetime = models.some((m) => m.fields.some((f) => f.type === 'DateTime'))
   const needsUuid = models.some((m) =>
     m.fields.some((f) => {
       if (uuidDefaultVersion(f) === 4) return true
@@ -917,20 +967,8 @@ export function collectGlobalImports(
   )
   const needsUuid7 = models.some((m) => m.fields.some((f) => uuidDefaultVersion(f) === 7))
   const needsUlid = models.some((m) => m.fields.some((f) => isUlidDefault(f)))
-  const needsDate = models.some((m) =>
-    m.fields.some((f) => {
-      if (!f.nativeType) return false
-      const [n] = f.nativeType
-      return n === 'Date'
-    }),
-  )
-  const needsTime = models.some((m) =>
-    m.fields.some((f) => {
-      if (!f.nativeType) return false
-      const [n] = f.nativeType
-      return n === 'Time'
-    }),
-  )
+  const needsDate = usesNativeType(models, ['Date'])
+  const needsTime = usesNativeType(models, ['Time', 'Timetz'])
 
   for (const model of models) {
     for (const field of model.fields) {
@@ -941,12 +979,8 @@ export function collectGlobalImports(
       }
       // A scalar list wraps its element SA type in ARRAY(...), so that element
       // type needs importing too (e.g. ARRAY(String) needs String).
-      if (field.isList) {
-        saImports.add(prismaTypeToSQLAlchemyType(field.type))
-      }
-      if (needsExplicitSaType(field)) {
-        const resolved = resolveNativeType(field)
-        saImports.add(resolved.replace(/\(.*\)$/u, ''))
+      if (field.isList || needsExplicitSaType(field, provider)) {
+        saImports.add(resolveNativeType(field, provider).replace(/\(.*\)$/u, ''))
       }
     }
 
@@ -974,13 +1008,26 @@ export function collectGlobalImports(
     saImports.add('Index')
     saImports.add('Table')
     for (const info of m2mTables) {
-      const leftType = info.leftPkField ? resolveNativeType(info.leftPkField) : 'String'
-      const rightType = info.rightPkField ? resolveNativeType(info.rightPkField) : 'String'
+      const leftType = info.leftPkField ? resolveNativeType(info.leftPkField, provider) : 'String'
+      const rightType = info.rightPkField
+        ? resolveNativeType(info.rightPkField, provider)
+        : 'String'
       saImports.add(leftType.replace(/\(.*\)$/u, ''))
       saImports.add(rightType.replace(/\(.*\)$/u, ''))
     }
   }
 
+  if (needsDatetime) {
+    saImports.add('Dialect')
+    saImports.add('TypeDecorator')
+    if (provider === 'sqlite') saImports.add('String')
+  }
+  if (needsUtcTimestamp) {
+    saImports.add('BindParameter')
+    saImports.add('DateTime')
+    saImports.add('ColumnElement')
+    saImports.add('text')
+  }
   if (needsFunc) saImports.add('func')
   if (needsArray) saImports.add('ARRAY')
   if (
@@ -1000,9 +1047,17 @@ export function collectGlobalImports(
 
   const lines: string[] = []
 
-  const sortedSa = [...saImports].toSorted()
+  const sortedSa = [...saImports].filter((name) => !UTC_TYPES.has(name)).toSorted()
   if (sortedSa.length > 0) {
     lines.push(`from sqlalchemy import ${sortedSa.join(', ')}`)
+  }
+  // What the UTC types are made on, where the dialect's own type carries the precision.
+  if (needsDatetime && provider === 'mysql') {
+    lines.push(
+      `from sqlalchemy.dialects.mysql import ${needsUtcTimestamp ? 'DATETIME, TIMESTAMP' : 'DATETIME'}`,
+    )
+  } else if (needsDatetime && provider !== 'sqlite') {
+    lines.push('from sqlalchemy.dialects.postgresql import TIMESTAMP')
   }
 
   const ormImports = ['DeclarativeBase', 'Mapped', 'mapped_column']
@@ -1021,10 +1076,122 @@ export function collectGlobalImports(
   if (needsDatetime) dtParts.push('datetime')
   if (needsDate) dtParts.push('date')
   if (needsTime) dtParts.push('time as time_type')
+  if (needsDatetime) dtParts.push('timezone')
   if (dtParts.length > 0) lines.push(`from datetime import ${dtParts.join(', ')}`)
   if (needsUuid) lines.push('import uuid as uuid_mod')
   if (needsUuid7) lines.push('import uuid6')
   if (needsUlid) lines.push('from ulid import ULID')
 
   return lines
+}
+
+/**
+ * The declarative base, after the types a DateTime is read through: every instant is UTC, aware
+ * in Python, as Prisma Client writes and reads it. SQLite keeps it as Prisma's text
+ * (`2030-01-02T03:04:05.678+00:00`), a timestamp without time zone holds UTC whatever the
+ * session's zone, and `utc_now` is the process's clock for `now()` and `@updatedAt`.
+ */
+export function generateBase(models: readonly DMMF.Model[], provider: string) {
+  if (!models.some((m) => m.fields.some((f) => f.type === 'DateTime'))) {
+    return ['class Base(DeclarativeBase):', '    pass']
+  }
+  const needsUtcTimestamp = provider === 'mysql' && usesNativeType(models, ['Timestamp'])
+  // UtcTimestamp puts TIMESTAMP where this has DATETIME: both are a DateTime to mypy.
+  const impl =
+    provider !== 'mysql'
+      ? 'impl = TIMESTAMP'
+      : needsUtcTimestamp
+        ? 'impl: type[DateTime] = DATETIME'
+        : 'impl = DATETIME'
+  const utcDateTime =
+    provider === 'sqlite'
+      ? [
+          'class UtcDateTime(TypeDecorator[datetime]):',
+          '    """UTC text with milliseconds, `2030-01-02T03:04:05.678+00:00`; a naive value is UTC."""',
+          '',
+          '    impl = String',
+          '    cache_ok = True',
+          '',
+          '    def process_bind_param(self, value: Optional[datetime], dialect: Dialect) -> Optional[str]:',
+          '        if value is None:',
+          '            return None',
+          '        aware = value if value.tzinfo else value.replace(tzinfo=timezone.utc)',
+          '        return aware.astimezone(timezone.utc).isoformat(timespec="milliseconds")',
+          '',
+          '    def process_result_value(self, value: Optional[str], dialect: Dialect) -> Optional[datetime]:',
+          '        if value is None:',
+          '            return None',
+          '        read = datetime.fromisoformat(value)',
+          '        return read.replace(tzinfo=timezone.utc) if read.tzinfo is None else read.astimezone(timezone.utc)',
+          '',
+          '',
+        ]
+      : [
+          'class UtcDateTime(TypeDecorator[datetime]):',
+          '    """A timestamp without time zone that holds UTC: an aware value is stored in UTC."""',
+          '',
+          `    ${impl}`,
+          '    cache_ok = True',
+          '',
+          '    def process_bind_param(self, value: Optional[datetime], dialect: Dialect) -> Optional[datetime]:',
+          '        if value is None or value.tzinfo is None:',
+          '            return value',
+          '        return value.astimezone(timezone.utc).replace(tzinfo=None)',
+          '',
+          '    def process_result_value(self, value: Optional[datetime], dialect: Dialect) -> Optional[datetime]:',
+          '        return None if value is None else value.replace(tzinfo=timezone.utc)',
+          '',
+          '',
+        ]
+  const utcDateTimeTz =
+    provider !== 'mysql' && usesNativeType(models, ['Timestamptz'])
+      ? [
+          'class UtcDateTimeTz(TypeDecorator[datetime]):',
+          '    """A timestamptz: a naive value is UTC, not the session\'s zone, and reads are UTC."""',
+          '',
+          '    impl = TIMESTAMP',
+          '    cache_ok = True',
+          '',
+          '    def __init__(self, precision: Optional[int] = None) -> None:',
+          '        super().__init__(timezone=True, precision=precision)',
+          '',
+          '    def process_bind_param(self, value: Optional[datetime], dialect: Dialect) -> Optional[datetime]:',
+          '        return value if value is None or value.tzinfo else value.replace(tzinfo=timezone.utc)',
+          '',
+          '    def process_result_value(self, value: Optional[datetime], dialect: Dialect) -> Optional[datetime]:',
+          '        return None if value is None else value.astimezone(timezone.utc)',
+          '',
+          '',
+        ]
+      : []
+  // MySQL converts a TIMESTAMP from the session's time_zone to UTC and back; CONVERT_TZ undoes
+  // that on both sides, so the column holds the instant under any session zone.
+  const utcTimestamp = needsUtcTimestamp
+    ? [
+        'class UtcTimestamp(UtcDateTime):',
+        '    """A TIMESTAMP, which the server shifts by the session\'s time_zone: shifted back here."""',
+        '',
+        '    impl = TIMESTAMP',
+        '    cache_ok = True',
+        '',
+        '    def bind_expression(self, value: BindParameter[datetime]) -> ColumnElement[datetime]:',
+        '        return func.convert_tz(value, "+00:00", text("@@session.time_zone"), type_=self)',
+        '',
+        '    def column_expression(self, column: ColumnElement[datetime]) -> ColumnElement[datetime]:',
+        '        return func.convert_tz(column, text("@@session.time_zone"), "+00:00", type_=self)',
+        '',
+        '',
+      ]
+    : []
+  const utcNow = models.some((m) => m.fields.some((f) => isNowDefault(f) || f.isUpdatedAt))
+    ? ['def utc_now() -> datetime:', '    return datetime.now(timezone.utc)', '', '']
+    : []
+  return [
+    ...utcDateTime,
+    ...utcDateTimeTz,
+    ...utcTimestamp,
+    ...utcNow,
+    'class Base(DeclarativeBase):',
+    `    type_annotation_map = {datetime: ${dateTimeType(provider)}}`,
+  ]
 }

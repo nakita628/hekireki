@@ -1562,24 +1562,149 @@ class Note extends Model`)
     const postgres = eloquentModels([model], 'App\\Models', undefined, undefined, {
       provider: 'postgresql',
     })
-    expect(postgres).toContain(`        'at' => '2020-01-01 00:00:00.000',`)
+    expect(postgres).toContain(`        'at' => '2020-01-01 00:00:00.000+00:00',`)
+    const mysql = eloquentModels([model], 'App\\Models', undefined, undefined, {
+      provider: 'mysql',
+    })
+    expect(mysql).toContain(`        'at' => '2020-01-01 00:00:00.000',`)
 
-    const [trait] = eloquentSupportFiles([model], 'App\\Models', 'sqlite')
+    const [trait, builder] = eloquentSupportFiles([model], 'App\\Models', 'sqlite')
     expect(trait?.fileName).toBe('PrismaDates.php')
     expect(trait?.code).toContain(`trait PrismaDates
 {
     public function fromDateTime($value)
     {
-        return empty($value) ? $value : parent::asDateTime($value)->setTimezone('UTC')->format('Y-m-d\\TH:i:s.vP');
+        return empty($value) ? $value : parent::asDateTime($value)->setTimezone('UTC')->format(PrismaQueryBuilder::DATE_FORMAT);
     }
 
     protected function asDateTime($value)
     {
         return is_string($value) ? Date::parse($value, 'UTC') : parent::asDateTime($value);
     }
+
+    protected function newBaseQueryBuilder()
+    {
+        $connection = $this->getConnection();
+
+        return new PrismaQueryBuilder($connection, $connection->getQueryGrammar(), $connection->getPostProcessor());
+    }
 }`)
-    expect(eloquentSupportFiles([model], 'App\\Models', 'postgresql')[0]?.code).toContain(
-      `->setTimezone('UTC')->format('Y-m-d H:i:s.v');`,
+    expect(builder?.fileName).toBe('PrismaQueryBuilder.php')
+    expect(builder?.code).toContain(`    const DATE_FORMAT = 'Y-m-d\\TH:i:s.vP';`)
+    expect(builder?.code).not.toContain('addDateBasedWhere')
+    expect(eloquentSupportFiles([model], 'App\\Models', 'postgresql')[1]?.code).toContain(
+      `    const DATE_FORMAT = 'Y-m-d H:i:s.vP';`,
+    )
+    expect(eloquentSupportFiles([model], 'App\\Models', 'mysql')[1]?.code).toContain(
+      `    const DATE_FORMAT = 'Y-m-d H:i:s.v';`,
+    )
+  })
+
+  it('takes the date and time of a timestamptz in UTC on PostgreSQL, whatever the session zone', () => {
+    const model = makeModel({
+      name: 'Shift',
+      fields: [
+        autoincrementId,
+        makeField({
+          name: 'startsAt',
+          type: 'DateTime',
+          dbName: 'starts_at',
+          nativeType: ['Timestamptz', ['3']],
+        }),
+        makeField({ name: 'at', type: 'DateTime', nativeType: ['Timestamp', ['3']] }),
+        makeField({
+          name: 'updatedAt',
+          type: 'DateTime',
+          isUpdatedAt: true,
+          nativeType: ['Timestamptz', []],
+        }),
+      ],
+    })
+
+    const postgres = eloquentModels([model], 'App\\Models', undefined, undefined, {
+      provider: 'postgresql',
+    })
+    expect(postgres).toContain(`    const ZONED_DATES = ['starts_at', 'updatedAt'];`)
+    expect(
+      eloquentModels([model], 'App\\Models', undefined, undefined, { provider: 'mysql' }),
+    ).not.toContain('ZONED_DATES')
+
+    const [trait, builder] = eloquentSupportFiles([model], 'App\\Models', 'postgresql')
+    expect(trait?.code)
+      .toContain(`        $query = new PrismaQueryBuilder($connection, $connection->getQueryGrammar(), $connection->getPostProcessor());
+        $query->zonedDates = defined(static::class . '::ZONED_DATES') ? static::ZONED_DATES : [];
+
+        return $query;`)
+    expect(builder?.code).toContain(`use Illuminate\\Database\\Query\\Expression;`)
+    expect(builder?.code)
+      .toContain(`    protected function addDateBasedWhere($type, $column, $operator, $value, $boolean = 'and')
+    {
+        if (is_string($column) && in_array(last(explode('.', $column)), $this->zonedDates, true)) {
+            $column = new Expression('(' . $this->grammar->wrap($column) . " at time zone 'UTC')");
+        }
+
+        return parent::addDateBasedWhere($type, $column, $operator, $value, $boolean);
+    }`)
+  })
+
+  it('fills a dbgenerated CURRENT_TIMESTAMP as it fills now(), and no other dbgenerated', () => {
+    const model = makeModel({
+      name: 'Ping',
+      fields: [
+        autoincrementId,
+        makeField({
+          name: 'at',
+          type: 'DateTime',
+          hasDefaultValue: true,
+          default: { name: 'dbgenerated', args: ['CURRENT_TIMESTAMP'] },
+        }),
+        makeField({
+          name: 'later',
+          type: 'DateTime',
+          hasDefaultValue: true,
+          default: { name: 'dbgenerated', args: ["now() + interval '1 day'"] },
+        }),
+      ],
+    })
+
+    const code = eloquentModels([model], 'App\\Models', undefined, undefined, {
+      provider: 'postgresql',
+    })
+    expect(code).toContain(`        if (! $this->exists) {
+            if (! array_key_exists('at', $this->attributes)) {
+                $this->setAttribute('at', $this->freshTimestamp());
+            }
+        }`)
+    expect(code).not.toContain(`array_key_exists('later'`)
+  })
+
+  it('casts a DateTime[] to a list of Carbon, by the native type of its items', () => {
+    const model = makeModel({
+      name: 'Calendar',
+      fields: [
+        autoincrementId,
+        makeField({ name: 'moments', type: 'DateTime', isList: true }),
+        makeField({ name: 'days', type: 'DateTime', isList: true, nativeType: ['Date', []] }),
+        makeField({ name: 'bells', type: 'DateTime', isList: true, nativeType: ['Timetz', ['3']] }),
+      ],
+    })
+
+    const code = eloquentModels([model], 'App\\Models', undefined, undefined, {
+      provider: 'postgresql',
+    })
+    expect(code).toContain(`    protected $casts = [
+        'moments' => AsPrismaDateList::class,
+        'days' => AsPrismaDateList::class . ':date',
+        'bells' => AsPrismaDateList::class . ':time',
+    ];`)
+    expect(code).not.toContain('use PrismaDates;')
+    const files = eloquentSupportFiles([model], 'App\\Models', 'postgresql')
+    expect(files.map((file) => file.fileName)).toStrictEqual(['AsPrismaDateList.php'])
+    expect(files[0]?.code).toContain(
+      `        return '{' . implode(',', array_map(fn ($item) => '"' . Date::parse($item)->setTimezone('UTC')->format($format) . '"', $value)) . '}';`,
+    )
+    expect(files[0]?.code).toContain(
+      `        $items = str_getcsv(substr((string) $value, 1, -1), ',', '"', '\\\\');`,
     )
   })
 
@@ -1755,8 +1880,41 @@ describe('corners of a schema, each run in examples/eloquent', () => {
     expect(eloquentModels([model], 'App\\Models')).toContain(`    protected $casts = [
         'amount' => AsDecimal::class,
         'exact' => AsDecimal::class,
-        'day' => 'date',
+        'day' => AsPrismaDate::class,
     ];`)
+  })
+
+  it('keeps a date or a time given as the text the column holds, a time on PostgreSQL in UTC', () => {
+    const model = makeModel({
+      name: 'Slot',
+      fields: [
+        autoincrementId,
+        makeField({ name: 'day', type: 'DateTime', nativeType: ['Date', []] }),
+        makeField({ name: 'opens', type: 'DateTime', nativeType: ['Time', ['3']] }),
+      ],
+    })
+
+    const files = (provider: string) =>
+      Object.fromEntries(
+        eloquentSupportFiles([model], 'App\\Models', provider).map((file) => [
+          file.fileName,
+          file.code,
+        ]),
+      )
+    expect(files('postgresql')['AsPrismaDate.php'])
+      .toContain(`        if (is_string($value) && preg_match('/^\\d{4}-\\d{2}-\\d{2}$/', $value)) {
+            return $value;
+        }`)
+    expect(files('postgresql')['AsPrismaTime.php'])
+      .toContain(`        if (is_string($value) && preg_match('/^\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?$/', $value)) {
+            return $value . '+00:00';
+        }
+
+        return $value === null ? null : Date::parse($value)->setTimezone('UTC')->format('H:i:s.vP');`)
+    expect(files('mysql')['AsPrismaTime.php']).toContain(`            return $value;
+        }
+
+        return $value === null ? null : Date::parse($value)->setTimezone('UTC')->format('H:i:s.v');`)
   })
 
   it('names the key of a relation wherever it is not the key Eloquent takes', () => {

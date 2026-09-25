@@ -8,12 +8,15 @@ defmodule Shop.Order do
   """
 
   @primary_key {:id, :id, autogenerate: true, source: :order_number}
+  @timestamps_opts [type: Shop.PrismaDateTime, autogenerate: {Shop.PrismaDateTime, :autogenerate, []}]
 
   @type t :: %__MODULE__{
           id: integer(),
           status: atom(),
           note: String.t() | nil,
           placed_at: DateTime.t(),
+          updated_at: DateTime.t(),
+          synced_at: DateTime.t(),
           account: Shop.Account.t() | nil,
           gift_target: Shop.Account.t() | nil,
           line_items: [Shop.LineItem.t()]
@@ -22,10 +25,11 @@ defmodule Shop.Order do
   schema "orders" do
     field(:status, Ecto.Enum, values: [:PENDING, :PAID, :SHIPPED, :CANCELLED], default: :PENDING)
     field(:note, :string)
-    field(:placed_at, :utc_datetime, read_after_writes: true)
+    field(:placed_at, Shop.PrismaDateTime, autogenerate: true)
     belongs_to(:account, Shop.Account, foreign_key: :account_id)
     belongs_to(:gift_target, Shop.Account, foreign_key: :gift_for, type: :string, references: :handle)
     has_many(:line_items, Shop.LineItem, foreign_key: :order_number)
-    timestamps(type: :utc_datetime, inserted_at: false, updated_at_source: :changed_at)
+    timestamps(inserted_at: false, updated_at_source: :changed_at)
+    timestamps(inserted_at: false, updated_at: :synced_at)
   end
 end

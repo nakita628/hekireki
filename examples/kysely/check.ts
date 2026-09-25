@@ -61,12 +61,13 @@ for (const table of [
   await db.deleteFrom(table).execute()
 }
 
-const NOW = '2026-09-25T09:00:00.000Z'
+// A DateTime is written as Prisma writes it, the text the generated file names.
+const NOW = '2026-09-25T09:00:00.000+00:00'
 
 // The shop's own account, which the SetDefault check needs as the default of `orders.customer_id`.
 await db
   .insertInto('users')
-  .values({ id: 1, email: 'shop@example.com', role: 'ADMIN', updated_at: NOW })
+  .values({ id: 1, email: 'shop@example.com', role: 'ADMIN', created_at: NOW, updated_at: NOW })
   .execute()
 
 const artist = await db
@@ -85,6 +86,7 @@ function record(title: string, catalogueNo: number): Insertable<t.Record> {
     tracklist: '[]',
     genre: 'jazz',
     artist_id: artist.id,
+    created_at: NOW,
     updated_at: NOW,
   }
 }
@@ -104,12 +106,13 @@ await check('every scalar goes in and comes back as the interface types it', asy
       rating: 4.75,
       tracks: 5,
       in_stock: 0,
-      released_on: '1959-08-17T00:00:00.000Z',
+      released_on: '1959-08-17T00:00:00.000+00:00',
       tracklist: JSON.stringify([{ side: 'A', title: 'So What' }]),
       cover,
       genre: 'jazz',
       format: 'LP',
       artist_id: artist.id,
+      created_at: NOW,
       updated_at: NOW,
     })
     .execute()
@@ -131,7 +134,7 @@ await check('every scalar goes in and comes back as the interface types it', asy
       cover: row.cover,
       genre: row.genre,
       format: row.format,
-      created_at: typeof row.created_at,
+      created_at: row.created_at,
       updated_at: row.updated_at,
     },
     {
@@ -141,12 +144,12 @@ await check('every scalar goes in and comes back as the interface types it', asy
       rating: 4.75,
       tracks: 5,
       in_stock: 0,
-      released_on: '1959-08-17T00:00:00.000Z',
+      released_on: '1959-08-17T00:00:00.000+00:00',
       tracklist: [{ side: 'A', title: 'So What' }],
       cover,
       genre: 'jazz',
       format: 'LP',
-      created_at: 'string',
+      created_at: NOW,
       updated_at: NOW,
     },
   )
@@ -212,7 +215,7 @@ await check('an optional column may be left out, and reads back null', async () 
 await check('database defaults fill what an insert leaves out', async () => {
   const user = await db
     .insertInto('users')
-    .values({ email: 'ann@example.com', updated_at: NOW })
+    .values({ email: 'ann@example.com', created_at: NOW, updated_at: NOW })
     .returningAll()
     .executeTakeFirstOrThrow()
   const recordId = randomUUID()
@@ -235,9 +238,6 @@ await check('database defaults fill what an insert leaves out', async () => {
       { role: user.role, is_active: user.is_active, display_name: user.display_name },
       { role: 'customer', is_active: 1, display_name: null },
     ),
-    /^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/u.test(user.created_at)
-      ? undefined
-      : `created_at ${user.created_at}`,
     differs({ weight: review.weight, body: review.body }, { weight: 1.5, body: '' }),
     differs(saved, { tracks: 1, in_stock: 1, format: 'LP' }),
   ].filter((reason) => reason !== undefined)
@@ -256,7 +256,7 @@ await check(
       return `ids ${first?.id} and ${second?.id}`
     const user = await db
       .insertInto('users')
-      .values({ email: 'cuid@example.com', updated_at: NOW })
+      .values({ email: 'cuid@example.com', created_at: NOW, updated_at: NOW })
       .returning('id')
       .executeTakeFirstOrThrow()
     // Prisma's client makes a cuid; the column has no default, so a raw insert without one fails.
@@ -272,7 +272,7 @@ await check(
   async () => {
     const user = await db
       .insertInto('users')
-      .values({ email: 'stale@example.com', updated_at: NOW })
+      .values({ email: 'stale@example.com', created_at: NOW, updated_at: NOW })
       .returning('id')
       .executeTakeFirstOrThrow()
     await db.updateTable('users').set({ display_name: 'Stale' }).where('id', '=', user.id).execute()
@@ -311,7 +311,13 @@ await check(
   async () => {
     await db
       .insertInto('shop settings')
-      .values({ key: 'currency', type: 'string', default: 'EUR', constructor: 'Intl' })
+      .values({
+        key: 'currency',
+        type: 'string',
+        default: 'EUR',
+        constructor: 'Intl',
+        'last-modified': NOW,
+      })
       .execute()
     const row = await db
       .selectFrom('shop settings')
@@ -335,7 +341,7 @@ await check(
 
 await check('@unique refuses a second row with the same value', async () => {
   const code = await failure(
-    db.insertInto('users').values({ email: 'ann@example.com', updated_at: NOW }),
+    db.insertInto('users').values({ email: 'ann@example.com', created_at: NOW, updated_at: NOW }),
   )
   return code === 'SQLITE_CONSTRAINT_UNIQUE' ? undefined : `got ${code}`
 })
@@ -351,8 +357,8 @@ await check(
     const [a, b] = await db
       .insertInto('users')
       .values([
-        { email: 'rev-a@example.com', updated_at: NOW },
-        { email: 'rev-b@example.com', updated_at: NOW },
+        { email: 'rev-a@example.com', created_at: NOW, updated_at: NOW },
+        { email: 'rev-b@example.com', created_at: NOW, updated_at: NOW },
       ])
       .returning('id')
       .execute()
@@ -380,7 +386,7 @@ await check('a composite primary key holds one line per record in an order', asy
     .execute()
   const order = await db
     .insertInto('orders')
-    .values({ id: 'order-keyed', customer_id: 1 })
+    .values({ id: 'order-keyed', customer_id: 1, placed_at: NOW })
     .returning('id')
     .executeTakeFirstOrThrow()
   await db
@@ -415,12 +421,17 @@ await check('a foreign key refuses an owner that is not there', async () => {
 await check('a self relation: the referrals stay, SetNull, when the referrer goes', async () => {
   const referrer = await db
     .insertInto('users')
-    .values({ email: 'referrer@example.com', updated_at: NOW })
+    .values({ email: 'referrer@example.com', created_at: NOW, updated_at: NOW })
     .returning('id')
     .executeTakeFirstOrThrow()
   const referred = await db
     .insertInto('users')
-    .values({ email: 'referred@example.com', referrer_id: referrer.id, updated_at: NOW })
+    .values({
+      email: 'referred@example.com',
+      referrer_id: referrer.id,
+      created_at: NOW,
+      updated_at: NOW,
+    })
     .returning('id')
     .executeTakeFirstOrThrow()
   const joined = await db
@@ -444,7 +455,7 @@ await check(
   async () => {
     const user = await db
       .insertInto('users')
-      .values({ email: 'profiled@example.com', updated_at: NOW })
+      .values({ email: 'profiled@example.com', created_at: NOW, updated_at: NOW })
       .returning('id')
       .executeTakeFirstOrThrow()
     const avatar = Buffer.from('GIF89a')
@@ -502,7 +513,10 @@ await check(
       .insertInto('records')
       .values({ ...record('Ordered', 500), id: recordId })
       .execute()
-    await db.insertInto('orders').values({ id: 'order-cascade', customer_id: 1 }).execute()
+    await db
+      .insertInto('orders')
+      .values({ id: 'order-cascade', customer_id: 1, placed_at: NOW })
+      .execute()
     await db
       .insertInto('order_items')
       .values({ order_id: 'order-cascade', record_id: recordId, quantity: 2, unit_price: '9.50' })
@@ -525,12 +539,12 @@ await check(
   async () => {
     const customer = await db
       .insertInto('users')
-      .values({ email: 'leaver@example.com', updated_at: NOW })
+      .values({ email: 'leaver@example.com', created_at: NOW, updated_at: NOW })
       .returning('id')
       .executeTakeFirstOrThrow()
     await db
       .insertInto('orders')
-      .values({ id: 'order-default', customer_id: customer.id, note: 'gift wrap' })
+      .values({ id: 'order-default', customer_id: customer.id, note: 'gift wrap', placed_at: NOW })
       .execute()
     await db.deleteFrom('users').where('id', '=', customer.id).execute()
     const order = await db
@@ -587,7 +601,7 @@ await check('a named implicit many-to-many is _Wishlist, A the record and B the 
     .execute()
   const user = await db
     .insertInto('users')
-    .values({ email: 'wisher@example.com', updated_at: NOW })
+    .values({ email: 'wisher@example.com', created_at: NOW, updated_at: NOW })
     .returning('id')
     .executeTakeFirstOrThrow()
   await db.insertInto('_Wishlist').values({ A: recordId, B: user.id }).execute()
@@ -633,15 +647,26 @@ export type Cases = [
 export function refused() {
   return [
     // @ts-expect-error email is required
-    db.insertInto('users').values({ updated_at: NOW }).compile(),
+    db.insertInto('users').values({ created_at: NOW, updated_at: NOW }).compile(),
     // @ts-expect-error @updatedAt has no database default: an insert gives it
-    db.insertInto('users').values({ email: 'x@example.com' }).compile(),
-    // @ts-expect-error a Boolean binds as 0 or 1: better-sqlite3 refuses `true`
-    db.insertInto('users').values({ email: 'x', updated_at: NOW, is_active: true }).compile(),
-    // @ts-expect-error a DateTime binds as text: better-sqlite3 refuses a Date
-    db.insertInto('users').values({ email: 'x', updated_at: new Date() }).compile(),
-    // @ts-expect-error the enum's database value is `customer`, not Prisma's name
-    db.insertInto('users').values({ email: 'x', updated_at: NOW, role: 'CUSTOMER' }).compile(),
+    db.insertInto('users').values({ email: 'x@example.com', created_at: NOW }).compile(),
+    // @ts-expect-error Prisma Client writes now() itself; SQLite's CURRENT_TIMESTAMP is other text
+    db.insertInto('users').values({ email: 'x@example.com', updated_at: NOW }).compile(),
+    db
+      .insertInto('users')
+      // @ts-expect-error a Boolean binds as 0 or 1: better-sqlite3 refuses `true`
+      .values({ email: 'x', created_at: NOW, updated_at: NOW, is_active: true })
+      .compile(),
+    db
+      .insertInto('users')
+      // @ts-expect-error a DateTime binds as text: better-sqlite3 refuses a Date
+      .values({ email: 'x', created_at: NOW, updated_at: new Date() })
+      .compile(),
+    db
+      .insertInto('users')
+      // @ts-expect-error the enum's database value is `customer`, not Prisma's name
+      .values({ email: 'x', created_at: NOW, updated_at: NOW, role: 'CUSTOMER' })
+      .compile(),
     // @ts-expect-error not a value of Genre
     db.updateTable('records').set({ genre: 'rock and roll' }).compile(),
     // @ts-expect-error a Json binds as its text, not as an object

@@ -4,7 +4,7 @@ import type { GeneratorOptions } from '@prisma/generator-helper'
 import { Effect } from 'effect'
 
 import { emitMany, emitRaw } from '../emit/index.js'
-import { APPLICATION_RECORD_FILE, activeRecordModelFiles } from '../generator/activerecord.js'
+import { activeRecordModelFiles, applicationRecordFile } from '../generator/activerecord.js'
 import { activeRecordLocaleFiles, activeRecordProblems } from '../helper/activerecord.js'
 import { getString } from '../utils/index.js'
 import { GeneratorConfigError } from './errors.js'
@@ -27,12 +27,13 @@ export function activerecord(options: GeneratorOptions) {
     const enums = options.dmmf.datamodel.enums
     // The `///` documentation stays in the schema: a model carries no
     // comment, so there is no `comment` option to read.
-    const files = activeRecordModelFiles(options.dmmf.datamodel.models, enums)
+    const provider = options.datasources[0]?.activeProvider
+    const files = activeRecordModelFiles(options.dmmf.datamodel.models, enums, provider)
     // Written into app/models itself, so the directory can be generated whole;
     // anywhere else (a subdirectory Zeitwerk reads as a namespace) it would
     // define ApplicationRecord under the wrong constant.
     const withBase =
-      path.basename(outDir) === 'models' ? [APPLICATION_RECORD_FILE, ...files] : files
+      path.basename(outDir) === 'models' ? [applicationRecordFile(provider), ...files] : files
     // Translated `@ar.` messages and names go to config/locales as
     // models/<model>/<locale>.yml, the layout the Rails i18n guide gives for
     // keeping model names apart from the views' text: `locales` names the

@@ -385,7 +385,8 @@ impl ActiveModelBehavior for ActiveModel {
             ..ActiveModelTrait::default()
         }
     }
-}`)
+}
+`)
 
     const v7Model = makeModel('Event', [
       {
@@ -425,7 +426,8 @@ impl ActiveModelBehavior for ActiveModel {
             ..ActiveModelTrait::default()
         }
     }
-}`)
+}
+`)
   })
 })
 
@@ -477,7 +479,8 @@ impl ActiveModelBehavior for ActiveModel {
             ..ActiveModelTrait::default()
         }
     }
-}`)
+}
+`)
   })
 })
 
@@ -511,7 +514,8 @@ pub enum Relation {
     Tag,
 }
 
-impl ActiveModelBehavior for ActiveModel {}`)
+impl ActiveModelBehavior for ActiveModel {}
+`)
   })
 })
 
@@ -628,7 +632,8 @@ impl ActiveModelBehavior for ActiveModel {
             ..ActiveModelTrait::default()
         }
     }
-}`)
+}
+`)
   })
 })
 
@@ -661,7 +666,6 @@ const NATIVE_TYPES: readonly (readonly [
   ['DateTime', '@db.Timestamptz', ['Timestamptz', []], 'TimestampWithTimeZone'],
   ['DateTime', '@db.Date', ['Date', []], 'Date'],
   ['DateTime', '@db.Time', ['Time', []], 'Time'],
-  ['DateTime', '@db.Timetz', ['Timetz', []], 'Time'],
   ['Json', '@db.JsonB', ['JsonB', []], 'JsonBinary'],
   ['String', '@db.Xml', ['Xml', []], null],
 ]
@@ -669,6 +673,138 @@ const NATIVE_TYPES: readonly (readonly [
 // `@db.*` is the only way a Prisma schema pins a column type. `null` means the Rust type already
 // says everything sea-orm needs, so no `column_type` attribute is written at all - which is a
 // different statement from "unmapped", and the one this table exists to keep honest.
+describe('DateTime defaults and @updatedAt', () => {
+  const field = (overrides: Partial<DMMF.Field> & { name: string; type: string }): DMMF.Field => ({
+    kind: 'scalar',
+    isList: false,
+    isRequired: true,
+    isUnique: false,
+    isId: false,
+    isReadOnly: false,
+    isGenerated: false,
+    isUpdatedAt: false,
+    hasDefaultValue: false,
+    ...overrides,
+  })
+  const model: DMMF.Model = {
+    name: 'Event',
+    dbName: null,
+    schema: null,
+    uniqueFields: [],
+    uniqueIndexes: [],
+    primaryKey: null,
+    fields: [
+      field({
+        name: 'id',
+        type: 'Int',
+        isId: true,
+        hasDefaultValue: true,
+        default: { name: 'autoincrement', args: [] },
+      }),
+      field({ name: 'at', type: 'DateTime' }),
+      field({
+        name: 'created',
+        type: 'DateTime',
+        hasDefaultValue: true,
+        default: { name: 'now', args: [] },
+      }),
+      field({
+        name: 'literal',
+        type: 'DateTime',
+        hasDefaultValue: true,
+        default: '2024-01-15T10:30:00.000Z',
+      }),
+      field({ name: 'updated', type: 'DateTime', isRequired: false, isUpdatedAt: true }),
+    ],
+  }
+
+  it('fills now(), a literal and @updatedAt in before_save, at millisecond precision', () => {
+    expect(generateEntityFile(model, [model], [], {}, 'postgresql')).toBe(`use chrono::SubsecRound;
+use sea_orm::entity::prelude::*;
+use sea_orm::Set;
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
+#[sea_orm(table_name = "Event")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: i32,
+    pub at: DateTime,
+    pub created: DateTime,
+    pub literal: DateTime,
+    pub updated: Option<DateTime>,
+}
+
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+pub enum Relation {}
+
+#[async_trait::async_trait]
+impl ActiveModelBehavior for ActiveModel {
+    async fn before_save<C>(mut self, _db: &C, insert: bool) -> Result<Self, DbErr>
+    where
+        C: ConnectionTrait,
+    {
+        let now = chrono::Utc::now().trunc_subsecs(3);
+        if insert && self.created.is_not_set() {
+            self.created = Set(now.naive_utc());
+        }
+        if insert && self.literal.is_not_set() {
+            self.literal = Set("2024-01-15T10:30:00.000".parse().unwrap());
+        }
+        if !self.updated.is_set() {
+            self.updated = Set(Some(now.naive_utc()));
+        }
+        Ok(self)
+    }
+}
+`)
+  })
+
+  it('declares a SQLite DateTime as PrismaDateTime, which writes the text Prisma writes', () => {
+    expect(generateEntityFile(model, [model], [], {}, 'sqlite'))
+      .toBe(`use super::prisma_date_time::PrismaDateTime;
+use chrono::SubsecRound;
+use sea_orm::entity::prelude::*;
+use sea_orm::Set;
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
+#[sea_orm(table_name = "Event")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: i32,
+    pub at: PrismaDateTime,
+    pub created: PrismaDateTime,
+    pub literal: PrismaDateTime,
+    pub updated: Option<PrismaDateTime>,
+}
+
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+pub enum Relation {}
+
+#[async_trait::async_trait]
+impl ActiveModelBehavior for ActiveModel {
+    async fn before_save<C>(mut self, _db: &C, insert: bool) -> Result<Self, DbErr>
+    where
+        C: ConnectionTrait,
+    {
+        let now = chrono::Utc::now().trunc_subsecs(3);
+        if insert && self.created.is_not_set() {
+            self.created = Set(now.into());
+        }
+        if insert && self.literal.is_not_set() {
+            self.literal = Set("2024-01-15T10:30:00.000Z".parse().unwrap());
+        }
+        if !self.updated.is_set() {
+            self.updated = Set(Some(now.into()));
+        }
+        Ok(self)
+    }
+}
+`)
+  })
+})
+
 describe('resolveSeaOrmColumnType', () => {
   it.each(NATIVE_TYPES)('maps %s `%s`', (type, _attribute, nativeType, columnType) => {
     const field: DMMF.Field = {

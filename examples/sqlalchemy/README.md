@@ -36,10 +36,10 @@ Then each thing the schema promises, as the session keeps it. SQLAlchemy's warni
 this run, so a relationship that overlaps another or a join the mapper had to guess stops it:
 
 - **Columns.** Every scalar type SQLite has round-trips: an `Int`, a `BigInt` past 2^53, a `Float`,
-  a `Decimal`, a `Boolean`, a `String`, a `DateTime` with microseconds, a nested `Json` and `Bytes`
-  with NUL in them. Optional fields left out are `None` and NULL in the table; an optional `Json`
+  a `Decimal`, a `Boolean`, a `String`, a `DateTime` to the millisecond, a nested `Json` and
+  `Bytes` with NUL in them. Optional fields left out are `None` and NULL in the table; an optional `Json`
   set to `None` is NULL as well, not the JSON text `null`. Literal defaults are on the row, `now()`
-  is the database's, and `@updatedAt` is set on INSERT and bumped on UPDATE.
+  and `@updatedAt` are the clock in UTC, and `@updatedAt` is bumped on UPDATE.
 - **Keys.** An `autoincrement()` key comes from the database, a `uuid()` key from the model. A
   `cuid()` key has no Python default (no maintained library makes one), so a row without an id
   stops at the flush instead of writing NULL. A composite `@@id` finds one row and refuses a
@@ -58,6 +58,26 @@ this run, so a relationship that overlaps another or a join the mapper had to gu
   order lines the session has loaded and leaves the rest to the database; `Restrict` and `NoAction`
   refuse, with the children loaded, instead of the session setting their key to NULL; `SetNull`
   nulls the reports of a manager; `SetDefault` hands a closed account's transfers to account 1.
+
+## Dates
+
+A `DateTime` is what Prisma Client makes of it: an aware `datetime` in UTC, whatever the time zone
+of the process or of the database session, so a row either one writes reads back as the same
+instant through the other. The module defines the types that do it, and `Base` maps a plain
+`Mapped[datetime]` to the first:
+
+- **`UtcDateTime`** on SQLite is the text Prisma writes, `2026-04-01T09:30:15.123+00:00`, to the
+  millisecond. On PostgreSQL and MySQL it is a `timestamp(3)` or `DATETIME(3)` (or the precision a
+  `@db.Timestamp(p)` or `@db.DateTime(p)` names) holding UTC. A naive value is taken as UTC.
+- **`UtcDateTimeTz`** is a `@db.Timestamptz`: read back in UTC rather than the session's zone.
+- **`UtcTimestamp`** is MySQL's `@db.Timestamp`, which the server shifts by the session's
+  `time_zone`; `CONVERT_TZ` shifts it back on both sides.
+- `@db.Date` and `@db.Time` are a `date` and a `time`: the UTC day and time of day of the instant.
+- `now()` and `@updatedAt` take the process's clock in UTC, as Prisma Client does, not the
+  database's `NOW()`, which is the session zone's wall time in a column without a time zone.
+
+Nothing needs setting. A `dbgenerated()` default is SQL the database runs, in the session's zone,
+for Prisma Client as for SQLAlchemy.
 
 ## What the schema leaves out
 

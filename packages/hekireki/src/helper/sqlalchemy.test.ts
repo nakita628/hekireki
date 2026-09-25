@@ -4,6 +4,50 @@ import { describe, expect, it } from 'vite-plus/test'
 import { generateSingleFile } from '../generator/sqlalchemy.js'
 import { prismaTypeToPythonType, prismaTypeToSQLAlchemyType, pythonAttrName } from './sqlalchemy.js'
 
+// What a PostgreSQL module with a DateTime carries above its models: the type every DateTime is
+// read through, as UTC, and the base that maps a plain `Mapped[datetime]` to it.
+const UTC_DATE_TIME = `class UtcDateTime(TypeDecorator[datetime]):
+    """A timestamp without time zone that holds UTC: an aware value is stored in UTC."""
+
+    impl = TIMESTAMP
+    cache_ok = True
+
+    def process_bind_param(self, value: Optional[datetime], dialect: Dialect) -> Optional[datetime]:
+        if value is None or value.tzinfo is None:
+            return value
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+    def process_result_value(self, value: Optional[datetime], dialect: Dialect) -> Optional[datetime]:
+        return None if value is None else value.replace(tzinfo=timezone.utc)
+
+
+`
+const UTC_DATE_TIME_TZ = `class UtcDateTimeTz(TypeDecorator[datetime]):
+    """A timestamptz: a naive value is UTC, not the session's zone, and reads are UTC."""
+
+    impl = TIMESTAMP
+    cache_ok = True
+
+    def __init__(self, precision: Optional[int] = None) -> None:
+        super().__init__(timezone=True, precision=precision)
+
+    def process_bind_param(self, value: Optional[datetime], dialect: Dialect) -> Optional[datetime]:
+        return value if value is None or value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+    def process_result_value(self, value: Optional[datetime], dialect: Dialect) -> Optional[datetime]:
+        return None if value is None else value.astimezone(timezone.utc)
+
+
+`
+const UTC_NOW = `def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+`
+const UTC_BASE = `class Base(DeclarativeBase):
+    type_annotation_map = {datetime: UtcDateTime(precision=3)}
+`
+
 describe('prismaTypeToSQLAlchemyType', () => {
   it('maps String to String', () => {
     expect(prismaTypeToSQLAlchemyType('String')).toStrictEqual('String')
@@ -249,20 +293,20 @@ class Account(Base):
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy import func
+      `from sqlalchemy import Dialect, TypeDecorator, func
+from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from datetime import datetime
+from typing import Optional
+from datetime import datetime, timezone
 
 
-class Base(DeclarativeBase):
-    pass
-
+${UTC_DATE_TIME}${UTC_NOW}${UTC_BASE}
 
 class Event(Base):
     __tablename__ = "Event"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    created_at: Mapped[datetime] = mapped_column("createdAt", server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column("createdAt", default=utc_now, server_default=func.now())
 `,
     )
   })
@@ -276,20 +320,20 @@ class Event(Base):
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy import func
+      `from sqlalchemy import Dialect, TypeDecorator
+from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from datetime import datetime
+from typing import Optional
+from datetime import datetime, timezone
 
 
-class Base(DeclarativeBase):
-    pass
-
+${UTC_DATE_TIME}${UTC_NOW}${UTC_BASE}
 
 class Record(Base):
     __tablename__ = "Record"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    updated_at: Mapped[datetime] = mapped_column("updatedAt", default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column("updatedAt", default=utc_now, onupdate=utc_now)
 `,
     )
   })
@@ -933,14 +977,14 @@ class Measurement(Base):
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy import Date
+      `from sqlalchemy import Date, Dialect, TypeDecorator
+from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from datetime import datetime, date
+from typing import Optional
+from datetime import datetime, date, timezone
 
 
-class Base(DeclarativeBase):
-    pass
-
+${UTC_DATE_TIME}${UTC_BASE}
 
 class Birthday(Base):
     __tablename__ = "Birthday"
@@ -964,14 +1008,14 @@ class Birthday(Base):
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy import Time
+      `from sqlalchemy import Dialect, Time, TypeDecorator
+from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from datetime import datetime, time as time_type
+from typing import Optional
+from datetime import datetime, time as time_type, timezone
 
 
-class Base(DeclarativeBase):
-    pass
-
+${UTC_DATE_TIME}${UTC_BASE}
 
 class Schedule(Base):
     __tablename__ = "Schedule"
@@ -1407,15 +1451,14 @@ class User(Base):
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy import func
+      `from sqlalchemy import Dialect, TypeDecorator, func
+from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 
-class Base(DeclarativeBase):
-    pass
-
+${UTC_DATE_TIME}${UTC_NOW}${UTC_BASE}
 
 class Article(Base):
     __tablename__ = "Article"
@@ -1425,8 +1468,8 @@ class Article(Base):
     slug: Mapped[str] = mapped_column(unique=True)
     body: Mapped[Optional[str]]
     published: Mapped[bool] = mapped_column(default=False)
-    created_at: Mapped[datetime] = mapped_column("createdAt", server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column("updatedAt", default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column("createdAt", default=utc_now, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column("updatedAt", default=utc_now, onupdate=utc_now)
 `,
     )
   })
@@ -1573,7 +1616,7 @@ class Tag(Base):
 })
 
 describe('timestamptz native type', () => {
-  it('emits DateTime(timezone=True) for @db.Timestamptz', () => {
+  it('emits the UTC timestamptz type for @db.Timestamptz', () => {
     const models = [
       makeModel('Sensor', [
         makeField({
@@ -1592,21 +1635,20 @@ describe('timestamptz native type', () => {
       ]),
     ]
 
-    expect(generateSingleFile(models)).toBe(`from sqlalchemy import DateTime
+    expect(generateSingleFile(models)).toBe(`from sqlalchemy import Dialect, TypeDecorator
+from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 
-class Base(DeclarativeBase):
-    pass
-
+${UTC_DATE_TIME}${UTC_DATE_TIME_TZ}${UTC_BASE}
 
 class Sensor(Base):
     __tablename__ = "Sensor"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    seen_at: Mapped[Optional[datetime]] = mapped_column("seenAt", DateTime(timezone=True))
+    seen_at: Mapped[Optional[datetime]] = mapped_column("seenAt", UtcDateTimeTz(precision=6))
 `)
   })
 })
@@ -1752,35 +1794,35 @@ const NATIVE_TYPES: readonly (readonly [
     'DateTime',
     '@db.Timestamp',
     ['Timestamp', []],
-    'from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import datetime\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
-    'Mapped[datetime]\n',
+    `from sqlalchemy import Dialect, TypeDecorator\nfrom sqlalchemy.dialects.postgresql import TIMESTAMP\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom typing import Optional\nfrom datetime import datetime, timezone\n\n\n${UTC_DATE_TIME}${UTC_BASE}\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n`,
+    'Mapped[datetime] = mapped_column(UtcDateTime())\n',
   ],
   [
     'DateTime',
     '@db.Timestamptz',
     ['Timestamptz', []],
-    'from sqlalchemy import DateTime\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import datetime\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
-    'Mapped[datetime] = mapped_column(DateTime(timezone=True))\n',
+    `from sqlalchemy import Dialect, TypeDecorator\nfrom sqlalchemy.dialects.postgresql import TIMESTAMP\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom typing import Optional\nfrom datetime import datetime, timezone\n\n\n${UTC_DATE_TIME}${UTC_DATE_TIME_TZ}${UTC_BASE}\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n`,
+    'Mapped[datetime] = mapped_column(UtcDateTimeTz())\n',
   ],
   [
     'DateTime',
     '@db.Date',
     ['Date', []],
-    'from sqlalchemy import Date\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import datetime, date\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
+    `from sqlalchemy import Date, Dialect, TypeDecorator\nfrom sqlalchemy.dialects.postgresql import TIMESTAMP\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom typing import Optional\nfrom datetime import datetime, date, timezone\n\n\n${UTC_DATE_TIME}${UTC_BASE}\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n`,
     'Mapped[date] = mapped_column(Date)\n',
   ],
   [
     'DateTime',
     '@db.Time',
     ['Time', []],
-    'from sqlalchemy import Time\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import datetime, time as time_type\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
+    `from sqlalchemy import Dialect, Time, TypeDecorator\nfrom sqlalchemy.dialects.postgresql import TIMESTAMP\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom typing import Optional\nfrom datetime import datetime, time as time_type, timezone\n\n\n${UTC_DATE_TIME}${UTC_BASE}\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n`,
     'Mapped[time_type] = mapped_column(Time)\n',
   ],
   [
     'DateTime',
     '@db.Timetz',
     ['Timetz', []],
-    'from sqlalchemy import Time\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import datetime\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
+    `from sqlalchemy import Dialect, Time, TypeDecorator\nfrom sqlalchemy.dialects.postgresql import TIMESTAMP\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom typing import Optional\nfrom datetime import datetime, time as time_type, timezone\n\n\n${UTC_DATE_TIME}${UTC_BASE}\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n`,
     'Mapped[time_type] = mapped_column(Time(timezone=True))\n',
   ],
   [
@@ -2104,5 +2146,175 @@ class Account(Base):
     expect(code).toContain(
       '    extra: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON(none_as_null=True))\n',
     )
+  })
+})
+
+// Prisma Client reads and writes a DateTime as a UTC instant, whatever the process's or the
+// session's time zone: the module makes every DateTime an aware UTC datetime, on each provider's
+// own storage of it.
+describe('DateTime per provider', () => {
+  const now = { hasDefaultValue: true, default: { name: 'now', args: [] } }
+
+  it('keeps SQLite DateTime as the UTC text Prisma writes', () => {
+    const models = [
+      makeModel('Row', [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'at', type: 'DateTime', ...now }),
+        makeField({ name: 'seen', type: 'DateTime', isRequired: false, isUpdatedAt: true }),
+      ]),
+    ]
+
+    expect(generateSingleFile(models, [], [], 'sqlite'))
+      .toBe(`from sqlalchemy import Dialect, String, TypeDecorator, func
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from typing import Optional
+from datetime import datetime, timezone
+
+
+class UtcDateTime(TypeDecorator[datetime]):
+    """UTC text with milliseconds, \`2030-01-02T03:04:05.678+00:00\`; a naive value is UTC."""
+
+    impl = String
+    cache_ok = True
+
+    def process_bind_param(self, value: Optional[datetime], dialect: Dialect) -> Optional[str]:
+        if value is None:
+            return None
+        aware = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        return aware.astimezone(timezone.utc).isoformat(timespec="milliseconds")
+
+    def process_result_value(self, value: Optional[str], dialect: Dialect) -> Optional[datetime]:
+        if value is None:
+            return None
+        read = datetime.fromisoformat(value)
+        return read.replace(tzinfo=timezone.utc) if read.tzinfo is None else read.astimezone(timezone.utc)
+
+
+${UTC_NOW}class Base(DeclarativeBase):
+    type_annotation_map = {datetime: UtcDateTime}
+
+
+class Row(Base):
+    __tablename__ = "Row"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    at: Mapped[datetime] = mapped_column(default=utc_now, server_default=func.now())
+    seen: Mapped[Optional[datetime]] = mapped_column(default=utc_now, onupdate=utc_now)
+`)
+  })
+
+  it('gives MySQL DATETIME its precision and undoes the session zone on a TIMESTAMP', () => {
+    const models = [
+      makeModel('Row', [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'at', type: 'DateTime', ...now }),
+        makeField({ name: 'ts', type: 'DateTime', nativeType: ['Timestamp', ['3']], ...now }),
+        makeField({ name: 'ts0', type: 'DateTime', nativeType: ['Timestamp', []], ...now }),
+        makeField({ name: 'dt6', type: 'DateTime', nativeType: ['DateTime', ['6']] }),
+      ]),
+    ]
+
+    expect(generateSingleFile(models, [], [], 'mysql'))
+      .toBe(`from sqlalchemy import BindParameter, ColumnElement, DateTime, Dialect, TypeDecorator, func, text
+from sqlalchemy.dialects.mysql import DATETIME, TIMESTAMP
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from typing import Optional
+from datetime import datetime, timezone
+
+
+class UtcDateTime(TypeDecorator[datetime]):
+    """A timestamp without time zone that holds UTC: an aware value is stored in UTC."""
+
+    impl: type[DateTime] = DATETIME
+    cache_ok = True
+
+    def process_bind_param(self, value: Optional[datetime], dialect: Dialect) -> Optional[datetime]:
+        if value is None or value.tzinfo is None:
+            return value
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+    def process_result_value(self, value: Optional[datetime], dialect: Dialect) -> Optional[datetime]:
+        return None if value is None else value.replace(tzinfo=timezone.utc)
+
+
+class UtcTimestamp(UtcDateTime):
+    """A TIMESTAMP, which the server shifts by the session's time_zone: shifted back here."""
+
+    impl = TIMESTAMP
+    cache_ok = True
+
+    def bind_expression(self, value: BindParameter[datetime]) -> ColumnElement[datetime]:
+        return func.convert_tz(value, "+00:00", text("@@session.time_zone"), type_=self)
+
+    def column_expression(self, column: ColumnElement[datetime]) -> ColumnElement[datetime]:
+        return func.convert_tz(column, text("@@session.time_zone"), "+00:00", type_=self)
+
+
+${UTC_NOW}class Base(DeclarativeBase):
+    type_annotation_map = {datetime: UtcDateTime(fsp=3)}
+
+
+class Row(Base):
+    __tablename__ = "Row"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    at: Mapped[datetime] = mapped_column(default=utc_now, server_default=func.now(3))
+    ts: Mapped[datetime] = mapped_column(UtcTimestamp(fsp=3), default=utc_now, server_default=func.now(3))
+    ts0: Mapped[datetime] = mapped_column(UtcTimestamp(), default=utc_now, server_default=func.now())
+    dt6: Mapped[datetime] = mapped_column(UtcDateTime(fsp=6))
+`)
+  })
+
+  it('reads lists, dates and times, and their defaults, in UTC on PostgreSQL', () => {
+    const models = [
+      makeModel('Row', [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'stamps', type: 'DateTime', isList: true }),
+        makeField({ name: 'days', type: 'DateTime', isList: true, nativeType: ['Date', []] }),
+        makeField({
+          name: 'd',
+          type: 'DateTime',
+          nativeType: ['Date', []],
+          hasDefaultValue: true,
+          default: '2024-01-15T00:00:00.000Z',
+        }),
+        makeField({
+          name: 't',
+          type: 'DateTime',
+          nativeType: ['Time', ['3']],
+          hasDefaultValue: true,
+          default: '1970-01-01T10:30:00.000Z',
+        }),
+        makeField({ name: 'dn', type: 'DateTime', nativeType: ['Date', []], ...now }),
+        makeField({
+          name: 'tz',
+          type: 'DateTime',
+          nativeType: ['Timetz', ['3']],
+          isUpdatedAt: true,
+        }),
+      ]),
+    ]
+
+    expect(generateSingleFile(models, [], [], 'postgresql'))
+      .toBe(`from sqlalchemy import ARRAY, Date, Dialect, Time, TypeDecorator, func
+from sqlalchemy.dialects.postgresql import TIMESTAMP
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from typing import Optional
+from datetime import datetime, date, time as time_type, timezone
+
+
+${UTC_DATE_TIME}${UTC_NOW}${UTC_BASE}
+
+class Row(Base):
+    __tablename__ = "Row"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    stamps: Mapped[list[datetime]] = mapped_column(ARRAY(UtcDateTime(precision=3)))
+    days: Mapped[list[date]] = mapped_column(ARRAY(Date))
+    d: Mapped[date] = mapped_column(Date, default=date.fromisoformat("2024-01-15"))
+    t: Mapped[time_type] = mapped_column(Time, default=time_type.fromisoformat("10:30:00.000"))
+    dn: Mapped[date] = mapped_column(Date, default=lambda: utc_now().date(), server_default=func.now())
+    tz: Mapped[time_type] = mapped_column(Time(timezone=True), default=lambda: utc_now().timetz(), onupdate=lambda: utc_now().timetz())
+`)
   })
 })
