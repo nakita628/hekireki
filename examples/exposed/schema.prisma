@@ -1,0 +1,78 @@
+// The DateTime fields of a PostgreSQL schema, with every corner of how Prisma stores them placed
+// where a real schema would put them: the default column, native types of every precision, now(),
+// several @updatedAt, literal defaults with an offset and with microseconds, lists, and a
+// DateTime in a composite key. `pnpm run demo` writes the Exposed tables and entities into
+// src/main/kotlin/models, creates the tables with `prisma db push`, and runs the Kotlin check
+// against them with the JVM in UTC and in Asia/Tokyo; Prisma Client shares the database, reading
+// what Exposed wrote and writing rows for Exposed to read.
+
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider            = "prisma-client"
+  output              = "generated/client"
+  importFileExtension = "ts"
+}
+
+generator Hekireki-Exposed {
+  provider = "hekireki-exposed"
+  output   = "src/main/kotlin/models"
+  package  = "models"
+}
+
+/// A DateTime in each of the forms Prisma gives one on PostgreSQL.
+model Event {
+  id        Int       @id @default(autoincrement())
+  name      String    @unique
+  /// timestamp(3), the column Prisma gives a DateTime
+  at        DateTime
+  endsAt    DateTime? @map("ends_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  /// Two @updatedAt: Prisma Client stamps both
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  syncedAt  DateTime  @updatedAt @map("synced_at")
+  /// And one in a date column: the UTC date of the stamp
+  touchedOn DateTime  @updatedAt @map("touched_on") @db.Date
+  day       DateTime  @db.Date
+  clock     DateTime  @db.Time(3)
+  /// time(6): Prisma still writes milliseconds
+  fineClock DateTime  @map("fine_clock") @db.Time
+  zonedTime DateTime  @map("zoned_time") @db.Timetz(3)
+  seconds   DateTime  @db.Timestamp(0)
+  micros    DateTime  @db.Timestamp(6)
+  zoned     DateTime  @db.Timestamptz(3)
+  zonedFine DateTime  @map("zoned_fine") @db.Timestamptz(6)
+  history   DateTime[]
+  zonedList DateTime[] @map("zoned_list") @db.Timestamptz(6)
+}
+
+/// Literal defaults and now() in every native type: what Prisma Client writes for each.
+model Defaults {
+  id         Int      @id @default(autoincrement())
+  epoch      DateTime @default("2020-01-01T00:00:00Z")
+  /// An offset: Prisma Client writes the UTC instant, 03:34:56.789
+  shifted    DateTime @default("2020-01-01T12:34:56.789+09:00")
+  /// Microseconds: a JavaScript Date keeps the milliseconds, .123
+  micro      DateTime @default("2020-01-01T00:00:00.123456Z") @db.Timestamp(6)
+  zoned      DateTime @default("2020-01-01T12:34:56.789+09:00") @db.Timestamptz(6)
+  /// The UTC date of the instant, 2019-12-31
+  day        DateTime @default("2020-01-01T01:00:00+09:00") @db.Date
+  /// The UTC time, 00:30:00
+  clock      DateTime @default("2020-01-01T09:30:00+09:00") @db.Time(3)
+  zonedClock DateTime @default("2020-01-01T09:30:00.5+09:00") @map("zoned_clock") @db.Timetz(3)
+  stampedOn  DateTime @default(now()) @map("stamped_on") @db.Date
+  stampedAt  DateTime @default(now()) @map("stamped_at") @db.Time(3)
+  stampedTz  DateTime @default(now()) @map("stamped_tz") @db.Timetz(3)
+  zonedNow   DateTime @default(now()) @map("zoned_now") @db.Timestamptz(3)
+}
+
+/// A DateTime in a composite key: the DAO finds a row by it.
+model Reading {
+  sensor String
+  at     DateTime
+  value  Float
+
+  @@id([sensor, at])
+}

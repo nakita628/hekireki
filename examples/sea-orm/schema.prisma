@@ -1,0 +1,66 @@
+// A small blog on SQLite, with a DateTime in every place a Prisma schema puts one. `pnpm run demo`
+// writes src/entities with `hekireki-sea-orm`, creates dev.db with `prisma db push`, and runs the
+// check binary against it through the real SeaORM (sqlx): each entity is written, read back,
+// updated and queried by its DateTime, not only compiled. Prisma Client shares the database:
+// interop.ts reads what SeaORM wrote and writes rows the check reads through the entities.
+// provider.ts runs the same on PostgreSQL and MySQL, with the native types of native/<provider>.prisma.
+
+datasource db {
+  provider = "sqlite"
+}
+
+generator client {
+  provider            = "prisma-client"
+  output              = "generated/client"
+  importFileExtension = "ts"
+}
+
+generator entities {
+  provider = "hekireki-sea-orm"
+  output   = "src/entities"
+}
+
+/// Someone who writes: timestamps under columns of their own.
+model Author {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  posts     Post[]
+
+  @@map("authors")
+}
+
+/// A DateTime that may be absent, one with a literal default, and timestamps as Prisma names them.
+model Post {
+  id          String    @id @default(uuid())
+  authorId    Int       @map("author_id")
+  author      Author    @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  title       String
+  publishedAt DateTime? @map("published_at")
+  releasedAt  DateTime  @default("2020-01-01T00:00:00Z") @map("released_at")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("posts")
+}
+
+/// Two @updatedAt and no now(): Prisma Client sets both on create and on every update.
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at")
+  syncedAt  DateTime @updatedAt @map("synced_at")
+
+  @@map("settings")
+}
+
+/// A DateTime in a composite primary key: a row is found by the instant it names.
+model Reading {
+  sensor String
+  at     DateTime
+  value  Float
+
+  @@id([sensor, at])
+  @@map("readings")
+}

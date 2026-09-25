@@ -1,0 +1,5 @@
+# What `pnpm run demo` makes beside the check: the virtualenv, and what Python caches. The models
+# `prisma generate` writes in app/ are committed, to be read without running it; dev.db is ignored
+# one level up.
+.venv/
+__pycache__/
