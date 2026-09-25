@@ -117,14 +117,14 @@ function plainType(type: string, provider: string) {
 // What SQLAlchemy maps a Python type to where the provider's plain type is another: the entries
 // of the base's type_annotation_map, for the Python types the columns use.
 function annotationMapEntries(models: readonly DMMF.Model[], provider: string) {
-  const plainFields = models.flatMap((m) =>
-    m.fields.filter((f) => f.kind === 'scalar' && !f.isList && !f.nativeType),
+  // A column with no type of its own: SQLite's enums are its plain `str`.
+  const annotated = models.flatMap((m) =>
+    m.fields.filter((f) => f.kind !== 'object' && !f.isList && !needsExplicitSaType(f, provider)),
   )
-  const uses = (type: string) => plainFields.some((f) => f.type === type)
+  const uses = (type: string) =>
+    annotated.some((f) => (f.kind === 'enum' ? 'String' : f.type) === type)
   return [
-    uses('DateTime') || usesUtcDateTime(models)
-      ? `datetime: ${plainType('DateTime', provider)}`
-      : null,
+    usesUtcDateTime(models) ? `datetime: ${plainType('DateTime', provider)}` : null,
     uses('String') ? `str: ${plainType('String', provider)}` : null,
     uses('Float') && provider === 'sqlite' ? 'float: REAL' : null,
     uses('Decimal') ? `DecimalType: ${plainType('Decimal', provider)}` : null,
@@ -273,7 +273,7 @@ const DIALECT_TYPES = new Set([
 ])
 
 function needsExplicitSaType(field: DMMF.Field, provider: string) {
-  if (field.kind === 'enum') return true
+  if (field.kind === 'enum') return provider !== 'sqlite'
   // dict is not in SQLAlchemy's default type_annotation_map: a bare
   // Mapped[dict[str, Any]] raises MappedAnnotationError at import time.
   if (field.type === 'Json') return true
@@ -459,20 +459,32 @@ export function generateAssociationTable(
   },
   provider: string,
 ) {
-  const leftSaType = info.leftPkField ? resolveNativeType(info.leftPkField, provider) : 'String'
-  const rightSaType = info.rightPkField ? resolveNativeType(info.rightPkField, provider) : 'String'
+  const plain = plainType('String', provider)
+  const leftSaType = info.leftPkField ? resolveNativeType(info.leftPkField, provider) : plain
+  const rightSaType = info.rightPkField ? resolveNativeType(info.rightPkField, provider) : plain
   const leftPkCol = info.leftPkField?.dbName ?? info.leftPkField?.name ?? 'id'
   const rightPkCol = info.rightPkField?.dbName ?? info.rightPkField?.name ?? 'id'
-
+  const name = (columns: string, suffix: string) =>
+    constraintName(info.tableName, [columns], suffix, provider)
+  // The pair is the key on PostgreSQL and a unique index on MySQL and SQLite, as Prisma Migrate
+  // makes it.
+  const pair =
+    provider === 'mysql' || provider === 'sqlite'
+      ? `Index("${name('AB', 'unique')}", "A", "B", unique=True)`
+      : `PrimaryKeyConstraint("A", "B", name="${name('AB', 'pkey')}")`
   return [
     `${info.varName} = Table(`,
     `    "${info.tableName}",`,
     '    Base.metadata,',
     // Prisma's join table goes with either row: both keys cascade.
-    `    Column("A", ${leftSaType}, ForeignKey("${info.leftTable}.${leftPkCol}", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True),`,
-    `    Column("B", ${rightSaType}, ForeignKey("${info.rightTable}.${rightPkCol}", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True),`,
+    `    Column("A", ${leftSaType}, ForeignKey("${info.leftTable}.${leftPkCol}", ondelete="CASCADE", onupdate="CASCADE", name="${name('A', 'fkey')}"), nullable=False),`,
+    `    Column("B", ${rightSaType}, ForeignKey("${info.rightTable}.${rightPkCol}", ondelete="CASCADE", onupdate="CASCADE", name="${name('B', 'fkey')}"), nullable=False),`,
+    `    ${pair},`,
     // The index Prisma adds for reading the relation from its B side.
-    `    Index("${info.tableName}_B_index", "B"),`,
+    `    Index("${name('B', 'index')}", "B"),`,
+    ...(provider === 'mysql'
+      ? ['    mysql_charset="utf8mb4",', '    mysql_collate="utf8mb4_unicode_ci",']
+      : []),
     ')',
   ].join('\n')
 }
@@ -551,6 +563,104 @@ function formatDefault(field: DMMF.Field, enumDef?: DMMF.DatamodelEnum) {
     return toPythonString(def)
   }
   return null
+}
+
+/**
+ * The name Prisma Migrate gives a key, index or constraint the schema does not name: the table,
+ * the columns and a suffix, the first two cut to the database's longest identifier (63 on
+ * PostgreSQL, 64 on MySQL).
+ *
+ * @example
+ * ```sql
+ * -- @@unique([s, i]) on Scalar; a foreign key on refs.comp_a, comp_b
+ * CREATE UNIQUE INDEX "Scalar_s_i_key" ON "Scalar"("s", "i");
+ * CONSTRAINT "refs_comp_a_comp_b_fkey" FOREIGN KEY ("comp_a", "comp_b") ...
+ * ```
+ */
+function constraintName(
+  table: string,
+  columns: readonly string[],
+  suffix: string,
+  provider: string,
+) {
+  const limit = provider === 'sqlite' ? Infinity : provider === 'mysql' ? 64 : 63
+  return `${[table, ...columns].join('_').slice(0, limit - suffix.length - 1)}_${suffix}`
+}
+
+// A literal default as SQL, in the form Prisma Migrate writes it: a date-time in UTC, with its
+// milliseconds where it has any, and with its offset where the column keeps or ignores one
+// (MySQL would shift it into the session's zone).
+function sqlLiteral(
+  field: DMMF.Field,
+  value: unknown,
+  enumDef: DMMF.DatamodelEnum | undefined,
+  provider: string,
+) {
+  const quote = (text: string) => `'${text.replaceAll("'", "''")}'`
+  if (field.kind === 'enum') {
+    return quote(enumDef?.values.find((v) => v.name === value)?.dbName ?? String(value))
+  }
+  if (typeof value === 'boolean') {
+    if (provider === 'mysql' && field.nativeType?.[0] === 'Bit') return value ? "b'1'" : "b'0'"
+    return value ? 'true' : 'false'
+  }
+  if (typeof value === 'number' || ['Int', 'BigInt', 'Float', 'Decimal'].includes(field.type)) {
+    return String(value)
+  }
+  if (field.type === 'DateTime' && typeof value === 'string') {
+    const iso = new Date(value).toISOString()
+    const ms = iso.slice(19, 23) === '.000' ? '' : iso.slice(19, 23)
+    const time = `${iso.slice(11, 19)}${ms}`
+    const nativeName = field.nativeType?.[0]
+    if (nativeName === 'Date') return quote(iso.slice(0, 10))
+    if (nativeName === 'Time') return quote(time)
+    if (nativeName === 'Timetz') return quote(`${time}+00`)
+    return quote(`${iso.slice(0, 10)} ${time}${provider === 'mysql' ? '' : ' +00:00'}`)
+  }
+  return quote(String(value))
+}
+
+// The element type a PostgreSQL list default is cast to where its items do not say it: an
+// enum's, or any type's when there are no items.
+const PG_ELEMENT_TYPE: { [k: string]: string } = {
+  String: 'text',
+  Int: 'integer',
+  BigInt: 'bigint',
+  Float: 'double precision',
+  Decimal: 'numeric(65,30)',
+  Boolean: 'boolean',
+  DateTime: 'timestamp(3)',
+  Json: 'jsonb',
+}
+
+/**
+ * The DEFAULT Prisma Migrate writes for a literal `@default`, for the column's `server_default`:
+ * what the database fills in where a row is written without the column. Prisma Client fills
+ * `uuid()`, `cuid()`, `ulid()`, `nanoid()` and `@updatedAt` itself, so those have none.
+ *
+ * @example
+ * ```sql
+ * -- @default("it's"), @default(-3), @default(true), @default(SAD), @default([HAPPY])
+ * "txt" text DEFAULT 'it''s'
+ * "neg" integer DEFAULT -3
+ * "b" boolean DEFAULT true
+ * "es" "Mood" DEFAULT 'sad'
+ * "el" "Mood"[] DEFAULT ARRAY['HAPPY']::"Mood"[]
+ * ```
+ */
+function serverDefault(
+  field: DMMF.Field,
+  enumDef: DMMF.DatamodelEnum | undefined,
+  provider: string,
+) {
+  const def = field.default
+  if (def === undefined || def === null || isFunctionDefault(def)) return null
+  if (!Array.isArray(def)) return sqlLiteral(field, def, enumDef, provider)
+  const items = def.map((item) => sqlLiteral(field, item, enumDef, provider))
+  const element =
+    field.kind === 'enum' ? `"${enumDef?.dbName ?? field.type}"` : PG_ELEMENT_TYPE[field.type]
+  const cast = field.kind === 'enum' || items.length === 0 ? `::${element}[]` : ''
+  return `ARRAY[${items.join(', ')}]${cast}`
 }
 
 function isFunctionDefault(
@@ -800,33 +910,38 @@ function generateColumn(
   return `    ${attrName}: Mapped[${typeHint}] = mapped_column(${colArgs.join(', ')})`
 }
 
+// The options Prisma Migrate gives each table: MySQL's character set and collation, and SQLite's
+// AUTOINCREMENT on an @default(autoincrement()) key.
+function tableOptions(provider: string, autoincrement: boolean) {
+  if (provider === 'mysql')
+    return '{"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}'
+  return provider === 'sqlite' && autoincrement ? '{"sqlite_autoincrement": True}' : null
+}
+
 function generateTableArgs(
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
   indexes: readonly DMMF.Index[],
+  provider: string,
 ) {
-  const uniqueConstraints = model.uniqueFields.map((fields) => {
-    const cols = fields.map((f) => {
-      const fieldObj = model.fields.find((mf) => mf.name === f)
-      return `"${fieldObj?.dbName ?? f}"`
-    })
-    return `UniqueConstraint(${cols.join(', ')})`
-  })
+  const tableName = model.dbName ?? model.name
+  const columnOf = (name: string) => model.fields.find((f) => f.name === name)?.dbName ?? name
 
+  // Prisma Migrate makes every unique a unique index, named `<table>_<columns>_key`, and every
+  // index `<table>_<columns>_idx`.
   const indexConstraints = indexes
-    .filter((idx) => idx.model === model.name && (idx.type === 'normal' || idx.type === 'fulltext'))
+    .filter(
+      (idx) =>
+        idx.model === model.name &&
+        (idx.type === 'unique' || idx.type === 'normal' || idx.type === 'fulltext'),
+    )
     .map((idx) => {
-      // Index names are schema-global in PostgreSQL: the fallback includes the
-      // table name so two models indexing the same column don't collide.
-      const idxName =
-        idx.dbName ??
-        idx.name ??
-        `${model.dbName ?? model.name}_${idx.fields.map((f) => model.fields.find((mf) => mf.name === f.name)?.dbName ?? f.name).join('_')}_idx`
-      const cols = idx.fields.map((f) => {
-        const fieldObj = model.fields.find((mf) => mf.name === f.name)
-        return `"${fieldObj?.dbName ?? f.name}"`
-      })
-      return `Index("${idxName}", ${cols.join(', ')})`
+      const columns = idx.fields.map((f) => columnOf(f.name))
+      const unique = idx.type === 'unique'
+      const name =
+        idx.dbName ?? constraintName(tableName, columns, unique ? 'key' : 'idx', provider)
+      const cols = columns.map((c) => `"${c}"`).join(', ')
+      return unique ? `Index("${name}", ${cols}, unique=True)` : `Index("${name}", ${cols})`
     })
 
   const fkConstraints = model.fields
@@ -840,10 +955,7 @@ function generateTableArgs(
     .map((f) => {
       const target = allModels.find((m) => m.name === f.type)
       const targetTable = target?.dbName ?? f.type
-      const localCols = (f.relationFromFields ?? []).map((c) => {
-        const fieldObj = model.fields.find((mf) => mf.name === c)
-        return `"${fieldObj?.dbName ?? c}"`
-      })
+      const localCols = (f.relationFromFields ?? []).map(columnOf)
       const targetCols = (f.relationToFields ?? []).map((c) => {
         const fieldObj = target?.fields.find((mf) => mf.name === c)
         return `"${targetTable}.${fieldObj?.dbName ?? c}"`
@@ -854,10 +966,19 @@ function generateTableArgs(
         SQL_ACTION[onDelete] ? `, ondelete="${SQL_ACTION[onDelete]}"` : '',
         SQL_ACTION[onUpdate] ? `, onupdate="${SQL_ACTION[onUpdate]}"` : '',
       ].join('')
-      return `ForeignKeyConstraint([${localCols.join(', ')}], [${targetCols.join(', ')}]${actions})`
+      const name = constraintName(tableName, localCols, 'fkey', provider)
+      return `ForeignKeyConstraint([${localCols.map((c) => `"${c}"`).join(', ')}], [${targetCols.join(', ')}]${actions}, name="${name}")`
     })
 
-  const allConstraints = [...uniqueConstraints, ...indexConstraints, ...fkConstraints]
+  const options = tableOptions(
+    provider,
+    model.fields.some((f) => f.isId && isAutoincrement(f)),
+  )
+  const allConstraints = [
+    ...indexConstraints,
+    ...fkConstraints,
+    ...(options === null ? [] : [options]),
+  ]
   if (allConstraints.length === 0) return []
 
   return ['', '    __table_args__ = (', ...allConstraints.map((c) => `        ${c},`), '    )']
@@ -1042,10 +1163,10 @@ export function generateModelBody(
   const columnLines = scalarFields.map((field) => {
     const isPk = field.isId || compositePkFieldNames.has(field.name)
     const isFk = belongsToFkFields.has(field.name)
-    return generateColumn(field, isPk, isFk, associations, allModels, enumMap, provider)
+    return generateColumn(field, isPk, isFk, associations, allModels, enumMap, provider, tableName)
   })
 
-  const tableArgsLines = generateTableArgs(model, allModels, indexes)
+  const tableArgsLines = generateTableArgs(model, allModels, indexes, provider)
 
   const relationLines = [
     ...generateBelongsToRelationships(associations, model, allModels),
@@ -1102,9 +1223,25 @@ export function collectGlobalImports(
   const needsOptional =
     needsUtcType || models.some((m) => m.fields.some((f) => f.kind !== 'object' && !f.isRequired))
   const hasRelationship = models.some((m) => m.fields.some((f) => f.kind === 'object'))
-  const needsFunc = needsUtcTimestamp || models.some((m) => m.fields.some(isNowDefault))
-  // SQLite's UtcDateTime is text that create_all declares DATETIME, through a compiler of its own.
-  const needsCompiles = needsUtcDateTime && provider === 'sqlite'
+  const needsFunc = needsUtcTimestamp
+  const needsJsonb =
+    provider === 'sqlite' && models.some((m) => m.fields.some((f) => f.type === 'Json'))
+  const needsXml = usesNativeType(models, ['Xml'])
+  // The types create_all declares as Prisma does through a compiler of their own: SQLite's
+  // UtcDateTime and Jsonb, and PostgreSQL's Xml.
+  const needsCompiles = (needsUtcDateTime && provider === 'sqlite') || needsJsonb || needsXml
+  // A server_default is SQL text: a now(), a literal default off the key, a dbgenerated().
+  const needsText =
+    needsUtcTimestamp ||
+    models.some((m) =>
+      m.fields.some(
+        (f) =>
+          f.default !== undefined &&
+          f.default !== null &&
+          !(f.isId || m.primaryKey?.fields.includes(f.name)) &&
+          (!isFunctionDefault(f.default) || ['now', 'dbgenerated'].includes(f.default.name)),
+      ),
+    )
   const needsAny = needsCompiles || models.some((m) => m.fields.some((f) => f.type === 'Json'))
   const needsArray = models.some((m) => m.fields.some((f) => f.kind !== 'object' && f.isList))
   const needsDecimal = models.some((m) => m.fields.some((f) => f.type === 'Decimal'))
@@ -1125,7 +1262,7 @@ export function collectGlobalImports(
     for (const field of model.fields) {
       if (field.kind === 'object') continue
       if (field.kind === 'enum') {
-        saImports.add('Enum')
+        if (provider !== 'sqlite') saImports.add('Enum')
         continue
       }
       // A scalar list wraps its element SA type in ARRAY(...), so that element
@@ -1138,15 +1275,15 @@ export function collectGlobalImports(
     const associations = getAssociations(model, models)
     if (associations.belongsTo.length > 0) saImports.add('ForeignKey')
 
-    if (model.uniqueFields.length > 0) saImports.add('UniqueConstraint')
-
     if (model.fields.some((f) => f.kind === 'object' && (f.relationFromFields?.length ?? 0) > 1)) {
       saImports.add('ForeignKeyConstraint')
     }
 
     if (
       indexes.some(
-        (idx) => idx.model === model.name && (idx.type === 'normal' || idx.type === 'fulltext'),
+        (idx) =>
+          idx.model === model.name &&
+          (idx.type === 'unique' || idx.type === 'normal' || idx.type === 'fulltext'),
       )
     ) {
       saImports.add('Index')
@@ -1158,11 +1295,11 @@ export function collectGlobalImports(
     saImports.add('ForeignKey')
     saImports.add('Index')
     saImports.add('Table')
+    if (provider !== 'mysql' && provider !== 'sqlite') saImports.add('PrimaryKeyConstraint')
     for (const info of m2mTables) {
-      const leftType = info.leftPkField ? resolveNativeType(info.leftPkField, provider) : 'String'
-      const rightType = info.rightPkField
-        ? resolveNativeType(info.rightPkField, provider)
-        : 'String'
+      const plain = plainType('String', provider)
+      const leftType = info.leftPkField ? resolveNativeType(info.leftPkField, provider) : plain
+      const rightType = info.rightPkField ? resolveNativeType(info.rightPkField, provider) : plain
       saImports.add(leftType.replace(/\(.*\)$/u, ''))
       saImports.add(rightType.replace(/\(.*\)$/u, ''))
     }
@@ -1177,23 +1314,16 @@ export function collectGlobalImports(
     saImports.add('BindParameter')
     saImports.add('DateTime')
     saImports.add('ColumnElement')
-    saImports.add('text')
   }
+  if (needsText) saImports.add('text')
   if (needsFunc) saImports.add('func')
   if (needsArray) saImports.add('ARRAY')
-  if (
-    models.some((m) =>
-      m.fields.some(
-        (f) =>
-          f.default !== undefined &&
-          f.default !== null &&
-          typeof f.default === 'object' &&
-          'name' in f.default &&
-          f.default.name === 'dbgenerated',
-      ),
-    )
-  ) {
-    saImports.add('text')
+  if (needsJsonb) saImports.add('JSON')
+  if (needsXml) saImports.add('Text')
+  // The base's key names, on PostgreSQL: MySQL's is PRIMARY and SQLite's has none.
+  if (provider !== 'mysql' && provider !== 'sqlite') saImports.add('MetaData')
+  for (const entry of annotationMapEntries(models, provider)) {
+    saImports.add(entry.slice(entry.indexOf(': ') + 2).replace(/\(.*\)$/u, ''))
   }
 
   const lines: string[] = []
