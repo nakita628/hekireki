@@ -141,10 +141,13 @@ function resolveNativeType(field: DMMF.Field, provider: string) {
       return `UtcDateTimeTz(${precision})`
     case 'Date':
       return 'Date'
+    // SQLAlchemy's Time has no precision: create_all would write TIME, the database's own
+    // (time(6) on PostgreSQL, TIME(0) on MySQL), where Prisma Migrate writes the one asked for.
     case 'Time':
-      return 'Time'
+      if (args.length === 0) return 'Time'
+      return provider === 'mysql' ? `TIME(${fsp})` : `TIME(${precision})`
     case 'Timetz':
-      return 'Time(timezone=True)'
+      return args.length === 0 ? 'Time(timezone=True)' : `TIME(${precision}, timezone=True)`
     case 'JsonB':
       return 'JSON'
     case 'Xml':
@@ -156,6 +159,8 @@ function resolveNativeType(field: DMMF.Field, provider: string) {
 
 // The date-time types the module defines rather than imports from sqlalchemy.
 const UTC_TYPES = new Set(['UtcDateTime', 'UtcDateTimeTz', 'UtcTimestamp'])
+// The types imported from the dialect, whose own type takes the precision sqlalchemy's does not.
+const DIALECT_TYPES = new Set(['TIME'])
 
 function needsExplicitSaType(field: DMMF.Field, provider: string) {
   if (field.kind === 'enum') return true
@@ -452,6 +457,17 @@ function isNowDefault(field: DMMF.Field) {
 
 function usesNativeType(models: readonly DMMF.Model[], names: readonly string[]) {
   return models.some((m) => m.fields.some((f) => names.includes(f.nativeType?.[0] ?? '')))
+}
+
+// A column read through UtcDateTime, or UtcTimestamp made on it: a DateTime with no native type
+// (through the base's type_annotation_map), a `@db.Timestamp` or a `@db.DateTime`.
+function usesUtcDateTime(models: readonly DMMF.Model[]) {
+  return models.some((m) =>
+    m.fields.some(
+      (f) =>
+        f.type === 'DateTime' && ['', 'Timestamp', 'DateTime'].includes(f.nativeType?.[0] ?? ''),
+    ),
+  )
 }
 
 function isAutoincrement(field: DMMF.Field) {
@@ -947,14 +963,28 @@ export function collectGlobalImports(
   provider: string,
 ) {
   const saImports = new Set<string>()
-  const needsDatetime = models.some((m) => m.fields.some((f) => f.type === 'DateTime'))
+  const needsUtcDateTime = usesUtcDateTime(models)
+  const needsUtcTimestamp = provider === 'mysql' && usesNativeType(models, ['Timestamp'])
+  const needsUtcType =
+    needsUtcDateTime || (provider !== 'mysql' && usesNativeType(models, ['Timestamptz']))
+  const needsUtcNow = models.some((m) => m.fields.some((f) => isNowDefault(f) || f.isUpdatedAt))
+  // A DateTime is a `datetime` unless it holds a date or a time; `utc_now` returns one.
+  const needsDatetime =
+    needsUtcNow ||
+    models.some((m) =>
+      m.fields.some(
+        (f) =>
+          f.type === 'DateTime' && !['Date', 'Time', 'Timetz'].includes(f.nativeType?.[0] ?? ''),
+      ),
+    )
   // The UTC types take and return an Optional.
   const needsOptional =
-    needsDatetime || models.some((m) => m.fields.some((f) => f.kind !== 'object' && !f.isRequired))
-  const needsUtcTimestamp = provider === 'mysql' && usesNativeType(models, ['Timestamp'])
+    needsUtcType || models.some((m) => m.fields.some((f) => f.kind !== 'object' && !f.isRequired))
   const hasRelationship = models.some((m) => m.fields.some((f) => f.kind === 'object'))
   const needsFunc = needsUtcTimestamp || models.some((m) => m.fields.some(isNowDefault))
-  const needsAny = models.some((m) => m.fields.some((f) => f.type === 'Json'))
+  // SQLite's UtcDateTime is text that create_all declares DATETIME, through a compiler of its own.
+  const needsCompiles = needsUtcDateTime && provider === 'sqlite'
+  const needsAny = needsCompiles || models.some((m) => m.fields.some((f) => f.type === 'Json'))
   const needsArray = models.some((m) => m.fields.some((f) => f.kind !== 'object' && f.isList))
   const needsDecimal = models.some((m) => m.fields.some((f) => f.type === 'Decimal'))
   const needsUuid = models.some((m) =>
@@ -1017,11 +1047,11 @@ export function collectGlobalImports(
     }
   }
 
-  if (needsDatetime) {
+  if (needsUtcType) {
     saImports.add('Dialect')
     saImports.add('TypeDecorator')
-    if (provider === 'sqlite') saImports.add('String')
   }
+  if (needsUtcDateTime && provider === 'sqlite') saImports.add('String')
   if (needsUtcTimestamp) {
     saImports.add('BindParameter')
     saImports.add('DateTime')
@@ -1047,18 +1077,26 @@ export function collectGlobalImports(
 
   const lines: string[] = []
 
-  const sortedSa = [...saImports].filter((name) => !UTC_TYPES.has(name)).toSorted()
+  const sortedSa = [...saImports]
+    .filter((name) => !UTC_TYPES.has(name) && !DIALECT_TYPES.has(name))
+    .toSorted()
   if (sortedSa.length > 0) {
     lines.push(`from sqlalchemy import ${sortedSa.join(', ')}`)
   }
-  // What the UTC types are made on, where the dialect's own type carries the precision.
-  if (needsDatetime && provider === 'mysql') {
-    lines.push(
-      `from sqlalchemy.dialects.mysql import ${needsUtcTimestamp ? 'DATETIME, TIMESTAMP' : 'DATETIME'}`,
-    )
-  } else if (needsDatetime && provider !== 'sqlite') {
-    lines.push('from sqlalchemy.dialects.postgresql import TIMESTAMP')
+  // The dialect's own types, where they carry the precision: the columns' and what the UTC types
+  // are made on.
+  const dialectTypes = [...saImports].filter((name) => DIALECT_TYPES.has(name))
+  if (provider === 'mysql') {
+    if (needsUtcDateTime) dialectTypes.push('DATETIME')
+    if (needsUtcTimestamp) dialectTypes.push('TIMESTAMP')
+  } else if (provider !== 'sqlite' && needsUtcType) {
+    dialectTypes.push('TIMESTAMP')
   }
+  if (dialectTypes.length > 0) {
+    const dialect = provider === 'mysql' ? 'mysql' : 'postgresql'
+    lines.push(`from sqlalchemy.dialects.${dialect} import ${dialectTypes.toSorted().join(', ')}`)
+  }
+  if (needsCompiles) lines.push('from sqlalchemy.ext.compiler import compiles')
 
   const ormImports = ['DeclarativeBase', 'Mapped', 'mapped_column']
   if (hasRelationship) ormImports.push('relationship')
@@ -1076,7 +1114,7 @@ export function collectGlobalImports(
   if (needsDatetime) dtParts.push('datetime')
   if (needsDate) dtParts.push('date')
   if (needsTime) dtParts.push('time as time_type')
-  if (needsDatetime) dtParts.push('timezone')
+  if (needsUtcType || needsUtcNow) dtParts.push('timezone')
   if (dtParts.length > 0) lines.push(`from datetime import ${dtParts.join(', ')}`)
   if (needsUuid) lines.push('import uuid as uuid_mod')
   if (needsUuid7) lines.push('import uuid6')
@@ -1088,13 +1126,11 @@ export function collectGlobalImports(
 /**
  * The declarative base, after the types a DateTime is read through: every instant is UTC, aware
  * in Python, as Prisma Client writes and reads it. SQLite keeps it as Prisma's text
- * (`2030-01-02T03:04:05.678+00:00`), a timestamp without time zone holds UTC whatever the
+ * (`2030-01-02T03:04:05.678+00:00`) in a column declared DATETIME, as Prisma's is, a timestamp without time zone holds UTC whatever the
  * session's zone, and `utc_now` is the process's clock for `now()` and `@updatedAt`.
  */
 export function generateBase(models: readonly DMMF.Model[], provider: string) {
-  if (!models.some((m) => m.fields.some((f) => f.type === 'DateTime'))) {
-    return ['class Base(DeclarativeBase):', '    pass']
-  }
+  const needsUtcDateTime = usesUtcDateTime(models)
   const needsUtcTimestamp = provider === 'mysql' && usesNativeType(models, ['Timestamp'])
   // UtcTimestamp puts TIMESTAMP where this has DATETIME: both are a DateTime to mypy.
   const impl =
@@ -1103,8 +1139,9 @@ export function generateBase(models: readonly DMMF.Model[], provider: string) {
       : needsUtcTimestamp
         ? 'impl: type[DateTime] = DATETIME'
         : 'impl = DATETIME'
-  const utcDateTime =
-    provider === 'sqlite'
+  const utcDateTime = !needsUtcDateTime
+    ? []
+    : provider === 'sqlite'
       ? [
           'class UtcDateTime(TypeDecorator[datetime]):',
           '    """UTC text with milliseconds, `2030-01-02T03:04:05.678+00:00`; a naive value is UTC."""',
@@ -1123,6 +1160,12 @@ export function generateBase(models: readonly DMMF.Model[], provider: string) {
           '            return None',
           '        read = datetime.fromisoformat(value)',
           '        return read.replace(tzinfo=timezone.utc) if read.tzinfo is None else read.astimezone(timezone.utc)',
+          '',
+          '',
+          '@compiles(UtcDateTime)',
+          'def utc_date_time_ddl(type_: UtcDateTime, compiler: Any, **kw: Any) -> str:',
+          '    """The column Prisma Migrate declares: DATETIME, which keeps the text as it is."""',
+          '    return "DATETIME"',
           '',
           '',
         ]
@@ -1192,6 +1235,8 @@ export function generateBase(models: readonly DMMF.Model[], provider: string) {
     ...utcTimestamp,
     ...utcNow,
     'class Base(DeclarativeBase):',
-    `    type_annotation_map = {datetime: ${dateTimeType(provider)}}`,
+    needsUtcDateTime
+      ? `    type_annotation_map = {datetime: ${dateTimeType(provider)}}`
+      : '    pass',
   ]
 }

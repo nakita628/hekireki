@@ -2444,6 +2444,47 @@ end`)
 end`)
   })
 
+  it("sends SQL Server's milliseconds through the adapter's own types, and fills now()", () => {
+    const model = moment([
+      makeField({ name: 'dt2', type: 'DateTime', nativeType: ['DateTime2', ['0']] }),
+      makeField({ name: 'off1', type: 'DateTime', nativeType: ['DateTimeOffset', ['1']] }),
+      makeField({ name: 'time0', type: 'DateTime', nativeType: ['Time', ['0']] }),
+      makeField({ name: 'dt2Full', type: 'DateTime', nativeType: ['DateTime2', []] }),
+      makeField({ name: 'off', type: 'DateTime', nativeType: ['DateTimeOffset', []] }),
+      makeField({ name: 'time', type: 'DateTime', nativeType: ['Time', []] }),
+      makeField({ name: 'small', type: 'DateTime', nativeType: ['SmallDateTime', []] }),
+      makeField({ name: 'legacy', type: 'DateTime', nativeType: ['DateTime', []] }),
+      makeField({ name: 'day', type: 'DateTime', nativeType: ['Date', []] }),
+      makeField({
+        name: 'createdAt',
+        type: 'DateTime',
+        hasDefaultValue: true,
+        default: { name: 'now', args: [] },
+      }),
+    ])
+
+    expect(activeRecordModels([model], [model], [], 'sqlserver'))
+      .toBe(`class Moment < ApplicationRecord
+  self.table_name = "Moment"
+
+  attribute :dt2, ActiveRecord::Type::SQLServer::DateTime2.new(precision: 3)
+  attribute :off1, ActiveRecord::Type::SQLServer::DateTimeOffset.new(precision: 3)
+  attribute :time0, ActiveRecord::Type::SQLServer::Time.new(precision: 3)
+  attribute :createdAt, default: -> { Time.current }
+  alias_attribute :created_at, :createdAt
+
+  validates :dt2, presence: true
+  validates :off1, presence: true
+  validates :time0, presence: true
+  validates :dt2Full, presence: true
+  validates :off, presence: true
+  validates :time, presence: true
+  validates :small, presence: true
+  validates :legacy, presence: true
+  validates :day, presence: true
+end`)
+  })
+
   it('reads a Timetz column as a time of day, not a String', () => {
     const model = moment([
       makeField({ name: 'at', type: 'DateTime', nativeType: ['Timetz', ['3']] }),

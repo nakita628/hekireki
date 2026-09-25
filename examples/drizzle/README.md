@@ -33,6 +33,13 @@ A `DateTime` is a `Date` in drizzle as it is in Prisma Client, held in UTC to th
   `@db.Time` and `@db.Timetz` are the generated `utcDate`, `utcTime` and `utcTimetz`: a `Date` on
   1970-01-01 for a time of day, written as UTC (`+00` for `timetz`). A `DateTime[]` is an array
   column, nullable as the one Prisma makes is.
+- **CockroachDB** takes the PostgreSQL schema, through node-postgres as Prisma's `@prisma/adapter-pg`
+  is: its `timestamp`, `timestamptz`, `date`, `time`, `timetz` and arrays of them read and write as
+  PostgreSQL's do, and a bare `@db.Timestamp` or `@db.Timestamptz` is microseconds on both. An `Int`
+  key there counts with `@default(sequence())`, which Prisma makes an identity column, and so is
+  `generatedByDefaultAsIdentity()`, left out of a drizzle insert. drizzle-kit writes that identity
+  with a `sequence name` CockroachDB refuses, and its `integer` is `INT8` there: make the tables
+  with Prisma.
 - **MySQL.** `DateTime` is `datetime(3)`; `@db.DateTime(p)`, `@db.Timestamp(p)` and `@db.Time(p)`
   keep their precision, and a bare `@db.DateTime` or `@db.Timestamp` is precision 0, as in the
   table Prisma makes.
@@ -45,7 +52,8 @@ A `DateTime` is a `Date` in drizzle as it is in Prisma Client, held in UTC to th
   only on a server whose zone is. Where the server's is not, set it on each connection drizzle
   uses: `SET time_zone = '+00:00'` on MySQL (with mysql2's pool,
   `pool.on('connection', (connection) => connection.query("SET time_zone = '+00:00'"))`), and
-  `options: '-c TimeZone=UTC'` in pg's config on PostgreSQL. The generated MySQL schema says this
+  `options: '-c TimeZone=UTC'` in pg's config on PostgreSQL and on CockroachDB, whose sessions
+  start in UTC unless the client or a role's default says otherwise. The generated MySQL schema says this
   on one line above the tables when it has a `timestamp()` column.
 - **An `=` on a MySQL `TIME` with less precision than the value.** mysql2 writes the value into the
   statement and MySQL rounds it to the column, where Prisma binds it: `= 03:04:05.678` on a

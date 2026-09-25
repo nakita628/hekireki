@@ -12,9 +12,13 @@ ActiveRecord::Base.establish_connection(adapter: "sqlite3", database: File.expan
 # is off, and a belongs_to would take a missing owner.
 ActiveRecord::Base.belongs_to_required_by_default = true
 
-models_dir = File.expand_path("app/models", __dir__)
-require File.join(models_dir, "application_record.rb")
-(Dir[File.join(models_dir, "*.rb")] - [File.join(models_dir, "application_record.rb")]).sort.each { |file| require file }
+# app/models is loaded as a Rails application loads it, by Zeitwerk, which also holds each file to
+# the constant its name says (prisma_date_time.rb to PrismaDateTime).
+require "zeitwerk"
+loader = Zeitwerk::Loader.new
+loader.push_dir(File.expand_path("app/models", __dir__))
+loader.setup
+loader.eager_load
 
 # The checks below make rows; from empty tables each time, so the check can be run again.
 ActiveRecord::Base.connection.execute('DELETE FROM "_CategoryToPost"')

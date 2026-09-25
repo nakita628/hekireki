@@ -199,6 +199,81 @@ function formatRustDefault(def: DMMF.Field['default']) {
   return null
 }
 
+// The columns rustfmt counts for a character: two for a wide one (CJK, most emoji), none for a
+// combining mark, one otherwise.
+const WIDE =
+  /[\p{Emoji_Presentation}ᄀ-ᅟ⺀-〾ぁ-㏿㐀-䶿一-鿿ꀀ-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦\u{20000}-\u{3FFFF}]/u
+
+function displayWidth(text: string) {
+  let width = 0
+  for (const char of text) {
+    width += WIDE.test(char) ? 2 : /\p{Mn}/u.test(char) ? 0 : 1
+  }
+  return width
+}
+
+/**
+ * A `#[sea_orm(...)]` attribute at `indent`, laid out as rustfmt lays it out: on one line while
+ * that line fits in 100 columns (99 on a field or a variant, where rustfmt keeps one for the
+ * comma after it) and, with more than one argument, the arguments take no more than 70
+ * (`attr_fn_like_width`); otherwise one argument per line.
+ *
+ * @example
+ * ```rust
+ * #[sea_orm(column_name = "jsonArr", default_value = "[]")]
+ * #[sea_orm(
+ *     column_name = "jsonObj",
+ *     default_value = "{\"a\":1,\"b\":[true,null,\"x\"]}"
+ * )]
+ * ```
+ */
+export function seaOrmAttribute(indent: string, args: readonly string[]) {
+  const inline = `${indent}#[sea_orm(${args.join(', ')})]`
+  const fits = displayWidth(inline) <= (indent === '' ? 100 : 99)
+  return fits && (args.length === 1 || displayWidth(args.join(', ')) <= 70)
+    ? inline
+    : [
+        `${indent}#[sea_orm(`,
+        args.map((arg) => `${indent}    ${arg}`).join(',\n'),
+        `${indent})]`,
+      ].join('\n')
+}
+
+/**
+ * A struct field, with its type on a line of its own where rustfmt would put it: when the one
+ * line runs past 100 columns.
+ *
+ * @example
+ * ```rust
+ * pub author_id: i32,
+ * pub extraordinarily_long_model_name_for_testing_rustfmt_width_limits_in_generated_code_id:
+ *     String,
+ * ```
+ */
+function rustField(name: string, type: string) {
+  const line = `    pub ${name}: ${type},`
+  return displayWidth(line) > 100 ? `    pub ${name}:\n        ${type},` : line
+}
+
+/**
+ * The header of `impl Related<...> for Entity`, broken before `for` as rustfmt breaks it when
+ * the one line runs past 100 columns.
+ *
+ * @example
+ * ```rust
+ * impl Related<super::post::Entity> for Entity {
+ * impl Related<super::another_extraordinarily_long_child_model_name_for_testing_widths::Entity>
+ *     for Entity
+ * {
+ * ```
+ */
+function relatedImplHeader(targetModule: string) {
+  const line = `impl Related<super::${targetModule}::Entity> for Entity {`
+  return displayWidth(line) > 100
+    ? `impl Related<super::${targetModule}::Entity>\n    for Entity\n{`
+    : line
+}
+
 export function buildSeaOrmAttributes(
   field: DMMF.Field,
   isPk: boolean,
@@ -213,11 +288,11 @@ export function buildSeaOrmAttributes(
     if (!isAutoincrement(field)) {
       parts.push('auto_increment = false')
     }
-    attrs.push(`#[sea_orm(${parts.join(', ')})]`)
+    attrs.push(seaOrmAttribute('    ', parts))
   }
 
   if (field.isUnique) {
-    attrs.push('#[sea_orm(unique)]')
+    attrs.push('    #[sea_orm(unique)]')
   }
 
   const columnParts: string[] = []
@@ -252,7 +327,7 @@ export function buildSeaOrmAttributes(
   }
 
   if (columnParts.length > 0) {
-    attrs.push(`#[sea_orm(${columnParts.join(', ')})]`)
+    attrs.push(seaOrmAttribute('    ', columnParts))
   }
 
   return attrs
@@ -387,7 +462,7 @@ export function generateEnum(e: DMMF.DatamodelEnum, serde: { readonly renameAll?
       .filter((part) => part !== '')
       .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
       .join('')
-    return `    #[sea_orm(string_value = "${value.dbName ?? value.name}")]\n    ${pascalName},`
+    return `${seaOrmAttribute('    ', [`string_value = "${value.dbName ?? value.name}"`])}\n    ${pascalName},`
   })
 
   const derives =
@@ -398,7 +473,11 @@ export function generateEnum(e: DMMF.DatamodelEnum, serde: { readonly renameAll?
   return [
     derives,
     ...serdeAttrs,
-    `#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "${e.dbName ?? e.name}")]`,
+    seaOrmAttribute('', [
+      'rs_type = "String"',
+      'db_type = "Enum"',
+      `enum_name = "${e.dbName ?? e.name}"`,
+    ]),
     `pub enum ${e.name} {`,
     ...variants,
     '}',
@@ -451,33 +530,47 @@ function generateRelationEnum(
             .join(', ')})`
         : `super::${targetModule}::Column::${toPascalCase(assoc.references)}`
     // Prisma action names match sea-orm's ForeignKeyAction variants verbatim.
-    const actionLines = [
-      assoc.onUpdate ? `        on_update = "${assoc.onUpdate}"` : null,
-      assoc.onDelete ? `        on_delete = "${assoc.onDelete}"` : null,
+    const actions = [
+      assoc.onUpdate ? `on_update = "${assoc.onUpdate}"` : null,
+      assoc.onDelete ? `on_delete = "${assoc.onDelete}"` : null,
     ].filter((l) => l !== null)
-    variants.push(
-      `    #[sea_orm(\n${[`        belongs_to = "super::${targetModule}::Entity"`, `        from = "${fromCol}"`, `        to = "${toCol}"`, ...actionLines].join(',\n')}\n    )]\n    ${variantName},`,
-    )
+    const attribute = seaOrmAttribute('    ', [
+      `belongs_to = "super::${targetModule}::Entity"`,
+      `from = "${fromCol}"`,
+      `to = "${toCol}"`,
+      ...actions,
+    ])
+    variants.push(`${attribute}\n    ${variantName},`)
   }
 
   for (const assoc of associations.hasMany) {
     const variantName = toPascalCase(assoc.name)
     const targetModule = makeSnakeCase(assoc.targetModel)
-    variants.push(
-      isAmbiguous(assoc.targetModel)
-        ? `    #[sea_orm(\n        has_many = "super::${targetModule}::Entity",\n        from = "Column::${toPascalCase(assoc.references)}",\n        to = "super::${targetModule}::Column::${toPascalCase(assoc.foreignKey)}"\n    )]\n    ${variantName},`
-        : `    #[sea_orm(has_many = "super::${targetModule}::Entity")]\n    ${variantName},`,
-    )
+    const attribute = seaOrmAttribute('    ', [
+      `has_many = "super::${targetModule}::Entity"`,
+      ...(isAmbiguous(assoc.targetModel)
+        ? [
+            `from = "Column::${toPascalCase(assoc.references)}"`,
+            `to = "super::${targetModule}::Column::${toPascalCase(assoc.foreignKey)}"`,
+          ]
+        : []),
+    ])
+    variants.push(`${attribute}\n    ${variantName},`)
   }
 
   for (const assoc of associations.hasOne) {
     const variantName = toPascalCase(assoc.name)
     const targetModule = makeSnakeCase(assoc.targetModel)
-    variants.push(
-      isAmbiguous(assoc.targetModel)
-        ? `    #[sea_orm(\n        has_one = "super::${targetModule}::Entity",\n        from = "Column::${toPascalCase(assoc.references)}",\n        to = "super::${targetModule}::Column::${toPascalCase(assoc.foreignKey)}"\n    )]\n    ${variantName},`
-        : `    #[sea_orm(has_one = "super::${targetModule}::Entity")]\n    ${variantName},`,
-    )
+    const attribute = seaOrmAttribute('    ', [
+      `has_one = "super::${targetModule}::Entity"`,
+      ...(isAmbiguous(assoc.targetModel)
+        ? [
+            `from = "Column::${toPascalCase(assoc.references)}"`,
+            `to = "super::${targetModule}::Column::${toPascalCase(assoc.foreignKey)}"`,
+          ]
+        : []),
+    ])
+    variants.push(`${attribute}\n    ${variantName},`)
   }
 
   return [
@@ -502,7 +595,7 @@ function generateRelatedImpls(model: DMMF.Model, associations: ReturnType<typeof
     const targetModule = makeSnakeCase(assoc.targetModel)
     impls.push(
       [
-        `impl Related<super::${targetModule}::Entity> for Entity {`,
+        relatedImplHeader(targetModule),
         '    fn to() -> RelationDef {',
         `        Relation::${toPascalCase(assoc.name)}.def()`,
         '    }',
@@ -517,7 +610,7 @@ function generateRelatedImpls(model: DMMF.Model, associations: ReturnType<typeof
     const targetModule = makeSnakeCase(assoc.targetModel)
     impls.push(
       [
-        `impl Related<super::${targetModule}::Entity> for Entity {`,
+        relatedImplHeader(targetModule),
         '    fn to() -> RelationDef {',
         `        Relation::${toPascalCase(assoc.name)}.def()`,
         '    }',
@@ -532,7 +625,7 @@ function generateRelatedImpls(model: DMMF.Model, associations: ReturnType<typeof
     const targetModule = makeSnakeCase(assoc.targetModel)
     impls.push(
       [
-        `impl Related<super::${targetModule}::Entity> for Entity {`,
+        relatedImplHeader(targetModule),
         '    fn to() -> RelationDef {',
         `        Relation::${toPascalCase(assoc.name)}.def()`,
         '    }',
@@ -551,7 +644,7 @@ function generateRelatedImpls(model: DMMF.Model, associations: ReturnType<typeof
 
     impls.push(
       [
-        `impl Related<super::${targetModule}::Entity> for Entity {`,
+        relatedImplHeader(targetModule),
         '    fn to() -> RelationDef {',
         `        super::${junctionModule}::Relation::${junctionRelToTarget}.def()`,
         '    }',
@@ -608,10 +701,7 @@ export function generateEntityFile(
           : `Option<${elemType}>`
         : prismaTypeToRustType(field.type, field.isRequired)
 
-    for (const attr of attrs) {
-      fieldLines.push(`    ${attr}`)
-    }
-    fieldLines.push(`    pub ${fieldName}: ${rustType},`)
+    fieldLines.push(...attrs, rustField(fieldName, rustType))
 
     if (field.type !== 'DateTime' || field.isList) continue
     // `now` is a DateTimeUtc at Prisma's millisecond precision; a literal is parsed as the
@@ -626,11 +716,32 @@ export function generateEntityFile(
     if (value === null) continue
     stampsNow ||= value.startsWith('now')
     stampsOnInsert ||= !field.isUpdatedAt
+    // Laid out as rustfmt lays them out. It puts a method chain longer than 60 columns
+    // (`chain_width`) one call per line, and the right-hand side of an assignment that runs past
+    // 100 columns on the next line. Where even that does not fit, rustfmt leaves the line as it is.
+    const check = field.isUpdatedAt ? 'is_set' : 'is_not_set'
+    const chainIndent = field.isUpdatedAt ? '            ' : '                '
+    const condition =
+      `self.${fieldName}.${check}()`.length <= 60 || `${chainIndent}.${fieldName}`.length > 100
+        ? [
+            field.isUpdatedAt
+              ? `        if !self.${fieldName}.is_set() {`
+              : `        if insert && self.${fieldName}.is_not_set() {`,
+          ]
+        : [
+            ...(field.isUpdatedAt
+              ? ['        if !self']
+              : ['        if insert', '            && self']),
+            `${chainIndent}.${fieldName}`,
+            `${chainIndent}.${check}()`,
+            '        {',
+          ]
+    const assignment = `            self.${fieldName} = Set(${field.isRequired ? value : `Some(${value})`});`
     stampLines.push(
-      field.isUpdatedAt
-        ? `        if !self.${fieldName}.is_set() {`
-        : `        if insert && self.${fieldName}.is_not_set() {`,
-      `            self.${fieldName} = Set(${field.isRequired ? value : `Some(${value})`});`,
+      ...condition,
+      assignment.length <= 100 || `            self.${fieldName} =`.length > 99
+        ? assignment
+        : `            self.${fieldName} =\n                ${assignment.trimStart().slice(`self.${fieldName} = `.length)}`,
       '        }',
     )
   }
@@ -673,9 +784,33 @@ export function generateEntityFile(
           '        Self {',
           ...generatedIdFields.map((field) => {
             const { ident } = rustFieldIdent(makeSnakeCase(field.name))
-            const generate = generatedIdExpr(field)
+            const generate = generatedIdExpr(field) ?? ''
             const value = field.isRequired ? generate : `Some(${generate})`
-            return `            ${ident}: Set(${value}),`
+            // rustfmt's layout of the field, as it writes it for each length of the name (n) and
+            // of the generator call (g): on one line while `name: Set(value)` fits in 100
+            // columns; then the argument of Set, or of Some, on a line of its own; then the value
+            // on the line after the name. Past 85 it leaves the line as it is. The bounds are
+            // what rustfmt 1.9 does, not a rule it states, and test/lang/sea-orm.test.ts holds
+            // the harness to it.
+            const n = ident.length
+            const g = generate.length
+            const inner = '                '
+            // The comma counts toward the 100 columns only after Some.
+            const width = `            ${ident}: Set(${value})`.length + (field.isRequired ? 0 : 1)
+            if (width <= 100 || n > 85) {
+              return `            ${ident}: Set(${value}),`
+            }
+            if (n > 82) return `            ${ident}:\n${inner}Set(${value}),`
+            if (!field.isRequired) {
+              return n > 75
+                ? `            ${ident}: Set(\n${inner}${value},\n            ),`
+                : `            ${ident}: Set(Some(\n${inner}${generate},\n            )),`
+            }
+            if (n + g > 93) return `            ${ident}: Set(\n${inner}${value},\n            ),`
+            if (n + g < 93) return `            ${ident}: Set(\n${inner}${value}\n            ),`
+            // At exactly 93 rustfmt breaks inside the generator's own call.
+            const call = generate.slice(0, -'().to_string()'.length)
+            return `            ${ident}: Set(${call}(\n            )\n            .to_string()),`
           }),
           '            ..ActiveModelTrait::default()',
           '        }',
@@ -718,7 +853,7 @@ export function generateEntityFile(
     '',
     deriveModel,
     ...serdeAttrs,
-    `#[sea_orm(table_name = "${tableName}")]`,
+    seaOrmAttribute('', [`table_name = "${tableName}"`]),
     'pub struct Model {',
     ...fieldLines,
     '}',
@@ -770,14 +905,14 @@ export function generateM2MEntity(
     '',
     deriveModel,
     ...serdeAttrs,
-    `#[sea_orm(table_name = "${tableName}")]`,
+    seaOrmAttribute('', [`table_name = "${tableName}"`]),
     'pub struct Model {',
     // Prisma's implicit join table stores its FKs in columns "A"/"B" (models
     // in alphabetical order), not <model>_id.
     '    #[sea_orm(primary_key, auto_increment = false, column_name = "A")]',
-    `    pub ${leftFk}: ${leftType},`,
+    rustField(leftFk, leftType),
     '    #[sea_orm(primary_key, auto_increment = false, column_name = "B")]',
-    `    pub ${rightFk}: ${rightType},`,
+    rustField(rightFk, rightType),
     '}',
     '',
     '#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]',

@@ -1,7 +1,11 @@
 import type { DMMF } from '@prisma/generator-helper'
 import { describe, expect, it } from 'vite-plus/test'
 
-import { activeRecordModelFiles, applicationRecordFile } from './activerecord.js'
+import {
+  activeRecordModelFiles,
+  applicationRecordFile,
+  prismaDateTimeFiles,
+} from './activerecord.js'
 
 function makeField(overrides: Partial<DMMF.Field> & { name: string; type: string }): DMMF.Field {
   return {
@@ -125,7 +129,7 @@ end
   })
 
   it('carries the ApplicationRecord Rails itself would write', () => {
-    expect(applicationRecordFile('postgresql')).toStrictEqual({
+    expect(applicationRecordFile()).toStrictEqual({
       fileName: 'application_record.rb',
       code: `class ApplicationRecord < ActiveRecord::Base
   primary_abstract_class
@@ -134,21 +138,28 @@ end
     })
   })
 
-  it('carries the DateTime type the models are declared with on SQLite', () => {
-    expect(applicationRecordFile('sqlite')).toStrictEqual({
-      fileName: 'application_record.rb',
-      code: `class ApplicationRecord < ActiveRecord::Base
-  primary_abstract_class
-
-  class PrismaDateTime < ActiveRecord::Type::DateTime
-    def serialize(value)
-      time = super
-      time.respond_to?(:getutc) ? time.getutc.strftime("%Y-%m-%dT%H:%M:%S.%L+00:00") : time
-    end
+  it('writes the DateTime type the models are declared with on SQLite, in a file of its own', () => {
+    const event = makeModel({
+      name: 'Event',
+      fields: [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'at', type: 'DateTime' }),
+      ],
+    })
+    expect(prismaDateTimeFiles([event], 'sqlite')).toStrictEqual([
+      {
+        fileName: 'prisma_date_time.rb',
+        code: `class PrismaDateTime < ActiveRecord::Type::DateTime
+  def serialize(value)
+    time = super
+    time.respond_to?(:getutc) ? time.getutc.strftime("%Y-%m-%dT%H:%M:%S.%L+00:00") : time
   end
 end
 `,
-    })
+      },
+    ])
+    expect(prismaDateTimeFiles([event], 'postgresql')).toStrictEqual([])
+    expect(prismaDateTimeFiles(bare, 'sqlite')).toStrictEqual([])
   })
 
   it('declares the DateTime columns with that type on SQLite', () => {

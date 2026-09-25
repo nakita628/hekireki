@@ -1491,14 +1491,18 @@ export function activeRecordModels(
           // store what Prisma Client stores:
           // - SQLite keeps it as text. Prisma writes 2030-01-02T03:04:05.678+00:00
           //   and Active Record 2030-01-02 03:04:05.678000, which compare, sort
-          //   and index as different values; PrismaDateTime (application_record.rb)
+          //   and index as different values; PrismaDateTime (prisma_date_time.rb)
           //   writes Prisma's text.
           // - A column holding fewer than three digits of a second (Timestamp(0),
           //   Time(0), MySQL's bare DateTime, Timestamp and Time) is rounded by
           //   the database from the milliseconds Prisma sends, and truncated by
           //   Active Record to the column's precision before sending, so 05.678
           //   is 06 from one and 05 from the other. precision: 3 sends what
-          //   Prisma sends and leaves the rounding to the database.
+          //   Prisma sends and leaves the rounding to the database. On SQL
+          //   Server (DateTime2, DateTimeOffset and Time take 0 to 7 digits)
+          //   the type is the adapter's own of that name: a `:datetime` there
+          //   is Active Record's generic one, which the adapter quotes as a
+          //   legacy datetime, rounded to its 1/300 s (05.678 is 05.679).
           // - A Timetz column has no Active Record type and reads as a String.
           const [nativeName, nativeArgs] = f.nativeType ?? ['', []]
           const secondDigits =
@@ -1513,12 +1517,17 @@ export function activeRecordModels(
               ? []
               : provider === 'sqlite'
                 ? ['PrismaDateTime.new']
-                : ['Timestamp', 'Timestamptz', 'Time', 'Timetz', 'DateTime'].includes(nativeName) &&
-                    secondDigits < 3
-                  ? [timeOfDay ? ':time' : ':datetime', 'precision: 3']
-                  : nativeName === 'Timetz'
-                    ? [':time']
+                : provider === 'sqlserver'
+                  ? ['DateTime2', 'DateTimeOffset', 'Time'].includes(nativeName) && secondDigits < 3
+                    ? [`ActiveRecord::Type::SQLServer::${nativeName}.new(precision: 3)`]
                     : []
+                  : ['Timestamp', 'Timestamptz', 'Time', 'Timetz', 'DateTime'].includes(
+                        nativeName,
+                      ) && secondDigits < 3
+                    ? [timeOfDay ? ':time' : ':datetime', 'precision: 3']
+                    : nativeName === 'Timetz'
+                      ? [':time']
+                      : []
           const attribute = (value: string | null) =>
             castType.length === 0 && value === null
               ? []
@@ -1536,9 +1545,13 @@ export function activeRecordModels(
           if (f.kind === 'enum') return []
           // Prisma Client fills now() itself. The database's CURRENT_TIMESTAMP
           // is the same instant elsewhere, but on SQLite it is text of another
-          // shape (2030-01-02 03:04:05), so there the model fills it as well.
+          // shape (2030-01-02 03:04:05), and on SQL Server the clock of the
+          // server's own zone, which no session setting turns to UTC: there
+          // the model fills it as well.
           if (typeof def === 'object' && 'name' in def && def.name === 'now') {
-            return attribute(provider === 'sqlite' ? '-> { Time.current }' : null)
+            return attribute(
+              provider === 'sqlite' || provider === 'sqlserver' ? '-> { Time.current }' : null,
+            )
           }
           // SecureRandom.uuid_v7 requires Ruby 3.3+; ULID.generate, Cuid.generate,
           // Cuid2.call and Nanoid.generate come from the ulid, cuid, cuid2 and

@@ -1,10 +1,11 @@
 # The Rails series the generated models are written for, on the SQLite of the schema;
-# has_secure_password needs bcrypt, and rubocop-rails-omakase is the style the README promises the
-# files pass. Gemfile.lock pins the tree, as test/harness/activerecord's does.
+# Zeitwerk loads app/models as a Rails application does, has_secure_password needs bcrypt, and
+# rubocop-rails-omakase is the style the README promises the files pass. Gemfile.lock pins the tree, as test/harness/activerecord's does.
 source "https://rubygems.org"
 
 gem "activerecord", "~> 8.1"
 gem "sqlite3", "~> 2.9"
+gem "zeitwerk", "~> 2.7"
 gem "bcrypt", "~> 3.1"
 gem "rubocop-rails-omakase", require: false
 

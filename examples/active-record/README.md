@@ -14,9 +14,9 @@ pnpm run demo
 `app/models` and `config/locales/models` are committed as `prisma generate` writes them, so what
 the schema becomes can be read here without running anything. `demo` starts from nothing all the
 same: `prisma generate` writes `app/models` and `config/locales/models`,
-`prisma db push` creates `dev.db`, `bundle install` puts Active Record 8.1, `sqlite3`, `bcrypt`
-and RuboCop in `vendor/bundle`, `bundle exec ruby check.rb` runs the checks and prints one `ok:`
-line for each, and `rubocop app/models` reads the generated files. Ruby 3.2 or newer is needed for
+`prisma db push` creates `dev.db`, `bundle install` puts Active Record 8.1, `sqlite3`, Zeitwerk,
+`bcrypt` and RuboCop in `vendor/bundle`, `bundle exec ruby check.rb` loads `app/models` through
+Zeitwerk as Rails does, runs the checks and prints one `ok:` line for each, and `rubocop app/models` reads the generated files. Ruby 3.2 or newer is needed for
 the Rails series in the `Gemfile`; the Lang Check workflow runs the same on its Active Record leg.
 
 ## What the check asks
@@ -40,7 +40,7 @@ Then each thing the schema promises, as Rails keeps it:
   Ruby already has `public`; a column named `type` is a plain column; `createdAt` and `updatedAt`
   are filled, bumped by `update` and `touch`, and ordered by through their aliases; a `DateTime`
   is stored as the text Prisma writes on SQLite (`2030-01-02T03:04:05.678+00:00`, through the
-  `PrismaDateTime` type in `application_record.rb`), not Active Record's
+  `PrismaDateTime` type in `prisma_date_time.rb`), not Active Record's
   `2030-01-02 03:04:05.678000`, and a `where` on the instant finds it; a `uuid()` key is made in
   Ruby and `first`/`last` follow `created_at`.
 - **Associations.** `has_one` built from its owner and destroyed with it; `onDelete: SetNull`

@@ -9,6 +9,7 @@ import {
   generateM2MEntity,
   prismaTypeToRustType,
   resolveSeaOrmColumnType,
+  seaOrmAttribute,
 } from './sea-orm.js'
 
 describe('buildSeaOrmAttributes', () => {
@@ -27,7 +28,7 @@ describe('buildSeaOrmAttributes', () => {
       nativeType: null,
     } as any
     expect(buildSeaOrmAttributes(field, true, false)).toStrictEqual([
-      '#[sea_orm(primary_key, auto_increment = false)]',
+      '    #[sea_orm(primary_key, auto_increment = false)]',
     ])
   })
 
@@ -45,7 +46,7 @@ describe('buildSeaOrmAttributes', () => {
       default: { name: 'autoincrement', args: [] },
       nativeType: null,
     } as any
-    expect(buildSeaOrmAttributes(field, true, false)).toStrictEqual(['#[sea_orm(primary_key)]'])
+    expect(buildSeaOrmAttributes(field, true, false)).toStrictEqual(['    #[sea_orm(primary_key)]'])
   })
 
   it('generates unique attribute', () => {
@@ -61,7 +62,7 @@ describe('buildSeaOrmAttributes', () => {
       hasDefaultValue: false,
       nativeType: null,
     } as any
-    expect(buildSeaOrmAttributes(field, false, false)).toStrictEqual(['#[sea_orm(unique)]'])
+    expect(buildSeaOrmAttributes(field, false, false)).toStrictEqual(['    #[sea_orm(unique)]'])
   })
 
   it('generates default_value for boolean', () => {
@@ -79,7 +80,7 @@ describe('buildSeaOrmAttributes', () => {
       nativeType: null,
     } as any
     expect(buildSeaOrmAttributes(field, false, false)).toStrictEqual([
-      '#[sea_orm(default_value = true)]',
+      '    #[sea_orm(default_value = true)]',
     ])
   })
 
@@ -98,7 +99,7 @@ describe('buildSeaOrmAttributes', () => {
       nativeType: null,
     } as any
     expect(buildSeaOrmAttributes(field, false, false)).toStrictEqual([
-      '#[sea_orm(column_name = "code_name_custom")]',
+      '    #[sea_orm(column_name = "code_name_custom")]',
     ])
   })
 
@@ -116,8 +117,69 @@ describe('buildSeaOrmAttributes', () => {
       nativeType: ['VarChar', [200]],
     } as any
     expect(buildSeaOrmAttributes(field, false, false)).toStrictEqual([
-      '#[sea_orm(column_type = "String(StringLen::N(200))")]',
+      '    #[sea_orm(column_type = "String(StringLen::N(200))")]',
     ])
+  })
+
+  it('puts the arguments on lines of their own once they pass the width rustfmt allows', () => {
+    const field = {
+      name: 'jsonObj',
+      kind: 'scalar' as const,
+      type: 'Json',
+      isRequired: true,
+      isId: false,
+      isUnique: false,
+      isList: false,
+      isUpdatedAt: false,
+      hasDefaultValue: true,
+      default: '{"a":1,"b":[true,null,"x"]}',
+      nativeType: null,
+    } as any
+    expect(buildSeaOrmAttributes(field, false, false)).toStrictEqual([
+      [
+        '    #[sea_orm(',
+        '        column_name = "jsonObj",',
+        '        default_value = "{\\"a\\":1,\\"b\\":[true,null,\\"x\\"]}"',
+        '    )]',
+      ].join('\n'),
+    ])
+  })
+})
+
+describe('seaOrmAttribute', () => {
+  it('keeps two or more arguments on one line while they take at most 70 columns', () => {
+    const args = ['column_name = "jsonObj"', `default_value = "${'a'.repeat(27)}"`]
+    expect(args.join(', ').length).toBe(70)
+    expect(seaOrmAttribute('    ', args)).toBe(`    #[sea_orm(${args.join(', ')})]`)
+    expect(seaOrmAttribute('    ', [args[0], `default_value = "${'a'.repeat(28)}"`])).toBe(
+      [
+        '    #[sea_orm(',
+        '        column_name = "jsonObj",',
+        `        default_value = "${'a'.repeat(28)}"`,
+        '    )]',
+      ].join('\n'),
+    )
+  })
+
+  it('counts a wide character as two columns, as rustfmt does', () => {
+    // `a = "x", b = ""` takes 15 columns, 27 wide characters and a narrow one 55 more.
+    const fits = ['a = "x"', `b = "${'日'.repeat(27)}a"`]
+    expect(seaOrmAttribute('', fits)).toBe(`#[sea_orm(${fits.join(', ')})]`)
+    expect(seaOrmAttribute('', ['a = "x"', `b = "${'日'.repeat(28)}"`])).toBe(
+      ['#[sea_orm(', '    a = "x",', `    b = "${'日'.repeat(28)}"`, ')]'].join('\n'),
+    )
+    expect(seaOrmAttribute('', ['a = "x"', `b = "${'🔥'.repeat(28)}"`])).toContain('\n')
+  })
+
+  it('keeps one argument on one line while the line fits, one column less on a field', () => {
+    const top = `table_name = "${'t'.repeat(73)}"`
+    expect(`#[sea_orm(${top})]`.length).toBe(100)
+    expect(seaOrmAttribute('', [top])).toBe(`#[sea_orm(${top})]`)
+    expect(seaOrmAttribute('', [`${top}t`])).toBe(`#[sea_orm(\n    ${top}t\n)]`)
+    const field = `default_value = "${'a'.repeat(65)}"`
+    expect(`    #[sea_orm(${field})]`.length).toBe(99)
+    expect(seaOrmAttribute('    ', [field])).toBe(`    #[sea_orm(${field})]`)
+    expect(seaOrmAttribute('    ', [`${field}a`])).toBe(`    #[sea_orm(\n        ${field}a\n    )]`)
   })
 })
 
@@ -506,6 +568,280 @@ pub enum Relation {
         to = "super::post::Column::Id"
     )]
     Post,
+    #[sea_orm(
+        belongs_to = "super::tag::Entity",
+        from = "Column::TagId",
+        to = "super::tag::Column::Id"
+    )]
+    Tag,
+}
+
+impl ActiveModelBehavior for ActiveModel {}
+`)
+  })
+})
+
+describe('lines rustfmt would break', () => {
+  // rustfmt breaks a line that runs past 100 columns; each case here is what it writes.
+  it('breaks a has_many attribute and a Related header past 100 columns', () => {
+    const makeField = (o: Record<string, unknown>): any => ({
+      kind: 'scalar',
+      isList: false,
+      isRequired: true,
+      isUnique: false,
+      isId: false,
+      isReadOnly: false,
+      isGenerated: false,
+      isUpdatedAt: false,
+      hasDefaultValue: false,
+      ...o,
+    })
+    const itemName = 'ExtraordinarilyLongInventoryItemNameForTestingRustfmtWidths'
+    const id = makeField({
+      name: 'id',
+      type: 'Int',
+      isId: true,
+      hasDefaultValue: true,
+      default: { name: 'autoincrement', args: [] },
+    })
+    const shelf: any = {
+      name: 'Shelf',
+      dbName: null,
+      primaryKey: null,
+      uniqueFields: [],
+      uniqueIndexes: [],
+      fields: [
+        id,
+        makeField({
+          name: 'items',
+          type: itemName,
+          kind: 'object',
+          isList: true,
+          relationName: 'ShelfItems',
+        }),
+      ],
+    }
+    const item: any = {
+      name: itemName,
+      dbName: null,
+      primaryKey: null,
+      uniqueFields: [],
+      uniqueIndexes: [],
+      fields: [
+        id,
+        makeField({ name: 'shelfId', type: 'Int' }),
+        makeField({
+          name: 'shelf',
+          type: 'Shelf',
+          kind: 'object',
+          relationName: 'ShelfItems',
+          relationFromFields: ['shelfId'],
+          relationToFields: ['id'],
+        }),
+      ],
+    }
+
+    expect(generateEntityFile(shelf, [shelf, item], [])).toBe(`use sea_orm::entity::prelude::*;
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
+#[sea_orm(table_name = "Shelf")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: i32,
+}
+
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(
+        has_many = "super::extraordinarily_long_inventory_item_name_for_testing_rustfmt_widths::Entity"
+    )]
+    Items,
+}
+
+impl Related<super::extraordinarily_long_inventory_item_name_for_testing_rustfmt_widths::Entity>
+    for Entity
+{
+    fn to() -> RelationDef {
+        Relation::Items.def()
+    }
+}
+
+impl ActiveModelBehavior for ActiveModel {}
+`)
+  })
+
+  it('breaks a long chain and a long assignment in before_save as rustfmt does', () => {
+    const makeField = (o: Record<string, unknown>): any => ({
+      kind: 'scalar',
+      isList: false,
+      isRequired: true,
+      isUnique: false,
+      isId: false,
+      isReadOnly: false,
+      isGenerated: false,
+      isUpdatedAt: false,
+      hasDefaultValue: false,
+      nativeType: null,
+      ...o,
+    })
+    const stamp: any = {
+      name: 'Stamp',
+      dbName: null,
+      primaryKey: null,
+      uniqueFields: [],
+      uniqueIndexes: [],
+      fields: [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({
+          name: 'createdAtOfTheRecordAsTheApplicationFirstSawIt',
+          type: 'DateTime',
+          hasDefaultValue: true,
+          default: { name: 'now', args: [] },
+        }),
+        makeField({
+          name: 'publishedAtOfTheRecordAsTheEditorialTeamDecided',
+          type: 'DateTime',
+          isRequired: false,
+          hasDefaultValue: true,
+          default: '2020-02-29T23:59:59.999Z',
+        }),
+        makeField({
+          name: 'updatedAtOfTheRecordAsTheApplicationLastSawIt',
+          type: 'DateTime',
+          isUpdatedAt: true,
+        }),
+      ],
+    }
+
+    expect(generateEntityFile(stamp, [stamp], []))
+      .toContain(`impl ActiveModelBehavior for ActiveModel {
+    async fn before_save<C>(mut self, _db: &C, insert: bool) -> Result<Self, DbErr>
+    where
+        C: ConnectionTrait,
+    {
+        let now = chrono::Utc::now().trunc_subsecs(3);
+        if insert
+            && self
+                .created_at_of_the_record_as_the_application_first_saw_it
+                .is_not_set()
+        {
+            self.created_at_of_the_record_as_the_application_first_saw_it = Set(now.naive_utc());
+        }
+        if insert
+            && self
+                .published_at_of_the_record_as_the_editorial_team_decided
+                .is_not_set()
+        {
+            self.published_at_of_the_record_as_the_editorial_team_decided =
+                Set(Some("2020-02-29T23:59:59.999".parse().unwrap()));
+        }
+        if !self
+            .updated_at_of_the_record_as_the_application_last_saw_it
+            .is_set()
+        {
+            self.updated_at_of_the_record_as_the_application_last_saw_it = Set(now.naive_utc());
+        }
+        Ok(self)
+    }
+}
+`)
+  })
+
+  it('lays out each generated id in new() as rustfmt does for the length of its name', () => {
+    const idField = (name: string, isRequired: boolean, fn: string, args: number[]): any => ({
+      name,
+      kind: 'scalar',
+      type: 'String',
+      isList: false,
+      isRequired,
+      isUnique: false,
+      isId: false,
+      isReadOnly: false,
+      isGenerated: false,
+      isUpdatedAt: false,
+      hasDefaultValue: true,
+      default: { name: fn, args },
+      nativeType: null,
+    })
+    // A name of n characters: 55 and 61 fall either side of where rustfmt breaks inside the uuid
+    // call (a name and a call of 93 together), 84 puts Set on the next line, 60 and 80 fall
+    // either side of where it stops breaking inside Some.
+    const name = (first: string, n: number) => first + 'q'.repeat(n - 1)
+    const ident: any = {
+      name: 'Ident',
+      dbName: null,
+      primaryKey: null,
+      uniqueFields: [],
+      uniqueIndexes: [],
+      fields: [
+        { ...idField('id', true, 'autoincrement', []), type: 'Int', isId: true },
+        idField(name('a', 55), true, 'uuid', [4]),
+        idField(name('b', 61), true, 'uuid', [7]),
+        idField(name('c', 70), true, 'ulid', []),
+        idField(name('d', 84), true, 'ulid', []),
+        idField(name('e', 60), false, 'uuid', [4]),
+        idField(name('g', 80), false, 'uuid', [7]),
+      ],
+    }
+
+    expect(generateEntityFile(ident, [ident], []))
+      .toContain(`impl ActiveModelBehavior for ActiveModel {
+    fn new() -> Self {
+        Self {
+            aqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq: Set(
+                uuid::Uuid::new_v4().to_string()
+            ),
+            bqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq: Set(uuid::Uuid::now_v7(
+            )
+            .to_string()),
+            cqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq: Set(
+                ulid::Ulid::generate().to_string(),
+            ),
+            dqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq:
+                Set(ulid::Ulid::generate().to_string()),
+            eqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq: Set(Some(
+                uuid::Uuid::new_v4().to_string(),
+            )),
+            gqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq: Set(
+                Some(uuid::Uuid::now_v7().to_string()),
+            ),
+            ..ActiveModelTrait::default()
+        }
+    }
+}
+`)
+  })
+
+  it('puts the type of a field on the next line on the next line past 100 columns', () => {
+    expect(
+      generateM2MEntity(
+        'ExtraordinarilyLongModelNameForTestingRustfmtWidthLimitsInGeneratedCode',
+        'Tag',
+        'LongToTag',
+        [],
+      ),
+    ).toBe(`use sea_orm::entity::prelude::*;
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
+#[sea_orm(table_name = "_LongToTag")]
+pub struct Model {
+    #[sea_orm(primary_key, auto_increment = false, column_name = "A")]
+    pub extraordinarily_long_model_name_for_testing_rustfmt_width_limits_in_generated_code_id:
+        String,
+    #[sea_orm(primary_key, auto_increment = false, column_name = "B")]
+    pub tag_id: String,
+}
+
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::extraordinarily_long_model_name_for_testing_rustfmt_width_limits_in_generated_code::Entity",
+        from = "Column::ExtraordinarilyLongModelNameForTestingRustfmtWidthLimitsInGeneratedCodeId",
+        to = "super::extraordinarily_long_model_name_for_testing_rustfmt_width_limits_in_generated_code::Column::Id"
+    )]
+    ExtraordinarilyLongModelNameForTestingRustfmtWidthLimitsInGeneratedCode,
     #[sea_orm(
         belongs_to = "super::tag::Entity",
         from = "Column::TagId",

@@ -1355,6 +1355,31 @@ describe('dates', () => {
     expect(schema(['DateTime', ['3']])).not.toContain(note)
   })
 
+  // CockroachDB takes autoincrement() on a BigInt only; an Int key counts with sequence(), which
+  // Prisma makes an identity column. Without one the key is required on every drizzle insert.
+  it('gives a CockroachDB sequence() key an identity, beside the dates PostgreSQL has', () => {
+    const datamodel = makeDatamodel([
+      makeModel({
+        name: 'Row',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'Int',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'sequence', args: [] },
+          }),
+          makeField({ name: 'at', type: 'DateTime' }),
+          nowField('tz', ['Timestamptz', []]),
+          makeField({ name: 'ttz', type: 'DateTime', nativeType: ['Timetz', ['3']] }),
+        ],
+      }),
+    ])
+    expect(drizzleSchema(datamodel, 'cockroachdb', []).split('\n').at(-1)).toBe(
+      "export const row = pgTable('Row', { id: integer('id').primaryKey().generatedByDefaultAsIdentity(), at: timestamp('at', { precision: 3 }).notNull(), tz: timestamp('tz', { withTimezone: true }).notNull().default(sql`CURRENT_TIMESTAMP`).$defaultFn(utcNow), ttz: utcTimetz('ttz', { precision: 3 }).notNull() })",
+    )
+  })
+
   it('leaves a DateTime list nullable on PostgreSQL', () => {
     const datamodel = makeDatamodel([
       makeModel({

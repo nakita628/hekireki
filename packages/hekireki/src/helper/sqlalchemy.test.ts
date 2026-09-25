@@ -977,14 +977,14 @@ class Measurement(Base):
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy import Date, Dialect, TypeDecorator
-from sqlalchemy.dialects.postgresql import TIMESTAMP
+      `from sqlalchemy import Date
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from typing import Optional
-from datetime import datetime, date, timezone
+from datetime import date
 
 
-${UTC_DATE_TIME}${UTC_BASE}
+class Base(DeclarativeBase):
+    pass
+
 
 class Birthday(Base):
     __tablename__ = "Birthday"
@@ -1008,14 +1008,14 @@ class Birthday(Base):
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy import Dialect, Time, TypeDecorator
-from sqlalchemy.dialects.postgresql import TIMESTAMP
+      `from sqlalchemy import Time
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from typing import Optional
-from datetime import datetime, time as time_type, timezone
+from datetime import time as time_type
 
 
-${UTC_DATE_TIME}${UTC_BASE}
+class Base(DeclarativeBase):
+    pass
+
 
 class Schedule(Base):
     __tablename__ = "Schedule"
@@ -1642,7 +1642,9 @@ from typing import Optional
 from datetime import datetime, timezone
 
 
-${UTC_DATE_TIME}${UTC_DATE_TIME_TZ}${UTC_BASE}
+${UTC_DATE_TIME_TZ}class Base(DeclarativeBase):
+    pass
+
 
 class Sensor(Base):
     __tablename__ = "Sensor"
@@ -1801,29 +1803,43 @@ const NATIVE_TYPES: readonly (readonly [
     'DateTime',
     '@db.Timestamptz',
     ['Timestamptz', []],
-    `from sqlalchemy import Dialect, TypeDecorator\nfrom sqlalchemy.dialects.postgresql import TIMESTAMP\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom typing import Optional\nfrom datetime import datetime, timezone\n\n\n${UTC_DATE_TIME}${UTC_DATE_TIME_TZ}${UTC_BASE}\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n`,
+    `from sqlalchemy import Dialect, TypeDecorator\nfrom sqlalchemy.dialects.postgresql import TIMESTAMP\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom typing import Optional\nfrom datetime import datetime, timezone\n\n\n${UTC_DATE_TIME_TZ}class Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n`,
     'Mapped[datetime] = mapped_column(UtcDateTimeTz())\n',
   ],
   [
     'DateTime',
     '@db.Date',
     ['Date', []],
-    `from sqlalchemy import Date, Dialect, TypeDecorator\nfrom sqlalchemy.dialects.postgresql import TIMESTAMP\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom typing import Optional\nfrom datetime import datetime, date, timezone\n\n\n${UTC_DATE_TIME}${UTC_BASE}\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n`,
+    'from sqlalchemy import Date\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import date\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[date] = mapped_column(Date)\n',
   ],
   [
     'DateTime',
     '@db.Time',
     ['Time', []],
-    `from sqlalchemy import Dialect, Time, TypeDecorator\nfrom sqlalchemy.dialects.postgresql import TIMESTAMP\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom typing import Optional\nfrom datetime import datetime, time as time_type, timezone\n\n\n${UTC_DATE_TIME}${UTC_BASE}\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n`,
+    'from sqlalchemy import Time\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import time as time_type\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[time_type] = mapped_column(Time)\n',
   ],
   [
     'DateTime',
     '@db.Timetz',
     ['Timetz', []],
-    `from sqlalchemy import Dialect, Time, TypeDecorator\nfrom sqlalchemy.dialects.postgresql import TIMESTAMP\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom typing import Optional\nfrom datetime import datetime, time as time_type, timezone\n\n\n${UTC_DATE_TIME}${UTC_BASE}\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n`,
+    'from sqlalchemy import Time\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import time as time_type\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[time_type] = mapped_column(Time(timezone=True))\n',
+  ],
+  [
+    'DateTime',
+    '@db.Time(3)',
+    ['Time', ['3']],
+    'from sqlalchemy.dialects.postgresql import TIME\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import time as time_type\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
+    'Mapped[time_type] = mapped_column(TIME(precision=3))\n',
+  ],
+  [
+    'DateTime',
+    '@db.Timetz(6)',
+    ['Timetz', ['6']],
+    'from sqlalchemy.dialects.postgresql import TIME\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import time as time_type\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
+    'Mapped[time_type] = mapped_column(TIME(precision=6, timezone=True))\n',
   ],
   [
     'Json',
@@ -2166,8 +2182,9 @@ describe('DateTime per provider', () => {
 
     expect(generateSingleFile(models, [], [], 'sqlite'))
       .toBe(`from sqlalchemy import Dialect, String, TypeDecorator, func
+from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from typing import Optional
+from typing import Any, Optional
 from datetime import datetime, timezone
 
 
@@ -2188,6 +2205,12 @@ class UtcDateTime(TypeDecorator[datetime]):
             return None
         read = datetime.fromisoformat(value)
         return read.replace(tzinfo=timezone.utc) if read.tzinfo is None else read.astimezone(timezone.utc)
+
+
+@compiles(UtcDateTime)
+def utc_date_time_ddl(type_: UtcDateTime, compiler: Any, **kw: Any) -> str:
+    """The column Prisma Migrate declares: DATETIME, which keeps the text as it is."""
+    return "DATETIME"
 
 
 ${UTC_NOW}class Base(DeclarativeBase):
@@ -2265,6 +2288,39 @@ class Row(Base):
 `)
   })
 
+  // No column is read through UtcDateTime, so the module leaves it out; a TIME keeps its precision
+  // as Prisma Migrate writes it, TIME(0) where none is given.
+  it('gives a MySQL TIME its precision and leaves out UtcDateTime where no column uses it', () => {
+    const models = [
+      makeModel('Shift', [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'day', type: 'DateTime', nativeType: ['Date', []] }),
+        makeField({ name: 'starts', type: 'DateTime', nativeType: ['Time', ['3']] }),
+        makeField({ name: 'ends', type: 'DateTime', isRequired: false, nativeType: ['Time', []] }),
+      ]),
+    ]
+
+    expect(generateSingleFile(models, [], [], 'mysql')).toBe(`from sqlalchemy import Date, Time
+from sqlalchemy.dialects.mysql import TIME
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from typing import Optional
+from datetime import date, time as time_type
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class Shift(Base):
+    __tablename__ = "Shift"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    day: Mapped[date] = mapped_column(Date)
+    starts: Mapped[time_type] = mapped_column(TIME(fsp=3))
+    ends: Mapped[Optional[time_type]] = mapped_column(Time)
+`)
+  })
+
   it('reads lists, dates and times, and their defaults, in UTC on PostgreSQL', () => {
     const models = [
       makeModel('Row', [
@@ -2296,8 +2352,8 @@ class Row(Base):
     ]
 
     expect(generateSingleFile(models, [], [], 'postgresql'))
-      .toBe(`from sqlalchemy import ARRAY, Date, Dialect, Time, TypeDecorator, func
-from sqlalchemy.dialects.postgresql import TIMESTAMP
+      .toBe(`from sqlalchemy import ARRAY, Date, Dialect, TypeDecorator, func
+from sqlalchemy.dialects.postgresql import TIME, TIMESTAMP
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from typing import Optional
 from datetime import datetime, date, time as time_type, timezone
@@ -2312,9 +2368,9 @@ class Row(Base):
     stamps: Mapped[list[datetime]] = mapped_column(ARRAY(UtcDateTime(precision=3)))
     days: Mapped[list[date]] = mapped_column(ARRAY(Date))
     d: Mapped[date] = mapped_column(Date, default=date.fromisoformat("2024-01-15"))
-    t: Mapped[time_type] = mapped_column(Time, default=time_type.fromisoformat("10:30:00.000"))
+    t: Mapped[time_type] = mapped_column(TIME(precision=3), default=time_type.fromisoformat("10:30:00.000"))
     dn: Mapped[date] = mapped_column(Date, default=lambda: utc_now().date(), server_default=func.now())
-    tz: Mapped[time_type] = mapped_column(Time(timezone=True), default=lambda: utc_now().timetz(), onupdate=lambda: utc_now().timetz())
+    tz: Mapped[time_type] = mapped_column(TIME(precision=3, timezone=True), default=lambda: utc_now().timetz(), onupdate=lambda: utc_now().timetz())
 `)
   })
 })

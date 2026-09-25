@@ -43,6 +43,17 @@ with Prisma Client reading what they wrote and writing what they read, in `Asia/
 on SQLite, PostgreSQL or MySQL; see [django/README.md](django/README.md). Python 3.10 or newer, in
 a virtualenv of its own.
 
+Three more hold a generator to Prisma Client on a `DateTime` in each place a Prisma schema puts
+one, the two clients sharing the database and each reading what the other wrote:
+
+- `drizzle/`: the schema `hekireki-drizzle` writes, used through drizzle over better-sqlite3 on
+  SQLite in `Asia/Tokyo`; see [drizzle/README.md](drizzle/README.md).
+- `sea-orm/`: the entities `hekireki-sea-orm` writes, used through SeaORM 1.1 (sqlx) on SQLite,
+  PostgreSQL or MySQL; see [sea-orm/README.md](sea-orm/README.md). A Rust toolchain.
+- `exposed/`: the tables and DAO entities `hekireki-exposed` writes, compiled with every warning an
+  error and used through Exposed 1.5 on PostgreSQL; see [exposed/README.md](exposed/README.md).
+  JDK 21.
+
 `sqlite/`, `mysql/` and `postgresql/` are small projects to try `hekireki seed` and `hekireki studio` on, one per database. Each is a
 `schema.prisma` with the `prisma-client` and `hekireki-seed` generators, the schema module the
 latter writes (committed, so the config type-checks before `pnpm setup` has run), and a typed

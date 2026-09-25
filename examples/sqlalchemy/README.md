@@ -63,8 +63,8 @@ this run, so a relationship that overlaps another or a join the mapper had to gu
 
 A `DateTime` is what Prisma Client makes of it: an aware `datetime` in UTC, whatever the time zone
 of the process or of the database session, so a row either one writes reads back as the same
-instant through the other. The module defines the types that do it, and `Base` maps a plain
-`Mapped[datetime]` to the first:
+instant through the other. The module defines the types that do it, those its columns use, and
+`Base` maps a plain `Mapped[datetime]` to the first:
 
 - **`UtcDateTime`** on SQLite is the text Prisma writes, `2026-04-01T09:30:15.123+00:00`, to the
   millisecond. On PostgreSQL and MySQL it is a `timestamp(3)` or `DATETIME(3)` (or the precision a
@@ -73,6 +73,8 @@ instant through the other. The module defines the types that do it, and `Base` m
 - **`UtcTimestamp`** is MySQL's `@db.Timestamp`, which the server shifts by the session's
   `time_zone`; `CONVERT_TZ` shifts it back on both sides.
 - `@db.Date` and `@db.Time` are a `date` and a `time`: the UTC day and time of day of the instant.
+  A `@db.Time(p)` or `@db.Timetz(p)` is the dialect's `TIME` with that precision, so `create_all`
+  makes the column Prisma Migrate does.
 - `now()` and `@updatedAt` take the process's clock in UTC, as Prisma Client does, not the
   database's `NOW()`, which is the session zone's wall time in a column without a time zone.
 

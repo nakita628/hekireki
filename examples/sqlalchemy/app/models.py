@@ -1,4 +1,5 @@
 from sqlalchemy import BigInteger, Column, Dialect, Enum, ForeignKey, Index, Integer, JSON, String, Table, TypeDecorator, UniqueConstraint, func
+from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from typing import Any, Optional
 from decimal import Decimal as DecimalType
@@ -23,6 +24,12 @@ class UtcDateTime(TypeDecorator[datetime]):
             return None
         read = datetime.fromisoformat(value)
         return read.replace(tzinfo=timezone.utc) if read.tzinfo is None else read.astimezone(timezone.utc)
+
+
+@compiles(UtcDateTime)
+def utc_date_time_ddl(type_: UtcDateTime, compiler: Any, **kw: Any) -> str:
+    """The column Prisma Migrate declares: DATETIME, which keeps the text as it is."""
+    return "DATETIME"
 
 
 def utc_now() -> datetime:
