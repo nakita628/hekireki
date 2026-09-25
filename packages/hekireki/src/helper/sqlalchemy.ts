@@ -1377,8 +1377,10 @@ export function collectGlobalImports(
 /**
  * The declarative base, after the types a DateTime is read through: every instant is UTC, aware
  * in Python, as Prisma Client writes and reads it. SQLite keeps it as Prisma's text
- * (`2030-01-02T03:04:05.678+00:00`) in a column declared DATETIME, as Prisma's is, a timestamp without time zone holds UTC whatever the
- * session's zone, and `utc_now` is the process's clock for `now()` and `@updatedAt`.
+ * (`2030-01-02T03:04:05.678+00:00`) in a column declared DATETIME, as Prisma's is, a timestamp
+ * without time zone holds UTC whatever the session's zone, and `utc_now` is the process's clock
+ * for `now()` and `@updatedAt`. The base names keys as Prisma Migrate does and maps each Python
+ * type to the column Prisma Migrate gives it where SQLAlchemy's own is another.
  */
 export function generateBase(models: readonly DMMF.Model[], provider: string) {
   const needsUtcDateTime = usesUtcDateTime(models)
@@ -1477,17 +1479,52 @@ export function generateBase(models: readonly DMMF.Model[], provider: string) {
         '',
       ]
     : []
+  const jsonb =
+    provider === 'sqlite' && models.some((m) => m.fields.some((f) => f.type === 'Json'))
+      ? [
+          'class Jsonb(JSON):',
+          '    """SQLite\'s Json column, which Prisma Migrate declares JSONB and fills with JSON text."""',
+          '',
+          '',
+          '@compiles(Jsonb)',
+          'def jsonb_ddl(type_: Jsonb, compiler: Any, **kw: Any) -> str:',
+          '    return "JSONB"',
+          '',
+          '',
+        ]
+      : []
+  const xml = usesNativeType(models, ['Xml'])
+    ? [
+        'class Xml(Text):',
+        '    """PostgreSQL\'s xml, read and written as its text."""',
+        '',
+        '',
+        '@compiles(Xml)',
+        'def xml_ddl(type_: Xml, compiler: Any, **kw: Any) -> str:',
+        '    return "XML"',
+        '',
+        '',
+      ]
+    : []
   const utcNow = models.some((m) => m.fields.some((f) => isNowDefault(f) || f.isUpdatedAt))
     ? ['def utc_now() -> datetime:', '    return datetime.now(timezone.utc)', '', '']
     : []
+  const annotations = annotationMapEntries(models, provider)
+  const body = [
+    // Prisma Migrate's name for a key, `<table>_pkey`.
+    ...(provider === 'mysql' || provider === 'sqlite'
+      ? []
+      : ['    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})']),
+    ...(annotations.length > 0 ? [`    type_annotation_map = {${annotations.join(', ')}}`] : []),
+  ]
   return [
     ...utcDateTime,
     ...utcDateTimeTz,
     ...utcTimestamp,
+    ...jsonb,
+    ...xml,
     ...utcNow,
     'class Base(DeclarativeBase):',
-    needsUtcDateTime
-      ? `    type_annotation_map = {datetime: ${dateTimeType(provider)}}`
-      : '    pass',
+    ...(body.length > 0 ? body : ['    pass']),
   ]
 }
