@@ -43,7 +43,7 @@ class Product extends Model
         'weight' => 0.0,
         'stock' => -1,
         'label' => 'it\'s "quoted" \\ back',
-        'released_at' => '2020-01-01 00:00:00',
+        'released_at' => '2020-01-01T00:00:00.000Z',
         'category_id' => 1,
     ];
 
@@ -56,6 +56,11 @@ class Product extends Model
         'released_at' => 'datetime',
         'category_id' => 'integer',
     ];
+
+    public function fromDateTime($value)
+    {
+        return empty($value) ? $value : $this->asDateTime($value)->setTimezone('UTC')->format('Y-m-d\TH:i:s.v\Z');
+    }
 
     public function category(): BelongsTo
     {

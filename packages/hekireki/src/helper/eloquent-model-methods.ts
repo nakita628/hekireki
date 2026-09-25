@@ -1,0 +1,91 @@
+// cspell:disable -- the method names are PHP's, lower-cased and run together.
+// The methods of Eloquent's Model, public and protected, as Laravel 12.69 has them, lower-cased:
+// PHP matches a method name without regard to case, so a relation method of the same name would
+// redeclare one, and either break what Eloquent does with it or fail to load.
+export const ELOQUENT_MODEL_METHODS = new Set(
+  `
+  __call __callstatic __construct __get __isset __set __sleep __tostring __unset __wakeup
+  addcastattributestoarray adddateattributestoarray addglobalscope addglobalscopes
+  addmutatedattributestoarray addobservableevents all append asdate asdatetime asdecimal asjson
+  astimestamp attempttoautoloadrelation attributestoarray autoloadrelationsusing
+  automaticallyeagerloadrelationships belongsto belongstomany boot booted boothasevents
+  boothasglobalscopes bootifnotbooted booting boottraits broadcastchannel broadcastchannelroute
+  cachemutatedattributes callnamedscope castattribute castattributeasencryptedstring
+  castattributeashashedstring castattributeasjson casts childroutebindingrelationshipname
+  clearbootedmodels clearrecursivecallvalue compareclasscastableattribute created creating
+  currentencrypter decrement decrementquietly delete deleted deleteorfail deletequietly deleting
+  destroy deviateclasscastableattribute discardchanges dispatchesevents encryptusing
+  ensurecastsarestringvalues escapewhencastingtostring except fill fillable fillablefromarray
+  filljsonattribute filtermodeleventresults finishsave firecustommodelevent firemodelevent
+  flusheventlisteners forcedelete forcedestroy forcefill forwardcallto forwarddecoratedcallto fresh
+  freshtimestamp freshtimestampstring fromdatetime fromencryptedstring fromfloat fromjson
+  getactualclassnameformorph getallglobalscopes getappends getarrayableappends
+  getarrayableattributes getarrayableitems getarrayablerelations getarrayattributebykey
+  getarrayattributewithvalue getattribute getattributefromarray getattributemarkedmutatormethods
+  getattributes getattributesforinsert getattributevalue getcasts getcasttype getchanges
+  getclasscastableattributevalue getconnection getconnectionname getconnectionresolver
+  getcreatedatcolumn getdateformat getdates getdirty getdirtyforupdate getenumcasefromvalue
+  getenumcastableattributevalue geteventdispatcher getfillable getforeignkey getglobalscope
+  getglobalscopes getguarded gethidden getincrementing getjsoncastflags getkey getkeyforsavequery
+  getkeyforselectquery getkeyname getkeytype getmorphclass getmorphs getmutatedattributes
+  getmutatormethods getobservableevents getoriginal getoriginalwithoutrewindingmodel getperpage
+  getprevious getqualifiedcreatedatcolumn getqualifiedkeyname getqualifiedupdatedatcolumn
+  getqueueableconnection getqueueableid getqueueablerelations getraworiginal getrecursioncache
+  getrecursivecallstack getrelation getrelations getrelationshipfrommethod getrelationvalue
+  getroutekey getroutekeyname getstorableenumvalue gettable gettouchedrelations getupdatedatcolumn
+  getvisible guard guessbelongstomanyrelation guessbelongstorelation guessresource
+  guessresourcename handlediscardedattributeviolationusing handlelazyloadingviolation
+  handlelazyloadingviolationusing handlemissingattributeviolationusing hasanygetmutator hasappended
+  hasattribute hasattributegetmutator hasattributemutator hasattributesetmutator hascast haschanges
+  hasgetmutator hasglobalscope hasmany hasmanythrough hasnamedscope hasone hasonethrough
+  hasrelationautoloadcallback hassetmutator increment incrementordecrement incrementquietly
+  initializehasattributes initializetraits insertandsetid invokerelationautoloadcallbackfor is
+  isautomaticallyeagerloadingrelationships isclasscastable isclasscomparable isclassdeviable
+  isclassserializable isclean iscustomdatetimecast isdateattribute isdatecastable
+  isdatecastablewithcustomformat isdecimalcast isdirty isencryptedcastable isenumcastable
+  isfillable isguardablecolumn isguarded isignoringtimestamps isignoringtouch
+  isimmutablecustomdatetimecast isjsoncastable ismassprunable isnot isprunable isrelation
+  isscopemethodwithattribute issoftdeletable isstandarddateformat isunguarded joiningtable
+  joiningtablesegment jsonserialize load loadaggregate loadavg loadcount loadexists loadmax loadmin
+  loadmissing loadmorph loadmorphaggregate loadmorphavg loadmorphcount loadmorphmax loadmorphmin
+  loadmorphsum loadsum makehidden makehiddenif makevisible makevisibleif mergeappends
+  mergeattributefromattributecasts mergeattributefromcachedcasts mergeattributefromclasscasts
+  mergeattributesfromattributecasts mergeattributesfromcachedcasts mergeattributesfromclasscasts
+  mergecasts mergefillable mergeguarded mergehidden mergevisible morpheagerto morphedbymany
+  morphinstanceto morphmany morphone morphto morphtomany mutateattribute mutateattributeforarray
+  mutateattributemarkedattribute newbasequerybuilder newbelongsto newbelongstomany newcollection
+  neweloquentbuilder newfrombuilder newhasmany newhasmanythrough newhasone newhasonethrough
+  newinstance newmodelquery newmorphmany newmorphone newmorphto newmorphtomany newpivot newquery
+  newqueryforrestoration newquerywithoutrelationships newquerywithoutscope newquerywithoutscopes
+  newrelatedinstance newrelatedthroughinstance newuniqueid normalizecastclassresponse observe
+  offsetexists offsetget offsetset offsetunset on only onwriteconnection originalisequivalent
+  parsecasterclass performdeleteonmodel performinsert performupdate
+  preventaccessingmissingattributes preventlazyloading preventsaccessingmissingattributes
+  preventsilentlydiscardingattributes preventslazyloading preventssilentlydiscardingattributes
+  propagaterelationautoloadcallbacktorelation push pushquietly qualifycolumn qualifycolumns query
+  refresh registerglobalscopes registermodelevent registerobserver reguard relationloaded
+  relationresolver relationstoarray removeobservableevents replicate replicatequietly replicating
+  resolvecasterclass resolvechildroutebinding resolvechildroutebindingquery
+  resolvecollectionfromattribute resolveconnection resolvecustombuilderclass
+  resolveglobalscopeattributes resolveobserveattributes resolverelationusing
+  resolveresourcefromattribute resolveroutebinding resolveroutebindingquery
+  resolvesoftdeletablechildroutebinding resolvesoftdeletableroutebinding retrieved save saved
+  saveorfail savequietly saving serializeclasscastableattribute serializedate setallglobalscopes
+  setappends setattribute setattributemarkedmutatedattributevalue setclasscastableattribute
+  setconnection setconnectionresolver setcreatedat setdateformat setenumcastableattribute
+  seteventdispatcher sethidden setincrementing setkeyname setkeysforsavequery setkeysforselectquery
+  setkeytype setmutatedattributevalue setobservableevents setperpage setrawattributes
+  setrecursivecallvalue setrelation setrelations settable settouchedrelations setuniqueids
+  setupdatedat setvisible shouldbestrict syncchanges syncoriginal syncoriginalattribute
+  syncoriginalattributes through throwbadmethodcallexception
+  throwmissingattributeexceptionifapplicable toarray tojson toprettyjson toresource totallyguarded
+  touch touches touchowners touchquietly transformmodelvalue unguard unguarded uniqueids
+  unsetconnectionresolver unseteventdispatcher unsetrelation unsetrelations update updated
+  updateorfail updatequietly updatetimestamps updating usestimestamps usesuniqueids waschanged
+  whenbooted with withoutappends withoutbroadcasting withoutevents withoutrecursion withoutrelation
+  withoutrelations withouttimestamps withouttimestampson withouttouching withouttouchingon
+  withrelationshipautoloading
+`
+    .split(/\s+/u)
+    .filter((name) => name !== ''),
+)

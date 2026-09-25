@@ -31,6 +31,7 @@ class AuditLog extends Model
 
     protected $casts = [
         'payload' => 'array',
+        'signature' => AsBytes::class,
         'logged_at' => 'datetime',
     ];
 }

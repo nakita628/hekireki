@@ -13,6 +13,7 @@ use App\Models\Account;
 use App\Models\Category;
 use App\Models\Coupon;
 use App\Models\Keyword;
+use App\Models\Kind;
 use App\Models\LineItem;
 use App\Models\Mood;
 use App\Models\Order;
@@ -125,7 +126,7 @@ check("every model names a table Prisma made, and every column of it", function 
 
 // --- Types ----------------------------------------------------------------------------------
 
-check('every scalar type SQLite has is written and read back as it was', function () use ($account, $product) {
+check('every scalar type SQLite has is written and read back as it was', function () use ($db, $account, $product) {
     $avatar = "\x00\xffPNG\n";
     $owner = $account('types');
     Profile::create(['account_id' => $owner->id, 'bio' => "two\nlines", 'avatar' => $avatar, 'mood' => Mood::FINE]);
@@ -148,6 +149,8 @@ check('every scalar type SQLite has is written and read back as it was', functio
         expect($found->released_at instanceof CarbonInterface ? $found->released_at->format('Y-m-d H:i:s') : $found->released_at, '2021-02-03 04:05:06', 'DateTime'),
         expect(Account::findOrFail($owner->id)->active, true, 'Boolean'),
         expect($profile->avatar, $avatar, 'Bytes with a zero byte'),
+        // A string would be TEXT, which Prisma Client refuses to read as bytes.
+        expect($db->selectOne('SELECT typeof(avatar) AS t FROM profiles WHERE id = ?', [$profile->id])->t, 'blob', 'Bytes stored as a BLOB'),
         expect($profile->bio, "two\nlines", 'String with a newline'),
     ];
 });
@@ -223,13 +226,15 @@ check('@@map and @map name the tables and columns, and the models read them by t
     ];
 });
 
-check("PHP's words are plain columns: type, class, function, match, list, static", function () {
+check("PHP's words are plain columns: type, class, function, match, list, static", function () use ($db) {
     $attributes = ['type' => 't', 'class' => 'c', 'function' => 'f', 'match' => 'm', 'list' => 'l', 'static' => true];
-    $made = Keyword::create($attributes);
+    $made = Keyword::create([...$attributes, 'kind' => Kind::CLASS_]);
     $found = Keyword::findOrFail($made->id);
     return [
         expect(array_intersect_key($found->toArray(), $attributes), $attributes, 'read back'),
         expect(Keyword::where('match', 'm')->value('class'), 'c', 'query'),
+        expect($found->kind, Kind::CLASS_, 'the case CLASS, named CLASS_'),
+        expect($db->selectOne('SELECT kind FROM keywords WHERE id = ?', [$made->id])->kind, 'CLASS', 'stored as CLASS'),
     ];
 });
 
@@ -268,7 +273,7 @@ check('@unique and @@unique refuse a second row', function () use ($account, $pr
     ];
 });
 
-check('a composite primary key finds, updates and deletes one row, and refuses a second', function () use ($account, $product) {
+check('a composite primary key updates and deletes one row by every column, and refuses a second', function () use ($db, $account, $product) {
     $order = Order::create(['account_id' => $account('composite')->id]);
     $one = $product('COMPOSITE1');
     $two = $product('COMPOSITE2');
@@ -276,10 +281,18 @@ check('a composite primary key finds, updates and deletes one row, and refuses a
     LineItem::create(['order_number' => $order->order_number, 'product_id' => $two->id, 'unit_price' => '2.00']);
     $item = LineItem::where(['order_number' => $order->order_number, 'product_id' => $one->id])->firstOrFail();
     $item->update(['quantity' => 3]);
+    $updated = $item->fresh()->quantity;
     $item->delete();
     return [
+        expect($updated, 3, 'the row updated, read again by both columns'),
         expect(thrown(fn () => LineItem::create(['order_number' => $order->order_number, 'product_id' => $two->id, 'unit_price' => '3.00'])), UniqueConstraintViolationException::class, 'a second row'),
         expect(LineItem::where('order_number', $order->order_number)->pluck('quantity', 'product_id')->all(), [$two->id => 1], 'one row left, the other untouched'),
+        // No column stands for the key, so neither reaches every row of the order: find() names
+        // no column and fails, and destroy() asks for a column named "", which SQLite reads as
+        // the empty string and PostgreSQL and MySQL refuse.
+        expect(thrown(fn () => LineItem::find($order->order_number)), QueryException::class, 'find() by one column'),
+        expect(LineItem::destroy($order->order_number), 0, 'destroy() by one column'),
+        expect($db->table('line_items')->where('order_number', $order->order_number)->count(), 1, 'the row destroy() did not reach'),
         expect($order->lineItems()->count(), 1, 'hasMany on a key named order_number'),
     ];
 });
@@ -411,6 +424,22 @@ check('onDelete: Restrict and NoAction refuse to delete a row something still po
         expect(thrown(fn () => $order->delete()), QueryException::class, 'Restrict: an order with line items'),
         expect(thrown(fn () => $owner->delete()), QueryException::class, 'NoAction: an account with orders'),
         expect(Order::whereKey($order->order_number)->exists(), true, 'the order stays'),
+    ];
+});
+
+check('a DateTime is written as Prisma Client writes it on SQLite, so the rows of both sort together', function () use ($db, $account) {
+    $early = $account('early');
+    $db->update('UPDATE accounts SET created_at = ? WHERE id = ?', ['2030-01-01T09:00:00.000Z', $early->id]);
+    // A row Prisma Client wrote an hour later the same day.
+    $db->insert("INSERT INTO accounts (email_address, handle, created_at, updated_at) VALUES ('late@example.com', 'late', '2030-01-01T10:00:00.000Z', '2030-01-01T10:00:00.000Z')");
+    $between = Account::create(['email_address' => 'mid@example.com', 'handle' => 'mid']);
+    $between->created_at = '2030-01-01 09:30:00';
+    $between->save();
+    return [
+        expect((bool) preg_match('/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/', $db->selectOne('SELECT updated_at FROM accounts WHERE id = ?', [$between->id])->updated_at), true, 'updated_at in ISO 8601 with milliseconds'),
+        expect($db->selectOne('SELECT created_at FROM accounts WHERE id = ?', [$between->id])->created_at, '2030-01-01T09:30:00.000Z', 'a value set by hand'),
+        expect(Account::whereIn('handle', ['early', 'mid', 'late'])->orderBy('created_at')->pluck('handle')->all(), ['early', 'mid', 'late'], 'ordered by the database'),
+        expect(Account::where('handle', 'late')->firstOrFail()->created_at->format('H:i'), '10:00', "a row Prisma wrote, read"),
     ];
 });
 

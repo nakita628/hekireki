@@ -33,6 +33,11 @@ class Account extends Model
         'active' => 'boolean',
     ];
 
+    public function fromDateTime($value)
+    {
+        return empty($value) ? $value : $this->asDateTime($value)->setTimezone('UTC')->format('Y-m-d\TH:i:s.v\Z');
+    }
+
     public function profile(): HasOne
     {
         return $this->hasOne(Profile::class, 'account_id');

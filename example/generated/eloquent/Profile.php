@@ -43,6 +43,7 @@ class Profile extends Model
         'age' => 'integer',
         'verified' => 'boolean',
         'meta' => 'array',
+        'avatar' => AsBytes::class,
         'last_seen' => 'datetime',
     ];
 

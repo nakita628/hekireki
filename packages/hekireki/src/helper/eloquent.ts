@@ -1,6 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { makePascalCase, stripAnnotations } from '../utils/index.js'
+import { ELOQUENT_MODEL_METHODS } from './eloquent-model-methods.js'
 
 export function prismaTypeToEloquentCast(type: string) {
   if (type === 'Int') return 'integer'
@@ -135,9 +136,14 @@ function findTimestamps(fields: readonly DMMF.Field[]) {
 
 // The raw value Eloquent keeps for a literal @default, or null where the database fills it
 // (now(), autoincrement(), dbgenerated()) or Prisma's client makes it (uuid(), cuid(), ulid()).
-// Eloquent holds attributes as the database has them, before its casts: a DateTime in its own
-// `Y-m-d H:i:s`, UTC; an enum member as its @map value; Json as its text.
-function phpDefault(field: DMMF.Field, enums: readonly DMMF.DatamodelEnum[]) {
+// Eloquent holds attributes as the database has them, before its casts: a DateTime as the model
+// writes one (Prisma's ISO 8601 on SQLite, Eloquent's own `Y-m-d H:i:s` elsewhere), in UTC; an
+// enum member as its @map value; Json as its text.
+function phpDefault(
+  field: DMMF.Field,
+  enums: readonly DMMF.DatamodelEnum[],
+  provider: string | undefined,
+) {
   const def = field.default
   if (def === undefined || def === null || field.isList || typeof def === 'object') return null
   if (field.kind === 'enum') {
@@ -151,9 +157,86 @@ function phpDefault(field: DMMF.Field, enums: readonly DMMF.DatamodelEnum[]) {
   }
   // DMMF carries BigInt defaults as digit strings and DateTime literals as ISO strings.
   if (field.type === 'BigInt') return def
-  if (field.type === 'DateTime') return phpString(def.slice(0, 19).replace('T', ' '))
+  if (field.type === 'DateTime') {
+    const iso = new Date(def).toISOString()
+    return phpString(provider === 'sqlite' ? iso : iso.slice(0, 19).replace('T', ' '))
+  }
   if (field.type === 'Bytes') return null
   return phpString(def)
+}
+
+/**
+ * The cast a Prisma `Bytes` column takes: written as a stream, which PDO binds as a LOB, so SQLite
+ * keeps a BLOB (a string would be TEXT, which Prisma Client refuses to read as bytes) and
+ * PostgreSQL a bytea; read back as the string of its bytes, whether the driver hands over a
+ * string or, as pdo_pgsql does, a stream.
+ */
+export function eloquentBytesCast(namespace: string) {
+  return `<?php
+
+namespace ${namespace};
+
+use Illuminate\\Contracts\\Database\\Eloquent\\CastsAttributes;
+use Illuminate\\Database\\Eloquent\\Model;
+
+/**
+ * A Prisma Bytes column: written as a stream, which PDO binds as a LOB, and read back as the
+ * string of its bytes.
+ */
+class AsBytes implements CastsAttributes
+{
+    public function get(Model $model, string $key, mixed $value, array $attributes): ?string
+    {
+        if (is_resource($value)) {
+            rewind($value);
+
+            return stream_get_contents($value);
+        }
+
+        return $value;
+    }
+
+    public function set(Model $model, string $key, mixed $value, array $attributes): mixed
+    {
+        if ($value === null || is_resource($value)) {
+            return $value;
+        }
+        $stream = fopen('php://memory', 'r+b');
+        fwrite($stream, (string) $value);
+        rewind($stream);
+
+        return $stream;
+    }
+}`
+}
+
+/**
+ * What keeps the schema from becoming Eloquent models that load and behave: a relation named after
+ * a method Model has (PHP matches method names without regard to case, so it would redeclare it),
+ * and a relation named after a column of its own model (`$model->name` answers with the column,
+ * never the relation). Each names the model and field it is on.
+ */
+export function eloquentProblems(models: readonly DMMF.Model[]) {
+  return models.flatMap((model) => {
+    const columns = new Set(
+      model.fields.filter((f) => f.kind !== 'object').map((f) => f.dbName ?? f.name),
+    )
+    const relations = model.fields.filter((f) => f.kind === 'object')
+    return [
+      ...relations
+        .filter((field) => ELOQUENT_MODEL_METHODS.has(field.name.toLowerCase()))
+        .map(
+          (field) =>
+            `field ${model.name}.${field.name}: ${field.name}() is a method of Eloquent's Model; rename the relation field`,
+        ),
+      ...relations
+        .filter((field) => columns.has(field.name))
+        .map(
+          (field) =>
+            `field ${model.name}.${field.name}: a column of ${model.name} has the name too, and $model->${field.name} would read the column; rename the relation field or @map the column`,
+        ),
+    ]
+  })
 }
 
 export function eloquentEnum(enumDef: DMMF.DatamodelEnum, namespace: string) {
@@ -164,7 +247,12 @@ export function eloquentEnum(enumDef: DMMF.DatamodelEnum, namespace: string) {
     '',
     `enum ${enumDef.name}: string`,
     '{',
-    ...enumDef.values.map((v) => `    case ${v.name} = ${phpString(v.dbName ?? v.name)};`),
+    // `class` is the one name PHP keeps from a case (`Role::class` is the enum's name): the
+    // case takes an underscore, and the value stays what the database holds.
+    ...enumDef.values.map(
+      (v) =>
+        `    case ${v.name.toLowerCase() === 'class' ? `${v.name}_` : v.name} = ${phpString(v.dbName ?? v.name)};`,
+    ),
     '}',
   ].join('\n')
 }
@@ -174,6 +262,7 @@ export function eloquentModels(
   namespace: string,
   allModels?: readonly DMMF.Model[],
   enums?: readonly DMMF.DatamodelEnum[],
+  options: { readonly provider?: string } = {},
 ) {
   const contextModels = allModels ?? models
   const enumNames = new Set((enums ?? []).map((e) => e.name))
@@ -244,7 +333,7 @@ export function eloquentModels(
       // A new model carries the schema's literal defaults before it is saved, as it will once
       // the database has filled them.
       const defaultEntries = attributeFields.flatMap((f) => {
-        const value = phpDefault(f, enums ?? [])
+        const value = phpDefault(f, enums ?? [], options.provider)
         return value === null ? [] : [`        ${phpString(f.dbName ?? f.name)} => ${value},`]
       })
       const defaultLines =
@@ -252,20 +341,45 @@ export function eloquentModels(
           ? ['    protected $attributes = [', ...defaultEntries, '    ];']
           : []
 
-      // Eloquent has no composite key: the first column stands for it, and an update, a delete
-      // or a refresh names every column of it, as the row was read.
+      // Eloquent has no composite key. `$primaryKey` stays null, so find(), destroy() and
+      // whereKey() fail rather than take one column for the key and reach rows it does not name;
+      // an update, a refresh and a delete name every column of it, as the row was read.
+      // Model::delete() refuses a model with no key before it builds the query, so it is written
+      // out without that check.
       const compositeColumns =
         idField === undefined ? compositePkFields.map((name) => fieldColumn(model, name)) : []
-      const compositeKeyMethods = ['setKeysForSaveQuery', 'setKeysForSelectQuery'].map((method) => [
-        `    protected function ${method}($query)`,
-        '    {',
-        `        foreach ([${compositeColumns.map(phpString).join(', ')}] as $column) {`,
-        "            $query->where($column, '=', $this->original[$column] ?? $this->getAttribute($column));",
-        '        }',
-        '',
-        '        return $query;',
-        '    }',
-      ])
+      const compositeKeyMethods = [
+        ...['setKeysForSaveQuery', 'setKeysForSelectQuery'].map((method) => [
+          `    protected function ${method}($query)`,
+          '    {',
+          `        foreach ([${compositeColumns.map(phpString).join(', ')}] as $column) {`,
+          "            $query->where($column, '=', $this->original[$column] ?? $this->getAttribute($column));",
+          '        }',
+          '',
+          '        return $query;',
+          '    }',
+        ]),
+        [
+          '    public function delete()',
+          '    {',
+          '        $this->mergeAttributesFromCachedCasts();',
+          '',
+          '        if (! $this->exists) {',
+          '            return null;',
+          '        }',
+          '',
+          "        if ($this->fireModelEvent('deleting') === false) {",
+          '            return false;',
+          '        }',
+          '',
+          '        $this->touchOwners();',
+          '        $this->performDeleteOnModel();',
+          "        $this->fireModelEvent('deleted', false);",
+          '',
+          '        return true;',
+          '    }',
+        ],
+      ]
 
       const castEntries = attributeFields.flatMap((f) => {
         const column = f.dbName ?? f.name
@@ -276,6 +390,7 @@ export function eloquentModels(
         if (f.kind === 'enum' && enumNames.has(f.type)) {
           return [`        ${phpString(column)} => ${f.type}::class,`]
         }
+        if (f.type === 'Bytes') return [`        ${phpString(column)} => AsBytes::class,`]
         const cast = prismaTypeToEloquentCast(f.type)
         return cast ? [`        ${phpString(column)} => '${cast}',`] : []
       })
@@ -290,9 +405,7 @@ export function eloquentModels(
         ...(pkColumn !== null && pkColumn !== 'id'
           ? [[`    protected $primaryKey = ${phpString(pkColumn)};`]]
           : []),
-        ...(compositeColumns.length > 0
-          ? [[`    protected $primaryKey = ${phpString(compositeColumns[0] ?? '')};`]]
-          : []),
+        ...(compositeColumns.length > 0 ? [['    protected $primaryKey = null;']] : []),
         ...(idField?.type === 'String' ? [["    protected $keyType = 'string';"]] : []),
         ...((idField !== undefined && !isAutoincrement) ||
         (idField === undefined && compositePkFields.length > 0)
@@ -349,8 +462,23 @@ export function eloquentModels(
         '        return (string) Str::ulid();',
         '    }',
       ]
+      // On SQLite a DateTime is text, compared and sorted as text, and Prisma Client writes it as
+      // UTC ISO 8601 with milliseconds: a row Eloquent writes in its own `Y-m-d H:i:s` would sort
+      // before one Prisma wrote the same day. The model writes Prisma's form; it reads both.
+      const dateMethod = [
+        '    public function fromDateTime($value)',
+        '    {',
+        "        return empty($value) ? $value : $this->asDateTime($value)->setTimezone('UTC')->format('Y-m-d\\TH:i:s.v\\Z');",
+        '    }',
+      ]
+      const writesDates =
+        options.provider === 'sqlite' &&
+        (model.fields.some((f) => f.type === 'DateTime' && !f.isList) ||
+          timestamps.createdColumn !== null ||
+          timestamps.updatedColumn !== null)
       const methodBlocks = [
         ...(pkUuidTrait === 'HasUlids' ? [ulidMethod] : []),
+        ...(writesDates ? [dateMethod] : []),
         ...(compositeColumns.length > 0 ? compositeKeyMethods : []),
         ...belongsToMethods,
         ...hasOneMethods,

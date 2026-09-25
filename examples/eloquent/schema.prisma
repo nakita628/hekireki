@@ -3,10 +3,17 @@
 // app/Models, creates dev.db with `prisma db push` and runs check.php with the real Eloquent
 // (illuminate/database): each model the generator writes is created, read back, updated, related
 // and deleted there, not only loaded. The tables are Prisma's; nothing here runs a Laravel
-// migration.
+// migration. Prisma Client shares the database: interop.ts reads what Eloquent wrote and writes
+// rows for interop.php to read through the models.
 
 datasource db {
   provider = "sqlite"
+}
+
+generator client {
+  provider            = "prisma-client"
+  output              = "generated/client"
+  importFileExtension = "ts"
 }
 
 generator Hekireki-Eloquent {
@@ -35,6 +42,12 @@ enum OrderStatus {
   PAID
   SHIPPED
   CANCELLED
+}
+
+/// Members named after words of PHP: `class` is the one a case cannot take.
+enum Kind {
+  CLASS
+  STATIC
 }
 
 /// Someone who signs in. The key counts up in the database, the address is unique, and the
@@ -214,6 +227,7 @@ model Keyword {
   match    String?
   list     String?
   static   Boolean?
+  kind     Kind?
 
   @@map("keywords")
 }

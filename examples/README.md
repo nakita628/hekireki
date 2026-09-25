@@ -34,8 +34,8 @@ starts from nothing.
 - `ecto/`: the schemas `hekireki-ecto` writes, compiled with warnings as errors and used through
   Ecto on `ecto_sqlite3`; see [ecto/README.md](ecto/README.md). Elixir 1.14 or newer.
 - `eloquent/`: the models `hekireki-eloquent` writes, read by `php -l` and used through Eloquent
-  (`illuminate/database` 12) on SQLite; see [eloquent/README.md](eloquent/README.md). PHP 8.2 or
-  newer with `pdo_sqlite`.
+  (`illuminate/database` 12) on SQLite, with Prisma Client reading what they wrote and writing what
+  they read; see [eloquent/README.md](eloquent/README.md). PHP 8.2 or newer with `pdo_sqlite`.
 
 `sqlite/`, `mysql/` and `postgresql/` are small projects to try `hekireki seed` and `hekireki studio` on, one per database. Each is a
 `schema.prisma` with the `prisma-client` and `hekireki-seed` generators, the schema module the

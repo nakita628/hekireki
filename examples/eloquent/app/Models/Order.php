@@ -38,6 +38,11 @@ class Order extends Model
         'placed_at' => 'datetime',
     ];
 
+    public function fromDateTime($value)
+    {
+        return empty($value) ? $value : $this->asDateTime($value)->setTimezone('UTC')->format('Y-m-d\TH:i:s.v\Z');
+    }
+
     public function account(): BelongsTo
     {
         return $this->belongsTo(Account::class, 'account_id');

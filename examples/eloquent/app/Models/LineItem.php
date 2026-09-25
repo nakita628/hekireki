@@ -12,7 +12,7 @@ class LineItem extends Model
 {
     protected $table = 'line_items';
 
-    protected $primaryKey = 'order_number';
+    protected $primaryKey = null;
 
     public $incrementing = false;
 
@@ -50,6 +50,25 @@ class LineItem extends Model
         }
 
         return $query;
+    }
+
+    public function delete()
+    {
+        $this->mergeAttributesFromCachedCasts();
+
+        if (! $this->exists) {
+            return null;
+        }
+
+        if ($this->fireModelEvent('deleting') === false) {
+            return false;
+        }
+
+        $this->touchOwners();
+        $this->performDeleteOnModel();
+        $this->fireModelEvent('deleted', false);
+
+        return true;
     }
 
     public function order(): BelongsTo

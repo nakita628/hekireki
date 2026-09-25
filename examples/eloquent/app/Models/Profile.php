@@ -23,6 +23,7 @@ class Profile extends Model
 
     protected $casts = [
         'account_id' => 'integer',
+        'avatar' => AsBytes::class,
         'mood' => Mood::class,
     ];
 

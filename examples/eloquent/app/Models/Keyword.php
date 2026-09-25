@@ -21,9 +21,11 @@ class Keyword extends Model
         'match',
         'list',
         'static',
+        'kind',
     ];
 
     protected $casts = [
         'static' => 'boolean',
+        'kind' => Kind::class,
     ];
 }

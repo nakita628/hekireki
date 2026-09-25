@@ -1,7 +1,13 @@
 import type { DMMF } from '@prisma/generator-helper'
 import { describe, expect, it } from 'vite-plus/test'
 
-import { eloquentEnum, eloquentModels, prismaTypeToEloquentCast } from './eloquent.js'
+import {
+  eloquentBytesCast,
+  eloquentEnum,
+  eloquentModels,
+  eloquentProblems,
+  prismaTypeToEloquentCast,
+} from './eloquent.js'
 
 function makeModel(overrides: Partial<DMMF.Model> & { name: string }): DMMF.Model {
   return {
@@ -475,7 +481,7 @@ class User extends Model
 }`)
   })
 
-  it('stands the first column for a composite key, and names every column of it to save or select', () => {
+  it('keeps a composite key out of $primaryKey, and names every column of it to save, select or delete', () => {
     const like = makeModel({
       name: 'Like',
       primaryKey: { name: null, fields: ['userId', 'postId'] },
@@ -523,7 +529,7 @@ class Like extends Model
 {
     protected $table = 'Like';
 
-    protected $primaryKey = 'userId';
+    protected $primaryKey = null;
 
     public $incrementing = false;
 
@@ -550,6 +556,25 @@ class Like extends Model
         }
 
         return $query;
+    }
+
+    public function delete()
+    {
+        $this->mergeAttributesFromCachedCasts();
+
+        if (! $this->exists) {
+            return null;
+        }
+
+        if ($this->fireModelEvent('deleting') === false) {
+            return false;
+        }
+
+        $this->touchOwners();
+        $this->performDeleteOnModel();
+        $this->fireModelEvent('deleted', false);
+
+        return true;
     }
 
     public function user(): BelongsTo
@@ -1443,5 +1468,90 @@ class Note extends Model`)
         'id',
         'code',
     ];`)
+  })
+
+  it('renames the one case name PHP keeps for itself, and keeps its value', () => {
+    const kind: DMMF.DatamodelEnum = {
+      name: 'Kind',
+      dbName: null,
+      values: [
+        { name: 'CLASS', dbName: null },
+        { name: 'STATIC', dbName: null },
+      ],
+    }
+
+    expect(eloquentEnum(kind, 'App\\Models')).toContain(`    case CLASS_ = 'CLASS';
+    case STATIC = 'STATIC';`)
+  })
+
+  it('casts Bytes through AsBytes, which binds a stream so the column holds a BLOB', () => {
+    const model = makeModel({
+      name: 'Profile',
+      fields: [autoincrementId, makeField({ name: 'avatar', type: 'Bytes', isRequired: false })],
+    })
+
+    expect(eloquentModels([model], 'App\\Models')).toContain(`    protected $casts = [
+        'avatar' => AsBytes::class,
+    ];`)
+    expect(eloquentBytesCast('App\\Models')).toContain(`class AsBytes implements CastsAttributes`)
+  })
+
+  it('writes a DateTime on SQLite as Prisma Client does, a default included', () => {
+    const model = makeModel({
+      name: 'Event',
+      fields: [
+        autoincrementId,
+        makeField({
+          name: 'at',
+          type: 'DateTime',
+          hasDefaultValue: true,
+          default: '2020-01-01T00:00:00Z',
+        }),
+      ],
+    })
+
+    const sqlite = eloquentModels([model], 'App\\Models', undefined, undefined, {
+      provider: 'sqlite',
+    })
+    expect(sqlite).toContain(`        'at' => '2020-01-01T00:00:00.000Z',`)
+    expect(sqlite).toContain(`    public function fromDateTime($value)
+    {
+        return empty($value) ? $value : $this->asDateTime($value)->setTimezone('UTC')->format('Y-m-d\\TH:i:s.v\\Z');
+    }`)
+    const postgres = eloquentModels([model], 'App\\Models', undefined, undefined, {
+      provider: 'postgresql',
+    })
+    expect(postgres).toContain(`        'at' => '2020-01-01 00:00:00',`)
+    expect(postgres).not.toContain('fromDateTime')
+  })
+
+  it('names a relation Eloquent would read as something else', () => {
+    const model = makeModel({
+      name: 'Post',
+      fields: [
+        autoincrementId,
+        makeField({ name: 'authorId', type: 'Int', dbName: 'author' }),
+        makeField({
+          name: 'author',
+          type: 'User',
+          kind: 'object',
+          relationName: 'PostToUser',
+          relationFromFields: ['authorId'],
+          relationToFields: ['id'],
+        }),
+        makeField({
+          name: 'Push',
+          type: 'User',
+          kind: 'object',
+          isList: true,
+          relationName: 'Pushes',
+        }),
+      ],
+    })
+
+    expect(eloquentProblems([model])).toStrictEqual([
+      "field Post.Push: Push() is a method of Eloquent's Model; rename the relation field",
+      'field Post.author: a column of Post has the name too, and $model->author would read the column; rename the relation field or @map the column',
+    ])
   })
 })
