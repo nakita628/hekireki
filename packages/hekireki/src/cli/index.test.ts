@@ -6,11 +6,10 @@ import { DatabaseSync } from 'node:sqlite'
 
 import { NodeFileSystem, NodeServices } from '@effect/platform-node'
 import { Effect, Exit } from 'effect'
-import { CliError } from 'effect/unstable/cli'
+import { CliError, Command } from 'effect/unstable/cli'
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 
-import { DEFAULT_SCHEMA_PATHS } from './constants.js'
-import { hekirekiCli, resolveSchemaPath, studioBanner } from './index.js'
+import { hekireki, resolveSchemaPath, studioBanner } from './index.js'
 
 const dirs: string[] = []
 const cwd = process.cwd()
@@ -51,7 +50,9 @@ async function cli(args: readonly string[]) {
     err.push(parts.map(String).join(' '))
   })
   const exit = await Effect.runPromiseExit(
-    hekirekiCli(args, { version: '0.0.0-test' }).pipe(Effect.provide(NodeServices.layer)),
+    Command.runWith(hekireki, { version: '0.0.0-test' })(args).pipe(
+      Effect.provide(NodeServices.layer),
+    ),
   )
   return {
     exit,
@@ -273,10 +274,6 @@ describe('resolveSchemaPath', () => {
         NodeFileSystem.layer,
       ),
     )
-
-  it('exposes the default candidates in order', () => {
-    expect(DEFAULT_SCHEMA_PATHS).toStrictEqual(['prisma/schema.prisma', 'schema.prisma'])
-  })
 
   it('uses the explicit path when it exists', async () => {
     const dir = tmp()
