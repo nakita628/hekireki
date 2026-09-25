@@ -19,7 +19,7 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <!-- ulid() and cuid() / cuid(2) defaults are generated with these. -->
     <PackageReference Include="Ulid" Version="1.4.1" />
-    <PackageReference Include="cuid.net" Version="7.0.0" />
+    <PackageReference Include="cuid.net" Version="7.1.0" />
   </ItemGroup>
 
 </Project>
