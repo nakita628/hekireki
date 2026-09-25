@@ -664,6 +664,7 @@ function generateColumn(
   allModels: readonly DMMF.Model[],
   enumMap: ReadonlyMap<string, DMMF.DatamodelEnum>,
   provider: string,
+  tableName: string,
 ) {
   // The attribute is the field in Python's case; the column is Prisma's, named
   // positionally whenever the two differ.
@@ -682,12 +683,12 @@ function generateColumn(
     colArgs.push(`"${columnName}"`)
   }
 
-  if (field.kind === 'enum') {
+  // SQLite has no enums: Prisma Migrate makes the column TEXT, the plain `str` of the base.
+  if (field.kind === 'enum' && provider !== 'sqlite') {
     const enumDef = enumMap.get(field.type)
     // The database stores the @map-ped values under the @@map-ped type name.
     const valuesStr = enumDef ? enumDef.values.map((v) => `"${v.dbName ?? v.name}"`).join(', ') : ''
-    const enumName = enumDef?.dbName ?? makeSnakeCase(field.type)
-    const enumType = `Enum(${valuesStr}, name="${enumName}")`
+    const enumType = `Enum(${valuesStr}, name="${enumDef?.dbName ?? field.type}")`
     colArgs.push(field.isList ? `ARRAY(${enumType})` : enumType)
   } else if (field.isList) {
     colArgs.push(`ARRAY(${resolveNativeType(field, provider)})`)
@@ -714,17 +715,25 @@ function generateColumn(
         SQL_ACTION[assoc.onDelete] ? `, ondelete="${SQL_ACTION[assoc.onDelete]}"` : '',
         SQL_ACTION[assoc.onUpdate] ? `, onupdate="${SQL_ACTION[assoc.onUpdate]}"` : '',
       ].join('')
-      colArgs.push(`ForeignKey("${targetTable}.${targetCol}"${fkActions})`)
+      const fkName = constraintName(tableName, [columnName], 'fkey', provider)
+      colArgs.push(`ForeignKey("${targetTable}.${targetCol}"${fkActions}, name="${fkName}")`)
     }
   }
 
   if (isPk) colArgs.push('primary_key=True')
   if (isPk && isAutoincrement(field)) colArgs.push('autoincrement=True')
-  if (field.isUnique) colArgs.push('unique=True')
+  // SQLAlchemy makes a lone integer key SERIAL or AUTO_INCREMENT unless told otherwise; Prisma
+  // Migrate does only for @default(autoincrement()).
+  if (field.isId && ['Int', 'BigInt'].includes(field.type) && !isAutoincrement(field)) {
+    colArgs.push('autoincrement=False')
+  }
+  // Prisma Migrate leaves a list's column nullable; the model reads it as a list all the same.
+  if (field.isList) colArgs.push('nullable=True')
 
   // now() and @updatedAt take the clock of the process, in UTC: the database's NOW() is the
   // session zone's wall time in a timestamp column and drops MySQL's milliseconds. The
-  // server_default is for the DDL, where MySQL holds NOW() to the column's precision.
+  // server_default is Prisma Migrate's, for the DDL, where MySQL holds it to the column's
+  // precision.
   const hasNowDefault = isNowDefault(field)
   const nativeName = field.nativeType?.[0]
   const utcNow =
@@ -739,8 +748,8 @@ function generateColumn(
   const fsp = field.nativeType ? field.nativeType[1][0] : '3'
   const nowSql =
     provider === 'mysql' && utcNow === 'utc_now' && fsp !== undefined && fsp !== '0'
-      ? `func.now(${fsp})`
-      : 'func.now()'
+      ? `text("CURRENT_TIMESTAMP(${fsp})")`
+      : 'text("CURRENT_TIMESTAMP")'
 
   const uuidVersion = uuidDefaultVersion(field)
   const dbGeneratedExpr =
@@ -772,6 +781,8 @@ function generateColumn(
     const defaultVal = formatDefault(field, enumMap.get(field.type))
     if (defaultVal !== null && !isPk) {
       colArgs.push(`default=${defaultVal}`)
+      const sql = serverDefault(field, enumMap.get(field.type), provider)
+      if (sql !== null) colArgs.push(`server_default=text(${toPythonString(sql)})`)
     }
   }
 
