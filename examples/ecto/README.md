@@ -59,9 +59,17 @@ Then each thing the schema promises, as Ecto keeps it:
   columns, read, written and queried.
 - **Enums.** `Ecto.Enum` stores the `@map` value (`staff`) and the member's name where there is no
   `@map` (`ADMIN`), loads a row another client wrote, and refuses a value outside the enum.
+- **Changesets.** `Account` and `Review` carry `/// @ecto.` lines, so each has a `changeset/2`:
+  `cast` of what it can write (not the timestamps), `validate_required` of what has no default,
+  `validate_format`, `validate_length` and `validate_number` from the fields' lines with their
+  Japanese messages, a `validate_required` with a message of its own, and the model's
+  `validate_exclusion` line. `Tag` casts with `empty_values: []`, so `""` and a blank are kept as
+  sent and stored, and only a `nil` name is missing. `Keyword` casts and validates fields named
+  after Elixir's words.
 - **Constraints.** Foreign keys are on for the connection `ecto_sqlite3` opens. `@unique` and a
-  composite `@@unique` are a changeset error with `unique_constraint`; a composite primary key
-  finds, refuses a second row and deletes one.
+  composite `@@unique` are a changeset error through the `unique_constraint` of `changeset/2`, one
+  with the message its `@ecto.` line gives; a composite primary key finds, refuses a second row and
+  deletes one.
 - **Associations.** `has_one`/`belongs_to` for a 1-1, `has_many` for a 1-n with two relations to
   one model kept apart, a tree and a thread of replies on themselves, and `many_to_many` through
   Prisma's `_ProductToTag`, the named `_Wished` and `_Follows`, with the `A` and `B` rows checked.

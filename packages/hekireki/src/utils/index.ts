@@ -43,8 +43,19 @@ export function parseDocumentWithoutAnnotations(documentation: string | undefine
   return documentationLines(documentation).filter((line) => line.length > 0)
 }
 
-const ANNOTATION_PREFIXES = ['@z.', '@v.', '@a.', '@e.', '@t.', '@j.', '@p.', '@ar.', '@relation']
-const ANNOTATION_EXACT = new Set(['@z', '@v', '@a', '@e', '@t', '@j', '@p', '@ar'])
+const ANNOTATION_PREFIXES = [
+  '@z.',
+  '@v.',
+  '@a.',
+  '@e.',
+  '@t.',
+  '@j.',
+  '@p.',
+  '@ar.',
+  '@ecto.',
+  '@relation',
+]
+const ANNOTATION_EXACT = new Set(['@z', '@v', '@a', '@e', '@t', '@j', '@p', '@ar', '@ecto'])
 
 export function isAnnotationLine(line: string) {
   const trimmed = line.trim()

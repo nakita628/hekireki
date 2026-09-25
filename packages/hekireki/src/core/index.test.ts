@@ -200,6 +200,8 @@ function options(
       config,
     },
     datasources: [{ activeProvider: provider }],
+    // The schema as written, which Ecto and Exposed read what DMMF drops from.
+    datamodel: '',
     dmmf: { datamodel: { models: MODELS, enums: ENUMS, types: [], indexes: [] } },
   } as unknown as GeneratorOptions
 }

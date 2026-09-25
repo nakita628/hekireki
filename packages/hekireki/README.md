@@ -43,8 +43,8 @@ generator Hekireki-Zod {
 | `hekireki-er`                                                                                 | ER diagram                                              | `outputs` (`.md`, `.dbml`, `.png`, `.svg`), `theme`                            |
 | `hekireki-seed`                                                                               | The schema module `hekireki.config.ts` is typed against |                                                                                |
 
-A `///` line starting with `@z.`, `@v.`, `@a.`, `@e.`, `@t.`, `@j.`, `@p.` or `@ar.` is used
-as-is by Zod, Valibot, ArkType, Effect Schema, TypeBox, AJV, Pydantic or Active Record:
+A `///` line starting with `@z.`, `@v.`, `@a.`, `@e.`, `@t.`, `@j.`, `@p.`, `@ar.` or `@ecto.` is
+used as-is by Zod, Valibot, ArkType, Effect Schema, TypeBox, AJV, Pydantic, Active Record or Ecto:
 
 ```prisma
 model User {
@@ -121,6 +121,59 @@ The tables stay Prisma's to create, so set `config.active_record.migration_error
 create the test database with `prisma migrate deploy`. `examples/active-record` in the repository
 runs a fuller schema against Active Record on SQLite, and is the place to read what each thing
 becomes.
+
+### Ecto
+
+`hekireki-ecto` writes one `Ecto.Schema` module per model. A model with a `/// @ecto` line on it
+or on one of its fields also gets a `changeset/2`: `cast` of every field it can write,
+`validate_required` of the required fields Prisma gives no default, a `unique_constraint` for each
+`@unique` and `@@unique`, a `foreign_key_constraint` for each foreign key, and a
+`no_assoc_constraint` for each `has_one` or `has_many` whose rows the database will not let go of
+(`Restrict` or `NoAction` on delete, which Prisma makes of a required relation that names neither),
+so a refused delete is an error on the association. Each constraint is
+named as the database reports it: Prisma's `<table>_<columns>_key` and `_fkey`, cut to the
+database's limit in bytes as Prisma cuts them, or the `map:` given. On SQLite a unique key takes
+the name Ecto derives itself, and a foreign key gets no constraint, since SQLite names none when it
+refuses a row; with `relationMode = "prisma"` there is no foreign key in the database to report.
+
+A `/// @ecto.` line on a field is an `Ecto.Changeset` function that takes the field first, without
+the field: `validate_length(max: 50)`, or `validate_required(message: "...")` for a message of the
+field's own. `unique_constraint(message: "...")` on a `@unique` field and
+`foreign_key_constraint(message: "...")` on a foreign key give the constraint its message. On a
+relation field, `assoc_constraint` (the side with the key) puts a missing row's error on the
+association, and `no_assoc_constraint(message: "...")` on a `has_one` or `has_many` gives a refused
+delete its message (or asks for one where the database cascades). On a model a line is a step of the pipeline written as it is
+(`validate_confirmation(:password)`), `unique_constraint([:a, :b], message: "...")` on the fields of
+a `@@unique` gives that constraint its message, `cast(empty_values: [])` hands its options to the
+changeset's `cast`, and a bare `/// @ecto` asks for the changeset with nothing added. With empty
+values of the model's own, `""` is a value, as it is to the column, so the required fields are
+checked by a `validate_not_null` written into the module, which counts only `nil` as missing
+(`validate_required` would count `""` too); a field's own `validate_required` line keeps Ecto's
+meaning. Ecto has no association for a foreign key of several columns, so the constraints of one
+are `foreign_key_constraint`s with the error on the relation's name.
+
+```prisma
+model User {
+  id    Int     @id @default(autoincrement())
+  /// @ecto.validate_required(message: "名前を入力してください")
+  /// @ecto.validate_length(max: 50, message: "%{count}文字以内で入力してください")
+  name  String
+  age   Int?
+  email String? @unique
+}
+```
+
+```elixir
+def changeset(user, attrs) do
+  user
+  |> cast(attrs, [:name, :age, :email])
+  |> validate_required([:name], message: "名前を入力してください")
+  |> validate_length(:name, max: 50, message: "%{count}文字以内で入力してください")
+  |> unique_constraint(:email, name: "User_email_key")
+end
+```
+
+`examples/ecto` in the repository runs a schema against Ecto on SQLite.
 
 ## Studio
 

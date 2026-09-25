@@ -1,7 +1,8 @@
 import type { DMMF } from '@prisma/generator-helper'
 import { describe, expect, it } from 'vite-plus/test'
 
-import { ectoSchemas, ectoTypeToTypespec, prismaTypeToEctoType } from './ecto.js'
+import { relationMaps } from '../utils/prisma-schema-text.js'
+import { ectoProblems, ectoSchemas, ectoTypeToTypespec, prismaTypeToEctoType } from './ecto.js'
 
 function makeModel(overrides: Partial<DMMF.Model> & { name: string }): DMMF.Model {
   return {
@@ -2472,5 +2473,660 @@ describe('@moduledoc', () => {
     field(:id, :integer, primary_key: true)
   end
 end`)
+  })
+})
+
+describe('changeset', () => {
+  const autoincrementId = makeField({
+    name: 'id',
+    type: 'Int',
+    isId: true,
+    hasDefaultValue: true,
+    default: { name: 'autoincrement', args: [] },
+  })
+
+  it('writes the @ecto. lines of a field into its changeset, after what the schema requires', () => {
+    const model = makeModel({
+      name: 'User',
+      fields: [
+        autoincrementId,
+        makeField({
+          name: 'name',
+          type: 'String',
+          documentation: [
+            '@ecto.validate_required(message: "名前を入力してください")',
+            '@ecto.validate_length(max: 50, message: "%{count}文字以内で入力してください")',
+          ].join('\n'),
+        }),
+        makeField({ name: 'age', type: 'Int', isRequired: false }),
+        makeField({ name: 'email', type: 'String', isRequired: false }),
+        makeField({ name: 'handle', type: 'String' }),
+        makeField({ name: 'role', type: 'String', hasDefaultValue: true, default: 'member' }),
+      ],
+    })
+
+    expect(ectoSchemas([model], 'App', undefined, undefined, { provider: 'postgresql' }))
+      .toBe(`defmodule App.User do
+  use Ecto.Schema
+  import Ecto.Changeset
+  @moduledoc false
+
+  @primary_key {:id, :id, autogenerate: true}
+
+  @type t :: %__MODULE__{
+          id: integer(),
+          name: String.t(),
+          age: integer() | nil,
+          email: String.t() | nil,
+          handle: String.t(),
+          role: String.t()
+        }
+
+  schema "User" do
+    field(:name, :string)
+    field(:age, :integer)
+    field(:email, :string)
+    field(:handle, :string)
+    field(:role, :string, default: "member")
+  end
+
+  @spec changeset(t(), map()) :: Ecto.Changeset.t()
+  def changeset(user, attrs) do
+    user
+    |> cast(attrs, [:name, :age, :email, :handle, :role])
+    |> validate_required([:handle])
+    |> validate_required([:name], message: "名前を入力してください")
+    |> validate_length(:name, max: 50, message: "%{count}文字以内で入力してください")
+  end
+end`)
+  })
+
+  it('writes no changeset where no @ecto line asks for one', () => {
+    const model = makeModel({
+      name: 'User',
+      fields: [autoincrementId, makeField({ name: 'email', type: 'String', isUnique: true })],
+    })
+
+    expect(ectoSchemas([model], 'App')).not.toContain('changeset')
+  })
+
+  it('takes a bare @ecto on a model for the changeset the schema implies, and a model line as a step', () => {
+    const model = makeModel({
+      name: 'Account',
+      dbName: 'accounts',
+      documentation: [
+        'Someone who signs in.',
+        '@ecto',
+        '@ecto.validate_confirmation(:password, message: "does not match")',
+      ].join('\n'),
+      fields: [
+        autoincrementId,
+        makeField({ name: 'password', type: 'String' }),
+        makeField({
+          name: 'createdAt',
+          type: 'DateTime',
+          hasDefaultValue: true,
+          default: { name: 'now', args: [] },
+        }),
+        makeField({ name: 'updatedAt', type: 'DateTime', isUpdatedAt: true }),
+      ],
+    })
+
+    const result = ectoSchemas([model], 'App', undefined, undefined, { provider: 'sqlite' })
+
+    expect(result).toContain(`  @moduledoc """
+  Someone who signs in.
+  """`)
+    expect(result).toContain(`  def changeset(account, attrs) do
+    account
+    |> cast(attrs, [:password])
+    |> validate_required([:password])
+    |> validate_confirmation(:password, message: "does not match")
+  end`)
+  })
+
+  it('names each unique constraint as the database reports it', () => {
+    const model = makeModel({
+      name: 'Review',
+      dbName: 'reviews',
+      uniqueFields: [['productId', 'accountId']],
+      documentation: '@ecto',
+      fields: [
+        autoincrementId,
+        makeField({
+          name: 'slug',
+          type: 'String',
+          isUnique: true,
+          documentation: '@ecto.unique_constraint(message: "既に使われています")',
+        }),
+        makeField({ name: 'code', type: 'String', isUnique: true, dbName: 'review_code' }),
+        makeField({ name: 'productId', type: 'Int', dbName: 'product_id' }),
+        makeField({ name: 'accountId', type: 'Int', dbName: 'account_id' }),
+      ],
+    })
+    const indexes: DMMF.Index[] = [
+      {
+        model: 'Review',
+        type: 'unique',
+        isDefinedOnField: true,
+        dbName: 'reviews_code_uq',
+        fields: [{ name: 'code' }],
+      },
+    ]
+
+    expect(ectoSchemas([model], 'App', undefined, undefined, { provider: 'postgresql', indexes }))
+      .toContain(`    |> unique_constraint(:slug, message: "既に使われています", name: "reviews_slug_key")
+    |> unique_constraint(:code, name: "reviews_code_uq")
+    |> unique_constraint([:product_id, :account_id], name: "reviews_product_id_account_id_key")
+  end`)
+    // ecto_sqlite3 reports `<table>_<columns>_index`, the name Ecto derives on its own.
+    expect(ectoSchemas([model], 'App', undefined, undefined, { provider: 'sqlite' }))
+      .toContain(`    |> unique_constraint(:slug, message: "既に使われています")
+    |> unique_constraint(:code)
+    |> unique_constraint([:product_id, :account_id])
+  end`)
+  })
+
+  it('cuts a derived name to what the database takes, as Prisma Migrate does', () => {
+    const model = makeModel({
+      name: 'Pair',
+      dbName: 'long_table',
+      uniqueFields: [['firstExtremelyLongColumnName', 'secondExtremelyLongColumnName']],
+      documentation: '@ecto',
+      fields: [
+        autoincrementId,
+        makeField({
+          name: 'anExtremelyLongColumnNameThatIsLongerThanUsualAndEvenLongerStill',
+          type: 'String',
+          isUnique: true,
+        }),
+        makeField({ name: 'firstExtremelyLongColumnName', type: 'Int' }),
+        makeField({ name: 'secondExtremelyLongColumnName', type: 'Int' }),
+      ],
+    })
+    // What `prisma migrate diff --script` writes for this model on each database.
+    const names = (provider: string) =>
+      [
+        ...ectoSchemas([model], 'App', undefined, undefined, { provider }).matchAll(
+          /name: "([^"]+)"/gu,
+        ),
+      ].map((m) => m[1])
+
+    expect(names('postgresql')).toStrictEqual([
+      'long_table_anExtremelyLongColumnNameThatIsLongerThanUsualAn_key',
+      'long_table_firstExtremelyLongColumnName_secondExtremelyLong_key',
+    ])
+    expect(names('mysql')).toStrictEqual([
+      'long_table_anExtremelyLongColumnNameThatIsLongerThanUsualAnd_key',
+      'long_table_firstExtremelyLongColumnName_secondExtremelyLongC_key',
+    ])
+    expect(names('sqlserver')).toStrictEqual([
+      'long_table_anExtremelyLongColumnNameThatIsLongerThanUsualAndEvenLongerStill_key',
+      'long_table_firstExtremelyLongColumnName_secondExtremelyLongColumnName_key',
+    ])
+  })
+
+  it('takes a model line on the fields of a @@unique as that constraint, and a name: in a message as text', () => {
+    const model = makeModel({
+      name: 'Review',
+      dbName: 'reviews',
+      uniqueFields: [['productId', 'accountId']],
+      documentation:
+        '@ecto.unique_constraint([:product_id, :account_id], message: "レビュー済みです")',
+      fields: [
+        autoincrementId,
+        makeField({
+          name: 'slug',
+          type: 'String',
+          isUnique: true,
+          documentation: '@ecto.unique_constraint(message: "name: is taken")',
+        }),
+        makeField({ name: 'productId', type: 'Int', dbName: 'product_id' }),
+        makeField({ name: 'accountId', type: 'Int', dbName: 'account_id' }),
+      ],
+    })
+
+    expect(ectoSchemas([model], 'App', undefined, undefined, { provider: 'postgresql' }))
+      .toContain(`    |> unique_constraint(:slug, message: "name: is taken", name: "reviews_slug_key")
+    |> unique_constraint([:product_id, :account_id], message: "レビュー済みです", name: "reviews_product_id_account_id_key")
+  end`)
+  })
+
+  it('does not name the struct after the attrs it is given', () => {
+    const model = makeModel({
+      name: 'Attrs',
+      documentation: '@ecto',
+      fields: [autoincrementId],
+    })
+
+    expect(ectoSchemas([model], 'App')).toContain('  def changeset(attrs_struct, attrs) do')
+  })
+
+  describe('foreign keys', () => {
+    const account = makeModel({
+      name: 'Account',
+      fields: [
+        autoincrementId,
+        makeField({
+          name: 'posts',
+          type: 'Post',
+          kind: 'object',
+          isList: true,
+          relationName: 'AccountToPost',
+          documentation: '@ecto.no_assoc_constraint(message: "has posts")',
+        }),
+        makeField({
+          name: 'edits',
+          type: 'Post',
+          kind: 'object',
+          isList: true,
+          relationName: 'Edits',
+        }),
+      ],
+    })
+    const post = makeModel({
+      name: 'Post',
+      dbName: 'posts',
+      documentation: '@ecto',
+      fields: [
+        autoincrementId,
+        makeField({
+          name: 'authorId',
+          type: 'Int',
+          dbName: 'author_id',
+          documentation: '@ecto.foreign_key_constraint(message: "no such author")',
+        }),
+        makeField({
+          name: 'author',
+          type: 'Account',
+          kind: 'object',
+          relationName: 'AccountToPost',
+          relationFromFields: ['authorId'],
+          relationToFields: ['id'],
+        }),
+        makeField({ name: 'editorId', type: 'Int', isRequired: false }),
+        makeField({
+          name: 'editor',
+          type: 'Account',
+          kind: 'object',
+          isRequired: false,
+          relationName: 'Edits',
+          relationFromFields: ['editorId'],
+          relationToFields: ['id'],
+          documentation: '@ecto.assoc_constraint',
+        }),
+      ],
+    })
+    // The name `map:` gives, which DMMF drops, read off the schema's text.
+    const foreignKeyNames = relationMaps(`model Post {
+  editor Account? @relation("Edits", fields: [editorId], references: [id], map: "post_editor_fk")
+}`)
+    const changeset = (model: DMMF.Model, provider: string, relationMode?: string) =>
+      ectoSchemas([model], 'App', [account, post], undefined, {
+        provider,
+        foreignKeyNames,
+        relationMode,
+      })
+
+    it('names each as Prisma Migrate does, and puts a relation asking for it on the association', () => {
+      // posts_author_id_fkey and post_editor_fk are what `prisma migrate diff --script` writes.
+      expect(changeset(post, 'postgresql')).toContain(`    |> cast(attrs, [:author_id, :editor_id])
+    |> validate_required([:author_id])
+    |> foreign_key_constraint(:author_id, message: "no such author", name: "posts_author_id_fkey")
+    |> assoc_constraint(:editor, name: "post_editor_fk")
+  end`)
+    })
+
+    it('names the key a has_many is followed by for its no_assoc_constraint', () => {
+      expect(
+        ectoSchemas([{ ...account, documentation: '@ecto' }], 'App', [account, post], undefined, {
+          provider: 'postgresql',
+        }),
+      )
+        .toContain(`    |> no_assoc_constraint(:posts, message: "has posts", name: "posts_author_id_fkey")
+  end`)
+    })
+
+    it('writes none SQLite could match, nor one relationMode prisma leaves out of the database', () => {
+      // ecto_sqlite3 reports a violated foreign key with no name: only what a line asks is written.
+      expect(changeset(post, 'sqlite')).toContain(`    |> cast(attrs, [:author_id, :editor_id])
+    |> validate_required([:author_id])
+    |> foreign_key_constraint(:author_id, message: "no such author")
+    |> assoc_constraint(:editor)
+  end`)
+      const comment = makeModel({
+        name: 'Comment',
+        documentation: '@ecto',
+        fields: [
+          autoincrementId,
+          makeField({ name: 'authorId', type: 'Int' }),
+          makeField({
+            name: 'author',
+            type: 'Account',
+            kind: 'object',
+            relationName: 'AccountToComment',
+            relationFromFields: ['authorId'],
+            relationToFields: ['id'],
+          }),
+        ],
+      })
+      expect(changeset(comment, 'postgresql')).toContain(
+        '    |> foreign_key_constraint(:author_id, name: "Comment_authorId_fkey")',
+      )
+      expect(changeset(comment, 'postgresql', 'prisma')).not.toContain('foreign_key_constraint')
+    })
+
+    it('cuts a name of several bytes a character to the database’s limit in bytes', () => {
+      const owner = makeModel({
+        name: 'O',
+        fields: [autoincrementId],
+      })
+      const model = makeModel({
+        name: 'T',
+        documentation: '@ecto',
+        fields: [
+          autoincrementId,
+          makeField({
+            name: 'name',
+            type: 'String',
+            isUnique: true,
+            dbName:
+              'とても長い日本語の列名がここにありますとても長い日本語の列名がここにありますとても長い日本語の列名',
+          }),
+          makeField({
+            name: 'ownerId',
+            type: 'Int',
+            dbName:
+              '所有者の識別子がとても長い名前になっている場合所有者の識別子がとても長い名前になっている場合',
+          }),
+          makeField({
+            name: 'owner',
+            type: 'O',
+            kind: 'object',
+            relationName: 'OToT',
+            relationFromFields: ['ownerId'],
+            relationToFields: ['id'],
+          }),
+        ],
+      })
+      const names = (provider: string) =>
+        [
+          ...ectoSchemas([model], 'App', [owner, model], undefined, { provider }).matchAll(
+            /name: "([^"]+)"/gu,
+          ),
+        ].map((m) => m[1])
+
+      // What `prisma migrate diff --script` writes for this model on each database.
+      expect(names('postgresql')).toStrictEqual([
+        'T_とても長い日本語の列名がここにあります_key',
+        'T_所有者の識別子がとても長い名前になっ_fkey',
+      ])
+      expect(names('mysql')).toStrictEqual([
+        'T_とても長い日本語の列名がここにあります_key',
+        'T_所有者の識別子がとても長い名前になって_fkey',
+      ])
+      expect(names('sqlserver')).toStrictEqual([
+        'T_とても長い日本語の列名がここにありますとても長い日本語の列名がここにありますとて_key',
+        'T_所有者の識別子がとても長い名前になっている場合所有者の識別子がとても長い名前にな_fkey',
+      ])
+    })
+
+    it('refuses the delete of a row whose has_many the database keeps, and no other', () => {
+      const relation = (name: string, type: string, relationName: string) =>
+        makeField({ name, type, kind: 'object', isList: true, relationName })
+      const holder = (name: string, relationName: string, overrides: Partial<DMMF.Field> = {}) =>
+        makeModel({
+          name,
+          fields: [
+            autoincrementId,
+            makeField({ name: 'userId', type: 'Int', isRequired: overrides.isRequired ?? true }),
+            makeField({
+              name: 'user',
+              type: 'User',
+              kind: 'object',
+              relationName,
+              relationFromFields: ['userId'],
+              relationToFields: ['id'],
+              ...overrides,
+            }),
+          ],
+        })
+      const user = makeModel({
+        name: 'User',
+        documentation: '@ecto',
+        fields: [
+          autoincrementId,
+          // Required and naming no onDelete: Prisma restricts it.
+          relation('orders', 'Order', 'OrderToUser'),
+          relation('invoices', 'Invoice', 'InvoiceToUser'),
+          relation('sessions', 'Session', 'SessionToUser'),
+          relation('visits', 'Visit', 'UserToVisit'),
+        ],
+      })
+      const models = [
+        user,
+        holder('Order', 'OrderToUser'),
+        holder('Invoice', 'InvoiceToUser', { relationOnDelete: 'NoAction' }),
+        holder('Session', 'SessionToUser', { relationOnDelete: 'Cascade' }),
+        // Optional and naming no onDelete: Prisma sets it null.
+        holder('Visit', 'UserToVisit', { isRequired: false }),
+      ]
+      const userChangeset = (provider: string, relationMode?: string) =>
+        ectoSchemas([user], 'App', models, undefined, { provider, relationMode })
+
+      expect(userChangeset('postgresql')).toContain(`    user
+    |> cast(attrs, [])
+    |> no_assoc_constraint(:orders, name: "Order_userId_fkey")
+    |> no_assoc_constraint(:invoices, name: "Invoice_userId_fkey")
+  end`)
+      expect(userChangeset('sqlite')).not.toContain('no_assoc_constraint')
+      expect(userChangeset('postgresql', 'prisma')).not.toContain('no_assoc_constraint')
+    })
+
+    it('puts a key of several columns, which Ecto has no association for, on the relation’s name', () => {
+      const pair = makeModel({
+        name: 'Pair',
+        primaryKey: { name: null, fields: ['a', 'b'] },
+        documentation: '@ecto',
+        fields: [
+          makeField({ name: 'a', type: 'Int' }),
+          makeField({ name: 'b', type: 'Int' }),
+          makeField({
+            name: 'children',
+            type: 'Child',
+            kind: 'object',
+            isList: true,
+            relationName: 'ChildToPair',
+          }),
+          makeField({
+            name: 'favourite',
+            type: 'Child',
+            kind: 'object',
+            isRequired: false,
+            relationName: 'Favourite',
+            documentation: '@ecto.no_assoc_constraint(message: "is someone’s favourite")',
+          }),
+        ],
+      })
+      const child = makeModel({
+        name: 'Child',
+        documentation: '@ecto',
+        fields: [
+          autoincrementId,
+          makeField({ name: 'pa', type: 'Int' }),
+          makeField({ name: 'pb', type: 'Int' }),
+          makeField({
+            name: 'pair',
+            type: 'Pair',
+            kind: 'object',
+            relationName: 'ChildToPair',
+            relationFromFields: ['pa', 'pb'],
+            relationToFields: ['a', 'b'],
+            documentation: '@ecto.assoc_constraint(message: "no such pair")',
+          }),
+          makeField({ name: 'fa', type: 'Int', isRequired: false }),
+          makeField({ name: 'fb', type: 'Int', isRequired: false }),
+          makeField({
+            name: 'favouriteOf',
+            type: 'Pair',
+            kind: 'object',
+            isRequired: false,
+            relationName: 'Favourite',
+            relationFromFields: ['fa', 'fb'],
+            relationToFields: ['a', 'b'],
+          }),
+        ],
+      })
+      const generate = (model: DMMF.Model) =>
+        ectoSchemas([model], 'App', [pair, child], undefined, { provider: 'postgresql' })
+
+      // Child_pa_pb_fkey is what `prisma migrate diff --script` names the key.
+      expect(generate(pair))
+        .toContain(`    |> foreign_key_constraint(:children, message: "are still associated with this entry", name: "Child_pa_pb_fkey")
+    |> foreign_key_constraint(:favourite, message: "is someone’s favourite", name: "Child_fa_fb_fkey")
+  end`)
+      expect(generate(child))
+        .toContain(`    |> foreign_key_constraint(:pair, message: "no such pair", name: "Child_pa_pb_fkey")
+    |> foreign_key_constraint(:fa, name: "Child_fa_fb_fkey")
+  end`)
+      expect(ectoProblems([pair, child])).toStrictEqual([])
+    })
+
+    it('names what a relation field cannot take', () => {
+      const owner = makeModel({
+        name: 'Account',
+        fields: [
+          autoincrementId,
+          makeField({
+            name: 'edits',
+            type: 'Post',
+            kind: 'object',
+            isList: true,
+            relationName: 'Edits',
+            documentation: '@ecto.assoc_constraint',
+          }),
+        ],
+      })
+      const edited = makeModel({
+        name: 'Post',
+        fields: [
+          autoincrementId,
+          makeField({
+            name: 'editorId',
+            type: 'Int',
+            documentation: '@ecto.cast(empty_values: [])',
+          }),
+          makeField({
+            name: 'editor',
+            type: 'Account',
+            kind: 'object',
+            relationName: 'Edits',
+            relationFromFields: ['editorId'],
+            relationToFields: ['id'],
+            documentation: '@ecto.no_assoc_constraint',
+          }),
+          makeField({
+            name: 'label',
+            type: 'String',
+            documentation: '@ecto.foreign_key_constraint',
+          }),
+        ],
+      })
+
+      expect(ectoProblems([owner, edited])).toStrictEqual([
+        'field Account.edits: assoc_constraint is on a relation whose foreign key is not a column of this model; it belongs on the side with the key',
+        'field Post.editorId: cast is not an Ecto.Changeset function that takes the field first; write it as an @ecto. line on the model',
+        'field Post.editor: no_assoc_constraint is on a relation that is not a has_one or has_many; it belongs on the side the key points at',
+        'field Post.label: foreign_key_constraint is on a field that is not the foreign key of a relation',
+      ])
+    })
+  })
+
+  it('hands the options of a model’s cast line to the changeset’s cast, and then requires only what is not nil', () => {
+    const model = makeModel({
+      name: 'Note',
+      documentation: '@ecto.cast(empty_values: [])',
+      fields: [
+        autoincrementId,
+        makeField({ name: 'body', type: 'String' }),
+        makeField({
+          name: 'title',
+          type: 'String',
+          documentation: '@ecto.validate_required(message: "blank is missing here")',
+        }),
+      ],
+    })
+
+    expect(ectoSchemas([model], 'App')).toContain(`  def changeset(note, attrs) do
+    note
+    |> cast(attrs, [:body, :title], empty_values: [])
+    |> validate_not_null([:body])
+    |> validate_required([:title], message: "blank is missing here")
+  end
+
+  # validate_required/3 for a column that takes "": missing is nil, and nothing else.
+  defp validate_not_null(changeset, fields) do
+    changeset = %{changeset | required: Enum.uniq(changeset.required ++ fields)}
+
+    Enum.reduce(fields, changeset, fn field, acc ->
+      if is_nil(get_field(acc, field)) and not Keyword.has_key?(acc.errors, field),
+        do: add_error(acc, field, "can't be blank", validation: :required),
+        else: acc
+    end)
+  end
+end`)
+  })
+
+  it('does not name the struct after a word Elixir reserves', () => {
+    const model = makeModel({
+      name: 'End',
+      documentation: '@ecto',
+      fields: [autoincrementId, makeField({ name: 'at', type: 'String' })],
+    })
+
+    expect(ectoSchemas([model], 'App')).toContain(`  def changeset(end_struct, attrs) do
+    end_struct`)
+  })
+})
+
+describe('ectoProblems', () => {
+  it('names what keeps an @ecto. line from being read', () => {
+    const model = makeModel({
+      name: 'User',
+      documentation: '@ecto\nWritten after the call.',
+      fields: [
+        makeField({
+          name: 'id',
+          type: 'Int',
+          isId: true,
+          hasDefaultValue: true,
+          default: { name: 'autoincrement', args: [] },
+          documentation: '@ecto.validate_number(greater_than: 0)',
+        }),
+        makeField({
+          name: 'name',
+          type: 'String',
+          documentation: '@ecto.validate_length(max: 50\n@ecto.unique_constraint',
+        }),
+        makeField({
+          name: 'posts',
+          type: 'Post',
+          kind: 'object',
+          isList: true,
+          relationName: 'PostToUser',
+          documentation: '@ecto.validate_length(min: 1)',
+        }),
+        makeField({ name: 'bio', type: 'String', documentation: '@ecto.validate_length 50' }),
+      ],
+    })
+
+    expect(ectoProblems([model])).toStrictEqual([
+      'model User: the line "Written after the call." comes after an @ecto. call; write the description above them',
+      'field User.id: an @ecto. call is on a field the changeset does not cast: a primary key Ecto generates, or a timestamp',
+      'field User.name: the @ecto. call "validate_length(max: 50" does not close its parentheses on its line; an @ecto. call is one /// line',
+      'field User.name: unique_constraint is on a field that is not @unique; write a @@unique constraint as an @ecto. line on the model',
+      'field User.posts: validate_length is on a relation field, which takes assoc_constraint or no_assoc_constraint; write it as an @ecto. line on the model',
+      'field User.bio: the @ecto. call "validate_length 50" is not name or name(arguments)',
+    ])
   })
 })

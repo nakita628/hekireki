@@ -211,9 +211,13 @@ check("Elixir's words are plain columns: type, end, do, fn, when, schema, change
 
   keyword = Repo.insert!(struct(Shop.Keyword, attrs))
   found = Repo.get!(Shop.Keyword, keyword.id)
+  cast = Shop.Keyword.changeset(%Shop.Keyword{}, Map.new(attrs))
+  long = Shop.Keyword.changeset(%Shop.Keyword{}, %{type: "t", do: "dd"})
 
   reasons([
     expect(Map.take(found, Keyword.keys(attrs)), Map.new(attrs), "read back"),
+    expect({cast.valid?, cast.changes}, {true, Map.new(attrs)}, "changeset/2 casts each"),
+    expect(errors(long), %{do: ["should be at most 1 character(s)"]}, "validate_length(:do, ...)"),
     expect(
       row(~s(SELECT "__meta__", "end", "rescue" FROM keywords WHERE id = ?), [keyword.id]),
       [["m", "2025-01-01T00:00:00Z", 1]],
@@ -226,11 +230,14 @@ end)
 check("a doc comment is the schema's @moduledoc, word for word", fn ->
   {:docs_v1, _, _, _, %{"en" => doc}, _, _} = Code.fetch_docs(Shop.Keyword)
 
-  expect(
-    String.contains?(doc, ~S(`#{interpolation}`, a `"""` and a backslash \ as a docstring)),
-    true,
-    "moduledoc #{inspect(doc)}"
-  )
+  reasons([
+    expect(
+      String.contains?(doc, ~S(`#{interpolation}`, a `"""` and a backslash \ as a docstring)),
+      true,
+      "moduledoc #{inspect(doc)}"
+    ),
+    expect(String.contains?(doc, "@ecto"), false, "the @ecto line is not prose")
+  ])
 end)
 
 # --- Enums ------------------------------------------------------------------------------------
@@ -261,25 +268,71 @@ end)
 
 # --- Constraints ------------------------------------------------------------------------------
 
-check("@unique and @@unique turn a violation into a changeset error", fn ->
+check("changeset/2: what the schema requires, what the @ecto. lines ask and their messages", fn ->
+  blank = Account.changeset(%Account{}, %{})
+  wrong = Account.changeset(%Account{}, %{email_address: "no-at-sign", handle: String.duplicate("h", 21)})
+  root = Account.changeset(%Account{}, %{email_address: "root@example.com", handle: "root"})
+  unrated = Review.changeset(%Review{}, %{product_id: "p", account_id: 1})
+  six = Review.changeset(%Review{}, %{product_id: "p", account_id: 1, rating: 6})
+
+  given =
+    Account.changeset(%Account{}, %{
+      email_address: "given@example.com",
+      handle: "given",
+      role: "staff",
+      created_at: "2000-01-01T00:00:00Z"
+    })
+
+  reasons([
+    expect(errors(blank), %{email_address: ["can't be blank"], handle: ["can't be blank"]}, "required"),
+    expect(
+      errors(wrong),
+      %{email_address: ["の形式が正しくありません"], handle: ["は20文字以内で入力してください"]},
+      "format and length"
+    ),
+    expect(errors(root), %{handle: ["は使えません"]}, "the model's line"),
+    expect(errors(unrated), %{rating: ["評価を入力してください"]}, "a required message of the field's own"),
+    expect(errors(six), %{rating: ["must be less than or equal to 5"]}, "number"),
+    expect(
+      given.changes,
+      %{email_address: "given@example.com", handle: "given", role: :STAFF},
+      "cast takes the fields and the enum, not the timestamps"
+    )
+  ])
+end)
+
+check("a cast with empty values of its own keeps \"\" and blanks, and requires what is not nil", fn ->
+  empty = Tag.changeset(%Tag{id: "c" <> Ecto.UUID.generate()}, %{name: ""})
+  blank = Tag.changeset(%Tag{}, %{name: "  "})
+  missing = Tag.changeset(%Tag{}, %{name: nil})
+  saved = Repo.insert!(empty)
+
+  reasons([
+    expect({empty.valid?, empty.changes.name}, {true, ""}, "\"\" is a name"),
+    expect({blank.valid?, blank.changes.name}, {true, "  "}, "a blank is kept"),
+    expect(errors(missing), %{name: ["can't be blank"]}, "nil is missing"),
+    expect(missing.required, [:name], "required, as validate_required marks it"),
+    expect(Repo.get!(Tag, saved.id).name, "", "stored")
+  ])
+end)
+
+check("@unique and @@unique turn a violation into a changeset error through changeset/2", fn ->
   account = account!.("unique")
   product = product!.("UNIQUE", [])
   Repo.insert!(%Review{product_id: product.id, account_id: account.id, rating: 5})
 
   {:error, again} =
     %Account{}
-    |> change(email_address: "unique@example.com", handle: "unique2")
-    |> unique_constraint(:email_address)
+    |> Account.changeset(%{email_address: "unique@example.com", handle: "unique2"})
     |> Repo.insert()
 
   {:error, twice} =
     %Review{}
-    |> change(product_id: product.id, account_id: account.id, rating: 1)
-    |> unique_constraint([:product_id, :account_id])
+    |> Review.changeset(%{product_id: product.id, account_id: account.id, rating: 1})
     |> Repo.insert()
 
   reasons([
-    expect(Keyword.keys(again.errors), [:email_address], "@unique"),
+    expect(errors(again), %{email_address: ["は既に使われています"]}, "@unique, with its @ecto. message"),
     expect(Keyword.keys(twice.errors), [:product_id], "@@unique"),
     expect(Repo.aggregate(from(r in Review, where: r.product_id == ^product.id), :count), 1, "reviews")
   ])

@@ -32,11 +32,16 @@ enum OrderStatus {
 
 /// Someone who signs in. The key counts up in the database, the address is unique, and the
 /// timestamps have Prisma's own names on Rails' columns, so Ecto's `timestamps()` needs a source
-/// for each.
+/// for each. Its changeset takes what the @ecto. lines ask on top of what the schema requires, and
+/// a line of the model's own.
+/// @ecto.validate_exclusion(:handle, ~w(root), message: "は使えません")
 model Account {
   id           Int          @id @default(autoincrement())
+  /// @ecto.validate_format(~r/@/, message: "の形式が正しくありません")
+  /// @ecto.unique_constraint(message: "は既に使われています")
   emailAddress String       @unique @map("email_address")
   /// A second unique column Prisma names in camel case: a relation references it below.
+  /// @ecto.validate_length(max: 20, message: "は%{count}文字以内で入力してください")
   handle       String       @unique
   displayName  String?      @map("display_name")
   role         Role         @default(CUSTOMER)
@@ -104,7 +109,9 @@ model Product {
 }
 
 /// The implicit many-to-many with Product: `_ProductToTag`, columns A (Product) and B (Tag). The
-/// key is a cuid, which Ecto has no generator for: the check gives it one.
+/// key is a cuid, which Ecto has no generator for: the check gives it one. Its changeset keeps ""
+/// and blanks as they were sent, as the column does, and a name is missing only when it is nil.
+/// @ecto.cast(empty_values: [])
 model Tag {
   id       String    @id @default(cuid())
   name     String    @unique
@@ -168,6 +175,8 @@ model Review {
   product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   accountId Int      @map("account_id")
   account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  /// @ecto.validate_required(message: "評価を入力してください")
+  /// @ecto.validate_number(greater_than_or_equal_to: 1, less_than_or_equal_to: 5)
   rating    Int
   body      String?
   parentId  Int?     @map("parent_id")
@@ -208,11 +217,14 @@ model AuditEvent {
 /// Column names that are words of Elixir or names Ecto keeps for itself. Each is a plain column;
 /// Ecto takes any atom, but the generated code has to stay valid Elixir around it. The model's
 /// own name is Elixir's Keyword module, which Shop.Keyword leaves alone. The doc comment carries
-/// `#{interpolation}`, a `"""` and a backslash \ as a docstring would have to.
+/// `#{interpolation}`, a `"""` and a backslash \ as a docstring would have to. Its changeset casts
+/// and validates each of them by name.
+/// @ecto
 model Keyword {
   id        Int       @id @default(autoincrement())
   type      String
   end       DateTime?
+  /// @ecto.validate_length(max: 1)
   do        String?
   fn        String?
   when      DateTime?

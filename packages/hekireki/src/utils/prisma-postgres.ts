@@ -13,15 +13,16 @@ function utf8Length(value: string) {
 
 /**
  * A constraint or index name as Prisma Migrate derives it: when base and suffix together exceed
- * PostgreSQL's identifier limit, the base is cut — at a character boundary, counting UTF-8 bytes
- * as PostgreSQL does — to leave room for the suffix.
+ * the database's identifier limit, the base is cut — at a character boundary, counting UTF-8 bytes
+ * — to leave room for the suffix. Prisma counts bytes on MySQL (64) and SQL Server (128) too.
  *
  * @param base - The table name, joined with the column names where Prisma includes them.
  * @param suffix - `_pkey`, `_key`, `_idx`, `_fkey` and so on.
+ * @param limit - The longest name in bytes, PostgreSQL's unless given.
  * @returns The name Prisma gives the constraint or index.
  */
-export function prismaConstraintName(base: string, suffix: string) {
-  const room = IDENTIFIER_LIMIT - utf8Length(suffix)
+export function prismaConstraintName(base: string, suffix: string, limit = IDENTIFIER_LIMIT) {
+  const room = limit - utf8Length(suffix)
   if (utf8Length(base) <= room) return `${base}${suffix}`
   const chars = [...base.matchAll(/./gsu)].map(([char]) => char)
   // Prefix lengths only grow, so the characters that fit are a prefix of the name.

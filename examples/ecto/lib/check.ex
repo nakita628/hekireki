@@ -20,4 +20,13 @@ defmodule Shop.Check do
   def expect(got, want, label), do: "#{label}: expected #{inspect(want)}, got #{inspect(got)}"
 
   def row(sql, params \\ []), do: Shop.Repo.query!(sql, params).rows
+
+  # A changeset's errors by field, with %{count} and the like filled in as Phoenix fills them.
+  def errors(changeset) do
+    Ecto.Changeset.traverse_errors(changeset, fn {message, opts} ->
+      Enum.reduce(opts, message, fn {key, value}, acc ->
+        String.replace(acc, "%{#{key}}", fn _ -> to_string(value) end)
+      end)
+    end)
+  end
 end

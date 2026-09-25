@@ -1,10 +1,12 @@
 defmodule Shop.Keyword do
   use Ecto.Schema
+  import Ecto.Changeset
   @moduledoc """
   Column names that are words of Elixir or names Ecto keeps for itself. Each is a plain column;
   Ecto takes any atom, but the generated code has to stay valid Elixir around it. The model's
   own name is Elixir's Keyword module, which Shop.Keyword leaves alone. The doc comment carries
-  `\#{interpolation}`, a `\"""` and a backslash \\ as a docstring would have to.
+  `\#{interpolation}`, a `\"""` and a backslash \\ as a docstring would have to. Its changeset casts
+  and validates each of them by name.
   """
 
   @primary_key {:id, :id, autogenerate: true}
@@ -36,5 +38,13 @@ defmodule Shop.Keyword do
     field(:rescue, :boolean)
     field(:in, :integer)
     field(:at, :utc_datetime, read_after_writes: true)
+  end
+
+  @spec changeset(t(), map()) :: Ecto.Changeset.t()
+  def changeset(keyword, attrs) do
+    keyword
+    |> cast(attrs, [:type, :end, :do, :fn, :when, :schema, :changeset, :meta, :rescue, :in, :at])
+    |> validate_required([:type])
+    |> validate_length(:do, max: 1)
   end
 end
