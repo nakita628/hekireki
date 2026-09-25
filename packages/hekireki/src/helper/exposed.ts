@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { allocate, pascalCase } from './naming.js'
+import { allocate, pascalCase } from '../utils/naming.js'
 import {
   backRelation,
   columnName,
@@ -21,8 +21,8 @@ import {
   sqlString,
   sqlTimestamp,
   tableName,
-} from './prisma-postgres.js'
-import type { IndexInfo, ManyToMany } from './prisma-postgres.js'
+} from '../utils/prisma-postgres.js'
+import type { IndexInfo, ManyToMany } from '../utils/prisma-postgres.js'
 
 // Generated Kotlin names a class through a placeholder: `\0T|java.time.Instant\0` where a type is
 // expected, `\0E|...\0` where a class is the receiver of a call (`Instant.now()`), `\0F|...\0` for a

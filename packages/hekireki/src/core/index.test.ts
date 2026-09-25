@@ -2,12 +2,12 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
+import { NodeFileSystem } from '@effect/platform-node'
 import type { GeneratorOptions } from '@prisma/generator-helper'
 import type { FileSystem } from 'effect'
 import { Effect, Exit } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
-import { fileSystemLayer } from '../file/index.js'
 import { activerecord } from './activerecord.js'
 import { ajv } from './ajv.js'
 import { arktype } from './arktype.js'
@@ -211,7 +211,7 @@ function run(
   provider = 'postgresql',
 ) {
   return Effect.runPromiseExit(
-    Effect.provide(generator(options(output, config, provider)), fileSystemLayer),
+    Effect.provide(generator(options(output, config, provider)), NodeFileSystem.layer),
   )
 }
 
@@ -349,7 +349,7 @@ describe('generator config', () => {
     const root = tmp()
     const output = path.join(root, 'app', 'models')
     const exit = await Effect.runPromiseExit(
-      Effect.provide(activerecord(translated(output)), fileSystemLayer),
+      Effect.provide(activerecord(translated(output)), NodeFileSystem.layer),
     )
     expect(Exit.isSuccess(exit)).toBe(true)
     const locales = path.join(root, 'config', 'locales')
@@ -376,7 +376,10 @@ describe('generator config', () => {
     const root = tmp()
     const output = path.join(root, 'out')
     const exit = await Effect.runPromiseExit(
-      Effect.provide(activerecord(translated(output, { locales: '../i18n' })), fileSystemLayer),
+      Effect.provide(
+        activerecord(translated(output, { locales: '../i18n' })),
+        NodeFileSystem.layer,
+      ),
     )
     expect(Exit.isSuccess(exit)).toBe(true)
     expect(new Set(readdirSync(path.join(root, 'i18n', 'models', 'user')))).toStrictEqual(
@@ -386,7 +389,7 @@ describe('generator config', () => {
 
   it('asks for `locales` when a translation has nowhere to go', async () => {
     const exit = await Effect.runPromiseExit(
-      Effect.provide(activerecord(translated(path.join(tmp(), 'out'))), fileSystemLayer),
+      Effect.provide(activerecord(translated(path.join(tmp(), 'out'))), NodeFileSystem.layer),
     )
     expect(failure(exit)).toContain('locales is required for Hekireki-ActiveRecord')
   })

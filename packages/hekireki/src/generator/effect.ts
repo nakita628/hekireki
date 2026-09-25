@@ -1,7 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { effectSchemaCode, makeEffectRelations } from '../helper/effect.js'
-import { makeRelationsOnly } from '../helper/extract-relations.js'
+import { makeRelationsOnly } from '../utils/extract-relations.js'
 
 export function effectCode(
   dmmf: DMMF.Document,

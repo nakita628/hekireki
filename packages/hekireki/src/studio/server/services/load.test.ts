@@ -2,11 +2,11 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
+import { NodeFileSystem } from '@effect/platform-node'
 import { Effect } from 'effect'
 import type { FileSystem } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
-import { fileSystemLayer } from '../../../file/index.js'
 import { parseSchemaFiles, readSchemaFiles } from './load.js'
 
 const dirs: string[] = []
@@ -22,7 +22,7 @@ function run<A, E extends { readonly message: string }>(
 ) {
   return Effect.runPromise(
     effect.pipe(
-      Effect.provide(fileSystemLayer),
+      Effect.provide(NodeFileSystem.layer),
       Effect.match({
         onSuccess: (value) => ({ ok: true, value }) as const,
         onFailure: (error) => ({ ok: false, error: error.message }) as const,

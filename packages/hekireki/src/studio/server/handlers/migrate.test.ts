@@ -3,10 +3,10 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
+import { NodeFileSystem } from '@effect/platform-node'
 import { Effect } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
-import { fileSystemLayer } from '../../../file/index.js'
 import { createStudioApp } from '../app.js'
 import { connectDatabase, createStudioState } from '../services/index.js'
 import type { disconnectedDatabase } from '../services/index.js'
@@ -53,7 +53,7 @@ async function setup() {
   writeFileSync(path.join(dir, 'migrations', '20260101000000_init', 'migration.sql'), INIT_SQL)
   writeFileSync(path.join(dir, 'migrations', 'migration_lock.toml'), 'provider = "sqlite"\n')
   const state = createStudioState({ schemaPath })
-  const snapshot = await Effect.runPromise(Effect.provide(state.reload(), fileSystemLayer))
+  const snapshot = await Effect.runPromise(Effect.provide(state.reload(), NodeFileSystem.layer))
   const db = await Effect.runPromise(
     Effect.provide(
       connectDatabase({
@@ -66,7 +66,7 @@ async function setup() {
         schemaDir: dir,
         env: {},
       }),
-      fileSystemLayer,
+      NodeFileSystem.layer,
     ),
   )
   states.push(db)

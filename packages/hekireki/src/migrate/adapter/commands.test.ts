@@ -2,10 +2,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
+import { NodeFileSystem } from '@effect/platform-node'
 import { Effect } from 'effect'
 import { afterAll, describe, expect, it } from 'vite-plus/test'
 
-import { fileSystemLayer } from '../../file/index.js'
 import { connectDatabase } from '../../studio/server/services/database.js'
 import { migrationName } from '../domain/history.js'
 import {
@@ -76,14 +76,14 @@ function openOn(project: ReturnType<typeof makeProject>) {
     })
     const migrations = yield* readMigrationsList(project.migrations)
     return { db, driver, engine, files, migrations }
-  }).pipe(Effect.provide(fileSystemLayer))
+  }).pipe(Effect.provide(NodeFileSystem.layer))
 }
 
 describe('readMigrationsList', () => {
   it('reads every migration directory in order, with the lock beside them', async () => {
     const project = makeProject('history')
     const list = await Effect.runPromise(
-      readMigrationsList(project.migrations).pipe(Effect.provide(fileSystemLayer)),
+      readMigrationsList(project.migrations).pipe(Effect.provide(NodeFileSystem.layer)),
     )
     expect(list.migrationDirectories.map((directory) => directory.path)).toStrictEqual([
       '20260101000000_init',
@@ -97,7 +97,7 @@ describe('readMigrationsList', () => {
 
   it('reads a directory that is not there as an empty history', async () => {
     const list = await Effect.runPromise(
-      readMigrationsList(path.join(root, 'nowhere')).pipe(Effect.provide(fileSystemLayer)),
+      readMigrationsList(path.join(root, 'nowhere')).pipe(Effect.provide(NodeFileSystem.layer)),
     )
     expect(list.migrationDirectories).toStrictEqual([])
     expect(list.lockfile.content).toBeNull()
@@ -181,7 +181,7 @@ describe('applyStatements', () => {
         name,
         sql: statements.map((statement) => `${statement};`).join('\n'),
         provider: 'sqlite',
-      }).pipe(Effect.provide(fileSystemLayer)),
+      }).pipe(Effect.provide(NodeFileSystem.layer)),
     )
 
     // The database matches the schema before the step runs: the engine reads it through the very
@@ -205,7 +205,7 @@ describe('applyStatements', () => {
     expect(applied.results[1]?.affected).toBe(1)
 
     const migrations = await Effect.runPromise(
-      readMigrationsList(project.migrations).pipe(Effect.provide(fileSystemLayer)),
+      readMigrationsList(project.migrations).pipe(Effect.provide(NodeFileSystem.layer)),
     )
     await Effect.runPromise(
       markMigrationApplied({ engine: opened.engine, driver: opened.driver, migrations, name }),

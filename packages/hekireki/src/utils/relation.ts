@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { parseRelation } from '../utils/index.js'
+import { parseRelation } from './index.js'
 
 export type Cardinality = 'zero-one' | 'one' | 'zero-many' | 'many'
 

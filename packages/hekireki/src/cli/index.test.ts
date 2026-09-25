@@ -4,12 +4,11 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
-import { NodeServices } from '@effect/platform-node'
+import { NodeFileSystem, NodeServices } from '@effect/platform-node'
 import { Effect, Exit } from 'effect'
 import { CliError } from 'effect/unstable/cli'
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 
-import { fileSystemLayer } from '../file/index.js'
 import { DEFAULT_SCHEMA_PATHS } from './constants.js'
 import { hekirekiCli, resolveSchemaPath, studioBanner } from './index.js'
 
@@ -271,7 +270,7 @@ describe('resolveSchemaPath', () => {
               error: userMessageOf(error),
             }) as const,
         }),
-        fileSystemLayer,
+        NodeFileSystem.layer,
       ),
     )
 

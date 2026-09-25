@@ -3,10 +3,10 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
+import { NodeFileSystem } from '@effect/platform-node'
 import { Effect } from 'effect'
 import { afterAll, describe, expect, it } from 'vite-plus/test'
 
-import { fileSystemLayer } from '../../file/index.js'
 import { connectDatabase } from '../../studio/server/services/database.js'
 import { makeSchemaEngineAdapter } from './engine-adapter.js'
 import { engineCommand, openSchemaEngine } from './engine.js'
@@ -60,7 +60,7 @@ function openOn(file: string) {
       adapter: makeSchemaEngineAdapter(driver),
     })
     return { engine, db, files: [{ path: schemaPath, content: SCHEMA }] }
-  }).pipe(Effect.provide(fileSystemLayer))
+  }).pipe(Effect.provide(NodeFileSystem.layer))
 }
 
 describe('makeSchemaEngineAdapter', () => {

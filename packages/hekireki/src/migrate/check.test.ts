@@ -3,10 +3,10 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
+import { NodeFileSystem } from '@effect/platform-node'
 import { Effect, Exit } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
-import { fileSystemLayer } from '../file/index.js'
 import { DECISIONS_FILE } from './adapter/decisions-file.js'
 import { runMigrateCheck } from './check.js'
 import { planSql } from './domain/plan-sql.js'
@@ -98,7 +98,7 @@ function check(dir: string, url: string | null = 'file:./dev.db') {
         cwd: dir,
         env: {},
       }),
-      fileSystemLayer,
+      NodeFileSystem.layer,
     ),
   )
 }
@@ -418,7 +418,7 @@ END $hekireki$;
           cwd: dir,
           env: {},
         }),
-        fileSystemLayer,
+        NodeFileSystem.layer,
       ),
     )
     expect(summarize(again)).toMatchObject({ blocking: 0, failed: 0, ok: true })

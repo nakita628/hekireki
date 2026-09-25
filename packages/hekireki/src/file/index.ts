@@ -1,10 +1,5 @@
-import { NodeFileSystem } from '@effect/platform-node'
 import { Effect, FileSystem, Option, Stream } from 'effect'
 
-/** The Node.js `FileSystem` service every function below reads from; provide it once at the program boundary. */
-export const fileSystemLayer = NodeFileSystem.layer
-
-/** Reads a UTF-8 text file. */
 export function readFile(path: string) {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem

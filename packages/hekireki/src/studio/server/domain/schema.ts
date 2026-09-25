@@ -1,8 +1,8 @@
 import type { DMMF } from '@prisma/generator-helper'
 import * as z from 'zod'
 
-import { erKey, erRelations } from '../../../helper/relation.js'
 import { isAnnotationLine } from '../../../utils/index.js'
+import { erKey, erRelations } from '../../../utils/relation.js'
 
 const DefaultValue = z
   .union([
@@ -87,7 +87,7 @@ const Field = z
   .readonly()
   .meta({ description: 'A DMMF field as Prisma parsed it' })
 
-// Stays a DMMF model: makeRelations hands it to helper/relation.ts, which is typed on Prisma's own.
+// Stays a DMMF model: makeRelations hands it to utils/relation.ts, which is typed on Prisma's own.
 const Model = z.custom<DMMF.Model>().meta({ description: 'A DMMF model as Prisma parsed it' })
 
 // The part of a DMMF index the renderers read.

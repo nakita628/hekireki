@@ -31,7 +31,7 @@ type Cardinality = 'zero-one' | 'one' | 'zero-many' | 'many'
 type Relation = {
   readonly id: string
   /** What the edge is dashed on, and what decides the handle it hangs off; see `RelationOrigin`
-   *  (helper/relation.ts). Dashed is "no foreign key backs this", not "many to many". */
+   *  (utils/relation.ts). Dashed is "no foreign key backs this", not "many to many". */
   readonly origin: 'inferred' | 'annotated' | 'implicit-many-to-many'
   readonly onDelete: string | null
   readonly onUpdate?: string | null

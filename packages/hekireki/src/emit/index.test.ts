@@ -2,10 +2,10 @@ import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 
+import { NodeFileSystem } from '@effect/platform-node'
 import { Effect } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
-import { fileSystemLayer } from '../file/index.js'
 import { FormatError } from '../format/index.js'
 import { emit, emitMany, emitRaw } from './index.js'
 
@@ -18,7 +18,7 @@ afterEach(async () => {
 })
 
 const run = <A, E>(effect: Effect.Effect<A, E, Effect.Services<ReturnType<typeof emit>>>) =>
-  Effect.runPromise(Effect.provide(effect, fileSystemLayer))
+  Effect.runPromise(Effect.provide(effect, NodeFileSystem.layer))
 
 describe('emit', () => {
   it('formats and writes a TS file', async () => {

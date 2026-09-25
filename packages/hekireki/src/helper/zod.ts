@@ -3,7 +3,7 @@ import {
   parseDocumentWithoutAnnotations,
   schemaFromFields,
 } from '../utils/index.js'
-import { makePropertiesGenerator, validationSchemas } from './validation-schema.js'
+import { makePropertiesGenerator, validationSchemas } from '../utils/validation-schema.js'
 
 export function makeZodInfer(modelName: string) {
   return `export type ${modelName} = z.infer<typeof ${modelName}Schema>`

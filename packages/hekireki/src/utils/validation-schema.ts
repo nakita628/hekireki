@@ -1,4 +1,4 @@
-import { extractObjectType, groupByModel, isFields, makeCommentBlock } from '../utils/index.js'
+import { extractObjectType, groupByModel, isFields, makeCommentBlock } from './index.js'
 
 export function makePropertiesGenerator(
   libraryPrefix: string,

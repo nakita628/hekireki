@@ -2,13 +2,13 @@ import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
+import { NodeFileSystem } from '@effect/platform-node'
 import { Effect, Fiber, Stream } from 'effect'
 import type { FileSystem, PlatformError } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
 import {
   exists,
-  fileSystemLayer,
   isDirectory,
   makeDirectory,
   readDirectory,
@@ -32,11 +32,11 @@ function tmp() {
 }
 
 function run<A>(effect: Effect.Effect<A, PlatformError.PlatformError, FileSystem.FileSystem>) {
-  return Effect.runPromise(Effect.provide(effect, fileSystemLayer))
+  return Effect.runPromise(Effect.provide(effect, NodeFileSystem.layer))
 }
 
 function fail(effect: Effect.Effect<unknown, PlatformError.PlatformError, FileSystem.FileSystem>) {
-  return Effect.runPromise(Effect.provide(Effect.flip(effect), fileSystemLayer))
+  return Effect.runPromise(Effect.provide(Effect.flip(effect), NodeFileSystem.layer))
 }
 
 describe('readFile', () => {
@@ -104,7 +104,7 @@ describe('watch', () => {
         yield* Effect.sleep('200 millis')
         writeFileSync(file, 'b')
         return yield* Fiber.join(fiber).pipe(Effect.timeout('3 seconds'))
-      }).pipe(Effect.provide(fileSystemLayer)),
+      }).pipe(Effect.provide(NodeFileSystem.layer)),
     )
     expect([...events].map((e) => e.path)).toStrictEqual(['schema.prisma'])
   })

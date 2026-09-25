@@ -2,11 +2,11 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
+import { NodeFileSystem } from '@effect/platform-node'
 import { Effect, Exit } from 'effect'
 import type { FileSystem } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
-import { fileSystemLayer } from '../file/index.js'
 import { SeedConfigError } from './errors.js'
 import { CONFIG_FILE, loadSeedConfig, readConfigUrl, resolveConfigPath } from './load-config.js'
 
@@ -23,7 +23,7 @@ function tmp() {
 }
 
 function run<A, E>(effect: Effect.Effect<A, E, FileSystem.FileSystem>) {
-  return Effect.runPromiseExit(effect.pipe(Effect.provide(fileSystemLayer)))
+  return Effect.runPromiseExit(effect.pipe(Effect.provide(NodeFileSystem.layer)))
 }
 
 function failure(exit: Exit.Exit<unknown, unknown>) {
@@ -107,7 +107,7 @@ describe('loadSeedConfig', () => {
     const other = path.join(dir, 'bad.config.ts')
     writeFileSync(other, `export default { models: { User: { data: [{ id: () => 1 }] } } }\n`)
     const bad = await Effect.runPromiseExit(
-      loadSeedConfig(other).pipe(Effect.provide(fileSystemLayer), Effect.flip),
+      loadSeedConfig(other).pipe(Effect.provide(NodeFileSystem.layer), Effect.flip),
     )
     expect(Exit.isSuccess(bad)).toBe(true)
     if (!Exit.isSuccess(bad)) return
@@ -176,7 +176,7 @@ export default config
       `export default { seed: 'x', nullRate: 2, models: { User: { count: -1, fields: { age: { nullRate: 'no' } } } } }\n`,
     )
     const exit = await Effect.runPromiseExit(
-      loadSeedConfig(file).pipe(Effect.provide(fileSystemLayer), Effect.flip),
+      loadSeedConfig(file).pipe(Effect.provide(NodeFileSystem.layer), Effect.flip),
     )
     expect(Exit.isSuccess(exit)).toBe(true)
     if (!Exit.isSuccess(exit)) return
@@ -199,7 +199,7 @@ export default config
       `export default { seeds: 1, models: { User: { fields: { age: { maximum: 3 } } } } }\n`,
     )
     const exit = await Effect.runPromiseExit(
-      loadSeedConfig(file).pipe(Effect.provide(fileSystemLayer), Effect.flip),
+      loadSeedConfig(file).pipe(Effect.provide(NodeFileSystem.layer), Effect.flip),
     )
     expect(Exit.isSuccess(exit)).toBe(true)
     if (!Exit.isSuccess(exit)) return
@@ -401,7 +401,7 @@ describe('loadSeedConfig, every option checked', () => {
     const file = path.join(dir, 'hekireki.config.ts')
     writeFileSync(file, `export default { ${option} }\n`)
     const exit = await Effect.runPromiseExit(
-      loadSeedConfig(file).pipe(Effect.provide(fileSystemLayer), Effect.flip),
+      loadSeedConfig(file).pipe(Effect.provide(NodeFileSystem.layer), Effect.flip),
     )
     expect(Exit.isSuccess(exit)).toBe(true)
     if (!Exit.isSuccess(exit)) return
@@ -491,7 +491,7 @@ describe('loadSeedConfig, every option checked', () => {
     const file = path.join(dir, 'hekireki.config.ts')
     writeFileSync(file, `${source}\n`)
     const exit = await Effect.runPromiseExit(
-      loadSeedConfig(file).pipe(Effect.provide(fileSystemLayer), Effect.flip),
+      loadSeedConfig(file).pipe(Effect.provide(NodeFileSystem.layer), Effect.flip),
     )
     expect(Exit.isSuccess(exit)).toBe(true)
     if (!Exit.isSuccess(exit)) return
@@ -503,7 +503,7 @@ describe('loadSeedConfig, every option checked', () => {
     const file = path.join(dir, 'hekireki.config.ts')
     writeFileSync(file, "throw new Error('no database today')\nexport default {}\n")
     const exit = await Effect.runPromiseExit(
-      loadSeedConfig(file).pipe(Effect.provide(fileSystemLayer), Effect.flip),
+      loadSeedConfig(file).pipe(Effect.provide(NodeFileSystem.layer), Effect.flip),
     )
     expect(Exit.isSuccess(exit)).toBe(true)
     if (!Exit.isSuccess(exit)) return

@@ -2,10 +2,10 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
+import { NodeFileSystem } from '@effect/platform-node'
 import { Effect } from 'effect'
 import { afterAll, describe, expect, it } from 'vite-plus/test'
 
-import { fileSystemLayer } from '../../file/index.js'
 import { DECISIONS_FILE, readDecisions, writeDecisions } from './decisions-file.js'
 
 const root = mkdtempSync(path.join(tmpdir(), 'hekireki-decisions-'))
@@ -33,10 +33,12 @@ describe('readDecisions and writeDecisions', () => {
       },
     ]
     expect(
-      await Effect.runPromise(Effect.provide(writeDecisions({ file, decisions }), fileSystemLayer)),
+      await Effect.runPromise(
+        Effect.provide(writeDecisions({ file, decisions }), NodeFileSystem.layer),
+      ),
     ).toBe(file)
     expect(
-      await Effect.runPromise(Effect.provide(readDecisions(file), fileSystemLayer)),
+      await Effect.runPromise(Effect.provide(readDecisions(file), NodeFileSystem.layer)),
     ).toStrictEqual(decisions)
   })
 
@@ -50,7 +52,7 @@ describe('readDecisions and writeDecisions', () => {
             { kind: 'not-null', modelName: 'User', field: 'name', choice: 'value', value: 'a' },
           ],
         }),
-        fileSystemLayer,
+        NodeFileSystem.layer,
       ),
     )
     expect(JSON.parse(readFileSync(file, 'utf8'))).toStrictEqual({
@@ -66,13 +68,15 @@ describe('readDecisions and writeDecisions', () => {
         ],
       }),
     )
-    const edited = await Effect.runPromise(Effect.provide(readDecisions(file), fileSystemLayer))
+    const edited = await Effect.runPromise(
+      Effect.provide(readDecisions(file), NodeFileSystem.layer),
+    )
     expect(edited[0]?.value).toBe('b')
   })
 
   it('reads a file that is not there as no decisions', async () => {
     expect(
-      await Effect.runPromise(Effect.provide(readDecisions(fileIn('empty')), fileSystemLayer)),
+      await Effect.runPromise(Effect.provide(readDecisions(fileIn('empty')), NodeFileSystem.layer)),
     ).toStrictEqual([])
   })
 
@@ -81,15 +85,15 @@ describe('readDecisions and writeDecisions', () => {
   it('refuses a file it cannot make sense of, naming it', async () => {
     const file = fileIn('broken')
     await Effect.runPromise(
-      Effect.provide(writeDecisions({ file, decisions: [] }), fileSystemLayer),
+      Effect.provide(writeDecisions({ file, decisions: [] }), NodeFileSystem.layer),
     )
     writeFileSync(file, '{ not json')
     await expect(
-      Effect.runPromise(Effect.provide(readDecisions(file), fileSystemLayer)),
+      Effect.runPromise(Effect.provide(readDecisions(file), NodeFileSystem.layer)),
     ).rejects.toThrow(`Cannot read the decisions in ${file}`)
     writeFileSync(file, '{"decisions":[{"kind":1}]}')
     await expect(
-      Effect.runPromise(Effect.provide(readDecisions(file), fileSystemLayer)),
+      Effect.runPromise(Effect.provide(readDecisions(file), NodeFileSystem.layer)),
     ).rejects.toThrow('decisions.0.kind')
   })
 
@@ -110,7 +114,7 @@ describe('readDecisions and writeDecisions', () => {
             },
           ],
         }),
-        fileSystemLayer,
+        NodeFileSystem.layer,
       ),
     )
     await Effect.runPromise(
@@ -121,11 +125,11 @@ describe('readDecisions and writeDecisions', () => {
             { kind: 'not-null', modelName: 'User', field: 'name', choice: 'value', value: 'a' },
           ],
         }),
-        fileSystemLayer,
+        NodeFileSystem.layer,
       ),
     )
     expect(
-      await Effect.runPromise(Effect.provide(readDecisions(file), fileSystemLayer)),
+      await Effect.runPromise(Effect.provide(readDecisions(file), NodeFileSystem.layer)),
     ).toHaveLength(1)
   })
 
@@ -140,13 +144,13 @@ describe('readDecisions and writeDecisions', () => {
               { kind: 'not-null', modelName: 'User', field: 'name', choice: 'clamp', value: null },
             ],
           }),
-          fileSystemLayer,
+          NodeFileSystem.layer,
         ),
       ),
     ).rejects.toThrow('decisions.0.choice: The check does not offer this choice.')
     // Nothing was written, so there is nothing to stop the next check.
     expect(
-      await Effect.runPromise(Effect.provide(readDecisions(file), fileSystemLayer)),
+      await Effect.runPromise(Effect.provide(readDecisions(file), NodeFileSystem.layer)),
     ).toStrictEqual([])
     mkdirSync(path.dirname(file), { recursive: true })
     writeFileSync(
@@ -156,7 +160,7 @@ describe('readDecisions and writeDecisions', () => {
       }),
     )
     await expect(
-      Effect.runPromise(Effect.provide(readDecisions(file), fileSystemLayer)),
+      Effect.runPromise(Effect.provide(readDecisions(file), NodeFileSystem.layer)),
     ).rejects.toThrow('decisions.0.kind: There is no check of this kind.')
   })
 })
