@@ -12,7 +12,7 @@ class Follow extends Model
 {
     protected $table = 'follows';
 
-    protected $primaryKey = null;
+    protected $primaryKey = 'follower_id';
 
     public $incrementing = false;
 
@@ -27,6 +27,24 @@ class Follow extends Model
     protected $casts = [
         'since' => 'datetime',
     ];
+
+    protected function setKeysForSaveQuery($query)
+    {
+        foreach (['follower_id', 'following_id'] as $column) {
+            $query->where($column, '=', $this->original[$column] ?? $this->getAttribute($column));
+        }
+
+        return $query;
+    }
+
+    protected function setKeysForSelectQuery($query)
+    {
+        foreach (['follower_id', 'following_id'] as $column) {
+            $query->where($column, '=', $this->original[$column] ?? $this->getAttribute($column));
+        }
+
+        return $query;
+    }
 
     public function follower(): BelongsTo
     {

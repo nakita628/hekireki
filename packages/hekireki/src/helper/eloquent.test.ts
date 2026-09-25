@@ -475,7 +475,7 @@ class User extends Model
 }`)
   })
 
-  it('disables the primary key for composite primary key models', () => {
+  it('stands the first column for a composite key, and names every column of it to save or select', () => {
     const like = makeModel({
       name: 'Like',
       primaryKey: { name: null, fields: ['userId', 'postId'] },
@@ -523,7 +523,7 @@ class Like extends Model
 {
     protected $table = 'Like';
 
-    protected $primaryKey = null;
+    protected $primaryKey = 'userId';
 
     public $incrementing = false;
 
@@ -533,6 +533,24 @@ class Like extends Model
         'userId',
         'postId',
     ];
+
+    protected function setKeysForSaveQuery($query)
+    {
+        foreach (['userId', 'postId'] as $column) {
+            $query->where($column, '=', $this->original[$column] ?? $this->getAttribute($column));
+        }
+
+        return $query;
+    }
+
+    protected function setKeysForSelectQuery($query)
+    {
+        foreach (['userId', 'postId'] as $column) {
+            $query->where($column, '=', $this->original[$column] ?? $this->getAttribute($column));
+        }
+
+        return $query;
+    }
 
     public function user(): BelongsTo
     {
@@ -1079,6 +1097,7 @@ class Counter extends Model
     public $timestamps = false;
 
     protected $fillable = [
+        'id',
         'value',
     ];
 
@@ -1201,7 +1220,7 @@ class Event extends Model
 })
 
 describe('ulid primary key', () => {
-  it('uses the HasUlids trait for ulid() primary keys', () => {
+  it('uses the HasUlids trait for ulid() primary keys, making them upper case as Prisma Client does', () => {
     const ticket = makeModel({
       name: 'Ticket',
       fields: [
@@ -1222,6 +1241,7 @@ namespace App\\Models;
 
 use Illuminate\\Database\\Eloquent\\Concerns\\HasUlids;
 use Illuminate\\Database\\Eloquent\\Model;
+use Illuminate\\Support\\Str;
 
 class Ticket extends Model
 {
@@ -1238,6 +1258,190 @@ class Ticket extends Model
     protected $fillable = [
         'label',
     ];
+
+    public function newUniqueId()
+    {
+        return (string) Str::ulid();
+    }
 }`)
+  })
+})
+
+describe('what examples/eloquent found', () => {
+  const autoincrementId = makeField({
+    name: 'id',
+    type: 'Int',
+    isId: true,
+    hasDefaultValue: true,
+    default: { name: 'autoincrement', args: [] },
+  })
+
+  it('quotes an enum value PHP would read as the end of the string', () => {
+    const mood: DMMF.DatamodelEnum = {
+      name: 'Mood',
+      dbName: null,
+      values: [
+        { name: 'FINE', dbName: "it's fine" },
+        { name: 'ESCAPED', dbName: 'back\\slash\\' },
+      ],
+    }
+
+    expect(eloquentEnum(mood, 'App\\Models')).toBe(`<?php
+
+namespace App\\Models;
+
+enum Mood: string
+{
+    case FINE = 'it\\'s fine';
+    case ESCAPED = 'back\\\\slash\\\\';
+}`)
+  })
+
+  it('writes a */ in a doc comment so the docblock goes on', () => {
+    const model = makeModel({
+      name: 'Note',
+      documentation: 'Ends early: */ and goes on.',
+      fields: [autoincrementId],
+    })
+
+    expect(eloquentModels([model], 'App\\Models')).toContain(`/**
+ * Ends early: *\\/ and goes on.
+ */
+class Note extends Model`)
+  })
+
+  it('reads a self relation whose list side comes first as a hasMany, and a self many-to-many by field name', () => {
+    const category = makeModel({
+      name: 'Category',
+      fields: [
+        autoincrementId,
+        makeField({
+          name: 'children',
+          type: 'Category',
+          kind: 'object',
+          isList: true,
+          relationName: 'Tree',
+        }),
+        makeField({ name: 'parentId', type: 'Int', isRequired: false }),
+        makeField({
+          name: 'parent',
+          type: 'Category',
+          kind: 'object',
+          isRequired: false,
+          relationName: 'Tree',
+          relationFromFields: ['parentId'],
+          relationToFields: ['id'],
+        }),
+        makeField({
+          name: 'following',
+          type: 'Category',
+          kind: 'object',
+          isList: true,
+          relationName: 'Follows',
+        }),
+        makeField({
+          name: 'followers',
+          type: 'Category',
+          kind: 'object',
+          isList: true,
+          relationName: 'Follows',
+        }),
+      ],
+    })
+
+    const result = eloquentModels([category], 'App\\Models')
+    expect(result).toContain(`        return $this->hasMany(Category::class, 'parentId');`)
+    // Of the two fields, `followers` sorts first: its own key is in A.
+    expect(result).toContain(`    public function following(): BelongsToMany
+    {
+        return $this->belongsToMany(Category::class, '_Follows', 'B', 'A');
+    }`)
+    expect(result).toContain(`    public function followers(): BelongsToMany
+    {
+        return $this->belongsToMany(Category::class, '_Follows', 'A', 'B');
+    }`)
+  })
+
+  it('puts the literal defaults on a new model, as the database holds them', () => {
+    const role: DMMF.DatamodelEnum = {
+      name: 'Role',
+      dbName: null,
+      values: [{ name: 'CUSTOMER', dbName: 'customer' }],
+    }
+    const model = makeModel({
+      name: 'Product',
+      fields: [
+        autoincrementId,
+        makeField({ name: 'weight', type: 'Float', hasDefaultValue: true, default: 0 }),
+        makeField({ name: 'stock', type: 'Int', hasDefaultValue: true, default: -1 }),
+        makeField({ name: 'price', type: 'Decimal', hasDefaultValue: true, default: 1.5 }),
+        makeField({
+          name: 'big',
+          type: 'BigInt',
+          hasDefaultValue: true,
+          default: '9007199254740993',
+        }),
+        makeField({ name: 'active', type: 'Boolean', hasDefaultValue: true, default: true }),
+        makeField({
+          name: 'label',
+          type: 'String',
+          hasDefaultValue: true,
+          default: 'it\'s "quoted" \\ back',
+        }),
+        makeField({
+          name: 'releasedAt',
+          type: 'DateTime',
+          dbName: 'released_at',
+          hasDefaultValue: true,
+          default: '2020-01-01T00:00:00.000Z',
+        }),
+        makeField({
+          name: 'role',
+          type: 'Role',
+          kind: 'enum',
+          hasDefaultValue: true,
+          default: 'CUSTOMER',
+        }),
+        makeField({
+          name: 'seenAt',
+          type: 'DateTime',
+          hasDefaultValue: true,
+          default: { name: 'now', args: [] },
+        }),
+      ],
+    })
+
+    expect(eloquentModels([model], 'App\\Models', undefined, [role]))
+      .toContain(`    protected $attributes = [
+        'weight' => 0.0,
+        'stock' => -1,
+        'price' => '1.5',
+        'big' => 9007199254740993,
+        'active' => true,
+        'label' => 'it\\'s "quoted" \\\\ back',
+        'released_at' => '2020-01-01 00:00:00',
+        'role' => 'customer',
+    ];`)
+  })
+
+  it('lets a key nothing generates be given through create()', () => {
+    const model = makeModel({
+      name: 'Coupon',
+      fields: [
+        makeField({
+          name: 'id',
+          type: 'String',
+          isId: true,
+          hasDefaultValue: true,
+          default: { name: 'cuid', args: [1] },
+        }),
+        makeField({ name: 'code', type: 'String' }),
+      ],
+    })
+
+    expect(eloquentModels([model], 'App\\Models')).toContain(`    protected $fillable = [
+        'id',
+        'code',
+    ];`)
   })
 })

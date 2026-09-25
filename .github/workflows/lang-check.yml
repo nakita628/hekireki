@@ -23,6 +23,7 @@ on:
       - test/**
       - examples/active-record/**
       - examples/ecto/**
+      - examples/eloquent/**
       - examples/gorm/**
       - examples/kysely/**
       - examples/sqlalchemy/**
@@ -164,16 +165,16 @@ jobs:
       # `prisma generate` finds `provider = "hekireki-activerecord"` on PATH. The install above
       # ran before dist/ was built, so it linked none of hekireki's commands; linking the built
       # package puts them there, as the Test workflow does for examples/migrate.
-      - if: contains(fromJSON('["activerecord","kysely","gorm","sqlalchemy","ecto"]'), matrix.lang)
+      - if: contains(fromJSON('["activerecord","kysely","gorm","sqlalchemy","ecto","eloquent"]'), matrix.lang)
         run: vp link ./packages/hekireki
       - if: matrix.lang == 'activerecord'
         run: vp run --filter ./examples/active-record demo
 
-      # examples/{kysely,gorm,sqlalchemy,ecto} end to end, as active-record: each schema is
-      # generated, pushed to SQLite and used through the real library (every scalar, default,
+      # examples/{kysely,gorm,sqlalchemy,ecto,eloquent} end to end, as active-record: each schema
+      # is generated, pushed to SQLite and used through the real library (every scalar, default,
       # key, relation and onDelete), with the language's own checks (tsc, gofmt and go vet,
-      # mypy --strict, mix compile --warnings-as-errors) on the generated code.
-      - if: matrix.lang == 'kysely' || matrix.lang == 'gorm' || matrix.lang == 'sqlalchemy' || matrix.lang == 'ecto'
+      # mypy --strict, mix compile --warnings-as-errors, php -l) on the generated code.
+      - if: matrix.lang == 'kysely' || matrix.lang == 'gorm' || matrix.lang == 'sqlalchemy' || matrix.lang == 'ecto' || matrix.lang == 'eloquent'
         run: vp run --filter ./examples/${{ matrix.lang }} demo
 
   # Prove the published tarball still ships dist/ only. The language harnesses

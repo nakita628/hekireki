@@ -76,6 +76,15 @@ importers:
         specifier: 8.1.0-dev.7
         version: 8.1.0-dev.7(@types/node@26.6.2)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(better-sqlite3@13.0.3)(magicast@0.5.3)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@7.0.2)
 
+  examples/eloquent:
+    devDependencies:
+      hekireki:
+        specifier: workspace:*
+        version: link:../../packages/hekireki
+      prisma:
+        specifier: 8.1.0-dev.7
+        version: 8.1.0-dev.7(@types/node@26.6.2)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(better-sqlite3@13.0.3)(magicast@0.5.3)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@7.0.2)
+
   examples/gorm:
     devDependencies:
       hekireki:

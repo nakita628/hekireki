@@ -29,6 +29,10 @@ class User extends Model
         'interests',
     ];
 
+    protected $attributes = [
+        'role' => 'VIEWER',
+    ];
+
     protected $casts = [
         'role' => Role::class,
     ];

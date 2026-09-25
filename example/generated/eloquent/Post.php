@@ -33,6 +33,12 @@ class Post extends Model
         'author_id',
     ];
 
+    protected $attributes = [
+        'visibility' => 'link_only',
+        'published' => false,
+        'view_count' => 0,
+    ];
+
     protected $casts = [
         'visibility' => Visibility::class,
         'published' => 'boolean',

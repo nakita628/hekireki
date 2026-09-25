@@ -106,6 +106,7 @@ class User extends Model
     public $timestamps = false;
 
     protected $fillable = [
+        'id',
         'name',
         'role',
     ];
@@ -138,6 +139,7 @@ class BlogPost extends Model
     public $timestamps = false;
 
     protected $fillable = [
+        'id',
         'title',
         'authorId',
     ];
@@ -190,6 +192,10 @@ class Bare extends Model
     public $incrementing = false;
 
     public $timestamps = false;
+
+    protected $fillable = [
+        'id',
+    ];
 }`,
       },
     ])

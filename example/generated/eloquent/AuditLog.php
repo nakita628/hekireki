@@ -18,10 +18,15 @@ class AuditLog extends Model
     public $timestamps = false;
 
     protected $fillable = [
+        'id',
         'action',
         'payload',
         'signature',
         'logged_at',
+    ];
+
+    protected $attributes = [
+        'payload' => '{}',
     ];
 
     protected $casts = [

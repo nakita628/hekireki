@@ -21,6 +21,7 @@ class Profile extends Model
     public $timestamps = false;
 
     protected $fillable = [
+        'id',
         'user_id',
         'bio',
         'nickname',
@@ -30,6 +31,12 @@ class Profile extends Model
         'meta',
         'avatar',
         'last_seen',
+    ];
+
+    protected $attributes = [
+        'nickname' => 'anonymous',
+        'balance' => '0',
+        'verified' => false,
     ];
 
     protected $casts = [

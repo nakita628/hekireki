@@ -15,7 +15,7 @@ key, every `onDelete`, a self relation, an implicit many-to-many, a composite ke
 in it generates, creates the database, runs the check and RuboCop; see
 [active-record/README.md](active-record/README.md).
 
-Four more do the same for other generators, each on a schema written the way a Prisma schema is
+Five more do the same for other generators, each on a schema written the way a Prisma schema is
 written with a corner of the target language in every model: every scalar SQLite has, every kind
 of `@default`, `@map` on models, fields and enum values, composite keys, a self relation, explicit
 and implicit many-to-many, every `onDelete`, and names the target language reserves. None of them
@@ -33,6 +33,9 @@ starts from nothing.
   [sqlalchemy/README.md](sqlalchemy/README.md). Python 3.11 or newer, in a virtualenv of its own.
 - `ecto/`: the schemas `hekireki-ecto` writes, compiled with warnings as errors and used through
   Ecto on `ecto_sqlite3`; see [ecto/README.md](ecto/README.md). Elixir 1.14 or newer.
+- `eloquent/`: the models `hekireki-eloquent` writes, read by `php -l` and used through Eloquent
+  (`illuminate/database` 12) on SQLite; see [eloquent/README.md](eloquent/README.md). PHP 8.2 or
+  newer with `pdo_sqlite`.
 
 `sqlite/`, `mysql/` and `postgresql/` are small projects to try `hekireki seed` and `hekireki studio` on, one per database. Each is a
 `schema.prisma` with the `prisma-client` and `hekireki-seed` generators, the schema module the
