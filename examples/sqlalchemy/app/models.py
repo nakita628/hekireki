@@ -1,4 +1,4 @@
-from sqlalchemy import BigInteger, Column, Dialect, Enum, ForeignKey, Index, Integer, JSON, String, Table, TypeDecorator, UniqueConstraint, func
+from sqlalchemy import BigInteger, Column, DECIMAL, Dialect, ForeignKey, Index, Integer, JSON, REAL, String, Table, Text, TypeDecorator, text
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from typing import Any, Optional
@@ -32,26 +32,37 @@ def utc_date_time_ddl(type_: UtcDateTime, compiler: Any, **kw: Any) -> str:
     return "DATETIME"
 
 
+class Jsonb(JSON):
+    """SQLite's Json column, which Prisma Migrate declares JSONB and fills with JSON text."""
+
+
+@compiles(Jsonb)
+def jsonb_ddl(type_: Jsonb, compiler: Any, **kw: Any) -> str:
+    return "JSONB"
+
+
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
 class Base(DeclarativeBase):
-    type_annotation_map = {datetime: UtcDateTime}
+    type_annotation_map = {datetime: UtcDateTime, str: Text, float: REAL, DecimalType: DECIMAL}
 
 follows = Table(
     "_Follows",
     Base.metadata,
-    Column("A", Integer, ForeignKey("accounts.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True),
-    Column("B", Integer, ForeignKey("accounts.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True),
+    Column("A", Integer, ForeignKey("accounts.id", ondelete="CASCADE", onupdate="CASCADE", name="_Follows_A_fkey"), nullable=False),
+    Column("B", Integer, ForeignKey("accounts.id", ondelete="CASCADE", onupdate="CASCADE", name="_Follows_B_fkey"), nullable=False),
+    Index("_Follows_AB_unique", "A", "B", unique=True),
     Index("_Follows_B_index", "B"),
 )
 
 category_to_product = Table(
     "_CategoryToProduct",
     Base.metadata,
-    Column("A", Integer, ForeignKey("categories.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True),
-    Column("B", String, ForeignKey("products.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True),
+    Column("A", Integer, ForeignKey("categories.id", ondelete="CASCADE", onupdate="CASCADE", name="_CategoryToProduct_A_fkey"), nullable=False),
+    Column("B", Text, ForeignKey("products.id", ondelete="CASCADE", onupdate="CASCADE", name="_CategoryToProduct_B_fkey"), nullable=False),
+    Index("_CategoryToProduct_AB_unique", "A", "B", unique=True),
     Index("_CategoryToProduct_B_index", "B"),
 )
 
@@ -60,15 +71,20 @@ class Account(Base):
     __tablename__ = "accounts"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    email: Mapped[str] = mapped_column(unique=True)
-    role: Mapped[str] = mapped_column(Enum("MEMBER", "admin", "owner", name="role"), default="MEMBER")
-    metadata_: Mapped[Optional[dict[str, Any]]] = mapped_column("metadata", JSON(none_as_null=True))
+    email: Mapped[str]
+    role: Mapped[str] = mapped_column(default="MEMBER", server_default=text("'MEMBER'"))
+    metadata_: Mapped[Optional[dict[str, Any]]] = mapped_column("metadata", Jsonb(none_as_null=True))
     registry_: Mapped[Optional[str]] = mapped_column("registry")
     class_: Mapped[Optional[str]] = mapped_column("class")
-    locale: Mapped[str] = mapped_column(default="en")
-    created_at: Mapped[datetime] = mapped_column(default=utc_now, server_default=func.now())
+    locale: Mapped[str] = mapped_column(default="en", server_default=text("'en'"))
+    created_at: Mapped[datetime] = mapped_column(default=utc_now, server_default=text("CURRENT_TIMESTAMP"))
     updated_at: Mapped[datetime] = mapped_column(default=utc_now, onupdate=utc_now)
-    manager_id: Mapped[Optional[int]] = mapped_column(ForeignKey("accounts.id", ondelete="SET NULL", onupdate="CASCADE"))
+    manager_id: Mapped[Optional[int]] = mapped_column(ForeignKey("accounts.id", ondelete="SET NULL", onupdate="CASCADE", name="accounts_manager_id_fkey"))
+
+    __table_args__ = (
+        Index("accounts_email_key", "email", unique=True),
+        {"sqlite_autoincrement": True},
+    )
 
     manager: Mapped[Optional["Account"]] = relationship(remote_side=[id], back_populates="reports")
     reports: Mapped[list["Account"]] = relationship(back_populates="manager")
@@ -84,9 +100,13 @@ class Profile(Base):
     __tablename__ = "profiles"
 
     id: Mapped[str] = mapped_column(primary_key=True)
-    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE", onupdate="CASCADE"), unique=True)
+    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE", onupdate="CASCADE", name="profiles_account_id_fkey"))
     bio: Mapped[Optional[str]]
     avatar: Mapped[Optional[bytes]]
+
+    __table_args__ = (
+        Index("profiles_account_id_key", "account_id", unique=True),
+    )
 
     account: Mapped["Account"] = relationship(back_populates="profile")
 
@@ -94,19 +114,20 @@ class Product(Base):
     __tablename__ = "products"
 
     id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid_mod.uuid4()))
-    sku: Mapped[str] = mapped_column(unique=True)
+    sku: Mapped[str]
     name: Mapped[str]
     price: Mapped[DecimalType]
     weight: Mapped[Optional[float]]
-    stock: Mapped[int] = mapped_column(default=0)
-    views: Mapped[int] = mapped_column(BigInteger, default=0)
-    active: Mapped[bool] = mapped_column(default=True)
-    attributes: Mapped[dict[str, Any]] = mapped_column(JSON)
+    stock: Mapped[int] = mapped_column(default=0, server_default=text("0"))
+    views: Mapped[int] = mapped_column(BigInteger, default=0, server_default=text("0"))
+    active: Mapped[bool] = mapped_column(default=True, server_default=text("true"))
+    attributes: Mapped[dict[str, Any]] = mapped_column(Jsonb)
     thumbnail: Mapped[Optional[bytes]]
     released_at: Mapped[Optional[datetime]]
-    type: Mapped[str] = mapped_column(default="physical")
+    type: Mapped[str] = mapped_column(default="physical", server_default=text("'physical'"))
 
     __table_args__ = (
+        Index("products_sku_key", "sku", unique=True),
         Index("products_name_idx", "name"),
     )
 
@@ -118,10 +139,11 @@ class Category(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str]
-    parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("categories.id", ondelete="CASCADE", onupdate="CASCADE"))
+    parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("categories.id", ondelete="CASCADE", onupdate="CASCADE", name="categories_parent_id_fkey"))
 
     __table_args__ = (
-        UniqueConstraint("parent_id", "name"),
+        Index("categories_parent_id_name_key", "parent_id", "name", unique=True),
+        {"sqlite_autoincrement": True},
     )
 
     parent: Mapped[Optional["Category"]] = relationship(remote_side=[id], back_populates="children")
@@ -132,13 +154,14 @@ class Order(Base):
     __tablename__ = "Order"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    status: Mapped[str] = mapped_column(Enum("pending", "paid", "cancelled", name="order_status"), default="pending")
-    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="RESTRICT", onupdate="CASCADE"))
+    status: Mapped[str] = mapped_column(default="pending", server_default=text("'pending'"))
+    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="RESTRICT", onupdate="CASCADE", name="Order_account_id_fkey"))
     note: Mapped[Optional[str]]
-    placed_at: Mapped[datetime] = mapped_column(default=utc_now, server_default=func.now())
+    placed_at: Mapped[datetime] = mapped_column(default=utc_now, server_default=text("CURRENT_TIMESTAMP"))
 
     __table_args__ = (
         Index("orders_by_account", "account_id", "status"),
+        {"sqlite_autoincrement": True},
     )
 
     account: Mapped["Account"] = relationship(back_populates="orders")
@@ -147,9 +170,9 @@ class Order(Base):
 class OrderLine(Base):
     __tablename__ = "order_lines"
 
-    order_id: Mapped[int] = mapped_column(ForeignKey("Order.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True)
-    product_id: Mapped[str] = mapped_column(ForeignKey("products.id", ondelete="RESTRICT", onupdate="CASCADE"), primary_key=True)
-    quantity: Mapped[int] = mapped_column(default=1)
+    order_id: Mapped[int] = mapped_column(ForeignKey("Order.id", ondelete="CASCADE", onupdate="CASCADE", name="order_lines_order_id_fkey"), primary_key=True)
+    product_id: Mapped[str] = mapped_column(ForeignKey("products.id", ondelete="RESTRICT", onupdate="CASCADE", name="order_lines_product_id_fkey"), primary_key=True)
+    quantity: Mapped[int] = mapped_column(default=1, server_default=text("1"))
     unit_price: Mapped[DecimalType]
 
     order: Mapped["Order"] = relationship(back_populates="lines")
@@ -160,10 +183,11 @@ class Search(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     query: Mapped[str]
-    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE", onupdate="CASCADE"))
+    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE", onupdate="CASCADE", name="searches_account_id_fkey"))
 
     __table_args__ = (
-        UniqueConstraint("account_id", "query"),
+        Index("searches_account_id_query_key", "account_id", "query", unique=True),
+        {"sqlite_autoincrement": True},
     )
 
     account: Mapped["Account"] = relationship(back_populates="searches")
@@ -173,8 +197,12 @@ class Transfer(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     amount: Mapped[DecimalType]
-    from_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="NO ACTION", onupdate="CASCADE"))
-    to_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="SET DEFAULT", onupdate="CASCADE"), default=1)
+    from_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="NO ACTION", onupdate="CASCADE", name="transfers_from_id_fkey"))
+    to_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="SET DEFAULT", onupdate="CASCADE", name="transfers_to_id_fkey"), default=1, server_default=text("1"))
+
+    __table_args__ = (
+        {"sqlite_autoincrement": True},
+    )
 
     from_: Mapped["Account"] = relationship(foreign_keys=[from_id], back_populates="sent")
     to: Mapped["Account"] = relationship(foreign_keys=[to_id], back_populates="received")

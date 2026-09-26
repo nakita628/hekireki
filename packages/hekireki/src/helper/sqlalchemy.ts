@@ -600,12 +600,11 @@ function sqlLiteral(
   if (field.kind === 'enum') {
     return quote(enumDef?.values.find((v) => v.name === value)?.dbName ?? String(value))
   }
-  if (typeof value === 'boolean') {
-    if (provider === 'mysql' && field.nativeType?.[0] === 'Bit') return value ? "b'1'" : "b'0'"
-    return value ? 'true' : 'false'
-  }
+  if (typeof value === 'boolean') return value ? 'true' : 'false'
+  // SQLAlchemy puts a MySQL default with a sign or a point in parentheses, which makes it an
+  // expression; quoted, MySQL reads it as the number all the same.
   if (typeof value === 'number' || ['Int', 'BigInt', 'Float', 'Decimal'].includes(field.type)) {
-    return String(value)
+    return provider === 'mysql' ? quote(String(value)) : String(value)
   }
   if (field.type === 'DateTime' && typeof value === 'string') {
     const iso = new Date(value).toISOString()
@@ -833,8 +832,13 @@ function generateColumn(
   if (isPk) colArgs.push('primary_key=True')
   if (isPk && isAutoincrement(field)) colArgs.push('autoincrement=True')
   // SQLAlchemy makes a lone integer key SERIAL or AUTO_INCREMENT unless told otherwise; Prisma
-  // Migrate does only for @default(autoincrement()).
-  if (field.isId && ['Int', 'BigInt'].includes(field.type) && !isAutoincrement(field)) {
+  // Migrate does only for @default(autoincrement()). SQLite's is AUTOINCREMENT either way.
+  if (
+    provider !== 'sqlite' &&
+    field.isId &&
+    ['Int', 'BigInt'].includes(field.type) &&
+    !isAutoincrement(field)
+  ) {
     colArgs.push('autoincrement=False')
   }
   // Prisma Migrate leaves a list's column nullable; the model reads it as a list all the same.
@@ -910,14 +914,6 @@ function generateColumn(
   return `    ${attrName}: Mapped[${typeHint}] = mapped_column(${colArgs.join(', ')})`
 }
 
-// The options Prisma Migrate gives each table: MySQL's character set and collation, and SQLite's
-// AUTOINCREMENT on an @default(autoincrement()) key.
-function tableOptions(provider: string, autoincrement: boolean) {
-  if (provider === 'mysql')
-    return '{"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}'
-  return provider === 'sqlite' && autoincrement ? '{"sqlite_autoincrement": True}' : null
-}
-
 function generateTableArgs(
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
@@ -970,10 +966,15 @@ function generateTableArgs(
       return `ForeignKeyConstraint([${localCols.map((c) => `"${c}"`).join(', ')}], [${targetCols.join(', ')}]${actions}, name="${name}")`
     })
 
-  const options = tableOptions(
-    provider,
-    model.fields.some((f) => f.isId && isAutoincrement(f)),
-  )
+  // The options Prisma Migrate gives each table: MySQL's character set and collation, and
+  // SQLite's AUTOINCREMENT on a lone Int key, whether or not it defaults to autoincrement() (a
+  // BigInt's is no INTEGER key, and goes without).
+  const options =
+    provider === 'mysql'
+      ? '{"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}'
+      : provider === 'sqlite' && model.fields.some((f) => f.isId && f.type === 'Int')
+        ? '{"sqlite_autoincrement": True}'
+        : null
   const allConstraints = [
     ...indexConstraints,
     ...fkConstraints,
