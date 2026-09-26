@@ -1,0 +1,19 @@
+# What `pnpm run setup` installs into .venv: Django for the checks, its drivers for PostgreSQL and
+# MySQL (provider.ts), and mypy with django-stubs for `typecheck`, with everything they pull in
+# pinned, so a run today and a run next year read the same code.
+Django==5.2.17
+asgiref==3.12.1
+sqlparse==0.6.0
+psycopg[binary]==3.3.6
+psycopg-binary==3.3.6
+PyMySQL==1.2.3
+mypy==2.3.1
+mypy_extensions==1.1.0
+librt==0.15.0
+pathspec==1.1.1
+ast_serialize==0.11.2
+django-stubs==6.1.1
+django-stubs-ext==6.1.1
+types-PyMySQL==1.2.0.20260923
+types-PyYAML==6.0.12.20260906
+typing_extensions==4.16.0

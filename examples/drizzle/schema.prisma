@@ -1,0 +1,27 @@
+datasource db {
+  provider = "sqlite"
+}
+
+generator client {
+  provider            = "prisma-client"
+  output              = "generated/client"
+  importFileExtension = "ts"
+}
+
+generator Hekireki-Drizzle {
+  provider = "hekireki-drizzle"
+  output   = "src/db/schema.ts"
+}
+
+model Event {
+  id        Int       @id @default(autoincrement())
+  title     String    @unique
+  at        DateTime
+  endsAt    DateTime? @map("ends_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  syncedAt  DateTime  @updatedAt @map("synced_at")
+  since     DateTime  @default("2020-01-01T00:00:00Z")
+
+  @@map("events")
+}

@@ -12,7 +12,11 @@ import {
   planEfCore,
 } from './efcore.js'
 
-const DEFAULT_OPTIONS = { namespace: 'Models', context: 'AppDbContext' }
+const DEFAULT_OPTIONS: Parameters<typeof planEfCore>[1] = {
+  namespace: 'Models',
+  context: 'AppDbContext',
+  provider: 'postgresql',
+}
 
 function fixture(schema: string, options = DEFAULT_OPTIONS) {
   const result = getDMMF({ datamodel: [['schema.prisma', schema]] })
@@ -597,8 +601,13 @@ public partial class Natives
       fileName: 'AppDbContext.cs',
       code: `#nullable enable
 
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
 
@@ -648,6 +657,7 @@ public partial class AppDbContext : DbContext
                 .HasColumnName("decimal");
             entity.Property(e => e.Boolean).HasColumnName("boolean");
             entity.Property(e => e.DateTime)
+                .HasConversion<UtcClockConverter>()
                 .HasColumnType("timestamp(3) without time zone")
                 .HasColumnName("dateTime");
             entity.Property(e => e.Json)
@@ -658,6 +668,7 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.Count).HasColumnName("count");
             entity.Property(e => e.List).HasColumnName("list");
             entity.Property(e => e.When)
+                .HasConversion<UtcClockListConverter, DateTimeListComparer>()
                 .HasColumnType("timestamp(3) without time zone[]")
                 .HasColumnName("when");
             entity.Property(e => e.Amounts)
@@ -725,15 +736,20 @@ public partial class AppDbContext : DbContext
                 .HasColumnName("exact");
             entity.Property(e => e.Numeric).HasColumnName("numeric");
             entity.Property(e => e.Stamp)
+                .HasConversion<UtcClockConverter>()
                 .HasColumnType("timestamp(0) without time zone")
                 .HasColumnName("stamp");
             entity.Property(e => e.StampAny)
+                .HasConversion<UtcClockConverter>()
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("stampAny");
             entity.Property(e => e.Zoned)
                 .HasPrecision(6)
+                .HasConversion<UtcConverter>()
                 .HasColumnName("zoned");
-            entity.Property(e => e.ZonedAny).HasColumnName("zonedAny");
+            entity.Property(e => e.ZonedAny)
+                .HasConversion<UtcConverter>()
+                .HasColumnName("zonedAny");
             entity.Property(e => e.Day).HasColumnName("day");
             entity.Property(e => e.Clock)
                 .HasPrecision(3)
@@ -764,6 +780,38 @@ public partial class AppDbContext : DbContext
     }
 
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
+}
+
+file sealed class UtcClockConverter : ValueConverter<DateTime, DateTime>
+{
+    public UtcClockConverter()
+        : base(v => DateTime.SpecifyKind(v.Kind == DateTimeKind.Local ? v.ToUniversalTime() : v, DateTimeKind.Unspecified), v => DateTime.SpecifyKind(v, DateTimeKind.Utc))
+    {
+    }
+}
+
+file sealed class UtcClockListConverter : ValueConverter<List<DateTime>, List<DateTime>>
+{
+    public UtcClockListConverter()
+        : base(v => v.Select(d => DateTime.SpecifyKind(d.Kind == DateTimeKind.Local ? d.ToUniversalTime() : d, DateTimeKind.Unspecified)).ToList(), v => v.Select(d => DateTime.SpecifyKind(d, DateTimeKind.Utc)).ToList())
+    {
+    }
+}
+
+file sealed class UtcConverter : ValueConverter<DateTime, DateTime>
+{
+    public UtcConverter()
+        : base(v => DateTime.SpecifyKind(v.Kind == DateTimeKind.Local ? v.ToUniversalTime() : v, DateTimeKind.Utc), v => v)
+    {
+    }
+}
+
+file sealed class DateTimeListComparer : ValueComparer<List<DateTime>>
+{
+    public DateTimeListComparer()
+        : base((l, r) => l == null ? r == null : r != null && l.SequenceEqual(r), v => v.Aggregate(0, (h, d) => HashCode.Combine(h, d)), v => v.ToList())
+    {
+    }
 }
 `,
     })
@@ -815,9 +863,9 @@ public partial class Literal
 
     public List<int>? None { get; set; } = new List<int>();
 
-    public DateTime Stamp { get; set; } = new DateTime(2020, 1, 1, 3, 34, 56, 123, 456, DateTimeKind.Unspecified);
+    public DateTime Stamp { get; set; } = new DateTime(2020, 1, 1, 3, 34, 56, 123, DateTimeKind.Utc);
 
-    public DateTime Zoned { get; set; } = new DateTime(2020, 1, 1, 3, 34, 56, 123, 456, DateTimeKind.Utc);
+    public DateTime Zoned { get; set; } = new DateTime(2020, 1, 1, 3, 34, 56, 123, DateTimeKind.Utc);
 
     public DateOnly Day { get; set; } = new DateOnly(2020, 1, 2);
 
@@ -825,7 +873,7 @@ public partial class Literal
 
     public DateTimeOffset ClockTz { get; set; }
 
-    public List<DateTime>? Stamps { get; set; } = new List<DateTime> { new DateTime(2019, 12, 31, 15, 0, 0, 0, DateTimeKind.Unspecified) };
+    public List<DateTime>? Stamps { get; set; } = new List<DateTime> { new DateTime(2019, 12, 31, 15, 0, 0, 0, DateTimeKind.Utc) };
 
     public BitArray Bits { get; set; } = null!;
 }
@@ -908,10 +956,12 @@ public partial class Plain
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Microsoft.EntityFrameworkCore.ValueGeneration;
 using Npgsql;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
@@ -1028,12 +1078,14 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.Stamp)
                 .ValueGeneratedNever()
                 .HasDefaultValueSql("'2020-01-01 12:34:56.123456 +09:00'")
+                .HasConversion<UtcClockConverter>()
                 .HasColumnType("timestamp(3) without time zone")
                 .HasColumnName("stamp");
             entity.Property(e => e.Zoned)
                 .ValueGeneratedNever()
                 .HasPrecision(6)
                 .HasDefaultValueSql("'2020-01-01 12:34:56.123456 +09:00'")
+                .HasConversion<UtcConverter>()
                 .HasColumnName("zoned");
             entity.Property(e => e.Day)
                 .ValueGeneratedNever()
@@ -1051,6 +1103,7 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.Stamps)
                 .ValueGeneratedNever()
                 .HasDefaultValueSql("'{\\"2020-01-01 00:00:00 +09:00\\"}'")
+                .HasConversion<UtcClockListConverter, DateTimeListComparer>()
                 .HasColumnType("timestamp(3) without time zone[]")
                 .HasColumnName("stamps");
             entity.Property(e => e.Bits)
@@ -1090,7 +1143,9 @@ public partial class AppDbContext : DbContext
                 .HasValueGenerator<Nanoid8Generator>()
                 .HasColumnName("nano8");
             entity.Property(e => e.Created)
+                .HasValueGenerator<UtcNowGenerator>()
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasConversion<UtcClockConverter>()
                 .HasColumnType("timestamp(3) without time zone")
                 .HasColumnName("created");
             entity.Property(e => e.Sql)
@@ -1198,6 +1253,45 @@ file sealed class Nanoid8Generator : ValueGenerator<string>
     public override bool GeneratesTemporaryValues => false;
 
     public override string Next(EntityEntry entry) => RandomNumberGenerator.GetString("_-0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ", 8);
+}
+
+file sealed class UtcNowGenerator : ValueGenerator<DateTime>
+{
+    public override bool GeneratesTemporaryValues => false;
+
+    public override DateTime Next(EntityEntry entry) => DateTime.UtcNow;
+}
+
+file sealed class UtcClockConverter : ValueConverter<DateTime, DateTime>
+{
+    public UtcClockConverter()
+        : base(v => DateTime.SpecifyKind(v.Kind == DateTimeKind.Local ? v.ToUniversalTime() : v, DateTimeKind.Unspecified), v => DateTime.SpecifyKind(v, DateTimeKind.Utc))
+    {
+    }
+}
+
+file sealed class UtcConverter : ValueConverter<DateTime, DateTime>
+{
+    public UtcConverter()
+        : base(v => DateTime.SpecifyKind(v.Kind == DateTimeKind.Local ? v.ToUniversalTime() : v, DateTimeKind.Utc), v => v)
+    {
+    }
+}
+
+file sealed class UtcClockListConverter : ValueConverter<List<DateTime>, List<DateTime>>
+{
+    public UtcClockListConverter()
+        : base(v => v.Select(d => DateTime.SpecifyKind(d.Kind == DateTimeKind.Local ? d.ToUniversalTime() : d, DateTimeKind.Unspecified)).ToList(), v => v.Select(d => DateTime.SpecifyKind(d, DateTimeKind.Utc)).ToList())
+    {
+    }
+}
+
+file sealed class DateTimeListComparer : ValueComparer<List<DateTime>>
+{
+    public DateTimeListComparer()
+        : base((l, r) => l == null ? r == null : r != null && l.SequenceEqual(r), v => v.Aggregate(0, (h, d) => HashCode.Combine(h, d)), v => v.ToList())
+    {
+    }
 }
 `,
     })
@@ -1387,6 +1481,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
 
@@ -1431,10 +1526,12 @@ public partial class AppDbContext : DbContext
                 .ValueGeneratedNever()
                 .HasColumnName("id");
             entity.Property(e => e.Plain)
+                .HasConversion<UtcClockConverter>()
                 .HasColumnType("timestamp(3) without time zone")
                 .HasColumnName("plain");
             entity.Property(e => e.Zoned)
                 .HasPrecision(3)
+                .HasConversion<UtcConverter>()
                 .HasColumnName("zoned");
             entity.Property(e => e.Day).HasColumnName("day");
             entity.Property(e => e.Clock).HasColumnName("clock");
@@ -1453,6 +1550,7 @@ public partial class AppDbContext : DbContext
                 .ValueGeneratedNever()
                 .HasColumnName("id");
             entity.Property(e => e.UpdatedAt)
+                .HasConversion<UtcClockConverter>()
                 .HasColumnType("timestamp(3) without time zone")
                 .HasColumnName("updated_at");
         });
@@ -1482,7 +1580,7 @@ public partial class AppDbContext : DbContext
             if ((entry.State == EntityState.Added && entry.Entity.Plain == default)
                 || (entry.State == EntityState.Modified && !entry.Property(e => e.Plain).IsModified))
             {
-                entry.Entity.Plain = DateTime.SpecifyKind(now, DateTimeKind.Unspecified);
+                entry.Entity.Plain = now;
             }
 
             if ((entry.State == EntityState.Added && entry.Entity.Zoned == default)
@@ -1515,9 +1613,25 @@ public partial class AppDbContext : DbContext
             if ((entry.State == EntityState.Added && entry.Entity.UpdatedAt == default)
                 || (entry.State == EntityState.Modified && !entry.Property(e => e.UpdatedAt).IsModified))
             {
-                entry.Entity.UpdatedAt = DateTime.SpecifyKind(now, DateTimeKind.Unspecified);
+                entry.Entity.UpdatedAt = now;
             }
         }
+    }
+}
+
+file sealed class UtcClockConverter : ValueConverter<DateTime, DateTime>
+{
+    public UtcClockConverter()
+        : base(v => DateTime.SpecifyKind(v.Kind == DateTimeKind.Local ? v.ToUniversalTime() : v, DateTimeKind.Unspecified), v => DateTime.SpecifyKind(v, DateTimeKind.Utc))
+    {
+    }
+}
+
+file sealed class UtcConverter : ValueConverter<DateTime, DateTime>
+{
+    public UtcConverter()
+        : base(v => DateTime.SpecifyKind(v.Kind == DateTimeKind.Local ? v.ToUniversalTime() : v, DateTimeKind.Utc), v => v)
+    {
     }
 }
 `,
@@ -2051,6 +2165,7 @@ using System;
 using System.Threading;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
 
@@ -2180,6 +2295,7 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.UserId2).HasColumnName("user_id");
             entity.Property(e => e.ToString1).HasColumnName("toString");
             entity.Property(e => e.UpdatedAt)
+                .HasConversion<UtcClockConverter>()
                 .HasColumnType("timestamp(3) without time zone")
                 .HasColumnName("updatedAt");
         });
@@ -2241,9 +2357,17 @@ public partial class AppDbContext : DbContext
             if ((entry.State == EntityState.Added && entry.Entity.UpdatedAt == default)
                 || (entry.State == EntityState.Modified && !entry.Property(e => e.UpdatedAt).IsModified))
             {
-                entry.Entity.UpdatedAt = DateTime.SpecifyKind(now, DateTimeKind.Unspecified);
+                entry.Entity.UpdatedAt = now;
             }
         }
+    }
+}
+
+file sealed class UtcClockConverter : ValueConverter<DateTime, DateTime>
+{
+    public UtcClockConverter()
+        : base(v => DateTime.SpecifyKind(v.Kind == DateTimeKind.Local ? v.ToUniversalTime() : v, DateTimeKind.Unspecified), v => DateTime.SpecifyKind(v, DateTimeKind.Utc))
+    {
     }
 }
 `,
@@ -2256,8 +2380,10 @@ public partial class AppDbContext : DbContext
       fileName: 'AppDbContext.cs',
       code: `#nullable enable
 
+using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
 
@@ -2333,6 +2459,7 @@ public partial class AppDbContext : DbContext
                 .HasColumnType("jsonb")
                 .HasColumnName("doc");
             entity.Property(e => e.At)
+                .HasConversion<UtcClockConverter>()
                 .HasColumnType("timestamp(3) without time zone")
                 .HasColumnName("at");
             entity.Property(e => e.Geo).HasColumnName("geo");
@@ -2361,6 +2488,14 @@ public partial class AppDbContext : DbContext
 
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
 }
+
+file sealed class UtcClockConverter : ValueConverter<DateTime, DateTime>
+{
+    public UtcClockConverter()
+        : base(v => DateTime.SpecifyKind(v.Kind == DateTimeKind.Local ? v.ToUniversalTime() : v, DateTimeKind.Unspecified), v => DateTime.SpecifyKind(v, DateTimeKind.Utc))
+    {
+    }
+}
 `,
     })
   })
@@ -2369,6 +2504,7 @@ public partial class AppDbContext : DbContext
     const { datamodel, plan } = fixture(COMMENTS, {
       namespace: 'Shop.Data',
       context: 'ShopContext',
+      provider: 'postgresql',
     })
     expect(entityFile(plan, model(datamodel, 'User'))).toStrictEqual({
       fileName: 'User.cs',
@@ -2509,7 +2645,7 @@ describe('hand-built DMMF', () => {
     }
   }
 
-  const options = { namespace: 'Models', context: 'AppDbContext' }
+  const options = { namespace: 'Models', context: 'AppDbContext', provider: 'postgresql' } as const
 
   it('reads keys and unique criteria off the models when DMMF has no indexes', () => {
     const models = [
@@ -2757,8 +2893,10 @@ public partial class Odd
 `)
     expect(contextFile(plan).code).toBe(`#nullable enable
 
+using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -2818,6 +2956,7 @@ public partial class AppDbContext : DbContext
                 .HasColumnName("amount");
             entity.Property(e => e.Far)
                 .HasDefaultValueSql("'12020-01-01T00:00:00Z'")
+                .HasConversion<UtcClockConverter>()
                 .HasColumnType("timestamp(3) without time zone")
                 .HasColumnName("far");
             entity.Property(e => e.Flag)
@@ -2838,6 +2977,14 @@ public partial class AppDbContext : DbContext
     }
 
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
+}
+
+file sealed class UtcClockConverter : ValueConverter<DateTime, DateTime>
+{
+    public UtcClockConverter()
+        : base(v => DateTime.SpecifyKind(v.Kind == DateTimeKind.Local ? v.ToUniversalTime() : v, DateTimeKind.Unspecified), v => DateTime.SpecifyKind(v, DateTimeKind.Utc))
+    {
+    }
 }
 `)
   })
@@ -2923,8 +3070,10 @@ public partial class Rest
 `)
     expect(contextFile(plan).code).toBe(`#nullable enable
 
+using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
 
@@ -2974,6 +3123,7 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.Seq).HasColumnName("seq");
             entity.Property(e => e.Late)
                 .HasDefaultValueSql("'9999-12-31 23:00:00 -05:00'")
+                .HasConversion<UtcClockConverter>()
                 .HasColumnType("timestamp(3) without time zone")
                 .HasColumnName("late");
             entity.Property(e => e.Masks)
@@ -3004,6 +3154,144 @@ public partial class AppDbContext : DbContext
 
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
 }
+
+file sealed class UtcClockConverter : ValueConverter<DateTime, DateTime>
+{
+    public UtcClockConverter()
+        : base(v => DateTime.SpecifyKind(v.Kind == DateTimeKind.Local ? v.ToUniversalTime() : v, DateTimeKind.Unspecified), v => DateTime.SpecifyKind(v, DateTimeKind.Utc))
+    {
+    }
+}
 `)
+  })
+})
+
+describe('MySQL and SQLite', () => {
+  const enumAndDates = `
+enum Role {
+  ADMIN
+  MEMBER @map("member")
+}
+
+model Event {
+  id    Int       @id
+  role  Role      @default(MEMBER)
+  at    DateTime  @default(now())
+  seen  DateTime? @updatedAt
+}
+`
+
+  it('stores an enum as its label through a converter, and names no Npgsql', () => {
+    for (const provider of ['mysql', 'sqlite'] as const) {
+      const { datamodel, plan } = fixture(
+        `datasource db {\n  provider = "${provider}"\n}\n${enumAndDates}`,
+        { ...DEFAULT_OPTIONS, provider },
+      )
+      const context = contextFile(plan).code
+      expect(context).not.toContain('Npgsql')
+      expect(context).not.toContain('MapEnums')
+      expect(context).toContain(`file sealed class RoleConverter : ValueConverter<Role, string>
+{
+    public RoleConverter()
+        : base(v => v == Role.Admin ? "ADMIN" : v == Role.Member ? "member" : v.ToString(), v => v == "ADMIN" ? Role.Admin : v == "member" ? Role.Member : Enum.Parse<Role>(v))
+    {
+    }
+}`)
+      expect(enumFile(plan, enumOf(datamodel, 'Role')).code).toBe(`#nullable enable
+
+namespace Models;
+
+public enum Role
+{
+    Admin,
+
+    Member,
+}
+`)
+    }
+  })
+
+  it('writes a MySQL DateTime as its UTC clock, and a @db.Date and @db.Time as DateOnly and TimeOnly', () => {
+    const { plan } = fixture(
+      `
+datasource db {
+  provider = "mysql"
+}
+
+model Event {
+  id    Int       @id
+  at    DateTime  @default(now())
+  seen  DateTime? @updatedAt
+  day   DateTime  @db.Date
+  clock DateTime  @db.Time(3)
+}
+`,
+      { ...DEFAULT_OPTIONS, provider: 'mysql' },
+    )
+    const context = contextFile(plan).code
+    expect(context).toContain(`            entity.Property(e => e.At)
+                .HasValueGenerator<UtcNowGenerator>()
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasConversion<UtcClockConverter>()
+                .HasColumnType("datetime(3)")
+                .HasColumnName("at");
+            entity.Property(e => e.Seen)
+                .HasConversion<UtcClockConverter>()
+                .HasColumnType("datetime(3)")
+                .HasColumnName("seen");
+            entity.Property(e => e.Day)
+                .HasConversion<DateOnlyDateTimeConverter>()
+                .HasColumnType("date")
+                .HasColumnName("day");
+            entity.Property(e => e.Clock)
+                .HasConversion<TimeOnlyTimeSpanConverter>()
+                .HasColumnType("time(3)")
+                .HasColumnName("clock");`)
+    expect(context)
+      .toContain(`file sealed class UtcClockConverter : ValueConverter<DateTime, DateTime>
+{
+    public UtcClockConverter()
+        : base(v => DateTime.SpecifyKind(v.Kind == DateTimeKind.Local ? v.ToUniversalTime() : v, DateTimeKind.Unspecified), v => DateTime.SpecifyKind(v, DateTimeKind.Utc))
+    {
+    }
+}`)
+  })
+
+  it('writes a SQLite DateTime as the text Prisma writes, and a literal default as the UTC instant', () => {
+    const { datamodel, plan } = fixture(
+      `
+datasource db {
+  provider = "sqlite"
+}
+
+model Event {
+  id      Int      @id
+  at      DateTime @default(now())
+  literal DateTime @default("2024-01-15T10:30:00.000Z")
+}
+`,
+      { ...DEFAULT_OPTIONS, provider: 'sqlite' },
+    )
+    const context = contextFile(plan).code
+    expect(context).toContain(`            entity.Property(e => e.At)
+                .HasValueGenerator<UtcNowGenerator>()
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasConversion<UtcTextConverter>()
+                .HasColumnName("at");
+            entity.Property(e => e.Literal)
+                .ValueGeneratedNever()
+                .HasDefaultValueSql("'2024-01-15 10:30:00 +00:00'")
+                .HasConversion<UtcTextConverter>()
+                .HasColumnName("literal");`)
+    expect(context).toContain(`file sealed class UtcTextConverter : ValueConverter<DateTime, string>
+{
+    public UtcTextConverter()
+        : base(v => (v.Kind == DateTimeKind.Local ? v.ToUniversalTime() : v).ToString("yyyy-MM-dd'T'HH:mm:ss.fff'+00:00'", CultureInfo.InvariantCulture), v => DateTime.Parse(v, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal))
+    {
+    }
+}`)
+    expect(entityFile(plan, model(datamodel, 'Event')).code).toContain(
+      'public DateTime Literal { get; set; } = new DateTime(2024, 1, 15, 10, 30, 0, 0, DateTimeKind.Utc);',
+    )
   })
 })

@@ -21,6 +21,19 @@ import { relations, sql } from 'drizzle-orm'
 import { v7 as uuidv7 } from 'uuid'
 import { createId } from '@paralleldrive/cuid2'
 
+const utcNow = (() => {
+  let now: Date | undefined
+  return () => {
+    if (now === undefined) {
+      now = new Date()
+      queueMicrotask(() => {
+        now = undefined
+      })
+    }
+    return now
+  }
+})()
+
 export const roleEnum = pgEnum('Role', ['ADMIN', 'EDITOR', 'VIEWER'])
 
 export const visibilityEnum = pgEnum('visibility_level', ['public', 'private', 'link_only'])
@@ -32,12 +45,12 @@ export const users = pgTable('users', {
   email: text('email').notNull().unique(),
   name: text('name').notNull(),
   role: roleEnum('role').notNull().default('VIEWER'),
-  interests: text('interests').array().notNull().default([]),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-  updatedAt: timestamp('updated_at')
+  interests: text('interests').array().default([]),
+  createdAt: timestamp('created_at', { precision: 3 })
     .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date()),
+    .default(sql`CURRENT_TIMESTAMP`)
+    .$defaultFn(utcNow),
+  updatedAt: timestamp('updated_at', { precision: 3 }).notNull().$onUpdate(utcNow),
 })
 
 export const profile = pgTable('Profile', {
@@ -72,7 +85,10 @@ export const posts = pgTable(
     authorId: text('author_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
+    createdAt: timestamp('created_at', { precision: 3 })
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`)
+      .$defaultFn(utcNow),
   },
   (table) => [index('idx_posts_authorId').on(table.authorId)],
 )
@@ -91,7 +107,10 @@ export const comments = pgTable(
       .notNull()
       .references(() => posts.id, { onDelete: 'cascade' }),
     authorId: text('author_id').references(() => users.id, { onDelete: 'set null' }),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
+    createdAt: timestamp('created_at', { precision: 3 })
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`)
+      .$defaultFn(utcNow),
   },
   (table) => [index('idx_comments_postId_createdAt').on(table.postId, table.createdAt)],
 )
@@ -105,7 +124,10 @@ export const follows = pgTable(
     followingId: text('following_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    since: timestamp('since').notNull().defaultNow(),
+    since: timestamp('since', { precision: 3 })
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`)
+      .$defaultFn(utcNow),
   },
   (table) => [primaryKey({ columns: [table.followerId, table.followingId] })],
 )
@@ -122,7 +144,10 @@ export const orders = pgTable('orders', {
     .notNull()
     .references(() => users.id),
   total: numeric('total', { precision: 12, scale: 2 }).notNull(),
-  placedAt: timestamp('placed_at').notNull().defaultNow(),
+  placedAt: timestamp('placed_at', { precision: 3 })
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`)
+    .$defaultFn(utcNow),
 })
 
 export const orderItems = pgTable(
@@ -146,7 +171,7 @@ export const auditLogs = pgTable('audit_logs', {
   action: text('action').notNull(),
   payload: jsonb('payload').notNull().default({}),
   signature: text('signature'),
-  loggedAt: timestamp('logged_at')
+  loggedAt: timestamp('logged_at', { precision: 3 })
     .notNull()
     .default(sql`now()`),
 })

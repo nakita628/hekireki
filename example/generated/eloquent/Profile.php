@@ -12,6 +12,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class Profile extends Model
 {
+    use PrismaDates;
+
+    const ZONED_DATES = ['last_seen'];
+
     protected $table = 'Profile';
 
     protected $keyType = 'string';
@@ -21,6 +25,7 @@ class Profile extends Model
     public $timestamps = false;
 
     protected $fillable = [
+        'id',
         'user_id',
         'bio',
         'nickname',
@@ -32,10 +37,18 @@ class Profile extends Model
         'last_seen',
     ];
 
+    protected $attributes = [
+        'nickname' => 'anonymous',
+        'balance' => '0',
+        'verified' => false,
+    ];
+
     protected $casts = [
         'age' => 'integer',
+        'balance' => AsDecimal::class,
         'verified' => 'boolean',
         'meta' => 'array',
+        'avatar' => AsBytes::class,
         'last_seen' => 'datetime',
     ];
 

@@ -2,10 +2,10 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
+import { NodeFileSystem } from '@effect/platform-node'
 import { Effect } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
-import { fileSystemLayer } from '../../../file/index.js'
 import { createStudioApp } from '../app.js'
 import { connectDatabase, createStudioState } from '../services/index.js'
 import type { disconnectedDatabase } from '../services/index.js'
@@ -73,7 +73,7 @@ async function setup() {
   writeFileSync(schemaPath, SCHEMA)
   writeFileSync(path.join(dir, '.env'), 'DATABASE_URL="file:./dev.db"\n')
   const state = createStudioState({ schemaPath })
-  const snapshot = await Effect.runPromise(Effect.provide(state.reload(), fileSystemLayer))
+  const snapshot = await Effect.runPromise(Effect.provide(state.reload(), NodeFileSystem.layer))
   const db = await Effect.runPromise(
     Effect.provide(
       connectDatabase({
@@ -86,7 +86,7 @@ async function setup() {
         schemaDir: dir,
         env: {},
       }),
-      fileSystemLayer,
+      NodeFileSystem.layer,
     ),
   )
   states.push(db)
@@ -124,7 +124,7 @@ describe('data routes over sqlite', () => {
     const schemaPath = path.join(dir, 'schema.prisma')
     writeFileSync(schemaPath, SCHEMA)
     const state = createStudioState({ schemaPath })
-    await Effect.runPromise(Effect.provide(state.reload(), fileSystemLayer))
+    await Effect.runPromise(Effect.provide(state.reload(), NodeFileSystem.layer))
     const db = await Effect.runPromise(
       Effect.provide(
         connectDatabase({
@@ -137,7 +137,7 @@ describe('data routes over sqlite', () => {
           schemaDir: dir,
           env: {},
         }),
-        fileSystemLayer,
+        NodeFileSystem.layer,
       ),
     )
     states.push(db)

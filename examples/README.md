@@ -15,7 +15,46 @@ key, every `onDelete`, a self relation, an implicit many-to-many, a composite ke
 in it generates, creates the database, runs the check and RuboCop; see
 [active-record/README.md](active-record/README.md).
 
-The other three are small projects to try `hekireki seed` and `hekireki studio` on, one per database. Each is a
+Five more do the same for other generators, each on a schema written the way a Prisma schema is
+written with a corner of the target language in every model: every scalar SQLite has, every kind
+of `@default`, `@map` on models, fields and enum values, composite keys, a self relation, explicit
+and implicit many-to-many, every `onDelete`, and names the target language reserves. None of them
+creates a table of its own; each check reads and writes the tables `prisma db push` made, through
+the names the generator gave them, and prints one `ok:` line per check. `pnpm run demo` in each
+starts from nothing.
+
+- `kysely/`: the `DB` interface `hekireki-kysely` writes, queried through Kysely over
+  better-sqlite3, with type-level checks that what the tables refuse does not compile; see
+  [kysely/README.md](kysely/README.md).
+- `gorm/`: the structs `hekireki-gorm` writes, read and written by GORM through the pure-Go SQLite
+  driver, after `gofmt` and `go vet`; see [gorm/README.md](gorm/README.md). Go 1.23 or newer.
+- `sqlalchemy/`: the models `hekireki-sqlalchemy` writes, compared with the database by
+  `inspect(engine)` and used through SQLAlchemy 2.1 sessions, after mypy `--strict`; see
+  [sqlalchemy/README.md](sqlalchemy/README.md). Python 3.11 or newer, in a virtualenv of its own.
+- `ecto/`: the schemas `hekireki-ecto` writes, compiled with warnings as errors and used through
+  Ecto on `ecto_sqlite3`; see [ecto/README.md](ecto/README.md). Elixir 1.14 or newer.
+- `eloquent/`: the models `hekireki-eloquent` writes, read by `php -l` and used through Eloquent
+  (`illuminate/database` 12) on SQLite, with Prisma Client reading what they wrote and writing what
+  they read; see [eloquent/README.md](eloquent/README.md). PHP 8.2 or newer with `pdo_sqlite`.
+
+`django/` runs the models `hekireki-django` writes through the Django 5.2 ORM on a blog with a
+corner of how Prisma keeps a `DateTime` in each model, after mypy `--strict` with django-stubs,
+with Prisma Client reading what they wrote and writing what they read, in `Asia/Tokyo` and in UTC,
+on SQLite, PostgreSQL or MySQL; see [django/README.md](django/README.md). Python 3.10 or newer, in
+a virtualenv of its own.
+
+Three more hold a generator to Prisma Client on a `DateTime` in each place a Prisma schema puts
+one, the two clients sharing the database and each reading what the other wrote:
+
+- `drizzle/`: the schema `hekireki-drizzle` writes, used through drizzle over better-sqlite3 on
+  SQLite in `Asia/Tokyo`; see [drizzle/README.md](drizzle/README.md).
+- `sea-orm/`: the entities `hekireki-sea-orm` writes, used through SeaORM 1.1 (sqlx) on SQLite,
+  PostgreSQL or MySQL; see [sea-orm/README.md](sea-orm/README.md). A Rust toolchain.
+- `exposed/`: the tables and DAO entities `hekireki-exposed` writes, compiled with every warning an
+  error and used through Exposed 1.5 on PostgreSQL; see [exposed/README.md](exposed/README.md).
+  JDK 21.
+
+`sqlite/`, `mysql/` and `postgresql/` are small projects to try `hekireki seed` and `hekireki studio` on, one per database. Each is a
 `schema.prisma` with the `prisma-client` and `hekireki-seed` generators, the schema module the
 latter writes (committed, so the config type-checks before `pnpm setup` has run), and a typed
 `hekireki.config.ts` that names the database in its `url`: no flag and no `.env` needed.

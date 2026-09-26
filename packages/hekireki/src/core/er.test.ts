@@ -2,11 +2,11 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
+import { NodeFileSystem } from '@effect/platform-node'
 import type { GeneratorOptions } from '@prisma/generator-helper'
 import { Effect, Exit } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
-import { fileSystemLayer } from '../file/index.js'
 import { er } from './er.js'
 
 const dirs: string[] = []
@@ -73,7 +73,7 @@ function run(
   schemaDir = tmpdir(),
 ) {
   return Effect.runPromiseExit(
-    Effect.provide(er(options(output, config, schemaDir)), fileSystemLayer),
+    Effect.provide(er(options(output, config, schemaDir)), NodeFileSystem.layer),
   )
 }
 

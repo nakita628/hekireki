@@ -526,4 +526,192 @@ describe('kyselySchema', () => {
       "import type { ColumnType } from 'kysely'\n\nexport type Generated<T> = T extends ColumnType<infer S, infer I, infer U>\n  ? ColumnType<S, I | undefined, U>\n  : ColumnType<T, T | undefined, T>\n\nexport type Timestamp = ColumnType<Date, Date | string, Date | string>\n\nexport interface Token {\n  id: string\n  pub: string\n  sortKey: string\n  shortId: string\n  seq: Generated<number>\n  issuedAt: Generated<Timestamp>\n  serverId: Generated<string>\n  label: Generated<string>\n}\n\nexport interface DB {\n  Token: Token\n}",
     )
   })
+
+  it('should quote and escape an enum value @map-ped to a string that is not a plain word', () => {
+    const datamodel = makeDatamodel(
+      [
+        makeModel({
+          name: 'Record',
+          fields: [
+            makeField({ name: 'id', type: 'String', isId: true }),
+            makeField({ name: 'genre', kind: 'enum', type: 'Genre' }),
+          ],
+        }),
+      ],
+      [
+        {
+          name: 'Genre',
+          values: [
+            { name: 'ROCK_AND_ROLL', dbName: "rock 'n' roll" },
+            { name: 'BACKSLASH', dbName: 'a\\b' },
+            { name: 'JAZZ', dbName: null },
+          ],
+        },
+      ],
+    )
+
+    const result = kyselySchema(datamodel)
+
+    expect(result).toBe(
+      "export type Genre = 'rock \\'n\\' roll' | 'a\\\\b' | 'JAZZ'\n\nexport interface Record {\n  id: string\n  genre: Genre\n}\n\nexport interface DB {\n  Record: Record\n}",
+    )
+  })
+
+  it('should type SQLite columns as better-sqlite3 reads and binds them', () => {
+    const datamodel = makeDatamodel([
+      makeModel({
+        name: 'Sample',
+        fields: [
+          makeField({ name: 'id', type: 'BigInt', isId: true }),
+          makeField({ name: 'flag', type: 'Boolean' }),
+          makeField({ name: 'enabled', type: 'Boolean', hasDefaultValue: true, default: true }),
+          makeField({ name: 'amount', type: 'Decimal', isRequired: false }),
+          makeField({ name: 'doc', type: 'Json' }),
+          makeField({ name: 'raw', type: 'Bytes' }),
+          makeField({
+            name: 'createdAt',
+            type: 'DateTime',
+            hasDefaultValue: true,
+            default: { name: 'now', args: [] },
+          }),
+          makeField({ name: 'seenAt', type: 'DateTime', isRequired: false }),
+          makeField({
+            name: 'others',
+            kind: 'object',
+            type: 'Sample',
+            isList: true,
+            isRequired: false,
+            relationName: 'related',
+            relationFromFields: [],
+            relationToFields: [],
+          }),
+          makeField({
+            name: 'otherOf',
+            kind: 'object',
+            type: 'Sample',
+            isList: true,
+            isRequired: false,
+            relationName: 'related',
+            relationFromFields: [],
+            relationToFields: [],
+          }),
+        ],
+      }),
+    ])
+
+    const result = kyselySchema(datamodel, 'sqlite')
+
+    expect(result).toBe(
+      "import type { ColumnType } from 'kysely'\n\nexport type Generated<T> = T extends ColumnType<infer S, infer I, infer U>\n  ? ColumnType<S, I | undefined, U>\n  : ColumnType<T, T | undefined, T>\n\n// A DateTime column holds the text date.toISOString().replace('Z', '+00:00')\n\nexport interface Sample {\n  id: ColumnType<number, number | bigint, number | bigint>\n  flag: number\n  enabled: Generated<number>\n  amount: ColumnType<number, number | string, number | string> | null\n  doc: ColumnType<string | number, string, string>\n  raw: Buffer\n  createdAt: string\n  seenAt: string | null\n}\n\nexport interface Related {\n  A: ColumnType<number, number | bigint, number | bigint>\n  B: ColumnType<number, number | bigint, number | bigint>\n}\n\nexport interface DB {\n  Sample: Sample\n  _related: Related\n}",
+    )
+  })
+
+  it('should import ColumnType on SQLite for a ColumnType column even without Generated', () => {
+    const datamodel = makeDatamodel([
+      makeModel({
+        name: 'Price',
+        fields: [
+          makeField({ name: 'sku', type: 'String', isId: true }),
+          makeField({ name: 'amount', type: 'Decimal' }),
+        ],
+      }),
+    ])
+
+    const result = kyselySchema(datamodel, 'sqlite')
+
+    expect(result).toBe(
+      "import type { ColumnType } from 'kysely'\n\nexport interface Price {\n  sku: string\n  amount: ColumnType<number, number | string, number | string>\n}\n\nexport interface DB {\n  Price: Price\n}",
+    )
+  })
+
+  it('should type a DateTime list as one ColumnType of Date[] and leave Timestamp out', () => {
+    const datamodel = makeDatamodel([
+      makeModel({
+        name: 'Schedule',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({ name: 'slots', type: 'DateTime', isList: true }),
+        ],
+      }),
+    ])
+
+    const result = kyselySchema(datamodel)
+
+    expect(result).toBe(
+      "import type { ColumnType } from 'kysely'\n\nexport interface Schedule {\n  id: number\n  slots: ColumnType<Date[], (Date | string)[], (Date | string)[]>\n}\n\nexport interface DB {\n  Schedule: Schedule\n}",
+    )
+  })
+
+  it('should type a time column (@db.Time, @db.Timetz) as the text the driver reads', () => {
+    const datamodel = makeDatamodel([
+      makeModel({
+        name: 'Shift',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({ name: 'opens', type: 'DateTime', nativeType: ['Time', ['3']] }),
+          makeField({
+            name: 'closes',
+            type: 'DateTime',
+            isRequired: false,
+            nativeType: ['Timetz', ['3']],
+          }),
+        ],
+      }),
+    ])
+
+    const result = kyselySchema(datamodel)
+
+    expect(result).toBe(
+      'export interface Shift {\n  id: number\n  opens: string\n  closes: string | null\n}\n\nexport interface DB {\n  Shift: Shift\n}',
+    )
+  })
+
+  it('should ask an insert for an optional @updatedAt, as Prisma sets it on create', () => {
+    const datamodel = makeDatamodel([
+      makeModel({
+        name: 'Note',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({ name: 'updatedAt', type: 'DateTime', isUpdatedAt: true }),
+          makeField({ name: 'seenAt', type: 'DateTime', isRequired: false, isUpdatedAt: true }),
+        ],
+      }),
+    ])
+
+    expect(kyselySchema(datamodel)).toBe(
+      "import type { ColumnType } from 'kysely'\n\nexport type Timestamp = ColumnType<Date, Date | string, Date | string>\n\nexport interface Note {\n  id: number\n  updatedAt: Timestamp\n  seenAt: ColumnType<Date | null, Date | string, Date | string | null>\n}\n\nexport interface DB {\n  Note: Note\n}",
+    )
+    expect(kyselySchema(datamodel, 'sqlite')).toBe(
+      "import type { ColumnType } from 'kysely'\n\n// A DateTime column holds the text date.toISOString().replace('Z', '+00:00')\n\nexport interface Note {\n  id: number\n  updatedAt: string\n  seenAt: ColumnType<string | null, string, string | null>\n}\n\nexport interface DB {\n  Note: Note\n}",
+    )
+  })
+  it('should leave a DateTime default to the insert on SQLite only, as Prisma Client writes it', () => {
+    const datamodel = makeDatamodel([
+      makeModel({
+        name: 'Stamp',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({
+            name: 'createdAt',
+            type: 'DateTime',
+            hasDefaultValue: true,
+            default: { name: 'now', args: [] },
+          }),
+          makeField({
+            name: 'since',
+            type: 'DateTime',
+            hasDefaultValue: true,
+            default: '2024-01-15T10:30:00.000Z',
+          }),
+        ],
+      }),
+    ])
+
+    expect(kyselySchema(datamodel)).toBe(
+      "import type { ColumnType } from 'kysely'\n\nexport type Generated<T> = T extends ColumnType<infer S, infer I, infer U>\n  ? ColumnType<S, I | undefined, U>\n  : ColumnType<T, T | undefined, T>\n\nexport type Timestamp = ColumnType<Date, Date | string, Date | string>\n\nexport interface Stamp {\n  id: number\n  createdAt: Generated<Timestamp>\n  since: Generated<Timestamp>\n}\n\nexport interface DB {\n  Stamp: Stamp\n}",
+    )
+    expect(kyselySchema(datamodel, 'sqlite')).toBe(
+      "// A DateTime column holds the text date.toISOString().replace('Z', '+00:00')\n\nexport interface Stamp {\n  id: number\n  createdAt: string\n  since: string\n}\n\nexport interface DB {\n  Stamp: Stamp\n}",
+    )
+  })
 })

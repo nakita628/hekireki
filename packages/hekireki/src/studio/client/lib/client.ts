@@ -1,5 +1,5 @@
 import { hc } from 'hono/client'
 
-import type { createStudioApi } from '../../server/app.js'
+import type { api } from '../../server/index.js'
 
-export const client = hc<ReturnType<typeof createStudioApi>>('/').api
+export const client = hc<typeof api>('/').api

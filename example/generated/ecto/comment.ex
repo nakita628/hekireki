@@ -6,10 +6,12 @@ defmodule Example.Comment do
   """
 
   @primary_key {:id, :id, autogenerate: true}
+  @timestamps_opts [type: Example.PrismaDateTime, autogenerate: {Example.PrismaDateTime, :autogenerate, []}]
 
   @type t :: %__MODULE__{
           id: integer(),
           body: String.t(),
+          inserted_at: DateTime.t(),
           post: Example.Post.t() | nil,
           author: Example.User.t() | nil
         }
@@ -18,6 +20,6 @@ defmodule Example.Comment do
     field(:body, :string)
     belongs_to(:post, Example.Post, foreign_key: :post_id, type: :binary_id)
     belongs_to(:author, Example.User, foreign_key: :author_id, type: :binary_id)
-    timestamps(type: :utc_datetime, inserted_at_source: :created_at, updated_at: false)
+    timestamps(inserted_at_source: :created_at, updated_at: false)
   end
 end

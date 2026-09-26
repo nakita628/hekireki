@@ -2,6 +2,7 @@ import type { DMMF } from '@prisma/generator-helper'
 
 import {
   collectDefaultHelpers,
+  collectFieldClasses,
   collectGlobalImports,
   collectManyToManyTables,
   generateEnumClass,
@@ -15,6 +16,7 @@ export function djangoCode(
   models: readonly DMMF.Model[],
   enums?: readonly DMMF.DatamodelEnum[],
   indexes?: readonly DMMF.Index[],
+  provider = 'postgresql',
 ) {
   const idx = indexes ?? []
   // Imports and default helpers are collected from the models that are actually
@@ -28,11 +30,12 @@ export function djangoCode(
   const names = resolveNames(emitted, m2mTables)
 
   const blocks = [
-    collectGlobalImports(emitted, idx).join('\n'),
+    collectGlobalImports(emitted, idx, provider).join('\n'),
+    ...collectFieldClasses(emitted, provider),
     ...collectDefaultHelpers(emitted, names, enums),
     ...(enums ?? []).map((e) => generateEnumClass(e)),
     ...emitted
-      .map((model) => generateModelBody(model, models, idx, m2mTables, names))
+      .map((model) => generateModelBody(model, models, idx, m2mTables, names, provider))
       .filter((body) => body !== null),
     ...m2mTables.map((t) => generateThroughModel(t)),
   ]

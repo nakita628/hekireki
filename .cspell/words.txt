@@ -6,6 +6,7 @@ apikey
 AQID
 arktype
 arrayagg
+Arrayable
 attcollation
 attgenerated
 attidentity
@@ -62,6 +63,7 @@ dbml
 defaultdb
 deptype
 dflt
+dialector
 dmmf
 docstrings
 DOUB
@@ -72,13 +74,16 @@ enumlabel
 enumsortorder
 enumtypid
 Excee
+exqlite
 FAVX
 fkey
 FLOA
 Fullwidth
 Generateds
 ghijklmnopqrstu
+glebarez
 gofmt
+gonanoid
 gorm
 GORM's
 groß
@@ -115,8 +120,11 @@ ktlint
 kysely
 kysely's
 lezer
+librt
+lucsky
 marginx
 marginy
+matoous
 maße
 Meiryo
 Memberwise
@@ -139,6 +147,7 @@ Noto
 notused
 npgsql
 Npgsql
+nrednav
 nspname
 ntile
 ntoa
@@ -155,6 +164,9 @@ peekview
 picklist
 plpgsql
 prefault
+primaryjoin
+primarykey
+pysqlite
 quasis
 randomblob
 rankdir
@@ -176,6 +188,7 @@ resvg
 RUSTFLAGS
 rubocop
 schemaname
+secondaryjoin
 Segoe
 seqcache
 seqcycle
@@ -196,6 +209,7 @@ sslmode
 Stampeds
 stringbool
 subplan
+subsecs
 Tabler
 takibi
 textbg
@@ -205,6 +219,7 @@ tgname
 tgrelid
 thibaultmeyer
 timestampdiff
+timespec
 tinys
 treeify
 triggerdef
@@ -240,3 +255,12 @@ zizmor
 zoomable
 über
 ünter
+Errorf
+Milli
+pgjdbc
+Duser
+datecheck
+libpq
+myxql
+jvmargs
+Linq

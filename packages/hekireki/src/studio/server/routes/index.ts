@@ -2785,6 +2785,7 @@ export const PlanBodySchema = z
       }),
   })
   .openapi({
+    required: [],
     description: 'The name to propose for a migration, and the decisions made for it on the page.',
     example: { name: 'profile', decisions: [] },
   })

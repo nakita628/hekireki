@@ -8,6 +8,7 @@ defmodule Example.User do
 
   @primary_key {:id, Ecto.UUID, autogenerate: [version: 7]}
   @foreign_key_type :binary_id
+  @timestamps_opts [type: Example.PrismaDateTime, autogenerate: {Example.PrismaDateTime, :autogenerate, []}]
 
   @type t :: %__MODULE__{
           id: Ecto.UUID.t(),
@@ -15,6 +16,8 @@ defmodule Example.User do
           name: String.t(),
           role: atom(),
           interests: [String.t()],
+          inserted_at: DateTime.t(),
+          updated_at: DateTime.t(),
           profile: Example.Profile.t() | nil,
           posts: [Example.Post.t()],
           comments: [Example.Comment.t()],
@@ -34,6 +37,6 @@ defmodule Example.User do
     has_many(:orders, Example.Order, foreign_key: :user_id)
     has_many(:followers, Example.Follow, foreign_key: :following_id)
     has_many(:following, Example.Follow, foreign_key: :follower_id)
-    timestamps(type: :utc_datetime, inserted_at_source: :created_at)
+    timestamps(inserted_at_source: :created_at)
   end
 end

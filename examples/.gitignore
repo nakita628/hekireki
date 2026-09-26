@@ -3,6 +3,9 @@
 *.db
 *.db-journal
 */seed.sql
+# What an example's provider.ts writes and generates to run its checks on PostgreSQL and MySQL:
+# made from its schema.prisma on each run.
+*/.provider/
 # A local .env for a database of your own; the committed configs name the compose databases.
 .env
 # sqlite/ builds its tables with `prisma db push` and keeps no migration history; a directory
@@ -19,3 +22,6 @@ migrate/.hekireki/
 # them. The models and locale files it generates are committed, to be read without running it.
 active-record/vendor/
 active-record/.bundle/
+# The date checks each example keeps beside it while its generator's DateTime handling is compared
+# with Prisma Client on real databases: scratch harnesses, caches, databases and logs.
+*/.datecheck/

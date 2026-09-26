@@ -1,0 +1,258 @@
+// A small shop on SQLite, written the way a Prisma schema is written, with the corners of what
+// Eloquent has to express placed where a real schema would put them. `pnpm run demo` writes
+// app/Models, creates dev.db with `prisma db push` and runs check.php with the real Eloquent
+// (illuminate/database): each model the generator writes is created, read back, updated, related
+// and deleted there, not only loaded. The tables are Prisma's; nothing here runs a Laravel
+// migration. Prisma Client shares the database: interop.ts reads what Eloquent wrote and writes
+// rows for interop.php to read through the models.
+
+datasource db {
+  provider = "sqlite"
+}
+
+generator client {
+  provider            = "prisma-client"
+  output              = "generated/client"
+  importFileExtension = "ts"
+}
+
+generator Hekireki-Eloquent {
+  provider = "hekireki-eloquent"
+  output   = "app/Models"
+}
+
+/// Stored under names of their own, which is what the database holds and what a backed enum's
+/// value has to be.
+enum Role {
+  CUSTOMER @map("customer")
+  STAFF    @map("staff")
+  ADMIN
+}
+
+/// Values PHP has to quote: an apostrophe and a backslash.
+enum Mood {
+  FINE    @map("it's fine")
+  SO_SO   @map("so-so")
+  ESCAPED @map("back\\slash")
+}
+
+/// No member is mapped: each case's value is its name.
+enum OrderStatus {
+  PENDING
+  PAID
+  SHIPPED
+  CANCELLED
+}
+
+/// Members named after words of PHP: `class` is the one a case cannot take.
+enum Kind {
+  CLASS
+  STATIC
+}
+
+/// Someone who signs in. The key counts up in the database, the address is unique, and the
+/// timestamps are Laravel's own columns under Prisma's field names.
+model Account {
+  id           Int       @id @default(autoincrement())
+  emailAddress String    @unique @map("email_address")
+  /// A second unique column: an order's gift references it below.
+  handle       String    @unique
+  displayName  String?   @map("display_name")
+  role         Role      @default(CUSTOMER)
+  active       Boolean   @default(true)
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  profile      Profile?
+  orders       Order[]   @relation("Orders")
+  /// Orders sent to this account as a gift: a second relation to the same model.
+  gifts        Order[]   @relation("Gifts")
+  reviews      Review[]
+  /// Who follows whom: an implicit many-to-many from a model to itself, in Prisma's `_Follows`.
+  followers    Account[] @relation("Follows")
+  following    Account[] @relation("Follows")
+  wishlist     Wishlist?
+
+  @@map("accounts")
+}
+
+/// One per account, deleted with it (1-1, the foreign key unique on this side). No timestamps.
+model Profile {
+  id        Int     @id @default(autoincrement())
+  accountId Int     @unique @map("account_id")
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  bio       String?
+  /// Bytes: an avatar kept in the row, a BLOB in SQLite.
+  avatar    Bytes?
+  mood      Mood?
+
+  @@map("profiles")
+}
+
+/// A uuid() key Prisma's client makes, so Eloquent has to, and timestamps under Prisma's camel-case
+/// names. A column named `attributes`, the property Eloquent keeps a model's columns in.
+model Product {
+  id         String     @id @default(uuid())
+  sku        String     @unique
+  name       String
+  /// Money is Decimal, never Float.
+  price      Decimal
+  weight     Float      @default(0)
+  /// Beyond 2^53: BigInt.
+  barcode    BigInt?
+  stock      Int        @default(-1)
+  /// Json. No default: `prisma db push` writes a Json default on SQLite unquoted, and SQLite
+  /// refuses the table.
+  attributes Json
+  dimensions Json?
+  /// A string default with the quotes PHP and SQL both have to escape.
+  label      String     @default("it's \"quoted\" \\ back")
+  releasedAt DateTime   @default("2020-01-01T00:00:00Z") @map("released_at")
+  /// Category 1 is "Uncategorised": a product whose category is removed goes back to it.
+  categoryId Int        @default(1) @map("category_id")
+  category   Category   @relation(fields: [categoryId], references: [id], onDelete: SetDefault)
+  tags       Tag[]
+  lineItems  LineItem[]
+  reviews    Review[]
+  wishlists  Wishlist[] @relation("Wished")
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+}
+
+/// The implicit many-to-many with Product: `_ProductToTag`, columns A (Product) and B (Tag). A
+/// ulid() key.
+model Tag {
+  id       String    @id @default(ulid())
+  name     String    @unique
+  products Product[]
+}
+
+/// A cuid() key, which Eloquent has no generator for: the caller gives it.
+model Coupon {
+  id   String @id @default(cuid())
+  code String @unique
+}
+
+/// A tree: a name is unique among the children of one parent, and a child keeps its place when
+/// its parent goes (SetNull on itself). The list side of the relation comes first.
+model Category {
+  id       Int        @id @default(autoincrement())
+  name     String
+  children Category[] @relation("Tree")
+  parentId Int?       @map("parent_id")
+  parent   Category?  @relation("Tree", fields: [parentId], references: [id], onDelete: SetNull)
+  products Product[]
+
+  @@unique([parentId, name])
+  @@map("categories")
+}
+
+/// The primary key is not called `id` and has a column of its own. An order cannot be removed
+/// while it has line items (Restrict), and its account cannot be removed while it has orders
+/// (NoAction). The only timestamp is `@updatedAt`, under a name of its own.
+model Order {
+  number     Int         @id @default(autoincrement()) @map("order_number")
+  accountId  Int         @map("account_id")
+  account    Account     @relation("Orders", fields: [accountId], references: [id], onDelete: NoAction)
+  status     OrderStatus @default(PENDING)
+  note       String?
+  /// now(): SQLite's CURRENT_TIMESTAMP is `Y-m-d H:i:s`, and Prisma Client writes ISO 8601.
+  placedAt   DateTime    @default(now()) @map("placed_at")
+  changedAt  DateTime    @updatedAt @map("changed_at")
+  lineItems  LineItem[]
+  /// The reference a customer sees: a ulid() that is not the key, which HasUlids does not make.
+  publicId   String      @unique @default(ulid()) @map("public_id")
+  /// A gift names its account by handle, not by key: `references:` another unique.
+  giftFor    String?     @map("gift_for")
+  giftTarget Account?    @relation("Gifts", fields: [giftFor], references: [handle], onDelete: SetNull)
+
+  @@map("orders")
+}
+
+/// An explicit many-to-many between Order and Product, keyed by the pair.
+model LineItem {
+  orderNumber Int        @map("order_number")
+  order       Order      @relation(fields: [orderNumber], references: [number], onDelete: Restrict)
+  productId   String     @map("product_id")
+  product     Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity    Int        @default(1)
+  unitPrice   Decimal    @map("unit_price")
+  shipments   Shipment[]
+
+  @@id([orderNumber, productId])
+  @@map("line_items")
+}
+
+/// A key of two columns, which Eloquent has no relation for: the columns stay, the method does not.
+model Shipment {
+  id          Int      @id @default(autoincrement())
+  orderNumber Int      @map("order_number")
+  productId   String   @map("product_id")
+  lineItem    LineItem @relation(fields: [orderNumber, productId], references: [orderNumber, productId], onDelete: Cascade)
+  carrier     String
+
+  @@map("shipments")
+}
+
+/// One review per account per product (a composite unique). Replies point at the review they
+/// answer and go with it (a self relation that cascades).
+model Review {
+  id        Int      @id @default(autoincrement())
+  productId String   @map("product_id")
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  accountId Int      @map("account_id")
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  rating    Int
+  body      String?
+  parentId  Int?     @map("parent_id")
+  parent    Review?  @relation("Replies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   Review[] @relation("Replies")
+
+  @@unique([productId, accountId])
+  @@map("reviews")
+}
+
+/// A saved list, one per account, holding products through a named implicit relation: the join
+/// table is `_Wished`, not `_ProductToWishlist`.
+model Wishlist {
+  id         String    @id @default(uuid())
+  accountId  Int       @unique @map("account_id")
+  account    Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  products   Product[] @relation("Wished")
+  /// A link to share the list by: a second uuid(), beside the key's.
+  shareToken String    @unique @default(uuid()) @map("share_token")
+}
+
+/// Column names that are words of PHP. A doc comment that ends a PHPDoc block early: */ and a
+/// $variable PHP would not interpolate in a comment anyway.
+model Keyword {
+  id       Int      @id @default(autoincrement())
+  type     String
+  class    String?
+  function String?
+  match    String?
+  list     String?
+  static   Boolean?
+  kind     Kind?
+
+  @@map("keywords")
+}
+
+/// A table as `prisma db pull` names it: lower case and snake case, and no @id, only a unique key.
+/// Two @updatedAt: Eloquent keeps one as UPDATED_AT, and Prisma bumps both.
+model store_setting {
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at")
+  syncedAt  DateTime @updatedAt @map("synced_at")
+}
+
+/// No @id and no single unique field: the pair is what names a row. A Decimal SQLite would hand
+/// back as a float.
+model ExchangeRate {
+  base  String
+  quote String
+  rate  Decimal
+
+  @@unique([base, quote])
+  @@map("exchange_rates")
+}

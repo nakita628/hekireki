@@ -2,10 +2,10 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
+import { NodeFileSystem } from '@effect/platform-node'
 import { Effect } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
-import { fileSystemLayer } from '../../file/index.js'
 import { createStudioApp, missingAssetsMessage } from './app.js'
 import { FORBIDDEN_HOST_MESSAGE } from './constants/index.js'
 import { disconnectedDatabase, createStudioState } from './services/index.js'
@@ -25,7 +25,7 @@ const SCHEMA = `model User {
 `
 
 const reloadState = (state: ReturnType<typeof createStudioState>) =>
-  Effect.runPromise(Effect.provide(state.reload(), fileSystemLayer))
+  Effect.runPromise(Effect.provide(state.reload(), NodeFileSystem.layer))
 
 async function setup(options: { readonly schema?: string; readonly withIndex?: boolean } = {}) {
   const dir = mkdtempSync(path.join(tmpdir(), 'hekireki-studio-'))

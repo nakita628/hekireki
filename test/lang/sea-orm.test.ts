@@ -17,16 +17,18 @@ describe('sea-orm', () => {
     expect({ cargo: hasCargo, rustfmt: hasRustfmt }).toStrictEqual({ cargo: true, rustfmt: true })
   })
 
-  it.skipIf(!hasRustfmt)('generated entities parse', () => {
+  // `--check` parses the entities and also holds them to rustfmt's layout: a project that runs
+  // `cargo fmt --check` over its generated entities must find nothing to change.
+  it.skipIf(!hasRustfmt)('generated entities are as rustfmt writes them', () => {
     const entities = join(harness, 'src', 'entities')
     const files = readdirSync(entities)
       .filter((f) => f.endsWith('.rs'))
       .map((f) => join(entities, f))
     expect(files.length).toBeGreaterThan(0)
 
-    const result = spawnSync('rustfmt', ['--edition', '2021', '--emit=stdout', ...files], {
+    const result = spawnSync('rustfmt', ['--edition', '2021', '--check', ...files], {
       cwd: harness,
-      stdio: ['ignore', 'ignore', 'inherit'],
+      stdio: ['ignore', 'inherit', 'inherit'],
     })
     expect(result.status).toBe(0)
   })

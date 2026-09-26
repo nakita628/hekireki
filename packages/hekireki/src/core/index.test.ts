@@ -2,12 +2,12 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
+import { NodeFileSystem } from '@effect/platform-node'
 import type { GeneratorOptions } from '@prisma/generator-helper'
 import type { FileSystem } from 'effect'
 import { Effect, Exit } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
-import { fileSystemLayer } from '../file/index.js'
 import { activerecord } from './activerecord.js'
 import { ajv } from './ajv.js'
 import { arktype } from './arktype.js'
@@ -200,6 +200,8 @@ function options(
       config,
     },
     datasources: [{ activeProvider: provider }],
+    // The schema as written, which Ecto and Exposed read what DMMF drops from.
+    datamodel: '',
     dmmf: { datamodel: { models: MODELS, enums: ENUMS, types: [], indexes: [] } },
   } as unknown as GeneratorOptions
 }
@@ -211,7 +213,7 @@ function run(
   provider = 'postgresql',
 ) {
   return Effect.runPromiseExit(
-    Effect.provide(generator(options(output, config, provider)), fileSystemLayer),
+    Effect.provide(generator(options(output, config, provider)), NodeFileSystem.layer),
   )
 }
 
@@ -349,7 +351,7 @@ describe('generator config', () => {
     const root = tmp()
     const output = path.join(root, 'app', 'models')
     const exit = await Effect.runPromiseExit(
-      Effect.provide(activerecord(translated(output)), fileSystemLayer),
+      Effect.provide(activerecord(translated(output)), NodeFileSystem.layer),
     )
     expect(Exit.isSuccess(exit)).toBe(true)
     const locales = path.join(root, 'config', 'locales')
@@ -376,7 +378,10 @@ describe('generator config', () => {
     const root = tmp()
     const output = path.join(root, 'out')
     const exit = await Effect.runPromiseExit(
-      Effect.provide(activerecord(translated(output, { locales: '../i18n' })), fileSystemLayer),
+      Effect.provide(
+        activerecord(translated(output, { locales: '../i18n' })),
+        NodeFileSystem.layer,
+      ),
     )
     expect(Exit.isSuccess(exit)).toBe(true)
     expect(new Set(readdirSync(path.join(root, 'i18n', 'models', 'user')))).toStrictEqual(
@@ -386,7 +391,7 @@ describe('generator config', () => {
 
   it('asks for `locales` when a translation has nowhere to go', async () => {
     const exit = await Effect.runPromiseExit(
-      Effect.provide(activerecord(translated(path.join(tmp(), 'out'))), fileSystemLayer),
+      Effect.provide(activerecord(translated(path.join(tmp(), 'out'))), NodeFileSystem.layer),
     )
     expect(failure(exit)).toContain('locales is required for Hekireki-ActiveRecord')
   })
@@ -433,6 +438,50 @@ describe('generator config', () => {
     expect(readFileSync(path.join(renamed, 'user.rs'), 'utf8')).toContain(
       '#[serde(rename_all = "camelCase")]',
     )
+  })
+
+  // sqlx has no Rust type it reads a PostgreSQL TIMETZ into, so no SeaORM entity could hold one.
+  it('refuses @db.Timetz for SeaORM and writes nothing', async () => {
+    const dir = tmp()
+    const base = options(dir)
+    const [user, ...rest] = base.dmmf.datamodel.models
+    const withTimetz = {
+      ...base,
+      dmmf: {
+        datamodel: {
+          ...base.dmmf.datamodel,
+          models: [
+            {
+              ...user,
+              fields: [
+                ...(user?.fields ?? []),
+                {
+                  name: 'opens',
+                  kind: 'scalar',
+                  type: 'DateTime',
+                  nativeType: ['Timetz', []],
+                  isList: false,
+                  isRequired: true,
+                  isUnique: false,
+                  isId: false,
+                  isReadOnly: false,
+                  isGenerated: false,
+                  isUpdatedAt: false,
+                  hasDefaultValue: false,
+                },
+              ],
+            },
+            ...rest,
+          ],
+        },
+      },
+    } as unknown as GeneratorOptions
+    const exit = await Effect.runPromiseExit(
+      Effect.provide(seaOrm(withTimetz), NodeFileSystem.layer),
+    )
+    expect(failure(exit)).toContain('@db.Timetz is not supported by Hekireki-SeaORM')
+    expect(failure(exit)).toContain('User.opens')
+    expect(readdirSync(dir)).toStrictEqual([])
   })
 
   it('adds the relation schemas to the zod output only when relation is on', async () => {
@@ -570,15 +619,24 @@ describe('datasource provider', () => {
     expect(failure(exit)).toContain('Unsupported provider for Hekireki-Drizzle: mongodb')
   })
 
-  it.each(['mysql', 'sqlite', 'sqlserver', 'cockroachdb', 'mongodb'])(
-    'refuses %s for EF Core, which it maps onto PostgreSQL only',
+  it.each(['sqlserver', 'cockroachdb', 'mongodb'])(
+    'refuses %s for EF Core, which it maps onto PostgreSQL, MySQL and SQLite only',
     async (provider) => {
       const dir = tmp()
       const exit = await run(efcore, dir, {}, provider)
       expect(failure(exit)).toContain(
-        `Unsupported provider for Hekireki-EFCore: ${provider}. Supported providers are postgresql.`,
+        `Unsupported provider for Hekireki-EFCore: ${provider}. Supported providers are postgresql, mysql and sqlite.`,
       )
       expect(readdirSync(dir)).toStrictEqual([])
+    },
+  )
+
+  it.each(['mysql', 'sqlite'])(
+    'writes EF Core models for %s that do not name Npgsql',
+    async (provider) => {
+      const dir = tmp()
+      expect(Exit.isSuccess(await run(efcore, dir, {}, provider))).toBe(true)
+      expect(readFileSync(path.join(dir, 'AppDbContext.cs'), 'utf8')).not.toContain('Npgsql')
     },
   )
 

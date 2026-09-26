@@ -1,7 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { makeRelationsOnly } from '../helper/extract-relations.js'
 import { makeTypeBoxRelations, typeboxSchemaCode } from '../helper/typebox.js'
+import { makeRelationsOnly } from '../utils/extract-relations.js'
 
 export function typeboxCode(
   dmmf: DMMF.Document,

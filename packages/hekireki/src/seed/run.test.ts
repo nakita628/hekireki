@@ -3,10 +3,10 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
+import { NodeFileSystem } from '@effect/platform-node'
 import { Effect, Exit } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
-import { fileSystemLayer } from '../file/index.js'
 import { runSeed, seedBanner } from './run.js'
 import type { SeedOverrides, SeedReport } from './run.js'
 
@@ -102,7 +102,7 @@ function project(config: string | null, schema = SCHEMA) {
 
 function run(overrides: Partial<SeedOverrides>, cwd: string) {
   return Effect.runPromiseExit(
-    runSeed({ ...NONE, ...overrides }, cwd).pipe(Effect.provide(fileSystemLayer)),
+    runSeed({ ...NONE, ...overrides }, cwd).pipe(Effect.provide(NodeFileSystem.layer)),
   )
 }
 

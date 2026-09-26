@@ -15,7 +15,7 @@ const PG_SCALAR_MAP: { [k: string]: string } = {
   Float: 'doublePrecision()',
   Decimal: 'numeric()',
   Boolean: 'boolean()',
-  DateTime: 'timestamp()',
+  DateTime: 'timestamp({ precision: 3 })',
   Json: 'jsonb()',
   Bytes: 'text()',
 }
@@ -39,7 +39,7 @@ const SQLITE_SCALAR_MAP: { [k: string]: string } = {
   Float: 'real()',
   Decimal: 'numeric()',
   Boolean: "integer({ mode: 'boolean' })",
-  DateTime: "integer({ mode: 'timestamp_ms' })",
+  DateTime: 'utcDateTime()',
   Json: "text({ mode: 'json' })",
   Bytes: 'blob()',
 }
@@ -85,9 +85,11 @@ function pgNativeType(name: string, args: readonly string[]) {
       return `timestamp({ ${opts.join(', ')} })`
     }
     case 'Date':
-      return 'date()'
+      return 'utcDate()'
     case 'Time':
-      return args[0] ? `time({ precision: ${args[0]} })` : 'time()'
+      return args[0] ? `utcTime({ precision: ${args[0]} })` : 'utcTime()'
+    case 'Timetz':
+      return args[0] ? `utcTimetz({ precision: ${args[0]} })` : 'utcTimetz()'
     case 'Json':
       return 'json()'
     case 'JsonB':
@@ -132,13 +134,13 @@ function mysqlNativeType(name: string, args: readonly string[]) {
       return opts ? `decimal(${opts})` : 'decimal()'
     }
     case 'Date':
-      return 'date()'
+      return 'utcDate()'
     case 'Time':
-      return args[0] ? `time({ fsp: ${args[0]} })` : 'time()'
+      return args[0] ? `utcTime({ precision: ${args[0]} })` : 'utcTime()'
     case 'DateTime':
-      return `datetime({ fsp: ${args[0] ?? 3} })`
+      return `datetime({ fsp: ${args[0] ?? 0} })`
     case 'Timestamp':
-      return `timestamp({ fsp: ${args[0] ?? 3} })`
+      return `timestamp({ fsp: ${args[0] ?? 0} })`
     case 'Json':
       return 'json()'
     case 'Binary':
@@ -152,6 +154,55 @@ function mysqlNativeType(name: string, args: readonly string[]) {
   }
 }
 
+// Columns that keep a DateTime in UTC, in the form Prisma Client writes and reads it.
+const DATE_HELPERS: { readonly [name: string]: string } = {
+  utcDateTime: `const utcDateTime = customType<{ data: Date; driverData: string | number }>({
+  dataType: () => 'datetime',
+  toDriver: (value) => value.toISOString().replace('Z', '+00:00'),
+  fromDriver: (value) => {
+    if (typeof value === 'number' || /^-?\\d+$/u.test(value)) return new Date(Number(value))
+    const iso = value.replace(' ', 'T').replace(/ (?=[+-]\\d\\d:?\\d\\d$)/u, '')
+    return new Date(/T[\\d:.]+$/u.test(iso) ? \`\${iso}Z\` : iso)
+  },
+})`,
+  utcDate: `const utcDate = customType<{ data: Date; driverData: string }>({
+  dataType: () => 'date',
+  toDriver: (value) => value.toISOString().slice(0, 10),
+  fromDriver: (value) => new Date(value),
+})`,
+  utcTime: `const utcTime = customType<{
+  data: Date
+  driverData: string
+  config: { precision?: number }
+}>({
+  dataType: (config) => \`time\${config?.precision === undefined ? '' : \`(\${config.precision})\`}\`,
+  toDriver: (value) => value.toISOString().slice(11, 23),
+  fromDriver: (value) => new Date(\`1970-01-01T\${value}Z\`),
+})`,
+  utcTimetz: `const utcTimetz = customType<{
+  data: Date
+  driverData: string
+  config: { precision?: number }
+}>({
+  dataType: (config) =>
+    \`time\${config?.precision === undefined ? '' : \`(\${config.precision})\`} with time zone\`,
+  toDriver: (value) => \`\${value.toISOString().slice(11, 23)}+00\`,
+  fromDriver: (value) => new Date(\`1970-01-01T\${value.replace(/[+-]\\d\\d(:?\\d\\d)?$/u, '')}Z\`),
+})`,
+  utcNow: `const utcNow = (() => {
+  let now: Date | undefined
+  return () => {
+    if (now === undefined) {
+      now = new Date()
+      queueMicrotask(() => {
+        now = undefined
+      })
+    }
+    return now
+  }
+})()`,
+}
+
 type ImportReq = { readonly pkg: string; readonly kind: 'named' | 'default'; readonly name: string }
 
 export function createImports() {
@@ -159,10 +210,32 @@ export function createImports() {
     core: new Set<string>(),
     orm: new Set<string>(),
     ext: new Map<string, { named: Set<string>; default?: string }>(),
+    dates: new Set<string>(),
   }
 }
 
 type DrizzleImports = ReturnType<typeof createImports>
+
+// A column function is drizzle's own, imported from its core module, or one of the date helpers,
+// declared in the schema itself.
+function addColumnImport(baseExpr: string, imports: DrizzleImports) {
+  const fnName = baseExpr.match(/^(\w+)/u)?.[1]
+  if (fnName === undefined) return
+  if (fnName in DATE_HELPERS) imports.dates.add(fnName)
+  else imports.core.add(fnName)
+}
+
+/**
+ * The date helpers the tables use, in a fixed order, to be written after the imports.
+ *
+ * @param imports - What the tables asked for; `customType` is added to it when a helper is one.
+ * @returns The declarations, one per helper.
+ */
+export function makeDateHelpers(imports: DrizzleImports) {
+  const used = Object.keys(DATE_HELPERS).filter((name) => imports.dates.has(name))
+  if (used.some((name) => name !== 'utcNow')) imports.core.add('customType')
+  return used.map((name) => DATE_HELPERS[name] ?? '')
+}
 
 function applyImport(imports: DrizzleImports, req: ImportReq) {
   if (req.pkg === 'drizzle-orm') {
@@ -307,8 +380,7 @@ function makeColumnExpr(
   }
 
   const baseExpr = resolveScalarType(field, provider)
-  const fnName = baseExpr.match(/^(\w+)/u)?.[1]
-  if (fnName) imports.core.add(fnName)
+  addColumnImport(baseExpr, imports)
   const parenIdx = baseExpr.indexOf('(')
   if (parenIdx === -1) return baseExpr
   const baseFnName = baseExpr.slice(0, parenIdx)
@@ -352,14 +424,24 @@ function resolveDefaultValue(
     switch (dflt.name) {
       case 'autoincrement':
         return { chain: '', imports: [] }
-      case 'now':
-        if (provider === 'sqlite') {
-          return { chain: '.default(sql`(unixepoch() * 1000)`)', imports: [SQL_IMPORT] }
+      // CockroachDB's counter on an Int, which Prisma makes `GENERATED BY DEFAULT AS IDENTITY`.
+      // The DMMF drops sequence()'s arguments, so the identity takes the database's defaults.
+      case 'sequence':
+        return { chain: '.generatedByDefaultAsIdentity()', imports: [] }
+      // Prisma Client sends now() itself; the table's default is for the DDL drizzle-kit writes,
+      // and on SQLite, where drizzle would send that default in place of the function's value,
+      // there is none: CURRENT_TIMESTAMP writes `2030-01-01 09:00:00`, not Prisma's form.
+      // Elsewhere it is Prisma's CURRENT_TIMESTAMP, at the column's precision on MySQL, which
+      // refuses any other; `defaultNow()` is not on a customType column.
+      case 'now': {
+        if (provider === 'sqlite') return { chain: '.$defaultFn(utcNow)', imports: [] }
+        const fsp =
+          provider === 'mysql' ? (field.nativeType ? (field.nativeType[1][0] ?? '0') : '3') : '0'
+        return {
+          chain: `.default(sql\`CURRENT_TIMESTAMP${fsp === '0' ? '' : `(${fsp})`}\`).$defaultFn(utcNow)`,
+          imports: [SQL_IMPORT],
         }
-        if (provider === 'mysql') {
-          return { chain: '.default(sql`CURRENT_TIMESTAMP(3)`)', imports: [SQL_IMPORT] }
-        }
-        return { chain: '.defaultNow()', imports: [] }
+      }
       case 'uuid':
         return dflt.args[0] === 7
           ? {
@@ -416,12 +498,6 @@ function resolveDefaultValue(
   }
   if (typeof dflt === 'boolean') return { chain: `.default(${dflt})`, imports: [] }
   return { chain: '', imports: [] }
-}
-
-function resolveUpdatedAtDefault(provider: DbProvider) {
-  if (provider === 'sqlite') return { chain: '.default(sql`(unixepoch() * 1000)`)', needsSql: true }
-  if (provider === 'mysql') return { chain: '.default(sql`CURRENT_TIMESTAMP(3)`)', needsSql: true }
-  return { chain: '.defaultNow()', needsSql: false }
 }
 
 function makeDefaultChain(
@@ -487,6 +563,9 @@ function makeColumn(
   const isAutoincrement = isFieldDefault(field.default) && field.default.name === 'autoincrement'
   const hasCompositePK = model.primaryKey !== null
   const colExpr = makeColumnExpr(field, provider, imports, enums)
+  if (field.isUpdatedAt || (isFieldDefault(field.default) && field.default.name === 'now')) {
+    imports.dates.add('utcNow')
+  }
 
   const chain = [
     // .array() must wrap the base column before any modifier: chained after
@@ -499,7 +578,11 @@ function makeColumn(
         ? '.primaryKey({ autoIncrement: true })'
         : '.primaryKey()'
       : '',
-    field.isRequired && !field.isId && !(isAutoincrement && provider === 'postgresql')
+    // A scalar list is a nullable array column in the table Prisma makes.
+    field.isRequired &&
+    !field.isList &&
+    !field.isId &&
+    !(isAutoincrement && provider === 'postgresql')
       ? '.notNull()'
       : '',
     field.isUnique ? '.unique()' : '',
@@ -508,14 +591,10 @@ function makeColumn(
       ? provider === 'mysql'
         ? '.autoincrement()'
         : ''
-      : field.isUpdatedAt && (field.default === undefined || field.default === null)
-        ? (() => {
-            const r = resolveUpdatedAtDefault(provider)
-            if (r.needsSql) imports.orm.add('sql')
-            return r.chain
-          })()
-        : makeDefaultChain(field, provider, imports, enums),
-    field.isUpdatedAt ? '.$onUpdate(() => new Date())' : '',
+      : makeDefaultChain(field, provider, imports, enums),
+    // Prisma Client sets @updatedAt on create and on every update, and the table has no default
+    // for it: drizzle calls this on an insert as well, where the column has no other default.
+    field.isUpdatedAt ? '.$onUpdate(utcNow)' : '',
   ].join('')
 
   return `${field.name}: ${colExpr}${chain}`
@@ -665,8 +744,7 @@ function pkColumnExpr(
 ) {
   const pkField = models.find((m) => m.name === modelName)?.fields.find((f) => f.isId)
   const baseExpr = pkField ? resolveScalarType(pkField, provider) : 'text()'
-  const fnName = baseExpr.match(/^(\w+)/u)?.[1]
-  if (fnName) imports.core.add(fnName)
+  addColumnImport(baseExpr, imports)
   return withColumnName(baseExpr, colName)
 }
 

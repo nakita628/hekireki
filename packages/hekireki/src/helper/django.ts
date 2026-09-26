@@ -231,7 +231,42 @@ function dbGeneratedExpr(field: DMMF.Field) {
     : null
 }
 
-function scalarElementLiteral(type: string, value: unknown) {
+// The Python type a DateTime column's value is: a date or time column holds
+// just that.
+function dateTimeKind(field: DMMF.Field) {
+  const { ctor } = resolveDjangoField(field)
+  return ctor === 'DateField' ? 'date' : ctor === 'TimeField' ? 'time' : 'datetime'
+}
+
+// A literal on a date or time column is the date or the time Prisma writes, the
+// UTC part of the instant; as a datetime, Django would take it in TIME_ZONE
+// first and could land on the day before.
+function dateTimeLiteral(field: DMMF.Field, iso: string) {
+  const at = new Date(iso)
+  const kind = dateTimeKind(field)
+  if (kind === 'date') {
+    return `date(${at.getUTCFullYear()}, ${at.getUTCMonth() + 1}, ${at.getUTCDate()})`
+  }
+  if (kind === 'time') {
+    const micro = at.getUTCMilliseconds() * 1000
+    const parts = [at.getUTCHours(), at.getUTCMinutes(), at.getUTCSeconds()]
+    return `time(${[...parts, ...(micro > 0 ? [micro] : [])].join(', ')})`
+  }
+  return `datetime.fromisoformat(${toPythonString(iso)})`
+}
+
+// Prisma keeps a DateTime as a UTC instant with no zone: timestamp(3) on
+// PostgreSQL, datetime(3) on MySQL, ISO 8601 text on SQLite. Django's own field
+// reads such a column in the connection's zone and writes its own text format,
+// so every one but PostgreSQL's timestamptz goes through UtcDateTimeField.
+function holdsUtc(field: DMMF.Field, provider: string) {
+  if (field.type !== 'DateTime' || resolveDjangoField(field).ctor !== 'DateTimeField') return false
+  const zoned = provider === 'postgresql' || provider === 'cockroachdb'
+  return !(zoned && field.nativeType?.[0] === 'Timestamptz')
+}
+
+function scalarElementLiteral(field: DMMF.Field, value: unknown) {
+  const { type } = field
   if (typeof value === 'boolean') return value ? 'True' : 'False'
   if (typeof value === 'number') {
     return type === 'Decimal' ? `Decimal("${value}")` : String(value)
@@ -239,7 +274,7 @@ function scalarElementLiteral(type: string, value: unknown) {
   if (typeof value === 'string') {
     if (type === 'BigInt') return value
     if (type === 'Decimal') return `Decimal("${value}")`
-    if (type === 'DateTime') return `datetime.fromisoformat(${toPythonString(value)})`
+    if (type === 'DateTime') return dateTimeLiteral(field, value)
     // A Json list default arrives as one JSON document per element; the column
     // stores the parsed value, not the text of it.
     if (type === 'Json') return jsonToPythonLiteral(JSON.parse(value))
@@ -365,12 +400,17 @@ function fieldDefaultHelper(
     // An enum list default arrives as Prisma-level value names; the column
     // stores the mapped ones, which the TextChoices members carry.
     const enumDef = field.kind === 'enum' ? enumMap.get(field.type) : undefined
-    const pythonType = field.kind === 'enum' ? 'str' : (PRISMA_TO_PYTHON[field.type] ?? 'str')
+    const pythonType =
+      field.kind === 'enum'
+        ? 'str'
+        : field.type === 'DateTime'
+          ? dateTimeKind(field)
+          : (PRISMA_TO_PYTHON[field.type] ?? 'str')
     const items = field.default
       .map((v) =>
         enumDef && typeof v === 'string'
           ? `${makePascalCase(field.type)}.${enumMemberName(v)}`
-          : scalarElementLiteral(field.type, v),
+          : scalarElementLiteral(field, v),
       )
       .join(', ')
     return [`def ${helperName}() -> list[${pythonType}]:`, `    return [${items}]`].join('\n')
@@ -432,6 +472,22 @@ export function collectDefaultHelpers(
       : null,
   ].filter((h) => h !== null)
 
+  // What now() and @updatedAt stamp on a date or a time column: the UTC date or
+  // time of day, as Prisma Client writes them.
+  const nowKinds = new Set(
+    models.flatMap((m) =>
+      m.fields.filter((f) => isNowDefault(f) || f.isUpdatedAt).map((f) => dateTimeKind(f)),
+    ),
+  )
+  const nowHelpers = [
+    nowKinds.has('date')
+      ? ['def utc_today() -> date:', '    return datetime.now(dt_timezone.utc).date()'].join('\n')
+      : null,
+    nowKinds.has('time')
+      ? ['def utc_time() -> time:', '    return datetime.now(dt_timezone.utc).time()'].join('\n')
+      : null,
+  ].filter((h) => h !== null)
+
   const fieldHelpers = models.flatMap((model) =>
     model.fields
       .filter((f) => f.kind !== 'object')
@@ -439,20 +495,108 @@ export function collectDefaultHelpers(
       .filter((h) => h !== null),
   )
 
-  return [...uuidHelpers, ...fieldHelpers]
+  return [...uuidHelpers, ...nowHelpers, ...fieldHelpers]
+}
+
+// cspell:ignore datetimefield
+const UTC_DATETIME_FIELD = `class UtcDateTimeField(models.DateTimeField):  # type: ignore[type-arg]
+    """A timestamp without a zone holding UTC, as ISO 8601 text on SQLite."""
+
+    def get_db_prep_value(self, value: Any, connection: BaseDatabaseWrapper, prepared: bool = False) -> Any:
+        if not prepared:
+            value = self.get_prep_value(value)
+        if not isinstance(value, datetime):
+            return super().get_db_prep_value(value, connection, prepared=True)
+        if timezone.is_naive(value):
+            value = timezone.make_aware(value, timezone.get_default_timezone())
+        value = value.astimezone(dt_timezone.utc)
+        if connection.vendor == "sqlite":
+            return value.isoformat(timespec="milliseconds")
+        return connection.ops.adapt_datetimefield_value(value.replace(tzinfo=None))
+
+    def from_db_value(self, value: datetime | None, expression: Any, connection: BaseDatabaseWrapper) -> datetime | None:
+        if value is None:
+            return None
+        if timezone.is_naive(value):
+            value = value.replace(tzinfo=dt_timezone.utc)
+        return value if settings.USE_TZ else timezone.make_naive(value, timezone.get_default_timezone())`
+
+const AUTO_NOW_QUERY_SET = `_M = TypeVar("_M", bound=models.Model)
+
+
+class AutoNowQuerySet(models.QuerySet[_M]):
+    """update(), and bulk_update() through it, set the auto_now fields as save() does."""
+
+    def update(self, **kwargs: Any) -> int:
+        for field in self.model._meta.concrete_fields:
+            if getattr(field, "auto_now", False):
+                kwargs.setdefault(field.name, getattr(field, "stamp", timezone.now)())
+        return super().update(**kwargs)`
+
+// Django's auto_now takes the local date or time of day; Prisma's @updatedAt on
+// a @db.Date or @db.Time column writes the UTC one.
+function utcStampedField(kind: 'date' | 'time') {
+  const ctor = kind === 'date' ? 'DateField' : 'TimeField'
+  const helper = kind === 'date' ? 'utc_today' : 'utc_time'
+  return `class Utc${ctor}(models.${ctor}):  # type: ignore[type-arg]
+    """auto_now stamps the UTC ${kind === 'date' ? 'date' : 'time of day'}, as Prisma's @updatedAt does."""
+
+    def stamp(self) -> ${kind}:
+        return ${helper}()
+
+    def pre_save(self, model_instance: models.Model, add: bool) -> Any:
+        if not self.auto_now:
+            return super().pre_save(model_instance, add)
+        value = self.stamp()
+        setattr(model_instance, self.attname, value)
+        return value`
+}
+
+// The class an @updatedAt date or time column is declared with, if it is one.
+function stampedFieldClass(field: DMMF.Field) {
+  if (!field.isUpdatedAt) return null
+  const kind = dateTimeKind(field)
+  return kind === 'date' ? 'UtcDateField' : kind === 'time' ? 'UtcTimeField' : null
+}
+
+// The field every zoneless DateTime column is declared with, those of an
+// @updatedAt date or time, and the QuerySet a model with an @updatedAt field is
+// managed by, each written once per file.
+export function collectFieldClasses(models: readonly DMMF.Model[], provider: string) {
+  const scalarFields = models.flatMap((m) => m.fields.filter((f) => f.kind !== 'object'))
+  const stamped = new Set(scalarFields.map((f) => stampedFieldClass(f)))
+  return [
+    scalarFields.some((f) => holdsUtc(f, provider)) ? UTC_DATETIME_FIELD : null,
+    stamped.has('UtcDateField') ? utcStampedField('date') : null,
+    stamped.has('UtcTimeField') ? utcStampedField('time') : null,
+    scalarFields.some((f) => f.isUpdatedAt) ? AUTO_NOW_QUERY_SET : null,
+  ].filter((c) => c !== null)
 }
 
 function formatDefaultArgs(model: DMMF.Model, field: DMMF.Field, isPk: boolean, names: Names) {
-  // Prisma's @updatedAt also sets the value on create, which is exactly
-  // Django's auto_now (it fires on every save, the first one included).
-  // auto_now is mutually exclusive with default/db_default.
+  // Prisma's @updatedAt also sets the value on create, as auto_now does on every
+  // save(). A bulk UPDATE is the model's AutoNowQuerySet's to stamp: auto_now
+  // alone never fires there. auto_now is mutually exclusive with
+  // default/db_default.
   if (field.isUpdatedAt) return ['auto_now=True']
 
   const generated = dbGeneratedExpr(field)
   // dbgenerated() is a raw DDL expression no client library can evaluate.
   if (generated !== null) return [`db_default=RawSQL(${toPythonString(generated)}, [])`]
 
-  if (isNowDefault(field)) return ['db_default=Now()']
+  // Prisma Client fills now() itself, in UTC. A db_default would be evaluated in
+  // the session's zone and, on MySQL, which has no RETURNING, would leave the
+  // expression on the instance for the next save() to write back.
+  if (isNowDefault(field)) {
+    const kind = dateTimeKind(field)
+    return [
+      kind === 'date'
+        ? 'default=utc_today'
+        : kind === 'time'
+          ? 'default=utc_time'
+          : 'default=timezone.now',
+    ]
+  }
 
   const uuidVersion = uuidDefaultVersion(field)
   if (uuidVersion !== null) {
@@ -489,7 +633,7 @@ function formatDefaultArgs(model: DMMF.Model, field: DMMF.Field, isPk: boolean, 
     // not a bare quoted string.
     if (field.type === 'BigInt') return [`default=${def}`]
     if (field.type === 'Decimal') return [`default=Decimal("${def}")`]
-    if (field.type === 'DateTime') return [`default=datetime.fromisoformat(${toPythonString(def)})`]
+    if (field.type === 'DateTime') return [`default=${dateTimeLiteral(field, def)}`]
     // A Bytes default is base64 text; the column holds the bytes it encodes.
     if (field.type === 'Bytes') return [`default=${pythonBytesLiteral(def)}`]
     if (field.type === 'Json') {
@@ -512,7 +656,13 @@ function autoFieldCtor(field: DMMF.Field) {
   return field.type === 'BigInt' ? 'BigAutoField' : 'AutoField'
 }
 
-function generateScalarField(model: DMMF.Model, field: DMMF.Field, isPk: boolean, names: Names) {
+function generateScalarField(
+  model: DMMF.Model,
+  field: DMMF.Field,
+  isPk: boolean,
+  names: Names,
+  provider: string,
+) {
   const columnName = fieldColumnName(field)
   const attrName = attrNameOf(names, model, field)
 
@@ -546,11 +696,14 @@ function generateScalarField(model: DMMF.Model, field: DMMF.Field, isPk: boolean
     emptyStringPk ? 'default=None' : null,
   ].filter((a) => a !== null)
 
+  const fieldClass = holdsUtc(field, provider)
+    ? 'UtcDateTimeField'
+    : (stampedFieldClass(field) ?? `models.${ctorResolved.ctor}`)
   if (field.isList) {
-    const inner = `models.${ctorResolved.ctor}(${ctorResolved.typeArgs.join(', ')})`
+    const inner = `${fieldClass}(${ctorResolved.typeArgs.join(', ')})`
     return `    ${attrName} = ArrayField(${[inner, ...outerArgs].join(', ')})`
   }
-  return `    ${attrName} = models.${ctorResolved.ctor}(${[...ctorResolved.typeArgs, ...outerArgs].join(', ')})`
+  return `    ${attrName} = ${fieldClass}(${[...ctorResolved.typeArgs, ...outerArgs].join(', ')})`
 }
 
 const ON_DELETE: { [k: string]: string } = {
@@ -936,6 +1089,7 @@ export function generateModelBody(
     rightModel: string
   }[],
   names: Names,
+  provider: string,
 ) {
   if (!hasPrimaryKey(model)) return null
   const compositePk = compositePkLine(model, names)
@@ -957,13 +1111,16 @@ export function generateModelBody(
     const owner = fkByScalarName.get(field.name)
     if (owner) return [generateForeignKeyField(model, owner, field, allModels, names)]
     const isPk = field.isId
-    return [generateScalarField(model, field, isPk, names)]
+    return [generateScalarField(model, field, isPk, names, provider)]
   })
 
   return [
     `class ${makePascalCase(model.name)}(models.Model):`,
     ...(compositePk === null ? [] : [compositePk]),
     ...fieldLines,
+    ...(model.fields.some((f) => f.isUpdatedAt)
+      ? ['    objects = AutoNowQuerySet.as_manager()']
+      : []),
     ...generateMetaLines(model, indexes, names),
   ].join('\n')
 }
@@ -981,11 +1138,12 @@ export function generateEnumClass(enumDef: DMMF.DatamodelEnum) {
 
 export function collectGlobalImports(
   models: readonly DMMF.Model[],
-  indexes?: readonly DMMF.Index[],
+  indexes: readonly DMMF.Index[],
+  provider: string,
 ) {
   const scalarFields = models.flatMap((m) => m.fields.filter((f) => f.kind !== 'object'))
   const modelNames = new Set(models.map((m) => m.name))
-  const indexClasses = (indexes ?? [])
+  const indexClasses = indexes
     .filter(
       (idx) => modelNames.has(idx.model) && (idx.type === 'normal' || idx.type === 'fulltext'),
     )
@@ -997,14 +1155,28 @@ export function collectGlobalImports(
   const needsUlid = scalarFields.some((f) => isUlidDefault(f))
   const needsArray = scalarFields.some((f) => f.isList)
   const needsRawSql = scalarFields.some((f) => dbGeneratedExpr(f) !== null)
-  const needsNow = scalarFields.some((f) => isNowDefault(f) && !f.isUpdatedAt)
-  const needsDatetime = scalarFields.some(
-    (f) =>
-      (f.type === 'DateTime' && typeof f.default === 'string') ||
-      (f.type === 'DateTime' &&
-        Array.isArray(f.default) &&
-        f.default.some((v) => typeof v === 'string')),
-  )
+  const needsUtcField = scalarFields.some((f) => holdsUtc(f, provider))
+  const needsAutoNow = scalarFields.some((f) => f.isUpdatedAt)
+  const literalKinds = scalarFields
+    .filter(
+      (f) =>
+        f.type === 'DateTime' &&
+        (typeof f.default === 'string' ||
+          (Array.isArray(f.default) && f.default.some((v) => typeof v === 'string'))),
+    )
+    .map((f) => dateTimeKind(f))
+  const nowKinds = scalarFields
+    .filter((f) => isNowDefault(f) || f.isUpdatedAt)
+    .map((f) => dateTimeKind(f))
+  // utc_today() and utc_time() read the clock through datetime, as
+  // UtcDateTimeField checks a value against it.
+  const nowHelperKinds = nowKinds.filter((kind) => kind !== 'datetime')
+  const kinds = new Set([
+    ...literalKinds,
+    ...nowHelperKinds,
+    ...(needsUtcField || nowHelperKinds.length > 0 ? ['datetime'] : []),
+  ])
+  const fromDatetime = ['date', 'datetime', 'time'].filter((kind) => kinds.has(kind))
   const needsDecimal = scalarFields.some(
     (f) =>
       f.type === 'Decimal' &&
@@ -1022,24 +1194,36 @@ export function collectGlobalImports(
     return Array.isArray(parsed) ? parsed.length > 0 : Object.keys(parsed).length > 0
   })
 
+  const fromTyping = [
+    needsAny || needsUtcField || needsAutoNow ? 'Any' : null,
+    needsAutoNow ? 'TypeVar' : null,
+  ].filter((name) => name !== null)
+
   const stdlib = [
     needsUuid ? 'import uuid' : null,
-    needsDatetime ? 'from datetime import datetime' : null,
+    fromDatetime.length > 0 ? `from datetime import ${fromDatetime.join(', ')}` : null,
+    needsUtcField || nowHelperKinds.length > 0
+      ? 'from datetime import timezone as dt_timezone'
+      : null,
     needsDecimal ? 'from decimal import Decimal' : null,
-    needsAny ? 'from typing import Any' : null,
+    fromTyping.length > 0 ? `from typing import ${fromTyping.join(', ')}` : null,
   ].filter((l) => l !== null)
 
   const sortedIndexClasses = [...new Set(indexClasses)].toSorted()
 
   const thirdParty = [
     needsUuid6 ? 'import uuid6' : null,
+    needsUtcField ? 'from django.conf import settings' : null,
     needsArray ? 'from django.contrib.postgres.fields import ArrayField' : null,
     sortedIndexClasses.length > 0
       ? `from django.contrib.postgres.indexes import ${sortedIndexClasses.join(', ')}`
       : null,
     'from django.db import models',
+    needsUtcField ? 'from django.db.backends.base.base import BaseDatabaseWrapper' : null,
     needsRawSql ? 'from django.db.models.expressions import RawSQL' : null,
-    needsNow ? 'from django.db.models.functions import Now' : null,
+    needsUtcField || needsAutoNow || nowKinds.includes('datetime')
+      ? 'from django.utils import timezone'
+      : null,
     needsUlid ? 'from ulid import ULID' : null,
   ].filter((l) => l !== null)
 

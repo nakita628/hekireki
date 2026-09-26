@@ -11,6 +11,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class Comment extends Model
 {
+    use PrismaDates;
+
     const UPDATED_AT = null;
 
     protected $table = 'comments';

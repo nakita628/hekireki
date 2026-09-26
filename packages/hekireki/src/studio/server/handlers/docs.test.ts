@@ -2,10 +2,10 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
+import { NodeFileSystem } from '@effect/platform-node'
 import { Effect } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
-import { fileSystemLayer } from '../../../file/index.js'
 import { createStudioApp } from '../app.js'
 import { createStudioState, disconnectedDatabase } from '../services/index.js'
 
@@ -59,7 +59,7 @@ async function setup(schema = SCHEMA) {
   const schemaPath = path.join(dir, 'schema.prisma')
   writeFileSync(schemaPath, schema)
   const state = createStudioState({ schemaPath })
-  await Effect.runPromise(Effect.provide(state.reload(), fileSystemLayer))
+  await Effect.runPromise(Effect.provide(state.reload(), NodeFileSystem.layer))
   const app = createStudioApp(state, dir, disconnectedDatabase())
   const docs = async () => {
     const response = await app.request('/api/docs')
@@ -126,7 +126,7 @@ describe('GET /api/docs', () => {
     const { docs, state, schemaPath } = await setup()
     const before = await docs()
     writeFileSync(schemaPath, 'model Broken {\n  id Nope\n}\n')
-    await Effect.runPromise(Effect.provide(state.reload(), fileSystemLayer))
+    await Effect.runPromise(Effect.provide(state.reload(), NodeFileSystem.layer))
     expect(state.snapshot().error).not.toBeNull()
     expect(await docs()).toStrictEqual(before)
   })

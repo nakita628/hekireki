@@ -1,0 +1,19 @@
+{
+  "name": "@hekireki/example-sea-orm",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "clean": "rm -rf src/entities generated dev.db dev.db-journal .provider",
+    "generate": "prisma validate && prisma generate",
+    "db": "prisma db push --url file:./dev.db",
+    "lint": "cargo fmt --check && cargo clippy --quiet --features sqlite -- -D warnings",
+    "verify": "node run.ts",
+    "demo": "pnpm run clean && pnpm run generate && pnpm run db && pnpm run lint && pnpm run verify",
+    "demo:postgresql": "node provider.ts postgresql",
+    "demo:mysql": "node provider.ts mysql"
+  },
+  "devDependencies": {
+    "hekireki": "workspace:*",
+    "prisma": "8.1.0-dev.7"
+  }
+}

@@ -3,6 +3,7 @@ import type { DMMF } from '@prisma/generator-helper'
 import {
   createImports,
   generateImports,
+  makeDateHelpers,
   makeEnumDeclarations,
   makeM2MJoinRelations,
   makeM2MJoinTables,
@@ -41,9 +42,16 @@ export function drizzleSchema(
     i < relationsLines.length - 1 ? [line, ''] : [line],
   )
 
+  const dateHelpers = makeDateHelpers(imports)
+
   return [
     generateImports(imports, db),
     '',
+    // MySQL converts a TIMESTAMP through the session's zone and drizzle reads and writes UTC.
+    ...(db === 'mysql' && imports.core.has('timestamp')
+      ? ["// timestamp() holds UTC only on a connection whose time_zone is '+00:00'", '']
+      : []),
+    ...dateHelpers.flatMap((helper) => [helper, '']),
     ...(enumLinesWithGap.length > 0 ? [...enumLinesWithGap, ''] : []),
     ...tableLinesWithGap,
     ...(relationsLinesWithGap.length > 0 ? ['', ...relationsLinesWithGap] : []),

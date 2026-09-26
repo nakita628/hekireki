@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 class User extends Model
 {
     use HasUuids;
+    use PrismaDates;
 
     protected $table = 'users';
 
@@ -27,6 +28,10 @@ class User extends Model
         'name',
         'role',
         'interests',
+    ];
+
+    protected $attributes = [
+        'role' => 'VIEWER',
     ];
 
     protected $casts = [

@@ -12,9 +12,13 @@ ActiveRecord::Base.establish_connection(adapter: "sqlite3", database: File.expan
 # is off, and a belongs_to would take a missing owner.
 ActiveRecord::Base.belongs_to_required_by_default = true
 
-models_dir = File.expand_path("app/models", __dir__)
-require File.join(models_dir, "application_record.rb")
-(Dir[File.join(models_dir, "*.rb")] - [File.join(models_dir, "application_record.rb")]).sort.each { |file| require file }
+# app/models is loaded as a Rails application loads it, by Zeitwerk, which also holds each file to
+# the constant its name says (prisma_date_time.rb to PrismaDateTime).
+require "zeitwerk"
+loader = Zeitwerk::Loader.new
+loader.push_dir(File.expand_path("app/models", __dir__))
+loader.setup
+loader.eager_load
 
 # The checks below make rows; from empty tables each time, so the check can be run again.
 ActiveRecord::Base.connection.execute('DELETE FROM "_CategoryToPost"')
@@ -197,6 +201,17 @@ check "Prisma-named timestamps are filled, bumped and ordered by through their a
   Post.where(id: first.id).update_all(createdAt: 1.day.ago)
   reasons << "recent scope order" unless Post.recent.first == second && Post.recent.last == first
   reasons.empty? ? nil : reasons.join(", ")
+end
+
+check "a DateTime is written as the text Prisma writes, and found again by its instant" do
+  at = Time.utc(2030, 1, 2, 3, 4, Rational("5.678"))
+  post = Post.create!(title: "Dated", createdAt: at)
+  stored = Post.connection.select_value(Post.where(id: post.id).select(:createdAt).to_sql)
+  if stored != "2030-01-02T03:04:05.678+00:00"
+    "stored #{stored.inspect}, Prisma writes 2030-01-02T03:04:05.678+00:00"
+  elsif Post.find_by(createdAt: at) != post
+    "find_by(createdAt:) missed the row"
+  end
 end
 
 check "a uuid primary key is made in Ruby and first/last order by created_at" do

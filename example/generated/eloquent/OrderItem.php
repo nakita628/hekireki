@@ -21,9 +21,14 @@ class OrderItem extends Model
         'price',
     ];
 
+    protected $attributes = [
+        'qty' => 1,
+    ];
+
     protected $casts = [
         'order_id' => 'integer',
         'qty' => 'integer',
+        'price' => AsDecimal::class,
     ];
 
     public function order(): BelongsTo

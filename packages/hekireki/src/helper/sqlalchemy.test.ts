@@ -4,6 +4,50 @@ import { describe, expect, it } from 'vite-plus/test'
 import { generateSingleFile } from '../generator/sqlalchemy.js'
 import { prismaTypeToPythonType, prismaTypeToSQLAlchemyType, pythonAttrName } from './sqlalchemy.js'
 
+// What a PostgreSQL module with a DateTime carries above its models: the type every DateTime is
+// read through, as UTC, and the base that maps a plain `Mapped[datetime]` to it.
+const UTC_DATE_TIME = `class UtcDateTime(TypeDecorator[datetime]):
+    """A timestamp without time zone that holds UTC: an aware value is stored in UTC."""
+
+    impl = TIMESTAMP
+    cache_ok = True
+
+    def process_bind_param(self, value: Optional[datetime], dialect: Dialect) -> Optional[datetime]:
+        if value is None or value.tzinfo is None:
+            return value
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+    def process_result_value(self, value: Optional[datetime], dialect: Dialect) -> Optional[datetime]:
+        return None if value is None else value.replace(tzinfo=timezone.utc)
+
+
+`
+const UTC_DATE_TIME_TZ = `class UtcDateTimeTz(TypeDecorator[datetime]):
+    """A timestamptz: a naive value is UTC, not the session's zone, and reads are UTC."""
+
+    impl = TIMESTAMP
+    cache_ok = True
+
+    def __init__(self, precision: Optional[int] = None) -> None:
+        super().__init__(timezone=True, precision=precision)
+
+    def process_bind_param(self, value: Optional[datetime], dialect: Dialect) -> Optional[datetime]:
+        return value if value is None or value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+    def process_result_value(self, value: Optional[datetime], dialect: Dialect) -> Optional[datetime]:
+        return None if value is None else value.astimezone(timezone.utc)
+
+
+`
+const UTC_NOW = `def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+`
+const UTC_BASE = `class Base(DeclarativeBase):
+    type_annotation_map = {datetime: UtcDateTime(precision=3)}
+`
+
 describe('prismaTypeToSQLAlchemyType', () => {
   it('maps String to String', () => {
     expect(prismaTypeToSQLAlchemyType('String')).toStrictEqual('String')
@@ -249,20 +293,20 @@ class Account(Base):
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy import func
+      `from sqlalchemy import Dialect, TypeDecorator, func
+from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from datetime import datetime
+from typing import Optional
+from datetime import datetime, timezone
 
 
-class Base(DeclarativeBase):
-    pass
-
+${UTC_DATE_TIME}${UTC_NOW}${UTC_BASE}
 
 class Event(Base):
     __tablename__ = "Event"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    created_at: Mapped[datetime] = mapped_column("createdAt", server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column("createdAt", default=utc_now, server_default=func.now())
 `,
     )
   })
@@ -276,20 +320,20 @@ class Event(Base):
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy import func
+      `from sqlalchemy import Dialect, TypeDecorator
+from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from datetime import datetime
+from typing import Optional
+from datetime import datetime, timezone
 
 
-class Base(DeclarativeBase):
-    pass
-
+${UTC_DATE_TIME}${UTC_NOW}${UTC_BASE}
 
 class Record(Base):
     __tablename__ = "Record"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    updated_at: Mapped[datetime] = mapped_column("updatedAt", default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column("updatedAt", default=utc_now, onupdate=utc_now)
 `,
     )
   })
@@ -534,14 +578,14 @@ class User(Base):
     id: Mapped[str] = mapped_column(primary_key=True)
     name: Mapped[str]
 
-    posts: Mapped[list["Post"]] = relationship(back_populates="user")
+    posts: Mapped[list["Post"]] = relationship(passive_deletes="all", back_populates="user")
 
 class Post(Base):
     __tablename__ = "Post"
 
     id: Mapped[str] = mapped_column(primary_key=True)
     title: Mapped[str]
-    user_id: Mapped[str] = mapped_column("userId", ForeignKey("User.id"))
+    user_id: Mapped[str] = mapped_column("userId", ForeignKey("User.id", ondelete="RESTRICT", onupdate="CASCADE"))
 
     user: Mapped["User"] = relationship(back_populates="posts")
 `,
@@ -592,14 +636,14 @@ class User(Base):
     id: Mapped[str] = mapped_column(primary_key=True)
     name: Mapped[str]
 
-    profile: Mapped[Optional["Profile"]] = relationship(back_populates="user")
+    profile: Mapped[Optional["Profile"]] = relationship(passive_deletes="all", back_populates="user")
 
 class Profile(Base):
     __tablename__ = "Profile"
 
     id: Mapped[str] = mapped_column(primary_key=True)
     bio: Mapped[str]
-    user_id: Mapped[str] = mapped_column("userId", ForeignKey("User.id"), unique=True)
+    user_id: Mapped[str] = mapped_column("userId", ForeignKey("User.id", ondelete="RESTRICT", onupdate="CASCADE"), unique=True)
 
     user: Mapped["User"] = relationship(back_populates="profile")
 `,
@@ -935,7 +979,7 @@ class Measurement(Base):
     expect(generateSingleFile(models)).toBe(
       `from sqlalchemy import Date
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from datetime import datetime, date
+from datetime import date
 
 
 class Base(DeclarativeBase):
@@ -966,7 +1010,7 @@ class Birthday(Base):
     expect(generateSingleFile(models)).toBe(
       `from sqlalchemy import Time
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from datetime import datetime, time as time_type
+from datetime import time as time_type
 
 
 class Base(DeclarativeBase):
@@ -1057,7 +1101,7 @@ class Base(DeclarativeBase):
     ])
 
     expect(generateSingleFile([postModel, tagModel])).toBe(
-      `from sqlalchemy import Column, ForeignKey, Integer, Table
+      `from sqlalchemy import Column, ForeignKey, Index, Integer, Table
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -1067,8 +1111,9 @@ class Base(DeclarativeBase):
 post_to_tag = Table(
     "_PostToTag",
     Base.metadata,
-    Column("A", Integer, ForeignKey("Post.id"), primary_key=True),
-    Column("B", Integer, ForeignKey("Tag.id"), primary_key=True),
+    Column("A", Integer, ForeignKey("Post.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True),
+    Column("B", Integer, ForeignKey("Tag.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True),
+    Index("_PostToTag_B_index", "B"),
 )
 
 
@@ -1160,7 +1205,7 @@ class User(Base):
     id: Mapped[str] = mapped_column(primary_key=True)
     name: Mapped[str]
 
-    likes: Mapped[list["Like"]] = relationship(back_populates="user")
+    likes: Mapped[list["Like"]] = relationship(passive_deletes="all", back_populates="user")
 
 class Post(Base):
     __tablename__ = "Post"
@@ -1168,13 +1213,13 @@ class Post(Base):
     id: Mapped[str] = mapped_column(primary_key=True)
     title: Mapped[str]
 
-    likes: Mapped[list["Like"]] = relationship(back_populates="post")
+    likes: Mapped[list["Like"]] = relationship(passive_deletes="all", back_populates="post")
 
 class Like(Base):
     __tablename__ = "Like"
 
-    user_id: Mapped[str] = mapped_column("userId", ForeignKey("User.id"), primary_key=True)
-    post_id: Mapped[str] = mapped_column("postId", ForeignKey("Post.id"), primary_key=True)
+    user_id: Mapped[str] = mapped_column("userId", ForeignKey("User.id", ondelete="RESTRICT", onupdate="CASCADE"), primary_key=True)
+    post_id: Mapped[str] = mapped_column("postId", ForeignKey("Post.id", ondelete="RESTRICT", onupdate="CASCADE"), primary_key=True)
 
     user: Mapped["User"] = relationship(back_populates="likes")
     post: Mapped["Post"] = relationship(back_populates="likes")
@@ -1243,15 +1288,15 @@ class User(Base):
     id: Mapped[str] = mapped_column(primary_key=True)
     name: Mapped[str]
 
-    followers: Mapped[list["Follow"]] = relationship(foreign_keys="Follow.following_id", back_populates="following")
-    following: Mapped[list["Follow"]] = relationship(foreign_keys="Follow.follower_id", back_populates="follower")
+    followers: Mapped[list["Follow"]] = relationship(foreign_keys="Follow.following_id", passive_deletes="all", back_populates="following")
+    following: Mapped[list["Follow"]] = relationship(foreign_keys="Follow.follower_id", passive_deletes="all", back_populates="follower")
 
 class Follow(Base):
     __tablename__ = "Follow"
 
     id: Mapped[str] = mapped_column(primary_key=True)
-    follower_id: Mapped[str] = mapped_column("followerId", ForeignKey("User.id"))
-    following_id: Mapped[str] = mapped_column("followingId", ForeignKey("User.id"))
+    follower_id: Mapped[str] = mapped_column("followerId", ForeignKey("User.id", ondelete="RESTRICT", onupdate="CASCADE"))
+    following_id: Mapped[str] = mapped_column("followingId", ForeignKey("User.id", ondelete="RESTRICT", onupdate="CASCADE"))
 
     follower: Mapped["User"] = relationship(foreign_keys=[follower_id], back_populates="following")
     following: Mapped["User"] = relationship(foreign_keys=[following_id], back_populates="followers")
@@ -1406,15 +1451,14 @@ class User(Base):
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy import func
+      `from sqlalchemy import Dialect, TypeDecorator, func
+from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 
-class Base(DeclarativeBase):
-    pass
-
+${UTC_DATE_TIME}${UTC_NOW}${UTC_BASE}
 
 class Article(Base):
     __tablename__ = "Article"
@@ -1424,8 +1468,8 @@ class Article(Base):
     slug: Mapped[str] = mapped_column(unique=True)
     body: Mapped[Optional[str]]
     published: Mapped[bool] = mapped_column(default=False)
-    created_at: Mapped[datetime] = mapped_column("createdAt", server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column("updatedAt", default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column("createdAt", default=utc_now, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column("updatedAt", default=utc_now, onupdate=utc_now)
 `,
     )
   })
@@ -1538,7 +1582,7 @@ describe('named implicit many-to-many', () => {
     ]
 
     expect(generateSingleFile(models))
-      .toBe(`from sqlalchemy import Column, ForeignKey, String, Table
+      .toBe(`from sqlalchemy import Column, ForeignKey, Index, String, Table
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -1548,8 +1592,9 @@ class Base(DeclarativeBase):
 post_tags = Table(
     "_PostTags",
     Base.metadata,
-    Column("A", String, ForeignKey("Post.id"), primary_key=True),
-    Column("B", String, ForeignKey("Tag.id"), primary_key=True),
+    Column("A", String, ForeignKey("Post.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True),
+    Column("B", String, ForeignKey("Tag.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True),
+    Index("_PostTags_B_index", "B"),
 )
 
 
@@ -1571,7 +1616,7 @@ class Tag(Base):
 })
 
 describe('timestamptz native type', () => {
-  it('emits DateTime(timezone=True) for @db.Timestamptz', () => {
+  it('emits the UTC timestamptz type for @db.Timestamptz', () => {
     const models = [
       makeModel('Sensor', [
         makeField({
@@ -1590,13 +1635,14 @@ describe('timestamptz native type', () => {
       ]),
     ]
 
-    expect(generateSingleFile(models)).toBe(`from sqlalchemy import DateTime
+    expect(generateSingleFile(models)).toBe(`from sqlalchemy import Dialect, TypeDecorator
+from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 
-class Base(DeclarativeBase):
+${UTC_DATE_TIME_TZ}class Base(DeclarativeBase):
     pass
 
 
@@ -1604,7 +1650,7 @@ class Sensor(Base):
     __tablename__ = "Sensor"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    seen_at: Mapped[Optional[datetime]] = mapped_column("seenAt", DateTime(timezone=True))
+    seen_at: Mapped[Optional[datetime]] = mapped_column("seenAt", UtcDateTimeTz(precision=6))
 `)
   })
 })
@@ -1750,36 +1796,50 @@ const NATIVE_TYPES: readonly (readonly [
     'DateTime',
     '@db.Timestamp',
     ['Timestamp', []],
-    'from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import datetime\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
-    'Mapped[datetime]\n',
+    `from sqlalchemy import Dialect, TypeDecorator\nfrom sqlalchemy.dialects.postgresql import TIMESTAMP\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom typing import Optional\nfrom datetime import datetime, timezone\n\n\n${UTC_DATE_TIME}${UTC_BASE}\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n`,
+    'Mapped[datetime] = mapped_column(UtcDateTime())\n',
   ],
   [
     'DateTime',
     '@db.Timestamptz',
     ['Timestamptz', []],
-    'from sqlalchemy import DateTime\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import datetime\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
-    'Mapped[datetime] = mapped_column(DateTime(timezone=True))\n',
+    `from sqlalchemy import Dialect, TypeDecorator\nfrom sqlalchemy.dialects.postgresql import TIMESTAMP\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom typing import Optional\nfrom datetime import datetime, timezone\n\n\n${UTC_DATE_TIME_TZ}class Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n`,
+    'Mapped[datetime] = mapped_column(UtcDateTimeTz())\n',
   ],
   [
     'DateTime',
     '@db.Date',
     ['Date', []],
-    'from sqlalchemy import Date\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import datetime, date\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
+    'from sqlalchemy import Date\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import date\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[date] = mapped_column(Date)\n',
   ],
   [
     'DateTime',
     '@db.Time',
     ['Time', []],
-    'from sqlalchemy import Time\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import datetime, time as time_type\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
+    'from sqlalchemy import Time\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import time as time_type\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[time_type] = mapped_column(Time)\n',
   ],
   [
     'DateTime',
     '@db.Timetz',
     ['Timetz', []],
-    'from sqlalchemy import Time\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import datetime\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
+    'from sqlalchemy import Time\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import time as time_type\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[time_type] = mapped_column(Time(timezone=True))\n',
+  ],
+  [
+    'DateTime',
+    '@db.Time(3)',
+    ['Time', ['3']],
+    'from sqlalchemy.dialects.postgresql import TIME\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import time as time_type\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
+    'Mapped[time_type] = mapped_column(TIME(precision=3))\n',
+  ],
+  [
+    'DateTime',
+    '@db.Timetz(6)',
+    ['Timetz', ['6']],
+    'from sqlalchemy.dialects.postgresql import TIME\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import time as time_type\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
+    'Mapped[time_type] = mapped_column(TIME(precision=6, timezone=True))\n',
   ],
   [
     'Json',
@@ -1867,5 +1927,450 @@ describe('pythonAttrName', () => {
 
   it.each(['email', 'createdAt', 'Class', 'metadata_'])('leaves %s alone', (name) => {
     expect(pythonAttrName(name)).toBe(name)
+  })
+})
+
+// Corners examples/sqlalchemy runs against SQLite: each of these once imported, configured or
+// behaved differently from the tables Prisma made.
+describe('relations as the database has them', () => {
+  const account = (extra: DMMF.Field[]) =>
+    makeModel('Account', [makeField({ name: 'id', type: 'Int', isId: true }), ...extra], {
+      dbName: 'accounts',
+    })
+
+  it('gives a relation named after a Python keyword a trailing underscore, on both sides', () => {
+    const models = [
+      account([
+        makeField({
+          name: 'sent',
+          type: 'Transfer',
+          kind: 'object',
+          isList: true,
+          relationName: 'Sent',
+        }),
+        makeField({
+          name: 'received',
+          type: 'Transfer',
+          kind: 'object',
+          isList: true,
+          relationName: 'Received',
+        }),
+      ]),
+      makeModel('Transfer', [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'fromId', type: 'Int' }),
+        makeField({
+          name: 'from',
+          type: 'Account',
+          kind: 'object',
+          relationName: 'Sent',
+          relationFromFields: ['fromId'],
+          relationToFields: ['id'],
+          relationOnDelete: 'NoAction',
+        }),
+        makeField({ name: 'toId', type: 'Int' }),
+        makeField({
+          name: 'to',
+          type: 'Account',
+          kind: 'object',
+          relationName: 'Received',
+          relationFromFields: ['toId'],
+          relationToFields: ['id'],
+          relationOnDelete: 'Cascade',
+        }),
+      ]),
+    ]
+
+    expect(generateSingleFile(models)).toBe(`from sqlalchemy import ForeignKey
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class Account(Base):
+    __tablename__ = "accounts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    sent: Mapped[list["Transfer"]] = relationship(foreign_keys="Transfer.from_id", passive_deletes="all", back_populates="from_")
+    received: Mapped[list["Transfer"]] = relationship(foreign_keys="Transfer.to_id", cascade="all, delete", passive_deletes=True, back_populates="to")
+
+class Transfer(Base):
+    __tablename__ = "Transfer"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    from_id: Mapped[int] = mapped_column("fromId", ForeignKey("accounts.id", ondelete="NO ACTION", onupdate="CASCADE"))
+    to_id: Mapped[int] = mapped_column("toId", ForeignKey("accounts.id", ondelete="CASCADE", onupdate="CASCADE"))
+
+    from_: Mapped["Account"] = relationship(foreign_keys=[from_id], back_populates="sent")
+    to: Mapped["Account"] = relationship(foreign_keys=[to_id], back_populates="received")
+`)
+  })
+
+  it('writes the actions Prisma Migrate implies when the schema names none', () => {
+    const models = [
+      account([
+        makeField({
+          name: 'orders',
+          type: 'Order',
+          kind: 'object',
+          isList: true,
+          relationName: 'Buyer',
+        }),
+        makeField({
+          name: 'notes',
+          type: 'Order',
+          kind: 'object',
+          isList: true,
+          relationName: 'Reviewer',
+        }),
+      ]),
+      makeModel('Order', [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'buyerId', type: 'Int' }),
+        makeField({
+          name: 'buyer',
+          type: 'Account',
+          kind: 'object',
+          relationName: 'Buyer',
+          relationFromFields: ['buyerId'],
+          relationToFields: ['id'],
+        }),
+        makeField({ name: 'reviewerId', type: 'Int', isRequired: false }),
+        makeField({
+          name: 'reviewer',
+          type: 'Account',
+          kind: 'object',
+          isRequired: false,
+          relationName: 'Reviewer',
+          relationFromFields: ['reviewerId'],
+          relationToFields: ['id'],
+        }),
+      ]),
+    ]
+
+    const code = generateSingleFile(models)
+    // Required: RESTRICT, which the session leaves to the database instead of nulling the key.
+    expect(code).toContain(
+      'buyer_id: Mapped[int] = mapped_column("buyerId", ForeignKey("accounts.id", ondelete="RESTRICT", onupdate="CASCADE"))',
+    )
+    expect(code).toContain(
+      'orders: Mapped[list["Order"]] = relationship(foreign_keys="Order.buyer_id", passive_deletes="all", back_populates="buyer")',
+    )
+    // Optional: SET NULL, which is what the session does on its own.
+    expect(code).toContain(
+      'reviewer_id: Mapped[Optional[int]] = mapped_column("reviewerId", ForeignKey("accounts.id", ondelete="SET NULL", onupdate="CASCADE"))',
+    )
+    expect(code).toContain(
+      'notes: Mapped[list["Order"]] = relationship(foreign_keys="Order.reviewer_id", back_populates="reviewer")',
+    )
+  })
+
+  it('cascades a 1-1 delete in the session and leaves the rest to the database', () => {
+    const models = [
+      account([
+        makeField({
+          name: 'profile',
+          type: 'Profile',
+          kind: 'object',
+          isRequired: false,
+          relationName: 'P',
+        }),
+      ]),
+      makeModel('Profile', [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'accountId', type: 'Int', isUnique: true }),
+        makeField({
+          name: 'account',
+          type: 'Account',
+          kind: 'object',
+          relationName: 'P',
+          relationFromFields: ['accountId'],
+          relationToFields: ['id'],
+          relationOnDelete: 'Cascade',
+        }),
+      ]),
+    ]
+
+    expect(generateSingleFile(models)).toContain(
+      'profile: Mapped[Optional["Profile"]] = relationship(cascade="all, delete", passive_deletes=True, back_populates="account")',
+    )
+  })
+
+  // Prisma Client writes `ann.following.connect(bob)` as A = bob, B = ann: the field whose name
+  // sorts first lists the B of the rows whose A is the row.
+  it('tells a self many-to-many which join column holds the row', () => {
+    const models = [
+      account([
+        makeField({
+          name: 'following',
+          type: 'Account',
+          kind: 'object',
+          isList: true,
+          relationName: 'Follows',
+        }),
+        makeField({
+          name: 'followers',
+          type: 'Account',
+          kind: 'object',
+          isList: true,
+          relationName: 'Follows',
+        }),
+      ]),
+    ]
+
+    expect(generateSingleFile(models))
+      .toBe(`from sqlalchemy import Column, ForeignKey, Index, Integer, Table
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+
+class Base(DeclarativeBase):
+    pass
+
+follows = Table(
+    "_Follows",
+    Base.metadata,
+    Column("A", Integer, ForeignKey("accounts.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True),
+    Column("B", Integer, ForeignKey("accounts.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True),
+    Index("_Follows_B_index", "B"),
+)
+
+
+class Account(Base):
+    __tablename__ = "accounts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    following: Mapped[list["Account"]] = relationship(secondary=follows, primaryjoin=lambda: Account.id == follows.c.B, secondaryjoin=lambda: Account.id == follows.c.A, back_populates="followers")
+    followers: Mapped[list["Account"]] = relationship(secondary=follows, primaryjoin=lambda: Account.id == follows.c.A, secondaryjoin=lambda: Account.id == follows.c.B, back_populates="following")
+`)
+  })
+
+  it('stores the None of an optional Json as NULL, and of a required one as JSON null', () => {
+    const models = [
+      makeModel('Row', [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'data', type: 'Json' }),
+        makeField({ name: 'extra', type: 'Json', isRequired: false }),
+      ]),
+    ]
+
+    const code = generateSingleFile(models)
+    expect(code).toContain('    data: Mapped[dict[str, Any]] = mapped_column(JSON)\n')
+    expect(code).toContain(
+      '    extra: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON(none_as_null=True))\n',
+    )
+  })
+})
+
+// Prisma Client reads and writes a DateTime as a UTC instant, whatever the process's or the
+// session's time zone: the module makes every DateTime an aware UTC datetime, on each provider's
+// own storage of it.
+describe('DateTime per provider', () => {
+  const now = { hasDefaultValue: true, default: { name: 'now', args: [] } }
+
+  it('keeps SQLite DateTime as the UTC text Prisma writes', () => {
+    const models = [
+      makeModel('Row', [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'at', type: 'DateTime', ...now }),
+        makeField({ name: 'seen', type: 'DateTime', isRequired: false, isUpdatedAt: true }),
+      ]),
+    ]
+
+    expect(generateSingleFile(models, [], [], 'sqlite'))
+      .toBe(`from sqlalchemy import Dialect, String, TypeDecorator, func
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from typing import Any, Optional
+from datetime import datetime, timezone
+
+
+class UtcDateTime(TypeDecorator[datetime]):
+    """UTC text with milliseconds, \`2030-01-02T03:04:05.678+00:00\`; a naive value is UTC."""
+
+    impl = String
+    cache_ok = True
+
+    def process_bind_param(self, value: Optional[datetime], dialect: Dialect) -> Optional[str]:
+        if value is None:
+            return None
+        aware = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        return aware.astimezone(timezone.utc).isoformat(timespec="milliseconds")
+
+    def process_result_value(self, value: Optional[str], dialect: Dialect) -> Optional[datetime]:
+        if value is None:
+            return None
+        read = datetime.fromisoformat(value)
+        return read.replace(tzinfo=timezone.utc) if read.tzinfo is None else read.astimezone(timezone.utc)
+
+
+@compiles(UtcDateTime)
+def utc_date_time_ddl(type_: UtcDateTime, compiler: Any, **kw: Any) -> str:
+    """The column Prisma Migrate declares: DATETIME, which keeps the text as it is."""
+    return "DATETIME"
+
+
+${UTC_NOW}class Base(DeclarativeBase):
+    type_annotation_map = {datetime: UtcDateTime}
+
+
+class Row(Base):
+    __tablename__ = "Row"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    at: Mapped[datetime] = mapped_column(default=utc_now, server_default=func.now())
+    seen: Mapped[Optional[datetime]] = mapped_column(default=utc_now, onupdate=utc_now)
+`)
+  })
+
+  it('gives MySQL DATETIME its precision and undoes the session zone on a TIMESTAMP', () => {
+    const models = [
+      makeModel('Row', [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'at', type: 'DateTime', ...now }),
+        makeField({ name: 'ts', type: 'DateTime', nativeType: ['Timestamp', ['3']], ...now }),
+        makeField({ name: 'ts0', type: 'DateTime', nativeType: ['Timestamp', []], ...now }),
+        makeField({ name: 'dt6', type: 'DateTime', nativeType: ['DateTime', ['6']] }),
+      ]),
+    ]
+
+    expect(generateSingleFile(models, [], [], 'mysql'))
+      .toBe(`from sqlalchemy import BindParameter, ColumnElement, DateTime, Dialect, TypeDecorator, func, text
+from sqlalchemy.dialects.mysql import DATETIME, TIMESTAMP
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from typing import Optional
+from datetime import datetime, timezone
+
+
+class UtcDateTime(TypeDecorator[datetime]):
+    """A timestamp without time zone that holds UTC: an aware value is stored in UTC."""
+
+    impl: type[DateTime] = DATETIME
+    cache_ok = True
+
+    def process_bind_param(self, value: Optional[datetime], dialect: Dialect) -> Optional[datetime]:
+        if value is None or value.tzinfo is None:
+            return value
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+    def process_result_value(self, value: Optional[datetime], dialect: Dialect) -> Optional[datetime]:
+        return None if value is None else value.replace(tzinfo=timezone.utc)
+
+
+class UtcTimestamp(UtcDateTime):
+    """A TIMESTAMP, which the server shifts by the session's time_zone: shifted back here."""
+
+    impl = TIMESTAMP
+    cache_ok = True
+
+    def bind_expression(self, value: BindParameter[datetime]) -> ColumnElement[datetime]:
+        return func.convert_tz(value, "+00:00", text("@@session.time_zone"), type_=self)
+
+    def column_expression(self, column: ColumnElement[datetime]) -> ColumnElement[datetime]:
+        return func.convert_tz(column, text("@@session.time_zone"), "+00:00", type_=self)
+
+
+${UTC_NOW}class Base(DeclarativeBase):
+    type_annotation_map = {datetime: UtcDateTime(fsp=3)}
+
+
+class Row(Base):
+    __tablename__ = "Row"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    at: Mapped[datetime] = mapped_column(default=utc_now, server_default=func.now(3))
+    ts: Mapped[datetime] = mapped_column(UtcTimestamp(fsp=3), default=utc_now, server_default=func.now(3))
+    ts0: Mapped[datetime] = mapped_column(UtcTimestamp(), default=utc_now, server_default=func.now())
+    dt6: Mapped[datetime] = mapped_column(UtcDateTime(fsp=6))
+`)
+  })
+
+  // No column is read through UtcDateTime, so the module leaves it out; a TIME keeps its precision
+  // as Prisma Migrate writes it, TIME(0) where none is given.
+  it('gives a MySQL TIME its precision and leaves out UtcDateTime where no column uses it', () => {
+    const models = [
+      makeModel('Shift', [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'day', type: 'DateTime', nativeType: ['Date', []] }),
+        makeField({ name: 'starts', type: 'DateTime', nativeType: ['Time', ['3']] }),
+        makeField({ name: 'ends', type: 'DateTime', isRequired: false, nativeType: ['Time', []] }),
+      ]),
+    ]
+
+    expect(generateSingleFile(models, [], [], 'mysql')).toBe(`from sqlalchemy import Date, Time
+from sqlalchemy.dialects.mysql import TIME
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from typing import Optional
+from datetime import date, time as time_type
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class Shift(Base):
+    __tablename__ = "Shift"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    day: Mapped[date] = mapped_column(Date)
+    starts: Mapped[time_type] = mapped_column(TIME(fsp=3))
+    ends: Mapped[Optional[time_type]] = mapped_column(Time)
+`)
+  })
+
+  it('reads lists, dates and times, and their defaults, in UTC on PostgreSQL', () => {
+    const models = [
+      makeModel('Row', [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'stamps', type: 'DateTime', isList: true }),
+        makeField({ name: 'days', type: 'DateTime', isList: true, nativeType: ['Date', []] }),
+        makeField({
+          name: 'd',
+          type: 'DateTime',
+          nativeType: ['Date', []],
+          hasDefaultValue: true,
+          default: '2024-01-15T00:00:00.000Z',
+        }),
+        makeField({
+          name: 't',
+          type: 'DateTime',
+          nativeType: ['Time', ['3']],
+          hasDefaultValue: true,
+          default: '1970-01-01T10:30:00.000Z',
+        }),
+        makeField({ name: 'dn', type: 'DateTime', nativeType: ['Date', []], ...now }),
+        makeField({
+          name: 'tz',
+          type: 'DateTime',
+          nativeType: ['Timetz', ['3']],
+          isUpdatedAt: true,
+        }),
+      ]),
+    ]
+
+    expect(generateSingleFile(models, [], [], 'postgresql'))
+      .toBe(`from sqlalchemy import ARRAY, Date, Dialect, TypeDecorator, func
+from sqlalchemy.dialects.postgresql import TIME, TIMESTAMP
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from typing import Optional
+from datetime import datetime, date, time as time_type, timezone
+
+
+${UTC_DATE_TIME}${UTC_NOW}${UTC_BASE}
+
+class Row(Base):
+    __tablename__ = "Row"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    stamps: Mapped[list[datetime]] = mapped_column(ARRAY(UtcDateTime(precision=3)))
+    days: Mapped[list[date]] = mapped_column(ARRAY(Date))
+    d: Mapped[date] = mapped_column(Date, default=date.fromisoformat("2024-01-15"))
+    t: Mapped[time_type] = mapped_column(TIME(precision=3), default=time_type.fromisoformat("10:30:00.000"))
+    dn: Mapped[date] = mapped_column(Date, default=lambda: utc_now().date(), server_default=func.now())
+    tz: Mapped[time_type] = mapped_column(TIME(precision=3, timezone=True), default=lambda: utc_now().timetz(), onupdate=lambda: utc_now().timetz())
+`)
   })
 })

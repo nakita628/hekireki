@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { allocate, pascalCase } from './naming.js'
+import { allocate, pascalCase } from '../utils/naming.js'
 import {
   backRelation,
   columnName,
@@ -21,8 +21,15 @@ import {
   sqlString,
   sqlTimestamp,
   tableName,
-} from './prisma-postgres.js'
-import type { IndexInfo, ManyToMany } from './prisma-postgres.js'
+} from '../utils/prisma-postgres.js'
+import type { IndexInfo, ManyToMany } from '../utils/prisma-postgres.js'
+import {
+  PRISMA_STRING,
+  prismaBlocks,
+  prismaString,
+  relationMaps,
+  relationMode,
+} from '../utils/prisma-schema-text.js'
 
 // Generated Kotlin names a class through a placeholder: `\0T|java.time.Instant\0` where a type is
 // expected, `\0E|...\0` where a class is the receiver of a call (`Instant.now()`), `\0F|...\0` for a
@@ -247,48 +254,6 @@ export function propertyName(name: string) {
   )
 }
 
-const PRISMA_ESCAPES: { readonly [char: string]: string } = {
-  b: '\b',
-  f: '\f',
-  n: '\n',
-  r: '\r',
-  t: '\t',
-}
-
-// A Prisma string literal's value: Prisma takes JSON's escapes, and only those.
-function prismaString(literal: string) {
-  return literal
-    .slice(1, -1)
-    .replaceAll(/\\(?:u([\dA-Fa-f]{4})|(.))/gu, (_, hex: string | undefined, char: string) =>
-      hex === undefined
-        ? (PRISMA_ESCAPES[char] ?? char)
-        : String.fromCodePoint(Number.parseInt(hex, 16)),
-    )
-}
-
-// The blocks of a Prisma schema with their lines, comments cut. The schema is line-based: a block
-// opens with `keyword Name {` on a line of its own and closes with `}` on one, and blocks do not
-// nest; a field or an attribute, arguments and all, stands on one line.
-function prismaBlocks(source: string) {
-  const lines = source
-    .split(/\r?\n/u)
-    .map((line) => (/^(?:"(?:[^"\\]|\\.)*"|[^"/]|\/(?!\/))*/u.exec(line)?.[0] ?? line).trim())
-  return lines.flatMap((line, index) => {
-    const opening = /^(\w+)\s+([^\s{]+)\s*\{$/u.exec(line)
-    if (!opening) return []
-    const end = lines.indexOf('}', index + 1)
-    return [
-      {
-        keyword: opening[1],
-        name: opening[2],
-        lines: lines.slice(index + 1, end === -1 ? lines.length : end),
-      },
-    ]
-  })
-}
-
-const PRISMA_STRING = String.raw`"(?:[^"\\]|\\.)*"`
-
 /**
  * The `@@schema` each enum is declared in. DMMF carries a model's schema but not an enum's, so it
  * is read off the schema's text.
@@ -315,37 +280,6 @@ export function enumSchemas(source: string) {
 }
 
 /**
- * The name each foreign key is given with `@relation(map: "...")`, by `Model.field`. DMMF drops it,
- * so it is read off the schema's text.
- *
- * @param source - The Prisma schema as written (all of its files, merged).
- * @returns The constraint name of each relation field that names one.
- */
-export function relationMaps(source: string) {
-  const string = new RegExp(PRISMA_STRING, 'gu')
-  return new Map(
-    prismaBlocks(source)
-      .filter((block) => block.keyword === 'model')
-      .flatMap((block) =>
-        block.lines.flatMap((line) => {
-          // With each string stood in for by where it starts, @relation's arguments hold no
-          // parenthesis.
-          const strings = new Map([...line.matchAll(string)].map((m) => [String(m.index), m[0]]))
-          const bare = line.replaceAll(string, (_, offset: number) => `"${offset}"`)
-          const field = /^([^\s@]\S*)\s/u.exec(bare)?.[1]
-          const args = /@relation\s*\(([^)]*)\)/u.exec(bare)?.[1]
-          const map =
-            args === undefined ? undefined : /(?:^|,)\s*map\s*:\s*"(\d+)"/u.exec(args)?.[1]
-          return field === undefined || map === undefined
-            ? []
-            : [{ key: `${block.name}.${field}`, name: prismaString(strings.get(map) ?? '""') }]
-        }),
-      )
-      .map(({ key, name }) => [key, name]),
-  )
-}
-
-/**
  * The names of the `view` blocks. DMMF lists a view among the models, with nothing to tell it
  * apart; Prisma Migrate creates no table for it.
  *
@@ -358,23 +292,6 @@ function viewNames(source: string) {
       .filter((block) => block.keyword === 'view')
       .map((block) => block.name),
   )
-}
-
-/**
- * The datasource's `relationMode`: with `"prisma"`, Prisma Migrate creates no foreign keys.
- *
- * @param source - The Prisma schema as written (all of its files, merged).
- * @returns The relation mode, `foreignKeys` unless the datasource names another.
- */
-function relationMode(source: string) {
-  const setting = prismaBlocks(source)
-    .filter((block) => block.keyword === 'datasource')
-    .flatMap((block) => block.lines)
-    .flatMap((line) => {
-      const match = new RegExp(String.raw`^relationMode\s*=\s*(${PRISMA_STRING})$`, 'u').exec(line)
-      return match ? [prismaString(match[1])] : []
-    })
-  return setting[0] ?? 'foreignKeys'
 }
 
 const ATTRIBUTE_TOKEN = new RegExp(String.raw`${PRISMA_STRING}|[()[\]{}:,]|[^\s()[\]{}:,"]+`, 'gu')
@@ -1508,12 +1425,13 @@ function pad(value: number, width = 2) {
 }
 
 // A timestamp default as the value Prisma Client writes for it: the instant the literal names, in
-// UTC — the UTC clock in a column without a time zone, the UTC date in a date column. (The DEFAULT
-// Prisma Migrate writes is the literal itself, which PostgreSQL reads with the offset dropped for
-// those columns; see `defaultPlan`.)
+// UTC — the UTC clock in a column without a time zone, the UTC date in a date column, the UTC time
+// of day at offset zero in a timetz column. (The DEFAULT Prisma Migrate writes is the literal
+// itself, which PostgreSQL reads with the offset dropped for the columns without a time zone and
+// with the offset kept for timetz; see `defaultPlan`.)
 function temporalLiteral(value: string, kind: TemporalKind) {
   const parsed = parseDateTimeDefault(value)
-  if (!parsed || kind === 'timetz') return null
+  if (!parsed) return null
   const moment = shift(parsed, parsed.offsetMinutes)
   if (moment.year > 9999) return null
   const date = `${pad(moment.year, 4)}-${pad(moment.month)}-${pad(moment.day)}`
@@ -1522,6 +1440,7 @@ function temporalLiteral(value: string, kind: TemporalKind) {
   const time = `${pad(moment.hour)}:${pad(moment.minute)}:${pad(moment.second)}${fraction}`
   if (kind === 'date') return `${exprRef(KT.LocalDate)}.parse(${kotlinString(date)})`
   if (kind === 'time') return `${exprRef(KT.LocalTime)}.parse(${kotlinString(time)})`
+  if (kind === 'timetz') return `${exprRef(KT.OffsetTime)}.parse(${kotlinString(`${time}Z`)})`
   return `${exprRef(KT.Instant)}.parse(${kotlinString(`${date}T${time}Z`)})`
 }
 
@@ -2798,7 +2717,9 @@ function unexpected(subject: string) {
 }
 
 // A column type of java.time values, bound and read as the java.time class JDBC 4.2 maps the
-// PostgreSQL type to, so that no conversion goes through the JVM's default time zone.
+// PostgreSQL type to, so that no conversion goes through the JVM's default time zone. `read` is
+// appended to what the column read: Prisma Client holds a DateTime as a JavaScript Date, so a value
+// is written and read to the millisecond and a zoned time at UTC, whatever precision the column has.
 function temporalClass(
   name: string,
   kotlin: string,
@@ -2806,6 +2727,7 @@ function temporalClass(
   precision: boolean,
   readAs: string,
   fromRead: string,
+  read: string,
   toDb: string | null,
 ) {
   const header = precision
@@ -2827,7 +2749,7 @@ function temporalClass(
     `            is ${x(kotlin)} -> value`,
     ...(readAs === kotlin ? [] : [`            is ${x(readAs)} -> ${fromRead}`]),
     `            else -> ${unexpected('')}`,
-    '        }',
+    `        }${read}`,
     '',
     ...readObjectLines(`rs.getObject(index, ${x(readAs)}::class.java)`),
     ...(toDb === null
@@ -2861,6 +2783,7 @@ function stringFactory(name: string, sqlType: string, cast: string) {
 }
 
 const utc = `${x(KT.ZoneOffset)}.UTC`
+const millis = `truncatedTo(${x(KT.ChronoUnit)}.MILLIS)`
 
 // Each declaration the tables may use, in the order the support file writes them, with the other
 // declarations it uses.
@@ -2879,6 +2802,11 @@ const SUPPORT: readonly Declaration[] = [
       '}',
     ],
   },
+  // The column's DEFAULT is `sql`, the clause Prisma Migrate writes. With a `value`, every insert
+  // writes that instead, as Prisma Client does: a DSL insert leaves a column with a database default
+  // out of the statement, and CURRENT_TIMESTAMP in a column without a time zone is then the clock
+  // of the session's TimeZone, which pgjdbc sets to the JVM's. So the value is a client default and
+  // the DEFAULT only a clause of the column's definition.
   {
     name: 'databaseDefault',
     needs: ['SqlExpression'],
@@ -2886,7 +2814,10 @@ const SUPPORT: readonly Declaration[] = [
       `internal fun <T> ${t(KT.Column)}<T>.databaseDefault(`,
       `    sql: ${t(KT.String)},`,
       '    value: (() -> T)? = null,',
-      `): ${t(KT.Column)}<T> = with(table) { defaultExpression(SqlExpression(sql, columnType)).also { it.defaultValueFun = value } }`,
+      `): ${t(KT.Column)}<T> =`,
+      '    with(table) {',
+      '        if (value == null) defaultExpression(SqlExpression(sql, columnType)) else clientDefault(value).withDefinition("DEFAULT $sql")',
+      '    }',
     ],
   },
   {
@@ -2926,7 +2857,8 @@ const SUPPORT: readonly Declaration[] = [
       true,
       KT.LocalDateTime,
       `value.toInstant(${utc})`,
-      `${x(KT.LocalDateTime)}.ofInstant(value, ${utc})`,
+      `.${millis}`,
+      `${x(KT.LocalDateTime)}.ofInstant(value.${millis}, ${utc})`,
     ),
   },
   {
@@ -2944,7 +2876,8 @@ const SUPPORT: readonly Declaration[] = [
       true,
       KT.OffsetDateTime,
       'value.toInstant()',
-      `value.atOffset(${utc})`,
+      `.${millis}`,
+      `value.${millis}.atOffset(${utc})`,
     ),
   },
   {
@@ -2955,7 +2888,16 @@ const SUPPORT: readonly Declaration[] = [
   {
     name: 'PgDateColumnType',
     needs: [],
-    lines: temporalClass('PgDateColumnType', KT.LocalDate, 'DATE', false, KT.LocalDate, '', null),
+    lines: temporalClass(
+      'PgDateColumnType',
+      KT.LocalDate,
+      'DATE',
+      false,
+      KT.LocalDate,
+      '',
+      '',
+      null,
+    ),
   },
   {
     name: 'pgDate',
@@ -2965,7 +2907,16 @@ const SUPPORT: readonly Declaration[] = [
   {
     name: 'PgTimeColumnType',
     needs: [],
-    lines: temporalClass('PgTimeColumnType', KT.LocalTime, 'TIME', true, KT.LocalTime, '', null),
+    lines: temporalClass(
+      'PgTimeColumnType',
+      KT.LocalTime,
+      'TIME',
+      true,
+      KT.LocalTime,
+      '',
+      `.${millis}`,
+      `value.${millis}`,
+    ),
   },
   {
     name: 'pgTime',
@@ -2982,7 +2933,8 @@ const SUPPORT: readonly Declaration[] = [
       true,
       KT.OffsetTime,
       '',
-      null,
+      `.withOffsetSameInstant(${utc}).${millis}`,
+      `value.withOffsetSameInstant(${utc}).${millis}`,
     ),
   },
   {

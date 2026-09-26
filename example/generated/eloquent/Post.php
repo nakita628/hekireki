@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Post extends Model
 {
     use HasVersion4Uuids;
+    use PrismaDates;
 
     const UPDATED_AT = null;
 
@@ -31,6 +32,12 @@ class Post extends Model
         'published',
         'view_count',
         'author_id',
+    ];
+
+    protected $attributes = [
+        'visibility' => 'link_only',
+        'published' => false,
+        'view_count' => 0,
     ];
 
     protected $casts = [

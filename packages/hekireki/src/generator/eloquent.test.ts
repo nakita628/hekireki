@@ -106,6 +106,7 @@ class User extends Model
     public $timestamps = false;
 
     protected $fillable = [
+        'id',
         'name',
         'role',
     ];
@@ -138,6 +139,7 @@ class BlogPost extends Model
     public $timestamps = false;
 
     protected $fillable = [
+        'id',
         'title',
         'authorId',
     ];
@@ -190,9 +192,24 @@ class Bare extends Model
     public $incrementing = false;
 
     public $timestamps = false;
+
+    protected $fillable = [
+        'id',
+    ];
 }`,
       },
     ])
+  })
+
+  it('names the file after the class, as PSR-4 autoloading looks for it', () => {
+    const introspected = makeModel({
+      name: 'store_setting',
+      fields: [makeField({ name: 'key', type: 'String', isUnique: true })],
+    })
+
+    const [file] = eloquentModelFiles([introspected], 'App')
+    expect(file?.fileName).toBe('StoreSetting.php')
+    expect(file?.code).toContain('class StoreSetting extends Model')
   })
 
   it('emits nothing for a schema without models or enums', () => {

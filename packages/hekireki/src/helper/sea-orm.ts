@@ -16,13 +16,32 @@ const PRISMA_TO_RUST: { [k: string]: string } = {
   Bytes: 'Vec<u8>',
 }
 
-// Native @db.* types whose Rust type differs from the Prisma-scalar default.
-function rustTypeForNative(field: DMMF.Field) {
+// The Rust type of a DateTime column where it is not the Prisma-scalar default. On SQLite the
+// instant is text that is compared as text, and Prisma writes it with exactly three decimals
+// (`2030-01-02T03:04:05.000+00:00`); sqlx writes DateTimeUtc with none on a whole second and
+// DateTime as `2030-01-02 03:04:05.678`, so the column is a PrismaDateTime (prisma_date_time.rs)
+// that writes Prisma's text. sqlx reads a MySQL TIMESTAMP only as DateTime<Utc>.
+function rustTypeForNative(field: DMMF.Field, provider: string | undefined) {
   const nativeName = field.nativeType?.[0]
   if (nativeName === 'Timestamptz') return 'DateTimeWithTimeZone'
+  if (nativeName === 'Timestamp' && provider === 'mysql') return 'DateTimeUtc'
   if (nativeName === 'Date') return 'Date'
-  if (nativeName === 'Time' || nativeName === 'Timetz') return 'Time'
+  if (nativeName === 'Time') return 'Time'
+  if (field.type === 'DateTime' && provider === 'sqlite') return 'PrismaDateTime'
   return null
+}
+
+// For each Rust type a DateTime column can have: how the DateTimeUtc `now` becomes one, and the
+// part of an ISO instant (`2024-01-15T10:30:00.000Z`) its FromStr reads.
+const DATE_TIME_FORMS: {
+  [k: string]: { readonly fromUtc: string; readonly text: readonly [number, number?] }
+} = {
+  DateTime: { fromUtc: '.naive_utc()', text: [0, -1] },
+  DateTimeUtc: { fromUtc: '', text: [0] },
+  PrismaDateTime: { fromUtc: '.into()', text: [0] },
+  DateTimeWithTimeZone: { fromUtc: '.fixed_offset()', text: [0] },
+  Date: { fromUtc: '.date_naive()', text: [0, 10] },
+  Time: { fromUtc: '.time()', text: [11, -1] },
 }
 
 export function prismaTypeToRustType(type: string, isRequired: boolean) {
@@ -135,7 +154,6 @@ export function resolveSeaOrmColumnType(field: DMMF.Field) {
     case 'Date':
       return 'Date'
     case 'Time':
-    case 'Timetz':
       return 'Time'
     case 'JsonB':
       return 'JsonBinary'
@@ -181,6 +199,81 @@ function formatRustDefault(def: DMMF.Field['default']) {
   return null
 }
 
+// The columns rustfmt counts for a character: two for a wide one (CJK, most emoji), none for a
+// combining mark, one otherwise.
+const WIDE =
+  /[\p{Emoji_Presentation}ᄀ-ᅟ⺀-〾ぁ-㏿㐀-䶿一-鿿ꀀ-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦\u{20000}-\u{3FFFF}]/u
+
+function displayWidth(text: string) {
+  let width = 0
+  for (const char of text) {
+    width += WIDE.test(char) ? 2 : /\p{Mn}/u.test(char) ? 0 : 1
+  }
+  return width
+}
+
+/**
+ * A `#[sea_orm(...)]` attribute at `indent`, laid out as rustfmt lays it out: on one line while
+ * that line fits in 100 columns (99 on a field or a variant, where rustfmt keeps one for the
+ * comma after it) and, with more than one argument, the arguments take no more than 70
+ * (`attr_fn_like_width`); otherwise one argument per line.
+ *
+ * @example
+ * ```rust
+ * #[sea_orm(column_name = "jsonArr", default_value = "[]")]
+ * #[sea_orm(
+ *     column_name = "jsonObj",
+ *     default_value = "{\"a\":1,\"b\":[true,null,\"x\"]}"
+ * )]
+ * ```
+ */
+export function seaOrmAttribute(indent: string, args: readonly string[]) {
+  const inline = `${indent}#[sea_orm(${args.join(', ')})]`
+  const fits = displayWidth(inline) <= (indent === '' ? 100 : 99)
+  return fits && (args.length === 1 || displayWidth(args.join(', ')) <= 70)
+    ? inline
+    : [
+        `${indent}#[sea_orm(`,
+        args.map((arg) => `${indent}    ${arg}`).join(',\n'),
+        `${indent})]`,
+      ].join('\n')
+}
+
+/**
+ * A struct field, with its type on a line of its own where rustfmt would put it: when the one
+ * line runs past 100 columns.
+ *
+ * @example
+ * ```rust
+ * pub author_id: i32,
+ * pub extraordinarily_long_model_name_for_testing_rustfmt_width_limits_in_generated_code_id:
+ *     String,
+ * ```
+ */
+function rustField(name: string, type: string) {
+  const line = `    pub ${name}: ${type},`
+  return displayWidth(line) > 100 ? `    pub ${name}:\n        ${type},` : line
+}
+
+/**
+ * The header of `impl Related<...> for Entity`, broken before `for` as rustfmt breaks it when
+ * the one line runs past 100 columns.
+ *
+ * @example
+ * ```rust
+ * impl Related<super::post::Entity> for Entity {
+ * impl Related<super::another_extraordinarily_long_child_model_name_for_testing_widths::Entity>
+ *     for Entity
+ * {
+ * ```
+ */
+function relatedImplHeader(targetModule: string) {
+  const line = `impl Related<super::${targetModule}::Entity> for Entity {`
+  return displayWidth(line) > 100
+    ? `impl Related<super::${targetModule}::Entity>\n    for Entity\n{`
+    : line
+}
+
 export function buildSeaOrmAttributes(
   field: DMMF.Field,
   isPk: boolean,
@@ -195,11 +288,11 @@ export function buildSeaOrmAttributes(
     if (!isAutoincrement(field)) {
       parts.push('auto_increment = false')
     }
-    attrs.push(`#[sea_orm(${parts.join(', ')})]`)
+    attrs.push(seaOrmAttribute('    ', parts))
   }
 
   if (field.isUnique) {
-    attrs.push('#[sea_orm(unique)]')
+    attrs.push('    #[sea_orm(unique)]')
   }
 
   const columnParts: string[] = []
@@ -217,15 +310,9 @@ export function buildSeaOrmAttributes(
     columnParts.push(`column_type = "${colType}"`)
   }
 
-  if (
-    (!isPk || isCompositePk) &&
-    !(
-      (field.type === 'DateTime' &&
-        isFunctionDefault(field.default) &&
-        field.default.name === 'now') ||
-      field.isUpdatedAt
-    )
-  ) {
+  // A DateTime default (now() or a literal) is filled in by ActiveModelBehavior, as Prisma Client
+  // does: sea-query would write a literal back as `2024-01-15 10:30:00 +00:00`.
+  if ((!isPk || isCompositePk) && field.type !== 'DateTime') {
     // An enum default arrives as the Prisma-level value name; the column
     // stores the @map-ped database value.
     const enumMappedDefault =
@@ -240,7 +327,7 @@ export function buildSeaOrmAttributes(
   }
 
   if (columnParts.length > 0) {
-    attrs.push(`#[sea_orm(${columnParts.join(', ')})]`)
+    attrs.push(seaOrmAttribute('    ', columnParts))
   }
 
   return attrs
@@ -375,7 +462,7 @@ export function generateEnum(e: DMMF.DatamodelEnum, serde: { readonly renameAll?
       .filter((part) => part !== '')
       .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
       .join('')
-    return `    #[sea_orm(string_value = "${value.dbName ?? value.name}")]\n    ${pascalName},`
+    return `${seaOrmAttribute('    ', [`string_value = "${value.dbName ?? value.name}"`])}\n    ${pascalName},`
   })
 
   const derives =
@@ -386,7 +473,11 @@ export function generateEnum(e: DMMF.DatamodelEnum, serde: { readonly renameAll?
   return [
     derives,
     ...serdeAttrs,
-    `#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "${e.dbName ?? e.name}")]`,
+    seaOrmAttribute('', [
+      'rs_type = "String"',
+      'db_type = "Enum"',
+      `enum_name = "${e.dbName ?? e.name}"`,
+    ]),
     `pub enum ${e.name} {`,
     ...variants,
     '}',
@@ -439,33 +530,47 @@ function generateRelationEnum(
             .join(', ')})`
         : `super::${targetModule}::Column::${toPascalCase(assoc.references)}`
     // Prisma action names match sea-orm's ForeignKeyAction variants verbatim.
-    const actionLines = [
-      assoc.onUpdate ? `        on_update = "${assoc.onUpdate}"` : null,
-      assoc.onDelete ? `        on_delete = "${assoc.onDelete}"` : null,
+    const actions = [
+      assoc.onUpdate ? `on_update = "${assoc.onUpdate}"` : null,
+      assoc.onDelete ? `on_delete = "${assoc.onDelete}"` : null,
     ].filter((l) => l !== null)
-    variants.push(
-      `    #[sea_orm(\n${[`        belongs_to = "super::${targetModule}::Entity"`, `        from = "${fromCol}"`, `        to = "${toCol}"`, ...actionLines].join(',\n')}\n    )]\n    ${variantName},`,
-    )
+    const attribute = seaOrmAttribute('    ', [
+      `belongs_to = "super::${targetModule}::Entity"`,
+      `from = "${fromCol}"`,
+      `to = "${toCol}"`,
+      ...actions,
+    ])
+    variants.push(`${attribute}\n    ${variantName},`)
   }
 
   for (const assoc of associations.hasMany) {
     const variantName = toPascalCase(assoc.name)
     const targetModule = makeSnakeCase(assoc.targetModel)
-    variants.push(
-      isAmbiguous(assoc.targetModel)
-        ? `    #[sea_orm(\n        has_many = "super::${targetModule}::Entity",\n        from = "Column::${toPascalCase(assoc.references)}",\n        to = "super::${targetModule}::Column::${toPascalCase(assoc.foreignKey)}"\n    )]\n    ${variantName},`
-        : `    #[sea_orm(has_many = "super::${targetModule}::Entity")]\n    ${variantName},`,
-    )
+    const attribute = seaOrmAttribute('    ', [
+      `has_many = "super::${targetModule}::Entity"`,
+      ...(isAmbiguous(assoc.targetModel)
+        ? [
+            `from = "Column::${toPascalCase(assoc.references)}"`,
+            `to = "super::${targetModule}::Column::${toPascalCase(assoc.foreignKey)}"`,
+          ]
+        : []),
+    ])
+    variants.push(`${attribute}\n    ${variantName},`)
   }
 
   for (const assoc of associations.hasOne) {
     const variantName = toPascalCase(assoc.name)
     const targetModule = makeSnakeCase(assoc.targetModel)
-    variants.push(
-      isAmbiguous(assoc.targetModel)
-        ? `    #[sea_orm(\n        has_one = "super::${targetModule}::Entity",\n        from = "Column::${toPascalCase(assoc.references)}",\n        to = "super::${targetModule}::Column::${toPascalCase(assoc.foreignKey)}"\n    )]\n    ${variantName},`
-        : `    #[sea_orm(has_one = "super::${targetModule}::Entity")]\n    ${variantName},`,
-    )
+    const attribute = seaOrmAttribute('    ', [
+      `has_one = "super::${targetModule}::Entity"`,
+      ...(isAmbiguous(assoc.targetModel)
+        ? [
+            `from = "Column::${toPascalCase(assoc.references)}"`,
+            `to = "super::${targetModule}::Column::${toPascalCase(assoc.foreignKey)}"`,
+          ]
+        : []),
+    ])
+    variants.push(`${attribute}\n    ${variantName},`)
   }
 
   return [
@@ -490,7 +595,7 @@ function generateRelatedImpls(model: DMMF.Model, associations: ReturnType<typeof
     const targetModule = makeSnakeCase(assoc.targetModel)
     impls.push(
       [
-        `impl Related<super::${targetModule}::Entity> for Entity {`,
+        relatedImplHeader(targetModule),
         '    fn to() -> RelationDef {',
         `        Relation::${toPascalCase(assoc.name)}.def()`,
         '    }',
@@ -505,7 +610,7 @@ function generateRelatedImpls(model: DMMF.Model, associations: ReturnType<typeof
     const targetModule = makeSnakeCase(assoc.targetModel)
     impls.push(
       [
-        `impl Related<super::${targetModule}::Entity> for Entity {`,
+        relatedImplHeader(targetModule),
         '    fn to() -> RelationDef {',
         `        Relation::${toPascalCase(assoc.name)}.def()`,
         '    }',
@@ -520,7 +625,7 @@ function generateRelatedImpls(model: DMMF.Model, associations: ReturnType<typeof
     const targetModule = makeSnakeCase(assoc.targetModel)
     impls.push(
       [
-        `impl Related<super::${targetModule}::Entity> for Entity {`,
+        relatedImplHeader(targetModule),
         '    fn to() -> RelationDef {',
         `        Relation::${toPascalCase(assoc.name)}.def()`,
         '    }',
@@ -539,7 +644,7 @@ function generateRelatedImpls(model: DMMF.Model, associations: ReturnType<typeof
 
     impls.push(
       [
-        `impl Related<super::${targetModule}::Entity> for Entity {`,
+        relatedImplHeader(targetModule),
         '    fn to() -> RelationDef {',
         `        super::${junctionModule}::Relation::${junctionRelToTarget}.def()`,
         '    }',
@@ -559,6 +664,7 @@ export function generateEntityFile(
   allModels: readonly DMMF.Model[],
   enums: readonly DMMF.DatamodelEnum[],
   serde: { readonly renameAll?: string } = {},
+  provider?: string,
 ) {
   const idField = model.fields.find((f) => f.isId)
   const compositePkFieldNames = new Set(model.primaryKey?.fields)
@@ -572,13 +678,18 @@ export function generateEntityFile(
 
   const scalarFields = model.fields.filter((f) => f.kind !== 'object')
   const fieldLines: string[] = []
+  // What before_save sets, as Prisma Client does: an @updatedAt on every save the caller left it
+  // out of, a now() or literal default on insert.
+  const stampLines: string[] = []
+  let stampsNow = false
+  let stampsOnInsert = false
 
   for (const field of scalarFields) {
     const isPk = field.isId || compositePkFieldNames.has(field.name)
     const { ident: fieldName, derivedColumn } = rustFieldIdent(makeSnakeCase(field.name))
     const attrs = buildSeaOrmAttributes(field, isPk, isCompositePk, derivedColumn, enums)
 
-    const nativeOverride = rustTypeForNative(field)
+    const nativeOverride = rustTypeForNative(field, provider)
     const elemType = enumNames.has(field.type)
       ? field.type
       : (nativeOverride ?? prismaTypeToRustType(field.type, true))
@@ -590,48 +701,143 @@ export function generateEntityFile(
           : `Option<${elemType}>`
         : prismaTypeToRustType(field.type, field.isRequired)
 
-    for (const attr of attrs) {
-      fieldLines.push(`    ${attr}`)
-    }
-    fieldLines.push(`    pub ${fieldName}: ${rustType},`)
+    fieldLines.push(...attrs, rustField(fieldName, rustType))
+
+    if (field.type !== 'DateTime' || field.isList) continue
+    // `now` is a DateTimeUtc at Prisma's millisecond precision; a literal is parsed as the
+    // field's own type, which Set leaves the compiler to infer.
+    const form = DATE_TIME_FORMS[elemType] ?? DATE_TIME_FORMS.DateTime
+    const value =
+      field.isUpdatedAt || (isFunctionDefault(field.default) && field.default.name === 'now')
+        ? `now${form.fromUtc}`
+        : typeof field.default === 'string'
+          ? `"${new Date(field.default).toISOString().slice(...form.text)}".parse().unwrap()`
+          : null
+    if (value === null) continue
+    stampsNow ||= value.startsWith('now')
+    stampsOnInsert ||= !field.isUpdatedAt
+    // Laid out as rustfmt lays them out. It puts a method chain longer than 60 columns
+    // (`chain_width`) one call per line, and the right-hand side of an assignment that runs past
+    // 100 columns on the next line. Where even that does not fit, rustfmt leaves the line as it is.
+    const check = field.isUpdatedAt ? 'is_set' : 'is_not_set'
+    const chainIndent = field.isUpdatedAt ? '            ' : '                '
+    const condition =
+      `self.${fieldName}.${check}()`.length <= 60 || `${chainIndent}.${fieldName}`.length > 100
+        ? [
+            field.isUpdatedAt
+              ? `        if !self.${fieldName}.is_set() {`
+              : `        if insert && self.${fieldName}.is_not_set() {`,
+          ]
+        : [
+            ...(field.isUpdatedAt
+              ? ['        if !self']
+              : ['        if insert', '            && self']),
+            `${chainIndent}.${fieldName}`,
+            `${chainIndent}.${check}()`,
+            '        {',
+          ]
+    const assignment = `            self.${fieldName} = Set(${field.isRequired ? value : `Some(${value})`});`
+    stampLines.push(
+      ...condition,
+      assignment.length <= 100 || `            self.${fieldName} =`.length > 99
+        ? assignment
+        : `            self.${fieldName} =\n                ${assignment.trimStart().slice(`self.${fieldName} = `.length)}`,
+      '        }',
+    )
   }
 
   const relationEnum = generateRelationEnum(model, associations)
   const relatedImpls = generateRelatedImpls(model, associations)
 
-  const enumImports = [
-    ...new Set(scalarFields.filter((f) => enumNames.has(f.type)).map((f) => f.type)),
+  const superImports = [
+    ...new Set(
+      scalarFields.flatMap((f) =>
+        enumNames.has(f.type)
+          ? [f.type]
+          : f.type === 'DateTime' && provider === 'sqlite'
+            ? ['PrismaDateTime']
+            : [],
+      ),
+    ),
   ]
-    .toSorted()
     .map((name) => `use super::${makeSnakeCase(name)}::${name};`)
+    .toSorted()
 
   const generatedIdFields = scalarFields.filter(
     (f) => f.type === 'String' && !f.isList && generatedIdExpr(f) !== null,
   )
 
+  // rustfmt puts `super` first.
   const useLines = [
+    ...superImports,
+    ...(stampsNow ? ['use chrono::SubsecRound;'] : []),
     'use sea_orm::entity::prelude::*;',
-    ...(generatedIdFields.length > 0 ? ['use sea_orm::Set;'] : []),
+    ...(generatedIdFields.length > 0 || stampLines.length > 0 ? ['use sea_orm::Set;'] : []),
     'use serde::{Deserialize, Serialize};',
-    ...enumImports,
   ]
 
-  const behaviorImpl =
+  const newFn =
     generatedIdFields.length === 0
-      ? 'impl ActiveModelBehavior for ActiveModel {}'
+      ? []
       : [
-          'impl ActiveModelBehavior for ActiveModel {',
           '    fn new() -> Self {',
           '        Self {',
           ...generatedIdFields.map((field) => {
             const { ident } = rustFieldIdent(makeSnakeCase(field.name))
-            const generate = generatedIdExpr(field)
+            const generate = generatedIdExpr(field) ?? ''
             const value = field.isRequired ? generate : `Some(${generate})`
-            return `            ${ident}: Set(${value}),`
+            // rustfmt's layout of the field, as it writes it for each length of the name (n) and
+            // of the generator call (g): on one line while `name: Set(value)` fits in 100
+            // columns; then the argument of Set, or of Some, on a line of its own; then the value
+            // on the line after the name. Past 85 it leaves the line as it is. The bounds are
+            // what rustfmt 1.9 does, not a rule it states, and test/lang/sea-orm.test.ts holds
+            // the harness to it.
+            const n = ident.length
+            const g = generate.length
+            const inner = '                '
+            // The comma counts toward the 100 columns only after Some.
+            const width = `            ${ident}: Set(${value})`.length + (field.isRequired ? 0 : 1)
+            if (width <= 100 || n > 85) {
+              return `            ${ident}: Set(${value}),`
+            }
+            if (n > 82) return `            ${ident}:\n${inner}Set(${value}),`
+            if (!field.isRequired) {
+              return n > 75
+                ? `            ${ident}: Set(\n${inner}${value},\n            ),`
+                : `            ${ident}: Set(Some(\n${inner}${generate},\n            )),`
+            }
+            if (n + g > 93) return `            ${ident}: Set(\n${inner}${value},\n            ),`
+            if (n + g < 93) return `            ${ident}: Set(\n${inner}${value}\n            ),`
+            // At exactly 93 rustfmt breaks inside the generator's own call.
+            const call = generate.slice(0, -'().to_string()'.length)
+            return `            ${ident}: Set(${call}(\n            )\n            .to_string()),`
           }),
           '            ..ActiveModelTrait::default()',
           '        }',
           '    }',
+        ]
+  const beforeSave =
+    stampLines.length === 0
+      ? []
+      : [
+          `    async fn before_save<C>(mut self, _db: &C, ${stampsOnInsert ? 'insert' : '_insert'}: bool) -> Result<Self, DbErr>`,
+          '    where',
+          '        C: ConnectionTrait,',
+          '    {',
+          ...(stampsNow ? ['        let now = chrono::Utc::now().trunc_subsecs(3);'] : []),
+          ...stampLines,
+          '        Ok(self)',
+          '    }',
+        ]
+  const behaviorImpl =
+    newFn.length === 0 && beforeSave.length === 0
+      ? 'impl ActiveModelBehavior for ActiveModel {}'
+      : [
+          ...(beforeSave.length > 0 ? ['#[async_trait::async_trait]'] : []),
+          'impl ActiveModelBehavior for ActiveModel {',
+          ...newFn,
+          ...(newFn.length > 0 && beforeSave.length > 0 ? [''] : []),
+          ...beforeSave,
           '}',
         ].join('\n')
 
@@ -647,7 +853,7 @@ export function generateEntityFile(
     '',
     deriveModel,
     ...serdeAttrs,
-    `#[sea_orm(table_name = "${tableName}")]`,
+    seaOrmAttribute('', [`table_name = "${tableName}"`]),
     'pub struct Model {',
     ...fieldLines,
     '}',
@@ -656,6 +862,7 @@ export function generateEntityFile(
     '',
     ...relatedImpls.map((impl) => `${impl}\n`),
     behaviorImpl,
+    '',
   ]
 
   return lines.join('\n')
@@ -698,14 +905,14 @@ export function generateM2MEntity(
     '',
     deriveModel,
     ...serdeAttrs,
-    `#[sea_orm(table_name = "${tableName}")]`,
+    seaOrmAttribute('', [`table_name = "${tableName}"`]),
     'pub struct Model {',
     // Prisma's implicit join table stores its FKs in columns "A"/"B" (models
     // in alphabetical order), not <model>_id.
     '    #[sea_orm(primary_key, auto_increment = false, column_name = "A")]',
-    `    pub ${leftFk}: ${leftType},`,
+    rustField(leftFk, leftType),
     '    #[sea_orm(primary_key, auto_increment = false, column_name = "B")]',
-    `    pub ${rightFk}: ${rightType},`,
+    rustField(rightFk, rightType),
     '}',
     '',
     '#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]',
@@ -725,8 +932,98 @@ export function generateM2MEntity(
     '}',
     '',
     'impl ActiveModelBehavior for ActiveModel {}',
+    '',
   ].join('\n')
 }
+
+// The column type of every DateTime on SQLite, written beside the entities that use it. sqlx
+// decodes what Prisma or a database default wrote; only the text it writes is Prisma's own.
+export const PRISMA_DATE_TIME_RS = `//! A Prisma \`DateTime\` on SQLite, where the instant is text and SQLite compares it as text.
+//! Prisma writes it in UTC with exactly three decimals (\`2030-01-02T03:04:05.000+00:00\`);
+//! sqlx writes a \`DateTimeUtc\` with none on a whole second and with nanoseconds below a
+//! millisecond, so a filter or a key on it would miss Prisma's rows. Filter with
+//! \`Column::At.eq(PrismaDateTime(instant))\`: a bare \`DateTimeUtc\` is bound as sqlx writes it.
+use sea_orm::entity::prelude::*;
+use sea_orm::sea_query::{ArrayType, Nullable, ValueType, ValueTypeErr};
+use sea_orm::{ColIdx, TryFromU64, TryGetError, TryGetable};
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct PrismaDateTime(pub DateTimeUtc);
+
+impl From<DateTimeUtc> for PrismaDateTime {
+    fn from(instant: DateTimeUtc) -> Self {
+        Self(instant)
+    }
+}
+
+impl From<PrismaDateTime> for DateTimeUtc {
+    fn from(value: PrismaDateTime) -> Self {
+        value.0
+    }
+}
+
+impl std::str::FromStr for PrismaDateTime {
+    type Err = <DateTimeUtc as std::str::FromStr>::Err;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        text.parse().map(Self)
+    }
+}
+
+impl std::fmt::Display for PrismaDateTime {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl From<PrismaDateTime> for Value {
+    fn from(value: PrismaDateTime) -> Self {
+        let text = value.0.format("%Y-%m-%dT%H:%M:%S%.3f+00:00").to_string();
+        Value::String(Some(Box::new(text)))
+    }
+}
+
+impl Nullable for PrismaDateTime {
+    fn null() -> Value {
+        Value::String(None)
+    }
+}
+
+impl ValueType for PrismaDateTime {
+    fn try_from(v: Value) -> Result<Self, ValueTypeErr> {
+        match v {
+            Value::String(Some(text)) => text.parse().map_err(|_| ValueTypeErr),
+            _ => Err(ValueTypeErr),
+        }
+    }
+
+    fn type_name() -> String {
+        "PrismaDateTime".to_owned()
+    }
+
+    fn array_type() -> ArrayType {
+        ArrayType::String
+    }
+
+    fn column_type() -> ColumnType {
+        ColumnType::DateTime
+    }
+}
+
+impl TryGetable for PrismaDateTime {
+    fn try_get_by<I: ColIdx>(res: &QueryResult, index: I) -> Result<Self, TryGetError> {
+        DateTimeUtc::try_get_by(res, index).map(Self)
+    }
+}
+
+impl TryFromU64 for PrismaDateTime {
+    fn try_from_u64(_: u64) -> Result<Self, DbErr> {
+        Err(DbErr::ConvertFromU64("PrismaDateTime"))
+    }
+}
+`
 
 export function generateModRs(moduleNames: readonly string[]) {
   return `${moduleNames.map((m) => `pub mod ${m};`).join('\n')}\n`
@@ -734,10 +1031,8 @@ export function generateModRs(moduleNames: readonly string[]) {
 
 export function generatePreludeRs(models: readonly DMMF.Model[]) {
   return `${models
-    .map((m) => {
-      const moduleName = makeSnakeCase(m.name)
-      return `pub use super::${moduleName}::Entity as ${m.name};`
-    })
+    .map((m) => `pub use super::${makeSnakeCase(m.name)}::Entity as ${m.name};`)
+    .toSorted()
     .join('\n')}\n`
 }
 

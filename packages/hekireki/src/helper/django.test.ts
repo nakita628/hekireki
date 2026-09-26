@@ -67,6 +67,43 @@ describe('djangoAttrName', () => {
   })
 })
 
+// The field every zoneless DateTime column is declared with, as the generator
+// writes it once per file.
+// cspell:ignore datetimefield
+const UTC_DATETIME_FIELD = `class UtcDateTimeField(models.DateTimeField):  # type: ignore[type-arg]
+    """A timestamp without a zone holding UTC, as ISO 8601 text on SQLite."""
+
+    def get_db_prep_value(self, value: Any, connection: BaseDatabaseWrapper, prepared: bool = False) -> Any:
+        if not prepared:
+            value = self.get_prep_value(value)
+        if not isinstance(value, datetime):
+            return super().get_db_prep_value(value, connection, prepared=True)
+        if timezone.is_naive(value):
+            value = timezone.make_aware(value, timezone.get_default_timezone())
+        value = value.astimezone(dt_timezone.utc)
+        if connection.vendor == "sqlite":
+            return value.isoformat(timespec="milliseconds")
+        return connection.ops.adapt_datetimefield_value(value.replace(tzinfo=None))
+
+    def from_db_value(self, value: datetime | None, expression: Any, connection: BaseDatabaseWrapper) -> datetime | None:
+        if value is None:
+            return None
+        if timezone.is_naive(value):
+            value = value.replace(tzinfo=dt_timezone.utc)
+        return value if settings.USE_TZ else timezone.make_naive(value, timezone.get_default_timezone())`
+
+const AUTO_NOW_QUERY_SET = `_M = TypeVar("_M", bound=models.Model)
+
+
+class AutoNowQuerySet(models.QuerySet[_M]):
+    """update(), and bulk_update() through it, set the auto_now fields as save() does."""
+
+    def update(self, **kwargs: Any) -> int:
+        for field in self.model._meta.concrete_fields:
+            if getattr(field, "auto_now", False):
+                kwargs.setdefault(field.name, getattr(field, "stamp", timezone.now)())
+        return super().update(**kwargs)`
+
 function makeField(overrides: Partial<DMMF.Field> & { name: string; type: string }): DMMF.Field {
   return {
     kind: 'scalar',
@@ -192,13 +229,23 @@ class User(models.Model):
     ]
 
     expect(djangoCode(models)).toBe(
-      `from django.db import models
+      `from datetime import datetime
+from datetime import timezone as dt_timezone
+from typing import Any
+
+from django.conf import settings
+from django.db import models
+from django.db.backends.base.base import BaseDatabaseWrapper
+from django.utils import timezone
+
+
+${UTC_DATETIME_FIELD}
 
 
 class BlogPost(models.Model):
     id = models.AutoField(primary_key=True)
     view_count = models.IntegerField(db_column="viewCount")
-    created_at = models.DateTimeField(db_column="created_on")
+    created_at = UtcDateTimeField(db_column="created_on")
 
     class Meta:
         db_table = "blog_posts"
@@ -514,7 +561,7 @@ class Keyword(models.Model):
     )
   })
 
-  it('emits db_default for now() and auto_now for @updatedAt', () => {
+  it('fills now() in Python and stamps @updatedAt on save() and update()', () => {
     const models = [
       makeModel('Stamped', [
         makeField({
@@ -534,14 +581,27 @@ class Keyword(models.Model):
     ]
 
     expect(djangoCode(models)).toBe(
-      `from django.db import models
-from django.db.models.functions import Now
+      `from datetime import datetime
+from datetime import timezone as dt_timezone
+from typing import Any, TypeVar
+
+from django.conf import settings
+from django.db import models
+from django.db.backends.base.base import BaseDatabaseWrapper
+from django.utils import timezone
+
+
+${UTC_DATETIME_FIELD}
+
+
+${AUTO_NOW_QUERY_SET}
 
 
 class Stamped(models.Model):
     id = models.AutoField(primary_key=True)
-    created_at = models.DateTimeField(db_default=Now())
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = UtcDateTimeField(default=timezone.now)
+    updated_at = UtcDateTimeField(auto_now=True)
+    objects = AutoNowQuerySet.as_manager()
 
     class Meta:
         db_table = "Stamped"
@@ -568,16 +628,235 @@ class Stamped(models.Model):
     ]
 
     expect(djangoCode(models)).toBe(
-      `from django.db import models
+      `from datetime import datetime
+from datetime import timezone as dt_timezone
+from typing import Any
+
+from django.conf import settings
+from django.db import models
+from django.db.backends.base.base import BaseDatabaseWrapper
 from django.db.models.expressions import RawSQL
+from django.utils import timezone
+
+
+${UTC_DATETIME_FIELD}
 
 
 class Computed(models.Model):
     id = models.UUIDField(primary_key=True, db_default=RawSQL("gen_random_uuid()", []))
-    when = models.DateTimeField(db_default=RawSQL("now() + interval '1 day'", []))
+    when = UtcDateTimeField(db_default=RawSQL("now() + interval '1 day'", []))
 
     class Meta:
         db_table = "Computed"
+`,
+    )
+  })
+
+  it('writes now() and a literal on a date or a time column as the UTC date or time', () => {
+    const models = [
+      makeModel('Opening', [
+        makeField({
+          name: 'id',
+          type: 'Int',
+          isId: true,
+          default: { name: 'autoincrement', args: [] },
+        }),
+        makeField({
+          name: 'day',
+          type: 'DateTime',
+          nativeType: ['Date', []],
+          default: { name: 'now', args: [] },
+        }),
+        makeField({
+          name: 'opens',
+          type: 'DateTime',
+          nativeType: ['Time', ['3']],
+          default: { name: 'now', args: [] },
+        }),
+        makeField({
+          name: 'since',
+          type: 'DateTime',
+          nativeType: ['Date', []],
+          default: '2024-01-15T00:00:00.000Z',
+        }),
+        makeField({
+          name: 'closes',
+          type: 'DateTime',
+          nativeType: ['Time', ['3']],
+          default: '1970-01-01T18:30:00.250Z',
+        }),
+        makeField({
+          name: 'holidays',
+          type: 'DateTime',
+          nativeType: ['Date', []],
+          isList: true,
+          default: ['2024-12-25T00:00:00.000Z'],
+        }),
+      ]),
+    ]
+
+    expect(djangoCode(models)).toBe(
+      `from datetime import date, datetime, time
+from datetime import timezone as dt_timezone
+
+from django.contrib.postgres.fields import ArrayField
+from django.db import models
+
+
+def utc_today() -> date:
+    return datetime.now(dt_timezone.utc).date()
+
+
+def utc_time() -> time:
+    return datetime.now(dt_timezone.utc).time()
+
+
+def opening_holidays_default() -> list[date]:
+    return [date(2024, 12, 25)]
+
+
+class Opening(models.Model):
+    id = models.AutoField(primary_key=True)
+    day = models.DateField(default=utc_today)
+    opens = models.TimeField(default=utc_time)
+    since = models.DateField(default=date(2024, 1, 15))
+    closes = models.TimeField(default=time(18, 30, 0, 250000))
+    holidays = ArrayField(models.DateField(), default=opening_holidays_default)
+
+    class Meta:
+        db_table = "Opening"
+`,
+    )
+  })
+
+  it('stamps an @updatedAt date or time with the UTC date or time of day', () => {
+    const models = [
+      makeModel('Shift', [
+        makeField({
+          name: 'id',
+          type: 'Int',
+          isId: true,
+          default: { name: 'autoincrement', args: [] },
+        }),
+        makeField({ name: 'day', type: 'DateTime', nativeType: ['Date', []], isUpdatedAt: true }),
+        makeField({
+          name: 'clock',
+          type: 'DateTime',
+          nativeType: ['Time', ['3']],
+          isUpdatedAt: true,
+        }),
+      ]),
+    ]
+
+    expect(djangoCode(models)).toBe(
+      `from datetime import date, datetime, time
+from datetime import timezone as dt_timezone
+from typing import Any, TypeVar
+
+from django.db import models
+from django.utils import timezone
+
+
+class UtcDateField(models.DateField):  # type: ignore[type-arg]
+    """auto_now stamps the UTC date, as Prisma's @updatedAt does."""
+
+    def stamp(self) -> date:
+        return utc_today()
+
+    def pre_save(self, model_instance: models.Model, add: bool) -> Any:
+        if not self.auto_now:
+            return super().pre_save(model_instance, add)
+        value = self.stamp()
+        setattr(model_instance, self.attname, value)
+        return value
+
+
+class UtcTimeField(models.TimeField):  # type: ignore[type-arg]
+    """auto_now stamps the UTC time of day, as Prisma's @updatedAt does."""
+
+    def stamp(self) -> time:
+        return utc_time()
+
+    def pre_save(self, model_instance: models.Model, add: bool) -> Any:
+        if not self.auto_now:
+            return super().pre_save(model_instance, add)
+        value = self.stamp()
+        setattr(model_instance, self.attname, value)
+        return value
+
+
+${AUTO_NOW_QUERY_SET}
+
+
+def utc_today() -> date:
+    return datetime.now(dt_timezone.utc).date()
+
+
+def utc_time() -> time:
+    return datetime.now(dt_timezone.utc).time()
+
+
+class Shift(models.Model):
+    id = models.AutoField(primary_key=True)
+    day = UtcDateField(auto_now=True)
+    clock = UtcTimeField(auto_now=True)
+    objects = AutoNowQuerySet.as_manager()
+
+    class Meta:
+        db_table = "Shift"
+`,
+    )
+  })
+
+  it('keeps a timestamptz as Django has it and holds every other DateTime in UTC', () => {
+    const fields = [
+      makeField({
+        name: 'id',
+        type: 'Int',
+        isId: true,
+        default: { name: 'autoincrement', args: [] },
+      }),
+      makeField({ name: 'plain', type: 'DateTime' }),
+      makeField({
+        name: 'zoned',
+        type: 'DateTime',
+        nativeType: ['Timestamptz', ['3']],
+        default: { name: 'now', args: [] },
+      }),
+    ]
+    expect(djangoCode([makeModel('Clock', fields)], [], [], 'postgresql')).toBe(
+      `from datetime import datetime
+from datetime import timezone as dt_timezone
+from typing import Any
+
+from django.conf import settings
+from django.db import models
+from django.db.backends.base.base import BaseDatabaseWrapper
+from django.utils import timezone
+
+
+${UTC_DATETIME_FIELD}
+
+
+class Clock(models.Model):
+    id = models.AutoField(primary_key=True)
+    plain = UtcDateTimeField()
+    zoned = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = "Clock"
+`,
+    )
+    // Only PostgreSQL's timestamptz keeps a zone: a MySQL TIMESTAMP is held in
+    // UTC as a DATETIME is.
+    const mysql = [
+      fields[0],
+      fields[1],
+      makeField({ name: 'stamped', type: 'DateTime', nativeType: ['Timestamp', ['3']] }),
+    ]
+    expect(djangoCode([makeModel('Clock', mysql)], [], [], 'mysql')).toContain(
+      `    plain = UtcDateTimeField()
+    stamped = UtcDateTimeField()
 `,
     )
   })
@@ -606,9 +885,17 @@ class Computed(models.Model):
 
     expect(djangoCode(models)).toBe(
       `from datetime import datetime
+from datetime import timezone as dt_timezone
 from decimal import Decimal
+from typing import Any
 
+from django.conf import settings
 from django.db import models
+from django.db.backends.base.base import BaseDatabaseWrapper
+from django.utils import timezone
+
+
+${UTC_DATETIME_FIELD}
 
 
 class Torture(models.Model):
@@ -616,7 +903,7 @@ class Torture(models.Model):
     big_pos = models.BigIntegerField(db_column="bigPos", default=9007199254740993)
     precise = models.DecimalField(max_digits=65, decimal_places=30, default=Decimal("12345.6789"))
     exact_str = models.DecimalField(max_digits=65, decimal_places=30, db_column="exactStr", default=Decimal("99.5"))
-    born = models.DateTimeField(default=datetime.fromisoformat("2020-02-29T23:59:59.999+00:00"))
+    born = UtcDateTimeField(default=datetime.fromisoformat("2020-02-29T23:59:59.999+00:00"))
     quoted = models.TextField(default="it's a \\"quote\\" and a \\\\ backslash")
     empty = models.TextField(default="")
 
@@ -700,8 +987,18 @@ class Payload(models.Model):
     ]
 
     expect(djangoCode(models)).toBe(
-      `from django.contrib.postgres.fields import ArrayField
+      `from datetime import datetime
+from datetime import timezone as dt_timezone
+from typing import Any
+
+from django.conf import settings
+from django.contrib.postgres.fields import ArrayField
 from django.db import models
+from django.db.backends.base.base import BaseDatabaseWrapper
+from django.utils import timezone
+
+
+${UTC_DATETIME_FIELD}
 
 
 def inventory_codes_default() -> list[int]:
@@ -719,7 +1016,7 @@ class Inventory(models.Model):
     labels = ArrayField(models.TextField(), default=inventory_labels_default)
     weights = ArrayField(models.FloatField())
     flags = ArrayField(models.BooleanField())
-    stamps = ArrayField(models.DateTimeField())
+    stamps = ArrayField(UtcDateTimeField())
 
     class Meta:
         db_table = "Inventory"
@@ -1961,10 +2258,18 @@ class Doc(models.Model):
 
     expect(djangoCode(models)).toBe(
       `from datetime import datetime
+from datetime import timezone as dt_timezone
 from decimal import Decimal
+from typing import Any
 
+from django.conf import settings
 from django.contrib.postgres.fields import ArrayField
 from django.db import models
+from django.db.backends.base.base import BaseDatabaseWrapper
+from django.utils import timezone
+
+
+${UTC_DATETIME_FIELD}
 
 
 def inventory_decs_default() -> list[Decimal]:
@@ -1986,7 +2291,7 @@ def inventory_flags_default() -> list[bool]:
 class Inventory(models.Model):
     id = models.AutoField(primary_key=True)
     decs = ArrayField(models.DecimalField(max_digits=65, decimal_places=30), default=inventory_decs_default)
-    stamps = ArrayField(models.DateTimeField(), default=inventory_stamps_default)
+    stamps = ArrayField(UtcDateTimeField(), default=inventory_stamps_default)
     bigs = ArrayField(models.BigIntegerField(), default=inventory_bigs_default)
     flags = ArrayField(models.BooleanField(), default=inventory_flags_default)
 

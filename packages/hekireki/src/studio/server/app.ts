@@ -22,16 +22,11 @@ const loopbackOnly = createMiddleware((c, next) =>
     : Promise.resolve(c.text(FORBIDDEN_HOST_MESSAGE, 403)),
 )
 
-/** The generated API mounted under /api with the problem+json validation hook, error handler and Effect runtime. */
+/** The generated API (routed under /api) with the problem+json validation hook, error handler, Effect runtime and its document at /api/openapi.json. */
 export function createStudioApi(
   state: ReturnType<typeof StateService.createStudioState>,
   db: ReturnType<typeof DatabaseService.disconnectedDatabase>,
-  client: ReturnType<typeof ClientService.createProjectClient> = ClientService.createProjectClient({
-    target: null,
-    reason: 'No database is connected.',
-    schemaDir: '.',
-    cwd: '.',
-  }),
+  client: ReturnType<typeof ClientService.createProjectClient>,
 ) {
   RuntimeService.configureRuntime({ state, db, client })
   const app = new OpenAPIHono({
@@ -71,8 +66,7 @@ export function createStudioApi(
       { 'Content-Type': 'application/problem+json' },
     )
   })
-  // The mounted routes and the document come back typed, which the client is built from.
-  return app.route('/api', api).doc('/api/openapi.json', {
+  return app.route('/', api).doc('/api/openapi.json', {
     openapi: '3.1.0',
     info: { title: 'Hekireki Studio API', version: '1.0.0' },
   })

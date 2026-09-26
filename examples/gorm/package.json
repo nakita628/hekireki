@@ -1,0 +1,17 @@
+{
+  "name": "@hekireki/example-gorm",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "clean": "rm -rf models dev.db dev.db-journal",
+    "generate": "prisma validate && prisma generate",
+    "db": "prisma db push --url file:./dev.db",
+    "vet": "gofmt -l main.go models | (! grep .) && CGO_ENABLED=0 go vet ./...",
+    "verify": "CGO_ENABLED=0 go run .",
+    "demo": "pnpm run clean && pnpm run generate && pnpm run db && pnpm run vet && pnpm run verify"
+  },
+  "devDependencies": {
+    "hekireki": "workspace:*",
+    "prisma": "8.1.0-dev.7"
+  }
+}

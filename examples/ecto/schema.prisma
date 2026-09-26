@@ -1,0 +1,255 @@
+// A small shop on SQLite, written the way a Prisma schema is written, with the corners of what
+// Ecto has to express placed where a real schema would put them. `pnpm run demo` writes lib/shop,
+// creates dev.db with `prisma db push` and runs check.exs with the real Ecto and ecto_sqlite3: each
+// schema the generator writes is inserted, read back, updated, preloaded and deleted there, not
+// only compiled. The tables are Prisma's; nothing here runs an Ecto migration. Prisma Client shares
+// the database: interop.ts reads what Ecto wrote and writes rows for interop.exs to read through
+// the schemas.
+
+datasource db {
+  provider = "sqlite"
+}
+
+generator client {
+  provider            = "prisma-client"
+  output              = "generated/client"
+  importFileExtension = "ts"
+}
+
+generator Hekireki-Ecto {
+  provider = "hekireki-ecto"
+  output   = "lib/shop"
+  app      = "Shop"
+}
+
+/// Stored under names of their own, which is what the database holds and what Ecto.Enum has to
+/// dump: the keyword form of `values:`.
+enum Role {
+  CUSTOMER @map("customer")
+  STAFF    @map("staff")
+  ADMIN
+}
+
+/// No member is mapped: the plain list of atoms.
+enum OrderStatus {
+  PENDING
+  PAID
+  SHIPPED
+  CANCELLED
+}
+
+/// Someone who signs in. The key counts up in the database, the address is unique, and the
+/// timestamps have Prisma's own names on Rails' columns, so Ecto's `timestamps()` needs a source
+/// for each. Its changeset takes what the @ecto. lines ask on top of what the schema requires, and
+/// a line of the model's own.
+/// @ecto.validate_exclusion(:handle, ~w(root), message: "は使えません")
+model Account {
+  id           Int          @id @default(autoincrement())
+  /// @ecto.validate_format(~r/@/, message: "の形式が正しくありません")
+  /// @ecto.unique_constraint(message: "は既に使われています")
+  emailAddress String       @unique @map("email_address")
+  /// A second unique column Prisma names in camel case: a relation references it below.
+  /// @ecto.validate_length(max: 20, message: "は%{count}文字以内で入力してください")
+  handle       String       @unique
+  displayName  String?      @map("display_name")
+  role         Role         @default(CUSTOMER)
+  active       Boolean      @default(true)
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+  profile      Profile?
+  orders       Order[]      @relation("Orders")
+  /// Orders sent to this account as a gift: a second relation to the same model, told apart by name.
+  gifts        Order[]      @relation("Gifts")
+  reviews      Review[]
+  /// Who follows whom: an implicit many-to-many from a model to itself, in Prisma's `_Follows`.
+  followers    Account[]    @relation("Follows")
+  following    Account[]    @relation("Follows")
+  wishlist     Wishlist?
+  auditEvents  AuditEvent[]
+
+  @@map("accounts")
+}
+
+/// One per account, destroyed with it (1-1, the foreign key unique on this side).
+model Profile {
+  id        Int     @id @default(autoincrement())
+  accountId Int     @unique @map("account_id")
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  bio       String?
+  /// Bytes: an avatar kept in the row, a BLOB in SQLite.
+  avatar    Bytes?
+
+  @@map("profiles")
+}
+
+/// A random primary key made by the client, not the database: Ecto has to generate it. Its
+/// author is an account with an integer key, the case where a module-wide
+/// `@foreign_key_type :binary_id` must not reach the `belongs_to`.
+model Product {
+  id         String     @id @default(uuid())
+  sku        String     @unique
+  name       String
+  /// Money is Decimal, never Float.
+  price      Decimal
+  /// A Float default the schema writes as an integer: Ecto wants `0.0`.
+  weight     Float      @default(0)
+  /// Beyond 2^53: BigInt, which JavaScript cannot hold in a Number.
+  barcode    BigInt?
+  stock      Int        @default(-1)
+  /// Json, a JSONB column in SQLite. No default: `prisma db push` writes a Json default on SQLite
+  /// unquoted, and SQLite refuses the table.
+  attributes Json
+  dimensions Json?
+  /// A string default Elixir would interpolate if it were not escaped.
+  label      String     @default("#{name} \"quoted\" \\ back")
+  /// A DateTime literal written with an offset: the instant is 2020-01-01T00:00:00Z.
+  releasedAt DateTime   @default("2020-01-01T09:00:00+09:00") @map("released_at")
+  /// Category 1 is "Uncategorised": a product whose category is removed goes back to it.
+  categoryId Int        @default(1) @map("category_id")
+  category   Category   @relation(fields: [categoryId], references: [id], onDelete: SetDefault)
+  tags       Tag[]
+  lineItems  LineItem[]
+  reviews    Review[]
+  wishlists  Wishlist[] @relation("Wished")
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  @@index([name])
+}
+
+/// The implicit many-to-many with Product: `_ProductToTag`, columns A (Product) and B (Tag). The
+/// key is a cuid, which Ecto has no generator for: the check gives it one. Its changeset keeps ""
+/// and blanks as they were sent, as the column does, and a name is missing only when it is nil.
+/// @ecto.cast(empty_values: [])
+model Tag {
+  id       String    @id @default(cuid())
+  name     String    @unique
+  products Product[]
+}
+
+/// A tree: a name is unique among the children of one parent, and a child keeps its place when
+/// its parent goes (SetNull on itself). The list side of the relation comes first, so the
+/// generator meets the relation from the side without the key.
+model Category {
+  id       Int        @id @default(autoincrement())
+  name     String
+  children Category[] @relation("Tree")
+  parentId Int?       @map("parent_id")
+  parent   Category?  @relation("Tree", fields: [parentId], references: [id], onDelete: SetNull)
+  products Product[]
+
+  @@unique([parentId, name])
+  @@map("categories")
+}
+
+/// The primary key is not called `id` and has a column of its own: Ecto calls it `:id` with a
+/// `source:`. An order cannot be removed while it has line items (Restrict), and its account
+/// cannot be removed while it has orders (NoAction, which SQLite checks at the end of the
+/// statement).
+model Order {
+  number     Int         @id @default(autoincrement()) @map("order_number")
+  accountId  Int         @map("account_id")
+  account    Account     @relation("Orders", fields: [accountId], references: [id], onDelete: NoAction)
+  status     OrderStatus @default(PENDING)
+  note       String?
+  placedAt   DateTime    @default(now()) @map("placed_at")
+  /// Not under a conventional name, and with no inserted-at beside it: `@updatedAt` alone.
+  changedAt  DateTime    @updatedAt @map("changed_at")
+  /// A second `@updatedAt`, which Prisma Client stamps as it stamps the first.
+  syncedAt   DateTime    @updatedAt @map("synced_at")
+  lineItems  LineItem[]
+  /// An order is shipped to an address kept by handle, not by key: `references:` another unique.
+  giftFor    String?     @map("gift_for")
+  giftTarget Account?    @relation("Gifts", fields: [giftFor], references: [handle], onDelete: SetNull)
+
+  @@map("orders")
+}
+
+/// An explicit many-to-many between Order and Product, keyed by the pair.
+model LineItem {
+  orderNumber Int     @map("order_number")
+  order       Order   @relation(fields: [orderNumber], references: [number], onDelete: Restrict)
+  productId   String  @map("product_id")
+  product     Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity    Int     @default(1)
+  unitPrice   Decimal @map("unit_price")
+
+  @@id([orderNumber, productId])
+  @@map("line_items")
+}
+
+/// One review per account per product (a composite unique). Replies point at the review they
+/// answer and go with it (a self relation that cascades).
+model Review {
+  id        Int      @id @default(autoincrement())
+  productId String   @map("product_id")
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  accountId Int      @map("account_id")
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  /// @ecto.validate_required(message: "評価を入力してください")
+  /// @ecto.validate_number(greater_than_or_equal_to: 1, less_than_or_equal_to: 5)
+  rating    Int
+  body      String?
+  parentId  Int?     @map("parent_id")
+  parent    Review?  @relation("Replies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   Review[] @relation("Replies")
+
+  @@unique([productId, accountId])
+  @@index([accountId])
+  @@map("reviews")
+}
+
+/// A saved list, one per account, holding products through a named implicit relation: the join
+/// table is `_Wished`, not `_ProductToWishlist`. Its key is a uuid and its owner's is an integer.
+model Wishlist {
+  id         String    @id @default(uuid())
+  /// A uuid() that is not the key: Prisma's client makes it, so Ecto has to.
+  shareToken String    @unique @default(uuid()) @map("share_token")
+  accountId  Int       @unique @map("account_id")
+  account    Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  products   Product[] @relation("Wished")
+}
+
+/// An append-only log, and an account that may go before its events do. The key would be a
+/// BigInt on a server; on SQLite, `prisma db push` makes a BigInt autoincrement key a plain
+/// BIGINT column that nothing counts up, so it is an Int here.
+model AuditEvent {
+  id        Int      @id @default(autoincrement())
+  accountId Int?     @map("account_id")
+  account   Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  action    String
+  payload   Json?
+  at        DateTime @default(now())
+
+  @@index([accountId, at])
+  @@map("audit_events")
+}
+
+/// Column names that are words of Elixir or names Ecto keeps for itself. Each is a plain column;
+/// Ecto takes any atom, but the generated code has to stay valid Elixir around it. The model's
+/// own name is Elixir's Keyword module, which Shop.Keyword leaves alone. The doc comment carries
+/// `#{interpolation}`, a `"""` and a backslash \ as a docstring would have to. Its changeset casts
+/// and validates each of them by name.
+/// @ecto
+model Keyword {
+  id        Int       @id @default(autoincrement())
+  type      String
+  end       DateTime?
+  /// @ecto.validate_length(max: 1)
+  do        String?
+  fn        String?
+  when      DateTime?
+  /// `schema` and `changeset` are what an Ecto module defines: a field may still have the name.
+  schema    String?
+  changeset String?
+  /// Ecto keeps `__meta__` on every struct: the column may have the name, the field may not.
+  meta      String?   @map("__meta__")
+  /// Not `nil`: Prisma takes it, but ecto_sqlite3 reads a field named nil in an INSERT as a
+  /// cell left to its default and refuses the row.
+  rescue    Boolean?
+  in        Int?
+  /// A now() that is not a timestamp: Prisma Client fills it with its own clock, and so does Ecto.
+  at        DateTime  @default(now())
+
+  @@map("keywords")
+}

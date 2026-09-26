@@ -1,0 +1,28 @@
+{
+  "name": "@hekireki/example-drizzle",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "clean": "rm -rf dev.db dev.db-journal",
+    "generate": "prisma validate && prisma generate",
+    "db": "prisma db push --url file:./dev.db",
+    "typecheck": "tsc -p tsconfig.json",
+    "verify": "TZ=Asia/Tokyo node check.ts",
+    "demo": "pnpm run clean && pnpm run generate && pnpm run db && pnpm run typecheck && pnpm run verify"
+  },
+  "devDependencies": {
+    "@prisma/adapter-better-sqlite3": "8.1.0-dev.7",
+    "@prisma/adapter-mariadb": "8.1.0-dev.7",
+    "@prisma/adapter-pg": "8.1.0-dev.7",
+    "@prisma/client": "8.1.0-dev.7",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/pg": "^8.23.1",
+    "better-sqlite3": "^13.0.3",
+    "drizzle-orm": "^0.45.3",
+    "hekireki": "workspace:*",
+    "mysql2": "^3.24.4",
+    "pg": "^8.23.0",
+    "prisma": "8.1.0-dev.7",
+    "typescript": "^7.0.2"
+  }
+}

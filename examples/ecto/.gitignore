@@ -1,0 +1,7 @@
+# What `pnpm run setup` fetches and builds beside the check, and the files SQLite keeps beside
+# dev.db in the WAL mode ecto_sqlite3 opens it in (dev.db itself is ignored by examples/.gitignore).
+# The schemas `prisma generate` writes in lib/shop are committed, to be read without running it.
+/deps/
+/_build/
+/dev.db-shm
+/dev.db-wal

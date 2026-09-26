@@ -29,11 +29,16 @@
     "node_modules",
     "dist",
     "pnpm-lock.yaml",
+    // The module paths and checksums `go mod tidy` writes.
+    "**/go.mod",
+    "**/go.sum",
     "test/harness",
     "example/generated",
     "examples/*/generated",
     // `pnpm seed:sql` output: faker text, committed so the example can be loaded without Node.js.
     "examples/*/prisma/seed.sql",
+    // The date checks kept beside an example while it is compared with Prisma Client (git-ignored).
+    "examples/*/.datecheck",
     "packages/hekireki/docs/studio-api.md",
     "packages/hekireki/src/studio/server/routes/index.ts",
     "packages/hekireki/src/studio/client/hooks/index.ts",

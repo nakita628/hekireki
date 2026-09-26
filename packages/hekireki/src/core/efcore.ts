@@ -16,9 +16,9 @@ export function efcore(options: GeneratorOptions) {
       })
     }
     const provider = options.datasources[0]?.activeProvider ?? 'postgresql'
-    if (provider !== 'postgresql') {
+    if (provider !== 'postgresql' && provider !== 'mysql' && provider !== 'sqlite') {
       return yield* new GeneratorConfigError({
-        message: `Unsupported provider for Hekireki-EFCore: ${provider}. Supported providers are postgresql.`,
+        message: `Unsupported provider for Hekireki-EFCore: ${provider}. Supported providers are postgresql, mysql and sqlite.`,
       })
     }
     const namespace = getString(options.generator.config?.namespace) ?? 'Models'
@@ -33,7 +33,7 @@ export function efcore(options: GeneratorOptions) {
         message: `context for Hekireki-EFCore must be a C# class name such as "AppDbContext": ${context}`,
       })
     }
-    const files = efcoreFiles(options.dmmf.datamodel, { namespace, context })
+    const files = efcoreFiles(options.dmmf.datamodel, { namespace, context, provider })
     return yield* emitMany(files, options.generator.output.value)
   })
 }

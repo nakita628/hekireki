@@ -1,8 +1,9 @@
 // Pins semantic invariants in the type system so `tsc --strict` catches a
-// regression that would otherwise type-check: a scalar list must stay a
-// non-null array, an optional column must be `T | null`, a BigInt column must
-// infer `bigint` (bigserial included), an enum column must stay a value union
-// of the @map-ped database values, and an enum array must stay a union array.
+// regression that would otherwise type-check: a scalar list must stay an
+// array, nullable as the column Prisma makes is, an optional column must be
+// `T | null`, a BigInt column must infer `bigint` (bigserial included), an enum
+// column must stay a value union of the @map-ped database values, and an enum
+// array must stay a union array.
 import type { InferSelectModel } from 'drizzle-orm'
 
 import type * as schema from './schema'
@@ -19,7 +20,7 @@ type Equal<A, B> =
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false
 
 export type Cases = [
-  Expect<Equal<Account['tags'], string[]>>,
+  Expect<Equal<Account['tags'], string[] | null>>,
   Expect<Equal<Account['bigNum'], bigint>>,
   Expect<Equal<Account['status'], 'ACTIVE' | 'INACTIVE' | 'PENDING_REVIEW'>>,
   Expect<Equal<Profile['bio'], string | null>>,
@@ -29,6 +30,6 @@ export type Cases = [
   Expect<Equal<Sequence['id'], bigint>>,
   Expect<Equal<Board['visibility'], 'public' | 'private' | 'link_only'>>,
   Expect<Equal<Board['fallback'], 'public' | 'private' | 'link_only' | null>>,
-  Expect<Equal<Board['audiences'], ('public' | 'private' | 'link_only')[]>>,
-  Expect<Equal<Inventory['codes'], number[]>>,
+  Expect<Equal<Board['audiences'], ('public' | 'private' | 'link_only')[] | null>>,
+  Expect<Equal<Inventory['codes'], number[] | null>>,
 ]

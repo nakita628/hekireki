@@ -133,6 +133,8 @@ export function adviseChecks(input: {
   const sql = sqlOf(input.dialect, input.cockroach)
   const same = (a: string, b: string) =>
     input.dialect === 'mysql' ? a.toLowerCase() === b.toLowerCase() : a === b
+  const has = (columns: readonly { readonly name: string }[] | undefined, name: string) =>
+    columns?.some((c) => same(c.name, name)) === true
   const actualOf = (table: Expected) =>
     input.actual.find(
       (t) =>
@@ -297,8 +299,6 @@ export function adviseChecks(input: {
             dataType: one.dataType,
             columnType: one.columnType,
           })
-          const has = (columns: readonly { readonly name: string }[] | undefined, name: string) =>
-            columns?.some((c) => same(c.name, name)) === true
           // How much a column the migration adds reads as this one: its name (the same but for
           // case and separators, else the longest run of letters they share, three at least),
           // then its kind (text takes any value), then whether it may be empty as this one may.
