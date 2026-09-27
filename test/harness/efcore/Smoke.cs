@@ -121,7 +121,7 @@ public static class Smoke
         context.SaveChanges();
         Check(Regex.IsMatch(profile.Id, "^c[a-z0-9]{24}$"), "cuid() is a 25-character CUID");
         Check(profile.Nickname == "anonymous" && profile.Score == 0 && profile.Balance == 0 && !profile.Verified, "literal defaults are set on new entities");
-        Check(profile.UpdatedAt >= before.AddSeconds(-1) && profile.UpdatedAt.Kind == DateTimeKind.Unspecified, "@updatedAt is stamped on insert, as UTC");
+        Check(profile.UpdatedAt >= before.AddSeconds(-1) && profile.UpdatedAt.Kind == DateTimeKind.Utc, "@updatedAt is stamped on insert, as UTC");
         var stored = (DateTime)Scalar(context, $"SELECT updated_at FROM \"Profile\" WHERE id = '{profile.Id}'")!;
         Check(Math.Abs((stored - before).TotalSeconds) < 60, "@updatedAt is stored as UTC, as Prisma stores it");
         Check((string?)Scalar(context, $"SELECT nickname FROM \"Profile\" WHERE id = '{profile.Id}'") == "anonymous", "the default is written");

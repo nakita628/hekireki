@@ -1,0 +1,14 @@
+{
+  "name": "@hekireki/example-exposed",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "clean": "rm -rf src/main/kotlin/models generated build",
+    "generate": "prisma validate && prisma generate",
+    "demo": "pnpm run clean && pnpm run generate && node run.ts"
+  },
+  "devDependencies": {
+    "hekireki": "workspace:*",
+    "prisma": "8.1.0-dev.7"
+  }
+}

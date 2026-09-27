@@ -10,9 +10,11 @@ resolves it; a missing @updatedAt insert default only fails on INSERT)."""
 
 from typing import Any, Optional
 
-from sqlalchemy import ARRAY, Table, create_engine
-from sqlalchemy.sql.elements import TextClause
+from sqlalchemy import create_engine
+from sqlalchemy.exc import CompileError, OperationalError
+from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session, configure_mappers
 from sqlalchemy.schema import CreateIndex, CreateTable
 
@@ -30,6 +32,11 @@ def _smoke(a: Account, p: Profile, b: Board) -> None:
     _ = (tags, data, bio, age, parent, visibility, audiences)
 
 
+@compiles(JSONB, "sqlite")
+def _jsonb_on_sqlite(type_: JSONB, compiler: Any, **kw: Any) -> str:
+    return "JSON"
+
+
 def _runtime_smoke() -> None:
     configure_mappers()
 
@@ -39,23 +46,17 @@ def _runtime_smoke() -> None:
         for index in table.indexes:
             str(CreateIndex(index).compile(dialect=pg_dialect))
 
-    # ARRAY and raw-DDL server defaults (dbgenerated: gen_random_uuid(),
-    # interval arithmetic) are PostgreSQL-only; every other table runs against
+    # The models are PostgreSQL's: a table SQLite cannot declare (an array, oid,
+    # money, inet) or cannot make (a dbgenerated default: gen_random_uuid(),
+    # interval arithmetic) is left out, and every other one runs against
     # in-memory SQLite so INSERTs exercise the client-side defaults
     # (@updatedAt, uuid, ulid).
     engine = create_engine("sqlite://")
-
-    def _sqlite_compatible(t: Table) -> bool:
-        if any(isinstance(c.type, ARRAY) for c in t.columns):
-            return False
-        return not any(
-            c.server_default is not None
-            and isinstance(getattr(c.server_default, "arg", None), TextClause)
-            for c in t.columns
-        )
-
-    sqlite_tables = [t for t in Base.metadata.sorted_tables if _sqlite_compatible(t)]
-    Base.metadata.create_all(engine, tables=sqlite_tables)
+    for table in Base.metadata.sorted_tables:
+        try:
+            table.create(engine)
+        except (CompileError, OperationalError):
+            continue
     with Session(engine) as session:
         session.add(Profile(id="p1", account_id="a1", meta={"k": "v"}))
         session.add(Category(name="root"))

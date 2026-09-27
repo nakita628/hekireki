@@ -1,5 +1,6 @@
 import path from 'node:path'
 
+import { NodeFileSystem } from '@effect/platform-node'
 import { getRequestListener } from '@hono/node-server'
 import tailwindcss from '@tailwindcss/vite'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
@@ -8,7 +9,6 @@ import { Effect } from 'effect'
 import { defineConfig } from 'vite-plus'
 import type { Plugin } from 'vite-plus'
 
-import { fileSystemLayer } from './src/file/index.js'
 import { createStudioApi } from './src/studio/server/app.js'
 import {
   connectDatabase,
@@ -31,7 +31,7 @@ function studioApi(): Plugin {
           path.resolve(import.meta.dirname, '../../example/schema.prisma'),
       )
       const state = createStudioState({ schemaPath })
-      const reload = Effect.provide(state.reload(), fileSystemLayer)
+      const reload = Effect.provide(state.reload(), NodeFileSystem.layer)
       const snapshot = await Effect.runPromise(reload)
       const db = await Effect.runPromise(
         Effect.provide(
@@ -45,7 +45,7 @@ function studioApi(): Plugin {
             schemaDir: path.dirname(schemaPath),
             env: process.env,
           }),
-          fileSystemLayer,
+          NodeFileSystem.layer,
         ),
       )
       const client = createProjectClient({

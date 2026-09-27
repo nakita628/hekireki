@@ -26,7 +26,8 @@ export function django(options: GeneratorOptions) {
         message: `Hekireki-Django cannot represent this schema:\n${conflicts.map((c) => `  - ${c}`).join('\n')}`,
       })
     }
-    const code = djangoCode(options.dmmf.datamodel.models, enums, indexes)
+    const provider = options.datasources[0]?.activeProvider
+    const code = djangoCode(options.dmmf.datamodel.models, enums, indexes, provider)
     return yield* emitRaw(code, path.dirname(outPath), outPath)
   })
 }

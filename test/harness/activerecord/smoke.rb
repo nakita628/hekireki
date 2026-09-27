@@ -3,10 +3,13 @@
 # Loads every generated model against the real Active Record API — what
 # `ruby -c` cannot see: an association whose class_name resolves to nothing,
 # an enum mapping the DSL rejects, a composite primary key assignment the
-# running Active Record version does not support. No database connection is
-# needed: table_name/primary_key assignment, enum definition, and association
-# reflection all run at class-definition time.
+# running Active Record version does not support. table_name/primary_key
+# assignment, enum definition, and association reflection all run at
+# class-definition time, and so does the type of an attribute declared by name,
+# which is the adapter's: the connection is an empty SQLite database in memory.
 require "active_record"
+
+ActiveRecord::Base.establish_connection(adapter: "sqlite3", database: ":memory:")
 
 # application_record.rb is generated too (the output directory is a `models`
 # directory); Zeitwerk would resolve it on demand, here it loads first.

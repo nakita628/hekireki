@@ -1,7 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { arktypeSchemaCode, makeArktypeRelations } from '../helper/arktype.js'
-import { makeRelationsOnly } from '../helper/extract-relations.js'
+import { makeRelationsOnly } from '../utils/extract-relations.js'
 
 export function arktypeCode(
   dmmf: DMMF.Document,

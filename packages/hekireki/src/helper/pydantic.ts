@@ -1,10 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import {
-  makePascalCase,
-  makeValidationExtractor,
-  parseDocumentWithoutAnnotations,
-} from '../utils/index.js'
+import { makePascalCase, makeValidationExtractor } from '../utils/index.js'
 
 const PRISMA_TO_PYDANTIC: { [k: string]: string } = {
   String: 'str',
@@ -152,22 +148,6 @@ export function makePydanticField(
   }
 }
 
-function makeDocstring(lines: readonly string[], indent: string) {
-  if (lines.length === 0) return []
-  const escaped = lines.map((l) => l.replaceAll('\\', '\\\\').replaceAll('"""', '\\"\\"\\"'))
-  // Text ending in `"` would fuse with an appended closing `"""` into four
-  // quotes (a Python SyntaxError), so those fall back to the multi-line form
-  // whose closing quotes sit on their own line.
-  if (escaped.length === 1 && !escaped[0].endsWith('"')) {
-    return [`${indent}"""${escaped[0]}"""`]
-  }
-  return [
-    `${indent}"""${escaped[0]}`,
-    ...escaped.slice(1).map((l) => `${indent}${l}`),
-    `${indent}"""`,
-  ]
-}
-
 // Pydantic's own idiom instead of zod-style strictObject/looseObject:
 // `/// @p.ConfigDict(extra='forbid')` on the model passes the expression
 // through verbatim as `model_config`. Any ConfigDict arguments work; no
@@ -185,7 +165,6 @@ function makeConfigLine(model: DMMF.Model) {
 export function makePydanticModel(
   model: DMMF.Model,
   enums: readonly DMMF.DatamodelEnum[] | undefined,
-  comment: boolean,
 ) {
   const built = model.fields.flatMap((field) => {
     const result = makePydanticField(field, enums)
@@ -193,17 +172,10 @@ export function makePydanticModel(
   })
   if (built.length === 0) return null
 
-  const docLines = comment
-    ? makeDocstring(parseDocumentWithoutAnnotations(model.documentation), '    ')
-    : []
   const configLine = makeConfigLine(model)
-  // oxlint-disable-next-line oxc/no-map-spread -- one docstring per field, not an accumulator
-  const fieldLines = built.flatMap(({ field, result }) => [
-    result.line,
-    ...(comment ? makeDocstring(parseDocumentWithoutAnnotations(field.documentation), '    ') : []),
-  ])
+  const fieldLines = built.map(({ result }) => result.line)
 
-  const sections = [docLines, configLine === null ? [] : [configLine], fieldLines].filter(
+  const sections = [configLine === null ? [] : [configLine], fieldLines].filter(
     (section) => section.length > 0,
   )
   return [

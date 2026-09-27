@@ -1,0 +1,97 @@
+// A small blog on SQLite, written the way a Prisma schema is written, with the corners of how
+// Prisma keeps a DateTime placed where a real schema would put them. `pnpm run demo` writes
+// app/models.py, creates dev.db with `prisma db push` and runs check.py with the real Django ORM
+// against the tables Prisma made: no Django migration runs. Prisma Client shares the database:
+// interop.ts reads what Django wrote and writes rows for interop.py to read through the models.
+//
+// SQLite has no native date types. A field with a `// postgresql:` or `// mysql:` comment gets
+// that attribute when provider.ts writes the schema again for PostgreSQL or MySQL, and a line that
+// starts `//+postgresql:` is a field only PostgreSQL has.
+
+datasource db {
+  provider = "sqlite"
+}
+
+generator client {
+  provider            = "prisma-client"
+  output              = "generated/client"
+  importFileExtension = "ts"
+}
+
+generator Hekireki-Django {
+  provider = "hekireki-django"
+  output   = "app/models.py"
+}
+
+/// Stored under names of its own.
+enum Status {
+  DRAFT     @map("draft")
+  PUBLISHED @map("published")
+}
+
+/// `now()` and `@updatedAt` under `@map`: Prisma Client fills both itself, in UTC with
+/// milliseconds, whatever default the table has.
+model Author {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  posts     Post[]
+
+  @@map("authors")
+}
+
+/// An optional DateTime that is filtered and sorted on, a literal DateTime default, and two
+/// `@updatedAt`: Prisma sets both on every write.
+model Post {
+  id          Int       @id @default(autoincrement())
+  title       String
+  status      Status    @default(DRAFT)
+  authorId    Int       @map("author_id")
+  author      Author    @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  publishedAt DateTime? @map("published_at")
+  embargo     DateTime  @default("2020-01-01T00:00:00Z")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  indexedAt   DateTime  @updatedAt @map("indexed_at")
+  tags        Tag[]
+
+  @@index([publishedAt])
+  @@map("posts")
+}
+
+/// The other side of an implicit many-to-many, through Prisma's `_PostToTag`.
+model Tag {
+  id    Int    @id @default(autoincrement())
+  name  String @unique
+  posts Post[]
+
+  @@map("tags")
+}
+
+/// A DateTime in a composite key: a row is found by the exact instant.
+model Visit {
+  path String
+  at   DateTime
+  note String?
+
+  @@id([path, at])
+  @@map("visits")
+}
+
+/// Every native type a DateTime can have. On SQLite each is the plain DateTime.
+model Clock {
+  id        Int       @id @default(autoincrement())
+  label     String    @unique
+  at        DateTime? // postgresql: @db.Timestamp(3)  mysql: @db.DateTime(3)
+  precise   DateTime? // postgresql: @db.Timestamp(6)  mysql: @db.DateTime(6)
+  seconds   DateTime? // postgresql: @db.Timestamp(0)  mysql: @db.DateTime(0)
+  zoned     DateTime? // postgresql: @db.Timestamptz(3)  mysql: @db.Timestamp(3)
+  day       DateTime? // postgresql: @db.Date  mysql: @db.Date
+  time      DateTime? // postgresql: @db.Time(3)  mysql: @db.Time(3)
+  zonedTime DateTime? @map("zoned_time") // postgresql: @db.Timetz(3)
+  //+postgresql: moments DateTime[]
+  createdAt DateTime  @default(now()) @map("created_at") // postgresql: @db.Timestamptz(3)  mysql: @db.Timestamp(3)
+
+  @@map("clocks")
+}

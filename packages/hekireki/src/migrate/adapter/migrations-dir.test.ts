@@ -2,10 +2,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
+import { NodeFileSystem } from '@effect/platform-node'
 import { Effect } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
-import { fileSystemLayer } from '../../file/index.js'
 import { migrationsStamp, resolveMigrationsDir } from './migrations-dir.js'
 
 const dirs: string[] = []
@@ -27,7 +27,9 @@ describe('resolveMigrationsDir', () => {
     mkdirSync(schemaDir)
     const resolve = () =>
       Effect.runPromise(
-        resolveMigrationsDir({ cwd: project, schemaDir }).pipe(Effect.provide(fileSystemLayer)),
+        resolveMigrationsDir({ cwd: project, schemaDir }).pipe(
+          Effect.provide(NodeFileSystem.layer),
+        ),
       )
     expect(await resolve()).toBe(path.join(schemaDir, 'migrations'))
     writeFileSync(
@@ -42,7 +44,7 @@ describe('migrationsStamp', () => {
   it('changes with a migration added or edited, and reads a directory that is not there as empty', async () => {
     const base = path.join(tmp(), 'migrations')
     const stamp = () =>
-      Effect.runPromise(migrationsStamp(base).pipe(Effect.provide(fileSystemLayer)))
+      Effect.runPromise(migrationsStamp(base).pipe(Effect.provide(NodeFileSystem.layer)))
     const empty = await stamp()
     expect(await stamp()).toBe(empty)
     mkdirSync(path.join(base, '20260101000000_init'), { recursive: true })

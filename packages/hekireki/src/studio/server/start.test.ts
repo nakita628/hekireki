@@ -2,10 +2,10 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
+import { NodeFileSystem } from '@effect/platform-node'
 import { Effect, Exit } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
-import { fileSystemLayer } from '../../file/index.js'
 import { startStudioServer } from './start.js'
 
 const dirs: string[] = []
@@ -53,7 +53,7 @@ describe('startStudioServer', () => {
           )
           return { port, schema, index, models: started.snapshot.schema?.models.length }
         }),
-      ).pipe(Effect.provide(fileSystemLayer)),
+      ).pipe(Effect.provide(NodeFileSystem.layer)),
     )
     expect(result.schema).toBe(200)
     expect(result.index).toBe(200)
@@ -80,7 +80,7 @@ describe('startStudioServer', () => {
           )
           return { html, database: started.database }
         }),
-      ).pipe(Effect.provide(fileSystemLayer)),
+      ).pipe(Effect.provide(NodeFileSystem.layer)),
     )
     expect(result.html).toContain('<title>Studio</title>')
     expect(result.database.connected).toBe(false)
@@ -106,7 +106,7 @@ describe('startStudioServer', () => {
             }),
           )
         }),
-      ).pipe(Effect.provide(fileSystemLayer)),
+      ).pipe(Effect.provide(NodeFileSystem.layer)),
     )
     expect(Exit.isFailure(exit)).toBe(true)
     if (Exit.isFailure(exit)) {
@@ -126,7 +126,7 @@ describe('startStudioServer', () => {
             databaseUrl: null,
           }),
         ),
-      ).pipe(Effect.provide(fileSystemLayer)),
+      ).pipe(Effect.provide(NodeFileSystem.layer)),
     )
     expect(String(exit)).toContain('Schema not found')
   })

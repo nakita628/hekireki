@@ -7,6 +7,7 @@ import {
   generateM2MEntity,
   generateModRs,
   generatePreludeRs,
+  PRISMA_DATE_TIME_RS,
 } from '../helper/sea-orm.js'
 import { makeSnakeCase } from '../utils/index.js'
 
@@ -14,6 +15,7 @@ export function seaOrmFiles(
   models: readonly DMMF.Model[],
   enums: readonly DMMF.DatamodelEnum[],
   serde: { readonly renameAll?: string } = {},
+  provider?: string,
 ) {
   const useLines = ['use sea_orm::entity::prelude::*;', 'use serde::{Deserialize, Serialize};']
 
@@ -27,7 +29,7 @@ export function seaOrmFiles(
     .map((model) => ({
       fileName: `${makeSnakeCase(model.name)}.rs`,
       moduleName: makeSnakeCase(model.name),
-      code: generateEntityFile(model, models, enums, serde),
+      code: generateEntityFile(model, models, enums, serde, provider),
     }))
     .filter((entry) => entry.code.trim().length > 0)
 
@@ -46,7 +48,24 @@ export function seaOrmFiles(
     code: generatePreludeRs(models),
   }
 
-  const allEntries = [...enumFiles, ...entityFiles, ...m2mFiles, preludeEntry]
+  const prismaDateTimeFiles =
+    provider === 'sqlite' && models.some((m) => m.fields.some((f) => f.type === 'DateTime'))
+      ? [
+          {
+            fileName: 'prisma_date_time.rs',
+            moduleName: 'prisma_date_time',
+            code: PRISMA_DATE_TIME_RS,
+          },
+        ]
+      : []
+
+  const allEntries = [
+    ...enumFiles,
+    ...entityFiles,
+    ...m2mFiles,
+    ...prismaDateTimeFiles,
+    preludeEntry,
+  ]
   const moduleNames = allEntries.map((e) => e.moduleName).toSorted()
   const modEntry = { fileName: 'mod.rs', code: generateModRs(moduleNames) }
 

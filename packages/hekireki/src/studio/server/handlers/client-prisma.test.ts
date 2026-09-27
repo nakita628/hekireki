@@ -4,10 +4,10 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
+import { NodeFileSystem } from '@effect/platform-node'
 import { Effect } from 'effect'
 import { afterAll, beforeAll, describe, expect, it } from 'vite-plus/test'
 
-import { fileSystemLayer } from '../../../file/index.js'
 import { formatSql } from '../../../sql/index.js'
 import { createStudioApp } from '../app.js'
 import { createProjectClient, createStudioState, disconnectedDatabase } from '../services/index.js'
@@ -130,7 +130,7 @@ beforeAll(async () => {
   `)
   db.close()
   const state = createStudioState({ schemaPath })
-  const reload = () => Effect.runPromise(Effect.provide(state.reload(), fileSystemLayer))
+  const reload = () => Effect.runPromise(Effect.provide(state.reload(), NodeFileSystem.layer))
   await reload()
   const client = createProjectClient({
     target: { url: 'file:./dev.db', dialect: 'sqlite' },

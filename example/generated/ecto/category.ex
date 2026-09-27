@@ -1,8 +1,5 @@
 defmodule Example.Category do
   use Ecto.Schema
-  @moduledoc """
-  Self-relation (adjacency-list tree) with a composite unique.
-  """
 
   @primary_key {:id, :id, autogenerate: true}
 

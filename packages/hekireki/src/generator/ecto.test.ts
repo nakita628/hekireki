@@ -89,9 +89,6 @@ describe('ectoSchemaFiles', () => {
         fileName: 'user.ex',
         code: `defmodule MyApp.User do
   use Ecto.Schema
-  @moduledoc """
-  A person.
-  """
 
   @primary_key false
 
@@ -114,7 +111,6 @@ end`,
         fileName: 'blog_post.ex',
         code: `defmodule MyApp.BlogPost do
   use Ecto.Schema
-  @moduledoc false
 
   @primary_key false
 
@@ -141,9 +137,6 @@ end`,
         fileName: 'user.ex',
         code: `defmodule My.App.User do
   use Ecto.Schema
-  @moduledoc """
-  A person.
-  """
 
   @primary_key false
 
@@ -166,7 +159,6 @@ end`,
         fileName: 'blog_post.ex',
         code: `defmodule My.App.BlogPost do
   use Ecto.Schema
-  @moduledoc false
 
   @primary_key false
 
@@ -193,7 +185,6 @@ end`,
         fileName: 'bare.ex',
         code: `defmodule App.Bare do
   use Ecto.Schema
-  @moduledoc false
 
   @primary_key false
 

@@ -1,0 +1,230 @@
+// A blog with an address book around it, on SQLite so nothing needs to run, and a model that holds
+// one column of every scalar type. `pnpm run demo` writes models/models.go, creates dev.db and runs
+// main.go against them with the real GORM: every struct is read and written through the table and
+// column names the generator gave it, on the tables Prisma made, never on tables GORM made itself.
+
+datasource db {
+  provider = "sqlite"
+}
+
+generator Hekireki-GORM {
+  provider = "hekireki-gorm"
+  output   = "models"
+  package  = "models"
+}
+
+/// Members the database holds under other names: the column stores `admin` and `member`, and
+/// `GUEST` as it is. The struct has a plain string, so what is written is the stored value.
+enum Role {
+  ADMIN  @map("admin")
+  MEMBER @map("member")
+  GUEST
+}
+
+enum PostStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+/// A person who writes. `active` defaults to true, which is not Go's zero value: a user made
+/// inactive on purpose has to stay inactive, not take the default because false looked unset.
+model User {
+  id          Int       @id @default(autoincrement())
+  email       String    @unique
+  /// Optional, so a pointer: nil is NULL, not "".
+  displayName String?   @map("display_name")
+  role        Role      @default(MEMBER)
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  profile     Profile?
+  posts       Post[]
+  comments    Comment[]
+  /// Both sides of a self many-to-many written out as a model: who follows whom.
+  following   Follow[]  @relation("Follower")
+  followers   Follow[]  @relation("Followee")
+  auditLogs   AuditLog[]
+
+  @@map("users")
+}
+
+/// One per user, and gone with the user. The relation field is named after the model, `user`,
+/// while its key is `ownerId`: GORM's own guess would be `UserID`, so the key has to be named.
+/// `websiteURL` is a Go initialism as a person writes it in camelCase.
+model Profile {
+  id         Int     @id @default(autoincrement())
+  ownerId    Int     @unique @map("owner_id")
+  user       User    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  bio        String?
+  websiteURL String? @map("website_url")
+  /// A picture as bytes: a nil slice is NULL.
+  avatar     Bytes?
+
+  @@map("profiles")
+}
+
+/// The key the posts of a deleted category fall back to: row 1, which the check creates first.
+model Category {
+  id    Int    @id @default(autoincrement())
+  name  String @unique
+  posts Post[]
+
+  @@map("categories")
+}
+
+/// Every onDelete a relation of a post can take, one per foreign key: the author may go and leave
+/// the post (SetNull), the category may go and hand the post to the default one (SetDefault).
+model Post {
+  id          Int        @id @default(autoincrement())
+  title       String
+  /// A non-empty default: "" set on purpose must be stored as "", not replaced by it.
+  slug        String     @default("untitled")
+  status      PostStatus @default(DRAFT)
+  views       Int        @default(0)
+  authorId    Int?       @map("author_id")
+  author      User?      @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  categoryId  Int        @default(1) @map("category_id")
+  category    Category   @relation(fields: [categoryId], references: [id], onDelete: SetDefault)
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  comments    Comment[]
+  /// An implicit many-to-many: Prisma's own join table, _PostToTag, with columns A (Post) and B
+  /// (Tag), named after the models in alphabetical order.
+  tags        Tag[]
+
+  @@index([authorId, status])
+  @@map("posts")
+}
+
+/// A random primary key made by the client: `uuid()` is not a database default, so the struct
+/// has to make one before it is inserted.
+model Tag {
+  id    String @id @default(uuid())
+  name  String @unique
+  posts Post[]
+
+  @@map("tags")
+}
+
+/// A `cuid()` key, a self relation for replies, and a unique pair: a comment's `slot` is unique
+/// within its post. The author cannot be deleted while a comment of theirs stands (Restrict).
+model Comment {
+  id       String    @id @default(cuid())
+  body     String
+  slot     Int
+  postId   Int       @map("post_id")
+  post     Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId Int       @map("author_id")
+  author   User      @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  parentId String?   @map("parent_id")
+  parent   Comment?  @relation("Replies", fields: [parentId], references: [id], onDelete: SetNull)
+  replies  Comment[] @relation("Replies")
+
+  @@unique([postId, slot])
+  @@map("comments")
+}
+
+/// A composite primary key, and the join model of an explicit self many-to-many: two relations
+/// to the same model, each named, each gone with either user.
+model Follow {
+  followerId Int      @map("follower_id")
+  follower   User     @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  followeeId Int      @map("followee_id")
+  followee   User     @relation("Followee", fields: [followeeId], references: [id], onDelete: Cascade)
+  since      DateTime @default(now())
+
+  @@id([followerId, followeeId])
+  @@map("follows")
+}
+
+/// A relation to a unique column that is not the key: the log names the user by address.
+/// NoAction keeps a user with log lines from going; a changed address follows into the log
+/// (onUpdate: Cascade). The key is an Int: on SQLite, Prisma writes a BigInt autoincrement key as
+/// `BIGINT PRIMARY KEY`, which is not the rowid, so the database never fills it.
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userEmail String   @map("user_email")
+  user      User     @relation(fields: [userEmail], references: [email], onDelete: NoAction, onUpdate: Cascade)
+  action    String
+  at        DateTime @default(now())
+
+  @@map("audit_logs")
+}
+
+/// The two client-made keys Go needs a library for: a `cuid(2)` primary key and a `nanoid(8)`
+/// column beside it, which is not a key at all and is made all the same.
+model Invite {
+  id        String    @id @default(cuid(2))
+  code      String    @unique @default(nanoid(8))
+  email     String
+  expiresAt DateTime? @map("expires_at")
+
+  @@map("invites")
+}
+
+/// A country keyed by its code, not by an `id`: an address refers to it through `countryCode`.
+model Country {
+  code      String    @id
+  name      String
+  addresses Address[]
+
+  @@map("countries")
+}
+
+model Address {
+  id          Int     @id @default(autoincrement())
+  countryCode String  @map("country_code")
+  country     Country @relation(fields: [countryCode], references: [code], onDelete: Restrict)
+  line1       String
+  line2       String?
+
+  @@map("addresses")
+}
+
+/// One column of every scalar type SQLite has, once required and once optional, and names that
+/// are Go keywords, Go initialisms or a method the generator writes itself. Nothing refers to it:
+/// it is here to be written and read back exactly.
+model Sample {
+  id            Int       @id @default(autoincrement())
+  int           Int
+  intOpt        Int?      @map("int_opt")
+  bigInt        BigInt    @map("big_int")
+  bigIntOpt     BigInt?   @map("big_int_opt")
+  float         Float
+  floatOpt      Float?    @map("float_opt")
+  decimal       Decimal
+  decimalOpt    Decimal?  @map("decimal_opt")
+  boolean       Boolean
+  booleanOpt    Boolean?  @map("boolean_opt")
+  string        String
+  stringOpt     String?   @map("string_opt")
+  dateTime      DateTime  @map("date_time")
+  dateTimeOpt   DateTime? @map("date_time_opt")
+  json          Json
+  jsonOpt       Json?     @map("json_opt")
+  bytes         Bytes
+  bytesOpt      Bytes?    @map("bytes_opt")
+  role          Role
+  roleOpt       Role?     @map("role_opt")
+  /// Go keywords as field names: `type`, `func`, `range`, `map`, `select`.
+  type          String    @default("plain")
+  func          String?
+  range         Int?
+  map           String?
+  select        Boolean   @default(false)
+  /// Initialisms, and a snake_case field beside a camelCase one.
+  userID        Int?      @map("user_id")
+  URL           String?   @map("url")
+  html_body     String?
+  /// A method GORM calls on the struct: the field cannot share its Go name.
+  tableName     String?   @map("table_name")
+  /// A literal default of every kind the struct tag has to quote: a quote and a backslash.
+  quoted        String    @default("it's \"quoted\" \\ here; really")
+  ratio         Float     @default(0.5)
+  price         Decimal   @default(9.99)
+  /// Past 2^53, where a number that went through a float would come back one off.
+  big           BigInt    @default(9007199254740993)
+
+  @@map("samples")
+}

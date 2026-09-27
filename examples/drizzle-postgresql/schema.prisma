@@ -1,0 +1,37 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider            = "prisma-client"
+  output              = "generated/client"
+  importFileExtension = "ts"
+}
+
+generator Hekireki-Drizzle {
+  provider = "hekireki-drizzle"
+  output   = "src/db/schema.ts"
+}
+
+/// A DateTime in every column PostgreSQL has for one.
+model Moment {
+  id        Int        @id @default(autoincrement())
+  name      String     @unique
+  at        DateTime
+  precise   DateTime   @db.Timestamp(6)
+  whole     DateTime   @db.Timestamp(0)
+  zoned     DateTime   @db.Timestamptz(3)
+  day       DateTime   @db.Date
+  dayOpt    DateTime?  @map("day_opt") @db.Date
+  opensAt   DateTime   @map("opens_at") @db.Time(3)
+  zonedTime DateTime   @map("zoned_time") @db.Timetz(3)
+  moments   DateTime[]
+  days      DateTime[] @db.Date
+  today     DateTime   @default(now()) @db.Date
+  launch    DateTime   @default("2024-01-15T00:00:00.000Z") @db.Date
+  bell      DateTime   @default("1970-01-01T10:30:00.000Z") @db.Time
+  createdAt DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime   @updatedAt @map("updated_at")
+
+  @@map("moments")
+}

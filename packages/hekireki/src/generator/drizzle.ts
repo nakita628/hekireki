@@ -3,6 +3,7 @@ import type { DMMF } from '@prisma/generator-helper'
 import {
   createImports,
   generateImports,
+  makeColumnHelpers,
   makeEnumDeclarations,
   makeM2MJoinRelations,
   makeM2MJoinTables,
@@ -41,9 +42,12 @@ export function drizzleSchema(
     i < relationsLines.length - 1 ? [line, ''] : [line],
   )
 
+  const columnHelpers = makeColumnHelpers(imports)
+
   return [
     generateImports(imports, db),
     '',
+    ...columnHelpers.flatMap((helper) => [helper, '']),
     ...(enumLinesWithGap.length > 0 ? [...enumLinesWithGap, ''] : []),
     ...tableLinesWithGap,
     ...(relationsLinesWithGap.length > 0 ? ['', ...relationsLinesWithGap] : []),

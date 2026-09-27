@@ -40,6 +40,21 @@ function makeDatamodel(
 }
 
 describe('atlasSchema', () => {
+  it('writes none of the documentation the schema has', () => {
+    const hcl = atlasSchema(
+      makeDatamodel([
+        makeModel({
+          name: 'Note',
+          documentation: 'A note.',
+          fields: [makeField({ name: 'id', type: 'Int', isId: true, documentation: 'Its key.' })],
+        }),
+      ]),
+      'postgresql',
+      {},
+    )
+    expect(hcl).not.toContain('comment')
+  })
+
   it('should generate a postgresql schema with tables, FK, and schema block', () => {
     const datamodel = makeDatamodel(
       [
@@ -273,7 +288,7 @@ table "_PostToTag" {
     null = false
     type = text
   }
-  primary_key {
+  primary_key "_PostToTag_AB_pkey" {
     columns = [column.A, column.B]
   }
   foreign_key "_PostToTag_A_fkey" {
@@ -330,7 +345,9 @@ schema "public" {}
     )
     expect(atlasSchema(datamodel, 'mysql', {})).toBe(
       `table "User" {
-  schema = schema.public
+  schema  = schema.public
+  charset = "utf8mb4"
+  collate = "utf8mb4_unicode_ci"
   column "id" {
     null           = false
     type           = int
@@ -424,7 +441,7 @@ schema "public" {}
     )
   })
 
-  it('should honor schemaName and comment config with @@schema models', () => {
+  it('should honor schemaName with @@schema models', () => {
     const datamodel = makeDatamodel(
       [
         makeModel({
@@ -444,18 +461,16 @@ schema "public" {}
       [],
       [{ model: 'User', type: 'id', isDefinedOnField: true, fields: [{ name: 'id' }] }],
     )
-    expect(atlasSchema(datamodel, 'postgresql', { schemaName: 'app', comment: true })).toBe(
+    expect(atlasSchema(datamodel, 'postgresql', { schemaName: 'app' })).toBe(
       `table "User" {
-  schema  = schema.auth
-  comment = "Users table"
+  schema = schema.auth
   column "id" {
     null = false
     type = text
   }
   column "email" {
-    null    = false
-    type    = text
-    comment = "email address"
+    null = false
+    type = text
   }
   primary_key {
     columns = [column.id]

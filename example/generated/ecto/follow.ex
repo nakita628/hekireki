@@ -1,8 +1,5 @@
 defmodule Example.Follow do
   use Ecto.Schema
-  @moduledoc """
-  Composite primary key + two named relations to the same model.
-  """
 
   @primary_key false
 
@@ -15,7 +12,7 @@ defmodule Example.Follow do
         }
 
   schema "follows" do
-    field(:since, :utc_datetime)
+    field(:since, Example.PrismaDateTime, autogenerate: true)
     field(:follower_id, :binary_id, primary_key: true)
     field(:following_id, :binary_id, primary_key: true)
     belongs_to(:follower, Example.User, foreign_key: :follower_id, define_field: false, type: :binary_id)

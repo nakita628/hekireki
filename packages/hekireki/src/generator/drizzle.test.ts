@@ -1,3 +1,5 @@
+import { stripTypeScriptTypes } from 'node:module'
+
 import type { DMMF } from '@prisma/generator-helper'
 import { describe, expect, it } from 'vite-plus/test'
 
@@ -89,7 +91,7 @@ describe('drizzleSchema', () => {
       const result = drizzleSchema(datamodel, 'postgresql', [])
 
       expect(result).toBe(
-        "import { integer, pgTable, serial, text } from 'drizzle-orm/pg-core'\nimport { relations } from 'drizzle-orm'\n\nexport const user = pgTable('User', { id: serial('id').primaryKey(), name: text('name').notNull(), email: text('email').notNull().unique() })\n\nexport const post = pgTable('Post', { id: serial('id').primaryKey(), title: text('title').notNull(), userId: integer('userId').notNull().references(() => user.id) })\n\nexport const userRelations = relations(user, ({ many }) => ({ posts: many(post) }))\n\nexport const postRelations = relations(post, ({ one }) => ({ author: one(user, { fields: [post.userId], references: [user.id] }) }))",
+        "import { foreignKey, integer, pgTable, serial, text } from 'drizzle-orm/pg-core'\nimport { relations } from 'drizzle-orm'\n\nexport const user = pgTable('User', { id: serial('id').primaryKey(), name: text('name').notNull(), email: text('email').notNull() })\n\nexport const post = pgTable('Post', { id: serial('id').primaryKey(), title: text('title').notNull(), userId: integer('userId').notNull() }, (table) => [foreignKey({ name: 'Post_userId_fkey', columns: [table.userId], foreignColumns: [user.id] }).onDelete('restrict').onUpdate('cascade')])\n\nexport const userRelations = relations(user, ({ many }) => ({ posts: many(post) }))\n\nexport const postRelations = relations(post, ({ one }) => ({ author: one(user, { fields: [post.userId], references: [user.id] }) }))",
       )
     })
   })
@@ -114,11 +116,12 @@ describe('drizzleSchema', () => {
         }),
       ])
 
-      const result = drizzleSchema(datamodel, 'sqlite', [])
+      const lines = drizzleSchema(datamodel, 'sqlite', []).split('\n')
 
-      expect(result).toBe(
-        "import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'\n\nexport const user = sqliteTable('User', { id: integer('id').primaryKey({ autoIncrement: true }), name: text('name').notNull(), active: integer('active', { mode: 'boolean' }).notNull(), createdAt: integer('createdAt', { mode: 'timestamp_ms' }).notNull() })",
-      )
+      expect([lines[0], lines.at(-1)]).toStrictEqual([
+        "import { customType, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'",
+        "export const user = sqliteTable('User', { id: integer('id').primaryKey({ autoIncrement: true }), name: text('name').notNull(), active: integer('active', { mode: 'boolean' }).notNull(), createdAt: utcDateTime('createdAt').notNull() })",
+      ])
     })
   })
 
@@ -143,7 +146,7 @@ describe('drizzleSchema', () => {
       const result = drizzleSchema(datamodel, 'mysql', [])
 
       expect(result).toBe(
-        "import { int, mysqlTable, text } from 'drizzle-orm/mysql-core'\n\nexport const user = mysqlTable('User', { id: int('id').primaryKey().autoincrement(), name: text('name').notNull() })",
+        "import { int, mysqlTable, varchar } from 'drizzle-orm/mysql-core'\n\nexport const user = mysqlTable('User', { id: int('id').primaryKey().autoincrement(), name: varchar('name', { length: 191 }).notNull() })",
       )
     })
   })
@@ -222,7 +225,7 @@ describe('drizzleSchema', () => {
       )
     })
 
-    it('wraps a scalar list with array() before notNull()', () => {
+    it('wraps a scalar list with array() and leaves it nullable, as Prisma makes it', () => {
       const datamodel = makeDatamodel([
         makeModel({
           name: 'Account',
@@ -242,7 +245,7 @@ describe('drizzleSchema', () => {
       const result = drizzleSchema(datamodel, 'postgresql', [])
 
       expect(result).toBe(
-        "import { pgTable, serial, text } from 'drizzle-orm/pg-core'\n\nexport const account = pgTable('Account', { id: serial('id').primaryKey(), tags: text('tags').array().notNull() })",
+        "import { pgTable, serial, text } from 'drizzle-orm/pg-core'\n\nexport const account = pgTable('Account', { id: serial('id').primaryKey(), tags: text('tags').array() })",
       )
     })
 
@@ -362,14 +365,18 @@ describe('drizzleSchema', () => {
         }),
       ])
 
-      const result = drizzleSchema(datamodel, 'postgresql', [])
+      const lines = drizzleSchema(datamodel, 'postgresql', []).split('\n')
 
-      expect(result).toBe(
-        "import { pgTable, serial, timestamp } from 'drizzle-orm/pg-core'\n\nexport const event = pgTable('Event', { id: serial('id').primaryKey(), createdAt: timestamp('createdAt').notNull().defaultNow() })",
+      expect(lines.slice(0, 2)).toStrictEqual([
+        "import { pgTable, serial, timestamp } from 'drizzle-orm/pg-core'",
+        "import { sql } from 'drizzle-orm'",
+      ])
+      expect(lines.at(-1)).toBe(
+        "export const event = pgTable('Event', { id: serial('id').primaryKey(), createdAt: timestamp('createdAt', { precision: 3 }).notNull().default(sql`CURRENT_TIMESTAMP`).$defaultFn(utcNow) })",
       )
     })
 
-    it('should handle now() default on SQLite with sql`(unixepoch())`', () => {
+    it('should leave now() to the client on SQLite', () => {
       const datamodel = makeDatamodel([
         makeModel({
           name: 'Event',
@@ -391,11 +398,12 @@ describe('drizzleSchema', () => {
         }),
       ])
 
-      const result = drizzleSchema(datamodel, 'sqlite', [])
+      const lines = drizzleSchema(datamodel, 'sqlite', []).split('\n')
 
-      expect(result).toBe(
-        "import { integer, sqliteTable } from 'drizzle-orm/sqlite-core'\nimport { sql } from 'drizzle-orm'\n\nexport const event = sqliteTable('Event', { id: integer('id').primaryKey({ autoIncrement: true }), createdAt: integer('createdAt', { mode: 'timestamp_ms' }).notNull().default(sql`(unixepoch() * 1000)`) })",
-      )
+      expect([lines[0], lines.at(-1)]).toStrictEqual([
+        "import { customType, integer, sqliteTable } from 'drizzle-orm/sqlite-core'",
+        "export const event = sqliteTable('Event', { id: integer('id').primaryKey({ autoIncrement: true }), createdAt: utcDateTime('createdAt').notNull().$defaultFn(utcNow) })",
+      ])
     })
 
     it('should handle numeric default', () => {
@@ -718,14 +726,14 @@ describe('torture corners', () => {
     ])
 
     expect(drizzleSchema(datamodel, 'postgresql', [])).toBe(
-      `import { integer, pgTable, primaryKey, serial } from 'drizzle-orm/pg-core'
+      `import { foreignKey, index, integer, pgTable, primaryKey, serial } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 
 export const actor = pgTable('Actor', { id: serial('id').primaryKey() })
 
 export const film = pgTable('Film', { id: serial('id').primaryKey() })
 
-export const cast = pgTable('_cast', { A: integer('A').notNull().references(() => actor.id, { onDelete: 'cascade' }), B: integer('B').notNull().references(() => film.id, { onDelete: 'cascade' }) }, (table) => [primaryKey({ columns: [table.A, table.B] })])
+export const cast = pgTable('_cast', { A: integer('A').notNull(), B: integer('B').notNull() }, (table) => [primaryKey({ name: '_cast_AB_pkey', columns: [table.A, table.B] }), index('_cast_B_index').on(table.B), foreignKey({ name: '_cast_A_fkey', columns: [table.A], foreignColumns: [actor.id] }).onDelete('cascade').onUpdate('cascade'), foreignKey({ name: '_cast_B_fkey', columns: [table.B], foreignColumns: [film.id] }).onDelete('cascade').onUpdate('cascade')])
 
 export const actorRelations = relations(actor, ({ many }) => ({ films: many(cast) }))
 
@@ -735,7 +743,7 @@ export const castRelations = relations(cast, ({ one }) => ({ actor: one(actor, {
     )
   })
 
-  it('names a composite @@unique after its map:, and leaves an unmapped one to drizzle', () => {
+  it('names a composite @@unique after its map:, and an unmapped one as Prisma Migrate does', () => {
     const datamodel = makeDatamodel([
       makeModel({
         name: 'Member',
@@ -770,7 +778,7 @@ export const castRelations = relations(cast, ({ one }) => ({ actor: one(actor, {
         },
       ]),
     ).toContain(
-      "(table) => [unique('member_tenant_email').on(table.tenantId, table.email), unique().on(table.tenantId, table.loginName)]",
+      "(table) => [uniqueIndex('member_tenant_email').on(table.tenantId, table.email), uniqueIndex('Member_tenantId_loginName_key').on(table.tenantId, table.loginName)]",
     )
   })
 
@@ -838,9 +846,9 @@ export const castRelations = relations(cast, ({ one }) => ({ actor: one(actor, {
       `import { foreignKey, pgTable, serial, text, unique } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 
-export const warehouse = pgTable('Warehouse', { id: serial('id').primaryKey(), country: text('country').notNull(), code: text('code').notNull() }, (table) => [unique().on(table.country, table.code)])
+export const warehouse = pgTable('Warehouse', { id: serial('id').primaryKey(), country: text('country').notNull(), code: text('code').notNull() }, (table) => [unique('Warehouse_country_code_key').on(table.country, table.code)])
 
-export const stock = pgTable('Stock', { id: serial('id').primaryKey(), country: text('country').notNull(), code: text('code').notNull() }, (table) => [foreignKey({ columns: [table.country, table.code], foreignColumns: [warehouse.country, warehouse.code] }).onDelete('cascade')])
+export const stock = pgTable('Stock', { id: serial('id').primaryKey(), country: text('country').notNull(), code: text('code').notNull() }, (table) => [foreignKey({ name: 'Stock_country_code_fkey', columns: [table.country, table.code], foreignColumns: [warehouse.country, warehouse.code] }).onDelete('cascade').onUpdate('cascade')])
 
 export const warehouseRelations = relations(warehouse, ({ many }) => ({ stocks: many(stock) }))
 
@@ -890,7 +898,7 @@ export const stockRelations = relations(stock, ({ one }) => ({ warehouse: one(wa
 
 export const visibilityEnum = pgEnum('visibility_level', ['public', 'private', 'link_only'])
 
-export const board = pgTable('Board', { id: serial('id').primaryKey(), visibility: visibilityEnum('visibility').notNull().default('link_only'), audiences: visibilityEnum('audiences').array().notNull() })`,
+export const board = pgTable('Board', { id: serial('id').primaryKey(), visibility: visibilityEnum('visibility').notNull().default('link_only'), audiences: visibilityEnum('audiences').array() })`,
     )
   })
 
@@ -932,7 +940,7 @@ export const board = pgTable('Board', { id: serial('id').primaryKey(), visibilit
       `import { bigint, bigserial, pgTable, text, timestamp } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
 
-export const torture = pgTable('Torture', { id: bigserial('id', { mode: 'bigint' }).primaryKey(), big: bigint('big', { mode: 'bigint' }).notNull().default(sql\`9007199254740993\`), quoted: text('quoted').notNull().default('it\\'s a "quote" and a \\\\ backslash'), born: timestamp('born').notNull().default(new Date('2020-02-29T23:59:59.999+00:00')) })`,
+export const torture = pgTable('Torture', { id: bigserial('id', { mode: 'bigint' }).primaryKey(), big: bigint('big', { mode: 'bigint' }).notNull().default(sql\`9007199254740993\`), quoted: text('quoted').notNull().default('it\\'s a "quote" and a \\\\ backslash'), born: timestamp('born', { precision: 3 }).notNull().default(new Date('2020-02-29T23:59:59.999+00:00')) })`,
     )
   })
 })
@@ -1026,18 +1034,26 @@ const PG_NATIVE_TYPES: readonly (readonly [
     'integer, pgTable, timestamp',
     "timestamp('value', { withTimezone: true })",
   ],
-  ['DateTime', '@db.Date', ['Date', []], 'date, integer, pgTable', "date('value')"],
+  ['DateTime', '@db.Date', ['Date', []], 'customType, integer, pgTable', "utcDate('value')"],
   [
     'DateTime',
     '@db.Time(3)',
     ['Time', ['3']],
-    'integer, pgTable, time',
-    "time('value', { precision: 3 })",
+    'customType, integer, pgTable',
+    "utcTime('value', { precision: 3 })",
   ],
-  ['DateTime', '@db.Time', ['Time', []], 'integer, pgTable, time', "time('value')"],
+  ['DateTime', '@db.Time', ['Time', []], 'customType, integer, pgTable', "utcTime('value')"],
+  [
+    'DateTime',
+    '@db.Timetz(3)',
+    ['Timetz', ['3']],
+    'customType, integer, pgTable',
+    "utcTimetz('value', { precision: 3 })",
+  ],
+  ['DateTime', '@db.Timetz', ['Timetz', []], 'customType, integer, pgTable', "utcTimetz('value')"],
   ['Json', '@db.Json', ['Json', []], 'integer, json, pgTable', "json('value')"],
   ['Json', '@db.JsonB', ['JsonB', []], 'integer, jsonb, pgTable', "jsonb('value')"],
-  ['Bytes', '@db.ByteA', ['ByteA', []], 'integer, pgTable, text', "text('value')"],
+  ['Bytes', '@db.ByteA', ['ByteA', []], 'customType, integer, pgTable', "bytea('value')"],
   ['String', '@db.Citext', ['Citext', []], 'integer, pgTable, text', "text('value')"],
 ]
 
@@ -1108,7 +1124,7 @@ const MYSQL_NATIVE_TYPES: readonly (readonly [
     '@db.DateTime',
     ['DateTime', []],
     'datetime, int, mysqlTable',
-    "datetime('value', { fsp: 3 })",
+    "datetime('value', { fsp: 0 })",
   ],
   [
     'DateTime',
@@ -1122,34 +1138,67 @@ const MYSQL_NATIVE_TYPES: readonly (readonly [
     '@db.Timestamp',
     ['Timestamp', []],
     'int, mysqlTable, timestamp',
-    "timestamp('value', { fsp: 3 })",
+    "timestamp('value', { fsp: 0 })",
   ],
-  ['DateTime', '@db.Date', ['Date', []], 'date, int, mysqlTable', "date('value')"],
+  ['DateTime', '@db.Date', ['Date', []], 'customType, int, mysqlTable', "utcDate('value')"],
   [
     'DateTime',
     '@db.Time(3)',
     ['Time', ['3']],
-    'int, mysqlTable, time',
-    "time('value', { fsp: 3 })",
+    'customType, int, mysqlTable',
+    "utcTime('value', { precision: 3 })",
   ],
-  ['DateTime', '@db.Time', ['Time', []], 'int, mysqlTable, time', "time('value')"],
+  ['DateTime', '@db.Time', ['Time', []], 'customType, int, mysqlTable', "utcTime('value')"],
   [
     'Bytes',
     '@db.Binary(16)',
     ['Binary', ['16']],
-    'binary, int, mysqlTable',
-    "binary('value', { length: 16 })",
+    'customType, int, mysqlTable',
+    "bytes('value', { type: 'binary(16)' })",
   ],
   [
     'Bytes',
     '@db.VarBinary(16)',
     ['VarBinary', ['16']],
-    'int, mysqlTable, varbinary',
-    "varbinary('value', { length: 16 })",
+    'customType, int, mysqlTable',
+    "bytes('value', { type: 'varbinary(16)' })",
   ],
-  ['Bytes', '@db.Blob', ['Blob', []], 'blob, int, mysqlTable', "blob('value')"],
+  [
+    'Bytes',
+    '@db.TinyBlob',
+    ['TinyBlob', []],
+    'customType, int, mysqlTable',
+    "bytes('value', { type: 'tinyblob' })",
+  ],
+  [
+    'Bytes',
+    '@db.Blob',
+    ['Blob', []],
+    'customType, int, mysqlTable',
+    "bytes('value', { type: 'blob' })",
+  ],
+  [
+    'Bytes',
+    '@db.MediumBlob',
+    ['MediumBlob', []],
+    'customType, int, mysqlTable',
+    "bytes('value', { type: 'mediumblob' })",
+  ],
+  [
+    'Bytes',
+    '@db.LongBlob',
+    ['LongBlob', []],
+    'customType, int, mysqlTable',
+    "bytes('value', { type: 'longblob' })",
+  ],
   ['Json', '@db.Json', ['Json', []], 'int, json, mysqlTable', "json('value')"],
-  ['String', '@db.Nope', ['Nope', []], 'int, mysqlTable, text', "text('value')"],
+  [
+    'String',
+    '@db.Nope',
+    ['Nope', []],
+    'int, mysqlTable, varchar',
+    "varchar('value', { length: 191 })",
+  ],
 ]
 
 /** Prisma type, the attribute as it is written, its DMMF nativeType, the drizzle imports and column. */
@@ -1179,11 +1228,12 @@ describe('native database types', () => {
           ],
         }),
       ])
-      expect(drizzleSchema(datamodel, 'postgresql', [])).toBe(
-        `import { ${imports} } from 'drizzle-orm/pg-core'
-
-export const row = pgTable('Row', { id: integer('id').primaryKey(), value: ${column}.notNull() })`,
-      )
+      // A date helper, when the column is one, is declared between the two.
+      const lines = drizzleSchema(datamodel, 'postgresql', []).split('\n')
+      expect([lines[0], lines.at(-1)]).toStrictEqual([
+        `import { ${imports} } from 'drizzle-orm/pg-core'`,
+        `export const row = pgTable('Row', { id: integer('id').primaryKey(), value: ${column}.notNull() })`,
+      ])
     },
   )
 
@@ -1199,11 +1249,12 @@ export const row = pgTable('Row', { id: integer('id').primaryKey(), value: ${col
           ],
         }),
       ])
-      expect(drizzleSchema(datamodel, 'mysql', [])).toBe(
-        `import { ${imports} } from 'drizzle-orm/mysql-core'
-
-export const row = mysqlTable('Row', { id: int('id').primaryKey(), value: ${column}.notNull() })`,
-      )
+      // A date helper, when the column is one, is declared between the two.
+      const lines = drizzleSchema(datamodel, 'mysql', []).split('\n')
+      expect([lines[0], lines.at(-1)]).toStrictEqual([
+        `import { ${imports} } from 'drizzle-orm/mysql-core'`,
+        `export const row = mysqlTable('Row', { id: int('id').primaryKey(), value: ${column}.notNull() })`,
+      ])
     },
   )
 
@@ -1219,11 +1270,306 @@ export const row = mysqlTable('Row', { id: int('id').primaryKey(), value: ${colu
           ],
         }),
       ])
-      expect(drizzleSchema(datamodel, 'sqlite', [])).toBe(
-        `import { ${imports} } from 'drizzle-orm/sqlite-core'
-
-export const row = sqliteTable('Row', { id: integer('id').primaryKey(), value: ${column}.notNull() })`,
-      )
+      // A date helper, when the column is one, is declared between the two.
+      const lines = drizzleSchema(datamodel, 'sqlite', []).split('\n')
+      expect([lines[0], lines.at(-1)]).toStrictEqual([
+        `import { ${imports} } from 'drizzle-orm/sqlite-core'`,
+        `export const row = sqliteTable('Row', { id: integer('id').primaryKey(), value: ${column}.notNull() })`,
+      ])
     },
   )
+})
+
+// Imports the date helpers a generated schema declares, with a customType that hands back its options.
+async function importDateHelpers(schema: string) {
+  const declarations = schema.split('\n\n').filter((block) => block.startsWith('const '))
+  const names = declarations.map((block) => block.match(/^const (\w+)/u)?.[1]).join(', ')
+  const code = `const customType = (options) => () => options\n${stripTypeScriptTypes(declarations.join('\n'))}\nexport { ${names} }`
+  return import(/* @vite-ignore */ `data:text/javascript,${encodeURIComponent(code)}`)
+}
+
+describe('dates', () => {
+  const nowField = (name: string, nativeType?: [string, string[]]) =>
+    makeField({
+      name,
+      type: 'DateTime',
+      hasDefaultValue: true,
+      default: { name: 'now', args: [] },
+      ...(nativeType ? { nativeType } : {}),
+    })
+
+  it('defaults now() to CURRENT_TIMESTAMP on a PostgreSQL date or time helper', () => {
+    const datamodel = makeDatamodel([
+      makeModel({
+        name: 'Row',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          nowField('d', ['Date', []]),
+          nowField('t', ['Time', ['3']]),
+          nowField('tz', ['Timetz', ['3']]),
+        ],
+      }),
+    ])
+    expect(drizzleSchema(datamodel, 'postgresql', []).split('\n').at(-1)).toBe(
+      "export const row = pgTable('Row', { id: integer('id').primaryKey(), d: utcDate('d').notNull().default(sql`CURRENT_TIMESTAMP`).$defaultFn(utcNow), t: utcTime('t', { precision: 3 }).notNull().default(sql`CURRENT_TIMESTAMP`).$defaultFn(utcNow), tz: utcTimetz('tz', { precision: 3 }).notNull().default(sql`CURRENT_TIMESTAMP`).$defaultFn(utcNow) })",
+    )
+  })
+
+  it('writes a timetz with the UTC offset and reads it back', async () => {
+    const datamodel = makeDatamodel([
+      makeModel({
+        name: 'Row',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({ name: 'tz', type: 'DateTime', nativeType: ['Timetz', ['3']] }),
+        ],
+      }),
+    ])
+    const { utcTimetz } = await importDateHelpers(drizzleSchema(datamodel, 'postgresql', []))
+    const column = utcTimetz()
+    expect(column.dataType({ precision: 3 })).toBe('time(3) with time zone')
+    expect(column.toDriver(new Date('1970-01-01T03:04:05.678Z'))).toBe('03:04:05.678+00')
+    expect(column.fromDriver('03:04:05.678+00').toISOString()).toBe('1970-01-01T03:04:05.678Z')
+  })
+
+  it('reads the literal default Prisma writes into a SQLite DateTime column', async () => {
+    const datamodel = makeDatamodel([
+      makeModel({
+        name: 'Row',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({ name: 'at', type: 'DateTime' }),
+        ],
+      }),
+    ])
+    const { utcDateTime } = await importDateHelpers(drizzleSchema(datamodel, 'sqlite', []))
+    const column = utcDateTime()
+    expect(
+      ['2024-01-15 10:30:00 +00:00', '2024-01-15T10:30:00.000+00:00', '2024-01-15 10:30:00'].map(
+        (value) => column.fromDriver(value).toISOString(),
+      ),
+    ).toStrictEqual(Array.from({ length: 3 }, () => '2024-01-15T10:30:00.000Z'))
+  })
+
+  it("gives MySQL's bare @db.DateTime and @db.Timestamp fsp 0, and now() the column's precision", () => {
+    const datamodel = makeDatamodel([
+      makeModel({
+        name: 'Row',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          nowField('plain'),
+          nowField('ts', ['Timestamp', []]),
+          nowField('dt6', ['DateTime', ['6']]),
+        ],
+      }),
+    ])
+    expect(drizzleSchema(datamodel, 'mysql', []).split('\n').at(-1)).toBe(
+      "export const row = mysqlTable('Row', { id: int('id').primaryKey(), plain: datetime('plain', { fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`).$defaultFn(utcNow), ts: timestamp('ts', { fsp: 0 }).notNull().default(sql`CURRENT_TIMESTAMP`).$defaultFn(utcNow), dt6: datetime('dt6', { fsp: 6 }).notNull().default(sql`CURRENT_TIMESTAMP(6)`).$defaultFn(utcNow) })",
+    )
+  })
+
+  it.each([
+    ['postgresql', "bytea('value').notNull().default(sql`decode('0001ff', 'hex')`)"],
+    ['mysql', "bytes('value', { type: 'longblob' }).notNull().default(sql`0x0001ff`)"],
+    ['sqlite', "blob('value').notNull().default(sql`X'0001ff'`)"],
+  ] as const)('writes a Bytes and its default on %s as the bytes they are', (provider, column) => {
+    const datamodel = makeDatamodel([
+      makeModel({
+        name: 'Row',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({ name: 'value', type: 'Bytes', hasDefaultValue: true, default: 'AAH/' }),
+        ],
+      }),
+    ])
+    expect(drizzleSchema(datamodel, provider, []).split('\n').at(-1)).toContain(column)
+  })
+
+  // CockroachDB takes autoincrement() on a BigInt only; an Int key counts with sequence(), which
+  // Prisma makes an identity column. Without one the key is required on every drizzle insert.
+  it('gives a CockroachDB sequence() key an identity, beside the dates PostgreSQL has', () => {
+    const datamodel = makeDatamodel([
+      makeModel({
+        name: 'Row',
+        fields: [
+          makeField({
+            name: 'id',
+            type: 'Int',
+            isId: true,
+            hasDefaultValue: true,
+            default: { name: 'sequence', args: [] },
+          }),
+          makeField({ name: 'at', type: 'DateTime' }),
+          nowField('tz', ['Timestamptz', []]),
+          makeField({ name: 'ttz', type: 'DateTime', nativeType: ['Timetz', ['3']] }),
+        ],
+      }),
+    ])
+    expect(drizzleSchema(datamodel, 'cockroachdb', []).split('\n').at(-1)).toBe(
+      "export const row = pgTable('Row', { id: integer('id').primaryKey().generatedByDefaultAsIdentity(), at: timestamp('at', { precision: 3 }).notNull(), tz: timestamp('tz', { withTimezone: true }).notNull().default(sql`CURRENT_TIMESTAMP`).$defaultFn(utcNow), ttz: utcTimetz('ttz', { precision: 3 }).notNull() })",
+    )
+  })
+
+  it('leaves a DateTime list nullable on PostgreSQL', () => {
+    const datamodel = makeDatamodel([
+      makeModel({
+        name: 'Row',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({ name: 'at', type: 'DateTime', isList: true }),
+        ],
+      }),
+    ])
+    expect(drizzleSchema(datamodel, 'postgresql', []).split('\n').at(-1)).toBe(
+      "export const row = pgTable('Row', { id: integer('id').primaryKey(), at: timestamp('at', { precision: 3 }).array() })",
+    )
+  })
+})
+
+describe('keys, indexes and foreign keys as Prisma Migrate makes them', () => {
+  const account = makeModel({
+    name: 'Account',
+    dbName: 'accounts',
+    fields: [
+      makeField({ name: 'id', type: 'Int', isId: true }),
+      makeField({ name: 'email', type: 'String', isUnique: true }),
+      makeField({ name: 'bio', type: 'String', nativeType: ['Text', []] }),
+      makeField({ name: 'parentId', type: 'Int', isRequired: false, dbName: 'parent_id' }),
+      makeField({
+        name: 'parent',
+        type: 'Account',
+        kind: 'object',
+        isRequired: false,
+        relationName: 'Tree',
+        relationFromFields: ['parentId'],
+        relationToFields: ['id'],
+      }),
+      makeField({
+        name: 'children',
+        type: 'Account',
+        kind: 'object',
+        isList: true,
+        relationName: 'Tree',
+        relationFromFields: [],
+        relationToFields: [],
+      }),
+      makeField({
+        name: 'logins',
+        type: 'Login',
+        kind: 'object',
+        isList: true,
+        relationName: 'AccountToLogin',
+        relationFromFields: [],
+        relationToFields: [],
+      }),
+    ],
+  })
+  const login = makeModel({
+    name: 'Login',
+    fields: [
+      makeField({ name: 'id', type: 'Int', isId: true }),
+      makeField({ name: 'email', type: 'String' }),
+      makeField({
+        name: 'account',
+        type: 'Account',
+        kind: 'object',
+        relationName: 'AccountToLogin',
+        relationFromFields: ['email'],
+        relationToFields: ['email'],
+      }),
+    ],
+  })
+  const indexes: DMMF.Index[] = [
+    { model: 'Account', type: 'unique', isDefinedOnField: true, fields: [{ name: 'email' }] },
+    {
+      model: 'Account',
+      type: 'normal',
+      isDefinedOnField: false,
+      fields: [{ name: 'bio', length: 191 }, { name: 'parentId' }],
+    },
+  ]
+  const tables = (provider: 'postgresql' | 'mysql' | 'sqlite') =>
+    drizzleSchema(makeDatamodel([account, login]), provider, indexes)
+      .split('\n')
+      .filter(
+        (line) =>
+          line.startsWith('export const accounts =') || line.startsWith('export const login ='),
+      )
+      .map((line) => line.slice(line.indexOf('(table) =>')))
+
+  it('names them after the table and its columns, with the actions Prisma implies', () => {
+    expect(tables('postgresql')).toStrictEqual([
+      "(table) => [unique('accounts_email_key').on(table.email), index('accounts_bio_parent_id_idx').on(table.bio, table.parentId), foreignKey({ name: 'accounts_parent_id_fkey', columns: [table.parentId], foreignColumns: [table.id] }).onDelete('set null').onUpdate('cascade')])",
+      "(table) => [foreignKey({ name: 'Login_email_fkey', columns: [table.email], foreignColumns: [accounts.email] }).onDelete('restrict').onUpdate('cascade')])",
+    ])
+  })
+
+  it('takes part of a TEXT in an index on MySQL', () => {
+    expect(tables('mysql')[0]).toBe(
+      "(table) => [unique('accounts_email_key').on(table.email), index('accounts_bio_parent_id_idx').on(sql`${table.bio}(191)`, table.parentId), foreignKey({ name: 'accounts_parent_id_fkey', columns: [table.parentId], foreignColumns: [table.id] }).onDelete('set null').onUpdate('cascade')])",
+    )
+  })
+
+  it('has every unique an index on SQLite, which makes a foreign key with its table', () => {
+    expect(tables('sqlite')[0]).toBe(
+      "(table) => [uniqueIndex('accounts_email_key').on(table.email), index('accounts_bio_parent_id_idx').on(table.bio, table.parentId), foreignKey({ name: 'accounts_parent_id_fkey', columns: [table.parentId], foreignColumns: [table.id] }).onDelete('set null').onUpdate('cascade')])",
+    )
+  })
+
+  it('has a unique nothing points at an index on PostgreSQL', () => {
+    expect(drizzleSchema(makeDatamodel([account]), 'postgresql', indexes)).toContain(
+      "uniqueIndex('accounts_email_key').on(table.email)",
+    )
+  })
+
+  it('has the pair of a join table its key on PostgreSQL and a unique index elsewhere', () => {
+    const post = makeModel({
+      name: 'Post',
+      fields: [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({
+          name: 'tags',
+          type: 'Tag',
+          kind: 'object',
+          isList: true,
+          relationName: 'PostToTag',
+          relationFromFields: [],
+          relationToFields: [],
+        }),
+      ],
+    })
+    const tag = makeModel({
+      name: 'Tag',
+      fields: [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({
+          name: 'posts',
+          type: 'Post',
+          kind: 'object',
+          isList: true,
+          relationName: 'PostToTag',
+          relationFromFields: [],
+          relationToFields: [],
+        }),
+      ],
+    })
+    const join = (provider: 'postgresql' | 'mysql' | 'sqlite') => {
+      const line =
+        drizzleSchema(makeDatamodel([post, tag]), provider, [])
+          .split('\n')
+          .find((text) => text.includes("'_PostToTag'")) ?? ''
+      return line.slice(line.indexOf('(table) =>'))
+    }
+    const rest =
+      "index('_PostToTag_B_index').on(table.B), foreignKey({ name: '_PostToTag_A_fkey', columns: [table.A], foreignColumns: [post.id] }).onDelete('cascade').onUpdate('cascade'), foreignKey({ name: '_PostToTag_B_fkey', columns: [table.B], foreignColumns: [tag.id] }).onDelete('cascade').onUpdate('cascade')])"
+    expect(join('postgresql')).toBe(
+      `(table) => [primaryKey({ name: '_PostToTag_AB_pkey', columns: [table.A, table.B] }), ${rest}`,
+    )
+    expect(join('mysql')).toBe(
+      `(table) => [uniqueIndex('_PostToTag_AB_unique').on(table.A, table.B), ${rest}`,
+    )
+    expect(join('sqlite')).toBe(
+      `(table) => [uniqueIndex('_PostToTag_AB_unique').on(table.A, table.B), ${rest}`,
+    )
+  })
 })

@@ -1,8 +1,5 @@
 defmodule Example.Tag do
   use Ecto.Schema
-  @moduledoc """
-  Implicit many-to-many partner of Post (join table `_PostToTag`).
-  """
 
   @primary_key {:id, :id, autogenerate: true}
 

@@ -139,8 +139,6 @@ export function rewriteMigration(input: {
     ...(input.after ?? []),
   ]
   // Prisma's BEGIN and COMMIT go, and a comment above one goes to the statement after it.
-  const isTransaction = (statement: string) =>
-    /^(?:BEGIN|COMMIT)$/iu.test(commentOf(statement).body)
   const statementsOnly = written.flatMap((statement, index) => {
     if (isTransaction(statement)) return []
     const previous = written.slice(0, index).findLastIndex((s) => !isTransaction(s))
@@ -249,6 +247,10 @@ function commentOf(statement: string) {
     comment: lines.slice(0, at).join('\n').trim(),
     body: lines.slice(at).join('\n').trim(),
   }
+}
+
+function isTransaction(statement: string) {
+  return /^(?:BEGIN|COMMIT)$/iu.test(commentOf(statement).body)
 }
 
 /** A column definition Prisma writes: its type, NOT NULL, and the default after it. */

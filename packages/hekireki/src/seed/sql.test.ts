@@ -104,7 +104,7 @@ describe('renderLiteral', () => {
   it('writes timestamps in UTC as each dialect reads them', () => {
     expect(renderLiteral('postgresql', text, DATE)).toBe("'2025-03-04 05:06:07.089+00'")
     expect(renderLiteral('mysql', text, DATE)).toBe("'2025-03-04 05:06:07.089'")
-    expect(renderLiteral('sqlite', text, DATE)).toBe("'2025-03-04T05:06:07.089Z'")
+    expect(renderLiteral('sqlite', text, DATE)).toBe("'2025-03-04T05:06:07.089+00:00'")
   })
 
   it('writes bytes as hex in the dialect syntax', () => {

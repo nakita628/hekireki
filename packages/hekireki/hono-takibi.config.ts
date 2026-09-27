@@ -3,8 +3,7 @@ import { defineConfig } from 'hono-takibi'
 export default defineConfig({
   input: 'main.tsp',
   output: 'src/studio/server/routes/index.ts',
-  // `readonly` also wraps branded scalars (`Readonly<number & $brand<'Skip'>>`), which no longer
-  // matches the scalar the use cases take, so the generated types stay mutable.
+  basePath: '/api',
   readonly: false,
   format: {
     printWidth: 100,

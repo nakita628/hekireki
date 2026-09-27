@@ -334,16 +334,18 @@ object EdgeSmoke {
         // A timestamptz is written in the session's zone, which the JDBC driver sets to the JVM's: New York.
         val raw = scalar("SELECT concat_ws(' | ', stamp, zoned AT TIME ZONE 'UTC', clock, \"zonedTime\", exact, flag, bits, names, codes, cis, inets, flags, varbits, xmls, ids, smalls, oids, reals, exacts, moneys::numeric[], docs, plains, blobs, stamps, days, clocks, zones) FROM \"Bare\" WHERE id = $id")
         val expected =
-            "2020-03-08 02:30:00.123456 | 2020-03-08 07:30:00.123456 | 23:59:59.999999 | 10:20:30.4+09 | " +
+            "2020-03-08 02:30:00.123 | 2020-03-08 07:30:00.123 | 23:59:59.999 | 01:20:30.4+00 | " +
                 "1.000000000000000000000000000000000000000001 | 1 | 10101 | {\"a,b\",\"c\\\"d\"} | {abc,\"x  \"} | {AbC} | " +
                 "{10.0.0.0/8,::1} | {1010} | {1,10101} | {<a/>} | {8f1d3b4a-2c6e-4f7a-9b0c-1d2e3f4a5b6c} | {-32768} | " +
                 "{4294967295} | {1.5} | {0.1} | {-12.34} | {\"{\\\"a\\\": [2], \\\"b\\\": 1}\"} | {\"{\\\"b\\\":1}\"} | {\"\\\\x00ff\"} | " +
-                "{\"2020-03-08 03:30:00.123456-04\"} | {2024-02-29} | {13:14:15.123} | {10:20:30.4+09}"
+                "{\"2020-03-08 03:30:00.123-04\"} | {2024-02-29} | {13:14:15.123} | {01:20:30.4+00}"
         check(raw == expected, "every type and a list of each, as PostgreSQL stores them:\n$raw\n$expected")
         val row = BareTable.selectAll().where { (BareTable.id eq id) and (BareTable.ci eq "mixed") }.single()
-        check(row[BareTable.stamp] == JavaInstant.parse("2020-03-08T02:30:00.123456Z") && row[BareTable.zoned] == gap, "timestamp and timestamptz read back")
-        check(row[BareTable.stamps] == listOf(gap) && row[BareTable.days] == listOf(LocalDate.parse("2024-02-29")), "timestamptz[] and date[] read back")
-        check(row[BareTable.clocks] == listOf(LocalTime.parse("13:14:15.123")) && row[BareTable.zones] == listOf(OffsetTime.parse("10:20:30.400+09:00")), "time[] and timetz[] read back")
+        // What is past the millisecond is cut, as a JavaScript Date holds an instant.
+        val kept = JavaInstant.parse("2020-03-08T07:30:00.123Z")
+        check(row[BareTable.stamp] == JavaInstant.parse("2020-03-08T02:30:00.123Z") && row[BareTable.zoned] == kept, "timestamp and timestamptz read back")
+        check(row[BareTable.stamps] == listOf(kept) && row[BareTable.days] == listOf(LocalDate.parse("2024-02-29")), "timestamptz[] and date[] read back")
+        check(row[BareTable.clocks] == listOf(LocalTime.parse("13:14:15.123")) && row[BareTable.zones] == listOf(OffsetTime.parse("01:20:30.400Z")), "time[] and timetz[] read back, a timetz at offset zero")
         check(row[BareTable.moneys]!!.single().compareTo(BigDecimal("-12.34")) == 0 && row[BareTable.oids] == listOf(4_294_967_295L), "money[] and oid[] read back")
         check(row[BareTable.inets] == listOf("10.0.0.0/8", "::1") && row[BareTable.flags] == listOf("1010") && row[BareTable.varbits] == listOf("1", "10101"), "inet[], bit[] and varbit[] read back")
         check(row[BareTable.docs] == listOf("""{"a": [2], "b": 1}""") && row[BareTable.plains] == listOf("""{"b":1}""") && row[BareTable.cis] == listOf("AbC"), "jsonb[], json[] and citext[] read back")
@@ -356,17 +358,25 @@ object EdgeSmoke {
         flushCache()
         val dsl = DefaultsTable.insertAndGetId { }.value
         val dbDefault = scalar("INSERT INTO \"Defaults\" (code, ref, ref2, token, plain, \"touchedOn\") VALUES ('c', 'r', 'r2', 't', gen_random_uuid(), CURRENT_DATE) RETURNING id")!!
-        listOf("real", "small", "oid", "big", "minBig", "minInt", "minSmall", "tiny", "float0", "whenZoned", "clock", "zonedTime", "guid", "doc", "text", "quoted", "exact", "labels", "words", "bytes", "price", "address", "mask", "bitsDef", "markup", "nickname", "count", "mood")
+        listOf("real", "small", "oid", "big", "minBig", "minInt", "minSmall", "tiny", "float0", "clock", "guid", "doc", "text", "quoted", "exact", "labels", "words", "bytes", "price", "address", "mask", "bitsDef", "markup", "nickname", "count", "mood")
             .forEach { column ->
                 val theirs = scalar("SELECT \"$column\"::text FROM \"Defaults\" WHERE id = '$dbDefault'")
                 check(scalar("SELECT \"$column\"::text FROM \"Defaults\" WHERE id = '${entity.id.value}'") == theirs, "Defaults.$column (DAO) is the database default $theirs")
                 check(scalar("SELECT \"$column\"::text FROM \"Defaults\" WHERE id = '$dsl'") == theirs, "Defaults.$column (DSL) is the database default $theirs")
             }
+        // A literal on a timestamptz or a timetz is the instant of the DEFAULT clause, which keeps
+        // its microseconds and its offset: to the millisecond and at offset zero where the client
+        // writes it, as Prisma Client writes an instant.
+        listOf(entity.id.value, dsl).forEach { ours ->
+            val same = scalar("SELECT date_trunc('milliseconds', a.\"whenZoned\") = date_trunc('milliseconds', b.\"whenZoned\") AND (a.\"zonedTime\" AT TIME ZONE 'UTC')::time = (b.\"zonedTime\" AT TIME ZONE 'UTC')::time FROM \"Defaults\" a, \"Defaults\" b WHERE a.id = '$ours' AND b.id = '$dbDefault'")
+            val stored = scalar("SELECT \"whenZoned\"::text || ' ' || \"zonedTime\"::text FROM \"Defaults\" WHERE id = '$ours'")
+            check(same == "t", "Defaults.whenZoned and zonedTime are the instant of the database default, to the millisecond: $stored")
+        }
         check(entity.text == "line one\nline two\r\n\$dollar \"quoted\" \\ back", "a string default with line breaks")
         val instants = "SELECT \"when\"::text || ' ' || day::text || ' ' || stamps::text || ' ' || dates::text FROM \"Defaults\" WHERE id = "
         check(scalar(instants + "'${entity.id.value}'") == "2020-01-01 03:34:56.123 2020-01-02 {\"2020-01-01 03:34:56.5\",\"2021-06-30 23:59:59\"} {2020-01-02}", "timestamp defaults are the UTC instant, as Prisma Client writes them")
         check(scalar(instants + "'$dbDefault'") == "2020-01-01 12:34:56.123 2020-01-01 {\"2020-01-01 12:34:56.5\",\"2021-06-30 23:59:59\"} {2020-01-01}", "while the DEFAULT clause is Prisma Migrate's")
-        check(entity.whenZoned == JavaInstant.parse("2020-01-01T03:34:56.123456Z"), "timestamptz: the same instant either way")
+        check(entity.whenZoned == JavaInstant.parse("2020-01-01T03:34:56.123Z"), "timestamptz: the same instant either way")
         check(Regex("^[A-Za-z0-9_-]{8}$").matches(entity.code) && Regex("^c[a-z0-9]{24}$").matches(entity.ref) && Regex("^[a-z][a-z0-9]{23}$").matches(entity.ref2), "nanoid(8), cuid() and cuid(2)")
         check(Regex("^[0-9A-HJKMNP-TV-Z]{26}$").matches(entity.tag!!) && UUID.fromString(entity.token).version() == 4 && entity.plain.version() == 7, "ulid(), uuid(4) and uuid(7) on @db.Uuid")
         check(entity.auto > 0 && entity.trigger == null, "an autoincrement column that is not the key, and a dbgenerated() one the database leaves NULL")

@@ -3,7 +3,6 @@ import path from 'node:path'
 import { Faker, allLocales } from '@faker-js/faker'
 import { Effect } from 'effect'
 
-import { DEFAULT_SCHEMA_PATHS } from '../cli/constants.js'
 import { resolveDatabaseUrl } from '../database/resolve.js'
 import type { Dialect } from '../database/url.js'
 import { emitRaw } from '../emit/index.js'
@@ -47,13 +46,13 @@ function findSchemaPath(explicit: string | null, base: string, cwd: string) {
       })
     }
     for (const dir of [cwd, base]) {
-      for (const candidate of DEFAULT_SCHEMA_PATHS) {
+      for (const candidate of ['prisma/schema.prisma', 'schema.prisma']) {
         const resolved = path.resolve(dir, candidate)
         if (yield* exists(resolved)) return resolved
       }
     }
     return yield* new SeedConfigError({
-      message: `No Prisma schema found (looked for ${DEFAULT_SCHEMA_PATHS.join(', ')}).\n   Pass --schema <path> or set \`schema\` in hekireki.config.ts.`,
+      message: `No Prisma schema found (looked for prisma/schema.prisma, schema.prisma).\n   Pass --schema <path> or set \`schema\` in hekireki.config.ts.`,
     })
   })
 }

@@ -2,6 +2,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:f
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
+import { NodeFileSystem } from '@effect/platform-node'
 import type { DMMF, GeneratorOptions } from '@prisma/generator-helper'
 import { getDMMF } from '@prisma/get-dmmf'
 import type { GetDMMFError } from '@prisma/get-dmmf'
@@ -11,7 +12,6 @@ import { Effect } from 'effect'
 import { afterAll, describe, expect, it } from 'vite-plus/test'
 import * as z from 'zod'
 
-import { fileSystemLayer } from '../file/index.js'
 import { activerecord } from './activerecord.js'
 import { ajv } from './ajv.js'
 import { arktype } from './arktype.js'
@@ -229,7 +229,9 @@ describe('example/schema.prisma', () => {
 
       it('reproduces the committed output under example/generated', async () => {
         if (handler === undefined) throw new Error(`no handler for ${generator.provider.value}`)
-        await Effect.runPromise(Effect.provide(handler(optionsFor(generator)), fileSystemLayer))
+        await Effect.runPromise(
+          Effect.provide(handler(optionsFor(generator)), NodeFileSystem.layer),
+        )
 
         const expected = listFiles(goldenDir)
         expect(expected.length).toBeGreaterThan(0)

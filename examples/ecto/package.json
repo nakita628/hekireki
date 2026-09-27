@@ -1,0 +1,17 @@
+{
+  "name": "@hekireki/example-ecto",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "clean": "rm -rf lib/shop dev.db dev.db-journal dev.db-shm dev.db-wal",
+    "generate": "prisma validate && prisma generate",
+    "db": "prisma db push --url file:./dev.db",
+    "setup": "mix local.hex --force --if-missing && mix local.rebar --force --if-missing && mix deps.get && mix compile --warnings-as-errors",
+    "verify": "mix run check.exs",
+    "demo": "pnpm run clean && pnpm run generate && pnpm run db && pnpm run setup && pnpm run verify"
+  },
+  "devDependencies": {
+    "hekireki": "workspace:*",
+    "prisma": "8.1.0-dev.7"
+  }
+}

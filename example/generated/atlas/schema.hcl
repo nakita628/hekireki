@@ -423,7 +423,7 @@ table "_PostToTag" {
     null = false
     type = integer
   }
-  primary_key {
+  primary_key "_PostToTag_AB_pkey" {
     columns = [column.A, column.B]
   }
   foreign_key "_PostToTag_A_fkey" {
@@ -453,7 +453,7 @@ table "_cast" {
     null = false
     type = integer
   }
-  primary_key {
+  primary_key "_cast_AB_pkey" {
     columns = [column.A, column.B]
   }
   foreign_key "_cast_A_fkey" {

@@ -1,7 +1,11 @@
 import type { DMMF } from '@prisma/generator-helper'
 import { describe, expect, it } from 'vite-plus/test'
 
-import { APPLICATION_RECORD_FILE, activeRecordModelFiles } from './activerecord.js'
+import {
+  activeRecordModelFiles,
+  applicationRecordFile,
+  prismaDateTimeFiles,
+} from './activerecord.js'
 
 function makeField(overrides: Partial<DMMF.Field> & { name: string; type: string }): DMMF.Field {
   return {
@@ -125,13 +129,102 @@ end
   })
 
   it('carries the ApplicationRecord Rails itself would write', () => {
-    expect(APPLICATION_RECORD_FILE).toStrictEqual({
+    expect(applicationRecordFile()).toStrictEqual({
       fileName: 'application_record.rb',
       code: `class ApplicationRecord < ActiveRecord::Base
   primary_abstract_class
 end
 `,
     })
+  })
+
+  it('writes the DateTime type the models are declared with on SQLite, in a file of its own', () => {
+    const event = makeModel({
+      name: 'Event',
+      fields: [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'at', type: 'DateTime' }),
+      ],
+    })
+    expect(prismaDateTimeFiles([event], 'sqlite')).toStrictEqual([
+      {
+        fileName: 'prisma_date_time.rb',
+        code: `class PrismaDateTime < ActiveRecord::Type::DateTime
+  def serialize(value)
+    time = super
+    time.respond_to?(:getutc) ? time.getutc.strftime("%Y-%m-%dT%H:%M:%S.%L+00:00") : time
+  end
+end
+`,
+      },
+    ])
+    expect(prismaDateTimeFiles([event], 'postgresql')).toStrictEqual([])
+    expect(prismaDateTimeFiles(bare, 'sqlite')).toStrictEqual([])
+  })
+
+  it("writes the type SQL Server's DateTime and SmallDateTime columns are declared with", () => {
+    const event = makeModel({
+      name: 'Event',
+      fields: [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'at', type: 'DateTime', nativeType: ['DateTime', []] }),
+      ],
+    })
+    expect(prismaDateTimeFiles([event], 'sqlserver')).toStrictEqual([
+      {
+        fileName: 'prisma_date_time.rb',
+        code: `class PrismaDateTime < ActiveRecord::Type::SQLServer::DateTime2
+  attr_reader :sqlserver_type
+
+  def initialize(sqlserver_type = "datetime")
+    super(precision: 3)
+    @sqlserver_type = sqlserver_type
+  end
+end
+`,
+      },
+    ])
+    const minute = makeModel({
+      name: 'Event',
+      fields: [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'at', type: 'DateTime', nativeType: ['SmallDateTime', []] }),
+      ],
+    })
+    expect(prismaDateTimeFiles([minute], 'sqlserver')).toStrictEqual(
+      prismaDateTimeFiles([event], 'sqlserver'),
+    )
+    const plain = makeModel({
+      name: 'Event',
+      fields: [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'at', type: 'DateTime' }),
+      ],
+    })
+    expect(prismaDateTimeFiles([plain], 'sqlserver')).toStrictEqual([])
+  })
+
+  it('declares the DateTime columns with that type on SQLite', () => {
+    const event = makeModel({
+      name: 'Event',
+      fields: [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'at', type: 'DateTime' }),
+      ],
+    })
+    expect(activeRecordModelFiles([event], [], 'sqlite')).toStrictEqual([
+      {
+        fileName: 'event.rb',
+        code: `class Event < ApplicationRecord
+  self.table_name = "Event"
+
+  attribute :at, PrismaDateTime.new
+
+  validates :at, presence: true
+end
+`,
+      },
+    ])
   })
 
   it('emits nothing for a schema without models', () => {

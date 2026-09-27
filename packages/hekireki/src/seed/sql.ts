@@ -83,7 +83,8 @@ export function renderLiteral(dialect: Dialect, column: ColumnShape, value: Seed
       ? `'${timestamp(value)}+00'`
       : dialect === 'mysql'
         ? `'${timestamp(value)}'`
-        : `'${value.toISOString()}'`
+        : // Prisma Client's own text on SQLite: `=` compares text, so the `Z` form would miss it.
+          `'${value.toISOString().replace('Z', '+00:00')}'`
   }
   if (value instanceof Uint8Array) {
     const hex = Buffer.from(value).toString('hex')

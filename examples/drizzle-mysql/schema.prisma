@@ -1,0 +1,32 @@
+datasource db {
+  provider = "mysql"
+}
+
+generator client {
+  provider            = "prisma-client"
+  output              = "generated/client"
+  importFileExtension = "ts"
+}
+
+generator Hekireki-Drizzle {
+  provider = "hekireki-drizzle"
+  output   = "src/db/schema.ts"
+}
+
+/// A DateTime in every column MySQL has for one.
+model Moment {
+  id        Int       @id @default(autoincrement())
+  name      String    @unique
+  at        DateTime
+  precise   DateTime  @db.DateTime(6)
+  whole     DateTime  @db.DateTime(0)
+  stamped   DateTime  @db.Timestamp(3)
+  day       DateTime  @db.Date
+  dayOpt    DateTime? @map("day_opt") @db.Date
+  opensAt   DateTime  @map("opens_at") @db.Time(3)
+  launch    DateTime  @default("2024-01-15T00:00:00.000Z") @db.Date
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@map("moments")
+}

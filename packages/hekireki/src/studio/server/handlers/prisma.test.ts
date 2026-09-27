@@ -2,10 +2,10 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
+import { NodeFileSystem } from '@effect/platform-node'
 import { Effect } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
-import { fileSystemLayer } from '../../../file/index.js'
 import { createStudioApp } from '../app.js'
 import { disconnectedDatabase, createStudioState } from '../services/index.js'
 
@@ -35,7 +35,7 @@ async function setup() {
   const schemaPath = path.join(dir, 'schema.prisma')
   writeFileSync(schemaPath, SCHEMA)
   const state = createStudioState({ schemaPath })
-  await Effect.runPromise(Effect.provide(state.reload(), fileSystemLayer))
+  await Effect.runPromise(Effect.provide(state.reload(), NodeFileSystem.layer))
   const app = createStudioApp(state, dir, disconnectedDatabase())
   const post = async (url: string, body: unknown) => {
     const response = await app.request(url, {

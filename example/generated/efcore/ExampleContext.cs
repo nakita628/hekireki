@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Microsoft.EntityFrameworkCore.ValueGeneration;
 using Npgsql;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
@@ -92,10 +93,13 @@ public partial class ExampleContext : DbContext
                 .HasDefaultValue(new List<string>())
                 .HasColumnName("interests");
             entity.Property(e => e.CreatedAt)
+                .HasValueGenerator<UtcNowGenerator>()
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasConversion<UtcClockConverter>()
                 .HasColumnType("timestamp(3) without time zone")
                 .HasColumnName("created_at");
             entity.Property(e => e.UpdatedAt)
+                .HasConversion<UtcClockConverter>()
                 .HasColumnType("timestamp(3) without time zone")
                 .HasColumnName("updated_at");
         });
@@ -134,6 +138,7 @@ public partial class ExampleContext : DbContext
             entity.Property(e => e.Avatar).HasColumnName("avatar");
             entity.Property(e => e.LastSeen)
                 .HasPrecision(6)
+                .HasConversion<UtcConverter>()
                 .HasColumnName("last_seen");
 
             entity.HasOne(d => d.User).WithOne(p => p.Profile)
@@ -169,7 +174,9 @@ public partial class ExampleContext : DbContext
                 .HasColumnName("view_count");
             entity.Property(e => e.AuthorId).HasColumnName("author_id");
             entity.Property(e => e.CreatedAt)
+                .HasValueGenerator<UtcNowGenerator>()
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasConversion<UtcClockConverter>()
                 .HasColumnType("timestamp(3) without time zone")
                 .HasColumnName("created_at");
 
@@ -226,7 +233,9 @@ public partial class ExampleContext : DbContext
             entity.Property(e => e.PostId).HasColumnName("post_id");
             entity.Property(e => e.AuthorId).HasColumnName("author_id");
             entity.Property(e => e.CreatedAt)
+                .HasValueGenerator<UtcNowGenerator>()
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasConversion<UtcClockConverter>()
                 .HasColumnType("timestamp(3) without time zone")
                 .HasColumnName("created_at");
 
@@ -250,7 +259,9 @@ public partial class ExampleContext : DbContext
             entity.Property(e => e.FollowerId).HasColumnName("follower_id");
             entity.Property(e => e.FollowingId).HasColumnName("following_id");
             entity.Property(e => e.Since)
+                .HasValueGenerator<UtcNowGenerator>()
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasConversion<UtcClockConverter>()
                 .HasColumnType("timestamp(3) without time zone")
                 .HasColumnName("since");
 
@@ -299,7 +310,9 @@ public partial class ExampleContext : DbContext
                 .HasPrecision(12, 2)
                 .HasColumnName("total");
             entity.Property(e => e.PlacedAt)
+                .HasValueGenerator<UtcNowGenerator>()
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasConversion<UtcClockConverter>()
                 .HasColumnType("timestamp(3) without time zone")
                 .HasColumnName("placed_at");
 
@@ -356,6 +369,7 @@ public partial class ExampleContext : DbContext
             entity.Property(e => e.Signature).HasColumnName("signature");
             entity.Property(e => e.LoggedAt)
                 .HasDefaultValueSql("now()")
+                .HasConversion<UtcClockConverter>()
                 .HasColumnType("timestamp(3) without time zone")
                 .HasColumnName("logged_at");
         });
@@ -427,7 +441,7 @@ public partial class ExampleContext : DbContext
             if ((entry.State == EntityState.Added && entry.Entity.UpdatedAt == default)
                 || (entry.State == EntityState.Modified && !entry.Property(e => e.UpdatedAt).IsModified))
             {
-                entry.Entity.UpdatedAt = DateTime.SpecifyKind(now, DateTimeKind.Unspecified);
+                entry.Entity.UpdatedAt = now;
             }
         }
     }
@@ -438,6 +452,13 @@ file sealed class UuidV7StringGenerator : ValueGenerator<string>
     public override bool GeneratesTemporaryValues => false;
 
     public override string Next(EntityEntry entry) => Guid.CreateVersion7().ToString();
+}
+
+file sealed class UtcNowGenerator : ValueGenerator<DateTime>
+{
+    public override bool GeneratesTemporaryValues => false;
+
+    public override DateTime Next(EntityEntry entry) => DateTime.UtcNow;
 }
 
 file sealed class Cuid2Generator : ValueGenerator<string>
@@ -452,4 +473,20 @@ file sealed class UuidV4StringGenerator : ValueGenerator<string>
     public override bool GeneratesTemporaryValues => false;
 
     public override string Next(EntityEntry entry) => Guid.NewGuid().ToString();
+}
+
+file sealed class UtcClockConverter : ValueConverter<DateTime, DateTime>
+{
+    public UtcClockConverter()
+        : base(v => DateTime.SpecifyKind(v.Kind == DateTimeKind.Local ? v.ToUniversalTime() : v, DateTimeKind.Unspecified), v => DateTime.SpecifyKind(v, DateTimeKind.Utc))
+    {
+    }
+}
+
+file sealed class UtcConverter : ValueConverter<DateTime, DateTime>
+{
+    public UtcConverter()
+        : base(v => DateTime.SpecifyKind(v.Kind == DateTimeKind.Local ? v.ToUniversalTime() : v, DateTimeKind.Utc), v => v)
+    {
+    }
 }

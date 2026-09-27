@@ -1,7 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { makeRelationsOnly } from '../helper/extract-relations.js'
 import { makeZodRelations, zodSchemaCode } from '../helper/zod.js'
+import { makeRelationsOnly } from '../utils/extract-relations.js'
 
 export function zodCode(
   dmmf: DMMF.Document,

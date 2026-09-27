@@ -19,6 +19,7 @@ export function kysely(options: GeneratorOptions) {
     const resolved = path.extname(output)
       ? { dir: path.dirname(output), file: output }
       : { dir: output, file: path.join(output, 'types.ts') }
-    return yield* emit(kyselySchema(options.dmmf.datamodel), resolved.dir, resolved.file)
+    const provider = options.datasources[0]?.activeProvider ?? 'postgresql'
+    return yield* emit(kyselySchema(options.dmmf.datamodel, provider), resolved.dir, resolved.file)
   })
 }

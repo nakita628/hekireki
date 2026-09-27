@@ -1,7 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { stripAnnotations } from '../utils/index.js'
-import type { Cardinality } from './relation.js'
+import type { Cardinality } from '../utils/relation.js'
 
 // Mermaid spells a cardinality differently on each side of the line, so that both crow's feet
 // open away from the entity they touch. https://mermaid.js.org/syntax/entityRelationshipDiagram.html

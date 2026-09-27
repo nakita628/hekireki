@@ -22,7 +22,7 @@ import EditorWorker from 'monaco-editor/editor/editor.worker.js?worker'
 import './monaco-features.js'
 import type { Theme } from '../../lib/index.js'
 import { symbolKindName, toCompletions, toMarkers } from './lsp.js'
-import type { Completion, EditorMarker, PlainDiagnostic, PlainRange } from './lsp.js'
+import type { Completion, PlainDiagnostic, PlainRange } from './lsp.js'
 import {
   PRISMA_LANGUAGE_CONFIGURATION,
   PRISMA_LANGUAGE_ID,
@@ -652,18 +652,21 @@ function editorOpener(): editor.ICodeEditorOpener {
 
 /** Puts the diagnostics on the model as squiggles. */
 export function applyMarkers(model: editor.ITextModel, diagnostics: readonly PlainDiagnostic[]) {
-  const toMarker = (marker: EditorMarker): editor.IMarkerData => {
-    const range = toRange(marker.range)
-    return {
-      message: marker.message,
-      severity: MarkerSeverity[marker.severity],
-      startLineNumber: range.startLineNumber,
-      startColumn: range.startColumn,
-      endLineNumber: range.endLineNumber,
-      endColumn: range.endColumn,
-    }
-  }
-  editor.setModelMarkers(model, MARKER_OWNER, toMarkers(diagnostics).map(toMarker))
+  editor.setModelMarkers(
+    model,
+    MARKER_OWNER,
+    toMarkers(diagnostics).map((marker): editor.IMarkerData => {
+      const range = toRange(marker.range)
+      return {
+        message: marker.message,
+        severity: MarkerSeverity[marker.severity],
+        startLineNumber: range.startLineNumber,
+        startColumn: range.startColumn,
+        endLineNumber: range.endLineNumber,
+        endColumn: range.endColumn,
+      }
+    }),
+  )
 }
 
 const state = { ready: false }

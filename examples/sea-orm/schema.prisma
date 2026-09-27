@@ -1,0 +1,100 @@
+// A small blog on SQLite, with a DateTime in each place a Prisma schema puts one. `pnpm run demo`
+// writes src/entities with `hekireki-sea-orm`, creates dev.db with `prisma db push`, and runs the
+// check binary through the real SeaORM (sqlx) against the tables Prisma made: each entity is
+// written, read back, updated and queried by its DateTime, not only compiled. Prisma Client
+// shares the database: interop.ts reads what SeaORM wrote and writes rows the binary reads back.
+//
+// SQLite has no native date types. A field with a `// postgresql:` or `// mysql:` comment gets
+// that attribute when provider.ts writes the schema again for PostgreSQL or MySQL, and a line that
+// starts `//+postgresql:` is a field only PostgreSQL has.
+
+datasource db {
+  provider = "sqlite"
+}
+
+generator client {
+  provider            = "prisma-client"
+  output              = "generated/client"
+  importFileExtension = "ts"
+}
+
+generator entities {
+  provider = "hekireki-sea-orm"
+  output   = "src/entities"
+}
+
+/// `now()` and `@updatedAt` under `@map`: the entity fills both as Prisma Client does, in UTC
+/// with milliseconds.
+model Author {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  posts     Post[]
+
+  @@map("authors")
+}
+
+/// An optional DateTime that is filtered and sorted on, a literal default, and the timestamps
+/// under the names Prisma gives them.
+model Post {
+  id          String    @id @default(uuid())
+  authorId    Int       @map("author_id")
+  author      Author    @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  title       String
+  publishedAt DateTime? @map("published_at")
+  releasedAt  DateTime  @default("2020-01-01T00:00:00Z") @map("released_at")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([publishedAt])
+  @@map("posts")
+}
+
+/// Three `@updatedAt` and no `now()`: Prisma Client sets each on create and on every update, the
+/// optional one too.
+model Setting {
+  key       String    @id
+  value     String
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  syncedAt  DateTime  @updatedAt @map("synced_at")
+  checkedAt DateTime? @updatedAt @map("checked_at")
+
+  @@map("settings")
+}
+
+/// A DateTime in a composite primary key: a row is found by the instant it names.
+model Reading {
+  sensor String
+  at     DateTime
+  value  Float
+
+  @@id([sensor, at])
+  @@map("readings")
+}
+
+/// A `@unique` DateTime, found by a whole second as well as by milliseconds.
+model Booking {
+  id       Int      @id @default(autoincrement())
+  room     String
+  startsAt DateTime @unique @map("starts_at")
+
+  @@map("bookings")
+}
+
+/// Every native type SeaORM can hold a DateTime in. On SQLite each is the plain DateTime.
+/// (`@db.Timetz` is refused: sqlx has no Rust type to read a TIMETZ into.)
+model Clock {
+  id        Int       @id @default(autoincrement())
+  label     String    @unique
+  at        DateTime? // postgresql: @db.Timestamp(3)  mysql: @db.DateTime(3)
+  precise   DateTime? // postgresql: @db.Timestamp(6)  mysql: @db.DateTime(6)
+  seconds   DateTime? // postgresql: @db.Timestamp(0)  mysql: @db.DateTime(0)
+  zoned     DateTime? // postgresql: @db.Timestamptz(3)  mysql: @db.Timestamp(3)
+  day       DateTime? // postgresql: @db.Date  mysql: @db.Date
+  time      DateTime? // postgresql: @db.Time(3)  mysql: @db.Time(3)
+  //+postgresql: moments DateTime[]
+  createdAt DateTime  @default(now()) @map("created_at") // postgresql: @db.Timestamptz(3)  mysql: @db.Timestamp(3)
+
+  @@map("clocks")
+}

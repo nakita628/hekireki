@@ -1,0 +1,166 @@
+// A small shop, written the way a Prisma schema is written, with a corner of the language in each
+// model. `pnpm run demo` writes app/models.py, creates dev.db from this schema and runs check.py
+// against both with the real SQLAlchemy 2.0: every table, column, key and relationship the
+// generator writes is compared with what Prisma created and then used, not only imported.
+
+datasource db {
+  provider = "sqlite"
+}
+
+generator Hekireki-SQLAlchemy {
+  provider = "hekireki-sqlalchemy"
+  output   = "app/models.py"
+}
+
+/// Members the database holds under other names: the column stores `admin`, not `ADMIN`. One
+/// member keeps its own name, so both sides of `@map` are read.
+enum Role {
+  MEMBER
+  ADMIN  @map("admin")
+  OWNER  @map("owner")
+}
+
+/// An enum with a name of its own in the database as well as mapped members.
+enum OrderStatus {
+  PENDING   @map("pending")
+  PAID      @map("paid")
+  CANCELLED @map("cancelled")
+
+  @@map("order_status")
+}
+
+/// A person with an account. The fields named `metadata` and `registry` are what every
+/// DeclarativeBase already has, and `class` is a Python keyword: each becomes an attribute with
+/// a trailing underscore over a column of the field's own name.
+model Account {
+  id         Int        @id @default(autoincrement())
+  email      String     @unique
+  role       Role       @default(MEMBER)
+  /// Free-form settings, left out when there are none.
+  metadata   Json?
+  registry   String?
+  class      String?
+  /// The literal default is written into the model, so a new row has it before the INSERT.
+  locale     String     @default("en")
+  createdAt  DateTime   @default(now()) @map("created_at")
+  updatedAt  DateTime   @updatedAt @map("updated_at")
+  /// A self relation: an account may report to another, and outlives its manager.
+  managerId  Int?       @map("manager_id")
+  manager    Account?   @relation("Management", fields: [managerId], references: [id], onDelete: SetNull)
+  reports    Account[]  @relation("Management")
+  /// A self many-to-many: Prisma's join table _Follows holds both ends in columns A and B.
+  following  Account[]  @relation("Follows")
+  followers  Account[]  @relation("Follows")
+  profile    Profile?
+  orders     Order[]
+  searches   Search[]
+  sent       Transfer[] @relation("Sent")
+  received   Transfer[] @relation("Received")
+
+  @@map("accounts")
+}
+
+/// One per account, the 1-1 whose foreign key is unique. A `cuid()` key has no database default:
+/// the model has to make one.
+model Profile {
+  id        String  @id @default(cuid())
+  accountId Int     @unique @map("account_id")
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  bio       String?
+  avatar    Bytes?
+
+  @@map("profiles")
+}
+
+/// Every scalar type SQLite has, and a `uuid()` key made by the model.
+model Product {
+  id         String      @id @default(uuid())
+  sku        String      @unique
+  name       String
+  price      Decimal
+  weight     Float?
+  stock      Int         @default(0)
+  /// Counted past 2^31, so the column is BIGINT and the value a Python int all the same.
+  views      BigInt      @default(0)
+  active     Boolean     @default(true)
+  /// No `@default("{}")`: Prisma 8.1 writes it into SQLite's DDL unquoted, and the CREATE TABLE
+  /// fails before any model is read.
+  attributes Json
+  thumbnail  Bytes?
+  releasedAt DateTime?   @map("released_at")
+  /// `type` is a builtin in Python, not a keyword: it stays `type`.
+  type       String      @default("physical")
+  categories Category[]
+  lines      OrderLine[]
+
+  @@index([name])
+  @@map("products")
+}
+
+/// A tree of categories and an implicit many-to-many with products, through Prisma's
+/// _CategoryToProduct. A name is unique among the children of one parent.
+model Category {
+  id       Int        @id @default(autoincrement())
+  name     String
+  parentId Int?       @map("parent_id")
+  parent   Category?  @relation("Tree", fields: [parentId], references: [id], onDelete: Cascade)
+  children Category[] @relation("Tree")
+  products Product[]
+
+  @@unique([parentId, name])
+  @@map("categories")
+}
+
+/// `Order` is an SQL keyword and the table keeps it as its name: every statement has to quote it.
+/// An account with orders cannot be deleted.
+model Order {
+  id        Int         @id @default(autoincrement())
+  status    OrderStatus @default(PENDING)
+  accountId Int         @map("account_id")
+  account   Account     @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  note      String?
+  placedAt  DateTime    @default(now()) @map("placed_at")
+  lines     OrderLine[]
+
+  @@index([accountId, status], map: "orders_by_account")
+}
+
+/// The explicit many-to-many between orders and products, keyed by the pair. The lines go with
+/// their order; a product that was ordered stays.
+model OrderLine {
+  orderId   Int     @map("order_id")
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String  @map("product_id")
+  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  quantity  Int     @default(1)
+  unitPrice Decimal @map("unit_price")
+
+  @@id([orderId, productId])
+  @@map("order_lines")
+}
+
+/// A saved search. `query` is what the legacy `Model.query` property was called; in SQLAlchemy
+/// 2.0 it is a column like any other.
+model Search {
+  id        Int     @id @default(autoincrement())
+  query     String
+  accountId Int     @map("account_id")
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, query])
+  @@map("searches")
+}
+
+/// Two relations to the same model, named `from` and `to`: `from` is a Python keyword, and two
+/// foreign keys to one table make each relationship say which column it goes through. A transfer
+/// keeps its sender (NoAction), and one to a closed account falls back to the house account 1.
+model Transfer {
+  id     Int     @id @default(autoincrement())
+  amount Decimal
+  fromId Int     @map("from_id")
+  from   Account @relation("Sent", fields: [fromId], references: [id], onDelete: NoAction)
+  toId   Int     @default(1) @map("to_id")
+  to     Account @relation("Received", fields: [toId], references: [id], onDelete: SetDefault)
+
+  @@map("transfers")
+}

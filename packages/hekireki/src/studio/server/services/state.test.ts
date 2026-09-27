@@ -2,10 +2,10 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
+import { NodeFileSystem } from '@effect/platform-node'
 import { Effect } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
-import { fileSystemLayer } from '../../../file/index.js'
 import { createStudioState } from './state.js'
 
 const dirs: string[] = []
@@ -31,7 +31,7 @@ function schemaFile() {
 }
 
 const reload = (state: ReturnType<typeof createStudioState>) =>
-  Effect.runPromise(Effect.provide(state.reload(), fileSystemLayer))
+  Effect.runPromise(Effect.provide(state.reload(), NodeFileSystem.layer))
 
 describe('createStudioState', () => {
   it('starts empty with the epoch timestamp', () => {

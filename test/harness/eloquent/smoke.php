@@ -16,6 +16,14 @@ if ($files === false || $files === []) {
     fwrite(STDERR, "no generated files found in models/\n");
     exit(1);
 }
+// A model uses a trait or a cast from another file (`PrismaDates`), as it would under
+// Composer's PSR-4 autoloading in an app: load a class from its file when it is first named.
+spl_autoload_register(function (string $class): void {
+    $file = __DIR__ . '/models/' . substr($class, strlen('App\\Models\\')) . '.php';
+    if (str_starts_with($class, 'App\\Models\\') && is_file($file)) {
+        require_once $file;
+    }
+});
 sort($files);
 foreach ($files as $file) {
     require_once $file;

@@ -2,10 +2,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
+import { NodeFileSystem } from '@effect/platform-node'
 import { Effect, Exit } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
-import { fileSystemLayer } from '../file/index.js'
 import { resolveDatabaseUrl } from './resolve.js'
 import { DatabaseUrlNotFoundError } from './url.js'
 
@@ -41,7 +41,7 @@ function resolve(input: {
         schemaDir: input.schemaDir ?? input.cwd,
         env: input.env ?? {},
       }),
-      fileSystemLayer,
+      NodeFileSystem.layer,
     ),
   )
 }

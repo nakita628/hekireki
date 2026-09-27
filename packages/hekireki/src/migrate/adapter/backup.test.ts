@@ -3,11 +3,11 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
+import { NodeFileSystem } from '@effect/platform-node'
 import { Effect } from 'effect'
 import type { FileSystem } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
-import { fileSystemLayer } from '../../file/index.js'
 import { connectDatabase } from '../../studio/server/services/database.js'
 import type { Driver } from '../../studio/server/services/database.js'
 import { backupsDirectory, createBackup, listBackups, restoreBackup } from './backup.js'
@@ -55,7 +55,7 @@ function withDriver<A, E>(
         yield* Effect.addFinalizer(() => db.close)
         return yield* use(yield* db.driver)
       }),
-    ).pipe(Effect.provide(fileSystemLayer)),
+    ).pipe(Effect.provide(NodeFileSystem.layer)),
   )
 }
 

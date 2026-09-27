@@ -1,9 +1,5 @@
 defmodule Example.Actor do
   use Ecto.Schema
-  @moduledoc """
-  Named implicit many-to-many: the join table is `_cast`,
-  not `_ActorToFilm`.
-  """
 
   @primary_key {:id, :id, autogenerate: true}
 

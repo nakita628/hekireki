@@ -4,6 +4,10 @@ test/harness/**
 example/generated/**
 examples/*/generated/**
 examples/*/vendor/**
+examples/*/deps/**
+examples/*/_build/**
+examples/*/.venv/**
+examples/*/.datecheck/**
 packages/hekireki/docs/studio-api.md
 **/e2e/.results/**
 **/e2e/.workspace/**

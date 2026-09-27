@@ -18,7 +18,18 @@ export function seaOrm(options: GeneratorOptions) {
     const renameAll = getString(options.generator.config?.renameAll)
     const serde = { renameAll }
     const enums = options.dmmf.datamodel.enums
-    const files = seaOrmFiles(options.dmmf.datamodel.models, enums, serde)
+    const models = options.dmmf.datamodel.models
+    // sqlx has no chrono type for TIMETZ and SeaORM no column type, so no entity could read it.
+    const timetz = models.flatMap((m) =>
+      m.fields.filter((f) => f.nativeType?.[0] === 'Timetz').map((f) => `${m.name}.${f.name}`),
+    )
+    if (timetz.length > 0) {
+      return yield* new GeneratorConfigError({
+        message: `@db.Timetz is not supported by Hekireki-SeaORM (sqlx cannot read TIMETZ into a Rust type): ${timetz.join(', ')}. Use @db.Time or @db.Timestamptz instead.`,
+      })
+    }
+    const provider = options.datasources[0]?.activeProvider
+    const files = seaOrmFiles(models, enums, serde, provider)
     return yield* emitMany(files, outDir)
   })
 }

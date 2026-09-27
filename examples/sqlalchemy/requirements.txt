@@ -1,0 +1,9 @@
+# What `pnpm run setup` installs into .venv: SQLAlchemy for check.py and mypy for `typecheck`,
+# with everything they pull in pinned, so a run today and a run next year read the same code.
+SQLAlchemy==2.1.0
+typing_extensions==4.16.0
+mypy==2.3.1
+mypy_extensions==1.1.0
+librt==0.15.0
+pathspec==1.1.1
+ast_serialize==0.11.2

@@ -1,0 +1,20 @@
+{
+  "name": "@hekireki/example-django",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "clean": "rm -rf app/models.py generated dev.db dev.db-journal .provider",
+    "generate": "prisma validate && prisma generate",
+    "db": "prisma db push --url file:./dev.db",
+    "setup": "python3 -m venv .venv && PIP_NO_CACHE_DIR=1 .venv/bin/pip install -q -r requirements.txt",
+    "typecheck": ".venv/bin/python -m mypy",
+    "verify": "node run.ts",
+    "demo": "pnpm run clean && pnpm run generate && pnpm run db && pnpm run setup && pnpm run typecheck && pnpm run verify",
+    "demo:postgresql": "pnpm run setup && node provider.ts postgresql",
+    "demo:mysql": "pnpm run setup && node provider.ts mysql"
+  },
+  "devDependencies": {
+    "hekireki": "workspace:*",
+    "prisma": "8.1.0-dev.7"
+  }
+}

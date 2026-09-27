@@ -962,6 +962,28 @@ end`)
 end`)
   })
 
+  it('adds every other @updatedAt column to the ones Active Record bumps', () => {
+    const post = makeModel({
+      name: 'Post',
+      fields: [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'updatedAt', type: 'DateTime', isUpdatedAt: true }),
+        makeField({ name: 'changedAt', type: 'DateTime', isUpdatedAt: true, dbName: 'changed_at' }),
+        makeField({ name: 'seenAt', type: 'DateTime', isUpdatedAt: true, isRequired: false }),
+      ],
+    })
+
+    expect(activeRecordModels([post])).toBe(`class Post < ApplicationRecord
+  self.table_name = "Post"
+
+  alias_attribute :updated_at, :updatedAt
+  def self.timestamp_attributes_for_update
+    super + %w[changed_at seenAt]
+  end
+  private_class_method :timestamp_attributes_for_update
+end`)
+  })
+
   it('needs no alias when the columns already carry the Rails names', () => {
     const post = makeModel({
       name: 'Post',
@@ -2354,5 +2376,176 @@ describe('plural forms', () => {
       'validates :title, presence: true, length: { in: { min: 1 } }',
     )
     expect(activeRecordLocaleFiles([todo])).toStrictEqual([])
+  })
+})
+
+describe('DateTime columns', () => {
+  const moment = (fields: DMMF.Field[]) =>
+    makeModel({
+      name: 'Moment',
+      fields: [makeField({ name: 'id', type: 'Int', isId: true }), ...fields],
+    })
+
+  it('sends milliseconds to a column of fewer than three digits of a second', () => {
+    const model = moment([
+      makeField({ name: 'ts0', type: 'DateTime', nativeType: ['Timestamp', ['0']] }),
+      makeField({
+        name: 'tz1',
+        type: 'DateTime',
+        isRequired: false,
+        nativeType: ['Timestamptz', ['1']],
+      }),
+      makeField({ name: 'time0', type: 'DateTime', nativeType: ['Time', ['0']] }),
+      makeField({ name: 'ts3', type: 'DateTime', nativeType: ['Timestamp', ['3']] }),
+      makeField({ name: 'ts', type: 'DateTime', nativeType: ['Timestamp', []] }),
+      makeField({ name: 'day', type: 'DateTime', nativeType: ['Date', []] }),
+    ])
+
+    expect(activeRecordModels([model], [model], [], 'postgresql'))
+      .toBe(`class Moment < ApplicationRecord
+  self.table_name = "Moment"
+
+  attribute :ts0, :datetime, precision: 3
+  attribute :tz1, :datetime, precision: 3
+  attribute :time0, :time, precision: 3
+
+  validates :ts0, presence: true
+  validates :time0, presence: true
+  validates :ts3, presence: true
+  validates :ts, presence: true
+  validates :day, presence: true
+end`)
+  })
+
+  it("reads MySQL's DateTime, Timestamp and Time without a precision as whole seconds", () => {
+    const model = moment([
+      makeField({ name: 'dt', type: 'DateTime', nativeType: ['DateTime', []] }),
+      makeField({
+        name: 'ts',
+        type: 'DateTime',
+        nativeType: ['Timestamp', []],
+        hasDefaultValue: true,
+        default: { name: 'now', args: [] },
+      }),
+      makeField({ name: 'time', type: 'DateTime', nativeType: ['Time', []] }),
+      makeField({ name: 'dt3', type: 'DateTime', nativeType: ['DateTime', ['3']] }),
+    ])
+
+    expect(activeRecordModels([model], [model], [], 'mysql')).toBe(`class Moment < ApplicationRecord
+  self.table_name = "Moment"
+
+  attribute :dt, :datetime, precision: 3
+  attribute :ts, :datetime, precision: 3
+  attribute :time, :time, precision: 3
+
+  validates :dt, presence: true
+  validates :time, presence: true
+  validates :dt3, presence: true
+end`)
+  })
+
+  it("declares SQL Server's DateTime and SmallDateTime with PrismaDateTime, and fills now()", () => {
+    const model = moment([
+      makeField({ name: 'legacy', type: 'DateTime', nativeType: ['DateTime', []] }),
+      makeField({ name: 'dt2', type: 'DateTime', nativeType: ['DateTime2', []] }),
+      makeField({ name: 'off', type: 'DateTime', nativeType: ['DateTimeOffset', []] }),
+      makeField({ name: 'time', type: 'DateTime', nativeType: ['Time', []] }),
+      makeField({ name: 'small', type: 'DateTime', nativeType: ['SmallDateTime', []] }),
+      makeField({ name: 'day', type: 'DateTime', nativeType: ['Date', []] }),
+      makeField({
+        name: 'createdAt',
+        type: 'DateTime',
+        hasDefaultValue: true,
+        default: { name: 'now', args: [] },
+      }),
+    ])
+
+    expect(activeRecordModels([model], [model], [], 'sqlserver'))
+      .toBe(`class Moment < ApplicationRecord
+  self.table_name = "Moment"
+
+  attribute :legacy, PrismaDateTime.new
+  attribute :small, PrismaDateTime.new("smalldatetime")
+  attribute :createdAt, default: -> { Time.current }
+  alias_attribute :created_at, :createdAt
+
+  validates :legacy, presence: true
+  validates :dt2, presence: true
+  validates :off, presence: true
+  validates :time, presence: true
+  validates :small, presence: true
+  validates :day, presence: true
+end`)
+  })
+
+  it('reads a Timetz column as a time of day, not a String', () => {
+    const model = moment([
+      makeField({ name: 'at', type: 'DateTime', nativeType: ['Timetz', ['3']] }),
+      makeField({ name: 'at0', type: 'DateTime', nativeType: ['Timetz', ['0']] }),
+    ])
+
+    expect(activeRecordModels([model], [model], [], 'postgresql'))
+      .toBe(`class Moment < ApplicationRecord
+  self.table_name = "Moment"
+
+  attribute :at, :time
+  attribute :at0, :time, precision: 3
+
+  validates :at, presence: true
+  validates :at0, presence: true
+end`)
+  })
+
+  it('writes the text Prisma writes on SQLite, and fills now() as Prisma Client does', () => {
+    const model = moment([
+      makeField({ name: 'at', type: 'DateTime', isUnique: true }),
+      makeField({
+        name: 'createdAt',
+        type: 'DateTime',
+        hasDefaultValue: true,
+        default: { name: 'now', args: [] },
+      }),
+      makeField({
+        name: 'since',
+        type: 'DateTime',
+        hasDefaultValue: true,
+        default: '2024-01-15T10:30:00.000Z',
+      }),
+      makeField({ name: 'updatedAt', type: 'DateTime', isUpdatedAt: true, isRequired: false }),
+    ])
+
+    expect(activeRecordModels([model], [model], [], 'sqlite'))
+      .toBe(`class Moment < ApplicationRecord
+  self.table_name = "Moment"
+
+  attribute :at, PrismaDateTime.new
+  attribute :createdAt, PrismaDateTime.new, default: -> { Time.current }
+  attribute :since, PrismaDateTime.new, default: Time.iso8601("2024-01-15T10:30:00.000Z")
+  attribute :updatedAt, PrismaDateTime.new
+  alias_attribute :created_at, :createdAt
+  alias_attribute :updated_at, :updatedAt
+
+  validates :at, presence: true, uniqueness: true
+end`)
+  })
+
+  it('leaves now() to the database elsewhere, and a DateTime[] list as it is', () => {
+    const model = moment([
+      makeField({
+        name: 'createdAt',
+        type: 'DateTime',
+        hasDefaultValue: true,
+        default: { name: 'now', args: [] },
+      }),
+      makeField({ name: 'list', type: 'DateTime', isList: true, isRequired: false }),
+    ])
+
+    expect(activeRecordModels([model], [model], [], 'postgresql'))
+      .toBe(`class Moment < ApplicationRecord
+  self.table_name = "Moment"
+
+  attribute :list, default: -> { [] }
+  alias_attribute :created_at, :createdAt
+end`)
   })
 })

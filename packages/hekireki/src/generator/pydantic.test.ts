@@ -32,6 +32,43 @@ function makeField(overrides: Partial<DMMF.Field> & { name: string; type: string
 }
 
 describe('pydanticCode', () => {
+  it('writes none of the documentation the schema has', () => {
+    const code = pydanticCode(
+      [
+        {
+          name: 'Note',
+          dbName: null,
+          schema: null,
+          documentation: 'A note.',
+          primaryKey: null,
+          uniqueFields: [],
+          uniqueIndexes: [],
+          isGenerated: false,
+          fields: [
+            {
+              name: 'id',
+              type: 'Int',
+              kind: 'scalar',
+              documentation: 'Its key.',
+              isId: true,
+              isList: false,
+              isRequired: true,
+              isUnique: false,
+              isReadOnly: false,
+              isGenerated: false,
+              isUpdatedAt: false,
+              hasDefaultValue: false,
+            },
+          ],
+        },
+      ],
+      [],
+    )
+    expect(code).not.toContain('A note.')
+    expect(code).not.toContain('Its key.')
+    expect(code).not.toContain('"""')
+  })
+
   it('should generate a basic model with required, optional, and relation fields', () => {
     const models = [
       makeModel({
@@ -50,7 +87,7 @@ describe('pydanticCode', () => {
         ],
       }),
     ]
-    expect(pydanticCode(models, undefined, false)).toBe(`from pydantic import BaseModel
+    expect(pydanticCode(models, undefined)).toBe(`from pydantic import BaseModel
 
 
 class User(BaseModel):
@@ -77,7 +114,7 @@ class User(BaseModel):
         ],
       }),
     ]
-    expect(pydanticCode(models, undefined, false)).toBe(`from pydantic import BaseModel, JsonValue
+    expect(pydanticCode(models, undefined)).toBe(`from pydantic import BaseModel, JsonValue
 from decimal import Decimal
 from datetime import datetime
 
@@ -117,7 +154,7 @@ class Scalars(BaseModel):
         ],
       }),
     ]
-    expect(pydanticCode(models, enums, false)).toBe(`from pydantic import BaseModel
+    expect(pydanticCode(models, enums)).toBe(`from pydantic import BaseModel
 from typing import Literal
 
 
@@ -150,7 +187,7 @@ class Member(BaseModel):
         ],
       }),
     ]
-    expect(pydanticCode(models, enums, false)).toBe(`from pydantic import BaseModel
+    expect(pydanticCode(models, enums)).toBe(`from pydantic import BaseModel
 from typing import Literal
 
 
@@ -179,7 +216,7 @@ class Board(BaseModel):
         ],
       }),
     ]
-    expect(pydanticCode(models, undefined, false)).toBe(`from pydantic import BaseModel
+    expect(pydanticCode(models, undefined)).toBe(`from pydantic import BaseModel
 from datetime import date, datetime, time
 from uuid import UUID
 
@@ -207,7 +244,7 @@ class NativeTimes(BaseModel):
         ],
       }),
     ]
-    expect(pydanticCode(models, undefined, false)).toBe(`from pydantic import BaseModel, Field
+    expect(pydanticCode(models, undefined)).toBe(`from pydantic import BaseModel, Field
 
 
 class Keyword(BaseModel):
@@ -231,7 +268,7 @@ class Keyword(BaseModel):
         ],
       }),
     ]
-    expect(pydanticCode(models, undefined, false)).toBe(`from pydantic import BaseModel, ConfigDict
+    expect(pydanticCode(models, undefined)).toBe(`from pydantic import BaseModel, ConfigDict
 
 
 class Locked(BaseModel):
@@ -253,7 +290,7 @@ class Locked(BaseModel):
         ],
       }),
     ]
-    expect(pydanticCode(models, undefined, false)).toBe(`from pydantic import BaseModel, ConfigDict
+    expect(pydanticCode(models, undefined)).toBe(`from pydantic import BaseModel, ConfigDict
 
 
 class Open(BaseModel):
@@ -275,7 +312,7 @@ class Open(BaseModel):
         ],
       }),
     ]
-    expect(pydanticCode(models, undefined, false)).toBe(`from pydantic import BaseModel, ConfigDict
+    expect(pydanticCode(models, undefined)).toBe(`from pydantic import BaseModel, ConfigDict
 
 
 class Plain(BaseModel):
@@ -294,103 +331,11 @@ class Plain(BaseModel):
         fields: [makeField({ name: 'id', type: 'Int', isId: true })],
       }),
     ]
-    expect(pydanticCode(models, undefined, false)).toBe(`from pydantic import BaseModel
+    expect(pydanticCode(models, undefined)).toBe(`from pydantic import BaseModel
 
 
 class Bare(BaseModel):
     id: int
-`)
-  })
-
-  it('should emit model and field docstrings when comment is true', () => {
-    const models = [
-      makeModel({
-        name: 'User',
-        documentation: "Application user.\n@p.ConfigDict(extra='forbid')",
-        fields: [
-          makeField({
-            name: 'id',
-            type: 'String',
-            isId: true,
-            documentation: 'Primary key\n@z.uuid()\n@p.UUID4',
-          }),
-          makeField({ name: 'name', type: 'String', documentation: 'Display name' }),
-        ],
-      }),
-    ]
-    expect(pydanticCode(models, undefined, true))
-      .toBe(`from pydantic import BaseModel, ConfigDict, UUID4
-
-
-class User(BaseModel):
-    """Application user."""
-
-    model_config = ConfigDict(extra='forbid')
-
-    id: UUID4
-    """Primary key"""
-    name: str
-    """Display name"""
-`)
-  })
-
-  it('should emit multi-line docstrings with closing quotes on their own line', () => {
-    const models = [
-      makeModel({
-        name: 'Note',
-        documentation: 'First line.\nSecond line.',
-        fields: [
-          makeField({
-            name: 'id',
-            type: 'Int',
-            isId: true,
-            documentation: 'Line one\nLine two',
-          }),
-          makeField({ name: 'body', type: 'String' }),
-        ],
-      }),
-    ]
-    expect(pydanticCode(models, undefined, true)).toBe(`from pydantic import BaseModel
-
-
-class Note(BaseModel):
-    """First line.
-    Second line.
-    """
-
-    id: int
-    """Line one
-    Line two
-    """
-    body: str
-`)
-  })
-
-  it('should close docstrings ending in a quote on their own line', () => {
-    const models = [
-      makeModel({
-        name: 'Quote',
-        documentation: 'He said "hi"',
-        fields: [
-          makeField({
-            name: 'id',
-            type: 'Int',
-            isId: true,
-            documentation: 'Ends with a "quote"',
-          }),
-        ],
-      }),
-    ]
-    expect(pydanticCode(models, undefined, true)).toBe(`from pydantic import BaseModel
-
-
-class Quote(BaseModel):
-    """He said "hi"
-    """
-
-    id: int
-    """Ends with a "quote"
-    """
 `)
   })
 
@@ -421,7 +366,7 @@ class Quote(BaseModel):
         ],
       }),
     ]
-    expect(pydanticCode(models, undefined, false)).toBe(`from pydantic import BaseModel
+    expect(pydanticCode(models, undefined)).toBe(`from pydantic import BaseModel
 
 
 class Defaulted(BaseModel):
@@ -439,7 +384,7 @@ class Defaulted(BaseModel):
         fields: [makeField({ name: 'id', type: 'Int', isId: true, documentation: 'Primary key' })],
       }),
     ]
-    expect(pydanticCode(models, undefined, false)).toBe(`from pydantic import BaseModel
+    expect(pydanticCode(models, undefined)).toBe(`from pydantic import BaseModel
 
 
 class Note(BaseModel):
@@ -467,7 +412,7 @@ class Note(BaseModel):
         ],
       }),
     ]
-    expect(pydanticCode(models, undefined, false))
+    expect(pydanticCode(models, undefined))
       .toBe(`from pydantic import BaseModel, EmailStr, StringConstraints
 from typing import Annotated
 
@@ -493,7 +438,7 @@ class Account(BaseModel):
         ],
       }),
     ]
-    expect(pydanticCode(models, undefined, false)).toBe(`from pydantic import BaseModel
+    expect(pydanticCode(models, undefined)).toBe(`from pydantic import BaseModel
 
 
 class OrderLineItem(BaseModel):
@@ -513,7 +458,7 @@ class OrderLineItem(BaseModel):
         fields: [makeField({ name: 'id', type: 'String', isId: true })],
       }),
     ]
-    expect(pydanticCode(models, undefined, false)).toBe(`from pydantic import BaseModel
+    expect(pydanticCode(models, undefined)).toBe(`from pydantic import BaseModel
 
 
 class User(BaseModel):
@@ -563,7 +508,7 @@ class Post(BaseModel):
         ],
       }),
     ]
-    expect(pydanticCode(models, undefined, false, true)).toBe(`from pydantic import BaseModel
+    expect(pydanticCode(models, undefined, true)).toBe(`from pydantic import BaseModel
 
 
 class User(BaseModel):
@@ -608,7 +553,7 @@ class ProfileRelations(Profile):
         fields: [makeField({ name: 'id', type: 'String', isId: true })],
       }),
     ]
-    expect(pydanticCode(models, undefined, false, false)).toBe(`from pydantic import BaseModel
+    expect(pydanticCode(models, undefined, false)).toBe(`from pydantic import BaseModel
 
 
 class User(BaseModel):
@@ -636,7 +581,7 @@ class Post(BaseModel):
         fields: [makeField({ name: 'owner', kind: 'object', type: 'Category' })],
       }),
     ]
-    expect(pydanticCode(models, undefined, false, true)).toBe(`from pydantic import BaseModel
+    expect(pydanticCode(models, undefined, true)).toBe(`from pydantic import BaseModel
 
 
 class Category(BaseModel):
@@ -663,7 +608,7 @@ class CategoryRelations(Category):
         fields: [makeField({ name: 'id', type: 'String', isId: true })],
       }),
     ]
-    expect(pydanticCode(models, undefined, false, true)).toBe(`from pydantic import BaseModel, Field
+    expect(pydanticCode(models, undefined, true)).toBe(`from pydantic import BaseModel, Field
 
 
 class Room(BaseModel):

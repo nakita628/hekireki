@@ -4,7 +4,7 @@ import {
   parseDocumentWithoutAnnotations,
   schemaFromFields,
 } from '../utils/index.js'
-import { validationSchemas } from './validation-schema.js'
+import { validationSchemas } from '../utils/validation-schema.js'
 
 export function makeArktypeInfer(modelName: string) {
   return `export type ${modelName} = typeof ${modelName}Schema.infer`

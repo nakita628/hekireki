@@ -76,7 +76,6 @@ generator Hekireki-Django {
 generator Hekireki-Pydantic {
   provider = "hekireki-pydantic"
   output   = "generated/pydantic"
-  comment  = true
   relation = true
 }
 

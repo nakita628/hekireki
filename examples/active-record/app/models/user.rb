@@ -1,5 +1,7 @@
 class User < ApplicationRecord
   attribute :admin, default: false
+  attribute :created_at, PrismaDateTime.new, default: -> { Time.current }
+  attribute :updated_at, PrismaDateTime.new
 
   validates :email_address, presence: true, uniqueness: true, format: { with: URI::MailTo::EMAIL_REGEXP }
 

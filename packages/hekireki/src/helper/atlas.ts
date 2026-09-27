@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { stripAnnotations } from '../utils/index.js'
+import { indexPrefix } from '../utils/index.js'
 
 type AtlasDialect = 'postgresql' | 'mysql' | 'sqlite'
 
@@ -392,20 +392,17 @@ export function makeAtlasColumn(
   field: DMMF.Field,
   dialect: AtlasDialect,
   enums: readonly DMMF.DatamodelEnum[],
-  comment: boolean,
 ) {
   const name = field.dbName ?? field.name
   const isAutoincrement = isFunctionDefault(field.default) && field.default.name === 'autoincrement'
   const typeInfo = columnTypeInfo(field, dialect, enums, isAutoincrement)
   const defaultValue = isAutoincrement ? undefined : resolveDefault(field, dialect, enums)
-  const doc = comment ? stripAnnotations(field.documentation) : undefined
   const attrs = [
     attr('null', field.isList ? 'true' : String(!field.isRequired)),
     attr('type', typeInfo.type),
     ...(typeInfo.unsigned ? [attr('unsigned', 'true')] : []),
     ...(defaultValue !== undefined ? [attr('default', defaultValue)] : []),
     ...(isAutoincrement && dialect !== 'postgresql' ? [attr('auto_increment', 'true')] : []),
-    ...(doc !== undefined ? [attr('comment', hclString(doc))] : []),
   ]
   return [`  column ${hclString(name)} {`, ...alignAttrs(attrs, '    '), '  }'].join('\n')
 }
@@ -469,16 +466,26 @@ export function makeAtlasIndexes(
       const colsDb = idx.fields.map((f) => columnDbName(model, f.name))
       const suffix = idx.type === 'unique' ? 'key' : 'idx'
       const name = idx.dbName ?? `${table}_${colsDb.join('_')}_${suffix}`
-      const hasDesc = idx.fields.some((f) => f.sortOrder === 'desc')
-      const body = hasDesc
+      // A column the index takes part of or backwards is an `on` block of its own.
+      const hasParts = idx.fields.some(
+        (f) => f.sortOrder === 'desc' || indexPrefix(model, f) !== undefined,
+      )
+      const indexType =
+        idx.type === 'fulltext' && dialect === 'mysql' ? [attr('type', 'FULLTEXT')] : []
+      const body = hasParts
         ? [
-            ...(idx.type === 'unique' ? ['    unique = true'] : []),
+            ...alignAttrs(
+              [...(idx.type === 'unique' ? [attr('unique', 'true')] : []), ...indexType],
+              '    ',
+            ),
             ...idx.fields.map((f) => {
-              const ref = `column${refPart(columnDbName(model, f.name))}`
-              const attrs =
-                f.sortOrder === 'desc'
-                  ? [attr('desc', 'true'), attr('column', ref)]
-                  : [attr('column', ref)]
+              const attrs = [
+                ...(f.sortOrder === 'desc' ? [attr('desc', 'true')] : []),
+                attr('column', `column${refPart(columnDbName(model, f.name))}`),
+                ...(indexPrefix(model, f) === undefined
+                  ? []
+                  : [attr('prefix', String(indexPrefix(model, f)))]),
+              ]
               return ['    on {', ...alignAttrs(attrs, '      '), '    }'].join('\n')
             }),
           ]
@@ -486,7 +493,7 @@ export function makeAtlasIndexes(
             [
               ...(idx.type === 'unique' ? [attr('unique', 'true')] : []),
               attr('columns', `[${colsDb.map((c) => `column${refPart(c)}`).join(', ')}]`),
-              ...(idx.type === 'fulltext' && dialect === 'mysql' ? [attr('type', 'FULLTEXT')] : []),
+              ...indexType,
             ],
             '    ',
           )
@@ -494,27 +501,30 @@ export function makeAtlasIndexes(
     })
 }
 
+// Prisma Migrate makes every MySQL table `DEFAULT CHARACTER SET utf8mb4 COLLATE
+// utf8mb4_unicode_ci`, whatever the database's own is.
+const MYSQL_TABLE_ATTRS = [attr('charset', '"utf8mb4"'), attr('collate', '"utf8mb4_unicode_ci"')]
+
 export function makeAtlasTable(
   model: DMMF.Model,
   models: readonly DMMF.Model[],
   indexes: readonly DMMF.Index[],
   dialect: AtlasDialect,
   enums: readonly DMMF.DatamodelEnum[],
-  options: { readonly schemaName: string; readonly comment: boolean },
+  options: { readonly schemaName: string },
 ) {
   const name = tableNameOf(model)
   const schema = schemaOf(model, options.schemaName)
   const label = duplicateTableNames(models).has(name)
     ? `table ${hclString(schema)} ${hclString(name)}`
     : `table ${hclString(name)}`
-  const doc = options.comment ? stripAnnotations(model.documentation) : undefined
   const headAttrs = [
     attr('schema', `schema${refPart(schema)}`),
-    ...(doc !== undefined ? [attr('comment', hclString(doc))] : []),
+    ...(dialect === 'mysql' ? MYSQL_TABLE_ATTRS : []),
   ]
   const columns = model.fields
     .filter((f) => f.kind === 'scalar' || f.kind === 'enum')
-    .map((f) => makeAtlasColumn(f, dialect, enums, options.comment))
+    .map((f) => makeAtlasColumn(f, dialect, enums))
   const pk = makeAtlasPrimaryKey(model, indexes)
   return [
     `${label} {`,
@@ -602,8 +612,10 @@ function m2mForeignKey(
 }
 
 // Prisma's implicit m2m join table: `_<relationName>` with FK columns "A"/"B"
-// (sides in model-name alphabetical order), a composite PK on (A, B), an index
-// on B, and CASCADE/CASCADE foreign keys to each side's primary key.
+// (sides in model-name alphabetical order), an index on B, and CASCADE/CASCADE
+// foreign keys to each side's primary key. The pair is the key on PostgreSQL,
+// `_<relationName>_AB_pkey`, and a unique index on MySQL and SQLite,
+// `_<relationName>_AB_unique`, as Prisma Migrate makes it.
 export function makeAtlasM2MJoinTables(
   models: readonly DMMF.Model[],
   dialect: AtlasDialect,
@@ -616,14 +628,32 @@ export function makeAtlasM2MJoinTables(
     const rightPk = pair.right.fields.find((f) => f.isId)
     return [
       `table ${hclString(tableName)} {`,
-      `  schema = schema${refPart(schemaOf(pair.left, defaultSchema))}`,
+      ...alignAttrs(
+        [
+          attr('schema', `schema${refPart(schemaOf(pair.left, defaultSchema))}`),
+          ...(dialect === 'mysql' ? MYSQL_TABLE_ATTRS : []),
+        ],
+        '  ',
+      ),
       m2mColumn('A', leftPk, dialect, enums),
       m2mColumn('B', rightPk, dialect, enums),
-      '  primary_key {',
-      '    columns = [column.A, column.B]',
-      '  }',
+      ...(dialect === 'postgresql'
+        ? [
+            `  primary_key ${hclString(`${tableName}_AB_pkey`)} {`,
+            '    columns = [column.A, column.B]',
+            '  }',
+          ]
+        : []),
       m2mForeignKey('A', pair.left, tableName, models, defaultSchema),
       m2mForeignKey('B', pair.right, tableName, models, defaultSchema),
+      ...(dialect === 'postgresql'
+        ? []
+        : [
+            `  index ${hclString(`${tableName}_AB_unique`)} {`,
+            '    unique  = true',
+            '    columns = [column.A, column.B]',
+            '  }',
+          ]),
       `  index ${hclString(`${tableName}_B_index`)} {`,
       '    columns = [column.B]',
       '  }',

@@ -2,10 +2,10 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
+import { NodeFileSystem } from '@effect/platform-node'
 import { Effect } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
-import { fileSystemLayer } from '../../../file/index.js'
 import { DatabaseError } from '../errors/index.js'
 import { connectDatabase, disconnectedDatabase } from './database.js'
 
@@ -50,7 +50,7 @@ async function connect(
         schemaDir: options.schemaDir ?? cwd,
         env: options.env ?? {},
       }),
-      fileSystemLayer,
+      NodeFileSystem.layer,
     ),
   )
   opened.push(db)

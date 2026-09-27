@@ -1,0 +1,5 @@
+# What `pnpm run demo` makes beside the check: the virtualenv, and what Python and mypy cache.
+# app/models.py is committed, to be read without running anything; dev.db is ignored one level up.
+.venv/
+__pycache__/
+.mypy_cache/

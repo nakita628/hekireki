@@ -219,7 +219,7 @@ public static class EdgeSmoke
 
         // The columns Prisma gives no default must be named; every other one takes the database's.
         var dbDefault = Scalar(context, "INSERT INTO \"Defaults\" (code, ref, token) VALUES ('c', 'r', 't') RETURNING id")!;
-        foreach (var column in new[] { "real", "small", "oid", "big", "float0", "whenZoned", "clock", "guid", "doc", "nickname", "count", "mood", "bitsDef" })
+        foreach (var column in new[] { "real", "small", "oid", "big", "float0", "clock", "guid", "doc", "nickname", "count", "mood", "bitsDef" })
         {
             var ours = Text(context, $"SELECT \"{column}\"::text FROM \"Defaults\" WHERE id = '{defaults.Id}'");
             var theirs = Text(context, $"SELECT \"{column}\"::text FROM \"Defaults\" WHERE id = '{dbDefault}'");
@@ -231,7 +231,9 @@ public static class EdgeSmoke
         Check(Text(context, $"SELECT \"when\"::text || ' ' || day::text || ' ' || stamps::text || ' ' || dates::text FROM \"Defaults\" WHERE id = '{defaults.Id}'")
             == "2020-01-01 03:34:56.123 2020-01-02 {\"2020-01-01 03:34:56.5\",\"2021-06-30 23:59:59\"} {2020-01-02}", "timestamp defaults are the UTC instant, as Prisma Client writes them");
         Check(Text(context, $"SELECT \"when\"::text || ' ' || day::text FROM \"Defaults\" WHERE id = '{dbDefault}'") == "2020-01-01 12:34:56.123 2020-01-01", "while the DEFAULT clause is Prisma Migrate's");
-        Check(defaults.WhenZoned == new DateTime(2020, 1, 1, 3, 34, 56, 123, 456, DateTimeKind.Utc), "timestamptz: the same instant either way");
+        // Prisma Client holds a Date, so the microseconds of a literal never reach the row it writes.
+        Check(defaults.WhenZoned == new DateTime(2020, 1, 1, 3, 34, 56, 123, DateTimeKind.Utc)
+            && Text(context, $"SELECT \"whenZoned\"::text FROM \"Defaults\" WHERE id = '{defaults.Id}'") == "2020-01-01 03:34:56.123+00", "timestamptz: the instant to the millisecond, as Prisma Client writes it");
 
         var cleared = new Hekireki.Edge.Defaults { Nickname = null, Count = null, Mood = null, Tag = null };
         context.Add(cleared);

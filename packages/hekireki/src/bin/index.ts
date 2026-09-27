@@ -1,3 +1,4 @@
+import { NodeFileSystem } from '@effect/platform-node'
 import pkg from '@prisma/generator-helper'
 import { Effect } from 'effect'
 
@@ -22,7 +23,6 @@ import { sqlalchemy } from '../core/sqlalchemy.js'
 import { typebox } from '../core/typebox.js'
 import { valibot } from '../core/valibot.js'
 import { zod } from '../core/zod.js'
-import { fileSystemLayer } from '../file/index.js'
 
 const GENERATORS = {
   activerecord: { prettyName: 'Hekireki-ActiveRecord', handler: activerecord },
@@ -60,7 +60,7 @@ export function registerGenerator(name: keyof typeof GENERATORS) {
       return Effect.runPromise(
         handler(options).pipe(
           Effect.mapError((error) => new Error(error.message)),
-          Effect.provide(fileSystemLayer),
+          Effect.provide(NodeFileSystem.layer),
         ),
       )
     },

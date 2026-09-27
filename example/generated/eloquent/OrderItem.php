@@ -5,9 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-/**
- * Child of Order with a composite unique constraint.
- */
 class OrderItem extends Model
 {
     protected $table = 'order_items';
@@ -21,9 +18,14 @@ class OrderItem extends Model
         'price',
     ];
 
+    protected $attributes = [
+        'qty' => 1,
+    ];
+
     protected $casts = [
         'order_id' => 'integer',
         'qty' => 'integer',
+        'price' => AsDecimal::class,
     ];
 
     public function order(): BelongsTo

@@ -2,10 +2,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
+import { NodeFileSystem } from '@effect/platform-node'
 import { Effect } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
-import { fileSystemLayer } from '../../../file/index.js'
 import { createStudioState } from './state.js'
 import { watchMigrations, watchSchema } from './watch.js'
 
@@ -49,7 +49,7 @@ describe('watchSchema', () => {
           const reloaded = yield* until(() => state.snapshot().updatedAt !== before)
           return { reloaded, fields: state.snapshot().schema?.models[0]?.fields.length }
         }),
-      ).pipe(Effect.provide(fileSystemLayer)),
+      ).pipe(Effect.provide(NodeFileSystem.layer)),
     )
     expect(result).toStrictEqual({ reloaded: true, fields: 2 })
     const after = state.snapshot().updatedAt
@@ -89,7 +89,7 @@ describe('watchMigrations', () => {
           const edited = yield* until(() => state.migrationsUpdatedAt() !== afterAdd)
           return { quiet, added, edited }
         }),
-      ).pipe(Effect.provide(fileSystemLayer)),
+      ).pipe(Effect.provide(NodeFileSystem.layer)),
     )
     expect(seen).toStrictEqual({ quiet: true, added: true, edited: true })
   })

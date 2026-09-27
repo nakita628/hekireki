@@ -3,11 +3,12 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
+import { NodeFileSystem } from '@effect/platform-node'
 import { Effect } from 'effect'
 import * as z from 'zod'
 
 import { resolveDatabaseUrl } from '../../../database/resolve.js'
-import { fileSystemLayer, removePath } from '../../../file/index.js'
+import { removePath } from '../../../file/index.js'
 import { stringLiteral } from '../../../sql/index.js'
 import * as DatabaseErrorDomain from '../domain/index.js'
 import * as PlanDomain from '../domain/index.js'
@@ -687,7 +688,7 @@ export function openSqliteCopy(input: { readonly driver: Driver; readonly cwd: s
       ),
     )
     const copy = yield* openSqlite(`file:${file}`, input.cwd)
-    const remove = removePath(file).pipe(Effect.provide(fileSystemLayer), Effect.ignore)
+    const remove = removePath(file).pipe(Effect.provide(NodeFileSystem.layer), Effect.ignore)
     return { ...copy, close: Effect.all([copy.close, remove], { discard: true }) }
   })
 }

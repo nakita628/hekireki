@@ -8,13 +8,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-/**
- * @@map + @map column names, FK with a referential action,
- * mapped-enum default, and an implicit many-to-many to Tag.
- */
 class Post extends Model
 {
     use HasVersion4Uuids;
+    use PrismaDates;
 
     const UPDATED_AT = null;
 
@@ -31,6 +28,12 @@ class Post extends Model
         'published',
         'view_count',
         'author_id',
+    ];
+
+    protected $attributes = [
+        'visibility' => 'link_only',
+        'published' => false,
+        'view_count' => 0,
     ];
 
     protected $casts = [

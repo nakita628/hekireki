@@ -1,10 +1,7 @@
 defmodule Example.OrderItem do
   use Ecto.Schema
-  @moduledoc """
-  Child of Order with a composite unique constraint.
-  """
 
-  @primary_key false
+  @primary_key {:id, :id, autogenerate: true}
 
   @type t :: %__MODULE__{
           id: integer(),
@@ -15,7 +12,6 @@ defmodule Example.OrderItem do
         }
 
   schema "order_items" do
-    field(:id, :integer, primary_key: true)
     field(:sku, :string)
     field(:qty, :integer, default: 1)
     field(:price, :decimal)

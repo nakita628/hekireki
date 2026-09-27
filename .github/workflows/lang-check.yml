@@ -22,6 +22,11 @@ on:
       - packages/hekireki/src/**
       - test/**
       - examples/active-record/**
+      - examples/ecto/**
+      - examples/eloquent/**
+      - examples/gorm/**
+      - examples/kysely/**
+      - examples/sqlalchemy/**
       - .github/workflows/lang-check.yml
   workflow_dispatch: {}
 
@@ -41,8 +46,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # drizzle needs no extra toolchain step: setup-vp's node runs
-        # tsc + drizzle-kit from the workspace's devDependencies.
+        # drizzle and kysely need no extra toolchain step: setup-vp's node runs
+        # tsc, drizzle-kit and better-sqlite3 from the workspace's devDependencies.
         lang:
           [
             gorm,
@@ -51,6 +56,7 @@ jobs:
             django,
             ecto,
             drizzle,
+            kysely,
             activerecord,
             eloquent,
             atlas,
@@ -159,10 +165,17 @@ jobs:
       # `prisma generate` finds `provider = "hekireki-activerecord"` on PATH. The install above
       # ran before dist/ was built, so it linked none of hekireki's commands; linking the built
       # package puts them there, as the Test workflow does for examples/migrate.
-      - if: matrix.lang == 'activerecord'
+      - if: contains(fromJSON('["activerecord","kysely","gorm","sqlalchemy","ecto","eloquent"]'), matrix.lang)
         run: vp link ./packages/hekireki
       - if: matrix.lang == 'activerecord'
         run: vp run --filter ./examples/active-record demo
+
+      # examples/{kysely,gorm,sqlalchemy,ecto,eloquent} end to end, as active-record: each schema
+      # is generated, pushed to SQLite and used through the real library (every scalar, default,
+      # key, relation and onDelete), with the language's own checks (tsc, gofmt and go vet,
+      # mypy --strict, mix compile --warnings-as-errors, php -l) on the generated code.
+      - if: matrix.lang == 'kysely' || matrix.lang == 'gorm' || matrix.lang == 'sqlalchemy' || matrix.lang == 'ecto' || matrix.lang == 'eloquent'
+        run: vp run --filter ./examples/${{ matrix.lang }} demo
 
   # Prove the published tarball still ships dist/ only. The language harnesses
   # now live in test/ rather than inside the package, so nothing under

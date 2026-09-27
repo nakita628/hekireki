@@ -12,10 +12,10 @@ import {
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
+import { NodeFileSystem } from '@effect/platform-node'
 import { Effect } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
-import { fileSystemLayer } from '../../../file/index.js'
 import { createStudioApp } from '../app.js'
 import { createProjectClient, createStudioState, disconnectedDatabase } from '../services/index.js'
 
@@ -186,7 +186,7 @@ async function setup(input: {
   const { dir, schemaPath } = setupProject(input.schema)
   input.arrange?.(dir)
   const state = createStudioState({ schemaPath })
-  await Effect.runPromise(Effect.provide(state.reload(), fileSystemLayer))
+  await Effect.runPromise(Effect.provide(state.reload(), NodeFileSystem.layer))
   const client = input.client(dir)
   clients.push(client)
   const app = createStudioApp(state, dir, disconnectedDatabase(), client)

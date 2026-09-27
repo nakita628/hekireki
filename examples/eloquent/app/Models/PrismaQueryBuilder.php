@@ -1,0 +1,29 @@
+<?php
+
+namespace App\Models;
+
+use DateTimeImmutable;
+use DateTimeInterface;
+use DateTimeZone;
+use Illuminate\Database\Query\Builder;
+
+class PrismaQueryBuilder extends Builder
+{
+    const DATE_FORMAT = 'Y-m-d\TH:i:s.vP';
+
+    public function castBinding($value)
+    {
+        return $value instanceof DateTimeInterface
+            ? DateTimeImmutable::createFromInterface($value)->setTimezone(new DateTimeZone('UTC'))->format(self::DATE_FORMAT)
+            : parent::castBinding($value);
+    }
+
+    protected function flattenValue($value)
+    {
+        $value = parent::flattenValue($value);
+
+        return $value instanceof DateTimeInterface
+            ? DateTimeImmutable::createFromInterface($value)->setTimezone(new DateTimeZone('UTC'))
+            : $value;
+    }
+}

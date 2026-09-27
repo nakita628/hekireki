@@ -125,7 +125,6 @@ describe('makePydanticModel', () => {
           fields: [makeField({ name: 'target', kind: 'object', type: 'Real' })],
         }),
         undefined,
-        false,
       ),
     ).toBe(null)
   })

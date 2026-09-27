@@ -1,8 +1,5 @@
 defmodule Example.AuditLog do
   use Ecto.Schema
-  @moduledoc """
-  DB-side generated defaults (dbgenerated) plus Json / Bytes payloads.
-  """
 
   @primary_key false
 
@@ -15,10 +12,10 @@ defmodule Example.AuditLog do
         }
 
   schema "audit_logs" do
-    field(:id, :string, primary_key: true)
+    field(:id, :string, primary_key: true, read_after_writes: true)
     field(:action, :string)
     field(:payload, :map, default: %{})
     field(:signature, :binary)
-    field(:logged_at, :utc_datetime)
+    field(:logged_at, Example.PrismaDateTime, read_after_writes: true)
   end
 end

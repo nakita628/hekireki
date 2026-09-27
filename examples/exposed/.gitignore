@@ -1,0 +1,7 @@
+# What `pnpm run demo` fetches and builds beside the check: the Gradle distribution gradle.ts
+# downloads, Gradle's and the Kotlin compiler's caches, and the compiled classes. The models
+# `prisma generate` writes in src/main/kotlin/models are committed, to be read without running it.
+/.gradle-dist/
+/.gradle/
+/.kotlin/
+/build/

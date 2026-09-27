@@ -5,9 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
-/**
- * Implicit many-to-many partner of Post (join table `_PostToTag`).
- */
 class Tag extends Model
 {
     protected $table = 'Tag';

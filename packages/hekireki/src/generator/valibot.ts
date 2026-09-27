@@ -1,7 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { makeRelationsOnly } from '../helper/extract-relations.js'
 import { makeValibotRelations, valibotSchemaCode } from '../helper/valibot.js'
+import { makeRelationsOnly } from '../utils/extract-relations.js'
 
 export function valibotCode(
   dmmf: DMMF.Document,

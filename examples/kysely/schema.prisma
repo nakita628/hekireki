@@ -1,0 +1,189 @@
+// A record shop, on SQLite so nothing needs to run. `pnpm run demo` writes src/db/types.ts,
+// creates dev.db and runs check.ts against them with the real Kysely over better-sqlite3: each
+// table and column the generator writes into the DB interface is queried there, not only
+// type-checked, and the types are held to what the driver hands back.
+
+datasource db {
+  provider = "sqlite"
+}
+
+generator Hekireki-Kysely {
+  provider = "hekireki-kysely"
+  output   = "src/db/types.ts"
+}
+
+/// A customer, and the shop's own account (id 1), which an order passes to when its customer
+/// goes: see `Order.customer`.
+model User {
+  id          Int      @id @default(autoincrement())
+  email       String   @unique
+  /// Optional: `string | null` on select, and may be left out of an insert.
+  displayName String?  @map("display_name")
+  role        Role     @default(CUSTOMER)
+  /// SQLite has no boolean; the column holds 0 or 1 and the driver answers with a number.
+  isActive    Boolean  @default(true) @map("is_active")
+  /// A database default: the insert may leave it out.
+  createdAt   DateTime @default(now()) @map("created_at")
+  /// Prisma's client sets this on every write; the database knows nothing of it, so an insert
+  /// through Kysely has to give it.
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  /// A self relation: who brought this customer in. The customer stays when the referrer goes.
+  referrerId  Int?     @map("referrer_id")
+  referrer    User?    @relation("Referrals", fields: [referrerId], references: [id], onDelete: SetNull)
+  referrals   User[]   @relation("Referrals")
+  profile     Profile?
+  orders      Order[]
+  reviews     Review[]
+  /// An implicit many-to-many under a name of its own: Prisma's table is `_Wishlist`.
+  wishlist    Record[] @relation("Wishlist")
+
+  @@map("users")
+}
+
+/// Who may do what. A value the database holds under another name is the name Kysely reads.
+enum Role {
+  CUSTOMER @map("customer")
+  STAFF    @map("staff")
+  ADMIN
+}
+
+/// One per user, destroyed with the user. A client-side key: Prisma makes the cuid, the database
+/// has no default for it, so an insert through Kysely gives one.
+model Profile {
+  id     String  @id @default(cuid())
+  userId Int     @unique @map("user_id")
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bio    String?
+  /// Bytes: a BLOB, a Buffer in Node.js.
+  avatar Bytes?
+
+  @@map("profiles")
+}
+
+/// An artist cannot be deleted while a record of theirs is in the catalogue.
+model Artist {
+  id      Int      @id @default(autoincrement())
+  name    String   @unique
+  records Record[]
+
+  @@map("artists")
+}
+
+/// Values the database holds are not always identifiers: one has a hyphen, one an apostrophe,
+/// which the generated union has to quote.
+enum Genre {
+  ROCK_AND_ROLL @map("rock 'n' roll")
+  HIP_HOP       @map("hip-hop")
+  JAZZ          @map("jazz")
+  CLASSICAL
+}
+
+enum Format {
+  LP
+  EP
+  SINGLE
+  CASSETTE
+}
+
+/// `Record` is a global type in TypeScript as well: the model's interface shadows it inside the
+/// generated file, which does not use the global. Every scalar SQLite stores is here, each as the
+/// driver hands it back.
+model Record {
+  id          String      @id @default(uuid())
+  title       String
+  /// BigInt: binds as a bigint, reads back as a number unless the connection asks for
+  /// safeIntegers, which would make every INTEGER column a bigint.
+  catalogueNo BigInt      @unique @map("catalogue_no")
+  /// Decimal: SQLite keeps it with numeric affinity, a REAL when it has a fraction.
+  price       Decimal
+  /// Float, optional.
+  rating      Float?
+  tracks      Int         @default(1)
+  inStock     Boolean     @default(true) @map("in_stock")
+  /// DateTime, optional and without a default: text in, the same text out.
+  releasedOn  DateTime?   @map("released_on")
+  /// Json: SQLite keeps the text of it in a JSONB column, whose numeric affinity turns a
+  /// document that is a bare number into a number.
+  tracklist   Json
+  cover       Bytes?
+  genre       Genre
+  format      Format      @default(LP)
+  artistId    Int         @map("artist_id")
+  artist      Artist      @relation(fields: [artistId], references: [id], onDelete: Restrict)
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+  /// The implicit many-to-many with its default name: `_RecordToTag`, columns A (Record) and B
+  /// (Tag), in the order of the model names.
+  tags        Tag[]
+  wishedBy    User[]      @relation("Wishlist")
+  orderItems  OrderItem[]
+  reviews     Review[]
+
+  @@index([genre, releasedOn])
+  @@map("records")
+}
+
+model Tag {
+  id      Int      @id @default(autoincrement())
+  name    String   @unique
+  records Record[]
+
+  @@map("tags")
+}
+
+/// An order outlives its customer: it passes to the shop's own account, the default of the key.
+model Order {
+  id         String      @id @default(cuid())
+  customerId Int         @default(1) @map("customer_id")
+  customer   User        @relation(fields: [customerId], references: [id], onDelete: SetDefault)
+  placedAt   DateTime    @default(now()) @map("placed_at")
+  note       String?
+  items      OrderItem[]
+
+  @@map("orders")
+}
+
+/// A composite primary key: one line per record in an order. The lines go with the order; a
+/// record that has been ordered stays in the catalogue (NoAction, checked when the statement
+/// ends).
+model OrderItem {
+  orderId   String  @map("order_id")
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  recordId  String  @map("record_id")
+  record    Record  @relation(fields: [recordId], references: [id], onDelete: NoAction)
+  quantity  Int     @default(1)
+  unitPrice Decimal @map("unit_price")
+
+  @@id([orderId, recordId])
+  @@map("order_items")
+}
+
+/// One review per customer per record: a composite unique. The review goes with its record and
+/// with its author.
+model Review {
+  id       Int     @id @default(autoincrement())
+  recordId String  @map("record_id")
+  record   Record  @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  authorId Int     @map("author_id")
+  author   User    @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  stars    Int
+  /// A literal default on a Float, and a String default.
+  weight   Float   @default(1.5)
+  body     String  @default("")
+
+  @@unique([recordId, authorId])
+  @@map("reviews")
+}
+
+/// Columns named after words TypeScript reserves, and a table and a column whose database names
+/// are not identifiers: the generated interface quotes those keys.
+model Setting {
+  key          String   @id
+  type         String
+  default      String?
+  delete       Boolean  @default(false)
+  constructor  String?
+  lastModified DateTime @default(now()) @map("last-modified")
+
+  @@map("shop settings")
+}

@@ -622,7 +622,7 @@
 /* A relation no foreign key backs: declared in a `/// @relation` comment, or an implicit
    many-to-many whose pairs live in a join table of Prisma's own. Dashed is about that, not about
    cardinality — an explicit many-to-many written as a join model is two ordinary foreign keys and
-   stays solid. `RelationOrigin` (helper/relation.ts) is where the three origins are spelled out. */
+   stays solid. `RelationOrigin` (utils/relation.ts) is where the three origins are spelled out. */
 .react-flow__edge.relation-edge--annotated .react-flow__edge-path,
 .react-flow__edge.relation-edge--implicit-many-to-many .react-flow__edge-path {
   stroke-dasharray: 5 4;

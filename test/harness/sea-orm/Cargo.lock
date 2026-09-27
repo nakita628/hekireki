@@ -266,6 +266,8 @@ dependencies = [
 name = "conformance"
 version = "0.0.0"
 dependencies = [
+ "async-trait",
+ "chrono",
  "sea-orm",
  "serde",
  "ulid",

@@ -4,6 +4,7 @@ import {
   collectGlobalImports,
   collectManyToManyTables,
   generateAssociationTable,
+  generateBase,
   generateModelBody,
 } from '../helper/sqlalchemy.js'
 
@@ -11,29 +12,24 @@ export function generateSingleFile(
   models: readonly DMMF.Model[],
   enums?: readonly DMMF.DatamodelEnum[],
   indexes?: readonly DMMF.Index[],
+  provider = 'postgresql',
 ) {
   const idx = indexes ?? []
   const m2mTables = collectManyToManyTables(models)
 
-  const importLines = collectGlobalImports(models, enums, idx, m2mTables)
+  const importLines = collectGlobalImports(models, enums, idx, m2mTables, provider)
 
-  const m2mLines =
-    m2mTables.length > 0
-      ? m2mTables.flatMap((t, i) =>
-          i === 0 ? ['', generateAssociationTable(t)] : ['', generateAssociationTable(t)],
-        )
-      : []
+  const m2mLines = m2mTables.flatMap((t) => ['', generateAssociationTable(t, provider)])
 
   const modelBodies = models
-    .map((model) => generateModelBody(model, models, enums, idx, m2mTables))
+    .map((model) => generateModelBody(model, models, enums, idx, m2mTables, provider))
     .filter((body) => body !== null)
 
   return [
     ...importLines,
     '',
     '',
-    'class Base(DeclarativeBase):',
-    '    pass',
+    ...generateBase(models, provider),
     ...m2mLines,
     '',
     '',

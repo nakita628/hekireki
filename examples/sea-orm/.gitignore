@@ -1,0 +1,3 @@
+# What cargo builds beside the check. Cargo.lock and the entities `prisma generate` writes in
+# src/entities are committed, to be read without running it; dev.db is ignored one level up.
+/target/

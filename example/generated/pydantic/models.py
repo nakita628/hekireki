@@ -6,17 +6,9 @@ from uuid import UUID
 
 
 class User(BaseModel):
-    """Application user. Fully annotated for every validator generator,
-    with a UUIDv7 primary key, enum default, scalar list, @map columns,
-    @updatedAt, and relations of every cardinality.
-    """
-
     id: UUID7
-    """Primary key (UUIDv7)"""
     email: EmailStr
-    """Unique login email"""
     name: Annotated[str, StringConstraints(min_length=1, max_length=50)]
-    """Display name"""
     role: Literal["ADMIN", "EDITOR", "VIEWER"]
     interests: list[str]
     createdAt: datetime
@@ -24,11 +16,6 @@ class User(BaseModel):
 
 
 class Profile(BaseModel):
-    """One-to-one relation with native @db.* types, literal defaults,
-    and optional scalars of every flavour. ConfigDict passthrough: the
-    Pydantic model rejects unknown keys (extra='forbid').
-    """
-
     model_config = ConfigDict(extra='forbid')
 
     id: str
@@ -44,14 +31,8 @@ class Profile(BaseModel):
 
 
 class Post(BaseModel):
-    """@@map + @map column names, FK with a referential action,
-    mapped-enum default, and an implicit many-to-many to Tag.
-    """
-
     id: UUID4
-    """Primary key"""
     title: Annotated[str, StringConstraints(min_length=1, max_length=100)]
-    """Article title"""
     content: str | None = None
     visibility: Literal["PUBLIC", "PRIVATE", "LINK_ONLY"]
     published: bool
@@ -61,17 +42,11 @@ class Post(BaseModel):
 
 
 class Tag(BaseModel):
-    """Implicit many-to-many partner of Post (join table `_PostToTag`)."""
-
     id: int
     label: str
 
 
 class Comment(BaseModel):
-    """Two foreign keys with different referential actions
-    (Cascade vs SetNull) and a composite index.
-    """
-
     id: int
     body: str
     postId: str
@@ -80,24 +55,18 @@ class Comment(BaseModel):
 
 
 class Follow(BaseModel):
-    """Composite primary key + two named relations to the same model."""
-
     followerId: str
     followingId: str
     since: datetime
 
 
 class Category(BaseModel):
-    """Self-relation (adjacency-list tree) with a composite unique."""
-
     id: int
     name: str
     parentId: int | None = None
 
 
 class Order(BaseModel):
-    """BigInt autoincrement primary key (bigserial) and money as Decimal."""
-
     id: int
     userId: str
     total: Decimal
@@ -105,8 +74,6 @@ class Order(BaseModel):
 
 
 class OrderItem(BaseModel):
-    """Child of Order with a composite unique constraint."""
-
     id: int
     orderId: int
     sku: str
@@ -115,8 +82,6 @@ class OrderItem(BaseModel):
 
 
 class AuditLog(BaseModel):
-    """DB-side generated defaults (dbgenerated) plus Json / Bytes payloads."""
-
     id: UUID
     action: str
     payload: JsonValue
@@ -125,10 +90,6 @@ class AuditLog(BaseModel):
 
 
 class Actor(BaseModel):
-    """Named implicit many-to-many: the join table is `_cast`,
-    not `_ActorToFilm`.
-    """
-
     id: int
     name: str
 
