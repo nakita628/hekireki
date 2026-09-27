@@ -1,7 +1,7 @@
 // The generated drizzle schema against Prisma Client on the SQLite database `prisma db push` made
 // from schema.prisma: a row drizzle writes is the row Prisma would have written, and each reads
-// the other's as the same instant. `demo` runs it in a process whose zone is not UTC. Each check
-// prints `ok: <name>`, or throws with what it saw instead.
+// the other's as the same instant. `demo` runs it in each time zone of zones.ts. Each check prints
+// `ok: <name>`, or throws with what it saw instead.
 import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3'
 import Database from 'better-sqlite3'
 import { eq } from 'drizzle-orm'
@@ -81,6 +81,31 @@ check(
     updated.createdAt.getTime() === read.createdAt.getTime()
     ? undefined
     : `updated ${updated.updatedAt.toISOString()}, created ${updated.createdAt.toISOString()}`,
+)
+
+// What something other than the two clients may have left in the column: the instant under another
+// offset, text with no zone (what CURRENT_TIMESTAMP writes, which is UTC), and milliseconds.
+const held = [
+  '2030-01-02T12:04:05.678+09:00',
+  '2030-01-01T22:04:05.678-05:00',
+  '2030-01-02T08:34:05.678+05:30',
+  '2030-01-02T03:04:05.678Z',
+  '2030-01-02 03:04:05.678',
+  1893553445678,
+]
+const insert = connection.prepare(
+  'INSERT INTO events (title, at, created_at, updated_at, synced_at) VALUES (?, ?, ?, ?, ?)',
+)
+for (const value of held) insert.run(`held ${value}`, value, value, value, value)
+const others = await db.select({ title: events.title, at: events.at }).from(events)
+const wrong = others.filter(
+  (row) => row.title.startsWith('held ') && row.at.toISOString() !== at.toISOString(),
+)
+check(
+  'drizzle reads another offset, no zone and milliseconds as the instant',
+  wrong.length === 0
+    ? undefined
+    : wrong.map((row) => `${row.title} is ${row.at.toISOString()}`).join(', '),
 )
 
 await prisma.$disconnect()

@@ -1053,7 +1053,7 @@ const PG_NATIVE_TYPES: readonly (readonly [
   ['DateTime', '@db.Timetz', ['Timetz', []], 'customType, integer, pgTable', "utcTimetz('value')"],
   ['Json', '@db.Json', ['Json', []], 'integer, json, pgTable', "json('value')"],
   ['Json', '@db.JsonB', ['JsonB', []], 'integer, jsonb, pgTable', "jsonb('value')"],
-  ['Bytes', '@db.ByteA', ['ByteA', []], 'integer, pgTable, text', "text('value')"],
+  ['Bytes', '@db.ByteA', ['ByteA', []], 'customType, integer, pgTable', "bytea('value')"],
   ['String', '@db.Citext', ['Citext', []], 'integer, pgTable, text', "text('value')"],
 ]
 
@@ -1153,17 +1153,44 @@ const MYSQL_NATIVE_TYPES: readonly (readonly [
     'Bytes',
     '@db.Binary(16)',
     ['Binary', ['16']],
-    'binary, int, mysqlTable',
-    "binary('value', { length: 16 })",
+    'customType, int, mysqlTable',
+    "bytes('value', { type: 'binary(16)' })",
   ],
   [
     'Bytes',
     '@db.VarBinary(16)',
     ['VarBinary', ['16']],
-    'int, mysqlTable, varbinary',
-    "varbinary('value', { length: 16 })",
+    'customType, int, mysqlTable',
+    "bytes('value', { type: 'varbinary(16)' })",
   ],
-  ['Bytes', '@db.Blob', ['Blob', []], 'blob, int, mysqlTable', "blob('value')"],
+  [
+    'Bytes',
+    '@db.TinyBlob',
+    ['TinyBlob', []],
+    'customType, int, mysqlTable',
+    "bytes('value', { type: 'tinyblob' })",
+  ],
+  [
+    'Bytes',
+    '@db.Blob',
+    ['Blob', []],
+    'customType, int, mysqlTable',
+    "bytes('value', { type: 'blob' })",
+  ],
+  [
+    'Bytes',
+    '@db.MediumBlob',
+    ['MediumBlob', []],
+    'customType, int, mysqlTable',
+    "bytes('value', { type: 'mediumblob' })",
+  ],
+  [
+    'Bytes',
+    '@db.LongBlob',
+    ['LongBlob', []],
+    'customType, int, mysqlTable',
+    "bytes('value', { type: 'longblob' })",
+  ],
   ['Json', '@db.Json', ['Json', []], 'int, json, mysqlTable', "json('value')"],
   ['String', '@db.Nope', ['Nope', []], 'int, mysqlTable, text', "text('value')"],
 ]
@@ -1353,6 +1380,44 @@ describe('dates', () => {
     const note = "// timestamp() holds UTC only on a connection whose time_zone is '+00:00'"
     expect(schema(['Timestamp', ['3']]).split('\n')[2]).toBe(note)
     expect(schema(['DateTime', ['3']])).not.toContain(note)
+  })
+
+  it('says a MySQL bigint needs mysql2 told to keep it whole, only where there is one', () => {
+    const schema = (type: string) =>
+      drizzleSchema(
+        makeDatamodel([
+          makeModel({
+            name: 'Row',
+            fields: [
+              makeField({ name: 'id', type: 'Int', isId: true }),
+              makeField({ name: 'count', type }),
+            ],
+          }),
+        ]),
+        'mysql',
+        [],
+      )
+    const note =
+      '// bigint() is exact past 2^53 only on a connection with supportBigNumbers and bigNumberStrings'
+    expect(schema('BigInt').split('\n')[2]).toBe(note)
+    expect(schema('Int')).not.toContain(note)
+  })
+
+  it.each([
+    ['postgresql', "bytea('value').notNull().default(sql`decode('0001ff', 'hex')`)"],
+    ['mysql', "bytes('value', { type: 'longblob' }).notNull().default(sql`0x0001ff`)"],
+    ['sqlite', "blob('value').notNull().default(sql`X'0001ff'`)"],
+  ] as const)('writes a Bytes and its default on %s as the bytes they are', (provider, column) => {
+    const datamodel = makeDatamodel([
+      makeModel({
+        name: 'Row',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({ name: 'value', type: 'Bytes', hasDefaultValue: true, default: 'AAH/' }),
+        ],
+      }),
+    ])
+    expect(drizzleSchema(datamodel, provider, []).split('\n').at(-1)).toContain(column)
   })
 
   // CockroachDB takes autoincrement() on a BigInt only; an Int key counts with sequence(), which

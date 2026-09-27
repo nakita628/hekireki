@@ -3,7 +3,7 @@ import type { DMMF } from '@prisma/generator-helper'
 import {
   createImports,
   generateImports,
-  makeDateHelpers,
+  makeColumnHelpers,
   makeEnumDeclarations,
   makeM2MJoinRelations,
   makeM2MJoinTables,
@@ -42,7 +42,7 @@ export function drizzleSchema(
     i < relationsLines.length - 1 ? [line, ''] : [line],
   )
 
-  const dateHelpers = makeDateHelpers(imports)
+  const columnHelpers = makeColumnHelpers(imports)
 
   return [
     generateImports(imports, db),
@@ -51,7 +51,14 @@ export function drizzleSchema(
     ...(db === 'mysql' && imports.core.has('timestamp')
       ? ["// timestamp() holds UTC only on a connection whose time_zone is '+00:00'", '']
       : []),
-    ...dateHelpers.flatMap((helper) => [helper, '']),
+    // mysql2 gives a BIGINT as a number, which is exact to 2^53, unless it is told otherwise.
+    ...(db === 'mysql' && imports.core.has('bigint')
+      ? [
+          '// bigint() is exact past 2^53 only on a connection with supportBigNumbers and bigNumberStrings',
+          '',
+        ]
+      : []),
+    ...columnHelpers.flatMap((helper) => [helper, '']),
     ...(enumLinesWithGap.length > 0 ? [...enumLinesWithGap, ''] : []),
     ...tableLinesWithGap,
     ...(relationsLinesWithGap.length > 0 ? ['', ...relationsLinesWithGap] : []),

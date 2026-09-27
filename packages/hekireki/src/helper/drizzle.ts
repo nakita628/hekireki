@@ -17,7 +17,7 @@ const PG_SCALAR_MAP: { [k: string]: string } = {
   Boolean: 'boolean()',
   DateTime: 'timestamp({ precision: 3 })',
   Json: 'jsonb()',
-  Bytes: 'text()',
+  Bytes: 'bytea()',
 }
 
 const MYSQL_SCALAR_MAP: { [k: string]: string } = {
@@ -29,7 +29,7 @@ const MYSQL_SCALAR_MAP: { [k: string]: string } = {
   Boolean: 'boolean()',
   DateTime: 'datetime({ fsp: 3 })',
   Json: 'json()',
-  Bytes: 'binary()',
+  Bytes: "bytes({ type: 'longblob' })",
 }
 
 const SQLITE_SCALAR_MAP: { [k: string]: string } = {
@@ -95,7 +95,7 @@ function pgNativeType(name: string, args: readonly string[]) {
     case 'JsonB':
       return 'jsonb()'
     case 'ByteA':
-      return 'text()'
+      return 'bytea()'
     default:
       return null
   }
@@ -143,19 +143,29 @@ function mysqlNativeType(name: string, args: readonly string[]) {
       return `timestamp({ fsp: ${args[0] ?? 0} })`
     case 'Json':
       return 'json()'
+    // drizzle's binary() and varbinary() read the bytes as text, and it has no blob.
     case 'Binary':
-      return args[0] ? `binary({ length: ${args[0]} })` : 'binary()'
     case 'VarBinary':
-      return args[0] ? `varbinary({ length: ${args[0]} })` : 'varbinary()'
+      return `bytes({ type: '${name.toLowerCase()}${args[0] ? `(${args[0]})` : ''}' })`
+    case 'TinyBlob':
     case 'Blob':
-      return 'blob()'
+    case 'MediumBlob':
+    case 'LongBlob':
+      return `bytes({ type: '${name.toLowerCase()}' })`
     default:
       return null
   }
 }
 
-// Columns that keep a DateTime in UTC, in the form Prisma Client writes and reads it.
-const DATE_HELPERS: { readonly [name: string]: string } = {
+// Columns drizzle has none of its own for: a DateTime kept in UTC, in the form Prisma Client
+// writes and reads it, and a Bytes as the Uint8Array Prisma Client gives.
+const COLUMN_HELPERS: { readonly [name: string]: string } = {
+  bytea: `const bytea = customType<{ data: Uint8Array }>({
+  dataType: () => 'bytea',
+})`,
+  bytes: `const bytes = customType<{ data: Uint8Array; config: { type: string } }>({
+  dataType: (config) => config?.type ?? 'longblob',
+})`,
   utcDateTime: `const utcDateTime = customType<{ data: Date; driverData: string | number }>({
   dataType: () => 'datetime',
   toDriver: (value) => value.toISOString().replace('Z', '+00:00'),
@@ -210,31 +220,31 @@ export function createImports() {
     core: new Set<string>(),
     orm: new Set<string>(),
     ext: new Map<string, { named: Set<string>; default?: string }>(),
-    dates: new Set<string>(),
+    helpers: new Set<string>(),
   }
 }
 
 type DrizzleImports = ReturnType<typeof createImports>
 
-// A column function is drizzle's own, imported from its core module, or one of the date helpers,
+// A column function is drizzle's own, imported from its core module, or one of the helpers,
 // declared in the schema itself.
 function addColumnImport(baseExpr: string, imports: DrizzleImports) {
   const fnName = baseExpr.match(/^(\w+)/u)?.[1]
   if (fnName === undefined) return
-  if (fnName in DATE_HELPERS) imports.dates.add(fnName)
+  if (fnName in COLUMN_HELPERS) imports.helpers.add(fnName)
   else imports.core.add(fnName)
 }
 
 /**
- * The date helpers the tables use, in a fixed order, to be written after the imports.
+ * The column helpers the tables use, in a fixed order, to be written after the imports.
  *
  * @param imports - What the tables asked for; `customType` is added to it when a helper is one.
  * @returns The declarations, one per helper.
  */
-export function makeDateHelpers(imports: DrizzleImports) {
-  const used = Object.keys(DATE_HELPERS).filter((name) => imports.dates.has(name))
+export function makeColumnHelpers(imports: DrizzleImports) {
+  const used = Object.keys(COLUMN_HELPERS).filter((name) => imports.helpers.has(name))
   if (used.some((name) => name !== 'utcNow')) imports.core.add('customType')
-  return used.map((name) => DATE_HELPERS[name] ?? '')
+  return used.map((name) => COLUMN_HELPERS[name] ?? '')
 }
 
 function applyImport(imports: DrizzleImports, req: ImportReq) {
@@ -490,6 +500,17 @@ function resolveDefaultValue(
       return { chain: `.default(new Date(${toTsString(dflt)}))`, imports: [] }
     }
     if (fieldType === 'Json') return { chain: `.default(${dflt})`, imports: [] }
+    // A Bytes default is base64 in the DMMF, and the column's literal in the table.
+    if (fieldType === 'Bytes') {
+      const hex = Buffer.from(dflt, 'base64').toString('hex')
+      const literal =
+        provider === 'postgresql'
+          ? `decode('${hex}', 'hex')`
+          : provider === 'mysql'
+            ? `0x${hex}`
+            : `X'${hex}'`
+      return { chain: `.default(sql\`${literal}\`)`, imports: [SQL_IMPORT] }
+    }
     return { chain: `.default(${toTsString(dflt)})`, imports: [] }
   }
   if (typeof dflt === 'number') {
@@ -564,7 +585,7 @@ function makeColumn(
   const hasCompositePK = model.primaryKey !== null
   const colExpr = makeColumnExpr(field, provider, imports, enums)
   if (field.isUpdatedAt || (isFieldDefault(field.default) && field.default.name === 'now')) {
-    imports.dates.add('utcNow')
+    imports.helpers.add('utcNow')
   }
 
   const chain = [

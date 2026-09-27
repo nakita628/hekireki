@@ -12,8 +12,35 @@ pnpm run demo
 
 `src/db/schema.ts` is committed as `prisma generate` writes it. `demo` starts from nothing all the
 same: `prisma generate` writes the schema and Prisma Client, `prisma db push` creates `dev.db`,
-`tsc` type-checks `check.ts` against both, and `node check.ts` runs the checks in `Asia/Tokyo`, a
-zone that is not UTC, and prints one `ok:` line for each.
+`tsc` type-checks `check.ts` against both, and `zones.ts` runs the checks once in each time zone
+and prints one `ok:` line for each.
+
+## Time zones
+
+The checks run in UTC, in `Asia/Tokyo` (JST), in `America/New_York`, which has daylight saving,
+and in `Asia/Kolkata`, half an hour off the hour. `DRIZZLE_ZONES` names others:
+
+```bash
+DRIZZLE_ZONES=Europe/Paris,Pacific/Auckland pnpm run verify
+```
+
+What is written is UTC in every one of them, and what is read is the instant: the process's zone
+changes how a `Date` prints, not what the column holds.
+
+On PostgreSQL and MySQL, with the databases of `examples/compose.yaml`:
+
+```bash
+docker compose -f ../compose.yaml up -d postgres mysql
+pnpm run demo:postgresql       # or DRIZZLE_DATABASE=postgresql://… node provider.ts postgresql
+pnpm run demo:mysql
+```
+
+`provider.ts` writes `schema.prisma` again under `.provider/` with that provider and a `Slot`
+model of what SQLite has not (a date, a time, microseconds, a `timestamptz` and a `timetz` on
+PostgreSQL, a `TIMESTAMP` on MySQL) beside a `Bytes`, a `BigInt` past 2^53 and a `Decimal`. It
+generates there, pushes the tables to the database named `drizzle`, type-checks
+`check.postgresql.ts` or `check.mysql.ts` against what was generated, and runs it in each time
+zone.
 
 ## Dates
 
@@ -44,7 +71,25 @@ A `DateTime` is a `Date` in drizzle as it is in Prisma Client, held in UTC to th
   keep their precision, and a bare `@db.DateTime` or `@db.Timestamp` is precision 0, as in the
   table Prisma makes.
 
+## Bytes
+
+A `Bytes` is a `Uint8Array` in drizzle as it is in Prisma Client, in the column Prisma makes.
+
+- **PostgreSQL** has it in `bytea`, which drizzle has no column for: the generated `bytea` is one.
+- **MySQL** has it in `longblob`, or in what `@db.Binary`, `@db.VarBinary`, `@db.TinyBlob`,
+  `@db.Blob` and `@db.MediumBlob` name. drizzle's `binary()` and `varbinary()` read the bytes as
+  text, which loses every byte that is not UTF-8, and it has no blob: the generated `bytes` takes
+  the column's type and leaves the bytes alone.
+- **A `@default` on one** is the bytes in the table, written as the database reads them:
+  `decode('0001ff', 'hex')` on PostgreSQL, `0x0001ff` on MySQL, `X'0001ff'` on SQLite.
+
 ### What the connection has to be
+
+- **A MySQL `BIGINT` comes as text.** mysql2 gives one as a number, which is exact to 2^53:
+  `9007199254740993` is read as `9007199254740992n`. With `supportBigNumbers: true` and
+  `bigNumberStrings: true` in the pool's options it is text, which drizzle makes a `bigint` of.
+  The generated MySQL schema says this on one line above the tables when it has a `bigint()`
+  column.
 
 - **The session's time zone is UTC.** MySQL converts a `TIMESTAMP` through the session's
   `time_zone`, and `CURRENT_TIMESTAMP` in a column without a zone (a `dbgenerated` default on

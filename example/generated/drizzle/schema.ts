@@ -2,6 +2,7 @@ import {
   bigint,
   bigserial,
   boolean,
+  customType,
   index,
   integer,
   jsonb,
@@ -20,6 +21,10 @@ import {
 import { relations, sql } from 'drizzle-orm'
 import { v7 as uuidv7 } from 'uuid'
 import { createId } from '@paralleldrive/cuid2'
+
+const bytea = customType<{ data: Uint8Array }>({
+  dataType: () => 'bytea',
+})
 
 const utcNow = (() => {
   let now: Date | undefined
@@ -67,7 +72,7 @@ export const profile = pgTable('Profile', {
   balance: numeric('balance', { precision: 10, scale: 2 }).notNull().default('0'),
   verified: boolean('verified').notNull().default(false),
   meta: jsonb('meta'),
-  avatar: text('avatar'),
+  avatar: bytea('avatar'),
   lastSeen: timestamp('last_seen', { withTimezone: true, precision: 6 }),
 })
 
@@ -170,7 +175,7 @@ export const auditLogs = pgTable('audit_logs', {
     .default(sql`gen_random_uuid()`),
   action: text('action').notNull(),
   payload: jsonb('payload').notNull().default({}),
-  signature: text('signature'),
+  signature: bytea('signature'),
   loggedAt: timestamp('logged_at', { precision: 3 })
     .notNull()
     .default(sql`now()`),

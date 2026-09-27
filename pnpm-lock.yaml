@@ -93,6 +93,9 @@ importers:
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
+      '@types/node':
+        specifier: ^26.6.2
+        version: 26.6.2
       '@types/pg':
         specifier: ^8.23.1
         version: 8.23.1
@@ -108,6 +111,63 @@ importers:
       mysql2:
         specifier: ^3.24.4
         version: 3.24.4(@types/node@26.6.2)
+      pg:
+        specifier: ^8.23.0
+        version: 8.23.0
+      prisma:
+        specifier: 8.1.0-dev.7
+        version: 8.1.0-dev.7(@types/node@26.6.2)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(better-sqlite3@13.0.3)(magicast@0.5.3)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@7.0.2)
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+
+  examples/drizzle-mysql:
+    devDependencies:
+      '@prisma/adapter-mariadb':
+        specifier: 8.1.0-dev.7
+        version: 8.1.0-dev.7
+      '@prisma/client':
+        specifier: 8.1.0-dev.7
+        version: 8.1.0-dev.7(prisma@8.1.0-dev.7(@types/node@26.6.2)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(better-sqlite3@13.0.3)(magicast@0.5.3)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@7.0.2))(typescript@7.0.2)
+      '@types/node':
+        specifier: ^26.6.2
+        version: 26.6.2
+      drizzle-orm:
+        specifier: ^0.45.3
+        version: 0.45.3(@electric-sql/pglite@0.4.3)(@prisma/client@8.1.0-dev.7(typescript@7.0.2))(@types/better-sqlite3@9.6.0)(@types/pg@8.23.1)(better-sqlite3@13.0.3)(kysely@0.29.6)(mysql2@3.24.4(@types/node@26.6.2))(pg@8.23.0)(postgres@3.4.7)(prisma@8.1.0-dev.7(@types/node@26.6.2)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(better-sqlite3@13.0.3)(magicast@0.5.3)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@7.0.2))
+      hekireki:
+        specifier: workspace:*
+        version: link:../../packages/hekireki
+      mysql2:
+        specifier: ^3.24.4
+        version: 3.24.4(@types/node@26.6.2)
+      prisma:
+        specifier: 8.1.0-dev.7
+        version: 8.1.0-dev.7(@types/node@26.6.2)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(better-sqlite3@13.0.3)(magicast@0.5.3)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@7.0.2)
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+
+  examples/drizzle-postgresql:
+    devDependencies:
+      '@prisma/adapter-pg':
+        specifier: 8.1.0-dev.7
+        version: 8.1.0-dev.7
+      '@prisma/client':
+        specifier: 8.1.0-dev.7
+        version: 8.1.0-dev.7(prisma@8.1.0-dev.7(@types/node@26.6.2)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(better-sqlite3@13.0.3)(magicast@0.5.3)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@7.0.2))(typescript@7.0.2)
+      '@types/node':
+        specifier: ^26.6.2
+        version: 26.6.2
+      '@types/pg':
+        specifier: ^8.23.1
+        version: 8.23.1
+      drizzle-orm:
+        specifier: ^0.45.3
+        version: 0.45.3(@electric-sql/pglite@0.4.3)(@prisma/client@8.1.0-dev.7(typescript@7.0.2))(@types/better-sqlite3@9.6.0)(@types/pg@8.23.1)(better-sqlite3@13.0.3)(kysely@0.29.6)(mysql2@3.24.4(@types/node@26.6.2))(pg@8.23.0)(postgres@3.4.7)(prisma@8.1.0-dev.7(@types/node@26.6.2)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(better-sqlite3@13.0.3)(magicast@0.5.3)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@7.0.2))
+      hekireki:
+        specifier: workspace:*
+        version: link:../../packages/hekireki
       pg:
         specifier: ^8.23.0
         version: 8.23.0
