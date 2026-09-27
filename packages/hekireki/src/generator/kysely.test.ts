@@ -602,7 +602,7 @@ describe('kyselySchema', () => {
     const result = kyselySchema(datamodel, 'sqlite')
 
     expect(result).toBe(
-      "import type { ColumnType } from 'kysely'\n\nexport type Generated<T> = T extends ColumnType<infer S, infer I, infer U>\n  ? ColumnType<S, I | undefined, U>\n  : ColumnType<T, T | undefined, T>\n\n// A DateTime column holds the text date.toISOString().replace('Z', '+00:00')\n\nexport interface Sample {\n  id: ColumnType<number, number | bigint, number | bigint>\n  flag: number\n  enabled: Generated<number>\n  amount: ColumnType<number, number | string, number | string> | null\n  doc: ColumnType<string | number, string, string>\n  raw: Buffer\n  createdAt: string\n  seenAt: string | null\n}\n\nexport interface Related {\n  A: ColumnType<number, number | bigint, number | bigint>\n  B: ColumnType<number, number | bigint, number | bigint>\n}\n\nexport interface DB {\n  Sample: Sample\n  _related: Related\n}",
+      "import type { ColumnType } from 'kysely'\n\nexport type Generated<T> = T extends ColumnType<infer S, infer I, infer U>\n  ? ColumnType<S, I | undefined, U>\n  : ColumnType<T, T | undefined, T>\n\nexport interface Sample {\n  id: ColumnType<number, number | bigint, number | bigint>\n  flag: number\n  enabled: Generated<number>\n  amount: ColumnType<number, number | string, number | string> | null\n  doc: ColumnType<string | number, string, string>\n  raw: Buffer\n  createdAt: string\n  seenAt: string | null\n}\n\nexport interface Related {\n  A: ColumnType<number, number | bigint, number | bigint>\n  B: ColumnType<number, number | bigint, number | bigint>\n}\n\nexport interface DB {\n  Sample: Sample\n  _related: Related\n}",
     )
   })
 
@@ -682,7 +682,7 @@ describe('kyselySchema', () => {
       "import type { ColumnType } from 'kysely'\n\nexport type Timestamp = ColumnType<Date, Date | string, Date | string>\n\nexport interface Note {\n  id: number\n  updatedAt: Timestamp\n  seenAt: ColumnType<Date | null, Date | string, Date | string | null>\n}\n\nexport interface DB {\n  Note: Note\n}",
     )
     expect(kyselySchema(datamodel, 'sqlite')).toBe(
-      "import type { ColumnType } from 'kysely'\n\n// A DateTime column holds the text date.toISOString().replace('Z', '+00:00')\n\nexport interface Note {\n  id: number\n  updatedAt: string\n  seenAt: ColumnType<string | null, string, string | null>\n}\n\nexport interface DB {\n  Note: Note\n}",
+      "import type { ColumnType } from 'kysely'\n\nexport interface Note {\n  id: number\n  updatedAt: string\n  seenAt: ColumnType<string | null, string, string | null>\n}\n\nexport interface DB {\n  Note: Note\n}",
     )
   })
   it('should leave a DateTime default to the insert on SQLite only, as Prisma Client writes it', () => {
@@ -711,7 +711,7 @@ describe('kyselySchema', () => {
       "import type { ColumnType } from 'kysely'\n\nexport type Generated<T> = T extends ColumnType<infer S, infer I, infer U>\n  ? ColumnType<S, I | undefined, U>\n  : ColumnType<T, T | undefined, T>\n\nexport type Timestamp = ColumnType<Date, Date | string, Date | string>\n\nexport interface Stamp {\n  id: number\n  createdAt: Generated<Timestamp>\n  since: Generated<Timestamp>\n}\n\nexport interface DB {\n  Stamp: Stamp\n}",
     )
     expect(kyselySchema(datamodel, 'sqlite')).toBe(
-      "// A DateTime column holds the text date.toISOString().replace('Z', '+00:00')\n\nexport interface Stamp {\n  id: number\n  createdAt: string\n  since: string\n}\n\nexport interface DB {\n  Stamp: Stamp\n}",
+      'export interface Stamp {\n  id: number\n  createdAt: string\n  since: string\n}\n\nexport interface DB {\n  Stamp: Stamp\n}',
     )
   })
 })

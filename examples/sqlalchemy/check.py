@@ -12,7 +12,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import Engine, Enum, UniqueConstraint, create_engine, event, inspect, select, text
+from sqlalchemy import Engine, Text, create_engine, event, inspect, select, text
 from sqlalchemy.exc import IntegrityError, SAWarning
 from sqlalchemy.orm import Session, configure_mappers
 from sqlalchemy.pool import ConnectionPoolEntry
@@ -111,10 +111,11 @@ def _() -> str | None:
             problems.append(f"{name}: database {columns}, metadata {mapped}")
         key = set(inspector.get_pk_constraint(name)["constrained_columns"])
         mapped_key = {c.name for c in table.primary_key}
-        # Prisma's join table on SQLite has no primary key, only a unique index on (A, B); the
-        # metadata keys the pair, which is the same promise.
+        # Prisma's join table on SQLite has no primary key, only a unique index on (A, B), and so
+        # has the metadata.
         if name.startswith("_"):
             key = {str(c) for i in inspector.get_indexes(name) if i["unique"] for c in i["column_names"]}
+            mapped_key = {c.name for i in table.indexes if i.unique for c in i.columns}
         if key != mapped_key:
             problems.append(f"{name} key: database {key}, metadata {mapped_key}")
     return "; ".join(problems) or None
@@ -152,27 +153,19 @@ def _() -> str | None:
     return "; ".join(problems) or None
 
 
-@check("unique columns, @@unique pairs and @@index names match")
+@check("unique columns, @@unique pairs and @@index match, by the names Prisma gave them")
 def _() -> str | None:
     inspector = inspect(engine)
     problems = []
     for name, table in Base.metadata.tables.items():
-        indexes = inspector.get_indexes(name)
-        uniques = {frozenset(i["column_names"]) for i in indexes if i["unique"]}
-        uniques |= {frozenset(u["column_names"]) for u in inspector.get_unique_constraints(name)}
-        mapped_uniques = {frozenset([c.name]) for c in table.columns if c.unique}
-        mapped_uniques |= {
-            frozenset(c.name for c in u.columns)
-            for u in table.constraints
-            if isinstance(u, UniqueConstraint)
+        # Prisma makes every one of them an index, unique or not, and so has the metadata.
+        indexes = {
+            (i["name"], tuple(i["column_names"]), bool(i["unique"]))
+            for i in inspector.get_indexes(name)
         }
-        # The join table's unique pair is its primary key in the metadata (checked above).
-        if not name.startswith("_") and uniques != mapped_uniques:
-            problems.append(f"{name} unique: database {uniques}, metadata {mapped_uniques}")
-        plain = {(i["name"], tuple(i["column_names"])) for i in indexes if not i["unique"]}
-        mapped_plain = {(i.name, tuple(c.name for c in i.columns)) for i in table.indexes}
-        if plain != mapped_plain:
-            problems.append(f"{name} index: database {plain}, metadata {mapped_plain}")
+        mapped = {(i.name, tuple(c.name for c in i.columns), bool(i.unique)) for i in table.indexes}
+        if indexes != mapped:
+            problems.append(f"{name}: database {indexes}, metadata {mapped}")
     return "; ".join(problems) or None
 
 
@@ -414,13 +407,12 @@ def _() -> str | None:
         return None if (queries, types) == (["desk"], ["digital"]) else f"got {queries}, {types}"
 
 
-@check("enums store the @map'ed value, under the enum's own @@map")
+@check("enums are the text column SQLite has for them, and store the @map'ed value")
 def _() -> str | None:
+    # Prisma makes an enum a TEXT column on SQLite, with no check on what it holds.
     role, status = Account.__table__.c.role.type, Order.__table__.c.status.type
-    if not (isinstance(role, Enum) and isinstance(status, Enum)):
+    if not (isinstance(role, Text) and isinstance(status, Text)):
         return f"role {role!r}, status {status!r}"
-    if (role.enums, status.enums, status.name) != (["MEMBER", "admin", "owner"], ["pending", "paid", "cancelled"], "order_status"):
-        return f"role {role.enums}, status {status.enums} named {status.name}"
     with Session(engine) as session:
         account = Account(email="enum@example.com", role="admin")
         order = Order(account=account)

@@ -55,10 +55,10 @@ Kysely hands values to the driver and back as they are: there is no hook to fill
 conversion of a value, so what the types cannot hold to Prisma is the caller's to do.
 
 - **SQLite keeps a `DateTime` as text, and compares it as text.** Prisma writes
-  `2030-01-02T03:04:05.678+00:00`, which is `date.toISOString().replace('Z', '+00:00')`, and the
-  generated file says so on one line. A row Kysely writes with `toISOString()`'s `Z` holds the same
-  instant in other text: an `=` from either side misses it, `@unique` and a composite `@@id` let
-  both rows in, and Prisma's `findUnique` does not find Kysely's. `check.ts` writes Prisma's text.
+  `2030-01-02T03:04:05.678+00:00`, which is `date.toISOString().replace('Z', '+00:00')`. A row
+  Kysely writes with `toISOString()`'s `Z` holds the same instant in other text: an `=` from
+  either side misses it, `@unique` and a composite `@@id` let both rows in, and Prisma's
+  `findUnique` does not find Kysely's. `check.ts` writes Prisma's text.
 - **A `DateTime` default is the insert's on SQLite.** Prisma Client writes `now()` and a literal
   default itself. The column's own default is other text: `CURRENT_TIMESTAMP` writes
   `YYYY-MM-DD HH:MM:SS`, which sorts before any row Prisma wrote on the same day, and a literal is

@@ -2,16 +2,16 @@ import {
   bigint,
   boolean,
   datetime,
+  foreignKey,
   index,
   int,
   mysqlTable,
   text,
   unique,
+  uniqueIndex,
   varchar,
 } from 'drizzle-orm/mysql-core'
 import { relations, sql } from 'drizzle-orm'
-
-// bigint() is exact past 2^53 only on a connection with supportBigNumbers and bigNumberStrings
 
 const utcNow = (() => {
   let now: Date | undefined
@@ -26,37 +26,45 @@ const utcNow = (() => {
   }
 })()
 
-export const user = mysqlTable('user', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull(),
-  email: text('email').notNull().unique(),
-  emailVerified: boolean('emailVerified').notNull().default(false),
-  image: text('image'),
-  createdAt: datetime('createdAt', { fsp: 3 })
-    .notNull()
-    .default(sql`CURRENT_TIMESTAMP(3)`)
-    .$defaultFn(utcNow),
-  updatedAt: datetime('updatedAt', { fsp: 3 }).notNull().$onUpdate(utcNow),
-  username: text('username').unique(),
-  displayUsername: text('displayUsername'),
-  isAnonymous: boolean('isAnonymous').default(false),
-  phoneNumber: text('phoneNumber').unique(),
-  phoneNumberVerified: boolean('phoneNumberVerified'),
-  twoFactorEnabled: boolean('twoFactorEnabled').default(false),
-  role: text('role'),
-  banned: boolean('banned').default(false),
-  banReason: text('banReason'),
-  banExpires: datetime('banExpires', { fsp: 3 }),
-  lastLoginMethod: text('lastLoginMethod'),
-  stripeCustomerId: text('stripeCustomerId'),
-})
+export const user = mysqlTable(
+  'user',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    email: text('email').notNull(),
+    emailVerified: boolean('emailVerified').notNull().default(false),
+    image: text('image'),
+    createdAt: datetime('createdAt', { fsp: 3 })
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP(3)`)
+      .$defaultFn(utcNow),
+    updatedAt: datetime('updatedAt', { fsp: 3 }).notNull().$onUpdate(utcNow),
+    username: text('username'),
+    displayUsername: text('displayUsername'),
+    isAnonymous: boolean('isAnonymous').default(false),
+    phoneNumber: text('phoneNumber'),
+    phoneNumberVerified: boolean('phoneNumberVerified'),
+    twoFactorEnabled: boolean('twoFactorEnabled').default(false),
+    role: text('role'),
+    banned: boolean('banned').default(false),
+    banReason: text('banReason'),
+    banExpires: datetime('banExpires', { fsp: 3 }),
+    lastLoginMethod: text('lastLoginMethod'),
+    stripeCustomerId: text('stripeCustomerId'),
+  },
+  (table) => [
+    uniqueIndex('user_email_key').on(table.email),
+    uniqueIndex('user_username_key').on(table.username),
+    uniqueIndex('user_phoneNumber_key').on(table.phoneNumber),
+  ],
+)
 
 export const session = mysqlTable(
   'session',
   {
     id: text('id').primaryKey(),
     expiresAt: datetime('expiresAt', { fsp: 3 }).notNull(),
-    token: text('token').notNull().unique(),
+    token: text('token').notNull(),
     createdAt: datetime('createdAt', { fsp: 3 })
       .notNull()
       .default(sql`CURRENT_TIMESTAMP(3)`)
@@ -64,14 +72,18 @@ export const session = mysqlTable(
     updatedAt: datetime('updatedAt', { fsp: 3 }).notNull().$onUpdate(utcNow),
     ipAddress: text('ipAddress'),
     userAgent: text('userAgent'),
-    userId: text('userId')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
+    userId: text('userId').notNull(),
     impersonatedBy: text('impersonatedBy'),
     activeOrganizationId: text('activeOrganizationId'),
     activeTeamId: text('activeTeamId'),
   },
-  (table) => [index('idx_session_userId').on(table.userId)],
+  (table) => [
+    index('session_userId_idx').on(table.userId),
+    uniqueIndex('session_token_key').on(table.token),
+    foreignKey({ name: 'session_userId_fkey', columns: [table.userId], foreignColumns: [user.id] })
+      .onDelete('cascade')
+      .onUpdate('cascade'),
+  ],
 )
 
 export const account = mysqlTable(
@@ -80,9 +92,7 @@ export const account = mysqlTable(
     id: text('id').primaryKey(),
     accountId: text('accountId').notNull(),
     providerId: text('providerId').notNull(),
-    userId: text('userId')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
+    userId: text('userId').notNull(),
     accessToken: text('accessToken'),
     refreshToken: text('refreshToken'),
     idToken: text('idToken'),
@@ -96,7 +106,12 @@ export const account = mysqlTable(
       .$defaultFn(utcNow),
     updatedAt: datetime('updatedAt', { fsp: 3 }).notNull().$onUpdate(utcNow),
   },
-  (table) => [index('idx_account_userId').on(table.userId)],
+  (table) => [
+    index('account_userId_idx').on(table.userId),
+    foreignKey({ name: 'account_userId_fkey', columns: [table.userId], foreignColumns: [user.id] })
+      .onDelete('cascade')
+      .onUpdate('cascade'),
+  ],
 )
 
 export const verification = mysqlTable(
@@ -112,7 +127,7 @@ export const verification = mysqlTable(
       .$defaultFn(utcNow),
     updatedAt: datetime('updatedAt', { fsp: 3 }).notNull().$onUpdate(utcNow),
   },
-  (table) => [index('idx_verification_identifier').on(table.identifier)],
+  (table) => [index('verification_identifier_idx').on(table.identifier)],
 )
 
 export const twoFactor = mysqlTable(
@@ -121,16 +136,21 @@ export const twoFactor = mysqlTable(
     id: text('id').primaryKey(),
     secret: text('secret').notNull(),
     backupCodes: text('backupCodes').notNull(),
-    userId: text('userId')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
+    userId: text('userId').notNull(),
     verified: boolean('verified').default(true),
     failedVerificationCount: int('failedVerificationCount').default(0),
     lockedUntil: datetime('lockedUntil', { fsp: 3 }),
   },
   (table) => [
-    index('idx_twoFactor_secret').on(table.secret),
-    index('idx_twoFactor_userId').on(table.userId),
+    index('twoFactor_secret_idx').on(table.secret),
+    index('twoFactor_userId_idx').on(table.userId),
+    foreignKey({
+      name: 'twoFactor_userId_fkey',
+      columns: [table.userId],
+      foreignColumns: [user.id],
+    })
+      .onDelete('cascade')
+      .onUpdate('cascade'),
   ],
 )
 
@@ -140,9 +160,7 @@ export const passkey = mysqlTable(
     id: text('id').primaryKey(),
     name: text('name'),
     publicKey: text('publicKey').notNull(),
-    userId: text('userId')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
+    userId: text('userId').notNull(),
     credentialID: text('credentialID').notNull(),
     counter: int('counter').notNull(),
     deviceType: text('deviceType').notNull(),
@@ -152,8 +170,11 @@ export const passkey = mysqlTable(
     aaguid: text('aaguid'),
   },
   (table) => [
-    index('idx_passkey_userId').on(table.userId),
-    index('idx_passkey_credentialID').on(table.credentialID),
+    index('passkey_userId_idx').on(table.userId),
+    index('passkey_credentialID_idx').on(table.credentialID),
+    foreignKey({ name: 'passkey_userId_fkey', columns: [table.userId], foreignColumns: [user.id] })
+      .onDelete('cascade')
+      .onUpdate('cascade'),
   ],
 )
 
@@ -184,28 +205,30 @@ export const apikey = mysqlTable(
     metadata: text('metadata'),
   },
   (table) => [
-    index('idx_apikey_configId').on(table.configId),
-    index('idx_apikey_referenceId').on(table.referenceId),
-    index('idx_apikey_key').on(table.key),
+    index('apikey_configId_idx').on(table.configId),
+    index('apikey_referenceId_idx').on(table.referenceId),
+    index('apikey_key_idx').on(table.key),
   ],
 )
 
-export const organization = mysqlTable('organization', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull(),
-  slug: text('slug').notNull().unique(),
-  logo: text('logo'),
-  createdAt: datetime('createdAt', { fsp: 3 }).notNull(),
-  metadata: text('metadata'),
-})
+export const organization = mysqlTable(
+  'organization',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    slug: text('slug').notNull(),
+    logo: text('logo'),
+    createdAt: datetime('createdAt', { fsp: 3 }).notNull(),
+    metadata: text('metadata'),
+  },
+  (table) => [uniqueIndex('organization_slug_key').on(table.slug)],
+)
 
 export const organizationRole = mysqlTable(
   'organizationRole',
   {
     id: text('id').primaryKey(),
-    organizationId: text('organizationId')
-      .notNull()
-      .references(() => organization.id, { onDelete: 'cascade' }),
+    organizationId: text('organizationId').notNull(),
     role: text('role').notNull(),
     permission: text('permission').notNull(),
     createdAt: datetime('createdAt', { fsp: 3 })
@@ -215,8 +238,15 @@ export const organizationRole = mysqlTable(
     updatedAt: datetime('updatedAt', { fsp: 3 }).$onUpdate(utcNow),
   },
   (table) => [
-    index('idx_organizationRole_organizationId').on(table.organizationId),
-    index('idx_organizationRole_role').on(table.role),
+    index('organizationRole_organizationId_idx').on(table.organizationId),
+    index('organizationRole_role_idx').on(table.role),
+    foreignKey({
+      name: 'organizationRole_organizationId_fkey',
+      columns: [table.organizationId],
+      foreignColumns: [organization.id],
+    })
+      .onDelete('cascade')
+      .onUpdate('cascade'),
   ],
 )
 
@@ -226,31 +256,49 @@ export const team = mysqlTable(
     id: text('id').primaryKey(),
     name: text('name').notNull(),
     memberCount: int('memberCount').notNull().default(0),
-    organizationId: text('organizationId')
-      .notNull()
-      .references(() => organization.id, { onDelete: 'cascade' }),
+    organizationId: text('organizationId').notNull(),
     createdAt: datetime('createdAt', { fsp: 3 }).notNull(),
     updatedAt: datetime('updatedAt', { fsp: 3 }).$onUpdate(utcNow),
   },
-  (table) => [index('idx_team_organizationId').on(table.organizationId)],
+  (table) => [
+    index('team_organizationId_idx').on(table.organizationId),
+    foreignKey({
+      name: 'team_organizationId_fkey',
+      columns: [table.organizationId],
+      foreignColumns: [organization.id],
+    })
+      .onDelete('cascade')
+      .onUpdate('cascade'),
+  ],
 )
 
 export const teamMember = mysqlTable(
   'teamMember',
   {
     id: text('id').primaryKey(),
-    teamId: text('teamId')
-      .notNull()
-      .references(() => team.id, { onDelete: 'cascade' }),
-    userId: text('userId')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
-    membershipKey: text('membershipKey').unique(),
+    teamId: text('teamId').notNull(),
+    userId: text('userId').notNull(),
+    membershipKey: text('membershipKey'),
     createdAt: datetime('createdAt', { fsp: 3 }),
   },
   (table) => [
-    index('idx_teamMember_teamId').on(table.teamId),
-    index('idx_teamMember_userId').on(table.userId),
+    index('teamMember_teamId_idx').on(table.teamId),
+    index('teamMember_userId_idx').on(table.userId),
+    uniqueIndex('teamMember_membershipKey_key').on(table.membershipKey),
+    foreignKey({
+      name: 'teamMember_teamId_fkey',
+      columns: [table.teamId],
+      foreignColumns: [team.id],
+    })
+      .onDelete('cascade')
+      .onUpdate('cascade'),
+    foreignKey({
+      name: 'teamMember_userId_fkey',
+      columns: [table.userId],
+      foreignColumns: [user.id],
+    })
+      .onDelete('cascade')
+      .onUpdate('cascade'),
   ],
 )
 
@@ -258,18 +306,24 @@ export const member = mysqlTable(
   'member',
   {
     id: text('id').primaryKey(),
-    organizationId: text('organizationId')
-      .notNull()
-      .references(() => organization.id, { onDelete: 'cascade' }),
-    userId: text('userId')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
+    organizationId: text('organizationId').notNull(),
+    userId: text('userId').notNull(),
     role: text('role').notNull(),
     createdAt: datetime('createdAt', { fsp: 3 }).notNull(),
   },
   (table) => [
-    index('idx_member_organizationId').on(table.organizationId),
-    index('idx_member_userId').on(table.userId),
+    index('member_organizationId_idx').on(table.organizationId),
+    index('member_userId_idx').on(table.userId),
+    foreignKey({
+      name: 'member_organizationId_fkey',
+      columns: [table.organizationId],
+      foreignColumns: [organization.id],
+    })
+      .onDelete('cascade')
+      .onUpdate('cascade'),
+    foreignKey({ name: 'member_userId_fkey', columns: [table.userId], foreignColumns: [user.id] })
+      .onDelete('cascade')
+      .onUpdate('cascade'),
   ],
 )
 
@@ -277,9 +331,7 @@ export const invitation = mysqlTable(
   'invitation',
   {
     id: text('id').primaryKey(),
-    organizationId: text('organizationId')
-      .notNull()
-      .references(() => organization.id, { onDelete: 'cascade' }),
+    organizationId: text('organizationId').notNull(),
     email: text('email').notNull(),
     role: text('role'),
     teamId: text('teamId'),
@@ -289,13 +341,25 @@ export const invitation = mysqlTable(
       .notNull()
       .default(sql`CURRENT_TIMESTAMP(3)`)
       .$defaultFn(utcNow),
-    inviterId: text('inviterId')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
+    inviterId: text('inviterId').notNull(),
   },
   (table) => [
-    index('idx_invitation_organizationId').on(table.organizationId),
-    index('idx_invitation_email').on(table.email),
+    index('invitation_organizationId_idx').on(table.organizationId),
+    index('invitation_email_idx').on(table.email),
+    foreignKey({
+      name: 'invitation_organizationId_fkey',
+      columns: [table.organizationId],
+      foreignColumns: [organization.id],
+    })
+      .onDelete('cascade')
+      .onUpdate('cascade'),
+    foreignKey({
+      name: 'invitation_inviterId_fkey',
+      columns: [table.inviterId],
+      foreignColumns: [user.id],
+    })
+      .onDelete('cascade')
+      .onUpdate('cascade'),
   ],
 )
 
@@ -313,7 +377,7 @@ export const oauthClient = mysqlTable(
   'oauthClient',
   {
     id: text('id').primaryKey(),
-    clientId: text('clientId').notNull().unique(),
+    clientId: text('clientId').notNull(),
     clientSecret: text('clientSecret'),
     clientDiscoveryId: text('clientDiscoveryId'),
     disabled: boolean('disabled').default(false),
@@ -322,7 +386,7 @@ export const oauthClient = mysqlTable(
     subjectType: text('subjectType'),
     scopes: text('scopes'),
     clientCredentialsScopes: text('clientCredentialsScopes').default('[]'),
-    userId: text('userId').references(() => user.id, { onDelete: 'cascade' }),
+    userId: text('userId'),
     createdAt: datetime('createdAt', { fsp: 3 }),
     updatedAt: datetime('updatedAt', { fsp: 3 }),
     name: text('name'),
@@ -349,44 +413,71 @@ export const oauthClient = mysqlTable(
     referenceId: text('referenceId'),
     metadata: text('metadata'),
   },
-  (table) => [index('idx_oauthClient_userId').on(table.userId)],
+  (table) => [
+    index('oauthClient_userId_idx').on(table.userId),
+    unique('oauthClient_clientId_key').on(table.clientId),
+    foreignKey({
+      name: 'oauthClient_userId_fkey',
+      columns: [table.userId],
+      foreignColumns: [user.id],
+    })
+      .onDelete('cascade')
+      .onUpdate('cascade'),
+  ],
 )
 
-export const oauthResource = mysqlTable('oauthResource', {
-  id: text('id').primaryKey(),
-  identifier: text('identifier').notNull().unique(),
-  name: text('name').notNull(),
-  accessTokenTtl: int('accessTokenTtl'),
-  refreshTokenTtl: int('refreshTokenTtl'),
-  signingAlgorithm: text('signingAlgorithm'),
-  signingKeyId: text('signingKeyId'),
-  allowedScopes: text('allowedScopes'),
-  customClaims: text('customClaims'),
-  dpopBoundAccessTokensRequired: boolean('dpopBoundAccessTokensRequired').default(false),
-  disabled: boolean('disabled').default(false),
-  createdAt: datetime('createdAt', { fsp: 3 }),
-  updatedAt: datetime('updatedAt', { fsp: 3 }),
-  policyVersion: int('policyVersion').default(1),
-  metadata: text('metadata'),
-})
+export const oauthResource = mysqlTable(
+  'oauthResource',
+  {
+    id: text('id').primaryKey(),
+    identifier: text('identifier').notNull(),
+    name: text('name').notNull(),
+    accessTokenTtl: int('accessTokenTtl'),
+    refreshTokenTtl: int('refreshTokenTtl'),
+    signingAlgorithm: text('signingAlgorithm'),
+    signingKeyId: text('signingKeyId'),
+    allowedScopes: text('allowedScopes'),
+    customClaims: text('customClaims'),
+    dpopBoundAccessTokensRequired: boolean('dpopBoundAccessTokensRequired').default(false),
+    disabled: boolean('disabled').default(false),
+    createdAt: datetime('createdAt', { fsp: 3 }),
+    updatedAt: datetime('updatedAt', { fsp: 3 }),
+    policyVersion: int('policyVersion').default(1),
+    metadata: text('metadata'),
+  },
+  (table) => [unique('oauthResource_identifier_key').on(table.identifier)],
+)
 
 export const oauthClientResource = mysqlTable(
   'oauthClientResource',
   {
     id: text('id').primaryKey(),
-    clientId: varchar('clientId', { length: 191 })
-      .notNull()
-      .references(() => oauthClient.clientId, { onDelete: 'cascade' }),
-    resourceId: varchar('resourceId', { length: 191 })
-      .notNull()
-      .references(() => oauthResource.identifier, { onDelete: 'cascade' }),
+    clientId: varchar('clientId', { length: 191 }).notNull(),
+    resourceId: varchar('resourceId', { length: 191 }).notNull(),
     metadata: text('metadata'),
     createdAt: datetime('createdAt', { fsp: 3 }),
   },
   (table) => [
-    unique('oauthClientResource_clientId_resourceId_uidx').on(table.clientId, table.resourceId),
-    index('idx_oauthClientResource_clientId').on(table.clientId),
-    index('idx_oauthClientResource_resourceId').on(table.resourceId),
+    index('oauthClientResource_clientId_idx').on(table.clientId),
+    index('oauthClientResource_resourceId_idx').on(table.resourceId),
+    uniqueIndex('oauthClientResource_clientId_resourceId_uidx').on(
+      table.clientId,
+      table.resourceId,
+    ),
+    foreignKey({
+      name: 'oauthClientResource_clientId_fkey',
+      columns: [table.clientId],
+      foreignColumns: [oauthClient.clientId],
+    })
+      .onDelete('cascade')
+      .onUpdate('cascade'),
+    foreignKey({
+      name: 'oauthClientResource_resourceId_fkey',
+      columns: [table.resourceId],
+      foreignColumns: [oauthResource.identifier],
+    })
+      .onDelete('cascade')
+      .onUpdate('cascade'),
   ],
 )
 
@@ -394,14 +485,10 @@ export const oauthRefreshToken = mysqlTable(
   'oauthRefreshToken',
   {
     id: text('id').primaryKey(),
-    token: text('token').notNull().unique(),
-    clientId: text('clientId')
-      .notNull()
-      .references(() => oauthClient.clientId, { onDelete: 'cascade' }),
-    sessionId: text('sessionId').references(() => session.id, { onDelete: 'set null' }),
-    userId: text('userId')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
+    token: text('token').notNull(),
+    clientId: text('clientId').notNull(),
+    sessionId: text('sessionId'),
+    userId: text('userId').notNull(),
     referenceId: text('referenceId'),
     authorizationCodeId: text('authorizationCodeId'),
     resources: text('resources'),
@@ -417,10 +504,32 @@ export const oauthRefreshToken = mysqlTable(
     scopes: text('scopes').notNull(),
   },
   (table) => [
-    index('idx_oauthRefreshToken_clientId').on(table.clientId),
-    index('idx_oauthRefreshToken_sessionId').on(table.sessionId),
-    index('idx_oauthRefreshToken_userId').on(table.userId),
-    index('idx_oauthRefreshToken_authorizationCodeId').on(table.authorizationCodeId),
+    index('oauthRefreshToken_clientId_idx').on(table.clientId),
+    index('oauthRefreshToken_sessionId_idx').on(table.sessionId),
+    index('oauthRefreshToken_userId_idx').on(table.userId),
+    index('oauthRefreshToken_authorizationCodeId_idx').on(table.authorizationCodeId),
+    uniqueIndex('oauthRefreshToken_token_key').on(table.token),
+    foreignKey({
+      name: 'oauthRefreshToken_clientId_fkey',
+      columns: [table.clientId],
+      foreignColumns: [oauthClient.clientId],
+    })
+      .onDelete('cascade')
+      .onUpdate('cascade'),
+    foreignKey({
+      name: 'oauthRefreshToken_sessionId_fkey',
+      columns: [table.sessionId],
+      foreignColumns: [session.id],
+    })
+      .onDelete('set null')
+      .onUpdate('cascade'),
+    foreignKey({
+      name: 'oauthRefreshToken_userId_fkey',
+      columns: [table.userId],
+      foreignColumns: [user.id],
+    })
+      .onDelete('cascade')
+      .onUpdate('cascade'),
   ],
 )
 
@@ -428,17 +537,15 @@ export const oauthAccessToken = mysqlTable(
   'oauthAccessToken',
   {
     id: text('id').primaryKey(),
-    token: text('token').notNull().unique(),
-    clientId: text('clientId')
-      .notNull()
-      .references(() => oauthClient.clientId, { onDelete: 'cascade' }),
-    sessionId: text('sessionId').references(() => session.id, { onDelete: 'set null' }),
-    userId: text('userId').references(() => user.id, { onDelete: 'cascade' }),
+    token: text('token').notNull(),
+    clientId: text('clientId').notNull(),
+    sessionId: text('sessionId'),
+    userId: text('userId'),
     referenceId: text('referenceId'),
     authorizationCodeId: text('authorizationCodeId'),
     resources: text('resources'),
     requestedUserInfoClaims: text('requestedUserInfoClaims'),
-    refreshId: text('refreshId').references(() => oauthRefreshToken.id, { onDelete: 'cascade' }),
+    refreshId: text('refreshId'),
     expiresAt: datetime('expiresAt', { fsp: 3 }).notNull(),
     createdAt: datetime('createdAt', { fsp: 3 }).notNull(),
     revoked: datetime('revoked', { fsp: 3 }),
@@ -446,11 +553,40 @@ export const oauthAccessToken = mysqlTable(
     scopes: text('scopes').notNull(),
   },
   (table) => [
-    index('idx_oauthAccessToken_clientId').on(table.clientId),
-    index('idx_oauthAccessToken_sessionId').on(table.sessionId),
-    index('idx_oauthAccessToken_userId').on(table.userId),
-    index('idx_oauthAccessToken_authorizationCodeId').on(table.authorizationCodeId),
-    index('idx_oauthAccessToken_refreshId').on(table.refreshId),
+    index('oauthAccessToken_clientId_idx').on(table.clientId),
+    index('oauthAccessToken_sessionId_idx').on(table.sessionId),
+    index('oauthAccessToken_userId_idx').on(table.userId),
+    index('oauthAccessToken_authorizationCodeId_idx').on(table.authorizationCodeId),
+    index('oauthAccessToken_refreshId_idx').on(table.refreshId),
+    uniqueIndex('oauthAccessToken_token_key').on(table.token),
+    foreignKey({
+      name: 'oauthAccessToken_clientId_fkey',
+      columns: [table.clientId],
+      foreignColumns: [oauthClient.clientId],
+    })
+      .onDelete('cascade')
+      .onUpdate('cascade'),
+    foreignKey({
+      name: 'oauthAccessToken_sessionId_fkey',
+      columns: [table.sessionId],
+      foreignColumns: [session.id],
+    })
+      .onDelete('set null')
+      .onUpdate('cascade'),
+    foreignKey({
+      name: 'oauthAccessToken_userId_fkey',
+      columns: [table.userId],
+      foreignColumns: [user.id],
+    })
+      .onDelete('cascade')
+      .onUpdate('cascade'),
+    foreignKey({
+      name: 'oauthAccessToken_refreshId_fkey',
+      columns: [table.refreshId],
+      foreignColumns: [oauthRefreshToken.id],
+    })
+      .onDelete('cascade')
+      .onUpdate('cascade'),
   ],
 )
 
@@ -458,10 +594,8 @@ export const oauthConsent = mysqlTable(
   'oauthConsent',
   {
     id: text('id').primaryKey(),
-    clientId: text('clientId')
-      .notNull()
-      .references(() => oauthClient.clientId, { onDelete: 'cascade' }),
-    userId: text('userId').references(() => user.id, { onDelete: 'cascade' }),
+    clientId: text('clientId').notNull(),
+    userId: text('userId'),
     referenceId: text('referenceId'),
     resources: text('resources'),
     requestedUserInfoClaims: text('requestedUserInfoClaims'),
@@ -470,8 +604,22 @@ export const oauthConsent = mysqlTable(
     updatedAt: datetime('updatedAt', { fsp: 3 }).notNull(),
   },
   (table) => [
-    index('idx_oauthConsent_clientId').on(table.clientId),
-    index('idx_oauthConsent_userId').on(table.userId),
+    index('oauthConsent_clientId_idx').on(table.clientId),
+    index('oauthConsent_userId_idx').on(table.userId),
+    foreignKey({
+      name: 'oauthConsent_clientId_fkey',
+      columns: [table.clientId],
+      foreignColumns: [oauthClient.clientId],
+    })
+      .onDelete('cascade')
+      .onUpdate('cascade'),
+    foreignKey({
+      name: 'oauthConsent_userId_fkey',
+      columns: [table.userId],
+      foreignColumns: [user.id],
+    })
+      .onDelete('cascade')
+      .onUpdate('cascade'),
   ],
 )
 
@@ -480,38 +628,56 @@ export const oauthClientAssertion = mysqlTable('oauthClientAssertion', {
   expiresAt: datetime('expiresAt', { fsp: 3 }).notNull(),
 })
 
-export const deviceCode = mysqlTable('deviceCode', {
-  id: text('id').primaryKey(),
-  deviceCode: varchar('deviceCode', { length: 191 }).notNull().unique(),
-  userCode: varchar('userCode', { length: 191 }).notNull().unique(),
-  userId: text('userId'),
-  expiresAt: datetime('expiresAt', { fsp: 3 }).notNull(),
-  status: text('status').notNull(),
-  lastPolledAt: datetime('lastPolledAt', { fsp: 3 }),
-  pollingInterval: int('pollingInterval'),
-  clientId: text('clientId'),
-  scope: text('scope'),
-})
+export const deviceCode = mysqlTable(
+  'deviceCode',
+  {
+    id: text('id').primaryKey(),
+    deviceCode: varchar('deviceCode', { length: 191 }).notNull(),
+    userCode: varchar('userCode', { length: 191 }).notNull(),
+    userId: text('userId'),
+    expiresAt: datetime('expiresAt', { fsp: 3 }).notNull(),
+    status: text('status').notNull(),
+    lastPolledAt: datetime('lastPolledAt', { fsp: 3 }),
+    pollingInterval: int('pollingInterval'),
+    clientId: text('clientId'),
+    scope: text('scope'),
+  },
+  (table) => [
+    uniqueIndex('deviceCode_deviceCode_uidx').on(table.deviceCode),
+    uniqueIndex('deviceCode_userCode_uidx').on(table.userCode),
+  ],
+)
 
-export const ssoProvider = mysqlTable('ssoProvider', {
-  id: text('id').primaryKey(),
-  issuer: text('issuer').notNull(),
-  oidcConfig: text('oidcConfig'),
-  samlConfig: text('samlConfig'),
-  userId: text('userId')
-    .notNull()
-    .references(() => user.id, { onDelete: 'cascade' }),
-  providerId: text('providerId').notNull().unique(),
-  organizationId: text('organizationId'),
-  domain: text('domain').notNull(),
-})
+export const ssoProvider = mysqlTable(
+  'ssoProvider',
+  {
+    id: text('id').primaryKey(),
+    issuer: text('issuer').notNull(),
+    oidcConfig: text('oidcConfig'),
+    samlConfig: text('samlConfig'),
+    userId: text('userId').notNull(),
+    providerId: text('providerId').notNull(),
+    organizationId: text('organizationId'),
+    domain: text('domain').notNull(),
+  },
+  (table) => [
+    uniqueIndex('ssoProvider_providerId_key').on(table.providerId),
+    foreignKey({
+      name: 'ssoProvider_userId_fkey',
+      columns: [table.userId],
+      foreignColumns: [user.id],
+    })
+      .onDelete('cascade')
+      .onUpdate('cascade'),
+  ],
+)
 
 export const scimManagedConnection = mysqlTable(
   'scimManagedConnection',
   {
     id: text('id').primaryKey(),
-    creationRequestId: text('creationRequestId').notNull().unique(),
-    connectionId: text('connectionId').notNull().unique(),
+    creationRequestId: text('creationRequestId').notNull(),
+    connectionId: text('connectionId').notNull(),
     provisioningDomainId: text('provisioningDomainId').notNull(),
     status: text('status').notNull(),
     revision: int('revision').notNull(),
@@ -523,7 +689,9 @@ export const scimManagedConnection = mysqlTable(
     decommissionedBy: text('decommissionedBy'),
   },
   (table) => [
-    index('idx_scimManagedConnection_provisioningDomainId').on(table.provisioningDomainId),
+    index('scimManagedConnection_provisioningDomainId_idx').on(table.provisioningDomainId),
+    uniqueIndex('scimManagedConnection_creationRequestId_key').on(table.creationRequestId),
+    uniqueIndex('scimManagedConnection_connectionId_key').on(table.connectionId),
   ],
 )
 
@@ -531,13 +699,11 @@ export const scimManagedCredential = mysqlTable(
   'scimManagedCredential',
   {
     id: text('id').primaryKey(),
-    connectionRecordId: text('connectionRecordId')
-      .notNull()
-      .references(() => scimManagedConnection.id, { onDelete: 'cascade' }),
-    credentialId: text('credentialId').notNull().unique(),
+    connectionRecordId: text('connectionRecordId').notNull(),
+    credentialId: text('credentialId').notNull(),
     tokenDigest: text('tokenDigest').notNull(),
     hashVersion: text('hashVersion').notNull(),
-    activeSlotKey: text('activeSlotKey').notNull().unique(),
+    activeSlotKey: text('activeSlotKey').notNull(),
     status: text('status').notNull(),
     serializedScopes: text('serializedScopes').notNull(),
     expiresAt: datetime('expiresAt', { fsp: 3 }).notNull(),
@@ -548,17 +714,26 @@ export const scimManagedCredential = mysqlTable(
     revokedBy: text('revokedBy'),
     decommissionedAt: datetime('decommissionedAt', { fsp: 3 }),
   },
-  (table) => [index('idx_scimManagedCredential_connectionRecordId').on(table.connectionRecordId)],
+  (table) => [
+    index('scimManagedCredential_connectionRecordId_idx').on(table.connectionRecordId),
+    uniqueIndex('scimManagedCredential_credentialId_key').on(table.credentialId),
+    uniqueIndex('scimManagedCredential_activeSlotKey_key').on(table.activeSlotKey),
+    foreignKey({
+      name: 'scimManagedCredential_connectionRecordId_fkey',
+      columns: [table.connectionRecordId],
+      foreignColumns: [scimManagedConnection.id],
+    })
+      .onDelete('cascade')
+      .onUpdate('cascade'),
+  ],
 )
 
 export const scimManagedConnectionEvent = mysqlTable(
   'scimManagedConnectionEvent',
   {
     id: text('id').primaryKey(),
-    connectionRecordId: text('connectionRecordId')
-      .notNull()
-      .references(() => scimManagedConnection.id, { onDelete: 'cascade' }),
-    eventKey: text('eventKey').notNull().unique(),
+    connectionRecordId: text('connectionRecordId').notNull(),
+    eventKey: text('eventKey').notNull(),
     sequence: int('sequence').notNull(),
     type: text('type').notNull(),
     actorId: text('actorId').notNull(),
@@ -566,7 +741,15 @@ export const scimManagedConnectionEvent = mysqlTable(
     createdAt: datetime('createdAt', { fsp: 3 }).notNull(),
   },
   (table) => [
-    index('idx_scimManagedConnectionEvent_connectionRecordId').on(table.connectionRecordId),
+    index('scimManagedConnectionEvent_connectionRecordId_idx').on(table.connectionRecordId),
+    uniqueIndex('scimManagedConnectionEvent_eventKey_key').on(table.eventKey),
+    foreignKey({
+      name: 'scimManagedConnectionEvent_connectionRecordId_fkey',
+      columns: [table.connectionRecordId],
+      foreignColumns: [scimManagedConnection.id],
+    })
+      .onDelete('cascade')
+      .onUpdate('cascade'),
   ],
 )
 
@@ -575,7 +758,7 @@ export const scimConnectionBinding = mysqlTable(
   {
     id: text('id').primaryKey(),
     connectionId: text('connectionId').notNull(),
-    connectionKey: text('connectionKey').notNull().unique(),
+    connectionKey: text('connectionKey').notNull(),
     provisioningDomainId: text('provisioningDomainId').notNull(),
     createdAt: datetime('createdAt', { fsp: 3 }).notNull(),
     decommissionedAt: datetime('decommissionedAt', { fsp: 3 }),
@@ -588,7 +771,10 @@ export const scimConnectionBinding = mysqlTable(
     decommissionLeaseId: text('decommissionLeaseId'),
     decommissionLeaseExpiresAt: datetime('decommissionLeaseExpiresAt', { fsp: 3 }),
   },
-  (table) => [index('idx_scimConnectionBinding_connectionId').on(table.connectionId)],
+  (table) => [
+    index('scimConnectionBinding_connectionId_idx').on(table.connectionId),
+    uniqueIndex('scimConnectionBinding_connectionKey_key').on(table.connectionKey),
+  ],
 )
 
 export const scimIdentityTombstone = mysqlTable(
@@ -598,17 +784,23 @@ export const scimIdentityTombstone = mysqlTable(
     connectionId: text('connectionId').notNull(),
     provisioningDomainId: text('provisioningDomainId').notNull(),
     externalId: text('externalId').notNull(),
-    externalIdKey: text('externalIdKey').notNull().unique(),
-    userId: text('userId')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
+    externalIdKey: text('externalIdKey').notNull(),
+    userId: text('userId').notNull(),
     profile: text('profile').notNull(),
     deletedAt: datetime('deletedAt', { fsp: 3 }).notNull(),
   },
   (table) => [
-    index('idx_scimIdentityTombstone_connectionId').on(table.connectionId),
-    index('idx_scimIdentityTombstone_provisioningDomainId').on(table.provisioningDomainId),
-    index('idx_scimIdentityTombstone_userId').on(table.userId),
+    index('scimIdentityTombstone_connectionId_idx').on(table.connectionId),
+    index('scimIdentityTombstone_provisioningDomainId_idx').on(table.provisioningDomainId),
+    index('scimIdentityTombstone_userId_idx').on(table.userId),
+    uniqueIndex('scimIdentityTombstone_externalIdKey_key').on(table.externalIdKey),
+    foreignKey({
+      name: 'scimIdentityTombstone_userId_fkey',
+      columns: [table.userId],
+      foreignColumns: [user.id],
+    })
+      .onDelete('cascade')
+      .onUpdate('cascade'),
   ],
 )
 
@@ -616,16 +808,23 @@ export const scimSubject = mysqlTable(
   'scimSubject',
   {
     id: text('id').primaryKey(),
-    userId: text('userId')
-      .notNull()
-      .unique()
-      .references(() => user.id, { onDelete: 'cascade' }),
+    userId: text('userId').notNull(),
     profileSourceId: text('profileSourceId'),
     revision: int('revision').notNull(),
     createdAt: datetime('createdAt', { fsp: 3 }).notNull(),
     updatedAt: datetime('updatedAt', { fsp: 3 }).notNull(),
   },
-  (table) => [index('idx_scimSubject_profileSourceId').on(table.profileSourceId)],
+  (table) => [
+    index('scimSubject_profileSourceId_idx').on(table.profileSourceId),
+    uniqueIndex('scimSubject_userId_key').on(table.userId),
+    foreignKey({
+      name: 'scimSubject_userId_fkey',
+      columns: [table.userId],
+      foreignColumns: [user.id],
+    })
+      .onDelete('cascade')
+      .onUpdate('cascade'),
+  ],
 )
 
 export const scimUser = mysqlTable(
@@ -634,12 +833,10 @@ export const scimUser = mysqlTable(
     id: text('id').primaryKey(),
     connectionId: text('connectionId').notNull(),
     provisioningDomainId: text('provisioningDomainId').notNull(),
-    userId: text('userId')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
-    connectionUserKey: text('connectionUserKey').notNull().unique(),
+    userId: text('userId').notNull(),
+    connectionUserKey: text('connectionUserKey').notNull(),
     userName: text('userName').notNull(),
-    userNameKey: text('userNameKey').notNull().unique(),
+    userNameKey: text('userNameKey').notNull(),
     primaryEmail: text('primaryEmail').notNull(),
     workEmailValueIndex: text('workEmailValueIndex').notNull(),
     emailValueIndex: text('emailValueIndex').notNull(),
@@ -650,16 +847,23 @@ export const scimUser = mysqlTable(
     serializedEmails: text('serializedEmails').notNull(),
     serializedAttributes: text('serializedAttributes'),
     externalId: text('externalId'),
-    externalIdKey: text('externalIdKey').unique(),
+    externalIdKey: text('externalIdKey'),
     active: boolean('active').notNull(),
-    orderKey: text('orderKey').notNull().unique(),
+    orderKey: text('orderKey').notNull(),
     createdAt: datetime('createdAt', { fsp: 3 }).notNull(),
     updatedAt: datetime('updatedAt', { fsp: 3 }).notNull(),
   },
   (table) => [
-    index('idx_scimUser_connectionId').on(table.connectionId),
-    index('idx_scimUser_provisioningDomainId').on(table.provisioningDomainId),
-    index('idx_scimUser_userId').on(table.userId),
+    index('scimUser_connectionId_idx').on(table.connectionId),
+    index('scimUser_provisioningDomainId_idx').on(table.provisioningDomainId),
+    index('scimUser_userId_idx').on(table.userId),
+    uniqueIndex('scimUser_connectionUserKey_key').on(table.connectionUserKey),
+    uniqueIndex('scimUser_userNameKey_key').on(table.userNameKey),
+    uniqueIndex('scimUser_externalIdKey_key').on(table.externalIdKey),
+    uniqueIndex('scimUser_orderKey_key').on(table.orderKey),
+    foreignKey({ name: 'scimUser_userId_fkey', columns: [table.userId], foreignColumns: [user.id] })
+      .onDelete('cascade')
+      .onUpdate('cascade'),
   ],
 )
 
@@ -669,25 +873,36 @@ export const scimProjectionGrant = mysqlTable(
     id: text('id').primaryKey(),
     connectionId: text('connectionId').notNull(),
     provisioningDomainId: text('provisioningDomainId').notNull(),
-    scimUserId: text('scimUserId')
-      .notNull()
-      .references(() => scimUser.id, { onDelete: 'cascade' }),
-    userId: text('userId')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
+    scimUserId: text('scimUserId').notNull(),
+    userId: text('userId').notNull(),
     sourceKind: text('sourceKind').notNull(),
     sourceId: text('sourceId').notNull(),
     sourceValue: text('sourceValue'),
     role: text('role').notNull(),
-    grantKey: text('grantKey').notNull().unique(),
+    grantKey: text('grantKey').notNull(),
     createdAt: datetime('createdAt', { fsp: 3 }).notNull(),
     updatedAt: datetime('updatedAt', { fsp: 3 }).notNull(),
   },
   (table) => [
-    index('idx_scimProjectionGrant_connectionId').on(table.connectionId),
-    index('idx_scimProjectionGrant_provisioningDomainId').on(table.provisioningDomainId),
-    index('idx_scimProjectionGrant_scimUserId').on(table.scimUserId),
-    index('idx_scimProjectionGrant_userId').on(table.userId),
+    index('scimProjectionGrant_connectionId_idx').on(table.connectionId),
+    index('scimProjectionGrant_provisioningDomainId_idx').on(table.provisioningDomainId),
+    index('scimProjectionGrant_scimUserId_idx').on(table.scimUserId),
+    index('scimProjectionGrant_userId_idx').on(table.userId),
+    uniqueIndex('scimProjectionGrant_grantKey_key').on(table.grantKey),
+    foreignKey({
+      name: 'scimProjectionGrant_scimUserId_fkey',
+      columns: [table.scimUserId],
+      foreignColumns: [scimUser.id],
+    })
+      .onDelete('cascade')
+      .onUpdate('cascade'),
+    foreignKey({
+      name: 'scimProjectionGrant_userId_fkey',
+      columns: [table.userId],
+      foreignColumns: [user.id],
+    })
+      .onDelete('cascade')
+      .onUpdate('cascade'),
   ],
 )
 
@@ -699,16 +914,19 @@ export const scimGroup = mysqlTable(
     provisioningDomainId: text('provisioningDomainId').notNull(),
     revision: int('revision').notNull().default(0),
     displayName: text('displayName').notNull(),
-    displayNameKey: text('displayNameKey').notNull().unique(),
+    displayNameKey: text('displayNameKey').notNull(),
     externalId: text('externalId'),
-    externalIdKey: text('externalIdKey').unique(),
-    orderKey: text('orderKey').notNull().unique(),
+    externalIdKey: text('externalIdKey'),
+    orderKey: text('orderKey').notNull(),
     createdAt: datetime('createdAt', { fsp: 3 }).notNull(),
     updatedAt: datetime('updatedAt', { fsp: 3 }).notNull(),
   },
   (table) => [
-    index('idx_scimGroup_connectionId').on(table.connectionId),
-    index('idx_scimGroup_provisioningDomainId').on(table.provisioningDomainId),
+    index('scimGroup_connectionId_idx').on(table.connectionId),
+    index('scimGroup_provisioningDomainId_idx').on(table.provisioningDomainId),
+    uniqueIndex('scimGroup_displayNameKey_key').on(table.displayNameKey),
+    uniqueIndex('scimGroup_externalIdKey_key').on(table.externalIdKey),
+    uniqueIndex('scimGroup_orderKey_key').on(table.orderKey),
   ],
 )
 
@@ -717,19 +935,30 @@ export const scimGroupMember = mysqlTable(
   {
     id: text('id').primaryKey(),
     connectionId: text('connectionId').notNull(),
-    groupId: text('groupId')
-      .notNull()
-      .references(() => scimGroup.id, { onDelete: 'cascade' }),
-    scimUserId: text('scimUserId')
-      .notNull()
-      .references(() => scimUser.id, { onDelete: 'cascade' }),
-    membershipKey: text('membershipKey').notNull().unique(),
+    groupId: text('groupId').notNull(),
+    scimUserId: text('scimUserId').notNull(),
+    membershipKey: text('membershipKey').notNull(),
     createdAt: datetime('createdAt', { fsp: 3 }).notNull(),
   },
   (table) => [
-    index('idx_scimGroupMember_connectionId').on(table.connectionId),
-    index('idx_scimGroupMember_groupId').on(table.groupId),
-    index('idx_scimGroupMember_scimUserId').on(table.scimUserId),
+    index('scimGroupMember_connectionId_idx').on(table.connectionId),
+    index('scimGroupMember_groupId_idx').on(table.groupId),
+    index('scimGroupMember_scimUserId_idx').on(table.scimUserId),
+    uniqueIndex('scimGroupMember_membershipKey_key').on(table.membershipKey),
+    foreignKey({
+      name: 'scimGroupMember_groupId_fkey',
+      columns: [table.groupId],
+      foreignColumns: [scimGroup.id],
+    })
+      .onDelete('cascade')
+      .onUpdate('cascade'),
+    foreignKey({
+      name: 'scimGroupMember_scimUserId_fkey',
+      columns: [table.scimUserId],
+      foreignColumns: [scimUser.id],
+    })
+      .onDelete('cascade')
+      .onUpdate('cascade'),
   ],
 )
 
@@ -737,15 +966,22 @@ export const walletAddress = mysqlTable(
   'walletAddress',
   {
     id: text('id').primaryKey(),
-    userId: text('userId')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
+    userId: text('userId').notNull(),
     address: text('address').notNull(),
     chainId: int('chainId').notNull(),
     isPrimary: boolean('isPrimary').notNull().default(false),
     createdAt: datetime('createdAt', { fsp: 3 }).notNull(),
   },
-  (table) => [index('idx_walletAddress_userId').on(table.userId)],
+  (table) => [
+    index('walletAddress_userId_idx').on(table.userId),
+    foreignKey({
+      name: 'walletAddress_userId_fkey',
+      columns: [table.userId],
+      foreignColumns: [user.id],
+    })
+      .onDelete('cascade')
+      .onUpdate('cascade'),
+  ],
 )
 
 export const subscription = mysqlTable('subscription', {
@@ -768,12 +1004,16 @@ export const subscription = mysqlTable('subscription', {
   stripeScheduleId: text('stripeScheduleId'),
 })
 
-export const rateLimit = mysqlTable('rateLimit', {
-  id: text('id').primaryKey(),
-  key: text('key').notNull().unique(),
-  count: int('count').notNull(),
-  lastRequest: bigint('lastRequest', { mode: 'bigint' }).notNull(),
-})
+export const rateLimit = mysqlTable(
+  'rateLimit',
+  {
+    id: text('id').primaryKey(),
+    key: text('key').notNull(),
+    count: int('count').notNull(),
+    lastRequest: bigint('lastRequest', { mode: 'bigint' }).notNull(),
+  },
+  (table) => [uniqueIndex('rateLimit_key_key').on(table.key)],
+)
 
 export const userRelations = relations(user, ({ one, many }) => ({
   sessions: many(session),

@@ -236,10 +236,6 @@ use Illuminate\\Contracts\\Database\\Eloquent\\CastsAttributes;
 use Illuminate\\Contracts\\Database\\Eloquent\\SerializesCastableAttributes;
 use Illuminate\\Database\\Eloquent\\Model;
 
-/**
- * A Prisma Bytes column: written as a stream, which PDO binds as a LOB, read back as the string of
- * its bytes, and serialized as base64.
- */
 class AsBytes implements CastsAttributes, SerializesCastableAttributes
 {
     public function get(Model $model, string $key, mixed $value, array $attributes): ?string
@@ -312,10 +308,6 @@ namespace ${namespace};
 use Illuminate\\Contracts\\Database\\Eloquent\\CastsAttributes;
 use Illuminate\\Database\\Eloquent\\Model;
 
-/**
- * A Prisma Decimal column, read as the string Prisma's Decimal prints: no float, and no zeros a
- * column's scale pads it with.
- */
 class AsDecimal implements CastsAttributes
 {
     public function get(Model $model, string $key, mixed $value, array $attributes): ?string
@@ -357,13 +349,6 @@ use Illuminate\\Database\\Eloquent\\ModelNotFoundException;
 use Illuminate\\Support\\Collection;
 use InvalidArgumentException;
 
-/**
- * The query of a model keyed by several columns. A key is an array of every one of its
- * KEY_COLUMNS by name (\`['order_number' => 1, 'product_id' => 'p1']\`); a list of keys, or a
- * collection of keys or of models, names several rows. find(), findMany(), findOrFail(),
- * whereKey() and whereKeyNot() take either, and refuse a key that leaves a column out, which
- * would reach every row the rest of it matches.
- */
 class CompositeKeyBuilder extends Builder
 {
     public function find($id, $columns = ['*'])
@@ -478,13 +463,6 @@ use Illuminate\\Database\\Eloquent\\ModelNotFoundException;
 use Illuminate\\Support\\Arr;
 use Illuminate\\Support\\Collection as BaseCollection;
 
-/**
- * The models of a query keyed by several columns. Eloquent's Collection keys its models by
- * getKey(), an array here, which PHP casts to the string \`Array\`: every model would have the one
- * key. This one keys them by the key's JSON, its columns in order and its values as strings, so
- * unique(), diff(), intersect(), only(), except(), find(), findOrFail() and fresh() tell them
- * apart, and take a key as CompositeKeyBuilder does.
- */
 class CompositeKeyCollection extends Collection
 {
     public function find($key, $default = null)
@@ -553,7 +531,6 @@ class CompositeKeyCollection extends Collection
         return json_encode(array_map(fn ($value) => is_scalar($value) ? (string) $value : $value, $attribute));
     }
 
-    /** A list of keys, or of models: a key alone is an array of its columns by name. */
     protected function isKeyList(mixed $key): bool
     {
         return ! $key instanceof Model && ($key instanceof Arrayable || (is_array($key) && array_is_list($key)));
@@ -607,12 +584,6 @@ namespace ${namespace};
 
 use Illuminate\\Support\\Facades\\Date;
 
-/**
- * A DateTime as Prisma Client keeps it: in UTC with milliseconds, in PrismaQueryBuilder's
- * DATE_FORMAT. A value the caller gives with no zone is in the app's timezone, as Eloquent reads
- * one; one the table holds with no zone is UTC, as Prisma wrote it. The model's queries bind a
- * date the same way.
- */
 trait PrismaDates
 {
     public function fromDateTime($value)
@@ -662,17 +633,13 @@ use DateTimeInterface;
 use DateTimeZone;
 use Illuminate\\Database\\Query\\Builder;${zoned ? '\nuse Illuminate\\Database\\Query\\Expression;' : ''}
 
-/**
- * The query of a model with a DateTime: a date is bound as Prisma Client writes one, in UTC with
- * milliseconds, and whereDate() and the other date parts take its UTC date.
- */
 class PrismaQueryBuilder extends Builder
 {
     const DATE_FORMAT = '${dateFormat(provider)}';
 ${
   zoned
     ? `
-    /** @var list<string> the model's timestamptz columns, whose date and time are taken in UTC */
+    /** @var list<string> */
     public array $zonedDates = [];
 
     protected function addDateBasedWhere($type, $column, $operator, $value, $boolean = 'and')
@@ -718,11 +685,6 @@ use Illuminate\\Contracts\\Database\\Eloquent\\CastsAttributes;
 use Illuminate\\Database\\Eloquent\\Model;
 use Illuminate\\Support\\Facades\\Date;
 
-/**
- * A @db.Date column, as Prisma Client keeps one: the UTC date of the value, read as midnight UTC.
- * A date given as \`Y-m-d\` is written as it is; any other value with no zone is in the app's
- * timezone.
- */
 class AsPrismaDate implements CastsAttributes
 {
     public function get(Model $model, string $key, mixed $value, array $attributes): mixed
@@ -758,11 +720,6 @@ use Illuminate\\Contracts\\Database\\Eloquent\\CastsAttributes;
 use Illuminate\\Database\\Eloquent\\Model;
 use Illuminate\\Support\\Facades\\Date;
 
-/**
- * A @db.Time or @db.Timetz column, as Prisma Client keeps one: the UTC time of the value, read on
- * 1970-01-01 UTC, the offset a timetz gives dropped. A time given as \`H:i:s\` is that time in
- * UTC; any other value with no zone is in the app's timezone.
- */
 class AsPrismaTime implements CastsAttributes
 {
     public function get(Model $model, string $key, mixed $value, array $attributes): mixed
@@ -797,11 +754,6 @@ use Illuminate\\Contracts\\Database\\Eloquent\\CastsAttributes;
 use Illuminate\\Database\\Eloquent\\Model;
 use Illuminate\\Support\\Facades\\Date;
 
-/**
- * A PostgreSQL DateTime[] column, as Prisma Client keeps one: a list of Carbon, written as the
- * array literal in UTC. Its argument is the type of the items: date, time, or none for a
- * timestamp. A string is written as it is, as the literal the column takes.
- */
 class AsPrismaDateList implements CastsAttributes
 {
     public function __construct(private string $kind = 'timestamp')

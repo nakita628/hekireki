@@ -1,8 +1,6 @@
 import { customType, datetime, int, mysqlTable, text, timestamp } from 'drizzle-orm/mysql-core'
 import { sql } from 'drizzle-orm'
 
-// timestamp() holds UTC only on a connection whose time_zone is '+00:00'
-
 const utcDate = customType<{ data: Date; driverData: string }>({
   dataType: () => 'date',
   toDriver: (value) => value.toISOString().slice(0, 10),

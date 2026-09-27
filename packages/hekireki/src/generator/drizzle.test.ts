@@ -1362,47 +1362,6 @@ describe('dates', () => {
     )
   })
 
-  it('says a MySQL timestamp needs a UTC session, only where there is one', () => {
-    const schema = (nativeType: [string, string[]]) =>
-      drizzleSchema(
-        makeDatamodel([
-          makeModel({
-            name: 'Row',
-            fields: [
-              makeField({ name: 'id', type: 'Int', isId: true }),
-              makeField({ name: 'at', type: 'DateTime', nativeType }),
-            ],
-          }),
-        ]),
-        'mysql',
-        [],
-      )
-    const note = "// timestamp() holds UTC only on a connection whose time_zone is '+00:00'"
-    expect(schema(['Timestamp', ['3']]).split('\n')[2]).toBe(note)
-    expect(schema(['DateTime', ['3']])).not.toContain(note)
-  })
-
-  it('says a MySQL bigint needs mysql2 told to keep it whole, only where there is one', () => {
-    const schema = (type: string) =>
-      drizzleSchema(
-        makeDatamodel([
-          makeModel({
-            name: 'Row',
-            fields: [
-              makeField({ name: 'id', type: 'Int', isId: true }),
-              makeField({ name: 'count', type }),
-            ],
-          }),
-        ]),
-        'mysql',
-        [],
-      )
-    const note =
-      '// bigint() is exact past 2^53 only on a connection with supportBigNumbers and bigNumberStrings'
-    expect(schema('BigInt').split('\n')[2]).toBe(note)
-    expect(schema('Int')).not.toContain(note)
-  })
-
   it.each([
     ['postgresql', "bytea('value').notNull().default(sql`decode('0001ff', 'hex')`)"],
     ['mysql', "bytes('value', { type: 'longblob' }).notNull().default(sql`0x0001ff`)"],

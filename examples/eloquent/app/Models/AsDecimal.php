@@ -5,10 +5,6 @@ namespace App\Models;
 use Illuminate\Contracts\Database\Eloquent\CastsAttributes;
 use Illuminate\Database\Eloquent\Model;
 
-/**
- * A Prisma Decimal column, read as the string Prisma's Decimal prints: no float, and no zeros a
- * column's scale pads it with.
- */
 class AsDecimal implements CastsAttributes
 {
     public function get(Model $model, string $key, mixed $value, array $attributes): ?string

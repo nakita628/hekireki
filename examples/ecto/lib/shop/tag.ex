@@ -29,7 +29,6 @@ defmodule Shop.Tag do
     |> unique_constraint(:name)
   end
 
-  # validate_required/3 for a column that takes "": missing is nil, and nothing else.
   defp validate_not_null(changeset, fields) do
     changeset = %{changeset | required: Enum.uniq(changeset.required ++ fields)}
 

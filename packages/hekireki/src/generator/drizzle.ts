@@ -47,17 +47,6 @@ export function drizzleSchema(
   return [
     generateImports(imports, db),
     '',
-    // MySQL converts a TIMESTAMP through the session's zone and drizzle reads and writes UTC.
-    ...(db === 'mysql' && imports.core.has('timestamp')
-      ? ["// timestamp() holds UTC only on a connection whose time_zone is '+00:00'", '']
-      : []),
-    // mysql2 gives a BIGINT as a number, which is exact to 2^53, unless it is told otherwise.
-    ...(db === 'mysql' && imports.core.has('bigint')
-      ? [
-          '// bigint() is exact past 2^53 only on a connection with supportBigNumbers and bigNumberStrings',
-          '',
-        ]
-      : []),
     ...columnHelpers.flatMap((helper) => [helper, '']),
     ...(enumLinesWithGap.length > 0 ? [...enumLinesWithGap, ''] : []),
     ...tableLinesWithGap,

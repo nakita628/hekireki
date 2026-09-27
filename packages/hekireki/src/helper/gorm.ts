@@ -772,17 +772,9 @@ function hasImplicitManyToMany(models: readonly DMMF.Model[]) {
  * under a strategy that leaves names as they are; every other name in the
  * file is given in a tag or by `TableName()`, so nothing else changes with it.
  */
-export function generateNamingStrategy(models: readonly DMMF.Model[], packageName: string) {
+export function generateNamingStrategy(models: readonly DMMF.Model[]) {
   if (!hasImplicitManyToMany(models)) return []
-  return [
-    '',
-    '// NamingStrategy keeps the names Prisma gave its many-to-many join tables',
-    '// (`_AToB`, columns `A` and `B`), which GORM would otherwise snake_case,',
-    '// pluralise and lowercase. Open the connection with it:',
-    '//',
-    `//\tgorm.Open(dialector, &gorm.Config{NamingStrategy: ${packageName}.NamingStrategy})`,
-    'var NamingStrategy = schema.NamingStrategy{SingularTable: true, NoLowerCase: true}',
-  ]
+  return ['', 'var NamingStrategy = schema.NamingStrategy{SingularTable: true, NoLowerCase: true}']
 }
 
 /**
@@ -827,24 +819,17 @@ export function generateDateTypes(models: readonly DMMF.Model[], provider?: stri
   const value =
     provider === 'sqlite'
       ? [
-          '// Value writes the instant as Prisma Client does on SQLite: `2006-01-02T15:04:05.000+00:00`,',
-          '// in UTC, the text SQLite compares and sorts.',
           'func (dateTime DateTime) Value() (driver.Value, error) {',
           '\treturn dateTime.UTC().Truncate(time.Millisecond).Format("2006-01-02T15:04:05.000-07:00"), nil',
           '}',
         ]
       : provider === 'mysql'
         ? [
-            '// Value writes the instant as Prisma Client does on MySQL: `2006-01-02 15:04:05.000` in UTC,',
-            '// text the driver sends as it is, where it would convert a time.Time to its loc.',
             'func (dateTime DateTime) Value() (driver.Value, error) {',
             '\treturn dateTime.UTC().Truncate(time.Millisecond).Format("2006-01-02 15:04:05.000"), nil',
             '}',
           ]
         : [
-            '// Value writes the instant in UTC to the millisecond, as Prisma Client does: the wall clock of',
-            '// a timestamp column is UTC, and a timestamptz column holds the instant whatever the',
-            "// session's time zone.",
             'func (dateTime DateTime) Value() (driver.Value, error) {',
             '\treturn dateTime.UTC().Truncate(time.Millisecond), nil',
             '}',
@@ -852,26 +837,19 @@ export function generateDateTypes(models: readonly DMMF.Model[], provider?: stri
   const fromDriver =
     provider === 'mysql'
       ? [
-          "\t\t// The driver gives a DATETIME back in its loc; the table's wall clock is UTC.",
           '\t\treturn time.Date(value.Year(), value.Month(), value.Day(), value.Hour(), value.Minute(), value.Second(), value.Nanosecond(), time.UTC).Truncate(time.Millisecond), nil',
         ]
       : ['\t\treturn value.UTC().Truncate(time.Millisecond), nil']
   const dateTime = [
     '',
-    '// DateTime is a Prisma DateTime as Prisma Client keeps it: an instant in UTC, to the',
-    '// millisecond, whatever zone the time.Time is in. Bind a time.Time through it in a query of',
-    '// your own, `db.Where("at > ?", DateTime{Time: at})`: the driver formats a bare time.Time',
-    '// its own way.',
     'type DateTime struct{ time.Time }',
     '',
-    '// GormDataType has GORM treat the column as it treats a time.Time.',
     'func (DateTime) GormDataType() string {',
     '\treturn "time"',
     '}',
     '',
     ...value,
     '',
-    '// Scan reads the column as Prisma Client does (see readPrismaTime).',
     'func (dateTime *DateTime) Scan(src any) error {',
     '\tread, err := readPrismaTime(src)',
     '\tdateTime.Time = read',
@@ -880,21 +858,16 @@ export function generateDateTypes(models: readonly DMMF.Model[], provider?: stri
   ]
   const date = [
     '',
-    '// Date is a Prisma DateTime in a date column (@db.Date): the UTC date of the instant, read',
-    '// back as midnight UTC, as Prisma Client keeps it.',
     'type Date struct{ time.Time }',
     '',
-    '// GormDataType has GORM treat the column as it treats a time.Time.',
     'func (Date) GormDataType() string {',
     '\treturn "time"',
     '}',
     '',
-    '// Value writes the UTC date, `2006-01-02`.',
     'func (date Date) Value() (driver.Value, error) {',
     '\treturn date.UTC().Format("2006-01-02"), nil',
     '}',
     '',
-    '// Scan reads the date as midnight UTC.',
     'func (date *Date) Scan(src any) error {',
     '\tread, err := readPrismaTime(src)',
     '\tif err != nil || read.IsZero() {',
@@ -907,23 +880,16 @@ export function generateDateTypes(models: readonly DMMF.Model[], provider?: stri
   ]
   const timeOfDay = [
     '',
-    '// TimeOfDay is a Prisma DateTime in a time column (@db.Time, @db.Timetz): the UTC time of day',
-    '// of the instant to the millisecond, read back on 1970-01-01 UTC, as Prisma Client keeps it.',
     'type TimeOfDay struct{ time.Time }',
     '',
-    '// GormDataType has GORM treat the column as it treats a time.Time.',
     'func (TimeOfDay) GormDataType() string {',
     '\treturn "time"',
     '}',
     '',
-    '// Value writes the UTC time, `15:04:05.000`, with no offset: a timetz column takes the',
-    "// session's, as it does from Prisma Client.",
     'func (clock TimeOfDay) Value() (driver.Value, error) {',
     '\treturn clock.UTC().Truncate(time.Millisecond).Format("15:04:05.000"), nil',
     '}',
     '',
-    '// Scan reads the time on 1970-01-01 UTC, and drops the offset a timetz column holds, as',
-    '// Prisma Client does.',
     'func (clock *TimeOfDay) Scan(src any) error {',
     '\tswitch value := src.(type) {',
     '\tcase nil:',
@@ -949,23 +915,19 @@ export function generateDateTypes(models: readonly DMMF.Model[], provider?: stri
   ]
   // A DateTime[] is a PostgreSQL array; each element is written and read as the type of one is.
   const lists = [
-    { name: 'DateTimeList', element: 'DateTime', example: '{"2030-01-02 03:04:05.678"}' },
-    { name: 'DateList', element: 'Date', example: '{"2030-01-02"}' },
-    { name: 'TimeOfDayList', element: 'TimeOfDay', example: '{"03:04:05.678"}' },
+    { name: 'DateTimeList', element: 'DateTime' },
+    { name: 'DateList', element: 'Date' },
+    { name: 'TimeOfDayList', element: 'TimeOfDay' },
   ]
     .filter((list) => types.includes(list.name))
-    .flatMap(({ name, element, example }) => [
+    .flatMap(({ name, element }) => [
       '',
-      `// ${name} is a Prisma DateTime[] held as ${element}s: a PostgreSQL array, each element`,
-      `// written and read as ${element} writes and reads one.`,
       `type ${name} []${element}`,
       '',
-      `// Value writes the array as Prisma Client does, \`${example}\`.`,
       `func (list ${name}) Value() (driver.Value, error) {`,
       '\treturn arrayText(list)',
       '}',
       '',
-      `// Scan reads each element of the array as ${element} does.`,
       `func (list *${name}) Scan(src any) error {`,
       `\treturn scanArray(src, (*[]${element})(list))`,
       '}',
@@ -973,8 +935,6 @@ export function generateDateTypes(models: readonly DMMF.Model[], provider?: stri
   const arrays = types.some((name) => name.endsWith('List'))
     ? [
         '',
-        '// arrayText writes a PostgreSQL array literal, each element as its type writes it; an instant',
-        '// as the UTC wall clock, as Prisma Client writes it.',
         'func arrayText[T driver.Valuer](list []T) (driver.Value, error) {',
         '\titems := make([]string, len(list))',
         '\tfor i, item := range list {',
@@ -990,7 +950,6 @@ export function generateDateTypes(models: readonly DMMF.Model[], provider?: stri
         '\treturn "{" + strings.Join(items, ",") + "}", nil',
         '}',
         '',
-        '// scanArray reads a PostgreSQL array, each element as its type reads one.',
         'func scanArray[T any, P interface {',
         '\t*T',
         '\tsql.Scanner',
@@ -1030,8 +989,6 @@ export function generateDateTypes(models: readonly DMMF.Model[], provider?: stri
     ...lists,
     ...arrays,
     '',
-    '// prismaTimeLayouts are the texts readPrismaTime reads, as Prisma Client reads them: with an',
-    '// offset or `Z`, or with none, which is UTC; a date alone is midnight UTC.',
     'var prismaTimeLayouts = []string{',
     '\t"2006-01-02T15:04:05.999999999Z07:00",',
     '\t"2006-01-02 15:04:05.999999999Z07:00",',
@@ -1041,9 +998,6 @@ export function generateDateTypes(models: readonly DMMF.Model[], provider?: stri
     '\t"2006-01-02",',
     '}',
     '',
-    '// readPrismaTime reads a DateTime column as Prisma Client reads it: text with no zone is UTC, an',
-    '// offset is kept, digits are milliseconds since 1970, and what is past the millisecond is',
-    '// dropped.',
     'func readPrismaTime(src any) (time.Time, error) {',
     '\tswitch value := src.(type) {',
     '\tcase nil:',

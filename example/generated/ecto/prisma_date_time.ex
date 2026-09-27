@@ -1,24 +1,5 @@
 defmodule Example.PrismaDateTime do
-  @moduledoc """
-  A `DateTime` as Prisma Client keeps it: the instant in UTC, in milliseconds. Writes, and the
-  values a query binds, go through `dump/1`, so Prisma finds what Ecto wrote by the same
-  instant and Ecto what Prisma wrote: microseconds are cut to milliseconds, as a
-  JavaScript Date holds them. A column with no time zone holds UTC.
-
-  A value read is the instant Prisma reads: text with no zone is UTC, an offset is honoured, a
-  date alone is midnight UTC, digits are epoch milliseconds. A `NaiveDateTime` is UTC, as
-  `:utc_datetime` takes one; a `DateTime` in another zone is moved to UTC. An optional
-  `@updatedAt` left `nil` on insert is filled with now; to store null, as Prisma Client does
-  for an explicit null, give it with `Ecto.Changeset.force_change(changeset, field, nil)`.
-
-  A `@db.Timestamptz` or `@db.Timetz` column holds the instant whatever the session, as
-  Postgrex sends it, but Prisma Client writes it as UTC text with no zone, which PostgreSQL
-  reads in the session's time zone, and reads the offset back as `+00:00`: connect Prisma
-  Client with `options: '-c TimeZone=UTC'` where the server's zone is not UTC. The repo's
-  session changes no value Ecto writes or reads; only a value the database fills in a column
-  with no zone (`dbgenerated("CURRENT_TIMESTAMP")`, a `DEFAULT CURRENT_TIMESTAMP` on a row
-  from `insert_all`) is that session's wall time, UTC with `parameters: [timezone: "UTC"]`.
-  """
+  @moduledoc false
   use Ecto.Type
 
   @impl true
@@ -35,7 +16,6 @@ defmodule Example.PrismaDateTime do
   def load(value) when is_integer(value), do: {:ok, value |> DateTime.from_unix!(:millisecond) |> utc()}
 
   def load(value) when is_binary(value) do
-    # SQLite keeps a literal default as Prisma Migrate writes it: `2024-01-15 10:30:00 +00:00`.
     value = String.replace(value, ~r/\s+(?=[+-]\d\d:?\d\d\z)/, "")
 
     case DateTime.from_iso8601(value) do
@@ -56,14 +36,21 @@ defmodule Example.PrismaDateTime do
   def equal?(%DateTime{} = left, %DateTime{} = right), do: DateTime.compare(left, right) == :eq
   def equal?(left, right), do: left == right
 
-  @doc """
-  Now, as Prisma Client fills `now()` and `@updatedAt`. Ecto calls it once to a `timestamps()`
-  and to an `autogenerate: true` field, so the fields of one insert can be 1 ms apart.
-  """
   @impl true
-  def autogenerate, do: utc(DateTime.utc_now())
+  def autogenerate do
+    called = System.monotonic_time(:microsecond)
 
-  # A date alone, or epoch milliseconds as digits.
+    case Process.get(__MODULE__) do
+      {read, now} when called - read < 1_000 ->
+        now
+
+      _ ->
+        now = utc(DateTime.utc_now())
+        Process.put(__MODULE__, {called, now})
+        now
+    end
+  end
+
   defp load_other(value) do
     cond do
       value =~ ~r/\A-?\d+\z/ -> load(String.to_integer(value))

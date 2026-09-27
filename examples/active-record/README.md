@@ -43,6 +43,10 @@ Then each thing the schema promises, as Rails keeps it:
   `PrismaDateTime` type in `prisma_date_time.rb`), not Active Record's
   `2030-01-02 03:04:05.678000`, and a `where` on the instant finds it; a `uuid()` key is made in
   Ruby and `first`/`last` follow `created_at`.
+- **`default_timezone` is `:utc`**, as Rails has it unless told otherwise. With `:local`, Active
+  Record writes and reads a column without a zone (PostgreSQL's `timestamp`, MySQL's `DATETIME`)
+  on the process's clock, where Prisma Client keeps UTC: in `Asia/Tokyo` every such instant is
+  nine hours off, both ways. SQLite is not touched by it, its text carrying the offset.
 - **Associations.** `has_one` built from its owner and destroyed with it; `onDelete: SetNull`
   nullifies and the optional `belongs_to` may be empty; `Restrict` refuses to destroy an owner
   with children, as an error on the record; `Cascade` destroys the children; a self relation

@@ -8,15 +8,11 @@ use DateTimeZone;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Database\Query\Expression;
 
-/**
- * The query of a model with a DateTime: a date is bound as Prisma Client writes one, in UTC with
- * milliseconds, and whereDate() and the other date parts take its UTC date.
- */
 class PrismaQueryBuilder extends Builder
 {
     const DATE_FORMAT = 'Y-m-d H:i:s.vP';
 
-    /** @var list<string> the model's timestamptz columns, whose date and time are taken in UTC */
+    /** @var list<string> */
     public array $zonedDates = [];
 
     protected function addDateBasedWhere($type, $column, $operator, $value, $boolean = 'and')

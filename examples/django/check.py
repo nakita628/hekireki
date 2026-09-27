@@ -9,6 +9,7 @@ import sys
 from collections.abc import Callable
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
+from time import sleep
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -88,10 +89,13 @@ def _() -> str | None:
     post = Post.objects.create(title="Hello", author=author)
     post.refresh_from_db()
     created, updated = post.created_at, post.updated_at
+    # The columns keep milliseconds: a change within the one the row was made in is not seen.
+    sleep(0.005)
     post.title = "Hello again"
     post.save()
     post.refresh_from_db()
     saved = post.updated_at
+    sleep(0.005)
     # Prisma's updateMany sets @updatedAt too; a QuerySet.update() does here, through the manager.
     Post.objects.filter(pk=post.pk).update(status=Status.PUBLISHED)
     post.refresh_from_db()

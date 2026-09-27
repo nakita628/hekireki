@@ -3080,7 +3080,6 @@ end`)
     |> validate_required([:title], message: "blank is missing here")
   end
 
-  # validate_required/3 for a column that takes "": missing is nil, and nothing else.
   defp validate_not_null(changeset, fields) do
     changeset = %{changeset | required: Enum.uniq(changeset.required ++ fields)}
 
@@ -3213,25 +3212,12 @@ describe('ectoDateTypes', () => {
     )
   })
 
-  it('says how an optional @updatedAt stores null on insert', () => {
-    expect(ectoDateTypes('App', 'sqlite', all)).toContain(
-      '  `@updatedAt` left `nil` on insert is filled with now; to store null, as Prisma Client does\n' +
-        '  for an explicit null, give it with `Ecto.Changeset.force_change(changeset, field, nil)`.',
-    )
-  })
-
-  it("warns on PostgreSQL of Prisma Client's session for a @db.Timetz too, on both types", () => {
-    const code = ectoDateTypes('App', 'postgresql', all)
-    const warning =
-      '  A `@db.Timestamptz` or `@db.Timetz` column holds the instant whatever the session'
-    expect(code.split(warning)).toHaveLength(3)
-    expect(code).toContain('session\'s wall time, UTC with `parameters: [timezone: "UTC"]`.')
-    expect(code).not.toContain('or the\n  two read different instants')
-  })
-
-  it("warns on MySQL of the repo's session on PrismaDateTime alone", () => {
-    const code = ectoDateTypes('App', 'mysql', all)
-    expect(code.split('SET time_zone')).toHaveLength(2)
-    expect(code).not.toContain('@db.Timetz` column')
+  it('writes no documentation of its own into the modules', () => {
+    for (const provider of ['sqlite', 'postgresql', 'mysql'] as const) {
+      const code = ectoDateTypes('App', provider, all)
+      expect(code).not.toContain('@moduledoc """')
+      expect(code).not.toContain('@doc')
+      expect(code.split('\n').filter((line) => line.trimStart().startsWith('#'))).toStrictEqual([])
+    }
   })
 })

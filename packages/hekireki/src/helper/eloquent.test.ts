@@ -3,6 +3,14 @@ import { describe, expect, it } from 'vite-plus/test'
 
 import {
   eloquentBytesCast,
+  eloquentCompositeKeyBuilder,
+  eloquentCompositeKeyCollection,
+  eloquentDateCast,
+  eloquentDateListCast,
+  eloquentDatesTrait,
+  eloquentDecimalCast,
+  eloquentQueryBuilder,
+  eloquentTimeCast,
   eloquentEnum,
   eloquentModels,
   eloquentProblems,
@@ -1535,6 +1543,23 @@ class Note extends Model`)
         'avatar' => AsBytes::class,
     ];`)
     expect(eloquentBytesCast('App\\Models')).toContain(`class AsBytes implements CastsAttributes`)
+  })
+
+  it('writes no documentation of its own beside the tags that carry a type', () => {
+    const prose = [
+      eloquentBytesCast('App\\Models'),
+      eloquentDecimalCast('App\\Models'),
+      eloquentCompositeKeyBuilder('App\\Models'),
+      eloquentCompositeKeyCollection('App\\Models'),
+      eloquentDatesTrait('App\\Models', 'postgresql'),
+      eloquentQueryBuilder('App\\Models', 'postgresql'),
+      eloquentDateCast('App\\Models'),
+      eloquentTimeCast('App\\Models', 'postgresql'),
+      eloquentDateListCast('App\\Models'),
+    ]
+      .flatMap((code) => code.split('\n'))
+      .filter((line) => /^\s*(?:\/\/|\*(?! @|\/))/u.test(line))
+    expect(prose).toStrictEqual([])
   })
 
   it('writes a DateTime as Prisma Client does, in UTC with milliseconds, a default included', () => {

@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { makePascalCase, makeSnakeCase } from '../utils/index.js'
+import { constraintName, makePascalCase, makeSnakeCase } from '../utils/index.js'
 
 const PRISMA_TO_PYTHON: { [k: string]: string } = {
   String: 'str',
@@ -565,26 +565,9 @@ function formatDefault(field: DMMF.Field, enumDef?: DMMF.DatamodelEnum) {
   return null
 }
 
-/**
- * The name Prisma Migrate gives a key, index or constraint the schema does not name: the table,
- * the columns and a suffix, the first two cut to the database's longest identifier (63 on
- * PostgreSQL, 64 on MySQL).
- *
- * @example
- * ```sql
- * -- @@unique([s, i]) on Scalar; a foreign key on refs.comp_a, comp_b
- * CREATE UNIQUE INDEX "Scalar_s_i_key" ON "Scalar"("s", "i");
- * CONSTRAINT "refs_comp_a_comp_b_fkey" FOREIGN KEY ("comp_a", "comp_b") ...
- * ```
- */
-function constraintName(
-  table: string,
-  columns: readonly string[],
-  suffix: string,
-  provider: string,
-) {
-  const limit = provider === 'sqlite' ? Infinity : provider === 'mysql' ? 64 : 63
-  return `${[table, ...columns].join('_').slice(0, limit - suffix.length - 1)}_${suffix}`
+// Text as a SQL string literal, a quote in it doubled.
+function quote(text: string) {
+  return `'${text.replaceAll("'", "''")}'`
 }
 
 // A literal default as SQL, in the form Prisma Migrate writes it: a date-time in UTC, with its
@@ -596,7 +579,6 @@ function sqlLiteral(
   enumDef: DMMF.DatamodelEnum | undefined,
   provider: string,
 ) {
-  const quote = (text: string) => `'${text.replaceAll("'", "''")}'`
   if (field.kind === 'enum') {
     return quote(enumDef?.values.find((v) => v.name === value)?.dbName ?? String(value))
   }
@@ -1398,8 +1380,6 @@ export function generateBase(models: readonly DMMF.Model[], provider: string) {
     : provider === 'sqlite'
       ? [
           'class UtcDateTime(TypeDecorator[datetime]):',
-          '    """UTC text with milliseconds, `2030-01-02T03:04:05.678+00:00`; a naive value is UTC."""',
-          '',
           '    impl = String',
           '    cache_ok = True',
           '',
@@ -1418,15 +1398,12 @@ export function generateBase(models: readonly DMMF.Model[], provider: string) {
           '',
           '@compiles(UtcDateTime)',
           'def utc_date_time_ddl(type_: UtcDateTime, compiler: Any, **kw: Any) -> str:',
-          '    """The column Prisma Migrate declares: DATETIME, which keeps the text as it is."""',
           '    return "DATETIME"',
           '',
           '',
         ]
       : [
           'class UtcDateTime(TypeDecorator[datetime]):',
-          '    """A timestamp without time zone that holds UTC: an aware value is stored in UTC."""',
-          '',
           `    ${impl}`,
           '    cache_ok = True',
           '',
@@ -1444,8 +1421,6 @@ export function generateBase(models: readonly DMMF.Model[], provider: string) {
     provider !== 'mysql' && usesNativeType(models, ['Timestamptz'])
       ? [
           'class UtcDateTimeTz(TypeDecorator[datetime]):',
-          '    """A timestamptz: a naive value is UTC, not the session\'s zone, and reads are UTC."""',
-          '',
           '    impl = TIMESTAMP',
           '    cache_ok = True',
           '',
@@ -1466,8 +1441,6 @@ export function generateBase(models: readonly DMMF.Model[], provider: string) {
   const utcTimestamp = needsUtcTimestamp
     ? [
         'class UtcTimestamp(UtcDateTime):',
-        '    """A TIMESTAMP, which the server shifts by the session\'s time_zone: shifted back here."""',
-        '',
         '    impl = TIMESTAMP',
         '    cache_ok = True',
         '',
@@ -1484,7 +1457,7 @@ export function generateBase(models: readonly DMMF.Model[], provider: string) {
     provider === 'sqlite' && models.some((m) => m.fields.some((f) => f.type === 'Json'))
       ? [
           'class Jsonb(JSON):',
-          '    """SQLite\'s Json column, which Prisma Migrate declares JSONB and fills with JSON text."""',
+          '    pass',
           '',
           '',
           '@compiles(Jsonb)',
@@ -1497,7 +1470,7 @@ export function generateBase(models: readonly DMMF.Model[], provider: string) {
   const xml = usesNativeType(models, ['Xml'])
     ? [
         'class Xml(Text):',
-        '    """PostgreSQL\'s xml, read and written as its text."""',
+        '    pass',
         '',
         '',
         '@compiles(Xml)',

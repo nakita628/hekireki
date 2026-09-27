@@ -8,8 +8,6 @@ import uuid as uuid_mod
 
 
 class UtcDateTime(TypeDecorator[datetime]):
-    """UTC text with milliseconds, `2030-01-02T03:04:05.678+00:00`; a naive value is UTC."""
-
     impl = String
     cache_ok = True
 
@@ -28,12 +26,11 @@ class UtcDateTime(TypeDecorator[datetime]):
 
 @compiles(UtcDateTime)
 def utc_date_time_ddl(type_: UtcDateTime, compiler: Any, **kw: Any) -> str:
-    """The column Prisma Migrate declares: DATETIME, which keeps the text as it is."""
     return "DATETIME"
 
 
 class Jsonb(JSON):
-    """SQLite's Json column, which Prisma Migrate declares JSONB and fills with JSON text."""
+    pass
 
 
 @compiles(Jsonb)

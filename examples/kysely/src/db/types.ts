@@ -5,8 +5,6 @@ export type Generated<T> =
     ? ColumnType<S, I | undefined, U>
     : ColumnType<T, T | undefined, T>
 
-// A DateTime column holds the text date.toISOString().replace('Z', '+00:00')
-
 export type Role = 'customer' | 'staff' | 'ADMIN'
 
 export type Genre = "rock 'n' roll" | 'hip-hop' | 'jazz' | 'CLASSICAL'

@@ -24,7 +24,7 @@ export function generateGormModels(
   return [
     `package ${packageName}`,
     ...formatImports(collectImports(models)),
-    ...generateNamingStrategy(models, packageName),
+    ...generateNamingStrategy(models),
     '',
     modelBodies.join('\n\n'),
     ...generateDateTypes(models, provider),

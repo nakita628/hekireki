@@ -21,14 +21,10 @@ const GENERATED_ALIAS =
 
 const TIMESTAMP_ALIAS = 'export type Timestamp = ColumnType<Date, Date | string, Date | string>'
 
-// A DateTime Kysely writes on SQLite is equal to one Prisma wrote only as the same text.
-const SQLITE_DATETIME_NOTE =
-  "// A DateTime column holds the text date.toISOString().replace('Z', '+00:00')"
-
 /**
  * The Kysely `DB` interface of a datamodel, typed as the driver of `provider` reads and binds
  * each column: on SQLite, as better-sqlite3 does (`SQLITE_SCALAR_TYPE_MAP`), where a DateTime is
- * text and the file says which text, and a DateTime default is left to the insert (Prisma Client
+ * text, and a DateTime default is left to the insert (Prisma Client
  * writes it, and SQLite's own is other text); a time column (`@db.Time`, `@db.Timetz`) as the text pg and
  * mysql2 read it as.
  */
@@ -53,16 +49,10 @@ export function kyselySchema(datamodel: DMMF.Datamodel, provider = 'postgresql')
   )
   const usesColumnType =
     usesGenerated || usesTimestamp || columnTypes.some((type) => type.includes('ColumnType<'))
-  const usesSqliteDateTime =
-    provider === 'sqlite' &&
-    models.some((model) =>
-      model.fields.some((field) => field.kind === 'scalar' && field.type === 'DateTime'),
-    )
   return [
     ...(usesColumnType ? [`import type { ColumnType } from 'kysely'`] : []),
     ...(usesGenerated ? [GENERATED_ALIAS] : []),
     ...(usesTimestamp ? [TIMESTAMP_ALIAS] : []),
-    ...(usesSqliteDateTime ? [SQLITE_DATETIME_NOTE] : []),
     ...makeEnumDeclarations(models, datamodel.enums),
     ...models.map((model) => makeTableInterface(model, scalarTypes, provider)),
     ...joinEntries.map((entry) => makeM2MJoinInterface(entry)),

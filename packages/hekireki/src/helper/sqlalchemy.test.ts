@@ -7,8 +7,6 @@ import { prismaTypeToPythonType, prismaTypeToSQLAlchemyType, pythonAttrName } fr
 // What a PostgreSQL module with a DateTime carries above its models: the type every DateTime is
 // read through, as UTC, and the base that maps a plain `Mapped[datetime]` to it.
 const UTC_DATE_TIME = `class UtcDateTime(TypeDecorator[datetime]):
-    """A timestamp without time zone that holds UTC: an aware value is stored in UTC."""
-
     impl = TIMESTAMP
     cache_ok = True
 
@@ -23,8 +21,6 @@ const UTC_DATE_TIME = `class UtcDateTime(TypeDecorator[datetime]):
 
 `
 const UTC_DATE_TIME_TZ = `class UtcDateTimeTz(TypeDecorator[datetime]):
-    """A timestamptz: a naive value is UTC, not the session's zone, and reads are UTC."""
-
     impl = TIMESTAMP
     cache_ok = True
 
@@ -45,6 +41,7 @@ const UTC_NOW = `def utc_now() -> datetime:
 
 `
 const UTC_BASE = `class Base(DeclarativeBase):
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
     type_annotation_map = {datetime: UtcDateTime(precision=3)}
 `
 
@@ -173,11 +170,13 @@ describe('generateSingleFile', () => {
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+      `from sqlalchemy import MetaData, Text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
+    type_annotation_map = {str: Text}
 
 
 class User(Base):
@@ -205,12 +204,14 @@ class User(Base):
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+      `from sqlalchemy import MetaData, Text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from typing import Optional
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
+    type_annotation_map = {str: Text}
 
 
 class Post(Base):
@@ -238,11 +239,13 @@ class Post(Base):
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+      `from sqlalchemy import MetaData, Text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
+    type_annotation_map = {str: Text}
 
 
 class Item(Base):
@@ -262,19 +265,29 @@ class Item(Base):
       ]),
     ]
 
-    expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+    expect(
+      generateSingleFile(models, undefined, [
+        { model: 'Account', type: 'unique', isDefinedOnField: true, fields: [{ name: 'email' }] },
+      ]),
+    ).toBe(
+      `from sqlalchemy import Index, MetaData, Text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
+    type_annotation_map = {str: Text}
 
 
 class Account(Base):
     __tablename__ = "Account"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    email: Mapped[str] = mapped_column(unique=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    email: Mapped[str]
+
+    __table_args__ = (
+        Index("Account_email_key", "email", unique=True),
+    )
 `,
     )
   })
@@ -293,7 +306,7 @@ class Account(Base):
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy import Dialect, TypeDecorator, func
+      `from sqlalchemy import Dialect, MetaData, TypeDecorator, text
 from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from typing import Optional
@@ -305,8 +318,8 @@ ${UTC_DATE_TIME}${UTC_NOW}${UTC_BASE}
 class Event(Base):
     __tablename__ = "Event"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    created_at: Mapped[datetime] = mapped_column("createdAt", default=utc_now, server_default=func.now())
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    created_at: Mapped[datetime] = mapped_column("createdAt", default=utc_now, server_default=text("CURRENT_TIMESTAMP"))
 `,
     )
   })
@@ -320,7 +333,7 @@ class Event(Base):
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy import Dialect, TypeDecorator
+      `from sqlalchemy import Dialect, MetaData, TypeDecorator
 from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from typing import Optional
@@ -332,7 +345,7 @@ ${UTC_DATE_TIME}${UTC_NOW}${UTC_BASE}
 class Record(Base):
     __tablename__ = "Record"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
     updated_at: Mapped[datetime] = mapped_column("updatedAt", default=utc_now, onupdate=utc_now)
 `,
     )
@@ -352,18 +365,19 @@ class Record(Base):
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+      `from sqlalchemy import MetaData, text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
 
 
 class Setting(Base):
     __tablename__ = "Setting"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    active: Mapped[bool] = mapped_column(default=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    active: Mapped[bool] = mapped_column(default=True, server_default=text("true"))
 `,
     )
   })
@@ -382,18 +396,19 @@ class Setting(Base):
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+      `from sqlalchemy import MetaData, text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
 
 
 class Flag(Base):
     __tablename__ = "Flag"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    enabled: Mapped[bool] = mapped_column(default=False)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    enabled: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
 `,
     )
   })
@@ -412,18 +427,20 @@ class Flag(Base):
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+      `from sqlalchemy import MetaData, Text, text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
+    type_annotation_map = {str: Text}
 
 
 class Config(Base):
     __tablename__ = "Config"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    status: Mapped[str] = mapped_column(default="active")
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    status: Mapped[str] = mapped_column(default="active", server_default=text("'active'"))
 `,
     )
   })
@@ -442,18 +459,19 @@ class Config(Base):
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+      `from sqlalchemy import MetaData, text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
 
 
 class Limit(Base):
     __tablename__ = "Limit"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    max_retries: Mapped[int] = mapped_column("maxRetries", default=3)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    max_retries: Mapped[int] = mapped_column("maxRetries", default=3, server_default=text("3"))
 `,
     )
   })
@@ -476,19 +494,19 @@ class Limit(Base):
     ]
 
     expect(generateSingleFile(models, enums)).toBe(
-      `from sqlalchemy import Enum
+      `from sqlalchemy import Enum, MetaData
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
 
 
 class User(Base):
     __tablename__ = "User"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    role: Mapped[str] = mapped_column(Enum("ADMIN", "USER", name="role"))
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    role: Mapped[str] = mapped_column(Enum("ADMIN", "USER", name="Role"))
 `,
     )
   })
@@ -517,19 +535,19 @@ class User(Base):
     ]
 
     expect(generateSingleFile(models, enums)).toBe(
-      `from sqlalchemy import Enum
+      `from sqlalchemy import Enum, MetaData, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
 
 
 class User(Base):
     __tablename__ = "User"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    role: Mapped[str] = mapped_column(Enum("ADMIN", "USER", name="role"), default="USER")
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    role: Mapped[str] = mapped_column(Enum("ADMIN", "USER", name="Role"), default="USER", server_default=text("'USER'"))
 `,
     )
   })
@@ -564,12 +582,13 @@ class User(Base):
     ])
 
     expect(generateSingleFile([userModel, postModel])).toBe(
-      `from sqlalchemy import ForeignKey
+      `from sqlalchemy import ForeignKey, MetaData, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
+    type_annotation_map = {str: Text}
 
 
 class User(Base):
@@ -585,7 +604,7 @@ class Post(Base):
 
     id: Mapped[str] = mapped_column(primary_key=True)
     title: Mapped[str]
-    user_id: Mapped[str] = mapped_column("userId", ForeignKey("User.id", ondelete="RESTRICT", onupdate="CASCADE"))
+    user_id: Mapped[str] = mapped_column("userId", ForeignKey("User.id", ondelete="RESTRICT", onupdate="CASCADE", name="Post_userId_fkey"))
 
     user: Mapped["User"] = relationship(back_populates="posts")
 `,
@@ -621,13 +640,18 @@ class Post(Base):
       }),
     ])
 
-    expect(generateSingleFile([userModel, profileModel])).toBe(
-      `from sqlalchemy import ForeignKey
+    expect(
+      generateSingleFile([userModel, profileModel], undefined, [
+        { model: 'Profile', type: 'unique', isDefinedOnField: true, fields: [{ name: 'userId' }] },
+      ]),
+    ).toBe(
+      `from sqlalchemy import ForeignKey, Index, MetaData, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
+    type_annotation_map = {str: Text}
 
 
 class User(Base):
@@ -643,7 +667,11 @@ class Profile(Base):
 
     id: Mapped[str] = mapped_column(primary_key=True)
     bio: Mapped[str]
-    user_id: Mapped[str] = mapped_column("userId", ForeignKey("User.id", ondelete="RESTRICT", onupdate="CASCADE"), unique=True)
+    user_id: Mapped[str] = mapped_column("userId", ForeignKey("User.id", ondelete="RESTRICT", onupdate="CASCADE", name="Profile_userId_fkey"))
+
+    __table_args__ = (
+        Index("Profile_userId_key", "userId", unique=True),
+    )
 
     user: Mapped["User"] = relationship(back_populates="profile")
 `,
@@ -663,17 +691,19 @@ class Profile(Base):
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+      `from sqlalchemy import MetaData, Text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
+    type_annotation_map = {str: Text}
 
 
 class UserProfile(Base):
     __tablename__ = "user_profiles"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
     display_name: Mapped[str] = mapped_column("displayName")
 `,
     )
@@ -692,24 +722,34 @@ class UserProfile(Base):
       ),
     ]
 
-    expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy import UniqueConstraint
+    expect(
+      generateSingleFile(models, undefined, [
+        {
+          model: 'Membership',
+          type: 'unique',
+          isDefinedOnField: false,
+          fields: [{ name: 'userId' }, { name: 'orgId' }],
+        },
+      ]),
+    ).toBe(
+      `from sqlalchemy import Index, MetaData, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
+    type_annotation_map = {str: Text}
 
 
 class Membership(Base):
     __tablename__ = "Membership"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
     user_id: Mapped[str] = mapped_column("userId")
     org_id: Mapped[str] = mapped_column("orgId")
 
     __table_args__ = (
-        UniqueConstraint("userId", "orgId"),
+        Index("Membership_userId_orgId_key", "userId", "orgId", unique=True),
     )
 `,
     )
@@ -732,18 +772,19 @@ class Membership(Base):
     ]
 
     expect(generateSingleFile(models, undefined, indexes)).toBe(
-      `from sqlalchemy import Index
+      `from sqlalchemy import Index, MetaData, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
+    type_annotation_map = {str: Text}
 
 
 class Article(Base):
     __tablename__ = "Article"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
     slug: Mapped[str]
 
     __table_args__ = (
@@ -766,18 +807,18 @@ class Article(Base):
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy import String
+      `from sqlalchemy import MetaData, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
 
 
 class Tag(Base):
     __tablename__ = "Tag"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
     label: Mapped[str] = mapped_column(String(255))
 `,
     )
@@ -796,19 +837,19 @@ class Tag(Base):
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy import String
+      `from sqlalchemy import CHAR, MetaData
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
 
 
 class Code(Base):
     __tablename__ = "Code"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    code: Mapped[str] = mapped_column(String(6))
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    code: Mapped[str] = mapped_column(CHAR(6))
 `,
     )
   })
@@ -826,13 +867,13 @@ class Code(Base):
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy import Uuid
+      `from sqlalchemy import MetaData, Uuid
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 import uuid as uuid_mod
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
 
 
 class Entity(Base):
@@ -856,19 +897,19 @@ class Entity(Base):
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy import Numeric
+      `from sqlalchemy import MetaData, Numeric
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from decimal import Decimal as DecimalType
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
 
 
 class Product(Base):
     __tablename__ = "Product"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
     price: Mapped[DecimalType] = mapped_column(Numeric(precision=10, scale=2))
 `,
     )
@@ -887,19 +928,20 @@ class Product(Base):
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy import Text
+      `from sqlalchemy import MetaData, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
+    type_annotation_map = {str: Text}
 
 
 class Note(Base):
     __tablename__ = "Note"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    body: Mapped[str] = mapped_column(Text)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    body: Mapped[str]
 `,
     )
   })
@@ -917,18 +959,18 @@ class Note(Base):
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy import SmallInteger
+      `from sqlalchemy import MetaData, SmallInteger
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
 
 
 class Sensor(Base):
     __tablename__ = "Sensor"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
     value: Mapped[int] = mapped_column(SmallInteger)
 `,
     )
@@ -947,19 +989,19 @@ class Sensor(Base):
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy import Double
+      `from sqlalchemy import MetaData
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
 
 
 class Measurement(Base):
     __tablename__ = "Measurement"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    reading: Mapped[float] = mapped_column(Double)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    reading: Mapped[float]
 `,
     )
   })
@@ -977,19 +1019,19 @@ class Measurement(Base):
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy import Date
+      `from sqlalchemy import Date, MetaData
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from datetime import date
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
 
 
 class Birthday(Base):
     __tablename__ = "Birthday"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
     day: Mapped[date] = mapped_column(Date)
 `,
     )
@@ -1008,19 +1050,19 @@ class Birthday(Base):
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy import Time
+      `from sqlalchemy import MetaData, Time
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from datetime import time as time_type
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
 
 
 class Schedule(Base):
     __tablename__ = "Schedule"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
     start_time: Mapped[time_type] = mapped_column("startTime", Time)
 `,
     )
@@ -1039,20 +1081,21 @@ class Schedule(Base):
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy import JSON
+      `from sqlalchemy import MetaData
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from typing import Any
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
 
 
 class Doc(Base):
     __tablename__ = "Doc"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    data: Mapped[dict[str, Any]] = mapped_column(JSON)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    data: Mapped[dict[str, Any]] = mapped_column(JSONB)
 `,
     )
   })
@@ -1061,11 +1104,13 @@ class Doc(Base):
     const models = [makeModel('NoId', [makeField({ name: 'value', type: 'String' })])]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+      `from sqlalchemy import MetaData, Text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
+    type_annotation_map = {str: Text}
 
 
 
@@ -1101,18 +1146,20 @@ class Base(DeclarativeBase):
     ])
 
     expect(generateSingleFile([postModel, tagModel])).toBe(
-      `from sqlalchemy import Column, ForeignKey, Index, Integer, Table
+      `from sqlalchemy import Column, ForeignKey, Index, Integer, MetaData, PrimaryKeyConstraint, Table, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
+    type_annotation_map = {str: Text}
 
 post_to_tag = Table(
     "_PostToTag",
     Base.metadata,
-    Column("A", Integer, ForeignKey("Post.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True),
-    Column("B", Integer, ForeignKey("Tag.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True),
+    Column("A", Integer, ForeignKey("Post.id", ondelete="CASCADE", onupdate="CASCADE", name="_PostToTag_A_fkey"), nullable=False),
+    Column("B", Integer, ForeignKey("Tag.id", ondelete="CASCADE", onupdate="CASCADE", name="_PostToTag_B_fkey"), nullable=False),
+    PrimaryKeyConstraint("A", "B", name="_PostToTag_AB_pkey"),
     Index("_PostToTag_B_index", "B"),
 )
 
@@ -1120,7 +1167,7 @@ post_to_tag = Table(
 class Post(Base):
     __tablename__ = "Post"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
     title: Mapped[str]
 
     tags: Mapped[list["Tag"]] = relationship(secondary=post_to_tag, back_populates="posts")
@@ -1128,7 +1175,7 @@ class Post(Base):
 class Tag(Base):
     __tablename__ = "Tag"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
     name: Mapped[str]
 
     posts: Mapped[list["Post"]] = relationship(secondary=post_to_tag, back_populates="tags")
@@ -1191,12 +1238,13 @@ class Tag(Base):
     )
 
     expect(generateSingleFile([userModel, postModel, likeModel])).toBe(
-      `from sqlalchemy import ForeignKey
+      `from sqlalchemy import ForeignKey, MetaData, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
+    type_annotation_map = {str: Text}
 
 
 class User(Base):
@@ -1218,8 +1266,8 @@ class Post(Base):
 class Like(Base):
     __tablename__ = "Like"
 
-    user_id: Mapped[str] = mapped_column("userId", ForeignKey("User.id", ondelete="RESTRICT", onupdate="CASCADE"), primary_key=True)
-    post_id: Mapped[str] = mapped_column("postId", ForeignKey("Post.id", ondelete="RESTRICT", onupdate="CASCADE"), primary_key=True)
+    user_id: Mapped[str] = mapped_column("userId", ForeignKey("User.id", ondelete="RESTRICT", onupdate="CASCADE", name="Like_userId_fkey"), primary_key=True)
+    post_id: Mapped[str] = mapped_column("postId", ForeignKey("Post.id", ondelete="RESTRICT", onupdate="CASCADE", name="Like_postId_fkey"), primary_key=True)
 
     user: Mapped["User"] = relationship(back_populates="likes")
     post: Mapped["Post"] = relationship(back_populates="likes")
@@ -1274,12 +1322,13 @@ class Like(Base):
     ])
 
     expect(generateSingleFile([userModel, followModel])).toBe(
-      `from sqlalchemy import ForeignKey
+      `from sqlalchemy import ForeignKey, MetaData, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
+    type_annotation_map = {str: Text}
 
 
 class User(Base):
@@ -1295,8 +1344,8 @@ class Follow(Base):
     __tablename__ = "Follow"
 
     id: Mapped[str] = mapped_column(primary_key=True)
-    follower_id: Mapped[str] = mapped_column("followerId", ForeignKey("User.id", ondelete="RESTRICT", onupdate="CASCADE"))
-    following_id: Mapped[str] = mapped_column("followingId", ForeignKey("User.id", ondelete="RESTRICT", onupdate="CASCADE"))
+    follower_id: Mapped[str] = mapped_column("followerId", ForeignKey("User.id", ondelete="RESTRICT", onupdate="CASCADE", name="Follow_followerId_fkey"))
+    following_id: Mapped[str] = mapped_column("followingId", ForeignKey("User.id", ondelete="RESTRICT", onupdate="CASCADE", name="Follow_followingId_fkey"))
 
     follower: Mapped["User"] = relationship(foreign_keys=[follower_id], back_populates="following")
     following: Mapped["User"] = relationship(foreign_keys=[following_id], back_populates="followers")
@@ -1317,23 +1366,25 @@ class Follow(Base):
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+      `from sqlalchemy import MetaData, Text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
+    type_annotation_map = {str: Text}
 
 
 class User(Base):
     __tablename__ = "User"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
     name: Mapped[str]
 
 class Post(Base):
     __tablename__ = "Post"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
     title: Mapped[str]
 `,
     )
@@ -1349,21 +1400,22 @@ class Post(Base):
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy import JSON
+      `from sqlalchemy import MetaData
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from typing import Any
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
 
 
 class Blob(Base):
     __tablename__ = "Blob"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
     data: Mapped[bytes]
-    meta: Mapped[dict[str, Any]] = mapped_column(JSON)
+    meta: Mapped[dict[str, Any]] = mapped_column(JSONB)
 `,
     )
   })
@@ -1378,18 +1430,18 @@ class Blob(Base):
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy import BigInteger
+      `from sqlalchemy import BigInteger, MetaData
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
 
 
 class Metric(Base):
     __tablename__ = "Metric"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
     counter: Mapped[int] = mapped_column(BigInteger)
     rate: Mapped[float]
 `,
@@ -1405,17 +1457,19 @@ class Metric(Base):
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+      `from sqlalchemy import MetaData, Text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
+    type_annotation_map = {str: Text}
 
 
 class User(Base):
     __tablename__ = "User"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
     first_name: Mapped[str]
 `,
     )
@@ -1450,26 +1504,37 @@ class User(Base):
       ]),
     ]
 
-    expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy import Dialect, TypeDecorator, func
+    expect(
+      generateSingleFile(models, undefined, [
+        { model: 'Article', type: 'unique', isDefinedOnField: true, fields: [{ name: 'slug' }] },
+      ]),
+    ).toBe(
+      `from sqlalchemy import Dialect, Index, MetaData, Text, TypeDecorator, text
 from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from typing import Optional
 from datetime import datetime, timezone
 
 
-${UTC_DATE_TIME}${UTC_NOW}${UTC_BASE}
+${UTC_DATE_TIME}${UTC_NOW}class Base(DeclarativeBase):
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
+    type_annotation_map = {datetime: UtcDateTime(precision=3), str: Text}
+
 
 class Article(Base):
     __tablename__ = "Article"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     title: Mapped[str]
-    slug: Mapped[str] = mapped_column(unique=True)
+    slug: Mapped[str]
     body: Mapped[Optional[str]]
-    published: Mapped[bool] = mapped_column(default=False)
-    created_at: Mapped[datetime] = mapped_column("createdAt", default=utc_now, server_default=func.now())
+    published: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
+    created_at: Mapped[datetime] = mapped_column("createdAt", default=utc_now, server_default=text("CURRENT_TIMESTAMP"))
     updated_at: Mapped[datetime] = mapped_column("updatedAt", default=utc_now, onupdate=utc_now)
+
+    __table_args__ = (
+        Index("Article_slug_key", "slug", unique=True),
+    )
 `,
     )
   })
@@ -1499,13 +1564,15 @@ describe('uuid default generation', () => {
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+      `from sqlalchemy import MetaData, Text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 import uuid as uuid_mod
 import uuid6
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
+    type_annotation_map = {str: Text}
 
 
 class User(Base):
@@ -1538,12 +1605,14 @@ describe('ulid default generation', () => {
     ]
 
     expect(generateSingleFile(models)).toBe(
-      `from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+      `from sqlalchemy import MetaData, Text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from ulid import ULID
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
+    type_annotation_map = {str: Text}
 
 
 class Ticket(Base):
@@ -1582,18 +1651,20 @@ describe('named implicit many-to-many', () => {
     ]
 
     expect(generateSingleFile(models))
-      .toBe(`from sqlalchemy import Column, ForeignKey, Index, String, Table
+      .toBe(`from sqlalchemy import Column, ForeignKey, Index, MetaData, PrimaryKeyConstraint, Table, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
+    type_annotation_map = {str: Text}
 
 post_tags = Table(
     "_PostTags",
     Base.metadata,
-    Column("A", String, ForeignKey("Post.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True),
-    Column("B", String, ForeignKey("Tag.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True),
+    Column("A", Text, ForeignKey("Post.id", ondelete="CASCADE", onupdate="CASCADE", name="_PostTags_A_fkey"), nullable=False),
+    Column("B", Text, ForeignKey("Tag.id", ondelete="CASCADE", onupdate="CASCADE", name="_PostTags_B_fkey"), nullable=False),
+    PrimaryKeyConstraint("A", "B", name="_PostTags_AB_pkey"),
     Index("_PostTags_B_index", "B"),
 )
 
@@ -1635,7 +1706,7 @@ describe('timestamptz native type', () => {
       ]),
     ]
 
-    expect(generateSingleFile(models)).toBe(`from sqlalchemy import Dialect, TypeDecorator
+    expect(generateSingleFile(models)).toBe(`from sqlalchemy import Dialect, MetaData, TypeDecorator
 from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from typing import Optional
@@ -1643,7 +1714,7 @@ from datetime import datetime, timezone
 
 
 ${UTC_DATE_TIME_TZ}class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
 
 
 class Sensor(Base):
@@ -1670,196 +1741,196 @@ const NATIVE_TYPES: readonly (readonly [
     'String',
     '@db.VarChar(255)',
     ['VarChar', ['255']],
-    'from sqlalchemy import String\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
+    'from sqlalchemy import MetaData, String\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[str] = mapped_column(String(255))\n',
   ],
   [
     'String',
     '@db.VarChar',
     ['VarChar', []],
-    'from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
-    'Mapped[str]\n',
+    'from sqlalchemy import MetaData, String\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
+    'Mapped[str] = mapped_column(String)\n',
   ],
   [
     'String',
     '@db.Char(10)',
     ['Char', ['10']],
-    'from sqlalchemy import String\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
-    'Mapped[str] = mapped_column(String(10))\n',
+    'from sqlalchemy import CHAR, MetaData\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
+    'Mapped[str] = mapped_column(CHAR(10))\n',
   ],
   [
     'String',
     '@db.Char',
     ['Char', []],
-    'from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
-    'Mapped[str]\n',
+    'from sqlalchemy import CHAR, MetaData\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
+    'Mapped[str] = mapped_column(CHAR)\n',
   ],
   [
     'String',
     '@db.Text',
     ['Text', []],
-    'from sqlalchemy import Text\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
-    'Mapped[str] = mapped_column(Text)\n',
+    'from sqlalchemy import MetaData, Text\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})\n    type_annotation_map = {str: Text}\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
+    'Mapped[str]\n',
   ],
   [
     'String',
     '@db.MediumText',
     ['MediumText', []],
-    'from sqlalchemy import Text\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
-    'Mapped[str] = mapped_column(Text)\n',
+    'from sqlalchemy import MetaData\nfrom sqlalchemy.dialects.postgresql import MEDIUMTEXT\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
+    'Mapped[str] = mapped_column(MEDIUMTEXT)\n',
   ],
   [
     'String',
     '@db.LongText',
     ['LongText', []],
-    'from sqlalchemy import Text\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
-    'Mapped[str] = mapped_column(Text)\n',
+    'from sqlalchemy import MetaData\nfrom sqlalchemy.dialects.postgresql import LONGTEXT\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
+    'Mapped[str] = mapped_column(LONGTEXT)\n',
   ],
   [
     'String',
     '@db.TinyText',
     ['TinyText', []],
-    'from sqlalchemy import Text\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
-    'Mapped[str] = mapped_column(Text)\n',
+    'from sqlalchemy import MetaData\nfrom sqlalchemy.dialects.postgresql import TINYTEXT\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
+    'Mapped[str] = mapped_column(TINYTEXT)\n',
   ],
   [
     'Int',
     '@db.SmallInt',
     ['SmallInt', []],
-    'from sqlalchemy import SmallInteger\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
+    'from sqlalchemy import MetaData, SmallInteger\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[int] = mapped_column(SmallInteger)\n',
   ],
   [
     'Int',
     '@db.TinyInt',
     ['TinyInt', []],
-    'from sqlalchemy import SmallInteger\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
-    'Mapped[int] = mapped_column(SmallInteger)\n',
+    'from sqlalchemy import MetaData\nfrom sqlalchemy.dialects.postgresql import TINYINT\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
+    'Mapped[int] = mapped_column(TINYINT)\n',
   ],
   [
     'Int',
     '@db.MediumInt',
     ['MediumInt', []],
-    'from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
-    'Mapped[int]\n',
+    'from sqlalchemy import MetaData\nfrom sqlalchemy.dialects.postgresql import MEDIUMINT\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
+    'Mapped[int] = mapped_column(MEDIUMINT)\n',
   ],
   [
     'Float',
     '@db.DoublePrecision',
     ['DoublePrecision', []],
-    'from sqlalchemy import Double\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
-    'Mapped[float] = mapped_column(Double)\n',
+    'from sqlalchemy import MetaData\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
+    'Mapped[float]\n',
   ],
   [
     'Float',
     '@db.Double',
     ['Double', []],
-    'from sqlalchemy import Double\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
-    'Mapped[float] = mapped_column(Double)\n',
+    'from sqlalchemy import MetaData\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
+    'Mapped[float]\n',
   ],
   [
     'Float',
     '@db.Real',
     ['Real', []],
-    'from sqlalchemy import REAL\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
+    'from sqlalchemy import MetaData, REAL\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[float] = mapped_column(REAL)\n',
   ],
   [
     'Decimal',
     '@db.Decimal(10, 2)',
     ['Decimal', ['10', '2']],
-    'from sqlalchemy import Numeric\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom decimal import Decimal as DecimalType\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
+    'from sqlalchemy import MetaData, Numeric\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom decimal import Decimal as DecimalType\n\n\nclass Base(DeclarativeBase):\n    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[DecimalType] = mapped_column(Numeric(precision=10, scale=2))\n',
   ],
   [
     'Decimal',
     '@db.Decimal',
     ['Decimal', []],
-    'from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom decimal import Decimal as DecimalType\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
-    'Mapped[DecimalType]\n',
+    'from sqlalchemy import MetaData, Numeric\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom decimal import Decimal as DecimalType\n\n\nclass Base(DeclarativeBase):\n    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
+    'Mapped[DecimalType] = mapped_column(Numeric)\n',
   ],
   [
     'Decimal',
     '@db.Money(10, 2)',
     ['Money', ['10', '2']],
-    'from sqlalchemy import Numeric\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom decimal import Decimal as DecimalType\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
-    'Mapped[DecimalType] = mapped_column(Numeric(precision=10, scale=2))\n',
+    'from sqlalchemy import MetaData\nfrom sqlalchemy.dialects.postgresql import MONEY\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom decimal import Decimal as DecimalType\n\n\nclass Base(DeclarativeBase):\n    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
+    'Mapped[DecimalType] = mapped_column(MONEY)\n',
   ],
   [
     'String',
     '@db.Uuid',
     ['Uuid', []],
-    'from sqlalchemy import Uuid\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nimport uuid as uuid_mod\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
+    'from sqlalchemy import MetaData, Uuid\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nimport uuid as uuid_mod\n\n\nclass Base(DeclarativeBase):\n    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[uuid_mod.UUID] = mapped_column(Uuid)\n',
   ],
   [
     'DateTime',
     '@db.Timestamp',
     ['Timestamp', []],
-    `from sqlalchemy import Dialect, TypeDecorator\nfrom sqlalchemy.dialects.postgresql import TIMESTAMP\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom typing import Optional\nfrom datetime import datetime, timezone\n\n\n${UTC_DATE_TIME}${UTC_BASE}\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n`,
+    `from sqlalchemy import Dialect, MetaData, TypeDecorator\nfrom sqlalchemy.dialects.postgresql import TIMESTAMP\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom typing import Optional\nfrom datetime import datetime, timezone\n\n\n${UTC_DATE_TIME}${UTC_BASE}\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n`,
     'Mapped[datetime] = mapped_column(UtcDateTime())\n',
   ],
   [
     'DateTime',
     '@db.Timestamptz',
     ['Timestamptz', []],
-    `from sqlalchemy import Dialect, TypeDecorator\nfrom sqlalchemy.dialects.postgresql import TIMESTAMP\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom typing import Optional\nfrom datetime import datetime, timezone\n\n\n${UTC_DATE_TIME_TZ}class Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n`,
+    `from sqlalchemy import Dialect, MetaData, TypeDecorator\nfrom sqlalchemy.dialects.postgresql import TIMESTAMP\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom typing import Optional\nfrom datetime import datetime, timezone\n\n\n${UTC_DATE_TIME_TZ}class Base(DeclarativeBase):\n    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n`,
     'Mapped[datetime] = mapped_column(UtcDateTimeTz())\n',
   ],
   [
     'DateTime',
     '@db.Date',
     ['Date', []],
-    'from sqlalchemy import Date\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import date\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
+    'from sqlalchemy import Date, MetaData\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import date\n\n\nclass Base(DeclarativeBase):\n    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[date] = mapped_column(Date)\n',
   ],
   [
     'DateTime',
     '@db.Time',
     ['Time', []],
-    'from sqlalchemy import Time\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import time as time_type\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
+    'from sqlalchemy import MetaData, Time\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import time as time_type\n\n\nclass Base(DeclarativeBase):\n    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[time_type] = mapped_column(Time)\n',
   ],
   [
     'DateTime',
     '@db.Timetz',
     ['Timetz', []],
-    'from sqlalchemy import Time\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import time as time_type\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
+    'from sqlalchemy import MetaData, Time\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import time as time_type\n\n\nclass Base(DeclarativeBase):\n    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[time_type] = mapped_column(Time(timezone=True))\n',
   ],
   [
     'DateTime',
     '@db.Time(3)',
     ['Time', ['3']],
-    'from sqlalchemy.dialects.postgresql import TIME\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import time as time_type\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
+    'from sqlalchemy import MetaData\nfrom sqlalchemy.dialects.postgresql import TIME\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import time as time_type\n\n\nclass Base(DeclarativeBase):\n    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[time_type] = mapped_column(TIME(precision=3))\n',
   ],
   [
     'DateTime',
     '@db.Timetz(6)',
     ['Timetz', ['6']],
-    'from sqlalchemy.dialects.postgresql import TIME\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import time as time_type\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
+    'from sqlalchemy import MetaData\nfrom sqlalchemy.dialects.postgresql import TIME\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom datetime import time as time_type\n\n\nclass Base(DeclarativeBase):\n    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[time_type] = mapped_column(TIME(precision=6, timezone=True))\n',
   ],
   [
     'Json',
     '@db.JsonB',
     ['JsonB', []],
-    'from sqlalchemy import JSON\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom typing import Any\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
-    'Mapped[dict[str, Any]] = mapped_column(JSON)\n',
+    'from sqlalchemy import MetaData\nfrom sqlalchemy.dialects.postgresql import JSONB\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom typing import Any\n\n\nclass Base(DeclarativeBase):\n    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
+    'Mapped[dict[str, Any]] = mapped_column(JSONB)\n',
   ],
   [
     'String',
     '@db.Xml',
     ['Xml', []],
-    'from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
-    'Mapped[str]\n',
+    'from sqlalchemy import MetaData, Text\nfrom sqlalchemy.ext.compiler import compiles\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom typing import Any\n\n\nclass Xml(Text):\n    pass\n\n\n@compiles(Xml)\ndef xml_ddl(type_: Xml, compiler: Any, **kw: Any) -> str:\n    return "XML"\n\n\nclass Base(DeclarativeBase):\n    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
+    'Mapped[str] = mapped_column(Xml)\n',
   ],
   [
     'String',
     '@db.Nope',
     ['Nope', []],
-    'from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    pass\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
+    'from sqlalchemy import MetaData, Text\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n\nclass Base(DeclarativeBase):\n    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})\n    type_annotation_map = {str: Text}\n\n\nclass Row(Base):\n    __tablename__ = "Row"\n\n',
     'Mapped[str]\n',
   ],
 ]
@@ -1910,7 +1981,7 @@ describe('native database types', () => {
       },
     ]
     expect(generateSingleFile(models, [], [])).toBe(
-      `${header}    id: Mapped[int] = mapped_column(primary_key=True)\n    value: ${column}`,
+      `${header}    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)\n    value: ${column}`,
     )
   })
 })
@@ -1981,18 +2052,18 @@ describe('relations as the database has them', () => {
       ]),
     ]
 
-    expect(generateSingleFile(models)).toBe(`from sqlalchemy import ForeignKey
+    expect(generateSingleFile(models)).toBe(`from sqlalchemy import ForeignKey, MetaData
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
 
 
 class Account(Base):
     __tablename__ = "accounts"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
 
     sent: Mapped[list["Transfer"]] = relationship(foreign_keys="Transfer.from_id", passive_deletes="all", back_populates="from_")
     received: Mapped[list["Transfer"]] = relationship(foreign_keys="Transfer.to_id", cascade="all, delete", passive_deletes=True, back_populates="to")
@@ -2000,9 +2071,9 @@ class Account(Base):
 class Transfer(Base):
     __tablename__ = "Transfer"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    from_id: Mapped[int] = mapped_column("fromId", ForeignKey("accounts.id", ondelete="NO ACTION", onupdate="CASCADE"))
-    to_id: Mapped[int] = mapped_column("toId", ForeignKey("accounts.id", ondelete="CASCADE", onupdate="CASCADE"))
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    from_id: Mapped[int] = mapped_column("fromId", ForeignKey("accounts.id", ondelete="NO ACTION", onupdate="CASCADE", name="Transfer_fromId_fkey"))
+    to_id: Mapped[int] = mapped_column("toId", ForeignKey("accounts.id", ondelete="CASCADE", onupdate="CASCADE", name="Transfer_toId_fkey"))
 
     from_: Mapped["Account"] = relationship(foreign_keys=[from_id], back_populates="sent")
     to: Mapped["Account"] = relationship(foreign_keys=[to_id], back_populates="received")
@@ -2054,14 +2125,14 @@ class Transfer(Base):
     const code = generateSingleFile(models)
     // Required: RESTRICT, which the session leaves to the database instead of nulling the key.
     expect(code).toContain(
-      'buyer_id: Mapped[int] = mapped_column("buyerId", ForeignKey("accounts.id", ondelete="RESTRICT", onupdate="CASCADE"))',
+      'buyer_id: Mapped[int] = mapped_column("buyerId", ForeignKey("accounts.id", ondelete="RESTRICT", onupdate="CASCADE", name="Order_buyerId_fkey"))',
     )
     expect(code).toContain(
       'orders: Mapped[list["Order"]] = relationship(foreign_keys="Order.buyer_id", passive_deletes="all", back_populates="buyer")',
     )
     // Optional: SET NULL, which is what the session does on its own.
     expect(code).toContain(
-      'reviewer_id: Mapped[Optional[int]] = mapped_column("reviewerId", ForeignKey("accounts.id", ondelete="SET NULL", onupdate="CASCADE"))',
+      'reviewer_id: Mapped[Optional[int]] = mapped_column("reviewerId", ForeignKey("accounts.id", ondelete="SET NULL", onupdate="CASCADE", name="Order_reviewerId_fkey"))',
     )
     expect(code).toContain(
       'notes: Mapped[list["Order"]] = relationship(foreign_keys="Order.reviewer_id", back_populates="reviewer")',
@@ -2122,18 +2193,19 @@ class Transfer(Base):
     ]
 
     expect(generateSingleFile(models))
-      .toBe(`from sqlalchemy import Column, ForeignKey, Index, Integer, Table
+      .toBe(`from sqlalchemy import Column, ForeignKey, Index, Integer, MetaData, PrimaryKeyConstraint, Table
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
 
 follows = Table(
     "_Follows",
     Base.metadata,
-    Column("A", Integer, ForeignKey("accounts.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True),
-    Column("B", Integer, ForeignKey("accounts.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True),
+    Column("A", Integer, ForeignKey("accounts.id", ondelete="CASCADE", onupdate="CASCADE", name="_Follows_A_fkey"), nullable=False),
+    Column("B", Integer, ForeignKey("accounts.id", ondelete="CASCADE", onupdate="CASCADE", name="_Follows_B_fkey"), nullable=False),
+    PrimaryKeyConstraint("A", "B", name="_Follows_AB_pkey"),
     Index("_Follows_B_index", "B"),
 )
 
@@ -2141,7 +2213,7 @@ follows = Table(
 class Account(Base):
     __tablename__ = "accounts"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
 
     following: Mapped[list["Account"]] = relationship(secondary=follows, primaryjoin=lambda: Account.id == follows.c.B, secondaryjoin=lambda: Account.id == follows.c.A, back_populates="followers")
     followers: Mapped[list["Account"]] = relationship(secondary=follows, primaryjoin=lambda: Account.id == follows.c.A, secondaryjoin=lambda: Account.id == follows.c.B, back_populates="following")
@@ -2158,9 +2230,9 @@ class Account(Base):
     ]
 
     const code = generateSingleFile(models)
-    expect(code).toContain('    data: Mapped[dict[str, Any]] = mapped_column(JSON)\n')
+    expect(code).toContain('    data: Mapped[dict[str, Any]] = mapped_column(JSONB)\n')
     expect(code).toContain(
-      '    extra: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON(none_as_null=True))\n',
+      '    extra: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB(none_as_null=True))\n',
     )
   })
 })
@@ -2181,7 +2253,7 @@ describe('DateTime per provider', () => {
     ]
 
     expect(generateSingleFile(models, [], [], 'sqlite'))
-      .toBe(`from sqlalchemy import Dialect, String, TypeDecorator, func
+      .toBe(`from sqlalchemy import Dialect, String, TypeDecorator, text
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from typing import Any, Optional
@@ -2189,8 +2261,6 @@ from datetime import datetime, timezone
 
 
 class UtcDateTime(TypeDecorator[datetime]):
-    """UTC text with milliseconds, \`2030-01-02T03:04:05.678+00:00\`; a naive value is UTC."""
-
     impl = String
     cache_ok = True
 
@@ -2209,7 +2279,6 @@ class UtcDateTime(TypeDecorator[datetime]):
 
 @compiles(UtcDateTime)
 def utc_date_time_ddl(type_: UtcDateTime, compiler: Any, **kw: Any) -> str:
-    """The column Prisma Migrate declares: DATETIME, which keeps the text as it is."""
     return "DATETIME"
 
 
@@ -2221,8 +2290,12 @@ class Row(Base):
     __tablename__ = "Row"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    at: Mapped[datetime] = mapped_column(default=utc_now, server_default=func.now())
+    at: Mapped[datetime] = mapped_column(default=utc_now, server_default=text("CURRENT_TIMESTAMP"))
     seen: Mapped[Optional[datetime]] = mapped_column(default=utc_now, onupdate=utc_now)
+
+    __table_args__ = (
+        {"sqlite_autoincrement": True},
+    )
 `)
   })
 
@@ -2246,8 +2319,6 @@ from datetime import datetime, timezone
 
 
 class UtcDateTime(TypeDecorator[datetime]):
-    """A timestamp without time zone that holds UTC: an aware value is stored in UTC."""
-
     impl: type[DateTime] = DATETIME
     cache_ok = True
 
@@ -2261,8 +2332,6 @@ class UtcDateTime(TypeDecorator[datetime]):
 
 
 class UtcTimestamp(UtcDateTime):
-    """A TIMESTAMP, which the server shifts by the session's time_zone: shifted back here."""
-
     impl = TIMESTAMP
     cache_ok = True
 
@@ -2280,11 +2349,15 @@ ${UTC_NOW}class Base(DeclarativeBase):
 class Row(Base):
     __tablename__ = "Row"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    at: Mapped[datetime] = mapped_column(default=utc_now, server_default=func.now(3))
-    ts: Mapped[datetime] = mapped_column(UtcTimestamp(fsp=3), default=utc_now, server_default=func.now(3))
-    ts0: Mapped[datetime] = mapped_column(UtcTimestamp(), default=utc_now, server_default=func.now())
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    at: Mapped[datetime] = mapped_column(default=utc_now, server_default=text("CURRENT_TIMESTAMP(3)"))
+    ts: Mapped[datetime] = mapped_column(UtcTimestamp(fsp=3), default=utc_now, server_default=text("CURRENT_TIMESTAMP(3)"))
+    ts0: Mapped[datetime] = mapped_column(UtcTimestamp(), default=utc_now, server_default=text("CURRENT_TIMESTAMP"))
     dt6: Mapped[datetime] = mapped_column(UtcDateTime(fsp=6))
+
+    __table_args__ = (
+        {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"},
+    )
 `)
   })
 
@@ -2314,10 +2387,14 @@ class Base(DeclarativeBase):
 class Shift(Base):
     __tablename__ = "Shift"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
     day: Mapped[date] = mapped_column(Date)
     starts: Mapped[time_type] = mapped_column(TIME(fsp=3))
     ends: Mapped[Optional[time_type]] = mapped_column(Time)
+
+    __table_args__ = (
+        {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"},
+    )
 `)
   })
 
@@ -2352,7 +2429,7 @@ class Shift(Base):
     ]
 
     expect(generateSingleFile(models, [], [], 'postgresql'))
-      .toBe(`from sqlalchemy import ARRAY, Date, Dialect, TypeDecorator, func
+      .toBe(`from sqlalchemy import ARRAY, Date, Dialect, MetaData, TypeDecorator, text
 from sqlalchemy.dialects.postgresql import TIME, TIMESTAMP
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from typing import Optional
@@ -2364,12 +2441,12 @@ ${UTC_DATE_TIME}${UTC_NOW}${UTC_BASE}
 class Row(Base):
     __tablename__ = "Row"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    stamps: Mapped[list[datetime]] = mapped_column(ARRAY(UtcDateTime(precision=3)))
-    days: Mapped[list[date]] = mapped_column(ARRAY(Date))
-    d: Mapped[date] = mapped_column(Date, default=date.fromisoformat("2024-01-15"))
-    t: Mapped[time_type] = mapped_column(TIME(precision=3), default=time_type.fromisoformat("10:30:00.000"))
-    dn: Mapped[date] = mapped_column(Date, default=lambda: utc_now().date(), server_default=func.now())
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    stamps: Mapped[list[datetime]] = mapped_column(ARRAY(UtcDateTime(precision=3)), nullable=True)
+    days: Mapped[list[date]] = mapped_column(ARRAY(Date), nullable=True)
+    d: Mapped[date] = mapped_column(Date, default=date.fromisoformat("2024-01-15"), server_default=text("'2024-01-15'"))
+    t: Mapped[time_type] = mapped_column(TIME(precision=3), default=time_type.fromisoformat("10:30:00.000"), server_default=text("'10:30:00'"))
+    dn: Mapped[date] = mapped_column(Date, default=lambda: utc_now().date(), server_default=text("CURRENT_TIMESTAMP"))
     tz: Mapped[time_type] = mapped_column(TIME(precision=3, timezone=True), default=lambda: utc_now().timetz(), onupdate=lambda: utc_now().timetz())
 `)
   })

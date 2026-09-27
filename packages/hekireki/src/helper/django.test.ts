@@ -71,8 +71,6 @@ describe('djangoAttrName', () => {
 // writes it once per file.
 // cspell:ignore datetimefield
 const UTC_DATETIME_FIELD = `class UtcDateTimeField(models.DateTimeField):  # type: ignore[type-arg]
-    """A timestamp without a zone holding UTC, as ISO 8601 text on SQLite."""
-
     def get_db_prep_value(self, value: Any, connection: BaseDatabaseWrapper, prepared: bool = False) -> Any:
         if not prepared:
             value = self.get_prep_value(value)
@@ -96,8 +94,6 @@ const AUTO_NOW_QUERY_SET = `_M = TypeVar("_M", bound=models.Model)
 
 
 class AutoNowQuerySet(models.QuerySet[_M]):
-    """update(), and bulk_update() through it, set the auto_now fields as save() does."""
-
     def update(self, **kwargs: Any) -> int:
         for field in self.model._meta.concrete_fields:
             if getattr(field, "auto_now", False):
@@ -758,8 +754,6 @@ from django.utils import timezone
 
 
 class UtcDateField(models.DateField):  # type: ignore[type-arg]
-    """auto_now stamps the UTC date, as Prisma's @updatedAt does."""
-
     def stamp(self) -> date:
         return utc_today()
 
@@ -772,8 +766,6 @@ class UtcDateField(models.DateField):  # type: ignore[type-arg]
 
 
 class UtcTimeField(models.TimeField):  # type: ignore[type-arg]
-    """auto_now stamps the UTC time of day, as Prisma's @updatedAt does."""
-
     def stamp(self) -> time:
         return utc_time()
 

@@ -13,11 +13,6 @@ import (
 	"gorm.io/gorm/schema"
 )
 
-// NamingStrategy keeps the names Prisma gave its many-to-many join tables
-// (`_AToB`, columns `A` and `B`), which GORM would otherwise snake_case,
-// pluralise and lowercase. Open the connection with it:
-//
-//	gorm.Open(dialector, &gorm.Config{NamingStrategy: model.NamingStrategy})
 var NamingStrategy = schema.NamingStrategy{SingularTable: true, NoLowerCase: true}
 
 type User struct {
@@ -246,33 +241,22 @@ func (Film) TableName() string {
 	return "Film"
 }
 
-// DateTime is a Prisma DateTime as Prisma Client keeps it: an instant in UTC, to the
-// millisecond, whatever zone the time.Time is in. Bind a time.Time through it in a query of
-// your own, `db.Where("at > ?", DateTime{Time: at})`: the driver formats a bare time.Time
-// its own way.
 type DateTime struct{ time.Time }
 
-// GormDataType has GORM treat the column as it treats a time.Time.
 func (DateTime) GormDataType() string {
 	return "time"
 }
 
-// Value writes the instant in UTC to the millisecond, as Prisma Client does: the wall clock of
-// a timestamp column is UTC, and a timestamptz column holds the instant whatever the
-// session's time zone.
 func (dateTime DateTime) Value() (driver.Value, error) {
 	return dateTime.UTC().Truncate(time.Millisecond), nil
 }
 
-// Scan reads the column as Prisma Client does (see readPrismaTime).
 func (dateTime *DateTime) Scan(src any) error {
 	read, err := readPrismaTime(src)
 	dateTime.Time = read
 	return err
 }
 
-// prismaTimeLayouts are the texts readPrismaTime reads, as Prisma Client reads them: with an
-// offset or `Z`, or with none, which is UTC; a date alone is midnight UTC.
 var prismaTimeLayouts = []string{
 	"2006-01-02T15:04:05.999999999Z07:00",
 	"2006-01-02 15:04:05.999999999Z07:00",
@@ -282,9 +266,6 @@ var prismaTimeLayouts = []string{
 	"2006-01-02",
 }
 
-// readPrismaTime reads a DateTime column as Prisma Client reads it: text with no zone is UTC, an
-// offset is kept, digits are milliseconds since 1970, and what is past the millisecond is
-// dropped.
 func readPrismaTime(src any) (time.Time, error) {
 	switch value := src.(type) {
 	case nil:

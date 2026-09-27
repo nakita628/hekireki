@@ -14,8 +14,6 @@ from django.utils import timezone
 
 
 class UtcDateTimeField(models.DateTimeField):  # type: ignore[type-arg]
-    """A timestamp without a zone holding UTC, as ISO 8601 text on SQLite."""
-
     def get_db_prep_value(self, value: Any, connection: BaseDatabaseWrapper, prepared: bool = False) -> Any:
         if not prepared:
             value = self.get_prep_value(value)
@@ -40,8 +38,6 @@ _M = TypeVar("_M", bound=models.Model)
 
 
 class AutoNowQuerySet(models.QuerySet[_M]):
-    """update(), and bulk_update() through it, set the auto_now fields as save() does."""
-
     def update(self, **kwargs: Any) -> int:
         for field in self.model._meta.concrete_fields:
             if getattr(field, "auto_now", False):

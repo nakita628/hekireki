@@ -8,13 +8,6 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
 
-/**
- * The query of a model keyed by several columns. A key is an array of every one of its
- * KEY_COLUMNS by name (`['order_number' => 1, 'product_id' => 'p1']`); a list of keys, or a
- * collection of keys or of models, names several rows. find(), findMany(), findOrFail(),
- * whereKey() and whereKeyNot() take either, and refuse a key that leaves a column out, which
- * would reach every row the rest of it matches.
- */
 class CompositeKeyBuilder extends Builder
 {
     public function find($id, $columns = ['*'])

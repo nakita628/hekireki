@@ -9,13 +9,6 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection as BaseCollection;
 
-/**
- * The models of a query keyed by several columns. Eloquent's Collection keys its models by
- * getKey(), an array here, which PHP casts to the string `Array`: every model would have the one
- * key. This one keys them by the key's JSON, its columns in order and its values as strings, so
- * unique(), diff(), intersect(), only(), except(), find(), findOrFail() and fresh() tell them
- * apart, and take a key as CompositeKeyBuilder does.
- */
 class CompositeKeyCollection extends Collection
 {
     public function find($key, $default = null)
@@ -84,7 +77,6 @@ class CompositeKeyCollection extends Collection
         return json_encode(array_map(fn ($value) => is_scalar($value) ? (string) $value : $value, $attribute));
     }
 
-    /** A list of keys, or of models: a key alone is an array of its columns by name. */
     protected function isKeyList(mixed $key): bool
     {
         return ! $key instanceof Model && ($key instanceof Arrayable || (is_array($key) && array_is_list($key)));

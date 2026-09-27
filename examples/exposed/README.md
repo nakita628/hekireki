@@ -20,6 +20,10 @@ needed), and runs, with the JVM and Node in `Asia/Tokyo` and then in UTC: `Check
 Exposed alone, `Check.kt seed`, which writes rows for `node interop.ts` to read through Prisma
 Client and write its own, and `Check.kt read`, which reads those. Each check prints one `ok:` line.
 
+`build.gradle.kts` names what the models of this schema import: `exposed-core`, `exposed-jdbc` and
+`exposed-dao`. A schema with a `Json` field imports `org.jetbrains.exposed.v1.json` as well, which
+is `exposed-json`.
+
 ## DateTime
 
 The schema has a `DateTime` in each form Prisma gives one on PostgreSQL: `timestamp(3)`, the

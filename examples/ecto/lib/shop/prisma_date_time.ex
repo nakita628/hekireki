@@ -1,17 +1,5 @@
 defmodule Shop.PrismaDateTime do
-  @moduledoc """
-  A `DateTime` as Prisma Client keeps it: the instant in UTC, in milliseconds. Writes, and the
-  values a query binds, go through `dump/1`, so Prisma finds what Ecto wrote by the same
-  instant and Ecto what Prisma wrote. On SQLite that is the text Prisma writes,
-  `2030-01-01T09:00:00.000+00:00`: SQLite compares and sorts the text, and a row in another
-  form (`…Z`, no milliseconds, a space) would be missed by an equality or a range.
-
-  A value read is the instant Prisma reads: text with no zone is UTC, an offset is honoured, a
-  date alone is midnight UTC, digits are epoch milliseconds. A `NaiveDateTime` is UTC, as
-  `:utc_datetime` takes one; a `DateTime` in another zone is moved to UTC. An optional
-  `@updatedAt` left `nil` on insert is filled with now; to store null, as Prisma Client does
-  for an explicit null, give it with `Ecto.Changeset.force_change(changeset, field, nil)`.
-  """
+  @moduledoc false
   use Ecto.Type
 
   @impl true
@@ -28,7 +16,6 @@ defmodule Shop.PrismaDateTime do
   def load(value) when is_integer(value), do: {:ok, value |> DateTime.from_unix!(:millisecond) |> utc()}
 
   def load(value) when is_binary(value) do
-    # SQLite keeps a literal default as Prisma Migrate writes it: `2024-01-15 10:30:00 +00:00`.
     value = String.replace(value, ~r/\s+(?=[+-]\d\d:?\d\d\z)/, "")
 
     case DateTime.from_iso8601(value) do
@@ -51,14 +38,21 @@ defmodule Shop.PrismaDateTime do
   def equal?(%DateTime{} = left, %DateTime{} = right), do: DateTime.compare(left, right) == :eq
   def equal?(left, right), do: left == right
 
-  @doc """
-  Now, as Prisma Client fills `now()` and `@updatedAt`. Ecto calls it once to a `timestamps()`
-  and to an `autogenerate: true` field, so the fields of one insert can be 1 ms apart.
-  """
   @impl true
-  def autogenerate, do: utc(DateTime.utc_now())
+  def autogenerate do
+    called = System.monotonic_time(:microsecond)
 
-  # A date alone, or epoch milliseconds as digits.
+    case Process.get(__MODULE__) do
+      {read, now} when called - read < 1_000 ->
+        now
+
+      _ ->
+        now = utc(DateTime.utc_now())
+        Process.put(__MODULE__, {called, now})
+        now
+    end
+  end
+
   defp load_other(value) do
     cond do
       value =~ ~r/\A-?\d+\z/ -> load(String.to_integer(value))

@@ -50,6 +50,10 @@ writes the PostgreSQL schema, for node-postgres, and an `Int` key with `@default
 identity column, as Prisma makes it; keep the session's `TimeZone` at UTC there, as on PostgreSQL,
 for a `dbgenerated("CURRENT_TIMESTAMP")` default to be UTC.
 
+`hekireki-atlas` writes the tables as Prisma Migrate makes them, so that `atlas schema diff`
+against a database Prisma made has nothing to change. Its `schemaName` is `public` unless given
+(`main` on SQLite): on MySQL, where the schema is the database, give the database's name.
+
 `hekireki-efcore` stores a `DateTime` as Prisma Client does, whatever its `DateTimeKind`: the UTC
 instant (a `Local` value converted), read back as `Utc`, in Prisma's text form on SQLite, and
 `now()` filled in by EF Core rather than by the database's clock. It takes Npgsql's legacy

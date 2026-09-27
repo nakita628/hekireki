@@ -157,9 +157,10 @@ function isStamped(field: DMMF.Field) {
  * other `@updatedAt` is a call of its own with no `inserted_at`, as a schema can have one
  * `updated_at` to a call. A field keeps its own name where Ecto's is taken by another field.
  *
- * Ecto calls `autogenerate/0` once to a call and once to an `autogenerate: true` field, so the
- * fields of one insert can be a millisecond apart where Prisma Client gives them one `now()`: Ecto
- * has no option that fills fields of several calls from one value. An optional `@updatedAt` left
+ * Ecto calls `autogenerate/0` once to a call and once to an `autogenerate: true` field, and has no
+ * option that fills fields of several calls from one value: the type's `autogenerate/0` gives the
+ * calls of one insert the instant the first of them read, as Prisma Client gives one `now()`. An
+ * optional `@updatedAt` left
  * `nil` on insert is filled, as nil is a struct's default and the insert does not count it as a
  * change; `force_change(changeset, field, nil)` stores null, as Prisma does for an explicit null.
  *
@@ -895,7 +896,6 @@ function changesetLines(
     ...(notNull && required.length > 0
       ? [
           '',
-          '  # validate_required/3 for a column that takes "": missing is nil, and nothing else.',
           '  defp validate_not_null(changeset, fields) do',
           '    changeset = %{changeset | required: Enum.uniq(changeset.required ++ fields)}',
           '',
@@ -1192,50 +1192,9 @@ export function ectoDateTypes(
   modules: ReadonlySet<string>,
 ) {
   const sqlite = provider === 'sqlite'
-  const session =
-    provider === 'postgresql' || provider === 'cockroachdb'
-      ? [
-          '',
-          '  A `@db.Timestamptz` or `@db.Timetz` column holds the instant whatever the session, as',
-          '  Postgrex sends it, but Prisma Client writes it as UTC text with no zone, which PostgreSQL',
-          "  reads in the session's time zone, and reads the offset back as `+00:00`: connect Prisma",
-          "  Client with `options: '-c TimeZone=UTC'` where the server's zone is not UTC. The repo's",
-          '  session changes no value Ecto writes or reads; only a value the database fills in a column',
-          '  with no zone (`dbgenerated("CURRENT_TIMESTAMP")`, a `DEFAULT CURRENT_TIMESTAMP` on a row',
-          '  from `insert_all`) is that session\'s wall time, UTC with `parameters: [timezone: "UTC"]`.',
-        ]
-      : []
-  const mysqlSession = [
-    '',
-    "  MySQL converts a `TIMESTAMP` column from the session's `time_zone` and back, for Ecto as",
-    '  for Prisma Client, which writes UTC: connect the repo with',
-    "  `after_connect: {MyXQL, :query!, [\"SET time_zone = '+00:00'\", []]}` where the server's",
-    '  zone is not UTC.',
-  ]
   const dateTime = [
     `defmodule ${app}.PrismaDateTime do`,
-    '  @moduledoc """',
-    '  A `DateTime` as Prisma Client keeps it: the instant in UTC, in milliseconds. Writes, and the',
-    '  values a query binds, go through `dump/1`, so Prisma finds what Ecto wrote by the same',
-    ...(sqlite
-      ? [
-          '  instant and Ecto what Prisma wrote. On SQLite that is the text Prisma writes,',
-          '  `2030-01-01T09:00:00.000+00:00`: SQLite compares and sorts the text, and a row in another',
-          '  form (`…Z`, no milliseconds, a space) would be missed by an equality or a range.',
-        ]
-      : [
-          '  instant and Ecto what Prisma wrote: microseconds are cut to milliseconds, as a',
-          '  JavaScript Date holds them. A column with no time zone holds UTC.',
-        ]),
-    '',
-    '  A value read is the instant Prisma reads: text with no zone is UTC, an offset is honoured, a',
-    '  date alone is midnight UTC, digits are epoch milliseconds. A `NaiveDateTime` is UTC, as',
-    '  `:utc_datetime` takes one; a `DateTime` in another zone is moved to UTC. An optional',
-    '  `@updatedAt` left `nil` on insert is filled with now; to store null, as Prisma Client does',
-    '  for an explicit null, give it with `Ecto.Changeset.force_change(changeset, field, nil)`.',
-    ...session,
-    ...(provider === 'mysql' ? mysqlSession : []),
-    '  """',
+    '  @moduledoc false',
     '  use Ecto.Type',
     '',
     '  @impl true',
@@ -1252,7 +1211,6 @@ export function ectoDateTypes(
     '  def load(value) when is_integer(value), do: {:ok, value |> DateTime.from_unix!(:millisecond) |> utc()}',
     '',
     '  def load(value) when is_binary(value) do',
-    '    # SQLite keeps a literal default as Prisma Migrate writes it: `2024-01-15 10:30:00 +00:00`.',
     '    value = String.replace(value, ~r/\\s+(?=[+-]\\d\\d:?\\d\\d\\z)/, "")',
     '',
     '    case DateTime.from_iso8601(value) do',
@@ -1279,14 +1237,24 @@ export function ectoDateTypes(
     '  def equal?(%DateTime{} = left, %DateTime{} = right), do: DateTime.compare(left, right) == :eq',
     '  def equal?(left, right), do: left == right',
     '',
-    '  @doc """',
-    '  Now, as Prisma Client fills `now()` and `@updatedAt`. Ecto calls it once to a `timestamps()`',
-    '  and to an `autogenerate: true` field, so the fields of one insert can be 1 ms apart.',
-    '  """',
+    // Ecto calls this once to a `timestamps()` and once to an `autogenerate: true` field, all in
+    // the process that inserts and microseconds apart: a call within a millisecond of the one
+    // that read the clock is given its value, so the fields of one insert hold one instant.
     '  @impl true',
-    '  def autogenerate, do: utc(DateTime.utc_now())',
+    '  def autogenerate do',
+    '    called = System.monotonic_time(:microsecond)',
     '',
-    '  # A date alone, or epoch milliseconds as digits.',
+    '    case Process.get(__MODULE__) do',
+    '      {read, now} when called - read < 1_000 ->',
+    '        now',
+    '',
+    '      _ ->',
+    '        now = utc(DateTime.utc_now())',
+    '        Process.put(__MODULE__, {called, now})',
+    '        now',
+    '    end',
+    '  end',
+    '',
     '  defp load_other(value) do',
     '    cond do',
     '      value =~ ~r/\\A-?\\d+\\z/ -> load(String.to_integer(value))',
@@ -1303,11 +1271,7 @@ export function ectoDateTypes(
   ]
   const date = [
     `defmodule ${app}.PrismaDate do`,
-    '  @moduledoc """',
-    '  A `DateTime @db.Date` as Prisma Client keeps it: Prisma writes the UTC date of the instant it',
-    '  is given and reads the date as midnight UTC. A `DateTime`, or text with an offset, is cast to',
-    '  its UTC date, where `:date` would take the date as written; a date alone is that date.',
-    '  """',
+    '  @moduledoc false',
     '  use Ecto.Type',
     '',
     '  @impl true',
@@ -1331,20 +1295,13 @@ export function ectoDateTypes(
     '  def dump(%Date{} = value), do: {:ok, value}',
     '  def dump(_), do: :error',
     '',
-    '  @doc "Today in UTC, as Prisma Client fills `now()` and `@updatedAt`."',
     '  @impl true',
     '  def autogenerate, do: Date.utc_today()',
     'end',
   ]
   const time = [
     `defmodule ${app}.PrismaTime do`,
-    '  @moduledoc """',
-    '  A `DateTime @db.Time` or `@db.Timetz` as Prisma Client keeps it: Prisma writes the UTC time of',
-    '  day of the instant it is given, in milliseconds, and reads it on 1970-01-01 in UTC. A',
-    '  `DateTime` is cast to its UTC time, and so is a time written with an offset, which `:time`',
-    '  would drop.',
-    ...session,
-    '  """',
+    '  @moduledoc false',
     '  use Ecto.Type',
     '',
     '  @impl true',
@@ -1354,7 +1311,6 @@ export function ectoDateTypes(
     '  def cast(%Time{} = value), do: {:ok, milliseconds(value)}',
     '',
     '  def cast(value) do',
-    '    # A time of day alone is read on 1970-01-01, as Prisma reads the column, so an offset counts.',
     '    instant = if is_binary(value) and value =~ ~r/\\A\\d{2}:/, do: "1970-01-01T" <> value, else: value',
     '',
     '    case Ecto.Type.cast(:utc_datetime_usec, instant) do',
@@ -1371,7 +1327,6 @@ export function ectoDateTypes(
     '  def dump(%Time{} = value), do: {:ok, milliseconds(value)}',
     '  def dump(_), do: :error',
     '',
-    '  @doc "The time of day in UTC, as Prisma Client fills `now()` and `@updatedAt`."',
     '  @impl true',
     '  def autogenerate, do: milliseconds(Time.utc_now())',
     '',

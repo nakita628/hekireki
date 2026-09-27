@@ -189,3 +189,56 @@ export function chunks<T>(items: readonly T[], size: number) {
 export function lowerFirst(text: string) {
   return text.charAt(0).toLowerCase() + text.slice(1)
 }
+
+/**
+ * The name Prisma Migrate gives a key, index or constraint the schema does not name: the table,
+ * the columns and a suffix, the first two cut to the database's longest identifier (63 on
+ * PostgreSQL, 64 on MySQL).
+ *
+ * @example
+ * ```sql
+ * -- @@unique([s, i]) on Scalar; a foreign key on refs.comp_a, comp_b
+ * CREATE UNIQUE INDEX "Scalar_s_i_key" ON "Scalar"("s", "i");
+ * CONSTRAINT "refs_comp_a_comp_b_fkey" FOREIGN KEY ("comp_a", "comp_b") ...
+ * ```
+ */
+export function constraintName(
+  table: string,
+  columns: readonly string[],
+  suffix: string,
+  provider: string,
+) {
+  const limit = provider === 'sqlite' ? Infinity : provider === 'mysql' ? 64 : 63
+  return `${[table, ...columns].join('_').slice(0, limit - suffix.length - 1)}_${suffix}`
+}
+
+/**
+ * The part of a column an index takes: MySQL's `@@index([identifier(length: 191)])` on a TEXT. A
+ * length the column does not reach is the whole of it, and MySQL keeps none: a String is
+ * `varchar(191)` unless its native type says otherwise.
+ *
+ * @example
+ * ```sql
+ * -- identifier String @db.Text, @@index([identifier(length: 191)])
+ * CREATE INDEX `verification_identifier_idx` ON `verification`(`identifier`(191));
+ * -- userId String, @@index([userId(length: 191)])
+ * CREATE INDEX `account_userId_idx` ON `account`(`userId`);
+ * ```
+ */
+export function indexPrefix(
+  model: {
+    readonly fields: readonly {
+      readonly name: string
+      readonly nativeType?: readonly [string, readonly string[]] | null
+    }[]
+  },
+  field: { readonly name: string; readonly length?: number },
+) {
+  const native = model.fields.find((f) => f.name === field.name)?.nativeType
+  const size = !native
+    ? 191
+    : native[0] === 'VarChar' || native[0] === 'Char'
+      ? Number(native[1][0] ?? 1)
+      : Infinity
+  return field.length === undefined || field.length >= size ? undefined : field.length
+}

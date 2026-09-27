@@ -273,7 +273,7 @@ table "_PostToTag" {
     null = false
     type = text
   }
-  primary_key {
+  primary_key "_PostToTag_AB_pkey" {
     columns = [column.A, column.B]
   }
   foreign_key "_PostToTag_A_fkey" {
@@ -330,7 +330,9 @@ schema "public" {}
     )
     expect(atlasSchema(datamodel, 'mysql', {})).toBe(
       `table "User" {
-  schema = schema.public
+  schema  = schema.public
+  charset = "utf8mb4"
+  collate = "utf8mb4_unicode_ci"
   column "id" {
     null           = false
     type           = int

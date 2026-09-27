@@ -797,6 +797,62 @@ describe('makeAtlasIndexes', () => {
     ])
   })
 
+  it('should give a column the index takes part of its prefix, in an on block', () => {
+    const model = makeModel({
+      name: 'Verification',
+      fields: [
+        makeField({ name: 'identifier', type: 'String', nativeType: ['Text', []] }),
+        makeField({ name: 'value', type: 'String' }),
+      ],
+    })
+    const indexes: DMMF.Index[] = [
+      {
+        model: 'Verification',
+        type: 'unique',
+        isDefinedOnField: false,
+        fields: [{ name: 'identifier', length: 191 }, { name: 'value' }],
+      },
+    ]
+    expect(makeAtlasIndexes(model, indexes, 'mysql')).toStrictEqual([
+      `  index "Verification_identifier_value_key" {
+    unique = true
+    on {
+      column = column.identifier
+      prefix = 191
+    }
+    on {
+      column = column.value
+    }
+  }`,
+    ])
+  })
+
+  it('should leave out a length the column does not reach, as MySQL does', () => {
+    const model = makeModel({
+      name: 'Account',
+      fields: [
+        makeField({ name: 'userId', type: 'String' }),
+        makeField({ name: 'code', type: 'String', nativeType: ['VarChar', ['32']] }),
+      ],
+    })
+    const indexes: DMMF.Index[] = [
+      {
+        model: 'Account',
+        type: 'normal',
+        isDefinedOnField: false,
+        fields: [
+          { name: 'userId', length: 191 },
+          { name: 'code', length: 64 },
+        ],
+      },
+    ]
+    expect(makeAtlasIndexes(model, indexes, 'mysql')).toStrictEqual([
+      `  index "Account_userId_code_idx" {
+    columns = [column.userId, column.code]
+  }`,
+    ])
+  })
+
   it('should mark mysql fulltext indexes with type FULLTEXT', () => {
     const model = makeModel({
       name: 'Post',
@@ -913,7 +969,7 @@ describe('makeAtlasTable', () => {
 })
 
 describe('makeAtlasM2MJoinTables', () => {
-  it('should build the implicit join table with composite PK, B index, and cascade FKs', () => {
+  it('should build the implicit join table with the pair as its key, B index, and cascade FKs', () => {
     const post = makeModel({
       name: 'Post',
       fields: [
@@ -963,7 +1019,7 @@ describe('makeAtlasM2MJoinTables', () => {
     null = false
     type = integer
   }
-  primary_key {
+  primary_key "_PostToTag_AB_pkey" {
     columns = [column.A, column.B]
   }
   foreign_key "_PostToTag_A_fkey" {
@@ -977,6 +1033,41 @@ describe('makeAtlasM2MJoinTables', () => {
     ref_columns = [table.Tag.column.id]
     on_update   = CASCADE
     on_delete   = CASCADE
+  }
+  index "_PostToTag_B_index" {
+    columns = [column.B]
+  }
+}`,
+    ])
+    // MySQL and SQLite have the pair as a unique index, and MySQL the table's collation.
+    expect(makeAtlasM2MJoinTables([post, tag], 'mysql', [], 'shop')).toStrictEqual([
+      `table "_PostToTag" {
+  schema  = schema.shop
+  charset = "utf8mb4"
+  collate = "utf8mb4_unicode_ci"
+  column "A" {
+    null = false
+    type = varchar(191)
+  }
+  column "B" {
+    null = false
+    type = int
+  }
+  foreign_key "_PostToTag_A_fkey" {
+    columns     = [column.A]
+    ref_columns = [table.Post.column.id]
+    on_update   = CASCADE
+    on_delete   = CASCADE
+  }
+  foreign_key "_PostToTag_B_fkey" {
+    columns     = [column.B]
+    ref_columns = [table.Tag.column.id]
+    on_update   = CASCADE
+    on_delete   = CASCADE
+  }
+  index "_PostToTag_AB_unique" {
+    unique  = true
+    columns = [column.A, column.B]
   }
   index "_PostToTag_B_index" {
     columns = [column.B]

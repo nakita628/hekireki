@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { makeSnakeCase } from '../utils/index.js'
+import { constraintName, indexPrefix, makeSnakeCase } from '../utils/index.js'
 
 type DbProvider = 'postgresql' | 'mysql' | 'sqlite'
 
@@ -8,12 +8,14 @@ export function resolveDbProvider(provider: 'postgresql' | 'cockroachdb' | 'mysq
   return provider === 'cockroachdb' ? 'postgresql' : provider
 }
 
+// A column with no native type is the one Prisma Migrate makes for the scalar: a Decimal is
+// `decimal(65,30)`, and a String on MySQL `varchar(191)`.
 const PG_SCALAR_MAP: { [k: string]: string } = {
   String: 'text()',
   Int: 'integer()',
   BigInt: "bigint({ mode: 'bigint' })",
   Float: 'doublePrecision()',
-  Decimal: 'numeric()',
+  Decimal: 'numeric({ precision: 65, scale: 30 })',
   Boolean: 'boolean()',
   DateTime: 'timestamp({ precision: 3 })',
   Json: 'jsonb()',
@@ -21,11 +23,11 @@ const PG_SCALAR_MAP: { [k: string]: string } = {
 }
 
 const MYSQL_SCALAR_MAP: { [k: string]: string } = {
-  String: 'text()',
+  String: 'varchar({ length: 191 })',
   Int: 'int()',
   BigInt: "bigint({ mode: 'bigint' })",
   Float: 'double()',
-  Decimal: 'decimal()',
+  Decimal: 'decimal({ precision: 65, scale: 30 })',
   Boolean: 'boolean()',
   DateTime: 'datetime({ fsp: 3 })',
   Json: 'json()',
@@ -542,34 +544,6 @@ const PRISMA_ACTION_MAP: { [k: string]: string } = {
   SetDefault: 'set default',
 }
 
-function makeFkActionOpts(onDelete: string | undefined, onUpdate: string | undefined) {
-  const parts = [
-    onDelete && PRISMA_ACTION_MAP[onDelete] ? `onDelete: '${PRISMA_ACTION_MAP[onDelete]}'` : null,
-    onUpdate && PRISMA_ACTION_MAP[onUpdate] ? `onUpdate: '${PRISMA_ACTION_MAP[onUpdate]}'` : null,
-  ].filter((p) => p !== null)
-  return parts.length > 0 ? `, { ${parts.join(', ')} }` : ''
-}
-
-function makeFkReference(field: DMMF.Field, model: DMMF.Model, models: readonly DMMF.Model[]) {
-  const relField = model.fields.find(
-    (f) => f.kind === 'object' && f.relationFromFields?.includes(field.name),
-  )
-  if (!(relField?.relationFromFields && relField.relationToFields)) return ''
-
-  // A multi-column FK cannot be expressed per column: an inline .references()
-  // here would pair each local column with relationToFields[0] and emit a
-  // half-join; the table-level foreignKey() constraint covers it instead.
-  if (relField.relationFromFields.length > 1) return ''
-
-  // Skip inline .references() for self-referencing FKs to avoid TypeScript circular inference error
-  if (relField.type === model.name) return ''
-
-  const targetVar = resolveVarNameByType(relField.type, models)
-  const toCol = relField.relationToFields[0] ?? 'id'
-  const opts = makeFkActionOpts(relField.relationOnDelete, relField.relationOnUpdate)
-  return `.references(() => ${targetVar}.${toCol}${opts})`
-}
-
 function makeColumn(
   field: DMMF.Field,
   model: DMMF.Model,
@@ -606,8 +580,6 @@ function makeColumn(
     !(isAutoincrement && provider === 'postgresql')
       ? '.notNull()'
       : '',
-    field.isUnique ? '.unique()' : '',
-    makeFkReference(field, model, models),
     isAutoincrement
       ? provider === 'mysql'
         ? '.autoincrement()'
@@ -621,74 +593,85 @@ function makeColumn(
   return `${field.name}: ${colExpr}${chain}`
 }
 
-function makeCompositeConstraints(
+// What a table has beside its columns, under the names Prisma Migrate gives them where the schema
+// names none: the composite key `<table>_pkey`, every unique a unique index `<table>_<columns>_key`,
+// every index `<table>_<columns>_idx`, and every foreign key `<table>_<columns>_fkey` with the
+// actions Prisma implies (onUpdate Cascade; onDelete Restrict, or SetNull on an optional relation).
+function makeTableConstraints(
   model: DMMF.Model,
   models: readonly DMMF.Model[],
+  provider: DbProvider,
   imports: DrizzleImports,
   indexes: readonly DMMF.Index[],
   tableName: string,
 ) {
+  const columnOf = (name: string) => model.fields.find((f) => f.name === name)?.dbName ?? name
   const pkLine = model.primaryKey
     ? (() => {
         imports.core.add('primaryKey')
-        return `primaryKey({ columns: [${model.primaryKey.fields.map((f) => `table.${f}`).join(', ')}] })`
+        return `primaryKey({ name: '${tableName}_pkey', columns: [${model.primaryKey.fields.map((f) => `table.${f}`).join(', ')}] })`
       })()
     : null
 
-  // Read from the datamodel indexes rather than `model.uniqueFields`, which is column names and
-  // nothing else: `map:` names the constraint in the database, so it has to reach the output, the
-  // way it already does for `@@index` below. Prisma's `name:` does not — it names the compound
-  // key on the Client and means nothing to the database. A `@@unique` on a single column arrives
-  // on the field as `isUnique`, and is written there.
-  const uniqueLines = indexes
+  const indexLines = indexes
     .filter(
       (idx) =>
         idx.model === model.name &&
-        idx.type === 'unique' &&
-        !idx.isDefinedOnField &&
-        idx.fields.length > 1,
+        (idx.type === 'unique' || idx.type === 'normal' || idx.type === 'fulltext'),
     )
     .map((idx) => {
-      imports.core.add('unique')
-      const columns = idx.fields.map((f) => `table.${f.name}`).join(', ')
-      return idx.dbName ? `unique('${idx.dbName}').on(${columns})` : `unique().on(${columns})`
+      const name =
+        idx.dbName ??
+        constraintName(
+          tableName,
+          idx.fields.map((f) => columnOf(f.name)),
+          idx.type === 'unique' ? 'key' : 'idx',
+          provider,
+        )
+      // drizzle-kit adds a table's foreign keys before its indexes, and a foreign key is refused
+      // where what it points at is not unique yet: a unique a relation points at is a constraint,
+      // made with the table. SQLite makes its foreign keys with the table and asks for neither.
+      const referenced =
+        provider !== 'sqlite' &&
+        models.some((m) =>
+          m.fields.some(
+            (f) =>
+              f.type === model.name &&
+              f.relationToFields?.join(',') === idx.fields.map((field) => field.name).join(','),
+          ),
+        )
+      const make = idx.type !== 'unique' ? 'index' : referenced ? 'unique' : 'uniqueIndex'
+      imports.core.add(make)
+      // MySQL takes part of a TEXT in an index; drizzle has the part as SQL.
+      const on = idx.fields.map((f) => {
+        const prefix = provider === 'mysql' ? indexPrefix(model, f) : undefined
+        if (prefix === undefined) return `table.${f.name}`
+        imports.orm.add('sql')
+        return `sql\`\${table.${f.name}}(${prefix})\``
+      })
+      return `${make}('${name}').on(${on.join(', ')})`
     })
 
-  const indexLines = indexes
-    .filter((idx) => idx.model === model.name && (idx.type === 'normal' || idx.type === 'fulltext'))
-    .map((idx) => {
-      imports.core.add('index')
-      const idxName =
-        idx.dbName ?? idx.name ?? `idx_${tableName}_${idx.fields.map((f) => f.name).join('_')}`
-      return `index('${idxName}').on(${idx.fields.map((f) => `table.${f.name}`).join(', ')})`
-    })
-
-  const compositeFkLines = model.fields
+  const fkLines = model.fields
     .filter(
       (f) =>
         f.kind === 'object' &&
-        f.relationFromFields &&
-        f.relationFromFields.length > 1 &&
-        f.relationToFields &&
-        f.type !== model.name,
+        f.relationFromFields !== undefined &&
+        f.relationFromFields.length > 0 &&
+        f.relationToFields !== undefined,
     )
     .map((f) => {
       imports.core.add('foreignKey')
-      const targetVar = resolveVarNameByType(f.type, models)
-      const columns = (f.relationFromFields ?? []).map((c) => `table.${c}`).join(', ')
-      const foreignColumns = (f.relationToFields ?? []).map((c) => `${targetVar}.${c}`).join(', ')
-      const onDelete =
-        f.relationOnDelete && PRISMA_ACTION_MAP[f.relationOnDelete]
-          ? `.onDelete('${PRISMA_ACTION_MAP[f.relationOnDelete]}')`
-          : ''
-      const onUpdate =
-        f.relationOnUpdate && PRISMA_ACTION_MAP[f.relationOnUpdate]
-          ? `.onUpdate('${PRISMA_ACTION_MAP[f.relationOnUpdate]}')`
-          : ''
-      return `foreignKey({ columns: [${columns}], foreignColumns: [${foreignColumns}] })${onDelete}${onUpdate}`
+      // A relation of a model to itself reads its own columns from the table it is given.
+      const target = f.type === model.name ? 'table' : resolveVarNameByType(f.type, models)
+      const from = f.relationFromFields ?? []
+      const name = constraintName(tableName, from.map(columnOf), 'fkey', provider)
+      const onDelete = f.relationOnDelete ?? (f.isRequired ? 'Restrict' : 'SetNull')
+      const onUpdate = f.relationOnUpdate ?? 'Cascade'
+      return `foreignKey({ name: '${name}', columns: [${from.map((c) => `table.${c}`).join(', ')}], foreignColumns: [${(f.relationToFields ?? []).map((c) => `${target}.${c}`).join(', ')}] }).onDelete('${PRISMA_ACTION_MAP[onDelete] ?? 'no action'}').onUpdate('${PRISMA_ACTION_MAP[onUpdate] ?? 'no action'}')`
     })
 
-  const all = [pkLine, ...uniqueLines, ...indexLines, ...compositeFkLines].filter((l) => l !== null)
+  const all = [pkLine, ...indexLines, ...fkLines].filter((l) => l !== null)
   return all.length > 0 ? all.join(', ') : null
 }
 
@@ -710,7 +693,7 @@ export function makeTable(
     .map((field) => makeColumn(field, model, models, provider, imports, enums))
     .filter((c) => c !== null)
     .join(', ')
-  const constraints = makeCompositeConstraints(model, models, imports, indexes, tableName)
+  const constraints = makeTableConstraints(model, models, provider, imports, indexes, tableName)
 
   return constraints
     ? `export const ${varName} = ${tableFunc}('${tableName}', { ${columns} }, (table) => [${constraints}])`
@@ -769,10 +752,10 @@ function pkColumnExpr(
   return withColumnName(baseExpr, colName)
 }
 
-// Prisma's implicit join table: `_<relationName>`, FK columns "A"/"B" typed
-// after each side's PK (models in alphabetical order), composite PK (A, B),
-// both FKs ON DELETE CASCADE. Without this table the generated migration
-// would silently lack the m2m storage entirely.
+// Prisma's implicit join table: `_<relationName>`, columns "A"/"B" typed after each side's key
+// (models in alphabetical order), both foreign keys CASCADE/CASCADE, and an index on B. The pair
+// is the key on PostgreSQL, `_<relationName>_AB_pkey`, and a unique index on MySQL and SQLite,
+// `_<relationName>_AB_unique`, as Prisma Migrate makes it.
 export function makeM2MJoinTables(
   models: readonly DMMF.Model[],
   provider: DbProvider,
@@ -782,15 +765,34 @@ export function makeM2MJoinTables(
     provider === 'postgresql' ? 'pgTable' : provider === 'mysql' ? 'mysqlTable' : 'sqliteTable'
   return collectM2MJoinTables(models).map((pair) => {
     imports.core.add(tableFunc)
-    imports.core.add('primaryKey')
-    const varName = joinVarName(pair.relationName)
-    const leftVar = resolveVarNameByType(pair.left, models)
-    const rightVar = resolveVarNameByType(pair.right, models)
-    const leftPk = models.find((m) => m.name === pair.left)?.fields.find((f) => f.isId)
-    const rightPk = models.find((m) => m.name === pair.right)?.fields.find((f) => f.isId)
-    const leftCol = `A: ${pkColumnExpr(pair.left, 'A', models, provider, imports)}.notNull().references(() => ${leftVar}.${leftPk?.name ?? 'id'}, { onDelete: 'cascade' })`
-    const rightCol = `B: ${pkColumnExpr(pair.right, 'B', models, provider, imports)}.notNull().references(() => ${rightVar}.${rightPk?.name ?? 'id'}, { onDelete: 'cascade' })`
-    return `export const ${varName} = ${tableFunc}('_${pair.relationName}', { ${leftCol}, ${rightCol} }, (table) => [primaryKey({ columns: [table.A, table.B] })])`
+    imports.core.add('foreignKey')
+    imports.core.add('index')
+    imports.core.add(provider === 'postgresql' ? 'primaryKey' : 'uniqueIndex')
+    const tableName = `_${pair.relationName}`
+    const sides = (['A', 'B'] as const).map((column) => {
+      const model = column === 'A' ? pair.left : pair.right
+      return {
+        column,
+        model,
+        target: resolveVarNameByType(model, models),
+        key: models.find((m) => m.name === model)?.fields.find((f) => f.isId)?.name ?? 'id',
+      }
+    })
+    const columns = sides.map(
+      (side) =>
+        `${side.column}: ${pkColumnExpr(side.model, side.column, models, provider, imports)}.notNull()`,
+    )
+    const constraints = [
+      provider === 'postgresql'
+        ? `primaryKey({ name: '${tableName}_AB_pkey', columns: [table.A, table.B] })`
+        : `uniqueIndex('${tableName}_AB_unique').on(table.A, table.B)`,
+      `index('${tableName}_B_index').on(table.B)`,
+      ...sides.map(
+        (side) =>
+          `foreignKey({ name: '${tableName}_${side.column}_fkey', columns: [table.${side.column}], foreignColumns: [${side.target}.${side.key}] }).onDelete('cascade').onUpdate('cascade')`,
+      ),
+    ]
+    return `export const ${joinVarName(pair.relationName)} = ${tableFunc}('${tableName}', { ${columns.join(', ')} }, (table) => [${constraints.join(', ')}])`
   })
 }
 

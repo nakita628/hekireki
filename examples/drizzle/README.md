@@ -83,13 +83,27 @@ A `Bytes` is a `Uint8Array` in drizzle as it is in Prisma Client, in the column 
 - **A `@default` on one** is the bytes in the table, written as the database reads them:
   `decode('0001ff', 'hex')` on PostgreSQL, `0x0001ff` on MySQL, `X'0001ff'` on SQLite.
 
+## Keys, indexes and foreign keys
+
+The tables drizzle-kit would make from the schema are the ones Prisma Migrate makes, under its
+names: a composite key is `<table>_pkey`, a unique is the unique index `<table>_<columns>_key`, an
+index `<table>_<columns>_idx`, and a foreign key `<table>_<columns>_fkey` with the actions Prisma
+implies where the schema names none (`onUpdate: Cascade`; `onDelete: Restrict`, or `SetNull` on an
+optional relation). An implicit many-to-many is `_<relation>` with its pair as the key on
+PostgreSQL and as a unique index on MySQL and SQLite.
+
+Two things stay apart from Prisma's tables, in form and not in what they hold:
+
+- **A unique a relation points at is a constraint**, not an index, on PostgreSQL and MySQL:
+  drizzle-kit adds a table's foreign keys before its indexes, and a foreign key is refused where
+  what it points at is not unique yet. The name is Prisma's.
+- **A list's default** is written `'{}'` by drizzle-kit and `ARRAY[]::text[]` by Prisma Migrate.
+
 ### What the connection has to be
 
 - **A MySQL `BIGINT` comes as text.** mysql2 gives one as a number, which is exact to 2^53:
   `9007199254740993` is read as `9007199254740992n`. With `supportBigNumbers: true` and
   `bigNumberStrings: true` in the pool's options it is text, which drizzle makes a `bigint` of.
-  The generated MySQL schema says this on one line above the tables when it has a `bigint()`
-  column.
 
 - **The session's time zone is UTC.** MySQL converts a `TIMESTAMP` through the session's
   `time_zone`, and `CURRENT_TIMESTAMP` in a column without a zone (a `dbgenerated` default on
@@ -98,8 +112,7 @@ A `Bytes` is a `Uint8Array` in drizzle as it is in Prisma Client, in the column 
   uses: `SET time_zone = '+00:00'` on MySQL (with mysql2's pool,
   `pool.on('connection', (connection) => connection.query("SET time_zone = '+00:00'"))`), and
   `options: '-c TimeZone=UTC'` in pg's config on PostgreSQL and on CockroachDB, whose sessions
-  start in UTC unless the client or a role's default says otherwise. The generated MySQL schema says this
-  on one line above the tables when it has a `timestamp()` column.
+  start in UTC unless the client or a role's default says otherwise.
 - **An `=` on a MySQL `TIME` with less precision than the value.** mysql2 writes the value into the
   statement and MySQL rounds it to the column, where Prisma binds it: `= 03:04:05.678` on a
   `@db.Time(0)` finds the row holding `03:04:06` through drizzle and none through Prisma. Compare

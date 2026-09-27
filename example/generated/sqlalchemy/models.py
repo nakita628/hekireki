@@ -9,8 +9,6 @@ import uuid6
 
 
 class UtcDateTime(TypeDecorator[datetime]):
-    """A timestamp without time zone that holds UTC: an aware value is stored in UTC."""
-
     impl = TIMESTAMP
     cache_ok = True
 
@@ -24,8 +22,6 @@ class UtcDateTime(TypeDecorator[datetime]):
 
 
 class UtcDateTimeTz(TypeDecorator[datetime]):
-    """A timestamptz: a naive value is UTC, not the session's zone, and reads are UTC."""
-
     impl = TIMESTAMP
     cache_ok = True
 
