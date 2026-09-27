@@ -1,8 +1,6 @@
 defmodule Example.Order do
   use Ecto.Schema
-  @moduledoc """
-  BigInt autoincrement primary key (bigserial) and money as Decimal.
-  """
+  @moduledoc false
 
   @primary_key {:id, :id, autogenerate: true}
 

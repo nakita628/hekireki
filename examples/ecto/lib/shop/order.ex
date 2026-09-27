@@ -1,11 +1,6 @@
 defmodule Shop.Order do
   use Ecto.Schema
-  @moduledoc """
-  The primary key is not called `id` and has a column of its own: Ecto calls it `:id` with a
-  `source:`. An order cannot be removed while it has line items (Restrict), and its account
-  cannot be removed while it has orders (NoAction, which SQLite checks at the end of the
-  statement).
-  """
+  @moduledoc false
 
   @primary_key {:id, :id, autogenerate: true, source: :order_number}
   @timestamps_opts [type: Shop.PrismaDateTime, autogenerate: {Shop.PrismaDateTime, :autogenerate, []}]

@@ -2,9 +2,6 @@
 
 namespace App\Models;
 
-/**
- * Values PHP has to quote: an apostrophe and a backslash.
- */
 enum Mood: string
 {
     case FINE = 'it\'s fine';

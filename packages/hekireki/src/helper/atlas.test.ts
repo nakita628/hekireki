@@ -43,7 +43,7 @@ function makeField(overrides: Partial<DMMF.Field> & { name: string; type: string
 describe('makeAtlasColumn', () => {
   it('should generate a required text column', () => {
     const field = makeField({ name: 'name', type: 'String' })
-    expect(makeAtlasColumn(field, 'postgresql', [], false)).toBe(
+    expect(makeAtlasColumn(field, 'postgresql', [])).toBe(
       `  column "name" {
     null = false
     type = text
@@ -59,7 +59,7 @@ describe('makeAtlasColumn', () => {
       hasDefaultValue: true,
       default: 42,
     })
-    expect(makeAtlasColumn(field, 'postgresql', [], false)).toBe(
+    expect(makeAtlasColumn(field, 'postgresql', [])).toBe(
       `  column "age" {
     null    = true
     type    = integer
@@ -76,7 +76,7 @@ describe('makeAtlasColumn', () => {
       hasDefaultValue: true,
       default: { name: 'autoincrement', args: [] },
     })
-    expect(makeAtlasColumn(field, 'postgresql', [], false)).toBe(
+    expect(makeAtlasColumn(field, 'postgresql', [])).toBe(
       `  column "id" {
     null = false
     type = serial
@@ -92,7 +92,7 @@ describe('makeAtlasColumn', () => {
       hasDefaultValue: true,
       default: { name: 'autoincrement', args: [] },
     })
-    expect(makeAtlasColumn(field, 'postgresql', [], false)).toBe(
+    expect(makeAtlasColumn(field, 'postgresql', [])).toBe(
       `  column "id" {
     null = false
     type = bigserial
@@ -108,7 +108,7 @@ describe('makeAtlasColumn', () => {
       hasDefaultValue: true,
       default: { name: 'autoincrement', args: [] },
     })
-    expect(makeAtlasColumn(field, 'mysql', [], false)).toBe(
+    expect(makeAtlasColumn(field, 'mysql', [])).toBe(
       `  column "id" {
     null           = false
     type           = int
@@ -124,7 +124,7 @@ describe('makeAtlasColumn', () => {
       hasDefaultValue: true,
       default: { name: 'now', args: [] },
     })
-    expect(makeAtlasColumn(field, 'postgresql', [], false)).toBe(
+    expect(makeAtlasColumn(field, 'postgresql', [])).toBe(
       `  column "created_at" {
     null    = false
     type    = timestamp(3)
@@ -140,7 +140,7 @@ describe('makeAtlasColumn', () => {
       hasDefaultValue: true,
       default: { name: 'now', args: [] },
     })
-    expect(makeAtlasColumn(field, 'mysql', [], false)).toBe(
+    expect(makeAtlasColumn(field, 'mysql', [])).toBe(
       `  column "created_at" {
     null    = false
     type    = datetime(3)
@@ -151,7 +151,7 @@ describe('makeAtlasColumn', () => {
 
   it('should resolve postgresql native types', () => {
     const field = makeField({ name: 'code', type: 'String', nativeType: ['VarChar', ['32']] })
-    expect(makeAtlasColumn(field, 'postgresql', [], false)).toBe(
+    expect(makeAtlasColumn(field, 'postgresql', [])).toBe(
       `  column "code" {
     null = false
     type = varchar(32)
@@ -161,7 +161,7 @@ describe('makeAtlasColumn', () => {
 
   it('should resolve mysql unsigned native types', () => {
     const field = makeField({ name: 'count', type: 'Int', nativeType: ['UnsignedInt', []] })
-    expect(makeAtlasColumn(field, 'mysql', [], false)).toBe(
+    expect(makeAtlasColumn(field, 'mysql', [])).toBe(
       `  column "count" {
     null     = false
     type     = int
@@ -172,7 +172,7 @@ describe('makeAtlasColumn', () => {
 
   it('should emit a nullable sql array type for scalar lists', () => {
     const field = makeField({ name: 'tags', type: 'String', isList: true })
-    expect(makeAtlasColumn(field, 'postgresql', [], false)).toBe(
+    expect(makeAtlasColumn(field, 'postgresql', [])).toBe(
       `  column "tags" {
     null = true
     type = sql("text[]")
@@ -188,7 +188,7 @@ describe('makeAtlasColumn', () => {
       hasDefaultValue: true,
       default: [],
     })
-    expect(makeAtlasColumn(field, 'postgresql', [], false)).toBe(
+    expect(makeAtlasColumn(field, 'postgresql', [])).toBe(
       `  column "scores" {
     null    = true
     type    = sql("double precision[]")
@@ -205,7 +205,7 @@ describe('makeAtlasColumn', () => {
       hasDefaultValue: true,
       default: ['a', "b'c"],
     })
-    expect(makeAtlasColumn(field, 'postgresql', [], false)).toBe(
+    expect(makeAtlasColumn(field, 'postgresql', [])).toBe(
       `  column "tags" {
     null    = true
     type    = sql("text[]")
@@ -232,7 +232,7 @@ describe('makeAtlasColumn', () => {
       hasDefaultValue: true,
       default: 'PUBLIC',
     })
-    expect(makeAtlasColumn(field, 'postgresql', enums, false)).toBe(
+    expect(makeAtlasColumn(field, 'postgresql', enums)).toBe(
       `  column "visibility" {
     null    = false
     type    = enum.visibility_level
@@ -260,7 +260,7 @@ describe('makeAtlasColumn', () => {
       hasDefaultValue: true,
       default: ['PUBLIC'],
     })
-    expect(makeAtlasColumn(field, 'postgresql', enums, false)).toBe(
+    expect(makeAtlasColumn(field, 'postgresql', enums)).toBe(
       `  column "levels" {
     null    = true
     type    = sql("\\"visibility_level\\"[]")
@@ -281,7 +281,7 @@ describe('makeAtlasColumn', () => {
       },
     ]
     const field = makeField({ name: 'status', type: 'Status', kind: 'enum' })
-    expect(makeAtlasColumn(field, 'mysql', enums, false)).toBe(
+    expect(makeAtlasColumn(field, 'mysql', enums)).toBe(
       `  column "status" {
     null = false
     type = enum("active", "inactive")
@@ -298,7 +298,7 @@ describe('makeAtlasColumn', () => {
       },
     ]
     const field = makeField({ name: 'status', type: 'Status', kind: 'enum' })
-    expect(makeAtlasColumn(field, 'sqlite', enums, false)).toBe(
+    expect(makeAtlasColumn(field, 'sqlite', enums)).toBe(
       `  column "status" {
     null = false
     type = text
@@ -314,7 +314,7 @@ describe('makeAtlasColumn', () => {
       hasDefaultValue: true,
       default: { name: 'dbgenerated', args: ['gen_random_uuid()'] },
     })
-    expect(makeAtlasColumn(field, 'postgresql', [], false)).toBe(
+    expect(makeAtlasColumn(field, 'postgresql', [])).toBe(
       `  column "id" {
     null    = false
     type    = uuid
@@ -330,7 +330,7 @@ describe('makeAtlasColumn', () => {
       hasDefaultValue: true,
       default: { name: 'uuid', args: [7] },
     })
-    expect(makeAtlasColumn(field, 'postgresql', [], false)).toBe(
+    expect(makeAtlasColumn(field, 'postgresql', [])).toBe(
       `  column "id" {
     null = false
     type = text
@@ -345,7 +345,7 @@ describe('makeAtlasColumn', () => {
       hasDefaultValue: true,
       default: '9007199254740993',
     })
-    expect(makeAtlasColumn(field, 'postgresql', [], false)).toBe(
+    expect(makeAtlasColumn(field, 'postgresql', [])).toBe(
       `  column "big" {
     null    = false
     type    = bigint
@@ -361,7 +361,7 @@ describe('makeAtlasColumn', () => {
       hasDefaultValue: true,
       default: 'say "hi"\n${x} %{y}',
     })
-    expect(makeAtlasColumn(field, 'postgresql', [], false)).toBe(
+    expect(makeAtlasColumn(field, 'postgresql', [])).toBe(
       '  column "greeting" {\n' +
         '    null    = false\n' +
         '    type    = text\n' +
@@ -398,7 +398,7 @@ describe('makeAtlasColumn', () => {
     ]
     for (const [nativeType, prismaType, expected] of cases) {
       const field = makeField({ name: 'v', type: prismaType, nativeType })
-      expect(makeAtlasColumn(field, 'postgresql', [], false)).toBe(
+      expect(makeAtlasColumn(field, 'postgresql', [])).toBe(
         `  column "v" {\n    null = false\n    type = ${expected}\n  }`,
       )
     }
@@ -436,7 +436,7 @@ describe('makeAtlasColumn', () => {
     ]
     for (const [nativeType, prismaType, expected] of cases) {
       const field = makeField({ name: 'v', type: prismaType, nativeType })
-      expect(makeAtlasColumn(field, 'mysql', [], false)).toBe(
+      expect(makeAtlasColumn(field, 'mysql', [])).toBe(
         `  column "v" {\n    null = false\n    type = ${expected}\n  }`,
       )
     }
@@ -451,7 +451,7 @@ describe('makeAtlasColumn', () => {
     ]
     for (const [nativeName, expected] of cases) {
       const field = makeField({ name: 'v', type: 'Int', nativeType: [nativeName, []] })
-      expect(makeAtlasColumn(field, 'mysql', [], false)).toBe(
+      expect(makeAtlasColumn(field, 'mysql', [])).toBe(
         `  column "v" {\n    null     = false\n    type     = ${expected}\n    unsigned = true\n  }`,
       )
     }
@@ -471,7 +471,7 @@ describe('makeAtlasColumn', () => {
     ]
     for (const [prismaType, expected] of cases) {
       const field = makeField({ name: 'v', type: prismaType, nativeType: ['Uuid', []] })
-      expect(makeAtlasColumn(field, 'sqlite', [], false)).toBe(
+      expect(makeAtlasColumn(field, 'sqlite', [])).toBe(
         `  column "v" {\n    null = false\n    type = ${expected}\n  }`,
       )
     }
@@ -486,7 +486,7 @@ describe('makeAtlasColumn', () => {
       hasDefaultValue: true,
       default: { name: 'autoincrement', args: [] },
     })
-    expect(makeAtlasColumn(field, 'postgresql', [], false)).toBe(
+    expect(makeAtlasColumn(field, 'postgresql', [])).toBe(
       `  column "id" {
     null = false
     type = smallserial
@@ -502,7 +502,7 @@ describe('makeAtlasColumn', () => {
       hasDefaultValue: true,
       default: [1, 2, 3],
     })
-    expect(makeAtlasColumn(field, 'postgresql', [], false)).toBe(
+    expect(makeAtlasColumn(field, 'postgresql', [])).toBe(
       `  column "counts" {
     null    = true
     type    = sql("integer[]")
@@ -519,26 +519,11 @@ describe('makeAtlasColumn', () => {
       hasDefaultValue: true,
       default: ['9007199254740993'],
     })
-    expect(makeAtlasColumn(field, 'postgresql', [], false)).toBe(
+    expect(makeAtlasColumn(field, 'postgresql', [])).toBe(
       `  column "words" {
     null    = true
     type    = sql("bigint[]")
     default = sql("ARRAY[9007199254740993]::bigint[]")
-  }`,
-    )
-  })
-
-  it('should attach stripped documentation as a comment when enabled', () => {
-    const field = makeField({
-      name: 'name',
-      type: 'String',
-      documentation: '@z.string()\nUser name',
-    })
-    expect(makeAtlasColumn(field, 'postgresql', [], true)).toBe(
-      `  column "name" {
-    null    = false
-    type    = text
-    comment = "User name"
   }`,
     )
   })
@@ -886,7 +871,6 @@ describe('makeAtlasTable', () => {
     expect(
       makeAtlasTable(model, [model], indexes, 'postgresql', [], {
         schemaName: 'public',
-        comment: false,
       }),
     ).toBe(
       `table "User" {
@@ -910,7 +894,7 @@ describe('makeAtlasTable', () => {
     )
   })
 
-  it('should use the @@map name and @@schema, and align the comment attribute', () => {
+  it('should use the @@map name and @@schema', () => {
     const model = makeModel({
       name: 'Account',
       dbName: 'accounts',
@@ -924,12 +908,10 @@ describe('makeAtlasTable', () => {
     expect(
       makeAtlasTable(model, [model], indexes, 'postgresql', [], {
         schemaName: 'public',
-        comment: true,
       }),
     ).toBe(
       `table "accounts" {
-  schema  = schema.auth
-  comment = "Account table"
+  schema = schema.auth
   column "id" {
     null = false
     type = text
@@ -954,9 +936,7 @@ describe('makeAtlasTable', () => {
       schema: null,
       fields: [makeField({ name: 'id', type: 'String', isId: true })],
     })
-    expect(
-      makeAtlasTable(a, [a, b], [], 'postgresql', [], { schemaName: 'public', comment: false }),
-    ).toBe(
+    expect(makeAtlasTable(a, [a, b], [], 'postgresql', [], { schemaName: 'public' })).toBe(
       `table "auth" "users" {
   schema = schema.auth
   column "id" {

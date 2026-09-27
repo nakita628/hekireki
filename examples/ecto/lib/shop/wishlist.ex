@@ -1,9 +1,6 @@
 defmodule Shop.Wishlist do
   use Ecto.Schema
-  @moduledoc """
-  A saved list, one per account, holding products through a named implicit relation: the join
-  table is `_Wished`, not `_ProductToWishlist`. Its key is a uuid and its owner's is an integer.
-  """
+  @moduledoc false
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id

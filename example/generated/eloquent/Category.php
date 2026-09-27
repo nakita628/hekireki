@@ -6,9 +6,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-/**
- * Self-relation (adjacency-list tree) with a composite unique.
- */
 class Category extends Model
 {
     protected $table = 'Category';

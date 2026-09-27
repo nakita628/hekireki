@@ -4,10 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-/**
- * A table as `prisma db pull` names it: lower case and snake case, and no @id, only a unique key.
- * Two @updatedAt: Eloquent keeps one as UPDATED_AT, and Prisma bumps both.
- */
 class StoreSetting extends Model
 {
     use PrismaDates;

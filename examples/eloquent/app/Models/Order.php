@@ -7,11 +7,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
-/**
- * The primary key is not called `id` and has a column of its own. An order cannot be removed
- * while it has line items (Restrict), and its account cannot be removed while it has orders
- * (NoAction). The only timestamp is `@updatedAt`, under a name of its own.
- */
 class Order extends Model
 {
     use PrismaDates;

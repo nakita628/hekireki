@@ -1,10 +1,6 @@
 defmodule Shop.Product do
   use Ecto.Schema
-  @moduledoc """
-  A random primary key made by the client, not the database: Ecto has to generate it. Its
-  author is an account with an integer key, the case where a module-wide
-  `@foreign_key_type :binary_id` must not reach the `belongs_to`.
-  """
+  @moduledoc false
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id

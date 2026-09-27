@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { indexPrefix, stripAnnotations } from '../utils/index.js'
+import { indexPrefix } from '../utils/index.js'
 
 type AtlasDialect = 'postgresql' | 'mysql' | 'sqlite'
 
@@ -392,20 +392,17 @@ export function makeAtlasColumn(
   field: DMMF.Field,
   dialect: AtlasDialect,
   enums: readonly DMMF.DatamodelEnum[],
-  comment: boolean,
 ) {
   const name = field.dbName ?? field.name
   const isAutoincrement = isFunctionDefault(field.default) && field.default.name === 'autoincrement'
   const typeInfo = columnTypeInfo(field, dialect, enums, isAutoincrement)
   const defaultValue = isAutoincrement ? undefined : resolveDefault(field, dialect, enums)
-  const doc = comment ? stripAnnotations(field.documentation) : undefined
   const attrs = [
     attr('null', field.isList ? 'true' : String(!field.isRequired)),
     attr('type', typeInfo.type),
     ...(typeInfo.unsigned ? [attr('unsigned', 'true')] : []),
     ...(defaultValue !== undefined ? [attr('default', defaultValue)] : []),
     ...(isAutoincrement && dialect !== 'postgresql' ? [attr('auto_increment', 'true')] : []),
-    ...(doc !== undefined ? [attr('comment', hclString(doc))] : []),
   ]
   return [`  column ${hclString(name)} {`, ...alignAttrs(attrs, '    '), '  }'].join('\n')
 }
@@ -514,22 +511,20 @@ export function makeAtlasTable(
   indexes: readonly DMMF.Index[],
   dialect: AtlasDialect,
   enums: readonly DMMF.DatamodelEnum[],
-  options: { readonly schemaName: string; readonly comment: boolean },
+  options: { readonly schemaName: string },
 ) {
   const name = tableNameOf(model)
   const schema = schemaOf(model, options.schemaName)
   const label = duplicateTableNames(models).has(name)
     ? `table ${hclString(schema)} ${hclString(name)}`
     : `table ${hclString(name)}`
-  const doc = options.comment ? stripAnnotations(model.documentation) : undefined
   const headAttrs = [
     attr('schema', `schema${refPart(schema)}`),
     ...(dialect === 'mysql' ? MYSQL_TABLE_ATTRS : []),
-    ...(doc !== undefined ? [attr('comment', hclString(doc))] : []),
   ]
   const columns = model.fields
     .filter((f) => f.kind === 'scalar' || f.kind === 'enum')
-    .map((f) => makeAtlasColumn(f, dialect, enums, options.comment))
+    .map((f) => makeAtlasColumn(f, dialect, enums))
   const pk = makeAtlasPrimaryKey(model, indexes)
   return [
     `${label} {`,

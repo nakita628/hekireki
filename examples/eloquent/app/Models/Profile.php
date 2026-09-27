@@ -5,9 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-/**
- * One per account, deleted with it (1-1, the foreign key unique on this side). No timestamps.
- */
 class Profile extends Model
 {
     protected $table = 'profiles';

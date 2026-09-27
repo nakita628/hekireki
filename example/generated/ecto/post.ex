@@ -1,9 +1,6 @@
 defmodule Example.Post do
   use Ecto.Schema
-  @moduledoc """
-  @@map + @map column names, FK with a referential action,
-  mapped-enum default, and an implicit many-to-many to Tag.
-  """
+  @moduledoc false
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id

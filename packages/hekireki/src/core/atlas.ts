@@ -5,7 +5,7 @@ import { Effect } from 'effect'
 
 import { emitRaw } from '../emit/index.js'
 import { atlasSchema } from '../generator/atlas.js'
-import { getBool, getString } from '../utils/index.js'
+import { getString } from '../utils/index.js'
 import { GeneratorConfigError } from './errors.js'
 
 export function atlas(options: GeneratorOptions) {
@@ -31,8 +31,7 @@ export function atlas(options: GeneratorOptions) {
     }
     const output = options.generator.output.value
     const schemaName = getString(options.generator.config?.schemaName)
-    const comment = getBool(options.generator.config?.comment)
-    const content = atlasSchema(options.dmmf.datamodel, provider, { schemaName, comment })
+    const content = atlasSchema(options.dmmf.datamodel, provider, { schemaName })
     const outPath = path.extname(output) ? output : path.join(output, 'schema.hcl')
     return yield* emitRaw(content, path.dirname(outPath), outPath)
   })

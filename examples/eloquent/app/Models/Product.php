@@ -8,10 +8,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-/**
- * A uuid() key Prisma's client makes, so Eloquent has to, and timestamps under Prisma's camel-case
- * names. A column named `attributes`, the property Eloquent keeps a model's columns in.
- */
 class Product extends Model
 {
     use HasVersion4Uuids;

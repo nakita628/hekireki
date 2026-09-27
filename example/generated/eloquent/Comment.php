@@ -5,10 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-/**
- * Two foreign keys with different referential actions
- * (Cascade vs SetNull) and a composite index.
- */
 class Comment extends Model
 {
     use PrismaDates;

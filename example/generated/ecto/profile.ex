@@ -1,10 +1,6 @@
 defmodule Example.Profile do
   use Ecto.Schema
-  @moduledoc """
-  One-to-one relation with native @db.* types, literal defaults,
-  and optional scalars of every flavour. ConfigDict passthrough: the
-  Pydantic model rejects unknown keys (extra='forbid').
-  """
+  @moduledoc false
 
   @primary_key false
 

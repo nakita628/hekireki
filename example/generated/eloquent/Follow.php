@@ -5,9 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-/**
- * Composite primary key + two named relations to the same model.
- */
 class Follow extends Model
 {
     use PrismaDates;

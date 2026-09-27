@@ -4,10 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-/**
- * No @id and no single unique field: the pair is what names a row. A Decimal SQLite would hand
- * back as a float.
- */
 class ExchangeRate extends Model
 {
     const KEY_COLUMNS = ['base', 'quote'];

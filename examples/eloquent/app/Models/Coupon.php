@@ -4,9 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-/**
- * A cuid() key, which Eloquent has no generator for: the caller gives it.
- */
 class Coupon extends Model
 {
     protected $table = 'Coupon';

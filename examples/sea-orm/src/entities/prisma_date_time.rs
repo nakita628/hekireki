@@ -1,8 +1,3 @@
-//! A Prisma `DateTime` on SQLite, where the instant is text and SQLite compares it as text.
-//! Prisma writes it in UTC with exactly three decimals (`2030-01-02T03:04:05.000+00:00`);
-//! sqlx writes a `DateTimeUtc` with none on a whole second and with nanoseconds below a
-//! millisecond, so a filter or a key on it would miss Prisma's rows. Filter with
-//! `Column::At.eq(PrismaDateTime(instant))`: a bare `DateTimeUtc` is bound as sqlx writes it.
 use sea_orm::entity::prelude::*;
 use sea_orm::sea_query::{ArrayType, Nullable, ValueType, ValueTypeErr};
 use sea_orm::{ColIdx, TryFromU64, TryGetError, TryGetable};

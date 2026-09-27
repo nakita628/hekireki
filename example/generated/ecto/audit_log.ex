@@ -1,8 +1,6 @@
 defmodule Example.AuditLog do
   use Ecto.Schema
-  @moduledoc """
-  DB-side generated defaults (dbgenerated) plus Json / Bytes payloads.
-  """
+  @moduledoc false
 
   @primary_key false
 

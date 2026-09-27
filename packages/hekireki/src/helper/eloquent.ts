@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { makePascalCase, stripAnnotations } from '../utils/index.js'
+import { makePascalCase } from '../utils/index.js'
 import { ELOQUENT_MODEL_METHODS } from './eloquent-model-methods.js'
 
 export function prismaTypeToEloquentCast(type: string) {
@@ -25,13 +25,6 @@ function phpString(value: string) {
 
 // A doc comment as a PHPDoc block, or nothing. A `*/` in the text would end the block: it is
 // written `*\/`.
-function phpDoc(documentation: string | undefined) {
-  const doc = stripAnnotations(documentation)
-  return doc
-    ? ['/**', ...doc.split('\n').map((line) => ` * ${line.replaceAll('*/', '*\\/')}`), ' */']
-    : []
-}
-
 function fieldColumn(model: DMMF.Model, fieldName: string) {
   const field = model.fields.find((f) => f.name === fieldName)
   return field?.dbName ?? fieldName
@@ -955,7 +948,6 @@ export function eloquentEnum(enumDef: DMMF.DatamodelEnum, namespace: string) {
     '',
     `namespace ${namespace};`,
     '',
-    ...phpDoc(enumDef.documentation),
     `enum ${enumDef.name}: string`,
     '{',
     // `class` is the one name PHP keeps from a case (`Role::class` is the enum's name): the
@@ -1368,7 +1360,6 @@ export function eloquentModels(
         '',
         ...imports.map((fqcn) => `use ${fqcn};`),
         '',
-        ...phpDoc(model.documentation),
         `class ${makePascalCase(model.name)} extends ${ref(MODEL)}`,
         '{',
         // oxlint-disable-next-line oxc/no-map-spread -- one blank separator per block, not an accumulator

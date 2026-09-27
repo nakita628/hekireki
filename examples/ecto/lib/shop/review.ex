@@ -1,10 +1,7 @@
 defmodule Shop.Review do
   use Ecto.Schema
   import Ecto.Changeset
-  @moduledoc """
-  One review per account per product (a composite unique). Replies point at the review they
-  answer and go with it (a self relation that cascades).
-  """
+  @moduledoc false
 
   @primary_key {:id, :id, autogenerate: true}
 

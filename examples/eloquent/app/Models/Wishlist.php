@@ -8,10 +8,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Str;
 
-/**
- * A saved list, one per account, holding products through a named implicit relation: the join
- * table is `_Wished`, not `_ProductToWishlist`.
- */
 class Wishlist extends Model
 {
     use HasVersion4Uuids;

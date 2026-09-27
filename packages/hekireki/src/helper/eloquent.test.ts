@@ -900,45 +900,6 @@ class Post extends Model
 }`)
   })
 
-  it('renders model documentation as a PHPDoc block', () => {
-    const user = makeModel({
-      name: 'User',
-      documentation: 'Application user account.',
-      fields: [
-        makeField({
-          name: 'id',
-          type: 'String',
-          isId: true,
-          hasDefaultValue: true,
-          default: { name: 'uuid', args: [4] },
-        }),
-      ],
-    })
-
-    expect(eloquentModels([user], 'App\\Models')).toBe(`<?php
-
-namespace App\\Models;
-
-use Illuminate\\Database\\Eloquent\\Concerns\\HasVersion4Uuids;
-use Illuminate\\Database\\Eloquent\\Model;
-
-/**
- * Application user account.
- */
-class User extends Model
-{
-    use HasVersion4Uuids;
-
-    protected $table = 'User';
-
-    protected $keyType = 'string';
-
-    public $incrementing = false;
-
-    public $timestamps = false;
-}`)
-  })
-
   it('generates two belongsTo for a self-referencing relation', () => {
     const user = makeModel({
       name: 'User',
@@ -1369,19 +1330,6 @@ enum Mood: string
     case FINE = 'it\\'s fine';
     case ESCAPED = 'back\\\\slash\\\\';
 }`)
-  })
-
-  it('writes a */ in a doc comment so the docblock goes on', () => {
-    const model = makeModel({
-      name: 'Note',
-      documentation: 'Ends early: */ and goes on.',
-      fields: [autoincrementId],
-    })
-
-    expect(eloquentModels([model], 'App\\Models')).toContain(`/**
- * Ends early: *\\/ and goes on.
- */
-class Note extends Model`)
   })
 
   it('reads a self relation whose list side comes first as a hasMany, and a self many-to-many by field name', () => {
@@ -2038,20 +1986,6 @@ class Model extends \\Illuminate\\Database\\Eloquent\\Model`)
     {
         return $this->hasMany(HasMany::class, 'modelId');
     }`)
-  })
-
-  it('writes the doc comment of an enum as its docblock', () => {
-    const mood: DMMF.DatamodelEnum = {
-      name: 'Mood',
-      dbName: null,
-      documentation: 'Values PHP has to quote: */ ends nothing.',
-      values: [{ name: 'FINE', dbName: null }],
-    }
-
-    expect(eloquentEnum(mood, 'App\\Models')).toContain(`/**
- * Values PHP has to quote: *\\/ ends nothing.
- */
-enum Mood: string`)
   })
 
   it('serializes Bytes as base64, which json_encode takes', () => {

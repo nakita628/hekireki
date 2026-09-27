@@ -6,10 +6,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-/**
- * One review per account per product (a composite unique). Replies point at the review they
- * answer and go with it (a self relation that cascades).
- */
 class Review extends Model
 {
     protected $table = 'reviews';

@@ -20,7 +20,6 @@ generator Hekireki-SQLAlchemy {
 generator Hekireki-Pydantic {
   provider = "hekireki-pydantic"
   output   = "../harness/pydantic"
-  comment  = true
   relation = true
 }
 

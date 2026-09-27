@@ -1,8 +1,6 @@
 defmodule Shop.Profile do
   use Ecto.Schema
-  @moduledoc """
-  One per account, destroyed with it (1-1, the foreign key unique on this side).
-  """
+  @moduledoc false
 
   @primary_key {:id, :id, autogenerate: true}
 

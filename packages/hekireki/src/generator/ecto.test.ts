@@ -89,9 +89,7 @@ describe('ectoSchemaFiles', () => {
         fileName: 'user.ex',
         code: `defmodule MyApp.User do
   use Ecto.Schema
-  @moduledoc """
-  A person.
-  """
+  @moduledoc false
 
   @primary_key false
 
@@ -141,9 +139,7 @@ end`,
         fileName: 'user.ex',
         code: `defmodule My.App.User do
   use Ecto.Schema
-  @moduledoc """
-  A person.
-  """
+  @moduledoc false
 
   @primary_key false
 

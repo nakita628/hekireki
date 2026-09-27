@@ -4,9 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-/**
- * DB-side generated defaults (dbgenerated) plus Json / Bytes payloads.
- */
 class AuditLog extends Model
 {
     use PrismaDates;

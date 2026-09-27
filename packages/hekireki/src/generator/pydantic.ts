@@ -9,11 +9,10 @@ import {
 export function pydanticCode(
   models: readonly DMMF.Model[],
   enums: readonly DMMF.DatamodelEnum[] | undefined,
-  comment: boolean,
   relation = false,
 ) {
   const bodies = models
-    .map((model) => makePydanticModel(model, enums, comment))
+    .map((model) => makePydanticModel(model, enums))
     .filter((body) => body !== null)
   const relationBodies = relation
     ? models

@@ -5,9 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-/**
- * An explicit many-to-many between Order and Product, keyed by the pair.
- */
 class LineItem extends Model
 {
     const KEY_COLUMNS = ['order_number', 'product_id'];

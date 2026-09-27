@@ -5,9 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-/**
- * Child of Order with a composite unique constraint.
- */
 class OrderItem extends Model
 {
     protected $table = 'order_items';

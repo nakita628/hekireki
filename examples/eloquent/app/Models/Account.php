@@ -7,10 +7,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
-/**
- * Someone who signs in. The key counts up in the database, the address is unique, and the
- * timestamps are Laravel's own columns under Prisma's field names.
- */
 class Account extends Model
 {
     use PrismaDates;

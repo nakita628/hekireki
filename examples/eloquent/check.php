@@ -316,9 +316,9 @@ check("PHP's words are plain columns: type, class, function, match, list, static
     ];
 });
 
-check("a doc comment is the class's docblock, a */ in it written *\\/ so the block goes on", fn () => [
-    expect(str_contains((string) (new ReflectionClass(Keyword::class))->getDocComment(), 'early: *\\/ and a'), true, 'docblock'),
-    expect(str_contains((string) (new ReflectionClass(Mood::class))->getDocComment(), 'an apostrophe and a backslash'), true, "an enum's"),
+check('a doc comment of the schema is not written: a class and an enum have no docblock', fn () => [
+    expect((new ReflectionClass(Keyword::class))->getDocComment(), false, 'docblock'),
+    expect((new ReflectionClass(Mood::class))->getDocComment(), false, "an enum's"),
 ]);
 
 // --- Enums ----------------------------------------------------------------------------------

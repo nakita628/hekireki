@@ -5,11 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-/**
- * One-to-one relation with native @db.* types, literal defaults,
- * and optional scalars of every flavour. ConfigDict passthrough: the
- * Pydantic model rejects unknown keys (extra='forbid').
- */
 class Profile extends Model
 {
     use PrismaDates;

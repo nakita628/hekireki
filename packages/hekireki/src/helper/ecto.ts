@@ -1,11 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import {
-  isAnnotationLine,
-  makePascalCase,
-  makeSnakeCase,
-  stripAnnotations,
-} from '../utils/index.js'
+import { isAnnotationLine, makePascalCase, makeSnakeCase } from '../utils/index.js'
 import { prismaConstraintName } from '../utils/prisma-postgres.js'
 
 /**
@@ -830,8 +825,8 @@ function changesetLines(
   // NoAction on delete, which Prisma makes of a required relation that names neither — refuses
   // the delete of this row: `no_assoc_constraint` turns that into an error on the association.
   // Cascade and SetNull refuse nothing; a line asks for one anyway. A key of several columns has
-  // no association in Ecto, so it is a foreign_key_constraint on the relation's name with the
-  // message no_assoc_constraint gives.
+  // no association in Ecto, so it is a foreign_key_constraint on the relation's name, with the
+  // message Ecto gives one unless the line gives its own.
   const inverseSteps = relationFields.flatMap((field) => {
     const call = ectoCalls(field.documentation).calls.find((c) => c.name === 'no_assoc_constraint')
     const key = foreignKeyOf(model, field, allModels)
@@ -847,16 +842,7 @@ function changesetLines(
     if (key.holder.relationFromFields?.length === 1) {
       return [`no_assoc_constraint(${withArgs(atom, named(call?.args ?? '', name))})`]
     }
-    const args = call?.args ?? ''
-    const message = field.isList
-      ? '"are still associated with this entry"'
-      : '"is still associated with this entry"'
-    return [
-      `foreign_key_constraint(${withArgs(
-        atom,
-        named(hasOption(args, 'message') ? args : withArgs(`message: ${message}`, args), name),
-      )})`,
-    ]
+    return [`foreign_key_constraint(${withArgs(atom, named(call?.args ?? '', name))})`]
   })
 
   const compoundCalls = new Set(model.uniqueFields.map(compoundOwn))
@@ -1105,25 +1091,12 @@ export function ectoSchemas(
         return `    many_to_many(:${snakeAssocName}, ${appName}.${makePascalCase(a.targetModel)}, join_through: "${a.joinThrough}", ${joinKeys})`
       })
 
-      const moduledoc = stripAnnotations(model.documentation)
       const changeset = changesetLines(model, contextModels, options)
       const lines = [
         `defmodule ${appName}.${makePascalCase(model.name)} do`,
         '  use Ecto.Schema',
         ...(changeset.length > 0 ? ['  import Ecto.Changeset'] : []),
-        ...(moduledoc
-          ? [
-              `  @moduledoc """`,
-              // A heredoc interpolates and escapes: a doc comment is text, so neither applies.
-              ...moduledoc
-                .replaceAll('\\', '\\\\')
-                .replaceAll('#{', '\\#{')
-                .replaceAll('"""', '\\"""')
-                .split('\n')
-                .map((l) => `  ${l}`),
-              '  """',
-            ]
-          : ['  @moduledoc false']),
+        '  @moduledoc false',
         '',
         `  ${pk.line}`,
         ...(pk.foreignKeyType ? [`  @foreign_key_type ${formatEctoType(pk.foreignKeyType)}`] : []),

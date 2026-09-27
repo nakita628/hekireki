@@ -1,10 +1,6 @@
 defmodule Example.User do
   use Ecto.Schema
-  @moduledoc """
-  Application user. Fully annotated for every validator generator,
-  with a UUIDv7 primary key, enum default, scalar list, @map columns,
-  @updatedAt, and relations of every cardinality.
-  """
+  @moduledoc false
 
   @primary_key {:id, Ecto.UUID, autogenerate: [version: 7]}
   @foreign_key_type :binary_id

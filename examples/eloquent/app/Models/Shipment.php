@@ -4,9 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-/**
- * A key of two columns, which Eloquent has no relation for: the columns stay, the method does not.
- */
 class Shipment extends Model
 {
     protected $table = 'shipments';

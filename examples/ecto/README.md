@@ -31,7 +31,6 @@ It opens with what running these schemas found in the generator, so none comes b
 
 | Found                                                                                                     | Asked of the generated schema                                                    |
 | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| A doc comment with `#{...}` became an interpolation in `@moduledoc`, and the schema did not compile       | the `@moduledoc` of `Shop.Keyword` is the comment, word for word                 |
 | `references: [number]` on a key Ecto calls `:id` wrote `references: :number`, a field that is not there   | the schemas compile with `--warnings-as-errors`; a line item's order loads       |
 | A key referencing a unique `String` was typed `:id`, and `has_many` read it by the primary key            | `gifts` and `gift_target` load through `references: :handle`                     |
 | A `uuid()`-keyed schema's `@foreign_key_type :binary_id` reached a `belongs_to` of an integer key         | a wishlist and a product are saved with their account and category ids           |

@@ -1,8 +1,6 @@
 defmodule Shop.LineItem do
   use Ecto.Schema
-  @moduledoc """
-  An explicit many-to-many between Order and Product, keyed by the pair.
-  """
+  @moduledoc false
 
   @primary_key false
 

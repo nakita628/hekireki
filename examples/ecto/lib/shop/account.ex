@@ -1,12 +1,7 @@
 defmodule Shop.Account do
   use Ecto.Schema
   import Ecto.Changeset
-  @moduledoc """
-  Someone who signs in. The key counts up in the database, the address is unique, and the
-  timestamps have Prisma's own names on Rails' columns, so Ecto's `timestamps()` needs a source
-  for each. Its changeset takes what the @ecto. lines ask on top of what the schema requires, and
-  a line of the model's own.
-  """
+  @moduledoc false
 
   @primary_key {:id, :id, autogenerate: true}
   @timestamps_opts [type: Shop.PrismaDateTime, autogenerate: {Shop.PrismaDateTime, :autogenerate, []}]

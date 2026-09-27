@@ -1645,50 +1645,6 @@ end`)
         'defmodule App.User do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t()\n        }\n\n  schema "User" do\n  end\nend',
       )
     })
-
-    it('uses model.documentation for @moduledoc when present', () => {
-      const model = makeModel({
-        name: 'User',
-        fields: [
-          makeField({
-            name: 'id',
-            type: 'String',
-            isId: true,
-            hasDefaultValue: true,
-            default: { name: 'uuid', args: [4] },
-          }),
-        ],
-        documentation: 'User account schema',
-      })
-
-      const result = ectoSchemas([model], 'App')
-
-      expect(result).toBe(
-        'defmodule App.User do\n  use Ecto.Schema\n  @moduledoc """\n  User account schema\n  """\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t()\n        }\n\n  schema "User" do\n  end\nend',
-      )
-    })
-
-    it('handles multi-line documentation', () => {
-      const model = makeModel({
-        name: 'User',
-        fields: [
-          makeField({
-            name: 'id',
-            type: 'String',
-            isId: true,
-            hasDefaultValue: true,
-            default: { name: 'uuid', args: [4] },
-          }),
-        ],
-        documentation: 'User account schema\nUsed for authentication',
-      })
-
-      const result = ectoSchemas([model], 'App')
-
-      expect(result).toBe(
-        'defmodule App.User do\n  use Ecto.Schema\n  @moduledoc """\n  User account schema\n  Used for authentication\n  """\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t()\n        }\n\n  schema "User" do\n  end\nend',
-      )
-    })
   })
 
   describe('empty model', () => {
@@ -2465,33 +2421,6 @@ end`)
   })
 })
 
-describe('@moduledoc', () => {
-  it('keeps a doc comment as text: no interpolation, escape or end of the heredoc', () => {
-    const model = makeModel({
-      name: 'Note',
-      documentation: 'Says #{name}, a backslash \\n and a """ quote.',
-      fields: [makeField({ name: 'id', type: 'Int', isId: true })],
-    })
-
-    expect(ectoSchemas([model], 'App')).toBe(`defmodule App.Note do
-  use Ecto.Schema
-  @moduledoc """
-  Says \\#{name}, a backslash \\\\n and a \\""" quote.
-  """
-
-  @primary_key false
-
-  @type t :: %__MODULE__{
-          id: integer()
-        }
-
-  schema "Note" do
-    field(:id, :integer, primary_key: true)
-  end
-end`)
-  })
-})
-
 describe('changeset', () => {
   const autoincrementId = makeField({
     name: 'id',
@@ -2590,9 +2519,34 @@ end`)
 
     const result = ectoSchemas([model], 'App', undefined, undefined, { provider: 'sqlite' })
 
-    expect(result).toContain(`  @moduledoc """
-  Someone who signs in.
-  """`)
+    expect(result).toContain(`defmodule App.Account do
+  use Ecto.Schema
+  import Ecto.Changeset
+  @moduledoc false
+
+  @primary_key {:id, :id, autogenerate: true}
+  @timestamps_opts [type: App.PrismaDateTime, autogenerate: {App.PrismaDateTime, :autogenerate, []}]
+
+  @type t :: %__MODULE__{
+          id: integer(),
+          password: String.t(),
+          inserted_at: DateTime.t(),
+          updated_at: DateTime.t()
+        }
+
+  schema "accounts" do
+    field(:password, :string)
+    timestamps(inserted_at_source: :createdAt, updated_at_source: :updatedAt)
+  end
+
+  @spec changeset(t(), map()) :: Ecto.Changeset.t()
+  def changeset(account, attrs) do
+    account
+    |> cast(attrs, [:password])
+    |> validate_required([:password])
+    |> validate_confirmation(:password, message: "does not match")
+  end
+end`)
     expect(result).toContain(`  def changeset(account, attrs) do
     account
     |> cast(attrs, [:password])
@@ -2998,7 +2952,7 @@ end`)
 
       // Child_pa_pb_fkey is what `prisma migrate diff --script` names the key.
       expect(generate(pair))
-        .toContain(`    |> foreign_key_constraint(:children, message: "are still associated with this entry", name: "Child_pa_pb_fkey")
+        .toContain(`    |> foreign_key_constraint(:children, name: "Child_pa_pb_fkey")
     |> foreign_key_constraint(:favourite, message: "is someone’s favourite", name: "Child_fa_fb_fkey")
   end`)
       expect(generate(child))
