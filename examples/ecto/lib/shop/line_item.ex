@@ -1,6 +1,5 @@
 defmodule Shop.LineItem do
   use Ecto.Schema
-  @moduledoc false
 
   @primary_key false
 

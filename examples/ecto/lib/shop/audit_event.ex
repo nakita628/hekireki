@@ -1,6 +1,5 @@
 defmodule Shop.AuditEvent do
   use Ecto.Schema
-  @moduledoc false
 
   @primary_key {:id, :id, autogenerate: true}
 

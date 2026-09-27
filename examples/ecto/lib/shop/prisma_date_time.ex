@@ -1,5 +1,4 @@
 defmodule Shop.PrismaDateTime do
-  @moduledoc false
   use Ecto.Type
 
   @impl true

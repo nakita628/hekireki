@@ -1,6 +1,5 @@
 defmodule Shop.Category do
   use Ecto.Schema
-  @moduledoc false
 
   @primary_key {:id, :id, autogenerate: true}
 

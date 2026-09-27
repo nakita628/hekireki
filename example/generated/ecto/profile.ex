@@ -1,6 +1,5 @@
 defmodule Example.Profile do
   use Ecto.Schema
-  @moduledoc false
 
   @primary_key false
 

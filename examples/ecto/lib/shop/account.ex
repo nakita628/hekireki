@@ -1,7 +1,6 @@
 defmodule Shop.Account do
   use Ecto.Schema
   import Ecto.Changeset
-  @moduledoc false
 
   @primary_key {:id, :id, autogenerate: true}
   @timestamps_opts [type: Shop.PrismaDateTime, autogenerate: {Shop.PrismaDateTime, :autogenerate, []}]

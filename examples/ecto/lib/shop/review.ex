@@ -1,7 +1,6 @@
 defmodule Shop.Review do
   use Ecto.Schema
   import Ecto.Changeset
-  @moduledoc false
 
   @primary_key {:id, :id, autogenerate: true}
 

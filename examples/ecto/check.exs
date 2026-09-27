@@ -230,7 +230,7 @@ end)
 check("a doc comment of the schema is not written: the module has no @moduledoc", fn ->
   {:docs_v1, _, _, _, doc, _, _} = Code.fetch_docs(Shop.Keyword)
 
-  reasons([expect(doc, :hidden, "moduledoc #{inspect(doc)}")])
+  reasons([expect(doc, :none, "moduledoc #{inspect(doc)}")])
 end)
 
 # --- Enums ------------------------------------------------------------------------------------

@@ -66,7 +66,6 @@ describe('ectoSchemas', () => {
 
       expect(result).toBe(`defmodule App.Agent do
   use Ecto.Schema
-  @moduledoc false
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -112,7 +111,6 @@ end`)
 
       expect(result).toBe(`defmodule App.Post do
   use Ecto.Schema
-  @moduledoc false
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -151,7 +149,6 @@ end`)
 
       expect(result).toBe(`defmodule App.Tag do
   use Ecto.Schema
-  @moduledoc false
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -192,7 +189,7 @@ end`)
       const result = ectoSchemas([model], 'App')
 
       expect(result).toBe(
-        'defmodule App.User do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          active: boolean()\n        }\n\n  schema "User" do\n    field(:active, :boolean, default: true)\n  end\nend',
+        'defmodule App.User do\n  use Ecto.Schema\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          active: boolean()\n        }\n\n  schema "User" do\n    field(:active, :boolean, default: true)\n  end\nend',
       )
     })
 
@@ -219,7 +216,7 @@ end`)
       const result = ectoSchemas([model], 'App')
 
       expect(result).toBe(
-        'defmodule App.Mission do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          priority: integer()\n        }\n\n  schema "Mission" do\n    field(:priority, :integer, default: 1)\n  end\nend',
+        'defmodule App.Mission do\n  use Ecto.Schema\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          priority: integer()\n        }\n\n  schema "Mission" do\n    field(:priority, :integer, default: 1)\n  end\nend',
       )
     })
 
@@ -252,7 +249,7 @@ end`)
       const result = ectoSchemas([model], 'App')
 
       expect(result).toBe(
-        'defmodule App.Profile do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          score: float(),\n          ratio: float()\n        }\n\n  schema "Profile" do\n    field(:score, :float, default: 0.0)\n    field(:ratio, :float, default: 0.5)\n  end\nend',
+        'defmodule App.Profile do\n  use Ecto.Schema\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          score: float(),\n          ratio: float()\n        }\n\n  schema "Profile" do\n    field(:score, :float, default: 0.0)\n    field(:ratio, :float, default: 0.5)\n  end\nend',
       )
     })
 
@@ -279,7 +276,7 @@ end`)
       const result = ectoSchemas([model], 'App')
 
       expect(result).toBe(
-        'defmodule App.Config do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          locale: String.t()\n        }\n\n  schema "Config" do\n    field(:locale, :string, default: "en")\n  end\nend',
+        'defmodule App.Config do\n  use Ecto.Schema\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          locale: String.t()\n        }\n\n  schema "Config" do\n    field(:locale, :string, default: "en")\n  end\nend',
       )
     })
 
@@ -306,7 +303,7 @@ end`)
       const result = ectoSchemas([model], 'App')
 
       expect(result).toBe(
-        'defmodule App.Event do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          occurred_at: DateTime.t()\n        }\n\n  schema "Event" do\n    field(:occurred_at, App.PrismaDateTime, autogenerate: true, source: :occurredAt)\n  end\nend',
+        'defmodule App.Event do\n  use Ecto.Schema\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          occurred_at: DateTime.t()\n        }\n\n  schema "Event" do\n    field(:occurred_at, App.PrismaDateTime, autogenerate: true, source: :occurredAt)\n  end\nend',
       )
     })
   })
@@ -330,7 +327,7 @@ end`)
       const result = ectoSchemas([model], 'App')
 
       expect(result).toBe(
-        'defmodule App.MissionAssignment do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          role: String.t()\n        }\n\n  schema "MissionAssignment" do\n    field(:role, :string)\n  end\nend',
+        'defmodule App.MissionAssignment do\n  use Ecto.Schema\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          role: String.t()\n        }\n\n  schema "MissionAssignment" do\n    field(:role, :string)\n  end\nend',
       )
     })
 
@@ -351,7 +348,7 @@ end`)
       const result = ectoSchemas([model], 'App')
 
       expect(result).toBe(
-        'defmodule App.Agent do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t()\n        }\n\n  schema "Agent" do\n  end\nend',
+        'defmodule App.Agent do\n  use Ecto.Schema\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t()\n        }\n\n  schema "Agent" do\n  end\nend',
       )
     })
   })
@@ -360,6 +357,7 @@ end`)
     it('generates binary_id PK with @foreign_key_type for uuid default', () => {
       const model = makeModel({
         name: 'User',
+        documentation: 'A person.',
         fields: [
           makeField({
             name: 'id',
@@ -374,7 +372,7 @@ end`)
       const result = ectoSchemas([model], 'App')
 
       expect(result).toBe(
-        'defmodule App.User do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t()\n        }\n\n  schema "User" do\n  end\nend',
+        'defmodule App.User do\n  use Ecto.Schema\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t()\n        }\n\n  schema "User" do\n  end\nend',
       )
     })
 
@@ -393,7 +391,7 @@ end`)
       const result = ectoSchemas([model], 'App')
 
       expect(result).toBe(
-        'defmodule App.User do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key false\n\n  @type t :: %__MODULE__{\n          id: String.t()\n        }\n\n  schema "User" do\n    field(:id, :string, primary_key: true)\n  end\nend',
+        'defmodule App.User do\n  use Ecto.Schema\n\n  @primary_key false\n\n  @type t :: %__MODULE__{\n          id: String.t()\n        }\n\n  schema "User" do\n    field(:id, :string, primary_key: true)\n  end\nend',
       )
     })
   })
@@ -420,7 +418,7 @@ end`)
       const result = ectoSchemas([model], 'App')
 
       expect(result).toBe(
-        'defmodule App.TypeTest do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          text: String.t(),\n          count: integer(),\n          flag: boolean(),\n          at: DateTime.t()\n        }\n\n  schema "TypeTest" do\n    field(:text, :string)\n    field(:count, :integer)\n    field(:flag, :boolean)\n    field(:at, App.PrismaDateTime)\n  end\nend',
+        'defmodule App.TypeTest do\n  use Ecto.Schema\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          text: String.t(),\n          count: integer(),\n          flag: boolean(),\n          at: DateTime.t()\n        }\n\n  schema "TypeTest" do\n    field(:text, :string)\n    field(:count, :integer)\n    field(:flag, :boolean)\n    field(:at, App.PrismaDateTime)\n  end\nend',
       )
     })
 
@@ -445,7 +443,7 @@ end`)
       const result = ectoSchemas([model], 'App')
 
       expect(result).toBe(
-        'defmodule App.TypeTest do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          text: String.t(),\n          count: integer(),\n          flag: boolean(),\n          at: DateTime.t()\n        }\n\n  schema "TypeTest" do\n    field(:text, :string)\n    field(:count, :integer)\n    field(:flag, :boolean)\n    field(:at, App.PrismaDateTime)\n  end\nend',
+        'defmodule App.TypeTest do\n  use Ecto.Schema\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          text: String.t(),\n          count: integer(),\n          flag: boolean(),\n          at: DateTime.t()\n        }\n\n  schema "TypeTest" do\n    field(:text, :string)\n    field(:count, :integer)\n    field(:flag, :boolean)\n    field(:at, App.PrismaDateTime)\n  end\nend',
       )
     })
   })
@@ -470,7 +468,7 @@ end`)
       const result = ectoSchemas([model], 'App')
 
       expect(result).toBe(
-        'defmodule App.Agent do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          code_name: String.t(),\n          is_active: boolean()\n        }\n\n  schema "Agent" do\n    field(:code_name, :string, source: :codeName)\n    field(:is_active, :boolean, source: :isActive)\n  end\nend',
+        'defmodule App.Agent do\n  use Ecto.Schema\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          code_name: String.t(),\n          is_active: boolean()\n        }\n\n  schema "Agent" do\n    field(:code_name, :string, source: :codeName)\n    field(:is_active, :boolean, source: :isActive)\n  end\nend',
       )
     })
 
@@ -493,7 +491,7 @@ end`)
       const result = ectoSchemas([model], 'App')
 
       expect(result).toBe(
-        'defmodule App.Agent do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          name: String.t(),\n          is_active: boolean()\n        }\n\n  schema "Agent" do\n    field(:name, :string)\n    field(:is_active, :boolean)\n  end\nend',
+        'defmodule App.Agent do\n  use Ecto.Schema\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          name: String.t(),\n          is_active: boolean()\n        }\n\n  schema "Agent" do\n    field(:name, :string)\n    field(:is_active, :boolean)\n  end\nend',
       )
     })
   })
@@ -551,7 +549,7 @@ end`)
       const profileResult = ectoSchemas([profileModel], 'App', allModels)
 
       expect(profileResult).toBe(
-        'defmodule App.Profile do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          bio: String.t(),\n          agent: App.Agent.t() | nil\n        }\n\n  schema "Profile" do\n    field(:bio, :string)\n    field(:agent_id, :binary_id, source: :agentId)\n    belongs_to(:agent, App.Agent, foreign_key: :agent_id, define_field: false)\n  end\nend',
+        'defmodule App.Profile do\n  use Ecto.Schema\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          bio: String.t(),\n          agent: App.Agent.t() | nil\n        }\n\n  schema "Profile" do\n    field(:bio, :string)\n    field(:agent_id, :binary_id, source: :agentId)\n    belongs_to(:agent, App.Agent, foreign_key: :agent_id, define_field: false)\n  end\nend',
       )
     })
 
@@ -605,7 +603,7 @@ end`)
       const agentResult = ectoSchemas([agentModel], 'App', allModels)
 
       expect(agentResult).toBe(
-        'defmodule App.Agent do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          profile: App.Profile.t() | nil\n        }\n\n  schema "Agent" do\n    has_one(:profile, App.Profile, foreign_key: :agent_id)\n  end\nend',
+        'defmodule App.Agent do\n  use Ecto.Schema\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          profile: App.Profile.t() | nil\n        }\n\n  schema "Agent" do\n    has_one(:profile, App.Profile, foreign_key: :agent_id)\n  end\nend',
       )
     })
 
@@ -659,7 +657,7 @@ end`)
       const agentResult = ectoSchemas([agentModel], 'App', allModels)
 
       expect(agentResult).toBe(
-        'defmodule App.Agent do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          reports: [App.Report.t()]\n        }\n\n  schema "Agent" do\n    has_many(:reports, App.Report, foreign_key: :agent_id)\n  end\nend',
+        'defmodule App.Agent do\n  use Ecto.Schema\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          reports: [App.Report.t()]\n        }\n\n  schema "Agent" do\n    has_many(:reports, App.Report, foreign_key: :agent_id)\n  end\nend',
       )
     })
 
@@ -746,7 +744,7 @@ end`)
       const result = ectoSchemas([assignmentModel], 'App', allModels)
 
       expect(result).toBe(
-        'defmodule App.MissionAssignment do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          role: String.t(),\n          agent: App.Agent.t() | nil,\n          mission: App.Mission.t() | nil\n        }\n\n  schema "MissionAssignment" do\n    field(:role, :string)\n    field(:agent_id, :binary_id, source: :agentId)\n    field(:mission_id, :binary_id, source: :missionId)\n    belongs_to(:agent, App.Agent, foreign_key: :agent_id, define_field: false)\n    belongs_to(:mission, App.Mission, foreign_key: :mission_id, define_field: false)\n  end\nend',
+        'defmodule App.MissionAssignment do\n  use Ecto.Schema\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          role: String.t(),\n          agent: App.Agent.t() | nil,\n          mission: App.Mission.t() | nil\n        }\n\n  schema "MissionAssignment" do\n    field(:role, :string)\n    field(:agent_id, :binary_id, source: :agentId)\n    field(:mission_id, :binary_id, source: :missionId)\n    belongs_to(:agent, App.Agent, foreign_key: :agent_id, define_field: false)\n    belongs_to(:mission, App.Mission, foreign_key: :mission_id, define_field: false)\n  end\nend',
       )
     })
   })
@@ -849,7 +847,6 @@ end`)
 
       expect(result).toBe(`defmodule App.Agent do
   use Ecto.Schema
-  @moduledoc false
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -895,7 +892,7 @@ end`)
       const result = ectoSchemas([model], 'App')
 
       expect(result).toBe(
-        'defmodule App.User do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key false\n\n  @type t :: %__MODULE__{\n          id: String.t(),\n          name: String.t()\n        }\n\n  schema "User" do\n    field(:id, :string, primary_key: true)\n    field(:name, :string)\n  end\nend',
+        'defmodule App.User do\n  use Ecto.Schema\n\n  @primary_key false\n\n  @type t :: %__MODULE__{\n          id: String.t(),\n          name: String.t()\n        }\n\n  schema "User" do\n    field(:id, :string, primary_key: true)\n    field(:name, :string)\n  end\nend',
       )
     })
   })
@@ -919,7 +916,7 @@ end`)
       const result = ectoSchemas([model], 'App')
 
       expect(result).toBe(
-        'defmodule App.Post do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :id, autogenerate: true}\n\n  @type t :: %__MODULE__{\n          id: integer(),\n          title: String.t()\n        }\n\n  schema "Post" do\n    field(:title, :string)\n  end\nend',
+        'defmodule App.Post do\n  use Ecto.Schema\n\n  @primary_key {:id, :id, autogenerate: true}\n\n  @type t :: %__MODULE__{\n          id: integer(),\n          title: String.t()\n        }\n\n  schema "Post" do\n    field(:title, :string)\n  end\nend',
       )
     })
   })
@@ -947,7 +944,7 @@ end`)
       const result = ectoSchemas([model], 'App')
 
       expect(result).toBe(
-        'defmodule App.TypeTest do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          score: float(),\n          big_num: integer(),\n          price: Decimal.t(),\n          metadata: map(),\n          data: binary()\n        }\n\n  schema "TypeTest" do\n    field(:score, :float)\n    field(:big_num, :integer, source: :bigNum)\n    field(:price, :decimal)\n    field(:metadata, :map)\n    field(:data, :binary)\n  end\nend',
+        'defmodule App.TypeTest do\n  use Ecto.Schema\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          score: float(),\n          big_num: integer(),\n          price: Decimal.t(),\n          metadata: map(),\n          data: binary()\n        }\n\n  schema "TypeTest" do\n    field(:score, :float)\n    field(:big_num, :integer, source: :bigNum)\n    field(:price, :decimal)\n    field(:metadata, :map)\n    field(:data, :binary)\n  end\nend',
       )
     })
 
@@ -973,7 +970,7 @@ end`)
       const result = ectoSchemas([model], 'App')
 
       expect(result).toBe(
-        'defmodule App.TypeTest do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          score: float(),\n          big_num: integer(),\n          price: Decimal.t(),\n          metadata: map(),\n          data: binary()\n        }\n\n  schema "TypeTest" do\n    field(:score, :float)\n    field(:big_num, :integer, source: :bigNum)\n    field(:price, :decimal)\n    field(:metadata, :map)\n    field(:data, :binary)\n  end\nend',
+        'defmodule App.TypeTest do\n  use Ecto.Schema\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          score: float(),\n          big_num: integer(),\n          price: Decimal.t(),\n          metadata: map(),\n          data: binary()\n        }\n\n  schema "TypeTest" do\n    field(:score, :float)\n    field(:big_num, :integer, source: :bigNum)\n    field(:price, :decimal)\n    field(:metadata, :map)\n    field(:data, :binary)\n  end\nend',
       )
     })
   })
@@ -1008,7 +1005,7 @@ end`)
       const result = ectoSchemas([model], 'App', undefined, enums)
 
       expect(result).toBe(
-        'defmodule App.User do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          name: String.t(),\n          role: atom()\n        }\n\n  schema "User" do\n    field(:name, :string)\n    field(:role, Ecto.Enum, values: [:ADMIN, :USER])\n  end\nend',
+        'defmodule App.User do\n  use Ecto.Schema\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          name: String.t(),\n          role: atom()\n        }\n\n  schema "User" do\n    field(:name, :string)\n    field(:role, Ecto.Enum, values: [:ADMIN, :USER])\n  end\nend',
       )
     })
 
@@ -1040,7 +1037,7 @@ end`)
       const result = ectoSchemas([model], 'App', undefined, enums)
 
       expect(result).toBe(
-        'defmodule App.User do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          role: atom() | nil\n        }\n\n  schema "User" do\n    field(:role, Ecto.Enum, values: [:ADMIN, :USER])\n  end\nend',
+        'defmodule App.User do\n  use Ecto.Schema\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          role: atom() | nil\n        }\n\n  schema "User" do\n    field(:role, Ecto.Enum, values: [:ADMIN, :USER])\n  end\nend',
       )
     })
   })
@@ -1066,7 +1063,7 @@ end`)
       const result = ectoSchemas([model], 'App')
 
       expect(result).toBe(
-        'defmodule App.User do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          name: String.t(),\n          bio: String.t() | nil,\n          age: integer() | nil\n        }\n\n  schema "User" do\n    field(:name, :string)\n    field(:bio, :string)\n    field(:age, :integer)\n  end\nend',
+        'defmodule App.User do\n  use Ecto.Schema\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          name: String.t(),\n          bio: String.t() | nil,\n          age: integer() | nil\n        }\n\n  schema "User" do\n    field(:name, :string)\n    field(:bio, :string)\n    field(:age, :integer)\n  end\nend',
       )
     })
   })
@@ -1123,7 +1120,7 @@ end`)
       const result = ectoSchemas([postModel], 'App', allModels)
 
       expect(result).toBe(
-        'defmodule App.Post do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :id, autogenerate: true}\n\n  @type t :: %__MODULE__{\n          id: integer(),\n          title: String.t(),\n          user: App.User.t() | nil\n        }\n\n  schema "Post" do\n    field(:title, :string)\n    field(:user_id, :id, source: :userId)\n    belongs_to(:user, App.User, foreign_key: :user_id, define_field: false)\n  end\nend',
+        'defmodule App.Post do\n  use Ecto.Schema\n\n  @primary_key {:id, :id, autogenerate: true}\n\n  @type t :: %__MODULE__{\n          id: integer(),\n          title: String.t(),\n          user: App.User.t() | nil\n        }\n\n  schema "Post" do\n    field(:title, :string)\n    field(:user_id, :id, source: :userId)\n    belongs_to(:user, App.User, foreign_key: :user_id, define_field: false)\n  end\nend',
       )
     })
   })
@@ -1193,7 +1190,6 @@ end`)
 
       expect(result).toBe(`defmodule App.Follow do
   use Ecto.Schema
-  @moduledoc false
 
   @primary_key false
 
@@ -1295,7 +1291,7 @@ end`)
       const result = ectoSchemas([likeModel], 'App', allModels)
 
       expect(result).toBe(
-        'defmodule App.Like do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key false\n  @timestamps_opts [type: App.PrismaDateTime, autogenerate: {App.PrismaDateTime, :autogenerate, []}]\n\n  @type t :: %__MODULE__{\n          user_id: Ecto.UUID.t(),\n          post_id: Ecto.UUID.t(),\n          inserted_at: DateTime.t(),\n          user: App.User.t() | nil,\n          post: App.Post.t() | nil\n        }\n\n  schema "Like" do\n    field(:user_id, :binary_id, primary_key: true, source: :userId)\n    field(:post_id, :binary_id, primary_key: true, source: :postId)\n    belongs_to(:user, App.User, foreign_key: :user_id, define_field: false, type: :binary_id)\n    belongs_to(:post, App.Post, foreign_key: :post_id, define_field: false, type: :binary_id)\n    timestamps(inserted_at_source: :createdAt, updated_at: false)\n  end\nend',
+        'defmodule App.Like do\n  use Ecto.Schema\n\n  @primary_key false\n  @timestamps_opts [type: App.PrismaDateTime, autogenerate: {App.PrismaDateTime, :autogenerate, []}]\n\n  @type t :: %__MODULE__{\n          user_id: Ecto.UUID.t(),\n          post_id: Ecto.UUID.t(),\n          inserted_at: DateTime.t(),\n          user: App.User.t() | nil,\n          post: App.Post.t() | nil\n        }\n\n  schema "Like" do\n    field(:user_id, :binary_id, primary_key: true, source: :userId)\n    field(:post_id, :binary_id, primary_key: true, source: :postId)\n    belongs_to(:user, App.User, foreign_key: :user_id, define_field: false, type: :binary_id)\n    belongs_to(:post, App.Post, foreign_key: :post_id, define_field: false, type: :binary_id)\n    timestamps(inserted_at_source: :createdAt, updated_at: false)\n  end\nend',
       )
     })
 
@@ -1313,7 +1309,6 @@ end`)
 
       expect(result).toBe(`defmodule App.PostTag do
   use Ecto.Schema
-  @moduledoc false
 
   @primary_key false
 
@@ -1389,7 +1384,7 @@ end`)
       const result = ectoSchemas([likeModel], 'App', allModels)
 
       expect(result).toBe(
-        'defmodule App.Like do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key false\n\n  @type t :: %__MODULE__{\n          user_id: Ecto.UUID.t(),\n          post_id: Ecto.UUID.t(),\n          user: App.User.t() | nil,\n          post: App.Post.t() | nil\n        }\n\n  schema "Like" do\n    field(:user_id, :binary_id, primary_key: true)\n    field(:post_id, :binary_id, primary_key: true)\n    belongs_to(:user, App.User, foreign_key: :user_id, define_field: false, type: :binary_id)\n    belongs_to(:post, App.Post, foreign_key: :post_id, define_field: false, type: :binary_id)\n  end\nend',
+        'defmodule App.Like do\n  use Ecto.Schema\n\n  @primary_key false\n\n  @type t :: %__MODULE__{\n          user_id: Ecto.UUID.t(),\n          post_id: Ecto.UUID.t(),\n          user: App.User.t() | nil,\n          post: App.Post.t() | nil\n        }\n\n  schema "Like" do\n    field(:user_id, :binary_id, primary_key: true)\n    field(:post_id, :binary_id, primary_key: true)\n    belongs_to(:user, App.User, foreign_key: :user_id, define_field: false, type: :binary_id)\n    belongs_to(:post, App.Post, foreign_key: :post_id, define_field: false, type: :binary_id)\n  end\nend',
       )
     })
 
@@ -1456,7 +1451,7 @@ end`)
       const userResult = ectoSchemas([userModel], 'App', allModels)
 
       expect(userResult).toBe(
-        'defmodule App.User do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          followers: [App.Follow.t()],\n          following: [App.Follow.t()]\n        }\n\n  schema "User" do\n    has_many(:followers, App.Follow, foreign_key: :following_id)\n    has_many(:following, App.Follow, foreign_key: :follower_id)\n  end\nend',
+        'defmodule App.User do\n  use Ecto.Schema\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          followers: [App.Follow.t()],\n          following: [App.Follow.t()]\n        }\n\n  schema "User" do\n    has_many(:followers, App.Follow, foreign_key: :following_id)\n    has_many(:following, App.Follow, foreign_key: :follower_id)\n  end\nend',
       )
     })
   })
@@ -1481,7 +1476,7 @@ end`)
       const result = ectoSchemas([model], 'App')
 
       expect(result).toBe(
-        'defmodule App.UserProfile do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          bio: String.t()\n        }\n\n  schema "user_profiles" do\n    field(:bio, :string)\n  end\nend',
+        'defmodule App.UserProfile do\n  use Ecto.Schema\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          bio: String.t()\n        }\n\n  schema "user_profiles" do\n    field(:bio, :string)\n  end\nend',
       )
     })
 
@@ -1503,7 +1498,7 @@ end`)
       const result = ectoSchemas([model], 'App')
 
       expect(result).toBe(
-        'defmodule App.UserProfile do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          bio: String.t()\n        }\n\n  schema "UserProfile" do\n    field(:bio, :string)\n  end\nend',
+        'defmodule App.UserProfile do\n  use Ecto.Schema\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          bio: String.t()\n        }\n\n  schema "UserProfile" do\n    field(:bio, :string)\n  end\nend',
       )
     })
   })
@@ -1527,7 +1522,7 @@ end`)
       const result = ectoSchemas([model], 'App')
 
       expect(result).toBe(
-        'defmodule App.User do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          first_name: String.t()\n        }\n\n  schema "User" do\n    field(:first_name, :string)\n  end\nend',
+        'defmodule App.User do\n  use Ecto.Schema\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          first_name: String.t()\n        }\n\n  schema "User" do\n    field(:first_name, :string)\n  end\nend',
       )
     })
 
@@ -1549,7 +1544,7 @@ end`)
       const result = ectoSchemas([model], 'App')
 
       expect(result).toBe(
-        'defmodule App.User do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          first_name: String.t()\n        }\n\n  schema "User" do\n    field(:first_name, :string, source: :fname)\n  end\nend',
+        'defmodule App.User do\n  use Ecto.Schema\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          first_name: String.t()\n        }\n\n  schema "User" do\n    field(:first_name, :string, source: :fname)\n  end\nend',
       )
     })
 
@@ -1571,7 +1566,7 @@ end`)
       const result = ectoSchemas([model], 'App')
 
       expect(result).toBe(
-        'defmodule App.User do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          display_name: String.t()\n        }\n\n  schema "User" do\n    field(:display_name, :string, source: :display_nm)\n  end\nend',
+        'defmodule App.User do\n  use Ecto.Schema\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          display_name: String.t()\n        }\n\n  schema "User" do\n    field(:display_name, :string, source: :display_nm)\n  end\nend',
       )
     })
   })
@@ -1596,7 +1591,7 @@ end`)
       const result = ectoSchemas([model], 'App')
 
       expect(result).toBe(
-        'defmodule App.Post do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          tags: [String.t()],\n          scores: [integer()]\n        }\n\n  schema "Post" do\n    field(:tags, {:array, :string})\n    field(:scores, {:array, :integer})\n  end\nend',
+        'defmodule App.Post do\n  use Ecto.Schema\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          tags: [String.t()],\n          scores: [integer()]\n        }\n\n  schema "Post" do\n    field(:tags, {:array, :string})\n    field(:scores, {:array, :integer})\n  end\nend',
       )
     })
 
@@ -1619,15 +1614,16 @@ end`)
       const result = ectoSchemas([model], 'App')
 
       expect(result).toBe(
-        'defmodule App.Post do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          tags: [String.t()],\n          scores: [integer()]\n        }\n\n  schema "Post" do\n    field(:tags, {:array, :string})\n    field(:scores, {:array, :integer})\n  end\nend',
+        'defmodule App.Post do\n  use Ecto.Schema\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t(),\n          tags: [String.t()],\n          scores: [integer()]\n        }\n\n  schema "Post" do\n    field(:tags, {:array, :string})\n    field(:scores, {:array, :integer})\n  end\nend',
       )
     })
   })
 
-  describe('@moduledoc false', () => {
-    it('includes @moduledoc false when no documentation', () => {
+  describe('no @moduledoc', () => {
+    it("writes no @moduledoc, of the schema's documentation or of its own", () => {
       const model = makeModel({
         name: 'User',
+        documentation: 'A person.',
         fields: [
           makeField({
             name: 'id',
@@ -1642,7 +1638,7 @@ end`)
       const result = ectoSchemas([model], 'App')
 
       expect(result).toBe(
-        'defmodule App.User do\n  use Ecto.Schema\n  @moduledoc false\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t()\n        }\n\n  schema "User" do\n  end\nend',
+        'defmodule App.User do\n  use Ecto.Schema\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t()\n        }\n\n  schema "User" do\n  end\nend',
       )
     })
   })
@@ -1727,7 +1723,6 @@ describe('uuid v7 primary key', () => {
 
     expect(ectoSchemas([model], 'App')).toBe(`defmodule App.Event do
   use Ecto.Schema
-  @moduledoc false
 
   @primary_key {:id, Ecto.UUID, autogenerate: [version: 7]}
   @foreign_key_type :binary_id
@@ -1790,7 +1785,6 @@ describe('ulid primary key', () => {
 
     expect(ectoSchemas([ticket], 'App', [ticket, stub])).toBe(`defmodule App.Ticket do
   use Ecto.Schema
-  @moduledoc false
 
   @primary_key {:id, Ecto.ULID, autogenerate: true}
   @foreign_key_type Ecto.ULID
@@ -1809,7 +1803,6 @@ end`)
 
     expect(ectoSchemas([stub], 'App', [ticket, stub])).toBe(`defmodule App.Stub do
   use Ecto.Schema
-  @moduledoc false
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -1846,7 +1839,6 @@ describe('@map-ped primary key', () => {
 
     expect(ectoSchemas([model], 'App')).toBe(`defmodule App.Device do
   use Ecto.Schema
-  @moduledoc false
 
   @primary_key {:id, :binary_id, autogenerate: true, source: :device_id}
   @foreign_key_type :binary_id
@@ -1906,7 +1898,6 @@ describe('implicit many-to-many', () => {
 
     expect(ectoSchemas([post], 'App', [post, tag])).toBe(`defmodule App.Post do
   use Ecto.Schema
-  @moduledoc false
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -1923,7 +1914,6 @@ end`)
 
     expect(ectoSchemas([tag], 'App', [post, tag])).toBe(`defmodule App.Tag do
   use Ecto.Schema
-  @moduledoc false
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -1974,7 +1964,6 @@ describe('enum default', () => {
 
     expect(ectoSchemas([account], 'App', undefined, enums)).toBe(`defmodule App.Account do
   use Ecto.Schema
-  @moduledoc false
 
   @primary_key {:id, :id, autogenerate: true}
 
@@ -2172,7 +2161,6 @@ describe('keys and references Ecto names differently from Prisma', () => {
   it('references a primary key Ecto calls :id by that name', () => {
     expect(ectoSchemas([lineItem], 'App', models)).toBe(`defmodule App.LineItem do
   use Ecto.Schema
-  @moduledoc false
 
   @primary_key false
 
@@ -2193,7 +2181,6 @@ end`)
   it('types a key after the unique field it references, and says it on both sides', () => {
     expect(ectoSchemas([order], 'App', models)).toBe(`defmodule App.Order do
   use Ecto.Schema
-  @moduledoc false
 
   @primary_key {:id, :id, autogenerate: true, source: :order_number}
 
@@ -2212,7 +2199,6 @@ end`)
 end`)
     expect(ectoSchemas([account], 'App', models)).toBe(`defmodule App.Account do
   use Ecto.Schema
-  @moduledoc false
 
   @primary_key {:id, :id, autogenerate: true}
 
@@ -2236,7 +2222,6 @@ end`)
   it('keeps an integer key of a uuid-keyed model out of its @foreign_key_type', () => {
     expect(ectoSchemas([wishlist], 'App', models)).toBe(`defmodule App.Wishlist do
   use Ecto.Schema
-  @moduledoc false
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -2284,7 +2269,6 @@ describe('implicit many-to-many of a model with itself', () => {
 
     expect(ectoSchemas([account], 'App', [account])).toBe(`defmodule App.Account do
   use Ecto.Schema
-  @moduledoc false
 
   @primary_key {:id, :id, autogenerate: true, source: :number}
 
@@ -2334,7 +2318,6 @@ end`)
 
     expect(ectoSchemas([category], 'App', [category])).toBe(`defmodule App.Category do
   use Ecto.Schema
-  @moduledoc false
 
   @primary_key {:id, :id, autogenerate: true}
 
@@ -2402,7 +2385,6 @@ describe('defaults Ecto has to know about', () => {
 
     expect(ectoSchemas([event], 'App', [category, event])).toBe(`defmodule App.Event do
   use Ecto.Schema
-  @moduledoc false
 
   @primary_key {:id, :id, autogenerate: true}
 
@@ -2454,7 +2436,6 @@ describe('changeset', () => {
       .toBe(`defmodule App.User do
   use Ecto.Schema
   import Ecto.Changeset
-  @moduledoc false
 
   @primary_key {:id, :id, autogenerate: true}
 
@@ -2522,7 +2503,6 @@ end`)
     expect(result).toContain(`defmodule App.Account do
   use Ecto.Schema
   import Ecto.Changeset
-  @moduledoc false
 
   @primary_key {:id, :id, autogenerate: true}
   @timestamps_opts [type: App.PrismaDateTime, autogenerate: {App.PrismaDateTime, :autogenerate, []}]
@@ -3126,7 +3106,6 @@ describe('timestamps in @type t', () => {
 
     expect(ectoSchemas([model], 'App')).toBe(`defmodule App.Stamp do
   use Ecto.Schema
-  @moduledoc false
 
   @primary_key {:id, :id, autogenerate: true}
   @timestamps_opts [type: App.PrismaDateTime, autogenerate: {App.PrismaDateTime, :autogenerate, []}]
@@ -3169,7 +3148,7 @@ describe('ectoDateTypes', () => {
   it('writes no documentation of its own into the modules', () => {
     for (const provider of ['sqlite', 'postgresql', 'mysql'] as const) {
       const code = ectoDateTypes('App', provider, all)
-      expect(code).not.toContain('@moduledoc """')
+      expect(code).not.toContain('@moduledoc')
       expect(code).not.toContain('@doc')
       expect(code.split('\n').filter((line) => line.trimStart().startsWith('#'))).toStrictEqual([])
     }

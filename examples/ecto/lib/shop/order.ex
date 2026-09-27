@@ -1,6 +1,5 @@
 defmodule Shop.Order do
   use Ecto.Schema
-  @moduledoc false
 
   @primary_key {:id, :id, autogenerate: true, source: :order_number}
   @timestamps_opts [type: Shop.PrismaDateTime, autogenerate: {Shop.PrismaDateTime, :autogenerate, []}]

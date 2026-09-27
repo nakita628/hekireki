@@ -1,6 +1,5 @@
 defmodule Example.Comment do
   use Ecto.Schema
-  @moduledoc false
 
   @primary_key {:id, :id, autogenerate: true}
   @timestamps_opts [type: Example.PrismaDateTime, autogenerate: {Example.PrismaDateTime, :autogenerate, []}]

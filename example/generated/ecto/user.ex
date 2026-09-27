@@ -1,6 +1,5 @@
 defmodule Example.User do
   use Ecto.Schema
-  @moduledoc false
 
   @primary_key {:id, Ecto.UUID, autogenerate: [version: 7]}
   @foreign_key_type :binary_id

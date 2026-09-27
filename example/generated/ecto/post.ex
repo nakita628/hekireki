@@ -1,6 +1,5 @@
 defmodule Example.Post do
   use Ecto.Schema
-  @moduledoc false
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id

@@ -1,6 +1,5 @@
 defmodule Example.Follow do
   use Ecto.Schema
-  @moduledoc false
 
   @primary_key false
 

@@ -1096,7 +1096,6 @@ export function ectoSchemas(
         `defmodule ${appName}.${makePascalCase(model.name)} do`,
         '  use Ecto.Schema',
         ...(changeset.length > 0 ? ['  import Ecto.Changeset'] : []),
-        '  @moduledoc false',
         '',
         `  ${pk.line}`,
         ...(pk.foreignKeyType ? [`  @foreign_key_type ${formatEctoType(pk.foreignKeyType)}`] : []),
@@ -1167,7 +1166,6 @@ export function ectoDateTypes(
   const sqlite = provider === 'sqlite'
   const dateTime = [
     `defmodule ${app}.PrismaDateTime do`,
-    '  @moduledoc false',
     '  use Ecto.Type',
     '',
     '  @impl true',
@@ -1244,7 +1242,6 @@ export function ectoDateTypes(
   ]
   const date = [
     `defmodule ${app}.PrismaDate do`,
-    '  @moduledoc false',
     '  use Ecto.Type',
     '',
     '  @impl true',
@@ -1274,7 +1271,6 @@ export function ectoDateTypes(
   ]
   const time = [
     `defmodule ${app}.PrismaTime do`,
-    '  @moduledoc false',
     '  use Ecto.Type',
     '',
     '  @impl true',
