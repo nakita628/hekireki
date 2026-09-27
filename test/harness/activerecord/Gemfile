@@ -7,6 +7,9 @@
 source "https://rubygems.org"
 
 gem "activerecord", "~> 8.1"
+# A model that declares a column's type by name (`attribute :stamp, :datetime, precision: 3`)
+# asks the connection which adapter's type that is, as the class is defined.
+gem "sqlite3", "~> 2.9"
 # json 3.0 made JSON.parse's options keyword-only; Active Support 8.1.3 still
 # passes them positionally, so any JSON column read raises until Rails catches up.
 gem "json", "< 3"

@@ -286,6 +286,44 @@ function namespaceMember(node) {
   return node.property.type === 'Identifier' ? node.property.name : null
 }
 
+// Why a function is one that only forwards, or null where it is not: see `no-pass-through`.
+function passThroughReason(node) {
+  if (node.typeParameters ?? node.returnType?.typeAnnotation?.type === 'TSTypePredicate') {
+    return null
+  }
+  if (node.params.some((param) => param.type !== 'Identifier')) return null
+  const names = node.params.map((param) => param.name)
+  const returned = returnedExpression(node)
+  if (!returned) return null
+  if (returned.type === 'Identifier' && names.includes(returned.name)) {
+    return 'returns its own argument'
+  }
+  const passesParams = (args) =>
+    args.length === names.length &&
+    args.every(
+      (argument, index) => argument.type === 'Identifier' && argument.name === names[index],
+    )
+  if (
+    returned.type === 'CallExpression' &&
+    (returned.callee.type === 'Identifier' ||
+      (returned.callee.type === 'MemberExpression' && !returned.callee.computed)) &&
+    passesParams(returned.arguments)
+  ) {
+    return 'hands its arguments to another call unchanged'
+  }
+  if (
+    returned.type === 'BinaryExpression' &&
+    returned.operator === '===' &&
+    returned.left.type === 'UnaryExpression' &&
+    returned.left.operator === 'typeof' &&
+    returned.left.argument.type === 'Identifier' &&
+    names.includes(returned.left.argument.name)
+  ) {
+    return 'renames a built-in check'
+  }
+  return null
+}
+
 /** The one expression a function returns, or null when its body is more than that. */
 function returnedExpression(node) {
   if (node.body.type !== 'BlockStatement') return node.body
@@ -1180,44 +1218,8 @@ const plugin = {
       },
       create(context) {
         if (TEST_FILE.test(filenameOf(context))) return {}
-        function reason(node) {
-          if (node.typeParameters ?? node.returnType?.typeAnnotation?.type === 'TSTypePredicate') {
-            return null
-          }
-          if (node.params.some((param) => param.type !== 'Identifier')) return null
-          const names = node.params.map((param) => param.name)
-          const returned = returnedExpression(node)
-          if (!returned) return null
-          if (returned.type === 'Identifier' && names.includes(returned.name)) {
-            return 'returns its own argument'
-          }
-          const passesParams = (args) =>
-            args.length === names.length &&
-            args.every(
-              (argument, index) => argument.type === 'Identifier' && argument.name === names[index],
-            )
-          if (
-            returned.type === 'CallExpression' &&
-            (returned.callee.type === 'Identifier' ||
-              (returned.callee.type === 'MemberExpression' && !returned.callee.computed)) &&
-            passesParams(returned.arguments)
-          ) {
-            return 'hands its arguments to another call unchanged'
-          }
-          if (
-            returned.type === 'BinaryExpression' &&
-            returned.operator === '===' &&
-            returned.left.type === 'UnaryExpression' &&
-            returned.left.operator === 'typeof' &&
-            returned.left.argument.type === 'Identifier' &&
-            names.includes(returned.left.argument.name)
-          ) {
-            return 'renames a built-in check'
-          }
-          return null
-        }
         function check(idNode, node) {
-          const why = reason(node)
+          const why = passThroughReason(node)
           if (why === null) return
           context.report({
             node: idNode,

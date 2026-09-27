@@ -189,6 +189,12 @@ fun mainSchema() =
                 Quirk("""CREATE INDEX "_\w+_B_index" ON \S+ \("B"\)""", """fails: ERROR: relation "_\w+_B_index" already exists"""),
                 // @ignore takes a column out of DMMF, not out of the database.
                 Quirk("""ALTER TABLE "Ghost" DROP COLUMN hidden""", """changes: - column public\.Ghost\.hidden .*"""),
+                // A default the table declares in its DDL and fills itself (`databaseDefault`: now(),
+                // a list) is none where MigrationUtils reads one, in the column's own default.
+                Quirk(
+                    """ALTER TABLE \S+ ALTER COLUMN \S+ DROP DEFAULT""",
+                    """changes: \+ column \S+ .* default=none .*; - column \S+ .* default=(expr|value)\(.*""",
+                ),
             ),
     )
 
@@ -213,12 +219,21 @@ fun edgeSchema() =
                 "+ index public._AnExceedinglyLongModelNameThatKeepsGoingAndGoingToAnotherExcee._anexceedinglylong",
                 "- index public.AnExceedinglyLongModelNameThatKeepsGoingAndGoing.AnExceedinglyLong",
                 "+ index public.AnExceedinglyLongModelNameThatKeepsGoingAndGoing.anexceedinglylong",
+                // A literal default is the instant Prisma Client writes for it, to the millisecond.
+                "- column public.Defaults.whenZoned ",
+                "+ column public.Defaults.whenZoned ",
                 // DMMF leaves an Unsupported field out, and with it the column and its index.
                 "- column public.Doc.search ",
                 "- index public.Doc.Doc_search_idx ",
             ),
         expectedMigration =
             listOf(
+                // A default the table declares in its DDL and fills itself (`databaseDefault`: now(),
+                // a list) is none where MigrationUtils reads one, in the column's own default.
+                Quirk(
+                    """ALTER TABLE \S+ ALTER COLUMN \S+ DROP DEFAULT""",
+                    """changes: \+ column \S+ .* default=none .*; - column \S+ .* default=(expr|value)\(.*""",
+                ),
                 // Exposed names the sequence of a serial column after the table's whole name, schema
                 // and all, as one identifier: it never finds the one PostgreSQL made and asks for a
                 // second in the default schema, one that, when the name is cut at 63 characters inside
