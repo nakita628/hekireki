@@ -98,6 +98,15 @@ Two things stay apart from Prisma's tables, in form and not in what they hold:
   drizzle-kit adds a table's foreign keys before its indexes, and a foreign key is refused where
   what it points at is not unique yet. The name is Prisma's.
 - **A list's default** is written `'{}'` by drizzle-kit and `ARRAY[]::text[]` by Prisma Migrate.
+- **On SQLite** drizzle-kit leaves out a foreign key's name, a `Boolean` column is declared
+  `integer` where Prisma Migrate declares `BOOLEAN`, and `@default(now())` has no default in the
+  table, as drizzle fills it (see Dates).
+
+On MySQL the tables are Prisma's where the database's collation is: Prisma Migrate makes every
+table `utf8mb4_unicode_ci`, and a table drizzle-kit makes takes the database's. A `String` with no
+native type is `varchar(191)` and a `Decimal` `decimal(65,30)`, as Prisma Migrate makes them, and
+an index on part of a `TEXT` (`@@index([body(length: 191)])`) is written as SQL,
+`` sql`${table.body}(191)` ``.
 
 ### What the connection has to be
 

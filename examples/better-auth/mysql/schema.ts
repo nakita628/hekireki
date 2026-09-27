@@ -29,9 +29,9 @@ const utcNow = (() => {
 export const user = mysqlTable(
   'user',
   {
-    id: text('id').primaryKey(),
+    id: varchar('id', { length: 191 }).primaryKey(),
     name: text('name').notNull(),
-    email: text('email').notNull(),
+    email: varchar('email', { length: 191 }).notNull(),
     emailVerified: boolean('emailVerified').notNull().default(false),
     image: text('image'),
     createdAt: datetime('createdAt', { fsp: 3 })
@@ -39,10 +39,10 @@ export const user = mysqlTable(
       .default(sql`CURRENT_TIMESTAMP(3)`)
       .$defaultFn(utcNow),
     updatedAt: datetime('updatedAt', { fsp: 3 }).notNull().$onUpdate(utcNow),
-    username: text('username'),
+    username: varchar('username', { length: 191 }),
     displayUsername: text('displayUsername'),
     isAnonymous: boolean('isAnonymous').default(false),
-    phoneNumber: text('phoneNumber'),
+    phoneNumber: varchar('phoneNumber', { length: 191 }),
     phoneNumberVerified: boolean('phoneNumberVerified'),
     twoFactorEnabled: boolean('twoFactorEnabled').default(false),
     role: text('role'),
@@ -62,9 +62,9 @@ export const user = mysqlTable(
 export const session = mysqlTable(
   'session',
   {
-    id: text('id').primaryKey(),
+    id: varchar('id', { length: 191 }).primaryKey(),
     expiresAt: datetime('expiresAt', { fsp: 3 }).notNull(),
-    token: text('token').notNull(),
+    token: varchar('token', { length: 191 }).notNull(),
     createdAt: datetime('createdAt', { fsp: 3 })
       .notNull()
       .default(sql`CURRENT_TIMESTAMP(3)`)
@@ -72,7 +72,7 @@ export const session = mysqlTable(
     updatedAt: datetime('updatedAt', { fsp: 3 }).notNull().$onUpdate(utcNow),
     ipAddress: text('ipAddress'),
     userAgent: text('userAgent'),
-    userId: text('userId').notNull(),
+    userId: varchar('userId', { length: 191 }).notNull(),
     impersonatedBy: text('impersonatedBy'),
     activeOrganizationId: text('activeOrganizationId'),
     activeTeamId: text('activeTeamId'),
@@ -89,10 +89,10 @@ export const session = mysqlTable(
 export const account = mysqlTable(
   'account',
   {
-    id: text('id').primaryKey(),
+    id: varchar('id', { length: 191 }).primaryKey(),
     accountId: text('accountId').notNull(),
     providerId: text('providerId').notNull(),
-    userId: text('userId').notNull(),
+    userId: varchar('userId', { length: 191 }).notNull(),
     accessToken: text('accessToken'),
     refreshToken: text('refreshToken'),
     idToken: text('idToken'),
@@ -117,7 +117,7 @@ export const account = mysqlTable(
 export const verification = mysqlTable(
   'verification',
   {
-    id: text('id').primaryKey(),
+    id: varchar('id', { length: 191 }).primaryKey(),
     identifier: text('identifier').notNull(),
     value: text('value').notNull(),
     expiresAt: datetime('expiresAt', { fsp: 3 }).notNull(),
@@ -127,22 +127,22 @@ export const verification = mysqlTable(
       .$defaultFn(utcNow),
     updatedAt: datetime('updatedAt', { fsp: 3 }).notNull().$onUpdate(utcNow),
   },
-  (table) => [index('verification_identifier_idx').on(table.identifier)],
+  (table) => [index('verification_identifier_idx').on(sql`${table.identifier}(191)`)],
 )
 
 export const twoFactor = mysqlTable(
   'twoFactor',
   {
-    id: text('id').primaryKey(),
+    id: varchar('id', { length: 191 }).primaryKey(),
     secret: text('secret').notNull(),
     backupCodes: text('backupCodes').notNull(),
-    userId: text('userId').notNull(),
+    userId: varchar('userId', { length: 191 }).notNull(),
     verified: boolean('verified').default(true),
     failedVerificationCount: int('failedVerificationCount').default(0),
     lockedUntil: datetime('lockedUntil', { fsp: 3 }),
   },
   (table) => [
-    index('twoFactor_secret_idx').on(table.secret),
+    index('twoFactor_secret_idx').on(sql`${table.secret}(191)`),
     index('twoFactor_userId_idx').on(table.userId),
     foreignKey({
       name: 'twoFactor_userId_fkey',
@@ -157,10 +157,10 @@ export const twoFactor = mysqlTable(
 export const passkey = mysqlTable(
   'passkey',
   {
-    id: text('id').primaryKey(),
+    id: varchar('id', { length: 191 }).primaryKey(),
     name: text('name'),
     publicKey: text('publicKey').notNull(),
-    userId: text('userId').notNull(),
+    userId: varchar('userId', { length: 191 }).notNull(),
     credentialID: text('credentialID').notNull(),
     counter: int('counter').notNull(),
     deviceType: text('deviceType').notNull(),
@@ -171,7 +171,7 @@ export const passkey = mysqlTable(
   },
   (table) => [
     index('passkey_userId_idx').on(table.userId),
-    index('passkey_credentialID_idx').on(table.credentialID),
+    index('passkey_credentialID_idx').on(sql`${table.credentialID}(191)`),
     foreignKey({ name: 'passkey_userId_fkey', columns: [table.userId], foreignColumns: [user.id] })
       .onDelete('cascade')
       .onUpdate('cascade'),
@@ -181,7 +181,7 @@ export const passkey = mysqlTable(
 export const apikey = mysqlTable(
   'apikey',
   {
-    id: text('id').primaryKey(),
+    id: varchar('id', { length: 191 }).primaryKey(),
     configId: text('configId').notNull(),
     name: text('name'),
     start: text('start'),
@@ -205,18 +205,18 @@ export const apikey = mysqlTable(
     metadata: text('metadata'),
   },
   (table) => [
-    index('apikey_configId_idx').on(table.configId),
-    index('apikey_referenceId_idx').on(table.referenceId),
-    index('apikey_key_idx').on(table.key),
+    index('apikey_configId_idx').on(sql`${table.configId}(191)`),
+    index('apikey_referenceId_idx').on(sql`${table.referenceId}(191)`),
+    index('apikey_key_idx').on(sql`${table.key}(191)`),
   ],
 )
 
 export const organization = mysqlTable(
   'organization',
   {
-    id: text('id').primaryKey(),
+    id: varchar('id', { length: 191 }).primaryKey(),
     name: text('name').notNull(),
-    slug: text('slug').notNull(),
+    slug: varchar('slug', { length: 191 }).notNull(),
     logo: text('logo'),
     createdAt: datetime('createdAt', { fsp: 3 }).notNull(),
     metadata: text('metadata'),
@@ -227,8 +227,8 @@ export const organization = mysqlTable(
 export const organizationRole = mysqlTable(
   'organizationRole',
   {
-    id: text('id').primaryKey(),
-    organizationId: text('organizationId').notNull(),
+    id: varchar('id', { length: 191 }).primaryKey(),
+    organizationId: varchar('organizationId', { length: 191 }).notNull(),
     role: text('role').notNull(),
     permission: text('permission').notNull(),
     createdAt: datetime('createdAt', { fsp: 3 })
@@ -239,7 +239,7 @@ export const organizationRole = mysqlTable(
   },
   (table) => [
     index('organizationRole_organizationId_idx').on(table.organizationId),
-    index('organizationRole_role_idx').on(table.role),
+    index('organizationRole_role_idx').on(sql`${table.role}(191)`),
     foreignKey({
       name: 'organizationRole_organizationId_fkey',
       columns: [table.organizationId],
@@ -253,10 +253,10 @@ export const organizationRole = mysqlTable(
 export const team = mysqlTable(
   'team',
   {
-    id: text('id').primaryKey(),
+    id: varchar('id', { length: 191 }).primaryKey(),
     name: text('name').notNull(),
     memberCount: int('memberCount').notNull().default(0),
-    organizationId: text('organizationId').notNull(),
+    organizationId: varchar('organizationId', { length: 191 }).notNull(),
     createdAt: datetime('createdAt', { fsp: 3 }).notNull(),
     updatedAt: datetime('updatedAt', { fsp: 3 }).$onUpdate(utcNow),
   },
@@ -275,10 +275,10 @@ export const team = mysqlTable(
 export const teamMember = mysqlTable(
   'teamMember',
   {
-    id: text('id').primaryKey(),
-    teamId: text('teamId').notNull(),
-    userId: text('userId').notNull(),
-    membershipKey: text('membershipKey'),
+    id: varchar('id', { length: 191 }).primaryKey(),
+    teamId: varchar('teamId', { length: 191 }).notNull(),
+    userId: varchar('userId', { length: 191 }).notNull(),
+    membershipKey: varchar('membershipKey', { length: 191 }),
     createdAt: datetime('createdAt', { fsp: 3 }),
   },
   (table) => [
@@ -305,9 +305,9 @@ export const teamMember = mysqlTable(
 export const member = mysqlTable(
   'member',
   {
-    id: text('id').primaryKey(),
-    organizationId: text('organizationId').notNull(),
-    userId: text('userId').notNull(),
+    id: varchar('id', { length: 191 }).primaryKey(),
+    organizationId: varchar('organizationId', { length: 191 }).notNull(),
+    userId: varchar('userId', { length: 191 }).notNull(),
     role: text('role').notNull(),
     createdAt: datetime('createdAt', { fsp: 3 }).notNull(),
   },
@@ -330,8 +330,8 @@ export const member = mysqlTable(
 export const invitation = mysqlTable(
   'invitation',
   {
-    id: text('id').primaryKey(),
-    organizationId: text('organizationId').notNull(),
+    id: varchar('id', { length: 191 }).primaryKey(),
+    organizationId: varchar('organizationId', { length: 191 }).notNull(),
     email: text('email').notNull(),
     role: text('role'),
     teamId: text('teamId'),
@@ -341,11 +341,11 @@ export const invitation = mysqlTable(
       .notNull()
       .default(sql`CURRENT_TIMESTAMP(3)`)
       .$defaultFn(utcNow),
-    inviterId: text('inviterId').notNull(),
+    inviterId: varchar('inviterId', { length: 191 }).notNull(),
   },
   (table) => [
     index('invitation_organizationId_idx').on(table.organizationId),
-    index('invitation_email_idx').on(table.email),
+    index('invitation_email_idx').on(sql`${table.email}(191)`),
     foreignKey({
       name: 'invitation_organizationId_fkey',
       columns: [table.organizationId],
@@ -364,7 +364,7 @@ export const invitation = mysqlTable(
 )
 
 export const jwks = mysqlTable('jwks', {
-  id: text('id').primaryKey(),
+  id: varchar('id', { length: 191 }).primaryKey(),
   publicKey: text('publicKey').notNull(),
   privateKey: text('privateKey').notNull(),
   createdAt: datetime('createdAt', { fsp: 3 }).notNull(),
@@ -376,42 +376,42 @@ export const jwks = mysqlTable('jwks', {
 export const oauthClient = mysqlTable(
   'oauthClient',
   {
-    id: text('id').primaryKey(),
-    clientId: text('clientId').notNull(),
+    id: varchar('id', { length: 191 }).primaryKey(),
+    clientId: varchar('clientId', { length: 191 }).notNull(),
     clientSecret: text('clientSecret'),
     clientDiscoveryId: text('clientDiscoveryId'),
     disabled: boolean('disabled').default(false),
     skipConsent: boolean('skipConsent'),
     enableEndSession: boolean('enableEndSession'),
     subjectType: text('subjectType'),
-    scopes: text('scopes'),
-    clientCredentialsScopes: text('clientCredentialsScopes').default('[]'),
-    userId: text('userId'),
+    scopes: varchar('scopes', { length: 191 }),
+    clientCredentialsScopes: varchar('clientCredentialsScopes', { length: 191 }).default('[]'),
+    userId: varchar('userId', { length: 191 }),
     createdAt: datetime('createdAt', { fsp: 3 }),
     updatedAt: datetime('updatedAt', { fsp: 3 }),
     name: text('name'),
     uri: text('uri'),
     icon: text('icon'),
-    contacts: text('contacts'),
+    contacts: varchar('contacts', { length: 191 }),
     tos: text('tos'),
     policy: text('policy'),
     softwareId: text('softwareId'),
     softwareVersion: text('softwareVersion'),
     softwareStatement: text('softwareStatement'),
-    redirectUris: text('redirectUris').notNull(),
-    postLogoutRedirectUris: text('postLogoutRedirectUris'),
+    redirectUris: varchar('redirectUris', { length: 191 }).notNull(),
+    postLogoutRedirectUris: varchar('postLogoutRedirectUris', { length: 191 }),
     backchannelLogoutUri: text('backchannelLogoutUri'),
     backchannelLogoutSessionRequired: boolean('backchannelLogoutSessionRequired'),
     tokenEndpointAuthMethod: text('tokenEndpointAuthMethod'),
     applicationType: text('applicationType'),
     jwks: text('jwks'),
     jwksUri: text('jwksUri'),
-    grantTypes: text('grantTypes'),
-    responseTypes: text('responseTypes'),
+    grantTypes: varchar('grantTypes', { length: 191 }),
+    responseTypes: varchar('responseTypes', { length: 191 }),
     requirePKCE: boolean('requirePKCE'),
     dpopBoundAccessTokens: boolean('dpopBoundAccessTokens').default(false),
     referenceId: text('referenceId'),
-    metadata: text('metadata'),
+    metadata: varchar('metadata', { length: 191 }),
   },
   (table) => [
     index('oauthClient_userId_idx').on(table.userId),
@@ -429,21 +429,21 @@ export const oauthClient = mysqlTable(
 export const oauthResource = mysqlTable(
   'oauthResource',
   {
-    id: text('id').primaryKey(),
-    identifier: text('identifier').notNull(),
+    id: varchar('id', { length: 191 }).primaryKey(),
+    identifier: varchar('identifier', { length: 191 }).notNull(),
     name: text('name').notNull(),
     accessTokenTtl: int('accessTokenTtl'),
     refreshTokenTtl: int('refreshTokenTtl'),
     signingAlgorithm: text('signingAlgorithm'),
     signingKeyId: text('signingKeyId'),
-    allowedScopes: text('allowedScopes'),
-    customClaims: text('customClaims'),
+    allowedScopes: varchar('allowedScopes', { length: 191 }),
+    customClaims: varchar('customClaims', { length: 191 }),
     dpopBoundAccessTokensRequired: boolean('dpopBoundAccessTokensRequired').default(false),
     disabled: boolean('disabled').default(false),
     createdAt: datetime('createdAt', { fsp: 3 }),
     updatedAt: datetime('updatedAt', { fsp: 3 }),
     policyVersion: int('policyVersion').default(1),
-    metadata: text('metadata'),
+    metadata: varchar('metadata', { length: 191 }),
   },
   (table) => [unique('oauthResource_identifier_key').on(table.identifier)],
 )
@@ -451,10 +451,10 @@ export const oauthResource = mysqlTable(
 export const oauthClientResource = mysqlTable(
   'oauthClientResource',
   {
-    id: text('id').primaryKey(),
+    id: varchar('id', { length: 191 }).primaryKey(),
     clientId: varchar('clientId', { length: 191 }).notNull(),
     resourceId: varchar('resourceId', { length: 191 }).notNull(),
-    metadata: text('metadata'),
+    metadata: varchar('metadata', { length: 191 }),
     createdAt: datetime('createdAt', { fsp: 3 }),
   },
   (table) => [
@@ -484,15 +484,15 @@ export const oauthClientResource = mysqlTable(
 export const oauthRefreshToken = mysqlTable(
   'oauthRefreshToken',
   {
-    id: text('id').primaryKey(),
-    token: text('token').notNull(),
-    clientId: text('clientId').notNull(),
-    sessionId: text('sessionId'),
-    userId: text('userId').notNull(),
+    id: varchar('id', { length: 191 }).primaryKey(),
+    token: varchar('token', { length: 191 }).notNull(),
+    clientId: varchar('clientId', { length: 191 }).notNull(),
+    sessionId: varchar('sessionId', { length: 191 }),
+    userId: varchar('userId', { length: 191 }).notNull(),
     referenceId: text('referenceId'),
     authorizationCodeId: text('authorizationCodeId'),
-    resources: text('resources'),
-    requestedUserInfoClaims: text('requestedUserInfoClaims'),
+    resources: varchar('resources', { length: 191 }),
+    requestedUserInfoClaims: varchar('requestedUserInfoClaims', { length: 191 }),
     expiresAt: datetime('expiresAt', { fsp: 3 }).notNull(),
     createdAt: datetime('createdAt', { fsp: 3 }).notNull(),
     revoked: datetime('revoked', { fsp: 3 }),
@@ -500,14 +500,14 @@ export const oauthRefreshToken = mysqlTable(
     rotationReplayResponse: text('rotationReplayResponse'),
     rotationReplayExpiresAt: datetime('rotationReplayExpiresAt', { fsp: 3 }),
     authTime: datetime('authTime', { fsp: 3 }),
-    confirmation: text('confirmation'),
-    scopes: text('scopes').notNull(),
+    confirmation: varchar('confirmation', { length: 191 }),
+    scopes: varchar('scopes', { length: 191 }).notNull(),
   },
   (table) => [
     index('oauthRefreshToken_clientId_idx').on(table.clientId),
     index('oauthRefreshToken_sessionId_idx').on(table.sessionId),
     index('oauthRefreshToken_userId_idx').on(table.userId),
-    index('oauthRefreshToken_authorizationCodeId_idx').on(table.authorizationCodeId),
+    index('oauthRefreshToken_authorizationCodeId_idx').on(sql`${table.authorizationCodeId}(191)`),
     uniqueIndex('oauthRefreshToken_token_key').on(table.token),
     foreignKey({
       name: 'oauthRefreshToken_clientId_fkey',
@@ -536,27 +536,27 @@ export const oauthRefreshToken = mysqlTable(
 export const oauthAccessToken = mysqlTable(
   'oauthAccessToken',
   {
-    id: text('id').primaryKey(),
-    token: text('token').notNull(),
-    clientId: text('clientId').notNull(),
-    sessionId: text('sessionId'),
-    userId: text('userId'),
+    id: varchar('id', { length: 191 }).primaryKey(),
+    token: varchar('token', { length: 191 }).notNull(),
+    clientId: varchar('clientId', { length: 191 }).notNull(),
+    sessionId: varchar('sessionId', { length: 191 }),
+    userId: varchar('userId', { length: 191 }),
     referenceId: text('referenceId'),
     authorizationCodeId: text('authorizationCodeId'),
-    resources: text('resources'),
-    requestedUserInfoClaims: text('requestedUserInfoClaims'),
-    refreshId: text('refreshId'),
+    resources: varchar('resources', { length: 191 }),
+    requestedUserInfoClaims: varchar('requestedUserInfoClaims', { length: 191 }),
+    refreshId: varchar('refreshId', { length: 191 }),
     expiresAt: datetime('expiresAt', { fsp: 3 }).notNull(),
     createdAt: datetime('createdAt', { fsp: 3 }).notNull(),
     revoked: datetime('revoked', { fsp: 3 }),
-    confirmation: text('confirmation'),
-    scopes: text('scopes').notNull(),
+    confirmation: varchar('confirmation', { length: 191 }),
+    scopes: varchar('scopes', { length: 191 }).notNull(),
   },
   (table) => [
     index('oauthAccessToken_clientId_idx').on(table.clientId),
     index('oauthAccessToken_sessionId_idx').on(table.sessionId),
     index('oauthAccessToken_userId_idx').on(table.userId),
-    index('oauthAccessToken_authorizationCodeId_idx').on(table.authorizationCodeId),
+    index('oauthAccessToken_authorizationCodeId_idx').on(sql`${table.authorizationCodeId}(191)`),
     index('oauthAccessToken_refreshId_idx').on(table.refreshId),
     uniqueIndex('oauthAccessToken_token_key').on(table.token),
     foreignKey({
@@ -593,13 +593,13 @@ export const oauthAccessToken = mysqlTable(
 export const oauthConsent = mysqlTable(
   'oauthConsent',
   {
-    id: text('id').primaryKey(),
-    clientId: text('clientId').notNull(),
-    userId: text('userId'),
+    id: varchar('id', { length: 191 }).primaryKey(),
+    clientId: varchar('clientId', { length: 191 }).notNull(),
+    userId: varchar('userId', { length: 191 }),
     referenceId: text('referenceId'),
-    resources: text('resources'),
-    requestedUserInfoClaims: text('requestedUserInfoClaims'),
-    scopes: text('scopes').notNull(),
+    resources: varchar('resources', { length: 191 }),
+    requestedUserInfoClaims: varchar('requestedUserInfoClaims', { length: 191 }),
+    scopes: varchar('scopes', { length: 191 }).notNull(),
     createdAt: datetime('createdAt', { fsp: 3 }).notNull(),
     updatedAt: datetime('updatedAt', { fsp: 3 }).notNull(),
   },
@@ -624,14 +624,14 @@ export const oauthConsent = mysqlTable(
 )
 
 export const oauthClientAssertion = mysqlTable('oauthClientAssertion', {
-  id: text('id').primaryKey(),
+  id: varchar('id', { length: 191 }).primaryKey(),
   expiresAt: datetime('expiresAt', { fsp: 3 }).notNull(),
 })
 
 export const deviceCode = mysqlTable(
   'deviceCode',
   {
-    id: text('id').primaryKey(),
+    id: varchar('id', { length: 191 }).primaryKey(),
     deviceCode: varchar('deviceCode', { length: 191 }).notNull(),
     userCode: varchar('userCode', { length: 191 }).notNull(),
     userId: text('userId'),
@@ -651,12 +651,12 @@ export const deviceCode = mysqlTable(
 export const ssoProvider = mysqlTable(
   'ssoProvider',
   {
-    id: text('id').primaryKey(),
+    id: varchar('id', { length: 191 }).primaryKey(),
     issuer: text('issuer').notNull(),
     oidcConfig: text('oidcConfig'),
     samlConfig: text('samlConfig'),
-    userId: text('userId').notNull(),
-    providerId: text('providerId').notNull(),
+    userId: varchar('userId', { length: 191 }).notNull(),
+    providerId: varchar('providerId', { length: 191 }).notNull(),
     organizationId: text('organizationId'),
     domain: text('domain').notNull(),
   },
@@ -675,9 +675,9 @@ export const ssoProvider = mysqlTable(
 export const scimManagedConnection = mysqlTable(
   'scimManagedConnection',
   {
-    id: text('id').primaryKey(),
-    creationRequestId: text('creationRequestId').notNull(),
-    connectionId: text('connectionId').notNull(),
+    id: varchar('id', { length: 191 }).primaryKey(),
+    creationRequestId: varchar('creationRequestId', { length: 191 }).notNull(),
+    connectionId: varchar('connectionId', { length: 191 }).notNull(),
     provisioningDomainId: text('provisioningDomainId').notNull(),
     status: text('status').notNull(),
     revision: int('revision').notNull(),
@@ -689,7 +689,9 @@ export const scimManagedConnection = mysqlTable(
     decommissionedBy: text('decommissionedBy'),
   },
   (table) => [
-    index('scimManagedConnection_provisioningDomainId_idx').on(table.provisioningDomainId),
+    index('scimManagedConnection_provisioningDomainId_idx').on(
+      sql`${table.provisioningDomainId}(191)`,
+    ),
     uniqueIndex('scimManagedConnection_creationRequestId_key').on(table.creationRequestId),
     uniqueIndex('scimManagedConnection_connectionId_key').on(table.connectionId),
   ],
@@ -698,12 +700,12 @@ export const scimManagedConnection = mysqlTable(
 export const scimManagedCredential = mysqlTable(
   'scimManagedCredential',
   {
-    id: text('id').primaryKey(),
-    connectionRecordId: text('connectionRecordId').notNull(),
-    credentialId: text('credentialId').notNull(),
+    id: varchar('id', { length: 191 }).primaryKey(),
+    connectionRecordId: varchar('connectionRecordId', { length: 191 }).notNull(),
+    credentialId: varchar('credentialId', { length: 191 }).notNull(),
     tokenDigest: text('tokenDigest').notNull(),
     hashVersion: text('hashVersion').notNull(),
-    activeSlotKey: text('activeSlotKey').notNull(),
+    activeSlotKey: varchar('activeSlotKey', { length: 191 }).notNull(),
     status: text('status').notNull(),
     serializedScopes: text('serializedScopes').notNull(),
     expiresAt: datetime('expiresAt', { fsp: 3 }).notNull(),
@@ -731,9 +733,9 @@ export const scimManagedCredential = mysqlTable(
 export const scimManagedConnectionEvent = mysqlTable(
   'scimManagedConnectionEvent',
   {
-    id: text('id').primaryKey(),
-    connectionRecordId: text('connectionRecordId').notNull(),
-    eventKey: text('eventKey').notNull(),
+    id: varchar('id', { length: 191 }).primaryKey(),
+    connectionRecordId: varchar('connectionRecordId', { length: 191 }).notNull(),
+    eventKey: varchar('eventKey', { length: 191 }).notNull(),
     sequence: int('sequence').notNull(),
     type: text('type').notNull(),
     actorId: text('actorId').notNull(),
@@ -756,9 +758,9 @@ export const scimManagedConnectionEvent = mysqlTable(
 export const scimConnectionBinding = mysqlTable(
   'scimConnectionBinding',
   {
-    id: text('id').primaryKey(),
+    id: varchar('id', { length: 191 }).primaryKey(),
     connectionId: text('connectionId').notNull(),
-    connectionKey: text('connectionKey').notNull(),
+    connectionKey: varchar('connectionKey', { length: 191 }).notNull(),
     provisioningDomainId: text('provisioningDomainId').notNull(),
     createdAt: datetime('createdAt', { fsp: 3 }).notNull(),
     decommissionedAt: datetime('decommissionedAt', { fsp: 3 }),
@@ -772,7 +774,7 @@ export const scimConnectionBinding = mysqlTable(
     decommissionLeaseExpiresAt: datetime('decommissionLeaseExpiresAt', { fsp: 3 }),
   },
   (table) => [
-    index('scimConnectionBinding_connectionId_idx').on(table.connectionId),
+    index('scimConnectionBinding_connectionId_idx').on(sql`${table.connectionId}(191)`),
     uniqueIndex('scimConnectionBinding_connectionKey_key').on(table.connectionKey),
   ],
 )
@@ -780,18 +782,20 @@ export const scimConnectionBinding = mysqlTable(
 export const scimIdentityTombstone = mysqlTable(
   'scimIdentityTombstone',
   {
-    id: text('id').primaryKey(),
+    id: varchar('id', { length: 191 }).primaryKey(),
     connectionId: text('connectionId').notNull(),
     provisioningDomainId: text('provisioningDomainId').notNull(),
     externalId: text('externalId').notNull(),
-    externalIdKey: text('externalIdKey').notNull(),
-    userId: text('userId').notNull(),
+    externalIdKey: varchar('externalIdKey', { length: 191 }).notNull(),
+    userId: varchar('userId', { length: 191 }).notNull(),
     profile: text('profile').notNull(),
     deletedAt: datetime('deletedAt', { fsp: 3 }).notNull(),
   },
   (table) => [
-    index('scimIdentityTombstone_connectionId_idx').on(table.connectionId),
-    index('scimIdentityTombstone_provisioningDomainId_idx').on(table.provisioningDomainId),
+    index('scimIdentityTombstone_connectionId_idx').on(sql`${table.connectionId}(191)`),
+    index('scimIdentityTombstone_provisioningDomainId_idx').on(
+      sql`${table.provisioningDomainId}(191)`,
+    ),
     index('scimIdentityTombstone_userId_idx').on(table.userId),
     uniqueIndex('scimIdentityTombstone_externalIdKey_key').on(table.externalIdKey),
     foreignKey({
@@ -807,15 +811,15 @@ export const scimIdentityTombstone = mysqlTable(
 export const scimSubject = mysqlTable(
   'scimSubject',
   {
-    id: text('id').primaryKey(),
-    userId: text('userId').notNull(),
+    id: varchar('id', { length: 191 }).primaryKey(),
+    userId: varchar('userId', { length: 191 }).notNull(),
     profileSourceId: text('profileSourceId'),
     revision: int('revision').notNull(),
     createdAt: datetime('createdAt', { fsp: 3 }).notNull(),
     updatedAt: datetime('updatedAt', { fsp: 3 }).notNull(),
   },
   (table) => [
-    index('scimSubject_profileSourceId_idx').on(table.profileSourceId),
+    index('scimSubject_profileSourceId_idx').on(sql`${table.profileSourceId}(191)`),
     uniqueIndex('scimSubject_userId_key').on(table.userId),
     foreignKey({
       name: 'scimSubject_userId_fkey',
@@ -830,13 +834,13 @@ export const scimSubject = mysqlTable(
 export const scimUser = mysqlTable(
   'scimUser',
   {
-    id: text('id').primaryKey(),
+    id: varchar('id', { length: 191 }).primaryKey(),
     connectionId: text('connectionId').notNull(),
     provisioningDomainId: text('provisioningDomainId').notNull(),
-    userId: text('userId').notNull(),
-    connectionUserKey: text('connectionUserKey').notNull(),
+    userId: varchar('userId', { length: 191 }).notNull(),
+    connectionUserKey: varchar('connectionUserKey', { length: 191 }).notNull(),
     userName: text('userName').notNull(),
-    userNameKey: text('userNameKey').notNull(),
+    userNameKey: varchar('userNameKey', { length: 191 }).notNull(),
     primaryEmail: text('primaryEmail').notNull(),
     workEmailValueIndex: text('workEmailValueIndex').notNull(),
     emailValueIndex: text('emailValueIndex').notNull(),
@@ -847,15 +851,15 @@ export const scimUser = mysqlTable(
     serializedEmails: text('serializedEmails').notNull(),
     serializedAttributes: text('serializedAttributes'),
     externalId: text('externalId'),
-    externalIdKey: text('externalIdKey'),
+    externalIdKey: varchar('externalIdKey', { length: 191 }),
     active: boolean('active').notNull(),
-    orderKey: text('orderKey').notNull(),
+    orderKey: varchar('orderKey', { length: 191 }).notNull(),
     createdAt: datetime('createdAt', { fsp: 3 }).notNull(),
     updatedAt: datetime('updatedAt', { fsp: 3 }).notNull(),
   },
   (table) => [
-    index('scimUser_connectionId_idx').on(table.connectionId),
-    index('scimUser_provisioningDomainId_idx').on(table.provisioningDomainId),
+    index('scimUser_connectionId_idx').on(sql`${table.connectionId}(191)`),
+    index('scimUser_provisioningDomainId_idx').on(sql`${table.provisioningDomainId}(191)`),
     index('scimUser_userId_idx').on(table.userId),
     uniqueIndex('scimUser_connectionUserKey_key').on(table.connectionUserKey),
     uniqueIndex('scimUser_userNameKey_key').on(table.userNameKey),
@@ -870,22 +874,24 @@ export const scimUser = mysqlTable(
 export const scimProjectionGrant = mysqlTable(
   'scimProjectionGrant',
   {
-    id: text('id').primaryKey(),
+    id: varchar('id', { length: 191 }).primaryKey(),
     connectionId: text('connectionId').notNull(),
     provisioningDomainId: text('provisioningDomainId').notNull(),
-    scimUserId: text('scimUserId').notNull(),
-    userId: text('userId').notNull(),
+    scimUserId: varchar('scimUserId', { length: 191 }).notNull(),
+    userId: varchar('userId', { length: 191 }).notNull(),
     sourceKind: text('sourceKind').notNull(),
     sourceId: text('sourceId').notNull(),
     sourceValue: text('sourceValue'),
     role: text('role').notNull(),
-    grantKey: text('grantKey').notNull(),
+    grantKey: varchar('grantKey', { length: 191 }).notNull(),
     createdAt: datetime('createdAt', { fsp: 3 }).notNull(),
     updatedAt: datetime('updatedAt', { fsp: 3 }).notNull(),
   },
   (table) => [
-    index('scimProjectionGrant_connectionId_idx').on(table.connectionId),
-    index('scimProjectionGrant_provisioningDomainId_idx').on(table.provisioningDomainId),
+    index('scimProjectionGrant_connectionId_idx').on(sql`${table.connectionId}(191)`),
+    index('scimProjectionGrant_provisioningDomainId_idx').on(
+      sql`${table.provisioningDomainId}(191)`,
+    ),
     index('scimProjectionGrant_scimUserId_idx').on(table.scimUserId),
     index('scimProjectionGrant_userId_idx').on(table.userId),
     uniqueIndex('scimProjectionGrant_grantKey_key').on(table.grantKey),
@@ -909,21 +915,21 @@ export const scimProjectionGrant = mysqlTable(
 export const scimGroup = mysqlTable(
   'scimGroup',
   {
-    id: text('id').primaryKey(),
+    id: varchar('id', { length: 191 }).primaryKey(),
     connectionId: text('connectionId').notNull(),
     provisioningDomainId: text('provisioningDomainId').notNull(),
     revision: int('revision').notNull().default(0),
     displayName: text('displayName').notNull(),
-    displayNameKey: text('displayNameKey').notNull(),
+    displayNameKey: varchar('displayNameKey', { length: 191 }).notNull(),
     externalId: text('externalId'),
-    externalIdKey: text('externalIdKey'),
-    orderKey: text('orderKey').notNull(),
+    externalIdKey: varchar('externalIdKey', { length: 191 }),
+    orderKey: varchar('orderKey', { length: 191 }).notNull(),
     createdAt: datetime('createdAt', { fsp: 3 }).notNull(),
     updatedAt: datetime('updatedAt', { fsp: 3 }).notNull(),
   },
   (table) => [
-    index('scimGroup_connectionId_idx').on(table.connectionId),
-    index('scimGroup_provisioningDomainId_idx').on(table.provisioningDomainId),
+    index('scimGroup_connectionId_idx').on(sql`${table.connectionId}(191)`),
+    index('scimGroup_provisioningDomainId_idx').on(sql`${table.provisioningDomainId}(191)`),
     uniqueIndex('scimGroup_displayNameKey_key').on(table.displayNameKey),
     uniqueIndex('scimGroup_externalIdKey_key').on(table.externalIdKey),
     uniqueIndex('scimGroup_orderKey_key').on(table.orderKey),
@@ -933,15 +939,15 @@ export const scimGroup = mysqlTable(
 export const scimGroupMember = mysqlTable(
   'scimGroupMember',
   {
-    id: text('id').primaryKey(),
+    id: varchar('id', { length: 191 }).primaryKey(),
     connectionId: text('connectionId').notNull(),
-    groupId: text('groupId').notNull(),
-    scimUserId: text('scimUserId').notNull(),
-    membershipKey: text('membershipKey').notNull(),
+    groupId: varchar('groupId', { length: 191 }).notNull(),
+    scimUserId: varchar('scimUserId', { length: 191 }).notNull(),
+    membershipKey: varchar('membershipKey', { length: 191 }).notNull(),
     createdAt: datetime('createdAt', { fsp: 3 }).notNull(),
   },
   (table) => [
-    index('scimGroupMember_connectionId_idx').on(table.connectionId),
+    index('scimGroupMember_connectionId_idx').on(sql`${table.connectionId}(191)`),
     index('scimGroupMember_groupId_idx').on(table.groupId),
     index('scimGroupMember_scimUserId_idx').on(table.scimUserId),
     uniqueIndex('scimGroupMember_membershipKey_key').on(table.membershipKey),
@@ -965,8 +971,8 @@ export const scimGroupMember = mysqlTable(
 export const walletAddress = mysqlTable(
   'walletAddress',
   {
-    id: text('id').primaryKey(),
-    userId: text('userId').notNull(),
+    id: varchar('id', { length: 191 }).primaryKey(),
+    userId: varchar('userId', { length: 191 }).notNull(),
     address: text('address').notNull(),
     chainId: int('chainId').notNull(),
     isPrimary: boolean('isPrimary').notNull().default(false),
@@ -985,7 +991,7 @@ export const walletAddress = mysqlTable(
 )
 
 export const subscription = mysqlTable('subscription', {
-  id: text('id').primaryKey(),
+  id: varchar('id', { length: 191 }).primaryKey(),
   plan: text('plan').notNull(),
   referenceId: text('referenceId').notNull(),
   stripeCustomerId: text('stripeCustomerId'),
@@ -1007,8 +1013,8 @@ export const subscription = mysqlTable('subscription', {
 export const rateLimit = mysqlTable(
   'rateLimit',
   {
-    id: text('id').primaryKey(),
-    key: text('key').notNull(),
+    id: varchar('id', { length: 191 }).primaryKey(),
+    key: varchar('key', { length: 191 }).notNull(),
     count: int('count').notNull(),
     lastRequest: bigint('lastRequest', { mode: 'bigint' }).notNull(),
   },

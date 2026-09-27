@@ -91,7 +91,7 @@ describe('drizzleSchema', () => {
       const result = drizzleSchema(datamodel, 'postgresql', [])
 
       expect(result).toBe(
-        "import { integer, pgTable, serial, text } from 'drizzle-orm/pg-core'\nimport { relations } from 'drizzle-orm'\n\nexport const user = pgTable('User', { id: serial('id').primaryKey(), name: text('name').notNull(), email: text('email').notNull().unique() })\n\nexport const post = pgTable('Post', { id: serial('id').primaryKey(), title: text('title').notNull(), userId: integer('userId').notNull().references(() => user.id) })\n\nexport const userRelations = relations(user, ({ many }) => ({ posts: many(post) }))\n\nexport const postRelations = relations(post, ({ one }) => ({ author: one(user, { fields: [post.userId], references: [user.id] }) }))",
+        "import { foreignKey, integer, pgTable, serial, text } from 'drizzle-orm/pg-core'\nimport { relations } from 'drizzle-orm'\n\nexport const user = pgTable('User', { id: serial('id').primaryKey(), name: text('name').notNull(), email: text('email').notNull() })\n\nexport const post = pgTable('Post', { id: serial('id').primaryKey(), title: text('title').notNull(), userId: integer('userId').notNull() }, (table) => [foreignKey({ name: 'Post_userId_fkey', columns: [table.userId], foreignColumns: [user.id] }).onDelete('restrict').onUpdate('cascade')])\n\nexport const userRelations = relations(user, ({ many }) => ({ posts: many(post) }))\n\nexport const postRelations = relations(post, ({ one }) => ({ author: one(user, { fields: [post.userId], references: [user.id] }) }))",
       )
     })
   })
@@ -146,7 +146,7 @@ describe('drizzleSchema', () => {
       const result = drizzleSchema(datamodel, 'mysql', [])
 
       expect(result).toBe(
-        "import { int, mysqlTable, text } from 'drizzle-orm/mysql-core'\n\nexport const user = mysqlTable('User', { id: int('id').primaryKey().autoincrement(), name: text('name').notNull() })",
+        "import { int, mysqlTable, varchar } from 'drizzle-orm/mysql-core'\n\nexport const user = mysqlTable('User', { id: int('id').primaryKey().autoincrement(), name: varchar('name', { length: 191 }).notNull() })",
       )
     })
   })
@@ -726,14 +726,14 @@ describe('torture corners', () => {
     ])
 
     expect(drizzleSchema(datamodel, 'postgresql', [])).toBe(
-      `import { integer, pgTable, primaryKey, serial } from 'drizzle-orm/pg-core'
+      `import { foreignKey, index, integer, pgTable, primaryKey, serial } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 
 export const actor = pgTable('Actor', { id: serial('id').primaryKey() })
 
 export const film = pgTable('Film', { id: serial('id').primaryKey() })
 
-export const cast = pgTable('_cast', { A: integer('A').notNull().references(() => actor.id, { onDelete: 'cascade' }), B: integer('B').notNull().references(() => film.id, { onDelete: 'cascade' }) }, (table) => [primaryKey({ columns: [table.A, table.B] })])
+export const cast = pgTable('_cast', { A: integer('A').notNull(), B: integer('B').notNull() }, (table) => [primaryKey({ name: '_cast_AB_pkey', columns: [table.A, table.B] }), index('_cast_B_index').on(table.B), foreignKey({ name: '_cast_A_fkey', columns: [table.A], foreignColumns: [actor.id] }).onDelete('cascade').onUpdate('cascade'), foreignKey({ name: '_cast_B_fkey', columns: [table.B], foreignColumns: [film.id] }).onDelete('cascade').onUpdate('cascade')])
 
 export const actorRelations = relations(actor, ({ many }) => ({ films: many(cast) }))
 
@@ -743,7 +743,7 @@ export const castRelations = relations(cast, ({ one }) => ({ actor: one(actor, {
     )
   })
 
-  it('names a composite @@unique after its map:, and leaves an unmapped one to drizzle', () => {
+  it('names a composite @@unique after its map:, and an unmapped one as Prisma Migrate does', () => {
     const datamodel = makeDatamodel([
       makeModel({
         name: 'Member',
@@ -778,7 +778,7 @@ export const castRelations = relations(cast, ({ one }) => ({ actor: one(actor, {
         },
       ]),
     ).toContain(
-      "(table) => [unique('member_tenant_email').on(table.tenantId, table.email), unique().on(table.tenantId, table.loginName)]",
+      "(table) => [uniqueIndex('member_tenant_email').on(table.tenantId, table.email), uniqueIndex('Member_tenantId_loginName_key').on(table.tenantId, table.loginName)]",
     )
   })
 
@@ -846,9 +846,9 @@ export const castRelations = relations(cast, ({ one }) => ({ actor: one(actor, {
       `import { foreignKey, pgTable, serial, text, unique } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 
-export const warehouse = pgTable('Warehouse', { id: serial('id').primaryKey(), country: text('country').notNull(), code: text('code').notNull() }, (table) => [unique().on(table.country, table.code)])
+export const warehouse = pgTable('Warehouse', { id: serial('id').primaryKey(), country: text('country').notNull(), code: text('code').notNull() }, (table) => [unique('Warehouse_country_code_key').on(table.country, table.code)])
 
-export const stock = pgTable('Stock', { id: serial('id').primaryKey(), country: text('country').notNull(), code: text('code').notNull() }, (table) => [foreignKey({ columns: [table.country, table.code], foreignColumns: [warehouse.country, warehouse.code] }).onDelete('cascade')])
+export const stock = pgTable('Stock', { id: serial('id').primaryKey(), country: text('country').notNull(), code: text('code').notNull() }, (table) => [foreignKey({ name: 'Stock_country_code_fkey', columns: [table.country, table.code], foreignColumns: [warehouse.country, warehouse.code] }).onDelete('cascade').onUpdate('cascade')])
 
 export const warehouseRelations = relations(warehouse, ({ many }) => ({ stocks: many(stock) }))
 
@@ -1192,7 +1192,13 @@ const MYSQL_NATIVE_TYPES: readonly (readonly [
     "bytes('value', { type: 'longblob' })",
   ],
   ['Json', '@db.Json', ['Json', []], 'int, json, mysqlTable', "json('value')"],
-  ['String', '@db.Nope', ['Nope', []], 'int, mysqlTable, text', "text('value')"],
+  [
+    'String',
+    '@db.Nope',
+    ['Nope', []],
+    'int, mysqlTable, varchar',
+    "varchar('value', { length: 191 })",
+  ],
 ]
 
 /** Prisma type, the attribute as it is written, its DMMF nativeType, the drizzle imports and column. */
@@ -1416,6 +1422,154 @@ describe('dates', () => {
     ])
     expect(drizzleSchema(datamodel, 'postgresql', []).split('\n').at(-1)).toBe(
       "export const row = pgTable('Row', { id: integer('id').primaryKey(), at: timestamp('at', { precision: 3 }).array() })",
+    )
+  })
+})
+
+describe('keys, indexes and foreign keys as Prisma Migrate makes them', () => {
+  const account = makeModel({
+    name: 'Account',
+    dbName: 'accounts',
+    fields: [
+      makeField({ name: 'id', type: 'Int', isId: true }),
+      makeField({ name: 'email', type: 'String', isUnique: true }),
+      makeField({ name: 'bio', type: 'String', nativeType: ['Text', []] }),
+      makeField({ name: 'parentId', type: 'Int', isRequired: false, dbName: 'parent_id' }),
+      makeField({
+        name: 'parent',
+        type: 'Account',
+        kind: 'object',
+        isRequired: false,
+        relationName: 'Tree',
+        relationFromFields: ['parentId'],
+        relationToFields: ['id'],
+      }),
+      makeField({
+        name: 'children',
+        type: 'Account',
+        kind: 'object',
+        isList: true,
+        relationName: 'Tree',
+        relationFromFields: [],
+        relationToFields: [],
+      }),
+      makeField({
+        name: 'logins',
+        type: 'Login',
+        kind: 'object',
+        isList: true,
+        relationName: 'AccountToLogin',
+        relationFromFields: [],
+        relationToFields: [],
+      }),
+    ],
+  })
+  const login = makeModel({
+    name: 'Login',
+    fields: [
+      makeField({ name: 'id', type: 'Int', isId: true }),
+      makeField({ name: 'email', type: 'String' }),
+      makeField({
+        name: 'account',
+        type: 'Account',
+        kind: 'object',
+        relationName: 'AccountToLogin',
+        relationFromFields: ['email'],
+        relationToFields: ['email'],
+      }),
+    ],
+  })
+  const indexes: DMMF.Index[] = [
+    { model: 'Account', type: 'unique', isDefinedOnField: true, fields: [{ name: 'email' }] },
+    {
+      model: 'Account',
+      type: 'normal',
+      isDefinedOnField: false,
+      fields: [{ name: 'bio', length: 191 }, { name: 'parentId' }],
+    },
+  ]
+  const tables = (provider: 'postgresql' | 'mysql' | 'sqlite') =>
+    drizzleSchema(makeDatamodel([account, login]), provider, indexes)
+      .split('\n')
+      .filter(
+        (line) =>
+          line.startsWith('export const accounts =') || line.startsWith('export const login ='),
+      )
+      .map((line) => line.slice(line.indexOf('(table) =>')))
+
+  it('names them after the table and its columns, with the actions Prisma implies', () => {
+    expect(tables('postgresql')).toStrictEqual([
+      "(table) => [unique('accounts_email_key').on(table.email), index('accounts_bio_parent_id_idx').on(table.bio, table.parentId), foreignKey({ name: 'accounts_parent_id_fkey', columns: [table.parentId], foreignColumns: [table.id] }).onDelete('set null').onUpdate('cascade')])",
+      "(table) => [foreignKey({ name: 'Login_email_fkey', columns: [table.email], foreignColumns: [accounts.email] }).onDelete('restrict').onUpdate('cascade')])",
+    ])
+  })
+
+  it('takes part of a TEXT in an index on MySQL', () => {
+    expect(tables('mysql')[0]).toBe(
+      "(table) => [unique('accounts_email_key').on(table.email), index('accounts_bio_parent_id_idx').on(sql`${table.bio}(191)`, table.parentId), foreignKey({ name: 'accounts_parent_id_fkey', columns: [table.parentId], foreignColumns: [table.id] }).onDelete('set null').onUpdate('cascade')])",
+    )
+  })
+
+  it('has every unique an index on SQLite, which makes a foreign key with its table', () => {
+    expect(tables('sqlite')[0]).toBe(
+      "(table) => [uniqueIndex('accounts_email_key').on(table.email), index('accounts_bio_parent_id_idx').on(table.bio, table.parentId), foreignKey({ name: 'accounts_parent_id_fkey', columns: [table.parentId], foreignColumns: [table.id] }).onDelete('set null').onUpdate('cascade')])",
+    )
+  })
+
+  it('has a unique nothing points at an index on PostgreSQL', () => {
+    expect(drizzleSchema(makeDatamodel([account]), 'postgresql', indexes)).toContain(
+      "uniqueIndex('accounts_email_key').on(table.email)",
+    )
+  })
+
+  it('has the pair of a join table its key on PostgreSQL and a unique index elsewhere', () => {
+    const post = makeModel({
+      name: 'Post',
+      fields: [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({
+          name: 'tags',
+          type: 'Tag',
+          kind: 'object',
+          isList: true,
+          relationName: 'PostToTag',
+          relationFromFields: [],
+          relationToFields: [],
+        }),
+      ],
+    })
+    const tag = makeModel({
+      name: 'Tag',
+      fields: [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({
+          name: 'posts',
+          type: 'Post',
+          kind: 'object',
+          isList: true,
+          relationName: 'PostToTag',
+          relationFromFields: [],
+          relationToFields: [],
+        }),
+      ],
+    })
+    const join = (provider: 'postgresql' | 'mysql' | 'sqlite') => {
+      const line =
+        drizzleSchema(makeDatamodel([post, tag]), provider, [])
+          .split('\n')
+          .find((text) => text.includes("'_PostToTag'")) ?? ''
+      return line.slice(line.indexOf('(table) =>'))
+    }
+    const rest =
+      "index('_PostToTag_B_index').on(table.B), foreignKey({ name: '_PostToTag_A_fkey', columns: [table.A], foreignColumns: [post.id] }).onDelete('cascade').onUpdate('cascade'), foreignKey({ name: '_PostToTag_B_fkey', columns: [table.B], foreignColumns: [tag.id] }).onDelete('cascade').onUpdate('cascade')])"
+    expect(join('postgresql')).toBe(
+      `(table) => [primaryKey({ name: '_PostToTag_AB_pkey', columns: [table.A, table.B] }), ${rest}`,
+    )
+    expect(join('mysql')).toBe(
+      `(table) => [uniqueIndex('_PostToTag_AB_unique').on(table.A, table.B), ${rest}`,
+    )
+    expect(join('sqlite')).toBe(
+      `(table) => [uniqueIndex('_PostToTag_AB_unique').on(table.A, table.B), ${rest}`,
     )
   })
 })

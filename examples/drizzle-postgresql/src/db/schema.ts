@@ -1,4 +1,4 @@
-import { customType, pgTable, serial, text, timestamp } from 'drizzle-orm/pg-core'
+import { customType, pgTable, serial, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
 
 const utcDate = customType<{ data: Date; driverData: string }>({
@@ -41,28 +41,32 @@ const utcNow = (() => {
   }
 })()
 
-export const moments = pgTable('moments', {
-  id: serial('id').primaryKey(),
-  name: text('name').notNull().unique(),
-  at: timestamp('at', { precision: 3 }).notNull(),
-  precise: timestamp('precise', { precision: 6 }).notNull(),
-  whole: timestamp('whole', { precision: 0 }).notNull(),
-  zoned: timestamp('zoned', { withTimezone: true, precision: 3 }).notNull(),
-  day: utcDate('day').notNull(),
-  dayOpt: utcDate('day_opt'),
-  opensAt: utcTime('opens_at', { precision: 3 }).notNull(),
-  zonedTime: utcTimetz('zoned_time', { precision: 3 }).notNull(),
-  moments: timestamp('moments', { precision: 3 }).array(),
-  days: utcDate('days').array(),
-  today: utcDate('today')
-    .notNull()
-    .default(sql`CURRENT_TIMESTAMP`)
-    .$defaultFn(utcNow),
-  launch: utcDate('launch').notNull().default(new Date('2024-01-15T00:00:00+00:00')),
-  bell: utcTime('bell').notNull().default(new Date('1970-01-01T10:30:00+00:00')),
-  createdAt: timestamp('created_at', { withTimezone: true })
-    .notNull()
-    .default(sql`CURRENT_TIMESTAMP`)
-    .$defaultFn(utcNow),
-  updatedAt: timestamp('updated_at', { precision: 3 }).notNull().$onUpdate(utcNow),
-})
+export const moments = pgTable(
+  'moments',
+  {
+    id: serial('id').primaryKey(),
+    name: text('name').notNull(),
+    at: timestamp('at', { precision: 3 }).notNull(),
+    precise: timestamp('precise', { precision: 6 }).notNull(),
+    whole: timestamp('whole', { precision: 0 }).notNull(),
+    zoned: timestamp('zoned', { withTimezone: true, precision: 3 }).notNull(),
+    day: utcDate('day').notNull(),
+    dayOpt: utcDate('day_opt'),
+    opensAt: utcTime('opens_at', { precision: 3 }).notNull(),
+    zonedTime: utcTimetz('zoned_time', { precision: 3 }).notNull(),
+    moments: timestamp('moments', { precision: 3 }).array(),
+    days: utcDate('days').array(),
+    today: utcDate('today')
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`)
+      .$defaultFn(utcNow),
+    launch: utcDate('launch').notNull().default(new Date('2024-01-15T00:00:00+00:00')),
+    bell: utcTime('bell').notNull().default(new Date('1970-01-01T10:30:00+00:00')),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`)
+      .$defaultFn(utcNow),
+    updatedAt: timestamp('updated_at', { precision: 3 }).notNull().$onUpdate(utcNow),
+  },
+  (table) => [uniqueIndex('moments_name_key').on(table.name)],
+)
