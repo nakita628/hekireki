@@ -188,6 +188,7 @@ resvg
 RUSTFLAGS
 rubocop
 schemaname
+scim
 secondaryjoin
 Segoe
 seqcache
@@ -202,6 +203,7 @@ sequencename
 setnull
 setop
 setval
+siwe
 spawnable
 spgist
 sqlx
@@ -249,6 +251,7 @@ varbits
 VISLIB
 Visus
 wbindgen
+whsec
 xmls
 xyflow
 zizmor

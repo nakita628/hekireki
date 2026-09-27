@@ -35,6 +35,11 @@
     "test/harness",
     "example/generated",
     "examples/*/generated",
+    "examples/better-auth/*/generated",
+    // What Better Auth's CLI and the generators write there, in Better Auth's names.
+    "examples/better-auth/*/schema.prisma",
+    "examples/better-auth/*/schema.ts",
+    "examples/better-auth/*/better-auth.schema.ts",
     // `pnpm seed:sql` output: faker text, committed so the example can be loaded without Node.js.
     "examples/*/prisma/seed.sql",
     // The date checks kept beside an example while it is compared with Prisma Client (git-ignored).

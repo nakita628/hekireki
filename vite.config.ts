@@ -27,6 +27,8 @@ export default defineConfig({
       'examples/active-record/app/**',
       'examples/active-record/config/locales/models/**',
       // What `prisma generate` writes in these, committed as the generator has it.
+      'examples/better-auth/*/better-auth.schema.ts',
+      'examples/better-auth/*/schema.ts',
       'examples/drizzle-mysql/src/db/schema.ts',
       'examples/drizzle-postgresql/src/db/schema.ts',
       'packages/hekireki/docs/studio-api.md',

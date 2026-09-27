@@ -43,7 +43,7 @@ with Prisma Client reading what they wrote and writing what they read, in `Asia/
 on SQLite, PostgreSQL or MySQL; see [django/README.md](django/README.md). Python 3.10 or newer, in
 a virtualenv of its own.
 
-Five more hold a generator to Prisma Client on a `DateTime` in each place a Prisma schema puts
+Six more hold a generator to Prisma Client on a `DateTime` in each place a Prisma schema puts
 one, the two clients sharing the database and each reading what the other wrote:
 
 - `drizzle/`: the schema `hekireki-drizzle` writes, used through drizzle in UTC, JST and any
@@ -54,6 +54,10 @@ one, the two clients sharing the database and each reading what the other wrote:
   one (a date, a time, a `timetz`, each precision, arrays), the table holding the same text from
   drizzle and from Prisma Client; see [drizzle-postgresql/README.md](drizzle-postgresql/README.md)
   and [drizzle-mysql/README.md](drizzle-mysql/README.md).
+- `better-auth/`: Better Auth with every plugin that keeps something in the database, its Prisma
+  schema written by Better Auth's CLI for SQLite, PostgreSQL and MySQL, and from each an ER
+  diagram and a drizzle schema that Better Auth itself runs on beside Better Auth on Prisma
+  Client; see [better-auth/README.md](better-auth/README.md).
 - `sea-orm/`: the entities `hekireki-sea-orm` writes, used through SeaORM 1.1 (sqlx) on SQLite,
   PostgreSQL or MySQL; see [sea-orm/README.md](sea-orm/README.md). A Rust toolchain.
 - `exposed/`: the tables and DAO entities `hekireki-exposed` writes, compiled with every warning an

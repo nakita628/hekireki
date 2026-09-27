@@ -1,5 +1,6 @@
 # `pnpm setup` rebuilds these; the schema module in */generated/seed is committed, the Prisma Client is not.
 */generated/client/
+better-auth/*/generated/client/
 *.db
 *.db-journal
 */seed.sql
