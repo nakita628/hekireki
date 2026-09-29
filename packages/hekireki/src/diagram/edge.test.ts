@@ -1,20 +1,18 @@
 import { describe, expect, it } from 'vite-plus/test'
 
+import { EDGE_OFFSET, GRID, NODE_ROW_HEIGHT, SELF_LOOP_GAP } from '../constants/index.js'
+import type { Box, Point } from '../types/index.js'
 import {
   captionBox,
   captionWidth,
-  EDGE_OFFSET,
   placeCaptions,
   polylinePath,
   round,
   selfLoopPoints,
-  SELF_LOOP_GAP,
   separateRoutes,
   smoothStepPoints,
   routePoints,
 } from './edge.js'
-import type { Box, Point } from './edge.js'
-import { GRID, NODE_ROW_HEIGHT } from './layout.js'
 
 /** How far a polyline runs inside a box, so a route can be checked for what it hides. */
 function hiddenLength(points: readonly Point[], box: Box) {

@@ -1,8 +1,33 @@
 import {
   EDGE_LABEL_FONT_SIZE,
-  EDGE_OFFSET,
   EDGE_LABEL_LINE_HEIGHT,
   EDGE_LABEL_PADDING,
+  EDGE_OFFSET,
+  ENUM_WIDTH,
+  GRID,
+  MONO_ADVANCE,
+  NODE_CONSTRAINT_HEIGHT,
+  NODE_HEADER_HEIGHT,
+  NODE_PADDING,
+  NODE_ROW_HEIGHT,
+  NODE_WIDTH,
+  PALETTES,
+} from '../constants/index.js'
+import type {
+  Box,
+  Cardinality,
+  DiagramIndex,
+  DiagramInput,
+  DiagramTheme,
+  LayoutPositions,
+  Point,
+  Position,
+  SchemaEnum,
+  SchemaField,
+  SchemaModel,
+  SchemaRelation,
+} from '../types/index.js'
+import {
   placeCaptions,
   polylinePath,
   round,
@@ -10,114 +35,16 @@ import {
   routePoints,
   separateRoutes,
 } from './edge.js'
-import type { Box, Point } from './edge.js'
 import {
   diagramConstraints,
   diagramFields,
-  ENUM_WIDTH,
   enumHeight,
   fieldDetail,
   fieldRowHeight,
-  GRID,
-  NODE_CONSTRAINT_HEIGHT,
-  NODE_HEADER_HEIGHT,
-  NODE_PADDING,
-  NODE_ROW_HEIGHT,
-  NODE_WIDTH,
   nodeHeight,
   uniqueColumns,
 } from './layout.js'
-import type { DiagramIndex, LayoutPositions, Position } from './layout.js'
 import { textUnits, truncateLabel } from './text.js'
-
-export type DiagramTheme = 'light' | 'dark'
-
-type Field = {
-  readonly name: string
-  readonly kind: 'scalar' | 'object' | 'enum' | 'unsupported'
-  readonly type: string
-  readonly isList: boolean
-  readonly isRequired: boolean
-  readonly isId: boolean
-  readonly isUnique?: boolean
-  readonly isForeignKey: boolean
-  readonly documentation: string | null
-  readonly attributes?: readonly string[]
-}
-
-type Model = {
-  readonly name: string
-  readonly dbName: string | null
-  readonly documentation?: string | null
-  readonly primaryKey: readonly string[] | null
-  readonly fields: readonly Field[]
-  readonly indexes?: readonly DiagramIndex[]
-}
-
-type EnumBlock = {
-  readonly name: string
-  readonly dbName: string | null
-  readonly documentation?: string | null
-  readonly values: readonly { readonly name: string; readonly dbName: string | null }[]
-}
-
-type Cardinality = 'zero-one' | 'one' | 'zero-many' | 'many'
-
-type Relation = {
-  readonly origin: 'inferred' | 'annotated' | 'implicit-many-to-many'
-  readonly onDelete: string | null
-  readonly onUpdate?: string | null
-  readonly name?: string | null
-  readonly from: {
-    readonly model: string
-    readonly field: string
-    readonly cardinality: Cardinality
-  }
-  readonly to: {
-    readonly model: string
-    readonly field: string
-    readonly cardinality: Cardinality
-  }
-}
-
-// The Studio palette (client/styles.css), value for value, so the export looks like the canvas it
-// came from. `key`, `unique` and `enum` are the ones to watch: the canvas reads them from
-// `--c-key` / `--c-unique` / `--c-enum`, and a drawing that renders a mark in a different colour
-// from the page it was exported from is the failure this table exists to avoid.
-export const PALETTES = {
-  light: {
-    canvas: '#f7f8fb',
-    surface: '#ffffff',
-    ink: '#16181f',
-    muted: '#6b7084',
-    faint: '#9a9fb3',
-    lineStrong: '#cfd3e0',
-    accent: '#4f46e5',
-    node: '#1f2233',
-    nodeText: '#f4f5fa',
-    edge: '#9095ab',
-    dots: '#d4d4dc',
-    key: '#b45309',
-    unique: '#0f766e',
-    enumeration: '#7c3aed',
-  },
-  dark: {
-    canvas: '#0f1117',
-    surface: '#171a23',
-    ink: '#e6e8ef',
-    muted: '#9aa0b4',
-    faint: '#6b7189',
-    lineStrong: '#343a4a',
-    accent: '#7c74ff',
-    node: '#2a2f45',
-    nodeText: '#f4f5fa',
-    edge: '#6b7189',
-    dots: '#2a2f3d',
-    key: '#fbbf24',
-    unique: '#5eead4',
-    enumeration: '#c4b5fd',
-  },
-} as const
 
 // Family names stay unquoted: resvg drops a quoted name that follows an unquoted one.
 const FONT_MONO =
@@ -140,8 +67,7 @@ export function withRasterFonts(svg: string) {
   return svg.replaceAll(FONT_MONO, FONT_MONO_RASTER).replaceAll(FONT_SANS, FONT_SANS_RASTER)
 }
 
-// Glyph advance as a fraction of the font size; used to right-align, truncate and size labels.
-const MONO_ADVANCE = 0.6
+// Glyph advance as a fraction of the font size, for the faces besides the plain monospace one.
 const MONO_BOLD_ADVANCE = 0.66
 const SANS_ADVANCE = 0.52
 const NODE_RADIUS = 8
@@ -177,8 +103,8 @@ const LINK_ICON =
 type Palette = (typeof PALETTES)[DiagramTheme]
 
 type PlacedNode = {
-  readonly model: Model
-  readonly fields: readonly Field[]
+  readonly model: SchemaModel
+  readonly fields: readonly SchemaField[]
   readonly constraints: readonly DiagramIndex[]
   readonly x: number
   readonly y: number
@@ -187,19 +113,11 @@ type PlacedNode = {
 }
 
 type PlacedEnum = {
-  readonly value: EnumBlock
+  readonly value: SchemaEnum
   readonly x: number
   readonly y: number
   readonly width: number
   readonly height: number
-}
-
-export type DiagramInput = {
-  readonly models: readonly Model[]
-  readonly relations: readonly Relation[]
-  readonly enums?: readonly EnumBlock[]
-  readonly positions: LayoutPositions
-  readonly theme?: DiagramTheme
 }
 
 function escapeXml(text: string) {
@@ -218,11 +136,14 @@ function sansWidth(text: string, fontSize: number) {
   return textUnits(text) * fontSize * SANS_ADVANCE
 }
 
-export function fieldTypeLabel(field: Field) {
+export function fieldTypeLabel(field: SchemaField) {
   return `${field.type}${field.isList ? '[]' : ''}${field.isRequired || field.isList ? '' : '?'}`
 }
 
-function placeNodes(models: readonly Model[], positions: LayoutPositions): readonly PlacedNode[] {
+function placeNodes(
+  models: readonly SchemaModel[],
+  positions: LayoutPositions,
+): readonly PlacedNode[] {
   return models.map((model) => {
     const position: Position = positions[model.name] ?? { x: 0, y: 0 }
     return {
@@ -238,7 +159,7 @@ function placeNodes(models: readonly Model[], positions: LayoutPositions): reado
 }
 
 function placeEnums(
-  values: readonly EnumBlock[],
+  values: readonly SchemaEnum[],
   positions: LayoutPositions,
 ): readonly PlacedEnum[] {
   return values.map((value) => {
@@ -281,7 +202,7 @@ function defaultRelationName(a: string, b: string) {
 }
 
 /** The `@relation("...")` name, when the schema gave the relation one of its own. */
-function customRelationName(relation: Relation) {
+function customRelationName(relation: SchemaRelation) {
   const name = relation.name ?? null
   if (name === null) return null
   return name === defaultRelationName(relation.from.model, relation.to.model) ? null : name
@@ -297,7 +218,7 @@ function isMany(cardinality: Cardinality) {
 }
 
 /** The relationship the way it is spoken: one to one, one to many, many to many. */
-function relationshipKind(relation: Relation) {
+function relationshipKind(relation: SchemaRelation) {
   const from = isMany(relation.from.cardinality)
   const to = isMany(relation.to.cardinality)
   if (from && to) return 'many to many'
@@ -310,7 +231,7 @@ function relationshipKind(relation: Relation) {
  * schema gave it one, and the relationship it stands for — and then what the database does to a
  * child row when the parent changes.
  */
-export function edgeCaption(relation: Relation): readonly string[] {
+export function edgeCaption(relation: SchemaRelation): readonly string[] {
   const what = [customRelationName(relation), relationshipKind(relation)]
     .filter((part) => part !== null)
     .join(' · ')
@@ -323,7 +244,7 @@ export function edgeCaption(relation: Relation): readonly string[] {
   return rules === '' ? [what] : [what, rules]
 }
 
-function fieldIcon(field: Field, primaryKey: ReadonlySet<string>, palette: Palette) {
+function fieldIcon(field: SchemaField, primaryKey: ReadonlySet<string>, palette: Palette) {
   if (field.isId || primaryKey.has(field.name)) return { icon: KEY_ICON, color: palette.key }
   if (field.isForeignKey) return { icon: LINK_ICON, color: palette.accent }
   return null
@@ -348,11 +269,15 @@ function badgeWidth(label: string) {
 }
 
 /** The `UK` a field carries: covered by a unique constraint, and not already wearing the key. */
-function uniqueBadge(field: Field, primaryKey: ReadonlySet<string>, unique: ReadonlySet<string>) {
+function uniqueBadge(
+  field: SchemaField,
+  primaryKey: ReadonlySet<string>,
+  unique: ReadonlySet<string>,
+) {
   return unique.has(field.name) && !(field.isId || primaryKey.has(field.name)) ? 'UK' : null
 }
 
-function renderRow(node: PlacedNode, field: Field, top: number, palette: Palette) {
+function renderRow(node: PlacedNode, field: SchemaField, top: number, palette: Palette) {
   const primaryKey = new Set(node.model.primaryKey)
   const unique = uniqueColumns(node.model)
   const left = node.x + HEADER_PADDING_X
@@ -546,7 +471,7 @@ function renderCardinality(
 }
 
 type Edge = {
-  readonly relation: Relation
+  readonly relation: SchemaRelation
   readonly points: readonly Point[]
   readonly caption: readonly string[]
   readonly dashed: boolean
@@ -556,7 +481,7 @@ type Edge = {
 
 /** Where an edge leaves and enters its models, and what it says along the way. */
 function edgeGeometry(
-  relation: Relation,
+  relation: SchemaRelation,
   nodes: ReadonlyMap<string, PlacedNode>,
   cards: readonly Box[],
 ): Edge | null {

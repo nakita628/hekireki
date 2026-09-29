@@ -16,69 +16,28 @@ import type { Edge, OnSelectionChangeParams } from '@xyflow/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { LuDownload, LuLayoutGrid, LuRefreshCw } from 'react-icons/lu'
 
-import type { DiagramIndex } from '../../../../diagram/layout.js'
+import { GRID } from '../../../../constants/index.js'
+import type {
+  CanvasRelation,
+  DiagramNodeType,
+  SchemaEnum,
+  SchemaHighlight,
+  SchemaModel,
+} from '../../../../types/index.js'
 import { EnumNode } from '../../components/enum-node.js'
 import { ModelNode } from '../../components/model-node.js'
 import { layoutStorageKey, loadLayout, saveLayout, useUiStore } from '../../lib/index.js'
 import { exportPng, exportSvg } from './export.js'
 import { GeometryContext, useDiagramGeometry } from './geometry.js'
 import { buildEdges, buildNodes, highlightEdges, highlightOf } from './graph.js'
-import type { DiagramNodeType, SchemaHighlight } from './graph.js'
-import { autoLayout, GRID, positionsFor } from './layout.js'
+import { autoLayout, positionsFor } from './layout.js'
 import { RelationEdge } from './relation-edge.js'
-
-type Field = {
-  readonly name: string
-  readonly dbName?: string | null
-  readonly kind: 'scalar' | 'object' | 'enum' | 'unsupported'
-  readonly type: string
-  readonly isList: boolean
-  readonly isRequired: boolean
-  readonly isId: boolean
-  readonly isUnique: boolean
-  readonly isForeignKey: boolean
-  readonly documentation: string | null
-}
-
-type Model = {
-  readonly name: string
-  readonly dbName: string | null
-  readonly documentation: string | null
-  readonly primaryKey: readonly string[] | null
-  readonly fields: readonly Field[]
-  readonly indexes: readonly DiagramIndex[]
-}
-
-type Cardinality = 'zero-one' | 'one' | 'zero-many' | 'many'
-
-type Relation = {
-  readonly id: string
-  readonly origin: 'inferred' | 'annotated' | 'implicit-many-to-many'
-  readonly onDelete: string | null
-  readonly from: {
-    readonly model: string
-    readonly field: string
-    readonly cardinality: Cardinality
-  }
-  readonly to: {
-    readonly model: string
-    readonly field: string
-    readonly cardinality: Cardinality
-  }
-}
-
-type EnumBlock = {
-  readonly name: string
-  readonly dbName: string | null
-  readonly documentation: string | null
-  readonly values: readonly { readonly name: string; readonly dbName: string | null }[]
-}
 
 type Schema = {
   readonly files: readonly { readonly path: string }[]
-  readonly models: readonly Model[]
-  readonly enums: readonly EnumBlock[]
-  readonly relations: readonly Relation[]
+  readonly models: readonly SchemaModel[]
+  readonly enums: readonly SchemaEnum[]
+  readonly relations: readonly CanvasRelation[]
 }
 
 const nodeTypes = { model: ModelNode, enum: EnumNode }

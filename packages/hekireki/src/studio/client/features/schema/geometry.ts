@@ -9,7 +9,7 @@ import {
   selfLoopPoints,
   separateRoutes,
 } from '../../../../diagram/edge.js'
-import type { Box, Point } from '../../../../diagram/edge.js'
+import type { Box, Point } from '../../../../types/index.js'
 
 /** Where an edge runs and where its caption sits, both in flow coordinates. */
 type EdgeGeometry = {

@@ -2,57 +2,18 @@ import { readFileSync } from 'node:fs'
 
 import { describe, expect, it } from 'vite-plus/test'
 
+import {
+  NODE_HEADER_HEIGHT,
+  NODE_PADDING,
+  NODE_ROW_HEIGHT,
+  NODE_WIDTH,
+  PALETTES,
+} from '../constants/index.js'
+import type { DiagramIndex, SchemaField, SchemaModel, SchemaRelation } from '../types/index.js'
 import { polylinePath, smoothStepPoints } from './edge.js'
-import { NODE_HEADER_HEIGHT, NODE_PADDING, NODE_ROW_HEIGHT, NODE_WIDTH } from './layout.js'
-import { PALETTES, edgeCaption, fieldTypeLabel, renderDiagramSvg, withRasterFonts } from './svg.js'
+import { edgeCaption, fieldTypeLabel, renderDiagramSvg, withRasterFonts } from './svg.js'
 
-type Field = {
-  readonly name: string
-  readonly kind: 'scalar' | 'object' | 'enum' | 'unsupported'
-  readonly type: string
-  readonly isList: boolean
-  readonly isRequired: boolean
-  readonly isId: boolean
-  readonly isUnique?: boolean
-  readonly isForeignKey: boolean
-  readonly documentation: string | null
-  readonly attributes?: readonly string[]
-}
-
-type Index = {
-  readonly type: 'id' | 'normal' | 'unique' | 'fulltext'
-  readonly fields: readonly string[]
-}
-
-type Model = {
-  readonly name: string
-  readonly dbName: string | null
-  readonly documentation?: string | null
-  readonly primaryKey: readonly string[] | null
-  readonly fields: readonly Field[]
-  readonly indexes?: readonly Index[]
-}
-
-type Cardinality = 'zero-one' | 'one' | 'zero-many' | 'many'
-
-type Relation = {
-  readonly origin: 'inferred' | 'annotated' | 'implicit-many-to-many'
-  readonly onDelete: string | null
-  readonly onUpdate?: string | null
-  readonly name?: string | null
-  readonly from: {
-    readonly model: string
-    readonly field: string
-    readonly cardinality: Cardinality
-  }
-  readonly to: {
-    readonly model: string
-    readonly field: string
-    readonly cardinality: Cardinality
-  }
-}
-
-function field(name: string, overrides: Partial<Field> = {}): Field {
+function field(name: string, overrides: Partial<SchemaField> = {}): SchemaField {
   return {
     name,
     kind: 'scalar',
@@ -66,15 +27,15 @@ function field(name: string, overrides: Partial<Field> = {}): Field {
   }
 }
 
-function model(name: string, fields: Field[], dbName: string | null = null): Model {
+function model(name: string, fields: SchemaField[], dbName: string | null = null): SchemaModel {
   return { name, dbName, primaryKey: null, fields }
 }
 
-function constrained(name: string, fields: Field[], indexes: Index[]): Model {
+function constrained(name: string, fields: SchemaField[], indexes: DiagramIndex[]): SchemaModel {
   return { name, dbName: null, primaryKey: null, fields, indexes }
 }
 
-function relation(overrides: Partial<Relation> = {}): Relation {
+function relation(overrides: Partial<SchemaRelation> = {}): SchemaRelation {
   return {
     origin: 'inferred',
     from: { model: 'User', field: 'id', cardinality: 'one' },

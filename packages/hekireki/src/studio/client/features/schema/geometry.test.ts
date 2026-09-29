@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import type { Box, Point } from '../../../../diagram/edge.js'
-import { NODE_WIDTH } from '../../../../diagram/layout.js'
+import { NODE_WIDTH } from '../../../../constants/index.js'
+import type { Box, Point } from '../../../../types/index.js'
 import { diagramGeometry } from './geometry.js'
 import { loopTargetHandle, sourceHandle, targetHandle } from './graph.js'
 

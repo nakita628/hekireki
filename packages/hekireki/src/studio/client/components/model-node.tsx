@@ -3,19 +3,13 @@ import type { NodeProps } from '@xyflow/react'
 import { memo } from 'react'
 import { LuKey, LuLink } from 'react-icons/lu'
 
-import {
-  loopTargetHandle,
-  MODEL_HANDLE,
-  sourceHandle,
-  targetHandle,
-} from '../features/schema/graph.js'
-import type { ModelNodeType } from '../features/schema/graph.js'
+import { MODEL_HANDLE, NODE_CONSTRAINT_HEIGHT, NODE_ROW_HEIGHT } from '../../../constants/index.js'
+import type { ModelNodeType } from '../../../types/index.js'
+import { loopTargetHandle, sourceHandle, targetHandle } from '../features/schema/graph.js'
 import {
   diagramConstraints,
   fieldDetail,
   fieldRowHeight,
-  NODE_CONSTRAINT_HEIGHT,
-  NODE_ROW_HEIGHT,
   uniqueColumns,
 } from '../features/schema/layout.js'
 import { BADGE, CONSTRAINT_STYLES, fieldTypeLabel, UNIQUE_BADGE } from './labels.js'

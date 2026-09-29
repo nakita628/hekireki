@@ -1,93 +1,24 @@
-import type { Edge, Node } from '@xyflow/react'
+import type { Edge } from '@xyflow/react'
 
-import type { DiagramIndex, LayoutPositions } from '../../../../diagram/layout.js'
+import { MODEL_HANDLE } from '../../../../constants/index.js'
 import { edgeCaption } from '../../../../diagram/svg.js'
+import type {
+  CanvasRelation,
+  Cardinality,
+  DiagramNodeType,
+  LayoutPositions,
+  ModelHighlight,
+  SchemaEnum,
+  SchemaHighlight,
+  SchemaModel,
+} from '../../../../types/index.js'
 import { diagramFields } from './layout.js'
 
-type Field = {
-  readonly name: string
-  readonly dbName?: string | null
-  readonly kind: 'scalar' | 'object' | 'enum' | 'unsupported'
-  readonly type: string
-  readonly isList: boolean
-  readonly isRequired: boolean
-  readonly isId: boolean
-  readonly isUnique: boolean
-  readonly isForeignKey: boolean
-  readonly documentation: string | null
-}
-
-type Model = {
-  readonly name: string
-  readonly dbName: string | null
-  readonly documentation: string | null
-  readonly primaryKey: readonly string[] | null
-  readonly fields: readonly Field[]
-  readonly indexes: readonly DiagramIndex[]
-}
-
-type Cardinality = 'zero-one' | 'one' | 'zero-many' | 'many'
-
-type Relation = {
-  readonly id: string
-  /** What the edge is dashed on, and what decides the handle it hangs off; see `RelationOrigin`
-   *  (utils/relation.ts). Dashed is "no foreign key backs this", not "many to many". */
-  readonly origin: 'inferred' | 'annotated' | 'implicit-many-to-many'
-  readonly onDelete: string | null
-  readonly onUpdate?: string | null
-  readonly name?: string | null
-  readonly from: {
-    readonly model: string
-    readonly field: string
-    readonly cardinality: Cardinality
-  }
-  readonly to: {
-    readonly model: string
-    readonly field: string
-    readonly cardinality: Cardinality
-  }
-}
-
-type EnumBlock = {
-  readonly name: string
-  readonly dbName: string | null
-  readonly documentation: string | null
-  readonly values: readonly { readonly name: string; readonly dbName: string | null }[]
-}
-
 type Schema = {
-  readonly models: readonly Model[]
-  readonly relations: readonly Relation[]
-  readonly enums: readonly EnumBlock[]
+  readonly models: readonly SchemaModel[]
+  readonly relations: readonly CanvasRelation[]
+  readonly enums: readonly SchemaEnum[]
 }
-
-/** What a card is told about the statement being drawn: whether it takes part, and which fields it reads. */
-type ModelHighlight = {
-  readonly dim: boolean
-  readonly used: ReadonlySet<string>
-}
-
-type ModelNodeData = {
-  readonly model: Model
-  readonly fields: readonly Field[]
-  readonly highlight: ModelHighlight | null
-}
-
-export type ModelNodeType = Node<ModelNodeData, 'model'>
-
-export type EnumNodeType = Node<{ readonly value: EnumBlock }, 'enum'>
-
-export type DiagramNodeType = ModelNodeType | EnumNodeType
-
-type RelationEdgeData = {
-  /** The caption lines, as the exported diagram writes them; empty for an enum link. */
-  readonly caption: readonly string[]
-  readonly dimmed?: boolean
-}
-
-export type RelationEdgeType = Edge<RelationEdgeData, 'relation'>
-
-export const MODEL_HANDLE = '__model'
 
 export function sourceHandle(field: string) {
   return `${field}-source`
@@ -102,11 +33,11 @@ export function loopTargetHandle(field: string) {
   return `${field}-loop`
 }
 
-/** The tables a statement touches, keyed by lowercased table name, each with the lowercased columns it reads. */
-export type SchemaHighlight = ReadonlyMap<string, ReadonlySet<string>>
-
 /** What the card of a model shows of the statement: nothing while none is drawn, its part otherwise. */
-export function highlightOf(touched: SchemaHighlight | null, model: Model): ModelHighlight | null {
+export function highlightOf(
+  touched: SchemaHighlight | null,
+  model: SchemaModel,
+): ModelHighlight | null {
   if (touched === null) return null
   const used = touched.get((model.dbName ?? model.name).toLowerCase())
   if (used === undefined) return { dim: true, used: new Set() }

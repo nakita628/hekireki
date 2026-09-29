@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import { autoLayout, diagramFields, NODE_WIDTH, nodeHeight, positionsFor } from './layout.js'
+import { NODE_WIDTH } from '../../../../constants/index.js'
+import { autoLayout, diagramFields, nodeHeight, positionsFor } from './layout.js'
 
 type Field = {
   readonly name: string

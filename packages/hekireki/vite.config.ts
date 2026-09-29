@@ -786,6 +786,26 @@ export default defineConfig({
         },
       },
       {
+        // The shapes and measures of the ER diagram, shared by the renderer, the generator and
+        // Studio's canvas: they read none of those, so any of them can read these. The constants
+        // may name a shape; the shapes take only React Flow's, for the canvas's nodes and edges.
+        files: ['src/types/**', 'src/constants/**'],
+        rules: {
+          'no-restricted-imports': [
+            'error',
+            {
+              patterns: [
+                {
+                  group: ['../**', '!../types/**'],
+                  message:
+                    'types and constants are shared leaves: they import nothing of the project but the types',
+                },
+              ],
+            },
+          ],
+        },
+      },
+      {
         files: ['src/emit/**'],
         rules: {
           'no-restricted-imports': [

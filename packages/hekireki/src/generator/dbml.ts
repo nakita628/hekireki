@@ -3,9 +3,9 @@ import type { DMMF } from '@prisma/generator-helper'
 import { autoLayout } from '../diagram/layout.js'
 import { svgToPng } from '../diagram/png.js'
 import { renderDiagramSvg, withRasterFonts } from '../diagram/svg.js'
-import type { DiagramTheme } from '../diagram/svg.js'
 import { annotatedDbmlRefs, makeEnums, makeRelations, makeTables } from '../helper/dbml.js'
 import { makeSchema } from '../studio/server/domain/schema.js'
+import type { DiagramTheme } from '../types/index.js'
 
 /** The schema as DBML, named as the database names it: every `@map` / `@@map` applied. */
 export function dbmlContent(datamodel: DMMF.Datamodel) {

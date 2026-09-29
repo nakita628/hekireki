@@ -1,32 +1,23 @@
 // How a relation is drawn between two cards and where its caption sits, shared by the exported
 // SVG (svg.ts) and the Studio canvas (studio/client/features/schema) so the two agree.
-import { GRID, NODE_ROW_HEIGHT } from './layout.js'
+import {
+  EDGE_BEND_RADIUS,
+  EDGE_LABEL_FONT_SIZE,
+  EDGE_LABEL_LINE_HEIGHT,
+  EDGE_LABEL_PADDING,
+  EDGE_OFFSET,
+  GRID,
+  MONO_ADVANCE,
+  NODE_ROW_HEIGHT,
+  SELF_LOOP_GAP,
+} from '../constants/index.js'
+import type { Box, Point } from '../types/index.js'
 import { textUnits } from './text.js'
 
-export type Point = { readonly x: number; readonly y: number }
-
-export type Box = {
-  readonly x: number
-  readonly y: number
-  readonly width: number
-  readonly height: number
-}
-
-/** How far an edge runs straight out of a card before it is allowed to turn: one step of the grid. */
-export const EDGE_OFFSET = GRID
-const EDGE_BEND_RADIUS = 5
-/** How far a self relation reaches to the right of the node it loops back into. */
-export const SELF_LOOP_GAP = 34
-
-export const EDGE_LABEL_FONT_SIZE = 9.5
-export const EDGE_LABEL_LINE_HEIGHT = 12
-export const EDGE_LABEL_PADDING = 4
 // The room either side of the widest line of a caption, inside its chip.
 const EDGE_LABEL_PADDING_X = 5
 // The room a caption keeps between itself and the wire it labels when it sits beside one.
 const CAPTION_GAP = 6
-// Glyph advance as a fraction of the font size, for the monospace face captions are set in.
-const MONO_ADVANCE = 0.6
 
 /** Two decimals is as precise as a coordinate in the drawing ever needs to be. */
 export function round(value: number) {
@@ -152,16 +143,21 @@ export function routePoints(source: Point, target: Point, cards: readonly Box[])
     height: card.height - CARD_INSET * 2,
   }))
   const direct = smoothStepPoints(source, target)
-  if (routeCost(direct, obstacles).hidden === 0) return direct
-  // Only the cards in the corridor between the two ends suggest a way round; the rest of the
-  // drawing still has a say, because every candidate is scored against all of it.
   const corridor = {
     x: Math.min(source.x, target.x) - EDGE_OFFSET,
     y: Math.min(source.y, target.y) - EDGE_OFFSET,
     width: Math.abs(target.x - source.x) + EDGE_OFFSET * 2,
     height: Math.abs(target.y - source.y) + EDGE_OFFSET * 2,
   }
+  // The plain route stays in the corridor between the two ends, so only a card that reaches into
+  // it can be in the way.
   const inTheWay = cards.filter((card) => meets(corridor, card))
+  const blocking = obstacles.filter((box) => meets(corridor, box))
+  if (routeCost(direct, blocking).hidden === 0) return direct
+  // Only those cards suggest a way round, and every way round runs no further than a clearance
+  // past them, so what lies beyond has no say in which one is taken.
+  const reach = around([corridor, ...inTheWay], CLEARANCE)
+  const nearby = obstacles.filter((box) => meets(reach, box))
   const channels = inTheWay
     .flatMap((card) => [card.x - CLEARANCE, card.x + card.width + CLEARANCE])
     .filter((x) => x > source.x + EDGE_OFFSET && x < target.x - EDGE_OFFSET)
@@ -176,7 +172,7 @@ export function routePoints(source: Point, target: Point, cards: readonly Box[])
     ...channels.map((x) => throughChannel(source, target, x)),
     ...lanes.flatMap((y) => descents.map((x) => alongLane(source, target, y, x))),
   ]
-    .map((points) => ({ points, cost: routeCost(points, obstacles) }))
+    .map((points) => ({ points, cost: routeCost(points, nearby) }))
     .reduce((best, candidate) =>
       candidate.cost.hidden < best.cost.hidden ||
       (candidate.cost.hidden === best.cost.hidden && candidate.cost.length < best.cost.length)
@@ -272,10 +268,17 @@ function shifted(points: readonly Point[], index: number, x: number): readonly P
   return points.map((point, at) => (at === index || at === index + 1 ? { x, y: point.y } : point))
 }
 
+/** The part of a stretch's route that moves with it: the stretch at `x`, and the wires in and out. */
+function turned({ points, index }: Stretch, x: number): readonly Point[] {
+  return points
+    .slice(index - 1, index + 3)
+    .map((point, at) => (at === 1 || at === 2 ? { x, y: point.y } : point))
+}
+
 /**
- * What it costs to move a stretch to `x`: how much of its route then runs too near a card or a
- * wire that cannot move. A move that turns a wire into or out of the stretch back on itself, or
- * leaves an end symbol less than its room, is not made at all.
+ * What it costs to move a stretch to `x`: how much of what moves with it then runs too near a card
+ * or a wire that cannot move. A move that turns a wire into or out of the stretch back on itself,
+ * or leaves an end symbol less than its room, is not made at all.
  */
 function shiftCost(stretch: Stretch, x: number, near: readonly Box[]) {
   const { points } = stretch
@@ -285,7 +288,7 @@ function shiftCost(stretch: Stretch, x: number, near: readonly Box[]) {
     const room = at === 0 || at === points.length - 1 ? EDGE_OFFSET : 0
     return Math.sign(end.x - x) === Math.sign(end.x - stretch.x) && Math.abs(end.x - x) >= room
   })
-  return keeps ? routeCost(shifted(points, stretch.index, x), near).hidden : Infinity
+  return keeps ? routeCost(turned(stretch, x), near).hidden : Infinity
 }
 
 /**
@@ -299,28 +302,30 @@ function spreadVertical(
   cards: readonly Box[],
 ): readonly (readonly Point[])[] {
   const all = verticals(routes)
-  const pinned = all.filter((stretch) => !stretch.free)
-  const padded = cards.map((card) => ({
-    x: card.x - TRACK / 2,
-    y: card.y - TRACK / 2,
-    width: card.width + TRACK,
-    height: card.height + TRACK,
-  }))
-  // What a route keeps its distance from: half a track from the cards, and a whole one from the
+  // What a stretch keeps its distance from: half a track from the cards, and a whole one from the
   // wires of other routes that cannot move out of its way, as far as from a track beside it.
-  const near = routes.map((_, route) => [
-    ...padded,
-    ...pinned
-      .filter((stretch) => stretch.route !== route)
+  const obstacles = [
+    ...cards.map((card) => ({
+      route: null,
+      box: {
+        x: card.x - TRACK / 2,
+        y: card.y - TRACK / 2,
+        width: card.width + TRACK,
+        height: card.height + TRACK,
+      },
+    })),
+    ...all
+      .filter((stretch) => !stretch.free)
       .map((stretch) => ({
-        x: stretch.x - TRACK,
-        y: stretch.from,
-        width: TRACK * 2,
-        height: stretch.to - stretch.from,
+        route: stretch.route,
+        box: {
+          x: stretch.x - TRACK,
+          y: stretch.from,
+          width: TRACK * 2,
+          height: stretch.to - stretch.from,
+        },
       })),
-  ])
-  const cost = (bundle: readonly Stretch[], x: number) =>
-    bundle.reduce((sum, stretch) => sum + shiftCost(stretch, x, near[stretch.route] ?? []), 0)
+  ]
   const moves = components(
     all.filter((stretch) => stretch.free),
     (a, b) => Math.abs(a.x - b.x) < TRACK && a.from < b.to && b.from < a.to,
@@ -347,6 +352,29 @@ function spreadVertical(
       const slide = (Math.ceil(step / 2) * (step % 2 === 0 ? -TRACK : TRACK)) / 2
       return tracks.map((x) => x + slide)
     })
+    // Whatever layout is taken, what moves stays within the wires into and out of the group and
+    // the tracks it can be given, so only what lies near those can make one cost more.
+    const moved = group.flatMap((stretch) => turned(stretch, stretch.x))
+    const spanX = [...moved.map((point) => point.x), ...layouts.flat()]
+    const spanY = moved.map((point) => point.y)
+    const reach = {
+      x: Math.min(...spanX) - TRACK,
+      y: Math.min(...spanY) - TRACK,
+      width: Math.max(...spanX) - Math.min(...spanX) + TRACK * 2,
+      height: Math.max(...spanY) - Math.min(...spanY) + TRACK * 2,
+    }
+    const near = obstacles.filter((obstacle) => meets(reach, obstacle.box))
+    const cost = (bundle: readonly Stretch[], x: number) =>
+      bundle.reduce(
+        (sum, stretch) =>
+          sum +
+          shiftCost(
+            stretch,
+            x,
+            near.filter((obstacle) => obstacle.route !== stretch.route).map(({ box }) => box),
+          ),
+        0,
+      )
     const costs = layouts.map((xs) =>
       order.reduce((sum, bundle, index) => sum + cost(bundle, xs[index] ?? 0), 0),
     )
@@ -476,7 +504,11 @@ const CAPTION_STOPS = Array.from(
 // Off the wire counts too — beside a vertical stretch for a label too wide to straddle it, above
 // or below a horizontal one — which is what a caption needs where several edges run the same
 // corridor and every spot on the wire is already somebody's.
-function captionSpots(points: readonly Point[], width: number, height: number): readonly Point[] {
+function captionSpots(
+  points: readonly Point[],
+  width: number,
+  height: number,
+): readonly (readonly Point[])[] {
   const segments = points
     .slice(0, -1)
     .map((a, index) => {
@@ -511,7 +543,7 @@ function captionSpots(points: readonly Point[], width: number, height: number): 
     ...rings.flatMap((ring) => [beside + ring, -beside - ring]),
   ]
   const along = [0, ...(hugs[1] ?? []), ...rings.flatMap((ring) => [-clear - ring, clear + ring])]
-  return segments.flatMap((segment) =>
+  return segments.map((segment) =>
     CAPTION_STOPS.flatMap((t) => {
       const on = {
         x: segment.a.x + (segment.b.x - segment.a.x) * t,
@@ -681,20 +713,24 @@ export function placeCaptions<E extends CaptionedEdge>(
     (state, edge) => {
       const { caption } = edge
       if (caption.length === 0 || state.placed.some((other) => other.edge === edge)) return state
-      const boxes = captionSpots(edge.points, captionWidth(caption), captionHeight(caption)).map(
-        (spot) => captionBox(caption, spot),
-      )
-      // Every spot lies along this edge, so only what is near it can be in the way.
-      const reach = around(boxes, WIRE_CLEARANCE)
-      const near = cards.filter((card) => meets(reach, card))
       const own = wires.filter((wire) => wire.edge === edge)
-      const crossed = wires.filter((wire) => wire.edge !== edge && meets(reach, wire.box))
-      const taken = state.placed.filter((other) => meets(reach, other.box))
-      const best = boxes.reduce<{ readonly box: Box; readonly cost: number } | null>(
-        (found, box) => {
+      // Nothing costs less than nothing, so once a segment holds a spot that is free, the ones
+      // after it are not looked at.
+      const best = captionSpots(edge.points, captionWidth(caption), captionHeight(caption)).reduce<{
+        readonly box: Box
+        readonly cost: number
+      } | null>((found, spots) => {
+        if (found?.cost === 0) return found
+        const boxes = spots.map((spot) => captionBox(caption, spot))
+        // The spots of a segment all lie along it, so only what is near them can be in the way.
+        const reach = around(boxes, WIRE_CLEARANCE)
+        const near = cards.filter((card) => meets(reach, card))
+        const crossed = wires.filter((wire) => wire.edge !== edge && meets(reach, wire.box))
+        const taken = state.placed.filter((other) => meets(reach, other.box))
+        const scored = boxes.map((box) => {
           // How far the chip sits from the wire it names. Every pixel of it counts, so the spot
-          // on the wire wins whenever it is free and the chip steps off only when staying would
-          // cost it a model row — a chip on its line needs no tracing at all.
+          // on the wire wins whenever it is free and the chip steps off only when staying
+          // would cost it a model row — a chip on its line needs no tracing at all.
           const drift = Math.min(...own.map((wire) => boxGap(box, wire.box)))
           const cost =
             near.reduce((sum, card) => sum + overlapArea(box, card, CARD_MARGIN) * CARD_CLASH, 0) +
@@ -710,10 +746,13 @@ export function placeCaptions<E extends CaptionedEdge>(
               0,
             ) +
             drift * box.width * OFF_WIRE
-          return found === null || cost < found.cost ? { box, cost } : found
-        },
-        null,
-      )
+          return { box, cost }
+        })
+        return scored.reduce(
+          (kept, candidate) => (kept === null || candidate.cost < kept.cost ? candidate : kept),
+          found,
+        )
+      }, null)
       const box = best?.box ?? captionBox(caption, midpoint(edge.points))
       return { placed: [...state.placed, { edge, caption, box }] }
     },

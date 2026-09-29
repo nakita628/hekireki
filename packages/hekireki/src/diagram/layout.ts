@@ -1,49 +1,24 @@
 import { graphlib, layout } from '@dagrejs/dagre'
 import * as z from 'zod'
 
-export type Position = { readonly x: number; readonly y: number }
-
-export type LayoutPositions = Readonly<Record<string, Position>>
-
-/**
- * The pitch of the dots on the canvas. Every block sits on it and every distance between blocks
- * is a whole number of it, so the drawing lines up with the paper it is drawn on.
- */
-export const GRID = 20
-
-export const NODE_WIDTH = GRID * 17
-// Wide enough for a mapped enum name and the `enum` pill beside it.
-export const ENUM_WIDTH = GRID * 14
-export const NODE_HEADER_HEIGHT = 36
-export const NODE_ROW_HEIGHT = 22
-export const NODE_DESCRIPTION_HEIGHT = 14
-export const NODE_CONSTRAINT_HEIGHT = 20
-export const NODE_PADDING = 8
-
-/** A block attribute of a model: `@@id`, `@@unique`, `@@index` or `@@fulltext`. */
-export type DiagramIndex = {
-  readonly type: 'id' | 'normal' | 'unique' | 'fulltext'
-  readonly fields: readonly string[]
-}
-
-export type DiagramField = {
-  readonly kind: string
-  readonly type?: string
-  readonly documentation: string | null
-  readonly attributes?: readonly string[]
-}
-
-type DiagramModel = {
-  readonly documentation?: string | null
-  readonly fields: readonly DiagramField[]
-  readonly indexes?: readonly DiagramIndex[]
-}
-
-type DiagramEnum = {
-  readonly name: string
-  readonly documentation?: string | null
-  readonly values: readonly unknown[]
-}
+import {
+  ENUM_WIDTH,
+  GRID,
+  NODE_CONSTRAINT_HEIGHT,
+  NODE_DESCRIPTION_HEIGHT,
+  NODE_HEADER_HEIGHT,
+  NODE_PADDING,
+  NODE_ROW_HEIGHT,
+  NODE_WIDTH,
+} from '../constants/index.js'
+import type {
+  DiagramEnum,
+  DiagramField,
+  DiagramIndex,
+  DiagramModel,
+  DiagramSchema,
+  LayoutPositions,
+} from '../types/index.js'
 
 /** The fields a model node shows: everything but the relation fields. */
 export function diagramFields<Field extends { readonly kind: string }>(model: {
@@ -135,15 +110,6 @@ const LayoutNodeSchema = z
     height: z.number().meta({ description: 'Node height in pixels', example: 180 }),
   })
   .meta({ description: 'A positioned node of the ER diagram' })
-
-export type DiagramSchema = {
-  readonly models: readonly (DiagramModel & { readonly name: string })[]
-  readonly relations: readonly {
-    readonly from: { readonly model: string }
-    readonly to: { readonly model: string }
-  }[]
-  readonly enums?: readonly DiagramEnum[]
-}
 
 /** The enums a model's fields hold, as edges from the model to the enum card. */
 function enumEdges(schema: DiagramSchema) {

@@ -1,14 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test'
 
 import {
-  autoLayout,
-  diagramConstraints,
-  diagramFields,
   ENUM_WIDTH,
-  enumHeight,
-  fieldDetail,
-  fieldRowHeight,
-  firstLine,
   GRID,
   NODE_CONSTRAINT_HEIGHT,
   NODE_DESCRIPTION_HEIGHT,
@@ -16,10 +9,19 @@ import {
   NODE_PADDING,
   NODE_ROW_HEIGHT,
   NODE_WIDTH,
+} from '../constants/index.js'
+import type { DiagramField } from '../types/index.js'
+import {
+  autoLayout,
+  diagramConstraints,
+  diagramFields,
+  enumHeight,
+  fieldDetail,
+  fieldRowHeight,
+  firstLine,
   nodeHeight,
   uniqueColumns,
 } from './layout.js'
-import type { DiagramField } from './layout.js'
 
 function field(overrides: Partial<DiagramField> = {}): DiagramField {
   return { kind: 'scalar', type: 'String', documentation: null, ...overrides }
