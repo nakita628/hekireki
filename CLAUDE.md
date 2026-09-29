@@ -89,6 +89,20 @@ it. Most of the conventions are enforced by the oxlint plugin in
 - Do not name a directory here `usecases` or `services`: the lint plugin reads those names as
   Studio's layers, where a usecase never imports another and takes no `Effect.map` in a pipe.
 
+## The ER diagram
+
+- **What more than one module reads goes in `src/types` and `src/constants`.** The renderer
+  (`src/diagram`), the generator and Studio's canvas share the diagram's shapes
+  (`types/diagram.ts`: `SchemaModel`, `Point`, `ModelNodeType`) and measures
+  (`constants/diagram.ts`: `GRID`, `NODE_WIDTH`, `PALETTES`), and import them through the barrels
+  (`types/index.js`, `constants/index.js`). A value or shape only one file uses stays in that
+  file, unexported: moving it would only publish it.
+- **Both are leaves.** They import nothing of the project but the types, which
+  `no-restricted-imports` in `vite.config.ts` holds them to.
+- **A change to how the diagram is drawn shows in the committed drawings.** `example/generated/er`
+  and `examples/better-auth/*/er.png` are regenerated with it; a change meant to leave the drawing
+  alone (speed, naming, moving code) leaves them byte for byte as they were.
+
 ## Output
 
 - **Generated SQL carries no comment of ours.** `hekireki migrate plan` writes statements and one
@@ -105,6 +119,7 @@ it. Most of the conventions are enforced by the oxlint plugin in
 
 ```bash
 npx tsgo -p tsconfig.json --noEmit
+npx tsgo -p src/studio/client/tsconfig.json --noEmit   # the client is left out of the one above
 npx vp lint src/<directory>   # per directory
 npx vp test run
 pnpm build

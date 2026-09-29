@@ -158,15 +158,24 @@ export function routePoints(source: Point, target: Point, cards: readonly Box[])
   // past them, so what lies beyond has no say in which one is taken.
   const reach = around([corridor, ...inTheWay], CLEARANCE)
   const nearby = obstacles.filter((box) => meets(reach, box))
+  const inRange = (x: number) => x > source.x + EDGE_OFFSET && x < target.x - EDGE_OFFSET
   const channels = inTheWay
     .flatMap((card) => [card.x - CLEARANCE, card.x + card.width + CLEARANCE])
-    .filter((x) => x > source.x + EDGE_OFFSET && x < target.x - EDGE_OFFSET)
+    .filter(inRange)
   const lanes = inTheWay.flatMap((card) => [card.y - CLEARANCE, card.y + card.height + CLEARANCE])
-  // Where a lane comes down: the channel nearest the target first, right in front of it last.
-  // They cost the same, and of two equal routes the first is kept, so the edge comes down early
-  // and keeps a stretch into its target that no other edge on the lane shares — where its
-  // caption can say which edge it is.
-  const descents = [...channels.toSorted((a, b) => b - a), target.x - EDGE_OFFSET]
+  // Where a lane comes down: just past the last card it clears first, then in front of one, and
+  // right in front of the target last. They cost the same, and of two equal routes the first is
+  // kept, so the edge comes down as soon as it is past what is in its way and keeps a stretch
+  // into its target that no other edge on the lane shares — where its caption can say which edge
+  // it is. The channel in front of the target's own rank is its doorstep, and a handle measured a
+  // few pixels inside the card must not make it look like somewhere else to come down.
+  const past = inTheWay.map((card) => card.x + card.width + CLEARANCE).filter(inRange)
+  const before = inTheWay.map((card) => card.x - CLEARANCE).filter(inRange)
+  const descents = [
+    ...past.toSorted((a, b) => b - a),
+    ...before.toSorted((a, b) => b - a),
+    target.x - EDGE_OFFSET,
+  ]
   return [
     direct,
     ...channels.map((x) => throughChannel(source, target, x)),
@@ -556,6 +565,37 @@ function captionSpots(
   )
 }
 
+/**
+ * Where the caption of a self relation stands: on its loop, halfway down, hung out into the gap
+ * the loop reaches into with the wire just inside its near edge, so it names the loop and covers
+ * nothing of the card.
+ */
+function loopCaptionBox(points: readonly Point[], caption: readonly string[]): Box {
+  const [, top = { x: 0, y: 0 }, bottom = top] = points
+  const height = captionHeight(caption)
+  return {
+    x: top.x - EDGE_INSET,
+    y: (top.y + bottom.y) / 2 - height / 2,
+    width: captionWidth(caption),
+    height,
+  }
+}
+
+/**
+ * What a self relation takes of the gap beside its card: the loop and the caption on it, from the
+ * card's edge out. The other wires of the gap are routed round it as round a card — neither
+ * through the loop nor under its caption, nor in a sliver between the card and either.
+ */
+export function loopRoom(points: readonly Point[], caption: readonly string[]): Box {
+  return around(
+    [
+      loopCaptionBox(points, caption),
+      ...points.map((point) => ({ x: point.x, y: point.y, width: 0, height: 0 })),
+    ],
+    0,
+  )
+}
+
 function midpoint(points: readonly Point[]): Point {
   return {
     x: ((points[0]?.x ?? 0) + (points.at(-1)?.x ?? 0)) / 2,
@@ -658,6 +698,7 @@ function inColumns<E extends CaptionedEdge>(
   edges: readonly E[],
   wires: readonly { readonly edge: E; readonly box: Box }[],
   cards: readonly Box[],
+  taken: readonly PlacedCaption<E>[],
 ): readonly PlacedCaption<E>[] {
   const entering = edges.flatMap((edge) => {
     const end = edge.points.at(-1)
@@ -679,7 +720,7 @@ function inColumns<E extends CaptionedEdge>(
             // cover, as far out as its own straight run reaches.
             const stand = (x: number): Box | undefined => {
               const spot = { x, y: end.y - height / 2, width, height }
-              const covered = state.placed.filter(
+              const covered = [...taken, ...state.placed].filter(
                 (other) => overlapArea(spot, other.box, CAPTION_MARGIN) > 0,
               )
               if (covered.length === 0) return spot
@@ -700,15 +741,26 @@ function inColumns<E extends CaptionedEdge>(
 }
 
 /**
- * Puts every caption in a column in front of the card its edge comes into, and the few no column
- * holds on the clearest stretch of their edge: off the models, off the other captions and off the
- * wires, so a chip never hides the relation it names.
+ * Puts the caption of every self relation beside its loop, every other in a column in front of the
+ * card its edge comes into, and the few no column holds on the clearest stretch of their edge: off
+ * the models, off the other captions and off the wires, so a chip never hides the relation it
+ * names.
  */
 export function placeCaptions<E extends CaptionedEdge>(
   edges: readonly E[],
   cards: readonly Box[],
 ): readonly PlacedCaption<E>[] {
   const wires = wireBoxes(edges)
+  // A self relation's caption stands where its loop keeps room for it: a loop is the one route
+  // that goes out to the right and comes back to the x it left from.
+  const loops = edges.flatMap((edge) => {
+    const [start, out] = edge.points
+    const back = edge.points.at(-1)
+    const loop = start !== undefined && out !== undefined && back?.x === start.x && out.x > start.x
+    return edge.caption.length > 0 && loop
+      ? [{ edge, caption: edge.caption, box: loopCaptionBox(edge.points, edge.caption) }]
+      : []
+  })
   const { placed } = edges.reduce<{ readonly placed: readonly PlacedCaption<E>[] }>(
     (state, edge) => {
       const { caption } = edge
@@ -756,7 +808,7 @@ export function placeCaptions<E extends CaptionedEdge>(
       const box = best?.box ?? captionBox(caption, midpoint(edge.points))
       return { placed: [...state.placed, { edge, caption, box }] }
     },
-    { placed: inColumns(edges, wires, cards) },
+    { placed: [...loops, ...inColumns(edges, wires, cards, loops)] },
   )
   // In the order of the edges, whichever way each was placed.
   return edges.flatMap((edge) => placed.filter((caption) => caption.edge === edge))

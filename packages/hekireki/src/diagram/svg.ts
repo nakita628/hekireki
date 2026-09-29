@@ -28,6 +28,7 @@ import type {
   SchemaRelation,
 } from '../types/index.js'
 import {
+  loopRoom,
   placeCaptions,
   polylinePath,
   round,
@@ -70,16 +71,61 @@ export function withRasterFonts(svg: string) {
 // Glyph advance as a fraction of the font size, for the faces besides the plain monospace one.
 const MONO_BOLD_ADVANCE = 0.66
 const SANS_ADVANCE = 0.52
+// How far below the middle of a line its baseline sits, as a fraction of the font size: what
+// centres a line of text on a row, since resvg reads no `dominant-baseline`.
+const BASELINE = 0.36
+
+// The type of a card: the name in its header; a field's or member's name; its type, which the
+// table name, a stored enum value and the `enum` pill share; the faint line under a field; and
+// the columns of a block attribute.
+const HEADER_FONT_SIZE = 13
+const NAME_FONT_SIZE = 12
+const TYPE_FONT_SIZE = 11
+const DETAIL_FONT_SIZE = 10.5
+const CONSTRAINT_FONT_SIZE = 10.5
+// How far below the top of a field row its faint second line is centred.
+const DETAIL_CENTER = 26
+// The share of a row a field's type may take before it is cut, and a member's stored value: what
+// each leaves is the name's.
+const TYPE_SHARE = 0.6
+const STORED_SHARE = 0.5
+
 const NODE_RADIUS = 8
 const HEADER_PADDING_X = 10
-const ICON_SIZE = 11
+// The room between the name in a header, the table name after it and the pill at its end.
+const HEADER_GAP = 8
+// The table name after a model's name is quieter than the name, as the pill behind `enum` is.
+const TABLE_NAME_OPACITY = 0.6
+const PILL_HEIGHT = 16
+const PILL_TINT = 0.15
 const ROW_GAP = 6
+const ICON_SIZE = 11
+// The field icons are drawn on a grid of this many units (components/icons.tsx), with a stroke of
+// that grid's own, and scaled down to ICON_SIZE.
+const ICON_GRID = 24
+const ICON_STROKE = 2
 const BADGE_HEIGHT = 12
 const BADGE_FONT_SIZE = 8.5
 const BADGE_PADDING_X = 4
-const CONSTRAINT_FONT_SIZE = 10.5
+const BADGE_RADIUS = 3
+const BADGE_TINT = 0.14
+// The line between a card's fields and its block attributes.
+const DIVIDER_WIDTH = 1
+
+// A relation is drawn solid, and dashed where nothing in the database backs it; an enum link is
+// finer, dotted and quieter, so it never reads as a relation.
+const EDGE_WIDTH = 1.4
+const EDGE_DASH = '5 4'
+const ENUM_LINK_WIDTH = 1.2
+const ENUM_LINK_DASH = '2 4'
+const ENUM_LINK_OPACITY = 0.75
+const CAPTION_RADIUS = 3
+const CAPTION_BORDER = 0.8
+
 const DOT_RADIUS = 0.7
 const PADDING = GRID * 2
+// The shadow a card casts on the canvas: a pixel down, a pixel soft, barely there.
+const SHADOW = { dy: 1, blur: 1, opacity: 0.08 }
 // IE (crow's foot) notation as the canvas draws it (features/schema/schema-view.tsx): the inner
 // symbol is the maximum (a bar for one, the foot for many), the outer one the minimum (a bar for
 // mandatory, a circle for optional). The origin sits where the edge meets the node, the symbols
@@ -87,6 +133,9 @@ const PADDING = GRID * 2
 const CROW_FOOT = 'M0 -8 L-12 0 L0 8 M-12 0 L0 0'
 const MAX_ONE_BAR = 'M-6 -6 L-6 6'
 const MIN_ONE_BAR = 'M-15 -6 L-15 6'
+// The ring for an optional end, centred a pixel past the bar a mandatory one draws.
+const MIN_ZERO_CENTER = -16
+const MIN_ZERO_RADIUS = 3.2
 const CARDINALITY_SYMBOLS = {
   one: { max: MAX_ONE_BAR, optional: false },
   'zero-one': { max: MAX_ONE_BAR, optional: true },
@@ -251,15 +300,15 @@ function fieldIcon(field: SchemaField, primaryKey: ReadonlySet<string>, palette:
 }
 
 function renderIcon(icon: string, color: string, x: number, y: number, size: number) {
-  return `<g transform="translate(${round(x)} ${round(y)}) scale(${round(size / 24)})" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icon}</g>`
+  return `<g transform="translate(${round(x)} ${round(y)}) scale(${round(size / ICON_GRID)})" fill="none" stroke="${color}" stroke-width="${ICON_STROKE}" stroke-linecap="round" stroke-linejoin="round">${icon}</g>`
 }
 
 /** A small rounded chip with a word in it, tinted with the colour of what it marks. */
 function renderBadge(label: string, x: number, centerY: number, color: string) {
   const width = sansWidth(label, BADGE_FONT_SIZE) + BADGE_PADDING_X * 2
   const svg = [
-    `<rect x="${round(x)}" y="${round(centerY - BADGE_HEIGHT / 2)}" width="${round(width)}" height="${BADGE_HEIGHT}" rx="3" fill="${color}" fill-opacity="0.14"/>`,
-    `<text x="${round(x + width / 2)}" y="${round(centerY + BADGE_FONT_SIZE * 0.36)}" font-family="${FONT_SANS}" font-size="${BADGE_FONT_SIZE}" font-weight="600" text-anchor="middle" fill="${color}">${escapeXml(label)}</text>`,
+    `<rect x="${round(x)}" y="${round(centerY - BADGE_HEIGHT / 2)}" width="${round(width)}" height="${BADGE_HEIGHT}" rx="${BADGE_RADIUS}" fill="${color}" fill-opacity="${BADGE_TINT}"/>`,
+    `<text x="${round(x + width / 2)}" y="${round(centerY + BADGE_FONT_SIZE * BASELINE)}" font-family="${FONT_SANS}" font-size="${BADGE_FONT_SIZE}" font-weight="600" text-anchor="middle" fill="${color}">${escapeXml(label)}</text>`,
   ].join('')
   return { svg, width }
 }
@@ -286,8 +335,12 @@ function renderRow(node: PlacedNode, field: SchemaField, top: number, palette: P
   const icon = fieldIcon(field, primaryKey, palette)
   // The type is drawn from the right edge inwards, so without a bound of its own a long one runs
   // out of the card and off the drawing. Six tenths of the row leaves the name something to sit in.
-  const type = truncateLabel(fieldTypeLabel(field), (right - left) * 0.6, 11 * MONO_ADVANCE)
-  const typeWidth = monoWidth(type, 11)
+  const type = truncateLabel(
+    fieldTypeLabel(field),
+    (right - left) * TYPE_SHARE,
+    TYPE_FONT_SIZE * MONO_ADVANCE,
+  )
+  const typeWidth = monoWidth(type, TYPE_FONT_SIZE)
   const badge = uniqueBadge(field, primaryKey, unique)
   const badgeRoom = badge === null ? 0 : badgeWidth(badge) + ROW_GAP
   const badgeSvg =
@@ -299,20 +352,20 @@ function renderRow(node: PlacedNode, field: SchemaField, top: number, palette: P
   const name = truncateLabel(
     field.name,
     right - nameLeft - ROW_GAP - typeWidth - badgeRoom,
-    12 * MONO_ADVANCE,
+    NAME_FONT_SIZE * MONO_ADVANCE,
   )
   const detail = fieldDetail(field)
   const iconSvg = icon
     ? renderIcon(icon.icon, icon.color, left, centerY - ICON_SIZE / 2, ICON_SIZE)
     : ''
   const detailSvg = detail
-    ? `<text x="${round(left + 17)}" y="${round(top + 26 + 10.5 * 0.36)}" font-family="${FONT_SANS}" font-size="10.5" fill="${palette.faint}">${escapeXml(truncateLabel(detail, right - left - 17, 10.5 * SANS_ADVANCE))}</text>`
+    ? `<text x="${round(nameLeft)}" y="${round(top + DETAIL_CENTER + DETAIL_FONT_SIZE * BASELINE)}" font-family="${FONT_SANS}" font-size="${DETAIL_FONT_SIZE}" fill="${palette.faint}">${escapeXml(truncateLabel(detail, right - nameLeft, DETAIL_FONT_SIZE * SANS_ADVANCE))}</text>`
     : ''
   return [
     iconSvg,
     badgeSvg,
-    `<text x="${round(nameLeft)}" y="${round(centerY + 12 * 0.36)}" font-family="${FONT_MONO}" font-size="12" fill="${palette.ink}">${escapeXml(name)}</text>`,
-    `<text x="${round(right)}" y="${round(centerY + 11 * 0.36)}" font-family="${FONT_MONO}" font-size="11" text-anchor="end" fill="${field.kind === 'enum' ? palette.enumeration : palette.muted}">${escapeXml(type)}</text>`,
+    `<text x="${round(nameLeft)}" y="${round(centerY + NAME_FONT_SIZE * BASELINE)}" font-family="${FONT_MONO}" font-size="${NAME_FONT_SIZE}" fill="${palette.ink}">${escapeXml(name)}</text>`,
+    `<text x="${round(right)}" y="${round(centerY + TYPE_FONT_SIZE * BASELINE)}" font-family="${FONT_MONO}" font-size="${TYPE_FONT_SIZE}" text-anchor="end" fill="${field.kind === 'enum' ? palette.enumeration : palette.muted}">${escapeXml(type)}</text>`,
     detailSvg,
   ].join('')
 }
@@ -343,7 +396,7 @@ function renderConstraint(
     right - columnsLeft,
     CONSTRAINT_FONT_SIZE * MONO_ADVANCE,
   )
-  return `${badge.svg}<text x="${round(columnsLeft)}" y="${round(centerY + CONSTRAINT_FONT_SIZE * 0.36)}" font-family="${FONT_MONO}" font-size="${CONSTRAINT_FONT_SIZE}" fill="${palette.muted}">${escapeXml(columns)}</text>`
+  return `${badge.svg}<text x="${round(columnsLeft)}" y="${round(centerY + CONSTRAINT_FONT_SIZE * BASELINE)}" font-family="${FONT_MONO}" font-size="${CONSTRAINT_FONT_SIZE}" fill="${palette.muted}">${escapeXml(columns)}</text>`
 }
 
 /** The card behind a block: the rounded surface, its dark header band and the header text. */
@@ -353,16 +406,21 @@ function renderCard(
   header: { readonly name: string; readonly dbName: string | null; readonly pill: string | null },
   palette: Palette,
 ) {
-  const pillWidth = header.pill === null ? 0 : sansWidth(header.pill, 11) + 16
+  // A pill's ends are round, so it is padded by a radius at either end: its height in all.
+  const pillWidth = header.pill === null ? 0 : sansWidth(header.pill, TYPE_FONT_SIZE) + PILL_HEIGHT
   const pillX = card.x + card.width - HEADER_PADDING_X - pillWidth
   const nameLeft = card.x + HEADER_PADDING_X
   // Cut to the room before the pill: a long model or enum name used to run out of the header,
   // over the `enum` pill and past the edge of the drawing.
-  const name = truncateLabel(header.name, pillX - 8 - nameLeft, 13 * MONO_BOLD_ADVANCE)
-  const nameWidth = textUnits(name) * 13 * MONO_BOLD_ADVANCE
-  const dbNameLeft = nameLeft + nameWidth + 8
+  const name = truncateLabel(
+    header.name,
+    pillX - HEADER_GAP - nameLeft,
+    HEADER_FONT_SIZE * MONO_BOLD_ADVANCE,
+  )
+  const nameWidth = textUnits(name) * HEADER_FONT_SIZE * MONO_BOLD_ADVANCE
+  const dbNameLeft = nameLeft + nameWidth + HEADER_GAP
   const dbName = header.dbName
-    ? truncateLabel(header.dbName, pillX - 8 - dbNameLeft, 11 * MONO_ADVANCE)
+    ? truncateLabel(header.dbName, pillX - HEADER_GAP - dbNameLeft, TYPE_FONT_SIZE * MONO_ADVANCE)
     : ''
   const headerCenter = card.y + NODE_HEADER_HEIGHT / 2
   return [
@@ -370,16 +428,16 @@ function renderCard(
     `<rect x="${round(card.x)}" y="${round(card.y)}" width="${round(card.width)}" height="${round(card.height)}" rx="${NODE_RADIUS}" fill="${palette.surface}" stroke="${palette.lineStrong}" filter="url(#node-shadow)"/>`,
     `<rect x="${round(card.x)}" y="${round(card.y)}" width="${round(card.width)}" height="${NODE_HEADER_HEIGHT}" fill="${palette.node}" clip-path="url(#${id})"/>`,
     // One text run, so the table name follows the model name at its real width whatever font is used.
-    `<text x="${round(nameLeft)}" y="${round(headerCenter + 13 * 0.36)}" font-family="${FONT_MONO}" font-size="13" font-weight="700" fill="${palette.nodeText}">${escapeXml(name)}${
+    `<text x="${round(nameLeft)}" y="${round(headerCenter + HEADER_FONT_SIZE * BASELINE)}" font-family="${FONT_MONO}" font-size="${HEADER_FONT_SIZE}" font-weight="700" fill="${palette.nodeText}">${escapeXml(name)}${
       dbName
-        ? `<tspan dx="8" font-size="11" font-weight="400" opacity="0.6">${escapeXml(dbName)}</tspan>`
+        ? `<tspan dx="${HEADER_GAP}" font-size="${TYPE_FONT_SIZE}" font-weight="400" opacity="${TABLE_NAME_OPACITY}">${escapeXml(dbName)}</tspan>`
         : ''
     }</text>`,
     ...(header.pill === null
       ? []
       : [
-          `<rect x="${round(pillX)}" y="${round(headerCenter - 8)}" width="${round(pillWidth)}" height="16" rx="8" fill="${palette.surface}" opacity="0.15"/>`,
-          `<text x="${round(pillX + pillWidth / 2)}" y="${round(headerCenter + 11 * 0.36)}" font-family="${FONT_SANS}" font-size="11" text-anchor="middle" fill="${palette.nodeText}">${escapeXml(header.pill)}</text>`,
+          `<rect x="${round(pillX)}" y="${round(headerCenter - PILL_HEIGHT / 2)}" width="${round(pillWidth)}" height="${PILL_HEIGHT}" rx="${PILL_HEIGHT / 2}" fill="${palette.surface}" opacity="${PILL_TINT}"/>`,
+          `<text x="${round(pillX + pillWidth / 2)}" y="${round(headerCenter + TYPE_FONT_SIZE * BASELINE)}" font-family="${FONT_SANS}" font-size="${TYPE_FONT_SIZE}" text-anchor="middle" fill="${palette.nodeText}">${escapeXml(header.pill)}</text>`,
         ]),
   ].join('')
 }
@@ -405,7 +463,7 @@ function renderNode(node: PlacedNode, index: number, palette: Palette) {
     ...(node.constraints.length === 0
       ? []
       : [
-          `<path d="M${round(node.x)} ${round(rows.top + NODE_PADDING)}H${round(node.x + node.width)}" stroke="${palette.lineStrong}" stroke-width="1"/>`,
+          `<path d="M${round(node.x)} ${round(rows.top + NODE_PADDING)}H${round(node.x + node.width)}" stroke="${palette.lineStrong}" stroke-width="${DIVIDER_WIDTH}"/>`,
           ...node.constraints.map((constraint, position) =>
             renderConstraint(
               node,
@@ -438,14 +496,15 @@ function renderEnum(card: PlacedEnum, index: number, palette: Palette) {
       // Both are cut, and the member name takes only what the stored name leaves: each is drawn
       // from its own edge, so an uncut one runs over the other and out of the card.
       const dbName = member.dbName
-        ? truncateLabel(member.dbName, (right - left) * 0.5, 11 * MONO_ADVANCE)
+        ? truncateLabel(member.dbName, (right - left) * STORED_SHARE, TYPE_FONT_SIZE * MONO_ADVANCE)
         : ''
       const stored =
         dbName === ''
           ? ''
-          : `<text x="${round(right)}" y="${round(centerY + 11 * 0.36)}" font-family="${FONT_MONO}" font-size="11" text-anchor="end" fill="${palette.faint}">${escapeXml(dbName)}</text>`
-      const nameRoom = right - left - (dbName === '' ? 0 : monoWidth(dbName, 11) + ROW_GAP)
-      return `<text x="${round(left)}" y="${round(centerY + 12 * 0.36)}" font-family="${FONT_MONO}" font-size="12" fill="${palette.enumeration}">${escapeXml(truncateLabel(member.name, nameRoom, 12 * MONO_ADVANCE))}</text>${stored}`
+          : `<text x="${round(right)}" y="${round(centerY + TYPE_FONT_SIZE * BASELINE)}" font-family="${FONT_MONO}" font-size="${TYPE_FONT_SIZE}" text-anchor="end" fill="${palette.faint}">${escapeXml(dbName)}</text>`
+      const nameRoom =
+        right - left - (dbName === '' ? 0 : monoWidth(dbName, TYPE_FONT_SIZE) + ROW_GAP)
+      return `<text x="${round(left)}" y="${round(centerY + NAME_FONT_SIZE * BASELINE)}" font-family="${FONT_MONO}" font-size="${NAME_FONT_SIZE}" fill="${palette.enumeration}">${escapeXml(truncateLabel(member.name, nameRoom, NAME_FONT_SIZE * MONO_ADVANCE))}</text>${stored}`
     }),
     `</g>`,
   ].join('')
@@ -465,9 +524,9 @@ function renderCardinality(
   const { max, optional } = CARDINALITY_SYMBOLS[cardinality]
   const flip = towards === 'left' ? ' scale(-1 1)' : ''
   const minimum = optional
-    ? `<circle cx="-16" cy="0" r="3.2" fill="${palette.surface}"/>`
+    ? `<circle cx="${MIN_ZERO_CENTER}" cy="0" r="${MIN_ZERO_RADIUS}" fill="${palette.surface}"/>`
     : `<path d="${MIN_ONE_BAR}"/>`
-  return `<g transform="translate(${round(point.x)} ${round(point.y)})${flip}" fill="none" stroke="${palette.edge}" stroke-width="1.4"><path d="${max}"/>${minimum}</g>`
+  return `<g transform="translate(${round(point.x)} ${round(point.y)})${flip}" fill="none" stroke="${palette.edge}" stroke-width="${EDGE_WIDTH}"><path d="${max}"/>${minimum}</g>`
 }
 
 type Edge = {
@@ -479,12 +538,8 @@ type Edge = {
   readonly targetTowards: 'left' | 'right'
 }
 
-/** Where an edge leaves and enters its models, and what it says along the way. */
-function edgeGeometry(
-  relation: SchemaRelation,
-  nodes: ReadonlyMap<string, PlacedNode>,
-  cards: readonly Box[],
-): Edge | null {
+/** Where a relation leaves its model and where it comes into the other, or back into its own. */
+function edgeEnds(relation: SchemaRelation, nodes: ReadonlyMap<string, PlacedNode>) {
   const from = nodes.get(relation.from.model)
   const to = nodes.get(relation.to.model)
   if (!(from && to)) return null
@@ -495,18 +550,26 @@ function edgeGeometry(
     relation.origin === 'implicit-many-to-many' ||
     !hasField(from, relation.from.field) ||
     !hasField(to, relation.to.field)
-  const source = {
-    x: from.x + from.width,
-    y: anchorY(from, useHeader ? null : relation.from.field),
-  }
   const loops = relation.from.model === relation.to.model
-  const target = {
-    x: loops ? to.x + to.width : to.x,
-    y: anchorY(to, useHeader ? null : relation.to.field),
-  }
   return {
     relation,
-    points: loops ? selfLoopPoints(source, target) : routePoints(source, target, cards),
+    loops,
+    source: { x: from.x + from.width, y: anchorY(from, useHeader ? null : relation.from.field) },
+    target: {
+      x: loops ? to.x + to.width : to.x,
+      y: anchorY(to, useHeader ? null : relation.to.field),
+    },
+  }
+}
+
+/** How an edge runs between its ends, round `obstacles`, and what it says along the way. */
+function edgeGeometry(
+  { relation, loops, source, target }: NonNullable<ReturnType<typeof edgeEnds>>,
+  obstacles: readonly Box[],
+): Edge {
+  return {
+    relation,
+    points: loops ? selfLoopPoints(source, target) : routePoints(source, target, obstacles),
     caption: edgeCaption(relation),
     // Dashed is "no foreign key backs this", not "many to many" — see `RelationOrigin`.
     dashed: relation.origin === 'annotated' || relation.origin === 'implicit-many-to-many',
@@ -520,7 +583,7 @@ function renderEdge(edge: Edge, palette: Palette) {
   if (!(source && target)) return ''
   return [
     `<g class="relation-edge">`,
-    `<path d="${polylinePath(edge.points)}" fill="none" stroke="${palette.edge}" stroke-width="1.4"${edge.dashed ? ' stroke-dasharray="5 4"' : ''}/>`,
+    `<path d="${polylinePath(edge.points)}" fill="none" stroke="${palette.edge}" stroke-width="${EDGE_WIDTH}"${edge.dashed ? ` stroke-dasharray="${EDGE_DASH}"` : ''}/>`,
     renderCardinality(edge.relation.from.cardinality, source, 'left', palette),
     renderCardinality(edge.relation.to.cardinality, target, edge.targetTowards, palette),
     `</g>`,
@@ -545,7 +608,7 @@ function enumLinks(
 }
 
 function renderEnumLink(points: readonly Point[], palette: Palette) {
-  return `<g class="enum-edge"><path d="${polylinePath(points)}" fill="none" stroke="${palette.enumeration}" stroke-width="1.2" stroke-dasharray="2 4" opacity="0.75"/></g>`
+  return `<g class="enum-edge"><path d="${polylinePath(points)}" fill="none" stroke="${palette.enumeration}" stroke-width="${ENUM_LINK_WIDTH}" stroke-dasharray="${ENUM_LINK_DASH}" opacity="${ENUM_LINK_OPACITY}"/></g>`
 }
 
 // The relation leads, in the plain colour; what it does to a row follows in the quiet one.
@@ -555,11 +618,11 @@ function renderCaption(caption: readonly string[], box: Box, palette: Palette) {
     const baseline =
       box.y +
       EDGE_LABEL_PADDING / 2 +
-      (index + 0.5) * EDGE_LABEL_LINE_HEIGHT +
-      EDGE_LABEL_FONT_SIZE * 0.36
+      (index + 1 / 2) * EDGE_LABEL_LINE_HEIGHT +
+      EDGE_LABEL_FONT_SIZE * BASELINE
     return `<text x="${round(center)}" y="${round(baseline)}" font-family="${FONT_MONO}" font-size="${EDGE_LABEL_FONT_SIZE}" text-anchor="middle" fill="${index === 0 ? palette.muted : palette.faint}">${escapeXml(line)}</text>`
   })
-  return `<g class="relation-label"><rect x="${round(box.x)}" y="${round(box.y)}" width="${round(box.width)}" height="${round(box.height)}" rx="3" fill="${palette.surface}" stroke="${palette.lineStrong}" stroke-width="0.8"/>${lines.join('')}</g>`
+  return `<g class="relation-label"><rect x="${round(box.x)}" y="${round(box.y)}" width="${round(box.width)}" height="${round(box.height)}" rx="${CAPTION_RADIUS}" fill="${palette.surface}" stroke="${palette.lineStrong}" stroke-width="${CAPTION_BORDER}"/>${lines.join('')}</g>`
 }
 
 function union(boxes: readonly Box[]): Box {
@@ -590,14 +653,23 @@ export function renderDiagramSvg(input: DiagramInput) {
   const enums = placeEnums(input.enums ?? [], input.positions)
   const byName = new Map(nodes.map((node) => [node.model.name, node]))
   const cards = [...nodes, ...enums]
-  const routed = input.relations
-    .map((relation) => edgeGeometry(relation, byName, cards))
-    .filter((edge) => edge !== null)
+  const anchored = input.relations
+    .map((relation) => edgeEnds(relation, byName))
+    .filter((end) => end !== null)
+  // The caption of a self relation stands beside its loop, out in the gap by its card, and the
+  // wires of that gap go round it as round a card.
+  const obstacles = [
+    ...cards,
+    ...anchored
+      .filter((end) => end.loops)
+      .map((end) => loopRoom(selfLoopPoints(end.source, end.target), edgeCaption(end.relation))),
+  ]
+  const routed = anchored.map((end) => edgeGeometry(end, obstacles))
   // The enum links are drawn apart from the relations as much as from each other: a dotted wire
   // on top of a solid one reads as neither.
   const separated = separateRoutes(
-    [...routed.map((edge) => edge.points), ...enumLinks(nodes, enums, cards)],
-    cards,
+    [...routed.map((edge) => edge.points), ...enumLinks(nodes, enums, obstacles)],
+    obstacles,
   )
   const edges = routed.map((edge, index) => ({ ...edge, points: separated[index] ?? edge.points }))
   const links = separated.slice(routed.length)
@@ -632,7 +704,7 @@ export function renderDiagramSvg(input: DiagramInput) {
     `<svg xmlns="http://www.w3.org/2000/svg" width="${round(bounds.width)}" height="${round(bounds.height)}" viewBox="${round(bounds.x)} ${round(bounds.y)} ${round(bounds.width)} ${round(bounds.height)}">`,
     `<defs>`,
     `<pattern id="dots" x="${-DOT_RADIUS}" y="${-DOT_RADIUS}" width="${GRID}" height="${GRID}" patternUnits="userSpaceOnUse"><circle cx="${DOT_RADIUS}" cy="${DOT_RADIUS}" r="${DOT_RADIUS}" fill="${palette.dots}"/></pattern>`,
-    `<filter id="node-shadow" x="-5%" y="-5%" width="110%" height="115%"><feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#000000" flood-opacity="0.08"/></filter>`,
+    `<filter id="node-shadow" x="-5%" y="-5%" width="110%" height="115%"><feDropShadow dx="0" dy="${SHADOW.dy}" stdDeviation="${SHADOW.blur}" flood-color="#000000" flood-opacity="${SHADOW.opacity}"/></filter>`,
     `</defs>`,
     `<rect x="${round(bounds.x)}" y="${round(bounds.y)}" width="${round(bounds.width)}" height="${round(bounds.height)}" fill="${palette.canvas}"/>`,
     `<rect x="${round(bounds.x)}" y="${round(bounds.y)}" width="${round(bounds.width)}" height="${round(bounds.height)}" fill="url(#dots)"/>`,

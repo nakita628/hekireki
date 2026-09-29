@@ -5,6 +5,7 @@ import type { Box, Point } from '../types/index.js'
 import {
   captionBox,
   captionWidth,
+  loopRoom,
   placeCaptions,
   polylinePath,
   round,
@@ -93,6 +94,16 @@ describe('routePoints', () => {
       { x: 720, y: 400 },
       { x: 900, y: 400 },
     ])
+  })
+
+  it('comes down past the cards it clears, however near the target its handle is measured', () => {
+    // The canvas measures a handle a few pixels inside its card, which puts the channel in front
+    // of a neighbour in the target's own rank just short of the target's doorstep.
+    const upper = { x: 400, y: 0, width: 300, height: 160 }
+    const lower = { x: 400, y: 240, width: 300, height: 200 }
+    const neighbour = { x: 900, y: 60, width: 300, height: 150 }
+    const points = routePoints(source, { x: 903, y: 400 }, [upper, lower, neighbour])
+    expect(points.at(-3)?.x).toBe(upper.x + upper.width + EDGE_OFFSET)
   })
 
   it('keeps the plain route when nothing clears the models', () => {
@@ -311,6 +322,23 @@ describe('placeCaptions', () => {
       box.y <= point.y &&
       point.y <= box.y + box.height
     expect(placed && points.every((point) => inside(point, placed.box))).toBe(false)
+  })
+
+  it('stands the caption of a self relation on its loop, out in the room the loop keeps', () => {
+    const loop = selfLoopPoints({ x: 340, y: 100 }, { x: 340, y: 144 })
+    const [placed] = placeCaptions([{ caption, points: loop }], [])
+    const room = loopRoom(loop, caption)
+    const turn = loop[1]?.x ?? 0
+    const box = placed?.box ?? { x: 0, y: 0, width: 0, height: 0 }
+    // Clear of the card, on the loop, and inside the room the other wires are kept out of.
+    expect(box.x).toBeGreaterThan(340)
+    expect(box.x < turn && turn < box.x + box.width).toBe(true)
+    expect(box.x + box.width).toBeLessThanOrEqual(room.x + room.width)
+  })
+
+  it('keeps the room from the edge of the card out, so no wire slips between card and loop', () => {
+    const loop = selfLoopPoints({ x: 340, y: 100 }, { x: 340, y: 144 })
+    expect(loopRoom(loop, caption).x).toBe(340)
   })
 
   it('falls back to the middle of an edge with nowhere to put a caption', () => {

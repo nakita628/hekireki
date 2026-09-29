@@ -559,8 +559,8 @@ export default defineConfig({
               ],
               patterns: [
                 {
-                  regex: '^\\.\\./',
-                  message: 'leaf module: no project-internal imports allowed',
+                  group: ['../**', '!../types/**'],
+                  message: 'leaf module: it imports nothing of the project but the shared types',
                 },
               ],
             },
