@@ -10,6 +10,7 @@ export {
   fieldRowHeight,
   ENUM_WIDTH,
   enumHeight,
+  GRID,
   NODE_CONSTRAINT_HEIGHT,
   NODE_DESCRIPTION_HEIGHT,
   NODE_HEADER_HEIGHT,

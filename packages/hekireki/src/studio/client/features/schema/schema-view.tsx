@@ -24,7 +24,7 @@ import { exportPng, exportSvg } from './export.js'
 import { GeometryContext, useDiagramGeometry } from './geometry.js'
 import { buildEdges, buildNodes, highlightEdges, highlightOf } from './graph.js'
 import type { DiagramNodeType, SchemaHighlight } from './graph.js'
-import { autoLayout, positionsFor } from './layout.js'
+import { autoLayout, GRID, positionsFor } from './layout.js'
 import { RelationEdge } from './relation-edge.js'
 
 type Field = {
@@ -291,7 +291,7 @@ function Canvas({
         >
           <Background
             variant={BackgroundVariant.Dots}
-            gap={20}
+            gap={GRID}
             size={1.2}
             color={theme === 'dark' ? '#2a2f3d' : '#d4d4dc'}
           />

@@ -7,6 +7,7 @@ import {
   polylinePath,
   routePoints,
   selfLoopPoints,
+  separateRoutes,
 } from '../../../../diagram/edge.js'
 import type { Box, Point } from '../../../../diagram/edge.js'
 
@@ -63,19 +64,27 @@ export function diagramGeometry(
   cards: ReadonlyMap<string, GeometryCard>,
 ): DiagramGeometry {
   const boxes = [...cards.values()].map((card) => card.box)
-  const routed = edges.flatMap((edge) => {
+  const joined = edges.flatMap((edge) => {
     const source = cards.get(edge.source)?.source.get(edge.sourceHandle ?? '')
     const target = cards.get(edge.target)?.target.get(edge.targetHandle ?? '')
     if (source === undefined || target === undefined) return []
     const loops = edge.source === edge.target
     return [
       {
-        id: edge.id,
-        caption: edge.caption,
+        edge,
         points: loops ? selfLoopPoints(source, target) : routePoints(source, target, boxes),
       },
     ]
   })
+  const separated = separateRoutes(
+    joined.map(({ points }) => points),
+    boxes,
+  )
+  const routed = joined.map(({ edge }, index) => ({
+    id: edge.id,
+    caption: edge.caption,
+    points: separated[index] ?? [],
+  }))
   const captions = new Map(
     placeCaptions(routed, boxes).map((placed) => [placed.edge.id, center(placed.box)]),
   )

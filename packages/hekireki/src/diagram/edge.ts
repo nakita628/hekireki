@@ -1,6 +1,6 @@
 // How a relation is drawn between two cards and where its caption sits, shared by the exported
 // SVG (svg.ts) and the Studio canvas (studio/client/features/schema) so the two agree.
-import { NODE_ROW_HEIGHT } from './layout.js'
+import { GRID, NODE_ROW_HEIGHT } from './layout.js'
 import { textUnits } from './text.js'
 
 export type Point = { readonly x: number; readonly y: number }
@@ -12,8 +12,8 @@ export type Box = {
   readonly height: number
 }
 
-/** How far an edge runs straight out of a card before it is allowed to turn. */
-export const EDGE_OFFSET = 20
+/** How far an edge runs straight out of a card before it is allowed to turn: one step of the grid. */
+export const EDGE_OFFSET = GRID
 const EDGE_BEND_RADIUS = 5
 /** How far a self relation reaches to the right of the node it loops back into. */
 export const SELF_LOOP_GAP = 34
@@ -21,6 +21,8 @@ export const SELF_LOOP_GAP = 34
 export const EDGE_LABEL_FONT_SIZE = 9.5
 export const EDGE_LABEL_LINE_HEIGHT = 12
 export const EDGE_LABEL_PADDING = 4
+// The room either side of the widest line of a caption, inside its chip.
+const EDGE_LABEL_PADDING_X = 5
 // The room a caption keeps between itself and the wire it labels when it sits beside one.
 const CAPTION_GAP = 6
 // Glyph advance as a fraction of the font size, for the monospace face captions are set in.
@@ -73,14 +75,17 @@ function throughChannel(source: Point, target: Point, x: number): readonly Point
   ]
 }
 
-/** An edge that leaves its models first and crosses along a lane across the canvas at `y`. */
-function alongLane(source: Point, target: Point, y: number): readonly Point[] {
+/**
+ * An edge that leaves its models first, crosses along a lane across the canvas at `y`, and comes
+ * down to its target in a channel at `x`.
+ */
+function alongLane(source: Point, target: Point, y: number, x: number): readonly Point[] {
   return [
     source,
     { x: source.x + EDGE_OFFSET, y: source.y },
     { x: source.x + EDGE_OFFSET, y },
-    { x: target.x - EDGE_OFFSET, y },
-    { x: target.x - EDGE_OFFSET, y: target.y },
+    { x, y },
+    { x, y: target.y },
     target,
   ]
 }
@@ -88,11 +93,13 @@ function alongLane(source: Point, target: Point, y: number): readonly Point[] {
 /** The corners of an edge from a source on the right of a node to a target on the left of another. */
 export function smoothStepPoints(source: Point, target: Point): readonly Point[] {
   const center = { x: (source.x + target.x) / 2, y: (source.y + target.y) / 2 }
-  // A target to the left of its source has no channel to cross in, so the edge doubles back
-  // along a lane instead.
+  // The channel runs a step of the grid past the end of the source's stub, and leaves the rest of
+  // the gap to the captions in front of the target; a gap too narrow for that is crossed in its
+  // middle. A target to the left of its source has no channel to cross in, so the edge doubles
+  // back along a lane instead.
   return source.x + EDGE_OFFSET < target.x - EDGE_OFFSET
-    ? throughChannel(source, target, center.x)
-    : alongLane(source, target, center.y)
+    ? throughChannel(source, target, Math.min(source.x + EDGE_OFFSET + GRID, center.x))
+    : alongLane(source, target, center.y, target.x - EDGE_OFFSET)
 }
 
 /** How long a stretch of an axis-aligned segment runs inside a box. */
@@ -154,21 +161,20 @@ export function routePoints(source: Point, target: Point, cards: readonly Box[])
     width: Math.abs(target.x - source.x) + EDGE_OFFSET * 2,
     height: Math.abs(target.y - source.y) + EDGE_OFFSET * 2,
   }
-  const inTheWay = cards.filter(
-    (card) =>
-      card.x < corridor.x + corridor.width &&
-      corridor.x < card.x + card.width &&
-      card.y < corridor.y + corridor.height &&
-      corridor.y < card.y + card.height,
-  )
+  const inTheWay = cards.filter((card) => meets(corridor, card))
   const channels = inTheWay
     .flatMap((card) => [card.x - CLEARANCE, card.x + card.width + CLEARANCE])
     .filter((x) => x > source.x + EDGE_OFFSET && x < target.x - EDGE_OFFSET)
   const lanes = inTheWay.flatMap((card) => [card.y - CLEARANCE, card.y + card.height + CLEARANCE])
+  // Where a lane comes down: the channel nearest the target first, right in front of it last.
+  // They cost the same, and of two equal routes the first is kept, so the edge comes down early
+  // and keeps a stretch into its target that no other edge on the lane shares — where its
+  // caption can say which edge it is.
+  const descents = [...channels.toSorted((a, b) => b - a), target.x - EDGE_OFFSET]
   return [
     direct,
     ...channels.map((x) => throughChannel(source, target, x)),
-    ...lanes.map((y) => alongLane(source, target, y)),
+    ...lanes.flatMap((y) => descents.map((x) => alongLane(source, target, y, x))),
   ]
     .map((points) => ({ points, cost: routeCost(points, obstacles) }))
     .reduce((best, candidate) =>
@@ -177,6 +183,225 @@ export function routePoints(source: Point, target: Point, cards: readonly Box[])
         ? candidate
         : best,
     ).points
+}
+
+// How far apart two wires are drawn where they would otherwise run on top of each other: half a
+// step of the grid, so a channel down the middle of a gap and the tracks beside it stay on it.
+const TRACK = GRID / 2
+
+/** A vertical segment of a route, from `points[index]` to `points[index + 1]`. */
+type Stretch = {
+  readonly route: number
+  readonly points: readonly Point[]
+  readonly index: number
+  readonly x: number
+  readonly from: number
+  readonly to: number
+  /** Whether it turns in at one end and out at the other, so it can shift sideways. */
+  readonly free: boolean
+}
+
+function verticals(routes: readonly (readonly Point[])[]): readonly Stretch[] {
+  return routes.flatMap((points, route) =>
+    points.flatMap((a, index) => {
+      const b = points[index + 1]
+      if (!(b && a.x === b.x && a.y !== b.y)) return []
+      const before = points[index - 1]
+      const after = points[index + 2]
+      const free =
+        before !== undefined &&
+        after !== undefined &&
+        before.y === a.y &&
+        before.x !== a.x &&
+        after.y === b.y &&
+        after.x !== b.x
+      const from = Math.min(a.y, b.y)
+      const to = Math.max(a.y, b.y)
+      return [{ route, points, index, x: a.x, from, to, free }]
+    }),
+  )
+}
+
+/** The items in groups, each the items reachable from one another by `linked`. */
+function components<T>(
+  items: readonly T[],
+  linked: (a: T, b: T) => boolean,
+): readonly (readonly T[])[] {
+  return items.reduce<readonly (readonly T[])[]>((groups, item) => {
+    const joined = groups.filter((group) => group.some((other) => linked(item, other)))
+    const apart = groups.filter((group) => !joined.includes(group))
+    return [...apart, [...joined.flat(), item]]
+  }, [])
+}
+
+/**
+ * How many times the stretches of `left` and `right` cross when `left` is drawn to the left: a
+ * wire leaving `left` towards the right crosses every stretch of `right` it passes, and one
+ * leaving `right` towards the left every stretch of `left`.
+ */
+function crossings(left: readonly Stretch[], right: readonly Stretch[]) {
+  const leaving = (bundle: readonly Stretch[], side: number) =>
+    bundle.flatMap((stretch) =>
+      [stretch.points[stretch.index - 1], stretch.points[stretch.index + 2]].flatMap((end) =>
+        end !== undefined && Math.sign(end.x - stretch.x) === side ? [end.y] : [],
+      ),
+    )
+  const passes = (ys: readonly number[], bundle: readonly Stretch[]) =>
+    ys.filter((y) => bundle.some((stretch) => stretch.from < y && y < stretch.to)).length
+  return passes(leaving(left, 1), right) + passes(leaving(right, -1), left)
+}
+
+/** The bundles in the order that crosses least, each put where it adds the fewest crossings. */
+function leastCrossing(bundles: readonly (readonly Stretch[])[]) {
+  const total = (order: readonly (readonly Stretch[])[]) =>
+    order.reduce(
+      (sum, left, index) =>
+        sum + order.slice(index + 1).reduce((more, right) => more + crossings(left, right), 0),
+      0,
+    )
+  return bundles.reduce<readonly (readonly Stretch[])[]>((order, bundle) => {
+    const options = Array.from({ length: order.length + 1 }, (_, index) =>
+      order.toSpliced(index, 0, bundle),
+    )
+    return options.reduce((best, option) => (total(option) < total(best) ? option : best))
+  }, [])
+}
+
+/** The route with the stretch at `index` moved sideways to `x`. */
+function shifted(points: readonly Point[], index: number, x: number): readonly Point[] {
+  return points.map((point, at) => (at === index || at === index + 1 ? { x, y: point.y } : point))
+}
+
+/**
+ * What it costs to move a stretch to `x`: how much of its route then runs too near a card or a
+ * wire that cannot move. A move that turns a wire into or out of the stretch back on itself, or
+ * leaves an end symbol less than its room, is not made at all.
+ */
+function shiftCost(stretch: Stretch, x: number, near: readonly Box[]) {
+  const { points } = stretch
+  const keeps = [stretch.index - 1, stretch.index + 2].every((at) => {
+    const end = points[at]
+    if (end === undefined) return false
+    const room = at === 0 || at === points.length - 1 ? EDGE_OFFSET : 0
+    return Math.sign(end.x - x) === Math.sign(end.x - stretch.x) && Math.abs(end.x - x) >= room
+  })
+  return keeps ? routeCost(shifted(points, stretch.index, x), near).hidden : Infinity
+}
+
+/**
+ * Draws apart the vertical stretches that would run on top of, or too close to, one another:
+ * each group of them gets a track of its own, `TRACK` apart, in the order that crosses least.
+ * Edges that leave from the same point, or arrive at the same point, are one wire forking and
+ * keep one track between them.
+ */
+function spreadVertical(
+  routes: readonly (readonly Point[])[],
+  cards: readonly Box[],
+): readonly (readonly Point[])[] {
+  const all = verticals(routes)
+  const pinned = all.filter((stretch) => !stretch.free)
+  const padded = cards.map((card) => ({
+    x: card.x - TRACK / 2,
+    y: card.y - TRACK / 2,
+    width: card.width + TRACK,
+    height: card.height + TRACK,
+  }))
+  // What a route keeps its distance from: half a track from the cards, and a whole one from the
+  // wires of other routes that cannot move out of its way, as far as from a track beside it.
+  const near = routes.map((_, route) => [
+    ...padded,
+    ...pinned
+      .filter((stretch) => stretch.route !== route)
+      .map((stretch) => ({
+        x: stretch.x - TRACK,
+        y: stretch.from,
+        width: TRACK * 2,
+        height: stretch.to - stretch.from,
+      })),
+  ])
+  const cost = (bundle: readonly Stretch[], x: number) =>
+    bundle.reduce((sum, stretch) => sum + shiftCost(stretch, x, near[stretch.route] ?? []), 0)
+  const moves = components(
+    all.filter((stretch) => stretch.free),
+    (a, b) => Math.abs(a.x - b.x) < TRACK && a.from < b.to && b.from < a.to,
+  ).flatMap((group) => {
+    const bundles = components(
+      group,
+      (a, b) =>
+        a.x === b.x &&
+        [0, -1].some((at) => {
+          const one = a.points.at(at)
+          const other = b.points.at(at)
+          return one?.x === other?.x && one?.y === other?.y
+        }),
+    )
+    const order = leastCrossing(bundles.toSorted((a, b) => (a[0]?.x ?? 0) - (b[0]?.x ?? 0)))
+    // Every edge comes into its target from the left, and the stretch between its track and the
+    // target is where its caption goes, so the tracks are laid out rightwards from the leftmost
+    // stretch rather than either side of them. They slide over together, half a track at a time,
+    // where that keeps them clearer of the cards and the wires that cannot move: a turn just
+    // outside a card has no room to move towards it.
+    const first = Math.min(...group.map((stretch) => stretch.x))
+    const tracks = order.map((_, index) => first + index * TRACK)
+    const layouts = Array.from({ length: order.length * 2 + 1 }, (_, step) => {
+      const slide = (Math.ceil(step / 2) * (step % 2 === 0 ? -TRACK : TRACK)) / 2
+      return tracks.map((x) => x + slide)
+    })
+    const costs = layouts.map((xs) =>
+      order.reduce((sum, bundle, index) => sum + cost(bundle, xs[index] ?? 0), 0),
+    )
+    const layout = layouts[costs.indexOf(Math.min(...costs))] ?? []
+    // Where no layout suits them all, a bundle that cannot take its track keeps its place.
+    return order.flatMap((bundle, index) => {
+      const x = layout[index] ?? 0
+      return Number.isFinite(cost(bundle, x)) ? bundle.map((stretch) => ({ stretch, x })) : []
+    })
+  })
+  return routes.map((points, route) =>
+    moves
+      .filter((move) => move.stretch.route === route)
+      .reduce((moved, move) => shifted(moved, move.stretch.index, move.x), points),
+  )
+}
+
+function transposed(point: Point): Point {
+  return { x: point.y, y: point.x }
+}
+
+/**
+ * The routes with the stretches that different edges would draw on top of each other moved apart,
+ * down the canvas first and then across it, so every wire can be followed on its own.
+ */
+export function separateRoutes(
+  routes: readonly (readonly Point[])[],
+  cards: readonly Box[],
+): readonly (readonly Point[])[] {
+  const across = cards.map((card) => ({
+    x: card.y,
+    y: card.x,
+    width: card.height,
+    height: card.width,
+  }))
+  // A stretch moved onto its track can land beside one that was not in its group, so the passes
+  // run again on what they drew until they move nothing — no more often than there are routes,
+  // each pass having settled at least one of them.
+  const settle = (
+    current: readonly (readonly Point[])[],
+    passes: number,
+  ): readonly (readonly Point[])[] => {
+    const next = spreadVertical(
+      spreadVertical(current, cards).map((points) => points.map(transposed)),
+      across,
+    ).map((points) => points.map(transposed))
+    const moved = next.some((points, route) =>
+      points.some((point, index) => {
+        const before = current[route]?.[index]
+        return point.x !== before?.x || point.y !== before.y
+      }),
+    )
+    return moved && passes > 1 ? settle(next, passes - 1) : next
+  }
+  return settle(routes, routes.length)
 }
 
 // The corners of a relation that returns to the node it started from, looped off its right side.
@@ -193,7 +418,8 @@ export function captionWidth(caption: readonly string[]) {
   // A relation may be named in any language — `@relation("フォロー")` — so the chip is measured
   // the way a card measures a name, or a caption in Japanese draws half again as wide as its box.
   return (
-    Math.max(...caption.map((line) => textUnits(line) * EDGE_LABEL_FONT_SIZE * MONO_ADVANCE)) + 10
+    Math.max(...caption.map((line) => textUnits(line) * EDGE_LABEL_FONT_SIZE * MONO_ADVANCE)) +
+    EDGE_LABEL_PADDING_X * 2
   )
 }
 
@@ -231,13 +457,19 @@ const BESIDE_WIRE = 12
 // chip somewhere else to be.
 const EDGE_INSET = 12
 
-// Where along a segment a caption may sit: the middle first, then outwards in small steps to
-// either end. A chip whose middle is taken slides along its own wire rather than stepping off it,
-// which is what keeps it on the line it names — the offsets below are the last resort, not this.
-const CAPTION_STOPS = Array.from({ length: 17 }, (_, index) => {
-  const step = Math.ceil(index / 2) * 0.05
-  return 0.5 + (index % 2 === 0 ? -step : step)
-})
+// Where along a segment a caption may sit: the middle first, then outwards a twentieth of the
+// segment at a time, to a tenth of it from either end. A chip whose middle is taken slides along
+// its own wire rather than stepping off it, which is what keeps it on the line it names — the
+// offsets below are the last resort, not this.
+const CAPTION_STEP = 1 / 20
+const CAPTION_END = 1 / 10
+const CAPTION_STOPS = Array.from(
+  { length: Math.round((1 - CAPTION_END * 2) / CAPTION_STEP) + 1 },
+  (_, index) => {
+    const step = Math.ceil(index / 2) * CAPTION_STEP
+    return 1 / 2 + (index % 2 === 0 ? -step : step)
+  },
+)
 
 // Where a caption may sit: along the segments of its own edge, the vertical ones first — they are
 // the part of a smoothstep edge that belongs to it alone, so the labels of a shared bus fan out.
@@ -310,6 +542,12 @@ type PlacedCaption<E extends CaptionedEdge> = {
   readonly box: Box
 }
 
+// The breathing room a chip keeps from a model and from another chip: a chip that only touches
+// one still reads as crowding it.
+const CARD_MARGIN = 4
+const CAPTION_MARGIN = 2
+// A wire as a box: a pixel either side of its line, about the width it is drawn at.
+const WIRE_HALF_WIDTH = 1
 // What a pixel of a model costs a caption that covers it. A row buried under a chip is the one
 // thing the reader loses outright — the chip still reads, the field under it does not — so this
 // outweighs sitting off the wire, which only costs the reader a moment's tracing.
@@ -336,9 +574,10 @@ const WIRE_CROWDING = 0.25
 // is taken when the near spot is in the bus and the far one is not.
 const OFF_WIRE = 1
 
-/** The segments of every edge as thin boxes, so a caption can be scored against the wires. */
-// Each stretch of wire with the edge it belongs to: a caption is meant to sit on its own edge, so
-// what it has to stay off is everybody else's.
+/**
+ * The segments of every edge as thin boxes, each with the edge it belongs to: a caption is meant
+ * to sit on its own edge, so what it has to stay off is everybody else's.
+ */
 function wireBoxes<E extends CaptionedEdge>(
   edges: readonly E[],
 ): readonly { readonly edge: E; readonly box: Box }[] {
@@ -348,20 +587,16 @@ function wireBoxes<E extends CaptionedEdge>(
       return {
         edge,
         box: {
-          x: Math.min(a.x, b.x) - 1,
-          y: Math.min(a.y, b.y) - 1,
-          width: Math.abs(b.x - a.x) + 2,
-          height: Math.abs(b.y - a.y) + 2,
+          x: Math.min(a.x, b.x) - WIRE_HALF_WIDTH,
+          y: Math.min(a.y, b.y) - WIRE_HALF_WIDTH,
+          width: Math.abs(b.x - a.x) + WIRE_HALF_WIDTH * 2,
+          height: Math.abs(b.y - a.y) + WIRE_HALF_WIDTH * 2,
         },
       }
     }),
   )
 }
 
-/**
- * Puts every caption on the clearest stretch of its edge: off the models, off the other captions
- * and off the wires, so a chip never hides the relation it names.
- */
 /** The smallest box holding them all, grown by a margin. */
 function around(boxes: readonly Box[], margin: number): Box {
   const x = Math.min(...boxes.map((box) => box.x)) - margin
@@ -378,15 +613,74 @@ function meets(a: Box, b: Box) {
   return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height
 }
 
+/**
+ * The captions that stand in columns in front of the cards their edges come into. Each sits on the
+ * stretch into its target, centred on that wire and flush right a gap short of the end symbol, so
+ * the captions of a rank line up down its left edge. Two rows are nearer each other than a chip
+ * is tall, but never nearer than half of it, so where the caption of the row above is in the way
+ * a caption stands just left of it, and every caption stays on its own wire. One that would then
+ * reach back past its own track, or cover a model or another edge's wire, is left to the search
+ * in `placeCaptions`.
+ */
+function inColumns<E extends CaptionedEdge>(
+  edges: readonly E[],
+  wires: readonly { readonly edge: E; readonly box: Box }[],
+  cards: readonly Box[],
+): readonly PlacedCaption<E>[] {
+  const entering = edges.flatMap((edge) => {
+    const end = edge.points.at(-1)
+    // Where the straight run into the target starts: the corner after the last point off its line.
+    const turn = edge.points[edge.points.findLastIndex((point) => point.y !== end?.y) + 1]
+    if (edge.caption.length === 0 || turn === undefined || end === undefined) return []
+    return turn.x < end.x ? [{ edge, turn, end }] : []
+  })
+  return [...Map.groupBy(entering, ({ end }) => end.x).values()].flatMap(
+    (rank) =>
+      rank
+        .toSorted((a, b) => a.end.y - b.end.y)
+        .reduce<{ readonly placed: readonly PlacedCaption<E>[] }>(
+          (state, { edge, turn, end }) => {
+            const { caption } = edge
+            const width = captionWidth(caption)
+            const height = captionHeight(caption)
+            // Flush right a gap short of the end symbol, or else just left of the caption it would
+            // cover, as far out as its own straight run reaches.
+            const stand = (x: number): Box | undefined => {
+              const spot = { x, y: end.y - height / 2, width, height }
+              const covered = state.placed.filter(
+                (other) => overlapArea(spot, other.box, CAPTION_MARGIN) > 0,
+              )
+              if (covered.length === 0) return spot
+              const next = Math.min(...covered.map((other) => other.box.x)) - CAPTION_GAP - width
+              return next < turn.x ? undefined : stand(next)
+            }
+            const box = stand(end.x - EDGE_OFFSET - CAPTION_GAP - width)
+            const clear =
+              box !== undefined &&
+              box.x >= turn.x &&
+              !cards.some((card) => overlapArea(box, card, CARD_MARGIN) > 0) &&
+              !wires.some((wire) => wire.edge !== edge && meets(box, wire.box))
+            return clear ? { placed: [...state.placed, { edge, caption, box }] } : state
+          },
+          { placed: [] },
+        ).placed,
+  )
+}
+
+/**
+ * Puts every caption in a column in front of the card its edge comes into, and the few no column
+ * holds on the clearest stretch of their edge: off the models, off the other captions and off the
+ * wires, so a chip never hides the relation it names.
+ */
 export function placeCaptions<E extends CaptionedEdge>(
   edges: readonly E[],
   cards: readonly Box[],
 ): readonly PlacedCaption<E>[] {
   const wires = wireBoxes(edges)
-  return edges.reduce<{ readonly placed: readonly PlacedCaption<E>[] }>(
+  const { placed } = edges.reduce<{ readonly placed: readonly PlacedCaption<E>[] }>(
     (state, edge) => {
       const { caption } = edge
-      if (caption.length === 0) return state
+      if (caption.length === 0 || state.placed.some((other) => other.edge === edge)) return state
       const boxes = captionSpots(edge.points, captionWidth(caption), captionHeight(caption)).map(
         (spot) => captionBox(caption, spot),
       )
@@ -403,8 +697,11 @@ export function placeCaptions<E extends CaptionedEdge>(
           // cost it a model row — a chip on its line needs no tracing at all.
           const drift = Math.min(...own.map((wire) => boxGap(box, wire.box)))
           const cost =
-            near.reduce((sum, card) => sum + overlapArea(box, card, 4) * CARD_CLASH, 0) +
-            taken.reduce((sum, other) => sum + overlapArea(box, other.box, 2) * CAPTION_CLASH, 0) +
+            near.reduce((sum, card) => sum + overlapArea(box, card, CARD_MARGIN) * CARD_CLASH, 0) +
+            taken.reduce(
+              (sum, other) => sum + overlapArea(box, other.box, CAPTION_MARGIN) * CAPTION_CLASH,
+              0,
+            ) +
             crossed.reduce(
               (sum, wire) =>
                 sum +
@@ -420,6 +717,8 @@ export function placeCaptions<E extends CaptionedEdge>(
       const box = best?.box ?? captionBox(caption, midpoint(edge.points))
       return { placed: [...state.placed, { edge, caption, box }] }
     },
-    { placed: [] },
-  ).placed
+    { placed: inColumns(edges, wires, cards) },
+  )
+  // In the order of the edges, whichever way each was placed.
+  return edges.flatMap((edge) => placed.filter((caption) => caption.edge === edge))
 }

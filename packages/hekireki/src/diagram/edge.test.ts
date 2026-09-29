@@ -9,11 +9,12 @@ import {
   round,
   selfLoopPoints,
   SELF_LOOP_GAP,
+  separateRoutes,
   smoothStepPoints,
   routePoints,
 } from './edge.js'
 import type { Box, Point } from './edge.js'
-import { NODE_ROW_HEIGHT } from './layout.js'
+import { GRID, NODE_ROW_HEIGHT } from './layout.js'
 
 /** How far a polyline runs inside a box, so a route can be checked for what it hides. */
 function hiddenLength(points: readonly Point[], box: Box) {
@@ -54,8 +55,8 @@ describe('routePoints', () => {
     expect(routePoints(source, { x: 700, y: 300 }, [])).toStrictEqual([
       { x: 340, y: 100 },
       { x: 360, y: 100 },
-      { x: 520, y: 100 },
-      { x: 520, y: 300 },
+      { x: 380, y: 100 },
+      { x: 380, y: 300 },
       { x: 680, y: 300 },
       { x: 700, y: 300 },
     ])
@@ -81,6 +82,19 @@ describe('routePoints', () => {
     const lower = { x: 400, y: 240, width: 300, height: 200 }
     const points = routePoints(source, { x: 900, y: 400 }, [upper, lower])
     expect(hiddenLength(points, upper) + hiddenLength(points, lower)).toBe(0)
+  })
+
+  it('comes down from a lane in the channel nearest its target, not right in front of it', () => {
+    // Every edge the lane carries shares the descent, so the stretch into the target is the part
+    // of the edge that is its own, and it has to be long enough to hold a caption.
+    const upper = { x: 400, y: 0, width: 300, height: 160 }
+    const lower = { x: 400, y: 240, width: 300, height: 200 }
+    const points = routePoints(source, { x: 900, y: 400 }, [upper, lower])
+    expect(points.slice(-3)).toStrictEqual([
+      { x: 720, y: 180 },
+      { x: 720, y: 400 },
+      { x: 900, y: 400 },
+    ])
   })
 
   it('keeps the plain route when nothing clears the models', () => {
@@ -112,9 +126,45 @@ describe('routePoints', () => {
   })
 })
 
+describe('separateRoutes', () => {
+  // Two edges from different models that cross the same gap: the plain route puts both down its
+  // middle, one on top of the other from y 100 to 200.
+  const upper = smoothStepPoints({ x: 340, y: 50 }, { x: 620, y: 200 })
+  const lower = smoothStepPoints({ x: 340, y: 100 }, { x: 620, y: 350 })
+  const channel = (points: readonly Point[]) => points[2]?.x
+
+  it('draws two edges that share a channel a track apart', () => {
+    const [a = [], b = []] = separateRoutes([upper, lower], [])
+    expect(Math.abs((channel(a) ?? 0) - (channel(b) ?? 0))).toBe(GRID / 2)
+  })
+
+  it('puts the one that goes further down on the outside, so the two do not cross', () => {
+    // On the inside, the edge that goes further down would cross the other on its way in, and
+    // the other would cross it on the way out.
+    const [a = [], b = []] = separateRoutes([upper, lower], [])
+    expect(channel(b)).toBeLessThan(channel(a) ?? 0)
+  })
+
+  it('keeps edges that leave from the same point on one wire', () => {
+    const fork = smoothStepPoints({ x: 340, y: 50 }, { x: 620, y: 350 })
+    expect(separateRoutes([upper, fork], [])).toStrictEqual([upper, fork])
+  })
+
+  it('leaves an edge with nothing beside it where it was', () => {
+    expect(separateRoutes([upper], [])).toStrictEqual([upper])
+  })
+})
+
 describe('smoothStepPoints', () => {
-  it('crosses in a channel halfway between the two ends', () => {
-    expect(smoothStepPoints(source, { x: 700, y: 300 })[2]).toStrictEqual({ x: 520, y: 100 })
+  it('crosses in a channel a step of the grid past the end of its stub', () => {
+    expect(smoothStepPoints(source, { x: 700, y: 300 })[2]).toStrictEqual({
+      x: source.x + EDGE_OFFSET + GRID,
+      y: 100,
+    })
+  })
+
+  it('crosses in the middle of a gap too narrow for that', () => {
+    expect(smoothStepPoints(source, { x: 410, y: 300 })[2]).toStrictEqual({ x: 375, y: 100 })
   })
 })
 
@@ -161,13 +211,30 @@ describe('round', () => {
 
 describe('placeCaptions', () => {
   const caption = ['one to many', 'on delete cascade']
+  const { height } = captionBox(caption, { x: 0, y: 0 })
 
-  it('writes a caption on its wire, so the relation it names runs under it', () => {
+  it('stands a caption on the stretch into its target, flush against the end symbol', () => {
     const points = routePoints(source, { x: 700, y: 300 }, [])
     const [placed] = placeCaptions([{ caption, points }], [])
-    expect(placed).toBeDefined()
-    // The channel the edge runs down is at x = 520; the chip sits astride it.
-    expect(placed && placed.box.x < 520 && placed.box.x + placed.box.width > 520).toBe(true)
+    // Centred on the wire, so the relation it names runs under it; its right edge a gap of 6
+    // short of the end symbol, which takes the last EDGE_OFFSET of the wire.
+    expect(placed?.box.y).toBe(300 - height / 2)
+    expect((placed?.box.x ?? 0) + (placed?.box.width ?? 0)).toBe(700 - EDGE_OFFSET - 6)
+  })
+
+  it('stands the caption of the next row out, just left of the one it would cover', () => {
+    // Two rows of one card, nearer each other than a chip is tall.
+    const upper = routePoints(source, { x: 800, y: 300 }, [])
+    const lower = routePoints({ x: 340, y: 500 }, { x: 800, y: 300 + NODE_ROW_HEIGHT }, [])
+    const [first, second] = placeCaptions(
+      [
+        { caption, points: upper },
+        { caption, points: lower },
+      ],
+      [],
+    )
+    expect(second?.box.y).toBe(300 + NODE_ROW_HEIGHT - height / 2)
+    expect((second?.box.x ?? 0) + (second?.box.width ?? 0)).toBe((first?.box.x ?? 0) - 6)
   })
 
   it('keeps a caption off the models', () => {

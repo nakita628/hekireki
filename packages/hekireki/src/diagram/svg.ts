@@ -1,5 +1,6 @@
 import {
   EDGE_LABEL_FONT_SIZE,
+  EDGE_OFFSET,
   EDGE_LABEL_LINE_HEIGHT,
   EDGE_LABEL_PADDING,
   placeCaptions,
@@ -7,6 +8,7 @@ import {
   round,
   selfLoopPoints,
   routePoints,
+  separateRoutes,
 } from './edge.js'
 import type { Box, Point } from './edge.js'
 import {
@@ -16,6 +18,7 @@ import {
   enumHeight,
   fieldDetail,
   fieldRowHeight,
+  GRID,
   NODE_CONSTRAINT_HEIGHT,
   NODE_HEADER_HEIGHT,
   NODE_PADDING,
@@ -149,9 +152,8 @@ const BADGE_HEIGHT = 12
 const BADGE_FONT_SIZE = 8.5
 const BADGE_PADDING_X = 4
 const CONSTRAINT_FONT_SIZE = 10.5
-const DOT_GAP = 20
 const DOT_RADIUS = 0.7
-const PADDING = 40
+const PADDING = GRID * 2
 // IE (crow's foot) notation as the canvas draws it (features/schema/schema-view.tsx): the inner
 // symbol is the maximum (a bar for one, the foot for many), the outer one the minimum (a bar for
 // mandatory, a circle for optional). The origin sits where the edge meets the node, the symbols
@@ -663,10 +665,17 @@ export function renderDiagramSvg(input: DiagramInput) {
   const enums = placeEnums(input.enums ?? [], input.positions)
   const byName = new Map(nodes.map((node) => [node.model.name, node]))
   const cards = [...nodes, ...enums]
-  const edges = input.relations
+  const routed = input.relations
     .map((relation) => edgeGeometry(relation, byName, cards))
     .filter((edge) => edge !== null)
-  const links = enumLinks(nodes, enums, cards)
+  // The enum links are drawn apart from the relations as much as from each other: a dotted wire
+  // on top of a solid one reads as neither.
+  const separated = separateRoutes(
+    [...routed.map((edge) => edge.points), ...enumLinks(nodes, enums, cards)],
+    cards,
+  )
+  const edges = routed.map((edge, index) => ({ ...edge, points: separated[index] ?? edge.points }))
+  const links = separated.slice(routed.length)
   // The captions are laid out before the drawing is sized, so none of them falls outside it. The
   // enum links join in without a caption of their own: they are wires a caption has to stay off.
   const captions = placeCaptions(
@@ -680,16 +689,24 @@ export function renderDiagramSvg(input: DiagramInput) {
   const content = pad(
     union([
       ...(cards.length === 0 ? [{ x: 0, y: 0, width: 0, height: 0 }] : cards),
-      ...ends.map((end) => pad(end, 20)),
+      ...ends.map((end) => pad(end, EDGE_OFFSET)),
       ...captions.map((caption) => caption.box),
     ]),
     PADDING,
   )
-  const bounds = content
+  // The canvas starts and ends on the grid, as every block on it does.
+  const left = Math.floor(content.x / GRID) * GRID
+  const top = Math.floor(content.y / GRID) * GRID
+  const bounds = {
+    x: left,
+    y: top,
+    width: Math.ceil((content.x + content.width) / GRID) * GRID - left,
+    height: Math.ceil((content.y + content.height) / GRID) * GRID - top,
+  }
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${round(bounds.width)}" height="${round(bounds.height)}" viewBox="${round(bounds.x)} ${round(bounds.y)} ${round(bounds.width)} ${round(bounds.height)}">`,
     `<defs>`,
-    `<pattern id="dots" x="${round(bounds.x)}" y="${round(bounds.y)}" width="${DOT_GAP}" height="${DOT_GAP}" patternUnits="userSpaceOnUse"><circle cx="${DOT_RADIUS}" cy="${DOT_RADIUS}" r="${DOT_RADIUS}" fill="${palette.dots}"/></pattern>`,
+    `<pattern id="dots" x="${-DOT_RADIUS}" y="${-DOT_RADIUS}" width="${GRID}" height="${GRID}" patternUnits="userSpaceOnUse"><circle cx="${DOT_RADIUS}" cy="${DOT_RADIUS}" r="${DOT_RADIUS}" fill="${palette.dots}"/></pattern>`,
     `<filter id="node-shadow" x="-5%" y="-5%" width="110%" height="115%"><feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#000000" flood-opacity="0.08"/></filter>`,
     `</defs>`,
     `<rect x="${round(bounds.x)}" y="${round(bounds.y)}" width="${round(bounds.width)}" height="${round(bounds.height)}" fill="${palette.canvas}"/>`,

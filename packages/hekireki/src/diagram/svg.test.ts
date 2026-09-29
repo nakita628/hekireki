@@ -179,9 +179,9 @@ describe('renderDiagramSvg', () => {
 })
 
 describe('the path of an edge between two nodes', () => {
-  it('bends twice around the midpoint when the target lies to the right', () => {
+  it('bends twice, a step of the grid past its stub, when the target lies to the right', () => {
     expect(polylinePath(smoothStepPoints({ x: 0, y: 0 }, { x: 200, y: 100 }))).toBe(
-      'M0 0L20 0L 95,0Q 100,0 100,5L 100,95Q 100,100 105,100L180 100L200 100',
+      'M0 0L20 0L 35,0Q 40,0 40,5L 40,95Q 40,100 45,100L180 100L200 100',
     )
   })
 
@@ -255,6 +255,11 @@ function captionBoxes(svg: string) {
 function viewBox(svg: string) {
   const [x, y, width, height] = (/viewBox="([^"]+)"/u.exec(svg)?.[1] ?? '').split(' ').map(Number)
   return { x: x ?? 0, y: y ?? 0, width: width ?? 0, height: height ?? 0 }
+}
+
+/** How tall the first card of a drawing is drawn. */
+function cardHeight(svg: string) {
+  return Number(/<rect [^>]*height="([^"]+)"[^>]*filter="url\(#node-shadow\)"/u.exec(svg)?.[1])
 }
 
 describe('edge captions', () => {
@@ -386,7 +391,7 @@ describe('constraints', () => {
       positions: { Follow: { x: 0, y: 0 } },
     })
     // Three constraint rows and the padding above them.
-    expect(viewBox(withConstraints).height - viewBox(plain).height).toBe(68)
+    expect(cardHeight(withConstraints) - cardHeight(plain)).toBe(68)
   })
 
   it('marks a unique field, but not one that is already the key', () => {
@@ -447,7 +452,7 @@ describe('what a field carries besides its type', () => {
       relations: [],
       positions: { A: { x: 0, y: 0 } },
     })
-    expect(viewBox(detailed).height - viewBox(bare).height).toBe(14)
+    expect(cardHeight(detailed) - cardHeight(bare)).toBe(14)
   })
 })
 

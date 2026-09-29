@@ -111,7 +111,7 @@ describe('autoLayout', () => {
       autoLayout(schema([model('A', [field('id')]), model('B', [field('id')])])),
     ).toStrictEqual({
       A: { x: 40, y: 40 },
-      B: { x: 40, y: 170 },
+      B: { x: 40, y: 180 },
     })
   })
 })

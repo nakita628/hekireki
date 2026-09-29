@@ -5,9 +5,15 @@ export type Position = { readonly x: number; readonly y: number }
 
 export type LayoutPositions = Readonly<Record<string, Position>>
 
-export const NODE_WIDTH = 340
+/**
+ * The pitch of the dots on the canvas. Every block sits on it and every distance between blocks
+ * is a whole number of it, so the drawing lines up with the paper it is drawn on.
+ */
+export const GRID = 20
+
+export const NODE_WIDTH = GRID * 17
 // Wide enough for a mapped enum name and the `enum` pill beside it.
-export const ENUM_WIDTH = 280
+export const ENUM_WIDTH = GRID * 14
 export const NODE_HEADER_HEIGHT = 36
 export const NODE_ROW_HEIGHT = 22
 export const NODE_DESCRIPTION_HEIGHT = 14
@@ -150,12 +156,32 @@ function enumEdges(schema: DiagramSchema) {
   )
 }
 
-/** Places the blocks left to right along their relations, the way Studio lays a diagram out. */
+// The gap between ranks carries the edges and their captions. The edges a model sends across it
+// run down tracks next to it, and the captions stand in front of the rank they come into, on the
+// stretch from each edge's track into its target — two deep where neighbouring rows are nearer
+// each other than a chip is tall, so the gap holds the tracks and two chips named and set side by
+// side.
+const RANK_GAP = GRID * 20
+const NODE_GAP = GRID * 3
+const MARGIN = GRID * 2
+
+function onGrid(value: number) {
+  return Math.round(value / GRID) * GRID
+}
+
+/**
+ * Places the blocks left to right along their relations, the way Studio lays a diagram out: on the
+ * grid, and flush left in each rank, since every edge comes into its target from the left.
+ */
 export function autoLayout(schema: DiagramSchema): LayoutPositions {
   const graph = new graphlib.Graph()
-  // The gap between ranks carries the edges and their captions, so it is wide enough for a
-  // caption to sit in the clear rather than over a model.
-  graph.setGraph({ rankdir: 'LR', nodesep: 56, ranksep: 180, marginx: 40, marginy: 40 })
+  graph.setGraph({
+    rankdir: 'LR',
+    nodesep: NODE_GAP,
+    ranksep: RANK_GAP,
+    marginx: MARGIN,
+    marginy: MARGIN,
+  })
   graph.setDefaultEdgeLabel(() => ({}))
   for (const model of schema.models) {
     graph.setNode(model.name, { width: NODE_WIDTH, height: nodeHeight(model) })
@@ -181,19 +207,18 @@ export function autoLayout(schema: DiagramSchema): LayoutPositions {
     graph.setEdge(edge.from, edge.to)
   }
   layout(graph)
+  const placed = [...names].map((name) => {
+    const raw: unknown = graph.node(name)
+    return { name, result: LayoutNodeSchema.safeParse(raw) }
+  })
+  const nodes = placed.flatMap(({ result }) => (result.success ? [result.data] : []))
   return Object.fromEntries(
-    [...names].map((name) => {
-      const raw: unknown = graph.node(name)
-      const result = LayoutNodeSchema.safeParse(raw)
-      return [
-        name,
-        result.success
-          ? {
-              x: result.data.x - result.data.width / 2,
-              y: result.data.y - result.data.height / 2,
-            }
-          : { x: 0, y: 0 },
-      ]
+    placed.map(({ name, result }) => {
+      if (!result.success) return [name, { x: 0, y: 0 }]
+      // A rank is the blocks dagre centres on one line; its left edge is its widest block's.
+      const { x, y, height } = result.data
+      const width = Math.max(...nodes.filter((node) => node.x === x).map((node) => node.width))
+      return [name, { x: onGrid(x - width / 2), y: onGrid(y - height / 2) }]
     }),
   )
 }
