@@ -559,8 +559,8 @@ export default defineConfig({
               ],
               patterns: [
                 {
-                  regex: '^\\.\\./',
-                  message: 'leaf module: no project-internal imports allowed',
+                  group: ['../**', '!../types/**'],
+                  message: 'leaf module: it imports nothing of the project but the shared types',
                 },
               ],
             },
@@ -647,7 +647,8 @@ export default defineConfig({
       },
       {
         // studio/server/domain holds the pure functions: no I/O, no reaching back into the
-        // handlers, the state store or the database drivers.
+        // handlers, the state store or the database drivers, and nothing of Effect: its shapes
+        // are zod's, and what fails is said in plain TypeScript.
         files: ['src/studio/server/domain/**'],
         rules: {
           'no-restricted-imports': [
@@ -656,6 +657,7 @@ export default defineConfig({
               paths: [
                 { name: 'node:fs', message: 'file I/O belongs in src/file' },
                 { name: 'node:fs/promises', message: 'file I/O belongs in src/file' },
+                { name: 'effect', message: 'domain depends on zod at most, never on effect' },
               ],
               patterns: [
                 {
@@ -674,8 +676,8 @@ export default defineConfig({
       {
         // migrate/domain is the pure half of `hekireki migrate`: the schema and the database's
         // catalogue in; checks, fixes and SQL out. It opens no connection, reads no file and
-        // runs no Effect (the data types of `effect`, such as Result, are fine): that is
-        // migrate/adapter, and migrate/check.ts puts the two together.
+        // imports nothing of Effect: that is migrate/adapter, and migrate/check.ts puts the two
+        // together.
         files: ['src/migrate/domain/**'],
         rules: {
           'no-restricted-imports': [
@@ -684,12 +686,7 @@ export default defineConfig({
               paths: [
                 { name: 'node:fs', message: 'file I/O belongs in src/file' },
                 { name: 'node:fs/promises', message: 'file I/O belongs in src/file' },
-                {
-                  // Effect's data types (Result, Option, Array) are values; its runtime is not.
-                  name: 'effect',
-                  importNames: ['Effect', 'Layer', 'Stream', 'Ref', 'Semaphore', 'Scope'],
-                  message: 'migrate/domain is pure: an Effect belongs in adapter',
-                },
+                { name: 'effect', message: 'domain depends on zod at most, never on effect' },
               ],
               patterns: [
                 {
@@ -779,6 +776,26 @@ export default defineConfig({
                   message:
                     'diagram is pure: it only takes the contract types from studio/server/routes',
                   allowTypeImports: true,
+                },
+              ],
+            },
+          ],
+        },
+      },
+      {
+        // The shapes and measures of the ER diagram, shared by the renderer, the generator and
+        // Studio's canvas: they read none of those, so any of them can read these. The constants
+        // may name a shape; the shapes take only React Flow's, for the canvas's nodes and edges.
+        files: ['src/types/**', 'src/constants/**'],
+        rules: {
+          'no-restricted-imports': [
+            'error',
+            {
+              patterns: [
+                {
+                  group: ['../**', '!../types/**'],
+                  message:
+                    'types and constants are shared leaves: they import nothing of the project but the types',
                 },
               ],
             },

@@ -44,7 +44,6 @@ function checkProgram(input: {
   /** `--timeout`, in milliseconds. */
   readonly timeout: number | null
   readonly cwd: string
-  readonly env: Readonly<Record<string, string | undefined>>
 }) {
   return Effect.gen(function* () {
     const files = yield* readSchemaFiles(input.schemaPath).pipe(
@@ -74,7 +73,6 @@ function checkProgram(input: {
       schemaProvider: schema.provider,
       cwd: input.cwd,
       schemaDir,
-      env: input.env,
     })
     yield* Effect.addFinalizer(() => db.close)
     if (db.target === null) {

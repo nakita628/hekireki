@@ -1,6 +1,6 @@
 import * as z from 'zod'
 
-import type { LayoutPositions } from '../../../diagram/layout.js'
+import type { LayoutPositions } from '../../../types/index.js'
 
 const PositionSchema = z
   .object({

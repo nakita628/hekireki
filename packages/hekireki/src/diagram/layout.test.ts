@@ -1,24 +1,27 @@
 import { describe, expect, it } from 'vite-plus/test'
 
 import {
-  autoLayout,
-  diagramConstraints,
-  diagramFields,
   ENUM_WIDTH,
-  enumHeight,
-  fieldDetail,
-  fieldRowHeight,
-  firstLine,
+  GRID,
   NODE_CONSTRAINT_HEIGHT,
   NODE_DESCRIPTION_HEIGHT,
   NODE_HEADER_HEIGHT,
   NODE_PADDING,
   NODE_ROW_HEIGHT,
   NODE_WIDTH,
+} from '../constants/index.js'
+import type { DiagramField } from '../types/index.js'
+import {
+  autoLayout,
+  diagramConstraints,
+  diagramFields,
+  enumHeight,
+  fieldDetail,
+  fieldRowHeight,
+  firstLine,
   nodeHeight,
   uniqueColumns,
 } from './layout.js'
-import type { DiagramField } from './layout.js'
 
 function field(overrides: Partial<DiagramField> = {}): DiagramField {
   return { kind: 'scalar', type: 'String', documentation: null, ...overrides }
@@ -222,6 +225,26 @@ describe('autoLayout', () => {
         expect(apart, `${a.name} and ${b.name}`).toBe(true)
       }
     }
+  })
+
+  it('puts every block on the grid', () => {
+    for (const position of Object.values(autoLayout(schema))) {
+      expect(position.x % GRID).toBe(0)
+      expect(position.y % GRID).toBe(0)
+    }
+  })
+
+  it('lines a rank up on its left edge, so an enum starts where the models beside it do', () => {
+    // Post refers to User and holds a Status, so User and Status share the rank after Post.
+    const positions = autoLayout({
+      models: [
+        { name: 'Post', fields: [field({ kind: 'enum', type: 'Status' })] },
+        { name: 'User', fields: [field()] },
+      ],
+      relations: [{ from: { model: 'Post' }, to: { model: 'User' } }],
+      enums: [{ name: 'Status', values: ['DRAFT', 'PUBLISHED'] }],
+    })
+    expect(positions.Status?.x).toBe(positions.User?.x)
   })
 
   it('ignores self relations, unknown models and repeated edges', () => {

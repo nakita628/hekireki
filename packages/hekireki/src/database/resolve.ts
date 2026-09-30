@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { parseEnv } from 'node:util'
 
-import { Effect } from 'effect'
+import { ConfigProvider, Effect } from 'effect'
 
 import { readFile } from '../file/index.js'
 import { DatabaseUrlNotFoundError, makeDatabaseUrl } from './url.js'
@@ -26,8 +26,6 @@ export function resolveDatabaseUrl(options: {
   readonly cwd: string
   /** Where a second .env and prisma.config.ts are looked up. */
   readonly schemaDir: string
-  /** The process environment. */
-  readonly env: Readonly<Record<string, string | undefined>>
 }) {
   return Effect.gen(function* () {
     // Both .env files, the schema's first: the working directory's entries overwrite it below.
@@ -51,11 +49,13 @@ export function resolveDatabaseUrl(options: {
     return yield* makeDatabaseUrl({
       explicit: options.explicitUrl,
       configUrl: options.configUrl,
-      env: options.env,
-      dotenv: Object.fromEntries(variables.flat()),
       configText,
       schemaText: options.schemaText,
     }).pipe(
+      // The .env files stand behind the environment the caller runs with, as they do for Prisma.
+      Effect.provide(
+        ConfigProvider.layerAdd(ConfigProvider.fromEnvRecord(Object.fromEntries(variables.flat()))),
+      ),
       Effect.mapError((error) =>
         options.configError === null
           ? error

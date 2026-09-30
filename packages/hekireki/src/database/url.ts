@@ -1,6 +1,6 @@
 import path from 'node:path'
 
-import { Data, Effect } from 'effect'
+import { Config, Data, Effect, Option } from 'effect'
 
 /** Where a database URL was found, in precedence order. */
 export type UrlSource = 'flag' | 'hekireki' | 'prisma' | 'env'
@@ -34,6 +34,18 @@ function makeSchemaDatasourceUrl(input: { readonly schemaText: string }) {
 }
 
 /**
+ * A variable of the environment, as the `ConfigProvider` this runs with reads it: the process
+ * environment by default, with the `.env` files behind it once `resolveDatabaseUrl` has added them.
+ * One set to the empty string counts as not set.
+ */
+export function environmentVariable(name: string) {
+  return Config.option(Config.String(name)).pipe(
+    Effect.map((value) => Option.getOrNull(Option.filter(value, (text) => text !== ''))),
+    Effect.orElseSucceed(() => null),
+  )
+}
+
+/**
  * `--url`, then `url` in hekireki.config.ts, then whatever Prisma itself connects with: the
  * variable `datasource.url` names with `env("NAME")` in prisma.config.ts (or in the schema's
  * `datasource` block, Prisma 6 and earlier), read from the environment and `.env`, or the literal
@@ -44,26 +56,20 @@ export function makeDatabaseUrl(input: {
   readonly explicit: string | null
   /** The `url` of hekireki.config.ts, when set. */
   readonly configUrl: string | null
-  /** The process environment. */
-  readonly env: Readonly<Record<string, string | undefined>>
-  /** The variables of the `.env` files. */
-  readonly dotenv: Readonly<Record<string, string>>
   /** The text of prisma.config.ts, when it exists. */
   readonly configText: string | null
   /** The text of the Prisma schema files, when read. */
   readonly schemaText: string | null
 }) {
   return Effect.gen(function* () {
-    const lookup = (name: string) => {
-      const value = input.env[name] ?? input.dotenv[name]
-      return value === undefined || value === '' ? null : value
-    }
     const fromConfig =
       input.configText === null ? null : makeDatasourceUrl({ configText: input.configText })
     const fromSchema =
       input.schemaText === null ? null : makeSchemaDatasourceUrl({ schemaText: input.schemaText })
     const datasource = fromConfig ?? fromSchema
-    const named = datasource?.kind === 'env' ? lookup(datasource.name) : null
+    const named = datasource?.kind === 'env' ? yield* environmentVariable(datasource.name) : null
+    // DATABASE_URL, Prisma's default name, is read only when Prisma names nothing.
+    const fallback = datasource === null ? yield* environmentVariable('DATABASE_URL') : null
     const found: { readonly url: string; readonly source: UrlSource } | null =
       input.explicit !== null
         ? { url: input.explicit, source: 'flag' }
@@ -73,8 +79,8 @@ export function makeDatabaseUrl(input: {
             ? { url: datasource.value, source: 'prisma' }
             : named !== null
               ? { url: named, source: 'prisma' }
-              : datasource === null && lookup('DATABASE_URL') !== null
-                ? { url: lookup('DATABASE_URL') ?? '', source: 'env' }
+              : fallback !== null
+                ? { url: fallback, source: 'env' }
                 : null
     if (found !== null) return found
     const where = fromConfig === null ? 'the schema' : 'prisma.config.ts'
@@ -125,10 +131,7 @@ export function makeRedactedUrl(input: { readonly url: string }) {
  * parameter, so Studio sets the search path itself; `public` needs no setting.
  */
 export function makePostgresSchema(input: { readonly url: string }) {
-  try {
-    const name = new URL(input.url).searchParams.get('schema')
-    return name === null || name === '' || name === 'public' ? null : name
-  } catch {
-    return null
-  }
+  // `URL.parse` answers null for text that is not a URL rather than throwing.
+  const name = URL.parse(input.url)?.searchParams.get('schema') ?? null
+  return name === null || name === '' || name === 'public' ? null : name
 }

@@ -2,9 +2,9 @@ import { Handle, Position } from '@xyflow/react'
 import type { NodeProps } from '@xyflow/react'
 import { memo } from 'react'
 
-import { MODEL_HANDLE, targetHandle } from '../features/schema/graph.js'
-import type { EnumNodeType } from '../features/schema/graph.js'
-import { NODE_ROW_HEIGHT } from '../features/schema/layout.js'
+import { MODEL_HANDLE, NODE_ROW_HEIGHT } from '../../../constants/index.js'
+import type { EnumNodeType } from '../../../types/index.js'
+import { targetHandle } from '../features/schema/graph.js'
 import { OpenNodeLink } from './open-node-link.js'
 
 function EnumNodeComponent({ data, selected }: NodeProps<EnumNodeType>) {

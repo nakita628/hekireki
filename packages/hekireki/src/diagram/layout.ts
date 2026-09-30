@@ -1,43 +1,24 @@
 import { graphlib, layout } from '@dagrejs/dagre'
 import * as z from 'zod'
 
-export type Position = { readonly x: number; readonly y: number }
-
-export type LayoutPositions = Readonly<Record<string, Position>>
-
-export const NODE_WIDTH = 340
-// Wide enough for a mapped enum name and the `enum` pill beside it.
-export const ENUM_WIDTH = 280
-export const NODE_HEADER_HEIGHT = 36
-export const NODE_ROW_HEIGHT = 22
-export const NODE_DESCRIPTION_HEIGHT = 14
-export const NODE_CONSTRAINT_HEIGHT = 20
-export const NODE_PADDING = 8
-
-/** A block attribute of a model: `@@id`, `@@unique`, `@@index` or `@@fulltext`. */
-export type DiagramIndex = {
-  readonly type: 'id' | 'normal' | 'unique' | 'fulltext'
-  readonly fields: readonly string[]
-}
-
-export type DiagramField = {
-  readonly kind: string
-  readonly type?: string
-  readonly documentation: string | null
-  readonly attributes?: readonly string[]
-}
-
-type DiagramModel = {
-  readonly documentation?: string | null
-  readonly fields: readonly DiagramField[]
-  readonly indexes?: readonly DiagramIndex[]
-}
-
-type DiagramEnum = {
-  readonly name: string
-  readonly documentation?: string | null
-  readonly values: readonly unknown[]
-}
+import {
+  ENUM_WIDTH,
+  GRID,
+  NODE_CONSTRAINT_HEIGHT,
+  NODE_DESCRIPTION_HEIGHT,
+  NODE_HEADER_HEIGHT,
+  NODE_PADDING,
+  NODE_ROW_HEIGHT,
+  NODE_WIDTH,
+} from '../constants/index.js'
+import type {
+  DiagramEnum,
+  DiagramField,
+  DiagramIndex,
+  DiagramModel,
+  DiagramSchema,
+  LayoutPositions,
+} from '../types/index.js'
 
 /** The fields a model node shows: everything but the relation fields. */
 export function diagramFields<Field extends { readonly kind: string }>(model: {
@@ -130,15 +111,6 @@ const LayoutNodeSchema = z
   })
   .meta({ description: 'A positioned node of the ER diagram' })
 
-export type DiagramSchema = {
-  readonly models: readonly (DiagramModel & { readonly name: string })[]
-  readonly relations: readonly {
-    readonly from: { readonly model: string }
-    readonly to: { readonly model: string }
-  }[]
-  readonly enums?: readonly DiagramEnum[]
-}
-
 /** The enums a model's fields hold, as edges from the model to the enum card. */
 function enumEdges(schema: DiagramSchema) {
   const names = new Set((schema.enums ?? []).map((value) => value.name))
@@ -150,12 +122,32 @@ function enumEdges(schema: DiagramSchema) {
   )
 }
 
-/** Places the blocks left to right along their relations, the way Studio lays a diagram out. */
+// The gap between ranks carries the edges and their captions. The edges a model sends across it
+// run down tracks next to it, and the captions stand in front of the rank they come into, on the
+// stretch from each edge's track into its target — two deep where neighbouring rows are nearer
+// each other than a chip is tall, so the gap holds the tracks and two chips named and set side by
+// side.
+const RANK_GAP = GRID * 20
+const NODE_GAP = GRID * 3
+const MARGIN = GRID * 2
+
+function onGrid(value: number) {
+  return Math.round(value / GRID) * GRID
+}
+
+/**
+ * Places the blocks left to right along their relations, the way Studio lays a diagram out: on the
+ * grid, and flush left in each rank, since every edge comes into its target from the left.
+ */
 export function autoLayout(schema: DiagramSchema): LayoutPositions {
   const graph = new graphlib.Graph()
-  // The gap between ranks carries the edges and their captions, so it is wide enough for a
-  // caption to sit in the clear rather than over a model.
-  graph.setGraph({ rankdir: 'LR', nodesep: 56, ranksep: 180, marginx: 40, marginy: 40 })
+  graph.setGraph({
+    rankdir: 'LR',
+    nodesep: NODE_GAP,
+    ranksep: RANK_GAP,
+    marginx: MARGIN,
+    marginy: MARGIN,
+  })
   graph.setDefaultEdgeLabel(() => ({}))
   for (const model of schema.models) {
     graph.setNode(model.name, { width: NODE_WIDTH, height: nodeHeight(model) })
@@ -181,19 +173,18 @@ export function autoLayout(schema: DiagramSchema): LayoutPositions {
     graph.setEdge(edge.from, edge.to)
   }
   layout(graph)
+  const placed = [...names].map((name) => {
+    const raw: unknown = graph.node(name)
+    return { name, result: LayoutNodeSchema.safeParse(raw) }
+  })
+  const nodes = placed.flatMap(({ result }) => (result.success ? [result.data] : []))
   return Object.fromEntries(
-    [...names].map((name) => {
-      const raw: unknown = graph.node(name)
-      const result = LayoutNodeSchema.safeParse(raw)
-      return [
-        name,
-        result.success
-          ? {
-              x: result.data.x - result.data.width / 2,
-              y: result.data.y - result.data.height / 2,
-            }
-          : { x: 0, y: 0 },
-      ]
+    placed.map(({ name, result }) => {
+      if (!result.success) return [name, { x: 0, y: 0 }]
+      // A rank is the blocks dagre centres on one line; its left edge is its widest block's.
+      const { x, y, height } = result.data
+      const width = Math.max(...nodes.filter((node) => node.x === x).map((node) => node.width))
+      return [name, { x: onGrid(x - width / 2), y: onGrid(y - height / 2) }]
     }),
   )
 }

@@ -50,7 +50,6 @@ function withDriver<A, E>(
           schemaText: null,
           cwd: dir,
           schemaDir: dir,
-          env: {},
         })
         yield* Effect.addFinalizer(() => db.close)
         return yield* use(yield* db.driver)

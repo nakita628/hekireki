@@ -2,7 +2,9 @@
 
 [CONTRIBUTING.md](CONTRIBUTING.md) holds the rules; this file is what an agent needs in front of
 it. Most of the conventions are enforced by the oxlint plugin in
-`packages/hekireki/lint/custom.js`, so `vp lint` is the check, not a reviewer's memory.
+`packages/hekireki/lint/custom.js`, so `pnpm exec vp lint` is the check, not a reviewer's memory.
+Commands go through pnpm (`pnpm <script>`, `pnpm exec <tool>`), never `npx` or a bare `vp`: a tool
+resolved outside the workspace can be another version of it.
 
 ## Naming
 
@@ -43,16 +45,24 @@ it. Most of the conventions are enforced by the oxlint plugin in
 
 ## Effect
 
-- **An outcome is Effect's own type, not a hand-made one.** Not `{ errors, value: null }`, not
-  `{ ok, value } | { ok, error }`: return `Result.succeed(value)` / `Result.fail(why)` and split
-  a list of them with `Array.separate`, as `resolveTable` and `resolveMoves` do. In an Effect, use
-  `Effect.result`, `Effect.match`, `Effect.mapError`. `Result`, `Option` and `Array` are values and
-  are fine in `migrate/domain`; the `Effect` runtime is not.
+- **Outside a domain, an outcome is an Effect.** What can fail is an `Effect`, and what may throw
+  is read with `Effect.try`; a fallback is `Effect.orElseSucceed`, a failure turned into
+  something else `Effect.match` or `Effect.mapError`. Not `Result`, and not a hand-made
+  `{ ok, value } | { ok, error }`.
+- **A domain depends on zod at most, never on `effect`.** `studio/server/domain` and
+  `migrate/domain` are plain TypeScript over zod's shapes, and `no-restricted-imports` in
+  `vite.config.ts` holds them to it. Where one resolves many entries and reports every mistake at
+  once, each entry is a `Resolution` and the lot is split with `separate`
+  (`migrate/domain/fixes/resolution.ts`), as `resolveTable` and `resolveMoves` do.
+- **The environment is read through `Config`.** A variable is `Config.String(name)` from the
+  `ConfigProvider` the program runs with, not `process.env`; `resolveDatabaseUrl` puts the `.env`
+  files behind the environment with `ConfigProvider.layerAdd`, and a test provides the one it
+  wants. The command line's arguments come from `Stdio` the same way (`Command.run`).
 - **The one exception is a shape someone else reads.** The Prisma schema engine takes
   `{ ok, value, map, flatMap }` from its adapter and dies on anything else, so
-  `adapter/engine-adapter.ts` makes that from a `Result` at the last moment (`engineResult`) and
-  nowhere holds it. What Studio's API answers with (`ok`, `failedAt`, `error: string | null`) is a
-  contract of the same kind.
+  `adapter/engine-adapter.ts` makes that with `Effect.match` at the last moment (`engineSuccess`,
+  `engineFailure`) and nowhere holds it. What Studio's API answers with (`ok`, `failedAt`,
+  `error: string | null`) is a contract of the same kind.
 
 ## Schemas in `src/migrate`
 
@@ -77,17 +87,39 @@ it. Most of the conventions are enforced by the oxlint plugin in
 
 ## Layout of `src/migrate`
 
-- **`domain/` is pure**: the schema and the database's catalogue in; checks, fixes and SQL out. No
-  Effect, no file, no connection, and `no-restricted-imports` in `vite.config.ts` holds it to that.
-  `domain/fixes/` is one function, `resolveFixes`, in the parts it is made of: what the decisions
-  ask (`resolve-table.ts`, `moves.ts`), the versions of a table the steps make (`versions.ts`),
-  the steps (`steps.ts`) and what the database does on its own about them (`effects.ts`).
+- **`domain/` is pure**: the schema and the database's catalogue in; checks, fixes and SQL out.
+  Nothing of `effect`, no file, no connection, and `no-restricted-imports` in `vite.config.ts`
+  holds it to that. `domain/fixes/` is one function, `resolveFixes`, in the parts it is made of:
+  what the decisions ask (`resolve-table.ts`, `moves.ts`, each entry a `Resolution` from
+  `resolution.ts`), the versions of a table the steps make (`versions.ts`), the steps
+  (`steps.ts`) and what the database does on its own about them (`effects.ts`).
 - **`adapter/` is everything that reaches outside**: the schema engine and the connection it is
   given, the catalogue queries, the decisions file, the migrations directory, backups, a rehearsal.
 - **`check.ts` puts the two together** and `report.ts` prints what it found; `index.ts` is what the
   command line imports when `migrate check` or `plan` runs.
 - Do not name a directory here `usecases` or `services`: the lint plugin reads those names as
   Studio's layers, where a usecase never imports another and takes no `Effect.map` in a pipe.
+
+## The ER diagram
+
+- **What more than one module reads goes in `src/types` and `src/constants`.** The renderer
+  (`src/diagram`), the generator and Studio's canvas share the diagram's shapes
+  (`types/diagram.ts`: `SchemaModel`, `Point`, `ModelNodeType`) and measures
+  (`constants/diagram.ts`: `GRID`, `NODE_WIDTH`, `PALETTES`), and import them through the barrels
+  (`types/index.js`, `constants/index.js`). A value or shape only one file uses stays in that
+  file, unexported: moving it would only publish it.
+- **Both are leaves.** They import nothing of the project but the types, which
+  `no-restricted-imports` in `vite.config.ts` holds them to.
+- **`src/diagram` is one module per job.** `layout.ts` places the cards; `route.ts` runs a wire
+  between two of them, round the cards in the way; `tracks.ts` draws apart the wires that would
+  run on top of each other; `caption.ts` places the captions and `caption-text.ts` words them;
+  `path.ts` writes a wire as an SVG path; `card.ts` draws a card, `svg.ts` the whole document;
+  `box.ts` and `text.ts` are what they share. Studio's canvas routes and places with the same
+  modules (`studio/client/features/schema/geometry.ts`), so the page and its download agree.
+- **A change to how the diagram is drawn shows in the committed drawings.** `example/generated/er`
+  (`pnpm example` from the root) and `examples/better-auth/*/er.png` (`pnpm generate` there) are
+  regenerated with it; a change meant to leave the drawing alone (speed, naming, moving code)
+  leaves them byte for byte as they were.
 
 ## Output
 
@@ -100,17 +132,24 @@ it. Most of the conventions are enforced by the oxlint plugin in
 
 ## Checks before handing work back
 
-`vp lint` on a whole package gets killed here, so lint the directories you touched. In
+Linting a whole package gets killed here, so lint the directories you touched. In
 `packages/hekireki`:
 
 ```bash
-npx tsgo -p tsconfig.json --noEmit
-npx vp lint src/<directory>   # per directory
-npx vp test run
+pnpm exec tsgo -p tsconfig.json --noEmit
+pnpm exec tsgo -p src/studio/client/tsconfig.json --noEmit   # the client is left out of the one above
+pnpm exec vp lint src/<directory>   # per directory
+pnpm test run
 pnpm build
 ```
 
-From the repository root: `npx vp fmt --check` and `pnpm lint` (markdown, prose, spelling,
+A change to Studio (`src/studio`, or `src/diagram`, which its canvas draws with) also runs
+`pnpm test:e2e` there. The screenshots under `e2e/__screenshots__` are a local check: when the
+diagram is meant to look different, look at the new `*-actual.png` first, then take them again with
+`pnpm exec playwright test <file> --update-snapshots`. `pages through a table larger than one page`
+fails now and then when the whole suite runs at once and passes on its own.
+
+From the repository root: `pnpm exec vp fmt --check` and `pnpm lint` (markdown, prose, spelling,
 workflows). The database-backed tests under `test/db/` need the servers named in
 [CONTRIBUTING.md](CONTRIBUTING.md) and skip without them; `examples/migrate` runs the migration
 flow end to end on SQLite with `pnpm demo`. A change to the Active Record generator is run in

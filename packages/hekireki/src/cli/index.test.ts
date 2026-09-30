@@ -5,10 +5,11 @@ import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
 import { NodeFileSystem, NodeServices } from '@effect/platform-node'
-import { Effect, Exit } from 'effect'
-import { CliError, Command } from 'effect/unstable/cli'
+import { Effect, Exit, Stdio } from 'effect'
+import { CliError } from 'effect/unstable/cli'
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 
+import { version } from '../../package.json' with { type: 'json' }
 import { hekireki, resolveSchemaPath, studioBanner } from './index.js'
 
 const dirs: string[] = []
@@ -49,8 +50,10 @@ async function cli(args: readonly string[]) {
   vi.spyOn(console, 'error').mockImplementation((...parts: unknown[]) => {
     err.push(parts.map(String).join(' '))
   })
+  // The arguments go in through `Stdio`, where the binary's come from `process.argv`.
   const exit = await Effect.runPromiseExit(
-    Command.runWith(hekireki, { version: '0.0.0-test' })(args).pipe(
+    hekireki().pipe(
+      Effect.provide(Stdio.layerTest({ args: Effect.succeed(args) })),
       Effect.provide(NodeServices.layer),
     ),
   )
@@ -74,7 +77,7 @@ describe('hekireki --help', () => {
 
   it('prints the version', async () => {
     const { out } = await cli(['--version'])
-    expect(out).toContain('0.0.0-test')
+    expect(out).toContain(version)
   })
 
   it('rejects an unknown subcommand, `docs` among them now that Studio serves the docs page', async () => {

@@ -2,57 +2,22 @@ import { readFileSync } from 'node:fs'
 
 import { describe, expect, it } from 'vite-plus/test'
 
-import { polylinePath, smoothStepPoints } from './edge.js'
-import { NODE_HEADER_HEIGHT, NODE_PADDING, NODE_ROW_HEIGHT, NODE_WIDTH } from './layout.js'
-import { PALETTES, edgeCaption, fieldTypeLabel, renderDiagramSvg, withRasterFonts } from './svg.js'
+import {
+  NODE_HEADER_HEIGHT,
+  NODE_PADDING,
+  NODE_ROW_HEIGHT,
+  NODE_WIDTH,
+  PALETTES,
+} from '../constants/index.js'
+import type { DiagramIndex, SchemaField, SchemaModel, SchemaRelation } from '../types/index.js'
+import { edgeCaption } from './caption-text.js'
+import { fieldTypeLabel } from './card.js'
+import { polylinePath } from './path.js'
+import { routePoints } from './route.js'
+import { renderDiagramSvg } from './svg.js'
+import { withRasterFonts } from './text.js'
 
-type Field = {
-  readonly name: string
-  readonly kind: 'scalar' | 'object' | 'enum' | 'unsupported'
-  readonly type: string
-  readonly isList: boolean
-  readonly isRequired: boolean
-  readonly isId: boolean
-  readonly isUnique?: boolean
-  readonly isForeignKey: boolean
-  readonly documentation: string | null
-  readonly attributes?: readonly string[]
-}
-
-type Index = {
-  readonly type: 'id' | 'normal' | 'unique' | 'fulltext'
-  readonly fields: readonly string[]
-}
-
-type Model = {
-  readonly name: string
-  readonly dbName: string | null
-  readonly documentation?: string | null
-  readonly primaryKey: readonly string[] | null
-  readonly fields: readonly Field[]
-  readonly indexes?: readonly Index[]
-}
-
-type Cardinality = 'zero-one' | 'one' | 'zero-many' | 'many'
-
-type Relation = {
-  readonly origin: 'inferred' | 'annotated' | 'implicit-many-to-many'
-  readonly onDelete: string | null
-  readonly onUpdate?: string | null
-  readonly name?: string | null
-  readonly from: {
-    readonly model: string
-    readonly field: string
-    readonly cardinality: Cardinality
-  }
-  readonly to: {
-    readonly model: string
-    readonly field: string
-    readonly cardinality: Cardinality
-  }
-}
-
-function field(name: string, overrides: Partial<Field> = {}): Field {
+function field(name: string, overrides: Partial<SchemaField> = {}): SchemaField {
   return {
     name,
     kind: 'scalar',
@@ -66,15 +31,15 @@ function field(name: string, overrides: Partial<Field> = {}): Field {
   }
 }
 
-function model(name: string, fields: Field[], dbName: string | null = null): Model {
+function model(name: string, fields: SchemaField[], dbName: string | null = null): SchemaModel {
   return { name, dbName, primaryKey: null, fields }
 }
 
-function constrained(name: string, fields: Field[], indexes: Index[]): Model {
+function constrained(name: string, fields: SchemaField[], indexes: DiagramIndex[]): SchemaModel {
   return { name, dbName: null, primaryKey: null, fields, indexes }
 }
 
-function relation(overrides: Partial<Relation> = {}): Relation {
+function relation(overrides: Partial<SchemaRelation> = {}): SchemaRelation {
   return {
     origin: 'inferred',
     from: { model: 'User', field: 'id', cardinality: 'one' },
@@ -179,14 +144,14 @@ describe('renderDiagramSvg', () => {
 })
 
 describe('the path of an edge between two nodes', () => {
-  it('bends twice around the midpoint when the target lies to the right', () => {
-    expect(polylinePath(smoothStepPoints({ x: 0, y: 0 }, { x: 200, y: 100 }))).toBe(
-      'M0 0L20 0L 95,0Q 100,0 100,5L 100,95Q 100,100 105,100L180 100L200 100',
+  it('bends twice, a step of the grid past its stub, when the target lies to the right', () => {
+    expect(polylinePath(routePoints({ x: 0, y: 0 }, { x: 200, y: 100 }, []))).toBe(
+      'M0 0L20 0L 35,0Q 40,0 40,5L 40,95Q 40,100 45,100L180 100L200 100',
     )
   })
 
   it('routes around both nodes when the target lies to the left', () => {
-    const path = polylinePath(smoothStepPoints({ x: 200, y: 0 }, { x: 0, y: 100 }))
+    const path = polylinePath(routePoints({ x: 200, y: 0 }, { x: 0, y: 100 }, []))
     expect(path.startsWith('M200 0L 215,0Q 220,0 220,5')).toBe(true)
     expect(path).toContain('L -15,50Q -20,50 -20,55')
     expect(path.endsWith('Q -20,100 -15,100L0 100')).toBe(true)
@@ -255,6 +220,11 @@ function captionBoxes(svg: string) {
 function viewBox(svg: string) {
   const [x, y, width, height] = (/viewBox="([^"]+)"/u.exec(svg)?.[1] ?? '').split(' ').map(Number)
   return { x: x ?? 0, y: y ?? 0, width: width ?? 0, height: height ?? 0 }
+}
+
+/** How tall the first card of a drawing is drawn. */
+function cardHeight(svg: string) {
+  return Number(/<rect [^>]*height="([^"]+)"[^>]*filter="url\(#node-shadow\)"/u.exec(svg)?.[1])
 }
 
 describe('edge captions', () => {
@@ -386,7 +356,7 @@ describe('constraints', () => {
       positions: { Follow: { x: 0, y: 0 } },
     })
     // Three constraint rows and the padding above them.
-    expect(viewBox(withConstraints).height - viewBox(plain).height).toBe(68)
+    expect(cardHeight(withConstraints) - cardHeight(plain)).toBe(68)
   })
 
   it('marks a unique field, but not one that is already the key', () => {
@@ -447,7 +417,7 @@ describe('what a field carries besides its type', () => {
       relations: [],
       positions: { A: { x: 0, y: 0 } },
     })
-    expect(viewBox(detailed).height - viewBox(bare).height).toBe(14)
+    expect(cardHeight(detailed) - cardHeight(bare)).toBe(14)
   })
 })
 

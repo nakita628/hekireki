@@ -1,12 +1,9 @@
 import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath } from '@xyflow/react'
 import type { EdgeProps } from '@xyflow/react'
 
+import { EDGE_BEND_RADIUS } from '../../../../constants/index.js'
+import type { RelationEdgeType } from '../../../../types/index.js'
 import { useEdgeGeometry } from './geometry.js'
-import type { RelationEdgeType } from './graph.js'
-
-// The same corner radius the exported SVG bends by, for the fallback path React Flow draws until
-// the models have been measured.
-const BORDER_RADIUS = 5
 
 /**
  * An edge routed by the shared diagram geometry, so the canvas and the exported drawing draw the
@@ -34,7 +31,9 @@ export function RelationEdge({
     targetY,
     sourcePosition,
     targetPosition,
-    borderRadius: BORDER_RADIUS,
+    // The corner the exported drawing bends by, for the path React Flow draws until the models
+    // have been measured.
+    borderRadius: EDGE_BEND_RADIUS,
   })
   const [what, rules] = data?.caption ?? []
   const caption = geometry?.caption ?? { x: labelX, y: labelY }

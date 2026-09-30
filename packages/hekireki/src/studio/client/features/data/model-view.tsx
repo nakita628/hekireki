@@ -13,6 +13,7 @@ import {
   LuX,
 } from 'react-icons/lu'
 
+import type { Cardinality, RelationOrigin } from '../../../../types/index.js'
 import { ColumnsPicker } from '../../components/columns-picker.js'
 import { ConfirmDialog } from '../../components/confirm-dialog.js'
 import { DataGrid } from '../../components/data-grid.js'
@@ -30,8 +31,6 @@ import {
 import { keyLabel, keyOf, rowId, toCsv, toJson, toTsv } from './cells.js'
 import { loadHiddenColumns, saveHiddenColumns } from './columns.js'
 import { PAGE_SIZE } from './paging.js'
-
-type Cardinality = 'zero-one' | 'one' | 'zero-many' | 'many'
 
 type Row = Record<string, string | number | boolean | null>
 
@@ -69,7 +68,7 @@ type Schema = {
   }[]
   readonly relations: readonly {
     readonly id: string
-    readonly origin: 'inferred' | 'annotated' | 'implicit-many-to-many'
+    readonly origin: RelationOrigin
     readonly onDelete: string | null
     readonly from: {
       readonly model: string

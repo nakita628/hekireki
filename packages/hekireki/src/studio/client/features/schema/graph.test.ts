@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vite-plus/test'
 
+import { MODEL_HANDLE } from '../../../../constants/index.js'
 import {
   buildEdges,
   buildNodes,
   loopTargetHandle,
-  MODEL_HANDLE,
   sourceHandle,
   targetHandle,
   highlightEdges,

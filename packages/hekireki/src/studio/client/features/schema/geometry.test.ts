@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import type { Box, Point } from '../../../../diagram/edge.js'
-import { NODE_WIDTH } from '../../../../diagram/layout.js'
+import { NODE_WIDTH } from '../../../../constants/index.js'
+import type { Box, Point } from '../../../../types/index.js'
 import { diagramGeometry } from './geometry.js'
 import { loopTargetHandle, sourceHandle, targetHandle } from './graph.js'
 
@@ -160,6 +160,39 @@ describe('diagramGeometry', () => {
     const box = wire?.caption ? captionBoxAt(wire.caption, caption) : null
     expect(box && coversWire(box, wire?.points ?? [])).toBe(true)
     expect(box && hidesWire(box, wire?.points ?? [])).toBe(false)
+  })
+
+  it('routes a wire that passes a self relation round its loop and caption', () => {
+    // The canvas measures a handle a pixel inside its card, which once left a sliver between the
+    // card and the caption for a passing wire to run down, across the loop and under its caption.
+    const inside = (built: ReturnType<typeof card>) => ({
+      ...built,
+      source: new Map([...built.source].map(([id, at]) => [id, { x: at.x - 1, y: at.y }])),
+    })
+    const cards = new Map([
+      ['User', inside(card(0, 0, ['id']))],
+      ['Category', inside(card(0, 300, ['id', 'name', 'parentId']))],
+      ['Profile', card(760, 500, ['id', 'userId'])],
+    ])
+    const geometry = diagramGeometry(
+      [
+        edge('passes', ['User', 'id'], ['Profile', 'userId'], ['one to one']),
+        edge('tree', ['Category', 'id'], ['Category', 'parentId'], ['tree · one to many']),
+      ],
+      cards,
+    )
+    // What the loop takes, worked out here rather than asked of the router: from where it leaves
+    // the card, down its two rows, out to the far edge of its caption.
+    const [start = { x: 0, y: 0 }, , bottom = start] = geometry.get('tree')?.points ?? []
+    const centre = geometry.get('tree')?.caption ?? null
+    const chip = centre === null ? null : captionBoxAt(centre, ['tree · one to many'])
+    const taken = {
+      x: start.x,
+      y: start.y,
+      width: (chip ? chip.x + chip.width : start.x) - start.x,
+      height: bottom.y - start.y,
+    }
+    expect(entersCard(geometry.get('passes')?.points ?? [], taken)).toBe(false)
   })
 
   it('keeps a caption off the models', () => {

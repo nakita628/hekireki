@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import { autoLayout, diagramFields, NODE_WIDTH, nodeHeight, positionsFor } from './layout.js'
+import { NODE_WIDTH } from '../../../../constants/index.js'
+import { autoLayout, diagramFields, nodeHeight, positionsFor } from './layout.js'
 
 type Field = {
   readonly name: string
@@ -111,7 +112,7 @@ describe('autoLayout', () => {
       autoLayout(schema([model('A', [field('id')]), model('B', [field('id')])])),
     ).toStrictEqual({
       A: { x: 40, y: 40 },
-      B: { x: 40, y: 170 },
+      B: { x: 40, y: 180 },
     })
   })
 })

@@ -3,41 +3,22 @@ import type { NodeProps } from '@xyflow/react'
 import { memo } from 'react'
 import { LuKey, LuLink } from 'react-icons/lu'
 
-import {
-  loopTargetHandle,
-  MODEL_HANDLE,
-  sourceHandle,
-  targetHandle,
-} from '../features/schema/graph.js'
-import type { ModelNodeType } from '../features/schema/graph.js'
+import { MODEL_HANDLE, NODE_CONSTRAINT_HEIGHT, NODE_ROW_HEIGHT } from '../../../constants/index.js'
+import type { ModelNodeType, SchemaField } from '../../../types/index.js'
+import { loopTargetHandle, sourceHandle, targetHandle } from '../features/schema/graph.js'
 import {
   diagramConstraints,
   fieldDetail,
   fieldRowHeight,
-  NODE_CONSTRAINT_HEIGHT,
-  NODE_ROW_HEIGHT,
   uniqueColumns,
 } from '../features/schema/layout.js'
 import { BADGE, CONSTRAINT_STYLES, fieldTypeLabel, UNIQUE_BADGE } from './labels.js'
 import { OpenNodeLink } from './open-node-link.js'
 
-type Field = {
-  readonly name: string
-  readonly kind: 'scalar' | 'object' | 'enum' | 'unsupported'
-  readonly type: string
-  readonly isList: boolean
-  readonly isRequired: boolean
-  readonly isId: boolean
-  readonly isUnique?: boolean
-  readonly isForeignKey: boolean
-  readonly documentation: string | null
-  readonly attributes?: readonly string[]
-}
-
 // A row is taller than its name when the field is documented; the edges still meet the name.
 const ROW_HANDLE = { top: NODE_ROW_HEIGHT / 2 }
 
-function FieldIcon({ field }: { readonly field: Field }) {
+function FieldIcon({ field }: { readonly field: SchemaField }) {
   if (field.isId) {
     return <LuKey size={11} className="shrink-0 text-key" />
   }

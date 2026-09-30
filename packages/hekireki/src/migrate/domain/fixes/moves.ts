@@ -1,8 +1,7 @@
-import { Array, Result } from 'effect'
-
 import { qualifiedName } from '../../../sql/index.js'
 import type { ModelFixes } from '../decisions.js'
 import { sqlOf } from '../dialect.js'
+import { separate } from './resolution.js'
 import type { FixContext } from './versions.js'
 
 /** A foreign key over one column, which a value can be moved along. */
@@ -102,7 +101,7 @@ export function resolveMoves(
       sourceActual === undefined ||
       link === null
     ) {
-      return Result.fail(errors)
+      return { refused: true as const, reason: errors }
     }
     // PostgreSQL cuts a name at 63 bytes without saying so, and MySQL refuses one over 64
     // characters: a long one keeps its start and ends in a number made of the whole of it.
@@ -110,9 +109,9 @@ export function resolveMoves(
     const holdingName =
       named.length <= 60
         ? named
-        : `${named.slice(0, 51)}_${Array.makeBy(
-            named.length,
-            (index) => named.codePointAt(index) ?? 0,
+        : `${named.slice(0, 51)}_${Array.from(
+            { length: named.length },
+            (_, index) => named.codePointAt(index) ?? 0,
           )
             .reduce((hash, code) => (hash * 31 + code) % 4_294_967_291, 7)
             .toString(16)
@@ -120,9 +119,12 @@ export function resolveMoves(
     // A table of that name already there is what a plan that did not finish left: it may hold the
     // only copy of the values, so it is for a person to look at, not for the plan to write over.
     if (context.actual.some((table) => table.table === holdingName)) {
-      return Result.fail([
-        `${path}: the database has a table ${holdingName}, left by a plan that did not finish. It holds the values of ${from.model}.${from.column} as they were then: check that ${sourceActual.table}.${from.column} still has them, then drop ${holdingName} and run the check again.`,
-      ])
+      return {
+        refused: true as const,
+        reason: [
+          `${path}: the database has a table ${holdingName}, left by a plan that did not finish. It holds the values of ${from.model}.${from.column} as they were then: check that ${sourceActual.table}.${from.column} still has them, then drop ${holdingName} and run the check again.`,
+        ],
+      }
     }
     const holding = q(holdingName)
     // Several rows of the source can point at one row of the target: the value kept is the one
@@ -132,30 +134,33 @@ export function resolveMoves(
       ? source.primaryKey
       : []
     const ordered = [...orderBy.map((_, index) => q(`hk_order_${index}`)), q('hk_value')].join(', ')
-    return Result.succeed({
-      path,
-      target,
-      created: targetActual === undefined,
-      column,
-      source,
-      sourceActual,
-      from,
-      link,
-      holding,
-      /** Whether several rows of the source can point at one row of the target. */
-      several,
-      /** The columns of the source the kept values are read with: the key, the value, its primary key. */
-      kept: [
-        `${q(link.key)} AS ${q('hk_key')}`,
-        `${q(from.column)} AS ${q('hk_value')}`,
-        ...orderBy.map((c, index) => `${q(c)} AS ${q(`hk_order_${index}`)}`),
-      ].join(', '),
-      /** Which of the kept values a row takes, read from `source`: the holding table, or the rows in the check. */
-      valueFrom: (kept: string) =>
-        `(SELECT ${q('hk_value')} FROM ${kept} WHERE ${q('hk_key')} = ${q(link.match)} AND ${q('hk_value')} IS NOT NULL ORDER BY ${ordered} LIMIT 1)`,
-    })
+    return {
+      refused: false as const,
+      value: {
+        path,
+        target,
+        created: targetActual === undefined,
+        column,
+        source,
+        sourceActual,
+        from,
+        link,
+        holding,
+        /** Whether several rows of the source can point at one row of the target. */
+        several,
+        /** The columns of the source the kept values are read with: the key, the value, its primary key. */
+        kept: [
+          `${q(link.key)} AS ${q('hk_key')}`,
+          `${q(from.column)} AS ${q('hk_value')}`,
+          ...orderBy.map((c, index) => `${q(c)} AS ${q(`hk_order_${index}`)}`),
+        ].join(', '),
+        /** Which of the kept values a row takes, read from `source`: the holding table, or the rows in the check. */
+        valueFrom: (kept: string) =>
+          `(SELECT ${q('hk_value')} FROM ${kept} WHERE ${q('hk_key')} = ${q(link.match)} AND ${q('hk_value')} IS NOT NULL ORDER BY ${ordered} LIMIT 1)`,
+      },
+    }
   })
-  const [moveErrors, moved] = Array.separate(resolved)
+  const [moveErrors, moved] = separate(resolved)
   // Every new table's rows are made in one INSERT, from values of one table related one way.
   const createdTargets = [...new Set(moved.filter((m) => m.created).map((m) => m.target))]
   const createdErrors = createdTargets.flatMap((target) => {

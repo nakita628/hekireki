@@ -5,6 +5,7 @@ import type { editor as MonacoEditor } from 'monaco-editor/editor/editor.api.js'
 import { useMemo, useRef, useState } from 'react'
 import { LuCopy, LuWandSparkles } from 'react-icons/lu'
 
+import type { Cardinality, RelationOrigin } from '../../../../types/index.js'
 import { SchemaErrorStatus } from '../../components/schema-error-status.js'
 import { schemaProblems } from '../../components/schema-problems.js'
 import type { PlainFileDiagnostic } from '../../components/schema-problems.js'
@@ -17,8 +18,6 @@ import { blockAtLine } from './blocks.js'
 import { CodeEditor } from './code-editor.js'
 import type { EditorServices, PlainSymbol } from './monaco.js'
 import { saveStatus } from './save-status.js'
-
-type Cardinality = 'zero-one' | 'one' | 'zero-many' | 'many'
 
 type Location = { readonly file: string; readonly line: number } | null
 
@@ -59,7 +58,7 @@ type Snapshot = {
     }[]
     readonly relations: readonly {
       readonly id: string
-      readonly origin: 'inferred' | 'annotated' | 'implicit-many-to-many'
+      readonly origin: RelationOrigin
       readonly onDelete: string | null
       readonly from: {
         readonly model: string

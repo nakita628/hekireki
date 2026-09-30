@@ -66,7 +66,6 @@ function openOn(project: ReturnType<typeof makeProject>) {
       schemaProvider: 'sqlite',
       cwd: project.directory,
       schemaDir: project.directory,
-      env: {},
     })
     const driver = yield* db.driver
     const files = [{ path: project.schemaPath, content: SCHEMA }]

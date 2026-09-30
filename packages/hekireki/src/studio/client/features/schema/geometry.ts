@@ -1,19 +1,15 @@
 import { useNodes, useStore } from '@xyflow/react'
 import type { Edge, InternalNode, Node } from '@xyflow/react'
-import { createContext, useContext, useMemo } from 'react'
+import { createContext, useContext, useMemo, useState } from 'react'
 
-import {
-  placeCaptions,
-  polylinePath,
-  routePoints,
-  selfLoopPoints,
-} from '../../../../diagram/edge.js'
-import type { Box, Point } from '../../../../diagram/edge.js'
+import { polylinePath } from '../../../../diagram/path.js'
+import { layoutWires } from '../../../../diagram/wires.js'
+import type { Box, Point, Route } from '../../../../types/index.js'
 
 /** Where an edge runs and where its caption sits, both in flow coordinates. */
 type EdgeGeometry = {
   /** The corners the wire turns at; `path` is these, with the corners rounded. */
-  readonly points: readonly Point[]
+  readonly points: Route
   readonly path: string
   readonly caption: Point | null
 }
@@ -51,9 +47,8 @@ function center(box: Box): Point {
 }
 
 /**
- * Routes every edge and places every caption in one pass, with the same geometry the exported
- * drawing uses: the canvas and the download agree, and a caption is laid out knowing where the
- * other captions and every wire went, so it never covers the relation it names.
+ * Lays every edge out with the pass the exported drawing makes (`layoutWires`), so the canvas and
+ * the download agree.
  *
  * An edge whose ends are not both on a card that has been measured is left out; the edge draws
  * React Flow's own path until the next pass has it.
@@ -62,58 +57,58 @@ export function diagramGeometry(
   edges: readonly GeometryEdge[],
   cards: ReadonlyMap<string, GeometryCard>,
 ): DiagramGeometry {
-  const boxes = [...cards.values()].map((card) => card.box)
-  const routed = edges.flatMap((edge) => {
+  const anchored = edges.flatMap((edge) => {
     const source = cards.get(edge.source)?.source.get(edge.sourceHandle ?? '')
     const target = cards.get(edge.target)?.target.get(edge.targetHandle ?? '')
     if (source === undefined || target === undefined) return []
-    const loops = edge.source === edge.target
     return [
-      {
-        id: edge.id,
-        caption: edge.caption,
-        points: loops ? selfLoopPoints(source, target) : routePoints(source, target, boxes),
-      },
+      { id: edge.id, source, target, loops: edge.source === edge.target, caption: edge.caption },
     ]
   })
-  const captions = new Map(
-    placeCaptions(routed, boxes).map((placed) => [placed.edge.id, center(placed.box)]),
+  const wired = layoutWires(
+    anchored,
+    [...cards.values()].map((card) => card.box),
   )
   return new Map(
-    routed.map((edge) => [
-      edge.id,
-      {
-        points: edge.points,
-        path: polylinePath(edge.points),
-        caption: captions.get(edge.id) ?? null,
-      },
+    wired.map(({ wire, points, caption }) => [
+      wire.id,
+      { points, path: polylinePath(points), caption: caption === null ? null : center(caption) },
     ]),
   )
 }
 
-/** The middle of every handle of a node, keyed by handle id, in flow coordinates. */
-function handlePoints(node: InternalNode<Node>, type: 'source' | 'target') {
+/**
+ * Where every handle of a node meets its card, keyed by handle id, in flow coordinates: level with
+ * the middle of the handle, on the edge of the card it sits on. React Flow measures a handle a
+ * pixel or so inside the card, and a wire that starts there would be routed as if the card ended
+ * short of where it does — no longer the wire the exported drawing draws from the same schema.
+ */
+function handlePoints(node: InternalNode<Node>, box: Box, type: 'source' | 'target') {
   return new Map(
-    (node.internals.handleBounds?.[type] ?? []).map((handle) => [
-      handle.id ?? '',
-      {
-        x: node.internals.positionAbsolute.x + handle.x + handle.width / 2,
-        y: node.internals.positionAbsolute.y + handle.y + handle.height / 2,
-      },
-    ]),
+    (node.internals.handleBounds?.[type] ?? []).map((handle) => {
+      const middle = box.x + handle.x + handle.width / 2
+      return [
+        handle.id ?? '',
+        {
+          x: middle < box.x + box.width / 2 ? box.x : box.x + box.width,
+          y: box.y + handle.y + handle.height / 2,
+        },
+      ]
+    }),
   )
 }
 
 function geometryCard(node: InternalNode<Node>): GeometryCard {
+  const box = {
+    x: node.internals.positionAbsolute.x,
+    y: node.internals.positionAbsolute.y,
+    width: node.measured.width ?? 0,
+    height: node.measured.height ?? 0,
+  }
   return {
-    box: {
-      x: node.internals.positionAbsolute.x,
-      y: node.internals.positionAbsolute.y,
-      width: node.measured.width ?? 0,
-      height: node.measured.height ?? 0,
-    },
-    source: handlePoints(node, 'source'),
-    target: handlePoints(node, 'target'),
+    box,
+    source: handlePoints(node, box, 'source'),
+    target: handlePoints(node, box, 'target'),
   }
 }
 
@@ -123,13 +118,18 @@ function captionOf(edge: Edge): readonly string[] {
   return Array.isArray(caption) ? caption.filter((line) => typeof line === 'string') : []
 }
 
-/** {@link diagramGeometry} over what React Flow has measured, recomputed whenever a model moves. */
+/** {@link diagramGeometry} over what React Flow has measured, recomputed once a model has moved. */
 export function useDiagramGeometry(edges: readonly Edge[]): DiagramGeometry {
   const nodes = useNodes()
   const lookup = useStore((state) => state.nodeLookup)
+  const moving = useMemo(
+    () => new Set(nodes.filter((node) => node.dragging === true).map((node) => node.id)),
+    [nodes],
+  )
   // `nodes` changes whenever a model moves or is measured; the lookup is mutated in place, so it
   // is read through that render rather than subscribed to on its own.
-  return useMemo(() => {
+  const routed = useMemo(() => {
+    if (moving.size > 0) return null
     const cards = new Map(
       nodes.flatMap((node) => {
         const internal = lookup.get(node.id)
@@ -148,5 +148,22 @@ export function useDiagramGeometry(edges: readonly Edge[]): DiagramGeometry {
       })),
       cards,
     )
-  }, [nodes, lookup, edges])
+  }, [nodes, lookup, edges, moving])
+  // The geometry last routed, which stands while a model is dragged; kept as it is routed, the way
+  // React keeps a value from an earlier render.
+  const [settled, setSettled] = useState<DiagramGeometry>(EMPTY)
+  if (routed !== null && routed !== settled) setSettled(routed)
+  // Routing every wire and caption again on every frame of a drag is what makes a large schema
+  // stutter. So while a model moves, the wires of those that stay put keep where they were routed,
+  // and the ones of the model that moves draw React Flow's own path, which follows the card for
+  // nothing, until it is let go and everything is routed again.
+  return useMemo(() => {
+    if (routed !== null) return routed
+    const still = new Set(
+      edges
+        .filter((edge) => !moving.has(edge.source) && !moving.has(edge.target))
+        .map((edge) => edge.id),
+    )
+    return new Map([...settled].filter(([id]) => still.has(id)))
+  }, [routed, settled, edges, moving])
 }

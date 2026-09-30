@@ -82,7 +82,6 @@ export function startStudioServer(options: {
       schemaText: snapshot.files.map((file) => file.content).join('\n'),
       cwd: process.cwd(),
       schemaDir: watchDir,
-      env: process.env,
     })
     yield* Effect.addFinalizer(() => db.close)
     const client = ClientService.createProjectClient({

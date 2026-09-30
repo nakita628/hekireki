@@ -1,5 +1,5 @@
 import { autoLayout } from '../../../../diagram/layout.js'
-import type { DiagramSchema, LayoutPositions } from '../../../../diagram/layout.js'
+import type { DiagramSchema, LayoutPositions } from '../../../../types/index.js'
 
 export {
   autoLayout,
@@ -8,14 +8,7 @@ export {
   fieldDetail,
   firstLine,
   fieldRowHeight,
-  ENUM_WIDTH,
   enumHeight,
-  NODE_CONSTRAINT_HEIGHT,
-  NODE_DESCRIPTION_HEIGHT,
-  NODE_HEADER_HEIGHT,
-  NODE_PADDING,
-  NODE_ROW_HEIGHT,
-  NODE_WIDTH,
   nodeHeight,
   uniqueColumns,
 } from '../../../../diagram/layout.js'

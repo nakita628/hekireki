@@ -1,5 +1,5 @@
 import { renderDiagramSvg } from '../../../../diagram/svg.js'
-import type { DiagramInput } from '../../../../diagram/svg.js'
+import type { DiagramInput } from '../../../../types/index.js'
 
 const EXPORT_SCALE = 2
 

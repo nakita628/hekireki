@@ -85,12 +85,13 @@ const PrismaErrorBody = z
   .meta({ description: 'The JSON body get-dmmf puts in Error.message' })
 
 function prismaErrorMessage(error: Error) {
-  try {
-    const result = PrismaErrorBody.safeParse(JSON.parse(error.message))
-    return stripAnsi(result.success ? result.data.message : error.message).trim()
-  } catch {
-    return stripAnsi(error.message).trim()
-  }
+  return Effect.try((): unknown => JSON.parse(error.message)).pipe(
+    Effect.orElseSucceed(() => null),
+    Effect.map((json) => {
+      const result = PrismaErrorBody.safeParse(json)
+      return stripAnsi(result.success ? result.data.message : error.message).trim()
+    }),
+  )
 }
 
 const ReadProviderInput = z
@@ -137,24 +138,20 @@ const PrismaConfig = z
 
 /** The provider of the first `datasource` block as Prisma parses it, or null without one. */
 function readProvider(input: z.infer<typeof ReadProviderInput>) {
-  return Effect.sync(() => {
-    try {
-      const result = PrismaConfig.safeParse(
-        JSON.parse(
-          get_config(
-            JSON.stringify({
-              prismaSchema: input.files.map((f) => [f.path, f.content]),
-              ignoreEnvVarErrors: true,
-              env: {},
-            }),
-          ),
+  return Effect.try(() => {
+    const result = PrismaConfig.safeParse(
+      JSON.parse(
+        get_config(
+          JSON.stringify({
+            prismaSchema: input.files.map((f) => [f.path, f.content]),
+            ignoreEnvVarErrors: true,
+            env: {},
+          }),
         ),
-      )
-      return result.success ? (result.data.config.datasources[0]?.provider ?? null) : null
-    } catch {
-      return null
-    }
-  })
+      ),
+    )
+    return result.success ? (result.data.config.datasources[0]?.provider ?? null) : null
+  }).pipe(Effect.orElseSucceed(() => null))
 }
 
 const ParseSchemaFilesInput = z
@@ -192,7 +189,10 @@ export function parseSchemaFiles(input: z.infer<typeof ParseSchemaFilesInput>) {
       datamodel: files.map((f): [string, string] => [f.path, f.content]),
     })
     if ('type' in result) {
-      return yield* new SchemaParseError({ message: prismaErrorMessage(result.error), diagnostics })
+      return yield* new SchemaParseError({
+        message: yield* prismaErrorMessage(result.error),
+        diagnostics,
+      })
     }
     const provider = yield* readProvider({ files })
     const blocks = yield* LanguageService.blockLocations({ files })

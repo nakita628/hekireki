@@ -131,11 +131,14 @@ export function runClientQuery(input: z.infer<typeof RunClientQueryInput>) {
       return yield* new InvalidInputError({ field: 'query', message: problem.message })
     }
     const ran = yield* client.run(snapshot.files, query)
+    const formatted = yield* Effect.forEach(ran.queries, (event) =>
+      formatSql(event.sql, db.status.dialect),
+    )
     const clientResult = {
       ...ClientDomain.makeClientResult({ value: ran.value, limit: CLIENT_ROW_LIMIT }),
-      queries: ran.queries.map((event) => ({
+      queries: ran.queries.map((event, index) => ({
         sql: event.sql,
-        formatted: formatSql(event.sql, db.status.dialect),
+        formatted: formatted[index] ?? event.sql,
         params: ClientDomain.makeSqlParams({ text: event.params }),
         durationMs: Math.round(event.durationMs * 10) / 10,
       })),

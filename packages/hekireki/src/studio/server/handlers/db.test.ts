@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 
 import { NodeFileSystem } from '@effect/platform-node'
-import { Effect } from 'effect'
+import { ConfigProvider, Effect, Layer } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
 import { createStudioApp } from '../app.js'
@@ -84,9 +84,9 @@ async function setup() {
         schemaText: null,
         cwd: dir,
         schemaDir: dir,
-        env: {},
       }),
-      NodeFileSystem.layer,
+      // No environment: the URL is the one the test's .env names, never the machine's.
+      Layer.mergeAll(NodeFileSystem.layer, ConfigProvider.layer(ConfigProvider.fromUnknown({}))),
     ),
   )
   states.push(db)
@@ -135,7 +135,6 @@ describe('data routes over sqlite', () => {
           schemaText: null,
           cwd: dir,
           schemaDir: dir,
-          env: {},
         }),
         NodeFileSystem.layer,
       ),
