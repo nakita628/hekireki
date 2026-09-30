@@ -1,17 +1,8 @@
 import { Schema } from 'effect'
 
 export const UserSchema = Schema.Struct({
-  /**
-   * Primary key (UUIDv7)
-   */
   id: Schema.UUID,
-  /**
-   * Unique login email
-   */
   email: Schema.String.pipe(Schema.pattern(/^[^@]+@[^@]+\.[^@]+$/)),
-  /**
-   * Display name
-   */
   name: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(50)),
   role: Schema.Literal('ADMIN', 'EDITOR', 'VIEWER'),
   interests: Schema.String,
@@ -37,13 +28,7 @@ export const ProfileSchema = Schema.Struct({
 export type Profile = typeof ProfileSchema.Type
 
 export const PostSchema = Schema.Struct({
-  /**
-   * Primary key
-   */
   id: Schema.UUID,
-  /**
-   * Article title
-   */
   title: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100)),
   content: Schema.String,
   visibility: Schema.Literal('PUBLIC', 'PRIVATE', 'LINK_ONLY'),

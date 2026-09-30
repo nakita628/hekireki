@@ -3,17 +3,8 @@ import type { FromSchema } from 'json-schema-to-ts'
 export const UserSchema = {
   type: 'object' as const,
   properties: {
-    /**
-     * Primary key (UUIDv7)
-     */
     id: { type: 'string' as const, format: 'uuid' as const },
-    /**
-     * Unique login email
-     */
     email: { type: 'string' as const, format: 'email' as const },
-    /**
-     * Display name
-     */
     name: { type: 'string' as const, minLength: 1, maxLength: 50 },
     role: { enum: ['ADMIN', 'EDITOR', 'VIEWER'] as const },
     interests: { type: 'string' as const },
@@ -49,13 +40,7 @@ export type Profile = FromSchema<typeof ProfileSchema>
 export const PostSchema = {
   type: 'object' as const,
   properties: {
-    /**
-     * Primary key
-     */
     id: { type: 'string' as const, format: 'uuid' as const },
-    /**
-     * Article title
-     */
     title: { type: 'string' as const, minLength: 1, maxLength: 100 },
     content: { type: 'string' as const },
     visibility: { enum: ['PUBLIC', 'PRIVATE', 'LINK_ONLY'] as const },

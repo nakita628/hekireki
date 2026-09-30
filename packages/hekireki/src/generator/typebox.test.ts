@@ -88,13 +88,10 @@ const emptyDmmf = {
 
 describe('typeboxCode', () => {
   it('emits every model schema, without the relation schemas', () => {
-    expect(typeboxCode(dmmf, true, true, false))
+    expect(typeboxCode(dmmf, true, false))
       .toBe(`import { type Static, Type } from '@sinclair/typebox'
 
 export const UserSchema = Type.Object({
-  /**
-   * Primary key.
-   */
   id: Type.Integer(),
   name: Type.String(),
   role: Type.Union([Type.Literal('USER'), Type.Literal('ADMIN')]),
@@ -112,13 +109,10 @@ export type BlogPost = Static<typeof BlogPostSchema>`)
   })
 
   it('appends the relation schemas after a blank line', () => {
-    expect(typeboxCode(dmmf, true, true, true))
+    expect(typeboxCode(dmmf, true, true))
       .toBe(`import { type Static, Type } from '@sinclair/typebox'
 
 export const UserSchema = Type.Object({
-  /**
-   * Primary key.
-   */
   id: Type.Integer(),
   name: Type.String(),
   role: Type.Union([Type.Literal('USER'), Type.Literal('ADMIN')]),
@@ -150,7 +144,7 @@ export type BlogPostRelations = Static<typeof BlogPostRelationsSchema>`)
   })
 
   it('emits no relation block for a schema without models', () => {
-    expect(typeboxCode(emptyDmmf, true, true, true))
+    expect(typeboxCode(emptyDmmf, true, true))
       .toBe(`import { type Static, Type } from '@sinclair/typebox'
 
 `)

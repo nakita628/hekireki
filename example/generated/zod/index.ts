@@ -1,17 +1,8 @@
 import * as z from 'zod'
 
 export const UserSchema = z.object({
-  /**
-   * Primary key (UUIDv7)
-   */
   id: z.uuid(),
-  /**
-   * Unique login email
-   */
   email: z.email(),
-  /**
-   * Display name
-   */
   name: z.string().min(1).max(50),
   role: z.enum(['ADMIN', 'EDITOR', 'VIEWER']),
   interests: z.string(),
@@ -37,13 +28,7 @@ export const ProfileSchema = z.object({
 export type Profile = z.infer<typeof ProfileSchema>
 
 export const PostSchema = z.object({
-  /**
-   * Primary key
-   */
   id: z.uuid(),
-  /**
-   * Article title
-   */
   title: z.string().min(1).max(100),
   content: z.string().exactOptional(),
   visibility: z.enum(['PUBLIC', 'PRIVATE', 'LINK_ONLY']),

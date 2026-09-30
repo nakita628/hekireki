@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import { makeValidationExtractor, parseDocumentWithoutAnnotations } from '../utils/index.js'
+import { makeValidationExtractor } from '../utils/index.js'
 import { validationSchemas } from '../utils/validation-schema.js'
 import {
   makeZodEnumExpression,
@@ -24,62 +24,23 @@ describe('helper/zod', () => {
   })
 
   describe('makeZodSchemas', () => {
-    it.concurrent('schemas comment true', () => {
-      const result = makeZodSchemas(
-        [
-          {
-            documentation: '',
-            modelName: 'User',
-            fieldName: 'id',
-            comment: ['Primary key', '@v.pipe(v.string(), v.uuid())'],
-            validation: 'uuid()',
-            isRequired: true,
-          },
-          {
-            documentation: '',
-            modelName: 'User',
-            fieldName: 'name',
-            comment: ['Display name', '@v.pipe(v.string(), v.minLength(1), v.maxLength(50))'],
-            validation: 'string().min(1).max(50)',
-            isRequired: true,
-          },
-        ],
-        true,
-      )
-      const expected = `export const UserSchema = z.object({
-  /**
-   * Primary key
-   */
-  id: z.uuid(),
-  /**
-   * Display name
-   */
-  name: z.string().min(1).max(50)
-})`
-      expect(result).toBe(expected)
-    })
-    it.concurrent('schemas comment false', () => {
-      const result = makeZodSchemas(
-        [
-          {
-            documentation: '',
-            modelName: 'User',
-            fieldName: 'id',
-            comment: ['Primary key', '@v.pipe(v.string(), v.uuid())'],
-            validation: 'uuid()',
-            isRequired: true,
-          },
-          {
-            documentation: '',
-            modelName: 'User',
-            fieldName: 'name',
-            comment: ['Display name', '@v.pipe(v.string(), v.minLength(1), v.maxLength(50))'],
-            validation: 'string().min(1).max(50)',
-            isRequired: true,
-          },
-        ],
-        false,
-      )
+    it.concurrent('schemas', () => {
+      const result = makeZodSchemas([
+        {
+          documentation: '',
+          modelName: 'User',
+          fieldName: 'id',
+          validation: 'uuid()',
+          isRequired: true,
+        },
+        {
+          documentation: '',
+          modelName: 'User',
+          fieldName: 'name',
+          validation: 'string().min(1).max(50)',
+          isRequired: true,
+        },
+      ])
       const expected = `export const UserSchema = z.object({
   id: z.uuid(),
   name: z.string().min(1).max(50)
@@ -142,7 +103,7 @@ describe('helper/zod', () => {
         ],
       }
 
-      const result = zodSchemaCode([model], false, false)
+      const result = zodSchemaCode([model], false)
 
       expect(result).toBe(
         "import * as z from 'zod'\n\nexport const UserSchema = z.object({\n  id: z.uuid(),\n  name: z.string().min(1)\n})",
@@ -155,7 +116,7 @@ describe('helper/zod', () => {
         fields: [{ name: 'id', type: 'Int', kind: 'scalar', isRequired: true, isList: false }],
       }
 
-      const result = zodSchemaCode([model], false, false, 'mini')
+      const result = zodSchemaCode([model], false, 'mini')
 
       expect(result).toBe(
         "import * as z from 'zod/mini'\n\nexport const ItemSchema = z.object({\n  id: z.number()\n})",
@@ -168,32 +129,10 @@ describe('helper/zod', () => {
         fields: [{ name: 'id', type: 'Int', kind: 'scalar', isRequired: true, isList: false }],
       }
 
-      const result = zodSchemaCode([model], false, false, '@hono/zod-openapi')
+      const result = zodSchemaCode([model], false, '@hono/zod-openapi')
 
       expect(result).toBe(
         "import { z } from '@hono/zod-openapi'\n\nexport const ItemSchema = z.object({\n  id: z.number()\n})",
-      )
-    })
-
-    it('generates with comment true and type true', () => {
-      const model = {
-        name: 'User',
-        fields: [
-          {
-            name: 'id',
-            type: 'String',
-            kind: 'scalar',
-            isRequired: true,
-            isList: false,
-            documentation: 'Primary key\n@z.uuid()',
-          },
-        ],
-      }
-
-      const result = zodSchemaCode([model], true, true)
-
-      expect(result).toBe(
-        "import * as z from 'zod'\n\nexport const UserSchema = z.object({\n  /**\n   * Primary key\n   */\n  id: z.uuid()\n})\n\nexport type User = z.infer<typeof UserSchema>",
       )
     })
 
@@ -204,7 +143,7 @@ describe('helper/zod', () => {
       }
       const enums = [{ name: 'Role', values: [{ name: 'ADMIN' }, { name: 'USER' }] }]
 
-      const result = zodSchemaCode([model], false, false, undefined, enums)
+      const result = zodSchemaCode([model], false, undefined, enums)
 
       expect(result).toBe(
         "import * as z from 'zod'\n\nexport const UserSchema = z.object({\n  role: z.enum(['ADMIN', 'USER'])\n})",
@@ -242,7 +181,6 @@ describe('helper/zod', () => {
         documentation: '',
         modelName: 'Order',
         fieldName: 'id',
-        comment: ['Order ID'],
         validation: 'uuid()',
         isRequired: true,
       },
@@ -250,7 +188,6 @@ describe('helper/zod', () => {
         documentation: '',
         modelName: 'Order',
         fieldName: 'status',
-        comment: ['Order status'],
         validation: null,
         isRequired: true,
       },
@@ -258,7 +195,6 @@ describe('helper/zod', () => {
         documentation: '',
         modelName: 'Order',
         fieldName: 'totalAmount',
-        comment: ['Total amount in cents'],
         validation: 'number().int().nonnegative()',
         isRequired: true,
       },
@@ -266,33 +202,13 @@ describe('helper/zod', () => {
         documentation: '',
         modelName: 'Order',
         fieldName: 'note',
-        comment: ['Customer note', 'Optional memo from customer'],
         validation: 'string()',
         isRequired: false,
       },
     ]
 
-    it('generates Order schema with comments, enum skipped, optional field', () => {
-      const result = makeZodSchemas(orderFields, true)
-      expect(result).toBe(`export const OrderSchema = z.object({
-  /**
-   * Order ID
-   */
-  id: z.uuid(),
-  /**
-   * Total amount in cents
-   */
-  totalAmount: z.number().int().nonnegative(),
-  /**
-   * Customer note
-   * Optional memo from customer
-   */
-  note: z.string().exactOptional()
-})`)
-    })
-
-    it('generates Order schema without comments', () => {
-      const result = makeZodSchemas(orderFields, false)
+    it('generates Order schema, enum skipped, optional field', () => {
+      const result = makeZodSchemas(orderFields)
       expect(result).toBe(`export const OrderSchema = z.object({
   id: z.uuid(),
   totalAmount: z.number().int().nonnegative(),
@@ -358,37 +274,10 @@ describe('helper/zod', () => {
         },
       ]
 
-      const result = zodSchemaCode(models, true, false, undefined, enums)
+      const result = zodSchemaCode(models, true, undefined, enums)
       expect(result).toBe(
         "import * as z from 'zod'\n\nexport const OrderSchema = z.object({\n  id: z.uuid(),\n  status: z.enum(['PENDING', 'CONFIRMED', 'SHIPPED', 'DELIVERED', 'CANCELLED']),\n  totalAmount: z.number().int().nonnegative()\n})\n\nexport type Order = z.infer<typeof OrderSchema>",
       )
-    })
-  })
-
-  describe('multi-line comment handling', () => {
-    it('filters annotation lines from comments', () => {
-      const fields = [
-        {
-          documentation: '',
-          modelName: 'Payment',
-          fieldName: 'amount',
-          comment: [
-            'Payment amount',
-            'Stored in smallest currency unit (e.g. cents)',
-            '@z.number()',
-          ],
-          validation: 'number()',
-          isRequired: true,
-        },
-      ]
-      const result = makeZodSchemas(fields, true)
-      expect(result).toBe(`export const PaymentSchema = z.object({
-  /**
-   * Payment amount
-   * Stored in smallest currency unit (e.g. cents)
-   */
-  amount: z.number()
-})`)
     })
   })
 
@@ -439,10 +328,9 @@ describe('validationSchemas', () => {
       },
     ]
 
-    const result = validationSchemas(models, true, false, {
+    const result = validationSchemas(models, true, {
       importStatement: "import * as z from 'zod'",
       annotationPrefix: '@z.',
-      parseDocument: parseDocumentWithoutAnnotations,
       extractValidation: makeValidationExtractor('@z.'),
       inferType: makeZodInfer,
       schemas: makeZodSchemas,
@@ -471,10 +359,9 @@ describe('validationSchemas', () => {
       },
     ]
 
-    const result = validationSchemas(models, false, false, {
+    const result = validationSchemas(models, false, {
       importStatement: "import * as z from 'zod'",
       annotationPrefix: '@z.',
-      parseDocument: parseDocumentWithoutAnnotations,
       extractValidation: makeValidationExtractor('@z.'),
       inferType: makeZodInfer,
       schemas: makeZodSchemas,
@@ -494,10 +381,9 @@ describe('validationSchemas', () => {
       },
     ]
 
-    const result = validationSchemas(models, false, false, {
+    const result = validationSchemas(models, false, {
       importStatement: "import * as z from 'zod'",
       annotationPrefix: '@z.',
-      parseDocument: parseDocumentWithoutAnnotations,
       extractValidation: makeValidationExtractor('@z.'),
       inferType: makeZodInfer,
       schemas: makeZodSchemas,
@@ -506,38 +392,6 @@ describe('validationSchemas', () => {
 
     expect(result).toBe(
       "import * as z from 'zod'\n\nexport const ItemSchema = z.object({\n  count: z.number()\n})",
-    )
-  })
-
-  it('should generate schemas with comment true and type false', () => {
-    const models = [
-      {
-        name: 'User',
-        fields: [
-          {
-            name: 'id',
-            type: 'String',
-            kind: 'scalar',
-            isRequired: true,
-            isList: false,
-            documentation: 'Primary key\n@z.uuid()',
-          },
-        ],
-      },
-    ]
-
-    const result = validationSchemas(models, false, true, {
-      importStatement: "import * as z from 'zod'",
-      annotationPrefix: '@z.',
-      parseDocument: parseDocumentWithoutAnnotations,
-      extractValidation: makeValidationExtractor('@z.'),
-      inferType: makeZodInfer,
-      schemas: makeZodSchemas,
-      typeMapping: PRISMA_TO_ZOD,
-    })
-
-    expect(result).toBe(
-      "import * as z from 'zod'\n\nexport const UserSchema = z.object({\n  /**\n   * Primary key\n   */\n  id: z.uuid()\n})",
     )
   })
 
@@ -559,10 +413,9 @@ describe('validationSchemas', () => {
 
     const enums = [{ name: 'Role', values: [{ name: 'ADMIN' }, { name: 'USER' }] }]
 
-    const result = validationSchemas(models, false, false, {
+    const result = validationSchemas(models, false, {
       importStatement: "import * as z from 'zod'",
       annotationPrefix: '@z.',
-      parseDocument: parseDocumentWithoutAnnotations,
       extractValidation: makeValidationExtractor('@z.'),
       inferType: makeZodInfer,
       schemas: makeZodSchemas,
@@ -593,10 +446,9 @@ describe('validationSchemas', () => {
       },
     ]
 
-    validationSchemas(models, false, false, {
+    validationSchemas(models, false, {
       importStatement: '',
       annotationPrefix: '@z.',
-      parseDocument: parseDocumentWithoutAnnotations,
       extractValidation: makeValidationExtractor('@z.'),
       inferType: makeZodInfer,
       schemas: makeZodSchemas,
@@ -628,10 +480,9 @@ describe('validationSchemas', () => {
       },
     ]
 
-    validationSchemas(models, false, false, {
+    validationSchemas(models, false, {
       importStatement: "import * as z from 'zod'",
       annotationPrefix: '@z.',
-      parseDocument: parseDocumentWithoutAnnotations,
       extractValidation: makeValidationExtractor('@z.'),
       inferType: makeZodInfer,
       schemas: makeZodSchemas,

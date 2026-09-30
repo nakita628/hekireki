@@ -1,17 +1,8 @@
 import { type Static, Type } from '@sinclair/typebox'
 
 export const UserSchema = Type.Object({
-  /**
-   * Primary key (UUIDv7)
-   */
   id: Type.String({ format: 'uuid' }),
-  /**
-   * Unique login email
-   */
   email: Type.String({ format: 'email' }),
-  /**
-   * Display name
-   */
   name: Type.String({ minLength: 1, maxLength: 50 }),
   role: Type.Union([Type.Literal('ADMIN'), Type.Literal('EDITOR'), Type.Literal('VIEWER')]),
   interests: Type.String(),
@@ -37,13 +28,7 @@ export const ProfileSchema = Type.Object({
 export type Profile = Static<typeof ProfileSchema>
 
 export const PostSchema = Type.Object({
-  /**
-   * Primary key
-   */
   id: Type.String({ format: 'uuid' }),
-  /**
-   * Article title
-   */
   title: Type.String({ minLength: 1, maxLength: 100 }),
   content: Type.Optional(Type.String()),
   visibility: Type.Union([

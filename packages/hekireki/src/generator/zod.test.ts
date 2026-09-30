@@ -88,12 +88,9 @@ const emptyDmmf = {
 
 describe('zodCode', () => {
   it('emits every model schema, without the relation schemas', () => {
-    expect(zodCode(dmmf, true, true, false, '4')).toBe(`import * as z from 'zod'
+    expect(zodCode(dmmf, true, false, '4')).toBe(`import * as z from 'zod'
 
 export const UserSchema = z.object({
-  /**
-   * Primary key.
-   */
   id: z.number(),
   name: z.string(),
   role: z.enum(['USER', 'ADMIN'])
@@ -111,12 +108,9 @@ export type BlogPost = z.infer<typeof BlogPostSchema>`)
   })
 
   it('appends the relation schemas after a blank line', () => {
-    expect(zodCode(dmmf, true, true, true, '4')).toBe(`import * as z from 'zod'
+    expect(zodCode(dmmf, true, true, '4')).toBe(`import * as z from 'zod'
 
 export const UserSchema = z.object({
-  /**
-   * Primary key.
-   */
   id: z.number(),
   name: z.string(),
   role: z.enum(['USER', 'ADMIN'])
@@ -148,7 +142,7 @@ export type BlogPostRelations = z.infer<typeof BlogPostRelationsSchema>`)
   })
 
   it('emits no relation block for a schema without models', () => {
-    expect(zodCode(emptyDmmf, true, true, true, '4')).toBe(`import * as z from 'zod'
+    expect(zodCode(emptyDmmf, true, true, '4')).toBe(`import * as z from 'zod'
 
 `)
   })

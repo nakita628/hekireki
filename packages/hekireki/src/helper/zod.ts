@@ -1,8 +1,4 @@
-import {
-  makeValidationExtractor,
-  parseDocumentWithoutAnnotations,
-  schemaFromFields,
-} from '../utils/index.js'
+import { makeValidationExtractor, schemaFromFields } from '../utils/index.js'
 import { makePropertiesGenerator, validationSchemas } from '../utils/validation-schema.js'
 
 export function makeZodInfer(modelName: string) {
@@ -38,14 +34,11 @@ export function makeZodSchemas(
     readonly fieldName: string
     readonly validation: string | null
     readonly isRequired: boolean
-    readonly comment: readonly string[]
   }[],
-  comment: boolean,
   objectType?: 'strict' | 'loose',
 ) {
   return schemaFromFields(
     modelFields,
-    comment,
     makeZodSchema,
     makePropertiesGenerator('z', (expr, isRequired) =>
       isRequired ? expr : `${expr}.exactOptional()`,
@@ -91,7 +84,6 @@ export function zodSchemaCode(
     }[]
   }[],
   type: boolean,
-  comment: boolean,
   zodVersion?: string | string[],
   enums?: readonly {
     readonly name: string
@@ -105,10 +97,9 @@ export function zodSchemaCode(
         ? `import { z } from '@hono/zod-openapi'`
         : `import * as z from 'zod'`
 
-  return validationSchemas(models, type, comment, {
+  return validationSchemas(models, type, {
     importStatement,
     annotationPrefix: '@z.',
-    parseDocument: parseDocumentWithoutAnnotations,
     extractValidation: makeValidationExtractor('@z.'),
     inferType: makeZodInfer,
     schemas: makeZodSchemas,

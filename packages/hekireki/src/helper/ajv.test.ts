@@ -27,60 +27,16 @@ describe('helper/ajv', () => {
   })
 
   describe('makeAjvSchemas', () => {
-    it.concurrent('schemas comment true', () => {
-      const result = makeAjvSchemas(
-        [
-          {
-            documentation: '',
-            modelName: 'User',
-            fieldName: 'id',
-            comment: ['Primary key'],
-            validation: "{ type: 'string' as const }",
-            isRequired: true,
-          },
-          {
-            documentation: '',
-            modelName: 'User',
-            fieldName: 'name',
-            comment: ['Display name'],
-            validation: "{ type: 'string' as const }",
-            isRequired: true,
-          },
-        ],
-        true,
-      )
-      const expected = `export const UserSchema = {
-  type: 'object' as const,
-  properties: {
-    /**
-     * Primary key
-     */
-    id: { type: 'string' as const },
-    /**
-     * Display name
-     */
-    name: { type: 'string' as const },
-  },
-  required: ['id', 'name'] as const,
-  additionalProperties: false,
-} as const`
-      expect(result).toBe(expected)
-    })
-
-    it.concurrent('schemas comment false', () => {
-      const result = makeAjvSchemas(
-        [
-          {
-            documentation: '',
-            modelName: 'User',
-            fieldName: 'id',
-            comment: ['Primary key'],
-            validation: "{ type: 'string' as const }",
-            isRequired: true,
-          },
-        ],
-        false,
-      )
+    it.concurrent('schemas', () => {
+      const result = makeAjvSchemas([
+        {
+          documentation: '',
+          modelName: 'User',
+          fieldName: 'id',
+          validation: "{ type: 'string' as const }",
+          isRequired: true,
+        },
+      ])
       const expected = `export const UserSchema = {
   type: 'object' as const,
   properties: {
@@ -93,27 +49,22 @@ describe('helper/ajv', () => {
     })
 
     it.concurrent('includes required array only for required fields', () => {
-      const result = makeAjvSchemas(
-        [
-          {
-            documentation: '',
-            modelName: 'User',
-            fieldName: 'id',
-            comment: [],
-            validation: "{ type: 'string' as const }",
-            isRequired: true,
-          },
-          {
-            documentation: '',
-            modelName: 'User',
-            fieldName: 'email',
-            comment: [],
-            validation: "{ type: 'string' as const }",
-            isRequired: false,
-          },
-        ],
-        false,
-      )
+      const result = makeAjvSchemas([
+        {
+          documentation: '',
+          modelName: 'User',
+          fieldName: 'id',
+          validation: "{ type: 'string' as const }",
+          isRequired: true,
+        },
+        {
+          documentation: '',
+          modelName: 'User',
+          fieldName: 'email',
+          validation: "{ type: 'string' as const }",
+          isRequired: false,
+        },
+      ])
       const expected = `export const UserSchema = {
   type: 'object' as const,
   properties: {
@@ -127,19 +78,15 @@ describe('helper/ajv', () => {
     })
 
     it.concurrent('no required line when all fields are optional', () => {
-      const result = makeAjvSchemas(
-        [
-          {
-            documentation: '',
-            modelName: 'User',
-            fieldName: 'email',
-            comment: [],
-            validation: "{ type: 'string' as const }",
-            isRequired: false,
-          },
-        ],
-        false,
-      )
+      const result = makeAjvSchemas([
+        {
+          documentation: '',
+          modelName: 'User',
+          fieldName: 'email',
+          validation: "{ type: 'string' as const }",
+          isRequired: false,
+        },
+      ])
       const expected = `export const UserSchema = {
   type: 'object' as const,
   properties: {
@@ -219,7 +166,7 @@ export type UserRelations = FromSchema<typeof UserRelationsSchema>`
         ],
       }
 
-      const result = ajvSchemaCode([model], false, false)
+      const result = ajvSchemaCode([model], false)
 
       const expected = `export const UserSchema = {
   type: 'object' as const,
@@ -242,7 +189,7 @@ export type UserRelations = FromSchema<typeof UserRelationsSchema>`
         ],
       }
 
-      const result = ajvSchemaCode([model], false, false)
+      const result = ajvSchemaCode([model], false)
 
       const expected = `export const ItemSchema = {
   type: 'object' as const,
@@ -262,7 +209,7 @@ export type UserRelations = FromSchema<typeof UserRelationsSchema>`
         fields: [{ name: 'id', type: 'String', kind: 'scalar', isRequired: true, isList: false }],
       }
 
-      const result = ajvSchemaCode([model], true, false)
+      const result = ajvSchemaCode([model], true)
 
       const expected = `import type { FromSchema } from 'json-schema-to-ts'
 
@@ -338,7 +285,7 @@ export type User = FromSchema<typeof UserSchema>`
           ],
         },
       ]
-      const result = ajvSchemaCode(models, true, false, enums)
+      const result = ajvSchemaCode(models, true, enums)
       expect(result).toBe(`import type { FromSchema } from 'json-schema-to-ts'
 
 export const OrderSchema = {
@@ -356,49 +303,34 @@ export type Order = FromSchema<typeof OrderSchema>`)
     })
 
     it('generates Order schema with mixed required/optional fields', () => {
-      const result = makeAjvSchemas(
-        [
-          {
-            documentation: '',
-            modelName: 'Order',
-            fieldName: 'id',
-            comment: ['Order ID'],
-            validation: "{ type: 'string' as const, format: 'uuid' as const }",
-            isRequired: true,
-          },
-          {
-            documentation: '',
-            modelName: 'Order',
-            fieldName: 'totalAmount',
-            comment: ['Total amount in cents'],
-            validation: "{ type: 'integer' as const }",
-            isRequired: true,
-          },
-          {
-            documentation: '',
-            modelName: 'Order',
-            fieldName: 'note',
-            comment: ['Customer note'],
-            validation: "{ type: 'string' as const }",
-            isRequired: false,
-          },
-        ],
-        true,
-      )
+      const result = makeAjvSchemas([
+        {
+          documentation: '',
+          modelName: 'Order',
+          fieldName: 'id',
+          validation: "{ type: 'string' as const, format: 'uuid' as const }",
+          isRequired: true,
+        },
+        {
+          documentation: '',
+          modelName: 'Order',
+          fieldName: 'totalAmount',
+          validation: "{ type: 'integer' as const }",
+          isRequired: true,
+        },
+        {
+          documentation: '',
+          modelName: 'Order',
+          fieldName: 'note',
+          validation: "{ type: 'string' as const }",
+          isRequired: false,
+        },
+      ])
       expect(result).toBe(`export const OrderSchema = {
   type: 'object' as const,
   properties: {
-    /**
-     * Order ID
-     */
     id: { type: 'string' as const, format: 'uuid' as const },
-    /**
-     * Total amount in cents
-     */
     totalAmount: { type: 'integer' as const },
-    /**
-     * Customer note
-     */
     note: { type: 'string' as const },
   },
   required: ['id', 'totalAmount'] as const,
@@ -457,85 +389,28 @@ export type OrderRelations = FromSchema<typeof OrderRelationsSchema>`)
     })
 
     it('generates schema with all optional fields (no required array)', () => {
-      const result = makeAjvSchemas(
-        [
-          {
-            documentation: '',
-            modelName: 'Session',
-            fieldName: 'token',
-            comment: [],
-            validation: "{ type: 'string' as const }",
-            isRequired: false,
-          },
-          {
-            documentation: '',
-            modelName: 'Session',
-            fieldName: 'expiresAt',
-            comment: [],
-            validation: "{ type: 'string' as const, format: 'date-time' as const }",
-            isRequired: false,
-          },
-        ],
-        false,
-      )
+      const result = makeAjvSchemas([
+        {
+          documentation: '',
+          modelName: 'Session',
+          fieldName: 'token',
+          validation: "{ type: 'string' as const }",
+          isRequired: false,
+        },
+        {
+          documentation: '',
+          modelName: 'Session',
+          fieldName: 'expiresAt',
+          validation: "{ type: 'string' as const, format: 'date-time' as const }",
+          isRequired: false,
+        },
+      ])
       expect(result).toBe(`export const SessionSchema = {
   type: 'object' as const,
   properties: {
     token: { type: 'string' as const },
     expiresAt: { type: 'string' as const, format: 'date-time' as const },
   },
-  additionalProperties: false,
-} as const`)
-    })
-
-    it('generates schema with multi-line comments', () => {
-      const result = makeAjvSchemas(
-        [
-          {
-            documentation: '',
-            modelName: 'Payment',
-            fieldName: 'amount',
-            comment: ['Total amount in cents', 'Integer to avoid floating point issues'],
-            validation: "{ type: 'integer' as const }",
-            isRequired: true,
-          },
-        ],
-        true,
-      )
-      expect(result).toBe(`export const PaymentSchema = {
-  type: 'object' as const,
-  properties: {
-    /**
-     * Total amount in cents
-     * Integer to avoid floating point issues
-     */
-    amount: { type: 'integer' as const },
-  },
-  required: ['amount'] as const,
-  additionalProperties: false,
-} as const`)
-    })
-
-    it('generates schema with empty comment array when comment is true', () => {
-      const result = makeAjvSchemas(
-        [
-          {
-            documentation: '',
-            modelName: 'Token',
-            fieldName: 'value',
-            comment: [],
-            validation: "{ type: 'string' as const }",
-            isRequired: true,
-          },
-        ],
-        true,
-      )
-      expect(result).toBe(`export const TokenSchema = {
-  type: 'object' as const,
-  properties: {
-    value: { type: 'string' as const },
-  },
-  required: ['value'] as const,
   additionalProperties: false,
 } as const`)
     })
@@ -554,7 +429,7 @@ export type OrderRelations = FromSchema<typeof OrderRelationsSchema>`)
           ],
         },
       ]
-      const result = ajvSchemaCode(models, false, false)
+      const result = ajvSchemaCode(models, false)
       expect(result).toContain('export const UserSchema')
       expect(result).toContain('export const PostSchema')
     })
@@ -592,7 +467,7 @@ export type OrderRelations = FromSchema<typeof OrderRelationsSchema>`)
           ],
         },
       ]
-      const result = ajvSchemaCode(models, true, false)
+      const result = ajvSchemaCode(models, true)
       expect(result).toBe(`import type { FromSchema } from 'json-schema-to-ts'
 
 export const SessionSchema = {

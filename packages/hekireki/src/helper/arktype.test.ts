@@ -21,63 +21,23 @@ describe('helper/arktype', () => {
   })
 
   describe('makeArktypeSchemas', () => {
-    it('generates schema with comments', () => {
-      const result = makeArktypeSchemas(
-        [
-          {
-            documentation: '',
-            modelName: 'User',
-            fieldName: 'id',
-            comment: ['Primary key'],
-            validation: '"string"',
-            isRequired: true,
-          },
-          {
-            documentation: '',
-            modelName: 'User',
-            fieldName: 'name',
-            comment: ['Display name'],
-            validation: '"string"',
-            isRequired: true,
-          },
-        ],
-        true,
-      )
-      const expected = `export const UserSchema = type({
-  /**
-   * Primary key
-   */
-  id: "string",
-  /**
-   * Display name
-   */
-  name: "string",
-})`
-      expect(result).toBe(expected)
-    })
-
-    it('generates schema without comments', () => {
-      const result = makeArktypeSchemas(
-        [
-          {
-            documentation: '',
-            modelName: 'User',
-            fieldName: 'id',
-            comment: [],
-            validation: '"string"',
-            isRequired: true,
-          },
-          {
-            documentation: '',
-            modelName: 'User',
-            fieldName: 'age',
-            comment: [],
-            validation: '"number"',
-            isRequired: true,
-          },
-        ],
-        false,
-      )
+    it('generates schema', () => {
+      const result = makeArktypeSchemas([
+        {
+          documentation: '',
+          modelName: 'User',
+          fieldName: 'id',
+          validation: '"string"',
+          isRequired: true,
+        },
+        {
+          documentation: '',
+          modelName: 'User',
+          fieldName: 'age',
+          validation: '"number"',
+          isRequired: true,
+        },
+      ])
       const expected = `export const UserSchema = type({
   id: "string",
   age: "number",
@@ -132,7 +92,7 @@ describe('helper/arktype', () => {
           ],
         },
       ]
-      const result = arktypeSchemaCode(models, false, false)
+      const result = arktypeSchemaCode(models, false)
       expect(result).toBe(
         'import { type } from \'arktype\'\n\nexport const UserSchema = type({\n  id: "string",\n  age: "number",\n})',
       )
@@ -147,7 +107,7 @@ describe('helper/arktype', () => {
           ],
         },
       ]
-      const result = arktypeSchemaCode(models, true, false)
+      const result = arktypeSchemaCode(models, true)
       expect(result).toBe(
         'import { type } from \'arktype\'\n\nexport const PostSchema = type({\n  title: "string",\n})\n\nexport type Post = typeof PostSchema.infer',
       )
@@ -166,7 +126,7 @@ describe('helper/arktype', () => {
           values: [{ name: 'ADMIN' }, { name: 'USER' }],
         },
       ]
-      const result = arktypeSchemaCode(models, false, false, enums)
+      const result = arktypeSchemaCode(models, false, enums)
       expect(result).toBe(
         "import { type } from 'arktype'\n\nexport const UserSchema = type({\n  role: \"'ADMIN' | 'USER'\",\n})",
       )
@@ -195,21 +155,14 @@ describe('helper/arktype', () => {
         fieldName: 'id',
         validation: '"string.uuid"',
         isRequired: true,
-        comment: ['Primary key'],
       },
     ]
-
-    it('generates properties with comments', () => {
-      expect(makeArktypeProperties(fields, true)).toBe(
-        '  /**\n   * Primary key\n   */\n  id: "string.uuid",',
-      )
-    })
-    it('generates properties without comments', () => {
-      expect(makeArktypeProperties(fields, false)).toBe('  id: "string.uuid",')
+    it('generates properties', () => {
+      expect(makeArktypeProperties(fields)).toBe('  id: "string.uuid",')
     })
     it('uses "unknown" for null validation', () => {
-      const nullFields = [{ ...fields[0], validation: null, comment: [] }]
-      expect(makeArktypeProperties(nullFields, false)).toBe('  id: "unknown",')
+      const nullFields = [{ ...fields[0], validation: null }]
+      expect(makeArktypeProperties(nullFields)).toBe('  id: "unknown",')
     })
   })
 
@@ -265,45 +218,10 @@ describe('helper/arktype', () => {
           ],
         },
       ]
-      const result = arktypeSchemaCode(models, true, false, enums)
+      const result = arktypeSchemaCode(models, true, enums)
       expect(result).toBe(
         "import { type } from 'arktype'\n\nexport const OrderSchema = type({\n  id: \"string.uuid\",\n  status: \"'PENDING' | 'CONFIRMED' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED'\",\n  totalAmount: \"number\",\n})\n\nexport type Order = typeof OrderSchema.infer",
       )
-    })
-
-    it('generates Order schema with comments', () => {
-      const result = makeArktypeSchemas(
-        [
-          {
-            documentation: '',
-            modelName: 'Order',
-            fieldName: 'id',
-            comment: ['Order ID'],
-            validation: '"string.uuid"',
-            isRequired: true,
-          },
-          {
-            documentation: '',
-            modelName: 'Order',
-            fieldName: 'totalAmount',
-            comment: ['Total amount in cents', 'Integer to avoid floating point issues'],
-            validation: '"number"',
-            isRequired: true,
-          },
-        ],
-        true,
-      )
-      expect(result).toBe(`export const OrderSchema = type({
-  /**
-   * Order ID
-   */
-  id: "string.uuid",
-  /**
-   * Total amount in cents
-   * Integer to avoid floating point issues
-   */
-  totalAmount: "number",
-})`)
     })
 
     it('generates Order relations with items and customer', () => {
@@ -348,44 +266,6 @@ describe('helper/arktype', () => {
       }
     })
 
-    it('generates schema with multi-line comments', () => {
-      const result = makeArktypeProperties(
-        [
-          {
-            documentation: '',
-            modelName: 'Payment',
-            fieldName: 'amount',
-            comment: ['Total amount in cents', 'Integer to avoid floating point issues'],
-            validation: '"number"',
-            isRequired: true,
-          },
-        ],
-        true,
-      )
-      expect(result).toBe(`  /**
-   * Total amount in cents
-   * Integer to avoid floating point issues
-   */
-  amount: "number",`)
-    })
-
-    it('generates schema with empty comment array when comment is true', () => {
-      const result = makeArktypeProperties(
-        [
-          {
-            documentation: '',
-            modelName: 'Token',
-            fieldName: 'value',
-            comment: [],
-            validation: '"string"',
-            isRequired: true,
-          },
-        ],
-        true,
-      )
-      expect(result).toBe('  value: "string",')
-    })
-
     it('handles multiple models in a single arktype() call', () => {
       const models = [
         {
@@ -400,7 +280,7 @@ describe('helper/arktype', () => {
           ],
         },
       ]
-      const result = arktypeSchemaCode(models, false, false)
+      const result = arktypeSchemaCode(models, false)
       expect(result).toContain('export const UserSchema')
       expect(result).toContain('export const PostSchema')
     })
@@ -418,19 +298,15 @@ describe('helper/arktype', () => {
     })
 
     it('uses "unknown" for null validation', () => {
-      const result = makeArktypeProperties(
-        [
-          {
-            documentation: '',
-            modelName: 'Data',
-            fieldName: 'payload',
-            comment: [],
-            validation: null,
-            isRequired: true,
-          },
-        ],
-        false,
-      )
+      const result = makeArktypeProperties([
+        {
+          documentation: '',
+          modelName: 'Data',
+          fieldName: 'payload',
+          validation: null,
+          isRequired: true,
+        },
+      ])
       expect(result).toBe('  payload: "unknown",')
     })
   })
@@ -455,7 +331,7 @@ describe('helper/arktype', () => {
           ],
         },
       ]
-      const result = arktypeSchemaCode(models, true, false)
+      const result = arktypeSchemaCode(models, true)
       expect(result).toBe(`import { type } from 'arktype'
 
 export const SessionSchema = type({

@@ -39,10 +39,6 @@ export function makeValidationExtractor(annotationPrefix: `@${string}.`) {
   }
 }
 
-export function parseDocumentWithoutAnnotations(documentation: string | undefined) {
-  return documentationLines(documentation).filter((line) => line.length > 0)
-}
-
 const ANNOTATION_PREFIXES = [
   '@z.',
   '@v.',
@@ -101,18 +97,11 @@ export function extractObjectType(
   return 'loose'
 }
 
-export function makeCommentBlock(lines: readonly string[], indent: number) {
-  if (lines.length === 0) return ''
-  const prefix = ' '.repeat(indent)
-  return `${prefix}/**\n${lines.map((c) => `${prefix} * ${c}`).join('\n')}\n${prefix} */\n`
-}
-
 export function groupByModel(
   validFields: readonly {
     readonly documentation: string
     readonly modelName: string
     readonly fieldName: string
-    readonly comment: readonly string[]
     readonly validation: string | null
     readonly isRequired: boolean
   }[],
@@ -130,7 +119,6 @@ export function isFields(
     readonly documentation: string | undefined
     readonly modelName: string
     readonly fieldName: string
-    readonly comment: readonly string[]
     readonly validation: string | null
     readonly isRequired: boolean
   }[][],
@@ -142,7 +130,6 @@ export function isFields(
       documentation: string
       modelName: string
       fieldName: string
-      comment: string[]
       validation: string | null
       isRequired: boolean
     }> => field.validation !== null,
@@ -156,9 +143,7 @@ export function schemaFromFields(
     readonly fieldName: string
     readonly validation: string | null
     readonly isRequired: boolean
-    readonly comment: readonly string[]
   }[],
-  comment: boolean,
   schemaBuilder: (modelName: string, fields: string, objectType?: 'strict' | 'loose') => string,
   propertiesGenerator: (
     fields: readonly {
@@ -167,14 +152,12 @@ export function schemaFromFields(
       readonly fieldName: string
       readonly validation: string | null
       readonly isRequired: boolean
-      readonly comment: readonly string[]
     }[],
-    comment: boolean,
   ) => string,
   objectType?: 'strict' | 'loose',
 ) {
   const modelName = modelFields[0].modelName
-  const fields = propertiesGenerator(modelFields, comment)
+  const fields = propertiesGenerator(modelFields)
   return schemaBuilder(modelName, fields, objectType)
 }
 

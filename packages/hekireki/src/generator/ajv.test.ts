@@ -88,15 +88,11 @@ const emptyDmmf = {
 
 describe('ajvCode', () => {
   it('emits every model schema, without the relation schemas', () => {
-    expect(ajvCode(dmmf, true, true, false))
-      .toBe(`import type { FromSchema } from 'json-schema-to-ts'
+    expect(ajvCode(dmmf, true, false)).toBe(`import type { FromSchema } from 'json-schema-to-ts'
 
 export const UserSchema = {
   type: 'object' as const,
   properties: {
-    /**
-     * Primary key.
-     */
     id: { type: 'integer' as const },
     name: { type: 'string' as const },
     role: { enum: ['USER', 'ADMIN'] as const },
@@ -122,15 +118,11 @@ export type BlogPost = FromSchema<typeof BlogPostSchema>`)
   })
 
   it('appends the relation schemas after a blank line', () => {
-    expect(ajvCode(dmmf, true, true, true))
-      .toBe(`import type { FromSchema } from 'json-schema-to-ts'
+    expect(ajvCode(dmmf, true, true)).toBe(`import type { FromSchema } from 'json-schema-to-ts'
 
 export const UserSchema = {
   type: 'object' as const,
   properties: {
-    /**
-     * Primary key.
-     */
     id: { type: 'integer' as const },
     name: { type: 'string' as const },
     role: { enum: ['USER', 'ADMIN'] as const },
@@ -178,8 +170,7 @@ export type BlogPostRelations = FromSchema<typeof BlogPostRelationsSchema>`)
   })
 
   it('emits no relation block for a schema without models', () => {
-    expect(ajvCode(emptyDmmf, true, true, true))
-      .toBe(`import type { FromSchema } from 'json-schema-to-ts'
+    expect(ajvCode(emptyDmmf, true, true)).toBe(`import type { FromSchema } from 'json-schema-to-ts'
 
 `)
   })

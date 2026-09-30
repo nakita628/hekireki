@@ -1,9 +1,4 @@
-import {
-  makeCommentBlock,
-  makeValidationExtractor,
-  parseDocumentWithoutAnnotations,
-  schemaFromFields,
-} from '../utils/index.js'
+import { makeValidationExtractor, schemaFromFields } from '../utils/index.js'
 import { validationSchemas } from '../utils/validation-schema.js'
 
 export function makeArktypeInfer(modelName: string) {
@@ -31,15 +26,10 @@ export function makeArktypeProperties(
     readonly fieldName: string
     readonly validation: string | null
     readonly isRequired: boolean
-    readonly comment: readonly string[]
   }[],
-  comment: boolean,
 ) {
   return fields
-    .map((field) => {
-      const commentBlock = comment ? makeCommentBlock(field.comment, 2) : ''
-      return `${commentBlock}  ${field.fieldName}: ${field.validation ?? '"unknown"'},`
-    })
+    .map((field) => `  ${field.fieldName}: ${field.validation ?? '"unknown"'},`)
     .join('\n')
 }
 
@@ -66,18 +56,10 @@ export function makeArktypeSchemas(
     readonly fieldName: string
     readonly validation: string | null
     readonly isRequired: boolean
-    readonly comment: readonly string[]
   }[],
-  comment: boolean,
   objectType?: 'strict' | 'loose',
 ) {
-  return schemaFromFields(
-    modelFields,
-    comment,
-    makeArktypeSchema,
-    makeArktypeProperties,
-    objectType,
-  )
+  return schemaFromFields(modelFields, makeArktypeSchema, makeArktypeProperties, objectType)
 }
 
 export function makeArktypeRelations(
@@ -116,16 +98,14 @@ export function arktypeSchemaCode(
     }[]
   }[],
   type: boolean,
-  comment: boolean,
   enums?: readonly {
     readonly name: string
     readonly values: readonly { readonly name: string }[]
   }[],
 ) {
-  return validationSchemas(models, type, comment, {
+  return validationSchemas(models, type, {
     importStatement: `import { type } from 'arktype'`,
     annotationPrefix: '@a.',
-    parseDocument: parseDocumentWithoutAnnotations,
     extractValidation: makeValidationExtractor('@a.'),
     inferType: makeArktypeInfer,
     schemas: makeArktypeSchemas,

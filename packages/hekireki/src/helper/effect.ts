@@ -1,9 +1,4 @@
-import {
-  makeCommentBlock,
-  makeValidationExtractor,
-  parseDocumentWithoutAnnotations,
-  schemaFromFields,
-} from '../utils/index.js'
+import { makeValidationExtractor, schemaFromFields } from '../utils/index.js'
 import { validationSchemas } from '../utils/validation-schema.js'
 
 export function makeEffectInfer(modelName: string) {
@@ -21,15 +16,10 @@ export function makeEffectProperties(
     readonly fieldName: string
     readonly validation: string | null
     readonly isRequired: boolean
-    readonly comment: readonly string[]
   }[],
-  comment: boolean,
 ) {
   return fields
-    .map((field) => {
-      const commentBlock = comment ? makeCommentBlock(field.comment, 2) : ''
-      return `${commentBlock}  ${field.fieldName}: ${field.validation ?? 'Schema.Unknown'},`
-    })
+    .map((field) => `  ${field.fieldName}: ${field.validation ?? 'Schema.Unknown'},`)
     .join('\n')
 }
 
@@ -56,11 +46,9 @@ export function makeEffectSchemas(
     readonly fieldName: string
     readonly validation: string | null
     readonly isRequired: boolean
-    readonly comment: readonly string[]
   }[],
-  comment: boolean,
 ) {
-  return schemaFromFields(modelFields, comment, makeEffectSchema, makeEffectProperties)
+  return schemaFromFields(modelFields, makeEffectSchema, makeEffectProperties)
 }
 
 export function makeEffectRelations(
@@ -100,16 +88,14 @@ export function effectSchemaCode(
     }[]
   }[],
   type: boolean,
-  comment: boolean,
   enums?: readonly {
     readonly name: string
     readonly values: readonly { readonly name: string }[]
   }[],
 ) {
-  return validationSchemas(models, type, comment, {
+  return validationSchemas(models, type, {
     importStatement: `import { Schema } from 'effect'`,
     annotationPrefix: '@e.',
-    parseDocument: parseDocumentWithoutAnnotations,
     extractValidation: makeValidationExtractor('@e.'),
     inferType: makeEffectInfer,
     schemas: makeEffectSchemas,

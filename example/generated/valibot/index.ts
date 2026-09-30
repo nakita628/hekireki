@@ -1,17 +1,8 @@
 import * as v from 'valibot'
 
 export const UserSchema = v.object({
-  /**
-   * Primary key (UUIDv7)
-   */
   id: v.pipe(v.string(), v.uuid()),
-  /**
-   * Unique login email
-   */
   email: v.pipe(v.string(), v.email()),
-  /**
-   * Display name
-   */
   name: v.pipe(v.string(), v.minLength(1), v.maxLength(50)),
   role: v.picklist(['ADMIN', 'EDITOR', 'VIEWER']),
   interests: v.string(),
@@ -37,13 +28,7 @@ export const ProfileSchema = v.object({
 export type Profile = v.InferOutput<typeof ProfileSchema>
 
 export const PostSchema = v.object({
-  /**
-   * Primary key
-   */
   id: v.pipe(v.string(), v.uuid()),
-  /**
-   * Article title
-   */
   title: v.pipe(v.string(), v.minLength(1), v.maxLength(100)),
   content: v.exactOptional(v.string()),
   visibility: v.picklist(['PUBLIC', 'PRIVATE', 'LINK_ONLY']),

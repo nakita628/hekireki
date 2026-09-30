@@ -1,8 +1,4 @@
-import {
-  makeCommentBlock,
-  makeValidationExtractor,
-  parseDocumentWithoutAnnotations,
-} from '../utils/index.js'
+import { makeValidationExtractor } from '../utils/index.js'
 import { validationSchemas } from '../utils/validation-schema.js'
 
 export function makeAjvInfer(modelName: string) {
@@ -32,17 +28,14 @@ export function makeAjvSchemas(
     readonly fieldName: string
     readonly validation: string | null
     readonly isRequired: boolean
-    readonly comment: readonly string[]
   }[],
-  comment: boolean,
   objectType?: 'strict' | 'loose',
 ) {
   const modelName = modelFields[0].modelName
   const properties = modelFields
-    .map((field) => {
-      const commentBlock = comment ? makeCommentBlock(field.comment, 4) : ''
-      return `${commentBlock}    ${field.fieldName}: ${field.validation ?? "{ type: 'unknown' as const }"},`
-    })
+    .map(
+      (field) => `    ${field.fieldName}: ${field.validation ?? "{ type: 'unknown' as const }"},`,
+    )
     .join('\n')
   const requiredFields = modelFields.filter((f) => f.isRequired).map((f) => f.fieldName)
   const requiredLine =
@@ -90,16 +83,14 @@ export function ajvSchemaCode(
     }[]
   }[],
   type: boolean,
-  comment: boolean,
   enums?: readonly {
     readonly name: string
     readonly values: readonly { readonly name: string }[]
   }[],
 ) {
-  return validationSchemas(models, type, comment, {
+  return validationSchemas(models, type, {
     importStatement: type ? `import type { FromSchema } from 'json-schema-to-ts'` : '',
     annotationPrefix: '@j.',
-    parseDocument: parseDocumentWithoutAnnotations,
     extractValidation: makeValidationExtractor('@j.'),
     inferType: makeAjvInfer,
     schemas: makeAjvSchemas,

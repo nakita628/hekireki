@@ -9,7 +9,6 @@ generator Hekireki-Zod {
   provider = "hekireki-zod"
   output   = "generated/zod"
   type     = true
-  comment  = true
   relation = true
 }
 
@@ -17,7 +16,6 @@ generator Hekireki-Valibot {
   provider = "hekireki-valibot"
   output   = "generated/valibot"
   type     = true
-  comment  = true
   relation = true
 }
 
@@ -25,7 +23,6 @@ generator Hekireki-ArkType {
   provider = "hekireki-arktype"
   output   = "generated/arktype"
   type     = true
-  comment  = true
   relation = true
 }
 
@@ -33,7 +30,6 @@ generator Hekireki-Effect {
   provider = "hekireki-effect"
   output   = "generated/effect"
   type     = true
-  comment  = true
   relation = true
 }
 
@@ -41,7 +37,6 @@ generator Hekireki-TypeBox {
   provider = "hekireki-typebox"
   output   = "generated/typebox"
   type     = true
-  comment  = true
   relation = true
 }
 
@@ -49,7 +44,6 @@ generator Hekireki-AJV {
   provider = "hekireki-ajv"
   output   = "generated/ajv"
   type     = true
-  comment  = true
   relation = true
 }
 
