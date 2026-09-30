@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import { around, meets, routeCost } from './box.js'
+import { around, grow, meets, routeCost, spanning } from './box.js'
 
 const card = { x: 100, y: 100, width: 200, height: 100 }
 
@@ -18,6 +18,28 @@ describe('around', () => {
   it('holds every box, grown by the margin on every side', () => {
     const other = { x: 400, y: 50, width: 20, height: 20 }
     expect(around([card, other], 10)).toStrictEqual({ x: 90, y: 40, width: 340, height: 170 })
+  })
+})
+
+describe('spanning', () => {
+  it('is the box between two points, whichever way round they come', () => {
+    expect(spanning({ x: 50, y: 40 }, { x: 10, y: 0 })).toStrictEqual({
+      x: 10,
+      y: 0,
+      width: 40,
+      height: 40,
+    })
+  })
+
+  it('is a point with no size for one point', () => {
+    expect(spanning({ x: 5, y: 6 })).toStrictEqual({ x: 5, y: 6, width: 0, height: 0 })
+  })
+})
+
+describe('grow', () => {
+  it('grows a box on every side, and shrinks it for a negative amount', () => {
+    expect(grow(card, 10)).toStrictEqual({ x: 90, y: 90, width: 220, height: 120 })
+    expect(grow(card, -2)).toStrictEqual({ x: 102, y: 102, width: 196, height: 96 })
   })
 })
 

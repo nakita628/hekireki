@@ -9,7 +9,7 @@ import {
   MONO_ADVANCE,
 } from '../constants/index.js'
 import type { Box, Point, Route } from '../types/index.js'
-import { around, meets } from './box.js'
+import { around, grow, meets, spanning } from './box.js'
 import { textUnits } from './text.js'
 
 // The room either side of the widest line of a caption, inside its chip.
@@ -17,7 +17,7 @@ const EDGE_LABEL_PADDING_X = 5
 // The room a caption keeps between itself and the wire it labels when it sits beside one.
 const CAPTION_GAP = 6
 
-export function captionWidth(caption: readonly string[]) {
+function captionWidth(caption: readonly string[]) {
   // A relation may be named in any language — `@relation("フォロー")` — so the chip is measured
   // the way a card measures a name, or a caption in Japanese draws half again as wide as its box.
   return (
@@ -30,7 +30,7 @@ function captionHeight(caption: readonly string[]) {
   return caption.length * EDGE_LABEL_LINE_HEIGHT + EDGE_LABEL_PADDING
 }
 
-export function captionBox(caption: readonly string[], center: Point): Box {
+function captionBox(caption: readonly string[], center: Point): Box {
   const width = captionWidth(caption)
   const height = captionHeight(caption)
   return { x: center.x - width / 2, y: center.y - height / 2, width, height }
@@ -149,13 +149,7 @@ function loopCaptionBox(points: Route, caption: readonly string[]): Box {
  * through the loop nor under its caption, nor in a sliver between the card and either.
  */
 export function loopRoom(points: Route, caption: readonly string[]): Box {
-  return around(
-    [
-      loopCaptionBox(points, caption),
-      ...points.map((point) => ({ x: point.x, y: point.y, width: 0, height: 0 })),
-    ],
-    0,
-  )
+  return around([loopCaptionBox(points, caption), ...points.map((point) => spanning(point))], 0)
 }
 
 function midpoint(points: Route): Point {
@@ -222,15 +216,7 @@ function wireBoxes<E extends CaptionedEdge>(edges: readonly E[]): readonly Wire<
   return edges.flatMap((edge) =>
     edge.points.slice(0, -1).map((a, index) => {
       const b = edge.points[index + 1] ?? a
-      return {
-        edge,
-        box: {
-          x: Math.min(a.x, b.x) - WIRE_HALF_WIDTH,
-          y: Math.min(a.y, b.y) - WIRE_HALF_WIDTH,
-          width: Math.abs(b.x - a.x) + WIRE_HALF_WIDTH * 2,
-          height: Math.abs(b.y - a.y) + WIRE_HALF_WIDTH * 2,
-        },
-      }
+      return { edge, box: grow(spanning(a, b), WIRE_HALF_WIDTH) }
     }),
   )
 }

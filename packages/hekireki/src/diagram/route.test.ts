@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vite-plus/test'
 
 import { EDGE_OFFSET, GRID, NODE_ROW_HEIGHT, SELF_LOOP_GAP } from '../constants/index.js'
 import type { Box, Point } from '../types/index.js'
-import { routePoints, selfLoopPoints, smoothStepPoints } from './route.js'
+import { routePoints, selfLoopPoints } from './route.js'
 
 /** How far a polyline runs inside a box, so a route can be checked for what it hides. */
 function hiddenLength(points: readonly Point[], box: Box) {
@@ -107,16 +107,16 @@ describe('routePoints', () => {
   })
 })
 
-describe('smoothStepPoints', () => {
+describe('the plain route', () => {
   it('crosses in a channel a step of the grid past the end of its stub', () => {
-    expect(smoothStepPoints(source, { x: 700, y: 300 })[2]).toStrictEqual({
+    expect(routePoints(source, { x: 700, y: 300 }, [])[2]).toStrictEqual({
       x: source.x + EDGE_OFFSET + GRID,
       y: 100,
     })
   })
 
   it('crosses in the middle of a gap too narrow for that', () => {
-    expect(smoothStepPoints(source, { x: 410, y: 300 })[2]).toStrictEqual({ x: 375, y: 100 })
+    expect(routePoints(source, { x: 410, y: 300 }, [])[2]).toStrictEqual({ x: 375, y: 100 })
   })
 })
 

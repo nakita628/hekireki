@@ -3,7 +3,7 @@
 // keep one track between them.
 import { EDGE_OFFSET, GRID } from '../constants/index.js'
 import type { Box, Point, Route } from '../types/index.js'
-import { meets, routeCost } from './box.js'
+import { grow, meets, routeCost } from './box.js'
 
 // How far apart two wires are drawn where they would otherwise run on top of each other: half a
 // step of the grid, so a channel down the middle of a gap and the tracks beside it stay on it.
@@ -126,15 +126,7 @@ function spreadVertical(routes: readonly Route[], cards: readonly Box[]): readon
   // What a stretch keeps its distance from: half a track from the cards, and a whole one from the
   // wires of other routes that cannot move out of its way, as far as from a track beside it.
   const obstacles = [
-    ...cards.map((card) => ({
-      route: null,
-      box: {
-        x: card.x - TRACK / 2,
-        y: card.y - TRACK / 2,
-        width: card.width + TRACK,
-        height: card.height + TRACK,
-      },
-    })),
+    ...cards.map((card) => ({ route: null, box: grow(card, TRACK / 2) })),
     ...all
       .filter((stretch) => !stretch.free)
       .map((stretch) => ({

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vite-plus/test'
 
 import { EDGE_OFFSET, NODE_ROW_HEIGHT } from '../constants/index.js'
 import type { Box, Point } from '../types/index.js'
-import { captionBox, captionWidth, loopRoom, placeCaptions } from './caption.js'
+import { loopRoom, placeCaptions } from './caption.js'
 import { routePoints, selfLoopPoints } from './route.js'
 
 function overlaps(a: Box, b: Box) {
@@ -24,9 +24,17 @@ function coversWire(box: Box, points: readonly Point[]) {
 
 const source = { x: 340, y: 100 }
 
+/** The chip a caption is given on a plain edge with nothing in its way: how big it draws. */
+function chip(lines: readonly string[]): Box {
+  const points = routePoints(source, { x: 700, y: 300 }, [])
+  return (
+    placeCaptions([{ caption: lines, points }], [])[0]?.box ?? { x: 0, y: 0, width: 0, height: 0 }
+  )
+}
+
 describe('placeCaptions', () => {
   const caption = ['one to many', 'on delete cascade']
-  const { height } = captionBox(caption, { x: 0, y: 0 })
+  const { height } = chip(caption)
 
   it('stands a caption on the stretch into its target, flush against the end symbol', () => {
     const points = routePoints(source, { x: 700, y: 300 }, [])
@@ -151,23 +159,20 @@ describe('placeCaptions', () => {
     // Two ends a few pixels apart: every segment is a corner, so no spot qualifies.
     const points = routePoints({ x: 0, y: 0 }, { x: 6, y: 2 }, [])
     const [placed] = placeCaptions([{ caption, points }], [])
-    expect(placed?.box).toStrictEqual(captionBox(caption, { x: 3, y: 1 }))
+    const box = placed?.box ?? { x: 0, y: 0, width: 0, height: 0 }
+    expect({ x: box.x + box.width / 2, y: box.y + box.height / 2 }).toStrictEqual({ x: 3, y: 1 })
   })
 
   // A relation may be named in any language: `@relation("フォロー")` draws about twice as wide as
   // its character count suggests, and a chip sized from the count is too narrow for its own text.
   it('sizes a chip that holds full-width text to the width it draws at', () => {
-    expect(captionWidth(['あいう'])).toBe(captionWidth(['abcdef']))
-    expect(captionWidth(['あいう'])).toBeGreaterThan(captionWidth(['abc']))
+    expect(chip(['あいう']).width).toBe(chip(['abcdef']).width)
+    expect(chip(['あいう']).width).toBeGreaterThan(chip(['abc']).width)
   })
 
   it('sizes a chip from its longest line and its line count', () => {
-    expect(captionWidth(['ab'])).toBeLessThan(captionWidth(['abcd']))
-    expect(captionWidth(['ab', 'abcd'])).toBe(captionWidth(['abcd']))
-    const [one, two] = [captionBox(['a'], source), captionBox(['a', 'b'], source)]
-    expect(two.height).toBeGreaterThan(one.height)
-    // The box is centred on the point it is given.
-    expect(one.x + one.width / 2).toBe(source.x)
-    expect(one.y + one.height / 2).toBe(source.y)
+    expect(chip(['ab']).width).toBeLessThan(chip(['abcd']).width)
+    expect(chip(['ab', 'abcd']).width).toBe(chip(['abcd']).width)
+    expect(chip(['a', 'b']).height).toBeGreaterThan(chip(['a']).height)
   })
 })

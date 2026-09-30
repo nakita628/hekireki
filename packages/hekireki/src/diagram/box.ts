@@ -14,6 +14,21 @@ export function around(boxes: readonly Box[], margin: number): Box {
   }
 }
 
+/** The box two points span: a line's worth of box between two ends, or a point's for one. */
+export function spanning(a: Point, b: Point = a): Box {
+  return {
+    x: Math.min(a.x, b.x),
+    y: Math.min(a.y, b.y),
+    width: Math.abs(b.x - a.x),
+    height: Math.abs(b.y - a.y),
+  }
+}
+
+/** The box grown by `by` on every side, or shrunk by it where `by` is below zero. */
+export function grow(box: Box, by: number): Box {
+  return { x: box.x - by, y: box.y - by, width: box.width + by * 2, height: box.height + by * 2 }
+}
+
 /** Whether two boxes overlap; boxes that only touch do not meet. */
 export function meets(a: Box, b: Box) {
   return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height

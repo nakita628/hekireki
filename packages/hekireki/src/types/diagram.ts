@@ -131,7 +131,7 @@ export type SchemaRelation = {
 }
 
 /** A relation as Studio's canvas holds it: the drawing's own, and the id React Flow keys its edge by. */
-export type CanvasRelation = SchemaRelation & { readonly id: string }
+type CanvasRelation = SchemaRelation & { readonly id: string }
 
 /** The schema as Studio's canvas draws it. */
 export type CanvasSchema = {

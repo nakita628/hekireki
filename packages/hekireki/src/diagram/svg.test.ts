@@ -13,7 +13,7 @@ import type { DiagramIndex, SchemaField, SchemaModel, SchemaRelation } from '../
 import { edgeCaption } from './caption-text.js'
 import { fieldTypeLabel } from './card.js'
 import { polylinePath } from './path.js'
-import { smoothStepPoints } from './route.js'
+import { routePoints } from './route.js'
 import { renderDiagramSvg } from './svg.js'
 import { withRasterFonts } from './text.js'
 
@@ -145,13 +145,13 @@ describe('renderDiagramSvg', () => {
 
 describe('the path of an edge between two nodes', () => {
   it('bends twice, a step of the grid past its stub, when the target lies to the right', () => {
-    expect(polylinePath(smoothStepPoints({ x: 0, y: 0 }, { x: 200, y: 100 }))).toBe(
+    expect(polylinePath(routePoints({ x: 0, y: 0 }, { x: 200, y: 100 }, []))).toBe(
       'M0 0L20 0L 35,0Q 40,0 40,5L 40,95Q 40,100 45,100L180 100L200 100',
     )
   })
 
   it('routes around both nodes when the target lies to the left', () => {
-    const path = polylinePath(smoothStepPoints({ x: 200, y: 0 }, { x: 0, y: 100 }))
+    const path = polylinePath(routePoints({ x: 200, y: 0 }, { x: 0, y: 100 }, []))
     expect(path.startsWith('M200 0L 215,0Q 220,0 220,5')).toBe(true)
     expect(path).toContain('L -15,50Q -20,50 -20,55')
     expect(path.endsWith('Q -20,100 -15,100L0 100')).toBe(true)

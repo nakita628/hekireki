@@ -3,7 +3,7 @@
 // itself. Shared by the exported drawing and Studio's canvas, so the two agree.
 import { EDGE_OFFSET, GRID, NODE_ROW_HEIGHT, SELF_LOOP_GAP } from '../constants/index.js'
 import type { Box, Point, Route } from '../types/index.js'
-import { around, meets, routeCost } from './box.js'
+import { around, grow, meets, routeCost } from './box.js'
 
 /** An edge that crosses the gap in a channel down the canvas at `x`. */
 function throughChannel(source: Point, target: Point, x: number): Route {
@@ -33,7 +33,7 @@ function alongLane(source: Point, target: Point, y: number, x: number): Route {
 }
 
 /** The corners of an edge from a source on the right of a node to a target on the left of another. */
-export function smoothStepPoints(source: Point, target: Point): Route {
+function smoothStepPoints(source: Point, target: Point): Route {
   const center = { x: (source.x + target.x) / 2, y: (source.y + target.y) / 2 }
   // The channel runs a step of the grid past the end of the source's stub, and leaves the rest of
   // the gap to the captions in front of the target; a gap too narrow for that is crossed in its
@@ -56,12 +56,7 @@ const CARD_INSET = 2
  * another channel down the canvas or another lane across it.
  */
 export function routePoints(source: Point, target: Point, cards: readonly Box[]): Route {
-  const obstacles = cards.map((card) => ({
-    x: card.x + CARD_INSET,
-    y: card.y + CARD_INSET,
-    width: card.width - CARD_INSET * 2,
-    height: card.height - CARD_INSET * 2,
-  }))
+  const obstacles = cards.map((card) => grow(card, -CARD_INSET))
   const direct = smoothStepPoints(source, target)
   const corridor = {
     x: Math.min(source.x, target.x) - EDGE_OFFSET,

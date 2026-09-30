@@ -2,10 +2,8 @@ import { useNodes, useStore } from '@xyflow/react'
 import type { Edge, InternalNode, Node } from '@xyflow/react'
 import { createContext, useContext, useMemo, useState } from 'react'
 
-import { loopRoom, placeCaptions } from '../../../../diagram/caption.js'
 import { polylinePath } from '../../../../diagram/path.js'
-import { routePoints, selfLoopPoints } from '../../../../diagram/route.js'
-import { separateRoutes } from '../../../../diagram/tracks.js'
+import { layoutWires } from '../../../../diagram/wires.js'
 import type { Box, Point, Route } from '../../../../types/index.js'
 
 /** Where an edge runs and where its caption sits, both in flow coordinates. */
@@ -49,9 +47,8 @@ function center(box: Box): Point {
 }
 
 /**
- * Routes every edge and places every caption in one pass, with the same geometry the exported
- * drawing uses: the canvas and the download agree, and a caption is laid out knowing where the
- * other captions and every wire went, so it never covers the relation it names.
+ * Lays every edge out with the pass the exported drawing makes (`layoutWires`), so the canvas and
+ * the download agree.
  *
  * An edge whose ends are not both on a card that has been measured is left out; the edge draws
  * React Flow's own path until the next pass has it.
@@ -60,45 +57,22 @@ export function diagramGeometry(
   edges: readonly GeometryEdge[],
   cards: ReadonlyMap<string, GeometryCard>,
 ): DiagramGeometry {
-  const boxes = [...cards.values()].map((card) => card.box)
   const anchored = edges.flatMap((edge) => {
     const source = cards.get(edge.source)?.source.get(edge.sourceHandle ?? '')
     const target = cards.get(edge.target)?.target.get(edge.targetHandle ?? '')
     if (source === undefined || target === undefined) return []
-    return [{ edge, source, target, loops: edge.source === edge.target }]
+    return [
+      { id: edge.id, source, target, loops: edge.source === edge.target, caption: edge.caption },
+    ]
   })
-  // The caption of a self relation stands beside its loop, out in the gap by its card, and the
-  // wires of that gap go round it as round a card — as the exported drawing does.
-  const obstacles = [
-    ...boxes,
-    ...anchored
-      .filter(({ loops }) => loops)
-      .map(({ edge, source, target }) => loopRoom(selfLoopPoints(source, target), edge.caption)),
-  ]
-  const joined = anchored.map(({ edge, source, target, loops }) => ({
-    edge,
-    points: loops ? selfLoopPoints(source, target) : routePoints(source, target, obstacles),
-  }))
-  const separated = separateRoutes(
-    joined.map(({ points }) => points),
-    obstacles,
-  )
-  const routed = joined.map(({ edge }, index) => ({
-    id: edge.id,
-    caption: edge.caption,
-    points: separated[index] ?? [],
-  }))
-  const captions = new Map(
-    placeCaptions(routed, boxes).map((placed) => [placed.edge.id, center(placed.box)]),
+  const wired = layoutWires(
+    anchored,
+    [...cards.values()].map((card) => card.box),
   )
   return new Map(
-    routed.map((edge) => [
-      edge.id,
-      {
-        points: edge.points,
-        path: polylinePath(edge.points),
-        caption: captions.get(edge.id) ?? null,
-      },
+    wired.map(({ wire, points, caption }) => [
+      wire.id,
+      { points, path: polylinePath(points), caption: caption === null ? null : center(caption) },
     ]),
   )
 }

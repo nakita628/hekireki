@@ -18,15 +18,13 @@ import type {
   Route,
   SchemaRelation,
 } from '../types/index.js'
-import { around } from './box.js'
+import { around, grow, spanning } from './box.js'
 import { edgeCaption } from './caption-text.js'
-import { loopRoom, placeCaptions } from './caption.js'
 import { anchorY, hasField, placeEnums, placeNodes, renderEnum, renderNode } from './card.js'
 import type { PlacedEnum, PlacedNode } from './card.js'
 import { polylinePath, round } from './path.js'
-import { routePoints, selfLoopPoints } from './route.js'
 import { BASELINE, escapeXml, FONT_MONO } from './text.js'
-import { separateRoutes } from './tracks.js'
+import { layoutWires } from './wires.js'
 
 // A relation is drawn solid, and dashed where nothing in the database backs it; an enum link is
 // finer, dotted and quieter, so it never reads as a relation.
@@ -77,7 +75,6 @@ function renderCardinality(
 type Edge = {
   readonly relation: SchemaRelation
   readonly points: Route
-  readonly caption: readonly string[]
   readonly dashed: boolean
   /** Which way the end symbols face: the target of a self loop sits on the right of its node. */
   readonly targetTowards: 'left' | 'right'
@@ -107,21 +104,6 @@ function edgeEnds(relation: SchemaRelation, nodes: ReadonlyMap<string, PlacedNod
   }
 }
 
-/** How an edge runs between its ends, round `obstacles`, and what it says along the way. */
-function edgeGeometry(
-  { relation, loops, source, target }: NonNullable<ReturnType<typeof edgeEnds>>,
-  obstacles: readonly Box[],
-): Edge {
-  return {
-    relation,
-    points: loops ? selfLoopPoints(source, target) : routePoints(source, target, obstacles),
-    caption: edgeCaption(relation),
-    // Dashed is "no foreign key backs this", not "many to many" — see `RelationOrigin`.
-    dashed: relation.origin === 'annotated' || relation.origin === 'implicit-many-to-many',
-    targetTowards: loops ? 'left' : 'right',
-  }
-}
-
 function renderEdge(edge: Edge, palette: Palette) {
   const source = edge.points[0]
   const target = edge.points.at(-1)
@@ -135,19 +117,20 @@ function renderEdge(edge: Edge, palette: Palette) {
   ].join('')
 }
 
-/** The dotted links from every enum-typed field to the card that lists its values. */
-function enumLinks(
-  nodes: readonly PlacedNode[],
-  enums: readonly PlacedEnum[],
-  cards: readonly Box[],
-): readonly Route[] {
+/** Where the dotted link from every enum-typed field to the card that lists its values runs. */
+function enumLinkEnds(nodes: readonly PlacedNode[], enums: readonly PlacedEnum[]) {
   return nodes.flatMap((node) =>
     node.fields.flatMap((field) => {
       const card = enums.find((candidate) => candidate.value.name === field.type)
       if (field.kind !== 'enum' || card === undefined) return []
-      const source = { x: node.x + node.width, y: anchorY(node, field.name) }
-      const target = { x: card.x, y: card.y + NODE_HEADER_HEIGHT / 2 }
-      return [routePoints(source, target, cards)]
+      return [
+        {
+          source: { x: node.x + node.width, y: anchorY(node, field.name) },
+          target: { x: card.x, y: card.y + NODE_HEADER_HEIGHT / 2 },
+          loops: false,
+          caption: [],
+        },
+      ]
     }),
   )
 }
@@ -181,39 +164,42 @@ export function renderDiagramSvg(input: DiagramInput) {
   const enums = placeEnums(input.enums ?? [], input.positions)
   const byName = new Map(nodes.map((node) => [node.model.name, node]))
   const cards = [...nodes, ...enums]
-  const anchored = input.relations
+  const relations = input.relations
     .map((relation) => edgeEnds(relation, byName))
     .filter((end) => end !== null)
-  // The caption of a self relation stands beside its loop, out in the gap by its card, and the
-  // wires of that gap go round it as round a card.
-  const obstacles = [
-    ...cards,
-    ...anchored
-      .filter((end) => end.loops)
-      .map((end) => loopRoom(selfLoopPoints(end.source, end.target), edgeCaption(end.relation))),
-  ]
-  const routed = anchored.map((end) => edgeGeometry(end, obstacles))
-  // The enum links are drawn apart from the relations as much as from each other: a dotted wire
-  // on top of a solid one reads as neither.
-  const separated = separateRoutes(
-    [...routed.map((edge) => edge.points), ...enumLinks(nodes, enums, obstacles)],
-    obstacles,
-  )
-  const edges = routed.map((edge, index) => ({ ...edge, points: separated[index] ?? edge.points }))
-  const links = separated.slice(routed.length)
-  // The captions are laid out before the drawing is sized, so none of them falls outside it. The
-  // enum links join in without a caption of their own: they are wires a caption has to stay off.
-  const captions = placeCaptions(
-    [...edges, ...links.map((points) => ({ caption: [], points }))],
+  // The enum links are laid out with the relations: a dotted wire on top of a solid one reads as
+  // neither, and a caption has to stay off both.
+  const wired = layoutWires(
+    [
+      ...relations.map((end) => ({
+        source: end.source,
+        target: end.target,
+        loops: end.loops,
+        caption: edgeCaption(end.relation),
+      })),
+      ...enumLinkEnds(nodes, enums),
+    ],
     cards,
+  )
+  const edges = relations.map(({ relation, loops }, index): Edge => ({
+    relation,
+    points: wired[index]?.points ?? [],
+    // Dashed is "no foreign key backs this", not "many to many" — see `RelationOrigin`.
+    dashed: relation.origin === 'annotated' || relation.origin === 'implicit-many-to-many',
+    targetTowards: loops ? 'left' : 'right',
+  }))
+  const links = wired.slice(relations.length).map((laid) => laid.points)
+  // The captions are laid out before the drawing is sized, so none of them falls outside it.
+  const captions = wired.flatMap(({ wire, caption }) =>
+    caption === null ? [] : [{ caption: wire.caption, box: caption }],
   )
   // The end symbols reach back along the edge, so a corner of a wire takes a stub's room around it.
   const ends = [...edges.map((edge) => edge.points), ...links].flatMap((points) =>
-    points.map((point) => around([{ x: point.x, y: point.y, width: 0, height: 0 }], EDGE_OFFSET)),
+    points.map((point) => grow(spanning(point), EDGE_OFFSET)),
   )
   const content = around(
     [
-      ...(cards.length === 0 ? [{ x: 0, y: 0, width: 0, height: 0 }] : cards),
+      ...(cards.length === 0 ? [spanning({ x: 0, y: 0 })] : cards),
       ...ends,
       ...captions.map((caption) => caption.box),
     ],
