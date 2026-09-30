@@ -1,5 +1,6 @@
 // The measures and colours the ER diagram is drawn with, shared by the renderer (src/diagram), the
 // generator that writes it out, and Studio's canvas, so the export and the page it came from agree.
+import type { DiagramTheme } from '../types/index.js'
 
 /**
  * The pitch of the dots on the canvas. Every block sits on it and every distance between blocks
@@ -74,3 +75,6 @@ export const PALETTES = {
     enumeration: '#c4b5fd',
   },
 } as const
+
+/** The colours of one theme. */
+export type Palette = (typeof PALETTES)[DiagramTheme]

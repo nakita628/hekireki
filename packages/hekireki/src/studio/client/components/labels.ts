@@ -12,7 +12,7 @@ export const BADGE = 'rounded-[3px] px-1 py-px font-sans text-badge font-semibol
 export const UNIQUE_BADGE = 'bg-unique/15 text-unique'
 
 // What a `@@` block attribute is called on a card, and the colour it is tinted with; the export
-// draws the same chips (diagram/svg.ts).
+// draws the same chips (diagram/card.ts).
 export const CONSTRAINT_STYLES = {
   id: {
     label: 'key',

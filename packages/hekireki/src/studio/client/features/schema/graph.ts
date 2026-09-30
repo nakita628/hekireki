@@ -1,24 +1,17 @@
 import type { Edge } from '@xyflow/react'
 
 import { MODEL_HANDLE } from '../../../../constants/index.js'
-import { edgeCaption } from '../../../../diagram/svg.js'
+import { edgeCaption } from '../../../../diagram/caption-text.js'
 import type {
-  CanvasRelation,
+  CanvasSchema,
   Cardinality,
   DiagramNodeType,
   LayoutPositions,
   ModelHighlight,
-  SchemaEnum,
   SchemaHighlight,
   SchemaModel,
 } from '../../../../types/index.js'
 import { diagramFields } from './layout.js'
-
-type Schema = {
-  readonly models: readonly SchemaModel[]
-  readonly relations: readonly CanvasRelation[]
-  readonly enums: readonly SchemaEnum[]
-}
 
 export function sourceHandle(field: string) {
   return `${field}-source`
@@ -52,7 +45,7 @@ export function highlightOf(
 }
 
 export function buildNodes(
-  schema: Schema,
+  schema: CanvasSchema,
   positions: LayoutPositions,
   touched: SchemaHighlight | null = null,
 ): readonly DiagramNodeType[] {
@@ -78,7 +71,7 @@ function cardinalityMarker(cardinality: Cardinality) {
 }
 
 /** A dotted link from every enum-typed field to the card that lists the values it may hold. */
-function enumEdges(schema: Schema): readonly Edge[] {
+function enumEdges(schema: CanvasSchema): readonly Edge[] {
   const names = new Set(schema.enums.map((value) => value.name))
   return schema.models.flatMap((model) =>
     diagramFields(model)
@@ -97,7 +90,7 @@ function enumEdges(schema: Schema): readonly Edge[] {
   )
 }
 
-export function buildEdges(schema: Schema): readonly Edge[] {
+export function buildEdges(schema: CanvasSchema): readonly Edge[] {
   const scalarFields = new Map(
     schema.models.map((m) => [m.name, new Set(diagramFields(m).map((f) => f.name))]),
   )

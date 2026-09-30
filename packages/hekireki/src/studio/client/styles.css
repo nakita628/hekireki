@@ -28,7 +28,7 @@
   --c-edge: #9095ab;
   --c-dots: #d4d4dc;
   /* The three marks a card carries. One value each, because the exported drawing writes the same
-     colours literally (diagram/svg.ts) and a canvas that disagrees with its own download is the
+     colours literally (constants/diagram.ts) and a canvas that disagrees with its own download is the
      bug this palette exists to prevent. */
   --c-key: #b45309;
   --c-unique: #0f766e;

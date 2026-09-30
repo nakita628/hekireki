@@ -12,6 +12,9 @@ export type Box = {
   readonly height: number
 }
 
+/** A wire's path: the corners it turns at, from where it leaves a card to where it comes into one. */
+export type Route = readonly Point[]
+
 /** Where a block's top-left corner sits on the canvas. */
 export type Position = Point
 
@@ -129,6 +132,13 @@ export type SchemaRelation = {
 
 /** A relation as Studio's canvas holds it: the drawing's own, and the id React Flow keys its edge by. */
 export type CanvasRelation = SchemaRelation & { readonly id: string }
+
+/** The schema as Studio's canvas draws it. */
+export type CanvasSchema = {
+  readonly models: readonly SchemaModel[]
+  readonly relations: readonly CanvasRelation[]
+  readonly enums: readonly SchemaEnum[]
+}
 
 /** Everything a drawing is made from: the schema, where each block sits, and the theme. */
 export type DiagramInput = {

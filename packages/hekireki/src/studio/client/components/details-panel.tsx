@@ -1,10 +1,9 @@
 import { Link } from '@tanstack/react-router'
 import { LuArrowRight } from 'react-icons/lu'
 
+import type { Cardinality, RelationOrigin } from '../../../types/index.js'
 import { FieldGlyph } from './fields-table.js'
 import { fieldTypeLabel } from './labels.js'
-
-type Cardinality = 'zero-one' | 'one' | 'zero-many' | 'many'
 
 type Model = {
   readonly name: string
@@ -27,7 +26,7 @@ type Model = {
 type Schema = {
   readonly relations: readonly {
     readonly id: string
-    readonly origin: 'inferred' | 'annotated' | 'implicit-many-to-many'
+    readonly origin: RelationOrigin
     readonly onDelete: string | null
     readonly from: {
       readonly model: string

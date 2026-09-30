@@ -17,13 +17,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { LuDownload, LuLayoutGrid, LuRefreshCw } from 'react-icons/lu'
 
 import { GRID } from '../../../../constants/index.js'
-import type {
-  CanvasRelation,
-  DiagramNodeType,
-  SchemaEnum,
-  SchemaHighlight,
-  SchemaModel,
-} from '../../../../types/index.js'
+import type { CanvasSchema, DiagramNodeType, SchemaHighlight } from '../../../../types/index.js'
 import { EnumNode } from '../../components/enum-node.js'
 import { ModelNode } from '../../components/model-node.js'
 import { layoutStorageKey, loadLayout, saveLayout, useUiStore } from '../../lib/index.js'
@@ -33,12 +27,7 @@ import { buildEdges, buildNodes, highlightEdges, highlightOf } from './graph.js'
 import { autoLayout, positionsFor } from './layout.js'
 import { RelationEdge } from './relation-edge.js'
 
-type Schema = {
-  readonly files: readonly { readonly path: string }[]
-  readonly models: readonly SchemaModel[]
-  readonly enums: readonly SchemaEnum[]
-  readonly relations: readonly CanvasRelation[]
-}
+type Schema = CanvasSchema & { readonly files: readonly { readonly path: string }[] }
 
 const nodeTypes = { model: ModelNode, enum: EnumNode }
 const edgeTypes = { relation: RelationEdge }

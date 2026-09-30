@@ -2,20 +2,16 @@ import { useNodes, useStore } from '@xyflow/react'
 import type { Edge, InternalNode, Node } from '@xyflow/react'
 import { createContext, useContext, useMemo, useState } from 'react'
 
-import {
-  loopRoom,
-  placeCaptions,
-  polylinePath,
-  routePoints,
-  selfLoopPoints,
-  separateRoutes,
-} from '../../../../diagram/edge.js'
-import type { Box, Point } from '../../../../types/index.js'
+import { loopRoom, placeCaptions } from '../../../../diagram/caption.js'
+import { polylinePath } from '../../../../diagram/path.js'
+import { routePoints, selfLoopPoints } from '../../../../diagram/route.js'
+import { separateRoutes } from '../../../../diagram/tracks.js'
+import type { Box, Point, Route } from '../../../../types/index.js'
 
 /** Where an edge runs and where its caption sits, both in flow coordinates. */
 type EdgeGeometry = {
   /** The corners the wire turns at; `path` is these, with the corners rounded. */
-  readonly points: readonly Point[]
+  readonly points: Route
   readonly path: string
   readonly caption: Point | null
 }

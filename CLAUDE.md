@@ -2,7 +2,9 @@
 
 [CONTRIBUTING.md](CONTRIBUTING.md) holds the rules; this file is what an agent needs in front of
 it. Most of the conventions are enforced by the oxlint plugin in
-`packages/hekireki/lint/custom.js`, so `vp lint` is the check, not a reviewer's memory.
+`packages/hekireki/lint/custom.js`, so `pnpm exec vp lint` is the check, not a reviewer's memory.
+Commands go through pnpm (`pnpm <script>`, `pnpm exec <tool>`), never `npx` or a bare `vp`: a tool
+resolved outside the workspace can be another version of it.
 
 ## Naming
 
@@ -99,9 +101,16 @@ it. Most of the conventions are enforced by the oxlint plugin in
   file, unexported: moving it would only publish it.
 - **Both are leaves.** They import nothing of the project but the types, which
   `no-restricted-imports` in `vite.config.ts` holds them to.
+- **`src/diagram` is one module per job.** `layout.ts` places the cards; `route.ts` runs a wire
+  between two of them, round the cards in the way; `tracks.ts` draws apart the wires that would
+  run on top of each other; `caption.ts` places the captions and `caption-text.ts` words them;
+  `path.ts` writes a wire as an SVG path; `card.ts` draws a card, `svg.ts` the whole document;
+  `box.ts` and `text.ts` are what they share. Studio's canvas routes and places with the same
+  modules (`studio/client/features/schema/geometry.ts`), so the page and its download agree.
 - **A change to how the diagram is drawn shows in the committed drawings.** `example/generated/er`
-  and `examples/better-auth/*/er.png` are regenerated with it; a change meant to leave the drawing
-  alone (speed, naming, moving code) leaves them byte for byte as they were.
+  (`pnpm example` from the root) and `examples/better-auth/*/er.png` (`pnpm generate` there) are
+  regenerated with it; a change meant to leave the drawing alone (speed, naming, moving code)
+  leaves them byte for byte as they were.
 
 ## Output
 
@@ -114,18 +123,24 @@ it. Most of the conventions are enforced by the oxlint plugin in
 
 ## Checks before handing work back
 
-`vp lint` on a whole package gets killed here, so lint the directories you touched. In
+Linting a whole package gets killed here, so lint the directories you touched. In
 `packages/hekireki`:
 
 ```bash
-npx tsgo -p tsconfig.json --noEmit
-npx tsgo -p src/studio/client/tsconfig.json --noEmit   # the client is left out of the one above
-npx vp lint src/<directory>   # per directory
-npx vp test run
+pnpm exec tsgo -p tsconfig.json --noEmit
+pnpm exec tsgo -p src/studio/client/tsconfig.json --noEmit   # the client is left out of the one above
+pnpm exec vp lint src/<directory>   # per directory
+pnpm test run
 pnpm build
 ```
 
-From the repository root: `npx vp fmt --check` and `pnpm lint` (markdown, prose, spelling,
+A change to Studio (`src/studio`, or `src/diagram`, which its canvas draws with) also runs
+`pnpm test:e2e` there. The screenshots under `e2e/__screenshots__` are a local check: when the
+diagram is meant to look different, look at the new `*-actual.png` first, then take them again with
+`pnpm exec playwright test <file> --update-snapshots`. `pages through a table larger than one page`
+fails now and then when the whole suite runs at once and passes on its own.
+
+From the repository root: `pnpm exec vp fmt --check` and `pnpm lint` (markdown, prose, spelling,
 workflows). The database-backed tests under `test/db/` need the servers named in
 [CONTRIBUTING.md](CONTRIBUTING.md) and skip without them; `examples/migrate` runs the migration
 flow end to end on SQLite with `pnpm demo`. A change to the Active Record generator is run in

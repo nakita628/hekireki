@@ -1,5 +1,7 @@
-// How wide a label draws and where it has to be cut, shared by the cards (svg.ts) and the
-// captions on the edges (edge.ts) so the two measure a name the same way.
+// The type the drawing is set in: the font stacks, how wide a label draws and where it has to be
+// cut, shared by the cards (card.ts) and the captions (caption.ts, svg.ts) so they measure a name
+// the same way.
+import { MONO_ADVANCE } from '../constants/index.js'
 
 // The East Asian Wide and Fullwidth blocks, and the emoji that draw as wide as they do. A glyph
 // from one of them takes a full em where a Latin one takes about half, so measuring a label by
@@ -47,4 +49,48 @@ export function truncateLabel(text: string, maxWidth: number, advance: number) {
     { taken: '', used: 0 },
   )
   return `${kept.taken}…`
+}
+
+// Family names stay unquoted: resvg drops a quoted name that follows an unquoted one.
+export const FONT_MONO =
+  'ui-monospace, SF Mono, Menlo, Consolas, Liberation Mono, DejaVu Sans Mono, monospace'
+export const FONT_SANS =
+  'ui-sans-serif, -apple-system, Segoe UI, Roboto, Helvetica Neue, Arial, DejaVu Sans, sans-serif'
+
+// The same two stacks with the families that cover CJK in front. A browser picks a font per
+// glyph, so the stacks above are what the SVG carries; resvg stops at the first family the
+// machine has and never looks further for a glyph that family lacks, so with a Latin face in
+// front it drops Japanese text — the whole text run, not just the glyphs it cannot draw.
+const FONT_MONO_RASTER = `Noto Sans Mono CJK JP, Source Han Mono, BIZ UDGothic, MS Gothic, IPAGothic, ${FONT_MONO}`
+const FONT_SANS_RASTER = `Noto Sans CJK JP, Hiragino Sans, Yu Gothic UI, Meiryo, IPAPGothic, ${FONT_SANS}`
+
+/**
+ * The drawing with the raster font stacks in place of the ones a browser reads, for a rasteriser
+ * without per-glyph fallback. A machine with none of those families draws what it drew before.
+ */
+export function withRasterFonts(svg: string) {
+  return svg.replaceAll(FONT_MONO, FONT_MONO_RASTER).replaceAll(FONT_SANS, FONT_SANS_RASTER)
+}
+
+// Glyph advance as a fraction of the font size, for the faces besides the plain monospace one.
+export const MONO_BOLD_ADVANCE = 0.66
+export const SANS_ADVANCE = 0.52
+// How far below the middle of a line its baseline sits, as a fraction of the font size: what
+// centres a line of text on a row, since resvg reads no `dominant-baseline`.
+export const BASELINE = 0.36
+
+export function escapeXml(text: string) {
+  return text
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+}
+
+export function monoWidth(text: string, fontSize: number) {
+  return textUnits(text) * fontSize * MONO_ADVANCE
+}
+
+export function sansWidth(text: string, fontSize: number) {
+  return textUnits(text) * fontSize * SANS_ADVANCE
 }

@@ -10,8 +10,12 @@ import {
   PALETTES,
 } from '../constants/index.js'
 import type { DiagramIndex, SchemaField, SchemaModel, SchemaRelation } from '../types/index.js'
-import { polylinePath, smoothStepPoints } from './edge.js'
-import { edgeCaption, fieldTypeLabel, renderDiagramSvg, withRasterFonts } from './svg.js'
+import { edgeCaption } from './caption-text.js'
+import { fieldTypeLabel } from './card.js'
+import { polylinePath } from './path.js'
+import { smoothStepPoints } from './route.js'
+import { renderDiagramSvg } from './svg.js'
+import { withRasterFonts } from './text.js'
 
 function field(name: string, overrides: Partial<SchemaField> = {}): SchemaField {
   return {
