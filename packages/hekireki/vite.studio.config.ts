@@ -43,7 +43,6 @@ function studioApi(): Plugin {
             schemaProvider: snapshot.schema?.provider ?? null,
             cwd: process.cwd(),
             schemaDir: path.dirname(schemaPath),
-            env: process.env,
           }),
           NodeFileSystem.layer,
         ),
