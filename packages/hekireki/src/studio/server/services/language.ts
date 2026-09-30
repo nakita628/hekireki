@@ -228,17 +228,13 @@ const DiagnoseFilesInput = z
 
 /** Every diagnostic the language server reports for the loaded files, validated together. */
 export function diagnoseFiles(input: z.infer<typeof DiagnoseFilesInput>) {
-  return Effect.sync(() => {
+  return Effect.try(() => {
     const first = input.files[0]
     if (first === undefined) return []
-    try {
-      return diagnosticsOf(
-        makeWorkspace({ files: input.files, path: first.path, text: first.content }),
-      )
-    } catch {
-      return []
-    }
-  })
+    return diagnosticsOf(
+      makeWorkspace({ files: input.files, path: first.path, text: first.content }),
+    )
+  }).pipe(Effect.orElseSucceed(() => []))
 }
 
 const BlockLocationsInput = z
@@ -264,21 +260,17 @@ const BlockLocationsInput = z
 
 /** Every block of the loaded files with the file and 1-based line of its header, in file order. */
 export function blockLocations(input: z.infer<typeof BlockLocationsInput>) {
-  return Effect.sync(() => {
+  return Effect.try(() => {
     const first = input.files[0]
     if (first === undefined) return []
-    try {
-      const workspace = makeWorkspace({ files: input.files, path: first.path, text: first.content })
-      return Array.from(languageServer.ast.getBlocks(workspace.schema), (block) => ({
-        type: block.type,
-        name: block.name,
-        file: workspace.pathOf(block.definingDocument.uri),
-        line: block.range.start.line + 1,
-      }))
-    } catch {
-      return []
-    }
-  })
+    const workspace = makeWorkspace({ files: input.files, path: first.path, text: first.content })
+    return Array.from(languageServer.ast.getBlocks(workspace.schema), (block) => ({
+      type: block.type,
+      name: block.name,
+      file: workspace.pathOf(block.definingDocument.uri),
+      line: block.range.start.line + 1,
+    }))
+  }).pipe(Effect.orElseSucceed(() => []))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -318,16 +310,12 @@ const LintSchemaInput = z
 
 /** The diagnostics of the edited text, validated together with the other loaded files. */
 export function lintSchema(input: z.infer<typeof LintSchemaInput>) {
-  return Effect.sync(() => {
-    try {
-      const workspace = makeWorkspace(input)
-      return diagnosticsOf(workspace)
-        .filter((diagnostic) => diagnostic.path === (input.path ?? ''))
-        .map(({ range, message, severity }) => ({ range, message, severity }))
-    } catch {
-      return []
-    }
-  })
+  return Effect.try(() => {
+    const workspace = makeWorkspace(input)
+    return diagnosticsOf(workspace)
+      .filter((diagnostic) => diagnostic.path === (input.path ?? ''))
+      .map(({ range, message, severity }) => ({ range, message, severity }))
+  }).pipe(Effect.orElseSucceed(() => []))
 }
 
 const FORMAT_OPTIONS = { tabSize: 2, insertSpaces: true }
@@ -422,24 +410,20 @@ const SymbolsOfSchemaInput = z
 
 /** The blocks of the edited text as the language server's document outline lists them. */
 export function symbolsOfSchema(input: z.infer<typeof SymbolsOfSchemaInput>) {
-  return Effect.sync(() => {
-    try {
-      const workspace = makeWorkspace(input)
-      return languageServer.handlers
-        .handleDocumentSymbol({ textDocument: { uri: workspace.document.uri } }, workspace.document)
-        .map(
-          // `kind` is widened to a number so the declaration does not name the server's SymbolKind.
-          (symbol): { name: string; kind: number; range: LspRange; selectionRange: LspRange } => ({
-            name: symbol.name,
-            kind: symbol.kind,
-            range: rangeOf(symbol.range),
-            selectionRange: rangeOf(symbol.selectionRange),
-          }),
-        )
-    } catch {
-      return []
-    }
-  })
+  return Effect.try(() => {
+    const workspace = makeWorkspace(input)
+    return languageServer.handlers
+      .handleDocumentSymbol({ textDocument: { uri: workspace.document.uri } }, workspace.document)
+      .map(
+        // `kind` is widened to a number so the declaration does not name the server's SymbolKind.
+        (symbol): { name: string; kind: number; range: LspRange; selectionRange: LspRange } => ({
+          name: symbol.name,
+          kind: symbol.kind,
+          range: rangeOf(symbol.range),
+          selectionRange: rangeOf(symbol.selectionRange),
+        }),
+      )
+  }).pipe(Effect.orElseSucceed(() => []))
 }
 
 const PositionParamsInput = z
@@ -544,44 +528,40 @@ function markdownOf(
 
 /** Completions the Prisma language server offers at the position: keywords, types, attributes, arguments, values. */
 export function completeSchema(input: z.infer<typeof CompleteSchemaInput>) {
-  return Effect.sync(() => {
-    try {
-      const workspace = makeWorkspace(input)
-      const list = quietly(() =>
-        languageServer.handlers.handleCompletionRequest(workspace.schema, workspace.document, {
-          ...positionParams(workspace, input),
-          context:
-            input.triggerCharacter === null
-              ? { triggerKind: INVOKED }
-              : { triggerKind: TRIGGER_CHARACTER, triggerCharacter: input.triggerCharacter },
-        }),
-      )
-      return (list?.items ?? []).map(
-        // `kind` is widened to a number so the declaration does not name the server's CompletionItemKind.
-        (
-          item,
-        ): {
-          label: string
-          kind: number | null
-          detail: string | null
-          documentation: string | null
-          insertText: string
-          insertTextFormat: 'snippet' | 'plainText'
-          sortText: string | null
-        } => ({
-          label: item.label,
-          kind: item.kind ?? null,
-          detail: item.detail ?? null,
-          documentation: item.documentation === undefined ? null : markdownOf(item.documentation),
-          insertText: item.insertText ?? item.label,
-          insertTextFormat: item.insertTextFormat === SNIPPET ? 'snippet' : 'plainText',
-          sortText: item.sortText ?? null,
-        }),
-      )
-    } catch {
-      return []
-    }
-  })
+  return Effect.try(() => {
+    const workspace = makeWorkspace(input)
+    const list = quietly(() =>
+      languageServer.handlers.handleCompletionRequest(workspace.schema, workspace.document, {
+        ...positionParams(workspace, input),
+        context:
+          input.triggerCharacter === null
+            ? { triggerKind: INVOKED }
+            : { triggerKind: TRIGGER_CHARACTER, triggerCharacter: input.triggerCharacter },
+      }),
+    )
+    return (list?.items ?? []).map(
+      // `kind` is widened to a number so the declaration does not name the server's CompletionItemKind.
+      (
+        item,
+      ): {
+        label: string
+        kind: number | null
+        detail: string | null
+        documentation: string | null
+        insertText: string
+        insertTextFormat: 'snippet' | 'plainText'
+        sortText: string | null
+      } => ({
+        label: item.label,
+        kind: item.kind ?? null,
+        detail: item.detail ?? null,
+        documentation: item.documentation === undefined ? null : markdownOf(item.documentation),
+        insertText: item.insertText ?? item.label,
+        insertTextFormat: item.insertTextFormat === SNIPPET ? 'snippet' : 'plainText',
+        sortText: item.sortText ?? null,
+      }),
+    )
+  }).pipe(Effect.orElseSucceed(() => []))
 }
 
 const HoverSchemaInput = z
@@ -623,23 +603,19 @@ const HoverSchemaInput = z
 
 /** What the Prisma language server says about the symbol at the position, as Markdown. */
 export function hoverSchema(input: z.infer<typeof HoverSchemaInput>) {
-  return Effect.sync(() => {
-    try {
-      const workspace = makeWorkspace(input)
-      const hover = quietly(() =>
-        languageServer.handlers.handleHoverRequest(
-          workspace.schema,
-          workspace.document,
-          positionParams(workspace, input),
-        ),
-      )
-      return hover === undefined
-        ? { contents: null, range: null }
-        : { contents: markdownOf(hover.contents), range: hover.range ? rangeOf(hover.range) : null }
-    } catch {
-      return { contents: null, range: null }
-    }
-  })
+  return Effect.try(() => {
+    const workspace = makeWorkspace(input)
+    const hover = quietly(() =>
+      languageServer.handlers.handleHoverRequest(
+        workspace.schema,
+        workspace.document,
+        positionParams(workspace, input),
+      ),
+    )
+    return hover === undefined
+      ? { contents: null, range: null }
+      : { contents: markdownOf(hover.contents), range: hover.range ? rangeOf(hover.range) : null }
+  }).pipe(Effect.orElseSucceed(() => ({ contents: null, range: null })))
 }
 
 const DefineSchemaInput = z
@@ -681,25 +657,21 @@ const DefineSchemaInput = z
 
 /** Where the model, enum or type referenced at the position is declared. */
 export function defineSchema(input: z.infer<typeof DefineSchemaInput>) {
-  return Effect.sync(() => {
-    try {
-      const workspace = makeWorkspace(input)
-      const links = quietly(() =>
-        languageServer.handlers.handleDefinitionRequest(
-          workspace.schema,
-          workspace.document,
-          positionParams(workspace, input),
-        ),
-      )
-      return (links ?? []).map((link) => ({
-        path: workspace.pathOf(link.targetUri),
-        range: rangeOf(link.targetRange),
-        selection: rangeOf(link.targetSelectionRange),
-      }))
-    } catch {
-      return []
-    }
-  })
+  return Effect.try(() => {
+    const workspace = makeWorkspace(input)
+    const links = quietly(() =>
+      languageServer.handlers.handleDefinitionRequest(
+        workspace.schema,
+        workspace.document,
+        positionParams(workspace, input),
+      ),
+    )
+    return (links ?? []).map((link) => ({
+      path: workspace.pathOf(link.targetUri),
+      range: rangeOf(link.targetRange),
+      selection: rangeOf(link.targetSelectionRange),
+    }))
+  }).pipe(Effect.orElseSucceed(() => []))
 }
 
 const ReferencesSchemaInput = z
@@ -741,23 +713,19 @@ const ReferencesSchemaInput = z
 
 /** Every place the symbol at the position is used, across the loaded files, declaration included. */
 export function referencesSchema(input: z.infer<typeof ReferencesSchemaInput>) {
-  return Effect.sync(() => {
-    try {
-      const workspace = makeWorkspace(input)
-      const locations = quietly(() =>
-        languageServer.handlers.handleReferencesRequest(workspace.schema, {
-          ...positionParams(workspace, input),
-          context: { includeDeclaration: true },
-        }),
-      )
-      return (locations ?? []).map((location) => ({
-        path: workspace.pathOf(location.uri),
-        range: rangeOf(location.range),
-      }))
-    } catch {
-      return []
-    }
-  })
+  return Effect.try(() => {
+    const workspace = makeWorkspace(input)
+    const locations = quietly(() =>
+      languageServer.handlers.handleReferencesRequest(workspace.schema, {
+        ...positionParams(workspace, input),
+        context: { includeDeclaration: true },
+      }),
+    )
+    return (locations ?? []).map((location) => ({
+      path: workspace.pathOf(location.uri),
+      range: rangeOf(location.range),
+    }))
+  }).pipe(Effect.orElseSucceed(() => []))
 }
 
 function fileEdits(
@@ -812,20 +780,16 @@ const RenameSchemaInput = z
 
 /** The edits that rename the model, enum or field at the position everywhere it is used, per file. */
 export function renameSchema(input: z.infer<typeof RenameSchemaInput>) {
-  return Effect.sync(() => {
-    try {
-      const workspace = makeWorkspace(input)
-      const edit = quietly(() =>
-        languageServer.handlers.handleRenameRequest(workspace.schema, workspace.document, {
-          ...positionParams(workspace, input),
-          newName: input.newName,
-        }),
-      )
-      return fileEdits(workspace, edit?.changes)
-    } catch {
-      return []
-    }
-  })
+  return Effect.try(() => {
+    const workspace = makeWorkspace(input)
+    const edit = quietly(() =>
+      languageServer.handlers.handleRenameRequest(workspace.schema, workspace.document, {
+        ...positionParams(workspace, input),
+        newName: input.newName,
+      }),
+    )
+    return fileEdits(workspace, edit?.changes)
+  }).pipe(Effect.orElseSucceed(() => []))
 }
 
 const CodeActionsSchemaInput = z
@@ -1076,32 +1040,28 @@ function formatFix(input: z.infer<typeof FormatFixInput>, workspace: Workspace) 
 
 /** The quick fixes for the diagnostics in the range: the language server's, then the formatter when it fixes errors. */
 export function codeActionsSchema(input: z.infer<typeof CodeActionsSchemaInput>) {
-  return Effect.sync(() => {
-    try {
-      const workspace = makeWorkspace(input)
-      const actions = quietly(() =>
-        languageServer.handlers.handleCodeActions(workspace.schema, workspace.document, {
-          textDocument: { uri: workspace.document.uri },
-          range: input.range,
-          context: {
-            diagnostics: input.diagnostics.map((diagnostic) => ({
-              range: diagnostic.range,
-              message: diagnostic.message,
-              severity: SEVERITY[diagnostic.severity],
-            })),
-          },
-        }),
-      )
-      return [
-        ...actions.map((action) => ({
-          title: action.title,
-          changes: fileEdits(workspace, action.edit?.changes),
-          isPreferred: action.isPreferred ?? false,
-        })),
-        ...formatFix(input, workspace),
-      ]
-    } catch {
-      return []
-    }
-  })
+  return Effect.try(() => {
+    const workspace = makeWorkspace(input)
+    const actions = quietly(() =>
+      languageServer.handlers.handleCodeActions(workspace.schema, workspace.document, {
+        textDocument: { uri: workspace.document.uri },
+        range: input.range,
+        context: {
+          diagnostics: input.diagnostics.map((diagnostic) => ({
+            range: diagnostic.range,
+            message: diagnostic.message,
+            severity: SEVERITY[diagnostic.severity],
+          })),
+        },
+      }),
+    )
+    return [
+      ...actions.map((action) => ({
+        title: action.title,
+        changes: fileEdits(workspace, action.edit?.changes),
+        isPreferred: action.isPreferred ?? false,
+      })),
+      ...formatFix(input, workspace),
+    ]
+  }).pipe(Effect.orElseSucceed(() => []))
 }

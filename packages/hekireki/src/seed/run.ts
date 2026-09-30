@@ -168,7 +168,6 @@ function findClient(input: {
       schemaText: schemaText(input.files),
       cwd: input.cwd,
       schemaDir,
-      env: process.env,
     }).pipe(
       Effect.mapError(
         (error) =>

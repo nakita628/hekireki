@@ -7,6 +7,7 @@ import { getEnginesPath } from '@prisma/engines'
 import { Effect, Stream } from 'effect'
 import * as z from 'zod'
 
+import { environmentVariable } from '../../database/url.js'
 import { exists, readDirectory } from '../../file/index.js'
 import type { Engine } from './engine.js'
 
@@ -91,8 +92,8 @@ const MarkedResult = z
  */
 export function findSchemaEngineBinary(cwd: string) {
   return Effect.gen(function* () {
-    const configured = process.env.PRISMA_SCHEMA_ENGINE_BINARY
-    if (configured !== undefined && configured !== '') {
+    const configured = yield* environmentVariable('PRISMA_SCHEMA_ENGINE_BINARY')
+    if (configured !== null) {
       const file = path.resolve(cwd, configured)
       return (yield* exists(file).pipe(Effect.orElseSucceed(() => false))) ? file : null
     }

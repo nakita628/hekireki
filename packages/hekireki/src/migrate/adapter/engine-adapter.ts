@@ -1,4 +1,4 @@
-import { Effect, Result } from 'effect'
+import { Effect } from 'effect'
 
 import type { Dialect } from '../../database/url.js'
 import { splitStatements } from '../../sql/index.js'
@@ -8,8 +8,8 @@ import { COLUMN_TYPE, columnTypeOfNative, columnTypeOfValue } from './column-typ
 /**
  * What the engine reads back from every adapter call: the shape `@prisma/driver-adapter-utils`
  * wraps its adapters in. The engine reaches for `.valueOf()` on what it is given, so a bare value
- * makes it fail with `Cannot read properties of undefined`. Inside the adapter an outcome is
- * Effect's `Result`; this is only what it is handed to the engine as.
+ * makes it fail with `Cannot read properties of undefined`. Inside the adapter an outcome is an
+ * Effect; `Effect.match` turns it into this only as it is handed to the engine.
  */
 type EngineResult<A> = {
   readonly map: <B>(fn: (value: A) => B) => EngineResult<B>
@@ -19,20 +19,17 @@ type EngineResult<A> = {
   | { readonly ok: false; readonly error: AdapterError }
 )
 
-function engineResult<A>(result: Result.Result<A, AdapterError>): EngineResult<A> {
-  return Result.isSuccess(result)
-    ? {
-        ok: true,
-        value: result.success,
-        map: (fn) => engineResult(Result.map(result, fn)),
-        flatMap: (fn) => fn(result.success),
-      }
-    : {
-        ok: false,
-        error: result.failure,
-        map: () => engineResult(Result.fail(result.failure)),
-        flatMap: () => engineResult(Result.fail(result.failure)),
-      }
+function engineSuccess<A>(value: A): EngineResult<A> {
+  return { ok: true, value, map: (fn) => engineSuccess(fn(value)), flatMap: (fn) => fn(value) }
+}
+
+function engineFailure<A>(error: AdapterError): EngineResult<A> {
+  return {
+    ok: false,
+    error,
+    map: () => engineFailure(error),
+    flatMap: () => engineFailure(error),
+  }
 }
 
 /**
@@ -99,9 +96,10 @@ function runForEngine<A>(
 ) {
   return Effect.runPromise(
     operation.pipe(
-      Effect.mapError((error) => adapterError(dialect, error.cause)),
-      Effect.result,
-      Effect.map(engineResult),
+      Effect.match({
+        onFailure: (error): EngineResult<A> => engineFailure(adapterError(dialect, error.cause)),
+        onSuccess: (value) => engineSuccess(value),
+      }),
     ),
   )
 }
@@ -114,8 +112,7 @@ function runForEngine<A>(
 function connection(
   driver: Driver,
   /** What closing the connection does; the connection Studio is on outlives any one command. */
-  dispose: () => Promise<EngineResult<undefined>> = () =>
-    Promise.resolve(engineResult(Result.succeed(undefined))),
+  dispose: () => Promise<EngineResult<undefined>> = () => Promise.resolve(engineSuccess(undefined)),
 ) {
   return {
     // PostgreSQL is `postgres` to the engine, not `postgresql`.
@@ -165,7 +162,7 @@ function connection(
       // from reading the file until Studio stops. The file stays shared, as it is for the rest of
       // Studio.
       driver.dialect === 'sqlite' && EXCLUSIVE_LOCK.test(query.sql)
-        ? Promise.resolve(engineResult(Result.succeed(0)))
+        ? Promise.resolve(engineSuccess(0))
         : query.args.length === 0 &&
             splitStatements(query.sql).filter((statement) => statement.trim() !== '').length > 1
           ? runForEngine(driver.dialect, driver.executeScript(query.sql).pipe(Effect.as(0)))
@@ -196,7 +193,7 @@ export function makeSchemaEngineAdapter(
   return {
     provider: opened.provider,
     adapterName: opened.adapterName,
-    connect: () => Promise.resolve(engineResult(Result.succeed(opened))),
+    connect: () => Promise.resolve(engineSuccess(opened)),
     ...(openShadow === undefined
       ? {}
       : {
@@ -207,9 +204,7 @@ export function makeSchemaEngineAdapter(
                 Effect.mapError((error) => ({ cause: error.reason })),
                 Effect.map((shadow) =>
                   connection(shadow, () =>
-                    Effect.runPromise(
-                      shadow.close.pipe(Effect.as(engineResult(Result.succeed(undefined)))),
-                    ),
+                    Effect.runPromise(shadow.close.pipe(Effect.as(engineSuccess(undefined)))),
                   ),
                 ),
               ),

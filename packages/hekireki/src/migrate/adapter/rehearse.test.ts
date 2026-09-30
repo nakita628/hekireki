@@ -67,7 +67,6 @@ function rehearse(dir: string, file: string, steps: readonly (readonly string[])
           schemaText: null,
           cwd: dir,
           schemaDir: dir,
-          env: {},
         })
         yield* Effect.addFinalizer(() => db.close)
         const driver = yield* db.driver

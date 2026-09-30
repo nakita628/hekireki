@@ -52,7 +52,6 @@ function openOn(file: string) {
       schemaProvider: 'sqlite',
       cwd: directory,
       schemaDir: directory,
-      env: {},
     })
     const driver = yield* db.driver
     const engine = yield* openSchemaEngine({

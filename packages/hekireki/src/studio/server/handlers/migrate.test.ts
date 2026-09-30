@@ -64,7 +64,6 @@ async function setup() {
         schemaText: null,
         cwd: dir,
         schemaDir: dir,
-        env: {},
       }),
       NodeFileSystem.layer,
     ),

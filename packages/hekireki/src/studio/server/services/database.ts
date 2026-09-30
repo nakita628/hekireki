@@ -658,10 +658,6 @@ const ConnectDatabaseInput = z
     schemaDir: z
       .string()
       .meta({ description: 'Where relative sqlite files resolve from.', example: '/app/prisma' }),
-    env: z
-      .record(z.string(), z.string().optional())
-      .readonly()
-      .meta({ description: 'The process environment.' }),
   })
   .readonly()
   .meta({

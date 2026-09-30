@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 
 import { NodeFileSystem } from '@effect/platform-node'
-import { Effect, Exit } from 'effect'
+import { ConfigProvider, Effect, Exit, Layer } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
 import { resolveDatabaseUrl } from './resolve.js'
@@ -39,9 +39,12 @@ function resolve(input: {
         schemaText: input.schemaText ?? null,
         cwd: input.cwd,
         schemaDir: input.schemaDir ?? input.cwd,
-        env: input.env ?? {},
       }),
-      NodeFileSystem.layer,
+      // The environment is the one the test names, never the machine's it runs on.
+      Layer.mergeAll(
+        NodeFileSystem.layer,
+        ConfigProvider.layer(ConfigProvider.fromEnvRecord({ ...input.env })),
+      ),
     ),
   )
 }

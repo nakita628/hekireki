@@ -52,7 +52,7 @@ async function cli(args: readonly string[]) {
   })
   // The arguments go in through `Stdio`, where the binary's come from `process.argv`.
   const exit = await Effect.runPromiseExit(
-    hekireki.pipe(
+    hekireki().pipe(
       Effect.provide(Stdio.layerTest({ args: Effect.succeed(args) })),
       Effect.provide(NodeServices.layer),
     ),

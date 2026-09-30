@@ -145,26 +145,29 @@ function runStudio(args: Command.Command.Config.Infer<typeof studioFlags>) {
   }).pipe(Effect.scoped)
 }
 
-const studio = Command.make('studio', studioFlags, runStudio).pipe(
-  Command.withDescription(
-    'Open Hekireki Studio: ER diagram, docs, model data and SQL for a Prisma schema',
-  ),
-  Command.withExamples([
-    {
-      command: `${COMMAND_NAME} studio`,
-      description: `Open ./${DEFAULT_SCHEMA_PATHS[0]}, with the database URL from .env`,
-    },
-    {
-      command: `${COMMAND_NAME} studio --schema prisma/schema`,
-      description: 'Read a multi-file schema: every .prisma file of the directory, together',
-    },
-    {
-      command: `${COMMAND_NAME} studio --url file:./dev.db`,
-      description: 'Browse a SQLite file, resolved from the schema directory as Prisma resolves it',
-    },
-    { command: `${COMMAND_NAME} studio -p 3000`, description: 'Listen on another port' },
-  ]),
-)
+function studio() {
+  return Command.make('studio', studioFlags, runStudio).pipe(
+    Command.withDescription(
+      'Open Hekireki Studio: ER diagram, docs, model data and SQL for a Prisma schema',
+    ),
+    Command.withExamples([
+      {
+        command: `${COMMAND_NAME} studio`,
+        description: `Open ./${DEFAULT_SCHEMA_PATHS[0]}, with the database URL from .env`,
+      },
+      {
+        command: `${COMMAND_NAME} studio --schema prisma/schema`,
+        description: 'Read a multi-file schema: every .prisma file of the directory, together',
+      },
+      {
+        command: `${COMMAND_NAME} studio --url file:./dev.db`,
+        description:
+          'Browse a SQLite file, resolved from the schema directory as Prisma resolves it',
+      },
+      { command: `${COMMAND_NAME} studio -p 3000`, description: 'Listen on another port' },
+    ]),
+  )
+}
 
 const seedFlags = {
   config: Flag.String('config').pipe(
@@ -239,29 +242,31 @@ function runSeedCommand(args: Command.Command.Config.Infer<typeof seedFlags>) {
   })
 }
 
-const seed = Command.make('seed', seedFlags, runSeedCommand).pipe(
-  Command.withDescription(
-    'Fill the database with faker rows that follow the schema: relations, enums, unique keys and date ranges',
-  ),
-  Command.withExamples([
-    {
-      command: `${COMMAND_NAME} seed`,
-      description: 'Read hekireki.config.ts and insert into the database named by DATABASE_URL',
-    },
-    {
-      command: `${COMMAND_NAME} seed --sql prisma/seed.sql`,
-      description: 'Write the same rows as a SQL script instead of inserting them',
-    },
-    {
-      command: `${COMMAND_NAME} seed --reset --seed 7 --count 100`,
-      description: 'Empty the seeded tables first, then insert 100 rows per model from seed 7',
-    },
-    {
-      command: `${COMMAND_NAME} seed --locale ja`,
-      description: 'Japanese names, addresses and text',
-    },
-  ]),
-)
+function seed() {
+  return Command.make('seed', seedFlags, runSeedCommand).pipe(
+    Command.withDescription(
+      'Fill the database with faker rows that follow the schema: relations, enums, unique keys and date ranges',
+    ),
+    Command.withExamples([
+      {
+        command: `${COMMAND_NAME} seed`,
+        description: 'Read hekireki.config.ts and insert into the database named by DATABASE_URL',
+      },
+      {
+        command: `${COMMAND_NAME} seed --sql prisma/seed.sql`,
+        description: 'Write the same rows as a SQL script instead of inserting them',
+      },
+      {
+        command: `${COMMAND_NAME} seed --reset --seed 7 --count 100`,
+        description: 'Empty the seeded tables first, then insert 100 rows per model from seed 7',
+      },
+      {
+        command: `${COMMAND_NAME} seed --locale ja`,
+        description: 'Japanese names, addresses and text',
+      },
+    ]),
+  )
+}
 
 const migrateCheckFlags = {
   schema: Flag.String('schema').pipe(
@@ -320,7 +325,6 @@ function runMigrateCheckCommand(args: Command.Command.Config.Infer<typeof migrat
       ...args,
       schemaPath,
       cwd: process.cwd(),
-      env: process.env,
     }).pipe(Effect.mapError((error) => new CliError.UserError({ cause: error.message })))
     yield* Console.log(args.json ? checkJson(report) : checkBanner(report))
     const summary = summarize(report)
@@ -328,29 +332,31 @@ function runMigrateCheckCommand(args: Command.Command.Config.Infer<typeof migrat
   })
 }
 
-const migrateCheck = Command.make('check', migrateCheckFlags, runMigrateCheckCommand).pipe(
-  Command.withDescription(
-    'Check the rows of the database against the schema about to be migrated: NULLs in a column turning required, duplicates under a new unique key, orphans of a foreign key, values an enum drops, and the data a dropped table or column takes with it. Read only; fails when something blocks.',
-  ),
-  Command.withExamples([
-    {
-      command: `${COMMAND_NAME} migrate check`,
-      description: 'Check the edited schema against the database named by DATABASE_URL',
-    },
-    {
-      command: `${COMMAND_NAME} migrate check --url postgresql://readonly@prod/app`,
-      description: 'Check the production data before `prisma migrate deploy` runs on it',
-    },
-    {
-      command: `${COMMAND_NAME} migrate check --json`,
-      description: 'A report for CI: every check, its count and the SQL that counted it',
-    },
-    {
-      command: `${COMMAND_NAME} migrate check --timeout 30000`,
-      description: 'Stop any query that runs longer than 30 seconds',
-    },
-  ]),
-)
+function migrateCheck() {
+  return Command.make('check', migrateCheckFlags, runMigrateCheckCommand).pipe(
+    Command.withDescription(
+      'Check the rows of the database against the schema about to be migrated: NULLs in a column turning required, duplicates under a new unique key, orphans of a foreign key, values an enum drops, and the data a dropped table or column takes with it. Read only; fails when something blocks.',
+    ),
+    Command.withExamples([
+      {
+        command: `${COMMAND_NAME} migrate check`,
+        description: 'Check the edited schema against the database named by DATABASE_URL',
+      },
+      {
+        command: `${COMMAND_NAME} migrate check --url postgresql://readonly@prod/app`,
+        description: 'Check the production data before `prisma migrate deploy` runs on it',
+      },
+      {
+        command: `${COMMAND_NAME} migrate check --json`,
+        description: 'A report for CI: every check, its count and the SQL that counted it',
+      },
+      {
+        command: `${COMMAND_NAME} migrate check --timeout 30000`,
+        description: 'Stop any query that runs longer than 30 seconds',
+      },
+    ]),
+  )
+}
 
 const migratePlanFlags = {
   schema: migrateCheckFlags.schema,
@@ -391,7 +397,6 @@ function runMigratePlanCommand(args: Command.Command.Config.Infer<typeof migrate
       ...args,
       schemaPath,
       cwd: process.cwd(),
-      env: process.env,
     }).pipe(Effect.mapError((error) => new CliError.UserError({ cause: error.message })))
     const migration =
       args.migration === null
@@ -421,40 +426,49 @@ function runMigratePlanCommand(args: Command.Command.Config.Infer<typeof migrate
   })
 }
 
-const migratePlan = Command.make('plan', migratePlanFlags, runMigratePlanCommand).pipe(
-  Command.withDescription(
-    'Write the fixes decided on the Migrate page of hekireki studio as SQL to run before the migration: the UPDATEs and DELETEs `migrate check` counted them by. With --migration, the whole migration Prisma wrote, the fixes first and the renames, conversions, fills and new enum members written into it. Reads the database, writes nothing to it; fails when something still blocks.',
-  ),
-  Command.withExamples([
-    {
-      command: `${COMMAND_NAME} migrate plan > fixes.sql`,
-      description: 'The SQL on stdout, to paste at the top of the migration Prisma writes',
-    },
-    {
-      command: `${COMMAND_NAME} migrate plan -o prisma/fixes.sql`,
-      description: 'Write it to a file and print the report of the check',
-    },
-    {
-      command: `${COMMAND_NAME} migrate plan -m prisma/migrations/20260915_rename/migration.sql -o prisma/migrations/20260915_rename/migration.sql`,
-      description:
-        'Rewrite the migration Prisma wrote: the fixes first, renames, conversions and fills in its statements',
-    },
-    {
-      command: `${COMMAND_NAME} migrate plan --batch 10000 -o prisma/fixes.sql`,
-      description: 'On a large table in use: a fix over more than 10000 rows runs 10000 at a time',
-    },
-  ]),
-)
+function migratePlan() {
+  return Command.make('plan', migratePlanFlags, runMigratePlanCommand).pipe(
+    Command.withDescription(
+      'Write the fixes decided on the Migrate page of hekireki studio as SQL to run before the migration: the UPDATEs and DELETEs `migrate check` counted them by. With --migration, the whole migration Prisma wrote, the fixes first and the renames, conversions, fills and new enum members written into it. Reads the database, writes nothing to it; fails when something still blocks.',
+    ),
+    Command.withExamples([
+      {
+        command: `${COMMAND_NAME} migrate plan > fixes.sql`,
+        description: 'The SQL on stdout, to paste at the top of the migration Prisma writes',
+      },
+      {
+        command: `${COMMAND_NAME} migrate plan -o prisma/fixes.sql`,
+        description: 'Write it to a file and print the report of the check',
+      },
+      {
+        command: `${COMMAND_NAME} migrate plan -m prisma/migrations/20260915_rename/migration.sql -o prisma/migrations/20260915_rename/migration.sql`,
+        description:
+          'Rewrite the migration Prisma wrote: the fixes first, renames, conversions and fills in its statements',
+      },
+      {
+        command: `${COMMAND_NAME} migrate plan --batch 10000 -o prisma/fixes.sql`,
+        description:
+          'On a large table in use: a fix over more than 10000 rows runs 10000 at a time',
+      },
+    ]),
+  )
+}
 
-const migrate = Command.make('migrate').pipe(
-  Command.withDescription('Data checks and fixes for a schema migration'),
-  Command.withSubcommands([migrateCheck, migratePlan]),
-)
+function migrate() {
+  return Command.make('migrate').pipe(
+    Command.withDescription('Data checks and fixes for a schema migration'),
+    Command.withSubcommands([migrateCheck(), migratePlan()]),
+  )
+}
 
-const cli = Command.make(COMMAND_NAME).pipe(
-  Command.withDescription('⚡️ Prisma schema tools'),
-  Command.withSubcommands([studio, seed, migrate]),
-)
+function cli() {
+  return Command.make(COMMAND_NAME).pipe(
+    Command.withDescription('⚡️ Prisma schema tools'),
+    Command.withSubcommands([studio(), seed(), migrate()]),
+  )
+}
 
 /** The `hekireki` command line, run with the arguments the `Stdio` service supplies. */
-export const hekireki = Command.run(cli, { version })
+export function hekireki() {
+  return Command.run(cli(), { version })
+}

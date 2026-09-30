@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 
 import { NodeFileSystem } from '@effect/platform-node'
-import { Effect } from 'effect'
+import { ConfigProvider, Effect, Layer } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
 import { DatabaseError } from '../errors/index.js'
@@ -48,9 +48,12 @@ async function connect(
         schemaText: options.schemaText ?? null,
         cwd,
         schemaDir: options.schemaDir ?? cwd,
-        env: options.env ?? {},
       }),
-      NodeFileSystem.layer,
+      // The environment is the one the test names, never the machine's it runs on.
+      Layer.mergeAll(
+        NodeFileSystem.layer,
+        ConfigProvider.layer(ConfigProvider.fromEnvRecord({ ...options.env })),
+      ),
     ),
   )
   opened.push(db)

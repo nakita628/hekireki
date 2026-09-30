@@ -45,16 +45,24 @@ resolved outside the workspace can be another version of it.
 
 ## Effect
 
-- **An outcome is Effect's own type, not a hand-made one.** Not `{ errors, value: null }`, not
-  `{ ok, value } | { ok, error }`: return `Result.succeed(value)` / `Result.fail(why)` and split
-  a list of them with `Array.separate`, as `resolveTable` and `resolveMoves` do. In an Effect, use
-  `Effect.result`, `Effect.match`, `Effect.mapError`. `Result`, `Option` and `Array` are values and
-  are fine in `migrate/domain`; the `Effect` runtime is not.
+- **Outside a domain, an outcome is an Effect.** What can fail is an `Effect`, and what may throw
+  is read with `Effect.try`; a fallback is `Effect.orElseSucceed`, a failure turned into
+  something else `Effect.match` or `Effect.mapError`. Not `Result`, and not a hand-made
+  `{ ok, value } | { ok, error }`.
+- **A domain depends on zod at most, never on `effect`.** `studio/server/domain` and
+  `migrate/domain` are plain TypeScript over zod's shapes, and `no-restricted-imports` in
+  `vite.config.ts` holds them to it. Where one resolves many entries and reports every mistake at
+  once, each entry is a `Resolution` and the lot is split with `separate`
+  (`migrate/domain/fixes/resolution.ts`), as `resolveTable` and `resolveMoves` do.
+- **The environment is read through `Config`.** A variable is `Config.String(name)` from the
+  `ConfigProvider` the program runs with, not `process.env`; `resolveDatabaseUrl` puts the `.env`
+  files behind the environment with `ConfigProvider.layerAdd`, and a test provides the one it
+  wants. The command line's arguments come from `Stdio` the same way (`Command.run`).
 - **The one exception is a shape someone else reads.** The Prisma schema engine takes
   `{ ok, value, map, flatMap }` from its adapter and dies on anything else, so
-  `adapter/engine-adapter.ts` makes that from a `Result` at the last moment (`engineResult`) and
-  nowhere holds it. What Studio's API answers with (`ok`, `failedAt`, `error: string | null`) is a
-  contract of the same kind.
+  `adapter/engine-adapter.ts` makes that with `Effect.match` at the last moment (`engineSuccess`,
+  `engineFailure`) and nowhere holds it. What Studio's API answers with (`ok`, `failedAt`,
+  `error: string | null`) is a contract of the same kind.
 
 ## Schemas in `src/migrate`
 
@@ -79,11 +87,12 @@ resolved outside the workspace can be another version of it.
 
 ## Layout of `src/migrate`
 
-- **`domain/` is pure**: the schema and the database's catalogue in; checks, fixes and SQL out. No
-  Effect, no file, no connection, and `no-restricted-imports` in `vite.config.ts` holds it to that.
-  `domain/fixes/` is one function, `resolveFixes`, in the parts it is made of: what the decisions
-  ask (`resolve-table.ts`, `moves.ts`), the versions of a table the steps make (`versions.ts`),
-  the steps (`steps.ts`) and what the database does on its own about them (`effects.ts`).
+- **`domain/` is pure**: the schema and the database's catalogue in; checks, fixes and SQL out.
+  Nothing of `effect`, no file, no connection, and `no-restricted-imports` in `vite.config.ts`
+  holds it to that. `domain/fixes/` is one function, `resolveFixes`, in the parts it is made of:
+  what the decisions ask (`resolve-table.ts`, `moves.ts`, each entry a `Resolution` from
+  `resolution.ts`), the versions of a table the steps make (`versions.ts`), the steps
+  (`steps.ts`) and what the database does on its own about them (`effects.ts`).
 - **`adapter/` is everything that reaches outside**: the schema engine and the connection it is
   given, the catalogue queries, the decisions file, the migrations directory, backups, a rehearsal.
 - **`check.ts` puts the two together** and `report.ts` prints what it found; `index.ts` is what the

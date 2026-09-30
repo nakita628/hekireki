@@ -4,7 +4,7 @@ import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
 import { NodeFileSystem } from '@effect/platform-node'
-import { Effect, Exit } from 'effect'
+import { ConfigProvider, Effect, Exit, Layer } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
 import { DECISIONS_FILE } from './adapter/decisions-file.js'
@@ -96,9 +96,9 @@ function check(dir: string, url: string | null = 'file:./dev.db') {
         decisions: null,
         timeout: null,
         cwd: dir,
-        env: {},
       }),
-      NodeFileSystem.layer,
+      // No environment: the URL is the one the test passes, or none, never the machine's.
+      Layer.mergeAll(NodeFileSystem.layer, ConfigProvider.layer(ConfigProvider.fromUnknown({}))),
     ),
   )
 }
@@ -416,7 +416,6 @@ END $hekireki$;
           decisions: null,
           timeout: null,
           cwd: dir,
-          env: {},
         }),
         NodeFileSystem.layer,
       ),

@@ -79,8 +79,8 @@ function isGeneratorBlock(value: unknown): value is GeneratorBlock {
 
 /** The generator blocks and the first datasource's provider of a parsed `get_config` result. */
 function readConfig(files: readonly SchemaFile[]) {
-  try {
-    const parsed: unknown = JSON.parse(
+  return Effect.try((): unknown =>
+    JSON.parse(
       get_config(
         JSON.stringify({
           prismaSchema: files.map((f) => [f.path, f.content]),
@@ -88,29 +88,32 @@ function readConfig(files: readonly SchemaFile[]) {
           env: {},
         }),
       ),
-    )
-    const config = isRecord(parsed) ? parsed.config : null
-    const generators = isRecord(config) ? config.generators : null
-    const datasources = isRecord(config) ? config.datasources : null
-    const first: unknown = Array.isArray(datasources) ? datasources[0] : null
-    return {
-      generators: Array.isArray(generators) ? generators.filter(isGeneratorBlock) : [],
-      provider: isRecord(first) && typeof first.provider === 'string' ? first.provider : null,
-    }
-  } catch {
-    return { generators: [], provider: null }
-  }
+    ),
+  ).pipe(
+    Effect.orElseSucceed(() => null),
+    Effect.map((parsed) => {
+      const config = isRecord(parsed) ? parsed.config : null
+      const generators = isRecord(config) ? config.generators : null
+      const datasources = isRecord(config) ? config.datasources : null
+      const first: unknown = Array.isArray(datasources) ? datasources[0] : null
+      return {
+        generators: Array.isArray(generators) ? generators.filter(isGeneratorBlock) : [],
+        provider: isRecord(first) && typeof first.provider === 'string' ? first.provider : null,
+      }
+    }),
+  )
 }
 
 /** Prisma reports its validation errors as JSON with colour codes inside; this is the plain text. */
 function prismaMessage(raw: string) {
-  try {
-    const parsed: unknown = JSON.parse(raw)
-    const message = isRecord(parsed) && typeof parsed.message === 'string' ? parsed.message : raw
-    return stripVTControlCharacters(message)
-  } catch {
-    return stripVTControlCharacters(raw)
-  }
+  return Effect.try((): unknown => JSON.parse(raw)).pipe(
+    Effect.orElseSucceed(() => null),
+    Effect.map((parsed) =>
+      stripVTControlCharacters(
+        isRecord(parsed) && typeof parsed.message === 'string' ? parsed.message : raw,
+      ),
+    ),
+  )
 }
 
 /** The schema parsed by Prisma: its datamodel, the datasource provider and the generator blocks. */
@@ -120,9 +123,9 @@ export function parseSchema(files: readonly SchemaFile[]) {
       datamodel: files.map((f): [string, string] => [f.path, f.content]),
     })
     if ('type' in result) {
-      return yield* new SeedConfigError({ message: prismaMessage(result.error.message) })
+      return yield* new SeedConfigError({ message: yield* prismaMessage(result.error.message) })
     }
-    return { datamodel: result.datamodel, ...readConfig(files) }
+    return { datamodel: result.datamodel, ...(yield* readConfig(files)) }
   })
 }
 

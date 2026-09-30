@@ -1,3 +1,4 @@
+import { Effect } from 'effect'
 import { format } from 'sql-formatter'
 
 /**
@@ -10,14 +11,12 @@ import { format } from 'sql-formatter'
  * @returns the same tokens, with the whitespace between them rewritten
  */
 export function formatSql(text: string, dialect: 'postgresql' | 'mysql' | 'sqlite' | null) {
-  try {
-    return format(text, {
+  return Effect.try(() =>
+    format(text, {
       language: dialect ?? 'sql',
       keywordCase: 'preserve',
       // `?` as MySQL and SQLite bind, `$1` as PostgreSQL does.
       paramTypes: { positional: true, numbered: ['$'] },
-    })
-  } catch {
-    return text
-  }
+    }),
+  ).pipe(Effect.orElseSucceed(() => text))
 }

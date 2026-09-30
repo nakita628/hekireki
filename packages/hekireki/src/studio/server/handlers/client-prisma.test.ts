@@ -219,7 +219,7 @@ describe('the Prisma Client page on a generated client', () => {
     expect(queries[1]?.params).toStrictEqual(expect.arrayContaining([true, 1, 2]))
     for (const query of queries) {
       // The layout follows the connected database's dialect; here Studio's own connection is off.
-      expect(query.formatted).toBe(formatSql(query.sql, null))
+      expect(query.formatted).toBe(Effect.runSync(formatSql(query.sql, null)))
       expect(query.formatted.split('\n').length).toBeGreaterThan(3)
       expect(query.durationMs).toBeGreaterThanOrEqual(0)
     }

@@ -4,4 +4,4 @@ import { Effect } from 'effect'
 
 import { hekireki } from '../cli/index.js'
 
-NodeRuntime.runMain(hekireki.pipe(Effect.provide(NodeServices.layer)))
+NodeRuntime.runMain(hekireki().pipe(Effect.provide(NodeServices.layer)))
