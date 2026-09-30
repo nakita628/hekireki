@@ -1,9 +1,4 @@
-import {
-  makeCommentBlock,
-  makeValidationExtractor,
-  parseDocumentWithoutAnnotations,
-  schemaFromFields,
-} from '../utils/index.js'
+import { makeValidationExtractor, schemaFromFields } from '../utils/index.js'
 import { validationSchemas } from '../utils/validation-schema.js'
 
 export function makeTypeBoxInfer(modelName: string) {
@@ -28,16 +23,13 @@ export function makeTypeBoxProperties(
     readonly fieldName: string
     readonly validation: string | null
     readonly isRequired: boolean
-    readonly comment: readonly string[]
   }[],
-  comment: boolean,
 ) {
   return fields
     .map((field) => {
-      const commentBlock = comment ? makeCommentBlock(field.comment, 2) : ''
       const expr = field.validation ?? 'Type.Unknown()'
       const wrapped = field.isRequired ? expr : `Type.Optional(${expr})`
-      return `${commentBlock}  ${field.fieldName}: ${wrapped},`
+      return `  ${field.fieldName}: ${wrapped},`
     })
     .join('\n')
 }
@@ -65,18 +57,10 @@ export function makeTypeBoxSchemas(
     readonly fieldName: string
     readonly validation: string | null
     readonly isRequired: boolean
-    readonly comment: readonly string[]
   }[],
-  comment: boolean,
   objectType?: 'strict' | 'loose',
 ) {
-  return schemaFromFields(
-    modelFields,
-    comment,
-    makeTypeBoxSchema,
-    makeTypeBoxProperties,
-    objectType,
-  )
+  return schemaFromFields(modelFields, makeTypeBoxSchema, makeTypeBoxProperties, objectType)
 }
 
 export function makeTypeBoxRelations(
@@ -116,18 +100,16 @@ export function typeboxSchemaCode(
     }[]
   }[],
   type: boolean,
-  comment: boolean,
   enums?: readonly {
     readonly name: string
     readonly values: readonly { readonly name: string }[]
   }[],
 ) {
-  return validationSchemas(models, type, comment, {
+  return validationSchemas(models, type, {
     importStatement: type
       ? `import { type Static, Type } from '@sinclair/typebox'`
       : `import { Type } from '@sinclair/typebox'`,
     annotationPrefix: '@t.',
-    parseDocument: parseDocumentWithoutAnnotations,
     extractValidation: makeValidationExtractor('@t.'),
     inferType: makeTypeBoxInfer,
     schemas: makeTypeBoxSchemas,

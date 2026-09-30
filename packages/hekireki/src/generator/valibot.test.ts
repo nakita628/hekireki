@@ -88,12 +88,9 @@ const emptyDmmf = {
 
 describe('valibotCode', () => {
   it('emits every model schema, without the relation schemas', () => {
-    expect(valibotCode(dmmf, true, true, false)).toBe(`import * as v from 'valibot'
+    expect(valibotCode(dmmf, true, false)).toBe(`import * as v from 'valibot'
 
 export const UserSchema = v.object({
-  /**
-   * Primary key.
-   */
   id: v.number(),
   name: v.string(),
   role: v.picklist(['USER', 'ADMIN'])
@@ -111,12 +108,9 @@ export type BlogPost = v.InferOutput<typeof BlogPostSchema>`)
   })
 
   it('appends the relation schemas after a blank line', () => {
-    expect(valibotCode(dmmf, true, true, true)).toBe(`import * as v from 'valibot'
+    expect(valibotCode(dmmf, true, true)).toBe(`import * as v from 'valibot'
 
 export const UserSchema = v.object({
-  /**
-   * Primary key.
-   */
   id: v.number(),
   name: v.string(),
   role: v.picklist(['USER', 'ADMIN'])
@@ -148,7 +142,7 @@ export type BlogPostRelations = v.InferOutput<typeof BlogPostRelationsSchema>`)
   })
 
   it('emits no relation block for a schema without models', () => {
-    expect(valibotCode(emptyDmmf, true, true, true)).toBe(`import * as v from 'valibot'
+    expect(valibotCode(emptyDmmf, true, true)).toBe(`import * as v from 'valibot'
 
 `)
   })

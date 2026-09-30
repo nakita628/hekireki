@@ -1,4 +1,4 @@
-import { extractObjectType, groupByModel, isFields, makeCommentBlock } from './index.js'
+import { extractObjectType, groupByModel, isFields } from './index.js'
 
 export function makePropertiesGenerator(
   libraryPrefix: string,
@@ -11,30 +11,14 @@ export function makePropertiesGenerator(
       readonly fieldName: string
       readonly validation: string | null
       readonly isRequired: boolean
-      readonly comment: readonly string[]
     }[],
-    includeComments: boolean,
   ) {
     return modelFields
       .filter((field) => field.validation)
       .map((field) => {
-        const cleanLines = field.comment.filter(
-          (line) =>
-            !(
-              line.includes('@relation') ||
-              line.includes('@z') ||
-              line.includes('@v') ||
-              line.includes('@a') ||
-              line.includes('@e') ||
-              line.includes('@t') ||
-              line.includes('@j') ||
-              line.includes('@p')
-            ),
-        )
-        const docComment = includeComments ? makeCommentBlock(cleanLines, 2) : ''
         const base = `${libraryPrefix}.${field.validation}`
         const wrapped = wrapCardinality ? wrapCardinality(base, field.isRequired) : base
-        return `${docComment}  ${field.fieldName}: ${wrapped}`
+        return `  ${field.fieldName}: ${wrapped}`
       })
       .join(',\n')
   }
@@ -54,11 +38,9 @@ export function validationSchemas(
     }[]
   }[],
   type: boolean,
-  comment: boolean,
   config: {
     readonly importStatement: string
     readonly annotationPrefix: `@${string}.`
-    readonly parseDocument: (documentation: string | undefined) => readonly string[]
     readonly extractValidation: (documentation: string | undefined) => string | null
     readonly inferType: (modelName: string) => string
     readonly schemas: (
@@ -68,9 +50,7 @@ export function validationSchemas(
         readonly fieldName: string
         readonly validation: string | null
         readonly isRequired: boolean
-        readonly comment: readonly string[]
       }[],
-      comment: boolean,
       objectType?: 'strict' | 'loose',
     ) => string
     readonly typeMapping?: { [k: string]: string }
@@ -111,7 +91,6 @@ export function validationSchemas(
       documentation: model.documentation,
       modelName: model.name,
       fieldName: field.name,
-      comment: config.parseDocument(field.documentation),
       validation: resolveValidation(field),
       isRequired: field.isRequired,
     })),
@@ -141,7 +120,7 @@ export function validationSchemas(
   const schemaResults = Object.values(groupByModel(isFields(modelFields))).map((fields) => {
     const objectType = extractObjectType(fields[0].documentation, config.annotationPrefix)
     return {
-      schema: config.schemas(fields, comment, objectType),
+      schema: config.schemas(fields, objectType),
       inferType: type ? config.inferType(fields[0].modelName) : '',
     }
   })

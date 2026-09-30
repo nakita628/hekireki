@@ -26,22 +26,22 @@ generator Hekireki-Zod {
 }
 ```
 
-| Provider                                                                                      | Generates                                               | Options                                                                        |
-| --------------------------------------------------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `hekireki-zod`                                                                                | [Zod](https://zod.dev/)                                 | `type`, `comment`, `relation`, `zod` (`"v4"`, `"mini"`, `"@hono/zod-openapi"`) |
-| `hekireki-valibot`, `hekireki-arktype`, `hekireki-effect`, `hekireki-typebox`, `hekireki-ajv` | Valibot, ArkType, Effect Schema, TypeBox, AJV           | `type`, `comment`, `relation`                                                  |
-| `hekireki-pydantic`                                                                           | Pydantic                                                | `relation`                                                                     |
-| `hekireki-drizzle`, `hekireki-kysely`, `hekireki-sqlalchemy`, `hekireki-django`               | Drizzle, Kysely, SQLAlchemy, Django                     |                                                                                |
-| `hekireki-activerecord`                                                                       | Active Record                                           | `locales`                                                                      |
-| `hekireki-gorm`                                                                               | GORM                                                    | `package`                                                                      |
-| `hekireki-sea-orm`                                                                            | SeaORM                                                  | `renameAll`                                                                    |
-| `hekireki-ecto`                                                                               | Ecto                                                    | `app`                                                                          |
-| `hekireki-eloquent`                                                                           | Eloquent                                                | `namespace`                                                                    |
-| `hekireki-efcore` (PostgreSQL, MySQL, SQLite)                                                 | EF Core                                                 | `namespace`, `context`                                                         |
-| `hekireki-exposed` (PostgreSQL)                                                               | Exposed                                                 | `package`, `dao`                                                               |
-| `hekireki-atlas`                                                                              | Atlas HCL                                               | `schemaName`                                                                   |
-| `hekireki-er`                                                                                 | ER diagram                                              | `outputs` (`.md`, `.dbml`, `.png`, `.svg`), `theme`                            |
-| `hekireki-seed`                                                                               | The schema module `hekireki.config.ts` is typed against |                                                                                |
+| Provider                                                                                      | Generates                                               | Options                                                             |
+| --------------------------------------------------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------- |
+| `hekireki-zod`                                                                                | [Zod](https://zod.dev/)                                 | `type`, `relation`, `zod` (`"v4"`, `"mini"`, `"@hono/zod-openapi"`) |
+| `hekireki-valibot`, `hekireki-arktype`, `hekireki-effect`, `hekireki-typebox`, `hekireki-ajv` | Valibot, ArkType, Effect Schema, TypeBox, AJV           | `type`, `relation`                                                  |
+| `hekireki-pydantic`                                                                           | Pydantic                                                | `relation`                                                          |
+| `hekireki-drizzle`, `hekireki-kysely`, `hekireki-sqlalchemy`, `hekireki-django`               | Drizzle, Kysely, SQLAlchemy, Django                     |                                                                     |
+| `hekireki-activerecord`                                                                       | Active Record                                           | `locales`                                                           |
+| `hekireki-gorm`                                                                               | GORM                                                    | `package`                                                           |
+| `hekireki-sea-orm`                                                                            | SeaORM                                                  | `renameAll`                                                         |
+| `hekireki-ecto`                                                                               | Ecto                                                    | `app`                                                               |
+| `hekireki-eloquent`                                                                           | Eloquent                                                | `namespace`                                                         |
+| `hekireki-efcore` (PostgreSQL, MySQL, SQLite)                                                 | EF Core                                                 | `namespace`, `context`                                              |
+| `hekireki-exposed` (PostgreSQL)                                                               | Exposed                                                 | `package`, `dao`                                                    |
+| `hekireki-atlas`                                                                              | Atlas HCL                                               | `schemaName`                                                        |
+| `hekireki-er`                                                                                 | ER diagram                                              | `outputs` (`.md`, `.dbml`, `.png`, `.svg`), `theme`                 |
+| `hekireki-seed`                                                                               | The schema module `hekireki.config.ts` is typed against |                                                                     |
 
 On MySQL, `hekireki-drizzle` reads and writes a `@db.Timestamp` column as UTC, and MySQL converts a
 `TIMESTAMP` through the connection's `time_zone`: set it to `'+00:00'` on drizzle's connection, as

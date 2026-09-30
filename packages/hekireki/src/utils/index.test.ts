@@ -9,10 +9,8 @@ import {
   groupByModel,
   isFields,
   lowerFirst,
-  makeCommentBlock,
   makeSnakeCase,
   makeValidationExtractor,
-  parseDocumentWithoutAnnotations,
   parseRelation,
   schemaFromFields,
   stripAnnotations,
@@ -133,46 +131,6 @@ describe('utils', () => {
     })
   })
 
-  describe('parseDocumentWithoutAnnotations', () => {
-    it('filters out bare @z annotation', () => {
-      expect(parseDocumentWithoutAnnotations('User name\n@z')).toStrictEqual(['User name'])
-    })
-    it('filters out bare @v annotation', () => {
-      expect(parseDocumentWithoutAnnotations('User name\n@v')).toStrictEqual(['User name'])
-    })
-    it('filters out bare @a annotation', () => {
-      expect(parseDocumentWithoutAnnotations('User name\n@a')).toStrictEqual(['User name'])
-    })
-    it('filters out bare @e annotation', () => {
-      expect(parseDocumentWithoutAnnotations('User name\n@e')).toStrictEqual(['User name'])
-    })
-    it('filters both bare and prefixed annotations', () => {
-      expect(parseDocumentWithoutAnnotations('User name\n@z\n@v.string()')).toStrictEqual([
-        'User name',
-      ])
-    })
-    it('filters out bare @t annotation', () => {
-      expect(parseDocumentWithoutAnnotations('Name\n@t')).toStrictEqual(['Name'])
-    })
-    it('filters out bare @j annotation', () => {
-      expect(parseDocumentWithoutAnnotations('Name\n@j')).toStrictEqual(['Name'])
-    })
-    it('filters out @t. prefixed annotation', () => {
-      expect(parseDocumentWithoutAnnotations('Name\n@t.Type.String()')).toStrictEqual(['Name'])
-    })
-    it('filters out @j. prefixed annotation', () => {
-      expect(parseDocumentWithoutAnnotations("Name\n@j.{ type: 'string' as const }")).toStrictEqual(
-        ['Name'],
-      )
-    })
-    it('returns empty for undefined', () => {
-      expect(parseDocumentWithoutAnnotations(undefined)).toStrictEqual([])
-    })
-    it('returns empty for only annotations', () => {
-      expect(parseDocumentWithoutAnnotations('@z.uuid()\n@v.string()')).toStrictEqual([])
-    })
-  })
-
   describe('stripAnnotations', () => {
     it('drops an @ar. line as any other annotation', () => {
       expect(
@@ -228,38 +186,6 @@ describe('utils', () => {
     })
   })
 
-  describe('makeCommentBlock', () => {
-    it('generates multi-line JSDoc with 2-space indent', () => {
-      expect(makeCommentBlock(['Primary key'], 2)).toBe('  /**\n   * Primary key\n   */\n')
-    })
-
-    it('generates multi-line JSDoc with 4-space indent for AJV', () => {
-      expect(makeCommentBlock(['Primary key'], 4)).toBe('    /**\n     * Primary key\n     */\n')
-    })
-
-    it('handles multiple comment lines', () => {
-      expect(makeCommentBlock(['Line 1', 'Line 2'], 2)).toBe(
-        '  /**\n   * Line 1\n   * Line 2\n   */\n',
-      )
-    })
-
-    it('returns empty string for empty lines', () => {
-      expect(makeCommentBlock([], 2)).toBe('')
-    })
-
-    it('generates consistent format across all indentation levels', () => {
-      const lines = ['User ID']
-      const indent2 = makeCommentBlock(lines, 2)
-      const indent4 = makeCommentBlock(lines, 4)
-      expect(indent2).toContain('/**')
-      expect(indent2).toContain(' * User ID')
-      expect(indent2).toContain(' */')
-      expect(indent4).toContain('/**')
-      expect(indent4).toContain(' * User ID')
-      expect(indent4).toContain(' */')
-    })
-  })
-
   describe('groupByModel', () => {
     it('groups fields by model name', () => {
       const result = groupByModel([
@@ -267,7 +193,6 @@ describe('utils', () => {
           documentation: '',
           modelName: 'User',
           fieldName: 'id',
-          comment: ['Primary key', '@v.pipe(v.string(), v.uuid())'],
           validation: 'uuid()',
           isRequired: true,
         },
@@ -275,7 +200,6 @@ describe('utils', () => {
           documentation: '',
           modelName: 'User',
           fieldName: 'name',
-          comment: ['Display name', '@v.pipe(v.string(), v.minLength(1), v.maxLength(50))'],
           validation: 'string().min(1).max(50)',
           isRequired: true,
         },
@@ -283,7 +207,6 @@ describe('utils', () => {
           documentation: '@relation User.id Post.userId one-to-many',
           modelName: 'Post',
           fieldName: 'id',
-          comment: ['Primary key', '@v.pipe(v.string(), v.uuid())'],
           validation: 'uuid()',
           isRequired: true,
         },
@@ -291,7 +214,6 @@ describe('utils', () => {
           documentation: '@relation User.id Post.userId one-to-many',
           modelName: 'Post',
           fieldName: 'title',
-          comment: ['Article title', '@v.pipe(v.string(), v.minLength(1), v.maxLength(100))'],
           validation: 'string().min(1).max(100)',
           isRequired: true,
         },
@@ -302,7 +224,6 @@ describe('utils', () => {
           documentation: '',
           modelName: 'User',
           fieldName: 'id',
-          comment: ['Primary key', '@v.pipe(v.string(), v.uuid())'],
           validation: 'uuid()',
           isRequired: true,
         },
@@ -310,7 +231,6 @@ describe('utils', () => {
           documentation: '',
           modelName: 'User',
           fieldName: 'name',
-          comment: ['Display name', '@v.pipe(v.string(), v.minLength(1), v.maxLength(50))'],
           validation: 'string().min(1).max(50)',
           isRequired: true,
         },
@@ -320,7 +240,6 @@ describe('utils', () => {
           documentation: '@relation User.id Post.userId one-to-many',
           modelName: 'Post',
           fieldName: 'id',
-          comment: ['Primary key', '@v.pipe(v.string(), v.uuid())'],
           validation: 'uuid()',
           isRequired: true,
         },
@@ -328,7 +247,6 @@ describe('utils', () => {
           documentation: '@relation User.id Post.userId one-to-many',
           modelName: 'Post',
           fieldName: 'title',
-          comment: ['Article title', '@v.pipe(v.string(), v.minLength(1), v.maxLength(100))'],
           validation: 'string().min(1).max(100)',
           isRequired: true,
         },
@@ -344,7 +262,6 @@ describe('utils', () => {
             documentation: '',
             modelName: 'User',
             fieldName: 'id',
-            comment: ['Primary key'],
             validation: 'uuid()',
             isRequired: true,
           },
@@ -352,7 +269,6 @@ describe('utils', () => {
             documentation: '',
             modelName: 'User',
             fieldName: 'posts',
-            comment: ['One-to-many'],
             validation: null,
             isRequired: true,
           },
@@ -363,7 +279,6 @@ describe('utils', () => {
           documentation: '',
           modelName: 'User',
           fieldName: 'id',
-          comment: ['Primary key'],
           validation: 'uuid()',
           isRequired: true,
         },
@@ -380,7 +295,6 @@ describe('utils', () => {
           fieldName: 'id',
           validation: 'uuid()',
           isRequired: true,
-          comment: ['Primary key'],
         },
         {
           documentation: '',
@@ -388,36 +302,14 @@ describe('utils', () => {
           fieldName: 'name',
           validation: 'string()',
           isRequired: true,
-          comment: ['Name'],
         },
       ]
       const mockSchema = (name: string, f: string) => `schema(${name}, ${f})`
-      const mockProps = (_fields: readonly { readonly fieldName: string }[], _comment: boolean) =>
+      const mockProps = (_fields: readonly { readonly fieldName: string }[]) =>
         _fields.map((f) => f.fieldName).join(', ')
 
-      const result = schemaFromFields(fields, true, mockSchema, mockProps)
+      const result = schemaFromFields(fields, mockSchema, mockProps)
       expect(result).toBe('schema(User, id, name)')
-    })
-    it('passes comment flag to propertiesGenerator', () => {
-      const fields = [
-        {
-          documentation: '',
-          modelName: 'Post',
-          fieldName: 'title',
-          validation: 'string()',
-          isRequired: true,
-          comment: [],
-        },
-      ]
-      let receivedComment = false
-      const mockSchema = (_name: string, f: string) => f
-      const mockProps = (_fields: readonly { readonly fieldName: string }[], comment: boolean) => {
-        receivedComment = comment
-        return 'props'
-      }
-
-      schemaFromFields(fields, false, mockSchema, mockProps)
-      expect(receivedComment).toBe(false)
     })
   })
 })

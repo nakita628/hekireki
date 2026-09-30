@@ -1,8 +1,4 @@
-import {
-  makeValidationExtractor,
-  parseDocumentWithoutAnnotations,
-  schemaFromFields,
-} from '../utils/index.js'
+import { makeValidationExtractor, schemaFromFields } from '../utils/index.js'
 import { makePropertiesGenerator, validationSchemas } from '../utils/validation-schema.js'
 
 export function makeValibotInfer(modelName: string) {
@@ -42,14 +38,11 @@ export function makeValibotSchemas(
     readonly fieldName: string
     readonly validation: string | null
     readonly isRequired: boolean
-    readonly comment: readonly string[]
   }[],
-  comment: boolean,
   objectType?: 'strict' | 'loose',
 ) {
   return schemaFromFields(
     modelFields,
-    comment,
     makeValibotSchema,
     makePropertiesGenerator('v', (expr, isRequired) =>
       isRequired ? expr : `v.exactOptional(${expr})`,
@@ -95,16 +88,14 @@ export function valibotSchemaCode(
     }[]
   }[],
   type: boolean,
-  comment: boolean,
   enums?: readonly {
     readonly name: string
     readonly values: readonly { readonly name: string }[]
   }[],
 ) {
-  return validationSchemas(models, type, comment, {
+  return validationSchemas(models, type, {
     importStatement: `import * as v from 'valibot'`,
     annotationPrefix: '@v.',
-    parseDocument: parseDocumentWithoutAnnotations,
     extractValidation: makeValidationExtractor('@v.'),
     inferType: makeValibotInfer,
     schemas: makeValibotSchemas,

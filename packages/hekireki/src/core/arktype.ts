@@ -23,7 +23,6 @@ export function arktype(options: GeneratorOptions) {
     const code = arktypeCode(
       options.dmmf,
       getBool(options.generator.config?.type),
-      getBool(options.generator.config?.comment),
       getBool(options.generator.config?.relation),
     )
     return yield* emit(code, resolved.dir, resolved.file)

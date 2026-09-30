@@ -3,13 +3,8 @@ import type { DMMF } from '@prisma/generator-helper'
 import { makeTypeBoxRelations, typeboxSchemaCode } from '../helper/typebox.js'
 import { makeRelationsOnly } from '../utils/extract-relations.js'
 
-export function typeboxCode(
-  dmmf: DMMF.Document,
-  type: boolean,
-  comment: boolean,
-  relation: boolean,
-) {
-  const base = typeboxSchemaCode(dmmf.datamodel.models, type, comment, dmmf.datamodel.enums)
+export function typeboxCode(dmmf: DMMF.Document, type: boolean, relation: boolean) {
+  const base = typeboxSchemaCode(dmmf.datamodel.models, type, dmmf.datamodel.enums)
   const relations = relation ? makeRelationsOnly(dmmf, type, makeTypeBoxRelations) : ''
   return [base, relations].filter(Boolean).join('\n\n')
 }

@@ -436,9 +436,6 @@ model Coupon {
 // reject unknown keys, @p.ConfigDict(extra='allow') must keep them, no
 // annotation is pydantic's default (extra="ignore"), and the @p. field
 // annotation must be used verbatim with its pydantic/typing imports resolved.
-// The doc comments end in a bare quote on purpose: with comment=true the
-// emitted docstrings must not fuse with their closing quotes into a Python
-// SyntaxError.
 /// Payload the client said was "locked"
 /// @p.ConfigDict(extra='forbid')
 model Locked {

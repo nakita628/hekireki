@@ -1,17 +1,8 @@
 import { type } from 'arktype'
 
 export const UserSchema = type({
-  /**
-   * Primary key (UUIDv7)
-   */
   id: 'string.uuid',
-  /**
-   * Unique login email
-   */
   email: 'string.email',
-  /**
-   * Display name
-   */
   name: '1 <= string <= 50',
   role: "'ADMIN' | 'EDITOR' | 'VIEWER'",
   interests: 'string',
@@ -37,13 +28,7 @@ export const ProfileSchema = type({
 export type Profile = typeof ProfileSchema.infer
 
 export const PostSchema = type({
-  /**
-   * Primary key
-   */
   id: 'string.uuid',
-  /**
-   * Article title
-   */
   title: '1 <= string <= 100',
   content: 'string',
   visibility: "'PUBLIC' | 'PRIVATE' | 'LINK_ONLY'",

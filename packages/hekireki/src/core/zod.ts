@@ -23,7 +23,6 @@ export function zod(options: GeneratorOptions) {
     const code = zodCode(
       options.dmmf,
       getBool(options.generator.config?.type),
-      getBool(options.generator.config?.comment),
       getBool(options.generator.config?.relation),
       getString(options.generator.config?.zod) ?? 'v4',
     )

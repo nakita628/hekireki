@@ -88,12 +88,9 @@ const emptyDmmf = {
 
 describe('arktypeCode', () => {
   it('emits every model schema, without the relation schemas', () => {
-    expect(arktypeCode(dmmf, true, true, false)).toBe(`import { type } from 'arktype'
+    expect(arktypeCode(dmmf, true, false)).toBe(`import { type } from 'arktype'
 
 export const UserSchema = type({
-  /**
-   * Primary key.
-   */
   id: "number",
   name: "string",
   role: "'USER' | 'ADMIN'",
@@ -111,12 +108,9 @@ export type BlogPost = typeof BlogPostSchema.infer`)
   })
 
   it('appends the relation schemas after a blank line', () => {
-    expect(arktypeCode(dmmf, true, true, true)).toBe(`import { type } from 'arktype'
+    expect(arktypeCode(dmmf, true, true)).toBe(`import { type } from 'arktype'
 
 export const UserSchema = type({
-  /**
-   * Primary key.
-   */
   id: "number",
   name: "string",
   role: "'USER' | 'ADMIN'",
@@ -142,7 +136,7 @@ export type BlogPostRelations = typeof BlogPostRelationsSchema.infer`)
   })
 
   it('emits no relation block for a schema without models', () => {
-    expect(arktypeCode(emptyDmmf, true, true, true)).toBe(`import { type } from 'arktype'
+    expect(arktypeCode(emptyDmmf, true, true)).toBe(`import { type } from 'arktype'
 
 `)
   })

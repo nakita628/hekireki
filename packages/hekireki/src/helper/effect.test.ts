@@ -21,63 +21,23 @@ describe('helper/effect', () => {
   })
 
   describe('makeEffectSchemas', () => {
-    it('generates schema with comments', () => {
-      const result = makeEffectSchemas(
-        [
-          {
-            documentation: '',
-            modelName: 'User',
-            fieldName: 'id',
-            comment: ['Primary key'],
-            validation: 'Schema.String',
-            isRequired: true,
-          },
-          {
-            documentation: '',
-            modelName: 'User',
-            fieldName: 'name',
-            comment: ['Display name'],
-            validation: 'Schema.String',
-            isRequired: true,
-          },
-        ],
-        true,
-      )
-      const expected = `export const UserSchema = Schema.Struct({
-  /**
-   * Primary key
-   */
-  id: Schema.String,
-  /**
-   * Display name
-   */
-  name: Schema.String,
-})`
-      expect(result).toBe(expected)
-    })
-
-    it('generates schema without comments', () => {
-      const result = makeEffectSchemas(
-        [
-          {
-            documentation: '',
-            modelName: 'User',
-            fieldName: 'id',
-            comment: [],
-            validation: 'Schema.String',
-            isRequired: true,
-          },
-          {
-            documentation: '',
-            modelName: 'User',
-            fieldName: 'age',
-            comment: [],
-            validation: 'Schema.Number',
-            isRequired: true,
-          },
-        ],
-        false,
-      )
+    it('generates schema', () => {
+      const result = makeEffectSchemas([
+        {
+          documentation: '',
+          modelName: 'User',
+          fieldName: 'id',
+          validation: 'Schema.String',
+          isRequired: true,
+        },
+        {
+          documentation: '',
+          modelName: 'User',
+          fieldName: 'age',
+          validation: 'Schema.Number',
+          isRequired: true,
+        },
+      ])
       const expected = `export const UserSchema = Schema.Struct({
   id: Schema.String,
   age: Schema.Number,
@@ -132,7 +92,7 @@ describe('helper/effect', () => {
           ],
         },
       ]
-      const result = effectSchemaCode(models, false, false)
+      const result = effectSchemaCode(models, false)
       expect(result).toBe(
         "import { Schema } from 'effect'\n\nexport const UserSchema = Schema.Struct({\n  id: Schema.UUID,\n  age: Schema.Number,\n})",
       )
@@ -147,7 +107,7 @@ describe('helper/effect', () => {
           ],
         },
       ]
-      const result = effectSchemaCode(models, true, false)
+      const result = effectSchemaCode(models, true)
       expect(result).toBe(
         "import { Schema } from 'effect'\n\nexport const PostSchema = Schema.Struct({\n  title: Schema.String,\n})\n\nexport type Post = typeof PostSchema.Type",
       )
@@ -166,7 +126,7 @@ describe('helper/effect', () => {
           values: [{ name: 'ADMIN' }, { name: 'USER' }],
         },
       ]
-      const result = effectSchemaCode(models, false, false, enums)
+      const result = effectSchemaCode(models, false, enums)
       expect(result).toBe(
         "import { Schema } from 'effect'\n\nexport const UserSchema = Schema.Struct({\n  role: Schema.Literal('ADMIN', 'USER'),\n})",
       )
@@ -195,21 +155,14 @@ describe('helper/effect', () => {
         fieldName: 'id',
         validation: 'Schema.String',
         isRequired: true,
-        comment: ['Primary key'],
       },
     ]
-
-    it('generates properties with comments', () => {
-      expect(makeEffectProperties(fields, true)).toBe(
-        '  /**\n   * Primary key\n   */\n  id: Schema.String,',
-      )
-    })
-    it('generates properties without comments', () => {
-      expect(makeEffectProperties(fields, false)).toBe('  id: Schema.String,')
+    it('generates properties', () => {
+      expect(makeEffectProperties(fields)).toBe('  id: Schema.String,')
     })
     it('uses Schema.Unknown for null validation', () => {
-      const nullFields = [{ ...fields[0], validation: null, comment: [] }]
-      expect(makeEffectProperties(nullFields, false)).toBe('  id: Schema.Unknown,')
+      const nullFields = [{ ...fields[0], validation: null }]
+      expect(makeEffectProperties(nullFields)).toBe('  id: Schema.Unknown,')
     })
   })
 
@@ -223,13 +176,12 @@ describe('helper/effect', () => {
   })
 
   describe('E-Commerce order pattern', () => {
-    it('generates Order schema with comments and nullable field', () => {
+    it('generates Order schema with a nullable field', () => {
       const orderFields = [
         {
           documentation: '',
           modelName: 'Order',
           fieldName: 'id',
-          comment: ['Order ID'],
           validation: 'Schema.UUID',
           isRequired: true,
         },
@@ -237,7 +189,6 @@ describe('helper/effect', () => {
           documentation: '',
           modelName: 'Order',
           fieldName: 'totalAmount',
-          comment: ['Total amount in cents'],
           validation: 'Schema.Number',
           isRequired: true,
         },
@@ -245,26 +196,15 @@ describe('helper/effect', () => {
           documentation: '',
           modelName: 'Order',
           fieldName: 'note',
-          comment: ['Customer note', 'Optional memo from customer'],
           validation: 'Schema.NullOr(Schema.String)',
           isRequired: true,
         },
       ]
 
-      const result = makeEffectSchemas(orderFields, true)
+      const result = makeEffectSchemas(orderFields)
       expect(result).toBe(`export const OrderSchema = Schema.Struct({
-  /**
-   * Order ID
-   */
   id: Schema.UUID,
-  /**
-   * Total amount in cents
-   */
   totalAmount: Schema.Number,
-  /**
-   * Customer note
-   * Optional memo from customer
-   */
   note: Schema.NullOr(Schema.String),
 })`)
     })
@@ -326,28 +266,9 @@ describe('helper/effect', () => {
         },
       ]
 
-      const result = effectSchemaCode(models, true, false, enums)
+      const result = effectSchemaCode(models, true, enums)
       expect(result).toBe(
         "import { Schema } from 'effect'\n\nexport const OrderSchema = Schema.Struct({\n  id: Schema.UUID,\n  status: Schema.Literal('PENDING', 'CONFIRMED', 'SHIPPED', 'DELIVERED', 'CANCELLED'),\n  totalAmount: Schema.Number,\n})\n\nexport type Order = typeof OrderSchema.Type",
-      )
-    })
-  })
-
-  describe('multi-line comment handling', () => {
-    it('generates multi-line JSDoc for detailed field documentation', () => {
-      const fields = [
-        {
-          documentation: '',
-          modelName: 'Payment',
-          fieldName: 'amount',
-          comment: ['Payment amount', 'Stored in smallest currency unit (e.g. cents)'],
-          validation: 'Schema.Number',
-          isRequired: true,
-        },
-      ]
-      const result = makeEffectProperties(fields, true)
-      expect(result).toBe(
-        '  /**\n   * Payment amount\n   * Stored in smallest currency unit (e.g. cents)\n   */\n  amount: Schema.Number,',
       )
     })
   })

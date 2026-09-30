@@ -88,12 +88,9 @@ const emptyDmmf = {
 
 describe('effectCode', () => {
   it('emits every model schema, without the relation schemas', () => {
-    expect(effectCode(dmmf, true, true, false)).toBe(`import { Schema } from 'effect'
+    expect(effectCode(dmmf, true, false)).toBe(`import { Schema } from 'effect'
 
 export const UserSchema = Schema.Struct({
-  /**
-   * Primary key.
-   */
   id: Schema.Number,
   name: Schema.String,
   role: Schema.Literal('USER', 'ADMIN'),
@@ -111,12 +108,9 @@ export type BlogPost = typeof BlogPostSchema.Type`)
   })
 
   it('appends the relation schemas after a blank line', () => {
-    expect(effectCode(dmmf, true, true, true)).toBe(`import { Schema } from 'effect'
+    expect(effectCode(dmmf, true, true)).toBe(`import { Schema } from 'effect'
 
 export const UserSchema = Schema.Struct({
-  /**
-   * Primary key.
-   */
   id: Schema.Number,
   name: Schema.String,
   role: Schema.Literal('USER', 'ADMIN'),
@@ -142,7 +136,7 @@ export type BlogPostRelations = typeof BlogPostRelationsSchema.Type`)
   })
 
   it('emits no relation block for a schema without models', () => {
-    expect(effectCode(emptyDmmf, true, true, true)).toBe(`import { Schema } from 'effect'
+    expect(effectCode(emptyDmmf, true, true)).toBe(`import { Schema } from 'effect'
 
 `)
   })
