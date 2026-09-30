@@ -456,7 +456,5 @@ const cli = Command.make(COMMAND_NAME).pipe(
   Command.withSubcommands([studio, seed, migrate]),
 )
 
-/** Runs the command line `argv` spells out, as the `hekireki` binary does with its own arguments. */
-export function hekireki(argv: readonly string[]) {
-  return Command.runWith(cli, { version })(argv)
-}
+/** The `hekireki` command line, run with the arguments the `Stdio` service supplies. */
+export const hekireki = Command.run(cli, { version })

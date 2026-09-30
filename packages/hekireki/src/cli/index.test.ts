@@ -5,7 +5,7 @@ import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
 import { NodeFileSystem, NodeServices } from '@effect/platform-node'
-import { Effect, Exit } from 'effect'
+import { Effect, Exit, Stdio } from 'effect'
 import { CliError } from 'effect/unstable/cli'
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 
@@ -50,7 +50,13 @@ async function cli(args: readonly string[]) {
   vi.spyOn(console, 'error').mockImplementation((...parts: unknown[]) => {
     err.push(parts.map(String).join(' '))
   })
-  const exit = await Effect.runPromiseExit(hekireki(args).pipe(Effect.provide(NodeServices.layer)))
+  // The arguments go in through `Stdio`, where the binary's come from `process.argv`.
+  const exit = await Effect.runPromiseExit(
+    hekireki.pipe(
+      Effect.provide(Stdio.layerTest({ args: Effect.succeed(args) })),
+      Effect.provide(NodeServices.layer),
+    ),
+  )
   return {
     exit,
     out: out.join('\n'),
