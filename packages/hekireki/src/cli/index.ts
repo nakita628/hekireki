@@ -3,6 +3,7 @@ import path from 'node:path'
 import { Console, Effect, Schema } from 'effect'
 import { CliError, Command, Flag } from 'effect/unstable/cli'
 
+import { version } from '../../package.json' with { type: 'json' }
 import { exists } from '../file/index.js'
 import { DEFAULT_PORT } from '../studio/server/constants/index.js'
 import { ServerListenError } from '../studio/server/errors/index.js'
@@ -450,7 +451,12 @@ const migrate = Command.make('migrate').pipe(
   Command.withSubcommands([migrateCheck, migratePlan]),
 )
 
-export const hekireki = Command.make(COMMAND_NAME).pipe(
+const cli = Command.make(COMMAND_NAME).pipe(
   Command.withDescription('⚡️ Prisma schema tools'),
   Command.withSubcommands([studio, seed, migrate]),
 )
+
+/** Runs the command line `argv` spells out, as the `hekireki` binary does with its own arguments. */
+export function hekireki(argv: readonly string[]) {
+  return Command.runWith(cli, { version })(argv)
+}
