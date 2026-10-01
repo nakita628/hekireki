@@ -43,7 +43,7 @@ const MYSQL_SCALAR_MAP: { [k: string]: string } = {
 const SQLITE_SCALAR_MAP: { [k: string]: string } = {
   String: 'text()',
   Int: 'integer()',
-  BigInt: "blob({ mode: 'bigint' })",
+  BigInt: 'bigInteger()',
   Float: 'real()',
   Decimal: 'numeric()',
   Boolean: "integer({ mode: 'boolean' })",
@@ -166,8 +166,16 @@ function mysqlNativeType(name: string, args: readonly string[]) {
 }
 
 // Columns drizzle has none of its own for: a DateTime kept in UTC, in the form Prisma Client
-// writes and reads it, and a Bytes as the Uint8Array Prisma Client gives.
+// writes and reads it, a Bytes as the Uint8Array Prisma Client gives, and a BigInt on SQLite as
+// the integer Prisma keeps it as. drizzle's own `blob({ mode: 'bigint' })` reads the column as
+// bytes and writes the digits as a BLOB, which neither reads what Prisma wrote nor writes what
+// Prisma reads.
 const COLUMN_HELPERS: { readonly [name: string]: string } = {
+  bigInteger: `const bigInteger = customType<{ data: bigint; driverData: number | bigint }>({
+  dataType: () => 'bigint',
+  toDriver: (value) => value,
+  fromDriver: (value) => BigInt(value),
+})`,
   bytea: `const bytea = customType<{ data: Uint8Array }>({
   dataType: () => 'bytea',
 })`,
@@ -575,7 +583,8 @@ function makeColumn(
       ? '.array()'
       : '',
     field.isId && !hasCompositePK
-      ? isAutoincrement && provider === 'sqlite'
+      ? // SQLite counts only an INTEGER key, and Prisma makes a BigInt key BIGINT: none to ask for.
+        isAutoincrement && provider === 'sqlite' && field.type !== 'BigInt'
         ? '.primaryKey({ autoIncrement: true })'
         : '.primaryKey()'
       : '',

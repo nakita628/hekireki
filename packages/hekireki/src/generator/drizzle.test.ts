@@ -123,6 +123,38 @@ describe('drizzleSchema', () => {
         "export const user = sqliteTable('User', { id: integer('id').primaryKey({ autoIncrement: true }), name: text('name').notNull(), active: integer('active', { mode: 'boolean' }).notNull(), createdAt: utcDateTime('createdAt').notNull() })",
       ])
     })
+
+    // Prisma keeps a BigInt on SQLite as a BIGINT column holding the integer, a key too, which
+    // SQLite does not count. The column reads and writes that integer as a bigint.
+    it('keeps a BigInt in a bigint column, as the integer Prisma writes', () => {
+      const datamodel = makeDatamodel([
+        makeModel({
+          name: 'Sequence',
+          fields: [
+            makeField({
+              name: 'id',
+              type: 'BigInt',
+              isId: true,
+              hasDefaultValue: true,
+              default: { name: 'autoincrement', args: [] },
+            }),
+            makeField({ name: 'big', type: 'BigInt' }),
+          ],
+        }),
+      ])
+
+      const code = drizzleSchema(datamodel, 'sqlite', [])
+
+      expect(code)
+        .toContain(`const bigInteger = customType<{ data: bigint; driverData: number | bigint }>({
+  dataType: () => 'bigint',
+  toDriver: (value) => value,
+  fromDriver: (value) => BigInt(value),
+})`)
+      expect(code).toContain(
+        "export const sequence = sqliteTable('Sequence', { id: bigInteger('id').primaryKey(), big: bigInteger('big').notNull() })",
+      )
+    })
   })
 
   describe('mysql', () => {
