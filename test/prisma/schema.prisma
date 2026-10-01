@@ -227,11 +227,13 @@ model Event {
 
 // ULID primary key: client-side ULID generation in every ORM
 // (ulidx / python-ulid / oklog/ulid / ulid crate / Ecto.ULID / ulid gem /
-// HasUlids). Timestamps under Prisma's own names, unmapped: @updatedAt is
-// set by the client, so an ORM whose timestamp convention is created_at /
-// updated_at (Active Record, Eloquent) must point it at these columns.
+// HasUlids), and a ULID that is not the key, made the same way. Timestamps
+// under Prisma's own names, unmapped: @updatedAt is set by the client, so an
+// ORM whose timestamp convention is created_at / updated_at (Active Record,
+// Eloquent) must point it at these columns.
 model Ticket {
   id        String   @id @default(ulid())
+  code      String   @default(ulid())
   label     String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

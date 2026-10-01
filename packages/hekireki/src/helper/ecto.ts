@@ -375,6 +375,8 @@ function ectoDefaultOption(f: DMMF.Field) {
         ? 'autogenerate: {Ecto.UUID, :generate, [[version: 7]]}'
         : 'autogenerate: {Ecto.UUID, :generate, []}'
     }
+    // ulid() likewise, with Ecto.ULID from ecto_ulid_next, the package a ULID primary key needs.
+    if (def.name === 'ulid') return 'autogenerate: {Ecto.ULID, :generate, []}'
     return null
   }
   if (typeof def === 'string') {
