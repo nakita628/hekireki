@@ -10,6 +10,13 @@ allowBuilds:
   esbuild: true
   msgpackr-extract: false
   prisma: true
+# Effect 4.0.0 went in on the day it was published (2026-10-01), out of the release-age wait: the
+# move off the release candidate was decided then. Exact versions only, so the next release waits
+# as usual.
+minimumReleaseAgeExclude:
+  - '@effect/platform-node-shared@4.0.0'
+  - '@effect/platform-node@4.0.0'
+  - effect@4.0.0
 # The two types packages @heroui/react reaches through were published from 3.2.0 (color) and
 # 3.9.0 (slider) with a dependency on Adobe's Spectrum design system (@react-spectrum/color,
 # @react-spectrum/slider, and through them @adobe/react-spectrum with its thousands of icon

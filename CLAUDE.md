@@ -127,7 +127,7 @@ resolved outside the workspace can be another version of it.
   marker line, `-- hekireki migrate plan`, which is what lets it refuse to rewrite its own output.
   Comments Prisma wrote stay where they were. What a person needs to know is `notes` from
   `planSql`, printed by the CLI.
-- **Let the CLI library do its own job.** `effect/unstable/cli` renders help, parses flags and
+- **Let the CLI library do its own job.** `effect/cli` renders help, parses flags and
   reports errors; do not reimplement any of that.
 
 ## Checks before handing work back

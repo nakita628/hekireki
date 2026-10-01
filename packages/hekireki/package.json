@@ -96,7 +96,7 @@
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.1.1",
-    "@effect/platform-node": "^4.0.0-rc.117",
+    "@effect/platform-node": "^4.0.0",
     "@faker-js/faker": "^10.6.0",
     "@hono/node-server": "^2.1.1",
     "@hono/zod-openapi": "^1.6.3",
@@ -110,7 +110,7 @@
     "@resvg/resvg-js": "^2.6.2",
     "acorn": "^8.18.0",
     "cuid": "^3.0.0",
-    "effect": "^4.0.0-rc.117",
+    "effect": "^4.0.0",
     "hono": "^4.13.8",
     "nanoid": "^6.0.1",
     "oxfmt": "^0.70.0",

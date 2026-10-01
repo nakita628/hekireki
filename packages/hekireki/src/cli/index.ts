@@ -1,7 +1,7 @@
 import path from 'node:path'
 
 import { Console, Effect, Schema } from 'effect'
-import { CliError, Command, Flag } from 'effect/unstable/cli'
+import { CliError, Command, Flag } from 'effect/cli'
 
 import { version } from '../../package.json' with { type: 'json' }
 import { exists } from '../file/index.js'
@@ -81,6 +81,14 @@ export function studioBanner(options: {
 // An integer in 1–65535, the same check `Config.Port` makes: a port no listener could bind is
 // rejected while the command line is read.
 const Port = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65_535 }))
+
+// A row count, as the `count` of hekireki.config.ts takes it: a negative one is rejected while the
+// command line is read, before anything is generated.
+const RowCount = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))
+
+// A time limit in milliseconds: one of zero or less would reach the database as a value it refuses,
+// or as no limit at all, where leaving the flag out is how to ask for none.
+const Milliseconds = Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))
 
 const studioFlags = {
   port: Flag.Int('port').pipe(
@@ -210,6 +218,7 @@ const seedFlags = {
   ),
   count: Flag.Int('count').pipe(
     Flag.withAlias('n'),
+    Flag.withSchema(RowCount),
     Flag.withDescription(
       'Rows for every faker model, over the per-model counts of the config; models given as data keep their rows (left out: the config decides, and only the configured models are seeded)',
     ),
@@ -295,6 +304,7 @@ const migrateCheckFlags = {
     Flag.withDefault(null),
   ),
   timeout: Flag.Int('timeout').pipe(
+    Flag.withSchema(Milliseconds),
     Flag.withDescription(
       'How long one query may run, in milliseconds, on PostgreSQL and MySQL (default: no limit)',
     ),
