@@ -1,13 +1,22 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { stripVTControlCharacters } from 'node:util'
 
 // Regenerates test/harness/* from test/prisma/schema.prisma with the built generators
 // before the language checks run. One prisma run emits every target, so
 // running a single language's file still starts from fresh output. Further runs
 // cover test/prisma/efcore.prisma and test/prisma/exposed.prisma, the hazards
 // particular to C# and EF Core and to Kotlin and Exposed.
+//
+// The generators whose output turns most on the database — column types, keys, defaults — are
+// run again on SQLite and on MySQL: the same schema with the provider changed and the lines Prisma
+// refuses for it left out (a scalar list, a native type of PostgreSQL), so the variants follow
+// schema.prisma with no copy to keep in step. Each writes under harness/<lang>/variants/<provider>/,
+// where the language's check compiles and type-checks the output alone, without the smoke code
+// that names fields only the PostgreSQL schema has.
 //
 // The generated files are gitignored: the byte-for-byte golden masters live in
 // packages/hekireki/src/**/*.test.ts, and these harnesses only answer the
@@ -49,6 +58,66 @@ const STALE_OUTPUT = [
   'exposed/src/main/kotlin/hekireki',
 ]
 
+const VARIANT_PROVIDERS = ['sqlite', 'mysql'] as const
+
+/** The generator blocks of the variants: each target's name and where it writes, under harness/. */
+const VARIANT_TARGETS = [
+  ['gorm', (provider: string) => `gorm/variants/${provider}`],
+  ['sea-orm', (provider: string) => `sea-orm/src/variants/${provider}`],
+  ['sqlalchemy', (provider: string) => `sqlalchemy/variants/${provider}`],
+  ['drizzle', (provider: string) => `drizzle/variants/${provider}/schema.ts`],
+  ['kysely', (provider: string) => `kysely/variants/${provider}/types.ts`],
+] as const
+
+const VARIANT_OUTPUT = [
+  'gorm/variants',
+  'sea-orm/src/variants/sqlite',
+  'sea-orm/src/variants/mysql',
+  'sqlalchemy/variants',
+  'drizzle/variants',
+  'kysely/variants',
+]
+
+/**
+ * schema.prisma on another provider: its own generator blocks for the variant targets, and every
+ * line Prisma refuses there commented out, asked again until Prisma takes the schema.
+ */
+function variantSchema(root: string, provider: string) {
+  const require = createRequire(join(root, 'packages/hekireki/package.json'))
+  const { getDMMF } = require('@prisma/get-dmmf') as {
+    getDMMF: (options: { datamodel: [string, string][] }) => { type?: string; error?: Error }
+  }
+  const generators = VARIANT_TARGETS.map(
+    ([lang, output]) =>
+      `generator ${lang} {\n  provider = "hekireki-${lang}"\n  output   = "${join(root, 'test/harness', output(provider))}"\n}\n`,
+  ).join('\n')
+  const models = readFileSync(join(root, 'test/prisma/schema.prisma'), 'utf8')
+    .replace(/generator [\w-]+ \{[\s\S]*?\n\}\n/gu, '')
+    .replace(/datasource db \{[\s\S]*?\n\}\n/u, '')
+  const lines = `datasource db {\n  provider = "${provider}"\n}\n\n${generators}\n${models}`.split(
+    '\n',
+  )
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const result = getDMMF({ datamodel: [['schema.prisma', lines.join('\n')]] })
+    if (result.type === undefined) return lines.join('\n')
+    const refused = [
+      ...new Set(
+        [
+          ...stripVTControlCharacters(result.error?.message ?? '').matchAll(
+            /schema\.prisma:(\d+)/gu,
+          ),
+        ].map((match) => Number(match[1])),
+      ),
+    ]
+    if (refused.length === 0)
+      throw new Error(
+        `The ${provider} variant of schema.prisma does not parse: ${result.error?.message}`,
+      )
+    for (const line of refused) lines[line - 1] = `// ${lines[line - 1]}`
+  }
+  throw new Error(`The ${provider} variant of schema.prisma still does not parse`)
+}
+
 export default function setup() {
   const root = resolve(import.meta.dirname, '../..')
   const dist = join(root, 'packages/hekireki/dist/bin')
@@ -66,7 +135,7 @@ export default function setup() {
     symlinkSync(join(dist, `${lang}.js`), join(bin, `hekireki-${lang}`))
   }
 
-  for (const output of STALE_OUTPUT) {
+  for (const output of [...STALE_OUTPUT, ...VARIANT_OUTPUT]) {
     rmSync(join(root, 'test/harness', output), { recursive: true, force: true })
   }
 
@@ -98,7 +167,23 @@ export default function setup() {
     )
   }
 
+  const variants = mkdtempSync(join(tmpdir(), 'hekireki-lang-variants-'))
+  for (const provider of VARIANT_PROVIDERS) {
+    const schema = join(variants, `${provider}.prisma`)
+    writeFileSync(schema, variantSchema(root, provider))
+    execFileSync(
+      join(root, 'packages/hekireki/node_modules/.bin/prisma'),
+      ['generate', '--schema', schema],
+      {
+        cwd: root,
+        env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+        stdio: ['ignore', 'ignore', 'inherit'],
+      },
+    )
+  }
+
   return () => {
     rmSync(bin, { recursive: true, force: true })
+    rmSync(variants, { recursive: true, force: true })
   }
 }

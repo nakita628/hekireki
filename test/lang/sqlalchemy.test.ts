@@ -60,4 +60,23 @@ describe('sqlalchemy', () => {
     const result = spawnSync(python, ['smoke.py'], { cwd: harness, stdio: 'inherit' })
     expect(result.status).toBe(0)
   })
+
+  // The same schema on SQLite and MySQL (test/lang/setup.ts): typed under mypy --strict, every
+  // table's DDL compiled in its own dialect, and the SQLite tables made in a database in memory.
+  it.skipIf(!hasPython).each(['sqlite', 'mysql'])(
+    'type-checks and compiles the %s output',
+    (provider) => {
+      const typed = spawnSync(
+        python,
+        ['-m', 'mypy', '--config-file', 'mypy.ini', join('variants', provider, 'models.py')],
+        { cwd: harness, stdio: 'inherit' },
+      )
+      expect(typed.status).toBe(0)
+      const compiled = spawnSync(python, ['variants.py', provider], {
+        cwd: harness,
+        stdio: 'inherit',
+      })
+      expect(compiled.status).toBe(0)
+    },
+  )
 })

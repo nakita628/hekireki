@@ -42,4 +42,16 @@ describe('gorm', () => {
     })
     expect(result.status).toBe(0)
   })
+
+  // The same schema on SQLite and MySQL (test/lang/setup.ts), each a package of its own.
+  it.skipIf(!hasGo)('compiles and vets the SQLite and MySQL output', () => {
+    for (const command of ['build', 'vet']) {
+      const result = spawnSync(
+        'go',
+        [command, '-mod=readonly', './variants/sqlite/', './variants/mysql/'],
+        { cwd: harness, stdio: 'inherit', env },
+      )
+      expect(result.status).toBe(0)
+    }
+  })
 })

@@ -1,0 +1,15 @@
+{
+  // The output for SQLite and MySQL that test/lang/setup.ts writes into variants/: checked alone,
+  // without smoke.ts, which names fields only the PostgreSQL schema has.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "include": ["variants/*/types.ts"]
+}

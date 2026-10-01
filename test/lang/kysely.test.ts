@@ -17,4 +17,14 @@ describe('kysely', () => {
     const result = spawnSync(join(bin, 'tsc'), ['--noEmit', '-p', harness], { stdio: 'inherit' })
     expect(result.status).toBe(0)
   })
+
+  // The same schema on SQLite and MySQL (test/lang/setup.ts), whose column types differ.
+  it('type-checks the SQLite and MySQL output', () => {
+    const result = spawnSync(
+      join(bin, 'tsc'),
+      ['--noEmit', '-p', join(harness, 'tsconfig.variants.json')],
+      { stdio: 'inherit' },
+    )
+    expect(result.status).toBe(0)
+  })
 })

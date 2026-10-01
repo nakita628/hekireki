@@ -16,6 +16,13 @@ harness/efcore/Models/
 harness/efcore/Edge/
 harness/exposed/src/main/kotlin/models/
 harness/exposed/src/main/kotlin/hekireki/
+# The same schema on SQLite and MySQL, for the targets lang/setup.ts runs on both.
+harness/gorm/variants/
+harness/sea-orm/src/variants/sqlite/
+harness/sea-orm/src/variants/mysql/
+harness/sqlalchemy/variants/
+harness/drizzle/variants/
+harness/kysely/variants/
 
 # Toolchain build artifacts.
 harness/drizzle/node_modules
