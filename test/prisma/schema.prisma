@@ -171,6 +171,26 @@ model Topic {
   papers Paper[]
 }
 
+// One relation name between two pairs of models: `Pupil.crests` is the end of `Crest.pupil`, not
+// of `Crest.guild`, though both are called "holder".
+model Pupil {
+  id     Int     @id @default(autoincrement())
+  crests Crest[] @relation("holder")
+}
+
+model Guild {
+  id     Int     @id @default(autoincrement())
+  crests Crest[] @relation("holder")
+}
+
+model Crest {
+  id      Int   @id @default(autoincrement())
+  guildId Int
+  guild   Guild @relation("holder", fields: [guildId], references: [id])
+  pupilId Int
+  pupil   Pupil @relation("holder", fields: [pupilId], references: [id])
+}
+
 // Composite PK + two foreign keys to the same model.
 model Follow {
   followerId  String

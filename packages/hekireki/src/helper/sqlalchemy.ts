@@ -7,6 +7,7 @@ import {
   isFunctionDefault,
   isNowDefault,
   isUlidDefault,
+  relationEnds,
   uuidDefaultVersion,
 } from '../utils/prisma-model.js'
 import { jsonToPythonLiteral, toPythonString } from '../utils/python.js'
@@ -339,16 +340,16 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
   }[] = []
   const manyToMany: { name: string; targetModel: string; relationName: string }[] = []
 
-  for (const field of model.fields) {
-    if (field.kind !== 'object') continue
-
-    if (field.relationFromFields && field.relationFromFields.length > 0) {
+  for (const end of relationEnds(model, allModels)) {
+    const { field } = end
+    if (end.kind === 'belongsTo') {
+      const foreignKeys = field.relationFromFields ?? []
       belongsTo.push({
         name: field.name,
         targetModel: field.type,
-        foreignKey: field.relationFromFields[0],
+        foreignKey: foreignKeys[0],
         references: field.relationToFields?.[0] ?? 'id',
-        foreignKeys: field.relationFromFields,
+        foreignKeys,
         referencesList: field.relationToFields ?? ['id'],
         optional: !field.isRequired,
         // What Prisma Migrate writes when the schema names no action: the database has it, so
@@ -358,33 +359,18 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
       })
       continue
     }
-
-    const targetModel = allModels.find((m) => m.name === field.type)
-    if (!targetModel) continue
-
-    if (field.isList) {
-      const otherSide = backRelation(field, model, allModels)
-      if (otherSide?.isList) {
-        manyToMany.push({
-          name: field.name,
-          targetModel: field.type,
-          relationName: field.relationName ?? `${model.name}To${field.type}`,
-        })
-        continue
-      }
+    if (end.kind === 'manyToMany') {
+      manyToMany.push({
+        name: field.name,
+        targetModel: field.type,
+        relationName: field.relationName ?? `${model.name}To${field.type}`,
+      })
+      continue
     }
-
-    const fkField = targetModel.fields.find(
-      (f) =>
-        f.relationName === field.relationName &&
-        f.relationFromFields &&
-        f.relationFromFields.length > 0,
-    )
-    const foreignKey = fkField?.relationFromFields?.[0]
-    if (!(fkField && foreignKey)) continue
+    const fkField = end.inverse
+    const foreignKey = (fkField.relationFromFields ?? [])[0]
     const onDelete = fkField.relationOnDelete ?? (fkField.isRequired ? 'Restrict' : 'SetNull')
-
-    if (field.isList) {
+    if (end.kind === 'hasMany') {
       hasMany.push({
         name: field.name,
         targetModel: field.type,

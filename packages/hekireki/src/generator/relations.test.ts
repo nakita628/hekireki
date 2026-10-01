@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vite-plus/test'
 import { activeRecordModelFiles } from './activerecord.js'
 import { atlasSchema } from './atlas.js'
 import { drizzleSchema } from './drizzle.js'
+import { ectoSchemaFiles } from './ecto.js'
+import { eloquentModelFiles } from './eloquent.js'
 import { generateGormModels } from './gorm.js'
 import { kyselySchema } from './kysely.js'
 import { seaOrmFiles } from './sea-orm.js'
@@ -123,5 +125,72 @@ describe('a many-to-many between keys not named id', () => {
     )?.code
     expect(code).toContain('to = "super::post::Column::PostId"')
     expect(code).toContain('to = "super::tag::Column::Slug"')
+  })
+})
+
+// Prisma lets two pairs of models share a relation name. `User.posts` is the end of `Post.user`;
+// `Post.team` is "owner" too, but it points at Team, so it is not the key `posts` is joined on.
+describe('one relation name between two pairs of models', () => {
+  const result = getDMMF({
+    datamodel: [
+      [
+        'schema.prisma',
+        `datasource db {
+  provider = "postgresql"
+}
+model User {
+  id    Int    @id
+  posts Post[] @relation("owner")
+}
+model Team {
+  id    Int    @id
+  posts Post[] @relation("owner")
+}
+model Post {
+  id     Int  @id
+  teamId Int
+  team   Team @relation("owner", fields: [teamId], references: [id])
+  userId Int
+  user   User @relation("owner", fields: [userId], references: [id])
+}
+`,
+      ],
+    ],
+  })
+  if ('type' in result) throw new Error(result.error.message)
+  const { models, enums, indexes } = result.datamodel
+  const codeOf = (files: readonly { fileName: string; code: string }[], fileName: string) =>
+    files.find((f) => f.fileName === fileName)?.code
+
+  it('gorm joins each model on its own key', () => {
+    const code = generateGormModels(models, enums, indexes)
+    expect(code).toContain(
+      'type User struct {\n\tID    int    `gorm:"column:id;primaryKey" json:"id"`\n\tPosts []Post `gorm:"foreignKey:UserID"`',
+    )
+    expect(code).toContain(
+      'type Team struct {\n\tID    int    `gorm:"column:id;primaryKey" json:"id"`\n\tPosts []Post `gorm:"foreignKey:TeamID"`',
+    )
+  })
+
+  it('activerecord joins each model on its own key', () => {
+    const files = activeRecordModelFiles(models, enums)
+    expect(codeOf(files, 'user.rb')).toContain(
+      'has_many :posts, foreign_key: "userId", inverse_of: :user',
+    )
+    expect(codeOf(files, 'team.rb')).toContain(
+      'has_many :posts, foreign_key: "teamId", inverse_of: :team',
+    )
+  })
+
+  it('ecto joins each model on its own key', () => {
+    const files = ectoSchemaFiles(models, 'App', enums)
+    expect(codeOf(files, 'user.ex')).toContain('has_many(:posts, App.Post, foreign_key: :user_id)')
+    expect(codeOf(files, 'team.ex')).toContain('has_many(:posts, App.Post, foreign_key: :team_id)')
+  })
+
+  it('eloquent joins each model on its own key', () => {
+    const files = eloquentModelFiles(models, 'App\\Models', enums)
+    expect(codeOf(files, 'User.php')).toContain("return $this->hasMany(Post::class, 'userId');")
+    expect(codeOf(files, 'Team.php')).toContain("return $this->hasMany(Post::class, 'teamId');")
   })
 })

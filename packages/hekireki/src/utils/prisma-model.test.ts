@@ -9,6 +9,7 @@ import {
   isJoinSideA,
   isNowDefault,
   isUlidDefault,
+  relationEnds,
   uuidDefaultVersion,
 } from './prisma-model.js'
 
@@ -169,5 +170,59 @@ model Tag {
     const field = owner?.fields.find((f) => f.name === fieldName)
     const inverse = models.flatMap((m) => m.fields).find((f) => f.name === inverseName)
     expect(owner && field && inverse && isJoinSideA(field, owner, inverse)).toBe(expected)
+  })
+})
+
+describe('relationEnds', () => {
+  const result = getDMMF({
+    datamodel: [
+      [
+        'schema.prisma',
+        `datasource db {
+  provider = "postgresql"
+}
+model User {
+  id        Int    @id
+  reports   User[] @relation("management")
+  managerId Int?
+  manager   User?  @relation("management", fields: [managerId], references: [id])
+  profile   Profile?
+  tags      Tag[]
+}
+model Profile {
+  id     Int  @id
+  userId Int  @unique
+  user   User @relation(fields: [userId], references: [id])
+}
+model Tag {
+  id    Int    @id
+  users User[]
+}
+`,
+      ],
+    ],
+  })
+  if ('type' in result) throw new Error(result.error.message)
+  const { models } = result.datamodel
+
+  it('names each relation field of a model, in declaration order, with its other end', () => {
+    const [user] = models
+    expect(
+      relationEnds(user, models).map((end) =>
+        end.kind === 'manyToMany'
+          ? {
+              kind: end.kind,
+              field: end.field.name,
+              inverse: end.inverse.name,
+              isSideA: end.isSideA,
+            }
+          : { kind: end.kind, field: end.field.name, inverse: end.inverse?.name ?? null },
+      ),
+    ).toStrictEqual([
+      { kind: 'hasMany', field: 'reports', inverse: 'manager' },
+      { kind: 'belongsTo', field: 'manager', inverse: 'reports' },
+      { kind: 'hasOne', field: 'profile', inverse: 'user' },
+      { kind: 'manyToMany', field: 'tags', inverse: 'users', isSideA: false },
+    ])
   })
 })

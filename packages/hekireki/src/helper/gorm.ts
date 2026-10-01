@@ -1,11 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import {
-  backRelation,
-  isAutoincrement,
-  isFunctionDefault,
-  isJoinSideA,
-} from '../utils/prisma-model.js'
+import { isAutoincrement, isFunctionDefault, relationEnds } from '../utils/prisma-model.js'
 
 const PRISMA_TO_GO: { [k: string]: string } = {
   String: 'string',
@@ -117,76 +112,46 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
     isSideA: boolean
   }[] = []
 
-  for (const field of model.fields) {
-    if (field.kind !== 'object') continue
-
-    if (field.relationFromFields && field.relationFromFields.length > 0) {
+  for (const end of relationEnds(model, allModels)) {
+    const { field } = end
+    if (end.kind === 'belongsTo') {
+      const foreignKeys = field.relationFromFields ?? []
       belongsTo.push({
         name: field.name,
         targetModel: field.type,
-        foreignKey: field.relationFromFields[0],
+        foreignKey: foreignKeys[0],
         references: field.relationToFields?.[0] ?? 'id',
-        foreignKeys: field.relationFromFields,
+        foreignKeys,
         referencesList: field.relationToFields ?? ['id'],
         onDelete: field.relationOnDelete,
         onUpdate: field.relationOnUpdate,
       })
       continue
     }
-
-    const targetModel = allModels.find((m) => m.name === field.type)
-    if (!targetModel) continue
-
-    if (field.isList) {
-      const otherSide = backRelation(field, model, allModels)
-      if (otherSide?.isList) {
-        manyToMany.push({
-          name: field.name,
-          targetModel: field.type,
-          relationName: field.relationName ?? `${model.name}To${field.type}`,
-          isSideA: isJoinSideA(field, model, otherSide),
-        })
-        continue
-      }
-    }
-
-    const fkField = targetModel.fields.find(
-      (f) =>
-        f.relationName === field.relationName &&
-        f.relationFromFields &&
-        f.relationFromFields.length > 0,
-    )
-    const foreignKey = fkField?.relationFromFields?.[0]
-    if (!foreignKey) continue
-    const references = fkField?.relationToFields?.[0] ?? 'id'
-    const foreignKeys = fkField?.relationFromFields ?? [foreignKey]
-    const referencesList = fkField?.relationToFields ?? ['id']
-
-    if (field.isList) {
-      hasMany.push({
+    if (end.kind === 'manyToMany') {
+      manyToMany.push({
         name: field.name,
         targetModel: field.type,
-        foreignKey,
-        references,
-        foreignKeys,
-        referencesList,
-        isList: true,
-        onDelete: fkField?.relationOnDelete,
-        onUpdate: fkField?.relationOnUpdate,
+        relationName: field.relationName ?? `${model.name}To${field.type}`,
+        isSideA: end.isSideA,
       })
-    } else {
-      hasOne.push({
-        name: field.name,
-        targetModel: field.type,
-        foreignKey,
-        references,
-        foreignKeys,
-        referencesList,
-        isList: false,
-        onDelete: fkField?.relationOnDelete,
-        onUpdate: fkField?.relationOnUpdate,
-      })
+      continue
     }
+    const fkField = end.inverse
+    const foreignKeys = fkField.relationFromFields ?? []
+    const association = {
+      name: field.name,
+      targetModel: field.type,
+      foreignKey: foreignKeys[0],
+      references: fkField.relationToFields?.[0] ?? 'id',
+      foreignKeys,
+      referencesList: fkField.relationToFields ?? ['id'],
+      isList: end.kind === 'hasMany',
+      onDelete: fkField.relationOnDelete,
+      onUpdate: fkField.relationOnUpdate,
+    }
+    if (end.kind === 'hasMany') hasMany.push(association)
+    else hasOne.push(association)
   }
 
   return { belongsTo, hasMany, hasOne, manyToMany }

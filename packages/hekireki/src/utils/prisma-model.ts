@@ -78,6 +78,46 @@ export function isJoinSideA(field: DMMF.Field, owner: DMMF.Model, inverse: DMMF.
   return owner.name === field.type ? field.name < inverse.name : owner.name < field.type
 }
 
+/**
+ * A relation field as an ORM declares it: the end that holds the foreign key (`belongsTo`), an end of
+ * an implicit many-to-many, or the end a foreign key on the other model points back at (`hasMany`
+ * for a list, `hasOne` otherwise). `inverse` is the other end; a `belongsTo` may have none.
+ */
+export type RelationEnd =
+  | {
+      readonly kind: 'belongsTo'
+      readonly field: DMMF.Field
+      readonly inverse: DMMF.Field | undefined
+    }
+  | {
+      readonly kind: 'manyToMany'
+      readonly field: DMMF.Field
+      readonly inverse: DMMF.Field
+      readonly isSideA: boolean
+    }
+  | {
+      readonly kind: 'hasMany' | 'hasOne'
+      readonly field: DMMF.Field
+      readonly inverse: DMMF.Field
+    }
+
+// A model's relation fields in declaration order. The other end is the one `backRelation` finds:
+// on the related model, of the same relation, pointing back at this model — another relation of
+// the same name between other models, or the field itself in a self-relation, is not it.
+export function relationEnds(model: DMMF.Model, models: readonly DMMF.Model[]) {
+  return model.fields.flatMap((field): RelationEnd[] => {
+    if (field.kind !== 'object') return []
+    const inverse = backRelation(field, model, models)
+    if ((field.relationFromFields ?? []).length > 0) return [{ kind: 'belongsTo', field, inverse }]
+    if (!inverse) return []
+    if (field.isList && inverse.isList) {
+      return [{ kind: 'manyToMany', field, inverse, isSideA: isJoinSideA(field, model, inverse) }]
+    }
+    if ((inverse.relationFromFields ?? []).length === 0) return []
+    return [{ kind: field.isList ? 'hasMany' : 'hasOne', field, inverse }]
+  })
+}
+
 export type ManyToMany = {
   readonly relationName: string
   /** The side join column `A` belongs to. */

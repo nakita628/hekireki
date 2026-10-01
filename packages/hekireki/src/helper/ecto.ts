@@ -1,6 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { isAnnotationLine, makePascalCase, makeSnakeCase } from '../utils/index.js'
+import { relationEnds } from '../utils/prisma-model.js'
 import { prismaConstraintName } from '../utils/prisma-postgres.js'
 
 /**
@@ -294,73 +295,58 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[], ap
     relatedKey: string
   }[] = []
 
-  for (const field of model.fields) {
-    if (field.kind !== 'object') continue
+  for (const end of relationEnds(model, allModels)) {
+    const { field } = end
+    const targetModel = allModels.find((m) => m.name === field.type)
 
-    if (field.relationFromFields && field.relationFromFields.length > 0) {
+    if (end.kind === 'belongsTo') {
+      const fromFields = field.relationFromFields ?? []
       // Ecto's belongs_to takes a single foreign_key: a composite FK would
       // half-join on the first column, so it emits no association and the FK
       // columns stay plain fields.
-      if (field.relationFromFields.length > 1) continue
+      if (fromFields.length > 1) continue
       belongsTo.push({
         name: field.name,
         targetModel: field.type,
-        foreignKey: field.relationFromFields[0],
+        foreignKey: fromFields[0],
         fkType: getBelongsToFkType(allModels, field.type, field.relationToFields?.[0], appName),
-        references: ectoFieldName(
-          allModels.find((m) => m.name === field.type),
-          field.relationToFields?.[0] ?? 'id',
+        references: ectoFieldName(targetModel, field.relationToFields?.[0] ?? 'id'),
+      })
+      continue
+    }
+
+    if (!targetModel) continue
+
+    if (end.kind === 'manyToMany') {
+      // Prisma's join table holds the model that sorts first in "A". A model related to itself
+      // is on both sides: the relation field whose name sorts first reads its own key from "A".
+      const [left, right] = end.isSideA ? [model.name, field.type] : [field.type, model.name]
+      manyToMany.push({
+        name: field.name,
+        targetModel: field.type,
+        joinThrough: `_${field.relationName ?? `${left}To${right}`}`,
+        ownJoinColumn: end.isSideA ? 'A' : 'B',
+        ownKey: ectoFieldName(model, model.fields.find((f) => f.isId)?.name ?? 'id'),
+        relatedJoinColumn: end.isSideA ? 'B' : 'A',
+        relatedKey: ectoFieldName(
+          targetModel,
+          targetModel.fields.find((f) => f.isId)?.name ?? 'id',
         ),
       })
       continue
     }
 
-    const targetModel = allModels.find((m) => m.name === field.type)
-    if (!targetModel) continue
-
-    if (field.isList) {
-      const otherSide = targetModel.fields.find(
-        (f) => f.relationName === field.relationName && f.kind === 'object' && f !== field,
-      )
-      if (otherSide?.isList) {
-        // Prisma's join table holds the model that sorts first in "A". A model related to itself
-        // is on both sides: the relation field whose name sorts first reads its own key from "A".
-        const ownIsA =
-          model.name === field.type ? field.name < otherSide.name : model.name < field.type
-        const [left, right] = ownIsA ? [model.name, field.type] : [field.type, model.name]
-        manyToMany.push({
-          name: field.name,
-          targetModel: field.type,
-          joinThrough: `_${field.relationName ?? `${left}To${right}`}`,
-          ownJoinColumn: ownIsA ? 'A' : 'B',
-          ownKey: ectoFieldName(model, model.fields.find((f) => f.isId)?.name ?? 'id'),
-          relatedJoinColumn: ownIsA ? 'B' : 'A',
-          relatedKey: ectoFieldName(
-            targetModel,
-            targetModel.fields.find((f) => f.isId)?.name ?? 'id',
-          ),
-        })
-        continue
-      }
-    }
-
-    const fkField = targetModel.fields.find(
-      (f) =>
-        f.relationName === field.relationName &&
-        f.relationFromFields &&
-        f.relationFromFields.length > 0,
-    )
-    const foreignKey = fkField?.relationFromFields?.[0]
-    if (!foreignKey) continue
-    if ((fkField?.relationFromFields?.length ?? 0) > 1) continue
+    const fkField = end.inverse
+    const fromFields = fkField.relationFromFields ?? []
+    if (fromFields.length > 1) continue
 
     const association = {
       name: field.name,
       targetModel: field.type,
-      foreignKey,
-      references: ectoFieldName(model, fkField?.relationToFields?.[0] ?? 'id'),
+      foreignKey: fromFields[0],
+      references: ectoFieldName(model, fkField.relationToFields?.[0] ?? 'id'),
     }
-    if (field.isList) {
+    if (end.kind === 'hasMany') {
       hasMany.push(association)
     } else {
       hasOne.push(association)
