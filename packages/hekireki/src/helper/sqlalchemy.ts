@@ -1,6 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { constraintName, makePascalCase, makeSnakeCase } from '../utils/index.js'
+import { backRelation } from '../utils/prisma-postgres.js'
 
 const PRISMA_TO_PYTHON: { [k: string]: string } = {
   String: 'str',
@@ -354,9 +355,7 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
     if (!targetModel) continue
 
     if (field.isList) {
-      const otherSide = targetModel.fields.find(
-        (f) => f.relationName === field.relationName && f.kind === 'object',
-      )
+      const otherSide = backRelation(field, model, allModels)
       if (otherSide?.isList) {
         manyToMany.push({
           name: field.name,
@@ -406,9 +405,7 @@ export function collectManyToManyTables(allModels: readonly DMMF.Model[]) {
       if (field.kind !== 'object' || !field.isList) return []
       const targetModel = allModels.find((m) => m.name === field.type)
       if (!targetModel) return []
-      const otherSide = targetModel.fields.find(
-        (f) => f.relationName === field.relationName && f.kind === 'object',
-      )
+      const otherSide = backRelation(field, model, allModels)
       if (!otherSide?.isList) return []
 
       const [leftName, rightName] =

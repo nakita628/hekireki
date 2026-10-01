@@ -1,6 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { indexPrefix } from '../utils/index.js'
+import { isImplicitManyToMany } from '../utils/prisma-postgres.js'
 
 type AtlasDialect = 'postgresql' | 'mysql' | 'sqlite'
 
@@ -537,20 +538,10 @@ export function makeAtlasTable(
   ].join('\n')
 }
 
-function isImplicitM2M(field: DMMF.Field, models: readonly DMMF.Model[]) {
-  if (field.kind !== 'object' || !field.isList) return false
-  if (field.relationFromFields && field.relationFromFields.length > 0) return false
-  const target = models.find((m) => m.name === field.type)
-  const otherSide = target?.fields.find(
-    (f) => f.kind === 'object' && f.relationName === field.relationName,
-  )
-  return otherSide?.isList === true
-}
-
 function collectM2M(models: readonly DMMF.Model[]) {
   const pairs = models.flatMap((model) =>
     model.fields
-      .filter((field) => isImplicitM2M(field, models))
+      .filter((field) => isImplicitManyToMany(field, model, models))
       .map((field) => {
         const [leftName, rightName] =
           model.name < field.type ? [model.name, field.type] : [field.type, model.name]

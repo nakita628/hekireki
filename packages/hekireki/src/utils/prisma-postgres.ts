@@ -131,6 +131,27 @@ export function backRelation(field: DMMF.Field, owner: DMMF.Model, models: reado
   )
 }
 
+// A list relation field kept in an implicit join table: no `@relation(fields:)`, and its other end
+// is a list too. In a self-relation the other end is another field, never the field itself.
+export function isImplicitManyToMany(
+  field: DMMF.Field,
+  owner: DMMF.Model,
+  models: readonly DMMF.Model[],
+) {
+  return (
+    field.kind === 'object' &&
+    field.isList &&
+    (field.relationFromFields ?? []).length === 0 &&
+    backRelation(field, owner, models)?.isList === true
+  )
+}
+
+// Whether a field of an implicit many-to-many relation is on the side of column `A`: its model's
+// name sorts first, or, in a self-relation, its own name sorts before its other end's.
+export function isJoinSideA(field: DMMF.Field, owner: DMMF.Model, inverse: DMMF.Field) {
+  return owner.name === field.type ? field.name < inverse.name : owner.name < field.type
+}
+
 export type ManyToMany = {
   readonly relationName: string
   /** The side join column `A` belongs to. */
@@ -151,9 +172,7 @@ export function manyToManyRelations(models: readonly DMMF.Model[]) {
         const inverse = backRelation(field, model, models)
         const other = models.find((m) => m.name === field.type)
         if (!(other && inverse?.isList)) return []
-        const isSideA =
-          model.name === other.name ? field.name < inverse.name : model.name < other.name
-        if (!isSideA) return []
+        if (!isJoinSideA(field, model, inverse)) return []
         return [
           {
             relationName: field.relationName ?? `${model.name}To${other.name}`,

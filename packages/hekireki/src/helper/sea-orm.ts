@@ -1,6 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { makeSnakeCase } from '../utils/index.js'
+import { backRelation } from '../utils/prisma-postgres.js'
 
 const PRISMA_TO_RUST: { [k: string]: string } = {
   String: 'String',
@@ -381,9 +382,7 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
     if (!targetModel) continue
 
     if (field.isList) {
-      const otherSide = targetModel.fields.find(
-        (f) => f.relationName === field.relationName && f.kind === 'object',
-      )
+      const otherSide = backRelation(field, model, allModels)
       if (otherSide?.isList) {
         manyToMany.push({
           name: field.name,

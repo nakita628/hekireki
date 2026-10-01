@@ -1,5 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
+import { backRelation, isJoinSideA } from '../utils/prisma-postgres.js'
+
 const PRISMA_TO_GO: { [k: string]: string } = {
   String: 'string',
   Int: 'int',
@@ -103,7 +105,12 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
     onDelete?: string
     onUpdate?: string
   }[] = []
-  const manyToMany: { name: string; targetModel: string; relationName: string }[] = []
+  const manyToMany: {
+    name: string
+    targetModel: string
+    relationName: string
+    isSideA: boolean
+  }[] = []
 
   for (const field of model.fields) {
     if (field.kind !== 'object') continue
@@ -126,14 +133,13 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
     if (!targetModel) continue
 
     if (field.isList) {
-      const otherSide = targetModel.fields.find(
-        (f) => f.relationName === field.relationName && f.kind === 'object',
-      )
+      const otherSide = backRelation(field, model, allModels)
       if (otherSide?.isList) {
         manyToMany.push({
           name: field.name,
           targetModel: field.type,
           relationName: field.relationName ?? `${model.name}To${field.type}`,
+          isSideA: isJoinSideA(field, model, otherSide),
         })
         continue
       }
@@ -673,9 +679,10 @@ function generateRelationFields(
 
   // Prisma's join table has two columns, A for the model whose name sorts
   // first and B for the other, where GORM would look for `post_id`/`tag_id`.
+  // In a self-relation the field whose name sorts first holds its own key in A.
   const manyToManyLines = associations.manyToMany.map((assoc) => {
     const joinTable = `_${assoc.relationName}`
-    const [own, related] = model.name < assoc.targetModel ? ['A', 'B'] : ['B', 'A']
+    const [own, related] = assoc.isSideA ? ['A', 'B'] : ['B', 'A']
     return [
       goFieldName(assoc.name),
       `[]${goModelName(assoc.targetModel)}`,

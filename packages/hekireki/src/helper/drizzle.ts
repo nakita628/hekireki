@@ -1,6 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { constraintName, indexPrefix, makeSnakeCase } from '../utils/index.js'
+import { isImplicitManyToMany } from '../utils/prisma-postgres.js'
 
 type DbProvider = 'postgresql' | 'mysql' | 'sqlite'
 
@@ -700,16 +701,6 @@ export function makeTable(
     : `export const ${varName} = ${tableFunc}('${tableName}', { ${columns} })`
 }
 
-function isImplicitM2M(field: DMMF.Field, models: readonly DMMF.Model[]) {
-  if (field.kind !== 'object' || !field.isList) return false
-  if (field.relationFromFields && field.relationFromFields.length > 0) return false
-  const target = models.find((m) => m.name === field.type)
-  const otherSide = target?.fields.find(
-    (f) => f.kind === 'object' && f.relationName === field.relationName,
-  )
-  return otherSide?.isList === true
-}
-
 function joinVarName(relationName: string) {
   return snakeToCamel(makeSnakeCase(relationName))
 }
@@ -717,7 +708,7 @@ function joinVarName(relationName: string) {
 function collectM2MJoinTables(models: readonly DMMF.Model[]) {
   const pairs = models.flatMap((model) =>
     model.fields
-      .filter((field) => isImplicitM2M(field, models))
+      .filter((field) => isImplicitManyToMany(field, model, models))
       .map((field) => {
         const [left, right] =
           model.name < field.type ? [model.name, field.type] : [field.type, model.name]
@@ -846,7 +837,7 @@ function makeRelationField(
     // An implicit m2m side goes through the junction table: drizzle's
     // relational API has no direct many-to-many, so `many(target)` here
     // would fail to resolve at query time.
-    if (isImplicitM2M(field, models)) {
+    if (isImplicitManyToMany(field, model, models)) {
       const [left, right] =
         model.name < field.type ? [model.name, field.type] : [field.type, model.name]
       return `${field.name}: many(${joinVarName(field.relationName ?? `${left}To${right}`)})`

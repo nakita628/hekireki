@@ -2,6 +2,7 @@ import type { DMMF } from '@prisma/generator-helper'
 
 import { pluralize } from '../utils/humanizer.js'
 import { isAnnotationLine, makePascalCase, makeSnakeCase } from '../utils/index.js'
+import { backRelation, isJoinSideA } from '../utils/prisma-postgres.js'
 
 // cspell:disable
 // Names an enum key on an Active Record model may not take. Rails defines a
@@ -1263,18 +1264,17 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
     if (!targetModel) continue
 
     if (field.isList) {
-      const otherSide = targetModel.fields.find(
-        (f) => f.relationName === field.relationName && f.kind === 'object',
-      )
+      const otherSide = backRelation(field, model, allModels)
       if (otherSide?.isList) {
         const [left, right] =
           model.name < field.type ? [model.name, field.type] : [field.type, model.name]
+        const sideA = isJoinSideA(field, model, otherSide)
         habtm.push({
           name: field.name,
           targetModel: field.type,
           joinTable: `_${field.relationName ?? `${left}To${right}`}`,
-          foreignKey: model.name === left ? 'A' : 'B',
-          associationForeignKey: model.name === left ? 'B' : 'A',
+          foreignKey: sideA ? 'A' : 'B',
+          associationForeignKey: sideA ? 'B' : 'A',
         })
         continue
       }
