@@ -96,6 +96,7 @@ packages/hekireki/src/
 ├── emit/        # file-writing boundary (the only place with I/O side effects)
 ├── format/      # oxfmt formatting for TypeScript output
 ├── database/    # where a database URL comes from (--url, hekireki.config.ts, prisma.config.ts, .env), shared by studio, seed and migrate
+├── schema/      # the Prisma schema as studio, seed and migrate read it: the files (down through a schema directory), getDMMF, the datasource and generator blocks; path.ts finds it and the Prisma config as Prisma does, apart from the engine so `--help` stays light
 ├── migrate/     # `hekireki migrate check` and `plan`: DMMF and the database's catalogue → count queries (read through the CTEs of the fixes the Studio decisions make, `.hekireki/migrate.json`) → report, or the fixes as SQL, written into Prisma's migration.sql with `--migration`
 │   ├── domain/    # pure: expected tables, the catalogue's rows as tables, conversions, checks, fixes (`fixes/`), advice, the rewritten migration, the plan; no Effect, no I/O
 │   └── adapter/   # what reaches outside: the Prisma schema engine and the connection it is given, catalogue queries, the decisions file, the migrations directory, backups, a rehearsal
@@ -103,7 +104,7 @@ packages/hekireki/src/
     └── generate/  # rows from the plan: rules, parents, defaults and uniques, nesting, many-to-many links, cardinality
 test/
 ├── prisma/          # the one schema every language check generates from
-├── lang/            # per-language checks (setup.ts regenerates the harness)
+├── lang/            # per-language checks (setup.ts regenerates the harness, and the SQLite and MySQL variants of five targets)
 └── harness/         # per-language host projects (go.mod, Cargo.toml, mix.exs, …)
 ```
 
