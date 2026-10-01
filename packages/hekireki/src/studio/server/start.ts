@@ -47,7 +47,7 @@ function listen(input: {
   )
 }
 
-/** Loads the schema, connects the database, watches the schema directory and listens; everything is released with the scope. */
+/** Listens, then loads the schema, connects the database and watches the schema directory; everything is released with the scope. */
 export function startStudioServer(options: {
   readonly schemaPath: string
   readonly port: number
@@ -63,6 +63,14 @@ export function startStudioServer(options: {
           }),
       ),
     )
+    // The port is taken before anything heavy is loaded, so a port in use is said at once rather
+    // than after the schema, the language server and the database; a request that arrives in
+    // between waits for the app.
+    const app = Promise.withResolvers<ReturnType<typeof createStudioApp>>()
+    const server = yield* listen({
+      fetch: (request) => app.promise.then((ready) => ready.fetch(request)),
+      port: options.port,
+    })
     const state = StateService.createStudioState({ schemaPath: options.schemaPath })
     const snapshot = yield* state.reload()
     const watchDir = directory ? options.schemaPath : path.dirname(options.schemaPath)
@@ -107,8 +115,7 @@ export function startStudioServer(options: {
       dir: migrationsDir,
       intervalMs: MIGRATIONS_POLL_MS,
     })
-    const app = createStudioApp(state, options.staticDir, db, client)
-    const server = yield* listen({ fetch: app.fetch, port: options.port })
+    app.resolve(createStudioApp(state, options.staticDir, db, client))
     return { snapshot, database: db.status, server }
   })
 }

@@ -71,7 +71,9 @@ const AstModule = z
   })
   .meta({ description: 'The AST helpers of @prisma/language-server (dist/lib/ast)' })
 
-function loadLanguageServer() {
+// Read where a request needs it rather than when Studio starts: loading the package takes
+// seconds, and `require` keeps the modules once read, so only the first request pays.
+function languageServer() {
   const require = createRequire(import.meta.url)
   const root = path.resolve(path.dirname(require.resolve('@prisma/language-server')), '..')
   const lib = (file: string): unknown => require(path.join(root, 'dist/lib', file))
@@ -81,8 +83,6 @@ function loadLanguageServer() {
     ast: AstModule.parse(lib('ast/index.js')),
   }
 }
-
-const languageServer = loadLanguageServer()
 
 function noop() {
   // The language server reports progress on the console; Studio's terminal belongs to the CLI.
@@ -154,11 +154,10 @@ function makeWorkspace(input: z.infer<typeof MakeWorkspaceInput>) {
     [editedUri, edited ?? ''],
     ...others.map((f): readonly [string, string] => [f.document.uri, f.path]),
   ])
+  const { PrismaSchema, SchemaDocument } = languageServer().schema
   return {
-    schema: new languageServer.schema.PrismaSchema(
-      [document, ...others.map((f) => f.document)].map(
-        (loaded) => new languageServer.schema.SchemaDocument(loaded),
-      ),
+    schema: new PrismaSchema(
+      [document, ...others.map((f) => f.document)].map((loaded) => new SchemaDocument(loaded)),
     ),
     document,
     pathOf: (uri: string) => paths.get(uri) ?? uri,
@@ -192,7 +191,7 @@ const SEVERITIES = ['error', 'warning', 'information', 'hint'] as const
 
 function diagnosticsOf(workspace: Workspace) {
   return Array.from(
-    quietly(() => languageServer.handlers.handleDiagnosticsRequest(workspace.schema)).entries(),
+    quietly(() => languageServer().handlers.handleDiagnosticsRequest(workspace.schema)).entries(),
     ([uri, diagnostics]) =>
       diagnostics.map((diagnostic) => ({
         path: workspace.pathOf(uri),
@@ -264,7 +263,7 @@ export function blockLocations(input: z.infer<typeof BlockLocationsInput>) {
     const first = input.files[0]
     if (first === undefined) return []
     const workspace = makeWorkspace({ files: input.files, path: first.path, text: first.content })
-    return Array.from(languageServer.ast.getBlocks(workspace.schema), (block) => ({
+    return Array.from(languageServer().ast.getBlocks(workspace.schema), (block) => ({
       type: block.type,
       name: block.name,
       file: workspace.pathOf(block.definingDocument.uri),
@@ -322,7 +321,7 @@ const FORMAT_OPTIONS = { tabSize: 2, insertSpaces: true }
 
 function formatEdits(workspace: Workspace, onError: (message: string) => void) {
   return quietly(() =>
-    languageServer.handlers.handleDocumentFormatting(
+    languageServer().handlers.handleDocumentFormatting(
       workspace.schema,
       workspace.document,
       { textDocument: { uri: workspace.document.uri }, options: FORMAT_OPTIONS },
@@ -412,8 +411,11 @@ const SymbolsOfSchemaInput = z
 export function symbolsOfSchema(input: z.infer<typeof SymbolsOfSchemaInput>) {
   return Effect.try(() => {
     const workspace = makeWorkspace(input)
-    return languageServer.handlers
-      .handleDocumentSymbol({ textDocument: { uri: workspace.document.uri } }, workspace.document)
+    return languageServer()
+      .handlers.handleDocumentSymbol(
+        { textDocument: { uri: workspace.document.uri } },
+        workspace.document,
+      )
       .map(
         // `kind` is widened to a number so the declaration does not name the server's SymbolKind.
         (symbol): { name: string; kind: number; range: LspRange; selectionRange: LspRange } => ({
@@ -531,7 +533,7 @@ export function completeSchema(input: z.infer<typeof CompleteSchemaInput>) {
   return Effect.try(() => {
     const workspace = makeWorkspace(input)
     const list = quietly(() =>
-      languageServer.handlers.handleCompletionRequest(workspace.schema, workspace.document, {
+      languageServer().handlers.handleCompletionRequest(workspace.schema, workspace.document, {
         ...positionParams(workspace, input),
         context:
           input.triggerCharacter === null
@@ -606,7 +608,7 @@ export function hoverSchema(input: z.infer<typeof HoverSchemaInput>) {
   return Effect.try(() => {
     const workspace = makeWorkspace(input)
     const hover = quietly(() =>
-      languageServer.handlers.handleHoverRequest(
+      languageServer().handlers.handleHoverRequest(
         workspace.schema,
         workspace.document,
         positionParams(workspace, input),
@@ -660,7 +662,7 @@ export function defineSchema(input: z.infer<typeof DefineSchemaInput>) {
   return Effect.try(() => {
     const workspace = makeWorkspace(input)
     const links = quietly(() =>
-      languageServer.handlers.handleDefinitionRequest(
+      languageServer().handlers.handleDefinitionRequest(
         workspace.schema,
         workspace.document,
         positionParams(workspace, input),
@@ -716,7 +718,7 @@ export function referencesSchema(input: z.infer<typeof ReferencesSchemaInput>) {
   return Effect.try(() => {
     const workspace = makeWorkspace(input)
     const locations = quietly(() =>
-      languageServer.handlers.handleReferencesRequest(workspace.schema, {
+      languageServer().handlers.handleReferencesRequest(workspace.schema, {
         ...positionParams(workspace, input),
         context: { includeDeclaration: true },
       }),
@@ -783,7 +785,7 @@ export function renameSchema(input: z.infer<typeof RenameSchemaInput>) {
   return Effect.try(() => {
     const workspace = makeWorkspace(input)
     const edit = quietly(() =>
-      languageServer.handlers.handleRenameRequest(workspace.schema, workspace.document, {
+      languageServer().handlers.handleRenameRequest(workspace.schema, workspace.document, {
         ...positionParams(workspace, input),
         newName: input.newName,
       }),
@@ -1043,7 +1045,7 @@ export function codeActionsSchema(input: z.infer<typeof CodeActionsSchemaInput>)
   return Effect.try(() => {
     const workspace = makeWorkspace(input)
     const actions = quietly(() =>
-      languageServer.handlers.handleCodeActions(workspace.schema, workspace.document, {
+      languageServer().handlers.handleCodeActions(workspace.schema, workspace.document, {
         textDocument: { uri: workspace.document.uri },
         range: input.range,
         context: {
