@@ -3,7 +3,7 @@ import { stripVTControlCharacters } from 'node:util'
 import { Effect, Semaphore } from 'effect'
 import * as z from 'zod'
 
-import type { SchemaFile } from '../../../seed/schema.js'
+import type { SchemaFile } from '../../../schema/index.js'
 import { ClientQueryError } from '../errors/index.js'
 import * as ClientLoadService from './client-load.js'
 import * as TypescriptService from './typescript.js'

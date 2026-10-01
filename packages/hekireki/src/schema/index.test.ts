@@ -6,7 +6,7 @@ import { NodeFileSystem } from '@effect/platform-node'
 import { Effect } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
-import { parseSchema, readSchemaFiles } from './schema.js'
+import { parseSchema, readSchemaFiles } from './index.js'
 
 const dirs: string[] = []
 
@@ -16,11 +16,11 @@ afterEach(() => {
   }
 })
 
-// `hekireki seed` and `hekireki migrate` read a schema directory as Prisma does: down through its
-// subdirectories, so `User.posts` finds the Post kept in `models/`.
+// hekireki seed, hekireki migrate and Studio read a schema directory as Prisma does: down through
+// its subdirectories, so `User.posts` finds the Post kept in `models/`.
 describe('readSchemaFiles', () => {
   it('reads the .prisma files of a directory and its subdirectories', async () => {
-    const dir = mkdtempSync(path.join(tmpdir(), 'hekireki-seed-schema-'))
+    const dir = mkdtempSync(path.join(tmpdir(), 'hekireki-schema-'))
     dirs.push(dir)
     mkdirSync(path.join(dir, 'models'))
     writeFileSync(
@@ -34,10 +34,10 @@ describe('readSchemaFiles', () => {
     const models = await Effect.runPromise(
       Effect.gen(function* () {
         const files = yield* readSchemaFiles(dir)
-        const { datamodel } = yield* parseSchema(files)
+        const { dmmf } = yield* parseSchema(files)
         return {
           files: files.map((f) => path.relative(dir, f.path)),
-          models: datamodel.models.map((m) => m.name),
+          models: dmmf.datamodel.models.map((m) => m.name),
         }
       }).pipe(Effect.provide(NodeFileSystem.layer)),
     )

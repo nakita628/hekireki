@@ -956,6 +956,7 @@ export default defineConfig({
           'src/migrate/errors.ts',
           'src/format/index.ts',
           'src/seed/errors.ts',
+          'src/schema/errors.ts',
           'src/studio/server/errors/index.ts',
           'src/studio/server/services/runtime.ts',
         ],

@@ -2,11 +2,14 @@ import path from 'node:path'
 
 import { Faker, allLocales } from '@faker-js/faker'
 import { Effect } from 'effect'
+import type * as z from 'zod'
 
 import { resolveDatabaseUrl } from '../database/resolve.js'
 import type { Dialect } from '../database/url.js'
 import { emitRaw } from '../emit/index.js'
 import { exists } from '../file/index.js'
+import { dialectOf, parseSchema, readSchemaFiles, schemaText } from '../schema/index.js'
+import type { GeneratorBlock, SchemaFile } from '../schema/index.js'
 import { seedWithClient } from './client.js'
 import type { SeedConfig } from './config.js'
 import { ADAPTERS, discoverClient } from './discover.js'
@@ -17,8 +20,6 @@ import type { ResolvedSeedConfig } from './options.js'
 import { resolveSeedConfig } from './options.js'
 import { makeSeedPlan } from './plan.js'
 import { withTypeScriptImports } from './resolve.js'
-import { dialectOf, parseSchema, readSchemaFiles, schemaText } from './schema.js'
-import type { GeneratorBlock, SchemaFile } from './schema.js'
 import { makeSeedSql } from './sql.js'
 
 export type SeedOverrides = {
@@ -142,7 +143,7 @@ function requireDialect(provider: string | null, purpose: string) {
  */
 function findClient(input: {
   readonly config: ResolvedSeedConfig
-  readonly generators: readonly GeneratorBlock[]
+  readonly generators: readonly z.infer<typeof GeneratorBlock>[]
   readonly files: readonly SchemaFile[]
   readonly schemaPath: string
   readonly cwd: string
@@ -204,9 +205,13 @@ function seedProgram(overrides: SeedOverrides, cwd: string) {
       overrides.schema === null ? configDir : cwd,
       cwd,
     )
-    const files = yield* readSchemaFiles(schemaPath)
-    const schema = yield* parseSchema(files)
-    const tables = yield* makeSeedPlan(schema.datamodel)
+    const files = yield* readSchemaFiles(schemaPath).pipe(
+      Effect.mapError((error) => new SeedConfigError({ message: error.message })),
+    )
+    const schema = yield* parseSchema(files).pipe(
+      Effect.mapError((error) => new SeedConfigError({ message: error.message })),
+    )
+    const tables = yield* makeSeedPlan(schema.dmmf.datamodel)
     const faker = yield* makeFaker(config.seed, config.locale)
     const entries = yield* generateSeedRows({
       tables,
