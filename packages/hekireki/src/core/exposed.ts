@@ -6,15 +6,11 @@ import { exposedFiles } from '../generator/exposed.js'
 import { isKotlinIdentifier } from '../helper/exposed.js'
 import { getString } from '../utils/index.js'
 import { GeneratorConfigError } from './errors.js'
+import { requireOutput } from './output.js'
 
 export function exposed(options: GeneratorOptions) {
   return Effect.gen(function* () {
-    if (!(options.generator.isCustomOutput && options.generator.output?.value)) {
-      return yield* new GeneratorConfigError({
-        message:
-          'output is required for Hekireki-Exposed. Please specify output in your generator config.',
-      })
-    }
+    const output = yield* requireOutput(options, 'Hekireki-Exposed')
     const provider = options.datasources[0]?.activeProvider ?? 'postgresql'
     if (provider !== 'postgresql') {
       return yield* new GeneratorConfigError({
@@ -38,6 +34,6 @@ export function exposed(options: GeneratorOptions) {
       dao: dao === 'true',
       source: options.datamodel,
     })
-    return yield* emitMany(files, options.generator.output.value)
+    return yield* emitMany(files, output)
   })
 }

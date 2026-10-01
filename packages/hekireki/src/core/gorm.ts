@@ -1,5 +1,3 @@
-import path from 'node:path'
-
 import type { GeneratorOptions } from '@prisma/generator-helper'
 import { Effect } from 'effect'
 
@@ -8,23 +6,18 @@ import { generateGormModels } from '../generator/gorm.js'
 import { gormProblems } from '../helper/gorm.js'
 import { getString } from '../utils/index.js'
 import { GeneratorConfigError } from './errors.js'
+import { outputFile, requireOutput } from './output.js'
 
 export function gorm(options: GeneratorOptions) {
   return Effect.gen(function* () {
-    if (!(options.generator.isCustomOutput && options.generator.output?.value)) {
-      return yield* new GeneratorConfigError({
-        message:
-          'output is required for Hekireki-GORM. Please specify output in your generator config.',
-      })
-    }
+    const output = yield* requireOutput(options, 'Hekireki-GORM')
     const problems = gormProblems(options.dmmf.datamodel.models)
     if (problems.length > 0) {
       return yield* new GeneratorConfigError({
         message: `Hekireki-GORM cannot write this schema:\n${problems.map((p) => `  - ${p}`).join('\n')}`,
       })
     }
-    const output = options.generator.output.value
-    const outPath = path.extname(output) ? output : path.join(output, 'models.go')
+    const resolved = outputFile(output, 'models.go')
     const packageName = getString(options.generator.config.package) ?? 'model'
     const enums = options.dmmf.datamodel.enums
     const indexes = options.dmmf.datamodel.indexes
@@ -35,6 +28,6 @@ export function gorm(options: GeneratorOptions) {
       packageName,
       options.datasources[0]?.activeProvider,
     )
-    return yield* emitRaw(code, path.dirname(outPath), outPath)
+    return yield* emitRaw(code, resolved.dir, resolved.file)
   })
 }
