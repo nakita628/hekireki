@@ -118,6 +118,27 @@ export function relationEnds(model: DMMF.Model, models: readonly DMMF.Model[]) {
   })
 }
 
+// Every implicit many-to-many join table once: `_<relation>`, between the model that sorts first
+// (column `A`) and the other. In the order the models declare an end of them, which is the order
+// the schema writers (Atlas, Drizzle, Kysely) put the tables in.
+export function implicitJoinTables(models: readonly DMMF.Model[]) {
+  const pairs = models.flatMap((model) =>
+    model.fields
+      .filter((field) => isImplicitManyToMany(field, model, models))
+      .map((field) => {
+        const [left, right] =
+          model.name < field.type ? [model.name, field.type] : [field.type, model.name]
+        return { left, right, relationName: field.relationName ?? `${left}To${right}` }
+      }),
+  )
+  const seen = new Set<string>()
+  return pairs.filter((pair) => {
+    if (seen.has(pair.relationName)) return false
+    seen.add(pair.relationName)
+    return true
+  })
+}
+
 export type ManyToMany = {
   readonly relationName: string
   /** The side join column `A` belongs to. */

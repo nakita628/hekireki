@@ -1,7 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { makePascalCase, makeSnakeCase } from '../utils/index.js'
-import { isFunctionDefault, isImplicitManyToMany } from '../utils/prisma-model.js'
+import { implicitJoinTables, isFunctionDefault } from '../utils/prisma-model.js'
 
 export const SCALAR_TYPE_MAP: { readonly [k: string]: string } = {
   String: 'string',
@@ -138,28 +138,12 @@ export function collectM2MJoinEntries(
   models: readonly DMMF.Model[],
   scalarTypes: { readonly [k: string]: string },
 ) {
-  const pairs = models.flatMap((model) =>
-    model.fields
-      .filter((field) => isImplicitManyToMany(field, model, models))
-      .map((field) => {
-        const [left, right] =
-          model.name < field.type ? [model.name, field.type] : [field.type, model.name]
-        return { left, right, relationName: field.relationName ?? `${left}To${right}` }
-      }),
-  )
-  const seen = new Set<string>()
-  return pairs
-    .filter((pair) => {
-      if (seen.has(pair.relationName)) return false
-      seen.add(pair.relationName)
-      return true
-    })
-    .map((pair) => ({
-      interfaceName: makePascalCase(makeSnakeCase(pair.relationName)),
-      tableName: `_${pair.relationName}`,
-      aType: pkTsType(pair.left, models, scalarTypes),
-      bType: pkTsType(pair.right, models, scalarTypes),
-    }))
+  return implicitJoinTables(models).map((pair) => ({
+    interfaceName: makePascalCase(makeSnakeCase(pair.relationName)),
+    tableName: `_${pair.relationName}`,
+    aType: pkTsType(pair.left, models, scalarTypes),
+    bType: pkTsType(pair.right, models, scalarTypes),
+  }))
 }
 
 export function makeM2MJoinInterface(entry: {

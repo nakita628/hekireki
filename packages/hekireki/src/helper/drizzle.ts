@@ -1,7 +1,12 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { constraintName, indexPrefix, makeSnakeCase } from '../utils/index.js'
-import { backRelation, isImplicitManyToMany, isJoinSideA } from '../utils/prisma-model.js'
+import {
+  backRelation,
+  implicitJoinTables,
+  isImplicitManyToMany,
+  isJoinSideA,
+} from '../utils/prisma-model.js'
 
 type DbProvider = 'postgresql' | 'mysql' | 'sqlite'
 
@@ -705,24 +710,6 @@ function joinVarName(relationName: string) {
   return snakeToCamel(makeSnakeCase(relationName))
 }
 
-function collectM2MJoinTables(models: readonly DMMF.Model[]) {
-  const pairs = models.flatMap((model) =>
-    model.fields
-      .filter((field) => isImplicitManyToMany(field, model, models))
-      .map((field) => {
-        const [left, right] =
-          model.name < field.type ? [model.name, field.type] : [field.type, model.name]
-        return { left, right, relationName: field.relationName ?? `${left}To${right}` }
-      }),
-  )
-  const seen = new Set<string>()
-  return pairs.filter((pair) => {
-    if (seen.has(pair.relationName)) return false
-    seen.add(pair.relationName)
-    return true
-  })
-}
-
 function withColumnName(baseExpr: string, colName: string) {
   const parenIdx = baseExpr.indexOf('(')
   const fnName = baseExpr.slice(0, parenIdx)
@@ -754,7 +741,7 @@ export function makeM2MJoinTables(
 ) {
   const tableFunc =
     provider === 'postgresql' ? 'pgTable' : provider === 'mysql' ? 'mysqlTable' : 'sqliteTable'
-  return collectM2MJoinTables(models).map((pair) => {
+  return implicitJoinTables(models).map((pair) => {
     imports.core.add(tableFunc)
     imports.core.add('foreignKey')
     imports.core.add('index')
@@ -788,7 +775,7 @@ export function makeM2MJoinTables(
 }
 
 export function makeM2MJoinRelations(models: readonly DMMF.Model[], imports: DrizzleImports) {
-  const pairs = collectM2MJoinTables(models)
+  const pairs = implicitJoinTables(models)
   if (pairs.length > 0) imports.orm.add('relations')
   return pairs.map((pair) => {
     const varName = joinVarName(pair.relationName)
