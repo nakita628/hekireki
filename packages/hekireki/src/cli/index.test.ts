@@ -144,7 +144,7 @@ describe('hekireki studio', () => {
     const { exit, printed } = await cli(['studio'])
     expect(Exit.isFailure(exit)).toBe(true)
     expect(printed).toContain(
-      'No Prisma schema found (looked for prisma/schema.prisma, schema.prisma)',
+      'No Prisma schema found (looked for `schema` in prisma.config.ts, then prisma/schema.prisma, schema.prisma)',
     )
     // Nothing was typed out, so the usage of the command that was run is the answer.
     expect(printed).toContain('hekireki studio [flags]')

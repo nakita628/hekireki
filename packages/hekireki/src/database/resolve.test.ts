@@ -107,6 +107,26 @@ describe('resolveDatabaseUrl', () => {
     )
   })
 
+  // Prisma finds its config under several names; prisma7.config comes before prisma.config.
+  it('reads the Prisma config under any name Prisma looks for', async () => {
+    const cwd = tmp()
+    mkdirSync(path.join(cwd, '.config'))
+    writeFileSync(
+      path.join(cwd, '.config', 'prisma.mjs'),
+      "export default defineConfig({ datasource: { url: 'file:./dot-config.db' } })\n",
+    )
+    expect(await resolve({ cwd })).toStrictEqual(
+      Exit.succeed({ url: 'file:./dot-config.db', source: 'prisma' }),
+    )
+    writeFileSync(
+      path.join(cwd, 'prisma7.config.ts'),
+      "export default defineConfig({ datasource: { url: 'file:./prisma7.db' } })\n",
+    )
+    expect(await resolve({ cwd })).toStrictEqual(
+      Exit.succeed({ url: 'file:./prisma7.db', source: 'prisma' }),
+    )
+  })
+
   it('reads the datasource url of a Prisma 6 schema from the schema text', async () => {
     const dir = tmp()
     expect(

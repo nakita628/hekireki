@@ -10,6 +10,7 @@ import { emitRaw } from '../emit/index.js'
 import { exists } from '../file/index.js'
 import { dialectOf, parseSchema, readSchemaFiles, schemaText } from '../schema/index.js'
 import type { GeneratorBlock, SchemaFile } from '../schema/index.js'
+import { DEFAULT_SCHEMA_PATHS, prismaSchemaPath } from '../schema/path.js'
 import { seedWithClient } from './client.js'
 import type { SeedConfig } from './config.js'
 import { ADAPTERS, discoverClient } from './discover.js'
@@ -34,8 +35,8 @@ export type SeedOverrides = {
 }
 
 /**
- * The schema as named (resolved from `base`), else the first default path that exists under the
- * working directory, then beside the config.
+ * The schema as named (resolved from `base`), else the one Prisma reads in the working directory
+ * (the `schema` of its prisma.config.ts, then the default paths), then the one beside the config.
  */
 function findSchemaPath(explicit: string | null, base: string, cwd: string) {
   return Effect.gen(function* () {
@@ -47,13 +48,11 @@ function findSchemaPath(explicit: string | null, base: string, cwd: string) {
       })
     }
     for (const dir of [cwd, base]) {
-      for (const candidate of ['prisma/schema.prisma', 'schema.prisma']) {
-        const resolved = path.resolve(dir, candidate)
-        if (yield* exists(resolved)) return resolved
-      }
+      const found = yield* prismaSchemaPath(path.resolve(dir))
+      if (found !== null) return found
     }
     return yield* new SeedConfigError({
-      message: `No Prisma schema found (looked for prisma/schema.prisma, schema.prisma).\n   Pass --schema <path> or set \`schema\` in hekireki.config.ts.`,
+      message: `No Prisma schema found (looked for \`schema\` in prisma.config.ts, then ${DEFAULT_SCHEMA_PATHS.join(', ')}).\n   Pass --schema <path> or set \`schema\` in hekireki.config.ts.`,
     })
   })
 }

@@ -360,7 +360,7 @@ CREATE TABLE "Post" ("id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "title" TE
     const empty = mkdtempSync(path.join(tmpdir(), 'hekireki-seed-empty-'))
     dirs.push(empty)
     expect(failure(await run({ output: 'seed.sql' }, empty))).toContain(
-      'No Prisma schema found (looked for prisma/schema.prisma, schema.prisma).',
+      'No Prisma schema found (looked for `schema` in prisma.config.ts, then prisma/schema.prisma, schema.prisma).',
     )
     const broken = project(null, 'model User {\n  id Int\n}\n')
     expect(failure(await run({ output: 'seed.sql' }, broken))).toContain(

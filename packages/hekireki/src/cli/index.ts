@@ -5,13 +5,11 @@ import { CliError, Command, Flag } from 'effect/cli'
 
 import { version } from '../../package.json' with { type: 'json' }
 import { exists } from '../file/index.js'
+import { DEFAULT_SCHEMA_PATHS, prismaSchemaPath } from '../schema/path.js'
 import { DEFAULT_PORT } from '../studio/server/constants/index.js'
 import { ServerListenError } from '../studio/server/errors/index.js'
 
 const COMMAND_NAME = 'hekireki'
-
-/** Where `--schema` looks when it is omitted, in order. */
-const DEFAULT_SCHEMA_PATHS = ['prisma/schema.prisma', 'schema.prisma']
 
 const STATIC_DIR = path.resolve(import.meta.dirname, '../studio')
 
@@ -26,7 +24,8 @@ const DatabaseUrl = Schema.String.pipe(
 )
 
 /**
- * The explicit schema when it exists, else the first default path that does.
+ * The explicit schema when it exists, else the one Prisma itself reads: the `schema` of
+ * prisma.config.ts, then the first default path that exists.
  *
  * A path that was typed out and is not there names itself, and the usage block would only bury
  * it. Nothing typed and nothing found is the other case — the command was run somewhere without
@@ -40,14 +39,14 @@ export function resolveSchemaPath(explicit: string | null, commandPath: readonly
         cause: `Schema not found: ${explicit}\n   Check the path passed to --schema.`,
       })
     }
-    for (const candidate of DEFAULT_SCHEMA_PATHS) {
-      if (yield* exists(candidate)) return candidate
-    }
+    // What Prisma itself reads: the `schema` of prisma.config.ts, then its default paths.
+    const found = yield* prismaSchemaPath('.')
+    if (found !== null) return found
     return yield* new CliError.ShowHelp({
       commandPath: [...commandPath],
       errors: [
         new CliError.UserError({
-          cause: `No Prisma schema found (looked for ${DEFAULT_SCHEMA_PATHS.join(', ')}).\n   Pass --schema <path> to point at your schema.prisma or a directory of .prisma files.`,
+          cause: `No Prisma schema found (looked for \`schema\` in prisma.config.ts, then ${DEFAULT_SCHEMA_PATHS.join(', ')}).\n   Pass --schema <path> to point at your schema.prisma or a directory of .prisma files.`,
         }),
       ],
     })
@@ -103,7 +102,7 @@ const studioFlags = {
   schema: Flag.String('schema').pipe(
     Flag.withAlias('s'),
     Flag.withDescription(
-      `Path to schema.prisma or a directory of .prisma files (default: ${DEFAULT_SCHEMA_PATHS.join(', then ')})`,
+      `Path to schema.prisma or a directory of .prisma files (default: \`schema\` in prisma.config.ts, then ${DEFAULT_SCHEMA_PATHS.join(', then ')})`,
     ),
     Flag.withMetavar('schema.prisma|dir'),
     Flag.withDefault(null),
@@ -189,7 +188,7 @@ const seedFlags = {
   schema: Flag.String('schema').pipe(
     Flag.withAlias('s'),
     Flag.withDescription(
-      `Path to schema.prisma or a directory of .prisma files (default: \`schema\` in the config, then ${DEFAULT_SCHEMA_PATHS.join(', then ')})`,
+      `Path to schema.prisma or a directory of .prisma files (default: \`schema\` in hekireki.config.ts, then \`schema\` in prisma.config.ts, then ${DEFAULT_SCHEMA_PATHS.join(', then ')})`,
     ),
     Flag.withMetavar('schema.prisma|dir'),
     Flag.withDefault(null),
@@ -281,7 +280,7 @@ const migrateCheckFlags = {
   schema: Flag.String('schema').pipe(
     Flag.withAlias('s'),
     Flag.withDescription(
-      `Path to the schema about to be migrated: schema.prisma or a directory of .prisma files (default: ${DEFAULT_SCHEMA_PATHS.join(', then ')})`,
+      `Path to the schema about to be migrated: schema.prisma or a directory of .prisma files (default: \`schema\` in prisma.config.ts, then ${DEFAULT_SCHEMA_PATHS.join(', then ')})`,
     ),
     Flag.withMetavar('schema.prisma|dir'),
     Flag.withDefault(null),

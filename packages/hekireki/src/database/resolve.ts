@@ -4,6 +4,7 @@ import { parseEnv } from 'node:util'
 import { ConfigProvider, Effect } from 'effect'
 
 import { readFile } from '../file/index.js'
+import { readPrismaConfig } from '../schema/path.js'
 import { DatabaseUrlNotFoundError, makeDatabaseUrl } from './url.js'
 
 /**
@@ -39,12 +40,12 @@ export function resolveDatabaseUrl(options: {
         Effect.orElseSucceed(() => []),
       ),
     )
-    // prisma.config.ts where Prisma reads it (the working directory), else beside the schema.
-    const configText = yield* Effect.firstSuccessOf(
-      [...new Set([options.cwd, options.schemaDir])].map((dir) =>
-        readFile(path.join(dir, 'prisma.config.ts')),
-      ),
-    ).pipe(Effect.orElseSucceed(() => null))
+    // The Prisma config where Prisma reads it (the working directory), else beside the schema,
+    // under any of the names Prisma looks for.
+    const configs = yield* Effect.forEach([...new Set([options.cwd, options.schemaDir])], (dir) =>
+      readPrismaConfig(dir),
+    )
+    const configText = configs.find((config) => config !== null)?.text ?? null
     // A config that could not be read may have held the URL, so that is the reason to give.
     return yield* makeDatabaseUrl({
       explicit: options.explicitUrl,
