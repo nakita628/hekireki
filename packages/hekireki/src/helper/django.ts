@@ -2,6 +2,7 @@ import type { DMMF } from '@prisma/generator-helper'
 
 import { makePascalCase, makeSnakeCase } from '../utils/index.js'
 import {
+  backRelation,
   isAutoincrement,
   isFunctionDefault,
   isNowDefault,
@@ -676,21 +677,6 @@ function onDeleteFor(field: DMMF.Field) {
   return field.isRequired ? 'models.RESTRICT' : 'models.SET_NULL'
 }
 
-function findBackRelationField(
-  relationField: DMMF.Field,
-  model: DMMF.Model,
-  allModels: readonly DMMF.Model[],
-) {
-  const targetModel = allModels.find((m) => m.name === relationField.type)
-  return targetModel?.fields.find(
-    (f) =>
-      f.kind === 'object' &&
-      f.type === model.name &&
-      f.relationName === relationField.relationName &&
-      !(targetModel.name === model.name && f.name === relationField.name),
-  )
-}
-
 function generateForeignKeyField(
   model: DMMF.Model,
   relationField: DMMF.Field,
@@ -700,7 +686,7 @@ function generateForeignKeyField(
 ) {
   const attrName = attrNameOf(names, model, relationField)
   const columnName = fieldColumnName(scalarField)
-  const backField = findBackRelationField(relationField, model, allModels)
+  const backField = backRelation(relationField, model, allModels)
   const ctor = backField && !backField.isList ? 'OneToOneField' : 'ForeignKey'
   const target =
     relationField.type === model.name ? '"self"' : `"${makePascalCase(relationField.type)}"`
@@ -759,14 +745,7 @@ export function collectManyToManyTables(
   const candidates = allModels.flatMap((model) =>
     model.fields.flatMap((field) => {
       if (field.kind !== 'object' || !field.isList) return []
-      const targetModel = allModels.find((m) => m.name === field.type)
-      if (!targetModel) return []
-      const otherSide = targetModel.fields.find(
-        (f) =>
-          f.relationName === field.relationName &&
-          f.kind === 'object' &&
-          !(targetModel.name === model.name && f.name === field.name),
-      )
+      const otherSide = backRelation(field, model, allModels)
       if (!otherSide?.isList) return []
 
       const [leftName, rightName] =
@@ -847,7 +826,7 @@ function generateManyToManyField(
   }[],
   names: Names,
 ) {
-  const backField = findBackRelationField(field, model, allModels)
+  const backField = backRelation(field, model, allModels)
   const table = m2mTables.find((t) => t.relationName === field.relationName)
   if (!table) return null
   const attrName = attrNameOf(names, model, field)

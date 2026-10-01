@@ -1,7 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { isAnnotationLine, makePascalCase, makeSnakeCase } from '../utils/index.js'
-import { relationEnds } from '../utils/prisma-model.js'
+import { backRelation, relationEnds } from '../utils/prisma-model.js'
 import { prismaConstraintName } from '../utils/prisma-postgres.js'
 
 /**
@@ -520,13 +520,11 @@ function foreignKeyOf(model: DMMF.Model, field: DMMF.Field, allModels: readonly 
     return { side: 'owner' as const, owner: model, holder: field }
   }
   const other = allModels.find((m) => m.name === field.type)
-  const holder = other?.fields.find(
-    (f) =>
-      f !== field &&
-      f.relationName === field.relationName &&
-      (f.relationFromFields?.length ?? 0) > 0,
-  )
-  return other && holder ? { side: 'inverse' as const, owner: other, holder } : null
+  // The other end of this relation, not another relation of the same name on that model.
+  const holder = backRelation(field, model, allModels)
+  return other && holder && (holder.relationFromFields?.length ?? 0) > 0
+    ? { side: 'inverse' as const, owner: other, holder }
+    : null
 }
 
 /**

@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vite-plus/test'
 
 import { activeRecordModelFiles } from './activerecord.js'
 import { atlasSchema } from './atlas.js'
+import { dbmlContent } from './dbml.js'
+import { djangoCode } from './django.js'
 import { drizzleSchema } from './drizzle.js'
 import { ectoSchemaFiles } from './ecto.js'
 import { eloquentModelFiles } from './eloquent.js'
@@ -192,5 +194,99 @@ model Post {
     const files = eloquentModelFiles(models, 'App\\Models', enums)
     expect(codeOf(files, 'User.php')).toContain("return $this->hasMany(Post::class, 'userId');")
     expect(codeOf(files, 'Team.php')).toContain("return $this->hasMany(Post::class, 'teamId');")
+  })
+})
+
+// The other end of `User.posts` is `Post.user`, though `Post.team` and `Team.owner` are "owner"
+// too: the key a has_many is held back by, and what kind of reference `Post.team` is, come from
+// the ends of each relation, not from the first field of the name.
+describe('one relation name across three models', () => {
+  const result = getDMMF({
+    datamodel: [
+      [
+        'schema.prisma',
+        `datasource db {
+  provider = "postgresql"
+}
+/// @ecto
+model User {
+  id    Int    @id
+  posts Post[] @relation("owner")
+  teams Team[] @relation("owner")
+}
+model Team {
+  id      Int    @id
+  ownerId Int?
+  owner   User?  @relation("owner", fields: [ownerId], references: [id])
+  posts   Post[] @relation("owner")
+}
+model Post {
+  id     Int  @id
+  teamId Int
+  team   Team @relation("owner", fields: [teamId], references: [id], onDelete: Cascade)
+  userId Int
+  user   User @relation("owner", fields: [userId], references: [id])
+}
+`,
+      ],
+    ],
+  })
+  if ('type' in result) throw new Error(result.error.message)
+  const datamodel = result.datamodel
+
+  // `Post.user` is required and names no action, so the database refuses to delete a user who
+  // has posts; `Post.team` cascades and would refuse nothing.
+  it('ecto holds a has_many back by the key of its own relation', () => {
+    const user = ectoSchemaFiles(datamodel.models, 'App', datamodel.enums, {
+      provider: 'postgresql',
+    }).find((f) => f.fileName === 'user.ex')
+    expect(user?.code).toContain('|> no_assoc_constraint(:posts, name: "Post_userId_fkey")')
+  })
+
+  it('dbml makes Post.team many-to-one, as Team.posts is a list', () => {
+    expect(dbmlContent(datamodel)).toContain(
+      'Ref Post_teamId_fk: Post.teamId > Team.id [delete: cascade]',
+    )
+  })
+})
+
+// `User.posts` is one-to-many: that `Post.tags` and `Tag.posts` are an implicit many-to-many of
+// the same name does not make `_owner` a join table of User.
+describe('a one-to-many and a many-to-many of one name', () => {
+  it('django joins the many-to-many between its own two models', () => {
+    const result = getDMMF({
+      datamodel: [
+        [
+          'schema.prisma',
+          `datasource db {
+  provider = "postgresql"
+}
+model User {
+  id    Int    @id
+  posts Post[] @relation("owner")
+}
+model Post {
+  id     Int   @id
+  tags   Tag[] @relation("owner")
+  userId Int
+  user   User  @relation("owner", fields: [userId], references: [id])
+}
+model Tag {
+  id    Int    @id
+  posts Post[] @relation("owner")
+}
+`,
+        ],
+      ],
+    })
+    if ('type' in result) throw new Error(result.error.message)
+    const { models, enums, indexes } = result.datamodel
+    const code = djangoCode(models, enums, indexes, 'postgresql')
+    expect(code).toContain(
+      'a = models.ForeignKey("Post", on_delete=models.CASCADE, related_name="+", db_column="A", db_index=False)',
+    )
+    expect(code).toContain(
+      'b = models.ForeignKey("Tag", on_delete=models.CASCADE, related_name="+", db_column="B", db_index=False)',
+    )
   })
 })
