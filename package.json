@@ -30,13 +30,13 @@
     "@prisma/client": "8.1.0-dev.7",
     "@types/pg": "^8.23.1",
     "actionlint": "^2.0.6",
-    "cspell": "^10.3.3",
+    "cspell": "^10.3.6",
     "markdownlint-cli2": "^0.23.3",
-    "mysql2": "^3.24.4",
+    "mysql2": "^3.24.5",
     "pg": "^8.23.0",
     "textlint": "^15.8.0",
     "textlint-rule-terminology": "^5.2.16",
-    "vite-plus": "1.0.0-rc.0"
+    "vite-plus": "1.0.0"
   },
   "packageManager": "pnpm@11.25.0"
 }

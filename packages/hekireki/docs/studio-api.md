@@ -58,12 +58,24 @@ The current snapshot: the last valid schema, the current Prisma error and the fi
 }
 ```
 
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
 <h3 id="readschema-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[Snapshot](#schemasnapshot)|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -120,12 +132,24 @@ Re-read and re-parse the schema from disk (the watcher does this on its own afte
 }
 ```
 
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
 <h3 id="reloadschema-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[Snapshot](#schemasnapshot)|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -206,14 +230,56 @@ to write is reported as a validation problem on `path`.
 }
 ```
 
+> 404 Response
+
+```json
+{
+  "type": "/problems/not-found",
+  "title": "Not Found",
+  "status": 404,
+  "detail": "Unknown model \"Nope\".",
+  "instance": "/api/db/rows/Nope"
+}
+```
+
+> 422 Response
+
+```json
+{
+  "type": "/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "The request failed validation. See `errors` for the offending fields.",
+  "instance": "/api/db/rows/User",
+  "errors": [
+    {
+      "field": "take",
+      "message": "take must be 1000 or fewer"
+    }
+  ]
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
 <h3 id="writeschemafile-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[Snapshot](#schemasnapshot)|
-|404|Not Found|404 Not Found (`application/problem+json`)|None|
-|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|404|Not Found|404 Not Found (`application/problem+json`)|[NotFoundProblem](#schemanotfoundproblem)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|[ValidationProblem](#schemavalidationproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -239,7 +305,7 @@ migrations directory changes, and `ping` every 15 seconds to keep the connection
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
-|200|OK|The request has succeeded.|None|
+|200|OK|The request has succeeded.|Inline|
 
 <aside class="success">
 This operation does not require authentication
@@ -276,12 +342,24 @@ The database connection status.
 }
 ```
 
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
 <h3 id="readdbstatus-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[DbStatus](#schemadbstatus)|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -315,13 +393,37 @@ Row count of every model that has a table; a model whose count fails is left out
 }
 ```
 
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
+> 503 Response
+
+```json
+{
+  "type": "/problems/service-unavailable",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "No database is connected. Set DATABASE_URL or pass --url to hekireki studio.",
+  "instance": "/api/db/counts"
+}
+```
+
 <h3 id="readcounts-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[Counts](#schemacounts)|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
-|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|[ServiceUnavailableProblem](#schemaserviceunavailableproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -334,7 +436,7 @@ This operation does not require authentication
 > Code samples
 
 ```bash
-curl 'http://localhost:5555/api/db/rows/{modelName}' \
+curl 'http://localhost:5555/api/db/rows/string?skip=0&take=1' \
   -H 'Accept: application/json'
 ```
 
@@ -380,15 +482,69 @@ One page of a model's rows, keyed by field name, ordered by the key fields.
 }
 ```
 
+> 404 Response
+
+```json
+{
+  "type": "/problems/not-found",
+  "title": "Not Found",
+  "status": 404,
+  "detail": "Unknown model \"Nope\".",
+  "instance": "/api/db/rows/Nope"
+}
+```
+
+> 422 Response
+
+```json
+{
+  "type": "/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "The request failed validation. See `errors` for the offending fields.",
+  "instance": "/api/db/rows/User",
+  "errors": [
+    {
+      "field": "take",
+      "message": "take must be 1000 or fewer"
+    }
+  ]
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
+> 503 Response
+
+```json
+{
+  "type": "/problems/service-unavailable",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "No database is connected. Set DATABASE_URL or pass --url to hekireki studio.",
+  "instance": "/api/db/counts"
+}
+```
+
 <h3 id="readrows-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[Rows](#schemarows)|
-|404|Not Found|404 Not Found (`application/problem+json`)|None|
-|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
-|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+|404|Not Found|404 Not Found (`application/problem+json`)|[NotFoundProblem](#schemanotfoundproblem)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|[ValidationProblem](#schemavalidationproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|[ServiceUnavailableProblem](#schemaserviceunavailableproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -401,7 +557,7 @@ This operation does not require authentication
 > Code samples
 
 ```bash
-curl 'http://localhost:5555/api/db/rows/{modelName}' \
+curl http://localhost:5555/api/db/rows/string \
   -X POST \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json' \
@@ -433,6 +589,10 @@ Insert one row; field names are translated to columns and values to the driver's
 |modelName|path|[modelName](#schemamodelname)|true|none|
 |body|body|[InsertBody](#schemainsertbody)|true|none|
 |» values|body|object|true|Field values for the new row; omitted fields take their defaults|
+|» » **additionalProperties**|body|string \| number(double) \| boolean \| null|false|none|
+|» » » *anyOf*|body|string|false|none|
+|» » » *anyOf*|body|number(double)|false|none|
+|» » » *anyOf*|body|boolean|false|none|
 
 > Example responses
 
@@ -444,15 +604,69 @@ Insert one row; field names are translated to columns and values to the driver's
 }
 ```
 
+> 404 Response
+
+```json
+{
+  "type": "/problems/not-found",
+  "title": "Not Found",
+  "status": 404,
+  "detail": "Unknown model \"Nope\".",
+  "instance": "/api/db/rows/Nope"
+}
+```
+
+> 422 Response
+
+```json
+{
+  "type": "/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "The request failed validation. See `errors` for the offending fields.",
+  "instance": "/api/db/rows/User",
+  "errors": [
+    {
+      "field": "take",
+      "message": "take must be 1000 or fewer"
+    }
+  ]
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
+> 503 Response
+
+```json
+{
+  "type": "/problems/service-unavailable",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "No database is connected. Set DATABASE_URL or pass --url to hekireki studio.",
+  "instance": "/api/db/counts"
+}
+```
+
 <h3 id="createrow-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[Affected](#schemaaffected)|
-|404|Not Found|404 Not Found (`application/problem+json`)|None|
-|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
-|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+|404|Not Found|404 Not Found (`application/problem+json`)|[NotFoundProblem](#schemanotfoundproblem)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|[ValidationProblem](#schemavalidationproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|[ServiceUnavailableProblem](#schemaserviceunavailableproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -465,7 +679,7 @@ This operation does not require authentication
 > Code samples
 
 ```bash
-curl 'http://localhost:5555/api/db/rows/{modelName}' \
+curl http://localhost:5555/api/db/rows/string \
   -X DELETE \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json' \
@@ -497,6 +711,10 @@ Delete the row identified by `where`.
 |modelName|path|[modelName](#schemamodelname)|true|none|
 |body|body|[DeleteBody](#schemadeletebody)|true|none|
 |» where|body|object|true|The key fields of the row to delete|
+|» » **additionalProperties**|body|string \| number(double) \| boolean \| null|false|none|
+|» » » *anyOf*|body|string|false|none|
+|» » » *anyOf*|body|number(double)|false|none|
+|» » » *anyOf*|body|boolean|false|none|
 
 > Example responses
 
@@ -508,15 +726,69 @@ Delete the row identified by `where`.
 }
 ```
 
+> 404 Response
+
+```json
+{
+  "type": "/problems/not-found",
+  "title": "Not Found",
+  "status": 404,
+  "detail": "Unknown model \"Nope\".",
+  "instance": "/api/db/rows/Nope"
+}
+```
+
+> 422 Response
+
+```json
+{
+  "type": "/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "The request failed validation. See `errors` for the offending fields.",
+  "instance": "/api/db/rows/User",
+  "errors": [
+    {
+      "field": "take",
+      "message": "take must be 1000 or fewer"
+    }
+  ]
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
+> 503 Response
+
+```json
+{
+  "type": "/problems/service-unavailable",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "No database is connected. Set DATABASE_URL or pass --url to hekireki studio.",
+  "instance": "/api/db/counts"
+}
+```
+
 <h3 id="deleterow-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[Affected](#schemaaffected)|
-|404|Not Found|404 Not Found (`application/problem+json`)|None|
-|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
-|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+|404|Not Found|404 Not Found (`application/problem+json`)|[NotFoundProblem](#schemanotfoundproblem)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|[ValidationProblem](#schemavalidationproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|[ServiceUnavailableProblem](#schemaserviceunavailableproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -529,7 +801,7 @@ This operation does not require authentication
 > Code samples
 
 ```bash
-curl 'http://localhost:5555/api/db/rows/{modelName}' \
+curl http://localhost:5555/api/db/rows/string \
   -X PATCH \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json' \
@@ -567,7 +839,15 @@ Update the row identified by `where`; both parts must name at least one field.
 |modelName|path|[modelName](#schemamodelname)|true|none|
 |body|body|[UpdateBody](#schemaupdatebody)|true|none|
 |» where|body|object|true|The key fields of the row to change|
+|» » **additionalProperties**|body|string \| number(double) \| boolean \| null|false|none|
+|» » » *anyOf*|body|string|false|none|
+|» » » *anyOf*|body|number(double)|false|none|
+|» » » *anyOf*|body|boolean|false|none|
 |» values|body|object|true|The fields to set|
+|» » **additionalProperties**|body|string \| number(double) \| boolean \| null|false|none|
+|» » » *anyOf*|body|string|false|none|
+|» » » *anyOf*|body|number(double)|false|none|
+|» » » *anyOf*|body|boolean|false|none|
 
 > Example responses
 
@@ -579,15 +859,69 @@ Update the row identified by `where`; both parts must name at least one field.
 }
 ```
 
+> 404 Response
+
+```json
+{
+  "type": "/problems/not-found",
+  "title": "Not Found",
+  "status": 404,
+  "detail": "Unknown model \"Nope\".",
+  "instance": "/api/db/rows/Nope"
+}
+```
+
+> 422 Response
+
+```json
+{
+  "type": "/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "The request failed validation. See `errors` for the offending fields.",
+  "instance": "/api/db/rows/User",
+  "errors": [
+    {
+      "field": "take",
+      "message": "take must be 1000 or fewer"
+    }
+  ]
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
+> 503 Response
+
+```json
+{
+  "type": "/problems/service-unavailable",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "No database is connected. Set DATABASE_URL or pass --url to hekireki studio.",
+  "instance": "/api/db/counts"
+}
+```
+
 <h3 id="updaterow-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[Affected](#schemaaffected)|
-|404|Not Found|404 Not Found (`application/problem+json`)|None|
-|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
-|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+|404|Not Found|404 Not Found (`application/problem+json`)|[NotFoundProblem](#schemanotfoundproblem)|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|[ValidationProblem](#schemavalidationproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|[ServiceUnavailableProblem](#schemaserviceunavailableproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -627,7 +961,10 @@ Run the statements one by one and return the rows of the last, or its affected c
 |---|---|---|---|---|
 |body|body|[SqlBody](#schemasqlbody)|true|none|
 |» sql|body|object|true|The statements; several are run one by one and the result belongs to the last|
-|» params|body|[object]|false|The values bound to the placeholders, in order; omitted means none|
+|» params|body|[string \| number(double) \| boolean \| null]|false|The values bound to the placeholders, in order; omitted means none|
+|» » *anyOf*|body|string|false|none|
+|» » *anyOf*|body|number(double)|false|none|
+|» » *anyOf*|body|boolean|false|none|
 
 > Example responses
 
@@ -650,14 +987,56 @@ Run the statements one by one and return the rows of the last, or its affected c
 }
 ```
 
+> 422 Response
+
+```json
+{
+  "type": "/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "The request failed validation. See `errors` for the offending fields.",
+  "instance": "/api/db/rows/User",
+  "errors": [
+    {
+      "field": "take",
+      "message": "take must be 1000 or fewer"
+    }
+  ]
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
+> 503 Response
+
+```json
+{
+  "type": "/problems/service-unavailable",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "No database is connected. Set DATABASE_URL or pass --url to hekireki studio.",
+  "instance": "/api/db/counts"
+}
+```
+
 <h3 id="runsql-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[SqlResult](#schemasqlresult)|
-|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
-|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|[ValidationProblem](#schemavalidationproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|[ServiceUnavailableProblem](#schemaserviceunavailableproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -697,7 +1076,10 @@ The execution plan the database chooses for the first statement of the text.
 |---|---|---|---|---|
 |body|body|[SqlBody](#schemasqlbody)|true|none|
 |» sql|body|object|true|The statements; several are run one by one and the result belongs to the last|
-|» params|body|[object]|false|The values bound to the placeholders, in order; omitted means none|
+|» params|body|[string \| number(double) \| boolean \| null]|false|The values bound to the placeholders, in order; omitted means none|
+|» » *anyOf*|body|string|false|none|
+|» » *anyOf*|body|number(double)|false|none|
+|» » *anyOf*|body|boolean|false|none|
 
 > Example responses
 
@@ -711,14 +1093,56 @@ The execution plan the database chooses for the first statement of the text.
 }
 ```
 
+> 422 Response
+
+```json
+{
+  "type": "/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "The request failed validation. See `errors` for the offending fields.",
+  "instance": "/api/db/rows/User",
+  "errors": [
+    {
+      "field": "take",
+      "message": "take must be 1000 or fewer"
+    }
+  ]
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
+> 503 Response
+
+```json
+{
+  "type": "/problems/service-unavailable",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "No database is connected. Set DATABASE_URL or pass --url to hekireki studio.",
+  "instance": "/api/db/counts"
+}
+```
+
 <h3 id="explainsql-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[Plan](#schemaplan)|
-|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
-|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|[ValidationProblem](#schemavalidationproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|[ServiceUnavailableProblem](#schemaserviceunavailableproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -857,13 +1281,43 @@ Analyze the statements against the Prisma schema's tables: data flow, lineage, r
 }
 ```
 
+> 422 Response
+
+```json
+{
+  "type": "/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "The request failed validation. See `errors` for the offending fields.",
+  "instance": "/api/db/rows/User",
+  "errors": [
+    {
+      "field": "take",
+      "message": "take must be 1000 or fewer"
+    }
+  ]
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
 <h3 id="analyzesql-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[Analysis](#schemaanalysis)|
-|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|[ValidationProblem](#schemavalidationproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -900,12 +1354,24 @@ Load the project's Prisma Client, the first time it is asked for, and say whethe
 }
 ```
 
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
 <h3 id="readclientstatus-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[ClientStatus](#schemaclientstatus)|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -976,13 +1442,43 @@ Read the query against the schema's models, without running it: its calls and it
 }
 ```
 
+> 422 Response
+
+```json
+{
+  "type": "/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "The request failed validation. See `errors` for the offending fields.",
+  "instance": "/api/db/rows/User",
+  "errors": [
+    {
+      "field": "take",
+      "message": "take must be 1000 or fewer"
+    }
+  ]
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
 <h3 id="analyzeclientquery-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[ClientAnalysis](#schemaclientanalysis)|
-|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|[ValidationProblem](#schemavalidationproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -1043,14 +1539,56 @@ The completions TypeScript offers at a position, against the client's types.
 }
 ```
 
+> 422 Response
+
+```json
+{
+  "type": "/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "The request failed validation. See `errors` for the offending fields.",
+  "instance": "/api/db/rows/User",
+  "errors": [
+    {
+      "field": "take",
+      "message": "take must be 1000 or fewer"
+    }
+  ]
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
+> 503 Response
+
+```json
+{
+  "type": "/problems/service-unavailable",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "No database is connected. Set DATABASE_URL or pass --url to hekireki studio.",
+  "instance": "/api/db/counts"
+}
+```
+
 <h3 id="completeclientquery-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[ClientCompletions](#schemaclientcompletions)|
-|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
-|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|[ValidationProblem](#schemavalidationproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|[ServiceUnavailableProblem](#schemaserviceunavailableproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -1108,14 +1646,56 @@ The type and documentation of one completion item.
 }
 ```
 
+> 422 Response
+
+```json
+{
+  "type": "/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "The request failed validation. See `errors` for the offending fields.",
+  "instance": "/api/db/rows/User",
+  "errors": [
+    {
+      "field": "take",
+      "message": "take must be 1000 or fewer"
+    }
+  ]
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
+> 503 Response
+
+```json
+{
+  "type": "/problems/service-unavailable",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "No database is connected. Set DATABASE_URL or pass --url to hekireki studio.",
+  "instance": "/api/db/counts"
+}
+```
+
 <h3 id="detailclientcompletion-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[ClientCompletionDetail](#schemaclientcompletiondetail)|
-|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
-|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|[ValidationProblem](#schemavalidationproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|[ServiceUnavailableProblem](#schemaserviceunavailableproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -1163,13 +1743,55 @@ What TypeScript says about the symbol at a position.
 
 > 200 Response
 
-```json
+````json
 {
   "contents": "```typescript\n(property) take?: number\n```",
   "range": {
     "start": 22,
     "end": 26
   }
+}
+````
+
+> 422 Response
+
+```json
+{
+  "type": "/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "The request failed validation. See `errors` for the offending fields.",
+  "instance": "/api/db/rows/User",
+  "errors": [
+    {
+      "field": "take",
+      "message": "take must be 1000 or fewer"
+    }
+  ]
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
+> 503 Response
+
+```json
+{
+  "type": "/problems/service-unavailable",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "No database is connected. Set DATABASE_URL or pass --url to hekireki studio.",
+  "instance": "/api/db/counts"
 }
 ```
 
@@ -1178,9 +1800,9 @@ What TypeScript says about the symbol at a position.
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[ClientHover](#schemaclienthover)|
-|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
-|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|[ValidationProblem](#schemavalidationproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|[ServiceUnavailableProblem](#schemaserviceunavailableproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -1236,14 +1858,56 @@ The signatures of the call the cursor is inside.
 }
 ```
 
+> 422 Response
+
+```json
+{
+  "type": "/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "The request failed validation. See `errors` for the offending fields.",
+  "instance": "/api/db/rows/User",
+  "errors": [
+    {
+      "field": "take",
+      "message": "take must be 1000 or fewer"
+    }
+  ]
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
+> 503 Response
+
+```json
+{
+  "type": "/problems/service-unavailable",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "No database is connected. Set DATABASE_URL or pass --url to hekireki studio.",
+  "instance": "/api/db/counts"
+}
+```
+
 <h3 id="signatureclientquery-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[ClientSignatureHelp](#schemaclientsignaturehelp)|
-|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
-|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|[ValidationProblem](#schemavalidationproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|[ServiceUnavailableProblem](#schemaserviceunavailableproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -1294,13 +1958,43 @@ The query laid out as the TypeScript formatter writes it; a query that does not 
 }
 ```
 
+> 422 Response
+
+```json
+{
+  "type": "/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "The request failed validation. See `errors` for the offending fields.",
+  "instance": "/api/db/rows/User",
+  "errors": [
+    {
+      "field": "take",
+      "message": "take must be 1000 or fewer"
+    }
+  ]
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
 <h3 id="formatclientquery-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[ClientFormatted](#schemaclientformatted)|
-|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|[ValidationProblem](#schemavalidationproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -1351,14 +2045,56 @@ What TypeScript finds wrong with the query, checked against the client's types.
 }
 ```
 
+> 422 Response
+
+```json
+{
+  "type": "/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "The request failed validation. See `errors` for the offending fields.",
+  "instance": "/api/db/rows/User",
+  "errors": [
+    {
+      "field": "take",
+      "message": "take must be 1000 or fewer"
+    }
+  ]
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
+> 503 Response
+
+```json
+{
+  "type": "/problems/service-unavailable",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "No database is connected. Set DATABASE_URL or pass --url to hekireki studio.",
+  "instance": "/api/db/counts"
+}
+```
+
 <h3 id="checkclientquery-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[ClientTypeDiagnostics](#schemaclienttypediagnostics)|
-|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
-|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|[ValidationProblem](#schemavalidationproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|[ServiceUnavailableProblem](#schemaserviceunavailableproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -1420,14 +2156,56 @@ Run a query that only reads to show the SQL it sends while it is typed; a write 
 }
 ```
 
+> 422 Response
+
+```json
+{
+  "type": "/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "The request failed validation. See `errors` for the offending fields.",
+  "instance": "/api/db/rows/User",
+  "errors": [
+    {
+      "field": "take",
+      "message": "take must be 1000 or fewer"
+    }
+  ]
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
+> 503 Response
+
+```json
+{
+  "type": "/problems/service-unavailable",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "No database is connected. Set DATABASE_URL or pass --url to hekireki studio.",
+  "instance": "/api/db/counts"
+}
+```
+
 <h3 id="previewclientquery-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[ClientPreview](#schemaclientpreview)|
-|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
-|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|[ValidationProblem](#schemavalidationproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|[ServiceUnavailableProblem](#schemaserviceunavailableproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -1497,14 +2275,56 @@ Run the query through the project's Prisma Client and return its result with the
 }
 ```
 
+> 422 Response
+
+```json
+{
+  "type": "/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "The request failed validation. See `errors` for the offending fields.",
+  "instance": "/api/db/rows/User",
+  "errors": [
+    {
+      "field": "take",
+      "message": "take must be 1000 or fewer"
+    }
+  ]
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
+> 503 Response
+
+```json
+{
+  "type": "/problems/service-unavailable",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "No database is connected. Set DATABASE_URL or pass --url to hekireki studio.",
+  "instance": "/api/db/counts"
+}
+```
+
 <h3 id="runclientquery-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[ClientResult](#schemaclientresult)|
-|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
-|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|[ValidationProblem](#schemavalidationproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|[ServiceUnavailableProblem](#schemaserviceunavailableproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -1572,13 +2392,43 @@ The edits that lay the text out as the Prisma formatter does.
 }
 ```
 
+> 422 Response
+
+```json
+{
+  "type": "/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "The request failed validation. See `errors` for the offending fields.",
+  "instance": "/api/db/rows/User",
+  "errors": [
+    {
+      "field": "take",
+      "message": "take must be 1000 or fewer"
+    }
+  ]
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
 <h3 id="formatschematext-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[Formatted](#schemaformatted)|
-|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|[ValidationProblem](#schemavalidationproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -1632,13 +2482,43 @@ Validate the buffer together with the other loaded files and return its diagnost
 }
 ```
 
+> 422 Response
+
+```json
+{
+  "type": "/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "The request failed validation. See `errors` for the offending fields.",
+  "instance": "/api/db/rows/User",
+  "errors": [
+    {
+      "field": "take",
+      "message": "take must be 1000 or fewer"
+    }
+  ]
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
 <h3 id="lintschematext-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[Diagnostics](#schemadiagnostics)|
-|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|[ValidationProblem](#schemavalidationproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -1690,13 +2570,43 @@ The blocks of the text, as the language server's document outline lists them.
 }
 ```
 
+> 422 Response
+
+```json
+{
+  "type": "/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "The request failed validation. See `errors` for the offending fields.",
+  "instance": "/api/db/rows/User",
+  "errors": [
+    {
+      "field": "take",
+      "message": "take must be 1000 or fewer"
+    }
+  ]
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
 <h3 id="symbolsschematext-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[Symbols](#schemasymbols)|
-|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|[ValidationProblem](#schemavalidationproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -1755,13 +2665,43 @@ Completions the Prisma language server offers at a cursor position.
 }
 ```
 
+> 422 Response
+
+```json
+{
+  "type": "/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "The request failed validation. See `errors` for the offending fields.",
+  "instance": "/api/db/rows/User",
+  "errors": [
+    {
+      "field": "take",
+      "message": "take must be 1000 or fewer"
+    }
+  ]
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
 <h3 id="completeschematext-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[Completions](#schemacompletions)|
-|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|[ValidationProblem](#schemavalidationproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -1813,7 +2753,7 @@ What the Prisma language server says about the symbol at a cursor position.
 
 > 200 Response
 
-```json
+````json
 {
   "contents": "```prisma\nmodel User {\n\t...\n}\n```",
   "range": {
@@ -1827,6 +2767,36 @@ What the Prisma language server says about the symbol at a cursor position.
     }
   }
 }
+````
+
+> 422 Response
+
+```json
+{
+  "type": "/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "The request failed validation. See `errors` for the offending fields.",
+  "instance": "/api/db/rows/User",
+  "errors": [
+    {
+      "field": "take",
+      "message": "take must be 1000 or fewer"
+    }
+  ]
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
 ```
 
 <h3 id="hoverschematext-responses">Responses</h3>
@@ -1834,8 +2804,8 @@ What the Prisma language server says about the symbol at a cursor position.
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[Hover](#schemahover)|
-|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|[ValidationProblem](#schemavalidationproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -1893,13 +2863,43 @@ Where the model, enum or type referenced at a cursor position is declared.
 }
 ```
 
+> 422 Response
+
+```json
+{
+  "type": "/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "The request failed validation. See `errors` for the offending fields.",
+  "instance": "/api/db/rows/User",
+  "errors": [
+    {
+      "field": "take",
+      "message": "take must be 1000 or fewer"
+    }
+  ]
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
 <h3 id="defineschematext-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[Definition](#schemadefinition)|
-|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|[ValidationProblem](#schemavalidationproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -1957,13 +2957,43 @@ Every place the symbol at a cursor position is used, across the loaded files.
 }
 ```
 
+> 422 Response
+
+```json
+{
+  "type": "/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "The request failed validation. See `errors` for the offending fields.",
+  "instance": "/api/db/rows/User",
+  "errors": [
+    {
+      "field": "take",
+      "message": "take must be 1000 or fewer"
+    }
+  ]
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
 <h3 id="referencesschematext-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[References](#schemareferences)|
-|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|[ValidationProblem](#schemavalidationproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -2024,13 +3054,43 @@ The edits that rename the model or enum at a cursor position everywhere it is us
 }
 ```
 
+> 422 Response
+
+```json
+{
+  "type": "/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "The request failed validation. See `errors` for the offending fields.",
+  "instance": "/api/db/rows/User",
+  "errors": [
+    {
+      "field": "take",
+      "message": "take must be 1000 or fewer"
+    }
+  ]
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
 <h3 id="renameschematext-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[Rename](#schemarename)|
-|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|[ValidationProblem](#schemavalidationproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -2094,7 +3154,22 @@ The quick fixes the Prisma language server offers for the diagnostics in a range
 |» text|body|object|true|The text as typed|
 |» path|body|string|false|The file the text belongs to, so the other loaded schema files are seen; the first file when omitted|
 |» range|body|object|true|The range the actions are asked for|
+|» » start|body|object|true|Where the range starts|
+|» » » line|body|object|true|The line|
+|» » » character|body|object|true|The column|
+|» » end|body|object|true|Where the range ends|
+|» » » line|body|object|true|The line|
+|» » » character|body|object|true|The column|
 |» diagnostics|body|[[LspDiagnostic](#schemalspdiagnostic)]|true|The diagnostics in that range, as the lint route returned them|
+|» » range|body|object|true|Where it is|
+|» » » start|body|object|true|Where the range starts|
+|» » » » line|body|object|true|The line|
+|» » » » character|body|object|true|The column|
+|» » » end|body|object|true|Where the range ends|
+|» » » » line|body|object|true|The line|
+|» » » » character|body|object|true|The column|
+|» » message|body|string|true|The Prisma message|
+|» » severity|body|object|true|How serious it is|
 
 > Example responses
 
@@ -2106,13 +3181,43 @@ The quick fixes the Prisma language server offers for the diagnostics in a range
 }
 ```
 
+> 422 Response
+
+```json
+{
+  "type": "/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "The request failed validation. See `errors` for the offending fields.",
+  "instance": "/api/db/rows/User",
+  "errors": [
+    {
+      "field": "take",
+      "message": "take must be 1000 or fewer"
+    }
+  ]
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
 <h3 id="codeactionsschematext-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[CodeActions](#schemacodeactions)|
-|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|[ValidationProblem](#schemavalidationproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -2157,13 +3262,37 @@ database has drifted from the schema. Reads only.
 }
 ```
 
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
+> 503 Response
+
+```json
+{
+  "type": "/problems/service-unavailable",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "No database is connected. Set DATABASE_URL or pass --url to hekireki studio.",
+  "instance": "/api/db/counts"
+}
+```
+
 <h3 id="readmigratestatus-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[MigrateStatus](#schemamigratestatus)|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
-|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|[ServiceUnavailableProblem](#schemaserviceunavailableproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -2196,13 +3325,37 @@ Reads the database; writes nothing to it.
 }
 ```
 
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
+> 503 Response
+
+```json
+{
+  "type": "/problems/service-unavailable",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "No database is connected. Set DATABASE_URL or pass --url to hekireki studio.",
+  "instance": "/api/db/counts"
+}
+```
+
 <h3 id="readmigratebaseline-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[MigrateBaseline](#schemamigratebaseline)|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
-|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|[ServiceUnavailableProblem](#schemaserviceunavailableproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -2265,14 +3418,56 @@ without running them. Refused when the database does not match them.
 }
 ```
 
+> 422 Response
+
+```json
+{
+  "type": "/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "The request failed validation. See `errors` for the offending fields.",
+  "instance": "/api/db/rows/User",
+  "errors": [
+    {
+      "field": "take",
+      "message": "take must be 1000 or fewer"
+    }
+  ]
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
+> 503 Response
+
+```json
+{
+  "type": "/problems/service-unavailable",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "No database is connected. Set DATABASE_URL or pass --url to hekireki studio.",
+  "instance": "/api/db/counts"
+}
+```
+
 <h3 id="baselinemigrations-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[MigrateStatus](#schemamigratestatus)|
-|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
-|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|[ValidationProblem](#schemavalidationproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|[ServiceUnavailableProblem](#schemaserviceunavailableproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -2305,13 +3500,37 @@ Reads the database; writes nothing to it.
 }
 ```
 
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
+> 503 Response
+
+```json
+{
+  "type": "/problems/service-unavailable",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "No database is connected. Set DATABASE_URL or pass --url to hekireki studio.",
+  "instance": "/api/db/counts"
+}
+```
+
 <h3 id="readmigratediff-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[MigrateDiff](#schemamigratediff)|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
-|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|[ServiceUnavailableProblem](#schemaserviceunavailableproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -2355,8 +3574,12 @@ rows before the ones that change the schema.
 |body|body|[PlanBody](#schemaplanbody)|true|none|
 |» name|body|string|false|What to call it; the timestamp is put in front|
 |» decisions|body|[[MigrationDecision](#schemamigrationdecision)]|false|Every decision to plan with, in place of the ones kept; the kept ones when left out|
-|» batch|body|integer(int32)|false|The most rows one statement of a fix changes: a fix over more is run that many at a time, so
-none holds its locks on the whole table; all of them at once when left out|
+|» » kind|body|string|true|The check it answers (`not-null`, `unique`, `foreign-key`, ...)|
+|» » modelName|body|string|true|The model it is about|
+|» » field|body|string|true|The field, or the relation for a foreign key|
+|» » choice|body|string|true|What to do, from the choices the check offers|
+|» » value|body|string|false|What a choice needs, when it needs something: the value or SQL written, the field a rename<br>became, the `STORED=MEMBER` pairs of an enum, or the field duplicates are ordered by|
+|» batch|body|integer(int32)|false|The most rows one statement of a fix changes: a fix over more is run that many at a time, so<br>none holds its locks on the whole table; all of them at once when left out|
 
 > Example responses
 
@@ -2374,14 +3597,56 @@ none holds its locks on the whole table; all of them at once when left out|
 }
 ```
 
+> 422 Response
+
+```json
+{
+  "type": "/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "The request failed validation. See `errors` for the offending fields.",
+  "instance": "/api/db/rows/User",
+  "errors": [
+    {
+      "field": "take",
+      "message": "take must be 1000 or fewer"
+    }
+  ]
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
+> 503 Response
+
+```json
+{
+  "type": "/problems/service-unavailable",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "No database is connected. Set DATABASE_URL or pass --url to hekireki studio.",
+  "instance": "/api/db/counts"
+}
+```
+
 <h3 id="planmigration-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[MigratePlan](#schemamigrateplan)|
-|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
-|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|[ValidationProblem](#schemavalidationproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|[ServiceUnavailableProblem](#schemaserviceunavailableproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -2439,14 +3704,56 @@ stays run: none of the three databases undoes a DDL statement already done.
 }
 ```
 
+> 422 Response
+
+```json
+{
+  "type": "/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "The request failed validation. See `errors` for the offending fields.",
+  "instance": "/api/db/rows/User",
+  "errors": [
+    {
+      "field": "take",
+      "message": "take must be 1000 or fewer"
+    }
+  ]
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
+> 503 Response
+
+```json
+{
+  "type": "/problems/service-unavailable",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "No database is connected. Set DATABASE_URL or pass --url to hekireki studio.",
+  "instance": "/api/db/counts"
+}
+```
+
 <h3 id="applymigrationstatements-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[ApplyResult](#schemaapplyresult)|
-|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
-|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|[ValidationProblem](#schemavalidationproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|[ServiceUnavailableProblem](#schemaserviceunavailableproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -2511,14 +3818,56 @@ what it does to the rows of each table, and whether the database then matches th
 }
 ```
 
+> 422 Response
+
+```json
+{
+  "type": "/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "The request failed validation. See `errors` for the offending fields.",
+  "instance": "/api/db/rows/User",
+  "errors": [
+    {
+      "field": "take",
+      "message": "take must be 1000 or fewer"
+    }
+  ]
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
+> 503 Response
+
+```json
+{
+  "type": "/problems/service-unavailable",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "No database is connected. Set DATABASE_URL or pass --url to hekireki studio.",
+  "instance": "/api/db/counts"
+}
+```
+
 <h3 id="rehearsemigration-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[Rehearsal](#schemarehearsal)|
-|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
-|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|[ValidationProblem](#schemavalidationproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|[ServiceUnavailableProblem](#schemaserviceunavailableproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -2549,13 +3898,37 @@ The rows of every table of the database now, to compare a run with.
 }
 ```
 
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
+> 503 Response
+
+```json
+{
+  "type": "/problems/service-unavailable",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "No database is connected. Set DATABASE_URL or pass --url to hekireki studio.",
+  "instance": "/api/db/counts"
+}
+```
+
 <h3 id="readtablecounts-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[TableCounts](#schematablecounts)|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
-|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|[ServiceUnavailableProblem](#schemaserviceunavailableproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -2586,13 +3959,37 @@ The backups taken before migrations, newest first.
 }
 ```
 
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
+> 503 Response
+
+```json
+{
+  "type": "/problems/service-unavailable",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "No database is connected. Set DATABASE_URL or pass --url to hekireki studio.",
+  "instance": "/api/db/counts"
+}
+```
+
 <h3 id="readbackups-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[Backups](#schemabackups)|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
-|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|[ServiceUnavailableProblem](#schemaserviceunavailableproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -2627,14 +4024,56 @@ Takes a backup of the database as it is now.
 }
 ```
 
+> 422 Response
+
+```json
+{
+  "type": "/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "The request failed validation. See `errors` for the offending fields.",
+  "instance": "/api/db/rows/User",
+  "errors": [
+    {
+      "field": "take",
+      "message": "take must be 1000 or fewer"
+    }
+  ]
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
+> 503 Response
+
+```json
+{
+  "type": "/problems/service-unavailable",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "No database is connected. Set DATABASE_URL or pass --url to hekireki studio.",
+  "instance": "/api/db/counts"
+}
+```
+
 <h3 id="createbackup-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[Backup](#schemabackup)|
-|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
-|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|[ValidationProblem](#schemavalidationproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|[ServiceUnavailableProblem](#schemaserviceunavailableproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -2700,14 +4139,56 @@ migration the run it undoes wrote.
 }
 ```
 
+> 422 Response
+
+```json
+{
+  "type": "/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "The request failed validation. See `errors` for the offending fields.",
+  "instance": "/api/db/rows/User",
+  "errors": [
+    {
+      "field": "take",
+      "message": "take must be 1000 or fewer"
+    }
+  ]
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
+> 503 Response
+
+```json
+{
+  "type": "/problems/service-unavailable",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "No database is connected. Set DATABASE_URL or pass --url to hekireki studio.",
+  "instance": "/api/db/counts"
+}
+```
+
 <h3 id="restorebackup-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[MigrateStatus](#schemamigratestatus)|
-|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
-|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|[ValidationProblem](#schemavalidationproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|[ServiceUnavailableProblem](#schemaserviceunavailableproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -2720,7 +4201,7 @@ This operation does not require authentication
 > Code samples
 
 ```bash
-curl 'http://localhost:5555/api/migrate/migrations/{migrationName}' \
+curl http://localhost:5555/api/migrate/migrations/string \
   -H 'Accept: application/json'
 ```
 
@@ -2746,14 +4227,50 @@ The migration.sql of one migration of the directory; 404 when the directory hold
 }
 ```
 
+> 404 Response
+
+```json
+{
+  "type": "/problems/not-found",
+  "title": "Not Found",
+  "status": 404,
+  "detail": "Unknown model \"Nope\".",
+  "instance": "/api/db/rows/Nope"
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
+> 503 Response
+
+```json
+{
+  "type": "/problems/service-unavailable",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "No database is connected. Set DATABASE_URL or pass --url to hekireki studio.",
+  "instance": "/api/db/counts"
+}
+```
+
 <h3 id="readmigrationfile-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[MigrationFile](#schemamigrationfile)|
-|404|Not Found|404 Not Found (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
-|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+|404|Not Found|404 Not Found (`application/problem+json`)|[NotFoundProblem](#schemanotfoundproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|[ServiceUnavailableProblem](#schemaserviceunavailableproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -2808,14 +4325,56 @@ Writes a migration.sql to the migrations directory, so Prisma Migrate owns it fr
 }
 ```
 
+> 422 Response
+
+```json
+{
+  "type": "/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "The request failed validation. See `errors` for the offending fields.",
+  "instance": "/api/db/rows/User",
+  "errors": [
+    {
+      "field": "take",
+      "message": "take must be 1000 or fewer"
+    }
+  ]
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
+> 503 Response
+
+```json
+{
+  "type": "/problems/service-unavailable",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "No database is connected. Set DATABASE_URL or pass --url to hekireki studio.",
+  "instance": "/api/db/counts"
+}
+```
+
 <h3 id="createmigration-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[CreatedMigration](#schemacreatedmigration)|
-|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
-|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|[ValidationProblem](#schemavalidationproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|[ServiceUnavailableProblem](#schemaserviceunavailableproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -2878,14 +4437,56 @@ at a time. The database must have been migrated at least once.
 }
 ```
 
+> 422 Response
+
+```json
+{
+  "type": "/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "The request failed validation. See `errors` for the offending fields.",
+  "instance": "/api/db/rows/User",
+  "errors": [
+    {
+      "field": "take",
+      "message": "take must be 1000 or fewer"
+    }
+  ]
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
+> 503 Response
+
+```json
+{
+  "type": "/problems/service-unavailable",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "No database is connected. Set DATABASE_URL or pass --url to hekireki studio.",
+  "instance": "/api/db/counts"
+}
+```
+
 <h3 id="markmigrationapplied-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[MigrateStatus](#schemamigratestatus)|
-|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
-|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|[ValidationProblem](#schemavalidationproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|[ServiceUnavailableProblem](#schemaserviceunavailableproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -2948,14 +4549,56 @@ stops counting as failed, which a database has to have before anything else reac
 }
 ```
 
+> 422 Response
+
+```json
+{
+  "type": "/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "The request failed validation. See `errors` for the offending fields.",
+  "instance": "/api/db/rows/User",
+  "errors": [
+    {
+      "field": "take",
+      "message": "take must be 1000 or fewer"
+    }
+  ]
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
+> 503 Response
+
+```json
+{
+  "type": "/problems/service-unavailable",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "No database is connected. Set DATABASE_URL or pass --url to hekireki studio.",
+  "instance": "/api/db/counts"
+}
+```
+
 <h3 id="markmigrationrolledback-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[MigrateStatus](#schemamigratestatus)|
-|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
-|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|[ValidationProblem](#schemavalidationproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|[ServiceUnavailableProblem](#schemaserviceunavailableproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -2987,13 +4630,37 @@ What has been decided on the page about the checks, as Studio kept it.
 }
 ```
 
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
+> 503 Response
+
+```json
+{
+  "type": "/problems/service-unavailable",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "No database is connected. Set DATABASE_URL or pass --url to hekireki studio.",
+  "instance": "/api/db/counts"
+}
+```
+
 <h3 id="readmigrationdecisions-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[MigrationDecisions](#schemamigrationdecisions)|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
-|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|[ServiceUnavailableProblem](#schemaserviceunavailableproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -3034,6 +4701,11 @@ Keeps the decisions, so the same plan is made the next time the page is opened, 
 |---|---|---|---|---|
 |body|body|[DecisionsBody](#schemadecisionsbody)|true|none|
 |» decisions|body|[[MigrationDecision](#schemamigrationdecision)]|true|All of them: what is left out is forgotten|
+|» » kind|body|string|true|The check it answers (`not-null`, `unique`, `foreign-key`, ...)|
+|» » modelName|body|string|true|The model it is about|
+|» » field|body|string|true|The field, or the relation for a foreign key|
+|» » choice|body|string|true|What to do, from the choices the check offers|
+|» » value|body|string|false|What a choice needs, when it needs something: the value or SQL written, the field a rename<br>became, the `STORED=MEMBER` pairs of an enum, or the field duplicates are ordered by|
 
 > Example responses
 
@@ -3046,14 +4718,56 @@ Keeps the decisions, so the same plan is made the next time the page is opened, 
 }
 ```
 
+> 422 Response
+
+```json
+{
+  "type": "/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "The request failed validation. See `errors` for the offending fields.",
+  "instance": "/api/db/rows/User",
+  "errors": [
+    {
+      "field": "take",
+      "message": "take must be 1000 or fewer"
+    }
+  ]
+}
+```
+
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
+> 503 Response
+
+```json
+{
+  "type": "/problems/service-unavailable",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "No database is connected. Set DATABASE_URL or pass --url to hekireki studio.",
+  "instance": "/api/db/counts"
+}
+```
+
 <h3 id="writemigrationdecisions-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[MigrationDecisions](#schemamigrationdecisions)|
-|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|None|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
-|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+|422|Unprocessable Entity|422 Unprocessable Content (`application/problem+json`)|[ValidationProblem](#schemavalidationproblem)|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|[ServiceUnavailableProblem](#schemaserviceunavailableproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -3087,13 +4801,37 @@ Applies every migration the database has not run yet, as `prisma migrate deploy`
 }
 ```
 
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
+> 503 Response
+
+```json
+{
+  "type": "/problems/service-unavailable",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "No database is connected. Set DATABASE_URL or pass --url to hekireki studio.",
+  "instance": "/api/db/counts"
+}
+```
+
 <h3 id="deploymigrations-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[Deployed](#schemadeployed)|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
-|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
+|503|Service Unavailable|503 Service Unavailable (`application/problem+json`)|[ServiceUnavailableProblem](#schemaserviceunavailableproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -3129,12 +4867,24 @@ The documentation of the last schema that parsed: models, operations and client 
 }
 ```
 
+> 500 Response
+
+```json
+{
+  "type": "/problems/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "An unexpected error occurred.",
+  "instance": "/api/schema"
+}
+```
+
 <h3 id="readdocs-responses">Responses</h3>
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
 |200|OK|The request has succeeded.|[Docs](#schemadocs)|
-|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|None|
+|500|Internal Server Error|500 Internal Server Error (`application/problem+json`)|[InternalServerProblem](#schemainternalserverproblem)|
 
 <aside class="success">
 This operation does not require authentication
@@ -3156,6 +4906,8 @@ This operation does not require authentication
 }
 ```
 
+One schema file on disk, as Studio read it.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -3173,6 +4925,8 @@ This operation does not require authentication
 ```json
 "scalar"
 ```
+
+What a field holds, as Prisma classifies it.
 
 <h2 id="tocS_FieldRelation">FieldRelation</h2>
 <!-- backwards compatibility -->
@@ -3195,6 +4949,8 @@ This operation does not require authentication
 }
 ```
 
+The `@relation(...)` attribute of a relation field.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -3202,8 +4958,8 @@ This operation does not require authentication
 |name|string|true|none|The relation name (`@relation("name")`, or the one Prisma derived)|
 |fromFields|[string]|true|none|The fields on this model that hold the foreign key|
 |toFields|[string]|true|none|The fields on the other model the key references|
-|onDelete|string|true|none|The `onDelete` referential action, when declared|
-|onUpdate|string|true|none|The `onUpdate` referential action, when declared|
+|onDelete|string \| null|true|none|The `onDelete` referential action, when declared|
+|onUpdate|string \| null|true|none|The `onUpdate` referential action, when declared|
 
 <h2 id="tocS_Field">Field</h2>
 <!-- backwards compatibility -->
@@ -3237,12 +4993,14 @@ This operation does not require authentication
 }
 ```
 
+One field of a model.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |name|string|true|none|The field name|
-|dbName|string|true|none|The column name from `@map`, when it differs|
+|dbName|string \| null|true|none|The column name from `@map`, when it differs|
 |kind|object|true|none|What the field holds|
 |type|string|true|none|The Prisma type: a scalar, a model or an enum name|
 |isList|boolean|true|none|Whether the field is a list (`String[]`)|
@@ -3251,11 +5009,11 @@ This operation does not require authentication
 |isUnique|boolean|true|none|Whether the field is `@unique`|
 |isUpdatedAt|boolean|true|none|Whether the field is `@updatedAt`|
 |isForeignKey|boolean|true|none|Whether the field holds the foreign key of a relation on this model|
-|default|string|true|none|The `@default(...)` value rendered as written, when declared|
-|nativeType|string|true|none|The `@db.*` native type rendered as written, when declared|
-|documentation|string|true|none|The `///` doc comment with hekireki annotations stripped|
+|default|string \| null|true|none|The `@default(...)` value rendered as written, when declared|
+|nativeType|string \| null|true|none|The `@db.*` native type rendered as written, when declared|
+|documentation|string \| null|true|none|The `///` doc comment with hekireki annotations stripped|
 |annotations|[string]|true|none|The hekireki annotation lines (`@z.*`, `@v.*`, ...) found in the doc comment|
-|relation|object|true|none|The `@relation(...)` attribute of a relation field|
+|relation|object \| null|true|none|The `@relation(...)` attribute of a relation field|
 |attributes|[string]|true|none|Every attribute rendered as written (`@id`, `@default(now())`, `@map("...")`, ...)|
 
 <h2 id="tocS_IndexType">IndexType</h2>
@@ -3268,6 +5026,8 @@ This operation does not require authentication
 ```json
 "id"
 ```
+
+The kind of index a `@@` attribute declares.
 
 <h2 id="tocS_Index">Index</h2>
 <!-- backwards compatibility -->
@@ -3288,13 +5048,15 @@ This operation does not require authentication
 }
 ```
 
+A `@@id`, `@@unique`, `@@index` or `@@fulltext` attribute of a model.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |type|object|true|none|The kind of index|
-|name|string|true|none|The Prisma-side index name, when declared|
-|dbName|string|true|none|The database-side index name (`map`), when declared|
+|name|string \| null|true|none|The Prisma-side index name, when declared|
+|dbName|string \| null|true|none|The database-side index name (`map`), when declared|
 |fields|[string]|true|none|The fields the index covers, in order|
 |attribute|string|true|none|The attribute rendered as written|
 
@@ -3311,6 +5073,8 @@ This operation does not require authentication
   "line": 12
 }
 ```
+
+Where a block starts in the schema files.
 
 ### Properties
 
@@ -3367,19 +5131,21 @@ This operation does not require authentication
 }
 ```
 
+One model of the schema.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |name|string|true|none|The model name|
-|dbName|string|true|none|The table name from `@@map`, when it differs|
-|documentation|string|true|none|The `///` doc comment with hekireki annotations stripped|
+|dbName|string \| null|true|none|The table name from `@@map`, when it differs|
+|documentation|string \| null|true|none|The `///` doc comment with hekireki annotations stripped|
 |annotations|[string]|true|none|The hekireki annotation lines found in the doc comment|
 |fields|[[Field](#schemafield)]|true|none|The fields in declaration order|
 |primaryKey|[string]|true|none|The `@@id` fields, when the primary key is composite|
 |indexes|[[Index](#schemaindex)]|true|none|The `@@` index attributes|
 |attributes|[string]|true|none|Every `@@` attribute rendered as written|
-|location|object|true|none|Where the block starts (null when it could not be located)|
+|location|object \| null|true|none|Where the block starts (null when it could not be located)|
 
 <h2 id="tocS_EnumValue">EnumValue</h2>
 <!-- backwards compatibility -->
@@ -3395,12 +5161,14 @@ This operation does not require authentication
 }
 ```
 
+One member of an enum.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |name|string|true|none|The member name|
-|dbName|string|true|none|The stored value from `@map`, when it differs|
+|dbName|string \| null|true|none|The stored value from `@map`, when it differs|
 
 <h2 id="tocS_Enum">Enum</h2>
 <!-- backwards compatibility -->
@@ -3431,15 +5199,17 @@ This operation does not require authentication
 }
 ```
 
+One enum of the schema.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |name|string|true|none|The enum name|
-|dbName|string|true|none|The type name from `@@map`, when it differs|
-|documentation|string|true|none|The `///` doc comment|
+|dbName|string \| null|true|none|The type name from `@@map`, when it differs|
+|documentation|string \| null|true|none|The `///` doc comment|
 |values|[[EnumValue](#schemaenumvalue)]|true|none|The members in declaration order|
-|location|object|true|none|Where the block starts (null when it could not be located)|
+|location|object \| null|true|none|Where the block starts (null when it could not be located)|
 
 <h2 id="tocS_RelationOrigin">RelationOrigin</h2>
 <!-- backwards compatibility -->
@@ -3452,6 +5222,8 @@ This operation does not require authentication
 "inferred"
 ```
 
+Where a relation came from.
+
 <h2 id="tocS_Cardinality">Cardinality</h2>
 <!-- backwards compatibility -->
 <a id="schemacardinality"></a>
@@ -3462,6 +5234,8 @@ This operation does not require authentication
 ```json
 "zero-one"
 ```
+
+How many rows one end of a relation points at.
 
 <h2 id="tocS_RelationEnd">RelationEnd</h2>
 <!-- backwards compatibility -->
@@ -3477,6 +5251,8 @@ This operation does not require authentication
   "cardinality": "many"
 }
 ```
+
+One end of a relation.
 
 ### Properties
 
@@ -3513,17 +5289,19 @@ This operation does not require authentication
 }
 ```
 
+A relation between two models, drawn as one edge in the ER diagram.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |id|string|true|none|A stable id built from both ends (`From.field->To.field`)|
-|name|string|true|none|The relation name, when one is declared or derived|
+|name|string \| null|true|none|The relation name, when one is declared or derived|
 |origin|object|true|none|Where the relation came from|
 |from|object|true|none|The referenced end|
 |to|object|true|none|The referencing end|
-|onDelete|string|true|none|The `onDelete` referential action, when declared|
-|onUpdate|string|true|none|The `onUpdate` referential action, when declared|
+|onDelete|string \| null|true|none|The `onDelete` referential action, when declared|
+|onUpdate|string \| null|true|none|The `onUpdate` referential action, when declared|
 
 <h2 id="tocS_Schema">Schema</h2>
 <!-- backwards compatibility -->
@@ -3547,12 +5325,14 @@ This operation does not require authentication
 }
 ```
 
+The parsed Prisma schema as the UI consumes it.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |files|[[SchemaFile](#schemaschemafile)]|true|none|The files the schema was parsed from|
-|provider|string|true|none|The `datasource` provider, when one is declared|
+|provider|string \| null|true|none|The `datasource` provider, when one is declared|
 |models|[[Model](#schemamodel)]|true|none|Every model in declaration order|
 |enums|[[Enum](#schemaenum)]|true|none|Every enum in declaration order|
 |relations|[[Relation](#schemarelation)]|true|none|Every relation between the models|
@@ -3568,6 +5348,8 @@ This operation does not require authentication
 0
 ```
 
+A 0-based line number in the editor buffer.
+
 <h2 id="tocS_character">character</h2>
 <!-- backwards compatibility -->
 <a id="schemacharacter"></a>
@@ -3578,6 +5360,8 @@ This operation does not require authentication
 ```json
 0
 ```
+
+A 0-based column (UTF-16 code unit offset) in the editor buffer.
 
 <h2 id="tocS_LspPosition">LspPosition</h2>
 <!-- backwards compatibility -->
@@ -3592,6 +5376,8 @@ This operation does not require authentication
   "character": 6
 }
 ```
+
+A 0-based position in a document, as LSP counts it.
 
 ### Properties
 
@@ -3620,6 +5406,8 @@ This operation does not require authentication
 }
 ```
 
+A range between two positions, end exclusive.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -3637,6 +5425,8 @@ This operation does not require authentication
 ```json
 "error"
 ```
+
+How serious a diagnostic of the Prisma language server is (LSP `DiagnosticSeverity`).
 
 <h2 id="tocS_FileDiagnostic">FileDiagnostic</h2>
 <!-- backwards compatibility -->
@@ -3662,6 +5452,8 @@ This operation does not require authentication
   "severity": "error"
 }
 ```
+
+One diagnostic the Prisma language server reports for a file on disk.
 
 ### Properties
 
@@ -3710,12 +5502,17 @@ This operation does not require authentication
 }
 ```
 
+The latest parse result. `schema` is the last schema that parsed (null until one does),
+`error` the current Prisma error and `diagnostics` the same errors as the language server
+places them, so a broken edit never blanks the UI. `files` always reflects the disk, even
+while the schema is broken.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
-|schema|object|true|none|The last schema that parsed, or null before the first successful parse|
-|error|string|true|none|The Prisma error of the latest parse as the engine printed it, or null when it succeeded|
+|schema|object \| null|true|none|The last schema that parsed, or null before the first successful parse|
+|error|string \| null|true|none|The Prisma error of the latest parse as the engine printed it, or null when it succeeded|
 |diagnostics|[[FileDiagnostic](#schemafilediagnostic)]|true|none|Every diagnostic the language server reports for the files on disk; empty when they parse|
 |updatedAt|string(date-time)|true|none|When the files were last read (ISO 8601); the event stream announces every change of it|
 |files|[[SchemaFile](#schemaschemafile)]|true|none|The files on disk as of the latest read|
@@ -3736,6 +5533,9 @@ This operation does not require authentication
   "instance": "/api/schema"
 }
 ```
+
+RFC 9457 Problem Details for a contract violation (the server could not produce a response
+matching this document) or any other unexpected failure.
 
 ### Properties
 
@@ -3772,6 +5572,8 @@ This operation does not require authentication
 }
 ```
 
+RFC 9457 Problem Details for a model or schema file that does not exist in the loaded schema.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -3804,6 +5606,8 @@ This operation does not require authentication
 }
 ```
 
+One field that failed validation.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -3833,6 +5637,11 @@ This operation does not require authentication
   ]
 }
 ```
+
+RFC 9457 Problem Details for a request that failed validation.
+`errors` is an extension member (RFC 9457 §3.2). The `@hono/zod-openapi` default hook returns
+this shape for every route, short-circuiting before the handler; a write that the database
+rejects is reported the same way with the offending field.
 
 ### Properties
 
@@ -3864,6 +5673,9 @@ This operation does not require authentication
 "string"
 ```
 
+A schema file path exactly as Studio loaded it (relative to the working directory, or absolute
+when the schema lives outside it). Only the loaded files can be written back.
+
 <h2 id="tocS_schemaText">schemaText</h2>
 <!-- backwards compatibility -->
 <a id="schemaschematext"></a>
@@ -3874,6 +5686,8 @@ This operation does not require authentication
 ```json
 "string"
 ```
+
+Prisma schema source text (a whole file, or the editor buffer being typed).
 
 <h2 id="tocS_FileWrite">FileWrite</h2>
 <!-- backwards compatibility -->
@@ -3888,6 +5702,8 @@ This operation does not require authentication
   "content": "model User {\n  id Int @id\n}\n"
 }
 ```
+
+A schema file to write back. Only a file Studio loaded can be written.
 
 ### Properties
 
@@ -3907,6 +5723,8 @@ This operation does not require authentication
 "postgresql"
 ```
 
+The SQL dialect of the connected database.
+
 <h2 id="tocS_UrlSource">UrlSource</h2>
 <!-- backwards compatibility -->
 <a id="schemaurlsource"></a>
@@ -3917,6 +5735,8 @@ This operation does not require authentication
 ```json
 "flag"
 ```
+
+Where the database URL was found, in precedence order.
 
 <h2 id="tocS_DbStatus">DbStatus</h2>
 <!-- backwards compatibility -->
@@ -3935,15 +5755,17 @@ This operation does not require authentication
 }
 ```
 
+The database connection as the sidebar shows it.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |connected|boolean|true|none|Whether a driver is open|
-|dialect|object|true|none|The dialect of the open driver|
-|url|string|true|none|The connection URL with its password redacted|
-|source|object|true|none|Where the URL was found|
-|error|string|true|none|Why no database is connected, when it is not|
+|dialect|object \| null|true|none|The dialect of the open driver|
+|url|string \| null|true|none|The connection URL with its password redacted|
+|source|object \| null|true|none|Where the URL was found|
+|error|string \| null|true|none|Why no database is connected, when it is not|
 
 <h2 id="tocS_Counts">Counts</h2>
 <!-- backwards compatibility -->
@@ -3960,6 +5782,8 @@ This operation does not require authentication
   }
 }
 ```
+
+Row counts keyed by model name. Models whose table could not be counted are left out.
 
 ### Properties
 
@@ -3983,6 +5807,9 @@ This operation does not require authentication
   "instance": "/api/db/counts"
 }
 ```
+
+RFC 9457 Problem Details for a request that needs the database while none is connected,
+or whose statement the database rejected.
 
 ### Properties
 
@@ -4013,6 +5840,9 @@ This operation does not require authentication
 "string"
 ```
 
+A model name exactly as declared in the schema (`model User {}` → `User`).
+Branded so a use case can only be asked about a model that came in through a validated path parameter.
+
 <h2 id="tocS_skip">skip</h2>
 <!-- backwards compatibility -->
 <a id="schemaskip"></a>
@@ -4023,6 +5853,8 @@ This operation does not require authentication
 ```json
 0
 ```
+
+Rows to skip before the page (0-based). Defaults to 0.
 
 <h2 id="tocS_take">take</h2>
 <!-- backwards compatibility -->
@@ -4035,6 +5867,8 @@ This operation does not require authentication
 1
 ```
 
+Rows per page (1-1000). Defaults to 100.
+
 <h2 id="tocS_search">search</h2>
 <!-- backwards compatibility -->
 <a id="schemasearch"></a>
@@ -4045,6 +5879,8 @@ This operation does not require authentication
 ```json
 "string"
 ```
+
+Case-insensitive text every returned row must contain in one of its columns; trimmed, empty means no filter.
 
 <h2 id="tocS_Row">Row</h2>
 <!-- backwards compatibility -->
@@ -4061,6 +5897,15 @@ This operation does not require authentication
   "deletedAt": null
 }
 ```
+
+One row keyed by Prisma field name (not column name). Values are what JSON can carry: dates
+are ISO strings, bigints are strings, JSON columns are strings.
+
+### Properties
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|**additionalProperties**|string \| number(double) \| boolean \| null|false|none|none|
 
 <h2 id="tocS_Rows">Rows</h2>
 <!-- backwards compatibility -->
@@ -4094,6 +5939,8 @@ This operation does not require authentication
 }
 ```
 
+One page of a model's table.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -4118,6 +5965,8 @@ This operation does not require authentication
 }
 ```
 
+How many rows a write touched.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -4138,6 +5987,8 @@ This operation does not require authentication
   }
 }
 ```
+
+A row to insert.
 
 ### Properties
 
@@ -4163,6 +6014,8 @@ This operation does not require authentication
 }
 ```
 
+A change to one row.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -4184,6 +6037,8 @@ This operation does not require authentication
   }
 }
 ```
+
+A row to delete.
 
 ### Properties
 
@@ -4215,6 +6070,8 @@ This operation does not require authentication
 }
 ```
 
+What a statement returned.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -4235,6 +6092,8 @@ This operation does not require authentication
 "string"
 ```
 
+SQL text: one or more statements, analyzed or run as written (the Studio API is loopback-only; there is no sandbox).
+
 <h2 id="tocS_SqlBody">SqlBody</h2>
 <!-- backwards compatibility -->
 <a id="schemasqlbody"></a>
@@ -4248,12 +6107,14 @@ This operation does not require authentication
 }
 ```
 
+A statement to run.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |sql|object|true|none|The statements; several are run one by one and the result belongs to the last|
-|params|[object]|false|none|The values bound to the placeholders, in order; omitted means none|
+|params|[string \| number(double) \| boolean \| null]|false|none|The values bound to the placeholders, in order; omitted means none|
 
 <h2 id="tocS_PlanNode">PlanNode</h2>
 <!-- backwards compatibility -->
@@ -4273,16 +6134,18 @@ This operation does not require authentication
 }
 ```
 
+One step of the execution plan, flattened; `parent` rebuilds the tree.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |id|string|true|none|The step id, unique within the plan|
-|parent|string|true|none|The id of the step this one feeds, or null for a root|
+|parent|string \| null|true|none|The id of the step this one feeds, or null for a root|
 |label|string|true|none|What the step does (`SCAN users`, `Seq Scan on users`, `Hash Join`)|
-|detail|string|true|none|The rest of what the database said about the step|
-|cost|number(double)|true|none|The estimated cost, when the database reports one|
-|rows|number(double)|true|none|The estimated (or, with ANALYZE, actual) row count, when reported|
+|detail|string \| null|true|none|The rest of what the database said about the step|
+|cost|number(double) \| null|true|none|The estimated cost, when the database reports one|
+|rows|number(double) \| null|true|none|The estimated (or, with ANALYZE, actual) row count, when reported|
 
 <h2 id="tocS_Plan">Plan</h2>
 <!-- backwards compatibility -->
@@ -4298,6 +6161,8 @@ This operation does not require authentication
   "raw": ""
 }
 ```
+
+The execution plan of a statement.
 
 ### Properties
 
@@ -4318,6 +6183,8 @@ This operation does not require authentication
 "select"
 ```
 
+What kind of statement was analyzed.
+
 <h2 id="tocS_TextRange">TextRange</h2>
 <!-- backwards compatibility -->
 <a id="schematextrange"></a>
@@ -4331,6 +6198,8 @@ This operation does not require authentication
   "end": 12
 }
 ```
+
+Character offsets into the statement text, end exclusive.
 
 ### Properties
 
@@ -4350,6 +6219,8 @@ This operation does not require authentication
 "table"
 ```
 
+What a node of the data-flow graph stands for.
+
 <h2 id="tocS_NodeColumn">NodeColumn</h2>
 <!-- backwards compatibility -->
 <a id="schemanodecolumn"></a>
@@ -4365,12 +6236,14 @@ This operation does not require authentication
 }
 ```
 
+A column a node produces.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |name|string|true|none|The column name|
-|dataType|string|true|none|The declared type, when known|
+|dataType|string \| null|true|none|The declared type, when known|
 |used|boolean|true|none|Whether the statement reads the column (for a table), or always true for a result|
 
 <h2 id="tocS_GraphNode">GraphNode</h2>
@@ -4397,6 +6270,8 @@ This operation does not require authentication
 }
 ```
 
+A node of the data-flow graph.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -4405,7 +6280,7 @@ This operation does not require authentication
 |kind|object|true|none|What the node stands for|
 |label|string|true|none|The caption (`users AS u`, `LEFT JOIN`, `WHERE`)|
 |details|[string]|true|none|Lines under the caption: the condition, the grouped keys, the column names|
-|range|object|true|none|Where the node's clause sits in the text, when it has one|
+|range|object \| null|true|none|Where the node's clause sits in the text, when it has one|
 |scope|string|true|none|`main`, or the CTE / subquery alias the node belongs to|
 |columns|[[NodeColumn](#schemanodecolumn)]|true|none|The columns the node produces (tables, CTEs, subqueries and projections)|
 
@@ -4419,6 +6294,8 @@ This operation does not require authentication
 ```json
 "flow"
 ```
+
+How rows travel along an edge.
 
 <h2 id="tocS_GraphEdge">GraphEdge</h2>
 <!-- backwards compatibility -->
@@ -4437,6 +6314,8 @@ This operation does not require authentication
 }
 ```
 
+An edge of the data-flow graph.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -4444,7 +6323,7 @@ This operation does not require authentication
 |id|string|true|none|The edge id, unique within the statement|
 |source|string|true|none|The node rows come from|
 |target|string|true|none|The node rows go to|
-|label|string|true|none|A caption (`optional` for the outer side of a join, `scalar` for a scalar subquery)|
+|label|string \| null|true|none|A caption (`optional` for the outer side of a join, `scalar` for a scalar subquery)|
 |kind|object|true|none|How rows travel|
 
 <h2 id="tocS_TableRef">TableRef</h2>
@@ -4472,13 +6351,15 @@ This operation does not require authentication
 }
 ```
 
+A table the statement reads or writes.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |nodeId|string|true|none|The graph node of this reference|
 |name|string|true|none|The table name as written|
-|alias|string|true|none|The alias, when one was given|
+|alias|string \| null|true|none|The alias, when one was given|
 |scope|string|true|none|`main`, or the CTE / subquery alias the reference sits in|
 |known|boolean|true|none|Whether the schema has the table|
 |columnsUsed|[string]|true|none|The columns the statement reads from this reference|
@@ -4497,6 +6378,8 @@ This operation does not require authentication
   "column": "email"
 }
 ```
+
+A base-table column an output column derives from.
 
 ### Properties
 
@@ -4528,15 +6411,17 @@ This operation does not require authentication
 }
 ```
 
+A column of the result, with its lineage and type.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |name|string|true|none|The name a driver keys the row with|
 |expression|string|true|none|The expression as written|
-|dataType|string|true|none|The declared type, when known|
+|dataType|string \| null|true|none|The declared type, when known|
 |tsType|string|true|none|The TypeScript type of the value|
-|nullable|boolean|true|none|Whether NULL can come back; null when the analysis cannot tell|
+|nullable|boolean \| null|true|none|Whether NULL can come back; null when the analysis cannot tell|
 |sources|[[ColumnSource](#schemacolumnsource)]|true|none|The base-table columns the value derives from|
 
 <h2 id="tocS_SqlParameter">SqlParameter</h2>
@@ -4557,15 +6442,17 @@ This operation does not require authentication
 }
 ```
 
+A placeholder and the type of what it stands beside.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |index|integer(int32)|true|none|The bind position (1-based), or the `$n` number|
 |placeholder|string|true|none|The placeholder as written (`?`, `$1`, `:name`)|
-|dataType|string|true|none|The declared type of the column it is compared with, when known|
+|dataType|string \| null|true|none|The declared type of the column it is compared with, when known|
 |tsType|string|true|none|The TypeScript type a value should have|
-|nullable|boolean|true|none|Whether NULL is a valid value; null when the analysis cannot tell|
+|nullable|boolean \| null|true|none|Whether NULL is a valid value; null when the analysis cannot tell|
 |context|string|true|none|The expression the placeholder sits in|
 
 <h2 id="tocS_SqlSeverity">SqlSeverity</h2>
@@ -4578,6 +6465,8 @@ This operation does not require authentication
 ```json
 "error"
 ```
+
+How serious a problem the analysis found is.
 
 <h2 id="tocS_SqlDiagnostic">SqlDiagnostic</h2>
 <!-- backwards compatibility -->
@@ -4597,13 +6486,15 @@ This operation does not require authentication
 }
 ```
 
+A problem found in the statement.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |severity|object|true|none|How serious it is|
 |message|string|true|none|What is wrong|
-|range|object|true|none|Where, when the analysis can point at it|
+|range|object \| null|true|none|Where, when the analysis can point at it|
 
 <h2 id="tocS_StatementAnalysis">StatementAnalysis</h2>
 <!-- backwards compatibility -->
@@ -4702,6 +6593,8 @@ This operation does not require authentication
 }
 ```
 
+The analysis of one statement.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -4715,7 +6608,7 @@ This operation does not require authentication
 |columns|[[OutputColumn](#schemaoutputcolumn)]|true|none|The columns of the result (empty for a write without RETURNING)|
 |parameters|[[SqlParameter](#schemasqlparameter)]|true|none|The placeholders, in bind order|
 |diagnostics|[[SqlDiagnostic](#schemasqldiagnostic)]|true|none|What was found wrong|
-|rowType|string|true|none|The row type as TypeScript (`{ id: number; email: string | null }`)|
+|rowType|string|true|none|The row type as TypeScript (`{ id: number; email: string \| null }`)|
 |paramsType|string|true|none|The parameter tuple (or object, for named placeholders) as TypeScript|
 
 <h2 id="tocS_Analysis">Analysis</h2>
@@ -4819,6 +6712,8 @@ This operation does not require authentication
 }
 ```
 
+The analysis of every statement in the text.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -4837,6 +6732,8 @@ This operation does not require authentication
   "sql": "SELECT id, email FROM users WHERE id = ?"
 }
 ```
+
+Text to analyze.
 
 ### Properties
 
@@ -4861,15 +6758,17 @@ This operation does not require authentication
 }
 ```
 
+Whether the project's Prisma Client can be loaded, and whether its types can be read.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |available|boolean|true|none|Whether the client is loaded and connected through the project's driver adapter|
-|source|string|true|none|Where the client was loaded from: the generator output, or `@prisma/client`|
-|error|string|true|none|Why the client could not be loaded, when it could not|
-|typescript|string|true|none|The version of the project's TypeScript the editor completes with, or null without one|
-|typesError|string|true|none|Why the editor cannot complete against the client's types, when it cannot|
+|source|string \| null|true|none|Where the client was loaded from: the generator output, or `@prisma/client`|
+|error|string \| null|true|none|Why the client could not be loaded, when it could not|
+|typescript|string \| null|true|none|The version of the project's TypeScript the editor completes with, or null without one|
+|typesError|string \| null|true|none|Why the editor cannot complete against the client's types, when it cannot|
 
 <h2 id="tocS_ClientCall">ClientCall</h2>
 <!-- backwards compatibility -->
@@ -4889,6 +6788,8 @@ This operation does not require authentication
   }
 }
 ```
+
+One model operation the query makes.
 
 ### Properties
 
@@ -4916,6 +6817,8 @@ This operation does not require authentication
 }
 ```
 
+A model the query touches, with the fields its arguments name.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -4939,6 +6842,8 @@ This operation does not require authentication
   }
 }
 ```
+
+A problem that keeps the query from being run.
 
 ### Properties
 
@@ -4980,6 +6885,8 @@ This operation does not require authentication
 }
 ```
 
+What the query text says, read without running it.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -5000,6 +6907,10 @@ This operation does not require authentication
 "string"
 ```
 
+A Prisma Client call as TypeScript would write it (`prisma.user.findMany({ take: 10 })`, or
+`prisma.$transaction([...])` over several). Only literal arguments are read: nothing in it is
+evaluated as code.
+
 <h2 id="tocS_ClientQueryBody">ClientQueryBody</h2>
 <!-- backwards compatibility -->
 <a id="schemaclientquerybody"></a>
@@ -5012,6 +6923,8 @@ This operation does not require authentication
   "query": "prisma.user.findMany({ where: { email: { contains: \"ann\" } }, take: 10 })"
 }
 ```
+
+A Prisma Client call to analyze or run.
 
 ### Properties
 
@@ -5035,6 +6948,8 @@ This operation does not require authentication
 }
 ```
 
+One completion TypeScript offers at a position.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -5042,7 +6957,7 @@ This operation does not require authentication
 |label|string|true|none|What is inserted, and shown|
 |kind|string|true|none|The TypeScript element kind (`property`, `method`, `keyword`, ...)|
 |sortText|string|true|none|The order TypeScript ranks the item in|
-|insertText|string|true|none|The text to insert when it differs from the label (a quoted key), else null|
+|insertText|string \| null|true|none|The text to insert when it differs from the label (a quoted key), else null|
 
 <h2 id="tocS_ClientCompletions">ClientCompletions</h2>
 <!-- backwards compatibility -->
@@ -5064,6 +6979,8 @@ This operation does not require authentication
 }
 ```
 
+The completions at a position.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -5081,6 +6998,8 @@ This operation does not require authentication
 0
 ```
 
+A 0-based offset into the query text, in UTF-16 code units, as the editor counts.
+
 <h2 id="tocS_ClientPositionBody">ClientPositionBody</h2>
 <!-- backwards compatibility -->
 <a id="schemaclientpositionbody"></a>
@@ -5094,6 +7013,8 @@ This operation does not require authentication
   "offset": 25
 }
 ```
+
+A position in a query, for completion, hovers and signature help.
 
 ### Properties
 
@@ -5116,12 +7037,14 @@ This operation does not require authentication
 }
 ```
 
+The type and the documentation of one completion.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
-|detail|string|true|none|The item's signature as TypeScript prints it|
-|documentation|string|true|none|Its doc comment, as Markdown|
+|detail|string \| null|true|none|The item's signature as TypeScript prints it|
+|documentation|string \| null|true|none|Its doc comment, as Markdown|
 
 <h2 id="tocS_ClientCompletionDetailBody">ClientCompletionDetailBody</h2>
 <!-- backwards compatibility -->
@@ -5138,6 +7061,8 @@ This operation does not require authentication
 }
 ```
 
+One completion to say more about.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -5153,7 +7078,7 @@ This operation does not require authentication
 <a id="tocSclienthover"></a>
 <a id="tocsclienthover"></a>
 
-```json
+````json
 {
   "contents": "```typescript\n(property) take?: number\n```",
   "range": {
@@ -5161,14 +7086,16 @@ This operation does not require authentication
     "end": 26
   }
 }
-```
+````
+
+What TypeScript says about the symbol at a position.
 
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
-|contents|string|true|none|The type and documentation as Markdown, or null when nothing is there|
-|range|object|true|none|The symbol the hover is about|
+|contents|string \| null|true|none|The type and documentation as Markdown, or null when nothing is there|
+|range|object \| null|true|none|The symbol the hover is about|
 
 <h2 id="tocS_ClientSignatureParameter">ClientSignatureParameter</h2>
 <!-- backwards compatibility -->
@@ -5184,12 +7111,14 @@ This operation does not require authentication
 }
 ```
 
+One parameter of a signature.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |label|string|true|none|The parameter as TypeScript prints it|
-|documentation|string|true|none|Its doc comment|
+|documentation|string \| null|true|none|Its doc comment|
 
 <h2 id="tocS_ClientSignature">ClientSignature</h2>
 <!-- backwards compatibility -->
@@ -5211,12 +7140,14 @@ This operation does not require authentication
 }
 ```
 
+One overload of the call under the cursor.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |label|string|true|none|The whole signature|
-|documentation|string|true|none|Its doc comment|
+|documentation|string \| null|true|none|Its doc comment|
 |parameters|[[ClientSignatureParameter](#schemaclientsignatureparameter)]|true|none|The parameters, in order|
 
 <h2 id="tocS_ClientSignatureHelp">ClientSignatureHelp</h2>
@@ -5233,6 +7164,8 @@ This operation does not require authentication
   "activeParameter": 0
 }
 ```
+
+The signatures of the call the cursor is inside, and which one and which parameter is active.
 
 ### Properties
 
@@ -5255,6 +7188,8 @@ This operation does not require authentication
 }
 ```
 
+The query laid out as the repository's TypeScript formatter (oxfmt) writes it.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -5271,6 +7206,8 @@ This operation does not require authentication
 ```json
 "error"
 ```
+
+How serious a TypeScript diagnostic is.
 
 <h2 id="tocS_ClientTypeDiagnostic">ClientTypeDiagnostic</h2>
 <!-- backwards compatibility -->
@@ -5289,6 +7226,8 @@ This operation does not require authentication
   }
 }
 ```
+
+One problem TypeScript finds in the query.
 
 ### Properties
 
@@ -5310,6 +7249,8 @@ This operation does not require authentication
   "diagnostics": []
 }
 ```
+
+What TypeScript finds wrong with the query against the client's types.
 
 ### Properties
 
@@ -5336,13 +7277,15 @@ This operation does not require authentication
 }
 ```
 
+One SQL statement the Prisma Client sent to the database.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |sql|string|true|none|The statement as the driver received it, from Prisma Client's own query event|
 |formatted|string|true|none|The same statement laid out a clause per line for reading: only its whitespace differs|
-|params|[object]|true|none|The values bound to its placeholders, in order|
+|params|[string \| number(double) \| boolean \| null]|true|none|The values bound to its placeholders, in order|
 |durationMs|number(double)|true|none|How long the database took, in milliseconds|
 
 <h2 id="tocS_ClientPreview">ClientPreview</h2>
@@ -5368,6 +7311,8 @@ This operation does not require authentication
   "durationMs": 3.2
 }
 ```
+
+The SQL a read-only call sends, from running it while it is typed.
 
 ### Properties
 
@@ -5408,13 +7353,14 @@ This operation does not require authentication
 }
 ```
 
+What a Prisma Client call returned, with the SQL it took.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
-|result|object|true|none|The value the call resolved to, as JSON: dates are ISO strings, bigints and decimals are
-strings, bytes are base64. A `$transaction` resolves to the array of its results.|
-|rowCount|integer(int32)|true|none|The length of the result, when it is an array|
+|result|object|true|none|The value the call resolved to, as JSON: dates are ISO strings, bigints and decimals are<br>strings, bytes are base64. A `$transaction` resolves to the array of its results.|
+|rowCount|integer(int32) \| null|true|none|The length of the result, when it is an array|
 |truncated|boolean|true|none|Whether only the first rows of the array are in `result`|
 |queries|[[ClientSqlQuery](#schemaclientsqlquery)]|true|none|The statements the client sent, in order|
 |durationMs|number(double)|true|none|Wall time of the whole call in milliseconds|
@@ -5441,6 +7387,8 @@ strings, bytes are base64. A `$transaction` resolves to the array of its results
   "newText": "Account"
 }
 ```
+
+One replacement in a document.
 
 ### Properties
 
@@ -5476,6 +7424,8 @@ strings, bytes are base64. A `$transaction` resolves to the array of its results
 }
 ```
 
+The edits the Prisma formatter makes; the editor applies them as a minimal diff.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -5494,6 +7444,8 @@ strings, bytes are base64. A `$transaction` resolves to the array of its results
   "text": "model User {\nid Int @id\n}\n"
 }
 ```
+
+Schema text and, when it belongs to a loaded file, that file, so the other loaded files are seen.
 
 ### Properties
 
@@ -5526,6 +7478,8 @@ strings, bytes are base64. A `$transaction` resolves to the array of its results
 }
 ```
 
+One diagnostic the Prisma language server reports, positioned as LSP does.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -5547,6 +7501,8 @@ strings, bytes are base64. A `$transaction` resolves to the array of its results
 }
 ```
 
+The diagnostics of one file.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -5566,6 +7522,8 @@ strings, bytes are base64. A `$transaction` resolves to the array of its results
   "text": "model User {\n  id Nope @id\n}\n"
 }
 ```
+
+The buffer being edited, validated together with the other loaded files.
 
 ### Properties
 
@@ -5608,6 +7566,8 @@ strings, bytes are base64. A `$transaction` resolves to the array of its results
 }
 ```
 
+A block of a schema file, as the language server's document outline lists it.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -5630,6 +7590,8 @@ strings, bytes are base64. A `$transaction` resolves to the array of its results
 }
 ```
 
+The blocks of one file in declaration order, as the editor outline shows them.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -5646,6 +7608,8 @@ strings, bytes are base64. A `$transaction` resolves to the array of its results
 ```json
 "plainText"
 ```
+
+How the `insertText` of a completion is to be read.
 
 <h2 id="tocS_Completion">Completion</h2>
 <!-- backwards compatibility -->
@@ -5666,17 +7630,19 @@ strings, bytes are base64. A `$transaction` resolves to the array of its results
 }
 ```
 
+One completion the Prisma language server offers.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |label|string|true|none|What the completion list shows|
-|kind|integer(int32)|true|none|The LSP `CompletionItemKind` (13 = enum value, 14 = keyword, 10 = property, ...), when the server gives one|
-|detail|string|true|none|A short type or kind, when the server gives one|
-|documentation|string|true|none|The documentation text (Markdown), when the server gives one|
+|kind|integer(int32) \| null|true|none|The LSP `CompletionItemKind` (13 = enum value, 14 = keyword, 10 = property, ...), when the server gives one|
+|detail|string \| null|true|none|A short type or kind, when the server gives one|
+|documentation|string \| null|true|none|The documentation text (Markdown), when the server gives one|
 |insertText|string|true|none|The text to insert; a snippet keeps its tab stops|
 |insertTextFormat|object|true|none|Whether `insertText` is plain text or a snippet|
-|sortText|string|true|none|The key the list is sorted by, when the server gives one|
+|sortText|string \| null|true|none|The key the list is sorted by, when the server gives one|
 
 <h2 id="tocS_Completions">Completions</h2>
 <!-- backwards compatibility -->
@@ -5690,6 +7656,8 @@ strings, bytes are base64. A `$transaction` resolves to the array of its results
   "items": []
 }
 ```
+
+The completions at a position.
 
 ### Properties
 
@@ -5712,6 +7680,8 @@ strings, bytes are base64. A `$transaction` resolves to the array of its results
 }
 ```
 
+A completion request at a cursor position.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -5729,7 +7699,7 @@ strings, bytes are base64. A `$transaction` resolves to the array of its results
 <a id="tocShover"></a>
 <a id="tocshover"></a>
 
-```json
+````json
 {
   "contents": "```prisma\nmodel User {\n\t...\n}\n```",
   "range": {
@@ -5743,14 +7713,16 @@ strings, bytes are base64. A `$transaction` resolves to the array of its results
     }
   }
 }
-```
+````
+
+What the Prisma language server says about the symbol under the cursor.
 
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
-|contents|string|true|none|Markdown to show, or null when there is nothing to say about the position|
-|range|object|true|none|The word the hover is about, when the server names it|
+|contents|string \| null|true|none|Markdown to show, or null when there is nothing to say about the position|
+|range|object \| null|true|none|The word the hover is about, when the server names it|
 
 <h2 id="tocS_PositionBody">PositionBody</h2>
 <!-- backwards compatibility -->
@@ -5766,6 +7738,8 @@ strings, bytes are base64. A `$transaction` resolves to the array of its results
   "character": 3
 }
 ```
+
+A request about the symbol at a cursor position (hover, definition, references).
 
 ### Properties
 
@@ -5809,6 +7783,8 @@ strings, bytes are base64. A `$transaction` resolves to the array of its results
 }
 ```
 
+A place in one of the schema files.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -5829,6 +7805,8 @@ strings, bytes are base64. A `$transaction` resolves to the array of its results
   "locations": []
 }
 ```
+
+Where the symbol at a position is declared.
 
 ### Properties
 
@@ -5859,6 +7837,8 @@ strings, bytes are base64. A `$transaction` resolves to the array of its results
 }
 ```
 
+One place a symbol is used.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -5878,6 +7858,8 @@ strings, bytes are base64. A `$transaction` resolves to the array of its results
   "locations": []
 }
 ```
+
+Every place the symbol at a position is used, across the loaded files.
 
 ### Properties
 
@@ -5899,6 +7881,8 @@ strings, bytes are base64. A `$transaction` resolves to the array of its results
 }
 ```
 
+The edits of one file.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -5918,6 +7902,8 @@ strings, bytes are base64. A `$transaction` resolves to the array of its results
   "changes": []
 }
 ```
+
+The edits a rename makes, per file.
 
 ### Properties
 
@@ -5940,6 +7926,8 @@ strings, bytes are base64. A `$transaction` resolves to the array of its results
   "newName": "Account"
 }
 ```
+
+A rename request: the symbol at a position and its new name.
 
 ### Properties
 
@@ -5966,6 +7954,8 @@ strings, bytes are base64. A `$transaction` resolves to the array of its results
 }
 ```
 
+One quick fix the language server offers.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -5986,6 +7976,8 @@ strings, bytes are base64. A `$transaction` resolves to the array of its results
   "actions": []
 }
 ```
+
+The quick fixes at a range.
 
 ### Properties
 
@@ -6017,6 +8009,8 @@ strings, bytes are base64. A `$transaction` resolves to the array of its results
 }
 ```
 
+A code action request: a range and the diagnostics the editor shows in it.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -6044,14 +8038,16 @@ strings, bytes are base64. A `$transaction` resolves to the array of its results
 }
 ```
 
+One migration the database has recorded in `_prisma_migrations`.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |name|string|true|none|The directory name of the migration|
-|startedAt|string|true|none|When it started, as the database recorded it|
-|finishedAt|string|true|none|When it finished; null while it is running or if it failed|
-|rolledBackAt|string|true|none|When it was marked rolled back, if it was|
+|startedAt|string \| null|true|none|When it started, as the database recorded it|
+|finishedAt|string \| null|true|none|When it finished; null while it is running or if it failed|
+|rolledBackAt|string \| null|true|none|When it was marked rolled back, if it was|
 |appliedStepsCount|integer(int32)|true|none|How many statements of it ran|
 |checksum|string|true|none|The checksum of the migration file as it was when it ran|
 
@@ -6065,6 +8061,8 @@ strings, bytes are base64. A `$transaction` resolves to the array of its results
 ```json
 "databaseIsBehind"
 ```
+
+How the migration history of the directory and the database differ, when they do.
 
 <h2 id="tocS_MigrateStatus">MigrateStatus</h2>
 <!-- backwards compatibility -->
@@ -6090,6 +8088,8 @@ strings, bytes are base64. A `$transaction` resolves to the array of its results
 }
 ```
 
+The state of the migration history, and whether the database has drifted from the schema.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -6100,10 +8100,9 @@ strings, bytes are base64. A `$transaction` resolves to the array of its results
 |pending|[string]|true|none|Migrations in the directory the database has not applied|
 |failed|[string]|true|none|Migrations that failed and were never resolved|
 |edited|[string]|true|none|Migrations whose file changed after the database ran it|
-|divergence|object|true|none|How the two histories differ, when they do|
+|divergence|object \| null|true|none|How the two histories differ, when they do|
 |drift|boolean|true|none|Whether the database differs from the schema, migrations aside|
-|baselineNeeded|boolean|true|none|Whether the database has tables and no migration history, which `prisma migrate deploy`
-refuses (P3005): it has to be baselined at the migration it already matches|
+|baselineNeeded|boolean|true|none|Whether the database has tables and no migration history, which `prisma migrate deploy`<br>refuses (P3005): it has to be baselined at the migration it already matches|
 |missingFiles|[string]|true|none|Migrations the database has recorded whose directory the migrations directory does not hold|
 
 <h2 id="tocS_BaselineCandidate">BaselineCandidate</h2>
@@ -6120,6 +8119,8 @@ refuses (P3005): it has to be baselined at the migration it already matches|
   "difference": ""
 }
 ```
+
+One migration the database could be baselined at, and whether it matches.
 
 ### Properties
 
@@ -6142,6 +8143,8 @@ refuses (P3005): it has to be baselined at the migration it already matches|
 }
 ```
 
+Where the database could be baselined: each migration, replayed into a shadow database.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -6160,6 +8163,8 @@ refuses (P3005): it has to be baselined at the migration it already matches|
   "name": "20260201000000_profile"
 }
 ```
+
+A migration whose statements have already been run.
 
 ### Properties
 
@@ -6181,6 +8186,8 @@ refuses (P3005): it has to be baselined at the migration it already matches|
 }
 ```
 
+The statements that would take the database to the schema.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -6198,6 +8205,8 @@ refuses (P3005): it has to be baselined at the migration it already matches|
 ```json
 "fix"
 ```
+
+What a step of a plan does, which says how much care it needs.
 
 <h2 id="tocS_MigrationChange">MigrationChange</h2>
 <!-- backwards compatibility -->
@@ -6217,15 +8226,16 @@ refuses (P3005): it has to be baselined at the migration it already matches|
 }
 ```
 
+One change a step makes, for the page to say in its own language.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
-|kind|string|true|none|`create-enum`, `create-table`, `rebuild-table`, `copy-rows`, `drop-table`, `add-column`,
-`drop-column`, `foreign-key`, `unique` or `index`|
+|kind|string|true|none|`create-enum`, `create-table`, `rebuild-table`, `copy-rows`, `drop-table`, `add-column`,<br>`drop-column`, `foreign-key`, `unique` or `index`|
 |table|string|true|none|The table it is about|
 |columns|[string]|true|none|The columns it is about, when it is about some|
-|target|string|true|none|The table a foreign key points at; null otherwise|
+|target|string \| null|true|none|The table a foreign key points at; null otherwise|
 
 <h2 id="tocS_MigrationStep">MigrationStep</h2>
 <!-- backwards compatibility -->
@@ -6258,6 +8268,8 @@ refuses (P3005): it has to be baselined at the migration it already matches|
 }
 ```
 
+One step of a plan: statements that are run, and reported, together.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -6267,10 +8279,9 @@ refuses (P3005): it has to be baselined at the migration it already matches|
 |statements|[string]|true|none|The statements of the step, in the order they must run|
 |changes|[[MigrationChange](#schemamigrationchange)]|true|none|What it does, one change each, in the words of the schema rather than of the database|
 |destructive|boolean|true|none|Whether it loses rows or what a column holds; a table rebuilt in place loses neither|
-|rows|integer(int32)|true|none|How many rows a fix will change, counted against the database now; null for a schema step|
-|subject|string|true|none|The field or relation a fix changes the rows of (`User.email`); null for a schema step|
-|fixKind|string|true|none|What a fix does to them: `nulls`, `values`, `duplicates`, `orphans`, `invalid`, `convert` or
-`fill`; null for a schema step|
+|rows|integer(int32) \| null|true|none|How many rows a fix will change, counted against the database now; null for a schema step|
+|subject|string \| null|true|none|The field or relation a fix changes the rows of (`User.email`); null for a schema step|
+|fixKind|string \| null|true|none|What a fix does to them: `nulls`, `values`, `duplicates`, `orphans`, `invalid`, `convert` or<br>`fill`; null for a schema step|
 
 <h2 id="tocS_MigrationSuggestion">MigrationSuggestion</h2>
 <!-- backwards compatibility -->
@@ -6287,17 +8298,15 @@ refuses (P3005): it has to be baselined at the migration it already matches|
 }
 ```
 
+A decision offered ready-made: nothing is decided until it is taken.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |choice|string|true|none|One of the choices of the check|
-|value|string|true|none|What the choice needs, as a decision carries it|
-|reason|string|true|none|Why it is offered: `schema-default`, `uuid`, `random-id`, `now`, `from-key`, `empty-string`,
-`zero`, `false`, `empty-object`, `first-referenced`, `enum-first`, `enum-default`,
-`enum-same-name`, `enum-replaced`, `oldest`, `first-by-key`, `optional-relation`,
-`required-relation`, `renamed`, `moved`, `convert-number`, `clamp`,
-`truncate`, `nullable` or `not-nullable`|
+|value|string \| null|true|none|What the choice needs, as a decision carries it|
+|reason|string|true|none|Why it is offered: `schema-default`, `uuid`, `random-id`, `now`, `from-key`, `empty-string`,<br>`zero`, `false`, `empty-object`, `first-referenced`, `enum-first`, `enum-default`,<br>`enum-same-name`, `enum-replaced`, `oldest`, `first-by-key`, `optional-relation`,<br>`required-relation`, `renamed`, `moved`, `convert-number`, `clamp`,<br>`truncate`, `nullable` or `not-nullable`|
 
 <h2 id="tocS_MigrationDestination">MigrationDestination</h2>
 <!-- backwards compatibility -->
@@ -6318,6 +8327,8 @@ refuses (P3005): it has to be baselined at the migration it already matches|
 }
 ```
 
+A column the migration adds that the values of a dropped column could go to.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -6326,9 +8337,8 @@ refuses (P3005): it has to be baselined at the migration it already matches|
 |value|string|true|none|What the decision names: the field, or `Model.field` for a move|
 |type|string|true|none|The Prisma type of the column|
 |fits|boolean|true|none|Whether the values fit its kind (text takes any)|
-|relation|string|true|none|How the tables are related: `same` table, the destination's rows `points-here` (a profile at
-its user), or this table's rows point at the destination's (`pointed-at`)|
-|via|string|true|none|The foreign key the values move along, `Profile.userId → User.id`; null for a rename|
+|relation|string|true|none|How the tables are related: `same` table, the destination's rows `points-here` (a profile at<br>its user), or this table's rows point at the destination's (`pointed-at`)|
+|via|string \| null|true|none|The foreign key the values move along, `Profile.userId → User.id`; null for a rename|
 |created|boolean|true|none|Whether the migration creates the destination's table, whose rows are made from the values|
 
 <h2 id="tocS_CheckStatus">CheckStatus</h2>
@@ -6341,6 +8351,8 @@ its user), or this table's rows point at the destination's (`pointed-at`)|
 ```json
 "passed"
 ```
+
+How a check came out: nothing found, something that blocks, or a query that failed.
 
 <h2 id="tocS_MigrationCheck">MigrationCheck</h2>
 <!-- backwards compatibility -->
@@ -6380,6 +8392,8 @@ its user), or this table's rows point at the destination's (`pointed-at`)|
 }
 ```
 
+One thing the migration needs of the rows the database holds now.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -6391,21 +8405,14 @@ its user), or this table's rows point at the destination's (`pointed-at`)|
 |hint|string|true|none|What to do about it, in a sentence|
 |field|string|true|none|The field, or the relation for a foreign key, a decision about it is made on|
 |choices|[string]|true|none|What can be decided about it on the page, empty when nothing can|
-|facts|object|true|none|What to read it by, for the page to say in its own language: `model`, `field`, `what`, and by
-kind `type`, `enum`, `removed`, `members`, `member`, `fields`, `orderBy`, `target`, `column`,
-`renamedTo`, `from`, `to`, `default` or `table`|
-|lost|string|true|none|A query for the rows and values the change loses, as the database holds them now (a column or
-table dropped, a column added again); null when it loses none|
-|suggestion|object|true|none|The decision read from the schema and the database as the likeliest fit; null when there is none|
-|candidates|[[MigrationSuggestion](#schemamigrationsuggestion)]|true|none|Where the values of a dropped column could have gone, the likeliest first: a column of the same
-table (`rename`) or of a related model (`move`) the migration adds, by the likeness of its name
-and kind, each with why (`same-name`, `similar-name`, `same-name-related` or
-`similar-name-related`). Empty when nowhere reads as one, and the values are lost.|
-|destinations|[[MigrationDestination](#schemamigrationdestination)]|true|none|Every column the migration adds that the values of a dropped column could go to, whatever its
-name: for the page to complete the field a rename or a move names, and to show how it moves|
+|facts|object|true|none|What to read it by, for the page to say in its own language: `model`, `field`, `what`, and by<br>kind `type`, `enum`, `removed`, `members`, `member`, `fields`, `orderBy`, `target`, `column`,<br>`renamedTo`, `from`, `to`, `default` or `table`|
+|lost|string \| null|true|none|A query for the rows and values the change loses, as the database holds them now (a column or<br>table dropped, a column added again); null when it loses none|
+|suggestion|object \| null|true|none|The decision read from the schema and the database as the likeliest fit; null when there is none|
+|candidates|[[MigrationSuggestion](#schemamigrationsuggestion)]|true|none|Where the values of a dropped column could have gone, the likeliest first: a column of the same<br>table (`rename`) or of a related model (`move`) the migration adds, by the likeness of its name<br>and kind, each with why (`same-name`, `similar-name`, `same-name-related` or<br>`similar-name-related`). Empty when nowhere reads as one, and the values are lost.|
+|destinations|[[MigrationDestination](#schemamigrationdestination)]|true|none|Every column the migration adds that the values of a dropped column could go to, whatever its<br>name: for the page to complete the field a rename or a move names, and to show how it moves|
 |status|object|true|none|How it came out|
-|count|integer(int32)|true|none|How many rows fail it; null when the check's query failed|
-|error|string|true|none|Why the check could not be counted, when it could not|
+|count|integer(int32) \| null|true|none|How many rows fail it; null when the check's query failed|
+|error|string \| null|true|none|Why the check could not be counted, when it could not|
 
 <h2 id="tocS_UnfitDecision">UnfitDecision</h2>
 <!-- backwards compatibility -->
@@ -6427,6 +8434,8 @@ name: for the page to complete the field a rename or a move names, and to show h
 }
 ```
 
+A kept decision that no longer fits, and why.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -6435,7 +8444,7 @@ name: for the page to complete the field a rename or a move names, and to show h
 |modelName|string|true|none|The model it is about|
 |field|string|true|none|The field, or the relation for a foreign key|
 |choice|string|true|none|What it said to do|
-|value|string|true|none|What the choice was given; null when it needed nothing|
+|value|string \| null|true|none|What the choice was given; null when it needed nothing|
 |reasons|[string]|true|none|What no longer fits, as the check says it|
 
 <h2 id="tocS_MigrationPreview">MigrationPreview</h2>
@@ -6451,6 +8460,8 @@ name: for the page to complete the field a rename or a move names, and to show h
   "sql": "WITH hk_fix_0 AS (...) SELECT * FROM hk_fix_0 ORDER BY id"
 }
 ```
+
+The rows of one model as the fixes will leave them, from a query that writes nothing.
 
 ### Properties
 
@@ -6478,6 +8489,8 @@ name: for the page to complete the field a rename or a move names, and to show h
 }
 ```
 
+A migration laid out as steps that can be run one at a time.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -6485,8 +8498,7 @@ name: for the page to complete the field a rename or a move names, and to show h
 |name|string|true|none|The directory name the migration would be written under|
 |steps|[[MigrationStep](#schemamigrationstep)]|true|none|The steps, in the order they must run|
 |checks|[[MigrationCheck](#schemamigrationcheck)]|true|none|What the migration needs of the rows the database holds now|
-|unfit|[[UnfitDecision](#schemaunfitdecision)]|true|none|Kept decisions set aside because they no longer fit the schema or the database: a field or
-model the schema has lost since they were made. The plan is made without them.|
+|unfit|[[UnfitDecision](#schemaunfitdecision)]|true|none|Kept decisions set aside because they no longer fit the schema or the database: a field or<br>model the schema has lost since they were made. The plan is made without them.|
 |previews|[[MigrationPreview](#schemamigrationpreview)]|true|none|Each fixed model's rows as the fixes will leave them, before anything is run|
 |notes|[string]|true|none|What the person running it needs to know|
 |errors|[string]|true|none|Why the plan cannot be run as it is, when it cannot|
@@ -6508,6 +8520,10 @@ model the schema has lost since they were made. The plan is made without them.|
 }
 ```
 
+A decision made on the page: which check it answers, what it is about, and what to do. Studio
+keeps them in `.hekireki/migrate.json` beside the schema, and `hekireki migrate check` and
+`hekireki migrate plan` read the same file, so the command line makes the same plan.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -6516,8 +8532,7 @@ model the schema has lost since they were made. The plan is made without them.|
 |modelName|string|true|none|The model it is about|
 |field|string|true|none|The field, or the relation for a foreign key|
 |choice|string|true|none|What to do, from the choices the check offers|
-|value|string|false|none|What a choice needs, when it needs something: the value or SQL written, the field a rename
-became, the `STORED=MEMBER` pairs of an enum, or the field duplicates are ordered by|
+|value|string|false|none|What a choice needs, when it needs something: the value or SQL written, the field a rename<br>became, the `STORED=MEMBER` pairs of an enum, or the field duplicates are ordered by|
 
 <h2 id="tocS_PlanBody">PlanBody</h2>
 <!-- backwards compatibility -->
@@ -6533,14 +8548,15 @@ became, the `STORED=MEMBER` pairs of an enum, or the field duplicates are ordere
 }
 ```
 
+The name to propose for a migration, and the decisions made for it on the page.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |name|string|false|none|What to call it; the timestamp is put in front|
 |decisions|[[MigrationDecision](#schemamigrationdecision)]|false|none|Every decision to plan with, in place of the ones kept; the kept ones when left out|
-|batch|integer(int32)|false|none|The most rows one statement of a fix changes: a fix over more is run that many at a time, so
-none holds its locks on the whole table; all of them at once when left out|
+|batch|integer(int32)|false|none|The most rows one statement of a fix changes: a fix over more is run that many at a time, so<br>none holds its locks on the whole table; all of them at once when left out|
 
 <h2 id="tocS_StatementResult">StatementResult</h2>
 <!-- backwards compatibility -->
@@ -6557,13 +8573,15 @@ none holds its locks on the whole table; all of them at once when left out|
 }
 ```
 
+What one statement did, or why the database refused it.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |sql|string|true|none|The statement as it was sent|
-|affected|integer(int32)|true|none|How many rows it changed; null when it failed|
-|error|string|true|none|What the database said, when it refused|
+|affected|integer(int32) \| null|true|none|How many rows it changed; null when it failed|
+|error|string \| null|true|none|What the database said, when it refused|
 
 <h2 id="tocS_ApplyResult">ApplyResult</h2>
 <!-- backwards compatibility -->
@@ -6580,12 +8598,14 @@ none holds its locks on the whole table; all of them at once when left out|
 }
 ```
 
+How far a staged apply got.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |results|[[StatementResult](#schemastatementresult)]|true|none|One result per statement attempted; the ones after a failure are not attempted|
-|failedAt|integer(int32)|true|none|The index of the statement that failed, null when none did|
+|failedAt|integer(int32) \| null|true|none|The index of the statement that failed, null when none did|
 |ok|boolean|true|none|Whether every statement ran|
 
 <h2 id="tocS_ApplyBody">ApplyBody</h2>
@@ -6602,6 +8622,8 @@ none holds its locks on the whole table; all of them at once when left out|
   ]
 }
 ```
+
+Statements to run, one at a time.
 
 ### Properties
 
@@ -6626,15 +8648,17 @@ none holds its locks on the whole table; all of them at once when left out|
 }
 ```
 
+How one step went in the rehearsal.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |ran|boolean|true|none|Whether it was run; a step after one that failed is not|
 |ok|boolean|true|none|Whether every statement of it went through|
-|affected|integer(int32)|true|none|The rows its statements changed; null when it was not run|
-|error|string|true|none|What the database said to the statement it refused|
-|statement|string|true|none|The statement it refused|
+|affected|integer(int32) \| null|true|none|The rows its statements changed; null when it was not run|
+|error|string \| null|true|none|What the database said to the statement it refused|
+|statement|string \| null|true|none|The statement it refused|
 
 <h2 id="tocS_TableRows">TableRows</h2>
 <!-- backwards compatibility -->
@@ -6651,13 +8675,15 @@ none holds its locks on the whole table; all of them at once when left out|
 }
 ```
 
+A table's rows, counted before and after.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |table|string|true|none|The table, as the database names it|
-|before|integer(int32)|true|none|Its rows before; null when it was not there, or could not be counted|
-|after|integer(int32)|true|none|Its rows after; null when it is gone, or could not be counted|
+|before|integer(int32) \| null|true|none|Its rows before; null when it was not there, or could not be counted|
+|after|integer(int32) \| null|true|none|Its rows after; null when it is gone, or could not be counted|
 
 <h2 id="tocS_Rehearsal">Rehearsal</h2>
 <!-- backwards compatibility -->
@@ -6677,6 +8703,9 @@ none holds its locks on the whole table; all of them at once when left out|
 }
 ```
 
+The migration run for real and taken back: on SQLite on a copy of the file, on PostgreSQL in a
+transaction rolled back whatever happens. Nothing of it remains in the database.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -6684,13 +8713,9 @@ none holds its locks on the whole table; all of them at once when left out|
 |ok|boolean|true|none|Whether every step went through|
 |steps|[[RehearsalStep](#schemarehearsalstep)]|true|none|How each step went, in order|
 |tables|[[TableRows](#schematablerows)]|true|none|Every table's rows before the steps and after them|
-|schemaMatches|boolean|true|none|Whether the database the steps left matches the schema; null when the schema engine cannot be
-asked of this database, and the result is not compared|
+|schemaMatches|boolean \| null|true|none|Whether the database the steps left matches the schema; null when the schema engine cannot be<br>asked of this database, and the result is not compared|
 |difference|string|true|none|What still differs from the schema, as the SQL that would close it; empty when it matches|
-|limitations|[string]|true|none|What the rehearsal could not show: `outside-transaction` when a step (an index made
-CONCURRENTLY, an enum value added) cannot run in the transaction PostgreSQL rehearses in.
-What it cost: `locks-tables` when it ran in a transaction on the database itself, which
-holds the locks of its steps until the rollback (it waits five seconds for one, no longer)|
+|limitations|[string]|true|none|What the rehearsal could not show: `outside-transaction` when a step (an index made<br>CONCURRENTLY, an enum value added) cannot run in the transaction PostgreSQL rehearses in.<br>What it cost: `locks-tables` when it ran in a transaction on the database itself, which<br>holds the locks of its steps until the rollback (it waits five seconds for one, no longer)|
 
 <h2 id="tocS_RehearseBody">RehearseBody</h2>
 <!-- backwards compatibility -->
@@ -6708,6 +8733,8 @@ holds the locks of its steps until the rollback (it waits five seconds for one, 
   ]
 }
 ```
+
+The steps of a plan, to rehearse.
 
 ### Properties
 
@@ -6727,6 +8754,8 @@ holds the locks of its steps until the rollback (it waits five seconds for one, 
   "tables": []
 }
 ```
+
+The rows of every table of the database now.
 
 ### Properties
 
@@ -6750,15 +8779,16 @@ holds the locks of its steps until the rollback (it waits five seconds for one, 
 }
 ```
 
+A copy of the database taken before a migration that loses data.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |name|string|true|none|What it is called: when it was taken|
 |location|string|true|none|The file on SQLite, the schema on PostgreSQL|
-|size|integer(int32)|true|none|The file's size in bytes; null for a schema|
-|restorable|boolean|true|none|Whether Studio can restore it: a SQLite file, or a PostgreSQL schema that keeps the statements
-of its restore; one taken before Studio kept them is its rows only, in the schema named|
+|size|integer(int32) \| null|true|none|The file's size in bytes; null for a schema|
+|restorable|boolean|true|none|Whether Studio can restore it: a SQLite file, or a PostgreSQL schema that keeps the statements<br>of its restore; one taken before Studio kept them is its rows only, in the schema named|
 
 <h2 id="tocS_Backups">Backups</h2>
 <!-- backwards compatibility -->
@@ -6772,6 +8802,8 @@ of its restore; one taken before Studio kept them is its rows only, in the schem
   "backups": []
 }
 ```
+
+The backups there are, newest first.
 
 ### Properties
 
@@ -6792,6 +8824,8 @@ of its restore; one taken before Studio kept them is its rows only, in the schem
   "migration": "20260917101530_profile"
 }
 ```
+
+A backup to restore, and the migration the restore undoes.
 
 ### Properties
 
@@ -6815,6 +8849,8 @@ of its restore; one taken before Studio kept them is its rows only, in the schem
 }
 ```
 
+One migration of the directory, and the SQL it holds.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -6837,6 +8873,8 @@ of its restore; one taken before Studio kept them is its rows only, in the schem
 }
 ```
 
+Where a migration was written.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -6857,6 +8895,8 @@ of its restore; one taken before Studio kept them is its rows only, in the schem
   "sql": "ALTER TABLE \"User\" ADD COLUMN \"name\" TEXT;\n"
 }
 ```
+
+A migration to write to the migrations directory.
 
 ### Properties
 
@@ -6879,6 +8919,8 @@ of its restore; one taken before Studio kept them is its rows only, in the schem
 }
 ```
 
+What has been decided on the page, and where Studio keeps it.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -6898,6 +8940,8 @@ of its restore; one taken before Studio kept them is its rows only, in the schem
   "decisions": []
 }
 ```
+
+Decisions to keep, replacing the ones kept now.
 
 ### Properties
 
@@ -6920,6 +8964,8 @@ of its restore; one taken before Studio kept them is its rows only, in the schem
 }
 ```
 
+The migrations a deploy ran.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -6941,6 +8987,8 @@ of its restore; one taken before Studio kept them is its rows only, in the schem
   ]
 }
 ```
+
+A model-level attribute (`@@id`, `@@unique`, `@@index`) and the fields it covers.
 
 ### Properties
 
@@ -6970,6 +9018,8 @@ of its restore; one taken before Studio kept them is its rows only, in the schem
 }
 ```
 
+One field of a model, as the documentation shows it.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -6979,7 +9029,7 @@ of its restore; one taken before Studio kept them is its rows only, in the schem
 |bareTypeName|string|true|none|The type name without modifiers, used to link to the output type or enum|
 |kind|object|true|none|What the field holds: a relation links to the model's output type, an enum to its enum section|
 |directives|[string]|true|none|The field attributes (`@id`, `@unique`, `@default(...)`, `@updatedAt`)|
-|documentation|string|true|none|The `///` doc comment|
+|documentation|string \| null|true|none|The `///` doc comment|
 |required|boolean|true|none|Whether the field is required|
 
 <h2 id="tocS_DocsTypeLocation">DocsTypeLocation</h2>
@@ -6992,6 +9042,8 @@ of its restore; one taken before Studio kept them is its rows only, in the schem
 ```json
 "scalar"
 ```
+
+Where a referenced type of the Prisma client API is declared, which decides what the page links to.
 
 <h2 id="tocS_DocsTypeRef">DocsTypeRef</h2>
 <!-- backwards compatibility -->
@@ -7007,6 +9059,8 @@ of its restore; one taken before Studio kept them is its rows only, in the schem
   "location": "inputObjectTypes"
 }
 ```
+
+A reference to a type in the Prisma client API.
 
 ### Properties
 
@@ -7037,6 +9091,8 @@ of its restore; one taken before Studio kept them is its rows only, in the schem
 }
 ```
 
+One argument of a Prisma client operation.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -7060,11 +9116,13 @@ of its restore; one taken before Studio kept them is its rows only, in the schem
 }
 ```
 
+What a Prisma client operation returns.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
-|type|string|true|none|The output type name, when the client API declares the operation|
+|type|string \| null|true|none|The output type name, when the client API declares the operation|
 |required|boolean|true|none|Whether the result is non-null|
 |list|boolean|true|none|Whether the result is a list|
 
@@ -7101,6 +9159,8 @@ of its restore; one taken before Studio kept them is its rows only, in the schem
 }
 ```
 
+One Prisma client operation of a model (`findMany`, `create`, ...).
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -7135,12 +9195,14 @@ of its restore; one taken before Studio kept them is its rows only, in the schem
 }
 ```
 
+One model of the documentation.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
 |---|---|---|---|---|
 |name|string|true|none|The model name|
-|documentation|string|true|none|The `///` doc comment|
+|documentation|string \| null|true|none|The `///` doc comment|
 |directives|[[DocsDirective](#schemadocsdirective)]|true|none|The model-level attributes|
 |fields|[[DocsField](#schemadocsfield)]|true|none|The fields in declaration order|
 |operations|[[DocsOperation](#schemadocsoperation)]|true|none|The Prisma client operations of the model|
@@ -7166,6 +9228,8 @@ of its restore; one taken before Studio kept them is its rows only, in the schem
 }
 ```
 
+One field of an input or output type of the Prisma client API.
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -7187,6 +9251,8 @@ of its restore; one taken before Studio kept them is its rows only, in the schem
   "fields": []
 }
 ```
+
+One input or output type of the Prisma client API.
 
 ### Properties
 
@@ -7212,6 +9278,8 @@ of its restore; one taken before Studio kept them is its rows only, in the schem
 }
 ```
 
+One enum of the Prisma client API: a schema enum, or one Prisma derives (`SortOrder`, `UserScalarFieldEnum`).
+
 ### Properties
 
 |Name|Type|Required|Restrictions|Description|
@@ -7234,6 +9302,8 @@ of its restore; one taken before Studio kept them is its rows only, in the schem
   "enumTypes": []
 }
 ```
+
+Everything the documentation page shows: the models with their operations, then the client API types.
 
 ### Properties
 

@@ -979,7 +979,4 @@ export default defineConfig({
   // Style (printWidth / quotes / semicolons / import sorting) and the ignore list for the
   // hono-takibi output are inherited from the root vite.config.ts: only the root `fmt` block
   // reaches oxfmt in a workspace.
-  fmt: {
-    ignorePatterns: ['**/node_modules/**', '**/dist/**'],
-  },
 })

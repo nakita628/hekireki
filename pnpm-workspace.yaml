@@ -25,3 +25,9 @@ minimumReleaseAgeExclude:
 overrides:
   '@react-types/color': 3.1.4
   '@react-types/slider': 3.8.4
+  # hono-takibi 0.16.0 (the Studio API generator, a devDependency) pins @effect/platform-node and
+  # effect to 4.0.0-rc.116, but that platform-node takes @effect/platform-node-shared by a range
+  # that now resolves to 4.0.0, which reads modules only effect 4.0.0 has: the generator does not
+  # start. Under that platform-node only, the shared package stays at the release candidate it was
+  # built with, until hono-takibi moves to effect 4.0.0.
+  '@effect/platform-node@4.0.0-rc.116>@effect/platform-node-shared': 4.0.0-rc.117
