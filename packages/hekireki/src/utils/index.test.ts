@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vite-plus/test'
 
 import {
   chunks,
+  isSameList,
   extractObjectType,
   getBool,
   getString,
@@ -437,6 +438,17 @@ describe('lowerFirst', () => {
     ['', ''],
   ])('%s → %s', (text, lowered) => {
     expect(lowerFirst(text)).toBe(lowered)
+  })
+})
+
+describe('isSameList', () => {
+  it.each([
+    [['a', 'b'], ['a', 'b'], true],
+    [['a', 'b'], ['b', 'a'], false],
+    [['a'], ['a', 'b'], false],
+    [[], [], true],
+  ])('%j and %j: %s', (left, right, expected) => {
+    expect(isSameList(left, right)).toBe(expected)
   })
 })
 

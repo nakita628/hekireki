@@ -1,8 +1,8 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { pluralize } from '../utils/humanizer.js'
-import { isAnnotationLine, makePascalCase, makeSnakeCase } from '../utils/index.js'
-import { backRelation, isJoinSideA } from '../utils/prisma-postgres.js'
+import { isAnnotationLine, isSameList, makePascalCase, makeSnakeCase } from '../utils/index.js'
+import { backRelation, isJoinSideA } from '../utils/prisma-model.js'
 
 // cspell:disable
 // Names an enum key on an Active Record model may not take. Rails defines a
@@ -766,10 +766,6 @@ function fieldColumn(model: DMMF.Model, fieldName: string) {
 function primaryKeyFields(model: DMMF.Model) {
   const idField = model.fields.find((f) => f.isId)
   return idField ? [idField.name] : (model.primaryKey?.fields ?? [])
-}
-
-function isSameList(a: readonly string[], b: readonly string[]) {
-  return a.length === b.length && a.every((value, i) => value === b[i])
 }
 
 // A Ruby array literal as RuboCop's defaults and rubocop-rails-omakase both

@@ -1,13 +1,6 @@
-import { getDMMF } from '@prisma/get-dmmf'
 import { describe, expect, it } from 'vite-plus/test'
 
-import {
-  isImplicitManyToMany,
-  isJoinSideA,
-  operatorClassName,
-  parseDateTimeDefault,
-  prismaConstraintName,
-} from './prisma-postgres.js'
+import { operatorClassName, parseDateTimeDefault, prismaConstraintName } from './prisma-postgres.js'
 
 // Every expected name is the one Prisma Migrate writes for the same table and columns.
 describe('prismaConstraintName', () => {
@@ -144,80 +137,5 @@ describe('operatorClassName', () => {
 
   it('uses a raw("...") operator class as it is', () => {
     expect(operatorClassName('text_pattern_ops', undefined)).toBe('text_pattern_ops')
-  })
-})
-
-describe('isImplicitManyToMany', () => {
-  const result = getDMMF({
-    datamodel: [
-      [
-        'schema.prisma',
-        `datasource db {
-  provider = "postgresql"
-}
-model Employee {
-  id        Int        @id
-  reports   Employee[] @relation("Mgr")
-  managerId Int?
-  manager   Employee?  @relation("Mgr", fields: [managerId], references: [id])
-  friends   Employee[] @relation("Friends")
-  friendOf  Employee[] @relation("Friends")
-}
-`,
-      ],
-    ],
-  })
-  if ('type' in result) throw new Error(result.error.message)
-  const models = result.datamodel.models
-  const [employee] = models
-
-  it.each([
-    ['reports', false],
-    ['manager', false],
-    ['friends', true],
-    ['friendOf', true],
-  ])('%s: %s', (name, expected) => {
-    const field = employee.fields.find((f) => f.name === name)
-    expect(field && isImplicitManyToMany(field, employee, models)).toBe(expected)
-  })
-})
-
-describe('isJoinSideA', () => {
-  const result = getDMMF({
-    datamodel: [
-      [
-        'schema.prisma',
-        `datasource db {
-  provider = "postgresql"
-}
-model User {
-  id         Int    @id
-  zFollowers User[] @relation("Follow")
-  aFollowing User[] @relation("Follow")
-  tags       Tag[]
-}
-model Tag {
-  id    Int    @id
-  users User[]
-}
-`,
-      ],
-    ],
-  })
-  if ('type' in result) throw new Error(result.error.message)
-  const models = result.datamodel.models
-
-  // Prisma's `_Follow` and `_TagToUser`: `A` is the model that sorts first, and in a self-relation
-  // the field that sorts first.
-  it.each([
-    ['User', 'aFollowing', 'zFollowers', true],
-    ['User', 'zFollowers', 'aFollowing', false],
-    ['Tag', 'users', 'tags', true],
-    ['User', 'tags', 'users', false],
-  ])('%s.%s: %s', (modelName, fieldName, inverseName, expected) => {
-    const owner = models.find((m) => m.name === modelName)
-    const field = owner?.fields.find((f) => f.name === fieldName)
-    const inverse = models.flatMap((m) => m.fields).find((f) => f.name === inverseName)
-    expect(owner && field && inverse && isJoinSideA(field, owner, inverse)).toBe(expected)
   })
 })

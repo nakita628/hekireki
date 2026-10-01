@@ -142,6 +142,35 @@ model Category {
   children Category[] @relation("tree")
 }
 
+// Self-relation with the list end declared before the foreign key: the list's other end is
+// `manager`, not the list itself, so there is no implicit join table.
+model Employee {
+  id        Int        @id @default(autoincrement())
+  reports   Employee[] @relation("management")
+  managerId Int?
+  manager   Employee?  @relation("management", fields: [managerId], references: [id])
+}
+
+// Implicit self many-to-many: `_mentorship` holds both ends' keys. `A` is the key of the row
+// whose field sorts first (`mentees`), so each end reads the table in the other direction.
+model Mentor {
+  id      Int      @id @default(autoincrement())
+  mentors Mentor[] @relation("mentorship")
+  mentees Mentor[] @relation("mentorship")
+}
+
+// Implicit many-to-many between models whose keys are not `id`: the join table's foreign keys
+// reference `paperId` and `slug`.
+model Paper {
+  paperId Int      @id @default(autoincrement())
+  topics  Topic[]
+}
+
+model Topic {
+  slug   String  @id
+  papers Paper[]
+}
+
 // Composite PK + two foreign keys to the same model.
 model Follow {
   followerId  String

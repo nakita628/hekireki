@@ -1,7 +1,12 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { makeSnakeCase } from '../utils/index.js'
-import { backRelation } from '../utils/prisma-postgres.js'
+import {
+  backRelation,
+  isAutoincrement,
+  isFunctionDefault,
+  isJoinSideA,
+} from '../utils/prisma-model.js'
 
 const PRISMA_TO_RUST: { [k: string]: string } = {
   String: 'String',
@@ -161,16 +166,6 @@ export function resolveSeaOrmColumnType(field: DMMF.Field) {
     default:
       return null
   }
-}
-
-function isFunctionDefault(
-  def: DMMF.Field['default'],
-): def is { readonly name: string; readonly args: readonly (string | number)[] } {
-  return def !== null && typeof def === 'object' && 'name' in def
-}
-
-function isAutoincrement(field: DMMF.Field) {
-  return isFunctionDefault(field.default) && field.default.name === 'autoincrement'
 }
 
 function generatedIdExpr(field: DMMF.Field) {
@@ -359,7 +354,12 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
     references: string
     isList: boolean
   }[] = []
-  const manyToMany: { name: string; targetModel: string; relationName: string }[] = []
+  const manyToMany: {
+    name: string
+    targetModel: string
+    relationName: string
+    isSideA: boolean
+  }[] = []
 
   for (const field of model.fields) {
     if (field.kind !== 'object') continue
@@ -388,6 +388,7 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
           name: field.name,
           targetModel: field.type,
           relationName: field.relationName ?? `${model.name}To${field.type}`,
+          isSideA: isJoinSideA(field, model, otherSide),
         })
         continue
       }
@@ -634,6 +635,31 @@ function generateRelatedImpls(model: DMMF.Model, associations: ReturnType<typeof
   }
 
   for (const assoc of associations.manyToMany) {
+    // A self many-to-many has two ends over one join table, and `Related<Entity>` could name only
+    // one of them: each end is a `Linked` instead, from the rows that hold its own key (`A` on
+    // side A) to the model the other column points at.
+    if (assoc.targetModel === model.name) {
+      const junctionModule = makeSnakeCase(assoc.relationName)
+      const [own, other] = assoc.isSideA ? ['A', 'B'] : ['B', 'A']
+      impls.push(
+        [
+          `pub struct ${toPascalCase(assoc.name)}Link;`,
+          '',
+          `impl Linked for ${toPascalCase(assoc.name)}Link {`,
+          '    type FromEntity = Entity;',
+          '    type ToEntity = Entity;',
+          '',
+          '    fn link(&self) -> Vec<RelationDef> {',
+          '        vec![',
+          `            super::${junctionModule}::Relation::${own}.def().rev(),`,
+          `            super::${junctionModule}::Relation::${other}.def(),`,
+          '        ]',
+          '    }',
+          '}',
+        ].join('\n'),
+      )
+      continue
+    }
     if (emittedTargets.has(assoc.targetModel)) continue
     emittedTargets.add(assoc.targetModel)
     const targetModule = makeSnakeCase(assoc.targetModel)
@@ -885,12 +911,25 @@ export function generateM2MEntity(
   const tableName = `_${relationName}`
   const leftModule = makeSnakeCase(sortedLeft)
   const rightModule = makeSnakeCase(sortedRight)
-  const leftFk = `${makeSnakeCase(sortedLeft)}_id`
-  const rightFk = `${makeSnakeCase(sortedRight)}_id`
-  const leftCol = toPascalCase(`${makeSnakeCase(sortedLeft)}Id`)
-  const rightCol = toPascalCase(`${makeSnakeCase(sortedRight)}Id`)
+  // In a self-relation both columns hold the one model's key, so `<model>_id` and the relation
+  // named after the model would each be declared twice: the fields and relations take the
+  // columns' own names, which the model's `Linked` ends refer to.
+  const isSelf = sortedLeft === sortedRight
+  const leftFk = isSelf ? 'a' : `${makeSnakeCase(sortedLeft)}_id`
+  const rightFk = isSelf ? 'b' : `${makeSnakeCase(sortedRight)}_id`
+  const leftCol = isSelf ? 'A' : toPascalCase(`${makeSnakeCase(sortedLeft)}Id`)
+  const rightCol = isSelf ? 'B' : toPascalCase(`${makeSnakeCase(sortedRight)}Id`)
+  const leftVariant = isSelf ? 'A' : sortedLeft
+  const rightVariant = isSelf ? 'B' : sortedRight
   const leftType = pkRustType(sortedLeft, allModels)
   const rightType = pkRustType(sortedRight, allModels)
+  // The column each side's key is, as its entity names it: `Column::Id` only when the key is `id`.
+  const leftKey = toPascalCase(
+    allModels.find((m) => m.name === sortedLeft)?.fields.find((f) => f.isId)?.name ?? 'id',
+  )
+  const rightKey = toPascalCase(
+    allModels.find((m) => m.name === sortedRight)?.fields.find((f) => f.isId)?.name ?? 'id',
+  )
 
   const useLines = ['use sea_orm::entity::prelude::*;', 'use serde::{Deserialize, Serialize};']
 
@@ -919,15 +958,15 @@ export function generateM2MEntity(
     '    #[sea_orm(',
     `        belongs_to = "super::${leftModule}::Entity",`,
     `        from = "Column::${leftCol}",`,
-    `        to = "super::${leftModule}::Column::Id"`,
+    `        to = "super::${leftModule}::Column::${leftKey}"`,
     '    )]',
-    `    ${sortedLeft},`,
+    `    ${leftVariant},`,
     '    #[sea_orm(',
     `        belongs_to = "super::${rightModule}::Entity",`,
     `        from = "Column::${rightCol}",`,
-    `        to = "super::${rightModule}::Column::Id"`,
+    `        to = "super::${rightModule}::Column::${rightKey}"`,
     '    )]',
-    `    ${sortedRight},`,
+    `    ${rightVariant},`,
     '}',
     '',
     'impl ActiveModelBehavior for ActiveModel {}',

@@ -1,7 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { constraintName, indexPrefix, makeSnakeCase } from '../utils/index.js'
-import { isImplicitManyToMany } from '../utils/prisma-postgres.js'
+import { backRelation, isImplicitManyToMany, isJoinSideA } from '../utils/prisma-model.js'
 
 type DbProvider = 'postgresql' | 'mysql' | 'sqlite'
 
@@ -797,9 +797,13 @@ export function makeM2MJoinRelations(models: readonly DMMF.Model[], imports: Dri
     const leftPk = models.find((m) => m.name === pair.left)?.fields.find((f) => f.isId)
     const rightPk = models.find((m) => m.name === pair.right)?.fields.find((f) => f.isId)
     const leftKey = uncapitalizeName(pair.left)
-    const rightKey =
-      pair.left === pair.right ? `${uncapitalizeName(pair.right)}_` : uncapitalizeName(pair.right)
-    return `export const ${varName}Relations = relations(${varName}, ({ one }) => ({ ${leftKey}: one(${leftVar}, { fields: [${varName}.A], references: [${leftVar}.${leftPk?.name ?? 'id'}] }), ${rightKey}: one(${rightVar}, { fields: [${varName}.B], references: [${rightVar}.${rightPk?.name ?? 'id'}] }) }))`
+    const isSelf = pair.left === pair.right
+    const rightKey = isSelf ? `${uncapitalizeName(pair.right)}_` : uncapitalizeName(pair.right)
+    // In a self-relation both columns point at the one model, and drizzle pairs each end's
+    // `many()` with its column only through a relation name.
+    const aName = isSelf ? `, relationName: '${pair.relationName}_A'` : ''
+    const bName = isSelf ? `, relationName: '${pair.relationName}_B'` : ''
+    return `export const ${varName}Relations = relations(${varName}, ({ one }) => ({ ${leftKey}: one(${leftVar}, { fields: [${varName}.A], references: [${leftVar}.${leftPk?.name ?? 'id'}]${aName} }), ${rightKey}: one(${rightVar}, { fields: [${varName}.B], references: [${rightVar}.${rightPk?.name ?? 'id'}]${bName} }) }))`
   })
 }
 
@@ -840,7 +844,14 @@ function makeRelationField(
     if (isImplicitManyToMany(field, model, models)) {
       const [left, right] =
         model.name < field.type ? [model.name, field.type] : [field.type, model.name]
-      return `${field.name}: many(${joinVarName(field.relationName ?? `${left}To${right}`)})`
+      const relationName = field.relationName ?? `${left}To${right}`
+      const inverse = backRelation(field, model, models)
+      // A self-relation's end reads the rows that hold its own key: column A for the end on side A.
+      if (model.name === field.type && inverse) {
+        const column = isJoinSideA(field, model, inverse) ? 'A' : 'B'
+        return `${field.name}: many(${joinVarName(relationName)}, { relationName: '${relationName}_${column}' })`
+      }
+      return `${field.name}: many(${joinVarName(relationName)})`
     }
     return needsAlias
       ? `${field.name}: many(${targetVar}, { relationName: '${field.relationName}' })`

@@ -1,6 +1,14 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { makePascalCase, makeSnakeCase } from '../utils/index.js'
+import {
+  isAutoincrement,
+  isFunctionDefault,
+  isNowDefault,
+  isUlidDefault,
+  uuidDefaultVersion,
+} from '../utils/prisma-model.js'
+import { jsonToPythonLiteral, toPythonString } from '../utils/python.js'
 
 const PRISMA_TO_DJANGO: { [k: string]: string } = {
   String: 'TextField',
@@ -172,55 +180,6 @@ function resolveDjangoField(field: DMMF.Field) {
     default:
       return baseResolved
   }
-}
-
-function toPythonString(value: string) {
-  const escaped = value
-    .replaceAll('\\', '\\\\')
-    .replaceAll('"', '\\"')
-    .replaceAll('\n', '\\n')
-    .replaceAll('\r', '\\r')
-  return `"${escaped}"`
-}
-
-function jsonToPythonLiteral(value: unknown): string {
-  if (value === null) return 'None'
-  if (value === true) return 'True'
-  if (value === false) return 'False'
-  if (typeof value === 'number') return String(value)
-  if (typeof value === 'string') return toPythonString(value)
-  if (Array.isArray(value)) return `[${value.map(jsonToPythonLiteral).join(', ')}]`
-  if (typeof value === 'object') {
-    return `{${Object.entries(value)
-      .map(([k, v]) => `${toPythonString(k)}: ${jsonToPythonLiteral(v)}`)
-      .join(', ')}}`
-  }
-  return 'None'
-}
-
-function isFunctionDefault(
-  def: DMMF.Field['default'],
-): def is { readonly name: string; readonly args: readonly (string | number)[] } {
-  return def !== null && typeof def === 'object' && 'name' in def && !Array.isArray(def)
-}
-
-function isAutoincrement(field: DMMF.Field) {
-  return isFunctionDefault(field.default) && field.default.name === 'autoincrement'
-}
-
-function uuidDefaultVersion(field: DMMF.Field) {
-  if (!(isFunctionDefault(field.default) && field.default.name === 'uuid')) return null
-  return field.default.args[0] === 7 ? 7 : 4
-}
-
-function isUlidDefault(field: DMMF.Field) {
-  return isFunctionDefault(field.default) && field.default.name === 'ulid'
-}
-
-function isNowDefault(field: DMMF.Field) {
-  return (
-    field.type === 'DateTime' && isFunctionDefault(field.default) && field.default.name === 'now'
-  )
 }
 
 function dbGeneratedExpr(field: DMMF.Field) {

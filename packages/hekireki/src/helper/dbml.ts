@@ -2,6 +2,7 @@ import type { DMMF } from '@prisma/generator-helper'
 
 import type { Cardinality } from '../types/index.js'
 import { stripAnnotations } from '../utils/index.js'
+import { isFunctionDefault } from '../utils/prisma-model.js'
 import { annotatedERRelations, erKey, inferredERRelations } from '../utils/relation.js'
 
 export function escapeNote(str: string) {
@@ -121,12 +122,6 @@ function dbNameOf(item: { readonly name: string; readonly dbName?: string | null
 function columnOf(model: DMMF.Model | undefined, field: string) {
   const found = model?.fields.find((f) => f.name === field)
   return found ? dbNameOf(found) : field
-}
-
-function isFunctionDefault(
-  def: DMMF.Field['default'],
-): def is { readonly name: string; readonly args: readonly (string | number)[] } {
-  return def !== null && typeof def === 'object' && 'name' in def
 }
 
 function toDBMLColumn(field: DMMF.Field, enums: readonly DMMF.DatamodelEnum[]) {

@@ -1,7 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { makePascalCase, makeSnakeCase } from '../utils/index.js'
-import { isImplicitManyToMany } from '../utils/prisma-postgres.js'
+import { isFunctionDefault, isImplicitManyToMany } from '../utils/prisma-model.js'
 
 export const SCALAR_TYPE_MAP: { readonly [k: string]: string } = {
   String: 'string',
@@ -34,12 +34,6 @@ export const SQLITE_SCALAR_TYPE_MAP: { readonly [k: string]: string } = {
 // emits no DDL DEFAULT for them and a raw kysely insert must still supply the
 // value. Only database-side defaults may become Generated<T>.
 const CLIENT_SIDE_DEFAULTS = new Set(['uuid', 'cuid', 'ulid', 'nanoid', 'auto'])
-
-function isFunctionDefault(
-  def: DMMF.Field['default'],
-): def is { readonly name: string; readonly args: readonly (string | number)[] } {
-  return def !== null && typeof def === 'object' && !Array.isArray(def) && 'name' in def
-}
 
 // Prisma Client writes a DateTime default itself as well, `now()` and a literal alike. On SQLite
 // the column's own default is other text for the instant (`CURRENT_TIMESTAMP` writes

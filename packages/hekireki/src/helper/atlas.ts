@@ -1,7 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { indexPrefix } from '../utils/index.js'
-import { isImplicitManyToMany } from '../utils/prisma-postgres.js'
+import { isFunctionDefault, isImplicitManyToMany } from '../utils/prisma-model.js'
 
 type AtlasDialect = 'postgresql' | 'mysql' | 'sqlite'
 
@@ -109,12 +109,6 @@ function tableRef(target: DMMF.Model, models: readonly DMMF.Model[], defaultSche
   return duplicateTableNames(models).has(name)
     ? `table${refPart(schemaOf(target, defaultSchema))}${refPart(name)}`
     : `table${refPart(name)}`
-}
-
-function isFunctionDefault(
-  def: DMMF.Field['default'],
-): def is { readonly name: string; readonly args: readonly (string | number)[] } {
-  return def !== null && typeof def === 'object' && !Array.isArray(def) && 'name' in def
 }
 
 function pgNativeType(name: string, args: readonly string[]) {

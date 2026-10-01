@@ -1,6 +1,11 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { backRelation, isJoinSideA } from '../utils/prisma-postgres.js'
+import {
+  backRelation,
+  isAutoincrement,
+  isFunctionDefault,
+  isJoinSideA,
+} from '../utils/prisma-model.js'
 
 const PRISMA_TO_GO: { [k: string]: string } = {
   String: 'string',
@@ -185,16 +190,6 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
   }
 
   return { belongsTo, hasMany, hasOne, manyToMany }
-}
-
-function isFunctionDefault(
-  def: DMMF.Field['default'],
-): def is { readonly name: string; readonly args: readonly (string | number)[] } {
-  return def !== null && typeof def === 'object' && 'name' in def
-}
-
-function isAutoincrement(field: DMMF.Field) {
-  return isFunctionDefault(field.default) && field.default.name === 'autoincrement'
 }
 
 function formatGoDefault(def: DMMF.Field['default'], type: string, kind: DMMF.FieldKind) {

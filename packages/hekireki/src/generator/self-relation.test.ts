@@ -80,4 +80,48 @@ describe('a self many-to-many', () => {
       'has_and_belongs_to_many :z_followers, class_name: "Employee", join_table: "_Follow", foreign_key: "B",',
     )
   })
+
+  // Both columns point at Employee, so drizzle pairs each `many()` with its `one()` by name.
+  it('drizzle names the column each end reads', () => {
+    const code = drizzleSchema(follow, 'postgresql', follow.indexes)
+    expect(code).toContain(
+      "export const employeeRelations = relations(employee, ({ many }) => ({ zFollowers: many(follow, { relationName: 'Follow_B' }), aFollowing: many(follow, { relationName: 'Follow_A' }) }))",
+    )
+    expect(code).toContain(
+      "export const followRelations = relations(follow, ({ one }) => ({ employee: one(employee, { fields: [follow.A], references: [employee.id], relationName: 'Follow_A' }), employee_: one(employee, { fields: [follow.B], references: [employee.id], relationName: 'Follow_B' }) }))",
+    )
+  })
+
+  // `Related<Entity>` could name only one end, and the join table's two keys would both be
+  // `employee_id`: the keys take their columns' names, and each end is a `Linked`.
+  it('sea-orm links each end through its own column', () => {
+    const files = seaOrmFiles(follow.models, follow.enums)
+    expect(files.find((f) => f.fileName === 'employee.rs')?.code).toBe(
+      'use sea_orm::entity::prelude::*;\nuse serde::{Deserialize, Serialize};\n\n#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]\n#[sea_orm(table_name = "Employee")]\npub struct Model {\n    #[sea_orm(primary_key)]\n    pub id: i32,\n}\n\n#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]\npub enum Relation {}\n\npub struct ZFollowersLink;\n\nimpl Linked for ZFollowersLink {\n    type FromEntity = Entity;\n    type ToEntity = Entity;\n\n    fn link(&self) -> Vec<RelationDef> {\n        vec![\n            super::follow::Relation::B.def().rev(),\n            super::follow::Relation::A.def(),\n        ]\n    }\n}\n\npub struct AFollowingLink;\n\nimpl Linked for AFollowingLink {\n    type FromEntity = Entity;\n    type ToEntity = Entity;\n\n    fn link(&self) -> Vec<RelationDef> {\n        vec![\n            super::follow::Relation::A.def().rev(),\n            super::follow::Relation::B.def(),\n        ]\n    }\n}\n\nimpl ActiveModelBehavior for ActiveModel {}\n',
+    )
+    expect(files.find((f) => f.fileName === 'follow.rs')?.code).toBe(
+      'use sea_orm::entity::prelude::*;\nuse serde::{Deserialize, Serialize};\n\n#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]\n#[sea_orm(table_name = "_Follow")]\npub struct Model {\n    #[sea_orm(primary_key, auto_increment = false, column_name = "A")]\n    pub a: i32,\n    #[sea_orm(primary_key, auto_increment = false, column_name = "B")]\n    pub b: i32,\n}\n\n#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]\npub enum Relation {\n    #[sea_orm(\n        belongs_to = "super::employee::Entity",\n        from = "Column::A",\n        to = "super::employee::Column::Id"\n    )]\n    A,\n    #[sea_orm(\n        belongs_to = "super::employee::Entity",\n        from = "Column::B",\n        to = "super::employee::Column::Id"\n    )]\n    B,\n}\n\nimpl ActiveModelBehavior for ActiveModel {}\n',
+    )
+  })
+})
+
+// sea-orm names an entity's key column after the field, so the join table refers to `PostId`
+// and `Slug`, not to an `Id` neither entity has.
+describe('a many-to-many between keys not named id', () => {
+  it('sea-orm refers to each key column by its name', () => {
+    const result = getDMMF({
+      datamodel: [
+        [
+          'schema.prisma',
+          'datasource db {\n  provider = "postgresql"\n}\nmodel Post {\n  postId Int @id\n  tags Tag[]\n}\nmodel Tag {\n  slug String @id\n  posts Post[]\n}\n',
+        ],
+      ],
+    })
+    if ('type' in result) throw new Error(result.error.message)
+    const code = seaOrmFiles(result.datamodel.models, result.datamodel.enums).find(
+      (f) => f.fileName === 'post_to_tag.rs',
+    )?.code
+    expect(code).toContain('to = "super::post::Column::PostId"')
+    expect(code).toContain('to = "super::tag::Column::Slug"')
+  })
 })

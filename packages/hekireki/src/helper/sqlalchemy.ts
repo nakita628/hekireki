@@ -1,7 +1,15 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { constraintName, makePascalCase, makeSnakeCase } from '../utils/index.js'
-import { backRelation } from '../utils/prisma-postgres.js'
+import {
+  backRelation,
+  isAutoincrement,
+  isFunctionDefault,
+  isNowDefault,
+  isUlidDefault,
+  uuidDefaultVersion,
+} from '../utils/prisma-model.js'
+import { jsonToPythonLiteral, toPythonString } from '../utils/python.js'
 
 const PRISMA_TO_PYTHON: { [k: string]: string } = {
   String: 'str',
@@ -486,30 +494,6 @@ export function generateAssociationTable(
   ].join('\n')
 }
 
-function toPythonString(value: string) {
-  const escaped = value
-    .replaceAll('\\', '\\\\')
-    .replaceAll('"', '\\"')
-    .replaceAll('\n', '\\n')
-    .replaceAll('\r', '\\r')
-  return `"${escaped}"`
-}
-
-function jsonToPythonLiteral(value: unknown): string {
-  if (value === null) return 'None'
-  if (value === true) return 'True'
-  if (value === false) return 'False'
-  if (typeof value === 'number') return String(value)
-  if (typeof value === 'string') return toPythonString(value)
-  if (Array.isArray(value)) return `[${value.map(jsonToPythonLiteral).join(', ')}]`
-  if (typeof value === 'object') {
-    return `{${Object.entries(value)
-      .map(([k, v]) => `${toPythonString(k)}: ${jsonToPythonLiteral(v)}`)
-      .join(', ')}}`
-  }
-  return 'None'
-}
-
 const SQL_ACTION: { [k: string]: string } = {
   Cascade: 'CASCADE',
   SetNull: 'SET NULL',
@@ -641,18 +625,6 @@ function serverDefault(
   return `ARRAY[${items.join(', ')}]${cast}`
 }
 
-function isFunctionDefault(
-  def: DMMF.Field['default'],
-): def is { readonly name: string; readonly args: readonly (string | number)[] } {
-  return def !== null && typeof def === 'object' && 'name' in def
-}
-
-function isNowDefault(field: DMMF.Field) {
-  return (
-    field.type === 'DateTime' && isFunctionDefault(field.default) && field.default.name === 'now'
-  )
-}
-
 function usesNativeType(models: readonly DMMF.Model[], names: readonly string[]) {
   return models.some((m) => m.fields.some((f) => names.includes(f.nativeType?.[0] ?? '')))
 }
@@ -666,19 +638,6 @@ function usesUtcDateTime(models: readonly DMMF.Model[]) {
         f.type === 'DateTime' && ['', 'Timestamp', 'DateTime'].includes(f.nativeType?.[0] ?? ''),
     ),
   )
-}
-
-function isAutoincrement(field: DMMF.Field) {
-  return isFunctionDefault(field.default) && field.default.name === 'autoincrement'
-}
-
-function uuidDefaultVersion(field: DMMF.Field) {
-  if (!(isFunctionDefault(field.default) && field.default.name === 'uuid')) return null
-  return field.default.args[0] === 7 ? 7 : 4
-}
-
-function isUlidDefault(field: DMMF.Field) {
-  return isFunctionDefault(field.default) && field.default.name === 'ulid'
 }
 
 function needsForeignKeysParam(
