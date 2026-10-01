@@ -55,7 +55,7 @@ export function environmentVariable(name: string) {
 
 /**
  * `--url`, then `url` in hekireki.config.ts, then whatever Prisma itself connects with: the
- * variable `datasource.url` names with `env("NAME")` in prisma.config.ts (or in the schema's
+ * variable `datasource.url` names with `env("NAME")` in the Prisma config (or in the schema's
  * `datasource` block, Prisma 6 and earlier), read from the environment and `.env`, or the literal
  * written there. Only when Prisma names nothing is DATABASE_URL, Prisma's own default, looked up.
  */
@@ -64,8 +64,10 @@ export function makeDatabaseUrl(input: {
   readonly explicit: string | null
   /** The `url` of hekireki.config.ts, when set. */
   readonly configUrl: string | null
-  /** The text of prisma.config.ts, when it exists. */
+  /** The text of the Prisma config, when there is one. */
   readonly configText: string | null
+  /** The Prisma config's file as the error names it: prisma.config.ts, .config/prisma.ts, ... */
+  readonly configName: string | null
   /** The text of the Prisma schema files, when read. */
   readonly schemaText: string | null
 }) {
@@ -91,7 +93,7 @@ export function makeDatabaseUrl(input: {
                 ? { url: fallback, source: 'env' }
                 : null
     if (found !== null) return found
-    const where = fromConfig === null ? 'the schema' : 'prisma.config.ts'
+    const where = fromConfig === null ? 'the schema' : (input.configName ?? 'prisma.config.ts')
     return yield* new DatabaseUrlNotFoundError({
       reason:
         datasource?.kind === 'env'

@@ -38,6 +38,26 @@ describe('resolveMigrationsDir', () => {
     )
     expect(await resolve()).toBe(path.join(project, 'db', 'migrations'))
   })
+
+  // Prisma finds its config under other names too, and resolves the path from the file's own
+  // directory: `.config/prisma.ts` reads `../db/migrations` as the project's db/migrations.
+  it('reads migrations.path from a config under .config, from that directory', async () => {
+    const project = tmp()
+    const schemaDir = path.join(project, 'prisma')
+    mkdirSync(schemaDir)
+    mkdirSync(path.join(project, '.config'))
+    writeFileSync(
+      path.join(project, '.config', 'prisma.ts'),
+      "export default { migrations: { path: '../db/migrations' } }\n",
+    )
+    expect(
+      await Effect.runPromise(
+        resolveMigrationsDir({ cwd: project, schemaDir }).pipe(
+          Effect.provide(NodeFileSystem.layer),
+        ),
+      ),
+    ).toBe(path.join(project, 'db', 'migrations'))
+  })
 })
 
 describe('migrationsStamp', () => {

@@ -28,7 +28,10 @@ function urlFrom(input: {
     ConfigProvider.fromEnvRecord({ ...dotenv }),
   )
   return Effect.runSyncExit(
-    makeDatabaseUrl(found).pipe(Effect.provide(ConfigProvider.layer(provider))),
+    makeDatabaseUrl({
+      ...found,
+      configName: found.configText === null ? null : 'prisma.config.ts',
+    }).pipe(Effect.provide(ConfigProvider.layer(provider))),
   )
 }
 

@@ -45,12 +45,19 @@ export function resolveDatabaseUrl(options: {
     const configs = yield* Effect.forEach([...new Set([options.cwd, options.schemaDir])], (dir) =>
       readPrismaConfig(dir),
     )
-    const configText = configs.find((config) => config !== null)?.text ?? null
+    const config = configs.find((found) => found !== null) ?? null
     // A config that could not be read may have held the URL, so that is the reason to give.
     return yield* makeDatabaseUrl({
       explicit: options.explicitUrl,
       configUrl: options.configUrl,
-      configText,
+      configText: config?.text ?? null,
+      // Named as the person sees it: from the working directory, or as found outside it.
+      configName:
+        config === null
+          ? null
+          : path.relative(options.cwd, config.file).startsWith('..')
+            ? config.file
+            : path.relative(options.cwd, config.file),
       schemaText: options.schemaText,
     }).pipe(
       // The .env files stand behind the environment the caller runs with, as they do for Prisma.

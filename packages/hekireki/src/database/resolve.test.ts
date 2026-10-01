@@ -143,6 +143,22 @@ describe('resolveDatabaseUrl', () => {
     },
   )
 
+  it('names the Prisma config it read when the variable it names is not set', async () => {
+    const cwd = tmp()
+    mkdirSync(path.join(cwd, '.config'))
+    writeFileSync(
+      path.join(cwd, '.config', 'prisma.ts'),
+      "export default defineConfig({ datasource: { url: env('SHOP_DB') } })\n",
+    )
+    expect(await resolve({ cwd })).toStrictEqual(
+      Exit.fail(
+        new DatabaseUrlNotFoundError({
+          reason: `${path.join('.config', 'prisma.ts')} reads the database URL from env("SHOP_DB"), but SHOP_DB is not set.\n   Set it in .env or the environment, or pass --url <connection string>.`,
+        }),
+      ),
+    )
+  })
+
   it('reads the datasource url of a Prisma 6 schema from the schema text', async () => {
     const dir = tmp()
     expect(
