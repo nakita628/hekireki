@@ -13,11 +13,19 @@ export class DatabaseUrlNotFoundError extends Data.TaggedError('DatabaseUrlNotFo
   readonly reason: string
 }> {}
 
-/** The `datasource.url` of prisma.config.ts, as `env("NAME")` or a literal; other shapes are not recognised. */
+/**
+ * The `datasource.url` of the Prisma config: a variable, as `env("NAME")`, `process.env.NAME` or
+ * `process.env["NAME"]`, or a literal; other shapes are not recognised.
+ */
 function makeDatasourceUrl(input: { readonly configText: string }) {
   const block = /datasource\s*:\s*\{([^}]*)\}/u.exec(input.configText)?.[1]
   if (!block) return null
-  const env = /url\s*:\s*env\(\s*["'`]([^"'`]+)["'`]\s*\)/u.exec(block)?.[1]
+  const env =
+    /url\s*:\s*env\(\s*["'`]([^"'`]+)["'`]\s*\)/u.exec(block)?.[1] ??
+    /url\s*:\s*process\.env(?:\.([A-Za-z_$][\w$]*)|\[\s*["'`]([^"'`]+)["'`]\s*\])/u
+      .exec(block)
+      ?.slice(1)
+      .find((name) => name !== undefined)
   if (env) return { kind: 'env', name: env } as const
   const literal = /url\s*:\s*["'`]([^"'`]+)["'`]/u.exec(block)?.[1]
   return literal ? ({ kind: 'literal', value: literal } as const) : null

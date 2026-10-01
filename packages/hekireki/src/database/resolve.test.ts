@@ -127,6 +127,22 @@ describe('resolveDatabaseUrl', () => {
     )
   })
 
+  // `process.env.APP_DB` names its variable as `env('APP_DB')` does; read as naming none, it would
+  // fall back to DATABASE_URL and open another database without a word.
+  it.each(['process.env.APP_DB', "process.env['APP_DB']", 'process.env["APP_DB"]'])(
+    'reads the variable %s names in the Prisma config',
+    async (url) => {
+      const cwd = tmp()
+      writeFileSync(
+        path.join(cwd, 'prisma.config.ts'),
+        `export default defineConfig({ datasource: { url: ${url} } })\n`,
+      )
+      expect(
+        await resolve({ cwd, env: { APP_DB: 'file:./app.db', DATABASE_URL: 'file:./other.db' } }),
+      ).toStrictEqual(Exit.succeed({ url: 'file:./app.db', source: 'prisma' }))
+    },
+  )
+
   it('reads the datasource url of a Prisma 6 schema from the schema text', async () => {
     const dir = tmp()
     expect(
