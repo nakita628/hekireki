@@ -82,6 +82,23 @@ describe('readSchemaFiles', () => {
     })
   })
 
+  // Prisma reads a schema directory down through its subdirectories, so a model kept in
+  // `models/` is part of the schema.
+  it('reads the .prisma files of its subdirectories too, as Prisma does', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'hekireki-studio-'))
+    dirs.push(dir)
+    mkdirSync(path.join(dir, 'models'))
+    writeFileSync(path.join(dir, 'user.prisma'), USER)
+    writeFileSync(path.join(dir, 'models', 'post.prisma'), POST)
+    expect(await run(readSchemaFiles({ schemaPath: dir }))).toStrictEqual({
+      ok: true,
+      value: [
+        { path: path.join(dir, 'models', 'post.prisma'), content: POST },
+        { path: path.join(dir, 'user.prisma'), content: USER },
+      ],
+    })
+  })
+
   it('fails for a directory without .prisma files', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'hekireki-studio-'))
     dirs.push(dir)

@@ -32,7 +32,7 @@ export function readSchemaFiles(schemaPath: string) {
       ),
     )
     const names = directory
-      ? yield* readDirectory(schemaPath).pipe(
+      ? yield* readDirectory(schemaPath, { recursive: true }).pipe(
           Effect.mapError((error) => new SeedConfigError({ message: error.message })),
         )
       : null

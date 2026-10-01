@@ -33,11 +33,14 @@ export function makeDirectory(path: string) {
   })
 }
 
-/** Lists the entry names of a directory. */
-export function readDirectory(path: string) {
+/**
+ * Lists the entry names of a directory; with `recursive`, every entry below it too, as a path
+ * relative to the directory.
+ */
+export function readDirectory(path: string, options?: { readonly recursive?: boolean }) {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem
-    return yield* fs.readDirectory(path)
+    return yield* fs.readDirectory(path, options)
   })
 }
 
@@ -67,9 +70,12 @@ export function isDirectory(path: string) {
   })
 }
 
-/** File events of a directory (paths are relative to it) or of a single file. */
-export function watch(path: string) {
-  return Stream.unwrap(Effect.map(FileSystem.FileSystem, (fs) => fs.watch(path)))
+/**
+ * File events of a directory (paths are relative to it) or of a single file; with `recursive`,
+ * of everything below the directory too.
+ */
+export function watch(path: string, options?: { readonly recursive?: boolean }) {
+  return Stream.unwrap(Effect.map(FileSystem.FileSystem, (fs) => fs.watch(path, options)))
 }
 
 /** Removes a file or a directory and what it holds; nothing happens when it is not there. */

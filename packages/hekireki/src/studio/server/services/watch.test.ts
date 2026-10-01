@@ -42,7 +42,7 @@ describe('watchSchema', () => {
         Effect.gen(function* () {
           yield* state.reload()
           const before = state.snapshot().updatedAt
-          yield* watchSchema({ state, dir, debounceMs: 50 })
+          yield* watchSchema({ state, dir, recursive: false, debounceMs: 50 })
           yield* Effect.sleep('100 millis')
           writeFileSync(schemaPath, 'model User {\n  id Int @id\n  name String\n}\n')
           writeFileSync(path.join(dir, 'README.md'), 'ignored')
@@ -56,6 +56,24 @@ describe('watchSchema', () => {
     writeFileSync(schemaPath, 'model User {\n  id Int @id\n}\n')
     await Effect.runPromise(Effect.sleep('200 millis'))
     expect(state.snapshot().updatedAt).toBe(after)
+  })
+  // A schema directory is read down through its subdirectories, so a change there is one too.
+  it('reloads after a .prisma write in a subdirectory of a schema directory', async () => {
+    const { dir, state } = setup()
+    mkdirSync(path.join(dir, 'models'))
+    const reloaded = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          yield* state.reload()
+          const before = state.snapshot().updatedAt
+          yield* watchSchema({ state, dir, recursive: true, debounceMs: 50 })
+          yield* Effect.sleep('100 millis')
+          writeFileSync(path.join(dir, 'models', 'post.prisma'), 'model Post {\n  id Int @id\n}\n')
+          return yield* until(() => state.snapshot().updatedAt !== before)
+        }),
+      ).pipe(Effect.provide(NodeFileSystem.layer)),
+    )
+    expect(reloaded).toBe(true)
   })
 })
 

@@ -91,7 +91,12 @@ export function startStudioServer(options: {
       cwd: process.cwd(),
     })
     yield* Effect.addFinalizer(() => client.close)
-    yield* WatchService.watchSchema({ state, dir: watchDir, debounceMs: RELOAD_DEBOUNCE_MS })
+    yield* WatchService.watchSchema({
+      state,
+      dir: watchDir,
+      recursive: directory,
+      debounceMs: RELOAD_DEBOUNCE_MS,
+    })
     // The migrations Prisma Migrate reads, so the Migrate page follows the files as they change.
     const migrationsDir = yield* resolveMigrationsDir({
       cwd: process.cwd(),

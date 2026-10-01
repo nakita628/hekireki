@@ -38,7 +38,7 @@ export function readSchemaFiles(input: z.infer<typeof ReadSchemaFilesInput>) {
       ),
     )
     const names = directory
-      ? yield* readDirectory(schemaPath).pipe(
+      ? yield* readDirectory(schemaPath, { recursive: true }).pipe(
           Effect.mapError((error) => new SchemaLoadError({ message: error.message })),
         )
       : null
