@@ -8,6 +8,7 @@
     "test": "vp test"
   },
   "devDependencies": {
+    "@prisma/get-dmmf": "8.1.0-dev.7",
     "prisma": "8.1.0-dev.7"
   }
 }

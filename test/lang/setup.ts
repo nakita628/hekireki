@@ -1,9 +1,10 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
+
+import { getDMMF } from '@prisma/get-dmmf'
 
 // Regenerates test/harness/* from test/prisma/schema.prisma with the built generators
 // before the language checks run. One prisma run emits every target, so
@@ -83,35 +84,29 @@ const VARIANT_OUTPUT = [
  * line Prisma refuses there commented out, asked again until Prisma takes the schema.
  */
 function variantSchema(root: string, provider: string) {
-  const require = createRequire(join(root, 'packages/hekireki/package.json'))
-  const { getDMMF } = require('@prisma/get-dmmf') as {
-    getDMMF: (options: { datamodel: [string, string][] }) => { type?: string; error?: Error }
-  }
   const generators = VARIANT_TARGETS.map(
     ([lang, output]) =>
       `generator ${lang} {\n  provider = "hekireki-${lang}"\n  output   = "${join(root, 'test/harness', output(provider))}"\n}\n`,
   ).join('\n')
   const models = readFileSync(join(root, 'test/prisma/schema.prisma'), 'utf8')
-    .replace(/generator [\w-]+ \{[\s\S]*?\n\}\n/gu, '')
+    .replaceAll(/generator [\w-]+ \{[\s\S]*?\n\}\n/gu, '')
     .replace(/datasource db \{[\s\S]*?\n\}\n/u, '')
   const lines = `datasource db {\n  provider = "${provider}"\n}\n\n${generators}\n${models}`.split(
     '\n',
   )
   for (let attempt = 0; attempt < 100; attempt += 1) {
     const result = getDMMF({ datamodel: [['schema.prisma', lines.join('\n')]] })
-    if (result.type === undefined) return lines.join('\n')
+    if (!('type' in result)) return lines.join('\n')
     const refused = [
       ...new Set(
-        [
-          ...stripVTControlCharacters(result.error?.message ?? '').matchAll(
-            /schema\.prisma:(\d+)/gu,
-          ),
-        ].map((match) => Number(match[1])),
+        [...stripVTControlCharacters(result.error.message).matchAll(/schema\.prisma:(\d+)/gu)].map(
+          (match) => Number(match[1]),
+        ),
       ),
     ]
     if (refused.length === 0)
       throw new Error(
-        `The ${provider} variant of schema.prisma does not parse: ${result.error?.message}`,
+        `The ${provider} variant of schema.prisma does not parse: ${result.error.message}`,
       )
     for (const line of refused) lines[line - 1] = `// ${lines[line - 1]}`
   }
