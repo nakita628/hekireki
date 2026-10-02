@@ -249,6 +249,7 @@ usmall
 utiny
 uuidv
 varbits
+voidzero
 VISLIB
 Visus
 wbindgen
