@@ -956,6 +956,7 @@ export default defineConfig({
           'src/migrate/errors.ts',
           'src/format/index.ts',
           'src/seed/errors.ts',
+          'src/schema/errors.ts',
           'src/studio/server/errors/index.ts',
           'src/studio/server/services/runtime.ts',
         ],
@@ -978,7 +979,4 @@ export default defineConfig({
   // Style (printWidth / quotes / semicolons / import sorting) and the ignore list for the
   // hono-takibi output are inherited from the root vite.config.ts: only the root `fmt` block
   // reaches oxfmt in a workspace.
-  fmt: {
-    ignorePatterns: ['**/node_modules/**', '**/dist/**'],
-  },
 })

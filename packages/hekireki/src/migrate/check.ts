@@ -4,10 +4,10 @@ import { Effect } from 'effect'
 import type * as z from 'zod'
 
 import { isDirectory } from '../file/index.js'
+import { dialectOf, parseSchema, readSchemaFiles, schemaText } from '../schema/index.js'
+import type { SchemaFile } from '../schema/index.js'
 import { readConfigUrl } from '../seed/load-config.js'
 import { withTypeScriptImports } from '../seed/resolve.js'
-import { dialectOf, parseSchema, readSchemaFiles, schemaText } from '../seed/schema.js'
-import type { SchemaFile } from '../seed/schema.js'
 import { connectDatabase } from '../studio/server/services/database.js'
 import type { Driver } from '../studio/server/services/database.js'
 import { DECISIONS_FILE, readDecisions } from './adapter/decisions-file.js'
@@ -159,7 +159,9 @@ export function checkOpened(input: {
     if (input.readOnly) yield* run(readOnlyStatements(dialect))
     const schemas = [
       ...new Set(
-        schema.datamodel.models.flatMap((model) => (model.schema === null ? [] : [model.schema])),
+        schema.dmmf.datamodel.models.flatMap((model) =>
+          model.schema === null ? [] : [model.schema],
+        ),
       ),
     ]
     const introspected = yield* introspectDatabase({ driver, dialect, schemas }).pipe(
@@ -171,7 +173,7 @@ export function checkOpened(input: {
       ),
     )
     yield* run(timeoutStatements(dialect, introspected.mariadb, input.timeout))
-    const expected = makeExpectedTables(schema.datamodel)
+    const expected = makeExpectedTables(schema.dmmf.datamodel)
     const cockroach = schema.provider === 'cockroachdb'
     const checksWith = (kept: z.infer<typeof Decisions>) =>
       makeChecks({

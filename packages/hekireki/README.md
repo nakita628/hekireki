@@ -282,7 +282,7 @@ nothing and runs no hook, so what the types cannot say is the caller's:
 ## Studio
 
 ```bash
-npx hekireki studio                  # ./prisma/schema.prisma or ./schema.prisma, port 5555
+npx hekireki studio                  # `schema` of prisma.config.ts, else ./prisma/schema.prisma or ./schema.prisma, port 5555
 npx hekireki studio --url file:./dev.db
 ```
 

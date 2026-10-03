@@ -12,7 +12,7 @@
   "devDependencies": {
     "@prisma/adapter-pg": "8.1.0-dev.7",
     "@prisma/client": "8.1.0-dev.7",
-    "@types/node": "^26.6.2",
+    "@types/node": "^26.6.3",
     "@types/pg": "^8.23.1",
     "drizzle-orm": "^0.45.3",
     "hekireki": "workspace:*",

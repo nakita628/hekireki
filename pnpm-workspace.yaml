@@ -10,6 +10,13 @@ allowBuilds:
   esbuild: true
   msgpackr-extract: false
   prisma: true
+# Effect 4.0.0 went in on the day it was published (2026-10-01), out of the release-age wait: the
+# move off the release candidate was decided then. Exact versions only, so the next release waits
+# as usual.
+minimumReleaseAgeExclude:
+  - '@effect/platform-node-shared@4.0.0'
+  - '@effect/platform-node@4.0.0'
+  - effect@4.0.0
 # The two types packages @heroui/react reaches through were published from 3.2.0 (color) and
 # 3.9.0 (slider) with a dependency on Adobe's Spectrum design system (@react-spectrum/color,
 # @react-spectrum/slider, and through them @adobe/react-spectrum with its thousands of icon
@@ -18,3 +25,16 @@ allowBuilds:
 overrides:
   '@react-types/color': 3.1.4
   '@react-types/slider': 3.8.4
+  # hono-takibi 0.16.0 (the Studio API generator, a devDependency) pins @effect/platform-node and
+  # effect to 4.0.0-rc.116, but that platform-node takes @effect/platform-node-shared by a range
+  # that now resolves to 4.0.0, which reads modules only effect 4.0.0 has: the generator does not
+  # start. Under that platform-node only, the shared package stays at the release candidate it was
+  # built with, until hono-takibi moves to effect 4.0.0.
+  '@effect/platform-node@4.0.0-rc.116>@effect/platform-node-shared': 4.0.0-rc.117
+  # What Vite+ asks of a project (vite-plus README, "Add package-manager overrides"): every package
+  # that names `vite` gets the Vite+ core it builds with, and one Vitest, the one `vp test` runs.
+  # Without them @tanstack/router-plugin typed its plugin against a separate vite 8.1.2, which
+  # vite.studio.config.ts could not hand to vite-plus 1.0's defineConfig. Keep both in step with
+  # vite-plus (`vp --version`).
+  vite: npm:@voidzero-dev/vite-plus-core@1.0.0
+  vitest: 5.0.1

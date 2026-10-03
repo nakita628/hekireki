@@ -1,6 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { indexPrefix } from '../utils/index.js'
+import { implicitJoinTables, isFunctionDefault } from '../utils/prisma-model.js'
 
 type AtlasDialect = 'postgresql' | 'mysql' | 'sqlite'
 
@@ -108,12 +109,6 @@ function tableRef(target: DMMF.Model, models: readonly DMMF.Model[], defaultSche
   return duplicateTableNames(models).has(name)
     ? `table${refPart(schemaOf(target, defaultSchema))}${refPart(name)}`
     : `table${refPart(name)}`
-}
-
-function isFunctionDefault(
-  def: DMMF.Field['default'],
-): def is { readonly name: string; readonly args: readonly (string | number)[] } {
-  return def !== null && typeof def === 'object' && !Array.isArray(def) && 'name' in def
 }
 
 function pgNativeType(name: string, args: readonly string[]) {
@@ -537,44 +532,6 @@ export function makeAtlasTable(
   ].join('\n')
 }
 
-function isImplicitM2M(field: DMMF.Field, models: readonly DMMF.Model[]) {
-  if (field.kind !== 'object' || !field.isList) return false
-  if (field.relationFromFields && field.relationFromFields.length > 0) return false
-  const target = models.find((m) => m.name === field.type)
-  const otherSide = target?.fields.find(
-    (f) => f.kind === 'object' && f.relationName === field.relationName,
-  )
-  return otherSide?.isList === true
-}
-
-function collectM2M(models: readonly DMMF.Model[]) {
-  const pairs = models.flatMap((model) =>
-    model.fields
-      .filter((field) => isImplicitM2M(field, models))
-      .map((field) => {
-        const [leftName, rightName] =
-          model.name < field.type ? [model.name, field.type] : [field.type, model.name]
-        return {
-          leftName,
-          rightName,
-          relationName: field.relationName ?? `${leftName}To${rightName}`,
-        }
-      }),
-  )
-  const seen = new Set<string>()
-  return pairs
-    .filter((pair) => {
-      if (seen.has(pair.relationName)) return false
-      seen.add(pair.relationName)
-      return true
-    })
-    .flatMap((pair) => {
-      const left = models.find((m) => m.name === pair.leftName)
-      const right = models.find((m) => m.name === pair.rightName)
-      return left && right ? [{ left, right, relationName: pair.relationName }] : []
-    })
-}
-
 function m2mColumn(
   side: 'A' | 'B',
   pkField: DMMF.Field | undefined,
@@ -622,44 +579,50 @@ export function makeAtlasM2MJoinTables(
   enums: readonly DMMF.DatamodelEnum[],
   defaultSchema: string,
 ) {
-  return collectM2M(models).map((pair) => {
-    const tableName = `_${pair.relationName}`
-    const leftPk = pair.left.fields.find((f) => f.isId)
-    const rightPk = pair.right.fields.find((f) => f.isId)
-    return [
-      `table ${hclString(tableName)} {`,
-      ...alignAttrs(
-        [
-          attr('schema', `schema${refPart(schemaOf(pair.left, defaultSchema))}`),
-          ...(dialect === 'mysql' ? MYSQL_TABLE_ATTRS : []),
-        ],
-        '  ',
-      ),
-      m2mColumn('A', leftPk, dialect, enums),
-      m2mColumn('B', rightPk, dialect, enums),
-      ...(dialect === 'postgresql'
-        ? [
-            `  primary_key ${hclString(`${tableName}_AB_pkey`)} {`,
-            '    columns = [column.A, column.B]',
-            '  }',
-          ]
-        : []),
-      m2mForeignKey('A', pair.left, tableName, models, defaultSchema),
-      m2mForeignKey('B', pair.right, tableName, models, defaultSchema),
-      ...(dialect === 'postgresql'
-        ? []
-        : [
-            `  index ${hclString(`${tableName}_AB_unique`)} {`,
-            '    unique  = true',
-            '    columns = [column.A, column.B]',
-            '  }',
-          ]),
-      `  index ${hclString(`${tableName}_B_index`)} {`,
-      '    columns = [column.B]',
-      '  }',
-      '}',
-    ].join('\n')
-  })
+  return implicitJoinTables(models)
+    .flatMap((pair) => {
+      const left = models.find((m) => m.name === pair.left)
+      const right = models.find((m) => m.name === pair.right)
+      return left && right ? [{ left, right, relationName: pair.relationName }] : []
+    })
+    .map((pair) => {
+      const tableName = `_${pair.relationName}`
+      const leftPk = pair.left.fields.find((f) => f.isId)
+      const rightPk = pair.right.fields.find((f) => f.isId)
+      return [
+        `table ${hclString(tableName)} {`,
+        ...alignAttrs(
+          [
+            attr('schema', `schema${refPart(schemaOf(pair.left, defaultSchema))}`),
+            ...(dialect === 'mysql' ? MYSQL_TABLE_ATTRS : []),
+          ],
+          '  ',
+        ),
+        m2mColumn('A', leftPk, dialect, enums),
+        m2mColumn('B', rightPk, dialect, enums),
+        ...(dialect === 'postgresql'
+          ? [
+              `  primary_key ${hclString(`${tableName}_AB_pkey`)} {`,
+              '    columns = [column.A, column.B]',
+              '  }',
+            ]
+          : []),
+        m2mForeignKey('A', pair.left, tableName, models, defaultSchema),
+        m2mForeignKey('B', pair.right, tableName, models, defaultSchema),
+        ...(dialect === 'postgresql'
+          ? []
+          : [
+              `  index ${hclString(`${tableName}_AB_unique`)} {`,
+              '    unique  = true',
+              '    columns = [column.A, column.B]',
+              '  }',
+            ]),
+        `  index ${hclString(`${tableName}_B_index`)} {`,
+        '    columns = [column.B]',
+        '  }',
+        '}',
+      ].join('\n')
+    })
 }
 
 // PostgreSQL enums become top-level enum blocks; MySQL inlines enum(...) in the

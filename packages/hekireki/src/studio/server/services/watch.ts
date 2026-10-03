@@ -11,6 +11,11 @@ const WatchSchemaInput = z
       .custom<ReturnType<typeof StateService.createStudioState>>()
       .meta({ description: 'The snapshot store to reload.' }),
     dir: z.string().meta({ description: 'The directory to watch.', example: 'prisma' }),
+    recursive: z.boolean().meta({
+      description:
+        'Whether to watch below the directory too: a schema directory is read down through its subdirectories, where the directory of a single schema file holds the whole project.',
+      example: true,
+    }),
     debounceMs: z
       .number()
       .int()
@@ -22,7 +27,7 @@ const WatchSchemaInput = z
 
 /** Reloads the state after a burst of `.prisma` changes; the watcher lives as long as the surrounding scope. */
 export function watchSchema(input: z.infer<typeof WatchSchemaInput>) {
-  return watch(input.dir).pipe(
+  return watch(input.dir, { recursive: input.recursive }).pipe(
     Stream.filter((event) => event.path.endsWith('.prisma')),
     Stream.debounce(Duration.millis(input.debounceMs)),
     Stream.runForEach(() => input.state.reload()),

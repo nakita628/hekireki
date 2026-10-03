@@ -1,7 +1,8 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { pluralize } from '../utils/humanizer.js'
-import { isAnnotationLine, makePascalCase, makeSnakeCase } from '../utils/index.js'
+import { isAnnotationLine, isSameList, makePascalCase, makeSnakeCase } from '../utils/index.js'
+import { relationEnds } from '../utils/prisma-model.js'
 
 // cspell:disable
 // Names an enum key on an Active Record model may not take. Rails defines a
@@ -767,10 +768,6 @@ function primaryKeyFields(model: DMMF.Model) {
   return idField ? [idField.name] : (model.primaryKey?.fields ?? [])
 }
 
-function isSameList(a: readonly string[], b: readonly string[]) {
-  return a.length === b.length && a.every((value, i) => value === b[i])
-}
-
 // A Ruby array literal as RuboCop's defaults and rubocop-rails-omakase both
 // accept it: %i[] for symbols, %w[] for plain words, and otherwise brackets
 // with a space inside (none in an empty pair).
@@ -1224,27 +1221,20 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
     associationForeignKey: string
   }[] = []
 
-  for (const field of model.fields) {
-    if (field.kind !== 'object') continue
+  for (const end of relationEnds(model, allModels)) {
+    const { field } = end
+    const targetModel = allModels.find((m) => m.name === field.type)
 
-    if (field.relationFromFields && field.relationFromFields.length > 0) {
-      const targetModel = allModels.find((m) => m.name === field.type)
+    if (end.kind === 'belongsTo') {
+      const fromFields = field.relationFromFields ?? []
       const referencedField = field.relationToFields?.[0] ?? 'id'
       const referencedFields = field.relationToFields ?? ['id']
-      // The other side of the relation is the field that shares its name and
-      // holds no foreign key; in a self-relation that rules out this field.
-      const inverse = targetModel?.fields.find(
-        (f) =>
-          f.kind === 'object' &&
-          f.relationName === field.relationName &&
-          !(f.relationFromFields && f.relationFromFields.length > 0),
-      )
       belongsTo.push({
         name: field.name,
         targetModel: field.type,
-        foreignKeyColumn: fieldColumn(model, field.relationFromFields[0]),
+        foreignKeyColumn: fieldColumn(model, fromFields[0]),
         primaryKeyColumn: targetModel ? fieldColumn(targetModel, referencedField) : referencedField,
-        foreignKeyColumns: field.relationFromFields.map((c) => fieldColumn(model, c)),
+        foreignKeyColumns: fromFields.map((c) => fieldColumn(model, c)),
         primaryKeyColumns: referencedFields.map((c) =>
           targetModel ? fieldColumn(targetModel, c) : c,
         ),
@@ -1253,77 +1243,43 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
           targetModel === undefined ? ['id'] : primaryKeyFields(targetModel),
         ),
         optional: !field.isRequired,
-        inverse: inverse?.name ?? null,
-        inverseIsList: inverse?.isList ?? false,
+        inverse: end.inverse?.name ?? null,
+        inverseIsList: end.inverse?.isList ?? false,
       })
       continue
     }
 
-    const targetModel = allModels.find((m) => m.name === field.type)
     if (!targetModel) continue
 
-    if (field.isList) {
-      const otherSide = targetModel.fields.find(
-        (f) => f.relationName === field.relationName && f.kind === 'object',
-      )
-      if (otherSide?.isList) {
-        const [left, right] =
-          model.name < field.type ? [model.name, field.type] : [field.type, model.name]
-        habtm.push({
-          name: field.name,
-          targetModel: field.type,
-          joinTable: `_${field.relationName ?? `${left}To${right}`}`,
-          foreignKey: model.name === left ? 'A' : 'B',
-          associationForeignKey: model.name === left ? 'B' : 'A',
-        })
-        continue
-      }
-    }
-
-    const fkField = targetModel.fields.find(
-      (f) =>
-        f.relationName === field.relationName &&
-        f.relationFromFields &&
-        f.relationFromFields.length > 0,
-    )
-    const foreignKey = fkField?.relationFromFields?.[0]
-    if (!(fkField && foreignKey)) continue
-    const foreignKeyColumn = fieldColumn(targetModel, foreignKey)
-    const foreignKeyColumns = (fkField.relationFromFields ?? [foreignKey]).map((c) =>
-      fieldColumn(targetModel, c),
-    )
-    const primaryKeyColumns = (fkField.relationToFields ?? ['id']).map((c) => fieldColumn(model, c))
-    const referencesPrimaryKey = isSameList(
-      fkField.relationToFields ?? ['id'],
-      primaryKeyFields(model),
-    )
-    // Prisma's default action when the schema names none: Restrict for a
-    // required relation, SetNull for an optional one.
-    const onDelete = fkField.relationOnDelete ?? (fkField.isRequired ? 'Restrict' : 'SetNull')
-
-    if (field.isList) {
-      hasMany.push({
+    if (end.kind === 'manyToMany') {
+      const [left, right] =
+        model.name < field.type ? [model.name, field.type] : [field.type, model.name]
+      habtm.push({
         name: field.name,
         targetModel: field.type,
-        foreignKeyColumn,
-        foreignKeyColumns,
-        primaryKeyColumns,
-        referencesPrimaryKey,
-        inverse: fkField.name,
-        onDelete,
+        joinTable: `_${field.relationName ?? `${left}To${right}`}`,
+        foreignKey: end.isSideA ? 'A' : 'B',
+        associationForeignKey: end.isSideA ? 'B' : 'A',
       })
-    } else {
-      hasOne.push({
-        name: field.name,
-        targetModel: field.type,
-        foreignKeyColumn,
-        foreignKeyColumns,
-        primaryKeyColumns,
-        referencesPrimaryKey,
-        inverse: fkField.name,
-        onDelete,
-      })
+      continue
     }
+
+    const fkField = end.inverse
+    const fromFields = fkField.relationFromFields ?? []
+    const association = {
+      name: field.name,
+      targetModel: field.type,
+      foreignKeyColumn: fieldColumn(targetModel, fromFields[0]),
+      foreignKeyColumns: fromFields.map((c) => fieldColumn(targetModel, c)),
+      primaryKeyColumns: (fkField.relationToFields ?? ['id']).map((c) => fieldColumn(model, c)),
+      referencesPrimaryKey: isSameList(fkField.relationToFields ?? ['id'], primaryKeyFields(model)),
+      inverse: fkField.name,
+      // Prisma's default action when the schema names none: Restrict for a
+      // required relation, SetNull for an optional one.
+      onDelete: fkField.relationOnDelete ?? (fkField.isRequired ? 'Restrict' : 'SetNull'),
+    }
+    if (end.kind === 'hasMany') hasMany.push(association)
+    else hasOne.push(association)
   }
 
   return { belongsTo, hasMany, hasOne, habtm }

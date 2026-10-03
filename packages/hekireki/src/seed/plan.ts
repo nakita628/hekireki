@@ -1,6 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 import { Effect } from 'effect'
 
+import { backRelation, isJoinSideA } from '../utils/prisma-model.js'
 import type { SeedRow } from './config.js'
 import { SeedGenerationError } from './errors.js'
 
@@ -70,16 +71,6 @@ function isForeignKeyField(field: DMMF.Field) {
 
 function isImplicitListField(field: DMMF.Field) {
   return field.kind === 'object' && field.isList && (field.relationFromFields ?? []).length === 0
-}
-
-function inverseOf(field: DMMF.Field, owner: DMMF.Model, related: DMMF.Model | undefined) {
-  return related?.fields.find(
-    (f) =>
-      f.kind === 'object' &&
-      f.relationName === field.relationName &&
-      f.type === owner.name &&
-      !(related.name === owner.name && f.name === field.name),
-  )
 }
 
 function enumMembers(enums: readonly DMMF.DatamodelEnum[], type: string) {
@@ -198,11 +189,10 @@ function makeJoinTables(models: readonly DMMF.Model[], enums: readonly DMMF.Data
   return models.flatMap((model) =>
     model.fields.filter(isImplicitListField).flatMap((field): readonly JoinTable[] => {
       const other = models.find((m) => m.name === field.type)
-      const inverse = inverseOf(field, model, other)
+      const inverse = backRelation(field, model, models)
       if (other === undefined || inverse === undefined || !inverse.isList) return []
       // Emitted from the side that sorts first; a self relation is emitted from its first field.
-      const first = model.name === other.name ? field.name < inverse.name : model.name < other.name
-      if (!first) return []
+      if (!isJoinSideA(field, model, inverse)) return []
       const name = `_${field.relationName ?? `${model.name}To${other.name}`}`
       return [
         {

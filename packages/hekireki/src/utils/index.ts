@@ -168,6 +168,11 @@ export function chunks<T>(items: readonly T[], size: number) {
   )
 }
 
+/** Whether two lists hold the same items in the same order. */
+export function isSameList(a: readonly string[], b: readonly string[]) {
+  return a.length === b.length && a.every((value, i) => value === b[i])
+}
+
 /** The text with its first character in lower case: a model's Prisma Client delegate, a label. */
 export function lowerFirst(text: string) {
   return text.charAt(0).toLowerCase() + text.slice(1)

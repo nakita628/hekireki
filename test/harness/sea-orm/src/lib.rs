@@ -8,6 +8,8 @@
 // the prelude re-exports and entities no smoke function touches would count as
 // unused_imports / dead_code. Public items are API surface, not dead code.
 pub mod entities;
+// The same schema on SQLite and on MySQL (src/variants/mod.rs).
+pub mod variants;
 
 // Pins the scalar-list invariant in the type system: `tags` must stay a Vec,
 // not collapse to a scalar (which would compile but silently drop the array).

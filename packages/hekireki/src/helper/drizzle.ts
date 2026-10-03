@@ -1,6 +1,12 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { constraintName, indexPrefix, makeSnakeCase } from '../utils/index.js'
+import {
+  backRelation,
+  implicitJoinTables,
+  isImplicitManyToMany,
+  isJoinSideA,
+} from '../utils/prisma-model.js'
 
 type DbProvider = 'postgresql' | 'mysql' | 'sqlite'
 
@@ -37,7 +43,7 @@ const MYSQL_SCALAR_MAP: { [k: string]: string } = {
 const SQLITE_SCALAR_MAP: { [k: string]: string } = {
   String: 'text()',
   Int: 'integer()',
-  BigInt: "blob({ mode: 'bigint' })",
+  BigInt: 'bigInteger()',
   Float: 'real()',
   Decimal: 'numeric()',
   Boolean: "integer({ mode: 'boolean' })",
@@ -160,8 +166,16 @@ function mysqlNativeType(name: string, args: readonly string[]) {
 }
 
 // Columns drizzle has none of its own for: a DateTime kept in UTC, in the form Prisma Client
-// writes and reads it, and a Bytes as the Uint8Array Prisma Client gives.
+// writes and reads it, a Bytes as the Uint8Array Prisma Client gives, and a BigInt on SQLite as
+// the integer Prisma keeps it as. drizzle's own `blob({ mode: 'bigint' })` reads the column as
+// bytes and writes the digits as a BLOB, which neither reads what Prisma wrote nor writes what
+// Prisma reads.
 const COLUMN_HELPERS: { readonly [name: string]: string } = {
+  bigInteger: `const bigInteger = customType<{ data: bigint; driverData: number | bigint }>({
+  dataType: () => 'bigint',
+  toDriver: (value) => value,
+  fromDriver: (value) => BigInt(value),
+})`,
   bytea: `const bytea = customType<{ data: Uint8Array }>({
   dataType: () => 'bytea',
 })`,
@@ -569,7 +583,8 @@ function makeColumn(
       ? '.array()'
       : '',
     field.isId && !hasCompositePK
-      ? isAutoincrement && provider === 'sqlite'
+      ? // SQLite counts only an INTEGER key, and Prisma makes a BigInt key BIGINT: none to ask for.
+        isAutoincrement && provider === 'sqlite' && field.type !== 'BigInt'
         ? '.primaryKey({ autoIncrement: true })'
         : '.primaryKey()'
       : '',
@@ -700,36 +715,8 @@ export function makeTable(
     : `export const ${varName} = ${tableFunc}('${tableName}', { ${columns} })`
 }
 
-function isImplicitM2M(field: DMMF.Field, models: readonly DMMF.Model[]) {
-  if (field.kind !== 'object' || !field.isList) return false
-  if (field.relationFromFields && field.relationFromFields.length > 0) return false
-  const target = models.find((m) => m.name === field.type)
-  const otherSide = target?.fields.find(
-    (f) => f.kind === 'object' && f.relationName === field.relationName,
-  )
-  return otherSide?.isList === true
-}
-
 function joinVarName(relationName: string) {
   return snakeToCamel(makeSnakeCase(relationName))
-}
-
-function collectM2MJoinTables(models: readonly DMMF.Model[]) {
-  const pairs = models.flatMap((model) =>
-    model.fields
-      .filter((field) => isImplicitM2M(field, models))
-      .map((field) => {
-        const [left, right] =
-          model.name < field.type ? [model.name, field.type] : [field.type, model.name]
-        return { left, right, relationName: field.relationName ?? `${left}To${right}` }
-      }),
-  )
-  const seen = new Set<string>()
-  return pairs.filter((pair) => {
-    if (seen.has(pair.relationName)) return false
-    seen.add(pair.relationName)
-    return true
-  })
 }
 
 function withColumnName(baseExpr: string, colName: string) {
@@ -763,7 +750,7 @@ export function makeM2MJoinTables(
 ) {
   const tableFunc =
     provider === 'postgresql' ? 'pgTable' : provider === 'mysql' ? 'mysqlTable' : 'sqliteTable'
-  return collectM2MJoinTables(models).map((pair) => {
+  return implicitJoinTables(models).map((pair) => {
     imports.core.add(tableFunc)
     imports.core.add('foreignKey')
     imports.core.add('index')
@@ -797,7 +784,7 @@ export function makeM2MJoinTables(
 }
 
 export function makeM2MJoinRelations(models: readonly DMMF.Model[], imports: DrizzleImports) {
-  const pairs = collectM2MJoinTables(models)
+  const pairs = implicitJoinTables(models)
   if (pairs.length > 0) imports.orm.add('relations')
   return pairs.map((pair) => {
     const varName = joinVarName(pair.relationName)
@@ -806,9 +793,13 @@ export function makeM2MJoinRelations(models: readonly DMMF.Model[], imports: Dri
     const leftPk = models.find((m) => m.name === pair.left)?.fields.find((f) => f.isId)
     const rightPk = models.find((m) => m.name === pair.right)?.fields.find((f) => f.isId)
     const leftKey = uncapitalizeName(pair.left)
-    const rightKey =
-      pair.left === pair.right ? `${uncapitalizeName(pair.right)}_` : uncapitalizeName(pair.right)
-    return `export const ${varName}Relations = relations(${varName}, ({ one }) => ({ ${leftKey}: one(${leftVar}, { fields: [${varName}.A], references: [${leftVar}.${leftPk?.name ?? 'id'}] }), ${rightKey}: one(${rightVar}, { fields: [${varName}.B], references: [${rightVar}.${rightPk?.name ?? 'id'}] }) }))`
+    const isSelf = pair.left === pair.right
+    const rightKey = isSelf ? `${uncapitalizeName(pair.right)}_` : uncapitalizeName(pair.right)
+    // In a self-relation both columns point at the one model, and drizzle pairs each end's
+    // `many()` with its column only through a relation name.
+    const aName = isSelf ? `, relationName: '${pair.relationName}_A'` : ''
+    const bName = isSelf ? `, relationName: '${pair.relationName}_B'` : ''
+    return `export const ${varName}Relations = relations(${varName}, ({ one }) => ({ ${leftKey}: one(${leftVar}, { fields: [${varName}.A], references: [${leftVar}.${leftPk?.name ?? 'id'}]${aName} }), ${rightKey}: one(${rightVar}, { fields: [${varName}.B], references: [${rightVar}.${rightPk?.name ?? 'id'}]${bName} }) }))`
   })
 }
 
@@ -846,10 +837,17 @@ function makeRelationField(
     // An implicit m2m side goes through the junction table: drizzle's
     // relational API has no direct many-to-many, so `many(target)` here
     // would fail to resolve at query time.
-    if (isImplicitM2M(field, models)) {
+    if (isImplicitManyToMany(field, model, models)) {
       const [left, right] =
         model.name < field.type ? [model.name, field.type] : [field.type, model.name]
-      return `${field.name}: many(${joinVarName(field.relationName ?? `${left}To${right}`)})`
+      const relationName = field.relationName ?? `${left}To${right}`
+      const inverse = backRelation(field, model, models)
+      // A self-relation's end reads the rows that hold its own key: column A for the end on side A.
+      if (model.name === field.type && inverse) {
+        const column = isJoinSideA(field, model, inverse) ? 'A' : 'B'
+        return `${field.name}: many(${joinVarName(relationName)}, { relationName: '${relationName}_${column}' })`
+      }
+      return `${field.name}: many(${joinVarName(relationName)})`
     }
     return needsAlias
       ? `${field.name}: many(${targetVar}, { relationName: '${field.relationName}' })`

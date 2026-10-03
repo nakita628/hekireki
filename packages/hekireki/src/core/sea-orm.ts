@@ -5,16 +5,11 @@ import { emitMany } from '../emit/index.js'
 import { seaOrmFiles } from '../generator/sea-orm.js'
 import { getString } from '../utils/index.js'
 import { GeneratorConfigError } from './errors.js'
+import { requireOutput } from './output.js'
 
 export function seaOrm(options: GeneratorOptions) {
   return Effect.gen(function* () {
-    if (!(options.generator.isCustomOutput && options.generator.output?.value)) {
-      return yield* new GeneratorConfigError({
-        message:
-          'output is required for Hekireki-SeaORM. Please specify output in your generator config.',
-      })
-    }
-    const outDir = options.generator.output.value
+    const output = yield* requireOutput(options, 'Hekireki-SeaORM')
     const renameAll = getString(options.generator.config?.renameAll)
     const serde = { renameAll }
     const enums = options.dmmf.datamodel.enums
@@ -30,6 +25,6 @@ export function seaOrm(options: GeneratorOptions) {
     }
     const provider = options.datasources[0]?.activeProvider
     const files = seaOrmFiles(models, enums, serde, provider)
-    return yield* emitMany(files, outDir)
+    return yield* emitMany(files, output)
   })
 }

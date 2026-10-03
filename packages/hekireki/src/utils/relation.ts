@@ -2,6 +2,7 @@ import type { DMMF } from '@prisma/generator-helper'
 
 import type { Cardinality, RelationOrigin } from '../types/index.js'
 import { parseRelation } from './index.js'
+import { backRelation } from './prisma-model.js'
 
 type ERRelation = {
   /** The `@relation` name the relation carries, when it has one. */
@@ -31,22 +32,6 @@ export function erKey(relation: {
   return `${relation.from.model}.${relation.from.field}->${relation.to.model}.${relation.to.field}`
 }
 
-/** The other side of the relation the field belongs to: same relation name, pointing back, and
- *  not the field itself — which is what tells the two ends of a self relation apart. */
-function inverseOf(
-  field: DMMF.Field,
-  owner: DMMF.Model,
-  related: DMMF.Model | undefined,
-): DMMF.Field | undefined {
-  return related?.fields.find(
-    (f) =>
-      f.kind === 'object' &&
-      f.relationName === field.relationName &&
-      f.type === owner.name &&
-      !(related.name === owner.name && f.name === field.name),
-  )
-}
-
 export function inferredERRelations(models: readonly DMMF.Model[]) {
   return models.flatMap((model) =>
     model.fields
@@ -62,8 +47,7 @@ export function inferredERRelations(models: readonly DMMF.Model[]) {
         const toField = field.relationFromFields?.[0] ?? ''
         const fromField = field.relationToFields?.[0] ?? 'id'
 
-        const relatedModel = models.find((m) => m.name === fromModel)
-        const inverseField = inverseOf(field, model, relatedModel)
+        const inverseField = backRelation(field, model, models)
 
         // The parent end answers "how many parents does one child row have?": exactly one, or
         // none when the foreign key is nullable.
@@ -117,7 +101,7 @@ export function implicitManyToManyERRelations(models: readonly DMMF.Model[]) {
       .filter((f) => f.kind === 'object' && f.isList && (f.relationFromFields ?? []).length === 0)
       .flatMap((field) => {
         const other = models.find((m) => m.name === field.type)
-        const inverse = inverseOf(field, model, other)
+        const inverse = backRelation(field, model, models)
         if (!(other && inverse?.isList)) return []
         if (`${model.name}.${field.name}` > `${other.name}.${inverse.name}`) return []
         return [

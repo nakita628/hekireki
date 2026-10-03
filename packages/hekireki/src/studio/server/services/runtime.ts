@@ -1,4 +1,4 @@
-import { NodeFileSystem } from '@effect/platform-node'
+import { layer as nodeFileSystemLayer } from '@effect/platform-node/NodeFileSystem'
 import { Context, Layer, ManagedRuntime } from 'effect'
 import type { FileSystem } from 'effect'
 import * as z from 'zod'
@@ -56,7 +56,7 @@ export function configureRuntime(input: z.infer<typeof ConfigureRuntimeInput>) {
       Layer.succeed(StudioStateTag, input.state),
       Layer.succeed(DatabaseTag, input.db),
       Layer.succeed(ClientTag, input.client),
-      NodeFileSystem.layer,
+      nodeFileSystemLayer,
     ),
   )
   if (previous !== null) void previous.dispose()

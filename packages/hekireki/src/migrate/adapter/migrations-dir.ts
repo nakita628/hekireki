@@ -10,6 +10,7 @@ import {
   readFile,
   writeFile,
 } from '../../file/index.js'
+import { readPrismaConfig } from '../../schema/path.js'
 import {
   LOCK_FILE,
   makeMigrationsPath,
@@ -85,15 +86,16 @@ export type MigrationsList = Effect.Success<ReturnType<typeof readMigrationsList
  */
 export function resolveMigrationsDir(input: { readonly cwd: string; readonly schemaDir: string }) {
   return Effect.gen(function* () {
-    const found = yield* Effect.firstSuccessOf(
-      [...new Set([input.cwd, input.schemaDir])].map((dir) =>
-        readFile(path.join(dir, 'prisma.config.ts')).pipe(Effect.map((text) => ({ dir, text }))),
-      ),
-    ).pipe(Effect.orElseSucceed(() => null))
+    // The Prisma config under any of its names, in the working directory, else beside the schema.
+    const configs = yield* Effect.forEach([...new Set([input.cwd, input.schemaDir])], (dir) =>
+      readPrismaConfig(dir),
+    )
+    const found = configs.find((config) => config !== null) ?? null
     const configured = found === null ? null : makeMigrationsPath(found.text)
+    // From the config file's own directory, as Prisma resolves the paths it holds.
     return found === null || configured === null
       ? path.join(input.schemaDir, 'migrations')
-      : path.resolve(found.dir, configured)
+      : path.resolve(path.dirname(found.file), configured)
   })
 }
 

@@ -2401,6 +2401,32 @@ describe('defaults Ecto has to know about', () => {
   end
 end`)
   })
+
+  // A ULID that is not the key is made on insert as a ULID key is, by Ecto.ULID.
+  it('autogenerates a ulid() default outside the primary key', () => {
+    const ticket = makeModel({
+      name: 'Ticket',
+      fields: [
+        makeField({
+          name: 'id',
+          type: 'Int',
+          isId: true,
+          hasDefaultValue: true,
+          default: { name: 'autoincrement', args: [] },
+        }),
+        makeField({
+          name: 'code',
+          type: 'String',
+          hasDefaultValue: true,
+          default: { name: 'ulid', args: [] },
+        }),
+      ],
+    })
+
+    expect(ectoSchemas([ticket], 'App', [ticket])).toContain(
+      '    field(:code, :string, autogenerate: {Ecto.ULID, :generate, []})',
+    )
+  })
 })
 
 describe('changeset', () => {

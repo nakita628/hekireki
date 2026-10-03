@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-import { NodeFileSystem } from '@effect/platform-node'
+import { layer as nodeFileSystemLayer } from '@effect/platform-node/NodeFileSystem'
 import { Effect } from 'effect'
 import * as z from 'zod'
 
@@ -684,7 +684,7 @@ export function openSqliteCopy(input: { readonly driver: Driver; readonly cwd: s
       ),
     )
     const copy = yield* openSqlite(`file:${file}`, input.cwd)
-    const remove = removePath(file).pipe(Effect.provide(NodeFileSystem.layer), Effect.ignore)
+    const remove = removePath(file).pipe(Effect.provide(nodeFileSystemLayer), Effect.ignore)
     return { ...copy, close: Effect.all([copy.close, remove], { discard: true }) }
   })
 }

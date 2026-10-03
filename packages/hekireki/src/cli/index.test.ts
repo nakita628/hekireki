@@ -6,7 +6,7 @@ import { DatabaseSync } from 'node:sqlite'
 
 import { NodeFileSystem, NodeServices } from '@effect/platform-node'
 import { Effect, Exit, Stdio } from 'effect'
-import { CliError } from 'effect/unstable/cli'
+import { CliError } from 'effect/cli'
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 
 import { version } from '../../package.json' with { type: 'json' }
@@ -144,7 +144,7 @@ describe('hekireki studio', () => {
     const { exit, printed } = await cli(['studio'])
     expect(Exit.isFailure(exit)).toBe(true)
     expect(printed).toContain(
-      'No Prisma schema found (looked for prisma/schema.prisma, schema.prisma)',
+      'No Prisma schema found (looked for `schema` in prisma.config.ts, then prisma/schema.prisma, schema.prisma)',
     )
     // Nothing was typed out, so the usage of the command that was run is the answer.
     expect(printed).toContain('hekireki studio [flags]')
@@ -357,6 +357,7 @@ describe('hekireki seed, the command line itself', () => {
   it.each([
     [['seed', '--count', 'abc'], 'count'],
     [['seed', '--count', '1.5'], 'count'],
+    [['seed', '--count', '-1'], 'count'],
     [['seed', '--seed', '1.5'], 'seed'],
     [['seed', '--nope'], 'nope'],
     [['seed', 'extra'], 'extra'],
@@ -568,6 +569,13 @@ DELETE FROM "User" WHERE "id" IN (SELECT "id" FROM (SELECT "id", "email", ROW_NU
     expect(printed).toContain('User.nmae: User has no field nmae.')
     const typo = await cli(['migrate', 'check', '-u', 'file:./dev.db', '--timeout', 'soon'])
     expect(Exit.isFailure(typo.exit)).toBe(true)
+    // A limit of zero or less is refused before any database is reached.
+    const zero = await cli(['migrate', 'check', '-u', 'file:./dev.db', '--timeout', '0'])
+    expect(Exit.isFailure(zero.exit)).toBe(true)
+    expect(zero.printed).toContain('timeout')
+    const negative = await cli(['migrate', 'check', '-u', 'file:./dev.db', '--timeout', '-5'])
+    expect(Exit.isFailure(negative.exit)).toBe(true)
+    expect(negative.printed).toContain('timeout')
   })
 
   it('documents plan, and migrate lists both', async () => {

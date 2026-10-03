@@ -2,6 +2,7 @@ import type { DMMF } from '@prisma/generator-helper'
 
 import type { Cardinality } from '../types/index.js'
 import { stripAnnotations } from '../utils/index.js'
+import { backRelation, isFunctionDefault } from '../utils/prisma-model.js'
 import { annotatedERRelations, erKey, inferredERRelations } from '../utils/relation.js'
 
 export function escapeNote(str: string) {
@@ -123,12 +124,6 @@ function columnOf(model: DMMF.Model | undefined, field: string) {
   return found ? dbNameOf(found) : field
 }
 
-function isFunctionDefault(
-  def: DMMF.Field['default'],
-): def is { readonly name: string; readonly args: readonly (string | number)[] } {
-  return def !== null && typeof def === 'object' && 'name' in def
-}
-
 function toDBMLColumn(field: DMMF.Field, enums: readonly DMMF.DatamodelEnum[]) {
   const defaultName = isFunctionDefault(field.default) ? field.default.name : undefined
   // An enum column holds the enum's mapped type and its values' mapped names.
@@ -216,13 +211,8 @@ export function makeRelations(models: readonly DMMF.Model[]) {
 
         const toModel = models.find((m) => m.name === relationTo)
         // The back relation is the other field of the same relation, not merely the first field
-        // pointing back at this model: a model can hold several relations to the same one.
-        const toField = toModel?.fields.find(
-          (f) =>
-            f.kind === 'object' &&
-            f.relationName === field.relationName &&
-            !(toModel.name === model.name && f.name === field.name),
-        )
+        // pointing back at this model, nor a relation of the same name to another model.
+        const toField = backRelation(field, model, models)
         const operator: '>' | '<' | '-' = toField?.isList ? '>' : '-'
 
         const relationFromName = dbNameOf(model)

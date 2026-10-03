@@ -1,6 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { makePascalCase, makeSnakeCase } from '../utils/index.js'
+import { implicitJoinTables, isFunctionDefault } from '../utils/prisma-model.js'
 
 export const SCALAR_TYPE_MAP: { readonly [k: string]: string } = {
   String: 'string',
@@ -33,12 +34,6 @@ export const SQLITE_SCALAR_TYPE_MAP: { readonly [k: string]: string } = {
 // emits no DDL DEFAULT for them and a raw kysely insert must still supply the
 // value. Only database-side defaults may become Generated<T>.
 const CLIENT_SIDE_DEFAULTS = new Set(['uuid', 'cuid', 'ulid', 'nanoid', 'auto'])
-
-function isFunctionDefault(
-  def: DMMF.Field['default'],
-): def is { readonly name: string; readonly args: readonly (string | number)[] } {
-  return def !== null && typeof def === 'object' && !Array.isArray(def) && 'name' in def
-}
 
 // Prisma Client writes a DateTime default itself as well, `now()` and a literal alike. On SQLite
 // the column's own default is other text for the instant (`CURRENT_TIMESTAMP` writes
@@ -127,16 +122,6 @@ export function makeEnumDeclarations(
     )
 }
 
-function isImplicitM2M(field: DMMF.Field, models: readonly DMMF.Model[]) {
-  if (field.kind !== 'object' || !field.isList) return false
-  if (field.relationFromFields && field.relationFromFields.length > 0) return false
-  const target = models.find((m) => m.name === field.type)
-  const otherSide = target?.fields.find(
-    (f) => f.kind === 'object' && f.relationName === field.relationName,
-  )
-  return otherSide?.isList === true
-}
-
 function pkTsType(
   modelName: string,
   models: readonly DMMF.Model[],
@@ -153,28 +138,12 @@ export function collectM2MJoinEntries(
   models: readonly DMMF.Model[],
   scalarTypes: { readonly [k: string]: string },
 ) {
-  const pairs = models.flatMap((model) =>
-    model.fields
-      .filter((field) => isImplicitM2M(field, models))
-      .map((field) => {
-        const [left, right] =
-          model.name < field.type ? [model.name, field.type] : [field.type, model.name]
-        return { left, right, relationName: field.relationName ?? `${left}To${right}` }
-      }),
-  )
-  const seen = new Set<string>()
-  return pairs
-    .filter((pair) => {
-      if (seen.has(pair.relationName)) return false
-      seen.add(pair.relationName)
-      return true
-    })
-    .map((pair) => ({
-      interfaceName: makePascalCase(makeSnakeCase(pair.relationName)),
-      tableName: `_${pair.relationName}`,
-      aType: pkTsType(pair.left, models, scalarTypes),
-      bType: pkTsType(pair.right, models, scalarTypes),
-    }))
+  return implicitJoinTables(models).map((pair) => ({
+    interfaceName: makePascalCase(makeSnakeCase(pair.relationName)),
+    tableName: `_${pair.relationName}`,
+    aType: pkTsType(pair.left, models, scalarTypes),
+    bType: pkTsType(pair.right, models, scalarTypes),
+  }))
 }
 
 export function makeM2MJoinInterface(entry: {

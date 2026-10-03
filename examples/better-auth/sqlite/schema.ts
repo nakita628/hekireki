@@ -1,5 +1,4 @@
 import {
-  blob,
   customType,
   foreignKey,
   index,
@@ -9,6 +8,12 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core'
 import { relations } from 'drizzle-orm'
+
+const bigInteger = customType<{ data: bigint; driverData: number | bigint }>({
+  dataType: () => 'bigint',
+  toDriver: (value) => value,
+  fromDriver: (value) => BigInt(value),
+})
 
 const utcDateTime = customType<{ data: Date; driverData: string | number }>({
   dataType: () => 'datetime',
@@ -1005,7 +1010,7 @@ export const rateLimit = sqliteTable(
     id: text('id').primaryKey(),
     key: text('key').notNull(),
     count: integer('count').notNull(),
-    lastRequest: blob('lastRequest', { mode: 'bigint' }).notNull(),
+    lastRequest: bigInteger('lastRequest').notNull(),
   },
   (table) => [uniqueIndex('rateLimit_key_key').on(table.key)],
 )

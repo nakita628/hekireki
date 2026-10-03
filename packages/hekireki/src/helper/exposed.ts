@@ -1,17 +1,22 @@
 import type { DMMF } from '@prisma/generator-helper'
 
+import { isSameList } from '../utils/index.js'
 import { allocate, pascalCase } from '../utils/naming.js'
+import type { ManyToMany } from '../utils/prisma-model.js'
 import {
   backRelation,
   columnName,
+  isFunctionDefault,
+  isListDefault,
+  manyToManyRelations,
+  tableName,
+} from '../utils/prisma-model.js'
+import {
   entityKey,
   fieldNames,
   INDEX_METHODS,
   indexName,
-  isFunctionDefault,
-  isListDefault,
   isSameFieldSet,
-  manyToManyRelations,
   modelIndexes,
   operatorClassName,
   parseDateTimeDefault,
@@ -20,9 +25,8 @@ import {
   sqlArray,
   sqlString,
   sqlTimestamp,
-  tableName,
 } from '../utils/prisma-postgres.js'
-import type { IndexInfo, ManyToMany } from '../utils/prisma-postgres.js'
+import type { IndexInfo } from '../utils/prisma-postgres.js'
 import {
   PRISMA_STRING,
   prismaBlocks,
@@ -763,10 +767,6 @@ type ExposedPlan = {
 
 /** An index, and the condition of a partial one as SQL. */
 type PlannedIndex = IndexInfo & { readonly where?: string }
-
-function isSameList(left: readonly string[], right: readonly string[]) {
-  return left.length === right.length && left.every((name, index) => right[index] === name)
-}
 
 // A partial index's condition as Prisma Migrate writes it. Prisma takes true, false, null, a
 // string or a number for a field, or `{ not: ... }` of one.

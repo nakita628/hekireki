@@ -1,4 +1,4 @@
-import { NodeFileSystem } from '@effect/platform-node'
+import { layer as nodeFileSystemLayer } from '@effect/platform-node/NodeFileSystem'
 import pkg from '@prisma/generator-helper'
 import { Effect } from 'effect'
 
@@ -60,7 +60,7 @@ export function registerGenerator(name: keyof typeof GENERATORS) {
       return Effect.runPromise(
         handler(options).pipe(
           Effect.mapError((error) => new Error(error.message)),
-          Effect.provide(NodeFileSystem.layer),
+          Effect.provide(nodeFileSystemLayer),
         ),
       )
     },

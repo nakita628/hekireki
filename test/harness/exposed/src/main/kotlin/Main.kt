@@ -172,12 +172,13 @@ fun mainSchema() =
             ),
         expectedMigration =
             listOf(
-                // Exposed looks for the sequence of a serial column under the table's name unquoted,
-                // which PostgreSQL folds to lower case: it misses "Category_id_seq" and asks for
-                // category_id_seq, a second sequence nothing uses.
+                // Exposed looks for the sequence of a serial column under the table's and the column's
+                // names unquoted, which PostgreSQL folds to lower case: it misses "Category_id_seq"
+                // (or "Paper_paperId_seq", a key not named id) and asks for category_id_seq, a second
+                // sequence nothing uses.
                 Quirk(
-                    """CREATE SEQUENCE IF NOT EXISTS [A-Z]\w*_id_seq START WITH 1 MINVALUE 1 MAXVALUE 9223372036854775807""",
-                    """changes: \+ sequence public\.[a-z]\w*_id_seq bigint owned-by=none""",
+                    """CREATE SEQUENCE IF NOT EXISTS [A-Z]\w*_\w+_seq START WITH 1 MINVALUE 1 MAXVALUE 9223372036854775807""",
+                    """changes: \+ sequence public\.[a-z][a-z0-9_]*_seq bigint owned-by=none""",
                 ),
                 // Exposed reads a column named in capitals throughout back from the catalog folded to
                 // lower case, and so misses the foreign key and the index on a join table's B column;

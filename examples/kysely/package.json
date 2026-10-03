@@ -20,7 +20,7 @@
     "better-sqlite3": "^13.0.3",
     "hekireki": "workspace:*",
     "kysely": "^0.29.6",
-    "mysql2": "^3.24.4",
+    "mysql2": "^3.24.5",
     "pg": "^8.23.0",
     "prisma": "8.1.0-dev.7",
     "typescript": "^7.0.2"

@@ -1,5 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
+import { isAutoincrement, isFunctionDefault, relationEnds } from '../utils/prisma-model.js'
+
 const PRISMA_TO_GO: { [k: string]: string } = {
   String: 'string',
   Int: 'int',
@@ -103,92 +105,56 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
     onDelete?: string
     onUpdate?: string
   }[] = []
-  const manyToMany: { name: string; targetModel: string; relationName: string }[] = []
+  const manyToMany: {
+    name: string
+    targetModel: string
+    relationName: string
+    isSideA: boolean
+  }[] = []
 
-  for (const field of model.fields) {
-    if (field.kind !== 'object') continue
-
-    if (field.relationFromFields && field.relationFromFields.length > 0) {
+  for (const end of relationEnds(model, allModels)) {
+    const { field } = end
+    if (end.kind === 'belongsTo') {
+      const foreignKeys = field.relationFromFields ?? []
       belongsTo.push({
         name: field.name,
         targetModel: field.type,
-        foreignKey: field.relationFromFields[0],
+        foreignKey: foreignKeys[0],
         references: field.relationToFields?.[0] ?? 'id',
-        foreignKeys: field.relationFromFields,
+        foreignKeys,
         referencesList: field.relationToFields ?? ['id'],
         onDelete: field.relationOnDelete,
         onUpdate: field.relationOnUpdate,
       })
       continue
     }
-
-    const targetModel = allModels.find((m) => m.name === field.type)
-    if (!targetModel) continue
-
-    if (field.isList) {
-      const otherSide = targetModel.fields.find(
-        (f) => f.relationName === field.relationName && f.kind === 'object',
-      )
-      if (otherSide?.isList) {
-        manyToMany.push({
-          name: field.name,
-          targetModel: field.type,
-          relationName: field.relationName ?? `${model.name}To${field.type}`,
-        })
-        continue
-      }
-    }
-
-    const fkField = targetModel.fields.find(
-      (f) =>
-        f.relationName === field.relationName &&
-        f.relationFromFields &&
-        f.relationFromFields.length > 0,
-    )
-    const foreignKey = fkField?.relationFromFields?.[0]
-    if (!foreignKey) continue
-    const references = fkField?.relationToFields?.[0] ?? 'id'
-    const foreignKeys = fkField?.relationFromFields ?? [foreignKey]
-    const referencesList = fkField?.relationToFields ?? ['id']
-
-    if (field.isList) {
-      hasMany.push({
+    if (end.kind === 'manyToMany') {
+      manyToMany.push({
         name: field.name,
         targetModel: field.type,
-        foreignKey,
-        references,
-        foreignKeys,
-        referencesList,
-        isList: true,
-        onDelete: fkField?.relationOnDelete,
-        onUpdate: fkField?.relationOnUpdate,
+        relationName: field.relationName ?? `${model.name}To${field.type}`,
+        isSideA: end.isSideA,
       })
-    } else {
-      hasOne.push({
-        name: field.name,
-        targetModel: field.type,
-        foreignKey,
-        references,
-        foreignKeys,
-        referencesList,
-        isList: false,
-        onDelete: fkField?.relationOnDelete,
-        onUpdate: fkField?.relationOnUpdate,
-      })
+      continue
     }
+    const fkField = end.inverse
+    const foreignKeys = fkField.relationFromFields ?? []
+    const association = {
+      name: field.name,
+      targetModel: field.type,
+      foreignKey: foreignKeys[0],
+      references: fkField.relationToFields?.[0] ?? 'id',
+      foreignKeys,
+      referencesList: fkField.relationToFields ?? ['id'],
+      isList: end.kind === 'hasMany',
+      onDelete: fkField.relationOnDelete,
+      onUpdate: fkField.relationOnUpdate,
+    }
+    if (end.kind === 'hasMany') hasMany.push(association)
+    else hasOne.push(association)
   }
 
   return { belongsTo, hasMany, hasOne, manyToMany }
-}
-
-function isFunctionDefault(
-  def: DMMF.Field['default'],
-): def is { readonly name: string; readonly args: readonly (string | number)[] } {
-  return def !== null && typeof def === 'object' && 'name' in def
-}
-
-function isAutoincrement(field: DMMF.Field) {
-  return isFunctionDefault(field.default) && field.default.name === 'autoincrement'
 }
 
 function formatGoDefault(def: DMMF.Field['default'], type: string, kind: DMMF.FieldKind) {
@@ -673,9 +639,10 @@ function generateRelationFields(
 
   // Prisma's join table has two columns, A for the model whose name sorts
   // first and B for the other, where GORM would look for `post_id`/`tag_id`.
+  // In a self-relation the field whose name sorts first holds its own key in A.
   const manyToManyLines = associations.manyToMany.map((assoc) => {
     const joinTable = `_${assoc.relationName}`
-    const [own, related] = model.name < assoc.targetModel ? ['A', 'B'] : ['B', 'A']
+    const [own, related] = assoc.isSideA ? ['A', 'B'] : ['B', 'A']
     return [
       goFieldName(assoc.name),
       `[]${goModelName(assoc.targetModel)}`,

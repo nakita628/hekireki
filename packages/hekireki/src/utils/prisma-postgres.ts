@@ -1,5 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
+import { columnName, tableName } from './prisma-model.js'
+
 // What a Prisma schema means on PostgreSQL, whichever language the model is written in: the names
 // Prisma Migrate gives tables, constraints and indexes, the keys and join tables it creates, and
 // how it writes a default into the DEFAULT clause.
@@ -30,31 +32,11 @@ export function prismaConstraintName(base: string, suffix: string, limit = IDENT
   return `${kept.join('')}${suffix}`
 }
 
-export function tableName(model: DMMF.Model) {
-  return model.dbName ?? model.name
-}
-
-export function columnName(field: DMMF.Field) {
-  return field.dbName ?? field.name
-}
-
 export type IndexInfo = {
   readonly type: DMMF.IndexType
   readonly fields: readonly DMMF.IndexField[]
   readonly dbName?: string
   readonly algorithm?: string
-}
-
-export function isListDefault(
-  def: DMMF.Field['default'],
-): def is readonly (string | number | boolean)[] {
-  return Array.isArray(def)
-}
-
-export function isFunctionDefault(
-  def: DMMF.Field['default'],
-): def is { readonly name: string; readonly args: readonly (string | number)[] } {
-  return def !== null && typeof def === 'object' && !Array.isArray(def) && 'name' in def
 }
 
 export function modelIndexes(
@@ -115,53 +97,6 @@ export function indexName(model: DMMF.Model, index: IndexInfo) {
   return prismaConstraintName(
     [table, ...columns].join('_'),
     index.type === 'unique' ? '_key' : '_idx',
-  )
-}
-
-// The other end of a relation field: the same relation, on the related model, and — which is what
-// tells the two ends of a self-relation apart — not the field itself.
-export function backRelation(field: DMMF.Field, owner: DMMF.Model, models: readonly DMMF.Model[]) {
-  const related = models.find((m) => m.name === field.type)
-  return related?.fields.find(
-    (f) =>
-      f.kind === 'object' &&
-      f.relationName === field.relationName &&
-      f.type === owner.name &&
-      !(related.name === owner.name && f.name === field.name),
-  )
-}
-
-export type ManyToMany = {
-  readonly relationName: string
-  /** The side join column `A` belongs to. */
-  readonly a: { readonly model: DMMF.Model; readonly field: DMMF.Field }
-  /** The side join column `B` belongs to. */
-  readonly b: { readonly model: DMMF.Model; readonly field: DMMF.Field }
-}
-
-// Prisma keeps an implicit many-to-many relation in `_<relation>`, a row per pair in columns `A`
-// and `B`. `A` holds the id of the model whose name sorts first, and that model's relation field
-// lists the `B` of its rows; in a self-relation both columns hold the same model's ids, and the
-// field whose name sorts first is the one that lists `B`.
-export function manyToManyRelations(models: readonly DMMF.Model[]) {
-  return models.flatMap((model) =>
-    model.fields
-      .filter((f) => f.kind === 'object' && f.isList && (f.relationFromFields ?? []).length === 0)
-      .flatMap((field): ManyToMany[] => {
-        const inverse = backRelation(field, model, models)
-        const other = models.find((m) => m.name === field.type)
-        if (!(other && inverse?.isList)) return []
-        const isSideA =
-          model.name === other.name ? field.name < inverse.name : model.name < other.name
-        if (!isSideA) return []
-        return [
-          {
-            relationName: field.relationName ?? `${model.name}To${other.name}`,
-            a: { model, field },
-            b: { model: other, field: inverse },
-          },
-        ]
-      }),
   )
 }
 

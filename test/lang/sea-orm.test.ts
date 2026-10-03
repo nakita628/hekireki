@@ -20,10 +20,17 @@ describe('sea-orm', () => {
   // `--check` parses the entities and also holds them to rustfmt's layout: a project that runs
   // `cargo fmt --check` over its generated entities must find nothing to change.
   it.skipIf(!hasRustfmt)('generated entities are as rustfmt writes them', () => {
-    const entities = join(harness, 'src', 'entities')
-    const files = readdirSync(entities)
-      .filter((f) => f.endsWith('.rs'))
-      .map((f) => join(entities, f))
+    // The PostgreSQL entities, and the SQLite and MySQL ones test/lang/setup.ts writes into
+    // src/variants/ (which `cargo check` below builds through src/variants/mod.rs).
+    const files = [
+      join(harness, 'src', 'entities'),
+      join(harness, 'src', 'variants', 'sqlite'),
+      join(harness, 'src', 'variants', 'mysql'),
+    ].flatMap((dir) =>
+      readdirSync(dir)
+        .filter((f) => f.endsWith('.rs'))
+        .map((f) => join(dir, f)),
+    )
     expect(files.length).toBeGreaterThan(0)
 
     const result = spawnSync('rustfmt', ['--edition', '2021', '--check', ...files], {

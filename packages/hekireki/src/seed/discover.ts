@@ -4,18 +4,19 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import { Effect } from 'effect'
+import type * as z from 'zod'
 
 import type { Dialect } from '../database/url.js'
 import { makePostgresSchema, makeSqliteFilePath } from '../database/url.js'
+import type { GeneratorBlock } from '../schema/index.js'
 import { SeedDatabaseError } from './errors.js'
-import type { GeneratorBlock } from './schema.js'
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === 'object' && value !== null
 }
 
 /** The `prisma-client` (or legacy `prisma-client-js`) generator block of the schema, if any. */
-function clientGenerator(generators: readonly GeneratorBlock[]) {
+function clientGenerator(generators: readonly z.infer<typeof GeneratorBlock>[]) {
   return (
     generators.find((g) => ['prisma-client', 'prisma-client-js'].includes(g.provider.value)) ?? null
   )
@@ -25,7 +26,7 @@ function clientGenerator(generators: readonly GeneratorBlock[]) {
  * Where the schema says the Prisma Client is: the `output` of its `prisma-client` generator, or
  * `@prisma/client` for the legacy `prisma-client-js`; null, with the reason, when it says nothing.
  */
-export function clientSource(generators: readonly GeneratorBlock[]) {
+export function clientSource(generators: readonly z.infer<typeof GeneratorBlock>[]) {
   const generator = clientGenerator(generators)
   if (generator === null) {
     return { source: null, reason: 'no prisma-client generator in the schema' }
@@ -120,7 +121,7 @@ function clientEntry(schemaDir: string, output: string) {
  * any piece is missing, so the caller can fall back to the database URL.
  */
 export function discoverClient(input: {
-  readonly generators: readonly GeneratorBlock[]
+  readonly generators: readonly z.infer<typeof GeneratorBlock>[]
   readonly schemaDir: string
   readonly cwd: string
   readonly url: string

@@ -6,16 +6,11 @@ import { ectoSchemaFiles } from '../generator/ecto.js'
 import { ectoProblems } from '../helper/ecto.js'
 import { relationMaps, relationMode } from '../utils/prisma-schema-text.js'
 import { GeneratorConfigError } from './errors.js'
+import { requireOutput } from './output.js'
 
 export function ecto(options: GeneratorOptions) {
   return Effect.gen(function* () {
-    if (!(options.generator.isCustomOutput && options.generator.output?.value)) {
-      return yield* new GeneratorConfigError({
-        message:
-          'output is required for Hekireki-Ecto. Please specify output in your generator config.',
-      })
-    }
-    const outDir = options.generator.output.value
+    const output = yield* requireOutput(options, 'Hekireki-Ecto')
     const problems = ectoProblems(options.dmmf.datamodel.models)
     if (problems.length > 0) {
       return yield* new GeneratorConfigError({
@@ -31,6 +26,6 @@ export function ecto(options: GeneratorOptions) {
       foreignKeyNames: relationMaps(options.datamodel),
       relationMode: relationMode(options.datamodel),
     })
-    return yield* emitMany(files, outDir)
+    return yield* emitMany(files, output)
   })
 }

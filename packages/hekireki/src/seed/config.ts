@@ -341,13 +341,14 @@ export type ModelRule<S extends SeedSchema, Mo extends SeedModelInfo> =
       /** Rows to generate for the model. */
       readonly count?: number
       /** Rules per scalar or enum field. */
+      // oxlint-disable-next-line typescript/no-generated-empty-object-type -- generic over the model: `{}` only under the constraint, a model's own fields once Mo is one
       readonly fields?: FieldRules<S, Mo>
       /** How many related rows each faker row gets, per relation field (`tags`, `posts`, `profile`). */
       readonly relations?: RelationRules<S, Mo>
     }
 
 export type CommonOptions = {
-  /** Path to schema.prisma or a directory of .prisma files; prisma/schema.prisma, then schema.prisma when omitted. */
+  /** Path to schema.prisma or a directory of .prisma files; the `schema` of the Prisma config, then prisma/schema.prisma, then schema.prisma when omitted. */
   readonly schema?: string
   /** The faker seed: the same seed yields the same rows. Left out, every run differs. */
   readonly seed?: number

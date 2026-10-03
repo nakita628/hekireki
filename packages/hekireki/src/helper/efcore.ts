@@ -5,14 +5,18 @@ import { allocate, pascalCase } from '../utils/naming.js'
 import {
   backRelation,
   columnName,
+  isFunctionDefault,
+  isListDefault,
+  manyToManyRelations,
+  tableName,
+} from '../utils/prisma-model.js'
+import type { ManyToMany } from '../utils/prisma-model.js'
+import {
   entityKey,
   fieldNames,
   INDEX_METHODS,
   indexName,
-  isFunctionDefault,
-  isListDefault,
   isSameFieldSet,
-  manyToManyRelations,
   modelIndexes,
   operatorClassName,
   parseDateTimeDefault,
@@ -21,9 +25,8 @@ import {
   sqlArray,
   sqlString,
   sqlTimestamp,
-  tableName,
 } from '../utils/prisma-postgres.js'
-import type { IndexInfo, ManyToMany } from '../utils/prisma-postgres.js'
+import type { IndexInfo } from '../utils/prisma-postgres.js'
 
 // Generated C# names a framework type through a placeholder, `\0T|System.DateTime\0` in a type
 // position or `\0E|...\0` in an expression. Only once a whole file is assembled is it known which

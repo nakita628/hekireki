@@ -5,9 +5,9 @@ import path from 'node:path'
 import { Effect } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
+import { parseSchema } from '../schema/index.js'
 import { discoverClient } from './discover.js'
 import { withTypeScriptImports } from './resolve.js'
-import { parseSchema } from './schema.js'
 
 const dirs: string[] = []
 

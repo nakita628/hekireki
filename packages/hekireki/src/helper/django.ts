@@ -1,6 +1,15 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { makePascalCase, makeSnakeCase } from '../utils/index.js'
+import {
+  backRelation,
+  isAutoincrement,
+  isFunctionDefault,
+  isNowDefault,
+  isUlidDefault,
+  uuidDefaultVersion,
+} from '../utils/prisma-model.js'
+import { jsonToPythonLiteral, toPythonString } from '../utils/python.js'
 
 const PRISMA_TO_DJANGO: { [k: string]: string } = {
   String: 'TextField',
@@ -172,55 +181,6 @@ function resolveDjangoField(field: DMMF.Field) {
     default:
       return baseResolved
   }
-}
-
-function toPythonString(value: string) {
-  const escaped = value
-    .replaceAll('\\', '\\\\')
-    .replaceAll('"', '\\"')
-    .replaceAll('\n', '\\n')
-    .replaceAll('\r', '\\r')
-  return `"${escaped}"`
-}
-
-function jsonToPythonLiteral(value: unknown): string {
-  if (value === null) return 'None'
-  if (value === true) return 'True'
-  if (value === false) return 'False'
-  if (typeof value === 'number') return String(value)
-  if (typeof value === 'string') return toPythonString(value)
-  if (Array.isArray(value)) return `[${value.map(jsonToPythonLiteral).join(', ')}]`
-  if (typeof value === 'object') {
-    return `{${Object.entries(value)
-      .map(([k, v]) => `${toPythonString(k)}: ${jsonToPythonLiteral(v)}`)
-      .join(', ')}}`
-  }
-  return 'None'
-}
-
-function isFunctionDefault(
-  def: DMMF.Field['default'],
-): def is { readonly name: string; readonly args: readonly (string | number)[] } {
-  return def !== null && typeof def === 'object' && 'name' in def && !Array.isArray(def)
-}
-
-function isAutoincrement(field: DMMF.Field) {
-  return isFunctionDefault(field.default) && field.default.name === 'autoincrement'
-}
-
-function uuidDefaultVersion(field: DMMF.Field) {
-  if (!(isFunctionDefault(field.default) && field.default.name === 'uuid')) return null
-  return field.default.args[0] === 7 ? 7 : 4
-}
-
-function isUlidDefault(field: DMMF.Field) {
-  return isFunctionDefault(field.default) && field.default.name === 'ulid'
-}
-
-function isNowDefault(field: DMMF.Field) {
-  return (
-    field.type === 'DateTime' && isFunctionDefault(field.default) && field.default.name === 'now'
-  )
 }
 
 function dbGeneratedExpr(field: DMMF.Field) {
@@ -717,21 +677,6 @@ function onDeleteFor(field: DMMF.Field) {
   return field.isRequired ? 'models.RESTRICT' : 'models.SET_NULL'
 }
 
-function findBackRelationField(
-  relationField: DMMF.Field,
-  model: DMMF.Model,
-  allModels: readonly DMMF.Model[],
-) {
-  const targetModel = allModels.find((m) => m.name === relationField.type)
-  return targetModel?.fields.find(
-    (f) =>
-      f.kind === 'object' &&
-      f.type === model.name &&
-      f.relationName === relationField.relationName &&
-      !(targetModel.name === model.name && f.name === relationField.name),
-  )
-}
-
 function generateForeignKeyField(
   model: DMMF.Model,
   relationField: DMMF.Field,
@@ -741,7 +686,7 @@ function generateForeignKeyField(
 ) {
   const attrName = attrNameOf(names, model, relationField)
   const columnName = fieldColumnName(scalarField)
-  const backField = findBackRelationField(relationField, model, allModels)
+  const backField = backRelation(relationField, model, allModels)
   const ctor = backField && !backField.isList ? 'OneToOneField' : 'ForeignKey'
   const target =
     relationField.type === model.name ? '"self"' : `"${makePascalCase(relationField.type)}"`
@@ -800,14 +745,7 @@ export function collectManyToManyTables(
   const candidates = allModels.flatMap((model) =>
     model.fields.flatMap((field) => {
       if (field.kind !== 'object' || !field.isList) return []
-      const targetModel = allModels.find((m) => m.name === field.type)
-      if (!targetModel) return []
-      const otherSide = targetModel.fields.find(
-        (f) =>
-          f.relationName === field.relationName &&
-          f.kind === 'object' &&
-          !(targetModel.name === model.name && f.name === field.name),
-      )
+      const otherSide = backRelation(field, model, allModels)
       if (!otherSide?.isList) return []
 
       const [leftName, rightName] =
@@ -888,7 +826,7 @@ function generateManyToManyField(
   }[],
   names: Names,
 ) {
-  const backField = findBackRelationField(field, model, allModels)
+  const backField = backRelation(field, model, allModels)
   const table = m2mTables.find((t) => t.relationName === field.relationName)
   if (!table) return null
   const attrName = attrNameOf(names, model, field)

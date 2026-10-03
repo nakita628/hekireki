@@ -107,6 +107,58 @@ describe('resolveDatabaseUrl', () => {
     )
   })
 
+  // Prisma finds its config under several names; prisma7.config comes before prisma.config.
+  it('reads the Prisma config under any name Prisma looks for', async () => {
+    const cwd = tmp()
+    mkdirSync(path.join(cwd, '.config'))
+    writeFileSync(
+      path.join(cwd, '.config', 'prisma.mjs'),
+      "export default defineConfig({ datasource: { url: 'file:./dot-config.db' } })\n",
+    )
+    expect(await resolve({ cwd })).toStrictEqual(
+      Exit.succeed({ url: 'file:./dot-config.db', source: 'prisma' }),
+    )
+    writeFileSync(
+      path.join(cwd, 'prisma7.config.ts'),
+      "export default defineConfig({ datasource: { url: 'file:./prisma7.db' } })\n",
+    )
+    expect(await resolve({ cwd })).toStrictEqual(
+      Exit.succeed({ url: 'file:./prisma7.db', source: 'prisma' }),
+    )
+  })
+
+  // `process.env.APP_DB` names its variable as `env('APP_DB')` does; read as naming none, it would
+  // fall back to DATABASE_URL and open another database without a word.
+  it.each(['process.env.APP_DB', "process.env['APP_DB']", 'process.env["APP_DB"]'])(
+    'reads the variable %s names in the Prisma config',
+    async (url) => {
+      const cwd = tmp()
+      writeFileSync(
+        path.join(cwd, 'prisma.config.ts'),
+        `export default defineConfig({ datasource: { url: ${url} } })\n`,
+      )
+      expect(
+        await resolve({ cwd, env: { APP_DB: 'file:./app.db', DATABASE_URL: 'file:./other.db' } }),
+      ).toStrictEqual(Exit.succeed({ url: 'file:./app.db', source: 'prisma' }))
+    },
+  )
+
+  it('names the Prisma config it read when the variable it names is not set', async () => {
+    const cwd = tmp()
+    mkdirSync(path.join(cwd, '.config'))
+    writeFileSync(
+      path.join(cwd, '.config', 'prisma.ts'),
+      "export default defineConfig({ datasource: { url: env('SHOP_DB') } })\n",
+    )
+    expect(await resolve({ cwd })).toStrictEqual(
+      Exit.fail(
+        new DatabaseUrlNotFoundError({
+          reason: `${path.join('.config', 'prisma.ts')} reads the database URL from env("SHOP_DB"), but SHOP_DB is not set.\n   Set it in .env or the environment, or pass --url <connection string>.`,
+        }),
+      ),
+    )
+  })
+
   it('reads the datasource url of a Prisma 6 schema from the schema text', async () => {
     const dir = tmp()
     expect(

@@ -42,4 +42,31 @@ describe('drizzle', () => {
     expect(result.status).toBe(0)
     expect(readdirSync(out).filter((f) => f.endsWith('.sql')).length).toBeGreaterThan(0)
   })
+
+  // The same schema on SQLite and MySQL (test/lang/setup.ts): the column functions of each
+  // dialect type-check, and drizzle-kit writes a migration for each.
+  it('type-checks the SQLite and MySQL output', () => {
+    const result = spawnSync(
+      join(bin, 'tsc'),
+      ['--noEmit', '-p', join(harness, 'tsconfig.variants.json')],
+      { stdio: 'inherit' },
+    )
+    expect(result.status).toBe(0)
+  })
+
+  it.each(['sqlite', 'mysql'])('generates %s migration SQL', (dialect) => {
+    const variantOut = join(out, dialect)
+    const result = spawnSync(
+      join(bin, 'drizzle-kit'),
+      [
+        'generate',
+        `--dialect=${dialect}`,
+        `--schema=${join(harness, 'variants', dialect, 'schema.ts')}`,
+        `--out=${variantOut}`,
+      ],
+      { cwd: root, stdio: ['ignore', 'ignore', 'inherit'] },
+    )
+    expect(result.status).toBe(0)
+    expect(readdirSync(variantOut).filter((f) => f.endsWith('.sql')).length).toBeGreaterThan(0)
+  })
 })

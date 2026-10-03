@@ -100,9 +100,4 @@ export default defineConfig({
   },
   // Style (printWidth / quotes / semicolons / import sorting) is inherited from the root
   // vite.config.ts; only the paths this workspace skips are declared here.
-  fmt: {
-    // generated/** is generator output whose bytes come from the generators' own
-    // oxfmt pass; reformatting would make every regeneration a spurious diff.
-    ignorePatterns: ['**/node_modules/**', 'generated/**'],
-  },
 })

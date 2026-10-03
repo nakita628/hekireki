@@ -1,6 +1,16 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { constraintName, makePascalCase, makeSnakeCase } from '../utils/index.js'
+import {
+  backRelation,
+  isAutoincrement,
+  isFunctionDefault,
+  isNowDefault,
+  isUlidDefault,
+  relationEnds,
+  uuidDefaultVersion,
+} from '../utils/prisma-model.js'
+import { jsonToPythonLiteral, toPythonString } from '../utils/python.js'
 
 const PRISMA_TO_PYTHON: { [k: string]: string } = {
   String: 'str',
@@ -330,16 +340,16 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
   }[] = []
   const manyToMany: { name: string; targetModel: string; relationName: string }[] = []
 
-  for (const field of model.fields) {
-    if (field.kind !== 'object') continue
-
-    if (field.relationFromFields && field.relationFromFields.length > 0) {
+  for (const end of relationEnds(model, allModels)) {
+    const { field } = end
+    if (end.kind === 'belongsTo') {
+      const foreignKeys = field.relationFromFields ?? []
       belongsTo.push({
         name: field.name,
         targetModel: field.type,
-        foreignKey: field.relationFromFields[0],
+        foreignKey: foreignKeys[0],
         references: field.relationToFields?.[0] ?? 'id',
-        foreignKeys: field.relationFromFields,
+        foreignKeys,
         referencesList: field.relationToFields ?? ['id'],
         optional: !field.isRequired,
         // What Prisma Migrate writes when the schema names no action: the database has it, so
@@ -349,35 +359,18 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
       })
       continue
     }
-
-    const targetModel = allModels.find((m) => m.name === field.type)
-    if (!targetModel) continue
-
-    if (field.isList) {
-      const otherSide = targetModel.fields.find(
-        (f) => f.relationName === field.relationName && f.kind === 'object',
-      )
-      if (otherSide?.isList) {
-        manyToMany.push({
-          name: field.name,
-          targetModel: field.type,
-          relationName: field.relationName ?? `${model.name}To${field.type}`,
-        })
-        continue
-      }
+    if (end.kind === 'manyToMany') {
+      manyToMany.push({
+        name: field.name,
+        targetModel: field.type,
+        relationName: field.relationName ?? `${model.name}To${field.type}`,
+      })
+      continue
     }
-
-    const fkField = targetModel.fields.find(
-      (f) =>
-        f.relationName === field.relationName &&
-        f.relationFromFields &&
-        f.relationFromFields.length > 0,
-    )
-    const foreignKey = fkField?.relationFromFields?.[0]
-    if (!(fkField && foreignKey)) continue
+    const fkField = end.inverse
+    const foreignKey = (fkField.relationFromFields ?? [])[0]
     const onDelete = fkField.relationOnDelete ?? (fkField.isRequired ? 'Restrict' : 'SetNull')
-
-    if (field.isList) {
+    if (end.kind === 'hasMany') {
       hasMany.push({
         name: field.name,
         targetModel: field.type,
@@ -406,9 +399,7 @@ export function collectManyToManyTables(allModels: readonly DMMF.Model[]) {
       if (field.kind !== 'object' || !field.isList) return []
       const targetModel = allModels.find((m) => m.name === field.type)
       if (!targetModel) return []
-      const otherSide = targetModel.fields.find(
-        (f) => f.relationName === field.relationName && f.kind === 'object',
-      )
+      const otherSide = backRelation(field, model, allModels)
       if (!otherSide?.isList) return []
 
       const [leftName, rightName] =
@@ -487,30 +478,6 @@ export function generateAssociationTable(
       : []),
     ')',
   ].join('\n')
-}
-
-function toPythonString(value: string) {
-  const escaped = value
-    .replaceAll('\\', '\\\\')
-    .replaceAll('"', '\\"')
-    .replaceAll('\n', '\\n')
-    .replaceAll('\r', '\\r')
-  return `"${escaped}"`
-}
-
-function jsonToPythonLiteral(value: unknown): string {
-  if (value === null) return 'None'
-  if (value === true) return 'True'
-  if (value === false) return 'False'
-  if (typeof value === 'number') return String(value)
-  if (typeof value === 'string') return toPythonString(value)
-  if (Array.isArray(value)) return `[${value.map(jsonToPythonLiteral).join(', ')}]`
-  if (typeof value === 'object') {
-    return `{${Object.entries(value)
-      .map(([k, v]) => `${toPythonString(k)}: ${jsonToPythonLiteral(v)}`)
-      .join(', ')}}`
-  }
-  return 'None'
 }
 
 const SQL_ACTION: { [k: string]: string } = {
@@ -644,18 +611,6 @@ function serverDefault(
   return `ARRAY[${items.join(', ')}]${cast}`
 }
 
-function isFunctionDefault(
-  def: DMMF.Field['default'],
-): def is { readonly name: string; readonly args: readonly (string | number)[] } {
-  return def !== null && typeof def === 'object' && 'name' in def
-}
-
-function isNowDefault(field: DMMF.Field) {
-  return (
-    field.type === 'DateTime' && isFunctionDefault(field.default) && field.default.name === 'now'
-  )
-}
-
 function usesNativeType(models: readonly DMMF.Model[], names: readonly string[]) {
   return models.some((m) => m.fields.some((f) => names.includes(f.nativeType?.[0] ?? '')))
 }
@@ -669,19 +624,6 @@ function usesUtcDateTime(models: readonly DMMF.Model[]) {
         f.type === 'DateTime' && ['', 'Timestamp', 'DateTime'].includes(f.nativeType?.[0] ?? ''),
     ),
   )
-}
-
-function isAutoincrement(field: DMMF.Field) {
-  return isFunctionDefault(field.default) && field.default.name === 'autoincrement'
-}
-
-function uuidDefaultVersion(field: DMMF.Field) {
-  if (!(isFunctionDefault(field.default) && field.default.name === 'uuid')) return null
-  return field.default.args[0] === 7 ? 7 : 4
-}
-
-function isUlidDefault(field: DMMF.Field) {
-  return isFunctionDefault(field.default) && field.default.name === 'ulid'
 }
 
 function needsForeignKeysParam(

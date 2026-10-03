@@ -1,10 +1,10 @@
 import { Effect } from 'effect'
 import * as z from 'zod'
 
+import { parseSchema } from '../../../schema/index.js'
+import type { SchemaFile } from '../../../schema/index.js'
 import { ADAPTERS, discoverClient } from '../../../seed/discover.js'
 import { withTypeScriptImports } from '../../../seed/resolve.js'
-import { parseSchema } from '../../../seed/schema.js'
-import type { SchemaFile } from '../../../seed/schema.js'
 import { ClientUnavailableError } from '../errors/index.js'
 
 /** What Prisma Client reports for each statement it sends, once `log` asks for query events. */

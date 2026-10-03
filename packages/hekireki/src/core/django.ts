@@ -1,5 +1,3 @@
-import path from 'node:path'
-
 import type { GeneratorOptions } from '@prisma/generator-helper'
 import { Effect } from 'effect'
 
@@ -7,17 +5,12 @@ import { emitRaw } from '../emit/index.js'
 import { djangoCode } from '../generator/django.js'
 import { findNameConflicts } from '../helper/django.js'
 import { GeneratorConfigError } from './errors.js'
+import { outputFile, requireOutput } from './output.js'
 
 export function django(options: GeneratorOptions) {
   return Effect.gen(function* () {
-    if (!(options.generator.isCustomOutput && options.generator.output?.value)) {
-      return yield* new GeneratorConfigError({
-        message:
-          'output is required for Hekireki-Django. Please specify output in your generator config.',
-      })
-    }
-    const output = options.generator.output.value
-    const outPath = path.extname(output) ? output : path.join(output, 'models.py')
+    const output = yield* requireOutput(options, 'Hekireki-Django')
+    const resolved = outputFile(output, 'models.py')
     const enums = options.dmmf.datamodel.enums
     const indexes = options.dmmf.datamodel.indexes
     const conflicts = findNameConflicts(options.dmmf.datamodel.models, enums)
@@ -28,6 +21,6 @@ export function django(options: GeneratorOptions) {
     }
     const provider = options.datasources[0]?.activeProvider
     const code = djangoCode(options.dmmf.datamodel.models, enums, indexes, provider)
-    return yield* emitRaw(code, path.dirname(outPath), outPath)
+    return yield* emitRaw(code, resolved.dir, resolved.file)
   })
 }

@@ -1,6 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { makePascalCase } from '../utils/index.js'
+import { relationEnds } from '../utils/prisma-model.js'
 import { ELOQUENT_MODEL_METHODS } from './eloquent-model-methods.js'
 
 export function prismaTypeToEloquentCast(type: string) {
@@ -84,15 +85,16 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
   // model's own for a belongsTo and this one's for a hasOne or hasMany.
   const ownKeyColumns = modelKey(model).columns
   const ownKey = ownKeyColumns.length === 1 ? ownKeyColumns[0] : null
-  for (const field of model.fields) {
-    if (field.kind !== 'object') continue
+  for (const end of relationEnds(model, allModels)) {
+    const { field } = end
+    const targetModel = allModels.find((m) => m.name === field.type)
 
-    // Eloquent has no composite-key relations: emitting one would silently
-    // half-join on the first column, so composite FKs produce no relation
-    // method (the scalar columns themselves are still generated).
-    if (field.relationFromFields && field.relationFromFields.length > 1) continue
-    if (field.relationFromFields && field.relationFromFields.length > 0) {
-      const targetModel = allModels.find((m) => m.name === field.type)
+    if (end.kind === 'belongsTo') {
+      const fromFields = field.relationFromFields ?? []
+      // Eloquent has no composite-key relations: emitting one would silently
+      // half-join on the first column, so composite FKs produce no relation
+      // method (the scalar columns themselves are still generated).
+      if (fromFields.length > 1) continue
       const referencedField = field.relationToFields?.[0] ?? 'id'
       const ownerKeyColumn = targetModel
         ? fieldColumn(targetModel, referencedField)
@@ -101,52 +103,37 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
       belongsTo.push({
         name: field.name,
         targetModel: field.type,
-        foreignKeyColumn: fieldColumn(model, field.relationFromFields[0]),
+        foreignKeyColumn: fieldColumn(model, fromFields[0]),
         ownerKeyColumn:
           targetKey.length === 1 && targetKey[0] === ownerKeyColumn ? null : ownerKeyColumn,
       })
       continue
     }
 
-    const targetModel = allModels.find((m) => m.name === field.type)
     if (!targetModel) continue
 
-    if (field.isList) {
-      // A self relation has both of its fields on this model: the other side is not this one.
-      const otherSide = targetModel.fields.find(
-        (f) => f !== field && f.relationName === field.relationName && f.kind === 'object',
-      )
-      if (otherSide?.isList) {
-        // Prisma's join table holds the model that sorts first in "A". A model related to itself
-        // is on both sides: the relation field whose name sorts first reads its own key from "A".
-        const ownIsA =
-          model.name === field.type ? field.name < otherSide.name : model.name < field.type
-        const [left, right] = ownIsA ? [model.name, field.type] : [field.type, model.name]
-        belongsToMany.push({
-          name: field.name,
-          targetModel: field.type,
-          joinTable: `_${field.relationName ?? `${left}To${right}`}`,
-          foreignPivotKey: ownIsA ? 'A' : 'B',
-          relatedPivotKey: ownIsA ? 'B' : 'A',
-        })
-        continue
-      }
+    if (end.kind === 'manyToMany') {
+      // Prisma's join table holds the model that sorts first in "A". A model related to itself
+      // is on both sides: the relation field whose name sorts first reads its own key from "A".
+      const [left, right] = end.isSideA ? [model.name, field.type] : [field.type, model.name]
+      belongsToMany.push({
+        name: field.name,
+        targetModel: field.type,
+        joinTable: `_${field.relationName ?? `${left}To${right}`}`,
+        foreignPivotKey: end.isSideA ? 'A' : 'B',
+        relatedPivotKey: end.isSideA ? 'B' : 'A',
+      })
+      continue
     }
 
-    const fkField = targetModel.fields.find(
-      (f) =>
-        f.relationName === field.relationName &&
-        f.relationFromFields &&
-        f.relationFromFields.length > 0,
-    )
-    if ((fkField?.relationFromFields?.length ?? 0) > 1) continue
-    const foreignKey = fkField?.relationFromFields?.[0]
-    if (!foreignKey) continue
-    const foreignKeyColumn = fieldColumn(targetModel, foreignKey)
-    const referencedColumn = fieldColumn(model, fkField?.relationToFields?.[0] ?? 'id')
+    const fkField = end.inverse
+    const fromFields = fkField.relationFromFields ?? []
+    if (fromFields.length > 1) continue
+    const foreignKeyColumn = fieldColumn(targetModel, fromFields[0])
+    const referencedColumn = fieldColumn(model, fkField.relationToFields?.[0] ?? 'id')
     const localKeyColumn = referencedColumn === ownKey ? null : referencedColumn
 
-    if (field.isList) {
+    if (end.kind === 'hasMany') {
       hasMany.push({ name: field.name, targetModel: field.type, foreignKeyColumn, localKeyColumn })
     } else {
       hasOne.push({ name: field.name, targetModel: field.type, foreignKeyColumn, localKeyColumn })

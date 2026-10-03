@@ -194,6 +194,9 @@ check "Prisma-named timestamps are filled, bumped and ordered by through their a
   reasons = []
   reasons << "createdAt not set" if first.createdAt.nil? || first.created_at != first.createdAt
   was = first.updatedAt
+  # The time is kept to the millisecond, as Prisma keeps it: an update in the millisecond of the
+  # insert, which a fast machine makes, would stamp the same time and look like no bump at all.
+  sleep(0.001) until Time.current.floor(3) > was
   first.update!(title: "Older, edited")
   reasons << "updatedAt not bumped" unless first.updatedAt > was
   first.touch
