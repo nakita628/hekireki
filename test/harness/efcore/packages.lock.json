@@ -4,12 +4,12 @@
     "net10.0": {
       "cuid.net": {
         "type": "Direct",
-        "requested": "[7.0.0, )",
-        "resolved": "7.0.0",
-        "contentHash": "QwsaxgI1a6ZylQ3ox8UvAoeOXSLqyX2nTvgDPW6iXVE3caCrfF3cSgmkeRcf/YptOZBNT86VvfHs98Eo3C5sAQ==",
+        "requested": "[7.1.0, )",
+        "resolved": "7.1.0",
+        "contentHash": "bEpuMLD00JZ2TEwz4nPbc1bXt5EZEB6lo9hBfGNgFs33oAI99yTSrwpHXJy7LYs5LctfYL9ncCbbyLe1nztr9w==",
         "dependencies": {
-          "BouncyCastle.Cryptography": "2.6.2",
-          "CommunityToolkit.Diagnostics": "8.4.0"
+          "BouncyCastle.Cryptography": "2.7.0",
+          "CommunityToolkit.Diagnostics": "8.4.2"
         }
       },
       "Npgsql.EntityFrameworkCore.PostgreSQL": {
@@ -31,13 +31,13 @@
       },
       "BouncyCastle.Cryptography": {
         "type": "Transitive",
-        "resolved": "2.6.2",
-        "contentHash": "7oWOcvnntmMKNzDLsdxAYqApt+AjpRpP2CShjMfIa3umZ42UQMvH0tl1qAliYPNYO6vTdcGMqnRrCPmsfzTI1w=="
+        "resolved": "2.7.0",
+        "contentHash": "U+12df8UEWHgBi04YVf/Lgi2dy3SItlIYvHjjEVa/BngCQIzDCDRBk50DDByCfDvSbe5pRNFr3b7UrVK2kMcLw=="
       },
       "CommunityToolkit.Diagnostics": {
         "type": "Transitive",
-        "resolved": "8.4.0",
-        "contentHash": "/9Nuy8EWo0ZYQsjn3h4OGxjCWVYXl3TV3fvv29f8IVqplXgXGRzIpbtHEHGOfykh+TPbzUclzIfMCBzmgblKDA=="
+        "resolved": "8.4.2",
+        "contentHash": "WC0fk3A49gk6kWjhSZ8CDgPkv+wPHGhMFxUrKRlLtzUYXRFOdTDQ4RsEkZnI9ApO7eJh6nqT2MFmwFptpMs7aw=="
       },
       "Microsoft.EntityFrameworkCore": {
         "type": "Transitive",
