@@ -32,28 +32,28 @@ importers:
         specifier: 8.1.0-dev.7
         version: 8.1.0-dev.7(prisma@8.1.0-dev.7(@types/node@26.6.3)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(better-sqlite3@13.0.3)(magicast@0.5.3)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@7.0.2))(typescript@7.0.2)
       '@types/pg':
-        specifier: ^8.23.1
+        specifier: 8.23.1
         version: 8.23.1
       actionlint:
-        specifier: ^2.0.6
+        specifier: 2.0.6
         version: 2.0.6
       cspell:
-        specifier: ^10.3.6
+        specifier: 10.3.6
         version: 10.3.6
       markdownlint-cli2:
-        specifier: ^0.23.3
+        specifier: 0.23.3
         version: 0.23.3
       mysql2:
-        specifier: ^3.24.5
+        specifier: 3.24.5
         version: 3.24.5(@types/node@26.6.3)
       pg:
-        specifier: ^8.23.0
+        specifier: 8.23.0
         version: 8.23.0
       textlint:
-        specifier: ^15.8.0
+        specifier: 15.8.0
         version: 15.8.0
       textlint-rule-terminology:
-        specifier: ^5.2.16
+        specifier: 5.2.16
         version: 5.2.16
       vite-plus:
         specifier: 1.0.0
@@ -323,7 +323,7 @@ importers:
         version: 0.29.6
       mysql2:
         specifier: ^3.24.5
-        version: 3.24.5(@types/node@26.6.2)
+        version: 3.24.5(@types/node@26.6.3)
       pg:
         specifier: ^8.23.0
         version: 8.23.0
@@ -491,49 +491,49 @@ importers:
         specifier: ^6.43.13
         version: 6.43.13
       '@heroui/react':
-        specifier: ^3.2.6
+        specifier: 3.2.6
         version: 3.2.6(@internationalized/date@3.12.4)(@react-aria/ssr@3.10.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(@react-aria/utils@3.34.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-aria-components@1.21.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react-aria@3.52.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(tailwind-merge@3.4.0)(tailwindcss@4.3.3)
       '@lezer/highlight':
-        specifier: ^1.2.5
+        specifier: 1.2.5
         version: 1.2.5
       '@monaco-editor/react':
-        specifier: ^4.7.0
+        specifier: 4.7.0
         version: 4.7.0(monaco-editor@0.57.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@playwright/test':
-        specifier: ^1.63.0
+        specifier: 1.63.0
         version: 1.63.0
       '@react-aria/i18n':
-        specifier: ^3.13.1
+        specifier: 3.13.1
         version: 3.13.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@react-aria/ssr':
-        specifier: ^3.10.1
+        specifier: 3.10.1
         version: 3.10.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@react-aria/utils':
-        specifier: ^3.34.1
+        specifier: 3.34.1
         version: 3.34.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@sinclair/typebox':
-        specifier: ^0.34.52
+        specifier: 0.34.52
         version: 0.34.52
       '@tailwindcss/vite':
-        specifier: ^4.3.3
+        specifier: 4.3.3
         version: 4.3.3(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(typescript@7.0.2)(yaml@2.9.1))
       '@tanstack/react-query':
-        specifier: ^5.104.0
+        specifier: 5.104.0
         version: 5.104.0(react@19.3.0)
       '@tanstack/react-query-devtools':
-        specifier: ^5.104.0
+        specifier: 5.104.0
         version: 5.104.0(@tanstack/react-query@5.104.0(react@19.3.0))(@types/react@19.3.0)(csstype@3.2.3)(react@19.3.0)
       '@tanstack/react-router':
-        specifier: ^1.170.40
+        specifier: 1.170.40
         version: 1.170.40(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@tanstack/router-core':
         specifier: 1.171.33
         version: 1.171.33
       '@tanstack/router-plugin':
-        specifier: ^1.168.41
+        specifier: 1.168.41
         version: 1.168.41(@tanstack/react-router@1.170.40(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(typescript@7.0.2)(yaml@2.9.1))(esbuild@0.28.2)(rolldown@1.1.5)
       '@types/node':
-        specifier: ^26.6.3
+        specifier: 26.6.3
         version: 26.6.3
       '@types/react':
         specifier: ^19.3.0
@@ -557,31 +557,31 @@ importers:
         specifier: ^1.16.0
         version: 1.16.0(@typespec/compiler@1.16.0(@types/node@26.6.3))(@typespec/http@1.16.0(@typespec/compiler@1.16.0(@types/node@26.6.3)))(@typespec/openapi@1.16.0(@typespec/compiler@1.16.0(@types/node@26.6.3))(@typespec/http@1.16.0(@typespec/compiler@1.16.0(@types/node@26.6.3))))
       '@vitejs/plugin-react':
-        specifier: ^6.1.1
+        specifier: 6.1.1
         version: 6.1.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(typescript@7.0.2)(yaml@2.9.1))
       '@xyflow/react':
-        specifier: ^12.12.0
+        specifier: 12.12.0
         version: 12.12.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       arktype:
-        specifier: ^2.2.5
+        specifier: 2.2.5
         version: 2.2.5
       drizzle-kit:
-        specifier: ^0.31.11
+        specifier: 0.31.11
         version: 0.31.11
       drizzle-orm:
-        specifier: ^0.45.3
+        specifier: 0.45.3
         version: 0.45.3(@electric-sql/pglite@0.4.3)(@prisma/client@8.1.0-dev.7(typescript@7.0.2))(@types/better-sqlite3@9.6.0)(@types/pg@8.23.1)(better-sqlite3@13.0.3)(kysely@0.29.6)(mysql2@3.24.5(@types/node@26.6.3))(pg@8.23.0)(postgres@3.4.7)(prisma@8.1.0-dev.7(@types/node@26.6.3)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(better-sqlite3@13.0.3)(magicast@0.5.3)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@7.0.2))
       hono-takibi:
-        specifier: ^0.16.0
+        specifier: 0.16.0
         version: 0.16.0(@types/node@26.6.3)(@typespec/http@1.16.0(@typespec/compiler@1.16.0(@types/node@26.6.3)))(@typespec/openapi@1.16.0(@typespec/compiler@1.16.0(@types/node@26.6.3))(@typespec/http@1.16.0(@typespec/compiler@1.16.0(@types/node@26.6.3))))(openapi-types@12.1.3)(redis@6.2.1)(vite-plus@1.0.0(@types/node@26.6.3)(@vitest/ui@5.0.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(typescript@7.0.2)(yaml@2.9.1))
       json-schema-to-ts:
-        specifier: ^3.1.1
+        specifier: 3.1.1
         version: 3.1.1
       kysely:
-        specifier: ^0.29.6
+        specifier: 0.29.6
         version: 0.29.6
       monaco-editor:
-        specifier: ^0.57.0
+        specifier: 0.57.0
         version: 0.57.0
       oxlint:
         specifier: 1.86.0
@@ -590,31 +590,31 @@ importers:
         specifier: 8.1.0-dev.7
         version: 8.1.0-dev.7(@types/node@26.6.3)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(better-sqlite3@13.0.3)(magicast@0.5.3)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@7.0.2)
       react:
-        specifier: ^19.3.0
+        specifier: 19.3.0
         version: 19.3.0
       react-aria:
-        specifier: ^3.52.1
+        specifier: 3.52.1
         version: 3.52.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       react-aria-components:
-        specifier: ^1.21.1
+        specifier: 1.21.1
         version: 1.21.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       react-dom:
-        specifier: ^19.3.0
+        specifier: 19.3.0
         version: 19.3.0(react@19.3.0)
       react-icons:
-        specifier: ^5.7.0
+        specifier: 5.7.0
         version: 5.7.0(react@19.3.0)
       tailwindcss:
-        specifier: ^4.3.3
+        specifier: 4.3.3
         version: 4.3.3
       typescript:
-        specifier: ^7.0.2
+        specifier: 7.0.2
         version: 7.0.2
       typescript-5:
-        specifier: npm:typescript@^5.9.3
+        specifier: npm:typescript@5.9.3
         version: typescript@5.9.3
       zustand:
-        specifier: ^5.0.15
+        specifier: 5.0.15
         version: 5.0.15(@types/react@19.3.0)(react@19.3.0)(use-sync-external-store@1.7.0(react@19.3.0))
 
   test:
@@ -3779,9 +3779,6 @@ packages:
   '@types/ms@2.1.0':
     resolution: {integrity: sha512-GsCCIZDE/p3i96vtEqx+7dBUGXrc7zeSK3wwPHIaRThS+9OhWIXRqzs4d6k1SVU8g91DrNRWxWUGhp5KXQb2VA==}
 
-  '@types/node@26.6.2':
-    resolution: {integrity: sha512-X1P21scMv4zGKLYqjdGjaKa7COa0RKVYYZZN/NfvLQ1JegxFhdhpZG/Lyn8AXx6CDUavKAd11v6BvfpkDByK8g==}
-
   '@types/node@26.6.3':
     resolution: {integrity: sha512-dsqMQQoeTLqu9wynDD00q573mNzso3IdQOAfHRJqLCcmCFPoGo9A1bDpUcv/9tnKpErQWv9uKeGfl37EIS02Yg==}
 
@@ -4261,133 +4258,157 @@ packages:
     resolution: {integrity: sha512-jrOY5WM+AaAqkv51fHP1x28ifto4WgcZVzodLUyMU1jMWn5Sq+VciRdk/n8E0Ey5w4p4cWWE+m5GfXWOYh7Kzw==}
     cpu: [arm64]
     os: [android]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-codegen/binding-darwin-arm64@0.9.5':
     resolution: {integrity: sha512-4O4lkCQIzPZGjiNB1GORSI6hBECbiiSBS/APZXPvNKYH+nhY4uuqv03LNXA+SET3hoBjvr95P5rIhY8KQaQUBA==}
     cpu: [arm64]
     os: [darwin]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-codegen/binding-darwin-x64@0.9.5':
     resolution: {integrity: sha512-9EvoUO0SEhD6/d8VHdWuPerepPMSR1y84+UEgz8Un1Ope14Oe7xMvePpEQLTLovoIFZ8Zg3iZ8z8E11pZMqC3g==}
     cpu: [x64]
     os: [darwin]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-codegen/binding-freebsd-x64@0.9.5':
     resolution: {integrity: sha512-HqT78WwgHTmp8lwujoUa9CrIortX4DdpuiVC18ZPSGvuuJf4ylpIEI6QrQEM78Zwz3muhAWAOXZ5irdiYY+AyA==}
     cpu: [x64]
     os: [freebsd]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-codegen/binding-linux-arm-gnu@0.9.5':
     resolution: {integrity: sha512-QJXwIW6Ms3QIawbcBIedmrmXnfdpuAOjZJ/eAABq5XTzWvSxZ7lutu9W5yIHahlaTaFnBo7ikrVMD1szLTpPUw==}
     cpu: [arm]
     os: [linux]
     libc: [glibc]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-codegen/binding-linux-arm-musl@0.9.5':
     resolution: {integrity: sha512-eHbFy3IHGb+IYarrYwAo0yWSEQV3eAmEn6VrsKA6I1Wy1YPJxWqSJlV69JhqsHtJuJlljUIF3ex0y46yaKIu9w==}
     cpu: [arm]
     os: [linux]
     libc: [musl]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-codegen/binding-linux-arm64-gnu@0.9.5':
     resolution: {integrity: sha512-ByoJMbySTaDhjAXSu8q6Lh7HKg3YoesXpcT72aYk0Aiw4PCznmY4ybpLTq0RCvp0RIPhFm/6yECFiGBwyCC1nw==}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-codegen/binding-linux-arm64-musl@0.9.5':
     resolution: {integrity: sha512-gD9vfXIoBw1toSxhO9rgmSu/FEfy3PMznJAxVjIuH8DrWEiDKXmJO0pJKfj1Ltbe/TmtWVZR+TjISqeSIGQzMg==}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-codegen/binding-linux-x64-gnu@0.9.5':
     resolution: {integrity: sha512-BARvdnvqMGjOr5Iel2JH+9H5vAIE0R6H0Z2fsT02xrvmI/1ZXNB8lkuX+ZGevPhZb3zJ9WeC/R8JZstrsUOK5g==}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-codegen/binding-linux-x64-musl@0.9.5':
     resolution: {integrity: sha512-x8flcevS1fbb7ESrmpOY/pON4eInSaE/7Ktjqx2udOE2W33BNSZmJuwpyUgo54AoHNqrcaM7szqydyJn5fNvew==}
     cpu: [x64]
     os: [linux]
     libc: [musl]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-codegen/binding-win32-arm64@0.9.5':
     resolution: {integrity: sha512-KOL/rBatWqH4ZpCNoF8ZtSNdOJbAxBJLmk/VeRciepGROPTbPum1A9t67GpFgOU7qrkUWlPJdJ+KHKbvbmOt+w==}
     cpu: [arm64]
     os: [win32]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-codegen/binding-win32-x64@0.9.5':
     resolution: {integrity: sha512-FxENahEjWSan59Syh/us/Kf4wNq8qrJLFJ3R2N4Oiwtb6yNdz/rWLNTIoNSssnsp7IoWJdUP6o/Z8ppg7lXMcg==}
     cpu: [x64]
     os: [win32]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-parser/binding-android-arm64@0.9.5':
     resolution: {integrity: sha512-A2JCFCSHfnficqYEw4Iujpx7XrkMM3UfFcgJFmYpZSo9zM4nyhmdIIE0FogSduuU60lhM0/UcfuUBXIVNBMlGQ==}
     cpu: [arm64]
     os: [android]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-darwin-arm64@0.9.5':
     resolution: {integrity: sha512-3PiyU+Eare4YuKaQ22N98/yAiROPY5o/NQJHraICzDvk4pgS+m+bgLKOvkGBRn33OnV95Vdv1Mn38b+MQHpULQ==}
     cpu: [arm64]
     os: [darwin]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-darwin-x64@0.9.5':
     resolution: {integrity: sha512-blFMAFI7AInI83XaiOF8cIeiRM46Nz9EfpZtZPRLbKxSA9aAr5v8aHYpmfN6NoyXxAv/10pwS4gsAuc1W6fy5Q==}
     cpu: [x64]
     os: [darwin]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-freebsd-x64@0.9.5':
     resolution: {integrity: sha512-TsNuL4qsZdO0tHp5GW43Y5fHeLPpPHA675wdcPNTcdq2ZO5AvsQWFFoiDg8CH4oBktfsQ9tdvKhjLnLYwKvp4g==}
     cpu: [x64]
     os: [freebsd]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-linux-arm-gnu@0.9.5':
     resolution: {integrity: sha512-b0afYK5gHeV8RdmOcqAlgM8ONsye4cax4DMnIBaoJyPMd1UTGvTbpkqQcPVdhmHlcfcGVGMV1laeVovlr/dscw==}
     cpu: [arm]
     os: [linux]
     libc: [glibc]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-linux-arm-musl@0.9.5':
     resolution: {integrity: sha512-fD3lKzl+r6j6n8DwiMY53qnh5DLqD8KJjCp+NbVud54Nnh3Q9Wprqss3YzyMHP3NSJk663Wlg1E1X5qOuFVFig==}
     cpu: [arm]
     os: [linux]
     libc: [musl]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-linux-arm64-gnu@0.9.5':
     resolution: {integrity: sha512-aRU/aCphV1MWCl/lvI6NX8LgucHQ68Fx+vz7NBb/5MEr2EuzCxiPOQqeFcMdWh+2AED/p0AvAREch0c+cSnlhA==}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-linux-arm64-musl@0.9.5':
     resolution: {integrity: sha512-5+Guro0l8H473YXlEjVNBRLN/IbPbJdnQh1zo0OLt49xxnON+XMJRRaEyTOTfkn9QSRg0+BhEKGR4W9Gu2uZJQ==}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-linux-x64-gnu@0.9.5':
     resolution: {integrity: sha512-pwwSyV9q+GlvzSXlsMZBMlgk22L5bud714/vqZCdeUTivzeUVltQzUaf3IQXOGXdpc59JYTeuMCtbGquaAUoCA==}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-linux-x64-musl@0.9.5':
     resolution: {integrity: sha512-z18j6JN3lBHH8vzN7gG1M8fI0nlgItSfnC9PfbmUbt97iHViKfw2iA2G9fGwRMe5LyPRZBrejIlapbygPbpdaw==}
     cpu: [x64]
     os: [linux]
     libc: [musl]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-win32-arm64@0.9.5':
     resolution: {integrity: sha512-s6Gwttb1dQvtPX6Bgkw+UPC9IO3UBDXc6Zezog8MMgvu3UfJBBB9TQqKBX/2quu0Eyh+lLSAyNlIyyecaagUPg==}
     cpu: [arm64]
     os: [win32]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-win32-x64@0.9.5':
     resolution: {integrity: sha512-FrERt9YWatY3bJfSUdi4YWY+6iQcyo3MzCC821BxlWM5TFZEHijnpz/bknR79VHlXY/9CvXz8ZlaAGPsTtN3nw==}
     cpu: [x64]
     os: [win32]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-toolchain/types@0.9.5':
     resolution: {integrity: sha512-KiuLNNgX9uNealaWAR+G3/cMXnRk9x4TY2EkYe/KIag+UPdwiA0RRf1hr1WAxzTP8KGzCTkqUdLPvqh32sEO3w==}
@@ -4422,10 +4443,6 @@ packages:
   ansi-regex@5.0.1:
     resolution: {integrity: sha512-quJQXlTSUGL2LH9SUXo8VwsY4soanhgo6LNSm84E1LBcE8s3O0wpdiRzyR9z/ZZJMlMWv37qOOb9pdJlMUEKFQ==}
     engines: {node: '>=8'}
-
-  ansi-regex@6.3.0:
-    resolution: {integrity: sha512-WpDfL7NO6j7tH88IDBNVdUJxDh9nmCteAVW9dsep846XdwF4naCBK+/tGLX3KJgcpgMRXCFlTM2hKGoK9FsdrQ==}
-    engines: {node: '>=12'}
 
   ansi-regex@6.4.0:
     resolution: {integrity: sha512-KzTVk2tCWAHtYrvvvaP8bJKJq2pVinhLcGEQdtLIYPbmNGNyYe8QwNaTUYQp2J7/vIsUKt5QCqAfUkYyG9DkOw==}
@@ -10083,10 +10100,6 @@ snapshots:
 
   '@types/ms@2.1.0': {}
 
-  '@types/node@26.6.2':
-    dependencies:
-      undici-types: 8.9.0
-
   '@types/node@26.6.3':
     dependencies:
       undici-types: 8.9.0
@@ -10095,7 +10108,7 @@ snapshots:
 
   '@types/pg@8.23.1':
     dependencies:
-      '@types/node': 26.6.2
+      '@types/node': 26.6.3
       pg-protocol: 1.16.0
       pg-types: 2.2.0
 
@@ -10576,8 +10589,6 @@ snapshots:
       require-from-string: 2.0.2
 
   ansi-regex@5.0.1: {}
-
-  ansi-regex@6.3.0: {}
 
   ansi-regex@6.4.0: {}
 
@@ -11845,7 +11856,7 @@ snapshots:
   mariadb@3.5.3:
     dependencies:
       '@types/geojson': 7946.0.16
-      '@types/node': 26.6.2
+      '@types/node': 26.6.3
       denque: 2.1.0
       iconv-lite: 0.7.3
       lru-cache: 11.5.3
@@ -12241,17 +12252,6 @@ snapshots:
   mysql2@3.24.4(@types/node@26.6.3):
     dependencies:
       '@types/node': 26.6.3
-      aws-ssl-profiles: 1.1.2
-      generate-function: 2.3.1
-      iconv-lite: 0.7.3
-      long: 5.3.2
-      lru.min: 1.1.5
-      named-placeholders: 1.1.6
-      sql-escaper: 1.5.2
-
-  mysql2@3.24.5(@types/node@26.6.2):
-    dependencies:
-      '@types/node': 26.6.2
       aws-ssl-profiles: 1.1.2
       generate-function: 2.3.1
       iconv-lite: 0.7.3
@@ -13089,7 +13089,7 @@ snapshots:
 
   strip-ansi@7.2.0:
     dependencies:
-      ansi-regex: 6.3.0
+      ansi-regex: 6.4.0
 
   strip-json-comments@2.0.1: {}
 
