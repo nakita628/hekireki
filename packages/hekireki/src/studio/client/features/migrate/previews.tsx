@@ -5,12 +5,12 @@ import type { InferResponseType } from 'hono/client'
 import { useState } from 'react'
 import { LuEye, LuTableProperties } from 'react-icons/lu'
 
+import { dbClient, migrateClient } from '../../api/index.js'
 import { ResultTable } from '../../components/result-table.js'
-import { client } from '../../lib/index.js'
 import { useMessages } from './language.js'
 import { PREVIEWS } from './messages.js'
 
-type Plan = InferResponseType<typeof client.migrate.plan.$post, 200>
+type Plan = InferResponseType<typeof migrateClient.migrate.plan.$post, 200>
 
 /**
  * One model as the fixes will leave it. The query is the one the check counted by, with the
@@ -21,7 +21,7 @@ function Preview({ preview }: { readonly preview: Plan['previews'][number] }) {
   const t = useMessages(PREVIEWS)
   const [open, setOpen] = useState(false)
   const rows = useMutation({
-    mutationFn: () => parseResponse(client.db.sql.$post({ json: { sql: preview.sql } })),
+    mutationFn: () => parseResponse(dbClient.db.sql.$post({ json: { sql: preview.sql } })),
   })
   return (
     <li className="rounded-lg border border-line bg-surface">

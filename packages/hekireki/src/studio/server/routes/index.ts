@@ -10,6 +10,7 @@ export const TextRangeSchema = z
     start: z.int32().openapi({ description: 'The first character' }),
     end: z.int32().openapi({ description: 'One past the last character' }),
   })
+  .readonly()
   .openapi({
     required: ['start', 'end'],
     description: 'Character offsets into the statement text, end exclusive.',
@@ -52,6 +53,7 @@ export const NodeColumnSchema = z
           'Whether the statement reads the column (for a table), or always true for a result',
       }),
   })
+  .readonly()
   .openapi({
     required: ['name', 'dataType', 'used'],
     description: 'A column a node produces.',
@@ -66,6 +68,7 @@ export const GraphNodeSchema = z
     label: z.string().openapi({ description: 'The caption (`users AS u`, `LEFT JOIN`, `WHERE`)' }),
     details: z
       .array(z.string())
+      .readonly()
       .openapi({
         description: 'Lines under the caption: the condition, the grouped keys, the column names',
       }),
@@ -77,10 +80,12 @@ export const GraphNodeSchema = z
       .openapi({ description: '`main`, or the CTE / subquery alias the node belongs to' }),
     columns: z
       .array(NodeColumnSchema)
+      .readonly()
       .openapi({
         description: 'The columns the node produces (tables, CTEs, subqueries and projections)',
       }),
   })
+  .readonly()
   .openapi({
     required: ['id', 'kind', 'label', 'details', 'range', 'scope', 'columns'],
     description: 'A node of the data-flow graph.',
@@ -115,6 +120,7 @@ export const GraphEdgeSchema = z
       }),
     kind: EdgeKindSchema.openapi({ description: 'How rows travel' }),
   })
+  .readonly()
   .openapi({
     required: ['id', 'source', 'target', 'label', 'kind'],
     description: 'An edge of the data-flow graph.',
@@ -133,9 +139,11 @@ export const TableRefSchema = z
     known: z.boolean().openapi({ description: 'Whether the schema has the table' }),
     columnsUsed: z
       .array(z.string())
+      .readonly()
       .openapi({ description: 'The columns the statement reads from this reference' }),
     range: TextRangeSchema.openapi({ description: 'Where the name sits in the text' }),
   })
+  .readonly()
   .openapi({
     required: ['nodeId', 'name', 'alias', 'scope', 'known', 'columnsUsed', 'range'],
     description: 'A table the statement reads or writes.',
@@ -156,6 +164,7 @@ export const ColumnSourceSchema = z
     table: z.string().openapi({ description: 'The base table' }),
     column: z.string().openapi({ description: 'The column of that table' }),
   })
+  .readonly()
   .openapi({
     required: ['table', 'column'],
     description: 'A base-table column an output column derives from.',
@@ -175,8 +184,10 @@ export const OutputColumnSchema = z
       .openapi({ description: 'Whether NULL can come back; null when the analysis cannot tell' }),
     sources: z
       .array(ColumnSourceSchema)
+      .readonly()
       .openapi({ description: 'The base-table columns the value derives from' }),
   })
+  .readonly()
   .openapi({
     required: ['name', 'expression', 'dataType', 'tsType', 'nullable', 'sources'],
     description: 'A column of the result, with its lineage and type.',
@@ -210,6 +221,7 @@ export const SqlParameterSchema = z
       }),
     context: z.string().openapi({ description: 'The expression the placeholder sits in' }),
   })
+  .readonly()
   .openapi({
     required: ['index', 'placeholder', 'dataType', 'tsType', 'nullable', 'context'],
     description: 'A placeholder and the type of what it stands beside.',
@@ -237,6 +249,7 @@ export const SqlDiagnosticSchema = z
       description: 'Where, when the analysis can point at it',
     }),
   })
+  .readonly()
   .openapi({
     required: ['severity', 'message', 'range'],
     description: 'A problem found in the statement.',
@@ -255,16 +268,30 @@ export const StatementAnalysisSchema = z
     range: TextRangeSchema.openapi({
       description: 'Where the statement sits in the submitted text',
     }),
-    nodes: z.array(GraphNodeSchema).openapi({ description: 'The nodes of the data-flow graph' }),
-    edges: z.array(GraphEdgeSchema).openapi({ description: 'The edges of the data-flow graph' }),
-    tables: z.array(TableRefSchema).openapi({ description: 'Every table the statement touches' }),
+    nodes: z
+      .array(GraphNodeSchema)
+      .readonly()
+      .openapi({ description: 'The nodes of the data-flow graph' }),
+    edges: z
+      .array(GraphEdgeSchema)
+      .readonly()
+      .openapi({ description: 'The edges of the data-flow graph' }),
+    tables: z
+      .array(TableRefSchema)
+      .readonly()
+      .openapi({ description: 'Every table the statement touches' }),
     columns: z
       .array(OutputColumnSchema)
+      .readonly()
       .openapi({ description: 'The columns of the result (empty for a write without RETURNING)' }),
     parameters: z
       .array(SqlParameterSchema)
+      .readonly()
       .openapi({ description: 'The placeholders, in bind order' }),
-    diagnostics: z.array(SqlDiagnosticSchema).openapi({ description: 'What was found wrong' }),
+    diagnostics: z
+      .array(SqlDiagnosticSchema)
+      .readonly()
+      .openapi({ description: 'What was found wrong' }),
     rowType: z
       .string()
       .openapi({
@@ -276,6 +303,7 @@ export const StatementAnalysisSchema = z
         description: 'The parameter tuple (or object, for named placeholders) as TypeScript',
       }),
   })
+  .readonly()
   .openapi({
     required: [
       'kind',
@@ -294,7 +322,7 @@ export const StatementAnalysisSchema = z
   })
   .openapi('StatementAnalysis')
 
-type AnalysisType = { statements: z.infer<typeof StatementAnalysisSchema>[] }
+type AnalysisType = { readonly statements: readonly z.infer<typeof StatementAnalysisSchema>[] }
 
 export const SchemaFileSchema = z
   .object({
@@ -306,6 +334,7 @@ export const SchemaFileSchema = z
       }),
     content: z.string().openapi({ description: 'The whole file content' }),
   })
+  .readonly()
   .openapi({
     required: ['path', 'content'],
     description: 'One schema file on disk, as Studio read it.',
@@ -327,9 +356,11 @@ export const FieldRelationSchema = z
       }),
     fromFields: z
       .array(z.string())
+      .readonly()
       .openapi({ description: 'The fields on this model that hold the foreign key' }),
     toFields: z
       .array(z.string())
+      .readonly()
       .openapi({ description: 'The fields on the other model the key references' }),
     onDelete: z
       .string()
@@ -340,6 +371,7 @@ export const FieldRelationSchema = z
       .nullable()
       .openapi({ description: 'The `onUpdate` referential action, when declared' }),
   })
+  .readonly()
   .openapi({
     required: ['name', 'fromFields', 'toFields', 'onDelete', 'onUpdate'],
     description: 'The `@relation(...)` attribute of a relation field.',
@@ -386,6 +418,7 @@ export const FieldSchema = z
       .openapi({ description: 'The `///` doc comment with hekireki annotations stripped' }),
     annotations: z
       .array(z.string())
+      .readonly()
       .openapi({
         description: 'The hekireki annotation lines (`@z.*`, `@v.*`, ...) found in the doc comment',
       }),
@@ -394,11 +427,13 @@ export const FieldSchema = z
     }),
     attributes: z
       .array(z.string())
+      .readonly()
       .openapi({
         description:
           'Every attribute rendered as written (`@id`, `@default(now())`, `@map("...")`, ...)',
       }),
   })
+  .readonly()
   .openapi({
     required: [
       'name',
@@ -456,9 +491,13 @@ export const IndexSchema = z
       .string()
       .nullable()
       .openapi({ description: 'The database-side index name (`map`), when declared' }),
-    fields: z.array(z.string()).openapi({ description: 'The fields the index covers, in order' }),
+    fields: z
+      .array(z.string())
+      .readonly()
+      .openapi({ description: 'The fields the index covers, in order' }),
     attribute: z.string().openapi({ description: 'The attribute rendered as written' }),
   })
+  .readonly()
   .openapi({
     required: ['type', 'name', 'dbName', 'fields', 'attribute'],
     description: 'A `@@id`, `@@unique`, `@@index` or `@@fulltext` attribute of a model.',
@@ -477,6 +516,7 @@ export const LocationSchema = z
     file: z.string().openapi({ description: 'The file that declares the block' }),
     line: z.int32().openapi({ description: 'The 1-based line of the `model` / `enum` keyword' }),
   })
+  .readonly()
   .openapi({
     required: ['file', 'line'],
     description: 'Where a block starts in the schema files.',
@@ -497,20 +537,27 @@ export const ModelSchema = z
       .openapi({ description: 'The `///` doc comment with hekireki annotations stripped' }),
     annotations: z
       .array(z.string())
+      .readonly()
       .openapi({ description: 'The hekireki annotation lines found in the doc comment' }),
-    fields: z.array(FieldSchema).openapi({ description: 'The fields in declaration order' }),
+    fields: z
+      .array(FieldSchema)
+      .readonly()
+      .openapi({ description: 'The fields in declaration order' }),
     primaryKey: z
       .array(z.string())
+      .readonly()
       .nullable()
       .openapi({ description: 'The `@@id` fields, when the primary key is composite' }),
-    indexes: z.array(IndexSchema).openapi({ description: 'The `@@` index attributes' }),
+    indexes: z.array(IndexSchema).readonly().openapi({ description: 'The `@@` index attributes' }),
     attributes: z
       .array(z.string())
+      .readonly()
       .openapi({ description: 'Every `@@` attribute rendered as written' }),
     location: LocationSchema.nullable().openapi({
       description: 'Where the block starts (null when it could not be located)',
     }),
   })
+  .readonly()
   .openapi({
     required: [
       'name',
@@ -565,6 +612,7 @@ export const EnumValueSchema = z
       .nullable()
       .openapi({ description: 'The stored value from `@map`, when it differs' }),
   })
+  .readonly()
   .openapi({
     required: ['name', 'dbName'],
     description: 'One member of an enum.',
@@ -580,11 +628,15 @@ export const EnumSchema = z
       .nullable()
       .openapi({ description: 'The type name from `@@map`, when it differs' }),
     documentation: z.string().nullable().openapi({ description: 'The `///` doc comment' }),
-    values: z.array(EnumValueSchema).openapi({ description: 'The members in declaration order' }),
+    values: z
+      .array(EnumValueSchema)
+      .readonly()
+      .openapi({ description: 'The members in declaration order' }),
     location: LocationSchema.nullable().openapi({
       description: 'Where the block starts (null when it could not be located)',
     }),
   })
+  .readonly()
   .openapi({
     required: ['name', 'dbName', 'documentation', 'values', 'location'],
     description: 'One enum of the schema.',
@@ -622,6 +674,7 @@ export const RelationEndSchema = z
       }),
     cardinality: CardinalitySchema.openapi({ description: 'How many rows this end points at' }),
   })
+  .readonly()
   .openapi({
     required: ['model', 'field', 'cardinality'],
     description: 'One end of a relation.',
@@ -650,6 +703,7 @@ export const RelationSchema = z
       .nullable()
       .openapi({ description: 'The `onUpdate` referential action, when declared' }),
   })
+  .readonly()
   .openapi({
     required: ['id', 'name', 'origin', 'from', 'to', 'onDelete', 'onUpdate'],
     description: 'A relation between two models, drawn as one edge in the ER diagram.',
@@ -669,17 +723,26 @@ export const SchemaSchema = z
   .object({
     files: z
       .array(SchemaFileSchema)
+      .readonly()
       .openapi({ description: 'The files the schema was parsed from' }),
     provider: z
       .string()
       .nullable()
       .openapi({ description: 'The `datasource` provider, when one is declared' }),
-    models: z.array(ModelSchema).openapi({ description: 'Every model in declaration order' }),
-    enums: z.array(EnumSchema).openapi({ description: 'Every enum in declaration order' }),
+    models: z
+      .array(ModelSchema)
+      .readonly()
+      .openapi({ description: 'Every model in declaration order' }),
+    enums: z
+      .array(EnumSchema)
+      .readonly()
+      .openapi({ description: 'Every enum in declaration order' }),
     relations: z
       .array(RelationSchema)
+      .readonly()
       .openapi({ description: 'Every relation between the models' }),
   })
+  .readonly()
   .openapi({
     required: ['files', 'provider', 'models', 'enums', 'relations'],
     description: 'The parsed Prisma schema as the UI consumes it.',
@@ -718,6 +781,7 @@ export const LspPositionSchema = z
     line: LineSchema.openapi({ description: 'The line' }),
     character: CharacterSchema.openapi({ description: 'The column' }),
   })
+  .readonly()
   .openapi({
     required: ['line', 'character'],
     description: 'A 0-based position in a document, as LSP counts it.',
@@ -730,6 +794,7 @@ export const LspRangeSchema = z
     start: LspPositionSchema.openapi({ description: 'Where the range starts' }),
     end: LspPositionSchema.openapi({ description: 'Where the range ends' }),
   })
+  .readonly()
   .openapi({
     required: ['start', 'end'],
     description: 'A range between two positions, end exclusive.',
@@ -752,6 +817,7 @@ export const FileDiagnosticSchema = z
     message: z.string().openapi({ description: 'The Prisma message' }),
     severity: SeveritySchema.openapi({ description: 'How serious it is' }),
   })
+  .readonly()
   .openapi({
     required: ['path', 'range', 'message', 'severity'],
     description: 'One diagnostic the Prisma language server reports for a file on disk.',
@@ -779,20 +845,23 @@ export const SnapshotSchema = z
       }),
     diagnostics: z
       .array(FileDiagnosticSchema)
+      .readonly()
       .openapi({
         description:
           'Every diagnostic the language server reports for the files on disk; empty when they parse',
       }),
     updatedAt: z.iso
-      .datetime()
+      .datetime({ offset: true })
       .openapi({
         description:
           'When the files were last read (ISO 8601); the event stream announces every change of it',
       }),
     files: z
       .array(SchemaFileSchema)
+      .readonly()
       .openapi({ description: 'The files on disk as of the latest read' }),
   })
+  .readonly()
   .brand<'Snapshot'>()
   .openapi({
     required: ['schema', 'error', 'diagnostics', 'updatedAt', 'files'],
@@ -835,6 +904,7 @@ export const InternalServerProblemSchema = z
       .string()
       .openapi({ description: 'URI reference identifying this occurrence (the request path)' }),
   })
+  .readonly()
   .openapi({
     required: ['type', 'title', 'status', 'detail', 'instance'],
     description:
@@ -867,6 +937,7 @@ export const NotFoundProblemSchema = z
       .string()
       .openapi({ description: 'URI reference identifying this occurrence (the request path)' }),
   })
+  .readonly()
   .openapi({
     required: ['type', 'title', 'status', 'detail', 'instance'],
     description:
@@ -888,6 +959,7 @@ export const FieldErrorSchema = z
       .openapi({ description: 'Dot-separated path of the field the error occurred on' }),
     message: z.string().openapi({ description: 'The validation message' }),
   })
+  .readonly()
   .openapi({
     required: ['field', 'message'],
     description: 'One field that failed validation.',
@@ -914,8 +986,10 @@ export const ValidationProblemSchema = z
       .openapi({ description: 'URI reference identifying this occurrence (the request path)' }),
     errors: z
       .array(FieldErrorSchema)
+      .readonly()
       .openapi({ description: 'Extension member: one entry per field that failed validation' }),
   })
+  .readonly()
   .openapi({
     required: ['type', 'title', 'status', 'detail', 'instance', 'errors'],
     description:
@@ -956,6 +1030,7 @@ export const FileWriteSchema = z
     }),
     content: SchemaTextSchema.openapi({ description: 'The whole new file content' }),
   })
+  .readonly()
   .openapi({
     required: ['path', 'content'],
     description: 'A schema file to write back. Only a file Studio loaded can be written.',
@@ -987,6 +1062,7 @@ export const DbStatusSchema = z
       .nullable()
       .openapi({ description: 'Why no database is connected, when it is not' }),
   })
+  .readonly()
   .brand<'DbStatus'>()
   .openapi({
     required: ['connected', 'dialect', 'url', 'source', 'error'],
@@ -1003,8 +1079,12 @@ export const DbStatusSchema = z
 
 export const CountsSchema = z
   .object({
-    counts: z.record(z.string(), z.int32()).openapi({ description: 'Model name → number of rows' }),
+    counts: z
+      .record(z.string(), z.int32())
+      .readonly()
+      .openapi({ description: 'Model name → number of rows' }),
   })
+  .readonly()
   .brand<'Counts'>()
   .openapi({
     required: ['counts'],
@@ -1032,6 +1112,7 @@ export const ServiceUnavailableProblemSchema = z
       .string()
       .openapi({ description: 'URI reference identifying this occurrence (the request path)' }),
   })
+  .readonly()
   .openapi({
     required: ['type', 'title', 'status', 'detail', 'instance'],
     description:
@@ -1098,6 +1179,7 @@ export const SearchSchema = z
 
 export const RowSchema = z
   .record(z.string(), z.union([z.string(), z.float64(), z.boolean()]).nullable())
+  .readonly()
   .openapi({
     description:
       'One row keyed by Prisma field name (not column name). Values are what JSON can carry: dates\nare ISO strings, bigints are strings, JSON columns are strings.',
@@ -1107,19 +1189,22 @@ export const RowSchema = z
 
 export const RowsSchema = z
   .object({
-    rows: z.array(RowSchema).openapi({ description: 'The rows of the page' }),
+    rows: z.array(RowSchema).readonly().openapi({ description: 'The rows of the page' }),
     total: z.int32().openapi({ description: 'How many rows match the search in total' }),
     skip: z.int32().openapi({ description: 'The skip the page was read with' }),
     take: z.int32().openapi({ description: 'The take the page was read with' }),
     key: z
       .array(z.string())
+      .readonly()
       .openapi({
         description: 'The fields that identify a row (the primary key, else the unique fields)',
       }),
     columns: z
       .array(z.string())
+      .readonly()
       .openapi({ description: 'The fields the table has, in declaration order' }),
   })
+  .readonly()
   .brand<'Rows'>()
   .openapi({
     required: ['rows', 'total', 'skip', 'take', 'key', 'columns'],
@@ -1137,6 +1222,7 @@ export const RowsSchema = z
 
 export const AffectedSchema = z
   .object({ affected: z.int32().openapi({ description: "The driver's affected-row count" }) })
+  .readonly()
   .brand<'Affected'>()
   .openapi({
     required: ['affected'],
@@ -1151,6 +1237,7 @@ export const InsertBodySchema = z
       description: 'Field values for the new row; omitted fields take their defaults',
     }),
   })
+  .readonly()
   .openapi({
     required: ['values'],
     description: 'A row to insert.',
@@ -1163,6 +1250,7 @@ export const UpdateBodySchema = z
     where: RowSchema.openapi({ description: 'The key fields of the row to change' }),
     values: RowSchema.openapi({ description: 'The fields to set' }),
   })
+  .readonly()
   .openapi({
     required: ['where', 'values'],
     description: 'A change to one row.',
@@ -1172,6 +1260,7 @@ export const UpdateBodySchema = z
 
 export const DeleteBodySchema = z
   .object({ where: RowSchema.openapi({ description: 'The key fields of the row to delete' }) })
+  .readonly()
   .openapi({ required: ['where'], description: 'A row to delete.', example: { where: { id: 1 } } })
   .openapi('DeleteBody')
 
@@ -1179,15 +1268,18 @@ export const SqlResultSchema = z
   .object({
     columns: z
       .array(z.string())
+      .readonly()
       .openapi({ description: 'The column names of the result set (empty for a write)' }),
     rows: z
       .array(RowSchema)
+      .readonly()
       .openapi({
         description: 'The rows of the result set keyed by column name (empty for a write)',
       }),
     rowCount: z.int32().openapi({ description: 'Rows returned, or rows affected for a write' }),
     durationMs: z.float64().openapi({ description: 'Wall time of the statement in milliseconds' }),
   })
+  .readonly()
   .brand<'SqlResult'>()
   .openapi({
     required: ['columns', 'rows', 'rowCount', 'durationMs'],
@@ -1219,11 +1311,13 @@ export const SqlBodySchema = z
     }),
     params: z
       .array(z.union([z.string(), z.float64(), z.boolean()]).nullable())
+      .readonly()
       .exactOptional()
       .openapi({
         description: 'The values bound to the placeholders, in order; omitted means none',
       }),
   })
+  .readonly()
   .openapi({
     required: ['sql'],
     description: 'A statement to run.',
@@ -1258,6 +1352,7 @@ export const PlanNodeSchema = z
         description: 'The estimated (or, with ANALYZE, actual) row count, when reported',
       }),
   })
+  .readonly()
   .openapi({
     required: ['id', 'parent', 'label', 'detail', 'cost', 'rows'],
     description: 'One step of the execution plan, flattened; `parent` rebuilds the tree.',
@@ -1268,9 +1363,13 @@ export const PlanNodeSchema = z
 export const PlanSchema = z
   .object({
     dialect: DialectSchema.openapi({ description: 'The dialect that produced the plan' }),
-    nodes: z.array(PlanNodeSchema).openapi({ description: 'The steps, parents before children' }),
+    nodes: z
+      .array(PlanNodeSchema)
+      .readonly()
+      .openapi({ description: 'The steps, parents before children' }),
     raw: z.string().openapi({ description: 'The plan as the database printed it' }),
   })
+  .readonly()
   .brand<'Plan'>()
   .openapi({
     required: ['dialect', 'nodes', 'raw'],
@@ -1285,8 +1384,10 @@ export const AnalysisSchema: z.ZodType<AnalysisType> = z
       .object({
         statements: z
           .array(StatementAnalysisSchema)
+          .readonly()
           .openapi({ description: 'One entry per statement, in order' }),
       })
+      .readonly()
       .brand<'Analysis'>()
       .openapi({
         required: ['statements'],
@@ -1297,6 +1398,7 @@ export const AnalysisSchema: z.ZodType<AnalysisType> = z
 
 export const AnalyzeBodySchema = z
   .object({ sql: SqlSchema.openapi({ description: 'The statements' }) })
+  .readonly()
   .openapi({
     required: ['sql'],
     description: 'Text to analyze.',
@@ -1336,6 +1438,7 @@ export const ClientStatusSchema = z
         description: "Why the editor cannot complete against the client's types, when it cannot",
       }),
   })
+  .readonly()
   .brand<'ClientStatus'>()
   .openapi({
     required: ['available', 'source', 'error', 'typescript', 'typesError'],
@@ -1362,6 +1465,7 @@ export const ClientCallSchema = z
     write: z.boolean().openapi({ description: 'Whether the operation writes' }),
     range: TextRangeSchema.openapi({ description: 'Where the call sits in the text' }),
   })
+  .readonly()
   .openapi({
     required: ['model', 'operation', 'write', 'range'],
     description: 'One model operation the query makes.',
@@ -1374,11 +1478,13 @@ export const ClientTouchedModelSchema = z
     model: z.string().openapi({ description: 'The model, as the schema declares it' }),
     fields: z
       .array(z.string())
+      .readonly()
       .openapi({
         description:
           'The fields of the model the arguments name: scalars they filter, select, order or write, relations they follow',
       }),
   })
+  .readonly()
   .openapi({
     required: ['model', 'fields'],
     description: 'A model the query touches, with the fields its arguments name.',
@@ -1391,6 +1497,7 @@ export const ClientDiagnosticSchema = z
     message: z.string().openapi({ description: 'What is wrong' }),
     range: TextRangeSchema.openapi({ description: 'Where' }),
   })
+  .readonly()
   .openapi({
     required: ['message', 'range'],
     description: 'A problem that keeps the query from being run.',
@@ -1402,20 +1509,24 @@ export const ClientAnalysisSchema = z
   .object({
     calls: z
       .array(ClientCallSchema)
+      .readonly()
       .openapi({ description: 'The calls, in order (empty when the text does not parse)' }),
     transaction: z
       .boolean()
       .openapi({ description: 'Whether the calls are batched in one `$transaction`' }),
     touched: z
       .array(ClientTouchedModelSchema)
+      .readonly()
       .openapi({
         description:
           'The models the calls are made on and the ones their relations reach, in the order they are reached',
       }),
     diagnostics: z
       .array(ClientDiagnosticSchema)
+      .readonly()
       .openapi({ description: 'What keeps the query from being run (empty when it can be)' }),
   })
+  .readonly()
   .brand<'ClientAnalysis'>()
   .openapi({
     required: ['calls', 'transaction', 'touched', 'diagnostics'],
@@ -1444,6 +1555,7 @@ export const ClientQueryBodySchema = z
   .object({
     query: ClientQuerySchema.openapi({ description: 'The call, as TypeScript would write it' }),
   })
+  .readonly()
   .openapi({
     required: ['query'],
     description: 'A Prisma Client call to analyze or run.',
@@ -1467,6 +1579,7 @@ export const ClientCompletionItemSchema = z
         description: 'The text to insert when it differs from the label (a quoted key), else null',
       }),
   })
+  .readonly()
   .openapi({
     required: ['label', 'kind', 'sortText', 'insertText'],
     description: 'One completion TypeScript offers at a position.',
@@ -1478,8 +1591,10 @@ export const ClientCompletionsSchema = z
   .object({
     items: z
       .array(ClientCompletionItemSchema)
+      .readonly()
       .openapi({ description: 'The items, unordered; `sortText` orders them' }),
   })
+  .readonly()
   .brand<'ClientCompletions'>()
   .openapi({ required: ['items'], description: 'The completions at a position.', example: {} })
   .openapi('ClientCompletions')
@@ -1500,6 +1615,7 @@ export const ClientPositionBodySchema = z
     query: ClientQuerySchema.openapi({ description: 'The query text as typed so far' }),
     offset: QueryOffsetSchema.openapi({ description: 'Where the cursor is' }),
   })
+  .readonly()
   .openapi({
     required: ['query', 'offset'],
     description: 'A position in a query, for completion, hovers and signature help.',
@@ -1515,6 +1631,7 @@ export const ClientCompletionDetailSchema = z
       .openapi({ description: "The item's signature as TypeScript prints it" }),
     documentation: z.string().nullable().openapi({ description: 'Its doc comment, as Markdown' }),
   })
+  .readonly()
   .brand<'ClientCompletionDetail'>()
   .openapi({
     required: ['detail', 'documentation'],
@@ -1529,6 +1646,7 @@ export const ClientCompletionDetailBodySchema = z
     offset: QueryOffsetSchema.openapi({ description: 'Where the cursor is' }),
     name: z.string().openapi({ description: 'The label of the item' }),
   })
+  .readonly()
   .openapi({
     required: ['query', 'offset', 'name'],
     description: 'One completion to say more about.',
@@ -1546,6 +1664,7 @@ export const ClientHoverSchema = z
       }),
     range: TextRangeSchema.nullable().openapi({ description: 'The symbol the hover is about' }),
   })
+  .readonly()
   .brand<'ClientHover'>()
   .openapi({
     required: ['contents', 'range'],
@@ -1562,6 +1681,7 @@ export const ClientSignatureParameterSchema = z
     label: z.string().openapi({ description: 'The parameter as TypeScript prints it' }),
     documentation: z.string().nullable().openapi({ description: 'Its doc comment' }),
   })
+  .readonly()
   .openapi({
     required: ['label', 'documentation'],
     description: 'One parameter of a signature.',
@@ -1575,8 +1695,10 @@ export const ClientSignatureSchema = z
     documentation: z.string().nullable().openapi({ description: 'Its doc comment' }),
     parameters: z
       .array(ClientSignatureParameterSchema)
+      .readonly()
       .openapi({ description: 'The parameters, in order' }),
   })
+  .readonly()
   .openapi({
     required: ['label', 'documentation', 'parameters'],
     description: 'One overload of the call under the cursor.',
@@ -1592,10 +1714,12 @@ export const ClientSignatureHelpSchema = z
   .object({
     signatures: z
       .array(ClientSignatureSchema)
+      .readonly()
       .openapi({ description: 'The overloads; empty when the cursor is not inside a call' }),
     activeSignature: z.int32().openapi({ description: 'The overload the arguments so far match' }),
     activeParameter: z.int32().openapi({ description: 'The parameter the cursor is on' }),
   })
+  .readonly()
   .brand<'ClientSignatureHelp'>()
   .openapi({
     required: ['signatures', 'activeSignature', 'activeParameter'],
@@ -1611,6 +1735,7 @@ export const ClientFormattedSchema = z
       .string()
       .openapi({ description: 'The whole text, formatted; the same text when it already is' }),
   })
+  .readonly()
   .brand<'ClientFormatted'>()
   .openapi({
     required: ['text'],
@@ -1630,6 +1755,7 @@ export const ClientTypeDiagnosticSchema = z
     severity: TypeSeveritySchema.openapi({ description: 'How serious it is' }),
     range: TextRangeSchema.openapi({ description: 'Where' }),
   })
+  .readonly()
   .openapi({
     required: ['message', 'severity', 'range'],
     description: 'One problem TypeScript finds in the query.',
@@ -1645,8 +1771,10 @@ export const ClientTypeDiagnosticsSchema = z
   .object({
     diagnostics: z
       .array(ClientTypeDiagnosticSchema)
+      .readonly()
       .openapi({ description: 'The problems, in order of position' }),
   })
+  .readonly()
   .brand<'ClientTypeDiagnostics'>()
   .openapi({
     required: ['diagnostics'],
@@ -1671,9 +1799,11 @@ export const ClientSqlQuerySchema = z
       }),
     params: z
       .array(z.union([z.string(), z.float64(), z.boolean()]).nullable())
+      .readonly()
       .openapi({ description: 'The values bound to its placeholders, in order' }),
     durationMs: z.float64().openapi({ description: 'How long the database took, in milliseconds' }),
   })
+  .readonly()
   .openapi({
     required: ['sql', 'formatted', 'params', 'durationMs'],
     description: 'One SQL statement the Prisma Client sent to the database.',
@@ -1690,9 +1820,11 @@ export const ClientPreviewSchema = z
   .object({
     queries: z
       .array(ClientSqlQuerySchema)
+      .readonly()
       .openapi({ description: 'The statements the client sent, in order' }),
     durationMs: z.float64().openapi({ description: 'Wall time of the whole call in milliseconds' }),
   })
+  .readonly()
   .brand<'ClientPreview'>()
   .openapi({
     required: ['queries', 'durationMs'],
@@ -1728,9 +1860,11 @@ export const ClientResultSchema = z
       .openapi({ description: 'Whether only the first rows of the array are in `result`' }),
     queries: z
       .array(ClientSqlQuerySchema)
+      .readonly()
       .openapi({ description: 'The statements the client sent, in order' }),
     durationMs: z.float64().openapi({ description: 'Wall time of the whole call in milliseconds' }),
   })
+  .readonly()
   .brand<'ClientResult'>()
   .openapi({
     required: ['result', 'rowCount', 'truncated', 'queries', 'durationMs'],
@@ -1757,6 +1891,7 @@ export const LspTextEditSchema = z
     range: LspRangeSchema.openapi({ description: 'What to replace' }),
     newText: z.string().openapi({ description: 'The replacement' }),
   })
+  .readonly()
   .openapi({
     required: ['range', 'newText'],
     description: 'One replacement in a document.',
@@ -1771,11 +1906,13 @@ export const FormattedSchema = z
   .object({
     edits: z
       .array(LspTextEditSchema)
+      .readonly()
       .openapi({
         description:
           'The replacements that lay the text out as the Prisma formatter does; empty when it already is',
       }),
   })
+  .readonly()
   .brand<'Formatted'>()
   .openapi({
     required: ['edits'],
@@ -1802,6 +1939,7 @@ export const TextBodySchema = z
           'The file the text belongs to, as Studio loaded it; the first file when omitted',
       }),
   })
+  .readonly()
   .openapi({
     required: ['text'],
     description:
@@ -1816,6 +1954,7 @@ export const LspDiagnosticSchema = z
     message: z.string().openapi({ description: 'The Prisma message' }),
     severity: SeveritySchema.openapi({ description: 'How serious it is' }),
   })
+  .readonly()
   .openapi({
     required: ['range', 'message', 'severity'],
     description: 'One diagnostic the Prisma language server reports, positioned as LSP does.',
@@ -1832,8 +1971,10 @@ export const DiagnosticsSchema = z
   .object({
     diagnostics: z
       .array(LspDiagnosticSchema)
+      .readonly()
       .openapi({ description: 'Every diagnostic the language server reported for the file' }),
   })
+  .readonly()
   .brand<'Diagnostics'>()
   .openapi({
     required: ['diagnostics'],
@@ -1847,6 +1988,7 @@ export const LintBodySchema = z
     path: SchemaFilePathSchema.openapi({ description: 'The loaded file the text replaces' }),
     text: SchemaTextSchema.openapi({ description: 'The text being edited' }),
   })
+  .readonly()
   .openapi({
     required: ['path', 'text'],
     description: 'The buffer being edited, validated together with the other loaded files.',
@@ -1866,6 +2008,7 @@ export const LspDocumentSymbolSchema = z
     range: LspRangeSchema.openapi({ description: 'The whole block' }),
     selectionRange: LspRangeSchema.openapi({ description: 'The name inside the block header' }),
   })
+  .readonly()
   .openapi({
     required: ['name', 'kind', 'range', 'selectionRange'],
     description: "A block of a schema file, as the language server's document outline lists it.",
@@ -1880,8 +2023,12 @@ export const LspDocumentSymbolSchema = z
 
 export const SymbolsSchema = z
   .object({
-    symbols: z.array(LspDocumentSymbolSchema).openapi({ description: 'Every block of the text' }),
+    symbols: z
+      .array(LspDocumentSymbolSchema)
+      .readonly()
+      .openapi({ description: 'Every block of the text' }),
   })
+  .readonly()
   .brand<'Symbols'>()
   .openapi({
     required: ['symbols'],
@@ -1924,6 +2071,7 @@ export const CompletionSchema = z
       .nullable()
       .openapi({ description: 'The key the list is sorted by, when the server gives one' }),
   })
+  .readonly()
   .openapi({
     required: [
       'label',
@@ -1951,8 +2099,10 @@ export const CompletionsSchema = z
   .object({
     items: z
       .array(CompletionSchema)
+      .readonly()
       .openapi({ description: "The offered completions in the server's order" }),
   })
+  .readonly()
   .brand<'Completions'>()
   .openapi({ required: ['items'], description: 'The completions at a position.', example: {} })
   .openapi('Completions')
@@ -1977,6 +2127,7 @@ export const CompleteBodySchema = z
           'The character that opened the list (`@`, `"`, `.`), when one did rather than typing',
       }),
   })
+  .readonly()
   .openapi({
     required: ['text', 'line', 'character'],
     description: 'A completion request at a cursor position.',
@@ -1996,6 +2147,7 @@ export const HoverSchema = z
       description: 'The word the hover is about, when the server names it',
     }),
   })
+  .readonly()
   .brand<'Hover'>()
   .openapi({
     required: ['contents', 'range'],
@@ -2020,6 +2172,7 @@ export const PositionBodySchema = z
     line: LineSchema.openapi({ description: 'The cursor line' }),
     character: CharacterSchema.openapi({ description: 'The cursor column' }),
   })
+  .readonly()
   .openapi({
     required: ['text', 'line', 'character'],
     description: 'A request about the symbol at a cursor position (hover, definition, references).',
@@ -2033,6 +2186,7 @@ export const LspLocationSchema = z
     range: LspRangeSchema.openapi({ description: 'The whole declaration' }),
     selection: LspRangeSchema.openapi({ description: 'The name inside it, to put the cursor on' }),
   })
+  .readonly()
   .openapi({
     required: ['path', 'range', 'selection'],
     description: 'A place in one of the schema files.',
@@ -2048,10 +2202,12 @@ export const DefinitionSchema = z
   .object({
     locations: z
       .array(LspLocationSchema)
+      .readonly()
       .openapi({
         description: 'The declarations, empty when the position holds no reference to one',
       }),
   })
+  .readonly()
   .brand<'Definition'>()
   .openapi({
     required: ['locations'],
@@ -2065,6 +2221,7 @@ export const LspReferenceSchema = z
     path: z.string().openapi({ description: 'The file, as Studio loaded it' }),
     range: LspRangeSchema.openapi({ description: 'The word that refers to the symbol' }),
   })
+  .readonly()
   .openapi({
     required: ['path', 'range'],
     description: 'One place a symbol is used.',
@@ -2079,10 +2236,12 @@ export const ReferencesSchema = z
   .object({
     locations: z
       .array(LspReferenceSchema)
+      .readonly()
       .openapi({
         description: 'The uses, including the declaration; empty when the position holds no symbol',
       }),
   })
+  .readonly()
   .brand<'References'>()
   .openapi({
     required: ['locations'],
@@ -2096,8 +2255,10 @@ export const LspFileEditSchema = z
     path: z.string().openapi({ description: 'The file, as Studio loaded it' }),
     edits: z
       .array(LspTextEditSchema)
+      .readonly()
       .openapi({ description: 'The replacements, in document order' }),
   })
+  .readonly()
   .openapi({
     required: ['path', 'edits'],
     description: 'The edits of one file.',
@@ -2109,10 +2270,12 @@ export const RenameSchema = z
   .object({
     changes: z
       .array(LspFileEditSchema)
+      .readonly()
       .openapi({
         description: 'The edits, grouped by file; empty when the position holds nothing to rename',
       }),
   })
+  .readonly()
   .brand<'Rename'>()
   .openapi({
     required: ['changes'],
@@ -2135,6 +2298,7 @@ export const RenameBodySchema = z
     character: CharacterSchema.openapi({ description: 'The cursor column' }),
     newName: z.string().openapi({ description: 'The new name' }),
   })
+  .readonly()
   .openapi({
     required: ['text', 'line', 'character', 'newName'],
     description: 'A rename request: the symbol at a position and its new name.',
@@ -2145,9 +2309,13 @@ export const RenameBodySchema = z
 export const CodeActionSchema = z
   .object({
     title: z.string().openapi({ description: 'What the fix does' }),
-    changes: z.array(LspFileEditSchema).openapi({ description: 'The edits, grouped by file' }),
+    changes: z
+      .array(LspFileEditSchema)
+      .readonly()
+      .openapi({ description: 'The edits, grouped by file' }),
     isPreferred: z.boolean().openapi({ description: 'Whether it is the fix to apply first' }),
   })
+  .readonly()
   .openapi({
     required: ['title', 'changes', 'isPreferred'],
     description: 'One quick fix the language server offers.',
@@ -2156,7 +2324,10 @@ export const CodeActionSchema = z
   .openapi('CodeAction')
 
 export const CodeActionsSchema = z
-  .object({ actions: z.array(CodeActionSchema).openapi({ description: 'The offered fixes' }) })
+  .object({
+    actions: z.array(CodeActionSchema).readonly().openapi({ description: 'The offered fixes' }),
+  })
+  .readonly()
   .brand<'CodeActions'>()
   .openapi({
     required: ['actions'],
@@ -2178,8 +2349,10 @@ export const CodeActionBodySchema = z
     range: LspRangeSchema.openapi({ description: 'The range the actions are asked for' }),
     diagnostics: z
       .array(LspDiagnosticSchema)
+      .readonly()
       .openapi({ description: 'The diagnostics in that range, as the lint route returned them' }),
   })
+  .readonly()
   .openapi({
     required: ['text', 'range', 'diagnostics'],
     description: 'A code action request: a range and the diagnostics the editor shows in it.',
@@ -2211,6 +2384,7 @@ export const MigrationRecordSchema = z
       .string()
       .openapi({ description: 'The checksum of the migration file as it was when it ran' }),
   })
+  .readonly()
   .openapi({
     required: ['name', 'startedAt', 'finishedAt', 'rolledBackAt', 'appliedStepsCount', 'checksum'],
     description: 'One migration the database has recorded in `_prisma_migrations`.',
@@ -2246,15 +2420,19 @@ export const MigrateStatusSchema = z
       }),
     applied: z
       .array(MigrationRecordSchema)
+      .readonly()
       .openapi({ description: 'Every migration the database has recorded, oldest first' }),
     pending: z
       .array(z.string())
+      .readonly()
       .openapi({ description: 'Migrations in the directory the database has not applied' }),
     failed: z
       .array(z.string())
+      .readonly()
       .openapi({ description: 'Migrations that failed and were never resolved' }),
     edited: z
       .array(z.string())
+      .readonly()
       .openapi({ description: 'Migrations whose file changed after the database ran it' }),
     divergence: DivergenceSchema.nullable().openapi({
       description: 'How the two histories differ, when they do',
@@ -2270,11 +2448,13 @@ export const MigrateStatusSchema = z
       }),
     missingFiles: z
       .array(z.string())
+      .readonly()
       .openapi({
         description:
           'Migrations the database has recorded whose directory the migrations directory does not hold',
       }),
   })
+  .readonly()
   .brand<'MigrateStatus'>()
   .openapi({
     required: [
@@ -2322,6 +2502,7 @@ export const BaselineCandidateSchema = z
           'The SQL that would take what the migrations make to the database; empty when it matches',
       }),
   })
+  .readonly()
   .openapi({
     required: ['name', 'matches', 'difference'],
     description: 'One migration the database could be baselined at, and whether it matches.',
@@ -2333,8 +2514,10 @@ export const MigrateBaselineSchema = z
   .object({
     candidates: z
       .array(BaselineCandidateSchema)
+      .readonly()
       .openapi({ description: 'Every migration of the directory, oldest first' }),
   })
+  .readonly()
   .brand<'MigrateBaseline'>()
   .openapi({
     required: ['candidates'],
@@ -2348,6 +2531,7 @@ export const MarkAppliedBodySchema = z
   .object({
     name: z.string().openapi({ description: 'The directory name of the migration to record' }),
   })
+  .readonly()
   .openapi({
     required: ['name'],
     description: 'A migration whose statements have already been run.',
@@ -2365,6 +2549,7 @@ export const MigrateDiffSchema = z
       }),
     drift: z.boolean().openapi({ description: 'Whether there was anything to write' }),
   })
+  .readonly()
   .brand<'MigrateDiff'>()
   .openapi({
     required: ['sql', 'drift'],
@@ -2389,12 +2574,14 @@ export const MigrationChangeSchema = z
     table: z.string().openapi({ description: 'The table it is about' }),
     columns: z
       .array(z.string())
+      .readonly()
       .openapi({ description: 'The columns it is about, when it is about some' }),
     target: z
       .string()
       .nullable()
       .openapi({ description: 'The table a foreign key points at; null otherwise' }),
   })
+  .readonly()
   .openapi({
     required: ['kind', 'table', 'columns', 'target'],
     description: 'One change a step makes, for the page to say in its own language.',
@@ -2410,9 +2597,11 @@ export const MigrationStepSchema = z
     kind: StepKindSchema.openapi({ description: 'Whether it changes rows or the schema' }),
     statements: z
       .array(z.string())
+      .readonly()
       .openapi({ description: 'The statements of the step, in the order they must run' }),
     changes: z
       .array(MigrationChangeSchema)
+      .readonly()
       .openapi({
         description:
           'What it does, one change each, in the words of the schema rather than of the database',
@@ -2445,6 +2634,7 @@ export const MigrationStepSchema = z
           'What a fix does to them: `nulls`, `values`, `duplicates`, `orphans`, `invalid`, `convert` or\n`fill`; null for a schema step',
       }),
   })
+  .readonly()
   .openapi({
     required: [
       'title',
@@ -2484,6 +2674,7 @@ export const MigrationSuggestionSchema = z
           'Why it is offered: `schema-default`, `uuid`, `random-id`, `now`, `from-key`, `empty-string`,\n`zero`, `false`, `empty-object`, `first-referenced`, `enum-first`, `enum-default`,\n`enum-same-name`, `enum-replaced`, `oldest`, `first-by-key`, `optional-relation`,\n`required-relation`, `renamed`, `moved`, `convert-number`, `clamp`,\n`truncate`, `nullable` or `not-nullable`',
       }),
   })
+  .readonly()
   .openapi({
     required: ['choice', 'value', 'reason'],
     description: 'A decision offered ready-made: nothing is decided until it is taken.',
@@ -2523,6 +2714,7 @@ export const MigrationDestinationSchema = z
           "Whether the migration creates the destination's table, whose rows are made from the values",
       }),
   })
+  .readonly()
   .openapi({
     required: ['choice', 'value', 'type', 'fits', 'relation', 'via', 'created'],
     description: 'A column the migration adds that the values of a dropped column could go to.',
@@ -2564,9 +2756,11 @@ export const MigrationCheckSchema = z
       }),
     choices: z
       .array(z.string())
+      .readonly()
       .openapi({ description: 'What can be decided about it on the page, empty when nothing can' }),
     facts: z
       .record(z.string(), z.string())
+      .readonly()
       .openapi({
         description:
           'What to read it by, for the page to say in its own language: `model`, `field`, `what`, and by\nkind `type`, `enum`, `removed`, `members`, `member`, `fields`, `orderBy`, `target`, `column`,\n`renamedTo`, `from`, `to`, `default` or `table`',
@@ -2584,12 +2778,14 @@ export const MigrationCheckSchema = z
     }),
     candidates: z
       .array(MigrationSuggestionSchema)
+      .readonly()
       .openapi({
         description:
           'Where the values of a dropped column could have gone, the likeliest first: a column of the same\ntable (`rename`) or of a related model (`move`) the migration adds, by the likeness of its name\nand kind, each with why (`same-name`, `similar-name`, `same-name-related` or\n`similar-name-related`). Empty when nowhere reads as one, and the values are lost.',
       }),
     destinations: z
       .array(MigrationDestinationSchema)
+      .readonly()
       .openapi({
         description:
           'Every column the migration adds that the values of a dropped column could go to, whatever its\nname: for the page to complete the field a rename or a move names, and to show how it moves',
@@ -2604,6 +2800,7 @@ export const MigrationCheckSchema = z
       .nullable()
       .openapi({ description: 'Why the check could not be counted, when it could not' }),
   })
+  .readonly()
   .openapi({
     required: [
       'kind',
@@ -2655,8 +2852,10 @@ export const UnfitDecisionSchema = z
       .openapi({ description: 'What the choice was given; null when it needed nothing' }),
     reasons: z
       .array(z.string())
+      .readonly()
       .openapi({ description: 'What no longer fits, as the check says it' }),
   })
+  .readonly()
   .openapi({
     required: ['kind', 'modelName', 'field', 'choice', 'value', 'reasons'],
     description: 'A kept decision that no longer fits, and why.',
@@ -2678,6 +2877,7 @@ export const MigrationPreviewSchema = z
       .string()
       .openapi({ description: 'The query that shows them; it reads, and changes nothing' }),
   })
+  .readonly()
   .openapi({
     required: ['modelName', 'sql'],
     description:
@@ -2696,26 +2896,35 @@ export const MigratePlanSchema = z
       .openapi({ description: 'The directory name the migration would be written under' }),
     steps: z
       .array(MigrationStepSchema)
+      .readonly()
       .openapi({ description: 'The steps, in the order they must run' }),
     checks: z
       .array(MigrationCheckSchema)
+      .readonly()
       .openapi({ description: 'What the migration needs of the rows the database holds now' }),
     unfit: z
       .array(UnfitDecisionSchema)
+      .readonly()
       .openapi({
         description:
           'Kept decisions set aside because they no longer fit the schema or the database: a field or\nmodel the schema has lost since they were made. The plan is made without them.',
       }),
     previews: z
       .array(MigrationPreviewSchema)
+      .readonly()
       .openapi({
         description: "Each fixed model's rows as the fixes will leave them, before anything is run",
       }),
-    notes: z.array(z.string()).openapi({ description: 'What the person running it needs to know' }),
+    notes: z
+      .array(z.string())
+      .readonly()
+      .openapi({ description: 'What the person running it needs to know' }),
     errors: z
       .array(z.string())
+      .readonly()
       .openapi({ description: 'Why the plan cannot be run as it is, when it cannot' }),
   })
+  .readonly()
   .brand<'MigratePlan'>()
   .openapi({
     required: ['name', 'steps', 'checks', 'unfit', 'previews', 'notes', 'errors'],
@@ -2748,6 +2957,7 @@ export const MigrationDecisionSchema = z
           'What a choice needs, when it needs something: the value or SQL written, the field a rename\nbecame, the `STORED=MEMBER` pairs of an enum, or the field duplicates are ordered by',
       }),
   })
+  .readonly()
   .openapi({
     required: ['kind', 'modelName', 'field', 'choice'],
     description:
@@ -2770,6 +2980,7 @@ export const PlanBodySchema = z
       .openapi({ description: 'What to call it; the timestamp is put in front' }),
     decisions: z
       .array(MigrationDecisionSchema)
+      .readonly()
       .exactOptional()
       .openapi({
         description:
@@ -2784,6 +2995,7 @@ export const PlanBodySchema = z
           'The most rows one statement of a fix changes: a fix over more is run that many at a time, so\nnone holds its locks on the whole table; all of them at once when left out',
       }),
   })
+  .readonly()
   .openapi({
     required: [],
     description: 'The name to propose for a migration, and the decisions made for it on the page.',
@@ -2803,6 +3015,7 @@ export const StatementResultSchema = z
       .nullable()
       .openapi({ description: 'What the database said, when it refused' }),
   })
+  .readonly()
   .openapi({
     required: ['sql', 'affected', 'error'],
     description: 'What one statement did, or why the database refused it.',
@@ -2814,6 +3027,7 @@ export const ApplyResultSchema = z
   .object({
     results: z
       .array(StatementResultSchema)
+      .readonly()
       .openapi({
         description:
           'One result per statement attempted; the ones after a failure are not attempted',
@@ -2824,6 +3038,7 @@ export const ApplyResultSchema = z
       .openapi({ description: 'The index of the statement that failed, null when none did' }),
     ok: z.boolean().openapi({ description: 'Whether every statement ran' }),
   })
+  .readonly()
   .brand<'ApplyResult'>()
   .openapi({
     required: ['results', 'failedAt', 'ok'],
@@ -2836,8 +3051,10 @@ export const ApplyBodySchema = z
   .object({
     statements: z
       .array(z.string())
+      .readonly()
       .openapi({ description: 'The statements, in the order they must run' }),
   })
+  .readonly()
   .openapi({
     required: ['statements'],
     description: 'Statements to run, one at a time.',
@@ -2861,6 +3078,7 @@ export const RehearsalStepSchema = z
       .openapi({ description: 'What the database said to the statement it refused' }),
     statement: z.string().nullable().openapi({ description: 'The statement it refused' }),
   })
+  .readonly()
   .openapi({
     required: ['ran', 'ok', 'affected', 'error', 'statement'],
     description: 'How one step went in the rehearsal.',
@@ -2882,6 +3100,7 @@ export const TableRowsSchema = z
       .nullable()
       .openapi({ description: 'Its rows after; null when it is gone, or could not be counted' }),
   })
+  .readonly()
   .openapi({
     required: ['table', 'before', 'after'],
     description: "A table's rows, counted before and after.",
@@ -2892,9 +3111,13 @@ export const TableRowsSchema = z
 export const RehearsalSchema = z
   .object({
     ok: z.boolean().openapi({ description: 'Whether every step went through' }),
-    steps: z.array(RehearsalStepSchema).openapi({ description: 'How each step went, in order' }),
+    steps: z
+      .array(RehearsalStepSchema)
+      .readonly()
+      .openapi({ description: 'How each step went, in order' }),
     tables: z
       .array(TableRowsSchema)
+      .readonly()
       .openapi({ description: "Every table's rows before the steps and after them" }),
     schemaMatches: z
       .boolean()
@@ -2911,11 +3134,13 @@ export const RehearsalSchema = z
       }),
     limitations: z
       .array(z.string())
+      .readonly()
       .openapi({
         description:
           'What the rehearsal could not show: `outside-transaction` when a step (an index made\nCONCURRENTLY, an enum value added) cannot run in the transaction PostgreSQL rehearses in.\nWhat it cost: `locks-tables` when it ran in a transaction on the database itself, which\nholds the locks of its steps until the rollback (it waits five seconds for one, no longer)',
       }),
   })
+  .readonly()
   .brand<'Rehearsal'>()
   .openapi({
     required: ['ok', 'steps', 'tables', 'schemaMatches', 'difference', 'limitations'],
@@ -2935,9 +3160,11 @@ export const RehearsalSchema = z
 export const RehearseBodySchema = z
   .object({
     steps: z
-      .array(z.array(z.string()))
+      .array(z.array(z.string()).readonly())
+      .readonly()
       .openapi({ description: "Each step's statements, in the order they run" }),
   })
+  .readonly()
   .openapi({
     required: ['steps'],
     description: 'The steps of a plan, to rehearse.',
@@ -2949,10 +3176,12 @@ export const TableCountsSchema = z
   .object({
     tables: z
       .array(TableRowsSchema)
+      .readonly()
       .openapi({
         description: 'Each table and its rows; `before` is null and `after` is the count',
       }),
   })
+  .readonly()
   .brand<'TableCounts'>()
   .openapi({
     required: ['tables'],
@@ -2976,6 +3205,7 @@ export const BackupSchema = z
           'Whether Studio can restore it: a SQLite file, or a PostgreSQL schema that keeps the statements\nof its restore; one taken before Studio kept them is its rows only, in the schema named',
       }),
   })
+  .readonly()
   .openapi({
     required: ['name', 'location', 'size', 'restorable'],
     description: 'A copy of the database taken before a migration that loses data.',
@@ -2989,7 +3219,8 @@ export const BackupSchema = z
   .openapi('Backup')
 
 export const BackupsSchema = z
-  .object({ backups: z.array(BackupSchema).openapi({ description: 'Newest first' }) })
+  .object({ backups: z.array(BackupSchema).readonly().openapi({ description: 'Newest first' }) })
+  .readonly()
   .brand<'Backups'>()
   .openapi({
     required: ['backups'],
@@ -3009,6 +3240,7 @@ export const RestoreBodySchema = z
           'The migration written by the run the backup was taken for, to remove from the directory',
       }),
   })
+  .readonly()
   .openapi({
     required: ['name'],
     description: 'A backup to restore, and the migration the restore undoes.',
@@ -3022,6 +3254,7 @@ export const MigrationFileSchema = z
     file: z.string().openapi({ description: 'Where its migration.sql is' }),
     sql: z.string().openapi({ description: 'What the migration.sql holds' }),
   })
+  .readonly()
   .brand<'MigrationFile'>()
   .openapi({
     required: ['name', 'file', 'sql'],
@@ -3039,6 +3272,7 @@ export const CreatedMigrationSchema = z
     name: z.string().openapi({ description: 'The directory name it was written under' }),
     file: z.string().openapi({ description: 'The migration.sql that was written' }),
   })
+  .readonly()
   .brand<'CreatedMigration'>()
   .openapi({
     required: ['name', 'file'],
@@ -3055,6 +3289,7 @@ export const CreateMigrationBodySchema = z
     name: z.string().openapi({ description: 'What to call it; the timestamp is put in front' }),
     sql: z.string().openapi({ description: 'The statements to write to migration.sql' }),
   })
+  .readonly()
   .openapi({
     required: ['name', 'sql'],
     description: 'A migration to write to the migrations directory.',
@@ -3069,8 +3304,10 @@ export const MigrationDecisionsSchema = z
       .openapi({ description: 'The file the decisions are kept in, beside the schema' }),
     decisions: z
       .array(MigrationDecisionSchema)
+      .readonly()
       .openapi({ description: 'The decisions, in the order they were made' }),
   })
+  .readonly()
   .brand<'MigrationDecisions'>()
   .openapi({
     required: ['file', 'decisions'],
@@ -3083,8 +3320,10 @@ export const DecisionsBodySchema = z
   .object({
     decisions: z
       .array(MigrationDecisionSchema)
+      .readonly()
       .openapi({ description: 'All of them: what is left out is forgotten' }),
   })
+  .readonly()
   .openapi({
     required: ['decisions'],
     description: 'Decisions to keep, replacing the ones kept now.',
@@ -3096,8 +3335,10 @@ export const DeployedSchema = z
   .object({
     applied: z
       .array(z.string())
+      .readonly()
       .openapi({ description: 'The migrations that were applied, oldest first' }),
   })
+  .readonly()
   .brand<'Deployed'>()
   .openapi({
     required: ['applied'],
@@ -3109,8 +3350,12 @@ export const DeployedSchema = z
 export const DocsDirectiveSchema = z
   .object({
     name: z.string().openapi({ description: 'The attribute name' }),
-    values: z.array(z.string()).openapi({ description: 'The field names the attribute lists' }),
+    values: z
+      .array(z.string())
+      .readonly()
+      .openapi({ description: 'The field names the attribute lists' }),
   })
+  .readonly()
   .openapi({
     required: ['name', 'values'],
     description:
@@ -3136,12 +3381,14 @@ export const DocsFieldSchema = z
     }),
     directives: z
       .array(z.string())
+      .readonly()
       .openapi({
         description: 'The field attributes (`@id`, `@unique`, `@default(...)`, `@updatedAt`)',
       }),
     documentation: z.string().nullable().openapi({ description: 'The `///` doc comment' }),
     required: z.boolean().openapi({ description: 'Whether the field is required' }),
   })
+  .readonly()
   .openapi({
     required: ['name', 'type', 'bareTypeName', 'kind', 'directives', 'documentation', 'required'],
     description: 'One field of a model, as the documentation shows it.',
@@ -3175,6 +3422,7 @@ export const DocsTypeRefSchema = z
     isList: z.boolean().openapi({ description: 'Whether the reference is a list of that type' }),
     location: DocsTypeLocationSchema.openapi({ description: 'Where the type is declared' }),
   })
+  .readonly()
   .openapi({
     required: ['type', 'isList', 'location'],
     description: 'A reference to a type in the Prisma client API.',
@@ -3185,9 +3433,10 @@ export const DocsTypeRefSchema = z
 export const DocsOperationInputSchema = z
   .object({
     name: z.string().openapi({ description: 'The argument name' }),
-    types: z.array(DocsTypeRefSchema).openapi({ description: 'The accepted types' }),
+    types: z.array(DocsTypeRefSchema).readonly().openapi({ description: 'The accepted types' }),
     required: z.boolean().openapi({ description: 'Whether the argument is required' }),
   })
+  .readonly()
   .openapi({
     required: ['name', 'types', 'required'],
     description: 'One argument of a Prisma client operation.',
@@ -3208,6 +3457,7 @@ export const DocsOperationOutputSchema = z
     required: z.boolean().openapi({ description: 'Whether the result is non-null' }),
     list: z.boolean().openapi({ description: 'Whether the result is a list' }),
   })
+  .readonly()
   .openapi({
     required: ['type', 'required', 'list'],
     description: 'What a Prisma client operation returns.',
@@ -3222,10 +3472,12 @@ export const DocsOperationSchema = z
     usage: z.string().openapi({ description: 'A usage snippet with the Prisma client' }),
     inputs: z
       .array(DocsOperationInputSchema)
+      .readonly()
       .nullable()
       .openapi({ description: 'The arguments, when the client API declares the operation' }),
     output: DocsOperationOutputSchema.openapi({ description: 'The result' }),
   })
+  .readonly()
   .openapi({
     required: ['name', 'description', 'usage', 'inputs', 'output'],
     description: 'One Prisma client operation of a model (`findMany`, `create`, ...).',
@@ -3250,12 +3502,20 @@ export const DocsModelSchema = z
   .object({
     name: z.string().openapi({ description: 'The model name' }),
     documentation: z.string().nullable().openapi({ description: 'The `///` doc comment' }),
-    directives: z.array(DocsDirectiveSchema).openapi({ description: 'The model-level attributes' }),
-    fields: z.array(DocsFieldSchema).openapi({ description: 'The fields in declaration order' }),
+    directives: z
+      .array(DocsDirectiveSchema)
+      .readonly()
+      .openapi({ description: 'The model-level attributes' }),
+    fields: z
+      .array(DocsFieldSchema)
+      .readonly()
+      .openapi({ description: 'The fields in declaration order' }),
     operations: z
       .array(DocsOperationSchema)
+      .readonly()
       .openapi({ description: 'The Prisma client operations of the model' }),
   })
+  .readonly()
   .openapi({
     required: ['name', 'documentation', 'directives', 'fields', 'operations'],
     description: 'One model of the documentation.',
@@ -3272,7 +3532,7 @@ export const DocsModelSchema = z
 export const DocsTypeFieldSchema = z
   .object({
     name: z.string().openapi({ description: 'The field name' }),
-    types: z.array(DocsTypeRefSchema).openapi({ description: 'The accepted types' }),
+    types: z.array(DocsTypeRefSchema).readonly().openapi({ description: 'The accepted types' }),
     nullable: z
       .boolean()
       .openapi({
@@ -3280,6 +3540,7 @@ export const DocsTypeFieldSchema = z
           'Whether the field may be null (input types), or is non-null (output types), as the original page shows it',
       }),
   })
+  .readonly()
   .openapi({
     required: ['name', 'types', 'nullable'],
     description: 'One field of an input or output type of the Prisma client API.',
@@ -3296,8 +3557,10 @@ export const DocsTypeSchema = z
     name: z.string().openapi({ description: 'The type name' }),
     fields: z
       .array(DocsTypeFieldSchema)
+      .readonly()
       .openapi({ description: 'The fields in declaration order' }),
   })
+  .readonly()
   .openapi({
     required: ['name', 'fields'],
     description: 'One input or output type of the Prisma client API.',
@@ -3308,8 +3571,12 @@ export const DocsTypeSchema = z
 export const DocsEnumSchema = z
   .object({
     name: z.string().openapi({ description: 'The enum name' }),
-    values: z.array(z.string()).openapi({ description: 'The values in declaration order' }),
+    values: z
+      .array(z.string())
+      .readonly()
+      .openapi({ description: 'The values in declaration order' }),
   })
+  .readonly()
   .openapi({
     required: ['name', 'values'],
     description:
@@ -3320,22 +3587,29 @@ export const DocsEnumSchema = z
 
 export const DocsSchema = z
   .object({
-    models: z.array(DocsModelSchema).openapi({ description: 'Every model in declaration order' }),
+    models: z
+      .array(DocsModelSchema)
+      .readonly()
+      .openapi({ description: 'Every model in declaration order' }),
     inputTypes: z
       .array(DocsTypeSchema)
+      .readonly()
       .openapi({ description: 'The input types of the Prisma client API' }),
     outputTypes: z
       .array(DocsTypeSchema)
+      .readonly()
       .openapi({
         description: 'The output types: the model types, then the aggregate / payload types',
       }),
     enumTypes: z
       .array(DocsEnumSchema)
+      .readonly()
       .openapi({
         description:
           'The enums: the schema enums, then the ones Prisma derives (`SortOrder`, `UserScalarFieldEnum`, ...)',
       }),
   })
+  .readonly()
   .brand<'Docs'>()
   .openapi({
     required: ['models', 'inputTypes', 'outputTypes', 'enumTypes'],
@@ -3354,7 +3628,7 @@ const RowsQuerySkipParamsSchema = SkipSchema.openapi({
     schema: { $ref: '#/components/schemas/skip' },
     explode: false,
   },
-})
+}).readonly()
 
 const RowsQueryTakeParamsSchema = TakeSchema.openapi({
   param: {
@@ -3365,9 +3639,9 @@ const RowsQueryTakeParamsSchema = TakeSchema.openapi({
     schema: { $ref: '#/components/schemas/take' },
     explode: false,
   },
-})
+}).readonly()
 
-const RowsQuerySearchParamsSchema = SearchSchema.exactOptional().openapi({
+const RowsQuerySearchParamsSchema = SearchSchema.openapi({
   param: {
     name: 'search',
     in: 'query',
@@ -3377,6 +3651,8 @@ const RowsQuerySearchParamsSchema = SearchSchema.exactOptional().openapi({
     explode: false,
   },
 })
+  .exactOptional()
+  .readonly()
 
 export const getSchemaRoute = createRoute({
   method: 'get',
@@ -3395,7 +3671,7 @@ export const getSchemaRoute = createRoute({
       content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
     },
   },
-})
+} as const)
 
 export const postSchemaReloadRoute = createRoute({
   method: 'post',
@@ -3414,7 +3690,7 @@ export const postSchemaReloadRoute = createRoute({
       content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
     },
   },
-})
+} as const)
 
 export const putSchemaFilesRoute = createRoute({
   method: 'put',
@@ -3444,7 +3720,7 @@ export const putSchemaFilesRoute = createRoute({
       content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
     },
   },
-})
+} as const)
 
 export const getSchemaEventsRoute = createRoute({
   method: 'get',
@@ -3459,7 +3735,7 @@ export const getSchemaEventsRoute = createRoute({
       content: { 'text/event-stream': { schema: z.string() } },
     },
   },
-})
+} as const)
 
 export const getDbRoute = createRoute({
   method: 'get',
@@ -3477,7 +3753,7 @@ export const getDbRoute = createRoute({
       content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
     },
   },
-})
+} as const)
 
 export const getDbCountsRoute = createRoute({
   method: 'get',
@@ -3499,7 +3775,7 @@ export const getDbCountsRoute = createRoute({
       content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
     },
   },
-})
+} as const)
 
 export const getDbRowsModelNameRoute = createRoute({
   method: 'get',
@@ -3546,7 +3822,7 @@ export const getDbRowsModelNameRoute = createRoute({
       content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
     },
   },
-})
+} as const)
 
 export const postDbRowsModelNameRoute = createRoute({
   method: 'post',
@@ -3590,7 +3866,7 @@ export const postDbRowsModelNameRoute = createRoute({
       content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
     },
   },
-})
+} as const)
 
 export const deleteDbRowsModelNameRoute = createRoute({
   method: 'delete',
@@ -3633,7 +3909,7 @@ export const deleteDbRowsModelNameRoute = createRoute({
       content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
     },
   },
-})
+} as const)
 
 export const patchDbRowsModelNameRoute = createRoute({
   method: 'patch',
@@ -3676,7 +3952,7 @@ export const patchDbRowsModelNameRoute = createRoute({
       content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
     },
   },
-})
+} as const)
 
 export const postDbSqlRoute = createRoute({
   method: 'post',
@@ -3704,7 +3980,7 @@ export const postDbSqlRoute = createRoute({
       content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
     },
   },
-})
+} as const)
 
 export const postDbExplainRoute = createRoute({
   method: 'post',
@@ -3731,7 +4007,7 @@ export const postDbExplainRoute = createRoute({
       content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
     },
   },
-})
+} as const)
 
 export const postDbAnalyzeRoute = createRoute({
   method: 'post',
@@ -3757,7 +4033,7 @@ export const postDbAnalyzeRoute = createRoute({
       content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
     },
   },
-})
+} as const)
 
 export const getClientRoute = createRoute({
   method: 'get',
@@ -3776,7 +4052,7 @@ export const getClientRoute = createRoute({
       content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
     },
   },
-})
+} as const)
 
 export const postClientAnalyzeRoute = createRoute({
   method: 'post',
@@ -3802,7 +4078,7 @@ export const postClientAnalyzeRoute = createRoute({
       content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
     },
   },
-})
+} as const)
 
 export const postClientCompleteRoute = createRoute({
   method: 'post',
@@ -3831,7 +4107,7 @@ export const postClientCompleteRoute = createRoute({
       content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
     },
   },
-})
+} as const)
 
 export const postClientCompleteDetailRoute = createRoute({
   method: 'post',
@@ -3863,7 +4139,7 @@ export const postClientCompleteDetailRoute = createRoute({
       content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
     },
   },
-})
+} as const)
 
 export const postClientHoverRoute = createRoute({
   method: 'post',
@@ -3892,7 +4168,7 @@ export const postClientHoverRoute = createRoute({
       content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
     },
   },
-})
+} as const)
 
 export const postClientSignatureRoute = createRoute({
   method: 'post',
@@ -3921,7 +4197,7 @@ export const postClientSignatureRoute = createRoute({
       content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
     },
   },
-})
+} as const)
 
 export const postClientFormatRoute = createRoute({
   method: 'post',
@@ -3947,7 +4223,7 @@ export const postClientFormatRoute = createRoute({
       content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
     },
   },
-})
+} as const)
 
 export const postClientCheckRoute = createRoute({
   method: 'post',
@@ -3976,7 +4252,7 @@ export const postClientCheckRoute = createRoute({
       content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
     },
   },
-})
+} as const)
 
 export const postClientPreviewRoute = createRoute({
   method: 'post',
@@ -4006,7 +4282,7 @@ export const postClientPreviewRoute = createRoute({
       content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
     },
   },
-})
+} as const)
 
 export const postClientRunRoute = createRoute({
   method: 'post',
@@ -4036,7 +4312,7 @@ export const postClientRunRoute = createRoute({
       content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
     },
   },
-})
+} as const)
 
 export const postPrismaFormatRoute = createRoute({
   method: 'post',
@@ -4061,7 +4337,7 @@ export const postPrismaFormatRoute = createRoute({
       content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
     },
   },
-})
+} as const)
 
 export const postPrismaLintRoute = createRoute({
   method: 'post',
@@ -4087,7 +4363,7 @@ export const postPrismaLintRoute = createRoute({
       content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
     },
   },
-})
+} as const)
 
 export const postPrismaSymbolsRoute = createRoute({
   method: 'post',
@@ -4112,7 +4388,7 @@ export const postPrismaSymbolsRoute = createRoute({
       content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
     },
   },
-})
+} as const)
 
 export const postPrismaCompleteRoute = createRoute({
   method: 'post',
@@ -4137,7 +4413,7 @@ export const postPrismaCompleteRoute = createRoute({
       content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
     },
   },
-})
+} as const)
 
 export const postPrismaHoverRoute = createRoute({
   method: 'post',
@@ -4162,7 +4438,7 @@ export const postPrismaHoverRoute = createRoute({
       content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
     },
   },
-})
+} as const)
 
 export const postPrismaDefinitionRoute = createRoute({
   method: 'post',
@@ -4187,7 +4463,7 @@ export const postPrismaDefinitionRoute = createRoute({
       content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
     },
   },
-})
+} as const)
 
 export const postPrismaReferencesRoute = createRoute({
   method: 'post',
@@ -4212,7 +4488,7 @@ export const postPrismaReferencesRoute = createRoute({
       content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
     },
   },
-})
+} as const)
 
 export const postPrismaRenameRoute = createRoute({
   method: 'post',
@@ -4238,7 +4514,7 @@ export const postPrismaRenameRoute = createRoute({
       content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
     },
   },
-})
+} as const)
 
 export const postPrismaCodeActionsRoute = createRoute({
   method: 'post',
@@ -4263,7 +4539,7 @@ export const postPrismaCodeActionsRoute = createRoute({
       content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
     },
   },
-})
+} as const)
 
 export const getMigrateRoute = createRoute({
   method: 'get',
@@ -4286,7 +4562,7 @@ export const getMigrateRoute = createRoute({
       content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
     },
   },
-})
+} as const)
 
 export const getMigrateBaselineRoute = createRoute({
   method: 'get',
@@ -4309,7 +4585,7 @@ export const getMigrateBaselineRoute = createRoute({
       content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
     },
   },
-})
+} as const)
 
 export const postMigrateBaselineRoute = createRoute({
   method: 'post',
@@ -4339,7 +4615,7 @@ export const postMigrateBaselineRoute = createRoute({
       content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
     },
   },
-})
+} as const)
 
 export const getMigrateDiffRoute = createRoute({
   method: 'get',
@@ -4362,7 +4638,7 @@ export const getMigrateDiffRoute = createRoute({
       content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
     },
   },
-})
+} as const)
 
 export const postMigratePlanRoute = createRoute({
   method: 'post',
@@ -4392,7 +4668,7 @@ export const postMigratePlanRoute = createRoute({
       content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
     },
   },
-})
+} as const)
 
 export const postMigrateApplyRoute = createRoute({
   method: 'post',
@@ -4422,7 +4698,7 @@ export const postMigrateApplyRoute = createRoute({
       content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
     },
   },
-})
+} as const)
 
 export const postMigrateRehearseRoute = createRoute({
   method: 'post',
@@ -4452,7 +4728,7 @@ export const postMigrateRehearseRoute = createRoute({
       content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
     },
   },
-})
+} as const)
 
 export const getMigrateTablesRoute = createRoute({
   method: 'get',
@@ -4474,7 +4750,7 @@ export const getMigrateTablesRoute = createRoute({
       content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
     },
   },
-})
+} as const)
 
 export const getMigrateBackupsRoute = createRoute({
   method: 'get',
@@ -4496,7 +4772,7 @@ export const getMigrateBackupsRoute = createRoute({
       content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
     },
   },
-})
+} as const)
 
 export const postMigrateBackupsRoute = createRoute({
   method: 'post',
@@ -4522,7 +4798,7 @@ export const postMigrateBackupsRoute = createRoute({
       content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
     },
   },
-})
+} as const)
 
 export const postMigrateBackupsRestoreRoute = createRoute({
   method: 'post',
@@ -4552,7 +4828,7 @@ export const postMigrateBackupsRestoreRoute = createRoute({
       content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
     },
   },
-})
+} as const)
 
 export const getMigrateMigrationsMigrationNameRoute = createRoute({
   method: 'get',
@@ -4588,7 +4864,7 @@ export const getMigrateMigrationsMigrationNameRoute = createRoute({
       content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
     },
   },
-})
+} as const)
 
 export const postMigrateMigrationsRoute = createRoute({
   method: 'post',
@@ -4621,7 +4897,7 @@ export const postMigrateMigrationsRoute = createRoute({
       content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
     },
   },
-})
+} as const)
 
 export const postMigrateMigrationsAppliedRoute = createRoute({
   method: 'post',
@@ -4651,7 +4927,7 @@ export const postMigrateMigrationsAppliedRoute = createRoute({
       content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
     },
   },
-})
+} as const)
 
 export const postMigrateMigrationsRolledBackRoute = createRoute({
   method: 'post',
@@ -4681,7 +4957,7 @@ export const postMigrateMigrationsRolledBackRoute = createRoute({
       content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
     },
   },
-})
+} as const)
 
 export const getMigrateDecisionsRoute = createRoute({
   method: 'get',
@@ -4703,7 +4979,7 @@ export const getMigrateDecisionsRoute = createRoute({
       content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
     },
   },
-})
+} as const)
 
 export const putMigrateDecisionsRoute = createRoute({
   method: 'put',
@@ -4733,7 +5009,7 @@ export const putMigrateDecisionsRoute = createRoute({
       content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
     },
   },
-})
+} as const)
 
 export const postMigrateDeployRoute = createRoute({
   method: 'post',
@@ -4756,7 +5032,7 @@ export const postMigrateDeployRoute = createRoute({
       content: { 'application/problem+json': { schema: ServiceUnavailableProblemSchema } },
     },
   },
-})
+} as const)
 
 export const getDocsRoute = createRoute({
   method: 'get',
@@ -4775,4 +5051,4 @@ export const getDocsRoute = createRoute({
       content: { 'application/problem+json': { schema: InternalServerProblemSchema } },
     },
   },
-})
+} as const)

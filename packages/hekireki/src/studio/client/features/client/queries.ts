@@ -4,8 +4,8 @@ import { queryOptions, useQuery } from '@tanstack/react-query'
 import type { QueryClient } from '@tanstack/react-query'
 import { parseResponse } from 'hono/client'
 
+import { client } from '../../api/index.js'
 import { getClientKey } from '../../hooks/index.js'
-import { client } from '../../lib/index.js'
 
 function analysisOptions(query: string) {
   return queryOptions({

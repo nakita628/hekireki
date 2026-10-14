@@ -2,10 +2,10 @@ import { Tabs } from '@heroui/react'
 import type { InferResponseType } from 'hono/client'
 import { useMemo } from 'react'
 
+import type { client } from '../../api/index.js'
 import { CodeBlock } from '../../components/code-block.js'
 import { ModeSwitch } from '../../components/mode-switch.js'
 import { ResultTable } from '../../components/result-table.js'
-import type { client } from '../../lib/index.js'
 import { problemMessage, tableOf } from './result.js'
 import { Statements } from './statements.js'
 

@@ -2,6 +2,8 @@ import { RuleTester } from 'oxlint/plugins-dev'
 import { describe, expect, it, test } from 'vite-plus/test'
 
 import plugin, {
+  docCommentBefore,
+  handlerDocNames,
   isServiceModulePath,
   isUseCaseModulePath,
   isUseCaseSpecifier,
@@ -446,5 +448,90 @@ tester.run('predicate-is-name', rule('predicate-is-name'), {
   invalid: [
     { ...tsCase(`function readIsLoopback() { return true }`), errors: 1 },
     { ...tsCase(`const readIsEmpty = () => true`), errors: 1 },
+  ],
+})
+
+const HANDLER_FILE = 'src/studio/server/handlers/docs.ts'
+
+const DOCUMENTED_HANDLER = `/**
+ * \`GET /docs\` handler. The documentation of the last schema that parsed.
+ *
+ * \`\`\`mermaid
+ * sequenceDiagram
+ *   participant C as Client
+ *   participant H as Handler
+ *   participant U as DocsUseCase
+ *   C->>H: GET /docs
+ *   H->>U: readDocs()
+ *   U-->>H: Docs
+ *   H-->>C: 200 Docs
+ *   Note over H: on failure, Match.tag: ContractViolationError -> 500
+ * \`\`\`
+ */
+export const getDocsRouteHandler: RouteHandler<typeof getDocsRoute> = (c) =>
+  Effect.runPromise(
+    Effect.matchEffect(DocsUseCase.readDocs(), {
+      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
+      onFailure: (error) => Match.value(error).pipe(Match.tag('ContractViolationError', () => Effect.succeed(c.json({}, 500))), Match.exhaustive),
+    }),
+  )
+`
+
+describe('handler doc helpers', () => {
+  it('reads the TSDoc block right above a statement', () => {
+    expect(docCommentBefore('/** a */\nexport const x = 1', 9)).toBe(' a ')
+    expect(docCommentBefore('// a\nexport const x = 1', 5)).toBeNull()
+    expect(docCommentBefore('/** a */\nconst y = 1\nexport const x = 1', 21)).toBeNull()
+  })
+
+  it('lists the use cases a handler calls and the tags it answers, once each', () => {
+    expect(
+      handlerDocNames(
+        `DocsUseCase.readDocs() Match.tag('A', 1) Match.tag('B', 2) Match.tag('A', 3)`,
+      ),
+    ).toStrictEqual(['readDocs', 'A', 'B'])
+  })
+})
+
+tester.run('handler-doc', rule('handler-doc'), {
+  valid: [
+    tsCase(DOCUMENTED_HANDLER, HANDLER_FILE),
+    // Outside handlers/, and in a handler test, nothing is asked.
+    tsCase(`export const getDocsRouteHandler = (c) => c.json({}, 200)`),
+    tsCase(
+      `export const getDocsRouteHandler = (c) => c.json({}, 200)`,
+      'src/studio/server/handlers/docs.test.ts',
+    ),
+    // A helper that is not a handler needs no diagram.
+    tsCase(`export const SSE_PING = 1`, HANDLER_FILE),
+  ],
+  invalid: [
+    {
+      ...tsCase(`export const getDocsRouteHandler = (c) => c.json({}, 200)`, HANDLER_FILE),
+      errors: 1,
+    },
+    {
+      ...tsCase(DOCUMENTED_HANDLER.replace('The documentation', 'ドキュメント'), HANDLER_FILE),
+      errors: 1,
+    },
+    {
+      ...tsCase(
+        DOCUMENTED_HANDLER.replace('`GET /docs` handler.', 'The docs handler.'),
+        HANDLER_FILE,
+      ),
+      errors: 1,
+    },
+    {
+      ...tsCase(DOCUMENTED_HANDLER.replace('sequenceDiagram', 'flowchart'), HANDLER_FILE),
+      errors: 1,
+    },
+    {
+      ...tsCase(DOCUMENTED_HANDLER.replace('ContractViolationError -> 500', ''), HANDLER_FILE),
+      errors: 1,
+    },
+    {
+      ...tsCase(DOCUMENTED_HANDLER.replace('H->>U: readDocs()', 'H->>U: read'), HANDLER_FILE),
+      errors: 1,
+    },
   ],
 })

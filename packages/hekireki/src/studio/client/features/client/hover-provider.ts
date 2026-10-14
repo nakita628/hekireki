@@ -1,7 +1,7 @@
 import { parseResponse } from 'hono/client'
 import type { languages } from 'monaco-editor/editor/editor.api.js'
 
-import { client } from '../../lib/index.js'
+import { client } from '../../api/index.js'
 import { registry, toRange, wordRange } from './editor-state.js'
 
 /** What TypeScript says about the symbol under the pointer, as Markdown. */

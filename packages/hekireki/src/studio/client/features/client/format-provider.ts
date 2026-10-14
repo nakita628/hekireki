@@ -1,7 +1,7 @@
 import { parseResponse } from 'hono/client'
 import type { languages } from 'monaco-editor/editor/editor.api.js'
 
-import { client } from '../../lib/index.js'
+import { client } from '../../api/index.js'
 
 /** Format Document: the query laid out by the TypeScript formatter, replacing the whole text. */
 export function formattingProvider() {

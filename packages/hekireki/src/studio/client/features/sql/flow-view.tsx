@@ -16,8 +16,8 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { ComponentProps } from 'react'
 import { LuLayoutGrid } from 'react-icons/lu'
 
+import type { dbClient } from '../../api/index.js'
 import { useUiStore } from '../../lib/index.js'
-import type { client } from '../../lib/index.js'
 import { autoLayout } from './flow-layout.js'
 import { FlowNode } from './flow-node.js'
 import type { FlowNodeType } from './flow-node.js'
@@ -44,11 +44,11 @@ function Canvas({
   onSelect,
 }: {
   readonly nodes: InferResponseType<
-    typeof client.db.analyze.$post,
+    typeof dbClient.db.analyze.$post,
     200
   >['statements'][number]['nodes']
   readonly edges: InferResponseType<
-    typeof client.db.analyze.$post,
+    typeof dbClient.db.analyze.$post,
     200
   >['statements'][number]['edges']
   readonly selected: string | null

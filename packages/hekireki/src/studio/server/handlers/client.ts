@@ -15,6 +15,22 @@ import type {
 } from '../routes'
 import * as ClientUseCase from '../usecases/index.js'
 
+/**
+ * `GET /client` handler. Load the project's Prisma Client, the first time it is asked for, and say
+ * whether it could.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant C as Client
+ *   participant H as Handler
+ *   participant U as ClientUseCase
+ *   C->>H: GET /client
+ *   H->>U: readClientStatus()
+ *   U-->>H: ClientStatus
+ *   H-->>C: 200 ClientStatus
+ *   Note over H: on failure, Match.tag: ContractViolationError -> 500
+ * ```
+ */
 export const getClientRouteHandler: RouteHandler<typeof getClientRoute> = (c) =>
   Effect.runPromise(
     Effect.matchEffect(ClientUseCase.readClientStatus(), {
@@ -43,6 +59,22 @@ export const getClientRouteHandler: RouteHandler<typeof getClientRoute> = (c) =>
     }),
   )
 
+/**
+ * `POST /client/analyze` handler. Read the query against the schema's models, without running it:
+ * its calls and its problems.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant C as Client
+ *   participant H as Handler
+ *   participant U as ClientUseCase
+ *   C->>H: POST /client/analyze
+ *   H->>U: analyzeClientQuery()
+ *   U-->>H: ClientAnalysis
+ *   H-->>C: 200 ClientAnalysis
+ *   Note over H: on failure, Match.tag: ContractViolationError -> 500
+ * ```
+ */
 export const postClientAnalyzeRouteHandler: RouteHandler<typeof postClientAnalyzeRoute> = (c) => {
   const data = c.req.valid('json')
   return Effect.runPromise(
@@ -73,6 +105,22 @@ export const postClientAnalyzeRouteHandler: RouteHandler<typeof postClientAnalyz
   )
 }
 
+/**
+ * `POST /client/run` handler. Run the query through the project's Prisma Client and return its
+ * result with the SQL it sent.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant C as Client
+ *   participant H as Handler
+ *   participant U as ClientUseCase
+ *   C->>H: POST /client/run
+ *   H->>U: runClientQuery()
+ *   U-->>H: ClientResult
+ *   H-->>C: 200 ClientResult
+ *   Note over H: on failure, Match.tag: InvalidInputError -> 422 / ClientQueryError -> 422 / ClientUnavailableError -> 503 / ContractViolationError -> 500
+ * ```
+ */
 export const postClientRunRouteHandler: RouteHandler<typeof postClientRunRoute> = (c) => {
   const data = c.req.valid('json')
   return Effect.runPromise(
@@ -150,6 +198,22 @@ export const postClientRunRouteHandler: RouteHandler<typeof postClientRunRoute> 
   )
 }
 
+/**
+ * `POST /client/complete` handler. The completions TypeScript offers at a position, against the
+ * client's types.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant C as Client
+ *   participant H as Handler
+ *   participant U as ClientUseCase
+ *   C->>H: POST /client/complete
+ *   H->>U: completeClientQuery()
+ *   U-->>H: ClientCompletions
+ *   H-->>C: 200 ClientCompletions
+ *   Note over H: on failure, Match.tag: ClientUnavailableError -> 503 / ContractViolationError -> 500
+ * ```
+ */
 export const postClientCompleteRouteHandler: RouteHandler<typeof postClientCompleteRoute> = (c) => {
   const data = c.req.valid('json')
   return Effect.runPromise(
@@ -198,6 +262,21 @@ export const postClientCompleteRouteHandler: RouteHandler<typeof postClientCompl
   )
 }
 
+/**
+ * `POST /client/complete/detail` handler. The type and documentation of one completion item.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant C as Client
+ *   participant H as Handler
+ *   participant U as ClientUseCase
+ *   C->>H: POST /client/complete/detail
+ *   H->>U: detailClientCompletion()
+ *   U-->>H: ClientCompletionDetail
+ *   H-->>C: 200 ClientCompletionDetail
+ *   Note over H: on failure, Match.tag: ClientUnavailableError -> 503 / ContractViolationError -> 500
+ * ```
+ */
 export const postClientCompleteDetailRouteHandler: RouteHandler<
   typeof postClientCompleteDetailRoute
 > = (c) => {
@@ -252,6 +331,21 @@ export const postClientCompleteDetailRouteHandler: RouteHandler<
   )
 }
 
+/**
+ * `POST /client/hover` handler. What TypeScript says about the symbol at a position.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant C as Client
+ *   participant H as Handler
+ *   participant U as ClientUseCase
+ *   C->>H: POST /client/hover
+ *   H->>U: hoverClientQuery()
+ *   U-->>H: ClientHover
+ *   H-->>C: 200 ClientHover
+ *   Note over H: on failure, Match.tag: ClientUnavailableError -> 503 / ContractViolationError -> 500
+ * ```
+ */
 export const postClientHoverRouteHandler: RouteHandler<typeof postClientHoverRoute> = (c) => {
   const data = c.req.valid('json')
   return Effect.runPromise(
@@ -297,6 +391,21 @@ export const postClientHoverRouteHandler: RouteHandler<typeof postClientHoverRou
   )
 }
 
+/**
+ * `POST /client/signature` handler. The signatures of the call the cursor is inside.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant C as Client
+ *   participant H as Handler
+ *   participant U as ClientUseCase
+ *   C->>H: POST /client/signature
+ *   H->>U: signatureClientQuery()
+ *   U-->>H: ClientSignatureHelp
+ *   H-->>C: 200 ClientSignatureHelp
+ *   Note over H: on failure, Match.tag: ClientUnavailableError -> 503 / ContractViolationError -> 500
+ * ```
+ */
 export const postClientSignatureRouteHandler: RouteHandler<typeof postClientSignatureRoute> = (
   c,
 ) => {
@@ -347,6 +456,22 @@ export const postClientSignatureRouteHandler: RouteHandler<typeof postClientSign
   )
 }
 
+/**
+ * `POST /client/check` handler. What TypeScript finds wrong with the query, checked against the
+ * client's types.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant C as Client
+ *   participant H as Handler
+ *   participant U as ClientUseCase
+ *   C->>H: POST /client/check
+ *   H->>U: checkClientQuery()
+ *   U-->>H: ClientTypeDiagnostics
+ *   H-->>C: 200 ClientTypeDiagnostics
+ *   Note over H: on failure, Match.tag: ClientUnavailableError -> 503 / ContractViolationError -> 500
+ * ```
+ */
 export const postClientCheckRouteHandler: RouteHandler<typeof postClientCheckRoute> = (c) => {
   const data = c.req.valid('json')
   return Effect.runPromise(
@@ -392,6 +517,22 @@ export const postClientCheckRouteHandler: RouteHandler<typeof postClientCheckRou
   )
 }
 
+/**
+ * `POST /client/format` handler. The query laid out as the TypeScript formatter writes it; a query
+ * that does not parse is reported on `query`.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant C as Client
+ *   participant H as Handler
+ *   participant U as ClientUseCase
+ *   C->>H: POST /client/format
+ *   H->>U: formatClientQuery()
+ *   U-->>H: ClientFormatted
+ *   H-->>C: 200 ClientFormatted
+ *   Note over H: on failure, Match.tag: FormatError -> 422 / ContractViolationError -> 500
+ * ```
+ */
 export const postClientFormatRouteHandler: RouteHandler<typeof postClientFormatRoute> = (c) => {
   const data = c.req.valid('json')
   return Effect.runPromise(
@@ -438,6 +579,22 @@ export const postClientFormatRouteHandler: RouteHandler<typeof postClientFormatR
   )
 }
 
+/**
+ * `POST /client/preview` handler. Run a query that only reads to show the SQL it sends while it is
+ * typed; a write is refused on `query`.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant C as Client
+ *   participant H as Handler
+ *   participant U as ClientUseCase
+ *   C->>H: POST /client/preview
+ *   H->>U: previewClientQuery()
+ *   U-->>H: ClientPreview
+ *   H-->>C: 200 ClientPreview
+ *   Note over H: on failure, Match.tag: InvalidInputError -> 422 / ClientQueryError -> 422 / ClientUnavailableError -> 503 / ContractViolationError -> 500
+ * ```
+ */
 export const postClientPreviewRouteHandler: RouteHandler<typeof postClientPreviewRoute> = (c) => {
   const data = c.req.valid('json')
   return Effect.runPromise(

@@ -1,7 +1,7 @@
 import { parseResponse } from 'hono/client'
 import { languages } from 'monaco-editor/editor/editor.api.js'
 
-import { client } from '../../lib/index.js'
+import { client } from '../../api/index.js'
 import { suggestionsAt } from './completion.js'
 import { contextAt } from './cursor.js'
 import { registry, wordRange } from './editor-state.js'

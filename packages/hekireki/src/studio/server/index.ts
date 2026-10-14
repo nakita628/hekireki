@@ -108,11 +108,13 @@ import {
 
 const app = new OpenAPIHono().basePath('/api')
 
-export const api = app
+export const schema = app
   .openapi(getSchemaRoute, getSchemaRouteHandler)
   .openapi(postSchemaReloadRoute, postSchemaReloadRouteHandler)
   .openapi(putSchemaFilesRoute, putSchemaFilesRouteHandler)
   .openapi(getSchemaEventsRoute, getSchemaEventsRouteHandler)
+
+export const db = app
   .openapi(getDbRoute, getDbRouteHandler)
   .openapi(getDbCountsRoute, getDbCountsRouteHandler)
   .openapi(getDbRowsModelNameRoute, getDbRowsModelNameRouteHandler)
@@ -122,6 +124,8 @@ export const api = app
   .openapi(postDbSqlRoute, postDbSqlRouteHandler)
   .openapi(postDbExplainRoute, postDbExplainRouteHandler)
   .openapi(postDbAnalyzeRoute, postDbAnalyzeRouteHandler)
+
+export const api = app
   .openapi(getClientRoute, getClientRouteHandler)
   .openapi(postClientAnalyzeRoute, postClientAnalyzeRouteHandler)
   .openapi(postClientCompleteRoute, postClientCompleteRouteHandler)
@@ -132,6 +136,8 @@ export const api = app
   .openapi(postClientCheckRoute, postClientCheckRouteHandler)
   .openapi(postClientPreviewRoute, postClientPreviewRouteHandler)
   .openapi(postClientRunRoute, postClientRunRouteHandler)
+
+export const prisma = app
   .openapi(postPrismaFormatRoute, postPrismaFormatRouteHandler)
   .openapi(postPrismaLintRoute, postPrismaLintRouteHandler)
   .openapi(postPrismaSymbolsRoute, postPrismaSymbolsRouteHandler)
@@ -141,6 +147,8 @@ export const api = app
   .openapi(postPrismaReferencesRoute, postPrismaReferencesRouteHandler)
   .openapi(postPrismaRenameRoute, postPrismaRenameRouteHandler)
   .openapi(postPrismaCodeActionsRoute, postPrismaCodeActionsRouteHandler)
+
+export const migrate = app
   .openapi(getMigrateRoute, getMigrateRouteHandler)
   .openapi(getMigrateBaselineRoute, getMigrateBaselineRouteHandler)
   .openapi(postMigrateBaselineRoute, postMigrateBaselineRouteHandler)
@@ -159,6 +167,7 @@ export const api = app
   .openapi(getMigrateDecisionsRoute, getMigrateDecisionsRouteHandler)
   .openapi(putMigrateDecisionsRoute, putMigrateDecisionsRouteHandler)
   .openapi(postMigrateDeployRoute, postMigrateDeployRouteHandler)
-  .openapi(getDocsRoute, getDocsRouteHandler)
+
+export const docs = app.openapi(getDocsRoute, getDocsRouteHandler)
 
 export default app

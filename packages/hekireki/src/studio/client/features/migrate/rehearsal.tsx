@@ -2,13 +2,13 @@ import { Button } from '@heroui/react'
 import type { InferResponseType } from 'hono/client'
 import { LuCircleAlert, LuCircleCheck, LuCircleDashed, LuFlaskConical } from 'react-icons/lu'
 
+import type { migrateClient } from '../../api/index.js'
 import { CodeBlock } from '../../components/code-block.js'
-import type { client } from '../../lib/index.js'
 import { useMessages } from './language.js'
 import { REHEARSAL } from './messages.js'
 import { RowCounts } from './row-counts.js'
 
-type Result = InferResponseType<typeof client.migrate.rehearse.$post, 200>
+type Result = InferResponseType<typeof migrateClient.migrate.rehearse.$post, 200>
 
 /**
  * The migration run for real where nothing is kept: on a copy of a SQLite file, or in a

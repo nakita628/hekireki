@@ -1,6 +1,7 @@
 import type { RouteHandler } from '@hono/zod-openapi'
 import { Effect, Match } from 'effect'
 
+import { SearchSchema, SkipSchema, TakeSchema } from '../routes'
 import type {
   deleteDbRowsModelNameRoute,
   getDbCountsRoute,
@@ -14,6 +15,21 @@ import type {
 } from '../routes'
 import * as DatabaseUseCase from '../usecases/index.js'
 
+/**
+ * `GET /db` handler. The database connection status.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant C as Client
+ *   participant H as Handler
+ *   participant U as DatabaseUseCase
+ *   C->>H: GET /db
+ *   H->>U: readDbStatus()
+ *   U-->>H: DbStatus
+ *   H-->>C: 200 DbStatus
+ *   Note over H: on failure, Match.tag: ContractViolationError -> 500
+ * ```
+ */
 export const getDbRouteHandler: RouteHandler<typeof getDbRoute> = (c) =>
   Effect.runPromise(
     Effect.matchEffect(DatabaseUseCase.readDbStatus(), {
@@ -42,6 +58,22 @@ export const getDbRouteHandler: RouteHandler<typeof getDbRoute> = (c) =>
     }),
   )
 
+/**
+ * `GET /db/counts` handler. Row count of every model that has a table; a model whose count fails is
+ * left out.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant C as Client
+ *   participant H as Handler
+ *   participant U as DatabaseUseCase
+ *   C->>H: GET /db/counts
+ *   H->>U: readCounts()
+ *   U-->>H: Counts
+ *   H-->>C: 200 Counts
+ *   Note over H: on failure, Match.tag: DatabaseUnavailableError -> 503 / ContractViolationError -> 500
+ * ```
+ */
 export const getDbCountsRouteHandler: RouteHandler<typeof getDbCountsRoute> = (c) =>
   Effect.runPromise(
     Effect.matchEffect(DatabaseUseCase.readCounts(), {
@@ -85,15 +117,34 @@ export const getDbCountsRouteHandler: RouteHandler<typeof getDbCountsRoute> = (c
     }),
   )
 
+/**
+ * `GET /db/rows/{modelName}` handler. One page of a model's rows, keyed by field name, ordered by
+ * the key fields.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant C as Client
+ *   participant H as Handler
+ *   participant U as DatabaseUseCase
+ *   C->>H: GET /db/rows/{modelName}
+ *   H->>U: readRows()
+ *   U-->>H: Rows
+ *   H-->>C: 200 Rows
+ *   Note over H: on failure, Match.tag: UnknownModelError -> 404 / DatabaseUnavailableError -> 503 / DatabaseError -> 503 / ContractViolationError -> 500
+ * ```
+ */
 export const getDbRowsModelNameRouteHandler: RouteHandler<typeof getDbRowsModelNameRoute> = (c) => {
   const data = { ...c.req.valid('param'), ...c.req.valid('query') }
   return Effect.runPromise(
     Effect.matchEffect(
+      // The generated query schemas wrap each scalar in `.readonly()` (hono-takibi applies it to
+      // every parameter), which turns the brand into `Readonly<number & $brand>`; parsing the
+      // value once more through the scalar schema gives the brand back as the use case wants it.
       DatabaseUseCase.readRows({
         modelName: data.modelName,
-        skip: data.skip,
-        take: data.take,
-        search: data.search,
+        skip: SkipSchema.parse(data.skip),
+        take: TakeSchema.parse(data.take),
+        search: data.search === undefined ? undefined : SearchSchema.parse(data.search),
       }),
       {
         onSuccess: (value) => Effect.succeed(c.json(value, 200)),
@@ -170,6 +221,22 @@ export const getDbRowsModelNameRouteHandler: RouteHandler<typeof getDbRowsModelN
   )
 }
 
+/**
+ * `POST /db/rows/{modelName}` handler. Insert one row; field names are translated to columns and
+ * values to the driver's representation.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant C as Client
+ *   participant H as Handler
+ *   participant U as DatabaseUseCase
+ *   C->>H: POST /db/rows/{modelName}
+ *   H->>U: insertRow()
+ *   U-->>H: Affected
+ *   H-->>C: 200 Affected
+ *   Note over H: on failure, Match.tag: UnknownModelError -> 404 / DatabaseUnavailableError -> 503 / DatabaseError -> 503 / ContractViolationError -> 500
+ * ```
+ */
 export const postDbRowsModelNameRouteHandler: RouteHandler<typeof postDbRowsModelNameRoute> = (
   c,
 ) => {
@@ -252,6 +319,22 @@ export const postDbRowsModelNameRouteHandler: RouteHandler<typeof postDbRowsMode
   )
 }
 
+/**
+ * `PATCH /db/rows/{modelName}` handler. Update the row identified by `where`; both parts must name
+ * at least one field.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant C as Client
+ *   participant H as Handler
+ *   participant U as DatabaseUseCase
+ *   C->>H: PATCH /db/rows/{modelName}
+ *   H->>U: updateRow()
+ *   U-->>H: Affected
+ *   H-->>C: 200 Affected
+ *   Note over H: on failure, Match.tag: UnknownModelError -> 404 / InvalidInputError -> 422 / DatabaseUnavailableError -> 503 / DatabaseError -> 503 / ContractViolationError -> 500
+ * ```
+ */
 export const patchDbRowsModelNameRouteHandler: RouteHandler<typeof patchDbRowsModelNameRoute> = (
   c,
 ) => {
@@ -354,6 +437,21 @@ export const patchDbRowsModelNameRouteHandler: RouteHandler<typeof patchDbRowsMo
   )
 }
 
+/**
+ * `DELETE /db/rows/{modelName}` handler. Delete the row identified by `where`.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant C as Client
+ *   participant H as Handler
+ *   participant U as DatabaseUseCase
+ *   C->>H: DELETE /db/rows/{modelName}
+ *   H->>U: deleteRow()
+ *   U-->>H: Affected
+ *   H-->>C: 200 Affected
+ *   Note over H: on failure, Match.tag: UnknownModelError -> 404 / InvalidInputError -> 422 / DatabaseUnavailableError -> 503 / DatabaseError -> 503 / ContractViolationError -> 500
+ * ```
+ */
 export const deleteDbRowsModelNameRouteHandler: RouteHandler<typeof deleteDbRowsModelNameRoute> = (
   c,
 ) => {
@@ -452,6 +550,22 @@ export const deleteDbRowsModelNameRouteHandler: RouteHandler<typeof deleteDbRows
   )
 }
 
+/**
+ * `POST /db/sql` handler. Run the statements one by one and return the rows of the last, or its
+ * affected count for a write, with the wall time of the whole.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant C as Client
+ *   participant H as Handler
+ *   participant U as DatabaseUseCase
+ *   C->>H: POST /db/sql
+ *   H->>U: runSql()
+ *   U-->>H: SqlResult
+ *   H-->>C: 200 SqlResult
+ *   Note over H: on failure, Match.tag: InvalidInputError -> 422 / DatabaseUnavailableError -> 503 / DatabaseError -> 422 / ContractViolationError -> 500
+ * ```
+ */
 export const postDbSqlRouteHandler: RouteHandler<typeof postDbSqlRoute> = (c) => {
   const data = c.req.valid('json')
   return Effect.runPromise(
@@ -529,6 +643,22 @@ export const postDbSqlRouteHandler: RouteHandler<typeof postDbSqlRoute> = (c) =>
   )
 }
 
+/**
+ * `POST /db/analyze` handler. Analyze the statements against the Prisma schema's tables: data flow,
+ * lineage, row type, parameters and problems.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant C as Client
+ *   participant H as Handler
+ *   participant U as DatabaseUseCase
+ *   C->>H: POST /db/analyze
+ *   H->>U: analyzeSql()
+ *   U-->>H: Analysis
+ *   H-->>C: 200 Analysis
+ *   Note over H: on failure, Match.tag: ContractViolationError -> 500
+ * ```
+ */
 export const postDbAnalyzeRouteHandler: RouteHandler<typeof postDbAnalyzeRoute> = (c) => {
   const data = c.req.valid('json')
   return Effect.runPromise(
@@ -559,6 +689,22 @@ export const postDbAnalyzeRouteHandler: RouteHandler<typeof postDbAnalyzeRoute> 
   )
 }
 
+/**
+ * `POST /db/explain` handler. The execution plan the database chooses for the first statement of
+ * the text.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant C as Client
+ *   participant H as Handler
+ *   participant U as DatabaseUseCase
+ *   C->>H: POST /db/explain
+ *   H->>U: explainSql()
+ *   U-->>H: Plan
+ *   H-->>C: 200 Plan
+ *   Note over H: on failure, Match.tag: InvalidInputError -> 422 / DatabaseUnavailableError -> 503 / DatabaseError -> 422 / ContractViolationError -> 500
+ * ```
+ */
 export const postDbExplainRouteHandler: RouteHandler<typeof postDbExplainRoute> = (c) => {
   const data = c.req.valid('json')
   return Effect.runPromise(

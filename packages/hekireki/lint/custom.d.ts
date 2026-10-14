@@ -34,3 +34,9 @@ declare const plugin: {
 }
 
 export default plugin
+
+/** Behind `custom/handler-doc`: the TSDoc block right above the statement starting at `start`, or null. */
+export declare function docCommentBefore(text: string, start: number): string | null
+
+/** Behind `custom/handler-doc`: the use cases a handler calls and the `Match.tag` names it answers. */
+export declare function handlerDocNames(body: string): readonly string[]

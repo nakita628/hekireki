@@ -17,6 +17,7 @@ minimumReleaseAgeExclude:
   - '@effect/platform-node-shared@4.0.0'
   - '@effect/platform-node@4.0.0'
   - effect@4.0.0
+  - hono-takibi@0.19.0
 # The two types packages @heroui/react reaches through were published from 3.2.0 (color) and
 # 3.9.0 (slider) with a dependency on Adobe's Spectrum design system (@react-spectrum/color,
 # @react-spectrum/slider, and through them @adobe/react-spectrum with its thousands of icon

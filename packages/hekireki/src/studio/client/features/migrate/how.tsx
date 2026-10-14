@@ -3,11 +3,11 @@ import { parseResponse } from 'hono/client'
 import type { InferResponseType } from 'hono/client'
 import { LuArrowDown, LuCircleAlert, LuTrash2 } from 'react-icons/lu'
 
-import { client } from '../../lib/index.js'
+import { dbClient, migrateClient } from '../../api/index.js'
 import { useMessages } from './language.js'
 import { HOW } from './messages.js'
 
-type Check = InferResponseType<typeof client.migrate.plan.$post, 200>['checks'][number]
+type Check = InferResponseType<typeof migrateClient.migrate.plan.$post, 200>['checks'][number]
 
 /** A column, a table or where values end up: one end of the flow the panel draws. */
 function Box({
@@ -61,7 +61,7 @@ function Sample({ check }: { readonly check: Check }) {
     enabled: check.lost !== null,
     queryFn: () =>
       parseResponse(
-        client.db.sql.$post({
+        dbClient.db.sql.$post({
           json: { sql: `SELECT * FROM (${check.lost ?? ''}) AS hk_sample LIMIT 3` },
         }),
       ),

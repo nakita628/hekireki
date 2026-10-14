@@ -5,15 +5,15 @@ import type { InferResponseType } from 'hono/client'
 import { useState } from 'react'
 import { LuCircleCheck, LuDownload, LuEye, LuTriangleAlert } from 'react-icons/lu'
 
+import { dbClient, migrateClient } from '../../api/index.js'
 import { ResultTable } from '../../components/result-table.js'
-import { client } from '../../lib/index.js'
 import { toCsv } from '../data/cells.js'
 import { useMessages } from './language.js'
 import { losesData } from './loss.js'
 import { CANDIDATES, IMPACT } from './messages.js'
 import { useCheckText } from './text.js'
 
-type Plan = InferResponseType<typeof client.migrate.plan.$post, 200>
+type Plan = InferResponseType<typeof migrateClient.migrate.plan.$post, 200>
 type Check = Plan['checks'][number]
 
 /**
@@ -26,7 +26,7 @@ function Loss({ check }: { readonly check: Check }) {
   const describe = useCheckText()
   const [open, setOpen] = useState(false)
   const rows = useMutation({
-    mutationFn: (sql: string) => parseResponse(client.db.sql.$post({ json: { sql } })),
+    mutationFn: (sql: string) => parseResponse(dbClient.db.sql.$post({ json: { sql } })),
   })
   return (
     <li className="rounded-md border border-line bg-surface">

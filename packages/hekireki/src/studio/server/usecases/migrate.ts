@@ -135,6 +135,7 @@ const PlanMigrationInput = z
             .meta({ description: 'The value a choice needs.', example: 'unknown' }),
         }),
       )
+      .readonly()
       .optional()
       .meta({
         description:
@@ -380,6 +381,7 @@ const WriteDecisionsInput = z
             .meta({ description: 'The value a choice needs.', example: 'unknown' }),
         }),
       )
+      .readonly()
       .meta({ description: 'All of them: what is left out is forgotten.' }),
   })
   .readonly()
@@ -495,7 +497,8 @@ export function readMigrationFile(input: z.infer<typeof ReadMigrationFileInput>)
 const RehearseInput = z
   .object({
     steps: z
-      .array(z.array(z.string()))
+      .array(z.array(z.string()).readonly())
+      .readonly()
       .meta({ description: "Each step's statements, in the order they run." }),
   })
   .readonly()

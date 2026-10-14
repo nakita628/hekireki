@@ -11,6 +11,22 @@ import type {
 } from '../routes'
 import * as SchemaUseCase from '../usecases/index.js'
 
+/**
+ * `GET /schema` handler. The current snapshot: the last valid schema, the current Prisma error and
+ * the files on disk.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant C as Client
+ *   participant H as Handler
+ *   participant U as SchemaUseCase
+ *   C->>H: GET /schema
+ *   H->>U: readSnapshot()
+ *   U-->>H: Snapshot
+ *   H-->>C: 200 Snapshot
+ *   Note over H: on failure, Match.tag: ContractViolationError -> 500
+ * ```
+ */
 export const getSchemaRouteHandler: RouteHandler<typeof getSchemaRoute> = (c) =>
   Effect.runPromise(
     Effect.matchEffect(SchemaUseCase.readSnapshot(), {
@@ -39,6 +55,22 @@ export const getSchemaRouteHandler: RouteHandler<typeof getSchemaRoute> = (c) =>
     }),
   )
 
+/**
+ * `POST /schema/reload` handler. Re-read and re-parse the schema from disk (the watcher does this
+ * on its own after every save).
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant C as Client
+ *   participant H as Handler
+ *   participant U as SchemaUseCase
+ *   C->>H: POST /schema/reload
+ *   H->>U: reloadSnapshot()
+ *   U-->>H: Snapshot
+ *   H-->>C: 200 Snapshot
+ *   Note over H: on failure, Match.tag: ContractViolationError -> 500
+ * ```
+ */
 export const postSchemaReloadRouteHandler: RouteHandler<typeof postSchemaReloadRoute> = (c) =>
   Effect.runPromise(
     Effect.matchEffect(SchemaUseCase.reloadSnapshot(), {
@@ -67,6 +99,23 @@ export const postSchemaReloadRouteHandler: RouteHandler<typeof postSchemaReloadR
     }),
   )
 
+/**
+ * `PUT /schema/files` handler. Write one schema file back to disk and reload, so the returned
+ * snapshot reflects the edit. Only a path listed in `Snapshot.files` can be written (404
+ * otherwise); a file the OS refuses to write is reported as a validation problem on `path`.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant C as Client
+ *   participant H as Handler
+ *   participant U as SchemaUseCase
+ *   C->>H: PUT /schema/files
+ *   H->>U: writeFile()
+ *   U-->>H: Snapshot
+ *   H-->>C: 200 Snapshot
+ *   Note over H: on failure, Match.tag: UnknownFileError -> 404 / FileWriteError -> 422 / ContractViolationError -> 500
+ * ```
+ */
 export const putSchemaFilesRouteHandler: RouteHandler<typeof putSchemaFilesRoute> = (c) => {
   const data = c.req.valid('json')
   return Effect.runPromise(
@@ -130,7 +179,33 @@ export const putSchemaFilesRouteHandler: RouteHandler<typeof putSchemaFilesRoute
   )
 }
 
-// Announces `change` whenever the snapshot's updatedAt moves, whoever triggered the reload.
+/**
+ * `GET /schema/events` handler. A server-sent event stream: `ready` with the snapshot's updatedAt,
+ * then `change` whenever it moves (whoever triggered the reload), `migrations` whenever the
+ * migrations directory does, and `ping` to keep the connection open.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant C as Client
+ *   participant H as Handler
+ *   participant U as SchemaUseCase
+ *   C->>H: GET /schema/events
+ *   H->>U: readUpdatedAt()
+ *   U-->>H: updatedAt, migrationsUpdatedAt
+ *   H-->>C: event: ready
+ *   loop every SSE_POLL_MS until the client goes away
+ *     H->>U: readUpdatedAt()
+ *     U-->>H: updatedAt, migrationsUpdatedAt
+ *     alt the snapshot changed
+ *       H-->>C: event: change
+ *     else the migrations directory changed
+ *       H-->>C: event: migrations
+ *     else SSE_PING_MS passed in silence
+ *       H-->>C: event: ping
+ *     end
+ *   end
+ * ```
+ */
 export const getSchemaEventsRouteHandler: RouteHandler<typeof getSchemaEventsRoute> = (c) =>
   streamSSE(c, async (stream) => {
     const initial = Effect.runSync(SchemaUseCase.readUpdatedAt())

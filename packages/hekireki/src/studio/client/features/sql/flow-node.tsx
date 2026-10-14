@@ -20,13 +20,13 @@ import {
   LuUpload,
 } from 'react-icons/lu'
 
-import type { client } from '../../lib/index.js'
+import type { dbClient } from '../../api/index.js'
 import { nodeLines } from './flow-layout.js'
 
 export type FlowNodeType = Node<
   {
     readonly node: InferResponseType<
-      typeof client.db.analyze.$post,
+      typeof dbClient.db.analyze.$post,
       200
     >['statements'][number]['nodes'][number]
   },

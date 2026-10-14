@@ -46,7 +46,7 @@ import { classHighlighter } from '@lezer/highlight'
 import type { InferResponseType } from 'hono/client'
 import { useEffect, useRef } from 'react'
 
-import type { client } from '../../lib/index.js'
+import type { dbClient } from '../../api/index.js'
 
 type Dialect = 'postgresql' | 'mysql' | 'sqlite' | null
 
@@ -63,7 +63,7 @@ type EditorTable = {
 const setHighlight = StateEffect.define<{ readonly start: number; readonly end: number } | null>()
 const setDiagnostics =
   StateEffect.define<
-    InferResponseType<typeof client.db.analyze.$post, 200>['statements'][number]['diagnostics']
+    InferResponseType<typeof dbClient.db.analyze.$post, 200>['statements'][number]['diagnostics']
   >()
 
 const highlightMark = Decoration.mark({ class: 'cm-node-range' })
@@ -264,7 +264,7 @@ export function SqlEditor({
   readonly tables: readonly EditorTable[]
   readonly highlight: { readonly start: number; readonly end: number } | null
   readonly diagnostics: InferResponseType<
-    typeof client.db.analyze.$post,
+    typeof dbClient.db.analyze.$post,
     200
   >['statements'][number]['diagnostics']
 }) {

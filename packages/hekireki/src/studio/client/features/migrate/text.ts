@@ -1,10 +1,10 @@
 import type { InferResponseType } from 'hono/client'
 
-import type { client } from '../../lib/index.js'
+import type { migrateClient } from '../../api/index.js'
 import { useMessages } from './language.js'
 import { CHANGES, CHECKS, STEPS } from './messages.js'
 
-type Plan = InferResponseType<typeof client.migrate.plan.$post, 200>
+type Plan = InferResponseType<typeof migrateClient.migrate.plan.$post, 200>
 type Check = Plan['checks'][number]
 type Step = Plan['steps'][number]
 

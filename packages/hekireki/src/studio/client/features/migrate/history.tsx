@@ -12,14 +12,14 @@ import {
   LuUndo2,
 } from 'react-icons/lu'
 
+import type { migrateClient } from '../../api/index.js'
 import { CodeBlock } from '../../components/code-block.js'
 import { useMigrateMigrationsMigrationName } from '../../hooks/index.js'
-import type { client } from '../../lib/index.js'
 import { useLanguage, useMessages } from './language.js'
 import { HISTORY } from './messages.js'
 import { problemReason } from './problem.js'
 
-type Status = InferResponseType<typeof client.migrate.$get, 200>
+type Status = InferResponseType<typeof migrateClient.migrate.$get, 200>
 
 const CELL = 'px-3 py-2 align-middle'
 

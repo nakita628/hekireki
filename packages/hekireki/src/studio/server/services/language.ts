@@ -887,6 +887,7 @@ const CodeActionsSchemaInput = z
             .meta({ description: 'How serious it is.', example: 'error' }),
         }),
       )
+      .readonly()
       .meta({ description: 'The diagnostics the editor shows in the range.' }),
   })
   .readonly()
@@ -1002,6 +1003,7 @@ const FormatFixInput = z
             .meta({ description: 'How serious it is.', example: 'error' }),
         }),
       )
+      .readonly()
       .meta({ description: 'The diagnostics the editor shows in the range.' }),
   })
   .readonly()

@@ -1,7 +1,7 @@
 import { parseResponse } from 'hono/client'
 import type { languages } from 'monaco-editor/editor/editor.api.js'
 
-import { client } from '../../lib/index.js'
+import { client } from '../../api/index.js'
 import { registry } from './editor-state.js'
 
 /** The overloads of the call the cursor is inside, and which parameter it is on. */

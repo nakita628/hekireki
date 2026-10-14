@@ -494,6 +494,7 @@ const CodeActionsAtInput = z
             .meta({ description: 'How serious it is.', example: 'error' }),
         }),
       )
+      .readonly()
       .meta({ description: 'The diagnostics the editor shows in the range.' }),
   })
   .readonly()

@@ -2,9 +2,9 @@ import { Button } from '@heroui/react'
 import type { InferResponseType } from 'hono/client'
 import { LuTerminal } from 'react-icons/lu'
 
+import type { client } from '../../api/index.js'
 import { CodeBlock } from '../../components/code-block.js'
 import { CopyButton } from '../../components/copy-button.js'
-import type { client } from '../../lib/index.js'
 
 /**
  * The statements the Prisma Client sent for a call, in order, each with the values bound to its

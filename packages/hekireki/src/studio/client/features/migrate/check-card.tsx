@@ -12,14 +12,14 @@ import {
   LuUndo2,
 } from 'react-icons/lu'
 
+import type { migrateClient } from '../../api/index.js'
 import { CodeBlock } from '../../components/code-block.js'
-import type { client } from '../../lib/index.js'
 import { How } from './how.js'
 import { useMessages } from './language.js'
 import { CANDIDATE_REASONS, CANDIDATES, CHOICES, REASONS, TOPICS } from './messages.js'
 import { useCheckText } from './text.js'
 
-type Plan = InferResponseType<typeof client.migrate.plan.$post, 200>
+type Plan = InferResponseType<typeof migrateClient.migrate.plan.$post, 200>
 type Check = Plan['checks'][number]
 
 type Decision = {

@@ -43,6 +43,10 @@
 //                                   generic identity are exempt: they carry a type)
 //   custom/predicate-is-name        a pure boolean predicate is `is*` (schema `Is*Input`),
 //                                   never `readIs*`
+//   custom/handler-doc              in handlers/, every exported `*RouteHandler` carries a TSDoc
+//                                   block in English that names its route (`GET /docs`), draws
+//                                   the request as a ```mermaid sequenceDiagram, and names every
+//                                   use case it calls and every `Match.tag` it answers
 //   custom/layer-namespace-import   a usecases/services/domain module is imported as a whole and
 //                                   through its layer barrel,
 //                                   `import * as PrismaUseCase from '../usecases/index.js'`
@@ -61,6 +65,9 @@ const LAYER_SUFFIX = /(UseCase|Service|Domain)$/u
 const TEST_FILE = /\.test\.tsx?$/u
 
 const STUDIO_SERVER = /(^|[\\/])studio[\\/]server[\\/]/u
+const HANDLER_MODULE = /(^|[\\/])handlers[\\/](?!index\.)[^\\/]+\.tsx?$/u
+const ROUTE_IN_DOC = /`(GET|POST|PUT|PATCH|DELETE) \/[^`]*`/u
+const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u
 const STUDIO_CLIENT = /(^|[\\/])studio[\\/]client[\\/]/u
 const CLIENT_LIB_IMPORT = /(^|\/)lib\/([\w-]+)\.js$/u
 const LAYER_DIRECTORY = /(^|[\\/])(usecases|services|domain)[\\/][^\\/]+\.tsx?$/u
@@ -111,6 +118,30 @@ export function isUseCaseSpecifier(source) {
 
 function filenameOf(context) {
   return context.filename ?? context.getFilename?.() ?? ''
+}
+
+/**
+ * The TSDoc block right above a statement, or null when there is none.
+ *
+ * @param text - the whole source
+ * @param start - the offset the statement begins at
+ * @returns the comment's inner text (between the markers)
+ */
+export function docCommentBefore(text, start) {
+  const match = /\/\*\*([\s\S]*?)\*\/\s*$/u.exec(text.slice(0, start))
+  return match ? match[1] : null
+}
+
+/**
+ * What a handler's doc has to name: the use cases it calls and the error tags it answers.
+ *
+ * @param body - the handler's source
+ * @returns the names, each once, in source order
+ */
+export function handlerDocNames(body) {
+  const useCases = [...body.matchAll(/\w+UseCase\.(\w+)\(/gu)].map((m) => m[1])
+  const tags = [...body.matchAll(/Match\.tag\('(\w+)'/gu)].map((m) => m[1])
+  return [...new Set([...useCases, ...tags])]
 }
 
 /**
@@ -1260,6 +1291,71 @@ const plugin = {
           },
           FunctionDeclaration(node) {
             if (node.id) check(node.id)
+          },
+        }
+      },
+    },
+    'handler-doc': {
+      meta: {
+        docs: {
+          description:
+            'an exported *RouteHandler carries an English TSDoc block with its route, a mermaid sequence diagram, and every use case and Match.tag it uses',
+        },
+      },
+      create(context) {
+        const filename = filenameOf(context)
+        if (!STUDIO_SERVER.test(filename) || !HANDLER_MODULE.test(filename)) return {}
+        if (TEST_FILE.test(filename)) return {}
+        const text = context.sourceCode?.text ?? context.getSourceCode?.().text ?? ''
+        return {
+          ExportNamedDeclaration(node) {
+            const declaration = node.declaration
+            if (declaration?.type !== 'VariableDeclaration') return
+            for (const declarator of declaration.declarations) {
+              if (
+                declarator.id.type !== 'Identifier' ||
+                !declarator.id.name.endsWith('RouteHandler')
+              ) {
+                continue
+              }
+              const name = declarator.id.name
+              const start = node.range?.[0] ?? node.start
+              const end = node.range?.[1] ?? node.end
+              const doc = docCommentBefore(text, start)
+              if (doc === null) {
+                context.report({
+                  node: declarator.id,
+                  message: `\`${name}\` has no TSDoc block. Write one in English: the route it serves (\`GET /docs\`), a \`\`\`mermaid sequenceDiagram of client, handler and use case, and a note naming each \`Match.tag\` and the status it answers with.`,
+                })
+                continue
+              }
+              if (CJK.test(doc)) {
+                context.report({
+                  node: declarator.id,
+                  message: `The doc of \`${name}\` is written in English.`,
+                })
+              }
+              if (!ROUTE_IN_DOC.test(doc)) {
+                context.report({
+                  node: declarator.id,
+                  message: `The doc of \`${name}\` names its route in backticks, as \`GET /docs\`.`,
+                })
+              }
+              if (!doc.includes('```mermaid') || !doc.includes('sequenceDiagram')) {
+                context.report({
+                  node: declarator.id,
+                  message: `The doc of \`${name}\` draws the request as a \`\`\`mermaid sequenceDiagram (client, handler, use case).`,
+                })
+              }
+              for (const needed of handlerDocNames(text.slice(start, end))) {
+                if (!doc.includes(needed)) {
+                  context.report({
+                    node: declarator.id,
+                    message: `The doc of \`${name}\` does not mention \`${needed}\`: name every use case the handler calls and every \`Match.tag\` it answers, with the status each one gets.`,
+                  })
+                }
+              }
+            }
           },
         }
       },
