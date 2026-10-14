@@ -13,11 +13,10 @@ import type {
   postClientRunRoute,
   postClientSignatureRoute,
 } from '../routes'
-import * as RuntimeService from '../services/index.js'
 import * as ClientUseCase from '../usecases/index.js'
 
 export const getClientRouteHandler: RouteHandler<typeof getClientRoute> = (c) =>
-  RuntimeService.studioRuntime().runPromise(
+  Effect.runPromise(
     Effect.matchEffect(ClientUseCase.readClientStatus(), {
       onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
@@ -46,7 +45,7 @@ export const getClientRouteHandler: RouteHandler<typeof getClientRoute> = (c) =>
 
 export const postClientAnalyzeRouteHandler: RouteHandler<typeof postClientAnalyzeRoute> = (c) => {
   const data = c.req.valid('json')
-  return RuntimeService.studioRuntime().runPromise(
+  return Effect.runPromise(
     Effect.matchEffect(ClientUseCase.analyzeClientQuery({ query: data.query }), {
       onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
@@ -76,7 +75,7 @@ export const postClientAnalyzeRouteHandler: RouteHandler<typeof postClientAnalyz
 
 export const postClientRunRouteHandler: RouteHandler<typeof postClientRunRoute> = (c) => {
   const data = c.req.valid('json')
-  return RuntimeService.studioRuntime().runPromise(
+  return Effect.runPromise(
     Effect.matchEffect(ClientUseCase.runClientQuery({ query: data.query }), {
       onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
@@ -153,7 +152,7 @@ export const postClientRunRouteHandler: RouteHandler<typeof postClientRunRoute> 
 
 export const postClientCompleteRouteHandler: RouteHandler<typeof postClientCompleteRoute> = (c) => {
   const data = c.req.valid('json')
-  return RuntimeService.studioRuntime().runPromise(
+  return Effect.runPromise(
     Effect.matchEffect(
       ClientUseCase.completeClientQuery({ query: data.query, offset: data.offset }),
       {
@@ -203,7 +202,7 @@ export const postClientCompleteDetailRouteHandler: RouteHandler<
   typeof postClientCompleteDetailRoute
 > = (c) => {
   const data = c.req.valid('json')
-  return RuntimeService.studioRuntime().runPromise(
+  return Effect.runPromise(
     Effect.matchEffect(
       ClientUseCase.detailClientCompletion({
         query: data.query,
@@ -255,7 +254,7 @@ export const postClientCompleteDetailRouteHandler: RouteHandler<
 
 export const postClientHoverRouteHandler: RouteHandler<typeof postClientHoverRoute> = (c) => {
   const data = c.req.valid('json')
-  return RuntimeService.studioRuntime().runPromise(
+  return Effect.runPromise(
     Effect.matchEffect(ClientUseCase.hoverClientQuery({ query: data.query, offset: data.offset }), {
       onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
@@ -302,7 +301,7 @@ export const postClientSignatureRouteHandler: RouteHandler<typeof postClientSign
   c,
 ) => {
   const data = c.req.valid('json')
-  return RuntimeService.studioRuntime().runPromise(
+  return Effect.runPromise(
     Effect.matchEffect(
       ClientUseCase.signatureClientQuery({ query: data.query, offset: data.offset }),
       {
@@ -350,7 +349,7 @@ export const postClientSignatureRouteHandler: RouteHandler<typeof postClientSign
 
 export const postClientCheckRouteHandler: RouteHandler<typeof postClientCheckRoute> = (c) => {
   const data = c.req.valid('json')
-  return RuntimeService.studioRuntime().runPromise(
+  return Effect.runPromise(
     Effect.matchEffect(ClientUseCase.checkClientQuery({ query: data.query }), {
       onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
@@ -395,7 +394,7 @@ export const postClientCheckRouteHandler: RouteHandler<typeof postClientCheckRou
 
 export const postClientFormatRouteHandler: RouteHandler<typeof postClientFormatRoute> = (c) => {
   const data = c.req.valid('json')
-  return RuntimeService.studioRuntime().runPromise(
+  return Effect.runPromise(
     Effect.matchEffect(ClientUseCase.formatClientQuery({ query: data.query }), {
       onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
@@ -441,7 +440,7 @@ export const postClientFormatRouteHandler: RouteHandler<typeof postClientFormatR
 
 export const postClientPreviewRouteHandler: RouteHandler<typeof postClientPreviewRoute> = (c) => {
   const data = c.req.valid('json')
-  return RuntimeService.studioRuntime().runPromise(
+  return Effect.runPromise(
     Effect.matchEffect(ClientUseCase.previewClientQuery({ query: data.query }), {
       onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>

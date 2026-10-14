@@ -21,11 +21,10 @@ import type {
   postMigrateRehearseRoute,
   putMigrateDecisionsRoute,
 } from '../routes'
-import * as RuntimeService from '../services/index.js'
 import * as MigrateUseCase from '../usecases/index.js'
 
 export const getMigrateRouteHandler: RouteHandler<typeof getMigrateRoute> = (c) =>
-  RuntimeService.studioRuntime().runPromise(
+  Effect.runPromise(
     Effect.matchEffect(MigrateUseCase.readMigrateStatus(), {
       onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
@@ -98,7 +97,7 @@ export const getMigrateRouteHandler: RouteHandler<typeof getMigrateRoute> = (c) 
   )
 
 export const getMigrateDiffRouteHandler: RouteHandler<typeof getMigrateDiffRoute> = (c) =>
-  RuntimeService.studioRuntime().runPromise(
+  Effect.runPromise(
     Effect.matchEffect(MigrateUseCase.readMigrateDiff(), {
       onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
@@ -171,7 +170,7 @@ export const getMigrateDiffRouteHandler: RouteHandler<typeof getMigrateDiffRoute
   )
 
 export const postMigratePlanRouteHandler: RouteHandler<typeof postMigratePlanRoute> = (c) =>
-  RuntimeService.studioRuntime().runPromise(
+  Effect.runPromise(
     Effect.matchEffect(MigrateUseCase.planMigration(c.req.valid('json')), {
       onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
@@ -262,7 +261,7 @@ export const postMigratePlanRouteHandler: RouteHandler<typeof postMigratePlanRou
   )
 
 export const postMigrateApplyRouteHandler: RouteHandler<typeof postMigrateApplyRoute> = (c) =>
-  RuntimeService.studioRuntime().runPromise(
+  Effect.runPromise(
     Effect.matchEffect(MigrateUseCase.applyMigrationStatements(c.req.valid('json')), {
       onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
@@ -307,7 +306,7 @@ export const postMigrateApplyRouteHandler: RouteHandler<typeof postMigrateApplyR
 export const postMigrateMigrationsRouteHandler: RouteHandler<typeof postMigrateMigrationsRoute> = (
   c,
 ) =>
-  RuntimeService.studioRuntime().runPromise(
+  Effect.runPromise(
     Effect.matchEffect(MigrateUseCase.createMigration(c.req.valid('json')), {
       onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
@@ -397,7 +396,7 @@ export const postMigrateMigrationsRouteHandler: RouteHandler<typeof postMigrateM
 export const postMigrateMigrationsAppliedRouteHandler: RouteHandler<
   typeof postMigrateMigrationsAppliedRoute
 > = (c) =>
-  RuntimeService.studioRuntime().runPromise(
+  Effect.runPromise(
     Effect.matchEffect(MigrateUseCase.recordMigrationApplied(c.req.valid('json')), {
       onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
@@ -472,7 +471,7 @@ export const postMigrateMigrationsAppliedRouteHandler: RouteHandler<
 export const postMigrateMigrationsRolledBackRouteHandler: RouteHandler<
   typeof postMigrateMigrationsRolledBackRoute
 > = (c) =>
-  RuntimeService.studioRuntime().runPromise(
+  Effect.runPromise(
     Effect.matchEffect(MigrateUseCase.recordMigrationRolledBack(c.req.valid('json')), {
       onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
@@ -545,7 +544,7 @@ export const postMigrateMigrationsRolledBackRouteHandler: RouteHandler<
   )
 
 export const postMigrateDeployRouteHandler: RouteHandler<typeof postMigrateDeployRoute> = (c) =>
-  RuntimeService.studioRuntime().runPromise(
+  Effect.runPromise(
     Effect.matchEffect(MigrateUseCase.deployMigrations(), {
       onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
@@ -618,7 +617,7 @@ export const postMigrateDeployRouteHandler: RouteHandler<typeof postMigrateDeplo
   )
 
 export const getMigrateDecisionsRouteHandler: RouteHandler<typeof getMigrateDecisionsRoute> = (c) =>
-  RuntimeService.studioRuntime().runPromise(
+  Effect.runPromise(
     Effect.matchEffect(MigrateUseCase.readMigrationDecisions(), {
       onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
@@ -691,7 +690,7 @@ export const getMigrateDecisionsRouteHandler: RouteHandler<typeof getMigrateDeci
   )
 
 export const putMigrateDecisionsRouteHandler: RouteHandler<typeof putMigrateDecisionsRoute> = (c) =>
-  RuntimeService.studioRuntime().runPromise(
+  Effect.runPromise(
     Effect.matchEffect(MigrateUseCase.writeMigrationDecisions(c.req.valid('json')), {
       onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
@@ -779,7 +778,7 @@ export const putMigrateDecisionsRouteHandler: RouteHandler<typeof putMigrateDeci
   )
 
 export const getMigrateBaselineRouteHandler: RouteHandler<typeof getMigrateBaselineRoute> = (c) =>
-  RuntimeService.studioRuntime().runPromise(
+  Effect.runPromise(
     Effect.matchEffect(MigrateUseCase.readMigrateBaseline(), {
       onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
@@ -852,7 +851,7 @@ export const getMigrateBaselineRouteHandler: RouteHandler<typeof getMigrateBasel
   )
 
 export const postMigrateBaselineRouteHandler: RouteHandler<typeof postMigrateBaselineRoute> = (c) =>
-  RuntimeService.studioRuntime().runPromise(
+  Effect.runPromise(
     Effect.matchEffect(MigrateUseCase.baselineDatabase(c.req.valid('json')), {
       onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
@@ -930,7 +929,7 @@ export const postMigrateBaselineRouteHandler: RouteHandler<typeof postMigrateBas
 export const getMigrateMigrationsMigrationNameRouteHandler: RouteHandler<
   typeof getMigrateMigrationsMigrationNameRoute
 > = (c) =>
-  RuntimeService.studioRuntime().runPromise(
+  Effect.runPromise(
     Effect.matchEffect(MigrateUseCase.readMigrationFile(c.req.valid('param')), {
       onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
@@ -1018,7 +1017,7 @@ export const getMigrateMigrationsMigrationNameRouteHandler: RouteHandler<
   )
 
 export const postMigrateRehearseRouteHandler: RouteHandler<typeof postMigrateRehearseRoute> = (c) =>
-  RuntimeService.studioRuntime().runPromise(
+  Effect.runPromise(
     Effect.matchEffect(MigrateUseCase.rehearse(c.req.valid('json')), {
       onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
@@ -1064,7 +1063,7 @@ export const postMigrateRehearseRouteHandler: RouteHandler<typeof postMigrateReh
   )
 
 export const getMigrateTablesRouteHandler: RouteHandler<typeof getMigrateTablesRoute> = (c) =>
-  RuntimeService.studioRuntime().runPromise(
+  Effect.runPromise(
     Effect.matchEffect(MigrateUseCase.readTableCounts(), {
       onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
@@ -1110,7 +1109,7 @@ export const getMigrateTablesRouteHandler: RouteHandler<typeof getMigrateTablesR
   )
 
 export const getMigrateBackupsRouteHandler: RouteHandler<typeof getMigrateBackupsRoute> = (c) =>
-  RuntimeService.studioRuntime().runPromise(
+  Effect.runPromise(
     Effect.matchEffect(MigrateUseCase.readBackups(), {
       onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
@@ -1156,7 +1155,7 @@ export const getMigrateBackupsRouteHandler: RouteHandler<typeof getMigrateBackup
   )
 
 export const postMigrateBackupsRouteHandler: RouteHandler<typeof postMigrateBackupsRoute> = (c) =>
-  RuntimeService.studioRuntime().runPromise(
+  Effect.runPromise(
     Effect.matchEffect(MigrateUseCase.takeBackup(), {
       onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
@@ -1220,7 +1219,7 @@ export const postMigrateBackupsRouteHandler: RouteHandler<typeof postMigrateBack
 export const postMigrateBackupsRestoreRouteHandler: RouteHandler<
   typeof postMigrateBackupsRestoreRoute
 > = (c) =>
-  RuntimeService.studioRuntime().runPromise(
+  Effect.runPromise(
     Effect.matchEffect(MigrateUseCase.restoreFromBackup(c.req.valid('json')), {
       onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>

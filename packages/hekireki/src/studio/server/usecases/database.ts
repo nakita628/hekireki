@@ -18,7 +18,7 @@ import {
   RowsSchema,
   SqlResultSchema,
 } from '../routes/index.js'
-import * as RuntimeService from '../services/index.js'
+import * as StudioService from '../services/index.js'
 
 /**
  * The connection status as the sidebar shows it.
@@ -27,7 +27,7 @@ import * as RuntimeService from '../services/index.js'
  */
 export function readDbStatus() {
   return Effect.gen(function* () {
-    const db = yield* RuntimeService.DatabaseTag
+    const db = StudioService.studio().db
     const result = DbStatusSchema.safeParse(db.status)
     if (!result.success) {
       return yield* new ContractViolationError({ message: result.error.message })
@@ -43,8 +43,8 @@ export function readDbStatus() {
  */
 export function readCounts() {
   return Effect.gen(function* () {
-    const state = yield* RuntimeService.StudioStateTag
-    const db = yield* RuntimeService.DatabaseTag
+    const state = StudioService.studio().state
+    const db = StudioService.studio().db
     const driver = yield* db.driver
     const models = state.snapshot().schema?.models ?? []
     const counted = yield* Effect.forEach(
@@ -134,10 +134,10 @@ const ReadRowsInput = z
  */
 export function readRows(input: z.infer<typeof ReadRowsInput>) {
   return Effect.gen(function* () {
-    const state = yield* RuntimeService.StudioStateTag
+    const state = StudioService.studio().state
     const model = state.snapshot().schema?.models.find((m) => m.name === input.modelName)
     if (!model) return yield* new UnknownModelError({ model: input.modelName })
-    const db = yield* RuntimeService.DatabaseTag
+    const db = StudioService.studio().db
     const driver = yield* db.driver
     const page = { skip: input.skip, take: input.take, search: input.search ?? '' }
     const fields = ModelDomain.tableColumns({ model })
@@ -213,10 +213,10 @@ const InsertRowInput = z
  */
 export function insertRow(input: z.infer<typeof InsertRowInput>) {
   return Effect.gen(function* () {
-    const state = yield* RuntimeService.StudioStateTag
+    const state = StudioService.studio().state
     const model = state.snapshot().schema?.models.find((m) => m.name === input.modelName)
     if (!model) return yield* new UnknownModelError({ model: input.modelName })
-    const db = yield* RuntimeService.DatabaseTag
+    const db = StudioService.studio().db
     const driver = yield* db.driver
     const written = yield* driver.query(
       SqlDomain.makeInsertStatement({
@@ -273,7 +273,7 @@ const UpdateRowInput = z
  */
 export function updateRow(input: z.infer<typeof UpdateRowInput>) {
   return Effect.gen(function* () {
-    const state = yield* RuntimeService.StudioStateTag
+    const state = StudioService.studio().state
     const model = state.snapshot().schema?.models.find((m) => m.name === input.modelName)
     if (!model) return yield* new UnknownModelError({ model: input.modelName })
     if (Object.keys(input.where).length === 0) {
@@ -288,7 +288,7 @@ export function updateRow(input: z.infer<typeof UpdateRowInput>) {
         message: 'must name at least one field',
       })
     }
-    const db = yield* RuntimeService.DatabaseTag
+    const db = StudioService.studio().db
     const driver = yield* db.driver
     const enums = state.snapshot().schema?.enums ?? []
     const written = yield* driver.query(
@@ -344,7 +344,7 @@ const DeleteRowInput = z
  */
 export function deleteRow(input: z.infer<typeof DeleteRowInput>) {
   return Effect.gen(function* () {
-    const state = yield* RuntimeService.StudioStateTag
+    const state = StudioService.studio().state
     const model = state.snapshot().schema?.models.find((m) => m.name === input.modelName)
     if (!model) return yield* new UnknownModelError({ model: input.modelName })
     if (Object.keys(input.where).length === 0) {
@@ -353,7 +353,7 @@ export function deleteRow(input: z.infer<typeof DeleteRowInput>) {
         message: 'must name at least one key field',
       })
     }
-    const db = yield* RuntimeService.DatabaseTag
+    const db = StudioService.studio().db
     const driver = yield* db.driver
     const enums = state.snapshot().schema?.enums ?? []
     const written = yield* driver.query(
@@ -424,7 +424,7 @@ const RunSqlInput = z
  */
 export function runSql(input: z.infer<typeof RunSqlInput>) {
   return Effect.gen(function* () {
-    const db = yield* RuntimeService.DatabaseTag
+    const db = StudioService.studio().db
     const driver = yield* db.driver
     const statements = splitStatements(input.sql)
     if (statements.length === 0) {
@@ -462,7 +462,7 @@ export function runSql(input: z.infer<typeof RunSqlInput>) {
  */
 export function explainSql(input: z.infer<typeof RunSqlInput>) {
   return Effect.gen(function* () {
-    const db = yield* RuntimeService.DatabaseTag
+    const db = StudioService.studio().db
     const driver = yield* db.driver
     const [first] = splitStatements(input.sql)
     if (first === undefined) {
@@ -502,8 +502,8 @@ const AnalyzeSqlInput = z
  */
 export function analyzeSql(input: z.infer<typeof AnalyzeSqlInput>) {
   return Effect.gen(function* () {
-    const state = yield* RuntimeService.StudioStateTag
-    const db = yield* RuntimeService.DatabaseTag
+    const state = StudioService.studio().state
+    const db = StudioService.studio().db
     const schema = state.snapshot().schema
     const analysis = analyze(
       input.sql,

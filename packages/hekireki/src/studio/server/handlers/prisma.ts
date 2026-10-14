@@ -12,12 +12,11 @@ import type {
   postPrismaRenameRoute,
   postPrismaSymbolsRoute,
 } from '../routes'
-import * as RuntimeService from '../services/index.js'
 import * as PrismaUseCase from '../usecases/index.js'
 
 export const postPrismaFormatRouteHandler: RouteHandler<typeof postPrismaFormatRoute> = (c) => {
   const data = c.req.valid('json')
-  return RuntimeService.studioRuntime().runPromise(
+  return Effect.runPromise(
     Effect.matchEffect(PrismaUseCase.formatText({ text: data.text, path: data.path }), {
       onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
@@ -63,7 +62,7 @@ export const postPrismaFormatRouteHandler: RouteHandler<typeof postPrismaFormatR
 
 export const postPrismaLintRouteHandler: RouteHandler<typeof postPrismaLintRoute> = (c) => {
   const data = c.req.valid('json')
-  return RuntimeService.studioRuntime().runPromise(
+  return Effect.runPromise(
     Effect.matchEffect(PrismaUseCase.lintText({ path: data.path, text: data.text }), {
       onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
@@ -93,7 +92,7 @@ export const postPrismaLintRouteHandler: RouteHandler<typeof postPrismaLintRoute
 
 export const postPrismaCompleteRouteHandler: RouteHandler<typeof postPrismaCompleteRoute> = (c) => {
   const data = c.req.valid('json')
-  return RuntimeService.studioRuntime().runPromise(
+  return Effect.runPromise(
     Effect.matchEffect(
       PrismaUseCase.completeAt({
         text: data.text,
@@ -132,7 +131,7 @@ export const postPrismaCompleteRouteHandler: RouteHandler<typeof postPrismaCompl
 
 export const postPrismaHoverRouteHandler: RouteHandler<typeof postPrismaHoverRoute> = (c) => {
   const data = c.req.valid('json')
-  return RuntimeService.studioRuntime().runPromise(
+  return Effect.runPromise(
     Effect.matchEffect(
       PrismaUseCase.hoverAt({
         text: data.text,
@@ -172,7 +171,7 @@ export const postPrismaDefinitionRouteHandler: RouteHandler<typeof postPrismaDef
   c,
 ) => {
   const data = c.req.valid('json')
-  return RuntimeService.studioRuntime().runPromise(
+  return Effect.runPromise(
     Effect.matchEffect(
       PrismaUseCase.defineAt({
         text: data.text,
@@ -210,7 +209,7 @@ export const postPrismaDefinitionRouteHandler: RouteHandler<typeof postPrismaDef
 
 export const postPrismaRenameRouteHandler: RouteHandler<typeof postPrismaRenameRoute> = (c) => {
   const data = c.req.valid('json')
-  return RuntimeService.studioRuntime().runPromise(
+  return Effect.runPromise(
     Effect.matchEffect(
       PrismaUseCase.renameAt({
         text: data.text,
@@ -251,7 +250,7 @@ export const postPrismaCodeActionsRouteHandler: RouteHandler<typeof postPrismaCo
   c,
 ) => {
   const data = c.req.valid('json')
-  return RuntimeService.studioRuntime().runPromise(
+  return Effect.runPromise(
     Effect.matchEffect(
       PrismaUseCase.codeActionsAt({
         text: data.text,
@@ -289,7 +288,7 @@ export const postPrismaCodeActionsRouteHandler: RouteHandler<typeof postPrismaCo
 
 export const postPrismaSymbolsRouteHandler: RouteHandler<typeof postPrismaSymbolsRoute> = (c) => {
   const data = c.req.valid('json')
-  return RuntimeService.studioRuntime().runPromise(
+  return Effect.runPromise(
     Effect.matchEffect(PrismaUseCase.symbolsOf({ text: data.text, path: data.path }), {
       onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
@@ -321,7 +320,7 @@ export const postPrismaReferencesRouteHandler: RouteHandler<typeof postPrismaRef
   c,
 ) => {
   const data = c.req.valid('json')
-  return RuntimeService.studioRuntime().runPromise(
+  return Effect.runPromise(
     Effect.matchEffect(
       PrismaUseCase.referencesAt({
         text: data.text,

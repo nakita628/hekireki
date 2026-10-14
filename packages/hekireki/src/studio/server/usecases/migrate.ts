@@ -1,5 +1,6 @@
 import path from 'node:path'
 
+import { layer as nodeFileSystemLayer } from '@effect/platform-node/NodeFileSystem'
 import { Effect } from 'effect'
 import * as z from 'zod'
 
@@ -46,14 +47,14 @@ import {
   MigrationDecisionsSchema,
   MigratePlanSchema,
 } from '../routes/index.js'
+import * as StudioService from '../services/index.js'
 import * as MigrateService from '../services/index.js'
-import * as RuntimeService from '../services/index.js'
 
 /** The schema, the database and the engine one command runs against. */
 function session() {
   return Effect.gen(function* () {
-    const state = yield* RuntimeService.StudioStateTag
-    const db = yield* RuntimeService.DatabaseTag
+    const state = StudioService.studio().state
+    const db = StudioService.studio().db
     const driver = yield* db.driver
     const opened = yield* MigrateService.openMigrateSession({
       schemaPath: state.schemaPath,
@@ -91,7 +92,7 @@ export function readMigrateStatus() {
       return yield* new ContractViolationError({ message: result.error.message })
     }
     return result.data
-  })
+  }).pipe(Effect.provide(nodeFileSystemLayer))
 }
 
 /**
@@ -112,7 +113,7 @@ export function readMigrateDiff() {
       return yield* new ContractViolationError({ message: result.error.message })
     }
     return result.data
-  })
+  }).pipe(Effect.provide(nodeFileSystemLayer))
 }
 
 const PlanMigrationInput = z
@@ -195,7 +196,7 @@ export function planMigration(input: z.infer<typeof PlanMigrationInput>) {
       return yield* new ContractViolationError({ message: result.error.message })
     }
     return result.data
-  })
+  }).pipe(Effect.provide(nodeFileSystemLayer))
 }
 
 const ApplyStatementsInput = z
@@ -219,7 +220,7 @@ const ApplyStatementsInput = z
  */
 export function applyMigrationStatements(input: z.infer<typeof ApplyStatementsInput>) {
   return Effect.gen(function* () {
-    const db = yield* RuntimeService.DatabaseTag
+    const db = StudioService.studio().db
     const driver = yield* db.driver
     const applied = yield* applyStatements({ driver, statements: input.statements })
     const result = ApplyResultSchema.safeParse(applied)
@@ -262,7 +263,7 @@ export function createMigration(input: z.infer<typeof CreateMigrationInput>) {
       return yield* new ContractViolationError({ message: result.error.message })
     }
     return result.data
-  })
+  }).pipe(Effect.provide(nodeFileSystemLayer))
 }
 
 const MarkAppliedInput = z
@@ -291,7 +292,7 @@ export function recordMigrationApplied(input: z.infer<typeof MarkAppliedInput>) 
       name: input.name,
     })
     return yield* readMigrateStatus()
-  })
+  }).pipe(Effect.provide(nodeFileSystemLayer))
 }
 
 /**
@@ -311,7 +312,7 @@ export function deployMigrations() {
       return yield* new ContractViolationError({ message: result.error.message })
     }
     return result.data
-  })
+  }).pipe(Effect.provide(nodeFileSystemLayer))
 }
 
 /**
@@ -325,7 +326,7 @@ export function recordMigrationRolledBack(input: z.infer<typeof MarkAppliedInput
     const opened = yield* session()
     yield* markMigrationRolledBack({ engine: opened.engine, name: input.name })
     return yield* readMigrateStatus()
-  })
+  }).pipe(Effect.provide(nodeFileSystemLayer))
 }
 
 /**
@@ -361,7 +362,7 @@ export function readMigrationDecisions() {
       return yield* new ContractViolationError({ message: result.error.message })
     }
     return result.data
-  })
+  }).pipe(Effect.provide(nodeFileSystemLayer))
 }
 
 const WriteDecisionsInput = z
@@ -403,7 +404,7 @@ export function writeMigrationDecisions(input: z.infer<typeof WriteDecisionsInpu
       return yield* new ContractViolationError({ message: result.error.message })
     }
     return result.data
-  })
+  }).pipe(Effect.provide(nodeFileSystemLayer))
 }
 
 /**
@@ -426,7 +427,7 @@ export function readMigrateBaseline() {
       return yield* new ContractViolationError({ message: result.error.message })
     }
     return result.data
-  })
+  }).pipe(Effect.provide(nodeFileSystemLayer))
 }
 
 /**
@@ -448,7 +449,7 @@ export function baselineDatabase(input: z.infer<typeof MarkAppliedInput>) {
       name: input.name,
     })
     return yield* readMigrateStatus()
-  })
+  }).pipe(Effect.provide(nodeFileSystemLayer))
 }
 
 const ReadMigrationFileInput = z
@@ -488,7 +489,7 @@ export function readMigrationFile(input: z.infer<typeof ReadMigrationFileInput>)
       return yield* new ContractViolationError({ message: result.error.message })
     }
     return result.data
-  })
+  }).pipe(Effect.provide(nodeFileSystemLayer))
 }
 
 const RehearseInput = z
@@ -535,7 +536,7 @@ export function rehearse(input: z.infer<typeof RehearseInput>) {
       return yield* new ContractViolationError({ message: result.error.message })
     }
     return result.data
-  })
+  }).pipe(Effect.provide(nodeFileSystemLayer))
 }
 
 /**
@@ -545,7 +546,7 @@ export function rehearse(input: z.infer<typeof RehearseInput>) {
  */
 export function readTableCounts() {
   return Effect.gen(function* () {
-    const db = yield* RuntimeService.DatabaseTag
+    const db = StudioService.studio().db
     const driver = yield* db.driver
     const counted = yield* countTables(driver).pipe(
       Effect.catchTag('DatabaseError', (error) =>
@@ -576,7 +577,7 @@ export function readBackups() {
       return yield* new ContractViolationError({ message: result.error.message })
     }
     return result.data
-  })
+  }).pipe(Effect.provide(nodeFileSystemLayer))
 }
 
 /**
@@ -605,6 +606,7 @@ export function takeBackup() {
       DatabaseError: (error) => Effect.fail(new MigrateDatabaseError({ message: error.cause })),
       PlatformError: (error) => Effect.fail(new MigrateConfigError({ message: error.message })),
     }),
+    Effect.provide(nodeFileSystemLayer),
   )
 }
 
@@ -641,5 +643,6 @@ export function restoreFromBackup(input: z.infer<typeof RestoreInput>) {
     Effect.catchTag('PlatformError', (error) =>
       Effect.fail(new MigrateConfigError({ message: error.message })),
     ),
+    Effect.provide(nodeFileSystemLayer),
   )
 }

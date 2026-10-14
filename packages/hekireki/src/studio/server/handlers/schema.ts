@@ -9,11 +9,10 @@ import type {
   postSchemaReloadRoute,
   putSchemaFilesRoute,
 } from '../routes'
-import * as RuntimeService from '../services/index.js'
 import * as SchemaUseCase from '../usecases/index.js'
 
 export const getSchemaRouteHandler: RouteHandler<typeof getSchemaRoute> = (c) =>
-  RuntimeService.studioRuntime().runPromise(
+  Effect.runPromise(
     Effect.matchEffect(SchemaUseCase.readSnapshot(), {
       onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
@@ -41,7 +40,7 @@ export const getSchemaRouteHandler: RouteHandler<typeof getSchemaRoute> = (c) =>
   )
 
 export const postSchemaReloadRouteHandler: RouteHandler<typeof postSchemaReloadRoute> = (c) =>
-  RuntimeService.studioRuntime().runPromise(
+  Effect.runPromise(
     Effect.matchEffect(SchemaUseCase.reloadSnapshot(), {
       onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
@@ -70,7 +69,7 @@ export const postSchemaReloadRouteHandler: RouteHandler<typeof postSchemaReloadR
 
 export const putSchemaFilesRouteHandler: RouteHandler<typeof putSchemaFilesRoute> = (c) => {
   const data = c.req.valid('json')
-  return RuntimeService.studioRuntime().runPromise(
+  return Effect.runPromise(
     Effect.matchEffect(SchemaUseCase.writeFile({ path: data.path, content: data.content }), {
       onSuccess: (value) => Effect.succeed(c.json(value, 200)),
       onFailure: (error) =>
@@ -134,9 +133,8 @@ export const putSchemaFilesRouteHandler: RouteHandler<typeof putSchemaFilesRoute
 // Announces `change` whenever the snapshot's updatedAt moves, whoever triggered the reload.
 export const getSchemaEventsRouteHandler: RouteHandler<typeof getSchemaEventsRoute> = (c) =>
   streamSSE(c, async (stream) => {
-    const state = RuntimeService.studioRuntime().runSync(RuntimeService.StudioStateTag)
-    const initial = state.snapshot().updatedAt
-    await stream.writeSSE({ event: 'ready', data: initial })
+    const initial = Effect.runSync(SchemaUseCase.readUpdatedAt())
+    await stream.writeSSE({ event: 'ready', data: initial.updatedAt })
     const pump = async (seen: {
       readonly updatedAt: string
       readonly migrationsUpdatedAt: string
@@ -144,17 +142,20 @@ export const getSchemaEventsRouteHandler: RouteHandler<typeof getSchemaEventsRou
     }): Promise<void> => {
       if (stream.aborted) return
       await stream.sleep(SSE_POLL_MS)
-      const current = state.snapshot().updatedAt
-      const migrations = state.migrationsUpdatedAt()
-      if (current !== seen.updatedAt) {
-        await stream.writeSSE({ event: 'change', data: current })
-        await pump({ ...seen, updatedAt: current, pingedAt: Date.now() })
+      const current = Effect.runSync(SchemaUseCase.readUpdatedAt())
+      if (current.updatedAt !== seen.updatedAt) {
+        await stream.writeSSE({ event: 'change', data: current.updatedAt })
+        await pump({ ...seen, updatedAt: current.updatedAt, pingedAt: Date.now() })
         return
       }
       // The migrations directory changed: what the Migrate page reads its history from.
-      if (migrations !== seen.migrationsUpdatedAt) {
-        await stream.writeSSE({ event: 'migrations', data: migrations })
-        await pump({ ...seen, migrationsUpdatedAt: migrations, pingedAt: Date.now() })
+      if (current.migrationsUpdatedAt !== seen.migrationsUpdatedAt) {
+        await stream.writeSSE({ event: 'migrations', data: current.migrationsUpdatedAt })
+        await pump({
+          ...seen,
+          migrationsUpdatedAt: current.migrationsUpdatedAt,
+          pingedAt: Date.now(),
+        })
         return
       }
       if (Date.now() - seen.pingedAt > SSE_PING_MS) {
@@ -164,9 +165,5 @@ export const getSchemaEventsRouteHandler: RouteHandler<typeof getSchemaEventsRou
       }
       await pump(seen)
     }
-    await pump({
-      updatedAt: initial,
-      migrationsUpdatedAt: state.migrationsUpdatedAt(),
-      pingedAt: Date.now(),
-    })
+    await pump({ ...initial, pingedAt: Date.now() })
   })

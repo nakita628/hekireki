@@ -958,7 +958,6 @@ export default defineConfig({
           'src/seed/errors.ts',
           'src/schema/errors.ts',
           'src/studio/server/errors/index.ts',
-          'src/studio/server/services/runtime.ts',
         ],
         rules: {
           'new-cap': 'off',

@@ -326,7 +326,7 @@ tester.run('layer-namespace-import', rule('layer-namespace-import'), {
     },
     {
       ...tsCase(
-        `import { studioRuntime } from '../services/index.js'`,
+        `import { createStudioState } from '../services/index.js'`,
         'src/studio/server/handlers/prisma.ts',
       ),
       errors: 1,

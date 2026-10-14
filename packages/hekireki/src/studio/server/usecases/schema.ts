@@ -1,9 +1,10 @@
+import { layer as nodeFileSystemLayer } from '@effect/platform-node/NodeFileSystem'
 import { Effect } from 'effect'
 import * as z from 'zod'
 
 import { ContractViolationError, UnknownFileError } from '../errors/index.js'
 import { SnapshotSchema } from '../routes/index.js'
-import * as RuntimeService from '../services/index.js'
+import * as StudioService from '../services/index.js'
 import * as SchemaService from '../services/index.js'
 
 /**
@@ -13,12 +14,27 @@ import * as SchemaService from '../services/index.js'
  */
 export function readSnapshot() {
   return Effect.gen(function* () {
-    const state = yield* RuntimeService.StudioStateTag
+    const state = StudioService.studio().state
     const result = SnapshotSchema.safeParse(state.snapshot())
     if (!result.success) {
       return yield* new ContractViolationError({ message: result.error.message })
     }
     return result.data
+  })
+}
+
+/**
+ * When the snapshot and the migrations directory last changed: what the event stream polls.
+ *
+ * @returns both timestamps as ISO strings
+ */
+export function readUpdatedAt() {
+  return Effect.sync(() => {
+    const state = StudioService.studio().state
+    return {
+      updatedAt: state.snapshot().updatedAt,
+      migrationsUpdatedAt: state.migrationsUpdatedAt(),
+    }
   })
 }
 
@@ -29,13 +45,13 @@ export function readSnapshot() {
  */
 export function reloadSnapshot() {
   return Effect.gen(function* () {
-    const state = yield* RuntimeService.StudioStateTag
+    const state = StudioService.studio().state
     const result = SnapshotSchema.safeParse(yield* state.reload())
     if (!result.success) {
       return yield* new ContractViolationError({ message: result.error.message })
     }
     return result.data
-  })
+  }).pipe(Effect.provide(nodeFileSystemLayer))
 }
 
 const WriteFileInput = z
@@ -79,7 +95,7 @@ const WriteFileInput = z
  */
 export function writeFile(input: z.infer<typeof WriteFileInput>) {
   return Effect.gen(function* () {
-    const state = yield* RuntimeService.StudioStateTag
+    const state = StudioService.studio().state
     const known = state.snapshot().files.find((f) => f.path === input.path)
     if (!known) return yield* new UnknownFileError({ path: input.path })
     yield* SchemaService.writeSchemaFile({ path: known.path, content: input.content })
@@ -88,5 +104,5 @@ export function writeFile(input: z.infer<typeof WriteFileInput>) {
       return yield* new ContractViolationError({ message: result.error.message })
     }
     return result.data
-  })
+  }).pipe(Effect.provide(nodeFileSystemLayer))
 }
