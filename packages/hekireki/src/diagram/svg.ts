@@ -39,7 +39,7 @@ const CAPTION_BORDER = 0.8
 const DOT_RADIUS = 0.7
 const PADDING = GRID * 2
 // The shadow a card casts on the canvas: a pixel down, a pixel soft, barely there.
-const SHADOW = { dy: 1, blur: 1, opacity: 0.08 }
+const SHADOW = { dy: 1, blur: 1, opacity: 0.08 } as const
 // IE (crow's foot) notation as the canvas draws it (features/schema/schema-view.tsx): the inner
 // symbol is the maximum (a bar for one, the foot for many), the outer one the minimum (a bar for
 // mandatory, a circle for optional). The origin sits where the edge meets the node, the symbols

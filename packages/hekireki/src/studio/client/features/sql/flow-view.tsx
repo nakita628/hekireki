@@ -22,7 +22,7 @@ import { autoLayout } from './flow-layout.js'
 import { FlowNode } from './flow-node.js'
 import type { FlowNodeType } from './flow-node.js'
 
-const nodeTypes = { flow: FlowNode }
+const nodeTypes = { flow: FlowNode } as const
 const NO_NODES: FlowNodeType[] = []
 const NO_EDGES: Edge[] = []
 

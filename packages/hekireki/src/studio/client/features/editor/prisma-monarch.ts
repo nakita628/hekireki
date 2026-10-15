@@ -5,7 +5,7 @@ import type { languages } from 'monaco-editor/editor/editor.api.js'
 
 export const PRISMA_LANGUAGE_ID = 'prisma'
 
-const BLOCK_KEYWORDS = ['model', 'enum', 'generator', 'datasource', 'type', 'view']
+const BLOCK_KEYWORDS = ['model', 'enum', 'generator', 'datasource', 'type', 'view'] as const
 
 const BUILTIN_TYPES = [
   'String',
@@ -18,7 +18,7 @@ const BUILTIN_TYPES = [
   'Json',
   'Bytes',
   'Unsupported',
-]
+] as const
 
 /** The word a completion replaces: an attribute with its `@` / `@@`, or an identifier with dots. */
 export const WORD_PATTERN = /@{1,2}[A-Za-z_][\w.]*|@{1,2}|[A-Za-z_][\w.]*/u

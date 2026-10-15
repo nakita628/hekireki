@@ -29,7 +29,11 @@ const WRITE_OPERATIONS = [
   'deleteMany',
 ] as const
 
-const OPERATIONS: readonly string[] = [...READ_OPERATIONS, ...WRITE_OPERATIONS]
+const OPERATIONS = [...READ_OPERATIONS, ...WRITE_OPERATIONS] as const
+
+function isOperation(name: string): name is (typeof OPERATIONS)[number] {
+  return OPERATIONS.some((operation) => operation === name)
+}
 
 /** An argument as the query text spells it: JSON, plus `undefined`, bigints and dates. */
 type ClientValue =
@@ -333,7 +337,7 @@ export function makeClientQuery(input: z.infer<typeof MakeClientQueryInput>) {
   const known = input.models.map((model) => ({ model, delegate: lowerFirst(model) }))
   const resolved = result.value.calls.map((call) => {
     const model = known.find((entry) => entry.delegate === call.delegate.name)?.model ?? null
-    const operation = OPERATIONS.includes(call.operation.name) ? call.operation.name : null
+    const operation = isOperation(call.operation.name) ? call.operation.name : null
     const diagnostics = [
       ...(model === null
         ? [

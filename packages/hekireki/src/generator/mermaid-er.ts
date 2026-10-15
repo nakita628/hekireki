@@ -3,8 +3,8 @@ import type { DMMF } from '@prisma/generator-helper'
 import { erRelationLine, modelInfo } from '../helper/mermaid-er.js'
 import { erRelations } from '../utils/relation.js'
 
-const ER_HEADER = ['```mermaid', 'erDiagram']
-const ER_FOOTER = ['```']
+const ER_HEADER = ['```mermaid', 'erDiagram'] as const
+const ER_FOOTER = ['```'] as const
 
 export function erContent(models: readonly DMMF.Model[]) {
   const resolveName = (model: string) => models.find((m) => m.name === model)?.dbName ?? model

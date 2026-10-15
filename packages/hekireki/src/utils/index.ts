@@ -50,7 +50,7 @@ const ANNOTATION_PREFIXES = [
   '@ar.',
   '@ecto.',
   '@relation',
-]
+] as const
 const ANNOTATION_EXACT = new Set(['@z', '@v', '@a', '@e', '@t', '@j', '@p', '@ar', '@ecto'])
 
 export function isAnnotationLine(line: string) {

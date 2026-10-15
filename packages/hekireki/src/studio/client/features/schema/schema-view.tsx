@@ -29,8 +29,8 @@ import { RelationEdge } from './relation-edge.js'
 
 type Schema = CanvasSchema & { readonly files: readonly { readonly path: string }[] }
 
-const nodeTypes = { model: ModelNode, enum: EnumNode }
-const edgeTypes = { relation: RelationEdge }
+const nodeTypes = { model: ModelNode, enum: EnumNode } as const
+const edgeTypes = { relation: RelationEdge } as const
 const NO_NODES: DiagramNodeType[] = []
 const NO_EDGES: Edge[] = []
 

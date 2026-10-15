@@ -25,14 +25,14 @@ type Schema = {
 }
 
 const NAV = 'flex items-center gap-2.5 rounded-lg px-3 py-2 text-lead'
-const NAV_ACTIVE = { className: `${NAV} bg-accent-soft font-semibold text-accent-text` }
-const NAV_INACTIVE = { className: `${NAV} hover:bg-canvas` }
+const NAV_ACTIVE = { className: `${NAV} bg-accent-soft font-semibold text-accent-text` } as const
+const NAV_INACTIVE = { className: `${NAV} hover:bg-canvas` } as const
 
 const ENTITY = 'flex items-center gap-2 rounded-lg border px-3 py-[7px] font-mono text-body'
 const ENTITY_ACTIVE = {
   className: `${ENTITY} border-accent bg-accent-soft font-semibold text-accent-text`,
-}
-const ENTITY_INACTIVE = { className: `${ENTITY} border-transparent hover:bg-canvas` }
+} as const
+const ENTITY_INACTIVE = { className: `${ENTITY} border-transparent hover:bg-canvas` } as const
 
 function EntityLink({
   to,

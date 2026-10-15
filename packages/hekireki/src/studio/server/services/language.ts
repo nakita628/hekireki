@@ -317,7 +317,7 @@ export function lintSchema(input: z.infer<typeof LintSchemaInput>) {
   }).pipe(Effect.orElseSucceed(() => []))
 }
 
-const FORMAT_OPTIONS = { tabSize: 2, insertSpaces: true }
+const FORMAT_OPTIONS = { tabSize: 2, insertSpaces: true } as const
 
 function formatEdits(workspace: Workspace, onError: (message: string) => void) {
   return quietly(() =>

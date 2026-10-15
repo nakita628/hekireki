@@ -115,7 +115,7 @@ const EDITOR_FONT =
  * Each arrives as one `insertText` carrying the substituted text, so each is answered with what
  * the keys actually said.
  */
-const SUBSTITUTIONS: Readonly<Record<string, string>> = {
+const SUBSTITUTIONS: Readonly<Partial<Record<string, string>>> = {
   '. ': ' ',
   '\u201C': '"',
   '\u201D': '"',

@@ -61,7 +61,7 @@ const FAMILY_STYLES = {
   filter: { header: 'bg-kind-filter-soft text-kind-filter', border: 'border-kind-filter/40' },
   output: { header: 'bg-kind-output-soft text-kind-output', border: 'border-kind-output/40' },
   write: { header: 'bg-kind-write-soft text-kind-write', border: 'border-kind-write/40' },
-}
+} as const
 
 function FlowNodeComponent({ data, selected }: NodeProps<FlowNodeType>) {
   const { node } = data

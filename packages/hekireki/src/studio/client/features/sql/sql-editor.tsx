@@ -72,7 +72,7 @@ const diagnosticMarks = {
   error: Decoration.mark({ class: 'cm-diagnostic-error' }),
   warning: Decoration.mark({ class: 'cm-diagnostic-warning' }),
   info: Decoration.mark({ class: 'cm-diagnostic-info' }),
-}
+} as const
 
 function clamp(range: { readonly start: number; readonly end: number }, length: number) {
   const start = Math.max(0, Math.min(range.start, length))

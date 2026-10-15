@@ -27,7 +27,7 @@ if (!rootElement) {
 
 // What every icon is unless a call site says otherwise: 16px, in the colour of the text around it,
 // and hidden from the accessibility tree — labels and `aria-label`s are what a reader hears.
-const ICONS = { size: '16', attr: { 'aria-hidden': true } }
+const ICONS = { size: '16', attr: { 'aria-hidden': true } } as const
 
 createRoot(rootElement).render(
   <StrictMode>

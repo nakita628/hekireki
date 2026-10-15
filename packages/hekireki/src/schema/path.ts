@@ -8,9 +8,9 @@ import { exists, readFile } from '../file/index.js'
 // this before `--help` or a rejected flag, and must not pay for the engine to do it.
 
 /** Where Prisma looks for a schema when neither the command nor prisma.config.ts names one. */
-export const DEFAULT_SCHEMA_PATHS = ['prisma/schema.prisma', 'schema.prisma']
+export const DEFAULT_SCHEMA_PATHS = ['prisma/schema.prisma', 'schema.prisma'] as const
 
-const CONFIG_EXTENSIONS = ['.js', '.ts', '.mjs', '.cjs', '.mts', '.cts']
+const CONFIG_EXTENSIONS = ['.js', '.ts', '.mjs', '.cjs', '.mts', '.cts'] as const
 
 // The config files Prisma looks for in a directory, in its order (@prisma/config,
 // findPrismaConfigFile): prisma7.config and .config/prisma7 first, then the names before them,

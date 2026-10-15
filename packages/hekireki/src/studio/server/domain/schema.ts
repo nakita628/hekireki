@@ -684,7 +684,7 @@ const MakeAnalysisSchemaInput = z
 
 /** The column type Prisma migrates a scalar to when no `@db.*` attribute says otherwise. */
 const PRISMA_COLUMN_TYPES: Readonly<
-  Record<z.infer<typeof AnalysisDialect>, Readonly<Record<string, string>>>
+  Record<z.infer<typeof AnalysisDialect>, Readonly<Partial<Record<string, string>>>>
 > = {
   postgresql: {
     Int: 'int4',
@@ -722,11 +722,11 @@ const PRISMA_COLUMN_TYPES: Readonly<
 }
 
 /** An enum column is stored as text everywhere; MySQL has its own `enum` type for it. */
-const ENUM_COLUMN_TYPES: Readonly<Record<z.infer<typeof AnalysisDialect>, string>> = {
+const ENUM_COLUMN_TYPES = {
   postgresql: 'text',
   mysql: 'enum',
   sqlite: 'TEXT',
-}
+} as const satisfies Readonly<Record<z.infer<typeof AnalysisDialect>, string>>
 
 function analysisDialect(input: z.infer<typeof MakeAnalysisSchemaInput>) {
   if (input.dialect !== null) return input.dialect

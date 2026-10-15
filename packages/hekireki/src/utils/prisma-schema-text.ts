@@ -1,7 +1,7 @@
 // What the Prisma schema's text says that DMMF drops: the name `@relation(map: ...)` gives a
 // foreign key, and the datasource's `relationMode`. Read off the schema as written.
 
-const PRISMA_ESCAPES: { readonly [char: string]: string } = {
+const PRISMA_ESCAPES: Readonly<Partial<Record<string, string>>> = {
   b: '\b',
   f: '\f',
   n: '\n',

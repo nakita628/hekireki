@@ -7,9 +7,9 @@ import type { languages } from 'monaco-editor/editor/editor.api.js'
 
 export const QUERY_LANGUAGE_ID = 'prisma-client-query'
 
-const KEYWORDS = ['await', 'new', 'async', 'const', 'let', 'return', 'typeof']
+const KEYWORDS = ['await', 'new', 'async', 'const', 'let', 'return', 'typeof'] as const
 
-const LITERALS = ['true', 'false', 'null', 'undefined']
+const LITERALS = ['true', 'false', 'null', 'undefined'] as const
 
 const IDENTIFIER = /[A-Za-z_$][\w$]*/u
 
