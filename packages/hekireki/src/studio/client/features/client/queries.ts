@@ -4,14 +4,14 @@ import { queryOptions, useQuery } from '@tanstack/react-query'
 import type { QueryClient } from '@tanstack/react-query'
 import { parseResponse } from 'hono/client'
 
-import { client } from '../../api/index.js'
+import { clientClient } from '../../api/index.js'
 import { getClientKey } from '../../hooks/index.js'
 
 function analysisOptions(query: string) {
   return queryOptions({
     queryKey: [...getClientKey(), '/client/analyze', query] as const,
     queryFn: ({ signal }) =>
-      parseResponse(client.client.analyze.$post({ json: { query } }, { init: { signal } })),
+      parseResponse(clientClient.client.analyze.$post({ json: { query } }, { init: { signal } })),
   })
 }
 
@@ -41,7 +41,7 @@ export function useClientPreview(query: string, enabled: boolean) {
   return useQuery({
     queryKey: [...getClientKey(), '/client/preview', query] as const,
     queryFn: ({ signal }) =>
-      parseResponse(client.client.preview.$post({ json: { query } }, { init: { signal } })),
+      parseResponse(clientClient.client.preview.$post({ json: { query } }, { init: { signal } })),
     enabled: enabled && query.trim() !== '',
     placeholderData: (previous) => previous,
     staleTime: Number.POSITIVE_INFINITY,
@@ -54,7 +54,7 @@ export function useTypeCheck(query: string, enabled: boolean) {
   return useQuery({
     queryKey: [...getClientKey(), '/client/check', query] as const,
     queryFn: ({ signal }) =>
-      parseResponse(client.client.check.$post({ json: { query } }, { init: { signal } })),
+      parseResponse(clientClient.client.check.$post({ json: { query } }, { init: { signal } })),
     enabled: enabled && query.trim() !== '',
     placeholderData: (previous) => previous,
   })

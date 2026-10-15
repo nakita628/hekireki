@@ -1,5 +1,5 @@
 import { hc } from 'hono/client'
-import type { schema, db, api, prisma, migrate, docs } from '../../server/index'
+import type { schema, db, client, prisma, migrate, docs } from '../../server/index'
 
 type SchemaClient = ReturnType<typeof hc<typeof schema>>
 
@@ -14,11 +14,12 @@ const hcDbWithType = (...args: Parameters<typeof hc>): DbClient => hc<typeof db>
 
 export const dbClient = hcDbWithType('/').api
 
-type Client = ReturnType<typeof hc<typeof api>>
+type ClientClient = ReturnType<typeof hc<typeof client>>
 
-const hcWithType = (...args: Parameters<typeof hc>): Client => hc<typeof api>(...args)
+const hcClientWithType = (...args: Parameters<typeof hc>): ClientClient =>
+  hc<typeof client>(...args)
 
-export const client = hcWithType('/').api
+export const clientClient = hcClientWithType('/').api
 
 type PrismaClient = ReturnType<typeof hc<typeof prisma>>
 

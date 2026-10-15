@@ -14,7 +14,14 @@ import type {
 } from '@tanstack/react-query'
 import type { ClientRequestOptions, InferRequestType } from 'hono/client'
 import { parseResponse } from 'hono/client'
-import { schemaClient, dbClient, client, prismaClient, migrateClient, docsClient } from '../api'
+import {
+  schemaClient,
+  dbClient,
+  clientClient,
+  prismaClient,
+  migrateClient,
+  docsClient,
+} from '../api'
 
 export function getClientKey() {
   return ['client'] as const
@@ -929,11 +936,13 @@ export function getClientQueryKey() {
 }
 
 export function getClientQueryOptions<
-  TData = Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.$get>>>>>,
+  TData = Awaited<
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.$get>>>>
+  >,
   TError = DefaultError,
 >(options?: ClientRequestOptions) {
   return queryOptions<
-    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.$get>>>>>,
+    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.$get>>>>>,
     TError,
     TData,
     ReturnType<typeof getClientQueryKey>
@@ -941,20 +950,24 @@ export function getClientQueryOptions<
     queryKey: getClientQueryKey(),
     queryFn({ signal }) {
       return parseResponse(
-        client.client.$get(undefined, { ...options, init: { ...options?.init, signal } }),
+        clientClient.client.$get(undefined, { ...options, init: { ...options?.init, signal } }),
       )
     },
   })
 }
 
 export function useClient<
-  TData = Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.$get>>>>>,
+  TData = Awaited<
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.$get>>>>
+  >,
   TError = DefaultError,
 >(
   options?: {
     query?: Omit<
       UseQueryOptions<
-        Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.$get>>>>>,
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.$get>>>>
+        >,
         TError,
         TData,
         ReturnType<typeof getClientQueryKey>
@@ -973,13 +986,17 @@ export function useClient<
 }
 
 export function useSuspenseClient<
-  TData = Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.$get>>>>>,
+  TData = Awaited<
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.$get>>>>
+  >,
   TError = DefaultError,
 >(
   options?: {
     query?: Omit<
       UseSuspenseQueryOptions<
-        Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.$get>>>>>,
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.$get>>>>
+        >,
         TError,
         TData,
         ReturnType<typeof getClientQueryKey>
@@ -1007,15 +1024,17 @@ export function getPostClientAnalyzeMutationOptions<
 >(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.analyze.$post>>>>
+      ReturnType<
+        typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.analyze.$post>>>
+      >
     >,
     TError,
-    InferRequestType<typeof client.client.analyze.$post>,
+    InferRequestType<typeof clientClient.client.analyze.$post>,
     TOnMutateResult
   >({
     mutationKey: getPostClientAnalyzeMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.client.analyze.$post>) {
-      return parseResponse(client.client.analyze.$post(args, options))
+    async mutationFn(args: InferRequestType<typeof clientClient.client.analyze.$post>) {
+      return parseResponse(clientClient.client.analyze.$post(args, options))
     },
   })
 }
@@ -1025,10 +1044,12 @@ export function usePostClientAnalyze<TError = DefaultError, TOnMutateResult = un
     mutation?: Omit<
       UseMutationOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.analyze.$post>>>>
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.analyze.$post>>>
+          >
         >,
         TError,
-        InferRequestType<typeof client.client.analyze.$post>,
+        InferRequestType<typeof clientClient.client.analyze.$post>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -1061,15 +1082,17 @@ export function getPostClientCompleteMutationOptions<
 >(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.complete.$post>>>>
+      ReturnType<
+        typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.complete.$post>>>
+      >
     >,
     TError,
-    InferRequestType<typeof client.client.complete.$post>,
+    InferRequestType<typeof clientClient.client.complete.$post>,
     TOnMutateResult
   >({
     mutationKey: getPostClientCompleteMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.client.complete.$post>) {
-      return parseResponse(client.client.complete.$post(args, options))
+    async mutationFn(args: InferRequestType<typeof clientClient.client.complete.$post>) {
+      return parseResponse(clientClient.client.complete.$post(args, options))
     },
   })
 }
@@ -1079,10 +1102,12 @@ export function usePostClientComplete<TError = DefaultError, TOnMutateResult = u
     mutation?: Omit<
       UseMutationOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.complete.$post>>>>
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.complete.$post>>>
+          >
         >,
         TError,
-        InferRequestType<typeof client.client.complete.$post>,
+        InferRequestType<typeof clientClient.client.complete.$post>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -1116,16 +1141,16 @@ export function getPostClientCompleteDetailMutationOptions<
   return mutationOptions<
     Awaited<
       ReturnType<
-        typeof parseResponse<Awaited<ReturnType<typeof client.client.complete.detail.$post>>>
+        typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.complete.detail.$post>>>
       >
     >,
     TError,
-    InferRequestType<typeof client.client.complete.detail.$post>,
+    InferRequestType<typeof clientClient.client.complete.detail.$post>,
     TOnMutateResult
   >({
     mutationKey: getPostClientCompleteDetailMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.client.complete.detail.$post>) {
-      return parseResponse(client.client.complete.detail.$post(args, options))
+    async mutationFn(args: InferRequestType<typeof clientClient.client.complete.detail.$post>) {
+      return parseResponse(clientClient.client.complete.detail.$post(args, options))
     },
   })
 }
@@ -1136,11 +1161,13 @@ export function usePostClientCompleteDetail<TError = DefaultError, TOnMutateResu
       UseMutationOptions<
         Awaited<
           ReturnType<
-            typeof parseResponse<Awaited<ReturnType<typeof client.client.complete.detail.$post>>>
+            typeof parseResponse<
+              Awaited<ReturnType<typeof clientClient.client.complete.detail.$post>>
+            >
           >
         >,
         TError,
-        InferRequestType<typeof client.client.complete.detail.$post>,
+        InferRequestType<typeof clientClient.client.complete.detail.$post>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -1172,15 +1199,15 @@ export function getPostClientHoverMutationOptions<TError = DefaultError, TOnMuta
 ) {
   return mutationOptions<
     Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.hover.$post>>>>
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.hover.$post>>>>
     >,
     TError,
-    InferRequestType<typeof client.client.hover.$post>,
+    InferRequestType<typeof clientClient.client.hover.$post>,
     TOnMutateResult
   >({
     mutationKey: getPostClientHoverMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.client.hover.$post>) {
-      return parseResponse(client.client.hover.$post(args, options))
+    async mutationFn(args: InferRequestType<typeof clientClient.client.hover.$post>) {
+      return parseResponse(clientClient.client.hover.$post(args, options))
     },
   })
 }
@@ -1190,10 +1217,12 @@ export function usePostClientHover<TError = DefaultError, TOnMutateResult = unkn
     mutation?: Omit<
       UseMutationOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.hover.$post>>>>
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.hover.$post>>>
+          >
         >,
         TError,
-        InferRequestType<typeof client.client.hover.$post>,
+        InferRequestType<typeof clientClient.client.hover.$post>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -1224,15 +1253,17 @@ export function getPostClientSignatureMutationOptions<
 >(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.signature.$post>>>>
+      ReturnType<
+        typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.signature.$post>>>
+      >
     >,
     TError,
-    InferRequestType<typeof client.client.signature.$post>,
+    InferRequestType<typeof clientClient.client.signature.$post>,
     TOnMutateResult
   >({
     mutationKey: getPostClientSignatureMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.client.signature.$post>) {
-      return parseResponse(client.client.signature.$post(args, options))
+    async mutationFn(args: InferRequestType<typeof clientClient.client.signature.$post>) {
+      return parseResponse(clientClient.client.signature.$post(args, options))
     },
   })
 }
@@ -1243,11 +1274,11 @@ export function usePostClientSignature<TError = DefaultError, TOnMutateResult = 
       UseMutationOptions<
         Awaited<
           ReturnType<
-            typeof parseResponse<Awaited<ReturnType<typeof client.client.signature.$post>>>
+            typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.signature.$post>>>
           >
         >,
         TError,
-        InferRequestType<typeof client.client.signature.$post>,
+        InferRequestType<typeof clientClient.client.signature.$post>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -1280,15 +1311,15 @@ export function getPostClientFormatMutationOptions<
 >(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.format.$post>>>>
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.format.$post>>>>
     >,
     TError,
-    InferRequestType<typeof client.client.format.$post>,
+    InferRequestType<typeof clientClient.client.format.$post>,
     TOnMutateResult
   >({
     mutationKey: getPostClientFormatMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.client.format.$post>) {
-      return parseResponse(client.client.format.$post(args, options))
+    async mutationFn(args: InferRequestType<typeof clientClient.client.format.$post>) {
+      return parseResponse(clientClient.client.format.$post(args, options))
     },
   })
 }
@@ -1298,10 +1329,12 @@ export function usePostClientFormat<TError = DefaultError, TOnMutateResult = unk
     mutation?: Omit<
       UseMutationOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.format.$post>>>>
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.format.$post>>>
+          >
         >,
         TError,
-        InferRequestType<typeof client.client.format.$post>,
+        InferRequestType<typeof clientClient.client.format.$post>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -1333,15 +1366,15 @@ export function getPostClientCheckMutationOptions<TError = DefaultError, TOnMuta
 ) {
   return mutationOptions<
     Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.check.$post>>>>
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.check.$post>>>>
     >,
     TError,
-    InferRequestType<typeof client.client.check.$post>,
+    InferRequestType<typeof clientClient.client.check.$post>,
     TOnMutateResult
   >({
     mutationKey: getPostClientCheckMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.client.check.$post>) {
-      return parseResponse(client.client.check.$post(args, options))
+    async mutationFn(args: InferRequestType<typeof clientClient.client.check.$post>) {
+      return parseResponse(clientClient.client.check.$post(args, options))
     },
   })
 }
@@ -1351,10 +1384,12 @@ export function usePostClientCheck<TError = DefaultError, TOnMutateResult = unkn
     mutation?: Omit<
       UseMutationOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.check.$post>>>>
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.check.$post>>>
+          >
         >,
         TError,
-        InferRequestType<typeof client.client.check.$post>,
+        InferRequestType<typeof clientClient.client.check.$post>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -1385,15 +1420,17 @@ export function getPostClientPreviewMutationOptions<
 >(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.preview.$post>>>>
+      ReturnType<
+        typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.preview.$post>>>
+      >
     >,
     TError,
-    InferRequestType<typeof client.client.preview.$post>,
+    InferRequestType<typeof clientClient.client.preview.$post>,
     TOnMutateResult
   >({
     mutationKey: getPostClientPreviewMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.client.preview.$post>) {
-      return parseResponse(client.client.preview.$post(args, options))
+    async mutationFn(args: InferRequestType<typeof clientClient.client.preview.$post>) {
+      return parseResponse(clientClient.client.preview.$post(args, options))
     },
   })
 }
@@ -1403,10 +1440,12 @@ export function usePostClientPreview<TError = DefaultError, TOnMutateResult = un
     mutation?: Omit<
       UseMutationOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.preview.$post>>>>
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.preview.$post>>>
+          >
         >,
         TError,
-        InferRequestType<typeof client.client.preview.$post>,
+        InferRequestType<typeof clientClient.client.preview.$post>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -1437,14 +1476,16 @@ export function getPostClientRunMutationOptions<TError = DefaultError, TOnMutate
   options?: ClientRequestOptions,
 ) {
   return mutationOptions<
-    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.run.$post>>>>>,
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.run.$post>>>>
+    >,
     TError,
-    InferRequestType<typeof client.client.run.$post>,
+    InferRequestType<typeof clientClient.client.run.$post>,
     TOnMutateResult
   >({
     mutationKey: getPostClientRunMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.client.run.$post>) {
-      return parseResponse(client.client.run.$post(args, options))
+    async mutationFn(args: InferRequestType<typeof clientClient.client.run.$post>) {
+      return parseResponse(clientClient.client.run.$post(args, options))
     },
   })
 }
@@ -1454,10 +1495,12 @@ export function usePostClientRun<TError = DefaultError, TOnMutateResult = unknow
     mutation?: Omit<
       UseMutationOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.run.$post>>>>
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.run.$post>>>
+          >
         >,
         TError,
-        InferRequestType<typeof client.client.run.$post>,
+        InferRequestType<typeof clientClient.client.run.$post>,
         TOnMutateResult
       >,
       'mutationFn'

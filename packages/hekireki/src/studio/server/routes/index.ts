@@ -3628,7 +3628,7 @@ const RowsQuerySkipParamsSchema = SkipSchema.openapi({
     schema: { $ref: '#/components/schemas/skip' },
     explode: false,
   },
-}).readonly()
+})
 
 const RowsQueryTakeParamsSchema = TakeSchema.openapi({
   param: {
@@ -3639,7 +3639,7 @@ const RowsQueryTakeParamsSchema = TakeSchema.openapi({
     schema: { $ref: '#/components/schemas/take' },
     explode: false,
   },
-}).readonly()
+})
 
 const RowsQuerySearchParamsSchema = SearchSchema.openapi({
   param: {
@@ -3650,9 +3650,7 @@ const RowsQuerySearchParamsSchema = SearchSchema.openapi({
     schema: { $ref: '#/components/schemas/search' },
     explode: false,
   },
-})
-  .exactOptional()
-  .readonly()
+}).exactOptional()
 
 export const getSchemaRoute = createRoute({
   method: 'get',

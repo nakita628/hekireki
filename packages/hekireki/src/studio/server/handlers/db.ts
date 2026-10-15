@@ -1,7 +1,6 @@
 import type { RouteHandler } from '@hono/zod-openapi'
 import { Effect, Match } from 'effect'
 
-import { SearchSchema, SkipSchema, TakeSchema } from '../routes'
 import type {
   deleteDbRowsModelNameRoute,
   getDbCountsRoute,
@@ -136,43 +135,49 @@ export const getDbCountsRouteHandler: RouteHandler<typeof getDbCountsRoute> = (c
 export const getDbRowsModelNameRouteHandler: RouteHandler<typeof getDbRowsModelNameRoute> = (c) => {
   const data = { ...c.req.valid('param'), ...c.req.valid('query') }
   return Effect.runPromise(
-    Effect.matchEffect(
-      // The generated query schemas wrap each scalar in `.readonly()` (hono-takibi applies it to
-      // every parameter), which turns the brand into `Readonly<number & $brand>`; parsing the
-      // value once more through the scalar schema gives the brand back as the use case wants it.
-      DatabaseUseCase.readRows({
-        modelName: data.modelName,
-        skip: SkipSchema.parse(data.skip),
-        take: TakeSchema.parse(data.take),
-        search: data.search === undefined ? undefined : SearchSchema.parse(data.search),
-      }),
-      {
-        onSuccess: (value) => Effect.succeed(c.json(value, 200)),
-        onFailure: (error) =>
-          Match.value(error).pipe(
-            Match.tag('UnknownModelError', ({ model }) =>
-              Effect.succeed(
-                c.json(
-                  {
-                    type: '/problems/not-found' as const,
-                    title: 'Not Found' as const,
-                    status: 404 as const,
-                    detail: `Unknown model "${model}".`,
-                    instance: c.req.path,
-                  },
-                  404,
-                  { 'Content-Type': 'application/problem+json' },
-                ),
+    Effect.matchEffect(DatabaseUseCase.readRows(data), {
+      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
+      onFailure: (error) =>
+        Match.value(error).pipe(
+          Match.tag('UnknownModelError', ({ model }) =>
+            Effect.succeed(
+              c.json(
+                {
+                  type: '/problems/not-found' as const,
+                  title: 'Not Found' as const,
+                  status: 404 as const,
+                  detail: `Unknown model "${model}".`,
+                  instance: c.req.path,
+                },
+                404,
+                { 'Content-Type': 'application/problem+json' },
               ),
             ),
-            Match.tag('DatabaseUnavailableError', ({ reason }) =>
-              Effect.succeed(
+          ),
+          Match.tag('DatabaseUnavailableError', ({ reason }) =>
+            Effect.succeed(
+              c.json(
+                {
+                  type: '/problems/service-unavailable' as const,
+                  title: 'Service Unavailable' as const,
+                  status: 503 as const,
+                  detail: reason,
+                  instance: c.req.path,
+                },
+                503,
+                { 'Content-Type': 'application/problem+json' },
+              ),
+            ),
+          ),
+          Match.tag('DatabaseError', ({ cause }) =>
+            Effect.logError('database error', cause).pipe(
+              Effect.as(
                 c.json(
                   {
                     type: '/problems/service-unavailable' as const,
                     title: 'Service Unavailable' as const,
                     status: 503 as const,
-                    detail: reason,
+                    detail: cause,
                     instance: c.req.path,
                   },
                   503,
@@ -180,44 +185,27 @@ export const getDbRowsModelNameRouteHandler: RouteHandler<typeof getDbRowsModelN
                 ),
               ),
             ),
-            Match.tag('DatabaseError', ({ cause }) =>
-              Effect.logError('database error', cause).pipe(
-                Effect.as(
-                  c.json(
-                    {
-                      type: '/problems/service-unavailable' as const,
-                      title: 'Service Unavailable' as const,
-                      status: 503 as const,
-                      detail: cause,
-                      instance: c.req.path,
-                    },
-                    503,
-                    { 'Content-Type': 'application/problem+json' },
-                  ),
-                ),
-              ),
-            ),
-            Match.tag('ContractViolationError', ({ message }) =>
-              Effect.logError('contract violation', message).pipe(
-                Effect.as(
-                  c.json(
-                    {
-                      type: '/problems/internal-server-error' as const,
-                      title: 'Internal Server Error' as const,
-                      status: 500 as const,
-                      detail: 'An unexpected error occurred.',
-                      instance: c.req.path,
-                    },
-                    500,
-                    { 'Content-Type': 'application/problem+json' },
-                  ),
-                ),
-              ),
-            ),
-            Match.exhaustive,
           ),
-      },
-    ),
+          Match.tag('ContractViolationError', ({ message }) =>
+            Effect.logError('contract violation', message).pipe(
+              Effect.as(
+                c.json(
+                  {
+                    type: '/problems/internal-server-error' as const,
+                    title: 'Internal Server Error' as const,
+                    status: 500 as const,
+                    detail: 'An unexpected error occurred.',
+                    instance: c.req.path,
+                  },
+                  500,
+                  { 'Content-Type': 'application/problem+json' },
+                ),
+              ),
+            ),
+          ),
+          Match.exhaustive,
+        ),
+    }),
   )
 }
 

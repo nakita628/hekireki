@@ -1,7 +1,7 @@
 import { parseResponse } from 'hono/client'
 import { languages } from 'monaco-editor/editor/editor.api.js'
 
-import { client } from '../../api/index.js'
+import { clientClient } from '../../api/index.js'
 import { suggestionsAt } from './completion.js'
 import { contextAt } from './cursor.js'
 import { registry, wordRange } from './editor-state.js'
@@ -48,7 +48,7 @@ export function completionProvider() {
       // A request the API refuses (no TypeScript 5, a broken schema) leaves the editor without
       // the feature, not with an error.
       const found = await parseResponse(
-        client.client.complete.$post({ json: { query, offset } }),
+        clientClient.client.complete.$post({ json: { query, offset } }),
       ).catch(() => null)
       if (found === null) return null
       const suggestions = found.items.map((item) => {
@@ -69,7 +69,7 @@ export function completionProvider() {
       if (context === undefined) return item
       const label = typeof item.label === 'string' ? item.label : item.label.label
       const detail = await parseResponse(
-        client.client.complete.detail.$post({ json: { ...context, name: label } }),
+        clientClient.client.complete.detail.$post({ json: { ...context, name: label } }),
       ).catch(() => null)
       if (detail === null) return item
       return {

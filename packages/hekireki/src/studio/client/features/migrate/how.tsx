@@ -3,7 +3,8 @@ import { parseResponse } from 'hono/client'
 import type { InferResponseType } from 'hono/client'
 import { LuArrowDown, LuCircleAlert, LuTrash2 } from 'react-icons/lu'
 
-import { dbClient, migrateClient } from '../../api/index.js'
+import type { migrateClient } from '../../api/index.js'
+import { dbClient } from '../../api/index.js'
 import { useMessages } from './language.js'
 import { HOW } from './messages.js'
 

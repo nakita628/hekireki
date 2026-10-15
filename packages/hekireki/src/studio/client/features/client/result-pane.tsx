@@ -2,7 +2,7 @@ import { Tabs } from '@heroui/react'
 import type { InferResponseType } from 'hono/client'
 import { useMemo } from 'react'
 
-import type { client } from '../../api/index.js'
+import type { clientClient } from '../../api/index.js'
 import { CodeBlock } from '../../components/code-block.js'
 import { ModeSwitch } from '../../components/mode-switch.js'
 import { ResultTable } from '../../components/result-table.js'
@@ -31,7 +31,7 @@ export function ResultPane({
 }: {
   readonly tab: 'result' | 'sql'
   readonly onTab: (tab: 'result' | 'sql') => void
-  readonly result: InferResponseType<typeof client.client.run.$post, 200> | null
+  readonly result: InferResponseType<typeof clientClient.client.run.$post, 200> | null
   /** Whether a run is on its way. */
   readonly running: boolean
   /** What the run failed with, when it did. */
@@ -40,7 +40,7 @@ export function ResultPane({
   readonly onAsJson: (asJson: boolean) => void
   readonly sql: {
     readonly data: {
-      readonly queries: InferResponseType<typeof client.client.run.$post, 200>['queries']
+      readonly queries: InferResponseType<typeof clientClient.client.run.$post, 200>['queries']
       readonly durationMs: number
     } | null
     /** What reading the SQL failed with, when it did. */
@@ -55,7 +55,7 @@ export function ResultPane({
   readonly onAsSent: (asSent: boolean) => void
   readonly dialect: 'postgresql' | 'mysql' | 'sqlite' | null
   readonly onOpen: (
-    statement: InferResponseType<typeof client.client.run.$post, 200>['queries'][number],
+    statement: InferResponseType<typeof clientClient.client.run.$post, 200>['queries'][number],
   ) => void
 }) {
   const table = useMemo(() => (result === null ? null : tableOf(result.result)), [result])
