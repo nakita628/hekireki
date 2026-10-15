@@ -191,7 +191,7 @@ describe('helper/typebox', () => {
         validation: 'Type.String()',
         isRequired: true,
       },
-    ]
+    ] as const
     it('generates properties', () => {
       expect(makeTypeBoxProperties(fields)).toBe('  id: Type.String(),')
     })

@@ -1,7 +1,7 @@
 import { parseResponse } from 'hono/client'
 import type { languages } from 'monaco-editor/editor/editor.api.js'
 
-import { client } from '../../lib/index.js'
+import { clientClient } from '../../api/index.js'
 
 /** Format Document: the query laid out by the TypeScript formatter, replacing the whole text. */
 export function formattingProvider() {
@@ -10,9 +10,9 @@ export function formattingProvider() {
     provideDocumentFormattingEdits: async (model) => {
       const query = model.getValue()
       if (query.trim() === '') return []
-      const formatted = await parseResponse(client.client.format.$post({ json: { query } })).catch(
-        () => null,
-      )
+      const formatted = await parseResponse(
+        clientClient.client.format.$post({ json: { query } }),
+      ).catch(() => null)
       if (formatted === null || formatted.text === query) return []
       return [{ range: model.getFullModelRange(), text: formatted.text }]
     },

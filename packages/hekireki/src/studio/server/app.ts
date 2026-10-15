@@ -1,5 +1,6 @@
 import path from 'node:path'
 
+import { layer as nodeFileSystemLayer } from '@effect/platform-node/NodeFileSystem'
 import { serveStatic } from '@hono/node-server/serve-static'
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { Effect } from 'effect'
@@ -8,11 +9,11 @@ import { createMiddleware } from 'hono/factory'
 import { readFile } from '../../file/index.js'
 import { isLoopbackHostname } from '../../utils/index.js'
 import { FORBIDDEN_HOST_MESSAGE } from './constants/index.js'
-import { api } from './index.js'
+import api from './index.js'
 import * as ClientService from './services/index.js'
 import type * as DatabaseService from './services/index.js'
-import * as RuntimeService from './services/index.js'
 import type * as StateService from './services/index.js'
+import * as StudioService from './services/index.js'
 
 // The API is unauthenticated, so a page on another origin must not be able to read it even
 // when its DNS name resolves to this machine.
@@ -22,13 +23,13 @@ const loopbackOnly = createMiddleware((c, next) =>
     : Promise.resolve(c.text(FORBIDDEN_HOST_MESSAGE, 403)),
 )
 
-/** The generated API (routed under /api) with the problem+json validation hook, error handler, Effect runtime and its document at /api/openapi.json. */
+/** The generated API (routed under /api) with the problem+json validation hook, error handler, its document at /api/openapi.json. */
 export function createStudioApi(
   state: ReturnType<typeof StateService.createStudioState>,
   db: ReturnType<typeof DatabaseService.disconnectedDatabase>,
   client: ReturnType<typeof ClientService.createProjectClient>,
 ) {
-  RuntimeService.configureRuntime({ state, db, client })
+  StudioService.configureStudio({ state, db, client })
   const app = new OpenAPIHono({
     defaultHook: (result, c) => {
       if (!result.success) {
@@ -93,11 +94,14 @@ export function createStudioApp(
   app.get('/*', (c) =>
     c.req.path.startsWith('/api/')
       ? c.notFound()
-      : RuntimeService.studioRuntime().runPromise(
-          Effect.match(readFile(path.join(staticDir, 'index.html')), {
-            onSuccess: (html) => c.html(html),
-            onFailure: () => c.text(missingAssetsMessage(staticDir), 500),
-          }),
+      : Effect.runPromise(
+          Effect.provide(
+            Effect.match(readFile(path.join(staticDir, 'index.html')), {
+              onSuccess: (html) => c.html(html),
+              onFailure: () => c.text(missingAssetsMessage(staticDir), 500),
+            }),
+            nodeFileSystemLayer,
+          ),
         ),
   )
   return app

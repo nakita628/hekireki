@@ -3,11 +3,11 @@ import { Link } from '@tanstack/react-router'
 import type { InferResponseType } from 'hono/client'
 import type { ReactNode } from 'react'
 
+import type { schemaClient } from '../../api/index.js'
 import { useSchema } from '../../hooks/index.js'
-import type { client } from '../../lib/index.js'
 
 // The parsed schema as the API sends it; the pages below take the slices they read.
-type Schema = NonNullable<InferResponseType<typeof client.schema.$get, 200>['schema']>
+type Schema = NonNullable<InferResponseType<typeof schemaClient.schema.$get, 200>['schema']>
 
 /** Renders the page once a schema is available; loading, request errors and a schema that never parsed are shown instead. */
 export function SchemaGate({ children }: { readonly children: (schema: Schema) => ReactNode }) {

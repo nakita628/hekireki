@@ -76,11 +76,11 @@ describe('a self many-to-many', () => {
   })
 
   it('activerecord joins each end on its own column', () => {
-    const [{ code }] = activeRecordModelFiles(follow.models, follow.enums)
-    expect(code).toContain(
+    const [first] = activeRecordModelFiles(follow.models, follow.enums)
+    expect(first?.code).toContain(
       'has_and_belongs_to_many :a_following, class_name: "Employee", join_table: "_Follow", foreign_key: "A",',
     )
-    expect(code).toContain(
+    expect(first?.code).toContain(
       'has_and_belongs_to_many :z_followers, class_name: "Employee", join_table: "_Follow", foreign_key: "B",',
     )
   })

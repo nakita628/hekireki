@@ -1,7 +1,7 @@
 // What the Prisma schema's text says that DMMF drops: the name `@relation(map: ...)` gives a
 // foreign key, and the datasource's `relationMode`. Read off the schema as written.
 
-const PRISMA_ESCAPES: { readonly [char: string]: string } = {
+const PRISMA_ESCAPES: Readonly<Record<string, string>> = {
   b: '\b',
   f: '\f',
   n: '\n',
@@ -33,8 +33,8 @@ export function prismaBlocks(source: string) {
     const end = lines.indexOf('}', index + 1)
     return [
       {
-        keyword: opening[1],
-        name: opening[2],
+        keyword: opening[1] ?? '',
+        name: opening[2] ?? '',
         lines: lines.slice(index + 1, end === -1 ? lines.length : end),
       },
     ]
@@ -86,7 +86,7 @@ export function relationMode(source: string) {
     .flatMap((block) => block.lines)
     .flatMap((line) => {
       const match = new RegExp(String.raw`^relationMode\s*=\s*(${PRISMA_STRING})$`, 'u').exec(line)
-      return match ? [prismaString(match[1])] : []
+      return match ? [prismaString(match[1] ?? '')] : []
     })
   return setting[0] ?? 'foreignKeys'
 }

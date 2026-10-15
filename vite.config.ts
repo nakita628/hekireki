@@ -36,6 +36,7 @@ export default defineConfig({
       'examples/drizzle-mysql/src/db/schema.ts',
       'examples/drizzle-postgresql/src/db/schema.ts',
       'packages/hekireki/docs/studio-api.md',
+      'packages/hekireki/src/studio/client/api/index.ts',
       'packages/hekireki/src/studio/client/hooks/index.ts',
       'packages/hekireki/src/studio/client/routeTree.gen.ts',
       'packages/hekireki/src/studio/server/handlers/index.ts',

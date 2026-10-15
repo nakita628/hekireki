@@ -2558,7 +2558,9 @@ model Other {
   tinys Tiny[]
 }
 `)
-    expect(joinTableFile(plan, plan.manyToMany[0])).toStrictEqual({
+    const [m2m] = plan.manyToMany
+    if (m2m === undefined) throw new Error('fixture')
+    expect(joinTableFile(plan, m2m)).toStrictEqual({
       fileName: 'OtherToTinyTable.kt',
       code: `package models
 
@@ -2960,7 +2962,9 @@ class UserEntity(
 }
 `,
     })
-    expect(joinTableFile(plan, plan.manyToMany[0])).toStrictEqual({
+    const [m2m] = plan.manyToMany
+    if (m2m === undefined) throw new Error('fixture')
+    expect(joinTableFile(plan, m2m)).toStrictEqual({
       fileName: 'TagToUserTable.kt',
       code: `package models
 
@@ -3289,7 +3293,9 @@ model Tag {
   posts Post[]
 }
 `)
-    expect(joinTableFile(plan, plan.manyToMany[0])).toStrictEqual({
+    const [m2m] = plan.manyToMany
+    if (m2m === undefined) throw new Error('fixture')
+    expect(joinTableFile(plan, m2m)).toStrictEqual({
       fileName: 'PostToTagTable.kt',
       code: `package models
 
@@ -3371,7 +3377,9 @@ model Member {
   @@schema("audit")
 }
 `)
-    expect(joinTableFile(plan, plan.manyToMany[0])).toStrictEqual({
+    const [m2m] = plan.manyToMany
+    if (m2m === undefined) throw new Error('fixture')
+    expect(joinTableFile(plan, m2m)).toStrictEqual({
       fileName: 'FriendsOfTable.kt',
       code: `package models
 

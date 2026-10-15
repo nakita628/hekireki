@@ -12,15 +12,15 @@ import {
   LuTriangleAlert,
 } from 'react-icons/lu'
 
+import type { migrateClient } from '../../api/index.js'
 import { CodeBlock } from '../../components/code-block.js'
-import type { client } from '../../lib/index.js'
 import { useMessages } from './language.js'
 import { STEPS } from './messages.js'
 import { outcomeOf } from './outcome.js'
 import type { StepOutcome } from './outcome.js'
 import { useStepLines } from './text.js'
 
-type Plan = InferResponseType<typeof client.migrate.plan.$post, 200>
+type Plan = InferResponseType<typeof migrateClient.migrate.plan.$post, 200>
 type Step = Plan['steps'][number]
 
 function StepIcon({ step, outcome }: { readonly step: Step; readonly outcome?: StepOutcome }) {

@@ -5,7 +5,7 @@ import { classHighlighter, highlightCode } from '@lezer/highlight'
 const PARSERS = {
   typescript: javascript({ typescript: true }).language.parser,
   sql: StandardSQL.language.parser,
-}
+} as const
 
 // Past this, a result is shown as plain text: a span per token of a few thousand rows of JSON
 // costs more than the colours are worth.

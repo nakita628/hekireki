@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import type { InferResponseType } from 'hono/client'
 import { useState } from 'react'
 
+import type { migrateClient } from '../../api/index.js'
 import {
   getMigrateBackupsQueryKey,
   getMigrateQueryKey,
@@ -14,7 +15,6 @@ import {
   usePostMigrateMigrationsApplied,
 } from '../../hooks/index.js'
 import type { usePostMigratePlan } from '../../hooks/index.js'
-import type { client } from '../../lib/index.js'
 import type { useFailure } from './failure.js'
 import { useMessages } from './language.js'
 import { losesData } from './loss.js'
@@ -47,7 +47,9 @@ export function useMigrationRun(input: {
   // statements does not.
   const [prepared, setPrepared] = useState<{
     readonly sql: string
-    readonly tables: InferResponseType<typeof client.migrate.tables.$get, 200>['tables'] | null
+    readonly tables:
+      | InferResponseType<typeof migrateClient.migrate.tables.$get, 200>['tables']
+      | null
     readonly backup: { readonly name: string; readonly restorable: boolean } | null
   } | null>(null)
   // What the last run did, checked after it: kept until dismissed, whatever the page compares next.

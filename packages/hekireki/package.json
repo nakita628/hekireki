@@ -92,7 +92,8 @@
     "test:e2e": "pnpm build && playwright test",
     "studio:dev": "vp dev -c vite.studio.config.ts",
     "deps": "rm -rf node_modules && pnpm install",
-    "studio:api": "hono-takibi"
+    "studio:api": "hono-takibi",
+    "studio:api:watch": "hono-takibi --watch"
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.1.1",
@@ -156,7 +157,7 @@
     "arktype": "^2.2.5",
     "drizzle-kit": "^0.31.11",
     "drizzle-orm": "^0.45.3",
-    "hono-takibi": "^0.16.0",
+    "hono-takibi": "^0.20.0",
     "json-schema-to-ts": "^3.1.1",
     "kysely": "^0.29.6",
     "monaco-editor": "^0.57.0",

@@ -427,9 +427,12 @@ model Post {
     const user = dmmf.datamodel.models[0]
     const post = dmmf.datamodel.models[1]
     if (!(user && post)) throw new Error('fixture')
-    expect(makeRelationAttribute({ field: user.fields[0], modelName: 'User' })).toBeNull()
-    expect(makeRelationAttribute({ field: user.fields[1], modelName: 'User' })).toBeNull()
-    expect(makeRelationAttribute({ field: post.fields[2], modelName: 'Post' })).toBe(
+    const [userId, userPosts] = user.fields
+    const postAuthor = post.fields[2]
+    if (!(userId && userPosts && postAuthor)) throw new Error('fixture')
+    expect(makeRelationAttribute({ field: userId, modelName: 'User' })).toBeNull()
+    expect(makeRelationAttribute({ field: userPosts, modelName: 'User' })).toBeNull()
+    expect(makeRelationAttribute({ field: postAuthor, modelName: 'Post' })).toBe(
       '@relation(fields: [authorId], references: [id])',
     )
   })

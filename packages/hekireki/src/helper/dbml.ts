@@ -28,7 +28,7 @@ export function makeRefName(ref: {
 }
 
 export function combineKeys(keys: readonly string[]) {
-  return keys.length > 1 ? `(${keys.join(', ')})` : keys[0]
+  return keys.length > 1 ? `(${keys.join(', ')})` : (keys[0] ?? '')
 }
 
 function escapeTriple(str: string) {

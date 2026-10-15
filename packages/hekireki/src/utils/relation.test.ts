@@ -70,7 +70,7 @@ function oneToMany(fkRequired: boolean) {
         }),
       ],
     }),
-  ]
+  ] as const
 }
 
 describe('erKey', () => {

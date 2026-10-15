@@ -1,6 +1,6 @@
 import type { InferResponseType } from 'hono/client'
 
-import type { client } from '../../lib/index.js'
+import type { dbClient } from '../../api/index.js'
 import { defaultParamInput, paramKey } from './params.js'
 
 /** One field per placeholder, labelled by what the analysis learned about it. */
@@ -10,7 +10,7 @@ export function ParamsPanel({
   onChange,
 }: {
   readonly parameters: InferResponseType<
-    typeof client.db.analyze.$post,
+    typeof dbClient.db.analyze.$post,
     200
   >['statements'][number]['parameters']
   readonly inputs: Readonly<Record<string, string>>

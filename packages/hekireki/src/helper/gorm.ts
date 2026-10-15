@@ -119,7 +119,7 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
       belongsTo.push({
         name: field.name,
         targetModel: field.type,
-        foreignKey: foreignKeys[0],
+        foreignKey: foreignKeys[0] ?? '',
         references: field.relationToFields?.[0] ?? 'id',
         foreignKeys,
         referencesList: field.relationToFields ?? ['id'],
@@ -142,7 +142,7 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
     const association = {
       name: field.name,
       targetModel: field.type,
-      foreignKey: foreignKeys[0],
+      foreignKey: foreignKeys[0] ?? '',
       references: fkField.relationToFields?.[0] ?? 'id',
       foreignKeys,
       referencesList: fkField.relationToFields ?? ['id'],
@@ -673,7 +673,7 @@ function alignFields(rows: readonly (readonly string[])[]) {
     const start = rows.slice(0, i).findLastIndex(breaks) + 1
     const end = rows.findIndex((row, j) => j > i && breaks(row))
     const run = rows.slice(start, end === -1 ? rows.length : end)
-    return Math.max(...run.map((row) => row[column].length)) + 1
+    return Math.max(...run.map((row) => row[column]?.length ?? 0)) + 1
   }
   return rows.map(
     (row, i) =>
@@ -1053,7 +1053,8 @@ export function collectImports(models: readonly DMMF.Model[]) {
 export function formatImports(groups: readonly (readonly string[])[]) {
   const imports = groups.filter((group) => group.length > 0)
   if (imports.length === 0) return []
-  if (imports.length === 1 && imports[0].length === 1) return ['', `import ${imports[0][0]}`]
+  const [only] = imports
+  if (imports.length === 1 && only?.length === 1) return ['', `import ${only[0] ?? ''}`]
   return [
     '',
     'import (',

@@ -6,13 +6,14 @@ import { useMemo, useRef, useState } from 'react'
 import { LuCopy, LuWandSparkles } from 'react-icons/lu'
 
 import type { Cardinality, RelationOrigin } from '../../../../types/index.js'
+import { prismaClient } from '../../api/index.js'
 import { SchemaErrorStatus } from '../../components/schema-error-status.js'
 import { schemaProblems } from '../../components/schema-problems.js'
 import type { PlainFileDiagnostic } from '../../components/schema-problems.js'
 import { useCopy } from '../../hooks/copy.js'
 import { getSchemaQueryKey, usePutSchemaFiles } from '../../hooks/index.js'
 import { useSteady } from '../../hooks/steady.js'
-import { client, loadString, saveString, useUiStore } from '../../lib/index.js'
+import { loadString, saveString, useUiStore } from '../../lib/index.js'
 import { SchemaCanvas } from '../schema/schema-view.js'
 import { blockAtLine } from './blocks.js'
 import { CodeEditor } from './code-editor.js'
@@ -186,7 +187,7 @@ export function PrismaView({
   const services: EditorServices = {
     format: async (request) => {
       try {
-        const body = await parseResponse(client.prisma.format.$post({ json: request }))
+        const body = await parseResponse(prismaClient.prisma.format.$post({ json: request }))
         return body.edits
       } catch {
         toast.danger('The schema could not be formatted.')
@@ -195,7 +196,7 @@ export function PrismaView({
     },
     symbols: async (request) => {
       try {
-        const body = await parseResponse(client.prisma.symbols.$post({ json: request }))
+        const body = await parseResponse(prismaClient.prisma.symbols.$post({ json: request }))
         return body.symbols
       } catch {
         return []
@@ -204,7 +205,7 @@ export function PrismaView({
     complete: async ({ triggerCharacter, ...request }) => {
       try {
         const body = await parseResponse(
-          client.prisma.complete.$post({
+          prismaClient.prisma.complete.$post({
             json: triggerCharacter === null ? request : { ...request, triggerCharacter },
           }),
         )
@@ -215,14 +216,14 @@ export function PrismaView({
     },
     hover: async (request) => {
       try {
-        return await parseResponse(client.prisma.hover.$post({ json: request }))
+        return await parseResponse(prismaClient.prisma.hover.$post({ json: request }))
       } catch {
         return { contents: null, range: null }
       }
     },
     definition: async (request) => {
       try {
-        const body = await parseResponse(client.prisma.definition.$post({ json: request }))
+        const body = await parseResponse(prismaClient.prisma.definition.$post({ json: request }))
         return body.locations
       } catch {
         return []
@@ -230,7 +231,7 @@ export function PrismaView({
     },
     references: async (request) => {
       try {
-        const body = await parseResponse(client.prisma.references.$post({ json: request }))
+        const body = await parseResponse(prismaClient.prisma.references.$post({ json: request }))
         return body.locations
       } catch {
         return []
@@ -238,7 +239,7 @@ export function PrismaView({
     },
     rename: async (request) => {
       try {
-        const body = await parseResponse(client.prisma.rename.$post({ json: request }))
+        const body = await parseResponse(prismaClient.prisma.rename.$post({ json: request }))
         return body.changes
       } catch {
         toast.danger('The rename could not be computed.')
@@ -248,7 +249,7 @@ export function PrismaView({
     codeActions: async (request) => {
       try {
         const body = await parseResponse(
-          client.prisma['code-actions'].$post({
+          prismaClient.prisma['code-actions'].$post({
             json: { ...request, diagnostics: [...request.diagnostics] },
           }),
         )
@@ -265,7 +266,7 @@ export function PrismaView({
     },
     lint: async (request) => {
       try {
-        const body = await parseResponse(client.prisma.lint.$post({ json: request }))
+        const body = await parseResponse(prismaClient.prisma.lint.$post({ json: request }))
         return body.diagnostics
       } catch {
         return []

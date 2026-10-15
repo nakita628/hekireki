@@ -128,20 +128,19 @@ function makeRow(input: RowInput) {
       .map((f) => linked[f.name])
       .filter((v): v is Date => v instanceof Date)
       .toSorted((a, b) => b.getTime() - a.getTime())[0]
-    const updated = table.model.fields
-      .filter(
-        (f) =>
-          f.isUpdatedAt === true &&
-          rules[f.name] === undefined &&
-          !(f.name in fitted) &&
-          created !== undefined,
-      )
-      .map((f) => {
-        const end =
-          context.config.dates?.to ?? new Date(created.getTime() + 30 * 24 * 60 * 60 * 1000)
-        const to = end > created ? end : created
-        return [f.name, context.faker.date.between({ from: created, to })] as const
-      })
+    const updated =
+      created === undefined
+        ? []
+        : table.model.fields
+            .filter(
+              (f) => f.isUpdatedAt === true && rules[f.name] === undefined && !(f.name in fitted),
+            )
+            .map((f) => {
+              const end =
+                context.config.dates?.to ?? new Date(created.getTime() + 30 * 24 * 60 * 60 * 1000)
+              const to = end > created ? end : created
+              return [f.name, context.faker.date.between({ from: created, to })] as const
+            })
     const row: SeedRow = { ...linked, ...Object.fromEntries(updated) }
     return row
   })

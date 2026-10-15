@@ -103,7 +103,7 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
       belongsTo.push({
         name: field.name,
         targetModel: field.type,
-        foreignKeyColumn: fieldColumn(model, fromFields[0]),
+        foreignKeyColumn: fieldColumn(model, fromFields[0] ?? ''),
         ownerKeyColumn:
           targetKey.length === 1 && targetKey[0] === ownerKeyColumn ? null : ownerKeyColumn,
       })
@@ -129,7 +129,7 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
     const fkField = end.inverse
     const fromFields = fkField.relationFromFields ?? []
     if (fromFields.length > 1) continue
-    const foreignKeyColumn = fieldColumn(targetModel, fromFields[0])
+    const foreignKeyColumn = fieldColumn(targetModel, fromFields[0] ?? '')
     const referencedColumn = fieldColumn(model, fkField.relationToFields?.[0] ?? 'id')
     const localKeyColumn = referencedColumn === ownKey ? null : referencedColumn
 

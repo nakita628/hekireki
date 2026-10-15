@@ -18,7 +18,7 @@ import {
   ClientStatusSchema,
   ClientTypeDiagnosticsSchema,
 } from '../routes/index.js'
-import * as RuntimeService from '../services/index.js'
+import * as StudioService from '../services/index.js'
 
 /**
  * Whether the project's Prisma Client loads; the first request loads it.
@@ -27,8 +27,8 @@ import * as RuntimeService from '../services/index.js'
  */
 export function readClientStatus() {
   return Effect.gen(function* () {
-    const state = yield* RuntimeService.StudioStateTag
-    const client = yield* RuntimeService.ClientTag
+    const state = StudioService.studio().state
+    const client = StudioService.studio().client
     const status = yield* client.status(state.snapshot().files)
     const result = ClientStatusSchema.safeParse(status)
     if (!result.success) {
@@ -59,7 +59,7 @@ const AnalyzeClientQueryInput = z
  */
 export function analyzeClientQuery(input: z.infer<typeof AnalyzeClientQueryInput>) {
   return Effect.gen(function* () {
-    const state = yield* RuntimeService.StudioStateTag
+    const state = StudioService.studio().state
     const models = state.snapshot().schema?.models ?? []
     const query = ClientDomain.makeClientQuery({
       text: input.query,
@@ -120,9 +120,9 @@ const RunClientQueryInput = z
  */
 export function runClientQuery(input: z.infer<typeof RunClientQueryInput>) {
   return Effect.gen(function* () {
-    const state = yield* RuntimeService.StudioStateTag
-    const client = yield* RuntimeService.ClientTag
-    const db = yield* RuntimeService.DatabaseTag
+    const state = StudioService.studio().state
+    const client = StudioService.studio().client
+    const db = StudioService.studio().db
     const snapshot = state.snapshot()
     const models = (snapshot.schema?.models ?? []).map((model) => model.name)
     const query = ClientDomain.makeClientQuery({ text: input.query, models })
@@ -161,7 +161,7 @@ export function runClientQuery(input: z.infer<typeof RunClientQueryInput>) {
  */
 export function previewClientQuery(input: z.infer<typeof RunClientQueryInput>) {
   return Effect.gen(function* () {
-    const state = yield* RuntimeService.StudioStateTag
+    const state = StudioService.studio().state
     const models = (state.snapshot().schema?.models ?? []).map((model) => model.name)
     const write = ClientDomain.makeClientQuery({ text: input.query, models }).calls.find(
       (call) => call.write,
@@ -211,8 +211,8 @@ const QueryPositionInput = z
  */
 export function completeClientQuery(input: z.infer<typeof QueryPositionInput>) {
   return Effect.gen(function* () {
-    const state = yield* RuntimeService.StudioStateTag
-    const client = yield* RuntimeService.ClientTag
+    const state = StudioService.studio().state
+    const client = StudioService.studio().client
     const items = yield* client.typescript.complete(
       state.snapshot().files,
       input.query,
@@ -254,8 +254,8 @@ const CompletionDetailInput = z
  */
 export function detailClientCompletion(input: z.infer<typeof CompletionDetailInput>) {
   return Effect.gen(function* () {
-    const state = yield* RuntimeService.StudioStateTag
-    const client = yield* RuntimeService.ClientTag
+    const state = StudioService.studio().state
+    const client = StudioService.studio().client
     const detail = yield* client.typescript.detail(
       state.snapshot().files,
       input.query,
@@ -278,8 +278,8 @@ export function detailClientCompletion(input: z.infer<typeof CompletionDetailInp
  */
 export function hoverClientQuery(input: z.infer<typeof QueryPositionInput>) {
   return Effect.gen(function* () {
-    const state = yield* RuntimeService.StudioStateTag
-    const client = yield* RuntimeService.ClientTag
+    const state = StudioService.studio().state
+    const client = StudioService.studio().client
     const hover = yield* client.typescript.hover(state.snapshot().files, input.query, input.offset)
     const result = ClientHoverSchema.safeParse(hover)
     if (!result.success) {
@@ -297,8 +297,8 @@ export function hoverClientQuery(input: z.infer<typeof QueryPositionInput>) {
  */
 export function signatureClientQuery(input: z.infer<typeof QueryPositionInput>) {
   return Effect.gen(function* () {
-    const state = yield* RuntimeService.StudioStateTag
-    const client = yield* RuntimeService.ClientTag
+    const state = StudioService.studio().state
+    const client = StudioService.studio().client
     const help = yield* client.typescript.signature(
       state.snapshot().files,
       input.query,
@@ -333,8 +333,8 @@ const CheckClientQueryInput = z
  */
 export function checkClientQuery(input: z.infer<typeof CheckClientQueryInput>) {
   return Effect.gen(function* () {
-    const state = yield* RuntimeService.StudioStateTag
-    const client = yield* RuntimeService.ClientTag
+    const state = StudioService.studio().state
+    const client = StudioService.studio().client
     const diagnostics = yield* client.typescript.check(state.snapshot().files, input.query)
     const result = ClientTypeDiagnosticsSchema.safeParse({ diagnostics })
     if (!result.success) {

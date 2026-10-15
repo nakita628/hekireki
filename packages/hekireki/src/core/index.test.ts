@@ -326,6 +326,8 @@ describe('generator config', () => {
     const [user, ...rest] = base.dmmf.datamodel.models
     const fields = user?.fields ?? []
     const name = fields.findIndex((f) => f.name === 'name')
+    const named = fields[name]
+    if (named === undefined) throw new Error('fixture')
     return {
       ...base,
       dmmf: {
@@ -336,7 +338,7 @@ describe('generator config', () => {
               ...user,
               documentation: 'A user.\n@ar.name(ja: "利用者", en: "User")',
               fields: fields.with(name, {
-                ...fields[name],
+                ...named,
                 documentation: '@ar.presence(message: { ja: "を入力してください" })',
               }),
             },

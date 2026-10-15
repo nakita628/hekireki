@@ -81,7 +81,7 @@ const ACTUAL = [
     uniques: [['id']],
     foreignKeys: [],
   },
-]
+] as const
 
 function checks(
   fixes: Parameters<typeof makeChecks>[0]['fixes'],
@@ -332,7 +332,7 @@ describe('decisions the check cannot use', () => {
         uniques: [['id']],
         foreignKeys: [],
       },
-    ]
+    ] as const
     const schema = `
 model User {
   id    Int    @id
@@ -350,9 +350,7 @@ model User {
       'User.id: User has no key that tells the rows of one id apart, so the plan cannot keep one of them and drop the rest. Settle these rows by hand before the migration.',
     ])
     // With another key of its own, the same fix goes through, naming the rows by that key.
-    const withEmail = [{ ...onlyKey[0], uniques: [['id'], ['email']] }].flatMap((table) =>
-      table === undefined ? [] : [table],
-    )
+    const withEmail = [{ ...onlyKey[0], uniques: [['id'], ['email']] }]
     const planned = checks(
       { User: { fields: { id: { duplicates: { keep: 'first', others: 'delete' } } } } },
       withEmail,

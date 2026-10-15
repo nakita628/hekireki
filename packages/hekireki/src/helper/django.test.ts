@@ -842,8 +842,7 @@ class Clock(models.Model):
     // Only PostgreSQL's timestamptz keeps a zone: a MySQL TIMESTAMP is held in
     // UTC as a DATETIME is.
     const mysql = [
-      fields[0],
-      fields[1],
+      ...fields.slice(0, 2),
       makeField({ name: 'stamped', type: 'DateTime', nativeType: ['Timestamp', ['3']] }),
     ]
     expect(djangoCode([makeModel('Clock', mysql)], [], [], 'mysql')).toContain(

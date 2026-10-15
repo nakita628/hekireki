@@ -148,7 +148,7 @@ describe('buildSeaOrmAttributes', () => {
 
 describe('seaOrmAttribute', () => {
   it('keeps two or more arguments on one line while they take at most 70 columns', () => {
-    const args = ['column_name = "jsonObj"', `default_value = "${'a'.repeat(27)}"`]
+    const args = ['column_name = "jsonObj"', `default_value = "${'a'.repeat(27)}"`] as const
     expect(args.join(', ').length).toBe(70)
     expect(seaOrmAttribute('    ', args)).toBe(`    #[sea_orm(${args.join(', ')})]`)
     expect(seaOrmAttribute('    ', [args[0], `default_value = "${'a'.repeat(28)}"`])).toBe(

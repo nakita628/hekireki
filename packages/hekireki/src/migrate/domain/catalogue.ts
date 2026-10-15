@@ -127,7 +127,7 @@ export const MYSQL_STATEMENTS = {
     sql: 'SELECT table_name AS `table`, constraint_name AS `name`, check_clause AS `clause` FROM information_schema.check_constraints WHERE constraint_schema = DATABASE() ORDER BY 1, 2',
     params: [],
   },
-}
+} as const
 
 /** Every table of the SQLite file, SQLite's own left out. */
 export const SQLITE_TABLES = {

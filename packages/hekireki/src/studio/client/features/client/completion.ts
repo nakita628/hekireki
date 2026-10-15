@@ -53,7 +53,7 @@ const RELATION_ARGS = [
   'take',
   'skip',
   'distinct',
-]
+] as const
 
 const NUMERIC = new Set(['Int', 'BigInt', 'Float', 'Decimal', 'DateTime'])
 

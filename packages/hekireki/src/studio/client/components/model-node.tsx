@@ -16,7 +16,7 @@ import { BADGE, CONSTRAINT_STYLES, fieldTypeLabel, UNIQUE_BADGE } from './labels
 import { OpenNodeLink } from './open-node-link.js'
 
 // A row is taller than its name when the field is documented; the edges still meet the name.
-const ROW_HANDLE = { top: NODE_ROW_HEIGHT / 2 }
+const ROW_HANDLE = { top: NODE_ROW_HEIGHT / 2 } as const
 
 function FieldIcon({ field }: { readonly field: SchemaField }) {
   if (field.isId) {

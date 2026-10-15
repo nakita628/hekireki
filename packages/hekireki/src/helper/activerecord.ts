@@ -1232,7 +1232,7 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
       belongsTo.push({
         name: field.name,
         targetModel: field.type,
-        foreignKeyColumn: fieldColumn(model, fromFields[0]),
+        foreignKeyColumn: fieldColumn(model, fromFields[0] ?? ''),
         primaryKeyColumn: targetModel ? fieldColumn(targetModel, referencedField) : referencedField,
         foreignKeyColumns: fromFields.map((c) => fieldColumn(model, c)),
         primaryKeyColumns: referencedFields.map((c) =>
@@ -1269,7 +1269,7 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
     const association = {
       name: field.name,
       targetModel: field.type,
-      foreignKeyColumn: fieldColumn(targetModel, fromFields[0]),
+      foreignKeyColumn: fieldColumn(targetModel, fromFields[0] ?? ''),
       foreignKeyColumns: fromFields.map((c) => fieldColumn(targetModel, c)),
       primaryKeyColumns: (fkField.relationToFields ?? ['id']).map((c) => fieldColumn(model, c)),
       referencesPrimaryKey: isSameList(fkField.relationToFields ?? ['id'], primaryKeyFields(model)),

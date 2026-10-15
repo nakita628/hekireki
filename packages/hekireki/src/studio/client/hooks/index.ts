@@ -14,7 +14,14 @@ import type {
 } from '@tanstack/react-query'
 import type { ClientRequestOptions, InferRequestType } from 'hono/client'
 import { parseResponse } from 'hono/client'
-import { client } from '../lib/index.js'
+import {
+  schemaClient,
+  dbClient,
+  clientClient,
+  prismaClient,
+  migrateClient,
+  docsClient,
+} from '../api'
 
 export function getClientKey() {
   return ['client'] as const
@@ -45,11 +52,13 @@ export function getSchemaQueryKey() {
 }
 
 export function getSchemaQueryOptions<
-  TData = Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.$get>>>>>,
+  TData = Awaited<
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof schemaClient.schema.$get>>>>
+  >,
   TError = DefaultError,
 >(options?: ClientRequestOptions) {
   return queryOptions<
-    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.$get>>>>>,
+    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof schemaClient.schema.$get>>>>>,
     TError,
     TData,
     ReturnType<typeof getSchemaQueryKey>
@@ -57,20 +66,24 @@ export function getSchemaQueryOptions<
     queryKey: getSchemaQueryKey(),
     queryFn({ signal }) {
       return parseResponse(
-        client.schema.$get(undefined, { ...options, init: { ...options?.init, signal } }),
+        schemaClient.schema.$get(undefined, { ...options, init: { ...options?.init, signal } }),
       )
     },
   })
 }
 
 export function useSchema<
-  TData = Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.$get>>>>>,
+  TData = Awaited<
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof schemaClient.schema.$get>>>>
+  >,
   TError = DefaultError,
 >(
   options?: {
     query?: Omit<
       UseQueryOptions<
-        Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.$get>>>>>,
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof schemaClient.schema.$get>>>>
+        >,
         TError,
         TData,
         ReturnType<typeof getSchemaQueryKey>
@@ -89,13 +102,17 @@ export function useSchema<
 }
 
 export function useSuspenseSchema<
-  TData = Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.$get>>>>>,
+  TData = Awaited<
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof schemaClient.schema.$get>>>>
+  >,
   TError = DefaultError,
 >(
   options?: {
     query?: Omit<
       UseSuspenseQueryOptions<
-        Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.$get>>>>>,
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof schemaClient.schema.$get>>>>
+        >,
         TError,
         TData,
         ReturnType<typeof getSchemaQueryKey>
@@ -123,7 +140,7 @@ export function getPostSchemaReloadMutationOptions<
 >(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.reload.$post>>>>
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof schemaClient.schema.reload.$post>>>>
     >,
     TError,
     void,
@@ -131,7 +148,7 @@ export function getPostSchemaReloadMutationOptions<
   >({
     mutationKey: getPostSchemaReloadMutationKey(),
     async mutationFn() {
-      return parseResponse(client.schema.reload.$post(undefined, options))
+      return parseResponse(schemaClient.schema.reload.$post(undefined, options))
     },
   })
 }
@@ -141,7 +158,9 @@ export function usePostSchemaReload<TError = DefaultError, TOnMutateResult = unk
     mutation?: Omit<
       UseMutationOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.reload.$post>>>>
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof schemaClient.schema.reload.$post>>>
+          >
         >,
         TError,
         void,
@@ -175,14 +194,16 @@ export function getPutSchemaFilesMutationOptions<TError = DefaultError, TOnMutat
   options?: ClientRequestOptions,
 ) {
   return mutationOptions<
-    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.files.$put>>>>>,
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof schemaClient.schema.files.$put>>>>
+    >,
     TError,
-    InferRequestType<typeof client.schema.files.$put>,
+    InferRequestType<typeof schemaClient.schema.files.$put>,
     TOnMutateResult
   >({
     mutationKey: getPutSchemaFilesMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.schema.files.$put>) {
-      return parseResponse(client.schema.files.$put(args, options))
+    async mutationFn(args: InferRequestType<typeof schemaClient.schema.files.$put>) {
+      return parseResponse(schemaClient.schema.files.$put(args, options))
     },
   })
 }
@@ -192,10 +213,12 @@ export function usePutSchemaFiles<TError = DefaultError, TOnMutateResult = unkno
     mutation?: Omit<
       UseMutationOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.files.$put>>>>
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof schemaClient.schema.files.$put>>>
+          >
         >,
         TError,
-        InferRequestType<typeof client.schema.files.$put>,
+        InferRequestType<typeof schemaClient.schema.files.$put>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -222,13 +245,13 @@ export function getSchemaEventsQueryKey() {
 
 export function getSchemaEventsQueryOptions<
   TData = Awaited<
-    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.events.$get>>>>
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof schemaClient.schema.events.$get>>>>
   >,
   TError = DefaultError,
 >(options?: ClientRequestOptions) {
   return queryOptions<
     Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.events.$get>>>>
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof schemaClient.schema.events.$get>>>>
     >,
     TError,
     TData,
@@ -237,7 +260,10 @@ export function getSchemaEventsQueryOptions<
     queryKey: getSchemaEventsQueryKey(),
     queryFn({ signal }) {
       return parseResponse(
-        client.schema.events.$get(undefined, { ...options, init: { ...options?.init, signal } }),
+        schemaClient.schema.events.$get(undefined, {
+          ...options,
+          init: { ...options?.init, signal },
+        }),
       )
     },
   })
@@ -245,7 +271,7 @@ export function getSchemaEventsQueryOptions<
 
 export function useSchemaEvents<
   TData = Awaited<
-    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.events.$get>>>>
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof schemaClient.schema.events.$get>>>>
   >,
   TError = DefaultError,
 >(
@@ -253,7 +279,9 @@ export function useSchemaEvents<
     query?: Omit<
       UseQueryOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.events.$get>>>>
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof schemaClient.schema.events.$get>>>
+          >
         >,
         TError,
         TData,
@@ -274,7 +302,7 @@ export function useSchemaEvents<
 
 export function useSuspenseSchemaEvents<
   TData = Awaited<
-    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.events.$get>>>>
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof schemaClient.schema.events.$get>>>>
   >,
   TError = DefaultError,
 >(
@@ -282,7 +310,9 @@ export function useSuspenseSchemaEvents<
     query?: Omit<
       UseSuspenseQueryOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.schema.events.$get>>>>
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof schemaClient.schema.events.$get>>>
+          >
         >,
         TError,
         TData,
@@ -306,11 +336,11 @@ export function getDbQueryKey() {
 }
 
 export function getDbQueryOptions<
-  TData = Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.$get>>>>>,
+  TData = Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof dbClient.db.$get>>>>>,
   TError = DefaultError,
 >(options?: ClientRequestOptions) {
   return queryOptions<
-    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.$get>>>>>,
+    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof dbClient.db.$get>>>>>,
     TError,
     TData,
     ReturnType<typeof getDbQueryKey>
@@ -318,20 +348,20 @@ export function getDbQueryOptions<
     queryKey: getDbQueryKey(),
     queryFn({ signal }) {
       return parseResponse(
-        client.db.$get(undefined, { ...options, init: { ...options?.init, signal } }),
+        dbClient.db.$get(undefined, { ...options, init: { ...options?.init, signal } }),
       )
     },
   })
 }
 
 export function useDb<
-  TData = Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.$get>>>>>,
+  TData = Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof dbClient.db.$get>>>>>,
   TError = DefaultError,
 >(
   options?: {
     query?: Omit<
       UseQueryOptions<
-        Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.$get>>>>>,
+        Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof dbClient.db.$get>>>>>,
         TError,
         TData,
         ReturnType<typeof getDbQueryKey>
@@ -350,13 +380,13 @@ export function useDb<
 }
 
 export function useSuspenseDb<
-  TData = Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.$get>>>>>,
+  TData = Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof dbClient.db.$get>>>>>,
   TError = DefaultError,
 >(
   options?: {
     query?: Omit<
       UseSuspenseQueryOptions<
-        Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.$get>>>>>,
+        Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof dbClient.db.$get>>>>>,
         TError,
         TData,
         ReturnType<typeof getDbQueryKey>
@@ -380,12 +410,12 @@ export function getDbCountsQueryKey() {
 
 export function getDbCountsQueryOptions<
   TData = Awaited<
-    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.counts.$get>>>>
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof dbClient.db.counts.$get>>>>
   >,
   TError = DefaultError,
 >(options?: ClientRequestOptions) {
   return queryOptions<
-    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.counts.$get>>>>>,
+    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof dbClient.db.counts.$get>>>>>,
     TError,
     TData,
     ReturnType<typeof getDbCountsQueryKey>
@@ -393,7 +423,7 @@ export function getDbCountsQueryOptions<
     queryKey: getDbCountsQueryKey(),
     queryFn({ signal }) {
       return parseResponse(
-        client.db.counts.$get(undefined, { ...options, init: { ...options?.init, signal } }),
+        dbClient.db.counts.$get(undefined, { ...options, init: { ...options?.init, signal } }),
       )
     },
   })
@@ -401,7 +431,7 @@ export function getDbCountsQueryOptions<
 
 export function useDbCounts<
   TData = Awaited<
-    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.counts.$get>>>>
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof dbClient.db.counts.$get>>>>
   >,
   TError = DefaultError,
 >(
@@ -409,7 +439,7 @@ export function useDbCounts<
     query?: Omit<
       UseQueryOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.counts.$get>>>>
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof dbClient.db.counts.$get>>>>
         >,
         TError,
         TData,
@@ -430,7 +460,7 @@ export function useDbCounts<
 
 export function useSuspenseDbCounts<
   TData = Awaited<
-    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.counts.$get>>>>
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof dbClient.db.counts.$get>>>>
   >,
   TError = DefaultError,
 >(
@@ -438,7 +468,7 @@ export function useSuspenseDbCounts<
     query?: Omit<
       UseSuspenseQueryOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.counts.$get>>>>
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof dbClient.db.counts.$get>>>>
         >,
         TError,
         TData,
@@ -458,7 +488,7 @@ export function useSuspenseDbCounts<
 }
 
 export function getDbRowsModelNameQueryKey(
-  args: InferRequestType<(typeof client.db.rows)[':modelName']['$get']>,
+  args: InferRequestType<(typeof dbClient.db.rows)[':modelName']['$get']>,
 ) {
   return ['db', '/db/rows/:modelName', args] as const
 }
@@ -466,18 +496,18 @@ export function getDbRowsModelNameQueryKey(
 export function getDbRowsModelNameQueryOptions<
   TData = Awaited<
     ReturnType<
-      typeof parseResponse<Awaited<ReturnType<(typeof client.db.rows)[':modelName']['$get']>>>
+      typeof parseResponse<Awaited<ReturnType<(typeof dbClient.db.rows)[':modelName']['$get']>>>
     >
   >,
   TError = DefaultError,
 >(
-  args: InferRequestType<(typeof client.db.rows)[':modelName']['$get']>,
+  args: InferRequestType<(typeof dbClient.db.rows)[':modelName']['$get']>,
   options?: ClientRequestOptions,
 ) {
   return queryOptions<
     Awaited<
       ReturnType<
-        typeof parseResponse<Awaited<ReturnType<(typeof client.db.rows)[':modelName']['$get']>>>
+        typeof parseResponse<Awaited<ReturnType<(typeof dbClient.db.rows)[':modelName']['$get']>>>
       >
     >,
     TError,
@@ -487,7 +517,10 @@ export function getDbRowsModelNameQueryOptions<
     queryKey: getDbRowsModelNameQueryKey(args),
     queryFn({ signal }) {
       return parseResponse(
-        client.db.rows[':modelName'].$get(args, { ...options, init: { ...options?.init, signal } }),
+        dbClient.db.rows[':modelName'].$get(args, {
+          ...options,
+          init: { ...options?.init, signal },
+        }),
       )
     },
   })
@@ -496,18 +529,20 @@ export function getDbRowsModelNameQueryOptions<
 export function useDbRowsModelName<
   TData = Awaited<
     ReturnType<
-      typeof parseResponse<Awaited<ReturnType<(typeof client.db.rows)[':modelName']['$get']>>>
+      typeof parseResponse<Awaited<ReturnType<(typeof dbClient.db.rows)[':modelName']['$get']>>>
     >
   >,
   TError = DefaultError,
 >(
-  args: InferRequestType<(typeof client.db.rows)[':modelName']['$get']>,
+  args: InferRequestType<(typeof dbClient.db.rows)[':modelName']['$get']>,
   options?: {
     query?: Omit<
       UseQueryOptions<
         Awaited<
           ReturnType<
-            typeof parseResponse<Awaited<ReturnType<(typeof client.db.rows)[':modelName']['$get']>>>
+            typeof parseResponse<
+              Awaited<ReturnType<(typeof dbClient.db.rows)[':modelName']['$get']>>
+            >
           >
         >,
         TError,
@@ -530,18 +565,20 @@ export function useDbRowsModelName<
 export function useSuspenseDbRowsModelName<
   TData = Awaited<
     ReturnType<
-      typeof parseResponse<Awaited<ReturnType<(typeof client.db.rows)[':modelName']['$get']>>>
+      typeof parseResponse<Awaited<ReturnType<(typeof dbClient.db.rows)[':modelName']['$get']>>>
     >
   >,
   TError = DefaultError,
 >(
-  args: InferRequestType<(typeof client.db.rows)[':modelName']['$get']>,
+  args: InferRequestType<(typeof dbClient.db.rows)[':modelName']['$get']>,
   options?: {
     query?: Omit<
       UseSuspenseQueryOptions<
         Awaited<
           ReturnType<
-            typeof parseResponse<Awaited<ReturnType<(typeof client.db.rows)[':modelName']['$get']>>>
+            typeof parseResponse<
+              Awaited<ReturnType<(typeof dbClient.db.rows)[':modelName']['$get']>>
+            >
           >
         >,
         TError,
@@ -572,16 +609,16 @@ export function getPostDbRowsModelNameMutationOptions<
   return mutationOptions<
     Awaited<
       ReturnType<
-        typeof parseResponse<Awaited<ReturnType<(typeof client.db.rows)[':modelName']['$post']>>>
+        typeof parseResponse<Awaited<ReturnType<(typeof dbClient.db.rows)[':modelName']['$post']>>>
       >
     >,
     TError,
-    InferRequestType<(typeof client.db.rows)[':modelName']['$post']>,
+    InferRequestType<(typeof dbClient.db.rows)[':modelName']['$post']>,
     TOnMutateResult
   >({
     mutationKey: getPostDbRowsModelNameMutationKey(),
-    async mutationFn(args: InferRequestType<(typeof client.db.rows)[':modelName']['$post']>) {
-      return parseResponse(client.db.rows[':modelName'].$post(args, options))
+    async mutationFn(args: InferRequestType<(typeof dbClient.db.rows)[':modelName']['$post']>) {
+      return parseResponse(dbClient.db.rows[':modelName'].$post(args, options))
     },
   })
 }
@@ -593,12 +630,12 @@ export function usePostDbRowsModelName<TError = DefaultError, TOnMutateResult = 
         Awaited<
           ReturnType<
             typeof parseResponse<
-              Awaited<ReturnType<(typeof client.db.rows)[':modelName']['$post']>>
+              Awaited<ReturnType<(typeof dbClient.db.rows)[':modelName']['$post']>>
             >
           >
         >,
         TError,
-        InferRequestType<(typeof client.db.rows)[':modelName']['$post']>,
+        InferRequestType<(typeof dbClient.db.rows)[':modelName']['$post']>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -632,16 +669,18 @@ export function getDeleteDbRowsModelNameMutationOptions<
   return mutationOptions<
     Awaited<
       ReturnType<
-        typeof parseResponse<Awaited<ReturnType<(typeof client.db.rows)[':modelName']['$delete']>>>
+        typeof parseResponse<
+          Awaited<ReturnType<(typeof dbClient.db.rows)[':modelName']['$delete']>>
+        >
       >
     >,
     TError,
-    InferRequestType<(typeof client.db.rows)[':modelName']['$delete']>,
+    InferRequestType<(typeof dbClient.db.rows)[':modelName']['$delete']>,
     TOnMutateResult
   >({
     mutationKey: getDeleteDbRowsModelNameMutationKey(),
-    async mutationFn(args: InferRequestType<(typeof client.db.rows)[':modelName']['$delete']>) {
-      return parseResponse(client.db.rows[':modelName'].$delete(args, options))
+    async mutationFn(args: InferRequestType<(typeof dbClient.db.rows)[':modelName']['$delete']>) {
+      return parseResponse(dbClient.db.rows[':modelName'].$delete(args, options))
     },
   })
 }
@@ -653,12 +692,12 @@ export function useDeleteDbRowsModelName<TError = DefaultError, TOnMutateResult 
         Awaited<
           ReturnType<
             typeof parseResponse<
-              Awaited<ReturnType<(typeof client.db.rows)[':modelName']['$delete']>>
+              Awaited<ReturnType<(typeof dbClient.db.rows)[':modelName']['$delete']>>
             >
           >
         >,
         TError,
-        InferRequestType<(typeof client.db.rows)[':modelName']['$delete']>,
+        InferRequestType<(typeof dbClient.db.rows)[':modelName']['$delete']>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -692,16 +731,16 @@ export function getPatchDbRowsModelNameMutationOptions<
   return mutationOptions<
     Awaited<
       ReturnType<
-        typeof parseResponse<Awaited<ReturnType<(typeof client.db.rows)[':modelName']['$patch']>>>
+        typeof parseResponse<Awaited<ReturnType<(typeof dbClient.db.rows)[':modelName']['$patch']>>>
       >
     >,
     TError,
-    InferRequestType<(typeof client.db.rows)[':modelName']['$patch']>,
+    InferRequestType<(typeof dbClient.db.rows)[':modelName']['$patch']>,
     TOnMutateResult
   >({
     mutationKey: getPatchDbRowsModelNameMutationKey(),
-    async mutationFn(args: InferRequestType<(typeof client.db.rows)[':modelName']['$patch']>) {
-      return parseResponse(client.db.rows[':modelName'].$patch(args, options))
+    async mutationFn(args: InferRequestType<(typeof dbClient.db.rows)[':modelName']['$patch']>) {
+      return parseResponse(dbClient.db.rows[':modelName'].$patch(args, options))
     },
   })
 }
@@ -713,12 +752,12 @@ export function usePatchDbRowsModelName<TError = DefaultError, TOnMutateResult =
         Awaited<
           ReturnType<
             typeof parseResponse<
-              Awaited<ReturnType<(typeof client.db.rows)[':modelName']['$patch']>>
+              Awaited<ReturnType<(typeof dbClient.db.rows)[':modelName']['$patch']>>
             >
           >
         >,
         TError,
-        InferRequestType<(typeof client.db.rows)[':modelName']['$patch']>,
+        InferRequestType<(typeof dbClient.db.rows)[':modelName']['$patch']>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -749,14 +788,14 @@ export function getPostDbSqlMutationOptions<TError = DefaultError, TOnMutateResu
   options?: ClientRequestOptions,
 ) {
   return mutationOptions<
-    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.sql.$post>>>>>,
+    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof dbClient.db.sql.$post>>>>>,
     TError,
-    InferRequestType<typeof client.db.sql.$post>,
+    InferRequestType<typeof dbClient.db.sql.$post>,
     TOnMutateResult
   >({
     mutationKey: getPostDbSqlMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.db.sql.$post>) {
-      return parseResponse(client.db.sql.$post(args, options))
+    async mutationFn(args: InferRequestType<typeof dbClient.db.sql.$post>) {
+      return parseResponse(dbClient.db.sql.$post(args, options))
     },
   })
 }
@@ -765,9 +804,11 @@ export function usePostDbSql<TError = DefaultError, TOnMutateResult = unknown>(
   options?: {
     mutation?: Omit<
       UseMutationOptions<
-        Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.sql.$post>>>>>,
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof dbClient.db.sql.$post>>>>
+        >,
         TError,
-        InferRequestType<typeof client.db.sql.$post>,
+        InferRequestType<typeof dbClient.db.sql.$post>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -796,14 +837,16 @@ export function getPostDbExplainMutationOptions<TError = DefaultError, TOnMutate
   options?: ClientRequestOptions,
 ) {
   return mutationOptions<
-    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.explain.$post>>>>>,
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof dbClient.db.explain.$post>>>>
+    >,
     TError,
-    InferRequestType<typeof client.db.explain.$post>,
+    InferRequestType<typeof dbClient.db.explain.$post>,
     TOnMutateResult
   >({
     mutationKey: getPostDbExplainMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.db.explain.$post>) {
-      return parseResponse(client.db.explain.$post(args, options))
+    async mutationFn(args: InferRequestType<typeof dbClient.db.explain.$post>) {
+      return parseResponse(dbClient.db.explain.$post(args, options))
     },
   })
 }
@@ -813,10 +856,10 @@ export function usePostDbExplain<TError = DefaultError, TOnMutateResult = unknow
     mutation?: Omit<
       UseMutationOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.explain.$post>>>>
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof dbClient.db.explain.$post>>>>
         >,
         TError,
-        InferRequestType<typeof client.db.explain.$post>,
+        InferRequestType<typeof dbClient.db.explain.$post>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -845,14 +888,16 @@ export function getPostDbAnalyzeMutationOptions<TError = DefaultError, TOnMutate
   options?: ClientRequestOptions,
 ) {
   return mutationOptions<
-    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.analyze.$post>>>>>,
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof dbClient.db.analyze.$post>>>>
+    >,
     TError,
-    InferRequestType<typeof client.db.analyze.$post>,
+    InferRequestType<typeof dbClient.db.analyze.$post>,
     TOnMutateResult
   >({
     mutationKey: getPostDbAnalyzeMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.db.analyze.$post>) {
-      return parseResponse(client.db.analyze.$post(args, options))
+    async mutationFn(args: InferRequestType<typeof dbClient.db.analyze.$post>) {
+      return parseResponse(dbClient.db.analyze.$post(args, options))
     },
   })
 }
@@ -862,10 +907,10 @@ export function usePostDbAnalyze<TError = DefaultError, TOnMutateResult = unknow
     mutation?: Omit<
       UseMutationOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.db.analyze.$post>>>>
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof dbClient.db.analyze.$post>>>>
         >,
         TError,
-        InferRequestType<typeof client.db.analyze.$post>,
+        InferRequestType<typeof dbClient.db.analyze.$post>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -891,11 +936,13 @@ export function getClientQueryKey() {
 }
 
 export function getClientQueryOptions<
-  TData = Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.$get>>>>>,
+  TData = Awaited<
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.$get>>>>
+  >,
   TError = DefaultError,
 >(options?: ClientRequestOptions) {
   return queryOptions<
-    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.$get>>>>>,
+    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.$get>>>>>,
     TError,
     TData,
     ReturnType<typeof getClientQueryKey>
@@ -903,20 +950,24 @@ export function getClientQueryOptions<
     queryKey: getClientQueryKey(),
     queryFn({ signal }) {
       return parseResponse(
-        client.client.$get(undefined, { ...options, init: { ...options?.init, signal } }),
+        clientClient.client.$get(undefined, { ...options, init: { ...options?.init, signal } }),
       )
     },
   })
 }
 
 export function useClient<
-  TData = Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.$get>>>>>,
+  TData = Awaited<
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.$get>>>>
+  >,
   TError = DefaultError,
 >(
   options?: {
     query?: Omit<
       UseQueryOptions<
-        Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.$get>>>>>,
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.$get>>>>
+        >,
         TError,
         TData,
         ReturnType<typeof getClientQueryKey>
@@ -935,13 +986,17 @@ export function useClient<
 }
 
 export function useSuspenseClient<
-  TData = Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.$get>>>>>,
+  TData = Awaited<
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.$get>>>>
+  >,
   TError = DefaultError,
 >(
   options?: {
     query?: Omit<
       UseSuspenseQueryOptions<
-        Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.$get>>>>>,
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.$get>>>>
+        >,
         TError,
         TData,
         ReturnType<typeof getClientQueryKey>
@@ -969,15 +1024,17 @@ export function getPostClientAnalyzeMutationOptions<
 >(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.analyze.$post>>>>
+      ReturnType<
+        typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.analyze.$post>>>
+      >
     >,
     TError,
-    InferRequestType<typeof client.client.analyze.$post>,
+    InferRequestType<typeof clientClient.client.analyze.$post>,
     TOnMutateResult
   >({
     mutationKey: getPostClientAnalyzeMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.client.analyze.$post>) {
-      return parseResponse(client.client.analyze.$post(args, options))
+    async mutationFn(args: InferRequestType<typeof clientClient.client.analyze.$post>) {
+      return parseResponse(clientClient.client.analyze.$post(args, options))
     },
   })
 }
@@ -987,10 +1044,12 @@ export function usePostClientAnalyze<TError = DefaultError, TOnMutateResult = un
     mutation?: Omit<
       UseMutationOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.analyze.$post>>>>
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.analyze.$post>>>
+          >
         >,
         TError,
-        InferRequestType<typeof client.client.analyze.$post>,
+        InferRequestType<typeof clientClient.client.analyze.$post>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -1023,15 +1082,17 @@ export function getPostClientCompleteMutationOptions<
 >(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.complete.$post>>>>
+      ReturnType<
+        typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.complete.$post>>>
+      >
     >,
     TError,
-    InferRequestType<typeof client.client.complete.$post>,
+    InferRequestType<typeof clientClient.client.complete.$post>,
     TOnMutateResult
   >({
     mutationKey: getPostClientCompleteMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.client.complete.$post>) {
-      return parseResponse(client.client.complete.$post(args, options))
+    async mutationFn(args: InferRequestType<typeof clientClient.client.complete.$post>) {
+      return parseResponse(clientClient.client.complete.$post(args, options))
     },
   })
 }
@@ -1041,10 +1102,12 @@ export function usePostClientComplete<TError = DefaultError, TOnMutateResult = u
     mutation?: Omit<
       UseMutationOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.complete.$post>>>>
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.complete.$post>>>
+          >
         >,
         TError,
-        InferRequestType<typeof client.client.complete.$post>,
+        InferRequestType<typeof clientClient.client.complete.$post>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -1078,16 +1141,16 @@ export function getPostClientCompleteDetailMutationOptions<
   return mutationOptions<
     Awaited<
       ReturnType<
-        typeof parseResponse<Awaited<ReturnType<typeof client.client.complete.detail.$post>>>
+        typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.complete.detail.$post>>>
       >
     >,
     TError,
-    InferRequestType<typeof client.client.complete.detail.$post>,
+    InferRequestType<typeof clientClient.client.complete.detail.$post>,
     TOnMutateResult
   >({
     mutationKey: getPostClientCompleteDetailMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.client.complete.detail.$post>) {
-      return parseResponse(client.client.complete.detail.$post(args, options))
+    async mutationFn(args: InferRequestType<typeof clientClient.client.complete.detail.$post>) {
+      return parseResponse(clientClient.client.complete.detail.$post(args, options))
     },
   })
 }
@@ -1098,11 +1161,13 @@ export function usePostClientCompleteDetail<TError = DefaultError, TOnMutateResu
       UseMutationOptions<
         Awaited<
           ReturnType<
-            typeof parseResponse<Awaited<ReturnType<typeof client.client.complete.detail.$post>>>
+            typeof parseResponse<
+              Awaited<ReturnType<typeof clientClient.client.complete.detail.$post>>
+            >
           >
         >,
         TError,
-        InferRequestType<typeof client.client.complete.detail.$post>,
+        InferRequestType<typeof clientClient.client.complete.detail.$post>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -1134,15 +1199,15 @@ export function getPostClientHoverMutationOptions<TError = DefaultError, TOnMuta
 ) {
   return mutationOptions<
     Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.hover.$post>>>>
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.hover.$post>>>>
     >,
     TError,
-    InferRequestType<typeof client.client.hover.$post>,
+    InferRequestType<typeof clientClient.client.hover.$post>,
     TOnMutateResult
   >({
     mutationKey: getPostClientHoverMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.client.hover.$post>) {
-      return parseResponse(client.client.hover.$post(args, options))
+    async mutationFn(args: InferRequestType<typeof clientClient.client.hover.$post>) {
+      return parseResponse(clientClient.client.hover.$post(args, options))
     },
   })
 }
@@ -1152,10 +1217,12 @@ export function usePostClientHover<TError = DefaultError, TOnMutateResult = unkn
     mutation?: Omit<
       UseMutationOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.hover.$post>>>>
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.hover.$post>>>
+          >
         >,
         TError,
-        InferRequestType<typeof client.client.hover.$post>,
+        InferRequestType<typeof clientClient.client.hover.$post>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -1186,15 +1253,17 @@ export function getPostClientSignatureMutationOptions<
 >(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.signature.$post>>>>
+      ReturnType<
+        typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.signature.$post>>>
+      >
     >,
     TError,
-    InferRequestType<typeof client.client.signature.$post>,
+    InferRequestType<typeof clientClient.client.signature.$post>,
     TOnMutateResult
   >({
     mutationKey: getPostClientSignatureMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.client.signature.$post>) {
-      return parseResponse(client.client.signature.$post(args, options))
+    async mutationFn(args: InferRequestType<typeof clientClient.client.signature.$post>) {
+      return parseResponse(clientClient.client.signature.$post(args, options))
     },
   })
 }
@@ -1205,11 +1274,11 @@ export function usePostClientSignature<TError = DefaultError, TOnMutateResult = 
       UseMutationOptions<
         Awaited<
           ReturnType<
-            typeof parseResponse<Awaited<ReturnType<typeof client.client.signature.$post>>>
+            typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.signature.$post>>>
           >
         >,
         TError,
-        InferRequestType<typeof client.client.signature.$post>,
+        InferRequestType<typeof clientClient.client.signature.$post>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -1242,15 +1311,15 @@ export function getPostClientFormatMutationOptions<
 >(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.format.$post>>>>
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.format.$post>>>>
     >,
     TError,
-    InferRequestType<typeof client.client.format.$post>,
+    InferRequestType<typeof clientClient.client.format.$post>,
     TOnMutateResult
   >({
     mutationKey: getPostClientFormatMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.client.format.$post>) {
-      return parseResponse(client.client.format.$post(args, options))
+    async mutationFn(args: InferRequestType<typeof clientClient.client.format.$post>) {
+      return parseResponse(clientClient.client.format.$post(args, options))
     },
   })
 }
@@ -1260,10 +1329,12 @@ export function usePostClientFormat<TError = DefaultError, TOnMutateResult = unk
     mutation?: Omit<
       UseMutationOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.format.$post>>>>
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.format.$post>>>
+          >
         >,
         TError,
-        InferRequestType<typeof client.client.format.$post>,
+        InferRequestType<typeof clientClient.client.format.$post>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -1295,15 +1366,15 @@ export function getPostClientCheckMutationOptions<TError = DefaultError, TOnMuta
 ) {
   return mutationOptions<
     Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.check.$post>>>>
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.check.$post>>>>
     >,
     TError,
-    InferRequestType<typeof client.client.check.$post>,
+    InferRequestType<typeof clientClient.client.check.$post>,
     TOnMutateResult
   >({
     mutationKey: getPostClientCheckMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.client.check.$post>) {
-      return parseResponse(client.client.check.$post(args, options))
+    async mutationFn(args: InferRequestType<typeof clientClient.client.check.$post>) {
+      return parseResponse(clientClient.client.check.$post(args, options))
     },
   })
 }
@@ -1313,10 +1384,12 @@ export function usePostClientCheck<TError = DefaultError, TOnMutateResult = unkn
     mutation?: Omit<
       UseMutationOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.check.$post>>>>
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.check.$post>>>
+          >
         >,
         TError,
-        InferRequestType<typeof client.client.check.$post>,
+        InferRequestType<typeof clientClient.client.check.$post>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -1347,15 +1420,17 @@ export function getPostClientPreviewMutationOptions<
 >(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.preview.$post>>>>
+      ReturnType<
+        typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.preview.$post>>>
+      >
     >,
     TError,
-    InferRequestType<typeof client.client.preview.$post>,
+    InferRequestType<typeof clientClient.client.preview.$post>,
     TOnMutateResult
   >({
     mutationKey: getPostClientPreviewMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.client.preview.$post>) {
-      return parseResponse(client.client.preview.$post(args, options))
+    async mutationFn(args: InferRequestType<typeof clientClient.client.preview.$post>) {
+      return parseResponse(clientClient.client.preview.$post(args, options))
     },
   })
 }
@@ -1365,10 +1440,12 @@ export function usePostClientPreview<TError = DefaultError, TOnMutateResult = un
     mutation?: Omit<
       UseMutationOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.preview.$post>>>>
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.preview.$post>>>
+          >
         >,
         TError,
-        InferRequestType<typeof client.client.preview.$post>,
+        InferRequestType<typeof clientClient.client.preview.$post>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -1399,14 +1476,16 @@ export function getPostClientRunMutationOptions<TError = DefaultError, TOnMutate
   options?: ClientRequestOptions,
 ) {
   return mutationOptions<
-    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.run.$post>>>>>,
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.run.$post>>>>
+    >,
     TError,
-    InferRequestType<typeof client.client.run.$post>,
+    InferRequestType<typeof clientClient.client.run.$post>,
     TOnMutateResult
   >({
     mutationKey: getPostClientRunMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.client.run.$post>) {
-      return parseResponse(client.client.run.$post(args, options))
+    async mutationFn(args: InferRequestType<typeof clientClient.client.run.$post>) {
+      return parseResponse(clientClient.client.run.$post(args, options))
     },
   })
 }
@@ -1416,10 +1495,12 @@ export function usePostClientRun<TError = DefaultError, TOnMutateResult = unknow
     mutation?: Omit<
       UseMutationOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.client.run.$post>>>>
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof clientClient.client.run.$post>>>
+          >
         >,
         TError,
-        InferRequestType<typeof client.client.run.$post>,
+        InferRequestType<typeof clientClient.client.run.$post>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -1450,15 +1531,15 @@ export function getPostPrismaFormatMutationOptions<
 >(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.format.$post>>>>
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof prismaClient.prisma.format.$post>>>>
     >,
     TError,
-    InferRequestType<typeof client.prisma.format.$post>,
+    InferRequestType<typeof prismaClient.prisma.format.$post>,
     TOnMutateResult
   >({
     mutationKey: getPostPrismaFormatMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.prisma.format.$post>) {
-      return parseResponse(client.prisma.format.$post(args, options))
+    async mutationFn(args: InferRequestType<typeof prismaClient.prisma.format.$post>) {
+      return parseResponse(prismaClient.prisma.format.$post(args, options))
     },
   })
 }
@@ -1468,10 +1549,12 @@ export function usePostPrismaFormat<TError = DefaultError, TOnMutateResult = unk
     mutation?: Omit<
       UseMutationOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.format.$post>>>>
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof prismaClient.prisma.format.$post>>>
+          >
         >,
         TError,
-        InferRequestType<typeof client.prisma.format.$post>,
+        InferRequestType<typeof prismaClient.prisma.format.$post>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -1502,14 +1585,16 @@ export function getPostPrismaLintMutationOptions<TError = DefaultError, TOnMutat
   options?: ClientRequestOptions,
 ) {
   return mutationOptions<
-    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.lint.$post>>>>>,
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof prismaClient.prisma.lint.$post>>>>
+    >,
     TError,
-    InferRequestType<typeof client.prisma.lint.$post>,
+    InferRequestType<typeof prismaClient.prisma.lint.$post>,
     TOnMutateResult
   >({
     mutationKey: getPostPrismaLintMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.prisma.lint.$post>) {
-      return parseResponse(client.prisma.lint.$post(args, options))
+    async mutationFn(args: InferRequestType<typeof prismaClient.prisma.lint.$post>) {
+      return parseResponse(prismaClient.prisma.lint.$post(args, options))
     },
   })
 }
@@ -1519,10 +1604,12 @@ export function usePostPrismaLint<TError = DefaultError, TOnMutateResult = unkno
     mutation?: Omit<
       UseMutationOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.lint.$post>>>>
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof prismaClient.prisma.lint.$post>>>
+          >
         >,
         TError,
-        InferRequestType<typeof client.prisma.lint.$post>,
+        InferRequestType<typeof prismaClient.prisma.lint.$post>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -1553,15 +1640,17 @@ export function getPostPrismaSymbolsMutationOptions<
 >(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.symbols.$post>>>>
+      ReturnType<
+        typeof parseResponse<Awaited<ReturnType<typeof prismaClient.prisma.symbols.$post>>>
+      >
     >,
     TError,
-    InferRequestType<typeof client.prisma.symbols.$post>,
+    InferRequestType<typeof prismaClient.prisma.symbols.$post>,
     TOnMutateResult
   >({
     mutationKey: getPostPrismaSymbolsMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.prisma.symbols.$post>) {
-      return parseResponse(client.prisma.symbols.$post(args, options))
+    async mutationFn(args: InferRequestType<typeof prismaClient.prisma.symbols.$post>) {
+      return parseResponse(prismaClient.prisma.symbols.$post(args, options))
     },
   })
 }
@@ -1571,10 +1660,12 @@ export function usePostPrismaSymbols<TError = DefaultError, TOnMutateResult = un
     mutation?: Omit<
       UseMutationOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.symbols.$post>>>>
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof prismaClient.prisma.symbols.$post>>>
+          >
         >,
         TError,
-        InferRequestType<typeof client.prisma.symbols.$post>,
+        InferRequestType<typeof prismaClient.prisma.symbols.$post>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -1607,15 +1698,17 @@ export function getPostPrismaCompleteMutationOptions<
 >(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.complete.$post>>>>
+      ReturnType<
+        typeof parseResponse<Awaited<ReturnType<typeof prismaClient.prisma.complete.$post>>>
+      >
     >,
     TError,
-    InferRequestType<typeof client.prisma.complete.$post>,
+    InferRequestType<typeof prismaClient.prisma.complete.$post>,
     TOnMutateResult
   >({
     mutationKey: getPostPrismaCompleteMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.prisma.complete.$post>) {
-      return parseResponse(client.prisma.complete.$post(args, options))
+    async mutationFn(args: InferRequestType<typeof prismaClient.prisma.complete.$post>) {
+      return parseResponse(prismaClient.prisma.complete.$post(args, options))
     },
   })
 }
@@ -1625,10 +1718,12 @@ export function usePostPrismaComplete<TError = DefaultError, TOnMutateResult = u
     mutation?: Omit<
       UseMutationOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.complete.$post>>>>
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof prismaClient.prisma.complete.$post>>>
+          >
         >,
         TError,
-        InferRequestType<typeof client.prisma.complete.$post>,
+        InferRequestType<typeof prismaClient.prisma.complete.$post>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -1660,15 +1755,15 @@ export function getPostPrismaHoverMutationOptions<TError = DefaultError, TOnMuta
 ) {
   return mutationOptions<
     Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.hover.$post>>>>
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof prismaClient.prisma.hover.$post>>>>
     >,
     TError,
-    InferRequestType<typeof client.prisma.hover.$post>,
+    InferRequestType<typeof prismaClient.prisma.hover.$post>,
     TOnMutateResult
   >({
     mutationKey: getPostPrismaHoverMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.prisma.hover.$post>) {
-      return parseResponse(client.prisma.hover.$post(args, options))
+    async mutationFn(args: InferRequestType<typeof prismaClient.prisma.hover.$post>) {
+      return parseResponse(prismaClient.prisma.hover.$post(args, options))
     },
   })
 }
@@ -1678,10 +1773,12 @@ export function usePostPrismaHover<TError = DefaultError, TOnMutateResult = unkn
     mutation?: Omit<
       UseMutationOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.hover.$post>>>>
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof prismaClient.prisma.hover.$post>>>
+          >
         >,
         TError,
-        InferRequestType<typeof client.prisma.hover.$post>,
+        InferRequestType<typeof prismaClient.prisma.hover.$post>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -1712,15 +1809,17 @@ export function getPostPrismaDefinitionMutationOptions<
 >(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.definition.$post>>>>
+      ReturnType<
+        typeof parseResponse<Awaited<ReturnType<typeof prismaClient.prisma.definition.$post>>>
+      >
     >,
     TError,
-    InferRequestType<typeof client.prisma.definition.$post>,
+    InferRequestType<typeof prismaClient.prisma.definition.$post>,
     TOnMutateResult
   >({
     mutationKey: getPostPrismaDefinitionMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.prisma.definition.$post>) {
-      return parseResponse(client.prisma.definition.$post(args, options))
+    async mutationFn(args: InferRequestType<typeof prismaClient.prisma.definition.$post>) {
+      return parseResponse(prismaClient.prisma.definition.$post(args, options))
     },
   })
 }
@@ -1731,11 +1830,11 @@ export function usePostPrismaDefinition<TError = DefaultError, TOnMutateResult =
       UseMutationOptions<
         Awaited<
           ReturnType<
-            typeof parseResponse<Awaited<ReturnType<typeof client.prisma.definition.$post>>>
+            typeof parseResponse<Awaited<ReturnType<typeof prismaClient.prisma.definition.$post>>>
           >
         >,
         TError,
-        InferRequestType<typeof client.prisma.definition.$post>,
+        InferRequestType<typeof prismaClient.prisma.definition.$post>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -1768,15 +1867,17 @@ export function getPostPrismaReferencesMutationOptions<
 >(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.references.$post>>>>
+      ReturnType<
+        typeof parseResponse<Awaited<ReturnType<typeof prismaClient.prisma.references.$post>>>
+      >
     >,
     TError,
-    InferRequestType<typeof client.prisma.references.$post>,
+    InferRequestType<typeof prismaClient.prisma.references.$post>,
     TOnMutateResult
   >({
     mutationKey: getPostPrismaReferencesMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.prisma.references.$post>) {
-      return parseResponse(client.prisma.references.$post(args, options))
+    async mutationFn(args: InferRequestType<typeof prismaClient.prisma.references.$post>) {
+      return parseResponse(prismaClient.prisma.references.$post(args, options))
     },
   })
 }
@@ -1787,11 +1888,11 @@ export function usePostPrismaReferences<TError = DefaultError, TOnMutateResult =
       UseMutationOptions<
         Awaited<
           ReturnType<
-            typeof parseResponse<Awaited<ReturnType<typeof client.prisma.references.$post>>>
+            typeof parseResponse<Awaited<ReturnType<typeof prismaClient.prisma.references.$post>>>
           >
         >,
         TError,
-        InferRequestType<typeof client.prisma.references.$post>,
+        InferRequestType<typeof prismaClient.prisma.references.$post>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -1824,15 +1925,15 @@ export function getPostPrismaRenameMutationOptions<
 >(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.rename.$post>>>>
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof prismaClient.prisma.rename.$post>>>>
     >,
     TError,
-    InferRequestType<typeof client.prisma.rename.$post>,
+    InferRequestType<typeof prismaClient.prisma.rename.$post>,
     TOnMutateResult
   >({
     mutationKey: getPostPrismaRenameMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.prisma.rename.$post>) {
-      return parseResponse(client.prisma.rename.$post(args, options))
+    async mutationFn(args: InferRequestType<typeof prismaClient.prisma.rename.$post>) {
+      return parseResponse(prismaClient.prisma.rename.$post(args, options))
     },
   })
 }
@@ -1842,10 +1943,12 @@ export function usePostPrismaRename<TError = DefaultError, TOnMutateResult = unk
     mutation?: Omit<
       UseMutationOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.prisma.rename.$post>>>>
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof prismaClient.prisma.rename.$post>>>
+          >
         >,
         TError,
-        InferRequestType<typeof client.prisma.rename.$post>,
+        InferRequestType<typeof prismaClient.prisma.rename.$post>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -1879,16 +1982,20 @@ export function getPostPrismaCodeActionsMutationOptions<
   return mutationOptions<
     Awaited<
       ReturnType<
-        typeof parseResponse<Awaited<ReturnType<(typeof client.prisma)['code-actions']['$post']>>>
+        typeof parseResponse<
+          Awaited<ReturnType<(typeof prismaClient.prisma)['code-actions']['$post']>>
+        >
       >
     >,
     TError,
-    InferRequestType<(typeof client.prisma)['code-actions']['$post']>,
+    InferRequestType<(typeof prismaClient.prisma)['code-actions']['$post']>,
     TOnMutateResult
   >({
     mutationKey: getPostPrismaCodeActionsMutationKey(),
-    async mutationFn(args: InferRequestType<(typeof client.prisma)['code-actions']['$post']>) {
-      return parseResponse(client.prisma['code-actions'].$post(args, options))
+    async mutationFn(
+      args: InferRequestType<(typeof prismaClient.prisma)['code-actions']['$post']>,
+    ) {
+      return parseResponse(prismaClient.prisma['code-actions'].$post(args, options))
     },
   })
 }
@@ -1900,12 +2007,12 @@ export function usePostPrismaCodeActions<TError = DefaultError, TOnMutateResult 
         Awaited<
           ReturnType<
             typeof parseResponse<
-              Awaited<ReturnType<(typeof client.prisma)['code-actions']['$post']>>
+              Awaited<ReturnType<(typeof prismaClient.prisma)['code-actions']['$post']>>
             >
           >
         >,
         TError,
-        InferRequestType<(typeof client.prisma)['code-actions']['$post']>,
+        InferRequestType<(typeof prismaClient.prisma)['code-actions']['$post']>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -1934,12 +2041,14 @@ export function getMigrateQueryKey() {
 
 export function getMigrateQueryOptions<
   TData = Awaited<
-    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.$get>>>>
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.$get>>>>
   >,
   TError = DefaultError,
 >(options?: ClientRequestOptions) {
   return queryOptions<
-    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.$get>>>>>,
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.$get>>>>
+    >,
     TError,
     TData,
     ReturnType<typeof getMigrateQueryKey>
@@ -1947,7 +2056,7 @@ export function getMigrateQueryOptions<
     queryKey: getMigrateQueryKey(),
     queryFn({ signal }) {
       return parseResponse(
-        client.migrate.$get(undefined, { ...options, init: { ...options?.init, signal } }),
+        migrateClient.migrate.$get(undefined, { ...options, init: { ...options?.init, signal } }),
       )
     },
   })
@@ -1955,14 +2064,16 @@ export function getMigrateQueryOptions<
 
 export function useMigrate<
   TData = Awaited<
-    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.$get>>>>
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.$get>>>>
   >,
   TError = DefaultError,
 >(
   options?: {
     query?: Omit<
       UseQueryOptions<
-        Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.$get>>>>>,
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.$get>>>>
+        >,
         TError,
         TData,
         ReturnType<typeof getMigrateQueryKey>
@@ -1982,14 +2093,16 @@ export function useMigrate<
 
 export function useSuspenseMigrate<
   TData = Awaited<
-    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.$get>>>>
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.$get>>>>
   >,
   TError = DefaultError,
 >(
   options?: {
     query?: Omit<
       UseSuspenseQueryOptions<
-        Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.$get>>>>>,
+        Awaited<
+          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.$get>>>>
+        >,
         TError,
         TData,
         ReturnType<typeof getMigrateQueryKey>
@@ -2013,13 +2126,17 @@ export function getMigrateBaselineQueryKey() {
 
 export function getMigrateBaselineQueryOptions<
   TData = Awaited<
-    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.baseline.$get>>>>
+    ReturnType<
+      typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.baseline.$get>>>
+    >
   >,
   TError = DefaultError,
 >(options?: ClientRequestOptions) {
   return queryOptions<
     Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.baseline.$get>>>>
+      ReturnType<
+        typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.baseline.$get>>>
+      >
     >,
     TError,
     TData,
@@ -2028,7 +2145,10 @@ export function getMigrateBaselineQueryOptions<
     queryKey: getMigrateBaselineQueryKey(),
     queryFn({ signal }) {
       return parseResponse(
-        client.migrate.baseline.$get(undefined, { ...options, init: { ...options?.init, signal } }),
+        migrateClient.migrate.baseline.$get(undefined, {
+          ...options,
+          init: { ...options?.init, signal },
+        }),
       )
     },
   })
@@ -2036,7 +2156,9 @@ export function getMigrateBaselineQueryOptions<
 
 export function useMigrateBaseline<
   TData = Awaited<
-    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.baseline.$get>>>>
+    ReturnType<
+      typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.baseline.$get>>>
+    >
   >,
   TError = DefaultError,
 >(
@@ -2044,7 +2166,9 @@ export function useMigrateBaseline<
     query?: Omit<
       UseQueryOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.baseline.$get>>>>
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.baseline.$get>>>
+          >
         >,
         TError,
         TData,
@@ -2065,7 +2189,9 @@ export function useMigrateBaseline<
 
 export function useSuspenseMigrateBaseline<
   TData = Awaited<
-    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.baseline.$get>>>>
+    ReturnType<
+      typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.baseline.$get>>>
+    >
   >,
   TError = DefaultError,
 >(
@@ -2073,7 +2199,9 @@ export function useSuspenseMigrateBaseline<
     query?: Omit<
       UseSuspenseQueryOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.baseline.$get>>>>
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.baseline.$get>>>
+          >
         >,
         TError,
         TData,
@@ -2102,15 +2230,17 @@ export function getPostMigrateBaselineMutationOptions<
 >(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.baseline.$post>>>>
+      ReturnType<
+        typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.baseline.$post>>>
+      >
     >,
     TError,
-    InferRequestType<typeof client.migrate.baseline.$post>,
+    InferRequestType<typeof migrateClient.migrate.baseline.$post>,
     TOnMutateResult
   >({
     mutationKey: getPostMigrateBaselineMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.migrate.baseline.$post>) {
-      return parseResponse(client.migrate.baseline.$post(args, options))
+    async mutationFn(args: InferRequestType<typeof migrateClient.migrate.baseline.$post>) {
+      return parseResponse(migrateClient.migrate.baseline.$post(args, options))
     },
   })
 }
@@ -2121,11 +2251,11 @@ export function usePostMigrateBaseline<TError = DefaultError, TOnMutateResult = 
       UseMutationOptions<
         Awaited<
           ReturnType<
-            typeof parseResponse<Awaited<ReturnType<typeof client.migrate.baseline.$post>>>
+            typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.baseline.$post>>>
           >
         >,
         TError,
-        InferRequestType<typeof client.migrate.baseline.$post>,
+        InferRequestType<typeof migrateClient.migrate.baseline.$post>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -2154,12 +2284,14 @@ export function getMigrateDiffQueryKey() {
 
 export function getMigrateDiffQueryOptions<
   TData = Awaited<
-    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.diff.$get>>>>
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.diff.$get>>>>
   >,
   TError = DefaultError,
 >(options?: ClientRequestOptions) {
   return queryOptions<
-    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.diff.$get>>>>>,
+    Awaited<
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.diff.$get>>>>
+    >,
     TError,
     TData,
     ReturnType<typeof getMigrateDiffQueryKey>
@@ -2167,7 +2299,10 @@ export function getMigrateDiffQueryOptions<
     queryKey: getMigrateDiffQueryKey(),
     queryFn({ signal }) {
       return parseResponse(
-        client.migrate.diff.$get(undefined, { ...options, init: { ...options?.init, signal } }),
+        migrateClient.migrate.diff.$get(undefined, {
+          ...options,
+          init: { ...options?.init, signal },
+        }),
       )
     },
   })
@@ -2175,7 +2310,7 @@ export function getMigrateDiffQueryOptions<
 
 export function useMigrateDiff<
   TData = Awaited<
-    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.diff.$get>>>>
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.diff.$get>>>>
   >,
   TError = DefaultError,
 >(
@@ -2183,7 +2318,9 @@ export function useMigrateDiff<
     query?: Omit<
       UseQueryOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.diff.$get>>>>
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.diff.$get>>>
+          >
         >,
         TError,
         TData,
@@ -2204,7 +2341,7 @@ export function useMigrateDiff<
 
 export function useSuspenseMigrateDiff<
   TData = Awaited<
-    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.diff.$get>>>>
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.diff.$get>>>>
   >,
   TError = DefaultError,
 >(
@@ -2212,7 +2349,9 @@ export function useSuspenseMigrateDiff<
     query?: Omit<
       UseSuspenseQueryOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.diff.$get>>>>
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.diff.$get>>>
+          >
         >,
         TError,
         TData,
@@ -2240,15 +2379,15 @@ export function getPostMigratePlanMutationOptions<TError = DefaultError, TOnMuta
 ) {
   return mutationOptions<
     Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.plan.$post>>>>
+      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.plan.$post>>>>
     >,
     TError,
-    InferRequestType<typeof client.migrate.plan.$post>,
+    InferRequestType<typeof migrateClient.migrate.plan.$post>,
     TOnMutateResult
   >({
     mutationKey: getPostMigratePlanMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.migrate.plan.$post>) {
-      return parseResponse(client.migrate.plan.$post(args, options))
+    async mutationFn(args: InferRequestType<typeof migrateClient.migrate.plan.$post>) {
+      return parseResponse(migrateClient.migrate.plan.$post(args, options))
     },
   })
 }
@@ -2258,10 +2397,12 @@ export function usePostMigratePlan<TError = DefaultError, TOnMutateResult = unkn
     mutation?: Omit<
       UseMutationOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.plan.$post>>>>
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.plan.$post>>>
+          >
         >,
         TError,
-        InferRequestType<typeof client.migrate.plan.$post>,
+        InferRequestType<typeof migrateClient.migrate.plan.$post>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -2292,15 +2433,17 @@ export function getPostMigrateApplyMutationOptions<
 >(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.apply.$post>>>>
+      ReturnType<
+        typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.apply.$post>>>
+      >
     >,
     TError,
-    InferRequestType<typeof client.migrate.apply.$post>,
+    InferRequestType<typeof migrateClient.migrate.apply.$post>,
     TOnMutateResult
   >({
     mutationKey: getPostMigrateApplyMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.migrate.apply.$post>) {
-      return parseResponse(client.migrate.apply.$post(args, options))
+    async mutationFn(args: InferRequestType<typeof migrateClient.migrate.apply.$post>) {
+      return parseResponse(migrateClient.migrate.apply.$post(args, options))
     },
   })
 }
@@ -2310,10 +2453,12 @@ export function usePostMigrateApply<TError = DefaultError, TOnMutateResult = unk
     mutation?: Omit<
       UseMutationOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.apply.$post>>>>
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.apply.$post>>>
+          >
         >,
         TError,
-        InferRequestType<typeof client.migrate.apply.$post>,
+        InferRequestType<typeof migrateClient.migrate.apply.$post>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -2346,15 +2491,17 @@ export function getPostMigrateRehearseMutationOptions<
 >(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.rehearse.$post>>>>
+      ReturnType<
+        typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.rehearse.$post>>>
+      >
     >,
     TError,
-    InferRequestType<typeof client.migrate.rehearse.$post>,
+    InferRequestType<typeof migrateClient.migrate.rehearse.$post>,
     TOnMutateResult
   >({
     mutationKey: getPostMigrateRehearseMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.migrate.rehearse.$post>) {
-      return parseResponse(client.migrate.rehearse.$post(args, options))
+    async mutationFn(args: InferRequestType<typeof migrateClient.migrate.rehearse.$post>) {
+      return parseResponse(migrateClient.migrate.rehearse.$post(args, options))
     },
   })
 }
@@ -2365,11 +2512,11 @@ export function usePostMigrateRehearse<TError = DefaultError, TOnMutateResult = 
       UseMutationOptions<
         Awaited<
           ReturnType<
-            typeof parseResponse<Awaited<ReturnType<typeof client.migrate.rehearse.$post>>>
+            typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.rehearse.$post>>>
           >
         >,
         TError,
-        InferRequestType<typeof client.migrate.rehearse.$post>,
+        InferRequestType<typeof migrateClient.migrate.rehearse.$post>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -2398,13 +2545,15 @@ export function getMigrateTablesQueryKey() {
 
 export function getMigrateTablesQueryOptions<
   TData = Awaited<
-    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.tables.$get>>>>
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.tables.$get>>>>
   >,
   TError = DefaultError,
 >(options?: ClientRequestOptions) {
   return queryOptions<
     Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.tables.$get>>>>
+      ReturnType<
+        typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.tables.$get>>>
+      >
     >,
     TError,
     TData,
@@ -2413,7 +2562,10 @@ export function getMigrateTablesQueryOptions<
     queryKey: getMigrateTablesQueryKey(),
     queryFn({ signal }) {
       return parseResponse(
-        client.migrate.tables.$get(undefined, { ...options, init: { ...options?.init, signal } }),
+        migrateClient.migrate.tables.$get(undefined, {
+          ...options,
+          init: { ...options?.init, signal },
+        }),
       )
     },
   })
@@ -2421,7 +2573,7 @@ export function getMigrateTablesQueryOptions<
 
 export function useMigrateTables<
   TData = Awaited<
-    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.tables.$get>>>>
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.tables.$get>>>>
   >,
   TError = DefaultError,
 >(
@@ -2429,7 +2581,9 @@ export function useMigrateTables<
     query?: Omit<
       UseQueryOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.tables.$get>>>>
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.tables.$get>>>
+          >
         >,
         TError,
         TData,
@@ -2450,7 +2604,7 @@ export function useMigrateTables<
 
 export function useSuspenseMigrateTables<
   TData = Awaited<
-    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.tables.$get>>>>
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.tables.$get>>>>
   >,
   TError = DefaultError,
 >(
@@ -2458,7 +2612,9 @@ export function useSuspenseMigrateTables<
     query?: Omit<
       UseSuspenseQueryOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.tables.$get>>>>
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.tables.$get>>>
+          >
         >,
         TError,
         TData,
@@ -2483,13 +2639,15 @@ export function getMigrateBackupsQueryKey() {
 
 export function getMigrateBackupsQueryOptions<
   TData = Awaited<
-    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.backups.$get>>>>
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.backups.$get>>>>
   >,
   TError = DefaultError,
 >(options?: ClientRequestOptions) {
   return queryOptions<
     Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.backups.$get>>>>
+      ReturnType<
+        typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.backups.$get>>>
+      >
     >,
     TError,
     TData,
@@ -2498,7 +2656,10 @@ export function getMigrateBackupsQueryOptions<
     queryKey: getMigrateBackupsQueryKey(),
     queryFn({ signal }) {
       return parseResponse(
-        client.migrate.backups.$get(undefined, { ...options, init: { ...options?.init, signal } }),
+        migrateClient.migrate.backups.$get(undefined, {
+          ...options,
+          init: { ...options?.init, signal },
+        }),
       )
     },
   })
@@ -2506,7 +2667,7 @@ export function getMigrateBackupsQueryOptions<
 
 export function useMigrateBackups<
   TData = Awaited<
-    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.backups.$get>>>>
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.backups.$get>>>>
   >,
   TError = DefaultError,
 >(
@@ -2514,7 +2675,9 @@ export function useMigrateBackups<
     query?: Omit<
       UseQueryOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.backups.$get>>>>
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.backups.$get>>>
+          >
         >,
         TError,
         TData,
@@ -2535,7 +2698,7 @@ export function useMigrateBackups<
 
 export function useSuspenseMigrateBackups<
   TData = Awaited<
-    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.backups.$get>>>>
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.backups.$get>>>>
   >,
   TError = DefaultError,
 >(
@@ -2543,7 +2706,9 @@ export function useSuspenseMigrateBackups<
     query?: Omit<
       UseSuspenseQueryOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.backups.$get>>>>
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.backups.$get>>>
+          >
         >,
         TError,
         TData,
@@ -2572,7 +2737,9 @@ export function getPostMigrateBackupsMutationOptions<
 >(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.backups.$post>>>>
+      ReturnType<
+        typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.backups.$post>>>
+      >
     >,
     TError,
     void,
@@ -2580,7 +2747,7 @@ export function getPostMigrateBackupsMutationOptions<
   >({
     mutationKey: getPostMigrateBackupsMutationKey(),
     async mutationFn() {
-      return parseResponse(client.migrate.backups.$post(undefined, options))
+      return parseResponse(migrateClient.migrate.backups.$post(undefined, options))
     },
   })
 }
@@ -2590,7 +2757,9 @@ export function usePostMigrateBackups<TError = DefaultError, TOnMutateResult = u
     mutation?: Omit<
       UseMutationOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.backups.$post>>>>
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.backups.$post>>>
+          >
         >,
         TError,
         void,
@@ -2627,16 +2796,18 @@ export function getPostMigrateBackupsRestoreMutationOptions<
   return mutationOptions<
     Awaited<
       ReturnType<
-        typeof parseResponse<Awaited<ReturnType<typeof client.migrate.backups.restore.$post>>>
+        typeof parseResponse<
+          Awaited<ReturnType<typeof migrateClient.migrate.backups.restore.$post>>
+        >
       >
     >,
     TError,
-    InferRequestType<typeof client.migrate.backups.restore.$post>,
+    InferRequestType<typeof migrateClient.migrate.backups.restore.$post>,
     TOnMutateResult
   >({
     mutationKey: getPostMigrateBackupsRestoreMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.migrate.backups.restore.$post>) {
-      return parseResponse(client.migrate.backups.restore.$post(args, options))
+    async mutationFn(args: InferRequestType<typeof migrateClient.migrate.backups.restore.$post>) {
+      return parseResponse(migrateClient.migrate.backups.restore.$post(args, options))
     },
   })
 }
@@ -2647,11 +2818,13 @@ export function usePostMigrateBackupsRestore<TError = DefaultError, TOnMutateRes
       UseMutationOptions<
         Awaited<
           ReturnType<
-            typeof parseResponse<Awaited<ReturnType<typeof client.migrate.backups.restore.$post>>>
+            typeof parseResponse<
+              Awaited<ReturnType<typeof migrateClient.migrate.backups.restore.$post>>
+            >
           >
         >,
         TError,
-        InferRequestType<typeof client.migrate.backups.restore.$post>,
+        InferRequestType<typeof migrateClient.migrate.backups.restore.$post>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -2675,7 +2848,7 @@ export function usePostMigrateBackupsRestore<TError = DefaultError, TOnMutateRes
 }
 
 export function getMigrateMigrationsMigrationNameQueryKey(
-  args: InferRequestType<(typeof client.migrate.migrations)[':migrationName']['$get']>,
+  args: InferRequestType<(typeof migrateClient.migrate.migrations)[':migrationName']['$get']>,
 ) {
   return ['migrate', '/migrate/migrations/:migrationName', args] as const
 }
@@ -2684,20 +2857,20 @@ export function getMigrateMigrationsMigrationNameQueryOptions<
   TData = Awaited<
     ReturnType<
       typeof parseResponse<
-        Awaited<ReturnType<(typeof client.migrate.migrations)[':migrationName']['$get']>>
+        Awaited<ReturnType<(typeof migrateClient.migrate.migrations)[':migrationName']['$get']>>
       >
     >
   >,
   TError = DefaultError,
 >(
-  args: InferRequestType<(typeof client.migrate.migrations)[':migrationName']['$get']>,
+  args: InferRequestType<(typeof migrateClient.migrate.migrations)[':migrationName']['$get']>,
   options?: ClientRequestOptions,
 ) {
   return queryOptions<
     Awaited<
       ReturnType<
         typeof parseResponse<
-          Awaited<ReturnType<(typeof client.migrate.migrations)[':migrationName']['$get']>>
+          Awaited<ReturnType<(typeof migrateClient.migrate.migrations)[':migrationName']['$get']>>
         >
       >
     >,
@@ -2708,7 +2881,7 @@ export function getMigrateMigrationsMigrationNameQueryOptions<
     queryKey: getMigrateMigrationsMigrationNameQueryKey(args),
     queryFn({ signal }) {
       return parseResponse(
-        client.migrate.migrations[':migrationName'].$get(args, {
+        migrateClient.migrate.migrations[':migrationName'].$get(args, {
           ...options,
           init: { ...options?.init, signal },
         }),
@@ -2721,20 +2894,22 @@ export function useMigrateMigrationsMigrationName<
   TData = Awaited<
     ReturnType<
       typeof parseResponse<
-        Awaited<ReturnType<(typeof client.migrate.migrations)[':migrationName']['$get']>>
+        Awaited<ReturnType<(typeof migrateClient.migrate.migrations)[':migrationName']['$get']>>
       >
     >
   >,
   TError = DefaultError,
 >(
-  args: InferRequestType<(typeof client.migrate.migrations)[':migrationName']['$get']>,
+  args: InferRequestType<(typeof migrateClient.migrate.migrations)[':migrationName']['$get']>,
   options?: {
     query?: Omit<
       UseQueryOptions<
         Awaited<
           ReturnType<
             typeof parseResponse<
-              Awaited<ReturnType<(typeof client.migrate.migrations)[':migrationName']['$get']>>
+              Awaited<
+                ReturnType<(typeof migrateClient.migrate.migrations)[':migrationName']['$get']>
+              >
             >
           >
         >,
@@ -2762,20 +2937,22 @@ export function useSuspenseMigrateMigrationsMigrationName<
   TData = Awaited<
     ReturnType<
       typeof parseResponse<
-        Awaited<ReturnType<(typeof client.migrate.migrations)[':migrationName']['$get']>>
+        Awaited<ReturnType<(typeof migrateClient.migrate.migrations)[':migrationName']['$get']>>
       >
     >
   >,
   TError = DefaultError,
 >(
-  args: InferRequestType<(typeof client.migrate.migrations)[':migrationName']['$get']>,
+  args: InferRequestType<(typeof migrateClient.migrate.migrations)[':migrationName']['$get']>,
   options?: {
     query?: Omit<
       UseSuspenseQueryOptions<
         Awaited<
           ReturnType<
             typeof parseResponse<
-              Awaited<ReturnType<(typeof client.migrate.migrations)[':migrationName']['$get']>>
+              Awaited<
+                ReturnType<(typeof migrateClient.migrate.migrations)[':migrationName']['$get']>
+              >
             >
           >
         >,
@@ -2809,15 +2986,17 @@ export function getPostMigrateMigrationsMutationOptions<
 >(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.migrations.$post>>>>
+      ReturnType<
+        typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.migrations.$post>>>
+      >
     >,
     TError,
-    InferRequestType<typeof client.migrate.migrations.$post>,
+    InferRequestType<typeof migrateClient.migrate.migrations.$post>,
     TOnMutateResult
   >({
     mutationKey: getPostMigrateMigrationsMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.migrate.migrations.$post>) {
-      return parseResponse(client.migrate.migrations.$post(args, options))
+    async mutationFn(args: InferRequestType<typeof migrateClient.migrate.migrations.$post>) {
+      return parseResponse(migrateClient.migrate.migrations.$post(args, options))
     },
   })
 }
@@ -2828,11 +3007,11 @@ export function usePostMigrateMigrations<TError = DefaultError, TOnMutateResult 
       UseMutationOptions<
         Awaited<
           ReturnType<
-            typeof parseResponse<Awaited<ReturnType<typeof client.migrate.migrations.$post>>>
+            typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.migrations.$post>>>
           >
         >,
         TError,
-        InferRequestType<typeof client.migrate.migrations.$post>,
+        InferRequestType<typeof migrateClient.migrate.migrations.$post>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -2866,16 +3045,20 @@ export function getPostMigrateMigrationsAppliedMutationOptions<
   return mutationOptions<
     Awaited<
       ReturnType<
-        typeof parseResponse<Awaited<ReturnType<typeof client.migrate.migrations.applied.$post>>>
+        typeof parseResponse<
+          Awaited<ReturnType<typeof migrateClient.migrate.migrations.applied.$post>>
+        >
       >
     >,
     TError,
-    InferRequestType<typeof client.migrate.migrations.applied.$post>,
+    InferRequestType<typeof migrateClient.migrate.migrations.applied.$post>,
     TOnMutateResult
   >({
     mutationKey: getPostMigrateMigrationsAppliedMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.migrate.migrations.applied.$post>) {
-      return parseResponse(client.migrate.migrations.applied.$post(args, options))
+    async mutationFn(
+      args: InferRequestType<typeof migrateClient.migrate.migrations.applied.$post>,
+    ) {
+      return parseResponse(migrateClient.migrate.migrations.applied.$post(args, options))
     },
   })
 }
@@ -2887,12 +3070,12 @@ export function usePostMigrateMigrationsApplied<TError = DefaultError, TOnMutate
         Awaited<
           ReturnType<
             typeof parseResponse<
-              Awaited<ReturnType<typeof client.migrate.migrations.applied.$post>>
+              Awaited<ReturnType<typeof migrateClient.migrate.migrations.applied.$post>>
             >
           >
         >,
         TError,
-        InferRequestType<typeof client.migrate.migrations.applied.$post>,
+        InferRequestType<typeof migrateClient.migrate.migrations.applied.$post>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -2927,19 +3110,19 @@ export function getPostMigrateMigrationsRolledBackMutationOptions<
     Awaited<
       ReturnType<
         typeof parseResponse<
-          Awaited<ReturnType<(typeof client.migrate.migrations)['rolled-back']['$post']>>
+          Awaited<ReturnType<(typeof migrateClient.migrate.migrations)['rolled-back']['$post']>>
         >
       >
     >,
     TError,
-    InferRequestType<(typeof client.migrate.migrations)['rolled-back']['$post']>,
+    InferRequestType<(typeof migrateClient.migrate.migrations)['rolled-back']['$post']>,
     TOnMutateResult
   >({
     mutationKey: getPostMigrateMigrationsRolledBackMutationKey(),
     async mutationFn(
-      args: InferRequestType<(typeof client.migrate.migrations)['rolled-back']['$post']>,
+      args: InferRequestType<(typeof migrateClient.migrate.migrations)['rolled-back']['$post']>,
     ) {
-      return parseResponse(client.migrate.migrations['rolled-back'].$post(args, options))
+      return parseResponse(migrateClient.migrate.migrations['rolled-back'].$post(args, options))
     },
   })
 }
@@ -2954,12 +3137,12 @@ export function usePostMigrateMigrationsRolledBack<
         Awaited<
           ReturnType<
             typeof parseResponse<
-              Awaited<ReturnType<(typeof client.migrate.migrations)['rolled-back']['$post']>>
+              Awaited<ReturnType<(typeof migrateClient.migrate.migrations)['rolled-back']['$post']>>
             >
           >
         >,
         TError,
-        InferRequestType<(typeof client.migrate.migrations)['rolled-back']['$post']>,
+        InferRequestType<(typeof migrateClient.migrate.migrations)['rolled-back']['$post']>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -2989,13 +3172,17 @@ export function getMigrateDecisionsQueryKey() {
 
 export function getMigrateDecisionsQueryOptions<
   TData = Awaited<
-    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.decisions.$get>>>>
+    ReturnType<
+      typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.decisions.$get>>>
+    >
   >,
   TError = DefaultError,
 >(options?: ClientRequestOptions) {
   return queryOptions<
     Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.decisions.$get>>>>
+      ReturnType<
+        typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.decisions.$get>>>
+      >
     >,
     TError,
     TData,
@@ -3004,7 +3191,7 @@ export function getMigrateDecisionsQueryOptions<
     queryKey: getMigrateDecisionsQueryKey(),
     queryFn({ signal }) {
       return parseResponse(
-        client.migrate.decisions.$get(undefined, {
+        migrateClient.migrate.decisions.$get(undefined, {
           ...options,
           init: { ...options?.init, signal },
         }),
@@ -3015,7 +3202,9 @@ export function getMigrateDecisionsQueryOptions<
 
 export function useMigrateDecisions<
   TData = Awaited<
-    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.decisions.$get>>>>
+    ReturnType<
+      typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.decisions.$get>>>
+    >
   >,
   TError = DefaultError,
 >(
@@ -3024,7 +3213,7 @@ export function useMigrateDecisions<
       UseQueryOptions<
         Awaited<
           ReturnType<
-            typeof parseResponse<Awaited<ReturnType<typeof client.migrate.decisions.$get>>>
+            typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.decisions.$get>>>
           >
         >,
         TError,
@@ -3046,7 +3235,9 @@ export function useMigrateDecisions<
 
 export function useSuspenseMigrateDecisions<
   TData = Awaited<
-    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.decisions.$get>>>>
+    ReturnType<
+      typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.decisions.$get>>>
+    >
   >,
   TError = DefaultError,
 >(
@@ -3055,7 +3246,7 @@ export function useSuspenseMigrateDecisions<
       UseSuspenseQueryOptions<
         Awaited<
           ReturnType<
-            typeof parseResponse<Awaited<ReturnType<typeof client.migrate.decisions.$get>>>
+            typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.decisions.$get>>>
           >
         >,
         TError,
@@ -3085,15 +3276,17 @@ export function getPutMigrateDecisionsMutationOptions<
 >(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.decisions.$put>>>>
+      ReturnType<
+        typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.decisions.$put>>>
+      >
     >,
     TError,
-    InferRequestType<typeof client.migrate.decisions.$put>,
+    InferRequestType<typeof migrateClient.migrate.decisions.$put>,
     TOnMutateResult
   >({
     mutationKey: getPutMigrateDecisionsMutationKey(),
-    async mutationFn(args: InferRequestType<typeof client.migrate.decisions.$put>) {
-      return parseResponse(client.migrate.decisions.$put(args, options))
+    async mutationFn(args: InferRequestType<typeof migrateClient.migrate.decisions.$put>) {
+      return parseResponse(migrateClient.migrate.decisions.$put(args, options))
     },
   })
 }
@@ -3104,11 +3297,11 @@ export function usePutMigrateDecisions<TError = DefaultError, TOnMutateResult = 
       UseMutationOptions<
         Awaited<
           ReturnType<
-            typeof parseResponse<Awaited<ReturnType<typeof client.migrate.decisions.$put>>>
+            typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.decisions.$put>>>
           >
         >,
         TError,
-        InferRequestType<typeof client.migrate.decisions.$put>,
+        InferRequestType<typeof migrateClient.migrate.decisions.$put>,
         TOnMutateResult
       >,
       'mutationFn'
@@ -3141,7 +3334,9 @@ export function getPostMigrateDeployMutationOptions<
 >(options?: ClientRequestOptions) {
   return mutationOptions<
     Awaited<
-      ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.deploy.$post>>>>
+      ReturnType<
+        typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.deploy.$post>>>
+      >
     >,
     TError,
     void,
@@ -3149,7 +3344,7 @@ export function getPostMigrateDeployMutationOptions<
   >({
     mutationKey: getPostMigrateDeployMutationKey(),
     async mutationFn() {
-      return parseResponse(client.migrate.deploy.$post(undefined, options))
+      return parseResponse(migrateClient.migrate.deploy.$post(undefined, options))
     },
   })
 }
@@ -3159,7 +3354,9 @@ export function usePostMigrateDeploy<TError = DefaultError, TOnMutateResult = un
     mutation?: Omit<
       UseMutationOptions<
         Awaited<
-          ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.migrate.deploy.$post>>>>
+          ReturnType<
+            typeof parseResponse<Awaited<ReturnType<typeof migrateClient.migrate.deploy.$post>>>
+          >
         >,
         TError,
         void,
@@ -3190,11 +3387,13 @@ export function getDocsQueryKey() {
 }
 
 export function getDocsQueryOptions<
-  TData = Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.docs.$get>>>>>,
+  TData = Awaited<
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof docsClient.docs.$get>>>>
+  >,
   TError = DefaultError,
 >(options?: ClientRequestOptions) {
   return queryOptions<
-    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.docs.$get>>>>>,
+    Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof docsClient.docs.$get>>>>>,
     TError,
     TData,
     ReturnType<typeof getDocsQueryKey>
@@ -3202,20 +3401,22 @@ export function getDocsQueryOptions<
     queryKey: getDocsQueryKey(),
     queryFn({ signal }) {
       return parseResponse(
-        client.docs.$get(undefined, { ...options, init: { ...options?.init, signal } }),
+        docsClient.docs.$get(undefined, { ...options, init: { ...options?.init, signal } }),
       )
     },
   })
 }
 
 export function useDocs<
-  TData = Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.docs.$get>>>>>,
+  TData = Awaited<
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof docsClient.docs.$get>>>>
+  >,
   TError = DefaultError,
 >(
   options?: {
     query?: Omit<
       UseQueryOptions<
-        Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.docs.$get>>>>>,
+        Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof docsClient.docs.$get>>>>>,
         TError,
         TData,
         ReturnType<typeof getDocsQueryKey>
@@ -3234,13 +3435,15 @@ export function useDocs<
 }
 
 export function useSuspenseDocs<
-  TData = Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.docs.$get>>>>>,
+  TData = Awaited<
+    ReturnType<typeof parseResponse<Awaited<ReturnType<typeof docsClient.docs.$get>>>>
+  >,
   TError = DefaultError,
 >(
   options?: {
     query?: Omit<
       UseSuspenseQueryOptions<
-        Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof client.docs.$get>>>>>,
+        Awaited<ReturnType<typeof parseResponse<Awaited<ReturnType<typeof docsClient.docs.$get>>>>>,
         TError,
         TData,
         ReturnType<typeof getDocsQueryKey>

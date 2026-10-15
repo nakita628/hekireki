@@ -156,7 +156,7 @@ describe('helper/effect', () => {
         validation: 'Schema.String',
         isRequired: true,
       },
-    ]
+    ] as const
     it('generates properties', () => {
       expect(makeEffectProperties(fields)).toBe('  id: Schema.String,')
     })

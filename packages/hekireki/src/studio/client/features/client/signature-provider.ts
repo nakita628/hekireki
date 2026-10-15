@@ -1,7 +1,7 @@
 import { parseResponse } from 'hono/client'
 import type { languages } from 'monaco-editor/editor/editor.api.js'
 
-import { client } from '../../lib/index.js'
+import { clientClient } from '../../api/index.js'
 import { registry } from './editor-state.js'
 
 /** The overloads of the call the cursor is inside, and which parameter it is on. */
@@ -14,7 +14,9 @@ export function signatureHelpProvider() {
       const query = model.getValue()
       if (query.trim() === '') return null
       const help = await parseResponse(
-        client.client.signature.$post({ json: { query, offset: model.getOffsetAt(position) } }),
+        clientClient.client.signature.$post({
+          json: { query, offset: model.getOffsetAt(position) },
+        }),
       ).catch(() => null)
       if (help === null || help.signatures.length === 0) return null
       return {

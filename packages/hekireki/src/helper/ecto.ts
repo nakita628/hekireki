@@ -308,7 +308,7 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[], ap
       belongsTo.push({
         name: field.name,
         targetModel: field.type,
-        foreignKey: fromFields[0],
+        foreignKey: fromFields[0] ?? '',
         fkType: getBelongsToFkType(allModels, field.type, field.relationToFields?.[0], appName),
         references: ectoFieldName(targetModel, field.relationToFields?.[0] ?? 'id'),
       })
@@ -343,7 +343,7 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[], ap
     const association = {
       name: field.name,
       targetModel: field.type,
-      foreignKey: fromFields[0],
+      foreignKey: fromFields[0] ?? '',
       references: ectoFieldName(model, fkField.relationToFields?.[0] ?? 'id'),
     }
     if (end.kind === 'hasMany') {

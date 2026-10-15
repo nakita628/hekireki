@@ -2,8 +2,8 @@ import { Button } from '@heroui/react'
 import type { InferResponseType } from 'hono/client'
 import { LuCopy } from 'react-icons/lu'
 
+import type { dbClient } from '../../api/index.js'
 import { copyText } from '../../hooks/copy.js'
-import type { client } from '../../lib/index.js'
 
 function formatType(type: string) {
   // `{ a: number; b: string }` → one property per line, the way an editor shows it on hover.
@@ -21,7 +21,7 @@ function formatType(type: string) {
 export function TypeView({
   statement,
 }: {
-  readonly statement: InferResponseType<typeof client.db.analyze.$post, 200>['statements'][number]
+  readonly statement: InferResponseType<typeof dbClient.db.analyze.$post, 200>['statements'][number]
 }) {
   const row = formatType(statement.rowType)
   const params = formatType(statement.paramsType)

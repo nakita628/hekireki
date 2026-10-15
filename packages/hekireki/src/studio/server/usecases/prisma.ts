@@ -13,8 +13,8 @@ import {
   RenameSchema,
   SymbolsSchema,
 } from '../routes/index.js'
+import * as StudioService from '../services/index.js'
 import * as LanguageService from '../services/index.js'
-import * as RuntimeService from '../services/index.js'
 
 const WorkspaceOfInput = z
   .object({
@@ -33,8 +33,8 @@ const WorkspaceOfInput = z
 
 // The edited file is the one named, else the first loaded file, else a lone in-memory document.
 function workspaceOf(input: z.infer<typeof WorkspaceOfInput>) {
-  return Effect.gen(function* () {
-    const state = yield* RuntimeService.StudioStateTag
+  return Effect.sync(() => {
+    const state = StudioService.studio().state
     const files = state.snapshot().files
     const path = input.path ?? files[0]?.path ?? null
     return { files, path, text: input.text }
@@ -100,7 +100,7 @@ const LintTextInput = z
  */
 export function lintText(input: z.infer<typeof LintTextInput>) {
   return Effect.gen(function* () {
-    const state = yield* RuntimeService.StudioStateTag
+    const state = StudioService.studio().state
     const diagnostics = yield* LanguageService.lintSchema({
       files: state.snapshot().files,
       path: input.path,
@@ -494,6 +494,7 @@ const CodeActionsAtInput = z
             .meta({ description: 'How serious it is.', example: 'error' }),
         }),
       )
+      .readonly()
       .meta({ description: 'The diagnostics the editor shows in the range.' }),
   })
   .readonly()

@@ -317,7 +317,7 @@ export function lintSchema(input: z.infer<typeof LintSchemaInput>) {
   }).pipe(Effect.orElseSucceed(() => []))
 }
 
-const FORMAT_OPTIONS = { tabSize: 2, insertSpaces: true }
+const FORMAT_OPTIONS = { tabSize: 2, insertSpaces: true } as const
 
 function formatEdits(workspace: Workspace, onError: (message: string) => void) {
   return quietly(() =>
@@ -887,6 +887,7 @@ const CodeActionsSchemaInput = z
             .meta({ description: 'How serious it is.', example: 'error' }),
         }),
       )
+      .readonly()
       .meta({ description: 'The diagnostics the editor shows in the range.' }),
   })
   .readonly()
@@ -1002,6 +1003,7 @@ const FormatFixInput = z
             .meta({ description: 'How serious it is.', example: 'error' }),
         }),
       )
+      .readonly()
       .meta({ description: 'The diagnostics the editor shows in the range.' }),
   })
   .readonly()

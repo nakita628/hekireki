@@ -34,15 +34,19 @@ function rustTypeForNative(field: DMMF.Field, provider: string | undefined) {
 
 // For each Rust type a DateTime column can have: how the DateTimeUtc `now` becomes one, and the
 // part of an ISO instant (`2024-01-15T10:30:00.000Z`) its FromStr reads.
-const DATE_TIME_FORMS: {
-  [k: string]: { readonly fromUtc: string; readonly text: readonly [number, number?] }
-} = {
+const DATE_TIME_FORMS = {
   DateTime: { fromUtc: '.naive_utc()', text: [0, -1] },
   DateTimeUtc: { fromUtc: '', text: [0] },
   PrismaDateTime: { fromUtc: '.into()', text: [0] },
   DateTimeWithTimeZone: { fromUtc: '.fixed_offset()', text: [0] },
   Date: { fromUtc: '.date_naive()', text: [0, 10] },
   Time: { fromUtc: '.time()', text: [11, -1] },
+} as const satisfies Readonly<
+  Record<string, { readonly fromUtc: string; readonly text: readonly [number, number?] }>
+>
+
+function isDateTimeForm(type: string): type is keyof typeof DATE_TIME_FORMS {
+  return Object.hasOwn(DATE_TIME_FORMS, type)
 }
 
 export function prismaTypeToRustType(type: string, isRequired: boolean) {
@@ -363,7 +367,7 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
       belongsTo.push({
         name: field.name,
         targetModel: field.type,
-        foreignKey: foreignKeys[0],
+        foreignKey: foreignKeys[0] ?? '',
         references: field.relationToFields?.[0] ?? 'id',
         foreignKeys,
         referencesList: field.relationToFields ?? ['id'],
@@ -384,7 +388,7 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
     const association = {
       name: field.name,
       targetModel: field.type,
-      foreignKey: (end.inverse.relationFromFields ?? [])[0],
+      foreignKey: end.inverse.relationFromFields?.[0] ?? '',
       references: end.inverse.relationToFields?.[0] ?? 'id',
       isList: end.kind === 'hasMany',
     }
@@ -700,7 +704,7 @@ export function generateEntityFile(
     if (field.type !== 'DateTime' || field.isList) continue
     // `now` is a DateTimeUtc at Prisma's millisecond precision; a literal is parsed as the
     // field's own type, which Set leaves the compiler to infer.
-    const form = DATE_TIME_FORMS[elemType] ?? DATE_TIME_FORMS.DateTime
+    const form = isDateTimeForm(elemType) ? DATE_TIME_FORMS[elemType] : DATE_TIME_FORMS.DateTime
     const value =
       field.isUpdatedAt || (isFunctionDefault(field.default) && field.default.name === 'now')
         ? `now${form.fromUtc}`
