@@ -216,7 +216,7 @@ export function sqliteStatements(table: string) {
 }
 
 /** PostgreSQL's `confdeltype` letters, as the other databases spell the rule. */
-const POSTGRES_DELETE_RULES: Readonly<Partial<Record<string, string>>> = {
+const POSTGRES_DELETE_RULES: Readonly<Record<string, string>> = {
   a: 'no action',
   r: 'restrict',
   c: 'cascade',

@@ -248,8 +248,8 @@ function foreignKeys(
         // EF Core matches a foreign key to a key by position, so the pairs follow the order of the
         // key they reference rather than the order `references` lists them in.
         const pairs = (referenced ? fieldNames(referenced) : to).flatMap((target) => {
-          const position = to.indexOf(target)
-          return position === -1 ? [] : [{ from: from[position], to: target }]
+          const source = from[to.indexOf(target)]
+          return source === undefined ? [] : [{ from: source, to: target }]
         })
         const isKey =
           referenced !== undefined && referenced === entityKey(principal, principalIndexes)
@@ -935,7 +935,7 @@ function renderFile(
 ) {
   const matches = [...body.matchAll(/\0([TE])\|([^\0]+)\0/gu)]
   const resolved = matches.map((match) => {
-    const [, kind, fullName] = match
+    const [, kind, fullName = ''] = match
     const dot = fullName.lastIndexOf('.')
     const simple = fullName.slice(dot + 1)
     const namespace = fullName.slice(0, dot)
@@ -953,7 +953,7 @@ function renderFile(
   })
   const assembled = matches.reduce(
     (acc, match, index) => ({
-      text: `${acc.text}${body.slice(acc.cursor, match.index)}${resolved[index].text}`,
+      text: `${acc.text}${body.slice(acc.cursor, match.index)}${resolved[index]?.text ?? ''}`,
       cursor: match.index + match[0].length,
     }),
     { text: '', cursor: 0 },
@@ -1114,7 +1114,7 @@ function memberType(plan: EfCorePlan, field: DMMF.Field) {
     return target ? generatedRef(plan.names, className(plan.names, target)) : null
   }
   const match = /^\0T\|([^\0]+)\0$/u.exec(fieldPlan(plan, field).clr.clr)
-  return match ? match[1] : null
+  return match?.[1] ?? null
 }
 
 function entityProperty(plan: EfCorePlan, model: DMMF.Model, field: DMMF.Field) {
@@ -1593,14 +1593,14 @@ function dateConversion(key: string) {
         typeRef(CS.DateTime),
         `v => ${dateTime}.SpecifyKind(${localToUtc('v')}, ${kind}.Unspecified)`,
         `v => ${dateTime}.SpecifyKind(v, ${kind}.Utc)`,
-      ]
+      ] as const
     case 'UtcConverter':
       return [
         typeRef(CS.DateTime),
         typeRef(CS.DateTime),
         `v => ${dateTime}.SpecifyKind(${localToUtc('v')}, ${kind}.Utc)`,
         'v => v',
-      ]
+      ] as const
     case 'UtcTextConverter': {
       const culture = `${exprRef(CS.CultureInfo)}.InvariantCulture`
       const styles = exprRef(CS.DateTimeStyles)
@@ -1609,7 +1609,7 @@ function dateConversion(key: string) {
         'string',
         `v => (${localToUtc('v')}).ToString(${csharpString("yyyy-MM-dd'T'HH:mm:ss.fff'+00:00'")}, ${culture})`,
         `v => ${dateTime}.Parse(v, ${culture}, ${styles}.AdjustToUniversal | ${styles}.AssumeUniversal)`,
-      ]
+      ] as const
     }
     case 'UtcClockListConverter':
       return [
@@ -1617,28 +1617,28 @@ function dateConversion(key: string) {
         dateTimeList,
         `v => v.Select(d => ${dateTime}.SpecifyKind(${localToUtc('d')}, ${kind}.Unspecified)).ToList()`,
         `v => v.Select(d => ${dateTime}.SpecifyKind(d, ${kind}.Utc)).ToList()`,
-      ]
+      ] as const
     case 'UtcListConverter':
       return [
         dateTimeList,
         dateTimeList,
         `v => v.Select(d => ${dateTime}.SpecifyKind(${localToUtc('d')}, ${kind}.Utc)).ToList()`,
         'v => v',
-      ]
+      ] as const
     case 'DateOnlyDateTimeConverter':
       return [
         typeRef(CS.DateOnly),
         typeRef(CS.DateTime),
         `v => v.ToDateTime(${exprRef(CS.TimeOnly)}.MinValue)`,
         `v => ${exprRef(CS.DateOnly)}.FromDateTime(v)`,
-      ]
+      ] as const
     default:
       return [
         typeRef(CS.TimeOnly),
         typeRef(CS.TimeSpan),
         'v => v.ToTimeSpan()',
         `v => ${exprRef(CS.TimeOnly)}.FromTimeSpan(v)`,
-      ]
+      ] as const
   }
 }
 

@@ -31,7 +31,7 @@ export function makeAjvSchemas(
   }[],
   objectType?: 'strict' | 'loose',
 ) {
-  const modelName = modelFields[0].modelName
+  const modelName = modelFields[0]?.modelName ?? ''
   const properties = modelFields
     .map(
       (field) => `    ${field.fieldName}: ${field.validation ?? "{ type: 'unknown' as const }"},`,

@@ -276,7 +276,7 @@ export function enumSchemas(source: string) {
       .flatMap((block) =>
         block.lines.flatMap((line) => {
           const match = attribute.exec(line)
-          return match ? [{ name: block.name, schema: prismaString(match[1]) }] : []
+          return match ? [{ name: block.name, schema: prismaString(match[1] ?? '') }] : []
         }),
       )
       .map(({ name, schema }) => [name, schema]),
@@ -354,11 +354,11 @@ function indexCondition(tokens: readonly string[]): IndexCondition | null {
   }
   if (tokens[0] !== '{') return null
   const terms = commaSeparated(enclosed(tokens, 0)).map((entry) => {
-    const [field, , ...value] = entry
+    const [field = '', , ...value] = entry
     const negated = value[0] === '{' ? attributeArguments(enclosed(value, 0)).get('not') : undefined
     return negated === undefined
-      ? { field, not: false, value: value[0] }
-      : { field, not: true, value: negated[0] }
+      ? { field, not: false, value: value[0] ?? '' }
+      : { field, not: true, value: negated[0] ?? '' }
   })
   return { kind: 'fields', terms }
 }
@@ -558,8 +558,8 @@ function modelKey(model: DMMF.Model, indexes: readonly IndexInfo[]): Key {
   const index = entityKey(model, indexes)
   if (!index) return { kind: 'none' }
   const fields = fieldNames(index).flatMap((name) => model.fields.filter((f) => f.name === name))
-  if (fields.length !== index.fields.length || fields.length === 0) return { kind: 'none' }
   const [first] = fields
+  if (fields.length !== index.fields.length || first === undefined) return { kind: 'none' }
   return fields.length === 1
     ? { kind: 'single', field: first, index }
     : { kind: 'composite', fields, index }
@@ -844,7 +844,8 @@ function navigationKind(schema: SchemaInfo, fk: ForeignKey) {
   // composite key references an EntityID: the DAO compares the two as different types.
   if (
     fk.kind === 'column' &&
-    (isKeyField(schema, fk.dependent, fk.from[0]) || isKeyField(schema, fk.principal, fk.to[0]))
+    (isKeyField(schema, fk.dependent, fk.from[0] ?? '') ||
+      isKeyField(schema, fk.principal, fk.to[0] ?? ''))
   ) {
     return null
   }
@@ -1197,13 +1198,15 @@ function temporalMapping(
   precision: string | null,
   readAs: string,
 ) {
-  const [factory, columnType] = {
-    timestamp: ['pgTimestamp', 'PgTimestampColumnType'],
-    timestamptz: ['pgTimestamptz', 'PgTimestamptzColumnType'],
-    date: ['pgDate', 'PgDateColumnType'],
-    time: ['pgTime', 'PgTimeColumnType'],
-    timetz: ['pgTimetz', 'PgTimetzColumnType'],
-  }[kind]
+  const [factory, columnType] = (
+    {
+      timestamp: ['pgTimestamp', 'PgTimestampColumnType'],
+      timestamptz: ['pgTimestamptz', 'PgTimestamptzColumnType'],
+      date: ['pgDate', 'PgDateColumnType'],
+      time: ['pgTime', 'PgTimeColumnType'],
+      timetz: ['pgTimetz', 'PgTimetzColumnType'],
+    } as const
+  )[kind]
   const args = precision === null ? [] : [precision]
   return mapping(
     typeRef(kotlin),
@@ -1697,7 +1700,7 @@ function inlineUniques(plan: ExposedPlan, model: DMMF.Model) {
       index.fields.length === 1 &&
       index.where === undefined &&
       index.fields.every((f) => f.sortOrder !== 'desc' && f.operatorClass === undefined) &&
-      !isKeyField(plan, model, index.fields[0].name),
+      !isKeyField(plan, model, index.fields[0]?.name ?? ''),
   )
 }
 
@@ -1749,7 +1752,7 @@ function columnCalls(plan: ExposedPlan, model: DMMF.Model, field: DMMF.Field) {
           {
             name: 'references',
             args: [
-              `${principal}.${kotlinName(columnProperty(plan, fk.principal, fk.to[0]))}`,
+              `${principal}.${kotlinName(columnProperty(plan, fk.principal, fk.to[0] ?? ''))}`,
               ...foreignKeyArgs(fk, 'fkName'),
             ],
           },
@@ -1779,7 +1782,7 @@ function columnCalls(plan: ExposedPlan, model: DMMF.Model, field: DMMF.Field) {
             : def.kind === 'generated' || smallserial
               ? [{ name: 'databaseGenerated', args: [] }]
               : [{ name: 'autoIncrement', args: [] }]
-  const unique = inlineUniques(plan, model).find((index) => index.fields[0].name === field.name)
+  const unique = inlineUniques(plan, model).find((index) => index.fields[0]?.name === field.name)
   return [
     head,
     ...(def?.kind === 'autoincrement' ? defaults : []),
@@ -1885,6 +1888,7 @@ function chainLines(indent: string, calls: readonly Call[]) {
   const [head, ...rest] = calls
   const single = `${indent}${renderChain(calls)}`
   if (rest.length < CHAIN_OPERATOR_LIMIT && fits(single)) return [single]
+  if (head === undefined) return [single]
   if (rest.length === 0) return callLines(indent, indent, head, '')
   const first = `${indent}${render(head)}`
   if (!fits(first)) {
@@ -1896,7 +1900,11 @@ function chainLines(indent: string, calls: readonly Call[]) {
       : alignedLines(indent, headLines, indent, rest)
   }
   const [last] = rest
-  if (rest.length === 1 && (last.args.length > 0 || last.lambda !== undefined)) {
+  if (
+    last !== undefined &&
+    rest.length === 1 &&
+    (last.args.length > 0 || last.lambda !== undefined)
+  ) {
     const tail = callLines(`${first}.`, indent, last, '')
     if (tail.every(fits)) return tail
   }
@@ -2039,7 +2047,7 @@ function placeholders(blocks: readonly Block[]) {
     b
       .lines((line) => line)
       .flatMap((line) =>
-        [...line.matchAll(PLACEHOLDER)].map(([, kind, fullName]) => ({
+        [...line.matchAll(PLACEHOLDER)].map(([, kind = '', fullName = '']) => ({
           kind,
           fullName,
           scope: b.scope,
@@ -2282,7 +2290,7 @@ function foreignKeyCalls(plan: ExposedPlan, model: DMMF.Model) {
       name: 'foreignKey',
       args: [
         ...fk.from.map((from, position) => {
-          const target = kotlinName(columnProperty(plan, fk.principal, fk.to[position]))
+          const target = kotlinName(columnProperty(plan, fk.principal, fk.to[position] ?? ''))
           return `${kotlinName(columnProperty(plan, model, from))} to ${tableRef(plan, fk.principal)}.${target}`
         }),
         ...foreignKeyArgs(fk, 'name'),
@@ -2401,7 +2409,7 @@ function relationLines(plan: ExposedPlan, model: DMMF.Model, field: DMMF.Field) 
     const target =
       navigationKind(plan, outgoing) === 'table'
         ? tableRef(plan, model)
-        : columnRef(plan, model, outgoing.from[0])
+        : columnRef(plan, model, outgoing.from[0] ?? '')
     const isKey = outgoing.from.some((from) => isKeyField(plan, model, from))
     return delegate(
       '    ',
@@ -2416,7 +2424,7 @@ function relationLines(plan: ExposedPlan, model: DMMF.Model, field: DMMF.Field) 
     const target =
       navigationKind(plan, incoming) === 'table'
         ? tableRef(plan, incoming.dependent)
-        : columnRef(plan, incoming.dependent, incoming.from[0])
+        : columnRef(plan, incoming.dependent, incoming.from[0] ?? '')
     const operator = field.isList
       ? incoming.isRequired
         ? 'referrersOn'
@@ -3284,7 +3292,7 @@ export function supportFile(plan: ExposedPlan) {
         .lines((text) => text)
         .flatMap((line) =>
           [...line.matchAll(PLACEHOLDER)]
-            .map((match) => match[2])
+            .map((match) => match[2] ?? '')
             .flatMap((fullName) => (fullName.startsWith('.') ? [fullName.slice(1)] : [])),
         ),
     ),

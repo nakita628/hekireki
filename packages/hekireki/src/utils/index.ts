@@ -1,7 +1,7 @@
 export function parseRelation(line: string) {
   const match = line.trim().match(/^@relation\s+(\w+)\.(\w+)\s+(\w+)\.(\w+)\s+(\w+-to-\w+)$/u)
   if (!match) return null
-  const [, fromModel, fromField, toModel, toField, type] = match
+  const [, fromModel = '', fromField = '', toModel = '', toField = '', type = ''] = match
   return { fromModel, fromField, toModel, toField, type }
 }
 
@@ -156,7 +156,7 @@ export function schemaFromFields(
   ) => string,
   objectType?: 'strict' | 'loose',
 ) {
-  const modelName = modelFields[0].modelName
+  const modelName = modelFields[0]?.modelName ?? ''
   const fields = propertiesGenerator(modelFields)
   return schemaBuilder(modelName, fields, objectType)
 }

@@ -347,7 +347,7 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
       belongsTo.push({
         name: field.name,
         targetModel: field.type,
-        foreignKey: foreignKeys[0],
+        foreignKey: foreignKeys[0] ?? '',
         references: field.relationToFields?.[0] ?? 'id',
         foreignKeys,
         referencesList: field.relationToFields ?? ['id'],
@@ -368,7 +368,7 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
       continue
     }
     const fkField = end.inverse
-    const foreignKey = (fkField.relationFromFields ?? [])[0]
+    const foreignKey = fkField.relationFromFields?.[0] ?? ''
     const onDelete = fkField.relationOnDelete ?? (fkField.isRequired ? 'Restrict' : 'SetNull')
     if (end.kind === 'hasMany') {
       hasMany.push({

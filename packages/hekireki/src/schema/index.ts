@@ -181,7 +181,7 @@ export function parseSchema(files: readonly SchemaFile[]) {
   })
 }
 
-const DIALECTS: Readonly<Partial<Record<string, Dialect>>> = {
+const DIALECTS: Readonly<Record<string, Dialect>> = {
   postgresql: 'postgresql',
   postgres: 'postgresql',
   cockroachdb: 'postgresql',

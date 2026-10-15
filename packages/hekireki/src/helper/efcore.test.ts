@@ -2734,7 +2734,7 @@ public partial class AppDbContext : DbContext
           field({ name: 'shape', type: 'geometry', kind: 'unsupported' }),
         ],
       }),
-    ]
+    ] as const
     const plan = planEfCore({ models, enums: [] }, options)
     expect(entityFile(plan, models[0]).code).toBe(`#nullable enable
 
@@ -2820,7 +2820,7 @@ public partial class AppDbContext : DbContext
           }),
         ],
       }),
-    ]
+    ] as const
     const plan = planEfCore({ models, enums: [] }, options)
     expect(plan.foreignKeys).toStrictEqual([])
     expect(entityFile(plan, models[0]).code).toBe(`#nullable enable
@@ -2862,7 +2862,7 @@ public partial class Post
           field({ name: 'code', type: 'Int', default: { name: 'uuid', args: [] } }),
         ],
       }),
-    ]
+    ] as const
     const plan = planEfCore({ models, enums }, options)
     expect(entityFile(plan, models[0]).code).toBe(`#nullable enable
 
@@ -3039,7 +3039,7 @@ file sealed class UtcClockConverter : ValueConverter<DateTime, DateTime>
           }),
         ],
       }),
-    ]
+    ] as const
     const plan = planEfCore({ models, enums: [] }, options)
     expect(entityFile(plan, models[0]).code).toBe(`#nullable enable
 

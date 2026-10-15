@@ -684,7 +684,7 @@ const MakeAnalysisSchemaInput = z
 
 /** The column type Prisma migrates a scalar to when no `@db.*` attribute says otherwise. */
 const PRISMA_COLUMN_TYPES: Readonly<
-  Record<z.infer<typeof AnalysisDialect>, Readonly<Partial<Record<string, string>>>>
+  Record<z.infer<typeof AnalysisDialect>, Readonly<Record<string, string>>>
 > = {
   postgresql: {
     Int: 'int4',

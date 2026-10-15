@@ -118,10 +118,10 @@ export function validationSchemas(
   }
 
   const schemaResults = Object.values(groupByModel(isFields(modelFields))).map((fields) => {
-    const objectType = extractObjectType(fields[0].documentation, config.annotationPrefix)
+    const objectType = extractObjectType(fields[0]?.documentation, config.annotationPrefix)
     return {
       schema: config.schemas(fields, objectType),
-      inferType: type ? config.inferType(fields[0].modelName) : '',
+      inferType: type ? config.inferType(fields[0]?.modelName ?? '') : '',
     }
   })
 

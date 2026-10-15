@@ -156,7 +156,7 @@ describe('helper/arktype', () => {
         validation: '"string.uuid"',
         isRequired: true,
       },
-    ]
+    ] as const
     it('generates properties', () => {
       expect(makeArktypeProperties(fields)).toBe('  id: "string.uuid",')
     })

@@ -25,9 +25,7 @@ function integerRange(name: keyof typeof RANGES, unsigned: boolean) {
 }
 
 /** `@db.TinyInt` and the like on MySQL, by the database type each names. */
-const MYSQL_INTEGER_NATIVES: Readonly<
-  Partial<Record<string, readonly [keyof typeof RANGES, boolean]>>
-> = {
+const MYSQL_INTEGER_NATIVES: Readonly<Record<string, readonly [keyof typeof RANGES, boolean]>> = {
   TinyInt: ['tinyint', false],
   UnsignedTinyInt: ['tinyint', true],
   SmallInt: ['smallint', false],
@@ -63,7 +61,7 @@ function targetRange(
   return integerRange('int', false)
 }
 
-const POSTGRES_INTEGERS: Readonly<Partial<Record<string, keyof typeof RANGES>>> = {
+const POSTGRES_INTEGERS: Readonly<Record<string, keyof typeof RANGES>> = {
   smallint: 'smallint',
   integer: 'int',
   bigint: 'bigint',
@@ -119,7 +117,7 @@ function targetLength(
 const POSTGRES_TEXT = new Set(['text', 'character varying', 'character'])
 
 /** PostgreSQL types a `String` with this `@db.*` is, other than text; a change to one is not cast. */
-const POSTGRES_STRING_NATIVES: Readonly<Partial<Record<string, string>>> = {
+const POSTGRES_STRING_NATIVES: Readonly<Record<string, string>> = {
   Uuid: 'uuid',
   Citext: 'citext',
   Inet: 'inet',

@@ -4,7 +4,7 @@ import type { Dialect } from '../../database/url.js'
 // from one that does not. `string`, `int`, `bigint`, `float`, `decimal`, `boolean`, `datetime`,
 // `json`, `bytes` and `enum`.
 
-const PRISMA_FAMILIES: Readonly<Partial<Record<string, string>>> = {
+const PRISMA_FAMILIES: Readonly<Record<string, string>> = {
   String: 'string',
   Int: 'int',
   BigInt: 'bigint',
@@ -22,7 +22,7 @@ export function prismaFamily(input: { readonly type: string; readonly kind: stri
   return input.kind === 'scalar' ? (PRISMA_FAMILIES[input.type] ?? null) : null
 }
 
-const POSTGRES_FAMILIES: Readonly<Partial<Record<string, string>>> = {
+const POSTGRES_FAMILIES: Readonly<Record<string, string>> = {
   text: 'string',
   'character varying': 'string',
   character: 'string',
@@ -51,7 +51,7 @@ const POSTGRES_FAMILIES: Readonly<Partial<Record<string, string>>> = {
   'USER-DEFINED': 'enum',
 }
 
-const MYSQL_FAMILIES: Readonly<Partial<Record<string, string>>> = {
+const MYSQL_FAMILIES: Readonly<Record<string, string>> = {
   char: 'string',
   varchar: 'string',
   tinytext: 'string',
@@ -83,7 +83,7 @@ const MYSQL_FAMILIES: Readonly<Partial<Record<string, string>>> = {
 }
 
 /** The declared types Prisma Migrate writes on SQLite; anything else is read by its affinity. */
-const SQLITE_FAMILIES: Readonly<Partial<Record<string, string>>> = {
+const SQLITE_FAMILIES: Readonly<Record<string, string>> = {
   TEXT: 'string',
   INTEGER: 'int',
   BIGINT: 'bigint',

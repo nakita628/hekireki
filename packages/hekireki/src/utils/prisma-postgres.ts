@@ -217,7 +217,7 @@ export function sqlArray(values: readonly string[]) {
   return sqlString(`{${elements.join(',')}}`)
 }
 
-export const INDEX_METHODS: Readonly<Partial<Record<string, string>>> = {
+export const INDEX_METHODS: Readonly<Record<string, string>> = {
   Hash: 'hash',
   Gist: 'gist',
   Gin: 'gin',

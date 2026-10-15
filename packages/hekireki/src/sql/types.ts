@@ -19,7 +19,7 @@ function sqliteTsType(dataType: string) {
   return 'number'
 }
 
-const POSTGRES_TYPES: Readonly<Partial<Record<string, string>>> = {
+const POSTGRES_TYPES: Readonly<Record<string, string>> = {
   int2: 'number',
   smallint: 'number',
   int4: 'number',
@@ -82,7 +82,7 @@ function postgresTsType(dataType: string): string {
   return POSTGRES_TYPES[base] ?? 'unknown'
 }
 
-const MYSQL_TYPES: Readonly<Partial<Record<string, string>>> = {
+const MYSQL_TYPES: Readonly<Record<string, string>> = {
   tinyint: 'number',
   smallint: 'number',
   mediumint: 'number',

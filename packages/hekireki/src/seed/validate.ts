@@ -8,7 +8,7 @@ import type { EnumMember, ModelTable } from './plan.js'
 import { fieldDefault } from './plan.js'
 import { nativeTypeOf } from './values.js'
 
-const INT_RANGES: Readonly<Partial<Record<string, readonly [number, number]>>> = {
+const INT_RANGES: Readonly<Record<string, readonly [number, number]>> = {
   TinyInt: [-128, 127],
   UnsignedTinyInt: [0, 255],
   SmallInt: [-32_768, 32_767],

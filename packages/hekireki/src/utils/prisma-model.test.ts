@@ -121,6 +121,7 @@ model Employee {
   if ('type' in result) throw new Error(result.error.message)
   const models = result.datamodel.models
   const [employee] = models
+  if (employee === undefined) throw new Error('fixture')
 
   it.each([
     ['reports', false],
@@ -207,6 +208,7 @@ model Tag {
 
   it('names each relation field of a model, in declaration order, with its other end', () => {
     const [user] = models
+    if (user === undefined) throw new Error('fixture')
     expect(
       relationEnds(user, models).map((end) =>
         end.kind === 'manyToMany'
