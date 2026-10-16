@@ -6,7 +6,7 @@ import type { makeExpectedTables } from '../tables.js'
 import { resolveMoves } from './moves.js'
 import { onlyMoves, resolveTable } from './resolve-table.js'
 import { columnStep, duplicateStep, migrationStep, orphanStep } from './steps.js'
-import { valueSql } from './values.js'
+import { mappedValues, valueSql } from './values.js'
 import { makeFixContext } from './versions.js'
 import type { FixState } from './versions.js'
 
@@ -229,10 +229,7 @@ export function resolveFixes(input: {
         const existing =
           entry.actual.columns.find((c) => c.name === column.column)?.enumValues ?? null
         if (existing === null) return []
-        const mapping = Object.entries(fix.values ?? {}).flatMap(([stored, member]) => {
-          const to = column.enumMembers?.find((m) => m.name === member)?.dbName ?? member
-          return existing.includes(to) ? [] : [{ from: stored, to }]
-        })
+        const mapping = mappedValues(column, fix.values).filter((m) => !existing.includes(m.to))
         return mapping.length === 0
           ? []
           : [

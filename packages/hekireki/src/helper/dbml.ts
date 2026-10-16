@@ -2,7 +2,7 @@ import type { DMMF } from '@prisma/generator-helper'
 
 import type { Cardinality } from '../types/index.js'
 import { stripAnnotations } from '../utils/index.js'
-import { backRelation, isFunctionDefault } from '../utils/prisma-model.js'
+import { backRelation, fieldColumn, isFunctionDefault } from '../utils/prisma-model.js'
 import { annotatedERRelations, erKey, inferredERRelations } from '../utils/relation.js'
 
 export function escapeNote(str: string) {
@@ -118,12 +118,6 @@ function dbNameOf(item: { readonly name: string; readonly dbName?: string | null
   return item.dbName ?? item.name
 }
 
-/** The column a Prisma field of `model` is stored in. */
-function columnOf(model: DMMF.Model | undefined, field: string) {
-  const found = model?.fields.find((f) => f.name === field)
-  return found ? dbNameOf(found) : field
-}
-
 function toDBMLColumn(field: DMMF.Field, enums: readonly DMMF.DatamodelEnum[]) {
   const defaultName = isFunctionDefault(field.default) ? field.default.name : undefined
   // An enum column holds the enum's mapped type and its values' mapped names.
@@ -171,7 +165,7 @@ export function makeTables(
       .map((field) => toDBMLColumn(field, enums))
     const columnLines = columns.map(makePrismaColumn).join('\n')
 
-    const columnsOf = (fields: readonly string[]) => fields.map((f) => columnOf(model, f))
+    const columnsOf = (fields: readonly string[]) => fields.map((f) => fieldColumn(model, f))
     const indexes = [
       ...(model.primaryKey?.fields && model.primaryKey.fields.length > 0
         ? [{ columns: columnsOf(model.primaryKey.fields), isPrimaryKey: true }]
@@ -219,10 +213,10 @@ export function makeRelations(models: readonly DMMF.Model[]) {
         const relationToName = toModel ? dbNameOf(toModel) : relationTo
 
         const fromColumn = combineKeys(
-          (field.relationFromFields ?? []).map((f) => columnOf(model, f)),
+          (field.relationFromFields ?? []).map((f) => fieldColumn(model, f)),
         )
         const toColumn = combineKeys(
-          (field.relationToFields ?? []).map((f) => columnOf(toModel, f)),
+          (field.relationToFields ?? []).map((f) => fieldColumn(toModel, f)),
         )
 
         return makeRef({
@@ -264,7 +258,7 @@ export function annotatedDbmlRefs(models: readonly DMMF.Model[]) {
   // The annotation names Prisma models and fields; the ref names the tables and columns they map to.
   const end = (side: { readonly model: string; readonly field: string }) => {
     const model = models.find((m) => m.name === side.model)
-    return { table: model ? dbNameOf(model) : side.model, column: columnOf(model, side.field) }
+    return { table: model ? dbNameOf(model) : side.model, column: fieldColumn(model, side.field) }
   }
   return annotatedERRelations(models)
     .filter((relation) => !inferredKeys.has(erKey(relation)))

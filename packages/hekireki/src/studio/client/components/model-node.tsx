@@ -1,10 +1,9 @@
 import { Handle, Position } from '@xyflow/react'
 import type { NodeProps } from '@xyflow/react'
 import { memo } from 'react'
-import { LuKey, LuLink } from 'react-icons/lu'
 
 import { MODEL_HANDLE, NODE_CONSTRAINT_HEIGHT, NODE_ROW_HEIGHT } from '../../../constants/index.js'
-import type { ModelNodeType, SchemaField } from '../../../types/index.js'
+import type { ModelNodeType } from '../../../types/index.js'
 import { loopTargetHandle, sourceHandle, targetHandle } from '../features/schema/graph.js'
 import {
   diagramConstraints,
@@ -12,19 +11,12 @@ import {
   fieldRowHeight,
   uniqueColumns,
 } from '../features/schema/layout.js'
+import { FieldIcon } from './field-icon.js'
 import { BADGE, CONSTRAINT_STYLES, fieldTypeLabel, UNIQUE_BADGE } from './labels.js'
 import { OpenNodeLink } from './open-node-link.js'
 
 // A row is taller than its name when the field is documented; the edges still meet the name.
 const ROW_HANDLE = { top: NODE_ROW_HEIGHT / 2 } as const
-
-function FieldIcon({ field }: { readonly field: SchemaField }) {
-  if (field.isId) {
-    return <LuKey size={11} className="shrink-0 text-key" />
-  }
-  if (field.isForeignKey) return <LuLink size={11} className="shrink-0 text-accent" />
-  return <span className="inline-block size-[11px] shrink-0" />
-}
 
 function ModelNodeComponent({ data, selected }: NodeProps<ModelNodeType>) {
   const { model, fields, highlight } = data
@@ -92,7 +84,13 @@ function ModelNodeComponent({ data, selected }: NodeProps<ModelNodeType>) {
               <div
                 className={`flex h-[22px] items-center gap-1.5 text-code ${read === false ? 'text-faint' : ''}`}
               >
-                <FieldIcon field={{ ...field, isId: field.isId || primaryKey.has(field.name) }} />
+                <FieldIcon
+                  field={field}
+                  primaryKey={primaryKey}
+                  size={11}
+                  className="shrink-0"
+                  blank={<span className="inline-block size-[11px] shrink-0" />}
+                />
                 <span className="min-w-0 flex-1 truncate">{field.name}</span>
                 {read === true ? (
                   <span

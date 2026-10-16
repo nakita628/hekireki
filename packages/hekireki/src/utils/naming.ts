@@ -29,10 +29,10 @@ export function pascalCase(name: string) {
  */
 export function uniqueName(candidate: string, isTaken: (name: string) => boolean) {
   if (!isTaken(candidate)) return candidate
-  const suffix = Array.from({ length: 10_000 }, (_, index) => index + 1).find(
-    (index) => !isTaken(`${candidate}${index}`),
-  )
-  return `${candidate}${suffix ?? ''}`
+  for (let index = 1; index <= 10_000; index += 1) {
+    if (!isTaken(`${candidate}${index}`)) return `${candidate}${index}`
+  }
+  return candidate
 }
 
 export function allocate(
@@ -40,14 +40,14 @@ export function allocate(
   reserved: readonly string[],
   fold: (name: string) => string,
 ) {
-  return candidates.reduce(
-    (acc, { key, candidate }) => {
-      const name = uniqueName(candidate, (taken) => acc.taken.has(fold(taken)))
-      return {
-        names: new Map([...acc.names, [key, name]]),
-        taken: new Set([...acc.taken, fold(name)]),
-      }
-    },
-    { names: new Map<string, string>(), taken: new Set(reserved.map(fold)) },
-  ).names
+  // Each name is chosen against the ones before it, so the two are filled as the candidates are
+  // walked rather than copied at every step.
+  const names = new Map<string, string>()
+  const taken = new Set(reserved.map(fold))
+  for (const { key, candidate } of candidates) {
+    const name = uniqueName(candidate, (one) => taken.has(fold(one)))
+    names.set(key, name)
+    taken.add(fold(name))
+  }
+  return names
 }

@@ -1,6 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { makePascalCase, makeValidationExtractor } from '../utils/index.js'
+import { PYTHON_KEYWORDS } from '../utils/python.js'
 
 const PRISMA_TO_PYDANTIC: { [k: string]: string } = {
   String: 'str',
@@ -13,48 +14,6 @@ const PRISMA_TO_PYDANTIC: { [k: string]: string } = {
   Json: 'JsonValue',
   Bytes: 'bytes',
 }
-
-// Python hard keywords cannot be attribute names (`async`/`yield` etc. are a
-// syntax error). Soft keywords (match/case/type/_) are valid names and
-// excluded. A keyword field is exposed as `<name>_` and still validated under
-// its real name via Field(alias=...).
-const PYTHON_KEYWORDS = new Set([
-  'False',
-  'None',
-  'True',
-  'and',
-  'as',
-  'assert',
-  'async',
-  'await',
-  'break',
-  'class',
-  'continue',
-  'def',
-  'del',
-  'elif',
-  'else',
-  'except',
-  'finally',
-  'for',
-  'from',
-  'global',
-  'if',
-  'import',
-  'in',
-  'is',
-  'lambda',
-  'nonlocal',
-  'not',
-  'or',
-  'pass',
-  'raise',
-  'return',
-  'try',
-  'while',
-  'with',
-  'yield',
-])
 
 export function pydanticFieldName(name: string) {
   return PYTHON_KEYWORDS.has(name) ? `${name}_` : name

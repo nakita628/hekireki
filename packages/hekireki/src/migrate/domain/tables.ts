@@ -1,5 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
+import { backRelation, isJoinSideA } from '../../utils/prisma-model.js'
+
 /** The `@default(...)` functions Prisma Client fills in: the column itself has no default. */
 const CLIENT_DEFAULTS = new Set(['uuid', 'cuid', 'nanoid', 'ulid'])
 
@@ -172,18 +174,10 @@ function makeJoinTables(models: readonly DMMF.Model[], enums: readonly DMMF.Data
       .filter((f) => f.kind === 'object' && f.isList && (f.relationFromFields ?? []).length === 0)
       .flatMap((field) => {
         const other = models.find((m) => m.name === field.type)
-        const inverse = other?.fields.find(
-          (f) =>
-            f.kind === 'object' &&
-            f.relationName === field.relationName &&
-            f.type === model.name &&
-            !(other.name === model.name && f.name === field.name),
-        )
+        const inverse = backRelation(field, model, models)
         if (other === undefined || inverse === undefined || !inverse.isList) return []
         // Emitted from the side that sorts first; a self relation from its first field.
-        const first =
-          model.name === other.name ? field.name < inverse.name : model.name < other.name
-        if (!first) return []
+        if (!isJoinSideA(field, model, inverse)) return []
         const name = `_${field.relationName ?? `${model.name}To${other.name}`}`
         return [
           {

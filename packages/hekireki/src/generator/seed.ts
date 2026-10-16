@@ -1,8 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-function literal(value: string) {
-  return `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`
-}
+import { tsString } from '../utils/typescript.js'
 
 /** One field as a value (`kind: 'scalar'`) or as a type (`readonly kind: 'scalar'`). */
 function fieldEntry(field: DMMF.Field, declaration: boolean) {
@@ -10,14 +8,14 @@ function fieldEntry(field: DMMF.Field, declaration: boolean) {
   const list = declaration ? 'readonly ' : ''
   const owning =
     field.kind === 'object' && (field.relationFromFields ?? []).length > 0
-      ? `; ${key}relationFromFields: ${list}[${(field.relationFromFields ?? []).map(literal).join(', ')}]`
+      ? `; ${key}relationFromFields: ${list}[${(field.relationFromFields ?? []).map(tsString).join(', ')}]`
       : ''
   const relation =
     field.kind === 'object' && field.relationName !== undefined
-      ? `; ${key}relationName: ${literal(field.relationName)}${owning}`
+      ? `; ${key}relationName: ${tsString(field.relationName)}${owning}`
       : ''
   const hasDefault = field.hasDefaultValue || field.isUpdatedAt === true
-  return `{ ${key}name: ${literal(field.name)}; ${key}kind: '${field.kind}'; ${key}type: ${literal(field.type)}; ${key}isList: ${String(field.isList)}; ${key}isRequired: ${String(field.isRequired)}; ${key}hasDefault: ${String(hasDefault)}${relation} }`.replaceAll(
+  return `{ ${key}name: ${tsString(field.name)}; ${key}kind: '${field.kind}'; ${key}type: ${tsString(field.type)}; ${key}isList: ${String(field.isList)}; ${key}isRequired: ${String(field.isRequired)}; ${key}hasDefault: ${String(hasDefault)}${relation} }`.replaceAll(
     declaration ? /(?!)/gu : /; /gu,
     ', ',
   )
@@ -45,9 +43,9 @@ function modelEntries(datamodel: DMMF.Datamodel, declaration: boolean) {
   return datamodel.models
     .map((model) => {
       const uniques = uniqueSets(model)
-        .map((set) => `${list}[${set.map(literal).join(', ')}]`)
+        .map((set) => `${list}[${set.map(tsString).join(', ')}]`)
         .join(', ')
-      return `{ ${key}name: ${literal(model.name)}${sep} ${key}fields: ${list}[${model.fields.map((field) => fieldEntry(field, declaration)).join(', ')}]${sep} ${key}uniques: ${list}[${uniques}] }`
+      return `{ ${key}name: ${tsString(model.name)}${sep} ${key}fields: ${list}[${model.fields.map((field) => fieldEntry(field, declaration)).join(', ')}]${sep} ${key}uniques: ${list}[${uniques}] }`
     })
     .join(', ')
 }
@@ -58,7 +56,7 @@ function enumEntries(datamodel: DMMF.Datamodel, declaration: boolean) {
   return datamodel.enums
     .map(
       (declared) =>
-        `{ ${key}name: ${literal(declared.name)}${declaration ? ';' : ','} ${key}values: ${list}[${declared.values.map((value) => literal(value.name)).join(', ')}] }`,
+        `{ ${key}name: ${tsString(declared.name)}${declaration ? ';' : ','} ${key}values: ${list}[${declared.values.map((value) => tsString(value.name)).join(', ')}] }`,
     )
     .join(', ')
 }

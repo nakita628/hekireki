@@ -9,14 +9,13 @@ import {
   LuDot,
   LuFileText,
   LuGitCompare,
-  LuKey,
-  LuLink,
   LuList,
   LuSearch,
   LuTable,
   LuTerminal,
 } from 'react-icons/lu'
 
+import { FieldIcon } from '../../components/field-icon.js'
 import { useUiStore } from '../../lib/index.js'
 import { search, segments } from './match.js'
 
@@ -56,16 +55,6 @@ function shortcutLabel() {
  * narrowed by typing one more letter, not by scrolling.
  */
 const SHOWN = 50
-
-/** The three marks the grid and the fields table already use, so a key is a key everywhere. */
-function fieldIcon(
-  model: Schema['models'][number],
-  field: Schema['models'][number]['fields'][number],
-) {
-  if (field.isId || (model.primaryKey ?? []).includes(field.name)) return <LuKey />
-  if (field.isForeignKey) return <LuLink />
-  return <LuDot />
-}
 
 /** The button that says the palette exists: in the sidebar, and on the rail it folds down to. */
 export function PaletteButton({ compact = false }: { readonly compact?: boolean }) {
@@ -192,7 +181,9 @@ export function CommandPalette({ schema }: { readonly schema: Schema | null }) {
           id: `field:${model.name}.${field.name}`,
           label: `${model.name}.${field.name}`,
           kind: 'Field',
-          icon: fieldIcon(model, field),
+          icon: (
+            <FieldIcon field={field} primaryKey={new Set(model.primaryKey)} blank={<LuDot />} />
+          ),
           go: () => {
             void navigate({
               to: '/models/$name',

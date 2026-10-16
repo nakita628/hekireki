@@ -73,17 +73,19 @@ function crossings(left: readonly Stretch[], right: readonly Stretch[]) {
 
 /** The bundles in the order that crosses least, each put where it adds the fewest crossings. */
 function leastCrossing(bundles: readonly (readonly Stretch[])[]) {
-  const total = (order: readonly (readonly Stretch[])[]) =>
-    order.reduce(
-      (sum, left, index) =>
-        sum + order.slice(index + 1).reduce((more, right) => more + crossings(left, right), 0),
-      0,
-    )
   return bundles.reduce<readonly (readonly Stretch[])[]>((order, bundle) => {
-    const options = Array.from({ length: order.length + 1 }, (_, index) =>
-      order.toSpliced(index, 0, bundle),
+    // The bundles already in order cross one another the same however this one is put among
+    // them, so a place is judged by what it adds: the crossings with each bundle it is drawn to
+    // the right of, and with each it is drawn to the left of. Each pair is counted once.
+    const leftOf = order.map((other) => crossings(bundle, other))
+    const rightOf = order.map((other) => crossings(other, bundle))
+    const added = Array.from(
+      { length: order.length + 1 },
+      (_, index) =>
+        rightOf.slice(0, index).reduce((sum, count) => sum + count, 0) +
+        leftOf.slice(index).reduce((sum, count) => sum + count, 0),
     )
-    return options.reduce((best, option) => (total(option) < total(best) ? option : best))
+    return order.toSpliced(added.indexOf(Math.min(...added)), 0, bundle)
   }, [])
 }
 
@@ -177,31 +179,38 @@ function spreadVertical(routes: readonly Route[], cards: readonly Box[]): readon
       height: Math.max(...spanY) - Math.min(...spanY) + TRACK * 2,
     }
     const near = obstacles.filter((obstacle) => meets(reach, obstacle.box))
+    // What each route keeps its distance from: everything near but its own stretches, read once
+    // per route rather than for every stretch of every layout.
+    const nearOthers = new Map(
+      group.map((stretch) => [
+        stretch.route,
+        near.filter((obstacle) => obstacle.route !== stretch.route).map(({ box }) => box),
+      ]),
+    )
     const cost = (bundle: readonly Stretch[], x: number) =>
       bundle.reduce(
-        (sum, stretch) =>
-          sum +
-          shiftCost(
-            stretch,
-            x,
-            near.filter((obstacle) => obstacle.route !== stretch.route).map(({ box }) => box),
-          ),
+        (sum, stretch) => sum + shiftCost(stretch, x, nearOthers.get(stretch.route) ?? []),
         0,
       )
-    const costs = layouts.map((xs) =>
-      order.reduce((sum, bundle, index) => sum + cost(bundle, xs[index] ?? 0), 0),
-    )
-    const layout = layouts[costs.indexOf(Math.min(...costs))] ?? []
+    // The cost of each bundle under each layout, kept: the layout taken is judged by it again.
+    const costs = layouts.map((xs) => order.map((bundle, index) => cost(bundle, xs[index] ?? 0)))
+    const totals = costs.map((each) => each.reduce((sum, one) => sum + one, 0))
+    const taken = totals.indexOf(Math.min(...totals))
+    const layout = layouts[taken] ?? []
     // Where no layout suits them all, a bundle that cannot take its track keeps its place.
     return order.flatMap((bundle, index) => {
       const x = layout[index] ?? 0
-      return Number.isFinite(cost(bundle, x)) ? bundle.map((stretch) => ({ stretch, x })) : []
+      return Number.isFinite(costs[taken]?.[index] ?? Infinity)
+        ? bundle.map((stretch) => ({ stretch, x }))
+        : []
     })
   })
+  const movesOf = Map.groupBy(moves, (move) => move.stretch.route)
   return routes.map((points, route) =>
-    moves
-      .filter((move) => move.stretch.route === route)
-      .reduce((moved, move) => shifted(moved, move.stretch.index, move.x), points),
+    (movesOf.get(route) ?? []).reduce(
+      (moved, move) => shifted(moved, move.stretch.index, move.x),
+      points,
+    ),
   )
 }
 

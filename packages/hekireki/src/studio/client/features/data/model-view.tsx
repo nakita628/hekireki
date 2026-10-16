@@ -28,6 +28,7 @@ import {
   usePatchDbRowsModelName,
   usePostDbRowsModelName,
 } from '../../hooks/index.js'
+import { downloadFile } from '../../lib/index.js'
 import { keyLabel, keyOf, rowId, toCsv, toJson, toTsv } from './cells.js'
 import { loadHiddenColumns, saveHiddenColumns } from './columns.js'
 import { PAGE_SIZE } from './paging.js'
@@ -85,15 +86,6 @@ type Schema = {
 
 /** How long the box may go on being typed in before the query behind it is worth a round trip. */
 const SEARCH_DELAY_MS = 250
-
-function download(fileName: string, content: string, type: string) {
-  const url = URL.createObjectURL(new Blob([content], { type }))
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = fileName
-  anchor.click()
-  URL.revokeObjectURL(url)
-}
 
 function plural(count: number) {
   return count === 1 ? 'row' : 'rows'
@@ -236,9 +228,14 @@ export function ModelView({
 
   const exportRows = (action: string | number) => {
     if (!page) return
-    if (action === 'csv') download(`${model.name}.csv`, toCsv(columns, page.rows), 'text/csv')
+    if (action === 'csv') {
+      downloadFile(`${model.name}.csv`, new Blob([toCsv(columns, page.rows)], { type: 'text/csv' }))
+    }
     if (action === 'json') {
-      download(`${model.name}.json`, toJson(columns, page.rows), 'application/json')
+      downloadFile(
+        `${model.name}.json`,
+        new Blob([toJson(columns, page.rows)], { type: 'application/json' }),
+      )
     }
     if (action === 'copy-csv') copyText(toCsv(columns, page.rows), 'This page (CSV)')
     if (action === 'copy-json') copyText(toJson(columns, page.rows), 'This page (JSON)')

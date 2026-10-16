@@ -3,6 +3,44 @@ import type { SeedValue } from '../../../seed/config.js'
 import { renderLiteral } from '../../../seed/sql.js'
 import type { makeExpectedTables } from '../tables.js'
 
+/**
+ * The members a fix's `values` map stored values onto, each by the name the database stores it
+ * under (`@map`), as the column's enum has it; a member the enum does not have is taken as written.
+ *
+ * @example
+ * ```ts
+ * mappedValues({ enumMembers: [{ name: 'InReview', dbName: 'in_review' }] }, { pending: 'InReview' })
+ * // [{ from: 'pending', to: 'in_review' }]
+ * ```
+ */
+export function mappedValues(
+  column: {
+    readonly enumMembers: readonly { readonly name: string; readonly dbName: string }[] | null
+  },
+  values: Readonly<Record<string, string>> | undefined,
+) {
+  return Object.entries(values ?? {}).map(([stored, member]) => ({
+    from: stored,
+    to: column.enumMembers?.find((m) => m.name === member)?.dbName ?? member,
+  }))
+}
+
+/**
+ * A value mapped through `WHEN ... THEN ...` pairs, as read: what no pair names stays as it is.
+ *
+ * @example
+ * ```sql
+ * -- caseMap('"role"', [{ from: "'admin'", to: "'ADMIN'" }])
+ * CASE "role" WHEN 'admin' THEN 'ADMIN' ELSE "role" END
+ * ```
+ */
+export function caseMap(
+  read: string,
+  pairs: readonly { readonly from: string; readonly to: string }[],
+) {
+  return `CASE ${read} ${pairs.map((pair) => `WHEN ${pair.from} THEN ${pair.to}`).join(' ')} ELSE ${read} END`
+}
+
 function isSql(value: unknown): value is { readonly sql: string } {
   return (
     typeof value === 'object' && value !== null && 'sql' in value && typeof value.sql === 'string'

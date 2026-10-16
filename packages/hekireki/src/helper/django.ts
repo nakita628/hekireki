@@ -9,7 +9,7 @@ import {
   isUlidDefault,
   uuidDefaultVersion,
 } from '../utils/prisma-model.js'
-import { jsonToPythonLiteral, toPythonString } from '../utils/python.js'
+import { jsonToPythonLiteral, PYTHON_KEYWORDS, toPythonString } from '../utils/python.js'
 
 const PRISMA_TO_DJANGO: { [k: string]: string } = {
   String: 'TextField',
@@ -38,46 +38,6 @@ const PRISMA_TO_PYTHON: { [k: string]: string } = {
 export function prismaTypeToDjangoField(type: string) {
   return PRISMA_TO_DJANGO[type] ?? 'TextField'
 }
-
-// Python hard keywords cannot be attribute names (`async`/`yield` etc. are a
-// syntax error). Soft keywords (match/case/type/_) are valid names and excluded.
-const PYTHON_KEYWORDS = new Set([
-  'False',
-  'None',
-  'True',
-  'and',
-  'as',
-  'assert',
-  'async',
-  'await',
-  'break',
-  'class',
-  'continue',
-  'def',
-  'del',
-  'elif',
-  'else',
-  'except',
-  'finally',
-  'for',
-  'from',
-  'global',
-  'if',
-  'import',
-  'in',
-  'is',
-  'lambda',
-  'nonlocal',
-  'not',
-  'or',
-  'pass',
-  'raise',
-  'return',
-  'try',
-  'while',
-  'with',
-  'yield',
-])
 
 // Not keywords, but unusable as Django model field names: `pk` fails the
 // fields.E003 system check, `objects` shadows the default manager, and

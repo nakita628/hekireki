@@ -173,8 +173,13 @@ export function sqliteCheckClauses(definition: string) {
       if (state.quote !== null) return char === state.quote ? { ...state, quote: null } : state
       if (char === "'" || char === '"' || char === '`') return { ...state, quote: char }
       if (char === '(') {
+        // The word before the parenthesis, whitespace between them aside, and the character
+        // before that word: enough to tell `CHECK (` from a longer word that only ends in it,
+        // without reading all of the definition above for every parenthesis in it.
+        const wordEnd = (at: number): number =>
+          at > 0 && /\s/u.test(definition[at - 1] ?? '') ? wordEnd(at - 1) : at
         return state.start === null
-          ? /\bCHECK\s*$/iu.test(definition.slice(0, index))
+          ? /\bCHECK\s*$/iu.test(definition.slice(Math.max(0, wordEnd(index) - 6), index))
             ? { ...state, start: index + 1, depth: 1 }
             : state
           : { ...state, depth: state.depth + 1 }
@@ -238,20 +243,48 @@ function uniqueColumns(rows: readonly Readonly<Record<string, unknown>>[]) {
   )
 }
 
-/** The triggers and CHECK constraints of each table, from the rows of the two queries that list them. */
-function unmanagedOf(
-  triggers: readonly Readonly<Record<string, unknown>>[],
-  checks: readonly Readonly<Record<string, unknown>>[],
-  key: string,
-) {
-  return {
-    triggers: triggers
-      .filter((row) => tableKey(row) === key)
-      .map((row) => catalogueText(row, 'name')),
-    checks: checks
-      .filter((row) => tableKey(row) === key)
-      .map((row) => ({ name: catalogueText(row, 'name'), clause: catalogueText(row, 'clause') })),
-  }
+type CatalogueRow = Readonly<Record<string, unknown>>
+
+/**
+ * What the catalogue says of each table besides its columns, by table key, each list grouped
+ * once: the triggers and CHECK constraints (the two queries that list them), the unique
+ * constraints and the foreign keys, each key's rows together in the order the catalogue gave
+ * them. `refSchema` and `enforced` are read from a key's first row as the dialect reports them.
+ */
+function makeTableParts(input: {
+  readonly uniques: readonly CatalogueRow[]
+  readonly foreignKeys: readonly CatalogueRow[]
+  readonly triggers: readonly CatalogueRow[]
+  readonly checks: readonly CatalogueRow[]
+  readonly refSchema: (row: CatalogueRow) => string | null
+  readonly enforced: (row: CatalogueRow) => boolean
+}) {
+  const triggers = Map.groupBy(input.triggers, tableKey)
+  const checks = Map.groupBy(input.checks, tableKey)
+  const uniques = Map.groupBy(uniqueColumns(input.uniques), (unique) => unique.key)
+  const foreignKeys = Map.groupBy(
+    groupsOf(input.foreignKeys, (row) =>
+      JSON.stringify([tableKey(row), catalogueText(row, 'name')]),
+    ),
+    (group) => tableKey(group[0] ?? {}),
+  )
+  return (key: string) => ({
+    triggers: (triggers.get(key) ?? []).map((row) => catalogueText(row, 'name')),
+    checks: (checks.get(key) ?? []).map((row) => ({
+      name: catalogueText(row, 'name'),
+      clause: catalogueText(row, 'clause'),
+    })),
+    uniques: (uniques.get(key) ?? []).map((unique) => unique.columns),
+    foreignKeys: (foreignKeys.get(key) ?? []).map((group) => ({
+      columns: group.map((row) => catalogueText(row, 'column')),
+      refSchema: input.refSchema(group[0] ?? {}),
+      refTable: catalogueText(group[0] ?? {}, 'refTable'),
+      refColumns: group.map((row) => catalogueText(row, 'refColumn')),
+      enforced: input.enforced(group[0] ?? {}),
+      onDelete: deleteRule(catalogueText(group[0] ?? {}, 'onDelete')),
+      onUpdate: deleteRule(catalogueText(group[0] ?? {}, 'onUpdate')),
+    })),
+  })
 }
 
 /** The PostgreSQL tables from the rows of the catalogue queries. */
@@ -263,27 +296,24 @@ export function makePostgresTables(input: {
   readonly triggers?: readonly Readonly<Record<string, unknown>>[]
   readonly checks?: readonly Readonly<Record<string, unknown>>[]
 }) {
-  const labels = groupsOf(input.enums, (row) =>
+  // The labels of each enum type by its schema and name, in the order the catalogue lists them.
+  const labels = Map.groupBy(input.enums, (row) =>
     JSON.stringify([catalogueText(row, 'schema'), catalogueText(row, 'name')]),
   )
   const labelsOf = (schema: string, name: string) =>
-    labels
-      .find(
-        (group) =>
-          group[0] !== undefined &&
-          catalogueText(group[0], 'schema') === schema &&
-          catalogueText(group[0], 'name') === name,
-      )
-      ?.map((row) => catalogueText(row, 'label')) ?? null
-  const uniques = uniqueColumns(input.uniques)
-  const foreignKeys = groupsOf(input.foreignKeys, (row) =>
-    JSON.stringify([tableKey(row), catalogueText(row, 'name')]),
-  )
+    labels.get(JSON.stringify([schema, name]))?.map((row) => catalogueText(row, 'label')) ?? null
+  const partsOf = makeTableParts({
+    uniques: input.uniques,
+    foreignKeys: input.foreignKeys,
+    triggers: input.triggers ?? [],
+    checks: input.checks ?? [],
+    refSchema: (row) => catalogueText(row, 'refSchema'),
+    enforced: (row) => row.validated === true,
+  })
   return groupsOf(input.columns, tableKey)
     .filter((rows) => !INTERNAL_TABLES.has(catalogueText(rows[0] ?? {}, 'table')))
     .map((rows) => {
-      const key = tableKey(rows[0] ?? {})
-      const unmanaged = unmanagedOf(input.triggers ?? [], input.checks ?? [], key)
+      const parts = partsOf(tableKey(rows[0] ?? {}))
       return {
         schema: catalogueText(rows[0] ?? {}, 'schema'),
         table: catalogueText(rows[0] ?? {}, 'table'),
@@ -306,20 +336,10 @@ export function makePostgresTables(input: {
               catalogueText(row, 'identity') === 'ALWAYS',
           }
         }),
-        triggers: unmanaged.triggers,
-        checks: unmanaged.checks,
-        uniques: uniques.filter((unique) => unique.key === key).map((unique) => unique.columns),
-        foreignKeys: foreignKeys
-          .filter((group) => tableKey(group[0] ?? {}) === key)
-          .map((group) => ({
-            columns: group.map((row) => catalogueText(row, 'column')),
-            refSchema: catalogueText(group[0] ?? {}, 'refSchema'),
-            refTable: catalogueText(group[0] ?? {}, 'refTable'),
-            refColumns: group.map((row) => catalogueText(row, 'refColumn')),
-            enforced: group[0]?.validated === true,
-            onDelete: deleteRule(catalogueText(group[0] ?? {}, 'onDelete')),
-            onUpdate: deleteRule(catalogueText(group[0] ?? {}, 'onUpdate')),
-          })),
+        triggers: parts.triggers,
+        checks: parts.checks,
+        uniques: parts.uniques,
+        foreignKeys: parts.foreignKeys,
       }
     })
 }
@@ -347,15 +367,18 @@ export function makeMysqlTables(input: {
           clause: catalogueText(row, 'clause').replaceAll(/\\(?<escaped>.)/gsu, '$<escaped>'),
         }))
       : (input.checks ?? [])
-  const uniques = uniqueColumns(input.uniques)
-  const foreignKeys = groupsOf(input.foreignKeys, (row) =>
-    JSON.stringify([tableKey(row), catalogueText(row, 'name')]),
-  )
+  const partsOf = makeTableParts({
+    uniques: input.uniques,
+    foreignKeys: input.foreignKeys,
+    triggers: input.triggers ?? [],
+    checks,
+    refSchema: () => null,
+    enforced: () => true,
+  })
   return groupsOf(input.columns, tableKey)
     .filter((rows) => !INTERNAL_TABLES.has(catalogueText(rows[0] ?? {}, 'table')))
     .map((rows) => {
-      const key = tableKey(rows[0] ?? {})
-      const unmanaged = unmanagedOf(input.triggers ?? [], checks, key)
+      const parts = partsOf(tableKey(rows[0] ?? {}))
       return {
         schema: null,
         table: catalogueText(rows[0] ?? {}, 'table'),
@@ -368,20 +391,10 @@ export function makeMysqlTables(input: {
           enumValues: mysqlEnumValues(catalogueText(row, 'full')),
           generated: catalogueText(row, 'generation') !== '',
         })),
-        triggers: unmanaged.triggers,
-        checks: unmanaged.checks,
-        uniques: uniques.filter((unique) => unique.key === key).map((unique) => unique.columns),
-        foreignKeys: foreignKeys
-          .filter((group) => tableKey(group[0] ?? {}) === key)
-          .map((group) => ({
-            columns: group.map((row) => catalogueText(row, 'column')),
-            refSchema: null,
-            refTable: catalogueText(group[0] ?? {}, 'refTable'),
-            refColumns: group.map((row) => catalogueText(row, 'refColumn')),
-            enforced: true,
-            onDelete: deleteRule(catalogueText(group[0] ?? {}, 'onDelete')),
-            onUpdate: deleteRule(catalogueText(group[0] ?? {}, 'onUpdate')),
-          })),
+        triggers: parts.triggers,
+        checks: parts.checks,
+        uniques: parts.uniques,
+        foreignKeys: parts.foreignKeys,
       }
     })
 }

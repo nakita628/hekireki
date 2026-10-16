@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { ComponentProps } from 'react'
 import { LuLayoutGrid } from 'react-icons/lu'
 
+import { PALETTES } from '../../../../constants/index.js'
 import type { dbClient } from '../../api/index.js'
 import { useUiStore } from '../../lib/index.js'
 import { autoLayout } from './flow-layout.js'
@@ -148,7 +149,7 @@ function Canvas({
         variant={BackgroundVariant.Dots}
         gap={20}
         size={1.2}
-        color={theme === 'dark' ? '#2a2f3d' : '#d4d4dc'}
+        color={PALETTES[theme].dots}
       />
       <Controls showInteractive={false} position="bottom-left" />
       <Panel position="top-right" className="flex gap-2">

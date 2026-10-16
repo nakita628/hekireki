@@ -2,7 +2,7 @@ import type { DMMF } from '@prisma/generator-helper'
 import { getDMMF } from '@prisma/get-dmmf'
 import { describe, expect, it } from 'vite-plus/test'
 
-import { relationMaps } from '../utils/prisma-schema-text.js'
+import { prismaBlocks, relationMaps } from '../utils/prisma-schema-text.js'
 import {
   entityFile,
   enumEntryName,
@@ -158,7 +158,8 @@ describe('referenceOption', () => {
 describe('enumSchemas', () => {
   it('reads the @@schema of each enum block, whichever way it is written', () => {
     expect(
-      enumSchemas(`datasource db {
+      enumSchemas(
+        prismaBlocks(`datasource db {
   provider = "postgresql"
   schemas  = ["public", "audit", "sales", "a\\"b\\\\cA"]
 }
@@ -202,6 +203,7 @@ enum Größe {
   @@schema("public")
 }
 `),
+      ),
     ).toStrictEqual(
       new Map([
         ['Level', 'audit'],
@@ -213,16 +215,17 @@ enum Größe {
   })
 
   it('reads a schema written with CRLF line endings', () => {
-    expect(enumSchemas('enum Level {\r\n  LOW\r\n\r\n  @@schema("audit")\r\n}\r\n')).toStrictEqual(
-      new Map([['Level', 'audit']]),
-    )
+    expect(
+      enumSchemas(prismaBlocks('enum Level {\r\n  LOW\r\n\r\n  @@schema("audit")\r\n}\r\n')),
+    ).toStrictEqual(new Map([['Level', 'audit']]))
   })
 })
 
 describe('relationMaps', () => {
   it('reads the map of each relation by model and field, skipping comments and strings', () => {
     expect(
-      relationMaps(`model Post {
+      relationMaps(
+        prismaBlocks(`model Post {
   id         Int    @id
   authorId   Int
   editorId   Int
@@ -248,6 +251,7 @@ model User {
   sized    Post[] @relation("sized")
 }
 `),
+      ),
     ).toStrictEqual(
       new Map([
         ['Post.author', 'post_author'],
@@ -260,7 +264,9 @@ model User {
   it('reads a schema written with CRLF line endings', () => {
     expect(
       relationMaps(
-        'model Post {\r\n  author User @relation(fields: [authorId], references: [id], map: "fk")\r\n}\r\n',
+        prismaBlocks(
+          'model Post {\r\n  author User @relation(fields: [authorId], references: [id], map: "fk")\r\n}\r\n',
+        ),
       ),
     ).toStrictEqual(new Map([['Post.author', 'fk']]))
   })

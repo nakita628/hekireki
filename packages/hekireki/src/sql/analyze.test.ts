@@ -200,6 +200,29 @@ describe('analyze', () => {
     ])
   })
 
+  it('records a placeholder inside a subquery beside a placeholder once', () => {
+    // The other side of `?` is typed on a quiet context; a subquery there is built again on it,
+    // and its own placeholder must not be collected twice.
+    const statement = first(
+      'SELECT id FROM users WHERE ? < coalesce((SELECT user_id FROM posts WHERE published = ?), 0)',
+    )
+    expect(
+      statement.parameters.map((parameter) => [parameter.placeholder, parameter.context]),
+    ).toStrictEqual([
+      ['?', '? < coalesce((SELECT user_id FROM posts WHERE published = ?), 0)'],
+      ['?', 'published = ?'],
+    ])
+  })
+
+  it('cuts a long expression to the limit with its whitespace collapsed', () => {
+    const list = Array.from({ length: 40 }, (_, index) => `${index}`).join(',\n   ')
+    const statement = first(`SELECT id FROM users WHERE ? IN (  ${list}  )`)
+    const [parameter] = statement.parameters
+    const collapsed = `? IN (  ${list}  )`.replaceAll(/\s+/gu, ' ').trim()
+    expect(parameter?.context).toBe(`${collapsed.slice(0, 119)}…`)
+    expect(first('SELECT id FROM users WHERE   id = ?   ').parameters[0]?.context).toBe('id = ?')
+  })
+
   it('resolves schema.table.column references as Prisma Client writes them', () => {
     const statement = first(
       'SELECT `main`.`posts`.`id`, `main`.`posts`.* FROM `main`.`posts` WHERE `main`.`posts`.`published` = ? LIMIT ?',

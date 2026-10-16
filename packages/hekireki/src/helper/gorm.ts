@@ -1,6 +1,11 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { isAutoincrement, isFunctionDefault, relationEnds } from '../utils/prisma-model.js'
+import {
+  implicitJoinTables,
+  isAutoincrement,
+  isFunctionDefault,
+  relationEnds,
+} from '../utils/prisma-model.js'
 
 const PRISMA_TO_GO: { [k: string]: string } = {
   String: 'string',
@@ -668,16 +673,26 @@ function generateRelationFields(
  * ```
  */
 function alignFields(rows: readonly (readonly string[])[]) {
-  const width = (i: number, column: number) => {
-    const breaks = (row: readonly string[]) => row.length - 1 <= column
-    const start = rows.slice(0, i).findLastIndex(breaks) + 1
-    const end = rows.findIndex((row, j) => j > i && breaks(row))
-    const run = rows.slice(start, end === -1 ? rows.length : end)
-    return Math.max(...run.map((row) => row[column]?.length ?? 0)) + 1
-  }
+  const columns = Math.max(0, ...rows.map((row) => row.length - 1))
+  // A column is aligned in runs: a row that ends at or before the column closes the run, and the
+  // rows of a run are padded to its widest cell. Each run is measured once, walking the rows.
+  const widths = Array.from({ length: columns }, (_, column) => {
+    const runOf = new Map<number, number>()
+    const widest = new Map<number, number>()
+    for (let i = 0, run = 0; i < rows.length; i += 1) {
+      const row = rows[i] ?? []
+      if (row.length - 1 <= column) {
+        run += 1
+      } else {
+        runOf.set(i, run)
+        widest.set(run, Math.max(widest.get(run) ?? 0, row[column]?.length ?? 0))
+      }
+    }
+    return (i: number) => (widest.get(runOf.get(i) ?? -1) ?? 0) + 1
+  })
   return rows.map(
     (row, i) =>
-      `\t${row.map((cell, column) => (column < row.length - 1 ? cell.padEnd(width(i, column)) : cell)).join('')}`,
+      `\t${row.map((cell, column) => (column < row.length - 1 ? cell.padEnd(widths[column]?.(i) ?? 0) : cell)).join('')}`,
   )
 }
 
@@ -729,7 +744,7 @@ export function generateModelStruct(
 }
 
 function hasImplicitManyToMany(models: readonly DMMF.Model[]) {
-  return models.some((model) => getAssociations(model, models).manyToMany.length > 0)
+  return implicitJoinTables(models).length > 0
 }
 
 /**

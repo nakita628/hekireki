@@ -11,6 +11,35 @@ export function columnName(field: DMMF.Field) {
   return field.dbName ?? field.name
 }
 
+/** The column a field of `model` named `fieldName` is stored in; the name itself where there is no such field. */
+export function fieldColumn(model: DMMF.Model | undefined, fieldName: string) {
+  const field = model?.fields.find((f) => f.name === fieldName)
+  return field ? columnName(field) : fieldName
+}
+
+/** The fields a table has a column for: the scalars and the enums, not the relations. */
+export function scalarFields(model: DMMF.Model) {
+  return model.fields.filter((f) => f.kind === 'scalar' || f.kind === 'enum')
+}
+
+/** The length a native type's first argument gives (`@db.VarChar(255)`), or null. */
+export function lengthArg(args: readonly string[]) {
+  const [length] = args
+  return length !== undefined && /^\d+$/u.test(length) ? length : null
+}
+
+/**
+ * The referential actions a relation field's foreign key gets: the ones `@relation` names, else
+ * what Prisma Migrate writes when it names none — `Restrict` on delete for a required relation,
+ * `SetNull` for an optional one, and `Cascade` on update.
+ */
+export function referentialActions(field: DMMF.Field) {
+  return {
+    onDelete: field.relationOnDelete ?? (field.isRequired ? 'Restrict' : 'SetNull'),
+    onUpdate: field.relationOnUpdate ?? 'Cascade',
+  }
+}
+
 export function isListDefault(
   def: DMMF.Field['default'],
 ): def is readonly (string | number | boolean)[] {

@@ -72,12 +72,13 @@ const ParseSchemaFilesInput = z
 export function parseSchemaFiles(input: z.infer<typeof ParseSchemaFilesInput>) {
   return Effect.gen(function* () {
     const { files } = input
-    const diagnostics = yield* LanguageService.diagnoseFiles({ files })
+    // One workspace of the language server serves both: the diagnostics the error path reports
+    // and the block locations the schema carries.
+    const { diagnostics, blocks } = yield* LanguageService.inspectFiles({ files })
     const parsed: { readonly dmmf: DMMF.Document; readonly provider: string | null } =
       yield* parseSchema(files).pipe(
         Effect.mapError((error) => new SchemaParseError({ message: error.message, diagnostics })),
       )
-    const blocks = yield* LanguageService.blockLocations({ files })
     return {
       dmmf: parsed.dmmf,
       schema: SchemaDomain.makeSchema({

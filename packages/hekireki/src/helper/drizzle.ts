@@ -3,10 +3,13 @@ import type { DMMF } from '@prisma/generator-helper'
 import { constraintName, indexPrefix, makeSnakeCase } from '../utils/index.js'
 import {
   backRelation,
+  fieldColumn,
   implicitJoinTables,
   isImplicitManyToMany,
   isJoinSideA,
+  referentialActions,
 } from '../utils/prisma-model.js'
+import { tsString } from '../utils/typescript.js'
 
 type DbProvider = 'postgresql' | 'mysql' | 'sqlite'
 
@@ -416,15 +419,6 @@ function makeColumnExpr(
 
 const SQL_IMPORT = { pkg: 'drizzle-orm', kind: 'named', name: 'sql' } as const
 
-function toTsString(value: string) {
-  const escaped = value
-    .replaceAll('\\', '\\\\')
-    .replaceAll("'", "\\'")
-    .replaceAll('\n', '\\n')
-    .replaceAll('\r', '\\r')
-  return `'${escaped}'`
-}
-
 function resolveDefaultValue(
   field: DMMF.Field,
   provider: DbProvider,
@@ -438,12 +432,12 @@ function resolveDefaultValue(
   if (field.kind === 'enum' && typeof dflt === 'string') {
     const enumDef = enums.find((e) => e.name === field.type)
     const value = enumDef?.values.find((v) => v.name === dflt)
-    return { chain: `.default(${toTsString(value?.dbName ?? dflt)})`, imports: [] }
+    return { chain: `.default(${tsString(value?.dbName ?? dflt)})`, imports: [] }
   }
   // A scalar-list default is a JSON-compatible array; emit it as a TS array
   // literal.
   if (Array.isArray(dflt)) {
-    const items = dflt.map((item) => (typeof item === 'string' ? toTsString(item) : String(item)))
+    const items = dflt.map((item) => (typeof item === 'string' ? tsString(item) : String(item)))
     return { chain: `.default([${items.join(', ')}])`, imports: [] }
   }
   if (isFieldDefault(dflt)) {
@@ -513,7 +507,7 @@ function resolveDefaultValue(
     // bigint, so emit it as a raw SQL DDL literal instead of `${dflt}n`.
     if (fieldType === 'BigInt') return { chain: `.default(sql\`${dflt}\`)`, imports: [SQL_IMPORT] }
     if (fieldType === 'DateTime') {
-      return { chain: `.default(new Date(${toTsString(dflt)}))`, imports: [] }
+      return { chain: `.default(new Date(${tsString(dflt)}))`, imports: [] }
     }
     if (fieldType === 'Json') return { chain: `.default(${dflt})`, imports: [] }
     // A Bytes default is base64 in the DMMF, and the column's literal in the table.
@@ -527,7 +521,7 @@ function resolveDefaultValue(
             : `X'${hex}'`
       return { chain: `.default(sql\`${literal}\`)`, imports: [SQL_IMPORT] }
     }
-    return { chain: `.default(${toTsString(dflt)})`, imports: [] }
+    return { chain: `.default(${tsString(dflt)})`, imports: [] }
   }
   if (typeof dflt === 'number') {
     const chain = fieldType === 'Decimal' ? `.default('${dflt}')` : `.default(${dflt})`
@@ -620,7 +614,6 @@ function makeTableConstraints(
   indexes: readonly DMMF.Index[],
   tableName: string,
 ) {
-  const columnOf = (name: string) => model.fields.find((f) => f.name === name)?.dbName ?? name
   const pkLine = model.primaryKey
     ? (() => {
         imports.core.add('primaryKey')
@@ -639,7 +632,7 @@ function makeTableConstraints(
         idx.dbName ??
         constraintName(
           tableName,
-          idx.fields.map((f) => columnOf(f.name)),
+          idx.fields.map((f) => fieldColumn(model, f.name)),
           idx.type === 'unique' ? 'key' : 'idx',
           provider,
         )
@@ -680,9 +673,13 @@ function makeTableConstraints(
       // A relation of a model to itself reads its own columns from the table it is given.
       const target = f.type === model.name ? 'table' : resolveVarNameByType(f.type, models)
       const from = f.relationFromFields ?? []
-      const name = constraintName(tableName, from.map(columnOf), 'fkey', provider)
-      const onDelete = f.relationOnDelete ?? (f.isRequired ? 'Restrict' : 'SetNull')
-      const onUpdate = f.relationOnUpdate ?? 'Cascade'
+      const name = constraintName(
+        tableName,
+        from.map((c) => fieldColumn(model, c)),
+        'fkey',
+        provider,
+      )
+      const { onDelete, onUpdate } = referentialActions(f)
       return `foreignKey({ name: '${name}', columns: [${from.map((c) => `table.${c}`).join(', ')}], foreignColumns: [${(f.relationToFields ?? []).map((c) => `${target}.${c}`).join(', ')}] }).onDelete('${PRISMA_ACTION_MAP[onDelete] ?? 'no action'}').onUpdate('${PRISMA_ACTION_MAP[onUpdate] ?? 'no action'}')`
     })
 

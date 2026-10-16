@@ -131,7 +131,7 @@ const Names = z
 function stateOf(driver: Driver) {
   return Effect.gen(function* () {
     const introspected = yield* introspectDatabase({ driver, dialect: 'postgresql', schemas: [] })
-    const rows = yield* countTables(driver)
+    const rows = yield* countTables(driver, introspected.tables)
     // Asked for before it is counted: inside a transaction a statement that fails, caught or
     // not, leaves PostgreSQL refusing the rest, and the COMMIT after it undoes everything in silence.
     const recorded = yield* driver.query({

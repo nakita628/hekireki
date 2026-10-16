@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { LuArrowRight } from 'react-icons/lu'
 
 import type { Cardinality, RelationOrigin } from '../../../types/index.js'
-import { FieldGlyph } from './fields-table.js'
+import { FieldIcon } from './field-icon.js'
 import { fieldTypeLabel } from './labels.js'
 
 type Model = {
@@ -70,7 +70,13 @@ export function DetailsPanel({
         {model.fields.map((field) => (
           <div key={field.name} className="mb-3">
             <div className="flex items-center gap-1.5">
-              <FieldGlyph field={field} primaryKey={primaryKey} />
+              <FieldIcon
+                field={field}
+                primaryKey={primaryKey}
+                size={13}
+                className="inline-block align-middle"
+                blank={<span className="inline-block size-[13px] align-middle" />}
+              />
               <span className="font-mono text-body font-semibold">{field.name}</span>
               <span className="font-mono text-code text-muted">{fieldTypeLabel(field)}</span>
             </div>

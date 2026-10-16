@@ -71,17 +71,31 @@ const AstModule = z
   })
   .meta({ description: 'The AST helpers of @prisma/language-server (dist/lib/ast)' })
 
+type LanguageServer = {
+  readonly handlers: z.infer<typeof MessageHandlerModule>
+  readonly schema: z.infer<typeof SchemaModule>
+  readonly ast: z.infer<typeof AstModule>
+}
+
+// The modules once read and checked; null until the first request asks for them.
+const modules: { server: LanguageServer | null } = { server: null }
+
 // Read where a request needs it rather than when Studio starts: loading the package takes
-// seconds, and `require` keeps the modules once read, so only the first request pays.
-function languageServer() {
+// seconds, so only the first request pays. Resolved and checked once: every request after that
+// reads the same modules, and `require.resolve` on each would be a file system walk per call.
+function languageServer(): LanguageServer {
+  if (modules.server !== null) return modules.server
   const require = createRequire(import.meta.url)
   const root = path.resolve(path.dirname(require.resolve('@prisma/language-server')), '..')
   const lib = (file: string): unknown => require(path.join(root, 'dist/lib', file))
-  return {
+  const server = {
     handlers: MessageHandlerModule.parse(lib('MessageHandler.js')),
     schema: SchemaModule.parse(lib('Schema.js')),
     ast: AstModule.parse(lib('ast/index.js')),
   }
+  // oxlint-disable-next-line custom/no-mutation -- the one cell the loaded modules are kept in
+  modules.server = server
+  return server
 }
 
 function noop() {
@@ -101,33 +115,123 @@ function quietly<T>(run: () => T): T {
 }
 
 // ---------------------------------------------------------------------------------------------
+// What the requests below are made of: the loaded files, the text being edited, and where.
+// ---------------------------------------------------------------------------------------------
+
+/** The LSP DiagnosticSeverity values by name. */
+const SEVERITY = { error: 1, warning: 2, information: 3, hint: 4 } as const
+
+/** The names in value order, so `SEVERITIES[value - 1]` is the name. */
+const SEVERITIES = ['error', 'warning', 'information', 'hint'] as const
+
+const SchemaFiles = z
+  .array(
+    z
+      .object({
+        path: z.string().meta({ description: 'The file path.', example: 'prisma/schema.prisma' }),
+        content: z
+          .string()
+          .meta({ description: 'The file text.', example: 'model User {\n  id Int @id\n}\n' }),
+      })
+      .readonly(),
+  )
+  .readonly()
+  .meta({ description: 'The loaded schema files.', example: [] })
+
+const EditedPath = z.string().nullable().meta({
+  description: 'The file the text belongs to, or null for a lone in-memory document.',
+  example: 'prisma/schema.prisma',
+})
+
+const EditedText = z
+  .string()
+  .meta({ description: 'The text as typed.', example: 'model User {\n  id Int @id\n}\n' })
+
+const CursorLine = z
+  .number()
+  .int()
+  .min(0)
+  .meta({ description: '0-based line of the cursor.', example: 1 })
+
+const CursorCharacter = z
+  .number()
+  .int()
+  .min(0)
+  .meta({ description: '0-based column of the cursor.', example: 13 })
+
+const ActionRange = z
+  .object({
+    start: z
+      .object({
+        line: z.number().int().min(0).meta({ description: 'The 0-based line.', example: 1 }),
+        character: z
+          .number()
+          .int()
+          .min(0)
+          .meta({ description: 'The 0-based column.', example: 13 }),
+      })
+      .meta({ description: 'Where the range starts.' }),
+    end: z
+      .object({
+        line: z.number().int().min(0).meta({ description: 'The 0-based line.', example: 1 }),
+        character: z
+          .number()
+          .int()
+          .min(0)
+          .meta({ description: 'The 0-based column.', example: 16 }),
+      })
+      .meta({ description: 'Where the range ends.' }),
+  })
+  .meta({ description: 'The range the actions are asked for.' })
+
+const ShownDiagnostics = z
+  .array(
+    z.object({
+      range: z
+        .object({
+          start: z
+            .object({
+              line: z.number().int().min(0).meta({ description: 'The 0-based line.', example: 1 }),
+              character: z
+                .number()
+                .int()
+                .min(0)
+                .meta({ description: 'The 0-based column.', example: 13 }),
+            })
+            .meta({ description: 'Where the range starts.' }),
+          end: z
+            .object({
+              line: z.number().int().min(0).meta({ description: 'The 0-based line.', example: 1 }),
+              character: z
+                .number()
+                .int()
+                .min(0)
+                .meta({ description: 'The 0-based column.', example: 16 }),
+            })
+            .meta({ description: 'Where the range ends.' }),
+        })
+        .meta({ description: 'Where the diagnostic is.' }),
+      message: z.string().meta({
+        description: 'The Prisma message.',
+        example:
+          'Type "R" is neither a built-in type, nor refers to another model, composite type, or enum.',
+      }),
+      severity: z.enum(SEVERITIES).meta({ description: 'How serious it is.', example: 'error' }),
+    }),
+  )
+  .readonly()
+  .meta({ description: 'The diagnostics the editor shows in the range.' })
+
+// ---------------------------------------------------------------------------------------------
 // The workspace: every loaded file as the language server sees it, one of them being edited.
 // ---------------------------------------------------------------------------------------------
 
-const MakeWorkspaceInput = z
+/** The loaded files and the text of the one being edited: what every request about a text carries. */
+const EditedSchemaInput = z
   .object({
-    files: z
-      .array(
-        z
-          .object({
-            path: z
-              .string()
-              .meta({ description: 'The file path.', example: 'prisma/schema.prisma' }),
-            content: z
-              .string()
-              .meta({ description: 'The file text.', example: 'model User {\n  id Int @id\n}\n' }),
-          })
-          .readonly(),
-      )
-      .readonly()
-      .meta({ description: 'The loaded schema files.' }),
-    path: z.string().nullable().meta({
-      description: 'The file the text belongs to, or null for a lone in-memory document.',
-      example: 'prisma/schema.prisma',
-    }),
-    text: z
-      .string()
-      .meta({ description: 'The text as typed.', example: 'model User {\n  id Int @id\n}\n' }),
+    files: SchemaFiles,
+    path: EditedPath,
+    text: EditedText,
   })
   .readonly()
   .meta({
@@ -140,7 +244,7 @@ function uriOf(filePath: string) {
 }
 
 /** The loaded files as documents, with the edited one (when it is one of them) replaced by the text. */
-function makeWorkspace(input: z.infer<typeof MakeWorkspaceInput>) {
+function makeWorkspace(input: z.infer<typeof EditedSchemaInput>) {
   const edited = input.path
   const editedUri = edited === null ? PRISMA_FILE_URI : uriOf(edited)
   const document = TextDocument.create(editedUri, 'prisma', 1, input.text)
@@ -183,12 +287,6 @@ function rangeOf(range: LspRange) {
 // The files on disk: what the snapshot carries about them.
 // ---------------------------------------------------------------------------------------------
 
-/** The LSP DiagnosticSeverity values by name. */
-const SEVERITY = { error: 1, warning: 2, information: 3, hint: 4 } as const
-
-/** The names in value order, so `SEVERITIES[value - 1]` is the name. */
-const SEVERITIES = ['error', 'warning', 'information', 'hint'] as const
-
 function diagnosticsOf(workspace: Workspace) {
   return Array.from(
     quietly(() => languageServer().handlers.handleDiagnosticsRequest(workspace.schema)).entries(),
@@ -204,111 +302,48 @@ function diagnosticsOf(workspace: Workspace) {
   ).flat()
 }
 
-const DiagnoseFilesInput = z
+const LoadedFilesInput = z
   .object({
-    files: z
-      .array(
-        z
-          .object({
-            path: z
-              .string()
-              .meta({ description: 'The file path.', example: 'prisma/schema.prisma' }),
-            content: z
-              .string()
-              .meta({ description: 'The file text.', example: 'model User {\n  id Int @id\n}\n' }),
-          })
-          .readonly(),
-      )
-      .readonly()
-      .meta({ description: 'The loaded schema files.' }),
+    files: SchemaFiles,
   })
   .readonly()
   .meta({ description: 'The loaded schema files', example: { files: [] } })
 
-/** Every diagnostic the language server reports for the loaded files, validated together. */
-export function diagnoseFiles(input: z.infer<typeof DiagnoseFilesInput>) {
-  return Effect.try(() => {
-    const first = input.files[0]
-    if (first === undefined) return []
-    return diagnosticsOf(
-      makeWorkspace({ files: input.files, path: first.path, text: first.content }),
-    )
-  }).pipe(Effect.orElseSucceed(() => []))
+function blocksOf(workspace: Workspace) {
+  return Array.from(languageServer().ast.getBlocks(workspace.schema), (block) => ({
+    type: block.type,
+    name: block.name,
+    file: workspace.pathOf(block.definingDocument.uri),
+    line: block.range.start.line + 1,
+  }))
 }
 
-const BlockLocationsInput = z
-  .object({
-    files: z
-      .array(
-        z
-          .object({
-            path: z
-              .string()
-              .meta({ description: 'The file path.', example: 'prisma/schema.prisma' }),
-            content: z
-              .string()
-              .meta({ description: 'The file text.', example: 'model User {\n  id Int @id\n}\n' }),
-          })
-          .readonly(),
-      )
-      .readonly()
-      .meta({ description: 'The loaded schema files.' }),
-  })
-  .readonly()
-  .meta({ description: 'The loaded schema files', example: { files: [] } })
-
-/** Every block of the loaded files with the file and 1-based line of its header, in file order. */
-export function blockLocations(input: z.infer<typeof BlockLocationsInput>) {
-  return Effect.try(() => {
+/**
+ * The diagnostics and the blocks of the loaded files, from one workspace: what a reload reads,
+ * which would otherwise build the same documents twice. Either is empty where the server throws.
+ */
+export function inspectFiles(input: z.infer<typeof LoadedFilesInput>) {
+  return Effect.gen(function* () {
     const first = input.files[0]
-    if (first === undefined) return []
-    const workspace = makeWorkspace({ files: input.files, path: first.path, text: first.content })
-    return Array.from(languageServer().ast.getBlocks(workspace.schema), (block) => ({
-      type: block.type,
-      name: block.name,
-      file: workspace.pathOf(block.definingDocument.uri),
-      line: block.range.start.line + 1,
-    }))
-  }).pipe(Effect.orElseSucceed(() => []))
+    if (first === undefined) return { diagnostics: [], blocks: [] }
+    const workspace = yield* Effect.try(() =>
+      makeWorkspace({ files: input.files, path: first.path, text: first.content }),
+    ).pipe(Effect.orElseSucceed(() => null))
+    if (workspace === null) return { diagnostics: [], blocks: [] }
+    const diagnostics = yield* Effect.try(() => diagnosticsOf(workspace)).pipe(
+      Effect.orElseSucceed(() => []),
+    )
+    const blocks = yield* Effect.try(() => blocksOf(workspace)).pipe(Effect.orElseSucceed(() => []))
+    return { diagnostics, blocks }
+  })
 }
 
 // ---------------------------------------------------------------------------------------------
 // The text being edited: what the editor asks about it.
 // ---------------------------------------------------------------------------------------------
 
-const LintSchemaInput = z
-  .object({
-    files: z
-      .array(
-        z
-          .object({
-            path: z
-              .string()
-              .meta({ description: 'The file path.', example: 'prisma/schema.prisma' }),
-            content: z
-              .string()
-              .meta({ description: 'The file text.', example: 'model User {\n  id Int @id\n}\n' }),
-          })
-          .readonly(),
-      )
-      .readonly()
-      .meta({ description: 'The loaded schema files.' }),
-    path: z.string().nullable().meta({
-      description: 'The file the text belongs to, or null for a lone in-memory document.',
-      example: 'prisma/schema.prisma',
-    }),
-    text: z
-      .string()
-      .meta({ description: 'The text as typed.', example: 'model User {\n  id Int @id\n}\n' }),
-  })
-  .readonly()
-  .meta({
-    description: 'The schema files and the text of the one being edited',
-    example: { files: [], path: null, text: '' },
-  })
-
 /** The diagnostics of the edited text, validated together with the other loaded files. */
-export function lintSchema(input: z.infer<typeof LintSchemaInput>) {
+export function lintSchema(input: z.infer<typeof EditedSchemaInput>) {
   return Effect.try(() => {
     const workspace = makeWorkspace(input)
     return diagnosticsOf(workspace)
@@ -330,39 +365,8 @@ function formatEdits(workspace: Workspace, onError: (message: string) => void) {
   ).filter((edit) => edit.newText !== workspace.document.getText())
 }
 
-const FormatSchemaInput = z
-  .object({
-    files: z
-      .array(
-        z
-          .object({
-            path: z
-              .string()
-              .meta({ description: 'The file path.', example: 'prisma/schema.prisma' }),
-            content: z
-              .string()
-              .meta({ description: 'The file text.', example: 'model User {\n  id Int @id\n}\n' }),
-          })
-          .readonly(),
-      )
-      .readonly()
-      .meta({ description: 'The loaded schema files.' }),
-    path: z.string().nullable().meta({
-      description: 'The file the text belongs to, or null for a lone in-memory document.',
-      example: 'prisma/schema.prisma',
-    }),
-    text: z
-      .string()
-      .meta({ description: 'The text as typed.', example: 'model User {\n  id Int @id\n}\n' }),
-  })
-  .readonly()
-  .meta({
-    description: 'The schema files and the text of the one being edited',
-    example: { files: [], path: null, text: '' },
-  })
-
 /** The edits the Prisma formatter makes to the edited text; empty when it is already formatted. */
-export function formatSchema(input: z.infer<typeof FormatSchemaInput>) {
+export function formatSchema(input: z.infer<typeof EditedSchemaInput>) {
   return Effect.suspend(() => {
     const failures: string[] = []
     const edits = formatEdits(makeWorkspace(input), (message) => {
@@ -376,39 +380,8 @@ export function formatSchema(input: z.infer<typeof FormatSchemaInput>) {
   })
 }
 
-const SymbolsOfSchemaInput = z
-  .object({
-    files: z
-      .array(
-        z
-          .object({
-            path: z
-              .string()
-              .meta({ description: 'The file path.', example: 'prisma/schema.prisma' }),
-            content: z
-              .string()
-              .meta({ description: 'The file text.', example: 'model User {\n  id Int @id\n}\n' }),
-          })
-          .readonly(),
-      )
-      .readonly()
-      .meta({ description: 'The loaded schema files.' }),
-    path: z.string().nullable().meta({
-      description: 'The file the text belongs to, or null for a lone in-memory document.',
-      example: 'prisma/schema.prisma',
-    }),
-    text: z
-      .string()
-      .meta({ description: 'The text as typed.', example: 'model User {\n  id Int @id\n}\n' }),
-  })
-  .readonly()
-  .meta({
-    description: 'The schema files and the text of the one being edited',
-    example: { files: [], path: null, text: '' },
-  })
-
 /** The blocks of the edited text as the language server's document outline lists them. */
-export function symbolsOfSchema(input: z.infer<typeof SymbolsOfSchemaInput>) {
+export function symbolsOfSchema(input: z.infer<typeof EditedSchemaInput>) {
   return Effect.try(() => {
     const workspace = makeWorkspace(input)
     return languageServer()
@@ -430,34 +403,11 @@ export function symbolsOfSchema(input: z.infer<typeof SymbolsOfSchemaInput>) {
 
 const PositionParamsInput = z
   .object({
-    files: z
-      .array(
-        z
-          .object({
-            path: z
-              .string()
-              .meta({ description: 'The file path.', example: 'prisma/schema.prisma' }),
-            content: z
-              .string()
-              .meta({ description: 'The file text.', example: 'model User {\n  id Int @id\n}\n' }),
-          })
-          .readonly(),
-      )
-      .readonly()
-      .meta({ description: 'The loaded schema files.' }),
-    path: z.string().nullable().meta({
-      description: 'The file the text belongs to, or null for a lone in-memory document.',
-      example: 'prisma/schema.prisma',
-    }),
-    text: z
-      .string()
-      .meta({ description: 'The text as typed.', example: 'model User {\n  id Int @id\n}\n' }),
-    line: z.number().int().min(0).meta({ description: '0-based line of the cursor.', example: 1 }),
-    character: z
-      .number()
-      .int()
-      .min(0)
-      .meta({ description: '0-based column of the cursor.', example: 13 }),
+    files: SchemaFiles,
+    path: EditedPath,
+    text: EditedText,
+    line: CursorLine,
+    character: CursorCharacter,
   })
   .readonly()
   .meta({
@@ -474,34 +424,11 @@ function positionParams(workspace: Workspace, input: z.infer<typeof PositionPara
 
 const CompleteSchemaInput = z
   .object({
-    files: z
-      .array(
-        z
-          .object({
-            path: z
-              .string()
-              .meta({ description: 'The file path.', example: 'prisma/schema.prisma' }),
-            content: z
-              .string()
-              .meta({ description: 'The file text.', example: 'model User {\n  id Int @id\n}\n' }),
-          })
-          .readonly(),
-      )
-      .readonly()
-      .meta({ description: 'The loaded schema files.' }),
-    path: z.string().nullable().meta({
-      description: 'The file the text belongs to, or null for a lone in-memory document.',
-      example: 'prisma/schema.prisma',
-    }),
-    text: z
-      .string()
-      .meta({ description: 'The text as typed.', example: 'model User {\n  id Int @id\n}\n' }),
-    line: z.number().int().min(0).meta({ description: '0-based line of the cursor.', example: 1 }),
-    character: z
-      .number()
-      .int()
-      .min(0)
-      .meta({ description: '0-based column of the cursor.', example: 13 }),
+    files: SchemaFiles,
+    path: EditedPath,
+    text: EditedText,
+    line: CursorLine,
+    character: CursorCharacter,
     triggerCharacter: z.string().nullable().meta({
       description: 'The character that opened the list, or null when the user asked for it.',
       example: '@',
@@ -566,45 +493,8 @@ export function completeSchema(input: z.infer<typeof CompleteSchemaInput>) {
   }).pipe(Effect.orElseSucceed(() => []))
 }
 
-const HoverSchemaInput = z
-  .object({
-    files: z
-      .array(
-        z
-          .object({
-            path: z
-              .string()
-              .meta({ description: 'The file path.', example: 'prisma/schema.prisma' }),
-            content: z
-              .string()
-              .meta({ description: 'The file text.', example: 'model User {\n  id Int @id\n}\n' }),
-          })
-          .readonly(),
-      )
-      .readonly()
-      .meta({ description: 'The loaded schema files.' }),
-    path: z.string().nullable().meta({
-      description: 'The file the text belongs to, or null for a lone in-memory document.',
-      example: 'prisma/schema.prisma',
-    }),
-    text: z
-      .string()
-      .meta({ description: 'The text as typed.', example: 'model User {\n  id Int @id\n}\n' }),
-    line: z.number().int().min(0).meta({ description: '0-based line of the cursor.', example: 1 }),
-    character: z
-      .number()
-      .int()
-      .min(0)
-      .meta({ description: '0-based column of the cursor.', example: 13 }),
-  })
-  .readonly()
-  .meta({
-    description: 'The schema files, the edited text and a 0-based LSP position',
-    example: { files: [], path: null, text: '', line: 0, character: 0 },
-  })
-
 /** What the Prisma language server says about the symbol at the position, as Markdown. */
-export function hoverSchema(input: z.infer<typeof HoverSchemaInput>) {
+export function hoverSchema(input: z.infer<typeof PositionParamsInput>) {
   return Effect.try(() => {
     const workspace = makeWorkspace(input)
     const hover = quietly(() =>
@@ -620,45 +510,8 @@ export function hoverSchema(input: z.infer<typeof HoverSchemaInput>) {
   }).pipe(Effect.orElseSucceed(() => ({ contents: null, range: null })))
 }
 
-const DefineSchemaInput = z
-  .object({
-    files: z
-      .array(
-        z
-          .object({
-            path: z
-              .string()
-              .meta({ description: 'The file path.', example: 'prisma/schema.prisma' }),
-            content: z
-              .string()
-              .meta({ description: 'The file text.', example: 'model User {\n  id Int @id\n}\n' }),
-          })
-          .readonly(),
-      )
-      .readonly()
-      .meta({ description: 'The loaded schema files.' }),
-    path: z.string().nullable().meta({
-      description: 'The file the text belongs to, or null for a lone in-memory document.',
-      example: 'prisma/schema.prisma',
-    }),
-    text: z
-      .string()
-      .meta({ description: 'The text as typed.', example: 'model User {\n  id Int @id\n}\n' }),
-    line: z.number().int().min(0).meta({ description: '0-based line of the cursor.', example: 1 }),
-    character: z
-      .number()
-      .int()
-      .min(0)
-      .meta({ description: '0-based column of the cursor.', example: 13 }),
-  })
-  .readonly()
-  .meta({
-    description: 'The schema files, the edited text and a 0-based LSP position',
-    example: { files: [], path: null, text: '', line: 0, character: 0 },
-  })
-
 /** Where the model, enum or type referenced at the position is declared. */
-export function defineSchema(input: z.infer<typeof DefineSchemaInput>) {
+export function defineSchema(input: z.infer<typeof PositionParamsInput>) {
   return Effect.try(() => {
     const workspace = makeWorkspace(input)
     const links = quietly(() =>
@@ -676,45 +529,8 @@ export function defineSchema(input: z.infer<typeof DefineSchemaInput>) {
   }).pipe(Effect.orElseSucceed(() => []))
 }
 
-const ReferencesSchemaInput = z
-  .object({
-    files: z
-      .array(
-        z
-          .object({
-            path: z
-              .string()
-              .meta({ description: 'The file path.', example: 'prisma/schema.prisma' }),
-            content: z
-              .string()
-              .meta({ description: 'The file text.', example: 'model User {\n  id Int @id\n}\n' }),
-          })
-          .readonly(),
-      )
-      .readonly()
-      .meta({ description: 'The loaded schema files.' }),
-    path: z.string().nullable().meta({
-      description: 'The file the text belongs to, or null for a lone in-memory document.',
-      example: 'prisma/schema.prisma',
-    }),
-    text: z
-      .string()
-      .meta({ description: 'The text as typed.', example: 'model User {\n  id Int @id\n}\n' }),
-    line: z.number().int().min(0).meta({ description: '0-based line of the cursor.', example: 1 }),
-    character: z
-      .number()
-      .int()
-      .min(0)
-      .meta({ description: '0-based column of the cursor.', example: 13 }),
-  })
-  .readonly()
-  .meta({
-    description: 'The schema files, the edited text and a 0-based LSP position',
-    example: { files: [], path: null, text: '', line: 0, character: 0 },
-  })
-
 /** Every place the symbol at the position is used, across the loaded files, declaration included. */
-export function referencesSchema(input: z.infer<typeof ReferencesSchemaInput>) {
+export function referencesSchema(input: z.infer<typeof PositionParamsInput>) {
   return Effect.try(() => {
     const workspace = makeWorkspace(input)
     const locations = quietly(() =>
@@ -744,34 +560,11 @@ function fileEdits(
 
 const RenameSchemaInput = z
   .object({
-    files: z
-      .array(
-        z
-          .object({
-            path: z
-              .string()
-              .meta({ description: 'The file path.', example: 'prisma/schema.prisma' }),
-            content: z
-              .string()
-              .meta({ description: 'The file text.', example: 'model User {\n  id Int @id\n}\n' }),
-          })
-          .readonly(),
-      )
-      .readonly()
-      .meta({ description: 'The loaded schema files.' }),
-    path: z.string().nullable().meta({
-      description: 'The file the text belongs to, or null for a lone in-memory document.',
-      example: 'prisma/schema.prisma',
-    }),
-    text: z
-      .string()
-      .meta({ description: 'The text as typed.', example: 'model User {\n  id Int @id\n}\n' }),
-    line: z.number().int().min(0).meta({ description: '0-based line of the cursor.', example: 1 }),
-    character: z
-      .number()
-      .int()
-      .min(0)
-      .meta({ description: '0-based column of the cursor.', example: 13 }),
+    files: SchemaFiles,
+    path: EditedPath,
+    text: EditedText,
+    line: CursorLine,
+    character: CursorCharacter,
     newName: z.string().meta({ description: 'The new name.', example: 'Account' }),
   })
   .readonly()
@@ -796,99 +589,11 @@ export function renameSchema(input: z.infer<typeof RenameSchemaInput>) {
 
 const CodeActionsSchemaInput = z
   .object({
-    files: z
-      .array(
-        z
-          .object({
-            path: z
-              .string()
-              .meta({ description: 'The file path.', example: 'prisma/schema.prisma' }),
-            content: z
-              .string()
-              .meta({ description: 'The file text.', example: 'model User {\n  id Int @id\n}\n' }),
-          })
-          .readonly(),
-      )
-      .readonly()
-      .meta({ description: 'The loaded schema files.' }),
-    path: z.string().nullable().meta({
-      description: 'The file the text belongs to, or null for a lone in-memory document.',
-      example: 'prisma/schema.prisma',
-    }),
-    text: z
-      .string()
-      .meta({ description: 'The text as typed.', example: 'model User {\n  id Int @id\n}\n' }),
-    range: z
-      .object({
-        start: z
-          .object({
-            line: z.number().int().min(0).meta({ description: 'The 0-based line.', example: 1 }),
-            character: z
-              .number()
-              .int()
-              .min(0)
-              .meta({ description: 'The 0-based column.', example: 13 }),
-          })
-          .meta({ description: 'Where the range starts.' }),
-        end: z
-          .object({
-            line: z.number().int().min(0).meta({ description: 'The 0-based line.', example: 1 }),
-            character: z
-              .number()
-              .int()
-              .min(0)
-              .meta({ description: 'The 0-based column.', example: 16 }),
-          })
-          .meta({ description: 'Where the range ends.' }),
-      })
-      .meta({ description: 'The range the actions are asked for.' }),
-    diagnostics: z
-      .array(
-        z.object({
-          range: z
-            .object({
-              start: z
-                .object({
-                  line: z
-                    .number()
-                    .int()
-                    .min(0)
-                    .meta({ description: 'The 0-based line.', example: 1 }),
-                  character: z
-                    .number()
-                    .int()
-                    .min(0)
-                    .meta({ description: 'The 0-based column.', example: 13 }),
-                })
-                .meta({ description: 'Where the range starts.' }),
-              end: z
-                .object({
-                  line: z
-                    .number()
-                    .int()
-                    .min(0)
-                    .meta({ description: 'The 0-based line.', example: 1 }),
-                  character: z
-                    .number()
-                    .int()
-                    .min(0)
-                    .meta({ description: 'The 0-based column.', example: 16 }),
-                })
-                .meta({ description: 'Where the range ends.' }),
-            })
-            .meta({ description: 'Where the diagnostic is.' }),
-          message: z.string().meta({
-            description: 'The Prisma message.',
-            example:
-              'Type "R" is neither a built-in type, nor refers to another model, composite type, or enum.',
-          }),
-          severity: z
-            .enum(SEVERITIES)
-            .meta({ description: 'How serious it is.', example: 'error' }),
-        }),
-      )
-      .readonly()
-      .meta({ description: 'The diagnostics the editor shows in the range.' }),
+    files: SchemaFiles,
+    path: EditedPath,
+    text: EditedText,
+    range: ActionRange,
+    diagnostics: ShownDiagnostics,
   })
   .readonly()
   .meta({
@@ -910,118 +615,10 @@ function errorCount(workspace: Workspace) {
   ).length
 }
 
-const FormatFixInput = z
-  .object({
-    files: z
-      .array(
-        z
-          .object({
-            path: z
-              .string()
-              .meta({ description: 'The file path.', example: 'prisma/schema.prisma' }),
-            content: z
-              .string()
-              .meta({ description: 'The file text.', example: 'model User {\n  id Int @id\n}\n' }),
-          })
-          .readonly(),
-      )
-      .readonly()
-      .meta({ description: 'The loaded schema files.' }),
-    path: z.string().nullable().meta({
-      description: 'The file the text belongs to, or null for a lone in-memory document.',
-      example: 'prisma/schema.prisma',
-    }),
-    text: z
-      .string()
-      .meta({ description: 'The text as typed.', example: 'model User {\n  id Int @id\n}\n' }),
-    range: z
-      .object({
-        start: z
-          .object({
-            line: z.number().int().min(0).meta({ description: 'The 0-based line.', example: 1 }),
-            character: z
-              .number()
-              .int()
-              .min(0)
-              .meta({ description: 'The 0-based column.', example: 13 }),
-          })
-          .meta({ description: 'Where the range starts.' }),
-        end: z
-          .object({
-            line: z.number().int().min(0).meta({ description: 'The 0-based line.', example: 1 }),
-            character: z
-              .number()
-              .int()
-              .min(0)
-              .meta({ description: 'The 0-based column.', example: 16 }),
-          })
-          .meta({ description: 'Where the range ends.' }),
-      })
-      .meta({ description: 'The range the actions are asked for.' }),
-    diagnostics: z
-      .array(
-        z.object({
-          range: z
-            .object({
-              start: z
-                .object({
-                  line: z
-                    .number()
-                    .int()
-                    .min(0)
-                    .meta({ description: 'The 0-based line.', example: 1 }),
-                  character: z
-                    .number()
-                    .int()
-                    .min(0)
-                    .meta({ description: 'The 0-based column.', example: 13 }),
-                })
-                .meta({ description: 'Where the range starts.' }),
-              end: z
-                .object({
-                  line: z
-                    .number()
-                    .int()
-                    .min(0)
-                    .meta({ description: 'The 0-based line.', example: 1 }),
-                  character: z
-                    .number()
-                    .int()
-                    .min(0)
-                    .meta({ description: 'The 0-based column.', example: 16 }),
-                })
-                .meta({ description: 'Where the range ends.' }),
-            })
-            .meta({ description: 'Where the diagnostic is.' }),
-          message: z.string().meta({
-            description: 'The Prisma message.',
-            example:
-              'Type "R" is neither a built-in type, nor refers to another model, composite type, or enum.',
-          }),
-          severity: z
-            .enum(SEVERITIES)
-            .meta({ description: 'How serious it is.', example: 'error' }),
-        }),
-      )
-      .readonly()
-      .meta({ description: 'The diagnostics the editor shows in the range.' }),
-  })
-  .readonly()
-  .meta({
-    description: 'The schema files, the edited text, a range and the diagnostics in it',
-    example: {
-      files: [],
-      path: null,
-      text: '',
-      range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
-      diagnostics: [],
-    },
-  })
-
 // The Prisma formatter also completes relations (the opposite field, `fields` / `references`),
 // which the language server reports as errors without offering a fix. When formatting the text
 // removes errors, the formatted text is offered as one.
-function formatFix(input: z.infer<typeof FormatFixInput>, workspace: Workspace) {
+function formatFix(input: z.infer<typeof CodeActionsSchemaInput>, workspace: Workspace) {
   if (!input.diagnostics.some((diagnostic) => diagnostic.severity === 'error')) return []
   const edit = formatEdits(workspace, noop)[0]
   if (edit === undefined) return []

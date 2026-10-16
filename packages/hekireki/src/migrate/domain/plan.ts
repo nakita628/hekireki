@@ -2,7 +2,7 @@ import type { Dialect } from '../../database/url.js'
 import { splitStatements } from '../../sql/index.js'
 import { fieldOf } from './checks.js'
 import { CHOICES } from './decisions.js'
-import { rewriteMigration } from './rewrite.js'
+import { escape, rewriteMigration } from './rewrite.js'
 
 /**
  * A statement that drops something, or changes a column in a way that can lose what it holds. A
@@ -47,11 +47,11 @@ export function rebuiltTables(statements: readonly string[]) {
       const copied = statements.some(
         (statement) => /^\s*INSERT\s+INTO/iu.test(statement) && namesOf(statement).includes(from),
       )
-      const dropped = statements.some((statement) =>
-        new RegExp(`^\\s*DROP\\s+TABLE\\s+(?:IF\\s+EXISTS\\s+)?["\`]${to}["\`]`, 'iu').test(
-          statement,
-        ),
+      const drop = new RegExp(
+        `^\\s*DROP\\s+TABLE\\s+(?:IF\\s+EXISTS\\s+)?["\`]${escape(to)}["\`]`,
+        'iu',
       )
+      const dropped = statements.some((statement) => drop.test(statement))
       return copied && dropped ? [to] : []
     }),
   )
@@ -109,18 +109,19 @@ function describeStatement(sql: string, rebuilt: ReadonlySet<string>) {
  * with the name of the change it makes (`RedefineTables`), which says what the engine did rather
  * than what the database will look like afterwards.
  */
-export function describeStep(statements: readonly string[]) {
-  const rebuilt = rebuiltTables(statements)
+export function describeStep(
+  statements: readonly string[],
+  rebuilt: ReadonlySet<string> = rebuiltTables(statements),
+) {
   const changes = statements.flatMap((statement) => describeStatement(statement, rebuilt))
-  return changes.filter(
-    (one, index) =>
-      changes.findIndex(
-        (other) =>
-          other.kind === one.kind &&
-          other.table === one.table &&
-          other.columns.join(',') === one.columns.join(','),
-      ) === index,
-  )
+  // Each change once, the first time it is made.
+  const seen = new Set<string>()
+  return changes.filter((one) => {
+    const key = JSON.stringify([one.kind, one.table, one.columns.join(',')])
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 /**
@@ -145,8 +146,10 @@ export function isLossyFix(fix: {
 }
 
 /** Whether a step loses rows or what a column holds; a table rebuilt in place loses neither. */
-export function isDestructiveStep(statements: readonly string[]) {
-  const rebuilt = rebuiltTables(statements)
+export function isDestructiveStep(
+  statements: readonly string[],
+  rebuilt: ReadonlySet<string> = rebuiltTables(statements),
+) {
   return statements.some((statement) => {
     if (!isDestructiveStatement(statement)) return false
     const [first = ''] = namesOf(statement)
@@ -165,16 +168,21 @@ export function isDestructiveStep(statements: readonly string[]) {
  */
 function blocksOf(migration: string) {
   const lines = migration.split('\n')
-  // A comment starts a block only between statements: one inside a statement stays with it.
-  const starts = lines.flatMap((line, index) => {
-    if (!COMMENT_LINE.test(line)) return []
-    const before = lines
-      .slice(0, index)
-      .join('\n')
-      .replaceAll(/^\s*--.*$/gmu, '')
-      .trim()
-    return before === '' || before.endsWith(';') ? [index] : []
-  })
+  // A comment starts a block only between statements: one inside a statement stays with it. What
+  // decides it is the last character of statement text above the comment, read in one pass down
+  // the lines rather than over the whole text above each one.
+  const { starts } = lines.reduce<{ readonly starts: readonly number[]; readonly last: string }>(
+    (state, line, index) => {
+      if (COMMENT_LINE.test(line)) {
+        return state.last === '' || state.last === ';'
+          ? { ...state, starts: [...state.starts, index] }
+          : state
+      }
+      const text = line.trim()
+      return text === '' ? state : { ...state, last: text.at(-1) ?? '' }
+    },
+    { starts: [], last: '' },
+  )
   const ends = [...starts.slice(1), lines.length]
   const blocks = [
     { title: null, lines: lines.slice(0, starts[0] ?? lines.length) },
@@ -381,16 +389,19 @@ export function makePlan(
       subject: fix.subject,
       fixKind: fix.kind ?? null,
     })),
-    ...blocksOf(rewritten.sql).map((block) => ({
-      title: block.title ?? 'Change the schema',
-      kind: 'migration' as const,
-      statements: block.statements,
-      changes: describeStep(block.statements),
-      destructive: isDestructiveStep(block.statements),
-      rows: null,
-      subject: null,
-      fixKind: null,
-    })),
+    ...blocksOf(rewritten.sql).map((block) => {
+      const rebuilt = rebuiltTables(block.statements)
+      return {
+        title: block.title ?? 'Change the schema',
+        kind: 'migration' as const,
+        statements: block.statements,
+        changes: describeStep(block.statements, rebuilt),
+        destructive: isDestructiveStep(block.statements, rebuilt),
+        rows: null,
+        subject: null,
+        fixKind: null,
+      }
+    }),
   ]
   // A check's kind is any string; the choices are keyed by the kinds a decision can answer.
   const choices: Readonly<Record<string, readonly string[]>> = CHOICES

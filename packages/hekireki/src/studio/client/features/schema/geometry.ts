@@ -35,6 +35,8 @@ type GeometryEdge = {
 
 const EMPTY: DiagramGeometry = new Map()
 
+const NONE_MOVING: ReadonlySet<string> = new Set()
+
 export const GeometryContext = createContext<DiagramGeometry>(EMPTY)
 
 /** The geometry of one edge, or null while React Flow has not measured its models yet. */
@@ -118,25 +120,50 @@ function captionOf(edge: Edge): readonly string[] {
   return Array.isArray(caption) ? caption.filter((line) => typeof line === 'string') : []
 }
 
+function handleSignature(handles: ReadonlyMap<string, Point>) {
+  return [...handles].map(([id, point]) => `${id}@${point.x},${point.y}`).join(';')
+}
+
+/** Everything the geometry pass reads of the cards, as one string: the same string, the same wires. */
+function cardsSignature(cards: ReadonlyMap<string, GeometryCard>) {
+  return [...cards]
+    .map(
+      ([id, { box, source, target }]) =>
+        `${id}:${box.x},${box.y},${box.width},${box.height}:${handleSignature(source)}:${handleSignature(target)}`,
+    )
+    .join('\n')
+}
+
 /** {@link diagramGeometry} over what React Flow has measured, recomputed once a model has moved. */
 export function useDiagramGeometry(edges: readonly Edge[]): DiagramGeometry {
   const nodes = useNodes()
   const lookup = useStore((state) => state.nodeLookup)
-  const moving = useMemo(
-    () => new Set(nodes.filter((node) => node.dragging === true).map((node) => node.id)),
-    [nodes],
-  )
+  const moving = useMemo(() => {
+    const ids = nodes.filter((node) => node.dragging === true).map((node) => node.id)
+    return ids.length === 0 ? NONE_MOVING : new Set(ids)
+  }, [nodes])
   // `nodes` changes whenever a model moves or is measured; the lookup is mutated in place, so it
   // is read through that render rather than subscribed to on its own.
-  const routed = useMemo(() => {
-    if (moving.size > 0) return null
+  const measured = useMemo(() => {
     const cards = new Map(
       nodes.flatMap((node) => {
         const internal = lookup.get(node.id)
         return internal === undefined ? [] : [[node.id, geometryCard(internal)] as const]
       }),
     )
-    if (cards.size !== nodes.length) return EMPTY
+    return { cards, complete: cards.size === nodes.length, signature: cardsSignature(cards) }
+  }, [nodes, lookup])
+  // A click, a highlight or a drag's end makes new nodes with the cards where they were, and
+  // routing them again would draw the same wires. So the cards last routed stand until one of
+  // them has moved or been measured anew; kept the way React keeps a value from an earlier render.
+  const [kept, setKept] = useState(measured)
+  if (kept.signature !== measured.signature || kept.complete !== measured.complete) {
+    setKept(measured)
+  }
+  const { cards, complete } = kept
+  const routed = useMemo(() => {
+    if (moving.size > 0) return null
+    if (!complete) return EMPTY
     return diagramGeometry(
       edges.map((edge) => ({
         id: edge.id,
@@ -148,7 +175,7 @@ export function useDiagramGeometry(edges: readonly Edge[]): DiagramGeometry {
       })),
       cards,
     )
-  }, [nodes, lookup, edges, moving])
+  }, [cards, complete, edges, moving])
   // The geometry last routed, which stands while a model is dragged; kept as it is routed, the way
   // React keeps a value from an earlier render.
   const [settled, setSettled] = useState<DiagramGeometry>(EMPTY)

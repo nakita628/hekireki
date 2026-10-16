@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import { describeStep, isDestructiveStatement, isDestructiveStep, makePlan } from './plan.js'
+import {
+  describeStep,
+  isDestructiveStatement,
+  isDestructiveStep,
+  makePlan,
+  rebuiltTables,
+} from './plan.js'
 
 // What Prisma Migrate writes for PostgreSQL: a comment per group, one or two statements each.
 const POSTGRES = `-- AlterTable
@@ -228,6 +234,17 @@ describe('describeStep', () => {
       [{ kind: 'foreign-key', table: 'Post', columns: ['categoryId'], target: 'Category' }],
     ])
     expect(steps.every((step) => !step.destructive)).toBe(true)
+  })
+
+  it('reads the name of a rebuilt table as it is, not as a pattern', () => {
+    // The new table's name goes into a pattern: `v1.0` names that table, not `v1x0` too.
+    const rebuild = (dropped: string) => [
+      'INSERT INTO "new_T" ("id") SELECT "id" FROM "T"',
+      `DROP TABLE "${dropped}"`,
+      'ALTER TABLE "T" RENAME TO "v1.0"',
+    ]
+    expect(rebuiltTables(rebuild('v1.0'))).toStrictEqual(new Set(['v1.0']))
+    expect(rebuiltTables(rebuild('v1x0'))).toStrictEqual(new Set())
   })
 
   it('still calls a real drop what it is', () => {

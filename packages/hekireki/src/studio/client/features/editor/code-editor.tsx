@@ -48,6 +48,7 @@ export function CodeEditor({
   const monaco = setupMonaco()
   const latest = useRef({ onChange, onCursorLine, onSymbols, services, path })
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const mounted = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
   useEffect(() => {
     latest.current = { onChange, onCursorLine, onSymbols, services, path }
   })
@@ -93,6 +94,7 @@ export function CodeEditor({
   )
 
   const onMount: OnMount = (editor) => {
+    mounted.current = editor
     onReady(editor)
     refuseTextSubstitutions(editor)
     // Monaco binds Ctrl+Shift+I on Linux; the header advertises Shift+Alt+F, so bind it everywhere.
@@ -128,8 +130,10 @@ export function CodeEditor({
       onChange={(text, event) => {
         if (text === undefined) return
         latest.current.onChange(text)
-        const model = monaco.editor.getModels().find((m) => m.getValue() === text)
-        if (model && !event.isFlush) scheduleAnalyze(model)
+        // The model is the editor's own; reading every model's text to find it by content would
+        // copy every file on each keystroke.
+        const model = mounted.current?.getModel() ?? null
+        if (model !== null && !event.isFlush) scheduleAnalyze(model)
       }}
     />
   )

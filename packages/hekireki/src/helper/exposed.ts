@@ -2,13 +2,16 @@ import type { DMMF } from '@prisma/generator-helper'
 
 import { isSameList } from '../utils/index.js'
 import { allocate, pascalCase } from '../utils/naming.js'
+import { exprRef, REF, typeRef } from '../utils/placeholder.js'
 import type { ManyToMany } from '../utils/prisma-model.js'
 import {
   backRelation,
   columnName,
   isFunctionDefault,
   isListDefault,
+  lengthArg,
   manyToManyRelations,
+  scalarFields,
   tableName,
 } from '../utils/prisma-model.js'
 import {
@@ -34,6 +37,7 @@ import {
   relationMaps,
   relationMode,
 } from '../utils/prisma-schema-text.js'
+import type { PrismaBlock } from '../utils/prisma-schema-text.js'
 
 // Generated Kotlin names a class through a placeholder: `\0T|java.time.Instant\0` where a type is
 // expected, `\0E|...\0` where a class is the receiver of a call (`Instant.now()`), `\0F|...\0` for a
@@ -43,16 +47,6 @@ import {
 // name plus an import, or to the qualified name where the simple one would bind to something else.
 // NUL never survives into emitted text otherwise (string literals escape it). A name that starts
 // with a dot is one of the package being written.
-const REF = '\u0000'
-
-function typeRef(fullName: string) {
-  return `${REF}T|${fullName}${REF}`
-}
-
-function exprRef(fullName: string) {
-  return `${REF}E|${fullName}${REF}`
-}
-
 function funRef(fullName: string) {
   return `${REF}F|${fullName}${REF}`
 }
@@ -262,16 +256,16 @@ export function propertyName(name: string) {
  * The `@@schema` each enum is declared in. DMMF carries a model's schema but not an enum's, so it
  * is read off the schema's text.
  *
- * @param source - The Prisma schema as written (all of its files, merged).
+ * @param blocks - The blocks of the Prisma schema as written (all of its files, merged).
  * @returns The schema of each enum that names one.
  */
-export function enumSchemas(source: string) {
+export function enumSchemas(blocks: readonly PrismaBlock[]) {
   const attribute = new RegExp(
     String.raw`^@@schema\s*\(\s*(?:map\s*:\s*)?(${PRISMA_STRING})\s*\)$`,
     'u',
   )
   return new Map(
-    prismaBlocks(source)
+    blocks
       .filter((block) => block.keyword === 'enum')
       .flatMap((block) =>
         block.lines.flatMap((line) => {
@@ -287,15 +281,11 @@ export function enumSchemas(source: string) {
  * The names of the `view` blocks. DMMF lists a view among the models, with nothing to tell it
  * apart; Prisma Migrate creates no table for it.
  *
- * @param source - The Prisma schema as written (all of its files, merged).
+ * @param blocks - The blocks of the Prisma schema as written (all of its files, merged).
  * @returns The name of each view.
  */
-function viewNames(source: string) {
-  return new Set(
-    prismaBlocks(source)
-      .filter((block) => block.keyword === 'view')
-      .map((block) => block.name),
-  )
+function viewNames(blocks: readonly PrismaBlock[]) {
+  return new Set(blocks.filter((block) => block.keyword === 'view').map((block) => block.name))
 }
 
 const ATTRIBUTE_TOKEN = new RegExp(String.raw`${PRISMA_STRING}|[()[\]{}:,]|[^\s()[\]{}:,"]+`, 'gu')
@@ -368,11 +358,11 @@ function indexCondition(tokens: readonly string[]): IndexCondition | null {
  * index apart: its model, whether it is unique, its fields and its `map`. DMMF drops it, so it is
  * read off the schema's text.
  *
- * @param source - The Prisma schema as written (all of its files, merged).
+ * @param blocks - The blocks of the Prisma schema as written (all of its files, merged).
  * @returns Each index that has a `where`.
  */
-function indexConditions(source: string) {
-  return prismaBlocks(source)
+function indexConditions(blocks: readonly PrismaBlock[]) {
+  return blocks
     .filter((block) => block.keyword === 'model')
     .flatMap((block) =>
       block.lines.flatMap((line) => {
@@ -411,12 +401,12 @@ function indexConditions(source: string) {
  * The text of each numeric `@default`, by `Model.field`. DMMF carries one as a JavaScript number,
  * which holds no more digits than a double; a Decimal default is taken as written.
  *
- * @param source - The Prisma schema as written (all of its files, merged).
+ * @param blocks - The blocks of the Prisma schema as written (all of its files, merged).
  * @returns The literal of each field whose default is a number.
  */
-function numericDefaults(source: string) {
+function numericDefaults(blocks: readonly PrismaBlock[]) {
   return new Map(
-    prismaBlocks(source)
+    blocks
       .filter((block) => block.keyword === 'model')
       .flatMap((block) =>
         block.lines.flatMap((line) => {
@@ -744,10 +734,6 @@ type Names = {
   readonly entries: ReadonlyMap<string, ReadonlyMap<string, string>>
 }
 
-function scalarFields(model: DMMF.Model) {
-  return model.fields.filter((f) => f.kind === 'scalar' || f.kind === 'enum')
-}
-
 /** Everything the files are written from: the schema, what it implies, and the Kotlin names. */
 type ExposedPlan = {
   readonly names: Names
@@ -763,6 +749,14 @@ type ExposedPlan = {
   readonly manyToMany: readonly ManyToMany[]
   /** The text of each numeric `@default`, by `Model.field`. */
   readonly numericDefaults: ReadonlyMap<string, string>
+  /** How the DAO follows a foreign key, as {@link navigationKind} says, read once per key. */
+  readonly navigationOf: (fk: ForeignKey) => 'column' | 'table' | null
+  /** The foreign keys a model holds, in the order `foreignKeys` lists them. */
+  readonly foreignKeysOf: (model: DMMF.Model) => readonly ForeignKey[]
+  /** The foreign key a relation field declares. */
+  readonly foreignKeyOf: (field: DMMF.Field) => ForeignKey | undefined
+  /** The foreign key a relation field is the far end of. */
+  readonly inverseKeyOf: (field: DMMF.Field) => ForeignKey | undefined
 }
 
 /** An index, and the condition of a partial one as SQL. */
@@ -809,7 +803,10 @@ function isSmallserial(field: DMMF.Field) {
  * @param fk - The foreign key.
  * @returns `column`, `table` or null.
  */
-function navigationKind(schema: SchemaInfo, fk: ForeignKey) {
+function navigationKind(
+  schema: Pick<SchemaInfo, 'dao' | 'keyOf' | 'foreignKeys'>,
+  fk: ForeignKey,
+): 'column' | 'table' | null {
   if (!hasEntity(schema, fk.dependent) || !hasEntity(schema, fk.principal)) return null
   if (fk.kind === 'composite') return null
   if (fk.kind === 'composite-id') {
@@ -865,7 +862,7 @@ function isJoinNavigable(schema: SchemaInfo, m2m: ManyToMany) {
 
 function relationFields(schema: SchemaInfo, model: DMMF.Model) {
   const fromForeignKeys = schema.foreignKeys.flatMap((fk) =>
-    navigationKind(schema, fk) === null
+    schema.navigationOf(fk) === null
       ? []
       : [
           ...(fk.dependent === model ? [fk.navigation.name] : []),
@@ -997,10 +994,11 @@ export function planExposed(
     readonly source?: string
   },
 ) {
-  const source = options.source ?? ''
-  const views = viewNames(source)
+  // The schema's text, read into its blocks once for everything DMMF drops.
+  const blocks = prismaBlocks(options.source ?? '')
+  const views = viewNames(blocks)
   const models = datamodel.models.filter((m) => !views.has(m.name))
-  const conditions = indexConditions(source)
+  const conditions = indexConditions(blocks)
   // Computed once per model: the indexes are told apart by identity, and a DMMF without `indexes`
   // has them made up afresh from each model.
   const indexes = new Map(
@@ -1043,20 +1041,36 @@ export function planExposed(
   const manyToMany = manyToManyRelations(models).filter(
     (m2m) => keyOf(m2m.a.model).kind === 'single' && keyOf(m2m.b.model).kind === 'single',
   )
-  const inDatabase = relationMode(source) !== 'prisma'
-  const schema: SchemaInfo = {
+  const inDatabase = relationMode(blocks) !== 'prisma'
+  const read = {
     dao: options.dao,
     models,
     enums: datamodel.enums,
-    enumSchemas: enumSchemas(source),
+    enumSchemas: enumSchemas(blocks),
     indexesOf,
     keyOf,
     // With `relationMode = "prisma"` the relations live in Prisma Client alone: no foreign key,
     // and nothing for the DAO to follow, as Exposed follows a relation by its foreign key.
-    foreignKeys: inDatabase ? foreignKeys(models, keyOf, relationMaps(source)) : [],
+    foreignKeys: inDatabase ? foreignKeys(models, keyOf, relationMaps(blocks)) : [],
     foreignKeysInDatabase: inDatabase,
     manyToMany,
-    numericDefaults: numericDefaults(source),
+    numericDefaults: numericDefaults(blocks),
+  }
+  // How the DAO follows each foreign key depends on the key alone, and every model asks about
+  // every key, so it is worked out once per key; a key is looked up by the field it is declared
+  // on, or by the model it belongs to.
+  const navigations = new Map(read.foreignKeys.map((fk) => [fk, navigationKind(read, fk)]))
+  const byDependent = Map.groupBy(read.foreignKeys, (fk) => fk.dependent)
+  const byNavigation = new Map(read.foreignKeys.map((fk) => [fk.navigation, fk]))
+  const byInverse = new Map(
+    read.foreignKeys.flatMap((fk) => (fk.inverse ? [[fk.inverse, fk] as const] : [])),
+  )
+  const schema: SchemaInfo = {
+    ...read,
+    navigationOf: (fk) => navigations.get(fk) ?? null,
+    foreignKeysOf: (model) => byDependent.get(model) ?? [],
+    foreignKeyOf: (field) => byNavigation.get(field),
+    inverseKeyOf: (field) => byInverse.get(field),
   }
   return { ...schema, names: planNames(schema, options.package) }
 }
@@ -1126,11 +1140,6 @@ type Mapping = {
 
 function callText(name: string, args: readonly string[]) {
   return `${name}(${args.join(', ')})`
-}
-
-function lengthArg(args: readonly string[]) {
-  const [length] = args
-  return length !== undefined && /^\d+$/u.test(length) ? length : null
 }
 
 function mapping(
@@ -1705,9 +1714,7 @@ function inlineUniques(plan: ExposedPlan, model: DMMF.Model) {
 }
 
 function inlineForeignKey(plan: ExposedPlan, model: DMMF.Model, field: DMMF.Field) {
-  return plan.foreignKeys.find(
-    (fk) => fk.dependent === model && fk.inline && fk.from[0] === field.name,
-  )
+  return plan.foreignKeysOf(model).find((fk) => fk.inline && fk.from[0] === field.name)
 }
 
 // Whether a foreign key's column is a `reference()`, typed EntityID: one referencing an IdTable's
@@ -2404,10 +2411,10 @@ function columnRef(plan: ExposedPlan, model: DMMF.Model, field: string) {
 
 function relationLines(plan: ExposedPlan, model: DMMF.Model, field: DMMF.Field) {
   const name = kotlinName(entityProperty(plan, model, field.name))
-  const outgoing = plan.foreignKeys.find((fk) => fk.dependent === model && fk.navigation === field)
+  const outgoing = plan.foreignKeyOf(field)
   if (outgoing) {
     const target =
-      navigationKind(plan, outgoing) === 'table'
+      plan.navigationOf(outgoing) === 'table'
         ? tableRef(plan, model)
         : columnRef(plan, model, outgoing.from[0] ?? '')
     const isKey = outgoing.from.some((from) => isKeyField(plan, model, from))
@@ -2419,10 +2426,10 @@ function relationLines(plan: ExposedPlan, model: DMMF.Model, field: DMMF.Field) 
       target,
     )
   }
-  const incoming = plan.foreignKeys.find((fk) => fk.principal === model && fk.inverse === field)
+  const incoming = plan.inverseKeyOf(field)
   if (incoming) {
     const target =
-      navigationKind(plan, incoming) === 'table'
+      plan.navigationOf(incoming) === 'table'
         ? tableRef(plan, incoming.dependent)
         : columnRef(plan, incoming.dependent, incoming.from[0] ?? '')
     const operator = field.isList

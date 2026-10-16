@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { columnName, tableName } from './prisma-model.js'
+import { fieldColumn, tableName } from './prisma-model.js'
 
 // What a Prisma schema means on PostgreSQL, whichever language the model is written in: the names
 // Prisma Migrate gives tables, constraints and indexes, the keys and join tables it creates, and
@@ -90,10 +90,7 @@ export function indexName(model: DMMF.Model, index: IndexInfo) {
   if (index.dbName) return index.dbName
   const table = tableName(model)
   if (index.type === 'id') return prismaConstraintName(table, '_pkey')
-  const columns = index.fields.map((f) => {
-    const field = model.fields.find((mf) => mf.name === f.name)
-    return field ? columnName(field) : f.name
-  })
+  const columns = index.fields.map((f) => fieldColumn(model, f.name))
   return prismaConstraintName(
     [table, ...columns].join('_'),
     index.type === 'unique' ? '_key' : '_idx',

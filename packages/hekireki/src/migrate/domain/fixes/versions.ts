@@ -43,10 +43,11 @@ export function makeFixContext(input: {
   const { dialect, keyOf } = input
   const q = (name: string) => quoteIdentifier(dialect, name)
   const actualByKey = new Map(input.actual.map((table) => [keyOf(table), table]))
+  const expectedByKey = new Map(input.expected.map((table) => [keyOf(table), table]))
 
   /** A table as the steps see it, whether the schema has a model for it or not. */
   const versioned = (key: string) => {
-    const expected = input.expected.find((table) => keyOf(table) === key)
+    const expected = expectedByKey.get(key)
     const actual = actualByKey.get(key)
     if (actual === undefined) return null
     return {
@@ -57,6 +58,29 @@ export function makeFixContext(input: {
       primaryKey:
         expected?.primaryKey ?? actual.uniques[0] ?? actual.columns.slice(0, 1).map((c) => c.name),
     }
+  }
+
+  // Every foreign key of the database by the table it points at, read once: a delete or a change
+  // of a table's rows is followed through them, and the steps ask for a table's many times over.
+  const pointingAt = Map.groupBy(
+    input.actual.flatMap((child) => child.foreignKeys.map((fk) => ({ child, fk }))),
+    ({ fk }) => keyOf({ schema: fk.refSchema, table: fk.refTable }),
+  )
+  /**
+   * The foreign keys into the table at `key`, in the order of the tables and of their keys, each
+   * with the columns it references: its own, or the table's primary key where it names none. A
+   * key that references more or fewer columns than it holds is left out.
+   */
+  const incoming = (key: string) => {
+    const parent = versioned(key)
+    if (parent === null) return []
+    return (pointingAt.get(key) ?? [])
+      .map(({ child, fk }) => ({
+        child,
+        fk,
+        references: fk.refColumns.every((c) => c !== '') ? fk.refColumns : parent.primaryKey,
+      }))
+      .filter(({ fk, references }) => references.length === fk.columns.length)
   }
 
   const noCtes: readonly string[] = []
@@ -105,8 +129,10 @@ export function makeFixContext(input: {
     counter: 0,
   }
   const current = (state: typeof empty, key: string) => {
+    const known = state.versions.get(key)
+    if (known !== undefined) return known
     const table = versioned(key)
-    return state.versions.get(key) ?? (table === null ? '' : qualifiedName(dialect, table))
+    return table === null ? '' : qualifiedName(dialect, table)
   }
   /**
    * A new version of a table: its rows as the step leaves them.
@@ -143,6 +169,7 @@ export function makeFixContext(input: {
     actualByKey,
     q,
     versioned,
+    incoming,
     empty,
     current,
     version,

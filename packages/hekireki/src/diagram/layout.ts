@@ -178,12 +178,18 @@ export function autoLayout(schema: DiagramSchema): LayoutPositions {
     return { name, result: LayoutNodeSchema.safeParse(raw) }
   })
   const nodes = placed.flatMap(({ result }) => (result.success ? [result.data] : []))
+  // A rank is the blocks dagre centres on one line; its left edge is its widest block's.
+  const rankWidth = new Map(
+    [...Map.groupBy(nodes, (node) => node.x)].map(([x, rank]) => [
+      x,
+      Math.max(...rank.map((node) => node.width)),
+    ]),
+  )
   return Object.fromEntries(
     placed.map(({ name, result }) => {
       if (!result.success) return [name, { x: 0, y: 0 }]
-      // A rank is the blocks dagre centres on one line; its left edge is its widest block's.
       const { x, y, height } = result.data
-      const width = Math.max(...nodes.filter((node) => node.x === x).map((node) => node.width))
+      const width = rankWidth.get(x) ?? 0
       return [name, { x: onGrid(x - width / 2), y: onGrid(y - height / 2) }]
     }),
   )
