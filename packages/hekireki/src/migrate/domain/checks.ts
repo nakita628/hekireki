@@ -306,12 +306,21 @@ export function makeChecks(input: {
       : []
   })
   const renames = renameErrors.length === 0 ? renameRequests : []
+  // By table key and new name, the first request for a column winning as a scan would: it is
+  // asked for every column of every table.
+  const renamedFrom = new Map(
+    renames.toReversed().map((r) => [JSON.stringify([keyOf(r.table), r.to]), r.from]),
+  )
   const nameNow = (key: string, column: string) =>
-    renames.find((r) => keyOf(r.table) === key && r.to === column)?.from ?? column
+    renamedFrom.get(JSON.stringify([key, column])) ?? column
   const expected = input.expected.map((table) => renamedTable(table, keyOf, nameNow))
 
   const expectedKeys = new Set(expected.map(keyOf))
-  const conversionsOf = (table: (typeof expected)[number], column: string) => {
+  const expectedByKey = new Map(expected.map((table) => [keyOf(table), table]))
+  // The conversions of a column are asked for by the fixes, by their steps and by the checks of
+  // its table: worked out once per column and kept.
+  const conversionsFound = new Map<string, ReturnType<typeof makeConversions>>()
+  const conversionsOnce = (table: (typeof expected)[number], column: string) => {
     const existing = rawByKey.get(keyOf(table))?.columns.find((c) => c.name === column)
     const found = table.columns.find((c) => c.column === column)
     if (existing === undefined || found === undefined) return []
@@ -333,6 +342,14 @@ export function makeChecks(input: {
     return fix?.renamedFrom !== undefined && dialect === 'postgresql'
       ? all.map((c) => (c.kind === 'column-recreated' ? withoutCast(c, found.type) : c))
       : all
+  }
+  const conversionsOf = (table: (typeof expected)[number], column: string) => {
+    const at = JSON.stringify([keyOf(table), column])
+    const known = conversionsFound.get(at)
+    if (known !== undefined) return known
+    const found = conversionsOnce(table, column)
+    conversionsFound.set(at, found)
+    return found
   }
   const fixes = resolveFixes({
     dialect,
@@ -583,7 +600,7 @@ export function makeChecks(input: {
       (table.checks ?? []).map((constraint) => ({
         kind: 'check-constraint',
         severity: 'blocking',
-        model: expected.find((one) => keyOf(one) === keyOf(table))?.model ?? table.table,
+        model: expectedByKey.get(keyOf(table))?.model ?? table.table,
         subject: `${table.table} ${constraint.name}`,
         what: `the fixes leave rows the CHECK constraint refuses: ${constraint.clause}`,
         unit: 'row',
@@ -611,7 +628,7 @@ export function makeChecks(input: {
             (table.checks ?? []).map((constraint) => ({
               kind: 'check-constraint',
               severity: 'blocking',
-              model: expected.find((one) => keyOf(one) === keyOf(table))?.model ?? table.table,
+              model: expectedByKey.get(keyOf(table))?.model ?? table.table,
               subject: `${table.table} ${constraint.name} (after the migration)`,
               what: `the migration leaves rows the CHECK constraint refuses: ${constraint.clause}`,
               unit: 'row',
@@ -633,7 +650,7 @@ export function makeChecks(input: {
           {
             kind: 'trigger-unfollowed',
             severity: 'warning',
-            model: expected.find((one) => keyOf(one) === keyOf(table))?.model ?? table.table,
+            model: expectedByKey.get(keyOf(table))?.model ?? table.table,
             subject: table.table,
             what: `the fixes write to a table with triggers the checks do not follow: ${names.join(', ')}`,
             unit: 'trigger',

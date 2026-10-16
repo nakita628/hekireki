@@ -1,7 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { makePascalCase } from '../utils/index.js'
-import { relationEnds } from '../utils/prisma-model.js'
+import { fieldColumn, relationEnds } from '../utils/prisma-model.js'
 import { ELOQUENT_MODEL_METHODS } from './eloquent-model-methods.js'
 
 export function prismaTypeToEloquentCast(type: string) {
@@ -26,11 +26,6 @@ function phpString(value: string) {
 
 // A doc comment as a PHPDoc block, or nothing. A `*/` in the text would end the block: it is
 // written `*\/`.
-function fieldColumn(model: DMMF.Model, fieldName: string) {
-  const field = model.fields.find((f) => f.name === fieldName)
-  return field?.dbName ?? fieldName
-}
-
 /**
  * What Eloquent keys a model by: its `@id`, or its `@@id`, or where it has neither, the first
  * unique of required fields (Prisma requires a model without an id to have one). One field is
@@ -864,6 +859,8 @@ export function eloquentProblems(
     ...enums.map((enumDef) => ({ what: 'enum', name: enumDef.name, className: enumDef.name })),
   ]
   const support = supportClasses(models)
+  // PHP compares class names without regard to case: the classes grouped by the name they share.
+  const sameClass = Map.groupBy(classes, ({ className }) => className.toLowerCase())
   const classProblems = [
     ...classes
       .filter(({ className }) => PHP_RESERVED_CLASS_NAMES.has(className.toLowerCase()))
@@ -879,15 +876,16 @@ export function eloquentProblems(
             `${what} ${name}: ${written.name} is ${written.why}, written beside the models; rename the ${what}`,
         ),
     ),
-    ...classes.flatMap(({ what, name, className }, i) =>
-      classes
-        .slice(0, i)
-        .filter((other) => other.className.toLowerCase() === className.toLowerCase())
+    ...classes.flatMap((one) => {
+      const { what, name, className } = one
+      const alike = sameClass.get(className.toLowerCase()) ?? []
+      return alike
+        .slice(0, alike.indexOf(one))
         .map(
           (other) =>
             `${what} ${name}: its class ${className} is the class of ${other.what} ${other.name} too, as PHP compares class names without regard to case; rename one of them`,
-        ),
-    ),
+        )
+    }),
   ]
   return [
     ...classProblems,
@@ -947,7 +945,24 @@ export function eloquentEnum(enumDef: DMMF.DatamodelEnum, namespace: string) {
   ].join('\n')
 }
 
+/** The models as one PHP file each, in their order. */
 export function eloquentModels(
+  models: readonly DMMF.Model[],
+  namespace: string,
+  allModels?: readonly DMMF.Model[],
+  enums?: readonly DMMF.DatamodelEnum[],
+  options: { readonly provider?: string } = {},
+) {
+  return eloquentModelCodes(models, namespace, allModels, enums, options)
+    .filter(Boolean)
+    .join('\n\n')
+}
+
+/**
+ * The PHP class of each model, in the order of `models`. What every class reads of the schema —
+ * which short names are taken — is worked out once for them all.
+ */
+export function eloquentModelCodes(
   models: readonly DMMF.Model[],
   namespace: string,
   allModels?: readonly DMMF.Model[],
@@ -970,392 +985,383 @@ export function eloquentModels(
     const short = fqcn.slice(fqcn.lastIndexOf('\\') + 1)
     return taken.has(short.toLowerCase()) ? `\\${fqcn}` : short
   }
-  return models
-    .map((model) => {
-      const associations = getAssociations(model, contextModels)
-      const tableName = model.dbName ?? model.name
-      const key = modelKey(model)
-      const idField = key.field
-      const timestamps = findTimestamps(model.fields)
-      // A model with a DateTime reads and writes it as Prisma Client does, through PrismaDates.
-      const writesDates = model.fields.some((f) => f.type === 'DateTime' && !f.isList)
+  return models.map((model) => {
+    const associations = getAssociations(model, contextModels)
+    const tableName = model.dbName ?? model.name
+    const key = modelKey(model)
+    const idField = key.field
+    const timestamps = findTimestamps(model.fields)
+    // A model with a DateTime reads and writes it as Prisma Client does, through PrismaDates.
+    const writesDates = model.fields.some((f) => f.type === 'DateTime' && !f.isList)
 
-      const pkColumn = idField ? (idField.dbName ?? idField.name) : null
-      const pkUuidTrait = (() => {
-        const def = idField?.default
-        if (!(def && typeof def === 'object' && 'name' in def)) return null
-        // Laravel 12: HasUuids generates UUIDv7, HasVersion4Uuids generates
-        // ordered UUIDv4 (Laravel 11.35+), HasUlids generates ULIDs.
-        if (def.name === 'ulid') return 'HasUlids'
-        if (def.name !== 'uuid') return null
-        return 'args' in def && def.args[0] === 7 ? 'HasUuids' : 'HasVersion4Uuids'
-      })()
-      const pkDefault = idField?.default
-      const isAutoincrement =
-        idField !== undefined &&
-        (idField.type === 'Int' || idField.type === 'BigInt') &&
-        pkDefault !== undefined &&
-        pkDefault !== null &&
-        typeof pkDefault === 'object' &&
-        'name' in pkDefault &&
-        pkDefault.name === 'autoincrement'
+    const pkColumn = idField ? (idField.dbName ?? idField.name) : null
+    const pkUuidTrait = (() => {
+      const def = idField?.default
+      if (!(def && typeof def === 'object' && 'name' in def)) return null
+      // Laravel 12: HasUuids generates UUIDv7, HasVersion4Uuids generates
+      // ordered UUIDv4 (Laravel 11.35+), HasUlids generates ULIDs.
+      if (def.name === 'ulid') return 'HasUlids'
+      if (def.name !== 'uuid') return null
+      return 'args' in def && def.args[0] === 7 ? 'HasUuids' : 'HasVersion4Uuids'
+    })()
+    const pkDefault = idField?.default
+    const isAutoincrement =
+      idField !== undefined &&
+      (idField.type === 'Int' || idField.type === 'BigInt') &&
+      pkDefault !== undefined &&
+      pkDefault !== null &&
+      typeof pkDefault === 'object' &&
+      'name' in pkDefault &&
+      pkDefault.name === 'autoincrement'
 
-      const timestampConstLines = [
-        ...(timestamps.createdColumn === null && timestamps.updatedColumn !== null
-          ? ['    const CREATED_AT = null;']
-          : timestamps.createdColumn !== null && timestamps.createdColumn !== 'created_at'
-            ? [`    const CREATED_AT = ${phpString(timestamps.createdColumn)};`]
-            : []),
-        ...(timestamps.updatedColumn === null && timestamps.createdColumn !== null
-          ? ['    const UPDATED_AT = null;']
-          : timestamps.updatedColumn !== null && timestamps.updatedColumn !== 'updated_at'
-            ? [`    const UPDATED_AT = ${phpString(timestamps.updatedColumn)};`]
-            : []),
-      ]
-      const timestampsDisabled =
-        timestamps.createdColumn === null && timestamps.updatedColumn === null
-
-      const attributeFields = model.fields.filter(
-        (f) =>
-          (f.kind === 'scalar' || f.kind === 'enum') &&
-          f !== idField &&
-          !timestamps.exclude.has(f.name),
-      )
-
-      // A key nothing generates (cuid(), or no default at all) is the caller's to give, and a
-      // `create([...])` drops what is not fillable.
-      const keyGiven = pkColumn !== null && pkUuidTrait === null && !isAutoincrement
-      const fillableColumns = [
-        ...(keyGiven && pkColumn !== null ? [pkColumn] : []),
-        ...attributeFields.map((f) => f.dbName ?? f.name),
-      ]
-      const fillableLines =
-        fillableColumns.length > 0
-          ? [
-              '    protected $fillable = [',
-              ...fillableColumns.map((column) => `        ${phpString(column)},`),
-              '    ];',
-            ]
-          : []
-
-      // A new model carries the schema's literal defaults before it is saved, as it will once
-      // the database has filled them.
-      const defaultEntries = attributeFields.flatMap((f) => {
-        const value = phpDefault(f, enums ?? [], options.provider)
-        return value === null ? [] : [`        ${phpString(f.dbName ?? f.name)} => ${value},`]
-      })
-      const defaultLines =
-        defaultEntries.length > 0
-          ? ['    protected $attributes = [', ...defaultEntries, '    ];']
-          : []
-
-      // Eloquent has no composite key. `$primaryKey` stays null, and KEY_COLUMNS names the columns:
-      // a key is an array of each by name. find(), findMany(), findOrFail(), whereKey() and
-      // whereKeyNot() take one through CompositeKeyBuilder, a collection of the models tells them
-      // apart by it through CompositeKeyCollection, destroy() and getKey() are here, and an
-      // update, a refresh and a delete name every column, as the row was read. Model::delete()
-      // refuses a model with no `$primaryKey` before it builds the query, so it is written out
-      // without that check.
-      const compositeColumns = idField === undefined ? key.columns : []
-      const compositeKeyMethods = [
-        [
-          '    public function getKey()',
-          '    {',
-          '        $key = [];',
-          '        foreach (static::KEY_COLUMNS as $column) {',
-          '            $key[$column] = $this->getAttribute($column);',
-          '        }',
-          '',
-          '        return $key;',
-          '    }',
-        ],
-        [
-          '    public function newEloquentBuilder($query)',
-          '    {',
-          '        return new CompositeKeyBuilder($query);',
-          '    }',
-        ],
-        [
-          '    public function newCollection(array $models = [])',
-          '    {',
-          '        return new CompositeKeyCollection($models);',
-          '    }',
-        ],
-        [
-          '    public static function destroy($ids)',
-          '    {',
-          '        $count = 0;',
-          '        foreach ((new static())->newQuery()->whereKey(func_num_args() > 1 ? func_get_args() : $ids)->get() as $model) {',
-          '            if ($model->delete()) {',
-          '                $count++;',
-          '            }',
-          '        }',
-          '',
-          '        return $count;',
-          '    }',
-        ],
-        ...['setKeysForSaveQuery', 'setKeysForSelectQuery'].map((method) => [
-          `    protected function ${method}($query)`,
-          '    {',
-          '        foreach (static::KEY_COLUMNS as $column) {',
-          "            $query->where($column, '=', $this->original[$column] ?? $this->getAttribute($column));",
-          '        }',
-          '',
-          '        return $query;',
-          '    }',
-        ]),
-        [
-          '    public function delete()',
-          '    {',
-          '        $this->mergeAttributesFromCachedCasts();',
-          '',
-          '        if (! $this->exists) {',
-          '            return null;',
-          '        }',
-          '',
-          "        if ($this->fireModelEvent('deleting') === false) {",
-          '            return false;',
-          '        }',
-          '',
-          '        $this->touchOwners();',
-          '        $this->performDeleteOnModel();',
-          "        $this->fireModelEvent('deleted', false);",
-          '',
-          '        return true;',
-          '    }',
-        ],
-      ]
-
-      // On PostgreSQL, the columns whose date and time PrismaQueryBuilder takes in UTC.
-      const zonedColumns =
-        options.provider === 'postgresql' || options.provider === 'cockroachdb'
-          ? model.fields
-              .filter(
-                (f) => f.type === 'DateTime' && !f.isList && f.nativeType?.[0] === 'Timestamptz',
-              )
-              .map((f) => phpString(f.dbName ?? f.name))
-          : []
-      const constLines = [
-        ...timestampConstLines,
-        ...(zonedColumns.length > 0
-          ? [`    const ZONED_DATES = [${zonedColumns.join(', ')}];`]
+    const timestampConstLines = [
+      ...(timestamps.createdColumn === null && timestamps.updatedColumn !== null
+        ? ['    const CREATED_AT = null;']
+        : timestamps.createdColumn !== null && timestamps.createdColumn !== 'created_at'
+          ? [`    const CREATED_AT = ${phpString(timestamps.createdColumn)};`]
           : []),
-        ...(compositeColumns.length > 0
-          ? [`    const KEY_COLUMNS = [${compositeColumns.map(phpString).join(', ')}];`]
+      ...(timestamps.updatedColumn === null && timestamps.createdColumn !== null
+        ? ['    const UPDATED_AT = null;']
+        : timestamps.updatedColumn !== null && timestamps.updatedColumn !== 'updated_at'
+          ? [`    const UPDATED_AT = ${phpString(timestamps.updatedColumn)};`]
           : []),
-      ]
+    ]
+    const timestampsDisabled =
+      timestamps.createdColumn === null && timestamps.updatedColumn === null
 
-      const castEntries = attributeFields.flatMap((f) => {
-        const column = f.dbName ?? f.name
-        // A DateTime[] is a list of Carbon, through AsPrismaDateList; its argument is the
-        // native type of the items.
-        if (f.isList && f.type === 'DateTime') {
-          const kind = f.nativeType?.[0]
-          const argument =
-            kind === 'Date'
-              ? " . ':date'"
-              : kind === 'Time' || kind === 'Timetz'
-                ? " . ':time'"
-                : ''
-          return [`        ${phpString(column)} => AsPrismaDateList::class${argument},`]
-        }
-        // Other Prisma scalar lists are native arrays (e.g. text[] on PostgreSQL),
-        // not serialized JSON: Laravel's 'array' cast would json_decode/encode
-        // and break both reads and writes, so they get no cast.
-        if (f.isList) return []
-        if (f.kind === 'enum' && enumNames.has(f.type)) {
-          return [`        ${phpString(column)} => ${f.type}::class,`]
-        }
-        if (f.type === 'Bytes') return [`        ${phpString(column)} => AsBytes::class,`]
-        if (f.type === 'Decimal') return [`        ${phpString(column)} => AsDecimal::class,`]
-        if (f.type === 'DateTime' && f.nativeType?.[0] === 'Date') {
-          return [`        ${phpString(column)} => AsPrismaDate::class,`]
-        }
-        if (
-          f.type === 'DateTime' &&
-          (f.nativeType?.[0] === 'Time' || f.nativeType?.[0] === 'Timetz')
-        ) {
-          return [`        ${phpString(column)} => AsPrismaTime::class,`]
-        }
-        const cast = prismaTypeToEloquentCast(f.type)
-        return cast ? [`        ${phpString(column)} => '${cast}',`] : []
-      })
+    const attributeFields = model.fields.filter(
+      (f) =>
+        (f.kind === 'scalar' || f.kind === 'enum') &&
+        f !== idField &&
+        !timestamps.exclude.has(f.name),
+    )
 
-      const castLines =
-        castEntries.length > 0 ? ['    protected $casts = [', ...castEntries, '    ];'] : []
+    // A key nothing generates (cuid(), or no default at all) is the caller's to give, and a
+    // `create([...])` drops what is not fillable.
+    const keyGiven = pkColumn !== null && pkUuidTrait === null && !isAutoincrement
+    const fillableColumns = [
+      ...(keyGiven && pkColumn !== null ? [pkColumn] : []),
+      ...attributeFields.map((f) => f.dbName ?? f.name),
+    ]
+    const fillableLines =
+      fillableColumns.length > 0
+        ? [
+            '    protected $fillable = [',
+            ...fillableColumns.map((column) => `        ${phpString(column)},`),
+            '    ];',
+          ]
+        : []
 
-      const propertyBlocks = [
-        ...(pkUuidTrait !== null || writesDates
-          ? [
-              [
-                ...(pkUuidTrait !== null ? [`    use ${ref(`${CONCERNS}${pkUuidTrait}`)};`] : []),
-                ...(writesDates ? ['    use PrismaDates;'] : []),
-              ],
-            ]
-          : []),
-        ...(constLines.length > 0 ? [constLines] : []),
-        [`    protected $table = ${phpString(tableName)};`],
-        ...(pkColumn !== null && pkColumn !== 'id'
-          ? [[`    protected $primaryKey = ${phpString(pkColumn)};`]]
-          : []),
-        ...(compositeColumns.length > 0 ? [['    protected $primaryKey = null;']] : []),
-        ...(idField?.type === 'String' ? [["    protected $keyType = 'string';"]] : []),
-        ...(isAutoincrement ? [] : [['    public $incrementing = false;']]),
-        ...(timestampsDisabled ? [['    public $timestamps = false;']] : []),
-        ...(fillableLines.length > 0 ? [fillableLines] : []),
-        ...(defaultLines.length > 0 ? [defaultLines] : []),
-        ...(castLines.length > 0 ? [castLines] : []),
-      ]
+    // A new model carries the schema's literal defaults before it is saved, as it will once
+    // the database has filled them.
+    const defaultEntries = attributeFields.flatMap((f) => {
+      const value = phpDefault(f, enums ?? [], options.provider)
+      return value === null ? [] : [`        ${phpString(f.dbName ?? f.name)} => ${value},`]
+    })
+    const defaultLines =
+      defaultEntries.length > 0
+        ? ['    protected $attributes = [', ...defaultEntries, '    ];']
+        : []
 
-      const belongsToMethods = associations.belongsTo.map((a) => {
-        const ownerKeyArg = a.ownerKeyColumn === null ? '' : `, ${phpString(a.ownerKeyColumn)}`
-        return [
-          `    public function ${a.name}(): ${ref(`${RELATIONS}BelongsTo`)}`,
-          '    {',
-          `        return $this->belongsTo(${makePascalCase(a.targetModel)}::class, ${phpString(a.foreignKeyColumn)}${ownerKeyArg});`,
-          '    }',
-        ]
-      })
-
-      const hasOneMethods = associations.hasOne.map((a) => {
-        const localKeyArg = a.localKeyColumn === null ? '' : `, ${phpString(a.localKeyColumn)}`
-        return [
-          `    public function ${a.name}(): ${ref(`${RELATIONS}HasOne`)}`,
-          '    {',
-          `        return $this->hasOne(${makePascalCase(a.targetModel)}::class, ${phpString(a.foreignKeyColumn)}${localKeyArg});`,
-          '    }',
-        ]
-      })
-
-      const hasManyMethods = associations.hasMany.map((a) => {
-        const localKeyArg = a.localKeyColumn === null ? '' : `, ${phpString(a.localKeyColumn)}`
-        return [
-          `    public function ${a.name}(): ${ref(`${RELATIONS}HasMany`)}`,
-          '    {',
-          `        return $this->hasMany(${makePascalCase(a.targetModel)}::class, ${phpString(a.foreignKeyColumn)}${localKeyArg});`,
-          '    }',
-        ]
-      })
-
-      const belongsToManyMethods = associations.belongsToMany.map((a) => [
-        `    public function ${a.name}(): ${ref(`${RELATIONS}BelongsToMany`)}`,
+    // Eloquent has no composite key. `$primaryKey` stays null, and KEY_COLUMNS names the columns:
+    // a key is an array of each by name. find(), findMany(), findOrFail(), whereKey() and
+    // whereKeyNot() take one through CompositeKeyBuilder, a collection of the models tells them
+    // apart by it through CompositeKeyCollection, destroy() and getKey() are here, and an
+    // update, a refresh and a delete name every column, as the row was read. Model::delete()
+    // refuses a model with no `$primaryKey` before it builds the query, so it is written out
+    // without that check.
+    const compositeColumns = idField === undefined ? key.columns : []
+    const compositeKeyMethods = [
+      [
+        '    public function getKey()',
         '    {',
-        `        return $this->belongsToMany(${makePascalCase(a.targetModel)}::class, ${phpString(a.joinTable)}, '${a.foreignPivotKey}', '${a.relatedPivotKey}');`,
-        '    }',
-      ])
-
-      // Prisma Client writes a ULID in upper case, and HasUlids in lower: the same column would
-      // hold both, and SQLite compares text by case.
-      const ulidMethod = [
-        '    public function newUniqueId()',
-        '    {',
-        `        return (string) ${ref(STR)}::ulid();`,
-        '    }',
-      ]
-      // What Prisma Client fills on an insert and the table does not, or fills in another form,
-      // the model fills as it saves: a uuid() or ulid() that is not the key (the traits make only
-      // the key), and a now(), which Prisma Client fills from its own clock in UTC and the table
-      // from the server's, on SQLite as `Y-m-d H:i:s`, which sorts before Prisma's ISO text.
-      // Each is left as it is where the caller gave it. It is done in
-      // save(), not in a `creating` listener, which Eloquent drops without an event dispatcher
-      // (Capsule outside Laravel).
-      const madeIds = attributeFields.flatMap((f) => {
-        const def = f.default
-        if (f.isList || !(def && typeof def === 'object' && 'name' in def)) return []
-        const column = phpString(f.dbName ?? f.name)
-        if (def.name === 'ulid') return [[column, `(string) ${ref(STR)}::ulid()`]]
-        if (def.name !== 'uuid') return []
-        const version = 'args' in def && def.args[0] === 7 ? 'uuid7' : 'orderedUuid'
-        return [[column, `(string) ${ref(STR)}::${version}()`]]
-      })
-      // A `dbgenerated("CURRENT_TIMESTAMP")` is filled so too: the table's clock is read in the
-      // session's time zone, and a `timestamp` column under Asia/Tokyo would be nine hours off.
-      const clockDefaults = attributeFields.flatMap((f) => {
-        const def = f.default
-        if (f.isList || f.isUpdatedAt || !(def && typeof def === 'object' && 'name' in def)) {
-          return []
-        }
-        const clock =
-          def.name === 'now' ||
-          (def.name === 'dbgenerated' &&
-            f.type === 'DateTime' &&
-            /^(current_timestamp(\(\d*\))?|now\(\))$/iu.test(String(def.args[0] ?? '').trim()))
-        return clock ? [[phpString(f.dbName ?? f.name), '$this->freshTimestamp()']] : []
-      })
-      const insertLines = [...madeIds, ...clockDefaults].flatMap(([column, value]) => [
-        `            if (! array_key_exists(${column}, $this->attributes)) {`,
-        `                $this->setAttribute(${column}, ${value});`,
-        '            }',
-      ])
-      // Eloquent stamps one @updatedAt, where it would, as UPDATED_AT; the others take the same
-      // time unless the caller gave them one.
-      const extraUpdated = attributeFields.filter((f) => f.isUpdatedAt)
-      const timestampsMethod = [
-        '    public function updateTimestamps()',
-        '    {',
-        ...extraUpdated.map(
-          (f) =>
-            `        $given${makePascalCase(f.name)} = $this->isDirty(${phpString(f.dbName ?? f.name)});`,
-        ),
-        '        parent::updateTimestamps();',
-        ...extraUpdated.flatMap((f) => [
-          `        if (! $given${makePascalCase(f.name)}) {`,
-          `            $this->setAttribute(${phpString(f.dbName ?? f.name)}, $this->getAttribute($this->getUpdatedAtColumn()));`,
-          '        }',
-        ]),
-        '',
-        '        return $this;',
-        '    }',
-      ]
-      const saveMethod = [
-        '    public function save(array $options = [])',
-        '    {',
-        '        if (! $this->exists) {',
-        ...insertLines,
+        '        $key = [];',
+        '        foreach (static::KEY_COLUMNS as $column) {',
+        '            $key[$column] = $this->getAttribute($column);',
         '        }',
         '',
-        '        return parent::save($options);',
+        '        return $key;',
+        '    }',
+      ],
+      [
+        '    public function newEloquentBuilder($query)',
+        '    {',
+        '        return new CompositeKeyBuilder($query);',
+        '    }',
+      ],
+      [
+        '    public function newCollection(array $models = [])',
+        '    {',
+        '        return new CompositeKeyCollection($models);',
+        '    }',
+      ],
+      [
+        '    public static function destroy($ids)',
+        '    {',
+        '        $count = 0;',
+        '        foreach ((new static())->newQuery()->whereKey(func_num_args() > 1 ? func_get_args() : $ids)->get() as $model) {',
+        '            if ($model->delete()) {',
+        '                $count++;',
+        '            }',
+        '        }',
+        '',
+        '        return $count;',
+        '    }',
+      ],
+      ...['setKeysForSaveQuery', 'setKeysForSelectQuery'].map((method) => [
+        `    protected function ${method}($query)`,
+        '    {',
+        '        foreach (static::KEY_COLUMNS as $column) {',
+        "            $query->where($column, '=', $this->original[$column] ?? $this->getAttribute($column));",
+        '        }',
+        '',
+        '        return $query;',
+        '    }',
+      ]),
+      [
+        '    public function delete()',
+        '    {',
+        '        $this->mergeAttributesFromCachedCasts();',
+        '',
+        '        if (! $this->exists) {',
+        '            return null;',
+        '        }',
+        '',
+        "        if ($this->fireModelEvent('deleting') === false) {",
+        '            return false;',
+        '        }',
+        '',
+        '        $this->touchOwners();',
+        '        $this->performDeleteOnModel();',
+        "        $this->fireModelEvent('deleted', false);",
+        '',
+        '        return true;',
+        '    }',
+      ],
+    ]
+
+    // On PostgreSQL, the columns whose date and time PrismaQueryBuilder takes in UTC.
+    const zonedColumns =
+      options.provider === 'postgresql' || options.provider === 'cockroachdb'
+        ? model.fields
+            .filter(
+              (f) => f.type === 'DateTime' && !f.isList && f.nativeType?.[0] === 'Timestamptz',
+            )
+            .map((f) => phpString(f.dbName ?? f.name))
+        : []
+    const constLines = [
+      ...timestampConstLines,
+      ...(zonedColumns.length > 0 ? [`    const ZONED_DATES = [${zonedColumns.join(', ')}];`] : []),
+      ...(compositeColumns.length > 0
+        ? [`    const KEY_COLUMNS = [${compositeColumns.map(phpString).join(', ')}];`]
+        : []),
+    ]
+
+    const castEntries = attributeFields.flatMap((f) => {
+      const column = f.dbName ?? f.name
+      // A DateTime[] is a list of Carbon, through AsPrismaDateList; its argument is the
+      // native type of the items.
+      if (f.isList && f.type === 'DateTime') {
+        const kind = f.nativeType?.[0]
+        const argument =
+          kind === 'Date' ? " . ':date'" : kind === 'Time' || kind === 'Timetz' ? " . ':time'" : ''
+        return [`        ${phpString(column)} => AsPrismaDateList::class${argument},`]
+      }
+      // Other Prisma scalar lists are native arrays (e.g. text[] on PostgreSQL),
+      // not serialized JSON: Laravel's 'array' cast would json_decode/encode
+      // and break both reads and writes, so they get no cast.
+      if (f.isList) return []
+      if (f.kind === 'enum' && enumNames.has(f.type)) {
+        return [`        ${phpString(column)} => ${f.type}::class,`]
+      }
+      if (f.type === 'Bytes') return [`        ${phpString(column)} => AsBytes::class,`]
+      if (f.type === 'Decimal') return [`        ${phpString(column)} => AsDecimal::class,`]
+      if (f.type === 'DateTime' && f.nativeType?.[0] === 'Date') {
+        return [`        ${phpString(column)} => AsPrismaDate::class,`]
+      }
+      if (
+        f.type === 'DateTime' &&
+        (f.nativeType?.[0] === 'Time' || f.nativeType?.[0] === 'Timetz')
+      ) {
+        return [`        ${phpString(column)} => AsPrismaTime::class,`]
+      }
+      const cast = prismaTypeToEloquentCast(f.type)
+      return cast ? [`        ${phpString(column)} => '${cast}',`] : []
+    })
+
+    const castLines =
+      castEntries.length > 0 ? ['    protected $casts = [', ...castEntries, '    ];'] : []
+
+    const propertyBlocks = [
+      ...(pkUuidTrait !== null || writesDates
+        ? [
+            [
+              ...(pkUuidTrait !== null ? [`    use ${ref(`${CONCERNS}${pkUuidTrait}`)};`] : []),
+              ...(writesDates ? ['    use PrismaDates;'] : []),
+            ],
+          ]
+        : []),
+      ...(constLines.length > 0 ? [constLines] : []),
+      [`    protected $table = ${phpString(tableName)};`],
+      ...(pkColumn !== null && pkColumn !== 'id'
+        ? [[`    protected $primaryKey = ${phpString(pkColumn)};`]]
+        : []),
+      ...(compositeColumns.length > 0 ? [['    protected $primaryKey = null;']] : []),
+      ...(idField?.type === 'String' ? [["    protected $keyType = 'string';"]] : []),
+      ...(isAutoincrement ? [] : [['    public $incrementing = false;']]),
+      ...(timestampsDisabled ? [['    public $timestamps = false;']] : []),
+      ...(fillableLines.length > 0 ? [fillableLines] : []),
+      ...(defaultLines.length > 0 ? [defaultLines] : []),
+      ...(castLines.length > 0 ? [castLines] : []),
+    ]
+
+    const belongsToMethods = associations.belongsTo.map((a) => {
+      const ownerKeyArg = a.ownerKeyColumn === null ? '' : `, ${phpString(a.ownerKeyColumn)}`
+      return [
+        `    public function ${a.name}(): ${ref(`${RELATIONS}BelongsTo`)}`,
+        '    {',
+        `        return $this->belongsTo(${makePascalCase(a.targetModel)}::class, ${phpString(a.foreignKeyColumn)}${ownerKeyArg});`,
         '    }',
       ]
-      const methodBlocks = [
-        ...(insertLines.length > 0 ? [saveMethod] : []),
-        ...(extraUpdated.length > 0 ? [timestampsMethod] : []),
-        ...(pkUuidTrait === 'HasUlids' ? [ulidMethod] : []),
-        ...(compositeColumns.length > 0 ? compositeKeyMethods : []),
-        ...belongsToMethods,
-        ...hasOneMethods,
-        ...hasManyMethods,
-        ...belongsToManyMethods,
-      ]
-
-      const imports = [
-        ...(pkUuidTrait !== null ? [`${CONCERNS}${pkUuidTrait}`] : []),
-        MODEL,
-        ...(associations.belongsTo.length > 0 ? [`${RELATIONS}BelongsTo`] : []),
-        ...(associations.belongsToMany.length > 0 ? [`${RELATIONS}BelongsToMany`] : []),
-        ...(associations.hasMany.length > 0 ? [`${RELATIONS}HasMany`] : []),
-        ...(associations.hasOne.length > 0 ? [`${RELATIONS}HasOne`] : []),
-        ...(pkUuidTrait === 'HasUlids' || madeIds.length > 0 ? [STR] : []),
-      ].filter((fqcn) => ref(fqcn) !== `\\${fqcn}`)
-
-      const bodyBlocks = [...propertyBlocks, ...methodBlocks]
-
-      const lines = [
-        '<?php',
-        '',
-        `namespace ${namespace};`,
-        '',
-        ...imports.map((fqcn) => `use ${fqcn};`),
-        '',
-        `class ${makePascalCase(model.name)} extends ${ref(MODEL)}`,
-        '{',
-        // oxlint-disable-next-line oxc/no-map-spread -- one blank separator per block, not an accumulator
-        ...bodyBlocks.flatMap((block, i) => (i === 0 ? block : ['', ...block])),
-        '}',
-      ]
-
-      return lines.join('\n')
     })
-    .filter(Boolean)
-    .join('\n\n')
+
+    const hasOneMethods = associations.hasOne.map((a) => {
+      const localKeyArg = a.localKeyColumn === null ? '' : `, ${phpString(a.localKeyColumn)}`
+      return [
+        `    public function ${a.name}(): ${ref(`${RELATIONS}HasOne`)}`,
+        '    {',
+        `        return $this->hasOne(${makePascalCase(a.targetModel)}::class, ${phpString(a.foreignKeyColumn)}${localKeyArg});`,
+        '    }',
+      ]
+    })
+
+    const hasManyMethods = associations.hasMany.map((a) => {
+      const localKeyArg = a.localKeyColumn === null ? '' : `, ${phpString(a.localKeyColumn)}`
+      return [
+        `    public function ${a.name}(): ${ref(`${RELATIONS}HasMany`)}`,
+        '    {',
+        `        return $this->hasMany(${makePascalCase(a.targetModel)}::class, ${phpString(a.foreignKeyColumn)}${localKeyArg});`,
+        '    }',
+      ]
+    })
+
+    const belongsToManyMethods = associations.belongsToMany.map((a) => [
+      `    public function ${a.name}(): ${ref(`${RELATIONS}BelongsToMany`)}`,
+      '    {',
+      `        return $this->belongsToMany(${makePascalCase(a.targetModel)}::class, ${phpString(a.joinTable)}, '${a.foreignPivotKey}', '${a.relatedPivotKey}');`,
+      '    }',
+    ])
+
+    // Prisma Client writes a ULID in upper case, and HasUlids in lower: the same column would
+    // hold both, and SQLite compares text by case.
+    const ulidMethod = [
+      '    public function newUniqueId()',
+      '    {',
+      `        return (string) ${ref(STR)}::ulid();`,
+      '    }',
+    ]
+    // What Prisma Client fills on an insert and the table does not, or fills in another form,
+    // the model fills as it saves: a uuid() or ulid() that is not the key (the traits make only
+    // the key), and a now(), which Prisma Client fills from its own clock in UTC and the table
+    // from the server's, on SQLite as `Y-m-d H:i:s`, which sorts before Prisma's ISO text.
+    // Each is left as it is where the caller gave it. It is done in
+    // save(), not in a `creating` listener, which Eloquent drops without an event dispatcher
+    // (Capsule outside Laravel).
+    const madeIds = attributeFields.flatMap((f) => {
+      const def = f.default
+      if (f.isList || !(def && typeof def === 'object' && 'name' in def)) return []
+      const column = phpString(f.dbName ?? f.name)
+      if (def.name === 'ulid') return [[column, `(string) ${ref(STR)}::ulid()`]]
+      if (def.name !== 'uuid') return []
+      const version = 'args' in def && def.args[0] === 7 ? 'uuid7' : 'orderedUuid'
+      return [[column, `(string) ${ref(STR)}::${version}()`]]
+    })
+    // A `dbgenerated("CURRENT_TIMESTAMP")` is filled so too: the table's clock is read in the
+    // session's time zone, and a `timestamp` column under Asia/Tokyo would be nine hours off.
+    const clockDefaults = attributeFields.flatMap((f) => {
+      const def = f.default
+      if (f.isList || f.isUpdatedAt || !(def && typeof def === 'object' && 'name' in def)) {
+        return []
+      }
+      const clock =
+        def.name === 'now' ||
+        (def.name === 'dbgenerated' &&
+          f.type === 'DateTime' &&
+          /^(current_timestamp(\(\d*\))?|now\(\))$/iu.test(String(def.args[0] ?? '').trim()))
+      return clock ? [[phpString(f.dbName ?? f.name), '$this->freshTimestamp()']] : []
+    })
+    const insertLines = [...madeIds, ...clockDefaults].flatMap(([column, value]) => [
+      `            if (! array_key_exists(${column}, $this->attributes)) {`,
+      `                $this->setAttribute(${column}, ${value});`,
+      '            }',
+    ])
+    // Eloquent stamps one @updatedAt, where it would, as UPDATED_AT; the others take the same
+    // time unless the caller gave them one.
+    const extraUpdated = attributeFields.filter((f) => f.isUpdatedAt)
+    const timestampsMethod = [
+      '    public function updateTimestamps()',
+      '    {',
+      ...extraUpdated.map(
+        (f) =>
+          `        $given${makePascalCase(f.name)} = $this->isDirty(${phpString(f.dbName ?? f.name)});`,
+      ),
+      '        parent::updateTimestamps();',
+      ...extraUpdated.flatMap((f) => [
+        `        if (! $given${makePascalCase(f.name)}) {`,
+        `            $this->setAttribute(${phpString(f.dbName ?? f.name)}, $this->getAttribute($this->getUpdatedAtColumn()));`,
+        '        }',
+      ]),
+      '',
+      '        return $this;',
+      '    }',
+    ]
+    const saveMethod = [
+      '    public function save(array $options = [])',
+      '    {',
+      '        if (! $this->exists) {',
+      ...insertLines,
+      '        }',
+      '',
+      '        return parent::save($options);',
+      '    }',
+    ]
+    const methodBlocks = [
+      ...(insertLines.length > 0 ? [saveMethod] : []),
+      ...(extraUpdated.length > 0 ? [timestampsMethod] : []),
+      ...(pkUuidTrait === 'HasUlids' ? [ulidMethod] : []),
+      ...(compositeColumns.length > 0 ? compositeKeyMethods : []),
+      ...belongsToMethods,
+      ...hasOneMethods,
+      ...hasManyMethods,
+      ...belongsToManyMethods,
+    ]
+
+    const imports = [
+      ...(pkUuidTrait !== null ? [`${CONCERNS}${pkUuidTrait}`] : []),
+      MODEL,
+      ...(associations.belongsTo.length > 0 ? [`${RELATIONS}BelongsTo`] : []),
+      ...(associations.belongsToMany.length > 0 ? [`${RELATIONS}BelongsToMany`] : []),
+      ...(associations.hasMany.length > 0 ? [`${RELATIONS}HasMany`] : []),
+      ...(associations.hasOne.length > 0 ? [`${RELATIONS}HasOne`] : []),
+      ...(pkUuidTrait === 'HasUlids' || madeIds.length > 0 ? [STR] : []),
+    ].filter((fqcn) => ref(fqcn) !== `\\${fqcn}`)
+
+    const bodyBlocks = [...propertyBlocks, ...methodBlocks]
+
+    const lines = [
+      '<?php',
+      '',
+      `namespace ${namespace};`,
+      '',
+      ...imports.map((fqcn) => `use ${fqcn};`),
+      '',
+      `class ${makePascalCase(model.name)} extends ${ref(MODEL)}`,
+      '{',
+      // oxlint-disable-next-line oxc/no-map-spread -- one blank separator per block, not an accumulator
+      ...bodyBlocks.flatMap((block, i) => (i === 0 ? block : ['', ...block])),
+      '}',
+    ]
+
+    return lines.join('\n')
+  })
 }

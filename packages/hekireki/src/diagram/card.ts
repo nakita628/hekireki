@@ -95,7 +95,7 @@ export type PlacedNode = Box & {
 /** The card of an enum where it sits. */
 export type PlacedEnum = Box & { readonly value: SchemaEnum }
 
-export function fieldTypeLabel(field: SchemaField) {
+export function fieldTypeLabel(field: Pick<SchemaField, 'type' | 'isList' | 'isRequired'>) {
   return `${field.type}${field.isList ? '[]' : ''}${field.isRequired || field.isList ? '' : '?'}`
 }
 
@@ -181,9 +181,14 @@ function uniqueBadge(
   return unique.has(field.name) && !(field.isId || primaryKey.has(field.name)) ? 'UK' : null
 }
 
-function renderRow(node: PlacedNode, field: SchemaField, top: number, palette: Palette) {
-  const primaryKey = new Set(node.model.primaryKey)
-  const unique = uniqueColumns(node.model)
+function renderRow(
+  node: PlacedNode,
+  field: SchemaField,
+  top: number,
+  keys: { readonly primaryKey: ReadonlySet<string>; readonly unique: ReadonlySet<string> },
+  palette: Palette,
+) {
+  const { primaryKey, unique } = keys
   const left = node.x + HEADER_PADDING_X
   const right = node.x + node.width - HEADER_PADDING_X
   const centerY = top + NODE_ROW_HEIGHT / 2
@@ -299,10 +304,12 @@ function renderCard(
 
 export function renderNode(node: PlacedNode, index: number, palette: Palette) {
   const { model, fields } = node
+  // What every row of the card reads: the key columns, gathered once rather than per row.
+  const keys = { primaryKey: new Set(model.primaryKey), unique: uniqueColumns(model) }
   const rows = fields.reduce<{ readonly top: number; readonly svg: readonly string[] }>(
     (state, field) => ({
       top: state.top + fieldRowHeight(field),
-      svg: [...state.svg, renderRow(node, field, state.top, palette)],
+      svg: [...state.svg, renderRow(node, field, state.top, keys, palette)],
     }),
     { top: fieldsTop(node), svg: [] },
   )

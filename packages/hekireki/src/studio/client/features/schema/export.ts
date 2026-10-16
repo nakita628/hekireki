@@ -1,18 +1,8 @@
 import { renderDiagramSvg } from '../../../../diagram/svg.js'
 import type { DiagramInput } from '../../../../types/index.js'
+import { downloadFile } from '../../lib/index.js'
 
 const EXPORT_SCALE = 2
-
-function download(fileName: string, blob: Blob) {
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = fileName
-  anchor.click()
-  setTimeout(() => {
-    URL.revokeObjectURL(url)
-  }, 1000)
-}
 
 function loadImage(svg: string) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
@@ -50,9 +40,12 @@ async function renderDiagramPng(input: DiagramInput) {
 }
 
 export async function exportPng(fileName: string, input: DiagramInput) {
-  download(fileName, await renderDiagramPng(input))
+  downloadFile(fileName, await renderDiagramPng(input))
 }
 
 export function exportSvg(fileName: string, input: DiagramInput) {
-  download(fileName, new Blob([renderDiagramSvg(input)], { type: 'image/svg+xml;charset=utf-8' }))
+  downloadFile(
+    fileName,
+    new Blob([renderDiagramSvg(input)], { type: 'image/svg+xml;charset=utf-8' }),
+  )
 }

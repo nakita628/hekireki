@@ -51,11 +51,19 @@ function fillScalars(
   columns: readonly SeedColumn[],
   skip: ReadonlySet<string>,
   row: SeedRow,
+  // The fields by name, read once per row rather than searched once per column; the columns are
+  // walked by index rather than cut down one at a time.
+  fields: ReadonlyMap<string, DMMF.Field> = new Map(
+    input.table.model.fields.map((f) => [f.name, f]),
+  ),
+  at = 0,
 ): SeedRow {
-  const [column, ...rest] = columns
+  const column = columns[at]
   if (column === undefined) return row
-  const field = input.table.model.fields.find((f) => f.name === column.field)
-  if (skip.has(column.field) || field === undefined) return fillScalars(input, rest, skip, row)
+  const field = fields.get(column.field)
+  if (skip.has(column.field) || field === undefined) {
+    return fillScalars(input, columns, skip, row, fields, at + 1)
+  }
   const value = makeFieldValue({
     faker: input.context.faker,
     field,
@@ -69,7 +77,7 @@ function fillScalars(
     index: input.index,
     row,
   })
-  return fillScalars(input, rest, skip, { ...row, [column.field]: value })
+  return fillScalars(input, columns, skip, { ...row, [column.field]: value }, fields, at + 1)
 }
 
 /** One omitted column of a real row with its default, as a `[field, value]` entry. */

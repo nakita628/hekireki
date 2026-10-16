@@ -2,6 +2,7 @@ import type { DMMF } from '@prisma/generator-helper'
 
 import { makePascalCase, makeSnakeCase } from '../utils/index.js'
 import { implicitJoinTables, isFunctionDefault } from '../utils/prisma-model.js'
+import { tsString } from '../utils/typescript.js'
 
 export const SCALAR_TYPE_MAP: { readonly [k: string]: string } = {
   String: 'string',
@@ -47,14 +48,8 @@ export function isDbGenerated(field: DMMF.Field, provider = 'postgresql') {
   )
 }
 
-// A database name is any string: an enum value @map-ped to `rock 'n' roll` or a column to
-// `last-modified` is quoted and escaped, or the generated file does not parse.
-function makeStringLiteral(value: string) {
-  return `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`
-}
-
 function makePropertyKey(name: string) {
-  return /^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(name) ? name : makeStringLiteral(name)
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(name) ? name : tsString(name)
 }
 
 // pg and mysql2 read a time column as its text (`03:04:05.678`, `03:04:05.678+00` for timetz),
@@ -118,7 +113,7 @@ export function makeEnumDeclarations(
     .filter((e) => usedEnumNames.has(e.name))
     .map(
       (e) =>
-        `export type ${e.name} = ${e.values.map((v) => makeStringLiteral(v.dbName ?? v.name)).join(' | ')}`,
+        `export type ${e.name} = ${e.values.map((v) => tsString(v.dbName ?? v.name)).join(' | ')}`,
     )
 }
 

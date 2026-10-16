@@ -4,7 +4,15 @@ import type { ModelFixes } from '../decisions.js'
 import type { makeExpectedTables } from '../tables.js'
 import { cascade, updated } from './effects.js'
 import type { resolveMoves } from './moves.js'
-import { anyOf, describe, identityColumns, postgresType, valueSql } from './values.js'
+import {
+  anyOf,
+  caseMap,
+  describe,
+  identityColumns,
+  mappedValues,
+  postgresType,
+  valueSql,
+} from './values.js'
 import type { FixContext, FixedTable, FixState } from './versions.js'
 
 /**
@@ -71,17 +79,10 @@ export function columnStep(
   // The stored values and the members they become, written as the plain text they are. A
   // member the column's type does not have yet is mapped by the migration, in its cast.
   const asText = { ...column, kind: 'scalar', type: 'String', isList: false }
-  const mapped = Object.entries(fix.values ?? {})
-    .map(([stored, member]) => ({
-      from: valueSql(dialect, asText, stored),
-      to: column.enumMembers?.find((m) => m.name === member)?.dbName ?? member,
-    }))
+  const mapped = mappedValues(column, fix.values)
     .filter((m) => existing === null || dialect === 'sqlite' || existing.includes(m.to))
-  const mapping = mapped
-    .map((m) => `WHEN ${m.from} THEN ${valueSql(dialect, asText, m.to)}`)
-    .join(' ')
-  const afterValues =
-    mapped.length === 0 ? afterInvalid : `CASE ${afterInvalid} ${mapping} ELSE ${afterInvalid} END`
+    .map((m) => ({ from: valueSql(dialect, asText, m.from), to: valueSql(dialect, asText, m.to) }))
+  const afterValues = mapped.length === 0 ? afterInvalid : caseMap(afterInvalid, mapped)
   const fill = fix.nulls === undefined ? null : valueSql(dialect, column, fix.nulls)
   const expression = fill === null ? afterValues : `COALESCE(${afterValues}, ${fill})`
   if (invalid === undefined && mapped.length === 0 && fill === null) return state
@@ -100,7 +101,7 @@ export function columnStep(
   const invalidHead = deletes
     ? `DELETE FROM ${base}`
     : `UPDATE ${base} SET ${name} = ${replaced ?? name}`
-  const mappedHead = `UPDATE ${base} SET ${name} = CASE ${name} ${mapping} ELSE ${name} END`
+  const mappedHead = `UPDATE ${base} SET ${name} = ${caseMap(name, mapped)}`
   const mappedWhere = `${name} IN (${mapped.map((m) => m.from).join(', ')})`
   const fixes = [
     ...(invalid === undefined || refused === null
@@ -439,10 +440,7 @@ export function migrationStep(
     if (added || column.kind !== 'enum' || dialect === 'sqlite') return []
     const existing = actual.columns.find((c) => c.name === column.column)?.enumValues ?? null
     if (existing === null) return []
-    const late = Object.entries(fix.values ?? {}).flatMap(([stored, member]) => {
-      const to = column.enumMembers?.find((m) => m.name === member)?.dbName ?? member
-      return existing.includes(to) ? [] : [{ from: stored, to }]
-    })
+    const late = mappedValues(column, fix.values).filter((m) => !existing.includes(m.to))
     return late.length === 0 ? [] : [{ column, existing, mapping: late }]
   })
   const fills = entry.resolved.columns.filter((c) => c.added && c.fix.nulls !== undefined)
@@ -460,9 +458,13 @@ export function migrationStep(
       }
       const mapping = mappings.find((m) => m.column.column === c.name)
       if (mapping !== undefined) {
-        return `CASE ${read(c.name)} ${mapping.mapping
-          .map((m) => `WHEN ${stringLiteral(dialect, m.from)} THEN ${stringLiteral(dialect, m.to)}`)
-          .join(' ')} ELSE ${read(c.name)} END AS ${q(c.name)}`
+        return `${caseMap(
+          read(c.name),
+          mapping.mapping.map((m) => ({
+            from: stringLiteral(dialect, m.from),
+            to: stringLiteral(dialect, m.to),
+          })),
+        )} AS ${q(c.name)}`
       }
       return q(c.name)
     }),

@@ -7,6 +7,10 @@ import { SnapshotSchema } from '../routes/index.js'
 import * as StudioService from '../services/index.js'
 import * as SchemaService from '../services/index.js'
 
+// The snapshot as last checked, by the object the state holds: a reload replaces that object,
+// and the page asks for the snapshot after every change event, so the check runs once per reload.
+const checked = new WeakMap<object, z.infer<typeof SnapshotSchema>>()
+
 /**
  * The current snapshot: the last valid schema, the current Prisma error and the files on disk.
  *
@@ -14,11 +18,14 @@ import * as SchemaService from '../services/index.js'
  */
 export function readSnapshot() {
   return Effect.gen(function* () {
-    const state = StudioService.studio().state
-    const result = SnapshotSchema.safeParse(state.snapshot())
+    const snapshot = StudioService.studio().state.snapshot()
+    const kept = checked.get(snapshot)
+    if (kept !== undefined) return kept
+    const result = SnapshotSchema.safeParse(snapshot)
     if (!result.success) {
       return yield* new ContractViolationError({ message: result.error.message })
     }
+    checked.set(snapshot, result.data)
     return result.data
   })
 }

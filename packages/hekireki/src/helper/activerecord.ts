@@ -2,7 +2,7 @@ import type { DMMF } from '@prisma/generator-helper'
 
 import { pluralize } from '../utils/humanizer.js'
 import { isAnnotationLine, isSameList, makePascalCase, makeSnakeCase } from '../utils/index.js'
-import { relationEnds } from '../utils/prisma-model.js'
+import { fieldColumn, referentialActions, relationEnds } from '../utils/prisma-model.js'
 
 // cspell:disable
 // Names an enum key on an Active Record model may not take. Rails defines a
@@ -758,11 +758,6 @@ yield_self`.split('\n'),
 )
 // cspell:enable
 
-function fieldColumn(model: DMMF.Model, fieldName: string) {
-  const field = model.fields.find((f) => f.name === fieldName)
-  return field?.dbName ?? fieldName
-}
-
 function primaryKeyFields(model: DMMF.Model) {
   const idField = model.fields.find((f) => f.isId)
   return idField ? [idField.name] : (model.primaryKey?.fields ?? [])
@@ -1274,9 +1269,8 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
       primaryKeyColumns: (fkField.relationToFields ?? ['id']).map((c) => fieldColumn(model, c)),
       referencesPrimaryKey: isSameList(fkField.relationToFields ?? ['id'], primaryKeyFields(model)),
       inverse: fkField.name,
-      // Prisma's default action when the schema names none: Restrict for a
-      // required relation, SetNull for an optional one.
-      onDelete: fkField.relationOnDelete ?? (fkField.isRequired ? 'Restrict' : 'SetNull'),
+      // Prisma's default action when the schema names none.
+      onDelete: referentialActions(fkField).onDelete,
     }
     if (end.kind === 'hasMany') hasMany.push(association)
     else hasOne.push(association)

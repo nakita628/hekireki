@@ -162,12 +162,7 @@ function openSqlite(url: string, baseDir: string) {
             )
             return { columns: [], rows: [], rowCount: info.changes }
           },
-          catch: (error) =>
-            new DatabaseError({
-              cause: DatabaseErrorDomain.makeDatabaseErrorMessage({
-                message: error instanceof Error ? error.message : String(error),
-              }),
-            }),
+          catch: queryError,
         }),
       explain: (statement) =>
         Effect.try({
@@ -179,12 +174,7 @@ function openSqlite(url: string, baseDir: string) {
             const rows = DriverRows.catch([]).parse(prepared.all(...statement.params))
             return PlanDomain.makeSqlitePlan({ rows })
           },
-          catch: (error) =>
-            new DatabaseError({
-              cause: DatabaseErrorDomain.makeDatabaseErrorMessage({
-                message: error instanceof Error ? error.message : String(error),
-              }),
-            }),
+          catch: queryError,
         }),
       queryRaw: (statement) =>
         Effect.try({
@@ -199,12 +189,7 @@ function openSqlite(url: string, baseDir: string) {
               rows: rows.map((row) => columns.map((column) => row[column.name] ?? null)),
             }
           },
-          catch: (error) =>
-            // The raw path reports the driver's own message: what reads it is the schema engine,
-            // which parses the message to tell a missing table from a broken database.
-            new DatabaseError({
-              cause: error instanceof Error ? error.message : String(error),
-            }),
+          catch: rawError,
         }),
       executeRaw: (statement) =>
         Effect.try({
@@ -215,24 +200,14 @@ function openSqlite(url: string, baseDir: string) {
             )
             return info.changes
           },
-          catch: (error) =>
-            // The raw path reports the driver's own message: what reads it is the schema engine,
-            // which parses the message to tell a missing table from a broken database.
-            new DatabaseError({
-              cause: error instanceof Error ? error.message : String(error),
-            }),
+          catch: rawError,
         }),
       executeScript: (script) =>
         Effect.try({
           try: () => {
             db.exec(script)
           },
-          catch: (error) =>
-            // The raw path reports the driver's own message: what reads it is the schema engine,
-            // which parses the message to tell a missing table from a broken database.
-            new DatabaseError({
-              cause: error instanceof Error ? error.message : String(error),
-            }),
+          catch: rawError,
         }),
       close: Effect.sync(() => {
         db.close()
@@ -338,12 +313,7 @@ function openPostgres(url: string, cwd: string) {
               rowCount: rowCount ?? rows.length,
             }
           },
-          catch: (error) =>
-            new DatabaseError({
-              cause: DatabaseErrorDomain.makeDatabaseErrorMessage({
-                message: error instanceof Error ? error.message : String(error),
-              }),
-            }),
+          catch: queryError,
         }),
       explain: (statement) =>
         Effect.tryPromise({
@@ -357,12 +327,7 @@ function openPostgres(url: string, cwd: string) {
             )
             return PlanDomain.makePostgresPlan({ document: rows[0]?.['QUERY PLAN'] ?? null })
           },
-          catch: (error) =>
-            new DatabaseError({
-              cause: DatabaseErrorDomain.makeDatabaseErrorMessage({
-                message: error instanceof Error ? error.message : String(error),
-              }),
-            }),
+          catch: queryError,
         }),
       queryRaw: (statement) =>
         Effect.tryPromise({
@@ -383,12 +348,7 @@ function openPostgres(url: string, cwd: string) {
               rows,
             }
           },
-          catch: (error) =>
-            // The raw path reports the driver's own message: what reads it is the schema engine,
-            // which parses the message to tell a missing table from a broken database.
-            new DatabaseError({
-              cause: error instanceof Error ? error.message : String(error),
-            }),
+          catch: rawError,
         }),
       executeRaw: (statement) =>
         Effect.tryPromise({
@@ -399,24 +359,14 @@ function openPostgres(url: string, cwd: string) {
             )
             return rowCount ?? 0
           },
-          catch: (error) =>
-            // The raw path reports the driver's own message: what reads it is the schema engine,
-            // which parses the message to tell a missing table from a broken database.
-            new DatabaseError({
-              cause: error instanceof Error ? error.message : String(error),
-            }),
+          catch: rawError,
         }),
       executeScript: (script) =>
         Effect.tryPromise({
           try: async () => {
             await client.query(script, [])
           },
-          catch: (error) =>
-            // The raw path reports the driver's own message: what reads it is the schema engine,
-            // which parses the message to tell a missing table from a broken database.
-            new DatabaseError({
-              cause: error instanceof Error ? error.message : String(error),
-            }),
+          catch: rawError,
         }),
       close: Effect.promise(() => client.end()),
     }
@@ -510,12 +460,7 @@ function openMysql(url: string, cwd: string) {
               rowCount: data.length,
             }
           },
-          catch: (error) =>
-            new DatabaseError({
-              cause: DatabaseErrorDomain.makeDatabaseErrorMessage({
-                message: error instanceof Error ? error.message : String(error),
-              }),
-            }),
+          catch: queryError,
         }),
       explain: (statement) =>
         Effect.tryPromise({
@@ -530,12 +475,7 @@ function openMysql(url: string, cwd: string) {
             const first = Array.isArray(data) ? data[0] : undefined
             return PlanDomain.makeMysqlPlan({ document: first?.EXPLAIN ?? null })
           },
-          catch: (error) =>
-            new DatabaseError({
-              cause: DatabaseErrorDomain.makeDatabaseErrorMessage({
-                message: error instanceof Error ? error.message : String(error),
-              }),
-            }),
+          catch: queryError,
         }),
       queryRaw: (statement) =>
         Effect.tryPromise({
@@ -556,12 +496,7 @@ function openMysql(url: string, cwd: string) {
               rows: Array.isArray(data) ? data : [],
             }
           },
-          catch: (error) =>
-            // The raw path reports the driver's own message: what reads it is the schema engine,
-            // which parses the message to tell a missing table from a broken database.
-            new DatabaseError({
-              cause: error instanceof Error ? error.message : String(error),
-            }),
+          catch: rawError,
         }),
       executeRaw: (statement) =>
         Effect.tryPromise({
@@ -572,24 +507,14 @@ function openMysql(url: string, cwd: string) {
             )
             return Array.isArray(data) ? data.length : data.affectedRows
           },
-          catch: (error) =>
-            // The raw path reports the driver's own message: what reads it is the schema engine,
-            // which parses the message to tell a missing table from a broken database.
-            new DatabaseError({
-              cause: error instanceof Error ? error.message : String(error),
-            }),
+          catch: rawError,
         }),
       executeScript: (script) =>
         Effect.tryPromise({
           try: async () => {
             await connection.query(script, [])
           },
-          catch: (error) =>
-            // The raw path reports the driver's own message: what reads it is the schema engine,
-            // which parses the message to tell a missing table from a broken database.
-            new DatabaseError({
-              cause: error instanceof Error ? error.message : String(error),
-            }),
+          catch: rawError,
         }),
       close: Effect.promise(() => connection.end()),
     }
@@ -663,6 +588,21 @@ const ConnectDatabaseInput = z
   .meta({
     description: 'Where to look for the database URL and how to resolve relative sqlite files',
   })
+
+/** What a statement failed with, as Studio shows it: the driver's message, read for its sense. */
+function queryError(error: unknown) {
+  return new DatabaseError({
+    cause: DatabaseErrorDomain.makeDatabaseErrorMessage({
+      message: error instanceof Error ? error.message : String(error),
+    }),
+  })
+}
+
+// The raw path reports the driver's own message: what reads it is the schema engine, which
+// parses the message to tell a missing table from a broken database.
+function rawError(error: unknown) {
+  return new DatabaseError({ cause: error instanceof Error ? error.message : String(error) })
+}
 
 /**
  * A copy of a SQLite database, taken through the open connection (`VACUUM INTO`, so it is

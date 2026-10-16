@@ -1,7 +1,12 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { isAnnotationLine, makePascalCase, makeSnakeCase } from '../utils/index.js'
-import { backRelation, relationEnds } from '../utils/prisma-model.js'
+import {
+  backRelation,
+  fieldColumn,
+  referentialActions,
+  relationEnds,
+} from '../utils/prisma-model.js'
 import { prismaConstraintName } from '../utils/prisma-postgres.js'
 
 /**
@@ -610,10 +615,7 @@ export function ectoProblems(models: readonly DMMF.Model[]) {
 
 // The table and the columns of a constraint, as Prisma joins them before its suffix.
 function constraintBase(owner: DMMF.Model, fields: readonly string[]) {
-  return [
-    owner.dbName ?? owner.name,
-    ...fields.map((name) => owner.fields.find((f) => f.name === name)?.dbName ?? name),
-  ].join('_')
+  return [owner.dbName ?? owner.name, ...fields.map((name) => fieldColumn(owner, name))].join('_')
 }
 
 // Whether an `@ecto.` line gives an option itself: the keyword, not the word inside a string.
@@ -817,7 +819,7 @@ function changesetLines(
     const call = ectoCalls(field.documentation).calls.find((c) => c.name === 'no_assoc_constraint')
     const key = foreignKeyOf(model, field, allModels)
     if (key?.side !== 'inverse') return []
-    const onDelete = key.holder.relationOnDelete ?? (key.holder.isRequired ? 'Restrict' : 'SetNull')
+    const { onDelete } = referentialActions(key.holder)
     const refused =
       (onDelete === 'Restrict' || onDelete === 'NoAction') &&
       provider !== 'sqlite' &&

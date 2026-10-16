@@ -1,4 +1,5 @@
 import type { Dialect } from '../../database/url.js'
+import { sqliteAffinity } from '../../sql/types.js'
 
 /**
  * The `ColumnType` codes the Prisma schema engine reads a result set by; it converts every value
@@ -128,13 +129,10 @@ function sqliteColumnType(declared: string) {
   if (upper === 'JSON' || upper === 'JSONB') return COLUMN_TYPE.json
   if (upper === 'BLOB') return COLUMN_TYPE.bytes
   if (upper === 'DECIMAL' || upper === 'NUMERIC') return COLUMN_TYPE.numeric
-  if (upper.includes('INT')) return COLUMN_TYPE.int64
-  if (upper.includes('CHAR') || upper.includes('CLOB') || upper.includes('TEXT')) {
-    return COLUMN_TYPE.text
-  }
-  if (upper.includes('REAL') || upper.includes('FLOA') || upper.includes('DOUB')) {
-    return COLUMN_TYPE.double
-  }
+  const affinity = sqliteAffinity(upper)
+  if (affinity === 'integer') return COLUMN_TYPE.int64
+  if (affinity === 'text') return COLUMN_TYPE.text
+  if (affinity === 'real') return COLUMN_TYPE.double
   return null
 }
 

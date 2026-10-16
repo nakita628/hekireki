@@ -2,12 +2,15 @@ import type { DMMF } from '@prisma/generator-helper'
 
 import { pluralize } from '../utils/humanizer.js'
 import { allocate, pascalCase } from '../utils/naming.js'
+import { exprRef, typeRef } from '../utils/placeholder.js'
 import {
   backRelation,
   columnName,
   isFunctionDefault,
   isListDefault,
+  lengthArg,
   manyToManyRelations,
+  scalarFields,
   tableName,
 } from '../utils/prisma-model.js'
 import type { ManyToMany } from '../utils/prisma-model.js'
@@ -34,15 +37,6 @@ import type { IndexInfo } from '../utils/prisma-postgres.js'
 // the simple name plus a `using`, or to a `global::` name where the simple one would bind to a
 // model, an enum or a member instead. NUL never survives into emitted text otherwise — string
 // literals escape it — so a placeholder cannot collide with user data.
-const REF = '\u0000'
-
-function typeRef(fullName: string) {
-  return `${REF}T|${fullName}${REF}`
-}
-
-function exprRef(fullName: string) {
-  return `${REF}E|${fullName}${REF}`
-}
 
 const CS = {
   BitArray: 'System.Collections.BitArray',
@@ -430,11 +424,6 @@ function mapping(
 
 function columnType(storeType: string) {
   return `.HasColumnType(${csharpString(storeType)})`
-}
-
-function lengthArg(args: readonly string[]) {
-  const [length] = args
-  return length !== undefined && /^\d+$/u.test(length) ? length : null
 }
 
 /** The datasource providers the generated DbContext is written for. */
@@ -1006,10 +995,6 @@ type EfCorePlan = {
   readonly indexesOf: (model: DMMF.Model) => readonly IndexInfo[]
   readonly foreignKeys: readonly ForeignKey[]
   readonly manyToMany: readonly ManyToMany[]
-}
-
-function scalarFields(model: DMMF.Model) {
-  return model.fields.filter((f) => f.kind === 'scalar' || f.kind === 'enum')
 }
 
 function fieldPlan(plan: EfCorePlan, field: DMMF.Field) {

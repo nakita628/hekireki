@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { eloquentEnum, eloquentModels, eloquentSupportFiles } from '../helper/eloquent.js'
+import { eloquentEnum, eloquentModelCodes, eloquentSupportFiles } from '../helper/eloquent.js'
 import { makePascalCase } from '../utils/index.js'
 
 export function eloquentModelFiles(
@@ -13,10 +13,11 @@ export function eloquentModelFiles(
     Array.isArray(namespace) ? namespace.join('\\') : namespace
   ).replaceAll('.', '\\')
   // The file is named after the class, as PSR-4 autoloading looks for it: `user_role` is
-  // UserRole.php.
-  const modelFiles = models.map((model) => ({
+  // UserRole.php. The classes are written in one pass, which reads the schema once for them all.
+  const codes = eloquentModelCodes(models, resolvedNamespace, models, enums, options)
+  const modelFiles = models.map((model, index) => ({
     fileName: `${makePascalCase(model.name)}.php`,
-    code: eloquentModels([model], resolvedNamespace, models, enums, options),
+    code: codes[index] ?? '',
   }))
   const enumFiles = (enums ?? []).map((enumDef) => ({
     fileName: `${enumDef.name}.php`,

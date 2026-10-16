@@ -1,10 +1,5 @@
-export function fieldTypeLabel(field: {
-  readonly type: string
-  readonly isList: boolean
-  readonly isRequired: boolean
-}) {
-  return `${field.type}${field.isList ? '[]' : ''}${field.isRequired || field.isList ? '' : '?'}`
-}
+// The type as the card draws it; the export writes the same label (diagram/card.ts).
+export { fieldTypeLabel } from '../../../diagram/card.js'
 
 /** The chip a mark on a card sits in: `UK` beside a column, `UNIQUE` beside a block attribute. */
 export const BADGE = 'rounded-[3px] px-1 py-px font-sans text-badge font-semibold uppercase'

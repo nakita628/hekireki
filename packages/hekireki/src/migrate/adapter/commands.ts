@@ -251,12 +251,14 @@ export function baselineMigrations(input: {
       })
     }
     const names = history.migrationDirectories.map((directory) => directory.path)
-    yield* Effect.forEach(names, (name) =>
+    // The first mark makes the history table where there is none; the ones after it find it there.
+    yield* Effect.forEach(names, (name, index) =>
       markMigrationApplied({
         engine: input.engine,
         driver: input.driver,
         migrations: input.migrations,
         name,
+        tablePresent: index > 0,
       }),
     )
     return names
@@ -336,10 +338,13 @@ export function markMigrationApplied(input: {
   readonly driver: Driver
   readonly migrations: MigrationsList
   readonly name: string
+  /** Whether `_prisma_migrations` is known to be there, so it is not asked for again. */
+  readonly tablePresent?: boolean
 }) {
   return Effect.gen(function* () {
-    const applied = yield* readAppliedMigrations(input.driver)
-    if (!applied.present) {
+    const present =
+      input.tablePresent === true || (yield* readAppliedMigrations(input.driver)).present
+    if (!present) {
       yield* input.driver.executeScript(MIGRATIONS_TABLE_DDL[input.driver.dialect]).pipe(
         Effect.mapError(
           (error) =>

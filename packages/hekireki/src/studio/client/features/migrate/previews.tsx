@@ -1,13 +1,11 @@
 import { Button } from '@heroui/react'
-import { useMutation } from '@tanstack/react-query'
-import { parseResponse } from 'hono/client'
 import type { InferResponseType } from 'hono/client'
 import { useState } from 'react'
 import { LuEye, LuTableProperties } from 'react-icons/lu'
 
 import type { migrateClient } from '../../api/index.js'
-import { dbClient } from '../../api/index.js'
 import { ResultTable } from '../../components/result-table.js'
+import { usePostDbSql } from '../../hooks/index.js'
 import { useMessages } from './language.js'
 import { PREVIEWS } from './messages.js'
 
@@ -21,9 +19,7 @@ type Plan = InferResponseType<typeof migrateClient.migrate.plan.$post, 200>
 function Preview({ preview }: { readonly preview: Plan['previews'][number] }) {
   const t = useMessages(PREVIEWS)
   const [open, setOpen] = useState(false)
-  const rows = useMutation({
-    mutationFn: () => parseResponse(dbClient.db.sql.$post({ json: { sql: preview.sql } })),
-  })
+  const rows = usePostDbSql()
   return (
     <li className="rounded-lg border border-line bg-surface">
       <div className="flex items-center gap-2.5 px-3 py-2">
@@ -36,7 +32,7 @@ function Preview({ preview }: { readonly preview: Plan['previews'][number] }) {
           isDisabled={rows.isPending}
           onPress={() => {
             setOpen(true)
-            rows.mutate()
+            rows.mutate({ json: { sql: preview.sql } })
           }}
         >
           <LuEye size={13} />

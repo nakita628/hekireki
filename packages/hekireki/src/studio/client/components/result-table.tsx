@@ -5,6 +5,7 @@ import { LuCopy, LuDownload } from 'react-icons/lu'
 
 import { displayCell, toCsv, toJson, toTsv } from '../features/data/cells.js'
 import { copyText } from '../hooks/copy.js'
+import { downloadFile } from '../lib/index.js'
 import { MarkedText } from './marked-text.js'
 
 type Row = Record<string, string | number | boolean | null>
@@ -17,15 +18,6 @@ function compare(a: Row[string], b: Row[string]) {
   return typeof a === 'number' && typeof b === 'number'
     ? a - b
     : String(a).localeCompare(String(b), undefined, { numeric: true })
-}
-
-function download(fileName: string, content: string, type: string) {
-  const url = URL.createObjectURL(new Blob([content], { type }))
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = fileName
-  anchor.click()
-  URL.revokeObjectURL(url)
 }
 
 /**
@@ -65,9 +57,11 @@ export function ResultTable({
     if (action === 'tsv') copyText(toTsv(columns, shown), `${shown.length} rows`)
     if (action === 'csv') copyText(toCsv(columns, shown), `${shown.length} rows (CSV)`)
     if (action === 'json') copyText(toJson(columns, shown), `${shown.length} rows (JSON)`)
-    if (action === 'download-csv') download('result.csv', toCsv(columns, shown), 'text/csv')
+    if (action === 'download-csv') {
+      downloadFile('result.csv', new Blob([toCsv(columns, shown)], { type: 'text/csv' }))
+    }
     if (action === 'download-json') {
-      download('result.json', toJson(columns, shown), 'application/json')
+      downloadFile('result.json', new Blob([toJson(columns, shown)], { type: 'application/json' }))
     }
   }
 

@@ -6,6 +6,7 @@ import {
   splitTopLevel,
   stringLiteral,
 } from '../../sql/index.js'
+import { caseMap } from './fixes/values.js'
 
 /** The dollar quote of the DO block a PostgreSQL plan runs in. */
 export const BLOCK_QUOTE = '$hekireki$'
@@ -138,16 +139,24 @@ export function rewriteMigration(input: {
       : rewritten.statements),
     ...(input.after ?? []),
   ]
-  // Prisma's BEGIN and COMMIT go, and a comment above one goes to the statement after it.
-  const statementsOnly = written.flatMap((statement, index) => {
-    if (isTransaction(statement)) return []
-    const previous = written.slice(0, index).findLastIndex((s) => !isTransaction(s))
-    const carried = written
-      .slice(previous + 1, index)
-      .map((s) => commentOf(s).comment)
-      .filter((comment) => comment !== '')
-    return [[...carried, statement].join('\n')]
-  })
+  // Prisma's BEGIN and COMMIT go, and a comment above one goes to the statement after it; one
+  // above the last of them, with no statement after, goes with it.
+  const { out: statementsOnly } = written.reduce<{
+    readonly out: readonly string[]
+    readonly carried: readonly string[]
+  }>(
+    (state, statement) => {
+      if (!isTransaction(statement)) {
+        return { out: [...state.out, [...state.carried, statement].join('\n')], carried: [] }
+      }
+      const { comment } = commentOf(statement)
+      return {
+        out: state.out,
+        carried: comment === '' ? state.carried : [...state.carried, comment],
+      }
+    },
+    { out: [], carried: [] },
+  )
   const transaction =
     dialect === 'postgresql' &&
     !cockroach &&
@@ -335,7 +344,8 @@ function rewriteAlters(
           )
           .map((map) => {
             mark(`enum ${plan.name}.${map.column}`)
-            return `UPDATE ${plan.name} SET ${q(map.column)} = CASE ${q(map.column)}::STRING ${map.mapping.map((m) => `WHEN ${text(m.from)} THEN ${text(m.to)}`).join(' ')} ELSE ${q(map.column)}::STRING END::${q(type)} WHERE ${q(map.column)}::STRING IN (${map.mapping.map((m) => text(m.from)).join(', ')})`
+            const pairs = map.mapping.map((m) => ({ from: text(m.from), to: text(m.to) }))
+            return `UPDATE ${plan.name} SET ${q(map.column)} = ${caseMap(`${q(map.column)}::STRING`, pairs)}::${q(type)} WHERE ${q(map.column)}::STRING IN (${map.mapping.map((m) => text(m.from)).join(', ')})`
           }),
       )
       return underComment(comment, [...updates, body])
@@ -353,17 +363,24 @@ function rewriteAlters(
       const map = plan.enumMaps.find((m) => q(m.column) === cast[1])
       if (map === undefined) return [statement]
       mark(`enum ${plan.name}.${map.column}`)
-      const read = `${q(map.column)}::text`
-      const mapped = `CASE ${read} ${map.mapping.map((m) => `WHEN ${text(m.from)} THEN ${text(m.to)}`).join(' ')} ELSE ${read} END`
+      const mapped = caseMap(
+        `${q(map.column)}::text`,
+        map.mapping.map((m) => ({ from: text(m.from), to: text(m.to) })),
+      )
       return [
         `${comment ? `${comment}\n` : ''}ALTER TABLE ${plan.name} ALTER COLUMN ${cast[1]} TYPE ${cast[2]} USING (${mapped})::${cast[4]}`,
       ]
     }
     const clauses = splitTopLevel(rest)
-    const drop = (column: string) =>
-      clauses.findIndex((c) => new RegExp(`^DROP COLUMN ${escape(q(column))}$`, 'u').test(c))
-    const add = (column: string) =>
-      clauses.findIndex((c) => new RegExp(`^ADD COLUMN\\s+${escape(q(column))}\\s`, 'u').test(c))
+    // Each pattern is made once per column, not once per clause it is tried on.
+    const drop = (column: string) => {
+      const pattern = new RegExp(`^DROP COLUMN ${escape(q(column))}$`, 'u')
+      return clauses.findIndex((c) => pattern.test(c))
+    }
+    const add = (column: string) => {
+      const pattern = new RegExp(`^ADD COLUMN\\s+${escape(q(column))}\\s`, 'u')
+      return clauses.findIndex((c) => pattern.test(c))
+    }
     const defOf = (index: number, column: string) =>
       (clauses[index] ?? '').replace(new RegExp(`^ADD COLUMN\\s+${escape(q(column))}\\s+`, 'u'), '')
     const sourceOfRename = new Set(plan.renames.map((r) => r.from))
@@ -398,19 +415,21 @@ function rewriteAlters(
     const widened =
       dialect === 'mysql'
         ? plan.enumMaps.flatMap((map) => {
-            const modify = clauses.find(
-              (c) =>
-                new RegExp(
-                  `^(?:MODIFY|CHANGE COLUMN ${escape(q(map.column))}) ${escape(q(map.column))} ENUM\\(`,
-                  'u',
-                ).test(c) || new RegExp(`^MODIFY ${escape(q(map.column))} ENUM\\(`, 'u').test(c),
+            const changed = new RegExp(
+              `^(?:MODIFY|CHANGE COLUMN ${escape(q(map.column))}) ${escape(q(map.column))} ENUM\\(`,
+              'u',
             )
+            const modified = new RegExp(`^MODIFY ${escape(q(map.column))} ENUM\\(`, 'u')
+            const modify = clauses.find((c) => changed.test(c) || modified.test(c))
             if (modify === undefined) return []
             mark(`enum ${plan.name}.${map.column}`)
             const values = [...new Set([...map.existing, ...map.members])]
             return [
               `ALTER TABLE ${plan.name} MODIFY ${q(map.column)} ENUM(${values.map(text).join(', ')}) ${nullable(plan.table, map.column) ? 'NULL' : 'NOT NULL'}`,
-              `UPDATE ${plan.name} SET ${q(map.column)} = CASE ${q(map.column)} ${map.mapping.map((m) => `WHEN ${text(m.from)} THEN ${text(m.to)}`).join(' ')} ELSE ${q(map.column)} END WHERE ${q(map.column)} IN (${map.mapping.map((m) => text(m.from)).join(', ')})`,
+              `UPDATE ${plan.name} SET ${q(map.column)} = ${caseMap(
+                q(map.column),
+                map.mapping.map((m) => ({ from: text(m.from), to: text(m.to) })),
+              )} WHERE ${q(map.column)} IN (${map.mapping.map((m) => text(m.from)).join(', ')})`,
             ]
           })
         : []
@@ -428,9 +447,8 @@ function rewriteAlters(
       .filter((convert) => !sourceOfRename.has(convert.column))
       .flatMap((convert) => {
         if (dialect === 'mysql') {
-          const touched = clauses.some((c) =>
-            new RegExp(`^MODIFY ${escape(q(convert.column))}\\s`, 'u').test(c),
-          )
+          const modified = new RegExp(`^MODIFY ${escape(q(convert.column))}\\s`, 'u')
+          const touched = clauses.some((c) => modified.test(c))
           if (!touched) return []
           mark(`convert ${plan.name}.${convert.column}`)
           return [
@@ -459,9 +477,8 @@ function rewriteAlters(
             },
           ]
         }
-        const castAt = clauses.findIndex((c) =>
-          new RegExp(`^ALTER COLUMN ${escape(q(convert.column))} SET DATA TYPE `, 'u').test(c),
-        )
+        const typed = new RegExp(`^ALTER COLUMN ${escape(q(convert.column))} SET DATA TYPE `, 'u')
+        const castAt = clauses.findIndex((c) => typed.test(c))
         if (castAt === -1) return []
         mark(`convert ${plan.name}.${convert.column}`)
         return [
@@ -561,7 +578,7 @@ function rewriteAlters(
 }
 
 /** A string matched as it is inside a regular expression. */
-function escape(value: string) {
+export function escape(value: string) {
   return value.replaceAll(/[.*+?^${}()|[\]\\]/gu, '\\$&')
 }
 

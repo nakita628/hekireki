@@ -28,14 +28,9 @@ export function cascade(
   cause: string,
   path: readonly string[],
 ): FixState {
-  const { keyOf, q, versioned, current, version, listOf, ref, gone } = context
-  const parent = versioned(key)
-  if (parent === null) return state
-  const into = context.actual.flatMap((child) =>
-    child.foreignKeys
-      .filter((fk) => keyOf({ schema: fk.refSchema, table: fk.refTable }) === key)
-      .map((fk) => ({ child, fk })),
-  )
+  const { keyOf, q, versioned, incoming, current, version, listOf, ref, gone } = context
+  if (versioned(key) === null) return state
+  const into = incoming(key)
   // A table pointing at itself goes first: its cascade decides every row that goes.
   const ordered = [
     ...into.filter(({ child }) => keyOf(child) === key),
@@ -43,13 +38,11 @@ export function cascade(
   ]
   const step = (
     acc: { readonly state: FixState; readonly deleted: string },
-    { child, fk }: (typeof ordered)[number],
+    { child, fk, references }: (typeof ordered)[number],
   ) => {
     const childKey = keyOf(child)
     const table = versioned(childKey)
     if (table === null) return acc
-    const references = fk.refColumns.every((c) => c !== '') ? fk.refColumns : parent.primaryKey
-    if (references.length !== fk.columns.length) return acc
     const source = current(acc.state, childKey)
     const match = (goneAlias: string) =>
       fk.columns
@@ -230,25 +223,12 @@ export function updated(
   cause: string,
   path: readonly string[] = [key],
 ): FixState {
-  const { dialect, keyOf, q, versioned, current, version, listOf, ref, gone } = context
+  const { dialect, keyOf, q, versioned, incoming, current, version, listOf, ref, gone } = context
   const parent = versioned(key)
   if (parent === null) return state
   // What the changed rows are now, before any cascade runs into the same table.
   const after = current(state, key)
-  const into = context.actual.flatMap((child) =>
-    child.foreignKeys
-      .map((fk) => ({
-        child,
-        fk,
-        references: fk.refColumns.every((c) => c !== '') ? fk.refColumns : parent.primaryKey,
-      }))
-      .filter(
-        ({ fk, references }) =>
-          keyOf({ schema: fk.refSchema, table: fk.refTable }) === key &&
-          references.length === fk.columns.length &&
-          references.some((c) => columns.includes(c)),
-      ),
-  )
+  const into = incoming(key).filter(({ references }) => references.some((c) => columns.includes(c)))
   const step = (acc: FixState, { child, fk, references }: (typeof into)[number]): FixState => {
     const childKey = keyOf(child)
     const table = versioned(childKey)

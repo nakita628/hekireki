@@ -79,12 +79,14 @@ export function pickParent(input: RowInput, fk: ForeignKey, self: SeedRow) {
       })
     }
     const bound = parentBound(context, table, fk)
-    const counted = (parent: SeedRow) =>
-      context.linkCounts.get(`${table.name}.${fk.field}`)?.get(uniqueKey(parent, fk.toFields)) ?? 0
+    const counts = context.linkCounts.get(`${table.name}.${fk.field}`)
+    const counted = (parent: SeedRow) => counts?.get(uniqueKey(parent, fk.toFields)) ?? 0
     // Parents still under the rule's `min` come first, so every one of them is served; none above
-    // its `max` is offered at all.
-    const open = parents.filter((parent) => bound.max === null || counted(parent) < bound.max)
-    const behind = open.filter((parent) => bound.min !== null && counted(parent) < bound.min)
+    // its `max` is offered at all. With no rule there is nothing to count: every parent is open,
+    // and none is behind.
+    const { min, max } = bound
+    const open = max === null ? parents : parents.filter((parent) => counted(parent) < max)
+    const behind = min === null ? [] : open.filter((parent) => counted(parent) < min)
     // The parents furthest from their `min` come first, so the rows are spread before any is spent.
     const fewest = Math.min(...behind.map(counted))
     const short = behind.filter((parent) => counted(parent) === fewest)

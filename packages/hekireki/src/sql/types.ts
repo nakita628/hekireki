@@ -5,14 +5,31 @@
 
 export type Dialect = 'postgresql' | 'mysql' | 'sqlite'
 
-/** SQLite's type affinity rules (https://www.sqlite.org/datatype3.html#affname), plus the conventional date/time and JSON spellings that store text. */
+/**
+ * The affinity SQLite gives a declared type by what its name holds
+ * (https://www.sqlite.org/datatype3.html#affname), in the order the rules are tried: INTEGER
+ * for `INT` anywhere in it, TEXT for `CHAR`, `CLOB` or `TEXT`, REAL for `REAL`, `FLOA` or
+ * `DOUB`; null for a name those rules say nothing about, which every reader decides for itself.
+ *
+ * @param upper - the declared type in upper case, as `sqlite_master` and `PRAGMA table_info` spell it
+ */
+export function sqliteAffinity(upper: string) {
+  if (upper.includes('INT')) return 'integer'
+  if (upper.includes('CHAR') || upper.includes('CLOB') || upper.includes('TEXT')) return 'text'
+  if (upper.includes('REAL') || upper.includes('FLOA') || upper.includes('DOUB')) return 'real'
+  return null
+}
+
+/** SQLite's type affinity rules, plus the conventional date/time and JSON spellings that store text. */
 function sqliteTsType(dataType: string) {
   const upper = dataType.toUpperCase()
   if (upper === '') return 'unknown'
-  if (upper.includes('INT')) return 'number'
-  if (upper.includes('CHAR') || upper.includes('CLOB') || upper.includes('TEXT')) return 'string'
+  const affinity = sqliteAffinity(upper)
+  if (affinity === 'integer') return 'number'
+  if (affinity === 'text') return 'string'
+  // BLOB is looked for before REAL, as it always was here: a name that holds both reads as bytes.
   if (upper.includes('BLOB')) return 'Uint8Array'
-  if (upper.includes('REAL') || upper.includes('FLOA') || upper.includes('DOUB')) return 'number'
+  if (affinity === 'real') return 'number'
   if (upper.includes('BOOL')) return 'number'
   if (upper.includes('DATE') || upper.includes('TIME') || upper.includes('JSON')) return 'string'
   if (upper.includes('DEC') || upper.includes('NUM')) return 'number'

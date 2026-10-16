@@ -209,9 +209,27 @@ function nextId(ctx: Context) {
   return `n${ctx.counter}`
 }
 
+/**
+ * The text of a node with its whitespace collapsed, cut to `limit` with an ellipsis. It is read
+ * for every expression a placeholder may sit in, so it stops reading once it has enough rather
+ * than collapsing the whole range first: a long chain of conditions is read once per term, not
+ * once per term for the whole chain.
+ */
 function snippet(ctx: Context, range: Range | null, limit = 120) {
   if (range === null) return ''
-  const text = ctx.text.slice(range.start, range.end).replaceAll(/\s+/gu, ' ').trim()
+  let text = ''
+  // A run of whitespace becomes one space, written only when a word follows it, so what is read
+  // is the trimmed text from its start.
+  let pendingSpace = false
+  for (let at = range.start; at < range.end && text.length <= limit; at += 1) {
+    const char = ctx.text[at] ?? ''
+    if (/\s/u.test(char)) {
+      pendingSpace = text.length > 0
+    } else {
+      text += pendingSpace ? ` ${char}` : char
+      pendingSpace = false
+    }
+  }
   return text.length > limit ? `${text.slice(0, limit - 1)}…` : text
 }
 
@@ -318,9 +336,20 @@ function findRelation(scope: Scope | null, qualifier: string): Relation | null {
   return findRelationByKey(scope, key.split('.').at(-1) ?? key)
 }
 
+// The columns of a relation by lowercased name, the first of a name winning as a scan would,
+// kept by the column list: a relation copied for an outer join shares the list, and the index.
+const columnIndexes = new WeakMap<readonly Resolved[], ReadonlyMap<string, Resolved>>()
+
 function columnOf(relation: Relation, name: string) {
-  const lower = name.toLowerCase()
-  return relation.columns.find((column) => column.name.toLowerCase() === lower) ?? null
+  const known = columnIndexes.get(relation.columns)
+  const index =
+    known ??
+    relation.columns.reduce((map, column) => {
+      const key = column.name.toLowerCase()
+      return map.has(key) ? map : map.set(key, column)
+    }, new Map<string, Resolved>())
+  if (known === undefined) columnIndexes.set(relation.columns, index)
+  return index.get(name.toLowerCase()) ?? null
 }
 
 function fromRelation(relation: Relation, name: string): TypeInfo {
@@ -971,9 +1000,11 @@ function typeOfCall(t: Typing, expr: Extract<Expr, { type: 'call' }>): TypeInfo 
 /** Records every placeholder with the type of what it stands beside. */
 function collectParams(t: Typing, expr: Expr, expected: TypeInfo | null, context: string) {
   const { ctx } = t
+  // Typing the other side of a placeholder draws nothing and records nothing: a subquery there
+  // is built again on the quiet context, and its own placeholders are collected where it stands.
   const quietTyping: Typing = {
     ...t,
-    ctx: { ...ctx, diagnostics: [], nodes: [], edges: [], refs: [] },
+    ctx: { ...ctx, diagnostics: [], nodes: [], edges: [], refs: [], params: [] },
   }
   const typeQuietly = (candidate: Expr): TypeInfo | null =>
     candidate.type === 'param' || candidate.type === 'subquery' || candidate.type === 'exists'
@@ -2253,11 +2284,15 @@ function finish(
   }
 }
 
-function makeContext(text: string, schema: AnalysisSchema): Context {
+function makeContext(
+  text: string,
+  schema: AnalysisSchema,
+  tables: ReadonlyMap<string, SchemaTable>,
+): Context {
   return {
     dialect: schema.dialect,
     text,
-    tables: new Map(schema.tables.map((table) => [table.name.toLowerCase(), table])),
+    tables,
     nodes: [],
     edges: [],
     refs: [],
@@ -2271,8 +2306,9 @@ function analyzeStatement(
   text: string,
   statement: Statement,
   schema: AnalysisSchema,
+  tables: ReadonlyMap<string, SchemaTable>,
 ): StatementAnalysis {
-  const ctx = makeContext(text, schema)
+  const ctx = makeContext(text, schema, tables)
   switch (statement.type) {
     case 'select': {
       const built = buildQuery(
@@ -2313,5 +2349,9 @@ function analyzeStatement(
 /** Every statement of the text, analyzed against the schema. */
 export function analyze(text: string, schema: AnalysisSchema): Analysis {
   const statements = parseStatements(text)
-  return { statements: statements.map((statement) => analyzeStatement(text, statement, schema)) }
+  // The tables by lowercased name, read once for every statement of the text.
+  const tables = new Map(schema.tables.map((table) => [table.name.toLowerCase(), table]))
+  return {
+    statements: statements.map((statement) => analyzeStatement(text, statement, schema, tables)),
+  }
 }

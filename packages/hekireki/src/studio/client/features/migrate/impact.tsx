@@ -1,13 +1,12 @@
 import { Button } from '@heroui/react'
-import { useMutation } from '@tanstack/react-query'
-import { parseResponse } from 'hono/client'
 import type { InferResponseType } from 'hono/client'
 import { useState } from 'react'
 import { LuCircleCheck, LuDownload, LuEye, LuTriangleAlert } from 'react-icons/lu'
 
 import type { migrateClient } from '../../api/index.js'
-import { dbClient } from '../../api/index.js'
 import { ResultTable } from '../../components/result-table.js'
+import { usePostDbSql } from '../../hooks/index.js'
+import { downloadFile } from '../../lib/index.js'
 import { toCsv } from '../data/cells.js'
 import { useMessages } from './language.js'
 import { losesData } from './loss.js'
@@ -26,9 +25,7 @@ function Loss({ check }: { readonly check: Check }) {
   const tc = useMessages(CANDIDATES)
   const describe = useCheckText()
   const [open, setOpen] = useState(false)
-  const rows = useMutation({
-    mutationFn: (sql: string) => parseResponse(dbClient.db.sql.$post({ json: { sql } })),
-  })
+  const rows = usePostDbSql()
   return (
     <li className="rounded-md border border-line bg-surface">
       <div className="flex flex-wrap items-center gap-2.5 px-3 py-2">
@@ -50,7 +47,7 @@ function Loss({ check }: { readonly check: Check }) {
               return
             }
             setOpen(true)
-            if (check.lost !== null) rows.mutate(check.lost)
+            if (check.lost !== null) rows.mutate({ json: { sql: check.lost } })
           }}
         >
           <LuEye size={13} />
@@ -75,14 +72,10 @@ function Loss({ check }: { readonly check: Check }) {
               variant="ghost"
               onPress={() => {
                 if (rows.data === undefined) return
-                const url = URL.createObjectURL(
+                downloadFile(
+                  `${check.subject.replaceAll(/[^\w.-]/gu, '_')}-lost.csv`,
                   new Blob([toCsv(rows.data.columns, rows.data.rows)], { type: 'text/csv' }),
                 )
-                const anchor = document.createElement('a')
-                anchor.href = url
-                anchor.download = `${check.subject.replaceAll(/[^\w.-]/gu, '_')}-lost.csv`
-                anchor.click()
-                URL.revokeObjectURL(url)
               }}
             >
               <LuDownload size={13} />

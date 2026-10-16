@@ -96,6 +96,7 @@ function checkProgram(input: {
       decisions,
       setAside: false,
       files,
+      schema,
       timeout: input.timeout,
       readOnly: true,
     })
@@ -129,6 +130,8 @@ export function checkOpened(input: {
    */
   readonly setAside: boolean
   readonly files: readonly SchemaFile[]
+  /** The files as Prisma parsed them, where the caller has: parsing them is the slow part. */
+  readonly schema?: Effect.Success<ReturnType<typeof parseSchema>>
   readonly timeout: number | null
   readonly readOnly: boolean
 }) {
@@ -145,9 +148,11 @@ export function checkOpened(input: {
       })
     }
     const decisions = result.data
-    const schema = yield* parseSchema(input.files).pipe(
-      Effect.mapError((error) => new MigrateConfigError({ message: error.message })),
-    )
+    const schema =
+      input.schema ??
+      (yield* parseSchema(input.files).pipe(
+        Effect.mapError((error) => new MigrateConfigError({ message: error.message })),
+      ))
     const dialect = driver.dialect
     const run = (statements: readonly string[]) =>
       Effect.forEach(statements, (sql) => driver.query({ sql, params: [] })).pipe(

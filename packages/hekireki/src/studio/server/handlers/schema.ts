@@ -210,35 +210,33 @@ export const getSchemaEventsRouteHandler: RouteHandler<typeof getSchemaEventsRou
   streamSSE(c, async (stream) => {
     const initial = Effect.runSync(SchemaUseCase.readUpdatedAt())
     await stream.writeSSE({ event: 'ready', data: initial.updatedAt })
-    const pump = async (seen: {
-      readonly updatedAt: string
-      readonly migrationsUpdatedAt: string
-      readonly pingedAt: number
-    }): Promise<void> => {
-      if (stream.aborted) return
+    // What the client was last told, carried from one poll to the next. A loop rather than a
+    // recursion: a stream stays open for hours, and every tick of a recursion would be one more
+    // frame waiting for the one below it.
+    for (
+      let seen: {
+        readonly updatedAt: string
+        readonly migrationsUpdatedAt: string
+        readonly pingedAt: number
+      } = { ...initial, pingedAt: Date.now() };
+      !stream.aborted;
+    ) {
+      // oxlint-disable-next-line no-await-in-loop -- one poll of the stream runs after the one before it
       await stream.sleep(SSE_POLL_MS)
       const current = Effect.runSync(SchemaUseCase.readUpdatedAt())
       if (current.updatedAt !== seen.updatedAt) {
+        // oxlint-disable-next-line no-await-in-loop -- one poll of the stream runs after the one before it
         await stream.writeSSE({ event: 'change', data: current.updatedAt })
-        await pump({ ...seen, updatedAt: current.updatedAt, pingedAt: Date.now() })
-        return
-      }
-      // The migrations directory changed: what the Migrate page reads its history from.
-      if (current.migrationsUpdatedAt !== seen.migrationsUpdatedAt) {
+        seen = { ...seen, updatedAt: current.updatedAt, pingedAt: Date.now() }
+      } else if (current.migrationsUpdatedAt !== seen.migrationsUpdatedAt) {
+        // The migrations directory changed: what the Migrate page reads its history from.
+        // oxlint-disable-next-line no-await-in-loop -- one poll of the stream runs after the one before it
         await stream.writeSSE({ event: 'migrations', data: current.migrationsUpdatedAt })
-        await pump({
-          ...seen,
-          migrationsUpdatedAt: current.migrationsUpdatedAt,
-          pingedAt: Date.now(),
-        })
-        return
-      }
-      if (Date.now() - seen.pingedAt > SSE_PING_MS) {
+        seen = { ...seen, migrationsUpdatedAt: current.migrationsUpdatedAt, pingedAt: Date.now() }
+      } else if (Date.now() - seen.pingedAt > SSE_PING_MS) {
+        // oxlint-disable-next-line no-await-in-loop -- one poll of the stream runs after the one before it
         await stream.writeSSE({ event: 'ping', data: '' })
-        await pump({ ...seen, pingedAt: Date.now() })
-        return
+        seen = { ...seen, pingedAt: Date.now() }
       }
-      await pump(seen)
     }
-    await pump({ ...initial, pingedAt: Date.now() })
   })

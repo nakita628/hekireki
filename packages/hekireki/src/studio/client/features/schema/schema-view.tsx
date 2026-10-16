@@ -16,7 +16,7 @@ import type { Edge, OnSelectionChangeParams } from '@xyflow/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { LuDownload, LuLayoutGrid, LuRefreshCw } from 'react-icons/lu'
 
-import { GRID } from '../../../../constants/index.js'
+import { GRID, PALETTES } from '../../../../constants/index.js'
 import type { CanvasSchema, DiagramNodeType, SchemaHighlight } from '../../../../types/index.js'
 import { EnumNode } from '../../components/enum-node.js'
 import { ModelNode } from '../../components/model-node.js'
@@ -241,7 +241,7 @@ function Canvas({
             variant={BackgroundVariant.Dots}
             gap={GRID}
             size={1.2}
-            color={theme === 'dark' ? '#2a2f3d' : '#d4d4dc'}
+            color={PALETTES[theme].dots}
           />
           <Controls showInteractive={false} position="bottom-left" />
           {compact ? null : (

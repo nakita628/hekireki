@@ -38,12 +38,17 @@ type Suggestion = {
 function sharedRun(a: string, b: string) {
   const left = a.toLowerCase()
   const right = b.toLowerCase()
-  const lengths = Array.from({ length: left.length }, (_, start) =>
-    Array.from({ length: left.length - start }, (__, index) => left.slice(start, start + index + 1))
-      .filter((run) => right.includes(run))
-      .reduce((longest, run) => Math.max(longest, run.length), 0),
-  )
-  return Math.max(0, ...lengths)
+  // Row by row down `left`: how long the run ending at each pair of positions is, one more than
+  // the run ending at the pair before it when the letters match, else nothing.
+  return left.split('').reduce<{ readonly row: readonly number[]; readonly longest: number }>(
+    (state, char) => {
+      const row = right
+        .split('')
+        .map((other, at) => (other === char ? (state.row[at - 1] ?? 0) + 1 : 0))
+      return { row, longest: Math.max(state.longest, ...row) }
+    },
+    { row: [], longest: 0 },
+  ).longest
 }
 
 /** A name with case and separators set aside: `in-review`, `In Review` and `IN_REVIEW` alike. */
@@ -394,8 +399,8 @@ export function adviseChecks(input: {
           return [...renames, ...moves]
         }
         /** The places that read as where the values went, the likeliest first. */
-        const destinationsOf = (one: typeof dropped) =>
-          placesOf(one)
+        const rankOf = (places: ReturnType<typeof placesOf>) =>
+          places
             .flatMap((place) =>
               place.weight === null
                 ? []
@@ -417,7 +422,9 @@ export function adviseChecks(input: {
                   ],
             )
             .toSorted((x, y) => y.weight - x.weight)
-        const destinations = placesOf(dropped).map((place) => ({
+        // Found once: the destinations are the places as they are, the candidates the ranked ones.
+        const places = placesOf(dropped)
+        const destinations = places.map((place) => ({
           choice: place.choice,
           value: place.value,
           type: place.type,
@@ -426,7 +433,7 @@ export function adviseChecks(input: {
           via: place.via,
           created: place.created,
         }))
-        const ranked = destinationsOf(dropped)
+        const ranked = rankOf(places)
         const candidates = ranked.map((c) => ({
           choice: c.choice,
           value: c.value,
@@ -448,7 +455,7 @@ export function adviseChecks(input: {
                 !table.columns.some((c) => same(c.column, other.name)),
             )
             .some((other) => {
-              const [theirs] = destinationsOf(other)
+              const [theirs] = rankOf(placesOf(other))
               return (
                 theirs !== undefined &&
                 theirs.choice === best.choice &&

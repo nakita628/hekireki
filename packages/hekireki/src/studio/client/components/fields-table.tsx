@@ -1,8 +1,8 @@
 import { Chip, Table } from '@heroui/react'
 import { Link } from '@tanstack/react-router'
 import { useEffect, useMemo, useRef } from 'react'
-import { LuKey, LuLink } from 'react-icons/lu'
 
+import { FieldIcon } from './field-icon.js'
 import { fieldTypeLabel } from './labels.js'
 import { MarkedText } from './marked-text.js'
 
@@ -28,26 +28,6 @@ type Model = {
 type Schema = {
   readonly models: readonly { readonly name: string }[]
   readonly enums: readonly { readonly name: string }[]
-}
-
-export function FieldGlyph({
-  field,
-  primaryKey,
-}: {
-  readonly field: {
-    readonly name: string
-    readonly isId: boolean
-    readonly isForeignKey: boolean
-  }
-  readonly primaryKey: ReadonlySet<string>
-}) {
-  if (field.isId || primaryKey.has(field.name)) {
-    return <LuKey size={13} className="inline-block align-middle text-key" />
-  }
-  if (field.isForeignKey) {
-    return <LuLink size={13} className="inline-block align-middle text-accent" />
-  }
-  return <span className="inline-block size-[13px] align-middle" />
 }
 
 function TypeLink({ field, schema }: { readonly field: Field; readonly schema: Schema }) {
@@ -143,7 +123,13 @@ export function FieldsTable({
                 }
               >
                 <Table.Cell className="w-9 py-2.5 pr-0 pl-3.5">
-                  <FieldGlyph field={field} primaryKey={primaryKey} />
+                  <FieldIcon
+                    field={field}
+                    primaryKey={primaryKey}
+                    size={13}
+                    className="inline-block align-middle"
+                    blank={<span className="inline-block size-[13px] align-middle" />}
+                  />
                 </Table.Cell>
                 <Table.Cell
                   textValue={field.name}

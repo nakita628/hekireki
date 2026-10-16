@@ -6,8 +6,6 @@ import {
   LuChevronsRight,
   LuCopy,
   LuEllipsis,
-  LuKey,
-  LuLink,
   LuPencil,
   LuTrash2,
   LuX,
@@ -24,6 +22,7 @@ import {
 } from '../features/data/cells.js'
 import { PAGE_SIZE } from '../features/data/paging.js'
 import { copyText } from '../hooks/copy.js'
+import { FieldIcon } from './field-icon.js'
 import { fieldTypeLabel } from './labels.js'
 import { MarkedText } from './marked-text.js'
 
@@ -226,14 +225,14 @@ function NewRowCells({
 
 function RowMenu({
   label,
-  json,
-  tsv,
+  names,
+  row,
   isDisabled,
   onDelete,
 }: {
   readonly label: string
-  readonly json: string
-  readonly tsv: string
+  readonly names: readonly string[]
+  readonly row: Row
   readonly isDisabled: boolean
   readonly onDelete: () => void
 }) {
@@ -252,8 +251,9 @@ function RowMenu({
         <Dropdown.Menu
           aria-label={`Actions for ${label}`}
           onAction={(key) => {
-            if (key === 'json') copyText(json, 'Row (JSON)')
-            if (key === 'tsv') copyText(tsv, 'Row')
+            // Written out when asked for: every row's menu is rendered, few are ever opened.
+            if (key === 'json') copyText(toJson(names, [row]), 'Row (JSON)')
+            if (key === 'tsv') copyText(toTsv(names, [row]), 'Row')
             if (key === 'delete') onDelete()
           }}
         >
@@ -482,11 +482,7 @@ export function DataGrid({
                   className="inline-flex items-center gap-1.5"
                   title={field.documentation ?? undefined}
                 >
-                  {field.isId || primaryKey.has(field.name) ? (
-                    <LuKey size={12} className="text-key" />
-                  ) : field.isForeignKey ? (
-                    <LuLink size={12} className="text-accent" />
-                  ) : null}
+                  <FieldIcon field={field} primaryKey={primaryKey} size={12} />
                   <span className="font-mono font-bold text-ink">{field.name}</span>
                   <span className="font-sans text-meta font-normal text-faint">
                     {fieldTypeLabel(field)}
@@ -602,8 +598,8 @@ export function DataGrid({
                                 </Checkbox>
                                 <RowMenu
                                   label={label}
-                                  json={toJson(names, [row])}
-                                  tsv={toTsv(names, [row])}
+                                  names={names}
+                                  row={row}
                                   isDisabled={saving}
                                   onDelete={() => {
                                     onDeleteRequest([row])

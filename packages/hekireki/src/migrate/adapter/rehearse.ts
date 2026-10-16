@@ -23,14 +23,20 @@ const OUTSIDE_TRANSACTION = /\bCONCURRENTLY\b|\bADD\s+VALUE\b/iu
  * Every table of the database with its rows counted. The migration history is not among them:
  * the introspection leaves Prisma Migrate's own table out.
  */
-export function countTables(driver: Driver) {
+export function countTables(
+  driver: Driver,
+  /** The tables as already read, where the caller has them: the catalogue is not read again. */
+  tables?: readonly { readonly schema: string | null; readonly table: string }[],
+) {
   return Effect.gen(function* () {
-    const introspected = yield* introspectDatabase({
-      driver,
-      dialect: driver.dialect,
-      schemas: [],
-    })
-    return yield* Effect.forEach(introspected.tables, (table) =>
+    const counted =
+      tables ??
+      (yield* introspectDatabase({
+        driver,
+        dialect: driver.dialect,
+        schemas: [],
+      })).tables
+    return yield* Effect.forEach(counted, (table) =>
       driver
         .query({
           sql: `SELECT COUNT(*) AS ${quoteIdentifier(driver.dialect, 'count')} FROM ${qualifiedName(driver.dialect, table)}`,

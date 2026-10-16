@@ -36,6 +36,15 @@ const CreateProjectClientInput = z
   .readonly()
   .meta({ description: 'The database and the project the Prisma Client is loaded for' })
 
+/** What Prisma Client threw, as a message: it colours its messages for a terminal. */
+function clientError(error: unknown) {
+  return new ClientQueryError({
+    message: stripVTControlCharacters(
+      error instanceof Error ? error.message : String(error),
+    ).trim(),
+  })
+}
+
 /**
  * The project's own Prisma Client, loaded the first time it is asked for (and again after a
  * failure, so a `prisma generate` run meanwhile is picked up), with query events on so every
@@ -128,13 +137,7 @@ export function createProjectClient(input: z.infer<typeof CreateProjectClientInp
           return Effect.try({
             try: (): unknown =>
               Reflect.apply(operation, delegate, call.args === undefined ? [] : [call.args]),
-            catch: (error) =>
-              new ClientQueryError({
-                // Prisma Client colours its messages for a terminal.
-                message: stripVTControlCharacters(
-                  error instanceof Error ? error.message : String(error),
-                ).trim(),
-              }),
+            catch: clientError,
           })
         })
         const events: Parameters<NonNullable<typeof holder.sink>>[0][] = []
@@ -149,13 +152,7 @@ export function createProjectClient(input: z.infer<typeof CreateProjectClientInp
             query.transaction
               ? client.$transaction(operations, query.options)
               : Promise.resolve(operations[0]),
-          catch: (error) =>
-            new ClientQueryError({
-              // Prisma Client colours its messages for a terminal.
-              message: stripVTControlCharacters(
-                error instanceof Error ? error.message : String(error),
-              ).trim(),
-            }),
+          catch: clientError,
         }).pipe(
           Effect.ensuring(
             Effect.sync(() => {

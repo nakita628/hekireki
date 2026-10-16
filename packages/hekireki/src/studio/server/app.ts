@@ -91,15 +91,29 @@ export function createStudioApp(
 ) {
   const app = createStudioApi(state, db, client)
   app.use('/*', serveStatic({ root: staticDir }))
+  // The page is read once, the first time it is asked for: every client-side navigation lands
+  // here, and the file does not change while Studio runs. A read that fails (the assets not
+  // built yet) is not kept, so the next request looks again.
+  const page: { html: string | null } = { html: null }
   app.get('/*', (c) =>
     c.req.path.startsWith('/api/')
       ? c.notFound()
       : Effect.runPromise(
           Effect.provide(
-            Effect.match(readFile(path.join(staticDir, 'index.html')), {
-              onSuccess: (html) => c.html(html),
-              onFailure: () => c.text(missingAssetsMessage(staticDir), 500),
-            }),
+            Effect.match(
+              page.html === null
+                ? Effect.tap(readFile(path.join(staticDir, 'index.html')), (html) =>
+                    Effect.sync(() => {
+                      // oxlint-disable-next-line custom/no-mutation -- the one cell the page is kept in
+                      page.html = html
+                    }),
+                  )
+                : Effect.succeed(page.html),
+              {
+                onSuccess: (html) => c.html(html),
+                onFailure: () => c.text(missingAssetsMessage(staticDir), 500),
+              },
+            ),
             nodeFileSystemLayer,
           ),
         ),

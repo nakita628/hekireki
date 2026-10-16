@@ -1,4 +1,5 @@
 import type { Dialect } from '../../database/url.js'
+import { sqliteAffinity } from '../../sql/types.js'
 
 // A family is what a column can hold, coarsely: enough to tell a type change that loses data
 // from one that does not. `string`, `int`, `bigint`, `float`, `decimal`, `boolean`, `datetime`,
@@ -103,9 +104,10 @@ function sqliteFamily(declared: string) {
     .trim()
   const known = SQLITE_FAMILIES[upper]
   if (known !== undefined) return known
-  if (upper.includes('INT')) return 'int'
-  if (upper.includes('CHAR') || upper.includes('CLOB') || upper.includes('TEXT')) return 'string'
-  if (upper.includes('REAL') || upper.includes('FLOA') || upper.includes('DOUB')) return 'float'
+  const affinity = sqliteAffinity(upper)
+  if (affinity === 'integer') return 'int'
+  if (affinity === 'text') return 'string'
+  if (affinity === 'real') return 'float'
   return null
 }
 

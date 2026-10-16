@@ -1,7 +1,8 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { indexPrefix } from '../utils/index.js'
-import { implicitJoinTables, isFunctionDefault } from '../utils/prisma-model.js'
+import { implicitJoinTables, isFunctionDefault, referentialActions } from '../utils/prisma-model.js'
+import { sqlString } from '../utils/prisma-postgres.js'
 
 type AtlasDialect = 'postgresql' | 'mysql' | 'sqlite'
 
@@ -307,10 +308,6 @@ function columnTypeInfo(
   return scalarType(field, dialect)
 }
 
-function sqlStringLiteral(value: string) {
-  return `'${value.replaceAll("'", "''")}'`
-}
-
 // Atlas reads a string default that opens and closes with the same quote
 // character as an already-quoted SQL literal and drops the pair, so the HCL
 // value `"quoted"` would reach the database as `quoted` — a syntax error on a
@@ -324,7 +321,7 @@ function isQuoteWrapped(value: string) {
 }
 
 function literalDefault(value: string) {
-  return isQuoteWrapped(value) ? sqlExpr(sqlStringLiteral(value)) : hclString(value)
+  return isQuoteWrapped(value) ? sqlExpr(sqlString(value)) : hclString(value)
 }
 
 function listDefault(
@@ -342,10 +339,10 @@ function listDefault(
     if (field.kind === 'enum') {
       const enumDef = enums.find((e) => e.name === field.type)
       const value = enumDef?.values.find((v) => v.name === item)
-      return sqlStringLiteral(value?.dbName ?? item)
+      return sqlString(value?.dbName ?? item)
     }
     if (field.type === 'BigInt') return item
-    return sqlStringLiteral(item)
+    return sqlString(item)
   })
   return sqlExpr(`ARRAY[${rendered.join(', ')}]::${elemType}[]`)
 }
@@ -429,11 +426,8 @@ export function makeAtlasForeignKeys(
       const toCols = (field.relationToFields ?? []).map((name) => columnDbName(target, name))
       const name = `${table}_${fromCols.join('_')}_fkey`
       const targetRef = tableRef(target, models, defaultSchema)
-      // Prisma applies these referential actions when @relation omits them:
-      // onUpdate defaults to Cascade, onDelete to Restrict (required relation)
-      // or SetNull (optional relation).
-      const onUpdate = field.relationOnUpdate ?? 'Cascade'
-      const onDelete = field.relationOnDelete ?? (field.isRequired ? 'Restrict' : 'SetNull')
+      // Prisma applies its own referential actions when @relation omits them.
+      const { onDelete, onUpdate } = referentialActions(field)
       const attrs = [
         attr('columns', `[${fromCols.map((c) => `column${refPart(c)}`).join(', ')}]`),
         attr(

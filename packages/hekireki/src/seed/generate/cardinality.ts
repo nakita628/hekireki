@@ -36,25 +36,23 @@ function relatedCounts(
   )
   if (join !== undefined) {
     const side = join.sides.find((s) => s.model === table.name && s.field === field.name)
-    const pairs = context.rowsByModel.get(join.name) ?? []
-    return rows.map((row) =>
-      side === undefined
-        ? 0
-        : pairs.filter(
-            (pair) => keyOf(pair[side.column] ?? null) === keyOf(row[side.idField] ?? null),
-          ).length,
+    if (side === undefined) return rows.map(() => 0)
+    // The pairs by the key they point at, counted once rather than once per row.
+    const pairs = Map.groupBy(context.rowsByModel.get(join.name) ?? [], (pair) =>
+      keyOf(pair[side.column] ?? null),
     )
+    return rows.map((row) => pairs.get(keyOf(row[side.idField] ?? null))?.length ?? 0)
   }
   const owner = inverseOwner(context.tables, table, field)
-  const children = context.rowsByModel.get(field.type) ?? []
   if (owner === undefined) return rows.map(() => 0)
   const from = owner.relationFromFields ?? []
   const to = owner.relationToFields ?? []
+  // The children by the key they point at, all its columns joined.
+  const children = Map.groupBy(context.rowsByModel.get(field.type) ?? [], (child) =>
+    JSON.stringify(from.map((f) => keyOf(child[f] ?? null))),
+  )
   return rows.map(
-    (row) =>
-      children.filter((child) =>
-        from.every((f, i) => keyOf(child[f] ?? null) === keyOf(row[to[i] ?? ''] ?? null)),
-      ).length,
+    (row) => children.get(JSON.stringify(to.map((t) => keyOf(row[t] ?? null))))?.length ?? 0,
   )
 }
 

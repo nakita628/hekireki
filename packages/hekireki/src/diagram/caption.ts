@@ -30,10 +30,14 @@ function captionHeight(caption: readonly string[]) {
   return caption.length * EDGE_LABEL_LINE_HEIGHT + EDGE_LABEL_PADDING
 }
 
-function captionBox(caption: readonly string[], center: Point): Box {
-  const width = captionWidth(caption)
-  const height = captionHeight(caption)
-  return { x: center.x - width / 2, y: center.y - height / 2, width, height }
+/** A chip of `size`, measured once from its caption, centred on `center`. */
+function captionBox(size: { readonly width: number; readonly height: number }, center: Point): Box {
+  return {
+    x: center.x - size.width / 2,
+    y: center.y - size.height / 2,
+    width: size.width,
+    height: size.height,
+  }
 }
 
 /** How far two boxes lie apart, zero once they touch. */
@@ -289,14 +293,16 @@ function clearestSpot<E extends CaptionedEdge>(
 ): Box {
   const { caption } = edge
   const own = wires.filter((wire) => wire.edge === edge)
+  // Measured once: every spot of every segment is a chip of the same size.
+  const size = { width: captionWidth(caption), height: captionHeight(caption) }
   // Nothing costs less than nothing, so once a segment holds a spot that is free, the ones after it
   // are not looked at.
-  const best = captionSpots(edge.points, captionWidth(caption), captionHeight(caption)).reduce<{
+  const best = captionSpots(edge.points, size.width, size.height).reduce<{
     readonly box: Box
     readonly cost: number
   } | null>((found, spots) => {
     if (found?.cost === 0) return found
-    const boxes = spots.map((spot) => captionBox(caption, spot))
+    const boxes = spots.map((spot) => captionBox(size, spot))
     // The spots of a segment all lie along it, so only what is near them can be in the way.
     const reach = around(boxes, WIRE_CLEARANCE)
     const near = cards.filter((card) => meets(reach, card))
@@ -328,7 +334,7 @@ function clearestSpot<E extends CaptionedEdge>(
       found,
     )
   }, null)
-  return best?.box ?? captionBox(caption, midpoint(edge.points))
+  return best?.box ?? captionBox(size, midpoint(edge.points))
 }
 
 /**
@@ -351,18 +357,25 @@ export function placeCaptions<E extends CaptionedEdge>(
       ? [{ edge, caption: edge.caption, box: loopCaptionBox(edge.points, edge.caption) }]
       : []
   })
-  const { placed } = edges.reduce<{ readonly placed: readonly PlacedCaption<E>[] }>(
+  // Whichever the columns held and the loops hold are settled before the search starts.
+  const first = [...loops, ...inColumns(edges, wires, cards, loops)]
+  const { placed } = edges.reduce<{
+    readonly placed: readonly PlacedCaption<E>[]
+    readonly done: ReadonlySet<E>
+  }>(
     (state, edge) =>
-      edge.caption.length === 0 || state.placed.some((other) => other.edge === edge)
+      edge.caption.length === 0 || state.done.has(edge)
         ? state
         : {
             placed: [
               ...state.placed,
               { edge, caption: edge.caption, box: clearestSpot(edge, wires, cards, state.placed) },
             ],
+            done: new Set([...state.done, edge]),
           },
-    { placed: [...loops, ...inColumns(edges, wires, cards, loops)] },
+    { placed: first, done: new Set(first.map((caption) => caption.edge)) },
   )
   // In the order of the edges, whichever way each was placed.
-  return edges.flatMap((edge) => placed.filter((caption) => caption.edge === edge))
+  const byEdge = Map.groupBy(placed, (caption) => caption.edge)
+  return edges.flatMap((edge) => byEdge.get(edge) ?? [])
 }

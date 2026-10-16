@@ -1,7 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 import { describe, expect, it } from 'vite-plus/test'
 
-import { relationMaps } from '../utils/prisma-schema-text.js'
+import { prismaBlocks, relationMaps } from '../utils/prisma-schema-text.js'
 import {
   ectoDateTypes,
   ectoProblems,
@@ -2734,9 +2734,11 @@ end`)
       ],
     })
     // The name `map:` gives, which DMMF drops, read off the schema's text.
-    const foreignKeyNames = relationMaps(`model Post {
+    const foreignKeyNames = relationMaps(
+      prismaBlocks(`model Post {
   editor Account? @relation("Edits", fields: [editorId], references: [id], map: "post_editor_fk")
-}`)
+}`),
+    )
     const changeset = (model: DMMF.Model, provider: string, relationMode?: string) =>
       ectoSchemas([model], 'App', [account, post], undefined, {
         provider,

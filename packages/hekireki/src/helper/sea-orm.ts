@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { makeSnakeCase } from '../utils/index.js'
+import { makePascalCase, makeSnakeCase } from '../utils/index.js'
 import { isAutoincrement, isFunctionDefault, relationEnds } from '../utils/prisma-model.js'
 
 const PRISMA_TO_RUST: { [k: string]: string } = {
@@ -399,16 +399,6 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
   return { belongsTo, hasMany, hasOne, manyToMany }
 }
 
-// UpperCamelCase the way sea-orm's derive macro names Column variants: split on
-// underscores, capitalize each part, keep inner camelCase capitals.
-function toPascalCase(name: string) {
-  return name
-    .split('_')
-    .filter((part) => part !== '')
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join('')
-}
-
 // Types that do NOT implement Eq in Rust (f64: NaN != NaN)
 const NON_EQ_PRISMA_TYPES = new Set(['Float'])
 
@@ -489,19 +479,19 @@ function generateRelationEnum(
   const isAmbiguous = (targetModel: string) => (targetCount.get(targetModel) ?? 0) > 1
 
   for (const assoc of associations.belongsTo) {
-    const variantName = toPascalCase(assoc.name)
+    const variantName = makePascalCase(assoc.name)
     const targetModule = makeSnakeCase(assoc.targetModel)
     // Composite FKs use sea-orm's tuple syntax: from = "(Column::A, Column::B)".
     const fromCol =
       assoc.foreignKeys.length > 1
-        ? `(${assoc.foreignKeys.map((c) => `Column::${toPascalCase(c)}`).join(', ')})`
-        : `Column::${toPascalCase(assoc.foreignKey)}`
+        ? `(${assoc.foreignKeys.map((c) => `Column::${makePascalCase(c)}`).join(', ')})`
+        : `Column::${makePascalCase(assoc.foreignKey)}`
     const toCol =
       assoc.referencesList.length > 1
         ? `(${assoc.referencesList
-            .map((c) => `super::${targetModule}::Column::${toPascalCase(c)}`)
+            .map((c) => `super::${targetModule}::Column::${makePascalCase(c)}`)
             .join(', ')})`
-        : `super::${targetModule}::Column::${toPascalCase(assoc.references)}`
+        : `super::${targetModule}::Column::${makePascalCase(assoc.references)}`
     // Prisma action names match sea-orm's ForeignKeyAction variants verbatim.
     const actions = [
       assoc.onUpdate ? `on_update = "${assoc.onUpdate}"` : null,
@@ -517,14 +507,14 @@ function generateRelationEnum(
   }
 
   for (const assoc of associations.hasMany) {
-    const variantName = toPascalCase(assoc.name)
+    const variantName = makePascalCase(assoc.name)
     const targetModule = makeSnakeCase(assoc.targetModel)
     const attribute = seaOrmAttribute('    ', [
       `has_many = "super::${targetModule}::Entity"`,
       ...(isAmbiguous(assoc.targetModel)
         ? [
-            `from = "Column::${toPascalCase(assoc.references)}"`,
-            `to = "super::${targetModule}::Column::${toPascalCase(assoc.foreignKey)}"`,
+            `from = "Column::${makePascalCase(assoc.references)}"`,
+            `to = "super::${targetModule}::Column::${makePascalCase(assoc.foreignKey)}"`,
           ]
         : []),
     ])
@@ -532,14 +522,14 @@ function generateRelationEnum(
   }
 
   for (const assoc of associations.hasOne) {
-    const variantName = toPascalCase(assoc.name)
+    const variantName = makePascalCase(assoc.name)
     const targetModule = makeSnakeCase(assoc.targetModel)
     const attribute = seaOrmAttribute('    ', [
       `has_one = "super::${targetModule}::Entity"`,
       ...(isAmbiguous(assoc.targetModel)
         ? [
-            `from = "Column::${toPascalCase(assoc.references)}"`,
-            `to = "super::${targetModule}::Column::${toPascalCase(assoc.foreignKey)}"`,
+            `from = "Column::${makePascalCase(assoc.references)}"`,
+            `to = "super::${targetModule}::Column::${makePascalCase(assoc.foreignKey)}"`,
           ]
         : []),
     ])
@@ -570,7 +560,7 @@ function generateRelatedImpls(model: DMMF.Model, associations: ReturnType<typeof
       [
         relatedImplHeader(targetModule),
         '    fn to() -> RelationDef {',
-        `        Relation::${toPascalCase(assoc.name)}.def()`,
+        `        Relation::${makePascalCase(assoc.name)}.def()`,
         '    }',
         '}',
       ].join('\n'),
@@ -585,7 +575,7 @@ function generateRelatedImpls(model: DMMF.Model, associations: ReturnType<typeof
       [
         relatedImplHeader(targetModule),
         '    fn to() -> RelationDef {',
-        `        Relation::${toPascalCase(assoc.name)}.def()`,
+        `        Relation::${makePascalCase(assoc.name)}.def()`,
         '    }',
         '}',
       ].join('\n'),
@@ -600,7 +590,7 @@ function generateRelatedImpls(model: DMMF.Model, associations: ReturnType<typeof
       [
         relatedImplHeader(targetModule),
         '    fn to() -> RelationDef {',
-        `        Relation::${toPascalCase(assoc.name)}.def()`,
+        `        Relation::${makePascalCase(assoc.name)}.def()`,
         '    }',
         '}',
       ].join('\n'),
@@ -616,9 +606,9 @@ function generateRelatedImpls(model: DMMF.Model, associations: ReturnType<typeof
       const [own, other] = assoc.isSideA ? ['A', 'B'] : ['B', 'A']
       impls.push(
         [
-          `pub struct ${toPascalCase(assoc.name)}Link;`,
+          `pub struct ${makePascalCase(assoc.name)}Link;`,
           '',
-          `impl Linked for ${toPascalCase(assoc.name)}Link {`,
+          `impl Linked for ${makePascalCase(assoc.name)}Link {`,
           '    type FromEntity = Entity;',
           '    type ToEntity = Entity;',
           '',
@@ -637,8 +627,8 @@ function generateRelatedImpls(model: DMMF.Model, associations: ReturnType<typeof
     emittedTargets.add(assoc.targetModel)
     const targetModule = makeSnakeCase(assoc.targetModel)
     const junctionModule = makeSnakeCase(assoc.relationName)
-    const junctionRelToTarget = toPascalCase(assoc.targetModel)
-    const junctionRelToSelf = toPascalCase(model.name)
+    const junctionRelToTarget = makePascalCase(assoc.targetModel)
+    const junctionRelToSelf = makePascalCase(model.name)
 
     impls.push(
       [
@@ -890,17 +880,17 @@ export function generateM2MEntity(
   const isSelf = sortedLeft === sortedRight
   const leftFk = isSelf ? 'a' : `${makeSnakeCase(sortedLeft)}_id`
   const rightFk = isSelf ? 'b' : `${makeSnakeCase(sortedRight)}_id`
-  const leftCol = isSelf ? 'A' : toPascalCase(`${makeSnakeCase(sortedLeft)}Id`)
-  const rightCol = isSelf ? 'B' : toPascalCase(`${makeSnakeCase(sortedRight)}Id`)
+  const leftCol = isSelf ? 'A' : makePascalCase(`${makeSnakeCase(sortedLeft)}Id`)
+  const rightCol = isSelf ? 'B' : makePascalCase(`${makeSnakeCase(sortedRight)}Id`)
   const leftVariant = isSelf ? 'A' : sortedLeft
   const rightVariant = isSelf ? 'B' : sortedRight
   const leftType = pkRustType(sortedLeft, allModels)
   const rightType = pkRustType(sortedRight, allModels)
   // The column each side's key is, as its entity names it: `Column::Id` only when the key is `id`.
-  const leftKey = toPascalCase(
+  const leftKey = makePascalCase(
     allModels.find((m) => m.name === sortedLeft)?.fields.find((f) => f.isId)?.name ?? 'id',
   )
-  const rightKey = toPascalCase(
+  const rightKey = makePascalCase(
     allModels.find((m) => m.name === sortedRight)?.fields.find((f) => f.isId)?.name ?? 'id',
   )
 

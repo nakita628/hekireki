@@ -106,25 +106,26 @@ function jsonValue(value: SeedValue): unknown {
   return value
 }
 
-function fieldOf(table: SeedTable, column: ColumnShape) {
-  return table.kind === 'model'
-    ? (table.columns.find((c) => c.column === column.column)?.field ?? column.column)
-    : column.column
-}
-
 /** The multi-row INSERTs of one table as SQL text with literal values, for a file. */
 export function insertSql(dialect: Dialect, entry: SeedTableRows, chunk = INSERT_CHUNK) {
   const columns = columnsOf(entry.table)
   const target = qualifiedName(dialect, entry.table)
   const names = columns.map((c) => quoteIdentifier(dialect, c.column)).join(', ')
+  // The field each column reads from a row: a model's rows are keyed by field name, a join
+  // table's by column. Found once per column, not once per cell.
+  const fields = columns.map((column) =>
+    entry.table.kind === 'model'
+      ? (entry.table.columns.find((c) => c.column === column.column)?.field ?? column.column)
+      : column.column,
+  )
   return chunks(entry.rows, chunk).map(
     (rows) =>
       `INSERT INTO ${target} (${names}) VALUES\n${rows
         .map(
           (row) =>
             `  (${columns
-              .map((column) =>
-                renderLiteral(dialect, column, row[fieldOf(entry.table, column)] ?? null),
+              .map((column, at) =>
+                renderLiteral(dialect, column, row[fields[at] ?? column.column] ?? null),
               )
               .join(', ')})`,
         )

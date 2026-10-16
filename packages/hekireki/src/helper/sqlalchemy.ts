@@ -3,14 +3,17 @@ import type { DMMF } from '@prisma/generator-helper'
 import { constraintName, makePascalCase, makeSnakeCase } from '../utils/index.js'
 import {
   backRelation,
+  fieldColumn,
   isAutoincrement,
   isFunctionDefault,
   isNowDefault,
   isUlidDefault,
+  referentialActions,
   relationEnds,
   uuidDefaultVersion,
 } from '../utils/prisma-model.js'
-import { jsonToPythonLiteral, toPythonString } from '../utils/python.js'
+import { sqlString } from '../utils/prisma-postgres.js'
+import { jsonToPythonLiteral, PYTHON_KEYWORDS, toPythonString } from '../utils/python.js'
 
 const PRISMA_TO_PYTHON: { [k: string]: string } = {
   String: 'str',
@@ -45,46 +48,6 @@ export function prismaTypeToSQLAlchemyType(type: string) {
 export function prismaTypeToPythonType(type: string) {
   return PRISMA_TO_PYTHON[type] ?? 'str'
 }
-
-// Python hard keywords cannot be attribute names (`async`/`yield` etc. are a
-// syntax error). Soft keywords (match/case/type/_) are valid names and excluded.
-const PYTHON_KEYWORDS = new Set([
-  'False',
-  'None',
-  'True',
-  'and',
-  'as',
-  'assert',
-  'async',
-  'await',
-  'break',
-  'class',
-  'continue',
-  'def',
-  'del',
-  'elif',
-  'else',
-  'except',
-  'finally',
-  'for',
-  'from',
-  'global',
-  'if',
-  'import',
-  'in',
-  'is',
-  'lambda',
-  'nonlocal',
-  'not',
-  'or',
-  'pass',
-  'raise',
-  'return',
-  'try',
-  'while',
-  'with',
-  'yield',
-])
 
 // Not keywords, but unusable as declarative attribute names: `self`/`cls`
 // collide with the default __init__ signature and `metadata`/`registry` are
@@ -354,8 +317,7 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
         optional: !field.isRequired,
         // What Prisma Migrate writes when the schema names no action: the database has it, so
         // the model says it too.
-        onDelete: field.relationOnDelete ?? (field.isRequired ? 'Restrict' : 'SetNull'),
-        onUpdate: field.relationOnUpdate ?? 'Cascade',
+        ...referentialActions(field),
       })
       continue
     }
@@ -369,7 +331,7 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
     }
     const fkField = end.inverse
     const foreignKey = fkField.relationFromFields?.[0] ?? ''
-    const onDelete = fkField.relationOnDelete ?? (fkField.isRequired ? 'Restrict' : 'SetNull')
+    const { onDelete } = referentialActions(fkField)
     if (end.kind === 'hasMany') {
       hasMany.push({
         name: field.name,
@@ -532,11 +494,6 @@ function formatDefault(field: DMMF.Field, enumDef?: DMMF.DatamodelEnum) {
   return null
 }
 
-// Text as a SQL string literal, a quote in it doubled.
-function quote(text: string) {
-  return `'${text.replaceAll("'", "''")}'`
-}
-
 // A literal default as SQL, in the form Prisma Migrate writes it: a date-time in UTC, with its
 // milliseconds where it has any, and with its offset where the column keeps or ignores one
 // (MySQL would shift it into the session's zone).
@@ -547,25 +504,25 @@ function sqlLiteral(
   provider: string,
 ) {
   if (field.kind === 'enum') {
-    return quote(enumDef?.values.find((v) => v.name === value)?.dbName ?? String(value))
+    return sqlString(enumDef?.values.find((v) => v.name === value)?.dbName ?? String(value))
   }
   if (typeof value === 'boolean') return value ? 'true' : 'false'
   // SQLAlchemy puts a MySQL default with a sign or a point in parentheses, which makes it an
   // expression; quoted, MySQL reads it as the number all the same.
   if (typeof value === 'number' || ['Int', 'BigInt', 'Float', 'Decimal'].includes(field.type)) {
-    return provider === 'mysql' ? quote(String(value)) : String(value)
+    return provider === 'mysql' ? sqlString(String(value)) : String(value)
   }
   if (field.type === 'DateTime' && typeof value === 'string') {
     const iso = new Date(value).toISOString()
     const ms = iso.slice(19, 23) === '.000' ? '' : iso.slice(19, 23)
     const time = `${iso.slice(11, 19)}${ms}`
     const nativeName = field.nativeType?.[0]
-    if (nativeName === 'Date') return quote(iso.slice(0, 10))
-    if (nativeName === 'Time') return quote(time)
-    if (nativeName === 'Timetz') return quote(`${time}+00`)
-    return quote(`${iso.slice(0, 10)} ${time}${provider === 'mysql' ? '' : ' +00:00'}`)
+    if (nativeName === 'Date') return sqlString(iso.slice(0, 10))
+    if (nativeName === 'Time') return sqlString(time)
+    if (nativeName === 'Timetz') return sqlString(`${time}+00`)
+    return sqlString(`${iso.slice(0, 10)} ${time}${provider === 'mysql' ? '' : ' +00:00'}`)
   }
-  return quote(String(value))
+  return sqlString(String(value))
 }
 
 // The element type a PostgreSQL list default is cast to where its items do not say it: an
@@ -631,6 +588,14 @@ function needsForeignKeysParam(
   assocs: readonly { readonly targetModel: string }[],
 ) {
   return assocs.filter((a) => a.targetModel === targetModel).length > 1
+}
+
+// The relations a model holds the foreign key of, each with the model it points at: what the
+// `belongsTo` of `getAssociations` lists, read off the fields alone when only the targets matter.
+function foreignKeyEnds(model: DMMF.Model) {
+  return model.fields
+    .filter((f) => f.kind === 'object' && (f.relationFromFields ?? []).length > 0)
+    .map((f) => ({ targetModel: f.type }))
 }
 
 function findBackPopulates(
@@ -845,7 +810,6 @@ function generateTableArgs(
   provider: string,
 ) {
   const tableName = model.dbName ?? model.name
-  const columnOf = (name: string) => model.fields.find((f) => f.name === name)?.dbName ?? name
 
   // Prisma Migrate makes every unique a unique index, named `<table>_<columns>_key`, and every
   // index `<table>_<columns>_idx`.
@@ -856,7 +820,7 @@ function generateTableArgs(
         (idx.type === 'unique' || idx.type === 'normal' || idx.type === 'fulltext'),
     )
     .map((idx) => {
-      const columns = idx.fields.map((f) => columnOf(f.name))
+      const columns = idx.fields.map((f) => fieldColumn(model, f.name))
       const unique = idx.type === 'unique'
       const name =
         idx.dbName ?? constraintName(tableName, columns, unique ? 'key' : 'idx', provider)
@@ -875,13 +839,12 @@ function generateTableArgs(
     .map((f) => {
       const target = allModels.find((m) => m.name === f.type)
       const targetTable = target?.dbName ?? f.type
-      const localCols = (f.relationFromFields ?? []).map(columnOf)
+      const localCols = (f.relationFromFields ?? []).map((c) => fieldColumn(model, c))
       const targetCols = (f.relationToFields ?? []).map((c) => {
         const fieldObj = target?.fields.find((mf) => mf.name === c)
         return `"${targetTable}.${fieldObj?.dbName ?? c}"`
       })
-      const onDelete = f.relationOnDelete ?? (f.isRequired ? 'Restrict' : 'SetNull')
-      const onUpdate = f.relationOnUpdate ?? 'Cascade'
+      const { onDelete, onUpdate } = referentialActions(f)
       const actions = [
         SQL_ACTION[onDelete] ? `, ondelete="${SQL_ACTION[onDelete]}"` : '',
         SQL_ACTION[onUpdate] ? `, onupdate="${SQL_ACTION[onUpdate]}"` : '',
@@ -967,7 +930,7 @@ function generateHasManyRelationships(
     )
     const targetModel = allModels.find((m) => m.name === assoc.targetModel)
     const needsFkParam = targetModel
-      ? needsForeignKeysParam(model.name, getAssociations(targetModel, allModels).belongsTo)
+      ? needsForeignKeysParam(model.name, foreignKeyEnds(targetModel))
       : false
     const targetFkSnake = pythonAttrName(makeSnakeCase(assoc.foreignKey))
     const fkClause = needsFkParam
@@ -993,7 +956,7 @@ function generateHasOneRelationships(
     )
     const targetModel = allModels.find((m) => m.name === assoc.targetModel)
     const needsFkParam = targetModel
-      ? needsForeignKeysParam(model.name, getAssociations(targetModel, allModels).belongsTo)
+      ? needsForeignKeysParam(model.name, foreignKeyEnds(targetModel))
       : false
     const targetFkSnake = pythonAttrName(makeSnakeCase(assoc.foreignKey))
     const fkClause = needsFkParam

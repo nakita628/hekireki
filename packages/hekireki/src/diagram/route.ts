@@ -56,7 +56,6 @@ const CARD_INSET = 2
  * another channel down the canvas or another lane across it.
  */
 export function routePoints(source: Point, target: Point, cards: readonly Box[]): Route {
-  const obstacles = cards.map((card) => grow(card, -CARD_INSET))
   const direct = smoothStepPoints(source, target)
   const corridor = {
     x: Math.min(source.x, target.x) - EDGE_OFFSET,
@@ -67,12 +66,15 @@ export function routePoints(source: Point, target: Point, cards: readonly Box[])
   // The plain route stays in the corridor between the two ends, so only a card that reaches into
   // it can be in the way.
   const inTheWay = cards.filter((card) => meets(corridor, card))
-  const blocking = obstacles.filter((box) => meets(corridor, box))
+  // A card's inset lies within it, so only the cards in the way can have an inset in the way too.
+  const blocking = inTheWay
+    .map((card) => grow(card, -CARD_INSET))
+    .filter((box) => meets(corridor, box))
   if (routeCost(direct, blocking).hidden === 0) return direct
   // Only those cards suggest a way round, and every way round runs no further than a clearance
   // past them, so what lies beyond has no say in which one is taken.
   const reach = around([corridor, ...inTheWay], CLEARANCE)
-  const nearby = obstacles.filter((box) => meets(reach, box))
+  const nearby = cards.map((card) => grow(card, -CARD_INSET)).filter((box) => meets(reach, box))
   const inRange = (x: number) => x > source.x + EDGE_OFFSET && x < target.x - EDGE_OFFSET
   const channels = inTheWay
     .flatMap((card) => [card.x - CLEARANCE, card.x + card.width + CLEARANCE])
