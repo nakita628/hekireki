@@ -24,6 +24,11 @@ minimumReleaseAgeExclude:
 # files) — for declarations that are erased at build time. The versions below are the same types
 # without it; renovate.json keeps them where they are.
 overrides:
+  # hono-takibi pins effect and @effect/platform-node to 4.0.0, and platform-node 4.0.0 lets
+  # platform-node-shared float: 4.0.5 imports `make` from effect/Path, which effect 4.0.0 does not
+  # have, and `hono-takibi` dies on the import. Hold the shared package to the platform-node it
+  # ships with; hekireki's own 4.0.5 pair is untouched.
+  '@effect/platform-node@4.0.0>@effect/platform-node-shared': 4.0.0
   '@react-types/color': 3.1.4
   '@react-types/slider': 3.8.4
   # What Vite+ asks of a project (vite-plus README, "Add package-manager overrides"): every package
@@ -31,5 +36,5 @@ overrides:
   # Without them @tanstack/router-plugin typed its plugin against a separate vite 8.1.2, which
   # vite.studio.config.ts could not hand to vite-plus 1.0's defineConfig. Keep both in step with
   # vite-plus (`vp --version`).
-  vite: npm:@voidzero-dev/vite-plus-core@1.0.0
-  vitest: 5.0.1
+  vite: npm:@voidzero-dev/vite-plus-core@1.3.0
+  vitest: 5.0.5
