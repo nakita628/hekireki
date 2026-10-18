@@ -10,13 +10,13 @@
     "demo": "pnpm run generate && pnpm run db && pnpm run typecheck && pnpm run verify"
   },
   "devDependencies": {
-    "@prisma/adapter-mariadb": "8.1.0-dev.7",
-    "@prisma/client": "8.1.0-dev.7",
-    "@types/node": "^26.6.3",
-    "drizzle-orm": "^0.45.3",
+    "@prisma/adapter-mariadb": "8.1.0-dev.9",
+    "@prisma/client": "8.1.0-dev.9",
+    "@types/node": "^26.6.5",
+    "drizzle-orm": "^0.45.4",
     "hekireki": "workspace:*",
-    "mysql2": "^3.24.5",
-    "prisma": "8.1.0-dev.7",
+    "mysql2": "^3.24.6",
+    "prisma": "8.1.0-dev.9",
     "typescript": "^7.0.2"
   }
 }
