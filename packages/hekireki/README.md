@@ -2,8 +2,10 @@
 
 # Hekireki
 
-**[Hekireki](https://www.npmjs.com/package/hekireki)** generates validation schemas, ORM models and
-ER diagrams from a [Prisma](https://www.prisma.io/) schema, and seeds a database.
+**[Hekireki](https://www.npmjs.com/package/hekireki)** reads a [Prisma](https://www.prisma.io/)
+schema and writes what the rest of the project needs from it: validation schemas, ORM models for
+nine languages, an ER diagram, and seed data. It also comes with a Studio for the schema and its
+database.
 
 ## Installation
 
@@ -11,12 +13,9 @@ ER diagrams from a [Prisma](https://www.prisma.io/) schema, and seeds a database
 npm install -D hekireki
 ```
 
-## Generators
+## Quick start
 
-Add a generator to `schema.prisma` and run `npx prisma generate`. `output` is required. Every
-generator reads the tables and columns Prisma creates: a model or field without `@map` keeps the
-name it has in the schema (`"Todo"`, `"authorId"`), and each ORM is told so where its own
-convention would say otherwise.
+Add a generator block to `schema.prisma` and run `npx prisma generate`. `output` is required.
 
 ```prisma
 generator Hekireki-Zod {
@@ -26,65 +25,13 @@ generator Hekireki-Zod {
 }
 ```
 
-| Provider                                                                                      | Generates                                               | Options                                                             |
-| --------------------------------------------------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------- |
-| `hekireki-zod`                                                                                | [Zod](https://zod.dev/)                                 | `type`, `relation`, `zod` (`"v4"`, `"mini"`, `"@hono/zod-openapi"`) |
-| `hekireki-valibot`, `hekireki-arktype`, `hekireki-effect`, `hekireki-typebox`, `hekireki-ajv` | Valibot, ArkType, Effect Schema, TypeBox, AJV           | `type`, `relation`                                                  |
-| `hekireki-pydantic`                                                                           | Pydantic                                                | `relation`                                                          |
-| `hekireki-drizzle`, `hekireki-kysely`, `hekireki-sqlalchemy`, `hekireki-django`               | Drizzle, Kysely, SQLAlchemy, Django                     |                                                                     |
-| `hekireki-activerecord`                                                                       | Active Record                                           | `locales`                                                           |
-| `hekireki-gorm`                                                                               | GORM                                                    | `package`                                                           |
-| `hekireki-sea-orm`                                                                            | SeaORM                                                  | `renameAll`                                                         |
-| `hekireki-ecto`                                                                               | Ecto                                                    | `app`                                                               |
-| `hekireki-eloquent`                                                                           | Eloquent                                                | `namespace`                                                         |
-| `hekireki-efcore` (PostgreSQL, MySQL, SQLite)                                                 | EF Core                                                 | `namespace`, `context`                                              |
-| `hekireki-exposed` (PostgreSQL)                                                               | Exposed                                                 | `package`, `dao`                                                    |
-| `hekireki-atlas`                                                                              | Atlas HCL                                               | `schemaName`                                                        |
-| `hekireki-er`                                                                                 | ER diagram                                              | `outputs` (`.md`, `.dbml`, `.png`, `.svg`), `theme`                 |
-| `hekireki-seed`                                                                               | The schema module `hekireki.config.ts` is typed against |                                                                     |
+Every generator reads the tables and columns Prisma creates: a model or field without `@map`
+keeps the name it has in the schema (`"Todo"`, `"authorId"`), and each ORM is told so where its
+own convention would say otherwise.
 
-On MySQL, `hekireki-drizzle` reads and writes a `@db.Timestamp` column as UTC, and MySQL converts a
-`TIMESTAMP` through the connection's `time_zone`: set it to `'+00:00'` on drizzle's connection, as
-Prisma's adapter does on its own, or the two see times that differ by the offset. On CockroachDB it
-writes the PostgreSQL schema, for node-postgres, and an `Int` key with `@default(sequence())` is an
-identity column, as Prisma makes it; keep the session's `TimeZone` at UTC there, as on PostgreSQL,
-for a `dbgenerated("CURRENT_TIMESTAMP")` default to be UTC.
-
-`hekireki-atlas` writes the tables as Prisma Migrate makes them, so that `atlas schema diff`
-against a database Prisma made has nothing to change. Its `schemaName` is `public` unless given
-(`main` on SQLite): on MySQL, where the schema is the database, give the database's name.
-
-`hekireki-efcore` stores a `DateTime` as Prisma Client does, whatever its `DateTimeKind`: the UTC
-instant (a `Local` value converted), read back as `Utc`, in Prisma's text form on SQLite, and
-`now()` filled in by EF Core rather than by the database's clock. It takes Npgsql's legacy
-timestamp behaviour to be off. On MySQL, compare a `@db.Time` column with a parameter rather than
-a constant: MySql.EntityFrameworkCore writes a constant `TimeSpan` as `TIME '03:04:05'`, without
-its fraction.
-
-`hekireki-django` keeps a `DateTime` as Prisma Client keeps it. A column without a zone is declared
-with the `UtcDateTimeField` written into `models.py`, which stores the UTC instant (on SQLite
-Prisma's text, `2030-01-02T03:04:05.678+00:00`) and reads it back as UTC, aware under
-`USE_TZ = True` and in `TIME_ZONE` under `False`; a `@db.Timestamptz` is Django's own field.
-`now()` is filled in by the model, in UTC (the UTC date or time on `@db.Date` and `@db.Time`), a
-literal default on a date or time column is its UTC date or time, an `@updatedAt` on one stamps the
-UTC date or time (`UtcDateField`, `UtcTimeField`) where Django's `auto_now` would take the local
-one, and a model with `@updatedAt` is managed by `AutoNowQuerySet`, so `QuerySet.update()` bumps it
-as `updateMany` does. Keep
-`USE_TZ = True`, Django's default: with `False`, Django sets a PostgreSQL session to `TIME_ZONE`,
-and a `dbgenerated()` default such as `CURRENT_TIMESTAMP` is evaluated in that zone.
-
-`hekireki-exposed` keeps a `DateTime` as Prisma Client keeps it, with no conversion through the
-JVM's zone: an `Instant` bound and read as the UTC instant, to the millisecond (a finer value is
-truncated, as a JavaScript Date holds it, in every native type), the UTC date of a `@db.Date`, the
-UTC time of a `@db.Time`, and a `@db.Timetz` at offset zero. `now()`, literal defaults and every
-`@updatedAt` are filled in by the client on a DAO or DSL insert, and the DAO bumps `@updatedAt` on
-update; a DSL `Table.update` has no such hook, so set it there yourself
-(`it[updatedAt] = Instant.now()`). pgjdbc sets the session to the JVM's zone, so open the
-connection in UTC, as Prisma's is, for a `dbgenerated("CURRENT_TIMESTAMP")` default or `now()` in
-SQL: `Database.connect(url, setupConnection = { it.createStatement().use { s -> s.execute("SET TIME ZONE 'UTC'") } })`.
-
-A `///` line starting with `@z.`, `@v.`, `@a.`, `@e.`, `@t.`, `@j.`, `@p.`, `@ar.` or `@ecto.` is
-used as-is by Zod, Valibot, ArkType, Effect Schema, TypeBox, AJV, Pydantic, Active Record or Ecto:
+A `///` comment on a field can carry a line for one of the validation generators, which uses it
+as it is. The prefix says which: `@z.` for Zod, `@v.` Valibot, `@a.` ArkType, `@e.` Effect
+Schema, `@t.` TypeBox, `@j.` AJV, `@p.` Pydantic, `@ar.` Active Record and `@ecto.` Ecto.
 
 ```prisma
 model User {
@@ -94,7 +41,104 @@ model User {
 }
 ```
 
-### Rails
+## Generators
+
+The `provider` of the generator block picks the output. The options are optional unless a
+section below says otherwise.
+
+### Validation schemas
+
+- **`hekireki-zod`** writes [Zod](https://zod.dev/) schemas. `type` also exports the TypeScript
+  type of each schema, `relation` adds a schema for each relation, and `zod` picks the flavour:
+  `"v4"` (the default), `"mini"` or `"@hono/zod-openapi"`.
+- **`hekireki-valibot`**, **`hekireki-arktype`**, **`hekireki-effect`**, **`hekireki-typebox`**
+  and **`hekireki-ajv`** write Valibot, ArkType, Effect Schema, TypeBox and AJV schemas, with the
+  same `type` and `relation` options.
+- **`hekireki-pydantic`** writes Pydantic models, with `relation`.
+
+### ORM models
+
+Every ORM generator stores a `DateTime` as Prisma Client stores it, so that the ORM and Prisma
+read each other's rows alike. What that takes differs per ORM, and the sections further down say
+what each one does and what is left to the caller.
+
+- **`hekireki-drizzle`** writes Drizzle tables. See [Drizzle](#drizzle).
+- **`hekireki-kysely`** writes the `DB` interface for Kysely. See [Kysely](#kysely).
+- **`hekireki-sqlalchemy`** writes SQLAlchemy models.
+- **`hekireki-django`** writes Django models. See [Django](#django).
+- **`hekireki-activerecord`** writes Rails models. `locales` names the directory for translated
+  messages. See [Active Record](#active-record).
+- **`hekireki-gorm`** writes GORM structs. `package` is the Go package name, `model` by default.
+- **`hekireki-sea-orm`** writes SeaORM entities. `renameAll` is serde's `rename_all` for the
+  entities and enums (`"camelCase"`, for one). See [SeaORM](#seaorm).
+- **`hekireki-ecto`** writes Ecto schemas. `app` is the application module the schemas live
+  under, `MyApp` by default. See [Ecto](#ecto).
+- **`hekireki-eloquent`** writes Eloquent models. `namespace` is the PHP namespace, `App\Models`
+  by default.
+- **`hekireki-efcore`** writes EF Core entities and a `DbContext`, on PostgreSQL, MySQL and SQLite.
+  `namespace` is the C# namespace, `Models` by default, and `context` the name of the context,
+  `AppDbContext` by default. See [EF Core](#ef-core).
+- **`hekireki-exposed`** writes Exposed tables, on PostgreSQL. `package` is the Kotlin package,
+  `models` by default, and `dao` writes the DAO classes beside the tables unless set to `false`.
+  See [Exposed](#exposed).
+
+### Database and diagrams
+
+- **`hekireki-atlas`** writes the schema as Atlas HCL. `schemaName` is the schema the tables go
+  in. See [Atlas](#atlas).
+- **`hekireki-er`** draws the ER diagram. `outputs` lists the files to write, one rendering per
+  extension (`.md`, `.dbml`, `.png`, `.svg`), and `theme` is `light` or `dark`.
+- **`hekireki-seed`** writes the schema module that `hekireki.config.ts` is typed against. See
+  [Seed](#seed).
+
+### Drizzle
+
+On MySQL, `hekireki-drizzle` reads and writes a `@db.Timestamp` column as UTC, and MySQL converts
+a `TIMESTAMP` through the connection's `time_zone`. Set it to `'+00:00'` on drizzle's connection,
+as Prisma's adapter does on its own, or the two see times that differ by the offset.
+
+On CockroachDB it writes the PostgreSQL schema, for node-postgres, and an `Int` key with
+`@default(sequence())` is an identity column, as Prisma makes it. Keep the session's `TimeZone` at
+UTC there, as on PostgreSQL, for a `dbgenerated("CURRENT_TIMESTAMP")` default to be UTC.
+
+### Kysely
+
+`hekireki-kysely` writes one `DB` interface, each column typed as the driver of the datasource
+reads and binds it: better-sqlite3 on SQLite, pg on PostgreSQL, mysql2 on MySQL. Kysely converts
+nothing and runs no hook, so what the types cannot say is the caller's:
+
+- On SQLite a `DateTime` is text, compared as text: write it as Prisma does,
+  `date.toISOString().replace('Z', '+00:00')`, or `=`, `@unique` and `@@id` do not meet Prisma's
+  rows. A `DateTime` with `now()` or a literal default is asked for on insert there, as Prisma
+  Client writes it itself: SQLite's own default is other text (`CURRENT_TIMESTAMP` sorts before
+  Prisma's rows, and Prisma reads the literal as an Invalid Date).
+- pg and mysql2 read a column without a zone in the process's zone, Prisma in UTC: set pg's type
+  parsers 1114, 1082, 1115 and 1182 to UTC with `pg.defaults.parseInputDatesAsUTC = true`, and
+  give mysql2 `timezone: 'Z'`. MySQL refuses ISO text with a `Z`; write a `Date` or MySQL's
+  `2030-01-02 03:04:05.678901`.
+- `@db.Time` and `@db.Timetz` are `string`, the time of day the drivers read.
+- `@updatedAt` is asked for on insert, optional or not, and must be set on every update.
+
+`examples/kysely` in the repository runs a schema against Kysely on SQLite.
+
+### Django
+
+`hekireki-django` keeps a `DateTime` as Prisma Client keeps it:
+
+- A column without a zone is declared with the `UtcDateTimeField` written into `models.py`. It
+  stores the UTC instant (on SQLite Prisma's text, `2030-01-02T03:04:05.678+00:00`) and reads it
+  back as UTC, aware under `USE_TZ = True` and in `TIME_ZONE` under `False`. A `@db.Timestamptz`
+  is Django's own field.
+- `now()` is filled in by the model, in UTC (the UTC date or time on `@db.Date` and `@db.Time`),
+  and a literal default on a date or time column is its UTC date or time.
+- An `@updatedAt` on a date or time column stamps the UTC date or time (`UtcDateField`,
+  `UtcTimeField`) where Django's `auto_now` would take the local one. A model with `@updatedAt`
+  is managed by `AutoNowQuerySet`, so `QuerySet.update()` bumps it as `updateMany` does.
+
+Keep `USE_TZ = True`, Django's default: with `False`, Django sets a PostgreSQL session to
+`TIME_ZONE`, and a `dbgenerated()` default such as `CURRENT_TIMESTAMP` is evaluated in that zone.
+
+### Active Record
 
 `hekireki-activerecord` writes `app/models` from the schema: `application_record.rb` and one model
 per Prisma model, as a Rails developer would write them (and `prisma_date_time.rb` where a column
@@ -107,7 +151,9 @@ A `/// @ar.` line on a field is a validator (`presence`, `length(maximum: 255)`)
 field's `validates`; on a model it is a Ruby line written into the class as it is
 (`has_secure_password`, `has_many :tags, through: :post_tags`, `scope ...`). A message or name
 given per locale, `message: { ja: "...", en: "..." }` or `@ar.name(ja: "...")`, goes to
-`config/locales/models/<model>/<locale>.yml` under the key Rails reads.
+`config/locales/models/<model>/<locale>.yml` under the key Rails reads. From `app/models` that
+directory is the application's own; from anywhere else, `locales` has to name it, relative to
+`output`.
 
 ```prisma
 generator Hekireki-ActiveRecord {
@@ -160,55 +206,65 @@ ja:
 The tables stay Prisma's to create, so set `config.active_record.migration_error = false` and
 create the test database with `prisma migrate deploy`.
 
-A `DateTime` is stored as Prisma Client stores it. Every `@updatedAt` column is bumped, not only
-the one aliased to `updated_at`. A column holding fewer than three digits of a second
-(`@db.Timestamp(0)`, MySQL's bare `@db.DateTime`) is sent Prisma's milliseconds for the database
-to round (`precision: 3`), where Active Record would cut them off first; a `@db.Timetz` column is
-read as a time, not a String (Active Record still warns `unknown OID 1266` once as it reads the
-table's columns, before the declared type takes over). On SQLite every `DateTime` column is
-declared with `PrismaDateTime`, which writes Prisma's text (`2030-01-02T03:04:05.678+00:00`) so
-that comparisons, unique indexes and ordering see both clients' rows alike; on SQL Server a
-`@db.DateTime` or `@db.SmallDateTime` column is, which sends milliseconds for the server to round
-to 1/300 s or to the minute as Prisma's are, where the adapter would round or cut them first. It is
-generated into `prisma_date_time.rb` beside the models, so Zeitwerk loads it from wherever it
-loads them, whatever `output` is. On SQLite and SQL Server, whose `CURRENT_TIMESTAMP` is text of
-another shape or the server's local time, `now()` is filled in by the model. Keep
-`config.active_record.default_timezone` at `:utc`, Rails' default: with `:local`, a `timestamp`
-column is written in the process's zone and Prisma reads it as UTC.
+A `DateTime` is stored as Prisma Client stores it:
 
-`examples/active-record` in the repository
-runs a fuller schema against Active Record on SQLite, and is the place to read what each thing
-becomes.
+- Every `@updatedAt` column is bumped, not only the one aliased to `updated_at`.
+- A column holding fewer than three digits of a second (`@db.Timestamp(0)`, MySQL's bare
+  `@db.DateTime`) is sent Prisma's milliseconds for the database to round (`precision: 3`), where
+  Active Record would cut them off first.
+- A `@db.Timetz` column is read as a time, not a String. Active Record still warns
+  `unknown OID 1266` once as it reads the table's columns, before the declared type takes over.
+- On SQLite every `DateTime` column is declared with `PrismaDateTime`, which writes Prisma's text
+  (`2030-01-02T03:04:05.678+00:00`) so that comparisons, unique indexes and ordering see both
+  clients' rows alike. On SQL Server a `@db.DateTime` or `@db.SmallDateTime` column is too: it
+  sends milliseconds for the server to round to 1/300 s or to the minute as Prisma's are, where
+  the adapter would round or cut them first. The type is generated into `prisma_date_time.rb`
+  beside the models, so Zeitwerk loads it from wherever it loads them, whatever `output` is.
+- On SQLite and SQL Server, whose `CURRENT_TIMESTAMP` is text of another shape or the server's
+  local time, `now()` is filled in by the model.
+
+Keep `config.active_record.default_timezone` at `:utc`, Rails' default: with `:local`, a
+`timestamp` column is written in the process's zone and Prisma reads it as UTC.
+
+`examples/active-record` in the repository runs a fuller schema against Active Record on SQLite,
+and is the place to read what each thing becomes.
 
 ### Ecto
 
 `hekireki-ecto` writes one `Ecto.Schema` module per model. A model with a `/// @ecto` line on it
-or on one of its fields also gets a `changeset/2`: `cast` of every field it can write,
-`validate_required` of the required fields Prisma gives no default, a `unique_constraint` for each
-`@unique` and `@@unique`, a `foreign_key_constraint` for each foreign key, and a
-`no_assoc_constraint` for each `has_one` or `has_many` whose rows the database will not let go of
-(`Restrict` or `NoAction` on delete, which Prisma makes of a required relation that names neither),
-so a refused delete is an error on the association. Each constraint is
-named as the database reports it: Prisma's `<table>_<columns>_key` and `_fkey`, cut to the
-database's limit in bytes as Prisma cuts them, or the `map:` given. On SQLite a unique key takes
-the name Ecto derives itself, and a foreign key gets no constraint, since SQLite names none when it
-refuses a row; with `relationMode = "prisma"` there is no foreign key in the database to report.
+or on one of its fields also gets a `changeset/2`:
 
-A `/// @ecto.` line on a field is an `Ecto.Changeset` function that takes the field first, without
-the field: `validate_length(max: 50)`, or `validate_required(message: "...")` for a message of the
-field's own. `unique_constraint(message: "...")` on a `@unique` field and
+- `cast` of every field it can write;
+- `validate_required` of the required fields Prisma gives no default;
+- a `unique_constraint` for each `@unique` and `@@unique`;
+- a `foreign_key_constraint` for each foreign key;
+- a `no_assoc_constraint` for each `has_one` or `has_many` whose rows the database will not let
+  go of (`Restrict` or `NoAction` on delete, which Prisma makes of a required relation that names
+  neither), so a refused delete is an error on the association.
+
+Each constraint is named as the database reports it: Prisma's `<table>_<columns>_key` and
+`_fkey`, cut to the database's limit in bytes as Prisma cuts them, or the `map:` given. On SQLite
+a unique key takes the name Ecto derives itself, and a foreign key gets no constraint, since
+SQLite names none when it refuses a row; with `relationMode = "prisma"` there is no foreign key in
+the database to report.
+
+A `/// @ecto.` line on a field is an `Ecto.Changeset` function that takes the field first, written
+without the field: `validate_length(max: 50)`, or `validate_required(message: "...")` for a
+message of the field's own. `unique_constraint(message: "...")` on a `@unique` field and
 `foreign_key_constraint(message: "...")` on a foreign key give the constraint its message. On a
 relation field, `assoc_constraint` (the side with the key) puts a missing row's error on the
 association, and `no_assoc_constraint(message: "...")` on a `has_one` or `has_many` gives a refused
-delete its message (or asks for one where the database cascades). On a model a line is a step of the pipeline written as it is
-(`validate_confirmation(:password)`), `unique_constraint([:a, :b], message: "...")` on the fields of
-a `@@unique` gives that constraint its message, `cast(empty_values: [])` hands its options to the
-changeset's `cast`, and a bare `/// @ecto` asks for the changeset with nothing added. With empty
-values of the model's own, `""` is a value, as it is to the column, so the required fields are
-checked by a `validate_not_null` written into the module, which counts only `nil` as missing
-(`validate_required` would count `""` too); a field's own `validate_required` line keeps Ecto's
-meaning. Ecto has no association for a foreign key of several columns, so the constraints of one
-are `foreign_key_constraint`s with the error on the relation's name.
+delete its message (or asks for one where the database cascades).
+
+On a model, a line is a step of the pipeline written as it is (`validate_confirmation(:password)`);
+`unique_constraint([:a, :b], message: "...")` on the fields of a `@@unique` gives that constraint
+its message; `cast(empty_values: [])` hands its options to the changeset's `cast`; and a bare
+`/// @ecto` asks for the changeset with nothing added. With empty values of the model's own, `""`
+is a value, as it is to the column, so the required fields are checked by a `validate_not_null`
+written into the module, which counts only `nil` as missing (`validate_required` would count `""`
+too); a field's own `validate_required` line keeps Ecto's meaning. Ecto has no association for a
+foreign key of several columns, so the constraints of one are `foreign_key_constraint`s with the
+error on the relation's name.
 
 ```prisma
 model User {
@@ -242,25 +298,33 @@ the module's documentation names the session time zone a `@db.Timestamptz`, `@db
 
 `examples/ecto` in the repository runs a schema against Ecto on SQLite.
 
-### Kysely
+### Exposed
 
-`hekireki-kysely` writes one `DB` interface, each column typed as the driver of the datasource
-reads and binds it: better-sqlite3 on SQLite, pg on PostgreSQL, mysql2 on MySQL. Kysely converts
-nothing and runs no hook, so what the types cannot say is the caller's:
+`hekireki-exposed` keeps a `DateTime` as Prisma Client keeps it, with no conversion through the
+JVM's zone: an `Instant` bound and read as the UTC instant, to the millisecond (a finer value is
+truncated, as a JavaScript Date holds it, in every native type), the UTC date of a `@db.Date`, the
+UTC time of a `@db.Time`, and a `@db.Timetz` at offset zero.
 
-- On SQLite a `DateTime` is text, compared as text: write it as Prisma does,
-  `date.toISOString().replace('Z', '+00:00')`, or `=`, `@unique` and `@@id` do not meet Prisma's
-  rows. A `DateTime` with `now()` or a literal default is asked for on insert there, as Prisma
-  Client writes it itself: SQLite's own default is other text (`CURRENT_TIMESTAMP` sorts before
-  Prisma's rows, and Prisma reads the literal as an Invalid Date).
-- pg and mysql2 read a column without a zone in the process's zone, Prisma in UTC: set pg's type
-  parsers 1114, 1082, 1115 and 1182 to UTC with `pg.defaults.parseInputDatesAsUTC = true`, and
-  give mysql2 `timezone: 'Z'`. MySQL refuses ISO text with a `Z`; write a `Date`
-  or MySQL's `2030-01-02 03:04:05.678901`.
-- `@db.Time` and `@db.Timetz` are `string`, the time of day the drivers read.
-- `@updatedAt` is asked for on insert, optional or not, and must be set on every update.
+`now()`, literal defaults and every `@updatedAt` are filled in by the client on a DAO or DSL
+insert, and the DAO bumps `@updatedAt` on update. A DSL `Table.update` has no such hook, so set it
+there yourself: `it[updatedAt] = Instant.now()`.
 
-`examples/kysely` in the repository runs a schema against Kysely on SQLite.
+pgjdbc sets the session to the JVM's zone, so open the connection in UTC, as Prisma's is, for a
+`dbgenerated("CURRENT_TIMESTAMP")` default or `now()` in SQL:
+
+```kotlin
+Database.connect(url, setupConnection = { it.createStatement().use { s -> s.execute("SET TIME ZONE 'UTC'") } })
+```
+
+### EF Core
+
+`hekireki-efcore` stores a `DateTime` as Prisma Client does, whatever its `DateTimeKind`: the UTC
+instant (a `Local` value converted), read back as `Utc`, in Prisma's text form on SQLite, and
+`now()` filled in by EF Core rather than by the database's clock. It takes Npgsql's legacy
+timestamp behaviour to be off.
+
+On MySQL, compare a `@db.Time` column with a parameter rather than a constant:
+MySql.EntityFrameworkCore writes a constant `TimeSpan` as `TIME '03:04:05'`, without its fraction.
 
 ### SeaORM
 
@@ -279,14 +343,22 @@ nothing and runs no hook, so what the types cannot say is the caller's:
 
 `examples/sea-orm` in the repository runs a schema against SeaORM on SQLite, PostgreSQL and MySQL.
 
+### Atlas
+
+`hekireki-atlas` writes the tables as Prisma Migrate makes them, so that `atlas schema diff`
+against a database Prisma made has nothing to change. Its `schemaName` is `public` unless given
+(`main` on SQLite): on MySQL, where the schema is the database, give the database's name.
+
 ## Studio
 
 ```bash
-npx hekireki studio                  # `schema` of prisma.config.ts, else ./prisma/schema.prisma or ./schema.prisma, port 5555
+npx hekireki studio
 npx hekireki studio --url file:./dev.db
 ```
 
-Your schema and database in the browser, on SQLite, PostgreSQL and MySQL.
+Your schema and database in the browser, on SQLite, PostgreSQL and MySQL. Without flags, Studio
+reads the `schema` of `prisma.config.ts`, else `./prisma/schema.prisma` or `./schema.prisma`, and
+listens on port 5555.
 
 **Browse the rows** of each model: search, add, edit and export them.
 
@@ -315,6 +387,9 @@ and the result comes with the TypeScript types of its rows.
 npx hekireki seed                    # Through the project's Prisma Client
 npx hekireki seed --sql seed.sql     # Or as a SQL script
 ```
+
+The `hekireki-seed` generator writes a schema module; `hekireki.config.ts` imports it and is typed
+against it, so each model's fields are known as the config is written.
 
 ```ts
 // hekireki.config.ts
