@@ -106,7 +106,7 @@ Then each thing the schema promises, as Ecto keeps it:
 - **A Json `@default`.** `prisma db push` writes it into SQLite's `CREATE TABLE` unquoted
   (`DEFAULT {"color": "none"}`), and SQLite refuses the table: a Prisma bug, not the generator's.
 - **A `BigInt` `autoincrement()` key.** On SQLite `prisma db push` makes it `BIGINT NOT NULL
-PRIMARY KEY`, which is not SQLite's row id, so nothing counts it up for any client. The generator
+  PRIMARY KEY`, which is not SQLite's row id, so nothing counts it up for any client. The generator
   writes it as `{:id, :id, autogenerate: true}`, which is what a server's `bigserial` needs.
 - **A field named `nil`.** Prisma takes it and the schema compiles, and an update or a read works,
   but `ecto_sqlite3` reads the atom `nil` in an INSERT as a cell left to its default and refuses

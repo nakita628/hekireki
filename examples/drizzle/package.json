@@ -13,19 +13,19 @@
     "demo:mysql": "node provider.ts mysql"
   },
   "devDependencies": {
-    "@prisma/adapter-better-sqlite3": "8.1.0-dev.7",
-    "@prisma/adapter-mariadb": "8.1.0-dev.7",
-    "@prisma/adapter-pg": "8.1.0-dev.7",
-    "@prisma/client": "8.1.0-dev.7",
+    "@prisma/adapter-better-sqlite3": "8.1.0-dev.9",
+    "@prisma/adapter-mariadb": "8.1.0-dev.9",
+    "@prisma/adapter-pg": "8.1.0-dev.9",
+    "@prisma/client": "8.1.0-dev.9",
     "@types/better-sqlite3": "^9.6.0",
-    "@types/node": "^26.6.3",
+    "@types/node": "^26.6.5",
     "@types/pg": "^8.23.1",
     "better-sqlite3": "^13.0.3",
-    "drizzle-orm": "^0.45.3",
+    "drizzle-orm": "^0.45.4",
     "hekireki": "workspace:*",
-    "mysql2": "^3.24.5",
-    "pg": "^8.23.0",
-    "prisma": "8.1.0-dev.7",
+    "mysql2": "^3.24.6",
+    "pg": "^8.23.1",
+    "prisma": "8.1.0-dev.9",
     "typescript": "^7.0.2"
   }
 }

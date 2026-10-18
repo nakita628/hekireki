@@ -13,7 +13,7 @@
   },
   "devDependencies": {
     "hekireki": "workspace:*",
-    "prisma": "8.1.0-dev.7",
+    "prisma": "8.1.0-dev.9",
     "typescript": "^7.0.2"
   }
 }
