@@ -4,6 +4,8 @@ import { isWriteOperation, makeClientQuery } from './client-query.js'
 
 const MODELS = ['User', 'Post', 'OrderItem']
 
+const NOW = Date.UTC(2026, 8, 3, 12, 0, 0)
+
 describe('makeClientQuery', () => {
   it('reads one call with its literal argument', () => {
     const text = `prisma.user.findMany({
@@ -13,7 +15,7 @@ describe('makeClientQuery', () => {
   skip: 0,
   include: { posts: true },
 })`
-    expect(makeClientQuery({ text, models: MODELS })).toStrictEqual({
+    expect(makeClientQuery({ text, models: MODELS, now: NOW })).toStrictEqual({
       calls: [
         {
           model: 'User',
@@ -38,7 +40,7 @@ describe('makeClientQuery', () => {
 
   it('takes a call without an argument, a leading await, a trailing semicolon and comments', () => {
     const text = '// how many?\nawait prisma.orderItem.count(); /* done */'
-    expect(makeClientQuery({ text, models: MODELS })).toStrictEqual({
+    expect(makeClientQuery({ text, models: MODELS, now: NOW })).toStrictEqual({
       calls: [
         {
           model: 'OrderItem',
@@ -68,7 +70,7 @@ describe('makeClientQuery', () => {
   text: 'it\\'s\\né\\x41',
   tpl: \`plain\`,
 }, })`
-    const { calls, diagnostics } = makeClientQuery({ text, models: MODELS })
+    const { calls, diagnostics } = makeClientQuery({ text, models: MODELS, now: NOW })
     expect(diagnostics).toStrictEqual([])
     expect(calls.map((call) => call.args)).toStrictEqual([
       {
@@ -92,7 +94,7 @@ describe('makeClientQuery', () => {
   it('reads a batch $transaction with its options', () => {
     const text =
       'prisma.$transaction([prisma.user.count(), prisma.post.deleteMany({ where: { id: 1 } }),], { isolationLevel: "Serializable" })'
-    expect(makeClientQuery({ text, models: MODELS })).toStrictEqual({
+    expect(makeClientQuery({ text, models: MODELS, now: NOW })).toStrictEqual({
       calls: [
         {
           model: 'User',
@@ -120,7 +122,7 @@ describe('makeClientQuery', () => {
   it('reports every unknown delegate and operation, and keeps the calls that resolve', () => {
     const text =
       'prisma.$transaction([prisma.usr.findMany(), prisma.post.findAll(), prisma.user.count()])'
-    expect(makeClientQuery({ text, models: MODELS })).toStrictEqual({
+    expect(makeClientQuery({ text, models: MODELS, now: NOW })).toStrictEqual({
       calls: [
         {
           model: 'User',
@@ -145,7 +147,9 @@ describe('makeClientQuery', () => {
         },
       ],
     })
-    expect(makeClientQuery({ text: 'prisma.user.count()', models: [] }).diagnostics).toStrictEqual([
+    expect(
+      makeClientQuery({ text: 'prisma.user.count()', models: [], now: NOW }).diagnostics,
+    ).toStrictEqual([
       {
         message: 'Unknown model delegate "user": the schema has no models',
         range: { start: 7, end: 11 },
@@ -232,7 +236,7 @@ describe('makeClientQuery', () => {
     ['user.findMany()', 'Expected a call such as prisma.user.findMany()', { start: 0, end: 13 }],
     ['42', 'Expected a call such as prisma.user.findMany()', { start: 0, end: 2 }],
   ])('refuses %s', (text, message, range) => {
-    expect(makeClientQuery({ text, models: MODELS })).toStrictEqual({
+    expect(makeClientQuery({ text, models: MODELS, now: NOW })).toStrictEqual({
       calls: [],
       transaction: false,
       options: undefined,
@@ -255,7 +259,7 @@ describe('makeClientQuery on large and deep input', () => {
   it('reads the data of a createMany with twenty thousand rows', () => {
     const rows = Array.from({ length: 20_000 }, (_, index) => `{ email: "u${index}@example.com" }`)
     const text = `prisma.user.createMany({ data: [${rows.join(', ')}] })`
-    const { calls, diagnostics } = makeClientQuery({ text, models: MODELS })
+    const { calls, diagnostics } = makeClientQuery({ text, models: MODELS, now: NOW })
     expect(diagnostics).toStrictEqual([])
     const args = calls[0]?.args as { data: { email: string }[] }
     expect(args.data).toHaveLength(20_000)
@@ -265,11 +269,11 @@ describe('makeClientQuery on large and deep input', () => {
   it('refuses arguments nested past the limit with a diagnostic, not a crash', () => {
     const open = '['.repeat(300)
     const text = `prisma.user.findMany({ where: { id: { in: ${open}1${']'.repeat(300)} } } })`
-    expect(makeClientQuery({ text, models: MODELS }).diagnostics).toStrictEqual([
+    expect(makeClientQuery({ text, models: MODELS, now: NOW }).diagnostics).toStrictEqual([
       { message: 'The arguments nest deeper than 256 levels', range: { start: 295, end: 390 } },
     ])
     const fine = `prisma.user.findMany({ where: { id: { in: ${'['.repeat(200)}1${']'.repeat(200)} } } })`
-    expect(makeClientQuery({ text: fine, models: MODELS }).diagnostics).toStrictEqual([])
+    expect(makeClientQuery({ text: fine, models: MODELS, now: NOW }).diagnostics).toStrictEqual([])
   })
 })
 
@@ -313,20 +317,18 @@ describe('makeClientQuery on the rest of what it refuses', () => {
     ['', 'Expected a call such as prisma.user.findMany()'],
   ])('refuses %s', (text, message) => {
     expect(
-      makeClientQuery({ text, models: MODELS }).diagnostics.map((d) => d.message),
+      makeClientQuery({ text, models: MODELS, now: NOW }).diagnostics.map((d) => d.message),
     ).toStrictEqual([message])
   })
 
-  it('reads new Date() as the moment it is read, and a number key as its text', () => {
-    const before = Date.now()
+  it('reads new Date() as the time of the reading, and a number key as its text', () => {
     const { calls } = makeClientQuery({
       text: 'prisma.user.findMany({ where: { at: new Date }, 1: "one", 0x10: "hex" })',
       models: MODELS,
+      now: NOW,
     })
     const args = calls[0]?.args as { where: { at: Date }; 1: string; 16: string }
-    expect(args.where.at).toBeInstanceOf(Date)
-    expect(args.where.at.getTime()).toBeGreaterThanOrEqual(before)
-    expect(args.where.at.getTime()).toBeLessThanOrEqual(Date.now())
+    expect(args.where.at).toStrictEqual(new Date(NOW))
     expect([args[1], args[16]]).toStrictEqual(['one', 'hex'])
   })
 })
@@ -449,7 +451,7 @@ describe('makeClientQuery reads back whatever literal it is given', () => {
       const where = valueOf(draw, 1)
       const args = { where, take: 1 }
       const text = `await prisma.user.findMany(${printOf(draw, args)});`
-      const { calls, diagnostics } = makeClientQuery({ text, models: MODELS })
+      const { calls, diagnostics } = makeClientQuery({ text, models: MODELS, now: NOW })
       expect(diagnostics).toStrictEqual([])
       expect(calls.map((call) => call.args)).toStrictEqual([args])
     },
@@ -461,7 +463,7 @@ describe('makeClientQuery reads back whatever literal it is given', () => {
       const draw = random(seed + 1000)
       const text = `prisma.user.findMany(${printOf(draw, { where: valueOf(draw, 1) })})`
       for (let end = 0; end <= text.length; end += Math.max(1, Math.floor(text.length / 25))) {
-        const result = makeClientQuery({ text: text.slice(0, end), models: MODELS })
+        const result = makeClientQuery({ text: text.slice(0, end), models: MODELS, now: NOW })
         expect(result.calls.length + result.diagnostics.length).toBeGreaterThan(0)
         for (const diagnostic of result.diagnostics) {
           expect(diagnostic.range.start).toBeGreaterThanOrEqual(0)

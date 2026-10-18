@@ -228,9 +228,8 @@ function flattenMysql(
     ]
   }
   if (typeof value !== 'object' || value === null) return []
-  const record = z.record(z.string(), z.unknown()).parse(value)
   if (key === 'table') {
-    const result = MysqlTable.safeParse(record)
+    const result = MysqlTable.safeParse(value)
     if (!result.success) return []
     const parts = [
       result.data.key === undefined ? null : `key ${result.data.key}`,
@@ -247,10 +246,10 @@ function flattenMysql(
         ) || null,
       rows: result.data.rows_produced_per_join ?? result.data.rows_examined_per_scan ?? null,
     }
-    return [node, ...childrenOfMysql(record, id, id)]
+    return [node, ...childrenOfMysql(value, id, id)]
   }
   if (key === 'query_block') {
-    const result = MysqlBlock.safeParse(record)
+    const result = MysqlBlock.safeParse(value)
     const node = {
       id,
       parent,
@@ -262,7 +261,7 @@ function flattenMysql(
       cost: result.success ? Number(result.data.cost_info?.query_cost ?? Number.NaN) || null : null,
       rows: null,
     }
-    return [node, ...childrenOfMysql(record, id, id)]
+    return [node, ...childrenOfMysql(value, id, id)]
   }
   if (MYSQL_OPERATIONS.has(key)) {
     const node = {
@@ -273,9 +272,9 @@ function flattenMysql(
       cost: null,
       rows: null,
     }
-    return [node, ...childrenOfMysql(record, id, id)]
+    return [node, ...childrenOfMysql(value, id, id)]
   }
-  return childrenOfMysql(record, parent, id)
+  return childrenOfMysql(value, parent, id)
 }
 
 /** The operations nested in an object, numbered under `base` (`1.2` → `1.2.1`, `1.2.2`, ...). */
@@ -285,8 +284,9 @@ function childrenOfMysql(
   base: string,
 ): readonly z.infer<typeof PlanNode>[] {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return []
-  const record = z.record(z.string(), z.unknown()).parse(value)
-  return Object.entries(record)
+  const result = z.record(z.string(), z.unknown()).safeParse(value)
+  if (!result.success) return []
+  return Object.entries(result.data)
     .filter(
       ([key, child]) => typeof child === 'object' && child !== null && MYSQL_OPERATIONS.has(key),
     )
