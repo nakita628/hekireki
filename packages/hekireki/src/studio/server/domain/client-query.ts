@@ -70,7 +70,7 @@ function nameOf(node: Expression | PrivateIdentifier) {
 }
 
 /** A literal read as the value it spells; anything that would need evaluating is refused. */
-function valueOf(node: Expression | SpreadElement, depth: number): Read<ClientValue> {
+function valueOf(node: Expression | SpreadElement, depth: number, now: number): Read<ClientValue> {
   if (depth > MAX_DEPTH) return fail(node, `The arguments nest deeper than ${MAX_DEPTH} levels`)
   if (node.type === 'Literal') {
     if (node.bigint !== undefined) return done(BigInt(node.bigint))
@@ -113,7 +113,7 @@ function valueOf(node: Expression | SpreadElement, depth: number): Read<ClientVa
       if (element.type === 'SpreadElement') {
         return fail(element, 'Spread is not supported: write the items out')
       }
-      const item = valueOf(element, depth + 1)
+      const item = valueOf(element, depth + 1, now)
       return item.ok ? done([...items.value, item.value]) : item
     }, done([]))
   }
@@ -137,7 +137,7 @@ function valueOf(node: Expression | SpreadElement, depth: number): Read<ClientVa
         const key =
           property.key.type === 'Literal' ? String(property.key.value) : nameOf(property.key)
         if (key === null) return fail(property.key, 'Expected a key')
-        const value = valueOf(property.value, depth + 1)
+        const value = valueOf(property.value, depth + 1, now)
         return value.ok ? done({ ...entries.value, [key]: value.value }) : value
       },
       done({}),
@@ -151,7 +151,7 @@ function valueOf(node: Expression | SpreadElement, depth: number): Read<ClientVa
       )
     }
     const [argument, second] = node.arguments
-    if (argument === undefined) return done(new Date())
+    if (argument === undefined) return done(new Date(now))
     if (second !== undefined) return fail(second, 'new Date takes one string or number')
     if (
       argument.type !== 'Literal' ||
@@ -172,7 +172,7 @@ function valueOf(node: Expression | SpreadElement, depth: number): Read<ClientVa
 }
 
 /** `prisma.user.findMany({ ... })`: whatever the client is called, a delegate, an operation, one argument. */
-function callOf(node: Expression) {
+function callOf(node: Expression, now: number) {
   if (node.type === 'TaggedTemplateExpression' && node.tag.type === 'MemberExpression') {
     const tag = nameOf(node.tag.property)
     if (tag?.startsWith('$')) {
@@ -217,7 +217,7 @@ function callOf(node: Expression) {
   }
   const [argument, second] = node.arguments
   if (second !== undefined) return fail(second, 'A model operation takes one argument')
-  const args = argument === undefined ? done(undefined) : valueOf(argument, 1)
+  const args = argument === undefined ? done(undefined) : valueOf(argument, 1, now)
   if (!args.ok) return args
   return done({
     delegate: { name: delegate, ...callee.object.property },
@@ -229,7 +229,7 @@ function callOf(node: Expression) {
 }
 
 /** The one statement of the text: a call, or a batch `$transaction` over several. */
-function programOf(text: string) {
+function programOf(text: string, now: number) {
   try {
     const result = parse(text, {
       ecmaVersion: 'latest',
@@ -258,7 +258,7 @@ function programOf(text: string) {
       expression.callee.type === 'MemberExpression' &&
       nameOf(expression.callee.property) === '$transaction'
     if (!transaction) {
-      const call = callOf(expression)
+      const call = callOf(expression, now)
       return call.ok ? done({ calls: [call.value], transaction: false, options: undefined }) : call
     }
     const [batch, options, extra] = expression.arguments
@@ -275,11 +275,11 @@ function programOf(text: string) {
     const calls = batch.elements.map((element) =>
       element === null || element.type === 'SpreadElement'
         ? fail(element ?? batch, 'Expected a call such as prisma.user.count()')
-        : callOf(element),
+        : callOf(element, now),
     )
     const refused = calls.find((call) => !call.ok)
     if (refused !== undefined && !refused.ok) return refused
-    const read = options === undefined ? done(undefined) : valueOf(options, 1)
+    const read = options === undefined ? done(undefined) : valueOf(options, 1, now)
     return read.ok
       ? done({
           calls: calls.flatMap((call) => (call.ok ? [call.value] : [])),
@@ -308,6 +308,11 @@ const MakeClientQueryInput = z
       .array(z.string().meta({ description: 'A model name.', example: 'User' }))
       .readonly()
       .meta({ description: 'The model names of the schema, as declared.' }),
+    now: z.number().int().meta({
+      description:
+        'The time of the reading, in Unix milliseconds: what `new Date()` without an argument stands for.',
+      example: 1_788_000_000_000,
+    }),
   })
   .readonly()
   .meta({
@@ -320,11 +325,11 @@ const MakeClientQueryInput = z
  * model of the schema and an operation Prisma Client has, their literal arguments, and what keeps
  * it from being run (a problem of the text stops the reading; unknown names are all reported).
  *
- * @param input - the text and the model names
+ * @param input - the text, the model names and the time of the reading
  * @returns the calls, whether they form a `$transaction`, its options, and the diagnostics
  */
 export function makeClientQuery(input: z.infer<typeof MakeClientQueryInput>) {
-  const result = programOf(input.text)
+  const result = programOf(input.text, input.now)
   if (!result.ok) {
     const { message, start, end } = result.failure
     return {

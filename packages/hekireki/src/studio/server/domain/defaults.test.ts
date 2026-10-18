@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import { makeGeneratedDefaults } from './defaults.js'
+import { makeGeneratedFields } from './defaults.js'
 
 function field(
   name: string,
@@ -23,15 +23,17 @@ function field(
   }
 }
 
-const NOW = Date.UTC(2026, 8, 3, 12, 0, 0)
-
-describe('makeGeneratedDefaults', () => {
-  it('fills the client-side defaults of omitted fields only', () => {
+describe('makeGeneratedFields', () => {
+  it('names the client-side defaults of omitted fields only', () => {
     const model = {
       fields: [
         field('id', { default: 'uuid(7)' }),
+        field('legacy', { default: 'uuid()' }),
         field('token', { default: 'cuid()' }),
+        field('handle', { default: 'cuid(2)' }),
         field('slug', { default: 'nanoid(10)' }),
+        field('code', { default: 'nanoid()' }),
+        field('order', { default: 'ulid()' }),
         field('createdAt', { default: 'now()' }),
         field('updatedAt', { isUpdatedAt: true }),
         field('serial', { default: 'autoincrement()' }),
@@ -42,16 +44,18 @@ describe('makeGeneratedDefaults', () => {
         field('author', { kind: 'object' }),
       ],
     }
-    const values = makeGeneratedDefaults({ model, row: { given: 'keep' }, now: NOW })
-    expect(new Set(Object.keys(values))).toStrictEqual(
-      new Set(['createdAt', 'id', 'slug', 'tags', 'token', 'updatedAt']),
-    )
-    expect(values.id).toMatch(/^[0-9a-f-]{36}$/u)
-    expect(values.token).toMatch(/^c[0-9a-z]{24}$/u)
-    expect(values.slug).toHaveLength(10)
-    expect(values.createdAt).toBe('2026-09-03T12:00:00.000Z')
-    expect(values.updatedAt).toBe('2026-09-03T12:00:00.000Z')
-    expect(values.tags).toBe('[]')
+    expect(makeGeneratedFields({ model, row: { given: 'keep' } })).toStrictEqual([
+      { name: 'id', generator: { kind: 'uuid', version: 7 } },
+      { name: 'legacy', generator: { kind: 'uuid', version: 4 } },
+      { name: 'token', generator: { kind: 'cuid', version: 1 } },
+      { name: 'handle', generator: { kind: 'cuid', version: 2 } },
+      { name: 'slug', generator: { kind: 'nanoid', length: 10 } },
+      { name: 'code', generator: { kind: 'nanoid', length: null } },
+      { name: 'order', generator: { kind: 'ulid' } },
+      { name: 'createdAt', generator: { kind: 'now' } },
+      { name: 'updatedAt', generator: { kind: 'now' } },
+      { name: 'tags', generator: { kind: 'literal', value: '[]' } },
+    ])
   })
 
   it('leaves the database to its own defaults', () => {
@@ -61,6 +65,6 @@ describe('makeGeneratedDefaults', () => {
         field('at', { default: 'dbgenerated("now()")' }),
       ],
     }
-    expect(makeGeneratedDefaults({ model, row: {} })).toStrictEqual({})
+    expect(makeGeneratedFields({ model, row: {} })).toStrictEqual([])
   })
 })

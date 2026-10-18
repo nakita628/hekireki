@@ -8,12 +8,18 @@ import { Effect } from 'effect'
 import * as z from 'zod'
 
 import { resolveDatabaseUrl } from '../../../database/resolve.js'
+import {
+  makeDialect,
+  makePostgresSchema,
+  makeRedactedUrl,
+  makeSqliteFilePath,
+} from '../../../database/url.js'
+import type { UrlSource } from '../../../database/url.js'
 import { removePath } from '../../../file/index.js'
 import { stringLiteral } from '../../../sql/index.js'
 import * as DatabaseErrorDomain from '../domain/index.js'
 import * as PlanDomain from '../domain/index.js'
 import * as SqlDomain from '../domain/index.js'
-import * as UrlDomain from '../domain/index.js'
 import { DatabaseError, DatabaseUnavailableError } from '../errors/index.js'
 
 /** An open connection: every operation is an Effect that fails with the driver's message. */
@@ -139,7 +145,7 @@ function openSqlite(url: string, baseDir: string) {
     const result = SqliteModule.safeParse(sqlite)
     if (!result.success) return yield* new DatabaseUnavailableError({ reason: NO_SQLITE })
     const db = yield* Effect.try({
-      try: () => new result.data.DatabaseSync(UrlDomain.makeSqliteFilePath({ url, baseDir })),
+      try: () => new result.data.DatabaseSync(makeSqliteFilePath({ url, baseDir })),
       catch: (error) =>
         new DatabaseUnavailableError({
           reason: error instanceof Error ? error.message : String(error),
@@ -285,7 +291,7 @@ function openPostgres(url: string, cwd: string) {
         await opened.connect()
         // `pg` ignores Prisma's `?schema=`; without this the tables of a non-public namespace are
         // invisible and every query reports a missing relation.
-        const schema = UrlDomain.makePostgresSchema({ url })
+        const schema = makePostgresSchema({ url })
         if (schema !== null) {
           const name = SqlDomain.makeIdentifier({ dialect: 'postgresql', name: schema })
           await opened.query(`SET search_path TO ${name}, public`, [])
@@ -536,7 +542,7 @@ export function disconnectedDatabase(reason: string | null = null): {
     readonly connected: boolean
     readonly dialect: 'postgresql' | 'mysql' | 'sqlite' | null
     readonly url: string | null
-    readonly source: UrlDomain.UrlSource | null
+    readonly source: UrlSource | null
     readonly error: string | null
   }
   readonly driver: Effect.Effect<Driver, DatabaseUnavailableError>
@@ -826,8 +832,8 @@ export function connectDatabase(options: z.infer<typeof ConnectDatabaseInput>) {
     const found = yield* resolveDatabaseUrl(options).pipe(
       Effect.mapError((error) => new DatabaseUnavailableError({ reason: error.reason })),
     )
-    const url = UrlDomain.makeRedactedUrl({ url: found.url })
-    const dialect = UrlDomain.makeDialect({
+    const url = makeRedactedUrl({ url: found.url })
+    const dialect = makeDialect({
       url: found.url,
       schemaProvider: options.schemaProvider,
     })

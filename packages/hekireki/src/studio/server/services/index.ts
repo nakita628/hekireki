@@ -1,5 +1,6 @@
 export * from './client.js'
 export * from './database.js'
+export * from './defaults.js'
 export * from './language.js'
 export * from './migrate.js'
 export * from './schema.js'

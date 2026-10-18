@@ -218,6 +218,10 @@ export function insertRow(input: z.infer<typeof InsertRowInput>) {
     if (!model) return yield* new UnknownModelError({ model: input.modelName })
     const db = StudioService.studio().db
     const driver = yield* db.driver
+    // Prisma generates uuid() / cuid() / now() in the client; Studio has to do the same.
+    const generated = yield* StudioService.generateDefaults({
+      fields: DefaultsDomain.makeGeneratedFields({ model, row: input.values }),
+    })
     const written = yield* driver.query(
       SqlDomain.makeInsertStatement({
         dialect: driver.dialect,
@@ -225,11 +229,7 @@ export function insertRow(input: z.infer<typeof InsertRowInput>) {
         values: ModelDomain.makeColumnValues({
           model,
           dialect: driver.dialect,
-          // Prisma generates uuid() / cuid() / now() in the client; Studio has to do the same.
-          row: {
-            ...DefaultsDomain.makeGeneratedDefaults({ model, row: input.values }),
-            ...input.values,
-          },
+          row: { ...generated, ...input.values },
           enums: state.snapshot().schema?.enums ?? [],
         }),
       }),

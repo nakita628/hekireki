@@ -1,4 +1,4 @@
-import { Effect } from 'effect'
+import { Clock, Effect } from 'effect'
 import * as z from 'zod'
 
 import { fmt } from '../../../format/index.js'
@@ -61,9 +61,11 @@ export function analyzeClientQuery(input: z.infer<typeof AnalyzeClientQueryInput
   return Effect.gen(function* () {
     const state = StudioService.studio().state
     const models = state.snapshot().schema?.models ?? []
+    const now = yield* Clock.currentTimeMillis
     const query = ClientDomain.makeClientQuery({
       text: input.query,
       models: models.map((model) => model.name),
+      now,
     })
     const analysis = {
       calls: query.calls.map(({ model, operation, write, range }) => ({
@@ -125,7 +127,8 @@ export function runClientQuery(input: z.infer<typeof RunClientQueryInput>) {
     const db = StudioService.studio().db
     const snapshot = state.snapshot()
     const models = (snapshot.schema?.models ?? []).map((model) => model.name)
-    const query = ClientDomain.makeClientQuery({ text: input.query, models })
+    const now = yield* Clock.currentTimeMillis
+    const query = ClientDomain.makeClientQuery({ text: input.query, models, now })
     const [problem] = query.diagnostics
     if (problem !== undefined) {
       return yield* new InvalidInputError({ field: 'query', message: problem.message })
@@ -163,7 +166,8 @@ export function previewClientQuery(input: z.infer<typeof RunClientQueryInput>) {
   return Effect.gen(function* () {
     const state = StudioService.studio().state
     const models = (state.snapshot().schema?.models ?? []).map((model) => model.name)
-    const write = ClientDomain.makeClientQuery({ text: input.query, models }).calls.find(
+    const now = yield* Clock.currentTimeMillis
+    const write = ClientDomain.makeClientQuery({ text: input.query, models, now }).calls.find(
       (call) => call.write,
     )
     if (write !== undefined) {
