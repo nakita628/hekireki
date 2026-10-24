@@ -33,6 +33,8 @@ object Catalog {
                 // A unique constraint is left to the index that backs it (listed below with the other
                 // indexes): Exposed enforces a unique criterion with a constraint where Prisma creates
                 // the index alone, and the two are the same index.
+                // NOT NULL is left to the column's nullability above: PostgreSQL 18 lists it as a
+                // constraint too, and earlier versions do not.
                 query(
                     connection,
                     """
@@ -40,7 +42,7 @@ object Catalog {
                     FROM pg_constraint con
                     JOIN pg_class c ON c.oid = con.conrelid
                     JOIN pg_namespace n ON n.oid = c.relnamespace
-                    WHERE $USER_SCHEMAS AND con.contype <> 'u'
+                    WHERE $USER_SCHEMAS AND con.contype NOT IN ('u', 'n')
                     """,
                 ).forEach { row -> add("constraint ${row[0]}.${row[1]}.${row[2]} ${row[3]} ${foreignKey(row[4]!!)}") }
                 query(

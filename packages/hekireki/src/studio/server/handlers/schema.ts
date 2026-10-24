@@ -38,12 +38,12 @@ export const getSchemaRouteHandler: RouteHandler<typeof getSchemaRoute> = (c) =>
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -82,12 +82,12 @@ export const postSchemaReloadRouteHandler: RouteHandler<typeof postSchemaReloadR
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -127,12 +127,12 @@ export const putSchemaFilesRouteHandler: RouteHandler<typeof putSchemaFilesRoute
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/not-found' as const,
-                  title: 'Not Found' as const,
-                  status: 404 as const,
+                  type: '/problems/not-found',
+                  title: 'Not Found',
+                  status: 404,
                   detail: `Unknown schema file "${path}". Only the files Studio loaded can be written.`,
                   instance: c.req.path,
-                },
+                } as const,
                 404,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -143,13 +143,13 @@ export const putSchemaFilesRouteHandler: RouteHandler<typeof putSchemaFilesRoute
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/validation-failed' as const,
-                    title: 'Validation Failed' as const,
-                    status: 422 as const,
+                    type: '/problems/validation-failed',
+                    title: 'Validation Failed',
+                    status: 422,
                     detail: `Could not write ${path}: ${cause}`,
                     instance: c.req.path,
                     errors: [{ field: 'path', message: cause }],
-                  },
+                  } as const,
                   422,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -161,12 +161,12 @@ export const putSchemaFilesRouteHandler: RouteHandler<typeof putSchemaFilesRoute
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),

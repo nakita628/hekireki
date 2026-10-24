@@ -31,12 +31,12 @@ export const getDocsRouteHandler: RouteHandler<typeof getDocsRoute> = (c) =>
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),

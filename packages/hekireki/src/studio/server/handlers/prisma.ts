@@ -40,13 +40,13 @@ export const postPrismaFormatRouteHandler: RouteHandler<typeof postPrismaFormatR
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/validation-failed' as const,
-                  title: 'Validation Failed' as const,
-                  status: 422 as const,
+                  type: '/problems/validation-failed',
+                  title: 'Validation Failed',
+                  status: 422,
                   detail: cause,
                   instance: c.req.path,
                   errors: [{ field: 'text', message: cause }],
-                },
+                } as const,
                 422,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -57,12 +57,12 @@ export const postPrismaFormatRouteHandler: RouteHandler<typeof postPrismaFormatR
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -103,12 +103,12 @@ export const postPrismaLintRouteHandler: RouteHandler<typeof postPrismaLintRoute
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -157,12 +157,12 @@ export const postPrismaCompleteRouteHandler: RouteHandler<typeof postPrismaCompl
                 Effect.as(
                   c.json(
                     {
-                      type: '/problems/internal-server-error' as const,
-                      title: 'Internal Server Error' as const,
-                      status: 500 as const,
+                      type: '/problems/internal-server-error',
+                      title: 'Internal Server Error',
+                      status: 500,
                       detail: 'An unexpected error occurred.',
                       instance: c.req.path,
-                    },
+                    } as const,
                     500,
                     { 'Content-Type': 'application/problem+json' },
                   ),
@@ -211,12 +211,12 @@ export const postPrismaHoverRouteHandler: RouteHandler<typeof postPrismaHoverRou
                 Effect.as(
                   c.json(
                     {
-                      type: '/problems/internal-server-error' as const,
-                      title: 'Internal Server Error' as const,
-                      status: 500 as const,
+                      type: '/problems/internal-server-error',
+                      title: 'Internal Server Error',
+                      status: 500,
                       detail: 'An unexpected error occurred.',
                       instance: c.req.path,
-                    },
+                    } as const,
                     500,
                     { 'Content-Type': 'application/problem+json' },
                   ),
@@ -267,12 +267,12 @@ export const postPrismaDefinitionRouteHandler: RouteHandler<typeof postPrismaDef
                 Effect.as(
                   c.json(
                     {
-                      type: '/problems/internal-server-error' as const,
-                      title: 'Internal Server Error' as const,
-                      status: 500 as const,
+                      type: '/problems/internal-server-error',
+                      title: 'Internal Server Error',
+                      status: 500,
                       detail: 'An unexpected error occurred.',
                       instance: c.req.path,
-                    },
+                    } as const,
                     500,
                     { 'Content-Type': 'application/problem+json' },
                   ),
@@ -322,12 +322,12 @@ export const postPrismaRenameRouteHandler: RouteHandler<typeof postPrismaRenameR
                 Effect.as(
                   c.json(
                     {
-                      type: '/problems/internal-server-error' as const,
-                      title: 'Internal Server Error' as const,
-                      status: 500 as const,
+                      type: '/problems/internal-server-error',
+                      title: 'Internal Server Error',
+                      status: 500,
                       detail: 'An unexpected error occurred.',
                       instance: c.req.path,
-                    },
+                    } as const,
                     500,
                     { 'Content-Type': 'application/problem+json' },
                   ),
@@ -378,12 +378,12 @@ export const postPrismaCodeActionsRouteHandler: RouteHandler<typeof postPrismaCo
                 Effect.as(
                   c.json(
                     {
-                      type: '/problems/internal-server-error' as const,
-                      title: 'Internal Server Error' as const,
-                      status: 500 as const,
+                      type: '/problems/internal-server-error',
+                      title: 'Internal Server Error',
+                      status: 500,
                       detail: 'An unexpected error occurred.',
                       instance: c.req.path,
-                    },
+                    } as const,
                     500,
                     { 'Content-Type': 'application/problem+json' },
                   ),
@@ -425,12 +425,12 @@ export const postPrismaSymbolsRouteHandler: RouteHandler<typeof postPrismaSymbol
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -480,12 +480,12 @@ export const postPrismaReferencesRouteHandler: RouteHandler<typeof postPrismaRef
                 Effect.as(
                   c.json(
                     {
-                      type: '/problems/internal-server-error' as const,
-                      title: 'Internal Server Error' as const,
-                      status: 500 as const,
+                      type: '/problems/internal-server-error',
+                      title: 'Internal Server Error',
+                      status: 500,
                       detail: 'An unexpected error occurred.',
                       instance: c.req.path,
-                    },
+                    } as const,
                     500,
                     { 'Content-Type': 'application/problem+json' },
                   ),

@@ -40,12 +40,12 @@ export const getDbRouteHandler: RouteHandler<typeof getDbRoute> = (c) =>
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -83,12 +83,12 @@ export const getDbCountsRouteHandler: RouteHandler<typeof getDbCountsRoute> = (c
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: reason,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -99,12 +99,12 @@ export const getDbCountsRouteHandler: RouteHandler<typeof getDbCountsRoute> = (c
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -143,12 +143,12 @@ export const getDbRowsModelNameRouteHandler: RouteHandler<typeof getDbRowsModelN
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/not-found' as const,
-                  title: 'Not Found' as const,
-                  status: 404 as const,
+                  type: '/problems/not-found',
+                  title: 'Not Found',
+                  status: 404,
                   detail: `Unknown model "${model}".`,
                   instance: c.req.path,
-                },
+                } as const,
                 404,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -158,12 +158,12 @@ export const getDbRowsModelNameRouteHandler: RouteHandler<typeof getDbRowsModelN
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: reason,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -174,12 +174,12 @@ export const getDbRowsModelNameRouteHandler: RouteHandler<typeof getDbRowsModelN
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/service-unavailable' as const,
-                    title: 'Service Unavailable' as const,
-                    status: 503 as const,
+                    type: '/problems/service-unavailable',
+                    title: 'Service Unavailable',
+                    status: 503,
                     detail: cause,
                     instance: c.req.path,
-                  },
+                  } as const,
                   503,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -191,12 +191,12 @@ export const getDbRowsModelNameRouteHandler: RouteHandler<typeof getDbRowsModelN
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -240,12 +240,12 @@ export const postDbRowsModelNameRouteHandler: RouteHandler<typeof postDbRowsMode
               Effect.succeed(
                 c.json(
                   {
-                    type: '/problems/not-found' as const,
-                    title: 'Not Found' as const,
-                    status: 404 as const,
+                    type: '/problems/not-found',
+                    title: 'Not Found',
+                    status: 404,
                     detail: `Unknown model "${model}".`,
                     instance: c.req.path,
-                  },
+                  } as const,
                   404,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -255,12 +255,12 @@ export const postDbRowsModelNameRouteHandler: RouteHandler<typeof postDbRowsMode
               Effect.succeed(
                 c.json(
                   {
-                    type: '/problems/service-unavailable' as const,
-                    title: 'Service Unavailable' as const,
-                    status: 503 as const,
+                    type: '/problems/service-unavailable',
+                    title: 'Service Unavailable',
+                    status: 503,
                     detail: reason,
                     instance: c.req.path,
-                  },
+                  } as const,
                   503,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -271,12 +271,12 @@ export const postDbRowsModelNameRouteHandler: RouteHandler<typeof postDbRowsMode
                 Effect.as(
                   c.json(
                     {
-                      type: '/problems/service-unavailable' as const,
-                      title: 'Service Unavailable' as const,
-                      status: 503 as const,
+                      type: '/problems/service-unavailable',
+                      title: 'Service Unavailable',
+                      status: 503,
                       detail: cause,
                       instance: c.req.path,
-                    },
+                    } as const,
                     503,
                     { 'Content-Type': 'application/problem+json' },
                   ),
@@ -288,12 +288,12 @@ export const postDbRowsModelNameRouteHandler: RouteHandler<typeof postDbRowsMode
                 Effect.as(
                   c.json(
                     {
-                      type: '/problems/internal-server-error' as const,
-                      title: 'Internal Server Error' as const,
-                      status: 500 as const,
+                      type: '/problems/internal-server-error',
+                      title: 'Internal Server Error',
+                      status: 500,
                       detail: 'An unexpected error occurred.',
                       instance: c.req.path,
-                    },
+                    } as const,
                     500,
                     { 'Content-Type': 'application/problem+json' },
                   ),
@@ -342,12 +342,12 @@ export const patchDbRowsModelNameRouteHandler: RouteHandler<typeof patchDbRowsMo
               Effect.succeed(
                 c.json(
                   {
-                    type: '/problems/not-found' as const,
-                    title: 'Not Found' as const,
-                    status: 404 as const,
+                    type: '/problems/not-found',
+                    title: 'Not Found',
+                    status: 404,
                     detail: `Unknown model "${model}".`,
                     instance: c.req.path,
-                  },
+                  } as const,
                   404,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -357,13 +357,13 @@ export const patchDbRowsModelNameRouteHandler: RouteHandler<typeof patchDbRowsMo
               Effect.succeed(
                 c.json(
                   {
-                    type: '/problems/validation-failed' as const,
-                    title: 'Validation Failed' as const,
-                    status: 422 as const,
+                    type: '/problems/validation-failed',
+                    title: 'Validation Failed',
+                    status: 422,
                     detail: `${field} ${message}.`,
                     instance: c.req.path,
                     errors: [{ field, message }],
-                  },
+                  } as const,
                   422,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -373,12 +373,12 @@ export const patchDbRowsModelNameRouteHandler: RouteHandler<typeof patchDbRowsMo
               Effect.succeed(
                 c.json(
                   {
-                    type: '/problems/service-unavailable' as const,
-                    title: 'Service Unavailable' as const,
-                    status: 503 as const,
+                    type: '/problems/service-unavailable',
+                    title: 'Service Unavailable',
+                    status: 503,
                     detail: reason,
                     instance: c.req.path,
-                  },
+                  } as const,
                   503,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -389,12 +389,12 @@ export const patchDbRowsModelNameRouteHandler: RouteHandler<typeof patchDbRowsMo
                 Effect.as(
                   c.json(
                     {
-                      type: '/problems/service-unavailable' as const,
-                      title: 'Service Unavailable' as const,
-                      status: 503 as const,
+                      type: '/problems/service-unavailable',
+                      title: 'Service Unavailable',
+                      status: 503,
                       detail: cause,
                       instance: c.req.path,
-                    },
+                    } as const,
                     503,
                     { 'Content-Type': 'application/problem+json' },
                   ),
@@ -406,12 +406,12 @@ export const patchDbRowsModelNameRouteHandler: RouteHandler<typeof patchDbRowsMo
                 Effect.as(
                   c.json(
                     {
-                      type: '/problems/internal-server-error' as const,
-                      title: 'Internal Server Error' as const,
-                      status: 500 as const,
+                      type: '/problems/internal-server-error',
+                      title: 'Internal Server Error',
+                      status: 500,
                       detail: 'An unexpected error occurred.',
                       instance: c.req.path,
-                    },
+                    } as const,
                     500,
                     { 'Content-Type': 'application/problem+json' },
                   ),
@@ -455,12 +455,12 @@ export const deleteDbRowsModelNameRouteHandler: RouteHandler<typeof deleteDbRows
               Effect.succeed(
                 c.json(
                   {
-                    type: '/problems/not-found' as const,
-                    title: 'Not Found' as const,
-                    status: 404 as const,
+                    type: '/problems/not-found',
+                    title: 'Not Found',
+                    status: 404,
                     detail: `Unknown model "${model}".`,
                     instance: c.req.path,
-                  },
+                  } as const,
                   404,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -470,13 +470,13 @@ export const deleteDbRowsModelNameRouteHandler: RouteHandler<typeof deleteDbRows
               Effect.succeed(
                 c.json(
                   {
-                    type: '/problems/validation-failed' as const,
-                    title: 'Validation Failed' as const,
-                    status: 422 as const,
+                    type: '/problems/validation-failed',
+                    title: 'Validation Failed',
+                    status: 422,
                     detail: `${field} ${message}.`,
                     instance: c.req.path,
                     errors: [{ field, message }],
-                  },
+                  } as const,
                   422,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -486,12 +486,12 @@ export const deleteDbRowsModelNameRouteHandler: RouteHandler<typeof deleteDbRows
               Effect.succeed(
                 c.json(
                   {
-                    type: '/problems/service-unavailable' as const,
-                    title: 'Service Unavailable' as const,
-                    status: 503 as const,
+                    type: '/problems/service-unavailable',
+                    title: 'Service Unavailable',
+                    status: 503,
                     detail: reason,
                     instance: c.req.path,
-                  },
+                  } as const,
                   503,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -502,12 +502,12 @@ export const deleteDbRowsModelNameRouteHandler: RouteHandler<typeof deleteDbRows
                 Effect.as(
                   c.json(
                     {
-                      type: '/problems/service-unavailable' as const,
-                      title: 'Service Unavailable' as const,
-                      status: 503 as const,
+                      type: '/problems/service-unavailable',
+                      title: 'Service Unavailable',
+                      status: 503,
                       detail: cause,
                       instance: c.req.path,
-                    },
+                    } as const,
                     503,
                     { 'Content-Type': 'application/problem+json' },
                   ),
@@ -519,12 +519,12 @@ export const deleteDbRowsModelNameRouteHandler: RouteHandler<typeof deleteDbRows
                 Effect.as(
                   c.json(
                     {
-                      type: '/problems/internal-server-error' as const,
-                      title: 'Internal Server Error' as const,
-                      status: 500 as const,
+                      type: '/problems/internal-server-error',
+                      title: 'Internal Server Error',
+                      status: 500,
                       detail: 'An unexpected error occurred.',
                       instance: c.req.path,
-                    },
+                    } as const,
                     500,
                     { 'Content-Type': 'application/problem+json' },
                   ),
@@ -565,13 +565,13 @@ export const postDbSqlRouteHandler: RouteHandler<typeof postDbSqlRoute> = (c) =>
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/validation-failed' as const,
-                  title: 'Validation Failed' as const,
-                  status: 422 as const,
+                  type: '/problems/validation-failed',
+                  title: 'Validation Failed',
+                  status: 422,
                   detail: `${field} ${message}.`,
                   instance: c.req.path,
                   errors: [{ field, message }],
-                },
+                } as const,
                 422,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -581,12 +581,12 @@ export const postDbSqlRouteHandler: RouteHandler<typeof postDbSqlRoute> = (c) =>
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: reason,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -596,13 +596,13 @@ export const postDbSqlRouteHandler: RouteHandler<typeof postDbSqlRoute> = (c) =>
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/validation-failed' as const,
-                  title: 'Validation Failed' as const,
-                  status: 422 as const,
+                  type: '/problems/validation-failed',
+                  title: 'Validation Failed',
+                  status: 422,
                   detail: cause,
                   instance: c.req.path,
                   errors: [{ field: 'sql', message: cause }],
-                },
+                } as const,
                 422,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -613,12 +613,12 @@ export const postDbSqlRouteHandler: RouteHandler<typeof postDbSqlRoute> = (c) =>
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -659,12 +659,12 @@ export const postDbAnalyzeRouteHandler: RouteHandler<typeof postDbAnalyzeRoute> 
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -704,13 +704,13 @@ export const postDbExplainRouteHandler: RouteHandler<typeof postDbExplainRoute> 
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/validation-failed' as const,
-                  title: 'Validation Failed' as const,
-                  status: 422 as const,
+                  type: '/problems/validation-failed',
+                  title: 'Validation Failed',
+                  status: 422,
                   detail: `${field} ${message}.`,
                   instance: c.req.path,
                   errors: [{ field, message }],
-                },
+                } as const,
                 422,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -720,12 +720,12 @@ export const postDbExplainRouteHandler: RouteHandler<typeof postDbExplainRoute> 
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: reason,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -735,13 +735,13 @@ export const postDbExplainRouteHandler: RouteHandler<typeof postDbExplainRoute> 
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/validation-failed' as const,
-                  title: 'Validation Failed' as const,
-                  status: 422 as const,
+                  type: '/problems/validation-failed',
+                  title: 'Validation Failed',
+                  status: 422,
                   detail: cause,
                   instance: c.req.path,
                   errors: [{ field: 'sql', message: cause }],
-                },
+                } as const,
                 422,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -752,12 +752,12 @@ export const postDbExplainRouteHandler: RouteHandler<typeof postDbExplainRoute> 
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),

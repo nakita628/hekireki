@@ -49,12 +49,12 @@ export const getMigrateRouteHandler: RouteHandler<typeof getMigrateRoute> = (c) 
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: message,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -64,12 +64,12 @@ export const getMigrateRouteHandler: RouteHandler<typeof getMigrateRoute> = (c) 
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: reason,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -79,12 +79,12 @@ export const getMigrateRouteHandler: RouteHandler<typeof getMigrateRoute> = (c) 
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: message,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -95,12 +95,12 @@ export const getMigrateRouteHandler: RouteHandler<typeof getMigrateRoute> = (c) 
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -138,12 +138,12 @@ export const getMigrateDiffRouteHandler: RouteHandler<typeof getMigrateDiffRoute
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: message,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -153,12 +153,12 @@ export const getMigrateDiffRouteHandler: RouteHandler<typeof getMigrateDiffRoute
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: reason,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -168,12 +168,12 @@ export const getMigrateDiffRouteHandler: RouteHandler<typeof getMigrateDiffRoute
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: message,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -184,12 +184,12 @@ export const getMigrateDiffRouteHandler: RouteHandler<typeof getMigrateDiffRoute
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -229,13 +229,13 @@ export const postMigratePlanRouteHandler: RouteHandler<typeof postMigratePlanRou
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/validation-failed' as const,
-                  title: 'Validation Failed' as const,
-                  status: 422 as const,
+                  type: '/problems/validation-failed',
+                  title: 'Validation Failed',
+                  status: 422,
                   detail: 'The migration could not be planned.',
                   instance: c.req.path,
                   errors: [{ field: 'config', message }],
-                },
+                } as const,
                 422,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -245,12 +245,12 @@ export const postMigratePlanRouteHandler: RouteHandler<typeof postMigratePlanRou
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: message,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -260,12 +260,12 @@ export const postMigratePlanRouteHandler: RouteHandler<typeof postMigratePlanRou
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: reason,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -275,12 +275,12 @@ export const postMigratePlanRouteHandler: RouteHandler<typeof postMigratePlanRou
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: message,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -291,12 +291,12 @@ export const postMigratePlanRouteHandler: RouteHandler<typeof postMigratePlanRou
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -335,12 +335,12 @@ export const postMigrateApplyRouteHandler: RouteHandler<typeof postMigrateApplyR
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: reason,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -351,12 +351,12 @@ export const postMigrateApplyRouteHandler: RouteHandler<typeof postMigrateApplyR
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -396,12 +396,12 @@ export const postMigrateMigrationsRouteHandler: RouteHandler<typeof postMigrateM
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: message,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -411,12 +411,12 @@ export const postMigrateMigrationsRouteHandler: RouteHandler<typeof postMigrateM
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: reason,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -426,12 +426,12 @@ export const postMigrateMigrationsRouteHandler: RouteHandler<typeof postMigrateM
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: message,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -442,12 +442,12 @@ export const postMigrateMigrationsRouteHandler: RouteHandler<typeof postMigrateM
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -458,13 +458,13 @@ export const postMigrateMigrationsRouteHandler: RouteHandler<typeof postMigrateM
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/validation-failed' as const,
-                  title: 'Validation Failed' as const,
-                  status: 422 as const,
+                  type: '/problems/validation-failed',
+                  title: 'Validation Failed',
+                  status: 422,
                   detail: 'The migration could not be written.',
                   instance: c.req.path,
                   errors: [{ field: 'name', message: String(failure) }],
-                },
+                } as const,
                 422,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -503,12 +503,12 @@ export const postMigrateMigrationsAppliedRouteHandler: RouteHandler<
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: message,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -518,12 +518,12 @@ export const postMigrateMigrationsAppliedRouteHandler: RouteHandler<
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: reason,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -533,12 +533,12 @@ export const postMigrateMigrationsAppliedRouteHandler: RouteHandler<
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: message,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -549,12 +549,12 @@ export const postMigrateMigrationsAppliedRouteHandler: RouteHandler<
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -595,12 +595,12 @@ export const postMigrateMigrationsRolledBackRouteHandler: RouteHandler<
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: message,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -610,12 +610,12 @@ export const postMigrateMigrationsRolledBackRouteHandler: RouteHandler<
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: reason,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -625,12 +625,12 @@ export const postMigrateMigrationsRolledBackRouteHandler: RouteHandler<
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: message,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -641,12 +641,12 @@ export const postMigrateMigrationsRolledBackRouteHandler: RouteHandler<
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -684,12 +684,12 @@ export const postMigrateDeployRouteHandler: RouteHandler<typeof postMigrateDeplo
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: message,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -699,12 +699,12 @@ export const postMigrateDeployRouteHandler: RouteHandler<typeof postMigrateDeplo
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: reason,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -714,12 +714,12 @@ export const postMigrateDeployRouteHandler: RouteHandler<typeof postMigrateDeplo
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: message,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -730,12 +730,12 @@ export const postMigrateDeployRouteHandler: RouteHandler<typeof postMigrateDeplo
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -773,12 +773,12 @@ export const getMigrateDecisionsRouteHandler: RouteHandler<typeof getMigrateDeci
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: message,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -788,12 +788,12 @@ export const getMigrateDecisionsRouteHandler: RouteHandler<typeof getMigrateDeci
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: reason,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -803,12 +803,12 @@ export const getMigrateDecisionsRouteHandler: RouteHandler<typeof getMigrateDeci
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: message,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -819,12 +819,12 @@ export const getMigrateDecisionsRouteHandler: RouteHandler<typeof getMigrateDeci
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -863,12 +863,12 @@ export const putMigrateDecisionsRouteHandler: RouteHandler<typeof putMigrateDeci
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: message,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -878,12 +878,12 @@ export const putMigrateDecisionsRouteHandler: RouteHandler<typeof putMigrateDeci
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: reason,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -893,12 +893,12 @@ export const putMigrateDecisionsRouteHandler: RouteHandler<typeof putMigrateDeci
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: message,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -909,12 +909,12 @@ export const putMigrateDecisionsRouteHandler: RouteHandler<typeof putMigrateDeci
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -925,13 +925,13 @@ export const putMigrateDecisionsRouteHandler: RouteHandler<typeof putMigrateDeci
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/validation-failed' as const,
-                  title: 'Validation Failed' as const,
-                  status: 422 as const,
+                  type: '/problems/validation-failed',
+                  title: 'Validation Failed',
+                  status: 422,
                   detail: 'The decisions could not be kept.',
                   instance: c.req.path,
                   errors: [{ field: 'decisions', message: String(failure) }],
-                },
+                } as const,
                 422,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -968,12 +968,12 @@ export const getMigrateBaselineRouteHandler: RouteHandler<typeof getMigrateBasel
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: message,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -983,12 +983,12 @@ export const getMigrateBaselineRouteHandler: RouteHandler<typeof getMigrateBasel
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: reason,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -998,12 +998,12 @@ export const getMigrateBaselineRouteHandler: RouteHandler<typeof getMigrateBasel
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: message,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -1014,12 +1014,12 @@ export const getMigrateBaselineRouteHandler: RouteHandler<typeof getMigrateBasel
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -1059,13 +1059,13 @@ export const postMigrateBaselineRouteHandler: RouteHandler<typeof postMigrateBas
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/validation-failed' as const,
-                  title: 'Validation Failed' as const,
-                  status: 422 as const,
+                  type: '/problems/validation-failed',
+                  title: 'Validation Failed',
+                  status: 422,
                   detail: 'The database could not be baselined.',
                   instance: c.req.path,
                   errors: [{ field: 'name', message }],
-                },
+                } as const,
                 422,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -1075,12 +1075,12 @@ export const postMigrateBaselineRouteHandler: RouteHandler<typeof postMigrateBas
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: reason,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -1090,12 +1090,12 @@ export const postMigrateBaselineRouteHandler: RouteHandler<typeof postMigrateBas
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: message,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -1106,12 +1106,12 @@ export const postMigrateBaselineRouteHandler: RouteHandler<typeof postMigrateBas
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -1151,12 +1151,12 @@ export const getMigrateMigrationsMigrationNameRouteHandler: RouteHandler<
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/not-found' as const,
-                  title: 'Not Found' as const,
-                  status: 404 as const,
+                  type: '/problems/not-found',
+                  title: 'Not Found',
+                  status: 404,
                   detail: `There is no migration ${name} in ${baseDir}.`,
                   instance: c.req.path,
-                },
+                } as const,
                 404,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -1166,12 +1166,12 @@ export const getMigrateMigrationsMigrationNameRouteHandler: RouteHandler<
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: message,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -1181,12 +1181,12 @@ export const getMigrateMigrationsMigrationNameRouteHandler: RouteHandler<
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: reason,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -1196,12 +1196,12 @@ export const getMigrateMigrationsMigrationNameRouteHandler: RouteHandler<
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: message,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -1212,12 +1212,12 @@ export const getMigrateMigrationsMigrationNameRouteHandler: RouteHandler<
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -1257,12 +1257,12 @@ export const postMigrateRehearseRouteHandler: RouteHandler<typeof postMigrateReh
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -1274,15 +1274,15 @@ export const postMigrateRehearseRouteHandler: RouteHandler<typeof postMigrateReh
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail:
                     'reason' in failure && typeof failure.reason === 'string'
                       ? failure.reason
                       : failure.message,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -1319,12 +1319,12 @@ export const getMigrateTablesRouteHandler: RouteHandler<typeof getMigrateTablesR
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -1336,15 +1336,15 @@ export const getMigrateTablesRouteHandler: RouteHandler<typeof getMigrateTablesR
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail:
                     'reason' in failure && typeof failure.reason === 'string'
                       ? failure.reason
                       : failure.message,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -1380,12 +1380,12 @@ export const getMigrateBackupsRouteHandler: RouteHandler<typeof getMigrateBackup
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -1397,15 +1397,15 @@ export const getMigrateBackupsRouteHandler: RouteHandler<typeof getMigrateBackup
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail:
                     'reason' in failure && typeof failure.reason === 'string'
                       ? failure.reason
                       : failure.message,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -1440,13 +1440,13 @@ export const postMigrateBackupsRouteHandler: RouteHandler<typeof postMigrateBack
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/validation-failed' as const,
-                  title: 'Validation Failed' as const,
-                  status: 422 as const,
+                  type: '/problems/validation-failed',
+                  title: 'Validation Failed',
+                  status: 422,
                   detail: 'The backup could not be taken.',
                   instance: c.req.path,
                   errors: [{ field: 'backup', message }],
-                },
+                } as const,
                 422,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -1457,12 +1457,12 @@ export const postMigrateBackupsRouteHandler: RouteHandler<typeof postMigrateBack
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -1474,15 +1474,15 @@ export const postMigrateBackupsRouteHandler: RouteHandler<typeof postMigrateBack
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail:
                     'reason' in failure && typeof failure.reason === 'string'
                       ? failure.reason
                       : failure.message,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -1520,13 +1520,13 @@ export const postMigrateBackupsRestoreRouteHandler: RouteHandler<
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/validation-failed' as const,
-                  title: 'Validation Failed' as const,
-                  status: 422 as const,
+                  type: '/problems/validation-failed',
+                  title: 'Validation Failed',
+                  status: 422,
                   detail: 'The backup could not be restored.',
                   instance: c.req.path,
                   errors: [{ field: 'name', message }],
-                },
+                } as const,
                 422,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -1537,12 +1537,12 @@ export const postMigrateBackupsRestoreRouteHandler: RouteHandler<
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -1554,15 +1554,15 @@ export const postMigrateBackupsRestoreRouteHandler: RouteHandler<
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail:
                     'reason' in failure && typeof failure.reason === 'string'
                       ? failure.reason
                       : failure.message,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
