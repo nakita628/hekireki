@@ -36,12 +36,14 @@ public static class Catalog
         // A unique constraint is left to the index that backs it (listed below with the other
         // indexes): EF Core enforces an alternate key with a constraint where Prisma creates the
         // index alone, and the two are the same index.
+        // NOT NULL is left to the column's nullability above: PostgreSQL 18 lists it as a constraint
+        // too, and earlier versions do not.
         foreach (var row in Query(connection, $"""
             SELECT n.nspname, c.relname, con.conname, con.contype, pg_get_constraintdef(con.oid)
             FROM pg_constraint con
             JOIN pg_class c ON c.oid = con.conrelid
             JOIN pg_namespace n ON n.oid = c.relnamespace
-            WHERE {UserSchemas} AND con.contype <> 'u'
+            WHERE {UserSchemas} AND con.contype NOT IN ('u', 'n')
             """))
         {
             var name = (string)row[2]!;
