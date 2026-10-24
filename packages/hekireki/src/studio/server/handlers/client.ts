@@ -42,12 +42,12 @@ export const getClientRouteHandler: RouteHandler<typeof getClientRoute> = (c) =>
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -87,12 +87,12 @@ export const postClientAnalyzeRouteHandler: RouteHandler<typeof postClientAnalyz
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -132,13 +132,13 @@ export const postClientRunRouteHandler: RouteHandler<typeof postClientRunRoute> 
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/validation-failed' as const,
-                  title: 'Validation Failed' as const,
-                  status: 422 as const,
+                  type: '/problems/validation-failed',
+                  title: 'Validation Failed',
+                  status: 422,
                   detail: message,
                   instance: c.req.path,
                   errors: [{ field, message }],
-                },
+                } as const,
                 422,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -148,13 +148,13 @@ export const postClientRunRouteHandler: RouteHandler<typeof postClientRunRoute> 
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/validation-failed' as const,
-                  title: 'Validation Failed' as const,
-                  status: 422 as const,
+                  type: '/problems/validation-failed',
+                  title: 'Validation Failed',
+                  status: 422,
                   detail: message,
                   instance: c.req.path,
                   errors: [{ field: 'query', message }],
-                },
+                } as const,
                 422,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -164,12 +164,12 @@ export const postClientRunRouteHandler: RouteHandler<typeof postClientRunRoute> 
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: reason,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -180,12 +180,12 @@ export const postClientRunRouteHandler: RouteHandler<typeof postClientRunRoute> 
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -227,12 +227,12 @@ export const postClientCompleteRouteHandler: RouteHandler<typeof postClientCompl
               Effect.succeed(
                 c.json(
                   {
-                    type: '/problems/service-unavailable' as const,
-                    title: 'Service Unavailable' as const,
-                    status: 503 as const,
+                    type: '/problems/service-unavailable',
+                    title: 'Service Unavailable',
+                    status: 503,
                     detail: reason,
                     instance: c.req.path,
-                  },
+                  } as const,
                   503,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -243,12 +243,12 @@ export const postClientCompleteRouteHandler: RouteHandler<typeof postClientCompl
                 Effect.as(
                   c.json(
                     {
-                      type: '/problems/internal-server-error' as const,
-                      title: 'Internal Server Error' as const,
-                      status: 500 as const,
+                      type: '/problems/internal-server-error',
+                      title: 'Internal Server Error',
+                      status: 500,
                       detail: 'An unexpected error occurred.',
                       instance: c.req.path,
-                    },
+                    } as const,
                     500,
                     { 'Content-Type': 'application/problem+json' },
                   ),
@@ -296,12 +296,12 @@ export const postClientCompleteDetailRouteHandler: RouteHandler<
               Effect.succeed(
                 c.json(
                   {
-                    type: '/problems/service-unavailable' as const,
-                    title: 'Service Unavailable' as const,
-                    status: 503 as const,
+                    type: '/problems/service-unavailable',
+                    title: 'Service Unavailable',
+                    status: 503,
                     detail: reason,
                     instance: c.req.path,
-                  },
+                  } as const,
                   503,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -312,12 +312,12 @@ export const postClientCompleteDetailRouteHandler: RouteHandler<
                 Effect.as(
                   c.json(
                     {
-                      type: '/problems/internal-server-error' as const,
-                      title: 'Internal Server Error' as const,
-                      status: 500 as const,
+                      type: '/problems/internal-server-error',
+                      title: 'Internal Server Error',
+                      status: 500,
                       detail: 'An unexpected error occurred.',
                       instance: c.req.path,
-                    },
+                    } as const,
                     500,
                     { 'Content-Type': 'application/problem+json' },
                   ),
@@ -357,12 +357,12 @@ export const postClientHoverRouteHandler: RouteHandler<typeof postClientHoverRou
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: reason,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -373,12 +373,12 @@ export const postClientHoverRouteHandler: RouteHandler<typeof postClientHoverRou
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -421,12 +421,12 @@ export const postClientSignatureRouteHandler: RouteHandler<typeof postClientSign
               Effect.succeed(
                 c.json(
                   {
-                    type: '/problems/service-unavailable' as const,
-                    title: 'Service Unavailable' as const,
-                    status: 503 as const,
+                    type: '/problems/service-unavailable',
+                    title: 'Service Unavailable',
+                    status: 503,
                     detail: reason,
                     instance: c.req.path,
-                  },
+                  } as const,
                   503,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -437,12 +437,12 @@ export const postClientSignatureRouteHandler: RouteHandler<typeof postClientSign
                 Effect.as(
                   c.json(
                     {
-                      type: '/problems/internal-server-error' as const,
-                      title: 'Internal Server Error' as const,
-                      status: 500 as const,
+                      type: '/problems/internal-server-error',
+                      title: 'Internal Server Error',
+                      status: 500,
                       detail: 'An unexpected error occurred.',
                       instance: c.req.path,
-                    },
+                    } as const,
                     500,
                     { 'Content-Type': 'application/problem+json' },
                   ),
@@ -483,12 +483,12 @@ export const postClientCheckRouteHandler: RouteHandler<typeof postClientCheckRou
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: reason,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -499,12 +499,12 @@ export const postClientCheckRouteHandler: RouteHandler<typeof postClientCheckRou
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -544,13 +544,13 @@ export const postClientFormatRouteHandler: RouteHandler<typeof postClientFormatR
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/validation-failed' as const,
-                  title: 'Validation Failed' as const,
-                  status: 422 as const,
+                  type: '/problems/validation-failed',
+                  title: 'Validation Failed',
+                  status: 422,
                   detail: message,
                   instance: c.req.path,
                   errors: [{ field: 'query', message }],
-                },
+                } as const,
                 422,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -561,12 +561,12 @@ export const postClientFormatRouteHandler: RouteHandler<typeof postClientFormatR
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -606,13 +606,13 @@ export const postClientPreviewRouteHandler: RouteHandler<typeof postClientPrevie
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/validation-failed' as const,
-                  title: 'Validation Failed' as const,
-                  status: 422 as const,
+                  type: '/problems/validation-failed',
+                  title: 'Validation Failed',
+                  status: 422,
                   detail: message,
                   instance: c.req.path,
                   errors: [{ field, message }],
-                },
+                } as const,
                 422,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -622,13 +622,13 @@ export const postClientPreviewRouteHandler: RouteHandler<typeof postClientPrevie
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/validation-failed' as const,
-                  title: 'Validation Failed' as const,
-                  status: 422 as const,
+                  type: '/problems/validation-failed',
+                  title: 'Validation Failed',
+                  status: 422,
                   detail: message,
                   instance: c.req.path,
                   errors: [{ field: 'query', message }],
-                },
+                } as const,
                 422,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -638,12 +638,12 @@ export const postClientPreviewRouteHandler: RouteHandler<typeof postClientPrevie
             Effect.succeed(
               c.json(
                 {
-                  type: '/problems/service-unavailable' as const,
-                  title: 'Service Unavailable' as const,
-                  status: 503 as const,
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
                   detail: reason,
                   instance: c.req.path,
-                },
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -654,12 +654,12 @@ export const postClientPreviewRouteHandler: RouteHandler<typeof postClientPrevie
               Effect.as(
                 c.json(
                   {
-                    type: '/problems/internal-server-error' as const,
-                    title: 'Internal Server Error' as const,
-                    status: 500 as const,
+                    type: '/problems/internal-server-error',
+                    title: 'Internal Server Error',
+                    status: 500,
                     detail: 'An unexpected error occurred.',
                     instance: c.req.path,
-                  },
+                  } as const,
                   500,
                   { 'Content-Type': 'application/problem+json' },
                 ),
