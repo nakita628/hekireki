@@ -122,6 +122,15 @@ generator Hekireki-Seed {
   output   = "generated/seed"
 }
 
+// The tables as the `components.schemas` of an OpenAPI 3.1 document, as Atlas's template writes
+// them, with `///` comments as descriptions, and with `paths` the CRUD of each table; `.json` in
+// place of `.yaml` writes JSON.
+generator Hekireki-OpenAPI {
+  provider = "hekireki-openapi"
+  output   = "generated/openapi/openapi.yaml"
+  paths    = true
+}
+
 generator Hekireki-Atlas {
   provider = "hekireki-atlas"
   output   = "generated/atlas/schema.hcl"
