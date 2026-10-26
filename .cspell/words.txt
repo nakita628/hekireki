@@ -2,6 +2,7 @@ activerecord
 adbin
 adnum
 adrelid
+aeiou
 apikey
 AQID
 arktype

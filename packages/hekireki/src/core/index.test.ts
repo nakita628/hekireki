@@ -21,6 +21,7 @@ import { eloquent } from './eloquent.js'
 import { exposed } from './exposed.js'
 import { gorm } from './gorm.js'
 import { kysely } from './kysely.js'
+import { openapi } from './openapi.js'
 import { pydantic } from './pydantic.js'
 import { seaOrm } from './sea-orm.js'
 import { sqlalchemy } from './sqlalchemy.js'
@@ -238,6 +239,7 @@ describe.each([
   ['exposed', exposed, 'Hekireki-Exposed'],
   ['gorm', gorm, 'Hekireki-GORM'],
   ['kysely', kysely, 'Hekireki-Kysely'],
+  ['openapi', openapi, 'Hekireki-OpenAPI'],
   ['pydantic', pydantic, 'Hekireki-Pydantic'],
   ['sea-orm', seaOrm, 'Hekireki-SeaORM'],
   ['sqlalchemy', sqlalchemy, 'Hekireki-SQLAlchemy'],
@@ -267,6 +269,7 @@ describe.each([
   ['effect', effect, 'index.ts'],
   ['gorm', gorm, 'models.go'],
   ['kysely', kysely, 'types.ts'],
+  ['openapi', openapi, 'openapi.yaml'],
   ['pydantic', pydantic, 'models.py'],
   ['sqlalchemy', sqlalchemy, 'models.py'],
   ['typebox', typebox, 'index.ts'],
@@ -658,5 +661,72 @@ describe('datasource provider', () => {
     const dir = tmp()
     await run(drizzle, dir, {}, 'mongodb')
     expect(readdirSync(dir)).toStrictEqual([])
+  })
+})
+
+describe('OpenAPI', () => {
+  it('fills info from title and version, and takes the defaults otherwise', async () => {
+    const dir = tmp()
+    expect(Exit.isSuccess(await run(openapi, dir))).toBe(true)
+    expect(readFileSync(path.join(dir, 'openapi.yaml'), 'utf8')).toContain(
+      'info:\n  title: Generated from schema.prisma\n  version: 1.0.0\n',
+    )
+    const named = tmp()
+    expect(Exit.isSuccess(await run(openapi, named, { title: 'Blog API', version: '2.3.0' }))).toBe(
+      true,
+    )
+    expect(readFileSync(path.join(named, 'openapi.yaml'), 'utf8')).toContain(
+      'info:\n  title: Blog API\n  version: 2.3.0\n',
+    )
+  })
+
+  it('writes JSON when the output ends in .json', async () => {
+    const dir = tmp()
+    const file = path.join(dir, 'openapi.json')
+    expect(Exit.isSuccess(await run(openapi, file))).toBe(true)
+    const document = JSON.parse(readFileSync(file, 'utf8')) as {
+      readonly components: { readonly schemas: Record<string, unknown> }
+    }
+    expect(Object.keys(document.components.schemas)).toStrictEqual(['User', 'Post'])
+  })
+
+  it('writes YAML when the output ends in .yml', async () => {
+    const dir = tmp()
+    expect(Exit.isSuccess(await run(openapi, path.join(dir, 'api.yml')))).toBe(true)
+    expect(readFileSync(path.join(dir, 'api.yml'), 'utf8').startsWith('openapi: 3.1.0\n')).toBe(
+      true,
+    )
+  })
+
+  it('refuses an output with an extension it has no format for, and writes nothing', async () => {
+    const dir = tmp()
+    const exit = await run(openapi, path.join(dir, 'openapi.toml'))
+    expect(failure(exit)).toContain('output for Hekireki-OpenAPI must end in .yaml, .yml or .json')
+    expect(readdirSync(dir)).toStrictEqual([])
+  })
+
+  it('writes the CRUD paths and the input schemas with paths, and none without', async () => {
+    const dir = tmp()
+    expect(Exit.isSuccess(await run(openapi, dir, { paths: 'true' }))).toBe(true)
+    const text = readFileSync(path.join(dir, 'openapi.yaml'), 'utf8')
+    expect(text).toContain('paths:\n  "/users":\n')
+    expect(text).toContain('  "/posts/{id}":\n')
+    expect(text).toContain('    Post_create:\n')
+    expect(text).toContain('    Post_update:\n')
+    const plain = tmp()
+    expect(Exit.isSuccess(await run(openapi, plain))).toBe(true)
+    const without = readFileSync(path.join(plain, 'openapi.yaml'), 'utf8')
+    expect(without).not.toContain('paths:')
+    expect(without).not.toContain('_create')
+  })
+
+  it('describes a table with its /// comment and its foreign keys', async () => {
+    const dir = tmp()
+    expect(Exit.isSuccess(await run(openapi, dir))).toBe(true)
+    const text = readFileSync(path.join(dir, 'openapi.yaml'), 'utf8')
+    expect(text).toContain('      description: |\n        A user.\n')
+    expect(text).toContain(
+      '      description: |\n        FK Post_authorId_fkey: (authorId) -> User\n',
+    )
   })
 })

@@ -1,7 +1,7 @@
 {
   "name": "hekireki",
   "version": "0.39.0",
-  "description": "Hekireki is a code generator from Prisma schema to validation schemas, ORM models and ER diagrams, with a Studio for your schema and its data",
+  "description": "Hekireki is a code generator from Prisma schema to validation schemas, ORM models, OpenAPI and ER diagrams, with a Studio for your schema and its data",
   "keywords": [
     "activerecord",
     "ajv",
@@ -26,6 +26,7 @@
     "kysely",
     "laravel",
     "mermaid",
+    "openapi",
     "php",
     "prisma",
     "pydantic",
@@ -63,6 +64,7 @@
     "hekireki-exposed": "dist/bin/exposed.js",
     "hekireki-gorm": "dist/bin/gorm.js",
     "hekireki-kysely": "dist/bin/kysely.js",
+    "hekireki-openapi": "dist/bin/openapi.js",
     "hekireki-pydantic": "dist/bin/pydantic.js",
     "hekireki-sea-orm": "dist/bin/sea-orm.js",
     "hekireki-seed": "dist/bin/seed.js",
@@ -171,6 +173,7 @@
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
     "typescript-5": "npm:typescript@^5.9.3",
+    "yaml": "^2.9.1",
     "zustand": "^5.0.15"
   }
 }

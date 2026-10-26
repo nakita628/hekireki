@@ -26,6 +26,7 @@ import { er } from './er.js'
 import { exposed } from './exposed.js'
 import { gorm } from './gorm.js'
 import { kysely } from './kysely.js'
+import { openapi } from './openapi.js'
 import { pydantic } from './pydantic.js'
 import { seaOrm } from './sea-orm.js'
 import { seed } from './seed.js'
@@ -63,6 +64,7 @@ const HANDLERS: Record<
   'hekireki-exposed': exposed,
   'hekireki-gorm': gorm,
   'hekireki-kysely': kysely,
+  'hekireki-openapi': openapi,
   'hekireki-pydantic': pydantic,
   'hekireki-sea-orm': seaOrm,
   'hekireki-seed': seed,
