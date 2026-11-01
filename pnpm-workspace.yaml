@@ -24,12 +24,12 @@ minimumReleaseAgeExclude:
 # files) — for declarations that are erased at build time. The versions below are the same types
 # without it; renovate.json keeps them where they are.
 overrides:
-  # hono-takibi pins effect and @effect/platform-node to one version (4.0.5 in 0.24) while
+  # hono-takibi pins effect and @effect/platform-node to one version (4.0.6 in 0.28) while
   # platform-node lets platform-node-shared float to a release that asks for a newer effect: 4.0.5
   # imported `make` from effect/Path, which effect 4.0.0 did not have, and `hono-takibi` died on
   # the import. Hold the shared package to the platform-node it ships with; hekireki's own pair is
   # untouched. Move the version with hono-takibi's pin.
-  '@effect/platform-node@4.0.5>@effect/platform-node-shared': 4.0.5
+  '@effect/platform-node@4.0.6>@effect/platform-node-shared': 4.0.6
   '@react-types/color': 3.1.4
   '@react-types/slider': 3.8.4
   # What Vite+ asks of a project (vite-plus README, "Add package-manager overrides"): every package
