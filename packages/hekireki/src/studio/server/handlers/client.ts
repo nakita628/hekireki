@@ -13,6 +13,18 @@ import type {
   postClientRunRoute,
   postClientSignatureRoute,
 } from '../routes'
+import {
+  ClientAnalysisSchema,
+  ClientCompletionDetailSchema,
+  ClientCompletionsSchema,
+  ClientFormattedSchema,
+  ClientHoverSchema,
+  ClientPreviewSchema,
+  ClientResultSchema,
+  ClientSignatureHelpSchema,
+  ClientStatusSchema,
+  ClientTypeDiagnosticsSchema,
+} from '../routes/index.js'
 import * as ClientUseCase from '../usecases/index.js'
 
 /**
@@ -28,35 +40,13 @@ import * as ClientUseCase from '../usecases/index.js'
  *   H->>U: readClientStatus()
  *   U-->>H: ClientStatus
  *   H-->>C: 200 ClientStatus
- *   Note over H: on failure, Match.tag: ContractViolationError -> 500
  * ```
  */
 export const getClientRouteHandler: RouteHandler<typeof getClientRoute> = (c) =>
   Effect.runPromise(
-    Effect.matchEffect(ClientUseCase.readClientStatus(), {
-      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
-      onFailure: (error) =>
-        Match.value(error).pipe(
-          Match.tag('ContractViolationError', ({ message }) =>
-            Effect.logError('contract violation', message).pipe(
-              Effect.as(
-                c.json(
-                  {
-                    type: '/problems/internal-server-error',
-                    title: 'Internal Server Error',
-                    status: 500,
-                    detail: 'An unexpected error occurred.',
-                    instance: c.req.path,
-                  } as const,
-                  500,
-                  { 'Content-Type': 'application/problem+json' },
-                ),
-              ),
-            ),
-          ),
-          Match.exhaustive,
-        ),
-    }),
+    Effect.map(ClientUseCase.readClientStatus(), (value) =>
+      c.json(ClientStatusSchema.parse(value), 200),
+    ),
   )
 
 /**
@@ -72,36 +62,14 @@ export const getClientRouteHandler: RouteHandler<typeof getClientRoute> = (c) =>
  *   H->>U: analyzeClientQuery()
  *   U-->>H: ClientAnalysis
  *   H-->>C: 200 ClientAnalysis
- *   Note over H: on failure, Match.tag: ContractViolationError -> 500
  * ```
  */
 export const postClientAnalyzeRouteHandler: RouteHandler<typeof postClientAnalyzeRoute> = (c) => {
   const data = c.req.valid('json')
   return Effect.runPromise(
-    Effect.matchEffect(ClientUseCase.analyzeClientQuery({ query: data.query }), {
-      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
-      onFailure: (error) =>
-        Match.value(error).pipe(
-          Match.tag('ContractViolationError', ({ message }) =>
-            Effect.logError('contract violation', message).pipe(
-              Effect.as(
-                c.json(
-                  {
-                    type: '/problems/internal-server-error',
-                    title: 'Internal Server Error',
-                    status: 500,
-                    detail: 'An unexpected error occurred.',
-                    instance: c.req.path,
-                  } as const,
-                  500,
-                  { 'Content-Type': 'application/problem+json' },
-                ),
-              ),
-            ),
-          ),
-          Match.exhaustive,
-        ),
-    }),
+    Effect.map(ClientUseCase.analyzeClientQuery({ query: data.query }), (value) =>
+      c.json(ClientAnalysisSchema.parse(value), 200),
+    ),
   )
 }
 
@@ -118,14 +86,14 @@ export const postClientAnalyzeRouteHandler: RouteHandler<typeof postClientAnalyz
  *   H->>U: runClientQuery()
  *   U-->>H: ClientResult
  *   H-->>C: 200 ClientResult
- *   Note over H: on failure, Match.tag: InvalidInputError -> 422 / ClientQueryError -> 422 / ClientUnavailableError -> 503 / ContractViolationError -> 500
+ *   Note over H: on failure, Match.tag: InvalidInputError -> 422 / ClientQueryError -> 422 / ClientUnavailableError -> 503
  * ```
  */
 export const postClientRunRouteHandler: RouteHandler<typeof postClientRunRoute> = (c) => {
   const data = c.req.valid('json')
   return Effect.runPromise(
     Effect.matchEffect(ClientUseCase.runClientQuery({ query: data.query }), {
-      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
+      onSuccess: (value) => Effect.succeed(c.json(ClientResultSchema.parse(value), 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           Match.tag('InvalidInputError', ({ field, message }) =>
@@ -175,23 +143,6 @@ export const postClientRunRouteHandler: RouteHandler<typeof postClientRunRoute> 
               ),
             ),
           ),
-          Match.tag('ContractViolationError', ({ message }) =>
-            Effect.logError('contract violation', message).pipe(
-              Effect.as(
-                c.json(
-                  {
-                    type: '/problems/internal-server-error',
-                    title: 'Internal Server Error',
-                    status: 500,
-                    detail: 'An unexpected error occurred.',
-                    instance: c.req.path,
-                  } as const,
-                  500,
-                  { 'Content-Type': 'application/problem+json' },
-                ),
-              ),
-            ),
-          ),
           Match.exhaustive,
         ),
     }),
@@ -211,7 +162,7 @@ export const postClientRunRouteHandler: RouteHandler<typeof postClientRunRoute> 
  *   H->>U: completeClientQuery()
  *   U-->>H: ClientCompletions
  *   H-->>C: 200 ClientCompletions
- *   Note over H: on failure, Match.tag: ClientUnavailableError -> 503 / ContractViolationError -> 500
+ *   Note over H: on failure, Match.tag: ClientUnavailableError -> 503
  * ```
  */
 export const postClientCompleteRouteHandler: RouteHandler<typeof postClientCompleteRoute> = (c) => {
@@ -220,7 +171,7 @@ export const postClientCompleteRouteHandler: RouteHandler<typeof postClientCompl
     Effect.matchEffect(
       ClientUseCase.completeClientQuery({ query: data.query, offset: data.offset }),
       {
-        onSuccess: (value) => Effect.succeed(c.json(value, 200)),
+        onSuccess: (value) => Effect.succeed(c.json(ClientCompletionsSchema.parse(value), 200)),
         onFailure: (error) =>
           Match.value(error).pipe(
             Match.tag('ClientUnavailableError', ({ reason }) =>
@@ -235,23 +186,6 @@ export const postClientCompleteRouteHandler: RouteHandler<typeof postClientCompl
                   } as const,
                   503,
                   { 'Content-Type': 'application/problem+json' },
-                ),
-              ),
-            ),
-            Match.tag('ContractViolationError', ({ message }) =>
-              Effect.logError('contract violation', message).pipe(
-                Effect.as(
-                  c.json(
-                    {
-                      type: '/problems/internal-server-error',
-                      title: 'Internal Server Error',
-                      status: 500,
-                      detail: 'An unexpected error occurred.',
-                      instance: c.req.path,
-                    } as const,
-                    500,
-                    { 'Content-Type': 'application/problem+json' },
-                  ),
                 ),
               ),
             ),
@@ -274,7 +208,7 @@ export const postClientCompleteRouteHandler: RouteHandler<typeof postClientCompl
  *   H->>U: detailClientCompletion()
  *   U-->>H: ClientCompletionDetail
  *   H-->>C: 200 ClientCompletionDetail
- *   Note over H: on failure, Match.tag: ClientUnavailableError -> 503 / ContractViolationError -> 500
+ *   Note over H: on failure, Match.tag: ClientUnavailableError -> 503
  * ```
  */
 export const postClientCompleteDetailRouteHandler: RouteHandler<
@@ -289,7 +223,8 @@ export const postClientCompleteDetailRouteHandler: RouteHandler<
         name: data.name,
       }),
       {
-        onSuccess: (value) => Effect.succeed(c.json(value, 200)),
+        onSuccess: (value) =>
+          Effect.succeed(c.json(ClientCompletionDetailSchema.parse(value), 200)),
         onFailure: (error) =>
           Match.value(error).pipe(
             Match.tag('ClientUnavailableError', ({ reason }) =>
@@ -304,23 +239,6 @@ export const postClientCompleteDetailRouteHandler: RouteHandler<
                   } as const,
                   503,
                   { 'Content-Type': 'application/problem+json' },
-                ),
-              ),
-            ),
-            Match.tag('ContractViolationError', ({ message }) =>
-              Effect.logError('contract violation', message).pipe(
-                Effect.as(
-                  c.json(
-                    {
-                      type: '/problems/internal-server-error',
-                      title: 'Internal Server Error',
-                      status: 500,
-                      detail: 'An unexpected error occurred.',
-                      instance: c.req.path,
-                    } as const,
-                    500,
-                    { 'Content-Type': 'application/problem+json' },
-                  ),
                 ),
               ),
             ),
@@ -343,14 +261,14 @@ export const postClientCompleteDetailRouteHandler: RouteHandler<
  *   H->>U: hoverClientQuery()
  *   U-->>H: ClientHover
  *   H-->>C: 200 ClientHover
- *   Note over H: on failure, Match.tag: ClientUnavailableError -> 503 / ContractViolationError -> 500
+ *   Note over H: on failure, Match.tag: ClientUnavailableError -> 503
  * ```
  */
 export const postClientHoverRouteHandler: RouteHandler<typeof postClientHoverRoute> = (c) => {
   const data = c.req.valid('json')
   return Effect.runPromise(
     Effect.matchEffect(ClientUseCase.hoverClientQuery({ query: data.query, offset: data.offset }), {
-      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
+      onSuccess: (value) => Effect.succeed(c.json(ClientHoverSchema.parse(value), 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           Match.tag('ClientUnavailableError', ({ reason }) =>
@@ -365,23 +283,6 @@ export const postClientHoverRouteHandler: RouteHandler<typeof postClientHoverRou
                 } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
-              ),
-            ),
-          ),
-          Match.tag('ContractViolationError', ({ message }) =>
-            Effect.logError('contract violation', message).pipe(
-              Effect.as(
-                c.json(
-                  {
-                    type: '/problems/internal-server-error',
-                    title: 'Internal Server Error',
-                    status: 500,
-                    detail: 'An unexpected error occurred.',
-                    instance: c.req.path,
-                  } as const,
-                  500,
-                  { 'Content-Type': 'application/problem+json' },
-                ),
               ),
             ),
           ),
@@ -403,7 +304,7 @@ export const postClientHoverRouteHandler: RouteHandler<typeof postClientHoverRou
  *   H->>U: signatureClientQuery()
  *   U-->>H: ClientSignatureHelp
  *   H-->>C: 200 ClientSignatureHelp
- *   Note over H: on failure, Match.tag: ClientUnavailableError -> 503 / ContractViolationError -> 500
+ *   Note over H: on failure, Match.tag: ClientUnavailableError -> 503
  * ```
  */
 export const postClientSignatureRouteHandler: RouteHandler<typeof postClientSignatureRoute> = (
@@ -414,7 +315,7 @@ export const postClientSignatureRouteHandler: RouteHandler<typeof postClientSign
     Effect.matchEffect(
       ClientUseCase.signatureClientQuery({ query: data.query, offset: data.offset }),
       {
-        onSuccess: (value) => Effect.succeed(c.json(value, 200)),
+        onSuccess: (value) => Effect.succeed(c.json(ClientSignatureHelpSchema.parse(value), 200)),
         onFailure: (error) =>
           Match.value(error).pipe(
             Match.tag('ClientUnavailableError', ({ reason }) =>
@@ -429,23 +330,6 @@ export const postClientSignatureRouteHandler: RouteHandler<typeof postClientSign
                   } as const,
                   503,
                   { 'Content-Type': 'application/problem+json' },
-                ),
-              ),
-            ),
-            Match.tag('ContractViolationError', ({ message }) =>
-              Effect.logError('contract violation', message).pipe(
-                Effect.as(
-                  c.json(
-                    {
-                      type: '/problems/internal-server-error',
-                      title: 'Internal Server Error',
-                      status: 500,
-                      detail: 'An unexpected error occurred.',
-                      instance: c.req.path,
-                    } as const,
-                    500,
-                    { 'Content-Type': 'application/problem+json' },
-                  ),
                 ),
               ),
             ),
@@ -469,14 +353,14 @@ export const postClientSignatureRouteHandler: RouteHandler<typeof postClientSign
  *   H->>U: checkClientQuery()
  *   U-->>H: ClientTypeDiagnostics
  *   H-->>C: 200 ClientTypeDiagnostics
- *   Note over H: on failure, Match.tag: ClientUnavailableError -> 503 / ContractViolationError -> 500
+ *   Note over H: on failure, Match.tag: ClientUnavailableError -> 503
  * ```
  */
 export const postClientCheckRouteHandler: RouteHandler<typeof postClientCheckRoute> = (c) => {
   const data = c.req.valid('json')
   return Effect.runPromise(
     Effect.matchEffect(ClientUseCase.checkClientQuery({ query: data.query }), {
-      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
+      onSuccess: (value) => Effect.succeed(c.json(ClientTypeDiagnosticsSchema.parse(value), 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           Match.tag('ClientUnavailableError', ({ reason }) =>
@@ -491,23 +375,6 @@ export const postClientCheckRouteHandler: RouteHandler<typeof postClientCheckRou
                 } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
-              ),
-            ),
-          ),
-          Match.tag('ContractViolationError', ({ message }) =>
-            Effect.logError('contract violation', message).pipe(
-              Effect.as(
-                c.json(
-                  {
-                    type: '/problems/internal-server-error',
-                    title: 'Internal Server Error',
-                    status: 500,
-                    detail: 'An unexpected error occurred.',
-                    instance: c.req.path,
-                  } as const,
-                  500,
-                  { 'Content-Type': 'application/problem+json' },
-                ),
               ),
             ),
           ),
@@ -530,14 +397,14 @@ export const postClientCheckRouteHandler: RouteHandler<typeof postClientCheckRou
  *   H->>U: formatClientQuery()
  *   U-->>H: ClientFormatted
  *   H-->>C: 200 ClientFormatted
- *   Note over H: on failure, Match.tag: FormatError -> 422 / ContractViolationError -> 500
+ *   Note over H: on failure, Match.tag: FormatError -> 422
  * ```
  */
 export const postClientFormatRouteHandler: RouteHandler<typeof postClientFormatRoute> = (c) => {
   const data = c.req.valid('json')
   return Effect.runPromise(
     Effect.matchEffect(ClientUseCase.formatClientQuery({ query: data.query }), {
-      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
+      onSuccess: (value) => Effect.succeed(c.json(ClientFormattedSchema.parse(value), 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           Match.tag('FormatError', ({ message }) =>
@@ -553,23 +420,6 @@ export const postClientFormatRouteHandler: RouteHandler<typeof postClientFormatR
                 } as const,
                 422,
                 { 'Content-Type': 'application/problem+json' },
-              ),
-            ),
-          ),
-          Match.tag('ContractViolationError', ({ message }) =>
-            Effect.logError('contract violation', message).pipe(
-              Effect.as(
-                c.json(
-                  {
-                    type: '/problems/internal-server-error',
-                    title: 'Internal Server Error',
-                    status: 500,
-                    detail: 'An unexpected error occurred.',
-                    instance: c.req.path,
-                  } as const,
-                  500,
-                  { 'Content-Type': 'application/problem+json' },
-                ),
               ),
             ),
           ),
@@ -592,14 +442,14 @@ export const postClientFormatRouteHandler: RouteHandler<typeof postClientFormatR
  *   H->>U: previewClientQuery()
  *   U-->>H: ClientPreview
  *   H-->>C: 200 ClientPreview
- *   Note over H: on failure, Match.tag: InvalidInputError -> 422 / ClientQueryError -> 422 / ClientUnavailableError -> 503 / ContractViolationError -> 500
+ *   Note over H: on failure, Match.tag: InvalidInputError -> 422 / ClientQueryError -> 422 / ClientUnavailableError -> 503
  * ```
  */
 export const postClientPreviewRouteHandler: RouteHandler<typeof postClientPreviewRoute> = (c) => {
   const data = c.req.valid('json')
   return Effect.runPromise(
     Effect.matchEffect(ClientUseCase.previewClientQuery({ query: data.query }), {
-      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
+      onSuccess: (value) => Effect.succeed(c.json(ClientPreviewSchema.parse(value), 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           Match.tag('InvalidInputError', ({ field, message }) =>
@@ -646,23 +496,6 @@ export const postClientPreviewRouteHandler: RouteHandler<typeof postClientPrevie
                 } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
-              ),
-            ),
-          ),
-          Match.tag('ContractViolationError', ({ message }) =>
-            Effect.logError('contract violation', message).pipe(
-              Effect.as(
-                c.json(
-                  {
-                    type: '/problems/internal-server-error',
-                    title: 'Internal Server Error',
-                    status: 500,
-                    detail: 'An unexpected error occurred.',
-                    instance: c.req.path,
-                  } as const,
-                  500,
-                  { 'Content-Type': 'application/problem+json' },
-                ),
               ),
             ),
           ),

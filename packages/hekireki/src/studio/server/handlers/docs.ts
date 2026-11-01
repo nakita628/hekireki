@@ -1,8 +1,21 @@
 import type { RouteHandler } from '@hono/zod-openapi'
-import { Effect, Match } from 'effect'
+import { Effect } from 'effect'
 
 import type { getDocsRoute } from '../routes'
+import { DocsSchema } from '../routes/index.js'
 import * as DocsUseCase from '../usecases/index.js'
+
+// The docs as last checked, by the object the state holds: a reload replaces that object, and
+// between reloads every request would otherwise run the whole DMMF-sized contract check again.
+const checked = new WeakMap<object, ReturnType<typeof DocsSchema.parse>>()
+
+function checkDocs(docs: object) {
+  const kept = checked.get(docs)
+  if (kept !== undefined) return kept
+  const parsed = DocsSchema.parse(docs)
+  checked.set(docs, parsed)
+  return parsed
+}
 
 /**
  * `GET /docs` handler. The documentation of the last schema that parsed: models, operations and
@@ -17,33 +30,7 @@ import * as DocsUseCase from '../usecases/index.js'
  *   H->>U: readDocs()
  *   U-->>H: Docs
  *   H-->>C: 200 Docs
- *   Note over H: on failure, Match.tag: ContractViolationError -> 500
  * ```
  */
 export const getDocsRouteHandler: RouteHandler<typeof getDocsRoute> = (c) =>
-  Effect.runPromise(
-    Effect.matchEffect(DocsUseCase.readDocs(), {
-      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
-      onFailure: (error) =>
-        Match.value(error).pipe(
-          Match.tag('ContractViolationError', ({ message }) =>
-            Effect.logError('contract violation', message).pipe(
-              Effect.as(
-                c.json(
-                  {
-                    type: '/problems/internal-server-error',
-                    title: 'Internal Server Error',
-                    status: 500,
-                    detail: 'An unexpected error occurred.',
-                    instance: c.req.path,
-                  } as const,
-                  500,
-                  { 'Content-Type': 'application/problem+json' },
-                ),
-              ),
-            ),
-          ),
-          Match.exhaustive,
-        ),
-    }),
-  )
+  Effect.runPromise(Effect.map(DocsUseCase.readDocs(), (value) => c.json(checkDocs(value), 200)))

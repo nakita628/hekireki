@@ -5,19 +5,7 @@ import { fmt } from '../../../format/index.js'
 import { formatSql } from '../../../sql/index.js'
 import { CLIENT_ROW_LIMIT } from '../constants/index.js'
 import * as ClientDomain from '../domain/index.js'
-import { ContractViolationError, InvalidInputError } from '../errors/index.js'
-import {
-  ClientAnalysisSchema,
-  ClientCompletionDetailSchema,
-  ClientCompletionsSchema,
-  ClientFormattedSchema,
-  ClientHoverSchema,
-  ClientPreviewSchema,
-  ClientResultSchema,
-  ClientSignatureHelpSchema,
-  ClientStatusSchema,
-  ClientTypeDiagnosticsSchema,
-} from '../routes/index.js'
+import { InvalidInputError } from '../errors/index.js'
 import * as StudioService from '../services/index.js'
 
 /**
@@ -30,11 +18,7 @@ export function readClientStatus() {
     const state = StudioService.studio().state
     const client = StudioService.studio().client
     const status = yield* client.status(state.snapshot().files)
-    const result = ClientStatusSchema.safeParse(status)
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
+    return status
   })
 }
 
@@ -78,11 +62,7 @@ export function analyzeClientQuery(input: z.infer<typeof AnalyzeClientQueryInput
       touched: ClientDomain.makeClientTouched({ calls: query.calls, models }),
       diagnostics: query.diagnostics,
     }
-    const result = ClientAnalysisSchema.safeParse(analysis)
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
+    return analysis
   })
 }
 
@@ -114,7 +94,7 @@ const RunClientQueryInput = z
  *   Note over U: read the text into calls (domain)
  *   U->>C: run(calls)
  *   C-->>U: value, query events / ClientUnavailableError / ClientQueryError
- *   Note over U: value as JSON, first CLIENT_ROW_LIMIT rows → validate against ClientResult
+ *   Note over U: value as JSON, first CLIENT_ROW_LIMIT rows
  * ```
  *
  * @param input - the query text
@@ -147,11 +127,7 @@ export function runClientQuery(input: z.infer<typeof RunClientQueryInput>) {
       })),
       durationMs: Math.round(ran.durationMs * 10) / 10,
     }
-    const result = ClientResultSchema.safeParse(clientResult)
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
+    return clientResult
   })
 }
 
@@ -177,14 +153,10 @@ export function previewClientQuery(input: z.infer<typeof RunClientQueryInput>) {
       })
     }
     const ran = yield* runClientQuery(input)
-    const result = ClientPreviewSchema.safeParse({
+    return {
       queries: ran.queries,
       durationMs: ran.durationMs,
-    })
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
     }
-    return result.data
   })
 }
 
@@ -222,11 +194,7 @@ export function completeClientQuery(input: z.infer<typeof QueryPositionInput>) {
       input.query,
       input.offset,
     )
-    const result = ClientCompletionsSchema.safeParse({ items })
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
+    return { items }
   })
 }
 
@@ -266,11 +234,7 @@ export function detailClientCompletion(input: z.infer<typeof CompletionDetailInp
       input.offset,
       input.name,
     )
-    const result = ClientCompletionDetailSchema.safeParse(detail)
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
+    return detail
   })
 }
 
@@ -285,11 +249,7 @@ export function hoverClientQuery(input: z.infer<typeof QueryPositionInput>) {
     const state = StudioService.studio().state
     const client = StudioService.studio().client
     const hover = yield* client.typescript.hover(state.snapshot().files, input.query, input.offset)
-    const result = ClientHoverSchema.safeParse(hover)
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
+    return hover
   })
 }
 
@@ -308,11 +268,7 @@ export function signatureClientQuery(input: z.infer<typeof QueryPositionInput>) 
       input.query,
       input.offset,
     )
-    const result = ClientSignatureHelpSchema.safeParse(help)
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
+    return help
   })
 }
 
@@ -340,11 +296,7 @@ export function checkClientQuery(input: z.infer<typeof CheckClientQueryInput>) {
     const state = StudioService.studio().state
     const client = StudioService.studio().client
     const diagnostics = yield* client.typescript.check(state.snapshot().files, input.query)
-    const result = ClientTypeDiagnosticsSchema.safeParse({ diagnostics })
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
+    return { diagnostics }
   })
 }
 
@@ -370,10 +322,6 @@ const FormatClientQueryInput = z
 export function formatClientQuery(input: z.infer<typeof FormatClientQueryInput>) {
   return Effect.gen(function* () {
     const text = yield* fmt(input.query)
-    const result = ClientFormattedSchema.safeParse({ text: text.trimEnd() })
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
+    return { text: text.trimEnd() }
   })
 }

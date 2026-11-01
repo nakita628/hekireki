@@ -12,6 +12,17 @@ import type {
   postPrismaRenameRoute,
   postPrismaSymbolsRoute,
 } from '../routes'
+import {
+  CodeActionsSchema,
+  CompletionsSchema,
+  DefinitionSchema,
+  DiagnosticsSchema,
+  FormattedSchema,
+  HoverSchema,
+  ReferencesSchema,
+  RenameSchema,
+  SymbolsSchema,
+} from '../routes/index.js'
 import * as PrismaUseCase from '../usecases/index.js'
 
 /**
@@ -26,14 +37,14 @@ import * as PrismaUseCase from '../usecases/index.js'
  *   H->>U: formatText()
  *   U-->>H: Formatted
  *   H-->>C: 200 Formatted
- *   Note over H: on failure, Match.tag: FormatError -> 422 / ContractViolationError -> 500
+ *   Note over H: on failure, Match.tag: FormatError -> 422
  * ```
  */
 export const postPrismaFormatRouteHandler: RouteHandler<typeof postPrismaFormatRoute> = (c) => {
   const data = c.req.valid('json')
   return Effect.runPromise(
     Effect.matchEffect(PrismaUseCase.formatText({ text: data.text, path: data.path }), {
-      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
+      onSuccess: (value) => Effect.succeed(c.json(FormattedSchema.parse(value), 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           Match.tag('FormatError', ({ cause }) =>
@@ -49,23 +60,6 @@ export const postPrismaFormatRouteHandler: RouteHandler<typeof postPrismaFormatR
                 } as const,
                 422,
                 { 'Content-Type': 'application/problem+json' },
-              ),
-            ),
-          ),
-          Match.tag('ContractViolationError', ({ message }) =>
-            Effect.logError('contract violation', message).pipe(
-              Effect.as(
-                c.json(
-                  {
-                    type: '/problems/internal-server-error',
-                    title: 'Internal Server Error',
-                    status: 500,
-                    detail: 'An unexpected error occurred.',
-                    instance: c.req.path,
-                  } as const,
-                  500,
-                  { 'Content-Type': 'application/problem+json' },
-                ),
               ),
             ),
           ),
@@ -88,36 +82,14 @@ export const postPrismaFormatRouteHandler: RouteHandler<typeof postPrismaFormatR
  *   H->>U: lintText()
  *   U-->>H: Diagnostics
  *   H-->>C: 200 Diagnostics
- *   Note over H: on failure, Match.tag: ContractViolationError -> 500
  * ```
  */
 export const postPrismaLintRouteHandler: RouteHandler<typeof postPrismaLintRoute> = (c) => {
   const data = c.req.valid('json')
   return Effect.runPromise(
-    Effect.matchEffect(PrismaUseCase.lintText({ path: data.path, text: data.text }), {
-      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
-      onFailure: (error) =>
-        Match.value(error).pipe(
-          Match.tag('ContractViolationError', ({ message }) =>
-            Effect.logError('contract violation', message).pipe(
-              Effect.as(
-                c.json(
-                  {
-                    type: '/problems/internal-server-error',
-                    title: 'Internal Server Error',
-                    status: 500,
-                    detail: 'An unexpected error occurred.',
-                    instance: c.req.path,
-                  } as const,
-                  500,
-                  { 'Content-Type': 'application/problem+json' },
-                ),
-              ),
-            ),
-          ),
-          Match.exhaustive,
-        ),
-    }),
+    Effect.map(PrismaUseCase.lintText({ path: data.path, text: data.text }), (value) =>
+      c.json(DiagnosticsSchema.parse(value), 200),
+    ),
   )
 }
 
@@ -134,13 +106,12 @@ export const postPrismaLintRouteHandler: RouteHandler<typeof postPrismaLintRoute
  *   H->>U: completeAt()
  *   U-->>H: Completions
  *   H-->>C: 200 Completions
- *   Note over H: on failure, Match.tag: ContractViolationError -> 500
  * ```
  */
 export const postPrismaCompleteRouteHandler: RouteHandler<typeof postPrismaCompleteRoute> = (c) => {
   const data = c.req.valid('json')
   return Effect.runPromise(
-    Effect.matchEffect(
+    Effect.map(
       PrismaUseCase.completeAt({
         text: data.text,
         path: data.path,
@@ -148,30 +119,7 @@ export const postPrismaCompleteRouteHandler: RouteHandler<typeof postPrismaCompl
         character: data.character,
         triggerCharacter: data.triggerCharacter,
       }),
-      {
-        onSuccess: (value) => Effect.succeed(c.json(value, 200)),
-        onFailure: (error) =>
-          Match.value(error).pipe(
-            Match.tag('ContractViolationError', ({ message }) =>
-              Effect.logError('contract violation', message).pipe(
-                Effect.as(
-                  c.json(
-                    {
-                      type: '/problems/internal-server-error',
-                      title: 'Internal Server Error',
-                      status: 500,
-                      detail: 'An unexpected error occurred.',
-                      instance: c.req.path,
-                    } as const,
-                    500,
-                    { 'Content-Type': 'application/problem+json' },
-                  ),
-                ),
-              ),
-            ),
-            Match.exhaustive,
-          ),
-      },
+      (value) => c.json(CompletionsSchema.parse(value), 200),
     ),
   )
 }
@@ -189,43 +137,19 @@ export const postPrismaCompleteRouteHandler: RouteHandler<typeof postPrismaCompl
  *   H->>U: hoverAt()
  *   U-->>H: Hover
  *   H-->>C: 200 Hover
- *   Note over H: on failure, Match.tag: ContractViolationError -> 500
  * ```
  */
 export const postPrismaHoverRouteHandler: RouteHandler<typeof postPrismaHoverRoute> = (c) => {
   const data = c.req.valid('json')
   return Effect.runPromise(
-    Effect.matchEffect(
+    Effect.map(
       PrismaUseCase.hoverAt({
         text: data.text,
         path: data.path,
         line: data.line,
         character: data.character,
       }),
-      {
-        onSuccess: (value) => Effect.succeed(c.json(value, 200)),
-        onFailure: (error) =>
-          Match.value(error).pipe(
-            Match.tag('ContractViolationError', ({ message }) =>
-              Effect.logError('contract violation', message).pipe(
-                Effect.as(
-                  c.json(
-                    {
-                      type: '/problems/internal-server-error',
-                      title: 'Internal Server Error',
-                      status: 500,
-                      detail: 'An unexpected error occurred.',
-                      instance: c.req.path,
-                    } as const,
-                    500,
-                    { 'Content-Type': 'application/problem+json' },
-                  ),
-                ),
-              ),
-            ),
-            Match.exhaustive,
-          ),
-      },
+      (value) => c.json(HoverSchema.parse(value), 200),
     ),
   )
 }
@@ -243,7 +167,6 @@ export const postPrismaHoverRouteHandler: RouteHandler<typeof postPrismaHoverRou
  *   H->>U: defineAt()
  *   U-->>H: Definition
  *   H-->>C: 200 Definition
- *   Note over H: on failure, Match.tag: ContractViolationError -> 500
  * ```
  */
 export const postPrismaDefinitionRouteHandler: RouteHandler<typeof postPrismaDefinitionRoute> = (
@@ -251,37 +174,14 @@ export const postPrismaDefinitionRouteHandler: RouteHandler<typeof postPrismaDef
 ) => {
   const data = c.req.valid('json')
   return Effect.runPromise(
-    Effect.matchEffect(
+    Effect.map(
       PrismaUseCase.defineAt({
         text: data.text,
         path: data.path,
         line: data.line,
         character: data.character,
       }),
-      {
-        onSuccess: (value) => Effect.succeed(c.json(value, 200)),
-        onFailure: (error) =>
-          Match.value(error).pipe(
-            Match.tag('ContractViolationError', ({ message }) =>
-              Effect.logError('contract violation', message).pipe(
-                Effect.as(
-                  c.json(
-                    {
-                      type: '/problems/internal-server-error',
-                      title: 'Internal Server Error',
-                      status: 500,
-                      detail: 'An unexpected error occurred.',
-                      instance: c.req.path,
-                    } as const,
-                    500,
-                    { 'Content-Type': 'application/problem+json' },
-                  ),
-                ),
-              ),
-            ),
-            Match.exhaustive,
-          ),
-      },
+      (value) => c.json(DefinitionSchema.parse(value), 200),
     ),
   )
 }
@@ -299,13 +199,12 @@ export const postPrismaDefinitionRouteHandler: RouteHandler<typeof postPrismaDef
  *   H->>U: renameAt()
  *   U-->>H: Rename
  *   H-->>C: 200 Rename
- *   Note over H: on failure, Match.tag: ContractViolationError -> 500
  * ```
  */
 export const postPrismaRenameRouteHandler: RouteHandler<typeof postPrismaRenameRoute> = (c) => {
   const data = c.req.valid('json')
   return Effect.runPromise(
-    Effect.matchEffect(
+    Effect.map(
       PrismaUseCase.renameAt({
         text: data.text,
         path: data.path,
@@ -313,30 +212,7 @@ export const postPrismaRenameRouteHandler: RouteHandler<typeof postPrismaRenameR
         character: data.character,
         newName: data.newName,
       }),
-      {
-        onSuccess: (value) => Effect.succeed(c.json(value, 200)),
-        onFailure: (error) =>
-          Match.value(error).pipe(
-            Match.tag('ContractViolationError', ({ message }) =>
-              Effect.logError('contract violation', message).pipe(
-                Effect.as(
-                  c.json(
-                    {
-                      type: '/problems/internal-server-error',
-                      title: 'Internal Server Error',
-                      status: 500,
-                      detail: 'An unexpected error occurred.',
-                      instance: c.req.path,
-                    } as const,
-                    500,
-                    { 'Content-Type': 'application/problem+json' },
-                  ),
-                ),
-              ),
-            ),
-            Match.exhaustive,
-          ),
-      },
+      (value) => c.json(RenameSchema.parse(value), 200),
     ),
   )
 }
@@ -354,7 +230,6 @@ export const postPrismaRenameRouteHandler: RouteHandler<typeof postPrismaRenameR
  *   H->>U: codeActionsAt()
  *   U-->>H: CodeActions
  *   H-->>C: 200 CodeActions
- *   Note over H: on failure, Match.tag: ContractViolationError -> 500
  * ```
  */
 export const postPrismaCodeActionsRouteHandler: RouteHandler<typeof postPrismaCodeActionsRoute> = (
@@ -362,37 +237,14 @@ export const postPrismaCodeActionsRouteHandler: RouteHandler<typeof postPrismaCo
 ) => {
   const data = c.req.valid('json')
   return Effect.runPromise(
-    Effect.matchEffect(
+    Effect.map(
       PrismaUseCase.codeActionsAt({
         text: data.text,
         path: data.path,
         range: data.range,
         diagnostics: data.diagnostics,
       }),
-      {
-        onSuccess: (value) => Effect.succeed(c.json(value, 200)),
-        onFailure: (error) =>
-          Match.value(error).pipe(
-            Match.tag('ContractViolationError', ({ message }) =>
-              Effect.logError('contract violation', message).pipe(
-                Effect.as(
-                  c.json(
-                    {
-                      type: '/problems/internal-server-error',
-                      title: 'Internal Server Error',
-                      status: 500,
-                      detail: 'An unexpected error occurred.',
-                      instance: c.req.path,
-                    } as const,
-                    500,
-                    { 'Content-Type': 'application/problem+json' },
-                  ),
-                ),
-              ),
-            ),
-            Match.exhaustive,
-          ),
-      },
+      (value) => c.json(CodeActionsSchema.parse(value), 200),
     ),
   )
 }
@@ -410,36 +262,14 @@ export const postPrismaCodeActionsRouteHandler: RouteHandler<typeof postPrismaCo
  *   H->>U: symbolsOf()
  *   U-->>H: Symbols
  *   H-->>C: 200 Symbols
- *   Note over H: on failure, Match.tag: ContractViolationError -> 500
  * ```
  */
 export const postPrismaSymbolsRouteHandler: RouteHandler<typeof postPrismaSymbolsRoute> = (c) => {
   const data = c.req.valid('json')
   return Effect.runPromise(
-    Effect.matchEffect(PrismaUseCase.symbolsOf({ text: data.text, path: data.path }), {
-      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
-      onFailure: (error) =>
-        Match.value(error).pipe(
-          Match.tag('ContractViolationError', ({ message }) =>
-            Effect.logError('contract violation', message).pipe(
-              Effect.as(
-                c.json(
-                  {
-                    type: '/problems/internal-server-error',
-                    title: 'Internal Server Error',
-                    status: 500,
-                    detail: 'An unexpected error occurred.',
-                    instance: c.req.path,
-                  } as const,
-                  500,
-                  { 'Content-Type': 'application/problem+json' },
-                ),
-              ),
-            ),
-          ),
-          Match.exhaustive,
-        ),
-    }),
+    Effect.map(PrismaUseCase.symbolsOf({ text: data.text, path: data.path }), (value) =>
+      c.json(SymbolsSchema.parse(value), 200),
+    ),
   )
 }
 
@@ -456,7 +286,6 @@ export const postPrismaSymbolsRouteHandler: RouteHandler<typeof postPrismaSymbol
  *   H->>U: referencesAt()
  *   U-->>H: References
  *   H-->>C: 200 References
- *   Note over H: on failure, Match.tag: ContractViolationError -> 500
  * ```
  */
 export const postPrismaReferencesRouteHandler: RouteHandler<typeof postPrismaReferencesRoute> = (
@@ -464,37 +293,14 @@ export const postPrismaReferencesRouteHandler: RouteHandler<typeof postPrismaRef
 ) => {
   const data = c.req.valid('json')
   return Effect.runPromise(
-    Effect.matchEffect(
+    Effect.map(
       PrismaUseCase.referencesAt({
         text: data.text,
         path: data.path,
         line: data.line,
         character: data.character,
       }),
-      {
-        onSuccess: (value) => Effect.succeed(c.json(value, 200)),
-        onFailure: (error) =>
-          Match.value(error).pipe(
-            Match.tag('ContractViolationError', ({ message }) =>
-              Effect.logError('contract violation', message).pipe(
-                Effect.as(
-                  c.json(
-                    {
-                      type: '/problems/internal-server-error',
-                      title: 'Internal Server Error',
-                      status: 500,
-                      detail: 'An unexpected error occurred.',
-                      instance: c.req.path,
-                    } as const,
-                    500,
-                    { 'Content-Type': 'application/problem+json' },
-                  ),
-                ),
-              ),
-            ),
-            Match.exhaustive,
-          ),
-      },
+      (value) => c.json(ReferencesSchema.parse(value), 200),
     ),
   )
 }

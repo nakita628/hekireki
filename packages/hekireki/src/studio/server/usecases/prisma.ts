@@ -1,18 +1,6 @@
 import { Effect } from 'effect'
 import * as z from 'zod'
 
-import { ContractViolationError } from '../errors/index.js'
-import {
-  CodeActionsSchema,
-  CompletionsSchema,
-  DefinitionSchema,
-  DiagnosticsSchema,
-  FormattedSchema,
-  HoverSchema,
-  ReferencesSchema,
-  RenameSchema,
-  SymbolsSchema,
-} from '../routes/index.js'
 import * as StudioService from '../services/index.js'
 import * as LanguageService from '../services/index.js'
 
@@ -61,17 +49,13 @@ const FormatTextInput = z
  * files so relations across files are completed too.
  *
  * @param input - the text and its file
- * @returns the edits, checked against the Formatted contract
+ * @returns the edits
  */
 export function formatText(input: z.infer<typeof FormatTextInput>) {
   return Effect.gen(function* () {
     const workspace = yield* workspaceOf(input)
     const edits = yield* LanguageService.formatSchema(workspace)
-    const result = FormattedSchema.safeParse({ edits })
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
+    return { edits }
   })
 }
 
@@ -106,11 +90,7 @@ export function lintText(input: z.infer<typeof LintTextInput>) {
       path: input.path,
       text: input.text,
     })
-    const result = DiagnosticsSchema.safeParse({ diagnostics })
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
+    return { diagnostics }
   })
 }
 
@@ -133,17 +113,13 @@ const SymbolsOfInput = z
  * The blocks of the text as the language server's document outline lists them.
  *
  * @param input - the text and its file
- * @returns the symbols, checked against the Symbols contract
+ * @returns the symbols
  */
 export function symbolsOf(input: z.infer<typeof SymbolsOfInput>) {
   return Effect.gen(function* () {
     const workspace = yield* workspaceOf(input)
     const symbols = yield* LanguageService.symbolsOfSchema(workspace)
-    const result = SymbolsSchema.safeParse({ symbols })
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
+    return { symbols }
   })
 }
 
@@ -196,11 +172,7 @@ export function completeAt(input: z.infer<typeof CompleteAtInput>) {
       character: input.character,
       triggerCharacter: input.triggerCharacter ?? null,
     })
-    const result = CompletionsSchema.safeParse({ items })
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
+    return { items }
   })
 }
 
@@ -238,7 +210,7 @@ const HoverAtInput = z
  * What the Prisma language server says about the symbol at the position.
  *
  * @param input - the text and the position
- * @returns the hover contents and range, checked against the Hover contract
+ * @returns the hover contents and range
  */
 export function hoverAt(input: z.infer<typeof HoverAtInput>) {
   return Effect.gen(function* () {
@@ -248,11 +220,7 @@ export function hoverAt(input: z.infer<typeof HoverAtInput>) {
       line: input.line,
       character: input.character,
     })
-    const result = HoverSchema.safeParse(hover)
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
+    return hover
   })
 }
 
@@ -290,7 +258,7 @@ const DefineAtInput = z
  * Where the model, enum or type referenced at the position is declared.
  *
  * @param input - the text and the position
- * @returns the declaration locations, checked against the Definition contract
+ * @returns the declaration locations
  */
 export function defineAt(input: z.infer<typeof DefineAtInput>) {
   return Effect.gen(function* () {
@@ -300,11 +268,7 @@ export function defineAt(input: z.infer<typeof DefineAtInput>) {
       line: input.line,
       character: input.character,
     })
-    const result = DefinitionSchema.safeParse({ locations })
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
+    return { locations }
   })
 }
 
@@ -342,7 +306,7 @@ const ReferencesAtInput = z
  * Every place the symbol at the position is used, across the loaded files.
  *
  * @param input - the text and the position
- * @returns the reference locations, checked against the References contract
+ * @returns the reference locations
  */
 export function referencesAt(input: z.infer<typeof ReferencesAtInput>) {
   return Effect.gen(function* () {
@@ -352,11 +316,7 @@ export function referencesAt(input: z.infer<typeof ReferencesAtInput>) {
       line: input.line,
       character: input.character,
     })
-    const result = ReferencesSchema.safeParse({ locations })
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
+    return { locations }
   })
 }
 
@@ -395,7 +355,7 @@ const RenameAtInput = z
  * The edits that rename the model or enum at the position everywhere it is used.
  *
  * @param input - the text, the position and the new name
- * @returns the edits per file, checked against the Rename contract
+ * @returns the edits per file
  */
 export function renameAt(input: z.infer<typeof RenameAtInput>) {
   return Effect.gen(function* () {
@@ -406,11 +366,7 @@ export function renameAt(input: z.infer<typeof RenameAtInput>) {
       character: input.character,
       newName: input.newName,
     })
-    const result = RenameSchema.safeParse({ changes })
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
+    return { changes }
   })
 }
 
@@ -511,7 +467,7 @@ const CodeActionsAtInput = z
  * The quick fixes the Prisma language server offers for the diagnostics in the range.
  *
  * @param input - the text, the range and the diagnostics in it
- * @returns the fixes, checked against the CodeActions contract
+ * @returns the fixes
  */
 export function codeActionsAt(input: z.infer<typeof CodeActionsAtInput>) {
   return Effect.gen(function* () {
@@ -521,10 +477,6 @@ export function codeActionsAt(input: z.infer<typeof CodeActionsAtInput>) {
       range: input.range,
       diagnostics: input.diagnostics,
     })
-    const result = CodeActionsSchema.safeParse({ actions })
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
+    return { actions }
   })
 }
