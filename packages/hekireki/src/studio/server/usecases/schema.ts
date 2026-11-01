@@ -2,32 +2,17 @@ import { layer as nodeFileSystemLayer } from '@effect/platform-node/NodeFileSyst
 import { Effect } from 'effect'
 import * as z from 'zod'
 
-import { ContractViolationError, UnknownFileError } from '../errors/index.js'
-import { SnapshotSchema } from '../routes/index.js'
+import { UnknownFileError } from '../errors/index.js'
 import * as StudioService from '../services/index.js'
 import * as SchemaService from '../services/index.js'
-
-// The snapshot as last checked, by the object the state holds: a reload replaces that object,
-// and the page asks for the snapshot after every change event, so the check runs once per reload.
-const checked = new WeakMap<object, z.infer<typeof SnapshotSchema>>()
 
 /**
  * The current snapshot: the last valid schema, the current Prisma error and the files on disk.
  *
- * @returns the snapshot, checked against the Snapshot contract
+ * @returns the snapshot as the state holds it
  */
 export function readSnapshot() {
-  return Effect.gen(function* () {
-    const snapshot = StudioService.studio().state.snapshot()
-    const kept = checked.get(snapshot)
-    if (kept !== undefined) return kept
-    const result = SnapshotSchema.safeParse(snapshot)
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    checked.set(snapshot, result.data)
-    return result.data
-  })
+  return Effect.sync(() => StudioService.studio().state.snapshot())
 }
 
 /**
@@ -51,14 +36,7 @@ export function readUpdatedAt() {
  * @returns the fresh snapshot
  */
 export function reloadSnapshot() {
-  return Effect.gen(function* () {
-    const state = StudioService.studio().state
-    const result = SnapshotSchema.safeParse(yield* state.reload())
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
-  }).pipe(Effect.provide(nodeFileSystemLayer))
+  return StudioService.studio().state.reload().pipe(Effect.provide(nodeFileSystemLayer))
 }
 
 const WriteFileInput = z
@@ -106,10 +84,6 @@ export function writeFile(input: z.infer<typeof WriteFileInput>) {
     const known = state.snapshot().files.find((f) => f.path === input.path)
     if (!known) return yield* new UnknownFileError({ path: input.path })
     yield* SchemaService.writeSchemaFile({ path: known.path, content: input.content })
-    const result = SnapshotSchema.safeParse(yield* state.reload())
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
+    return yield* state.reload()
   }).pipe(Effect.provide(nodeFileSystemLayer))
 }

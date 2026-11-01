@@ -17,7 +17,7 @@ const url = process.env.DRIZZLE_DATABASE ?? 'mysql://root:root@localhost:3306/dr
 // converted through.
 const pool = mysql.createPool({ uri: url, supportBigNumbers: true, bigNumberStrings: true })
 pool.on('connection', (connection) => connection.query("SET time_zone = '+00:00'"))
-const db = drizzle(pool)
+const db = drizzle({ client: pool })
 const prisma = new PrismaClient({ adapter: new PrismaMariaDb(url) })
 
 function check(name: string, problem: string | undefined) {

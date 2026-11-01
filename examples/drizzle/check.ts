@@ -12,7 +12,7 @@ import { events } from './src/db/schema.ts'
 
 const file = new URL('dev.db', import.meta.url).pathname
 const connection = new Database(file)
-const db = drizzle(connection)
+const db = drizzle({ client: connection })
 const prisma = new PrismaClient({ adapter: new PrismaBetterSqlite3({ url: `file:${file}` }) })
 
 function check(name: string, problem: string | undefined) {

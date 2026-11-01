@@ -8,16 +8,7 @@ import * as ModelDomain from '../domain/index.js'
 import * as SchemaDomain from '../domain/index.js'
 import * as SqlDomain from '../domain/index.js'
 import * as ValuesDomain from '../domain/index.js'
-import { ContractViolationError, InvalidInputError, UnknownModelError } from '../errors/index.js'
-import {
-  AffectedSchema,
-  AnalysisSchema,
-  CountsSchema,
-  DbStatusSchema,
-  PlanSchema,
-  RowsSchema,
-  SqlResultSchema,
-} from '../routes/index.js'
+import { InvalidInputError, UnknownModelError } from '../errors/index.js'
 import * as StudioService from '../services/index.js'
 
 /**
@@ -26,14 +17,7 @@ import * as StudioService from '../services/index.js'
  * @returns whether a database is open, which dialect and where the URL came from
  */
 export function readDbStatus() {
-  return Effect.gen(function* () {
-    const db = StudioService.studio().db
-    const result = DbStatusSchema.safeParse(db.status)
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
-  })
+  return Effect.sync(() => StudioService.studio().db.status)
 }
 
 /**
@@ -70,11 +54,7 @@ export function readCounts() {
           : []
       }),
     )
-    const result = CountsSchema.safeParse({ counts })
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
+    return { counts }
   })
 }
 
@@ -177,11 +157,7 @@ export function readRows(input: z.infer<typeof ReadRowsInput>) {
       key,
       columns: fields.map((f) => f.name),
     }
-    const result = RowsSchema.safeParse(rows)
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
+    return rows
   })
 }
 
@@ -235,11 +211,7 @@ export function insertRow(input: z.infer<typeof InsertRowInput>) {
       }),
     )
     const affected = { affected: written.rowCount }
-    const result = AffectedSchema.safeParse(affected)
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
+    return affected
   })
 }
 
@@ -310,11 +282,7 @@ export function updateRow(input: z.infer<typeof UpdateRowInput>) {
       }),
     )
     const affected = { affected: written.rowCount }
-    const result = AffectedSchema.safeParse(affected)
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
+    return affected
   })
 }
 
@@ -369,11 +337,7 @@ export function deleteRow(input: z.infer<typeof DeleteRowInput>) {
       }),
     )
     const affected = { affected: written.rowCount }
-    const result = AffectedSchema.safeParse(affected)
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
+    return affected
   })
 }
 
@@ -446,11 +410,7 @@ export function runSql(input: z.infer<typeof RunSqlInput>) {
       rowCount: executed.rowCount,
       durationMs: Math.round((performance.now() - started) * 10) / 10,
     }
-    const result = SqlResultSchema.safeParse(sqlResult)
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
+    return sqlResult
   })
 }
 
@@ -473,11 +433,7 @@ export function explainSql(input: z.infer<typeof RunSqlInput>) {
     )
     const explained = yield* driver.explain({ sql: first, params })
     const plan = { dialect: driver.dialect, nodes: explained.nodes, raw: explained.raw }
-    const result = PlanSchema.safeParse(plan)
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
+    return plan
   })
 }
 
@@ -501,11 +457,11 @@ const AnalyzeSqlInput = z
  * @returns the data-flow graph, lineage, row type, parameters and diagnostics of each statement
  */
 export function analyzeSql(input: z.infer<typeof AnalyzeSqlInput>) {
-  return Effect.gen(function* () {
+  return Effect.sync(() => {
     const state = StudioService.studio().state
     const db = StudioService.studio().db
     const schema = state.snapshot().schema
-    const analysis = analyze(
+    return analyze(
       input.sql,
       SchemaDomain.makeAnalysisSchema({
         dialect: db.status.dialect,
@@ -513,10 +469,5 @@ export function analyzeSql(input: z.infer<typeof AnalyzeSqlInput>) {
         models: schema?.models ?? [],
       }),
     )
-    const result = AnalysisSchema.safeParse(analysis)
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
   })
 }

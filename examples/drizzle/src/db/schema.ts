@@ -1,4 +1,5 @@
 import { customType, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import { sql } from 'drizzle-orm'
 
 const utcDateTime = customType<{ data: Date; driverData: string | number }>({
   dataType: () => 'datetime',
@@ -33,7 +34,9 @@ export const events = sqliteTable(
     createdAt: utcDateTime('created_at').notNull().$defaultFn(utcNow),
     updatedAt: utcDateTime('updated_at').notNull().$onUpdate(utcNow),
     syncedAt: utcDateTime('synced_at').notNull().$onUpdate(utcNow),
-    since: utcDateTime('since').notNull().default(new Date('2020-01-01T00:00:00+00:00')),
+    since: utcDateTime('since')
+      .notNull()
+      .default(sql`'2020-01-01T00:00:00.000+00:00'`),
   },
   (table) => [uniqueIndex('events_title_key').on(table.title)],
 )

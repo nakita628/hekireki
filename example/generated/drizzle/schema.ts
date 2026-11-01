@@ -19,7 +19,7 @@ import {
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core'
-import { relations, sql } from 'drizzle-orm'
+import { defineRelations, sql } from 'drizzle-orm'
 import { v7 as uuidv7 } from 'uuid'
 import { createId } from '@paralleldrive/cuid2'
 
@@ -292,73 +292,89 @@ export const cast = pgTable(
   ],
 )
 
-export const usersRelations = relations(users, ({ one, many }) => ({
-  profile: one(profile),
-  posts: many(posts),
-  comments: many(comments),
-  orders: many(orders),
-  followers: many(follows, { relationName: 'following' }),
-  following: many(follows, { relationName: 'follower' }),
-}))
-
-export const profileRelations = relations(profile, ({ one }) => ({
-  user: one(users, { fields: [profile.userId], references: [users.id] }),
-}))
-
-export const postsRelations = relations(posts, ({ one, many }) => ({
-  author: one(users, { fields: [posts.authorId], references: [users.id] }),
-  tags: many(postToTag),
-  comments: many(comments),
-}))
-
-export const tagRelations = relations(tag, ({ many }) => ({ posts: many(postToTag) }))
-
-export const commentsRelations = relations(comments, ({ one }) => ({
-  post: one(posts, { fields: [comments.postId], references: [posts.id] }),
-  author: one(users, { fields: [comments.authorId], references: [users.id] }),
-}))
-
-export const followsRelations = relations(follows, ({ one }) => ({
-  follower: one(users, {
-    fields: [follows.followerId],
-    references: [users.id],
-    relationName: 'follower',
+export const relations = defineRelations(
+  {
+    users,
+    profile,
+    posts,
+    tag,
+    comments,
+    follows,
+    category,
+    orders,
+    orderItems,
+    auditLogs,
+    actor,
+    film,
+    postToTag,
+    cast,
+  },
+  (r) => ({
+    users: {
+      profile: r.one.profile({ from: r.users.id, to: r.profile.userId }),
+      posts: r.many.posts(),
+      comments: r.many.comments(),
+      orders: r.many.orders(),
+      followers: r.many.follows({ alias: 'following' }),
+      following: r.many.follows({ alias: 'follower' }),
+    },
+    profile: { user: r.one.users({ from: r.profile.userId, to: r.users.id, optional: false }) },
+    posts: {
+      author: r.one.users({ from: r.posts.authorId, to: r.users.id, optional: false }),
+      tags: r.many.tag({
+        from: r.posts.id.through(r.postToTag.A),
+        to: r.tag.id.through(r.postToTag.B),
+      }),
+      comments: r.many.comments(),
+    },
+    tag: {
+      posts: r.many.posts({
+        from: r.tag.id.through(r.postToTag.B),
+        to: r.posts.id.through(r.postToTag.A),
+      }),
+    },
+    comments: {
+      post: r.one.posts({ from: r.comments.postId, to: r.posts.id, optional: false }),
+      author: r.one.users({ from: r.comments.authorId, to: r.users.id }),
+    },
+    follows: {
+      follower: r.one.users({
+        from: r.follows.followerId,
+        to: r.users.id,
+        optional: false,
+        alias: 'follower',
+      }),
+      following: r.one.users({
+        from: r.follows.followingId,
+        to: r.users.id,
+        optional: false,
+        alias: 'following',
+      }),
+    },
+    category: {
+      parent: r.one.category({ from: r.category.parentId, to: r.category.id, alias: 'tree' }),
+      children: r.many.category({ alias: 'tree' }),
+    },
+    orders: {
+      user: r.one.users({ from: r.orders.userId, to: r.users.id, optional: false }),
+      items: r.many.orderItems(),
+    },
+    orderItems: {
+      order: r.one.orders({ from: r.orderItems.orderId, to: r.orders.id, optional: false }),
+    },
+    actor: {
+      films: r.many.film({ from: r.actor.id.through(r.cast.A), to: r.film.id.through(r.cast.B) }),
+    },
+    film: {
+      actors: r.many.actor({ from: r.film.id.through(r.cast.B), to: r.actor.id.through(r.cast.A) }),
+    },
+    postToTag: {
+      post: r.one.posts({ from: r.postToTag.A, to: r.posts.id, optional: false }),
+      tag: r.one.tag({ from: r.postToTag.B, to: r.tag.id, optional: false }),
+    },
+    cast: {
+      actor: r.one.actor({ from: r.cast.A, to: r.actor.id, optional: false }),
+      film: r.one.film({ from: r.cast.B, to: r.film.id, optional: false }),
+    },
   }),
-  following: one(users, {
-    fields: [follows.followingId],
-    references: [users.id],
-    relationName: 'following',
-  }),
-}))
-
-export const categoryRelations = relations(category, ({ one, many }) => ({
-  parent: one(category, {
-    fields: [category.parentId],
-    references: [category.id],
-    relationName: 'tree',
-  }),
-  children: many(category, { relationName: 'tree' }),
-}))
-
-export const ordersRelations = relations(orders, ({ one, many }) => ({
-  user: one(users, { fields: [orders.userId], references: [users.id] }),
-  items: many(orderItems),
-}))
-
-export const orderItemsRelations = relations(orderItems, ({ one }) => ({
-  order: one(orders, { fields: [orderItems.orderId], references: [orders.id] }),
-}))
-
-export const actorRelations = relations(actor, ({ many }) => ({ films: many(cast) }))
-
-export const filmRelations = relations(film, ({ many }) => ({ actors: many(cast) }))
-
-export const postToTagRelations = relations(postToTag, ({ one }) => ({
-  post: one(posts, { fields: [postToTag.A], references: [posts.id] }),
-  tag: one(tag, { fields: [postToTag.B], references: [tag.id] }),
-}))
-
-export const castRelations = relations(cast, ({ one }) => ({
-  actor: one(actor, { fields: [cast.A], references: [actor.id] }),
-  film: one(film, { fields: [cast.B], references: [film.id] }),
-}))
+)

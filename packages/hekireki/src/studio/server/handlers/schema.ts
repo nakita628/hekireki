@@ -9,7 +9,20 @@ import type {
   postSchemaReloadRoute,
   putSchemaFilesRoute,
 } from '../routes'
+import { SnapshotSchema } from '../routes/index.js'
 import * as SchemaUseCase from '../usecases/index.js'
+
+// The snapshot as last checked, by the object the state holds: a reload replaces that object,
+// and the page asks for the snapshot after every change event, so the check runs once per reload.
+const checked = new WeakMap<object, ReturnType<typeof SnapshotSchema.parse>>()
+
+function checkSnapshot(snapshot: object) {
+  const kept = checked.get(snapshot)
+  if (kept !== undefined) return kept
+  const parsed = SnapshotSchema.parse(snapshot)
+  checked.set(snapshot, parsed)
+  return parsed
+}
 
 /**
  * `GET /schema` handler. The current snapshot: the last valid schema, the current Prisma error and
@@ -24,35 +37,11 @@ import * as SchemaUseCase from '../usecases/index.js'
  *   H->>U: readSnapshot()
  *   U-->>H: Snapshot
  *   H-->>C: 200 Snapshot
- *   Note over H: on failure, Match.tag: ContractViolationError -> 500
  * ```
  */
 export const getSchemaRouteHandler: RouteHandler<typeof getSchemaRoute> = (c) =>
   Effect.runPromise(
-    Effect.matchEffect(SchemaUseCase.readSnapshot(), {
-      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
-      onFailure: (error) =>
-        Match.value(error).pipe(
-          Match.tag('ContractViolationError', ({ message }) =>
-            Effect.logError('contract violation', message).pipe(
-              Effect.as(
-                c.json(
-                  {
-                    type: '/problems/internal-server-error',
-                    title: 'Internal Server Error',
-                    status: 500,
-                    detail: 'An unexpected error occurred.',
-                    instance: c.req.path,
-                  } as const,
-                  500,
-                  { 'Content-Type': 'application/problem+json' },
-                ),
-              ),
-            ),
-          ),
-          Match.exhaustive,
-        ),
-    }),
+    Effect.map(SchemaUseCase.readSnapshot(), (value) => c.json(checkSnapshot(value), 200)),
   )
 
 /**
@@ -68,35 +57,11 @@ export const getSchemaRouteHandler: RouteHandler<typeof getSchemaRoute> = (c) =>
  *   H->>U: reloadSnapshot()
  *   U-->>H: Snapshot
  *   H-->>C: 200 Snapshot
- *   Note over H: on failure, Match.tag: ContractViolationError -> 500
  * ```
  */
 export const postSchemaReloadRouteHandler: RouteHandler<typeof postSchemaReloadRoute> = (c) =>
   Effect.runPromise(
-    Effect.matchEffect(SchemaUseCase.reloadSnapshot(), {
-      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
-      onFailure: (error) =>
-        Match.value(error).pipe(
-          Match.tag('ContractViolationError', ({ message }) =>
-            Effect.logError('contract violation', message).pipe(
-              Effect.as(
-                c.json(
-                  {
-                    type: '/problems/internal-server-error',
-                    title: 'Internal Server Error',
-                    status: 500,
-                    detail: 'An unexpected error occurred.',
-                    instance: c.req.path,
-                  } as const,
-                  500,
-                  { 'Content-Type': 'application/problem+json' },
-                ),
-              ),
-            ),
-          ),
-          Match.exhaustive,
-        ),
-    }),
+    Effect.map(SchemaUseCase.reloadSnapshot(), (value) => c.json(checkSnapshot(value), 200)),
   )
 
 /**
@@ -113,14 +78,14 @@ export const postSchemaReloadRouteHandler: RouteHandler<typeof postSchemaReloadR
  *   H->>U: writeFile()
  *   U-->>H: Snapshot
  *   H-->>C: 200 Snapshot
- *   Note over H: on failure, Match.tag: UnknownFileError -> 404 / FileWriteError -> 422 / ContractViolationError -> 500
+ *   Note over H: on failure, Match.tag: UnknownFileError -> 404 / FileWriteError -> 422
  * ```
  */
 export const putSchemaFilesRouteHandler: RouteHandler<typeof putSchemaFilesRoute> = (c) => {
   const data = c.req.valid('json')
   return Effect.runPromise(
     Effect.matchEffect(SchemaUseCase.writeFile({ path: data.path, content: data.content }), {
-      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
+      onSuccess: (value) => Effect.succeed(c.json(checkSnapshot(value), 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           Match.tag('UnknownFileError', ({ path }) =>
@@ -151,23 +116,6 @@ export const putSchemaFilesRouteHandler: RouteHandler<typeof putSchemaFilesRoute
                     errors: [{ field: 'path', message: cause }],
                   } as const,
                   422,
-                  { 'Content-Type': 'application/problem+json' },
-                ),
-              ),
-            ),
-          ),
-          Match.tag('ContractViolationError', ({ message }) =>
-            Effect.logError('contract violation', message).pipe(
-              Effect.as(
-                c.json(
-                  {
-                    type: '/problems/internal-server-error',
-                    title: 'Internal Server Error',
-                    status: 500,
-                    detail: 'An unexpected error occurred.',
-                    instance: c.req.path,
-                  } as const,
-                  500,
                   { 'Content-Type': 'application/problem+json' },
                 ),
               ),

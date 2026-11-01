@@ -52,7 +52,7 @@ describe('a self one-to-many declared list first', () => {
   it('drizzle relates the list to the model, not to a join table', () => {
     const code = drizzleSchema(listFirst, 'postgresql', listFirst.indexes)
     expect(code).not.toContain("'_Mgr'")
-    expect(code).toContain("reports: many(employee, { relationName: 'Mgr' })")
+    expect(code).toContain("reports: r.many.employee({ alias: 'Mgr' })")
   })
 })
 
@@ -85,14 +85,14 @@ describe('a self many-to-many', () => {
     )
   })
 
-  // Both columns point at Employee, so drizzle pairs each `many()` with its `one()` by name.
+  // Both columns point at Employee, so each end reads the join table `through` its own column.
   it('drizzle names the column each end reads', () => {
     const code = drizzleSchema(follow, 'postgresql', follow.indexes)
     expect(code).toContain(
-      "export const employeeRelations = relations(employee, ({ many }) => ({ zFollowers: many(follow, { relationName: 'Follow_B' }), aFollowing: many(follow, { relationName: 'Follow_A' }) }))",
+      'employee: { zFollowers: r.many.employee({ from: r.employee.id.through(r.follow.B), to: r.employee.id.through(r.follow.A) }), aFollowing: r.many.employee({ from: r.employee.id.through(r.follow.A), to: r.employee.id.through(r.follow.B) }) }',
     )
     expect(code).toContain(
-      "export const followRelations = relations(follow, ({ one }) => ({ employee: one(employee, { fields: [follow.A], references: [employee.id], relationName: 'Follow_A' }), employee_: one(employee, { fields: [follow.B], references: [employee.id], relationName: 'Follow_B' }) }))",
+      'follow: { employee: r.one.employee({ from: r.follow.A, to: r.employee.id, optional: false }), employee_: r.one.employee({ from: r.follow.B, to: r.employee.id, optional: false }) }',
     )
   })
 

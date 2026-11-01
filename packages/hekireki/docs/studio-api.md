@@ -3161,15 +3161,6 @@ The quick fixes the Prisma language server offers for the diagnostics in a range
 |» » » line|body|object|true|The line|
 |» » » character|body|object|true|The column|
 |» diagnostics|body|[[LspDiagnostic](#schemalspdiagnostic)]|true|The diagnostics in that range, as the lint route returned them|
-|» » range|body|object|true|Where it is|
-|» » » start|body|object|true|Where the range starts|
-|» » » » line|body|object|true|The line|
-|» » » » character|body|object|true|The column|
-|» » » end|body|object|true|Where the range ends|
-|» » » » line|body|object|true|The line|
-|» » » » character|body|object|true|The column|
-|» » message|body|string|true|The Prisma message|
-|» » severity|body|object|true|How serious it is|
 
 > Example responses
 
@@ -3574,11 +3565,6 @@ rows before the ones that change the schema.
 |body|body|[PlanBody](#schemaplanbody)|true|none|
 |» name|body|string|false|What to call it; the timestamp is put in front|
 |» decisions|body|[[MigrationDecision](#schemamigrationdecision)]|false|Every decision to plan with, in place of the ones kept; the kept ones when left out|
-|» » kind|body|string|true|The check it answers (`not-null`, `unique`, `foreign-key`, ...)|
-|» » modelName|body|string|true|The model it is about|
-|» » field|body|string|true|The field, or the relation for a foreign key|
-|» » choice|body|string|true|What to do, from the choices the check offers|
-|» » value|body|string|false|What a choice needs, when it needs something: the value or SQL written, the field a rename<br>became, the `STORED=MEMBER` pairs of an enum, or the field duplicates are ordered by|
 |» batch|body|integer(int32)|false|The most rows one statement of a fix changes: a fix over more is run that many at a time, so<br>none holds its locks on the whole table; all of them at once when left out|
 
 > Example responses
@@ -4701,11 +4687,6 @@ Keeps the decisions, so the same plan is made the next time the page is opened, 
 |---|---|---|---|---|
 |body|body|[DecisionsBody](#schemadecisionsbody)|true|none|
 |» decisions|body|[[MigrationDecision](#schemamigrationdecision)]|true|All of them: what is left out is forgotten|
-|» » kind|body|string|true|The check it answers (`not-null`, `unique`, `foreign-key`, ...)|
-|» » modelName|body|string|true|The model it is about|
-|» » field|body|string|true|The field, or the relation for a foreign key|
-|» » choice|body|string|true|What to do, from the choices the check offers|
-|» » value|body|string|false|What a choice needs, when it needs something: the value or SQL written, the field a rename<br>became, the `STORED=MEMBER` pairs of an enum, or the field duplicates are ordered by|
 
 > Example responses
 

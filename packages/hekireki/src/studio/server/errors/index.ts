@@ -38,10 +38,6 @@ export class FormatError extends Data.TaggedError('FormatError')<{
   readonly cause: string
 }> {}
 
-export class ContractViolationError extends Data.TaggedError('ContractViolationError')<{
-  readonly message: string
-}> {}
-
 export class SchemaLoadError extends Data.TaggedError('SchemaLoadError')<{
   readonly message: string
 }> {}

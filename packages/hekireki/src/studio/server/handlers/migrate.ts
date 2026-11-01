@@ -21,6 +21,21 @@ import type {
   postMigrateRehearseRoute,
   putMigrateDecisionsRoute,
 } from '../routes'
+import {
+  ApplyResultSchema,
+  BackupSchema,
+  BackupsSchema,
+  CreatedMigrationSchema,
+  DeployedSchema,
+  MigrateBaselineSchema,
+  MigrateDiffSchema,
+  MigratePlanSchema,
+  MigrateStatusSchema,
+  MigrationDecisionsSchema,
+  MigrationFileSchema,
+  RehearsalSchema,
+  TableCountsSchema,
+} from '../routes/index.js'
 import * as MigrateUseCase from '../usecases/index.js'
 
 /**
@@ -36,13 +51,13 @@ import * as MigrateUseCase from '../usecases/index.js'
  *   H->>U: readMigrateStatus()
  *   U-->>H: MigrateStatus
  *   H-->>C: 200 MigrateStatus
- *   Note over H: on failure, Match.tag: MigrateConfigError -> 503 / DatabaseUnavailableError -> 503 / MigrateEngineError -> 503 / ContractViolationError -> 500
+ *   Note over H: on failure, Match.tag: MigrateConfigError -> 503 / DatabaseUnavailableError -> 503 / MigrateEngineError -> 503
  * ```
  */
 export const getMigrateRouteHandler: RouteHandler<typeof getMigrateRoute> = (c) =>
   Effect.runPromise(
     Effect.matchEffect(MigrateUseCase.readMigrateStatus(), {
-      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
+      onSuccess: (value) => Effect.succeed(c.json(MigrateStatusSchema.parse(value), 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           Match.tag('MigrateConfigError', ({ message }) =>
@@ -87,23 +102,6 @@ export const getMigrateRouteHandler: RouteHandler<typeof getMigrateRoute> = (c) 
                 } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
-              ),
-            ),
-          ),
-          Match.tag('ContractViolationError', ({ message }) =>
-            Effect.logError('contract violation', message).pipe(
-              Effect.as(
-                c.json(
-                  {
-                    type: '/problems/internal-server-error',
-                    title: 'Internal Server Error',
-                    status: 500,
-                    detail: 'An unexpected error occurred.',
-                    instance: c.req.path,
-                  } as const,
-                  500,
-                  { 'Content-Type': 'application/problem+json' },
-                ),
               ),
             ),
           ),
@@ -125,13 +123,13 @@ export const getMigrateRouteHandler: RouteHandler<typeof getMigrateRoute> = (c) 
  *   H->>U: readMigrateDiff()
  *   U-->>H: MigrateDiff
  *   H-->>C: 200 MigrateDiff
- *   Note over H: on failure, Match.tag: MigrateConfigError -> 503 / DatabaseUnavailableError -> 503 / MigrateEngineError -> 503 / ContractViolationError -> 500
+ *   Note over H: on failure, Match.tag: MigrateConfigError -> 503 / DatabaseUnavailableError -> 503 / MigrateEngineError -> 503
  * ```
  */
 export const getMigrateDiffRouteHandler: RouteHandler<typeof getMigrateDiffRoute> = (c) =>
   Effect.runPromise(
     Effect.matchEffect(MigrateUseCase.readMigrateDiff(), {
-      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
+      onSuccess: (value) => Effect.succeed(c.json(MigrateDiffSchema.parse(value), 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           Match.tag('MigrateConfigError', ({ message }) =>
@@ -179,23 +177,6 @@ export const getMigrateDiffRouteHandler: RouteHandler<typeof getMigrateDiffRoute
               ),
             ),
           ),
-          Match.tag('ContractViolationError', ({ message }) =>
-            Effect.logError('contract violation', message).pipe(
-              Effect.as(
-                c.json(
-                  {
-                    type: '/problems/internal-server-error',
-                    title: 'Internal Server Error',
-                    status: 500,
-                    detail: 'An unexpected error occurred.',
-                    instance: c.req.path,
-                  } as const,
-                  500,
-                  { 'Content-Type': 'application/problem+json' },
-                ),
-              ),
-            ),
-          ),
           Match.exhaustive,
         ),
     }),
@@ -214,13 +195,13 @@ export const getMigrateDiffRouteHandler: RouteHandler<typeof getMigrateDiffRoute
  *   H->>U: planMigration()
  *   U-->>H: MigratePlan
  *   H-->>C: 200 MigratePlan
- *   Note over H: on failure, Match.tag: MigrateConfigError -> 422 / MigrateDatabaseError -> 503 / DatabaseUnavailableError -> 503 / MigrateEngineError -> 503 / ContractViolationError -> 500
+ *   Note over H: on failure, Match.tag: MigrateConfigError -> 422 / MigrateDatabaseError -> 503 / DatabaseUnavailableError -> 503 / MigrateEngineError -> 503
  * ```
  */
 export const postMigratePlanRouteHandler: RouteHandler<typeof postMigratePlanRoute> = (c) =>
   Effect.runPromise(
     Effect.matchEffect(MigrateUseCase.planMigration(c.req.valid('json')), {
-      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
+      onSuccess: (value) => Effect.succeed(c.json(MigratePlanSchema.parse(value), 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           // The fixes of hekireki.config.ts do not fit the schema and the database: the person
@@ -286,23 +267,6 @@ export const postMigratePlanRouteHandler: RouteHandler<typeof postMigratePlanRou
               ),
             ),
           ),
-          Match.tag('ContractViolationError', ({ message }) =>
-            Effect.logError('contract violation', message).pipe(
-              Effect.as(
-                c.json(
-                  {
-                    type: '/problems/internal-server-error',
-                    title: 'Internal Server Error',
-                    status: 500,
-                    detail: 'An unexpected error occurred.',
-                    instance: c.req.path,
-                  } as const,
-                  500,
-                  { 'Content-Type': 'application/problem+json' },
-                ),
-              ),
-            ),
-          ),
           Match.exhaustive,
         ),
     }),
@@ -322,13 +286,13 @@ export const postMigratePlanRouteHandler: RouteHandler<typeof postMigratePlanRou
  *   H->>U: applyMigrationStatements()
  *   U-->>H: ApplyResult
  *   H-->>C: 200 ApplyResult
- *   Note over H: on failure, Match.tag: DatabaseUnavailableError -> 503 / ContractViolationError -> 500
+ *   Note over H: on failure, Match.tag: DatabaseUnavailableError -> 503
  * ```
  */
 export const postMigrateApplyRouteHandler: RouteHandler<typeof postMigrateApplyRoute> = (c) =>
   Effect.runPromise(
     Effect.matchEffect(MigrateUseCase.applyMigrationStatements(c.req.valid('json')), {
-      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
+      onSuccess: (value) => Effect.succeed(c.json(ApplyResultSchema.parse(value), 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           Match.tag('DatabaseUnavailableError', ({ reason }) =>
@@ -343,23 +307,6 @@ export const postMigrateApplyRouteHandler: RouteHandler<typeof postMigrateApplyR
                 } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
-              ),
-            ),
-          ),
-          Match.tag('ContractViolationError', ({ message }) =>
-            Effect.logError('contract violation', message).pipe(
-              Effect.as(
-                c.json(
-                  {
-                    type: '/problems/internal-server-error',
-                    title: 'Internal Server Error',
-                    status: 500,
-                    detail: 'An unexpected error occurred.',
-                    instance: c.req.path,
-                  } as const,
-                  500,
-                  { 'Content-Type': 'application/problem+json' },
-                ),
               ),
             ),
           ),
@@ -381,7 +328,7 @@ export const postMigrateApplyRouteHandler: RouteHandler<typeof postMigrateApplyR
  *   H->>U: createMigration()
  *   U-->>H: CreatedMigration
  *   H-->>C: 200 CreatedMigration
- *   Note over H: on failure, Match.tag: MigrateConfigError -> 503 / DatabaseUnavailableError -> 503 / MigrateEngineError -> 503 / ContractViolationError -> 500
+ *   Note over H: on failure, Match.tag: MigrateConfigError -> 503 / DatabaseUnavailableError -> 503 / MigrateEngineError -> 503
  * ```
  */
 export const postMigrateMigrationsRouteHandler: RouteHandler<typeof postMigrateMigrationsRoute> = (
@@ -389,7 +336,7 @@ export const postMigrateMigrationsRouteHandler: RouteHandler<typeof postMigrateM
 ) =>
   Effect.runPromise(
     Effect.matchEffect(MigrateUseCase.createMigration(c.req.valid('json')), {
-      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
+      onSuccess: (value) => Effect.succeed(c.json(CreatedMigrationSchema.parse(value), 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           Match.tag('MigrateConfigError', ({ message }) =>
@@ -437,23 +384,6 @@ export const postMigrateMigrationsRouteHandler: RouteHandler<typeof postMigrateM
               ),
             ),
           ),
-          Match.tag('ContractViolationError', ({ message }) =>
-            Effect.logError('contract violation', message).pipe(
-              Effect.as(
-                c.json(
-                  {
-                    type: '/problems/internal-server-error',
-                    title: 'Internal Server Error',
-                    status: 500,
-                    detail: 'An unexpected error occurred.',
-                    instance: c.req.path,
-                  } as const,
-                  500,
-                  { 'Content-Type': 'application/problem+json' },
-                ),
-              ),
-            ),
-          ),
           Match.orElse((failure) =>
             Effect.succeed(
               c.json(
@@ -488,7 +418,7 @@ export const postMigrateMigrationsRouteHandler: RouteHandler<typeof postMigrateM
  *   H->>U: recordMigrationApplied()
  *   U-->>H: MigrateStatus
  *   H-->>C: 200 MigrateStatus
- *   Note over H: on failure, Match.tag: MigrateConfigError -> 503 / DatabaseUnavailableError -> 503 / MigrateEngineError -> 503 / ContractViolationError -> 500
+ *   Note over H: on failure, Match.tag: MigrateConfigError -> 503 / DatabaseUnavailableError -> 503 / MigrateEngineError -> 503
  * ```
  */
 export const postMigrateMigrationsAppliedRouteHandler: RouteHandler<
@@ -544,23 +474,6 @@ export const postMigrateMigrationsAppliedRouteHandler: RouteHandler<
               ),
             ),
           ),
-          Match.tag('ContractViolationError', ({ message }) =>
-            Effect.logError('contract violation', message).pipe(
-              Effect.as(
-                c.json(
-                  {
-                    type: '/problems/internal-server-error',
-                    title: 'Internal Server Error',
-                    status: 500,
-                    detail: 'An unexpected error occurred.',
-                    instance: c.req.path,
-                  } as const,
-                  500,
-                  { 'Content-Type': 'application/problem+json' },
-                ),
-              ),
-            ),
-          ),
           Match.exhaustive,
         ),
     }),
@@ -580,7 +493,7 @@ export const postMigrateMigrationsAppliedRouteHandler: RouteHandler<
  *   H->>U: recordMigrationRolledBack()
  *   U-->>H: MigrateStatus
  *   H-->>C: 200 MigrateStatus
- *   Note over H: on failure, Match.tag: MigrateConfigError -> 503 / DatabaseUnavailableError -> 503 / MigrateEngineError -> 503 / ContractViolationError -> 500
+ *   Note over H: on failure, Match.tag: MigrateConfigError -> 503 / DatabaseUnavailableError -> 503 / MigrateEngineError -> 503
  * ```
  */
 export const postMigrateMigrationsRolledBackRouteHandler: RouteHandler<
@@ -636,23 +549,6 @@ export const postMigrateMigrationsRolledBackRouteHandler: RouteHandler<
               ),
             ),
           ),
-          Match.tag('ContractViolationError', ({ message }) =>
-            Effect.logError('contract violation', message).pipe(
-              Effect.as(
-                c.json(
-                  {
-                    type: '/problems/internal-server-error',
-                    title: 'Internal Server Error',
-                    status: 500,
-                    detail: 'An unexpected error occurred.',
-                    instance: c.req.path,
-                  } as const,
-                  500,
-                  { 'Content-Type': 'application/problem+json' },
-                ),
-              ),
-            ),
-          ),
           Match.exhaustive,
         ),
     }),
@@ -671,13 +567,13 @@ export const postMigrateMigrationsRolledBackRouteHandler: RouteHandler<
  *   H->>U: deployMigrations()
  *   U-->>H: Deployed
  *   H-->>C: 200 Deployed
- *   Note over H: on failure, Match.tag: MigrateConfigError -> 503 / DatabaseUnavailableError -> 503 / MigrateEngineError -> 503 / ContractViolationError -> 500
+ *   Note over H: on failure, Match.tag: MigrateConfigError -> 503 / DatabaseUnavailableError -> 503 / MigrateEngineError -> 503
  * ```
  */
 export const postMigrateDeployRouteHandler: RouteHandler<typeof postMigrateDeployRoute> = (c) =>
   Effect.runPromise(
     Effect.matchEffect(MigrateUseCase.deployMigrations(), {
-      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
+      onSuccess: (value) => Effect.succeed(c.json(DeployedSchema.parse(value), 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           Match.tag('MigrateConfigError', ({ message }) =>
@@ -722,23 +618,6 @@ export const postMigrateDeployRouteHandler: RouteHandler<typeof postMigrateDeplo
                 } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
-              ),
-            ),
-          ),
-          Match.tag('ContractViolationError', ({ message }) =>
-            Effect.logError('contract violation', message).pipe(
-              Effect.as(
-                c.json(
-                  {
-                    type: '/problems/internal-server-error',
-                    title: 'Internal Server Error',
-                    status: 500,
-                    detail: 'An unexpected error occurred.',
-                    instance: c.req.path,
-                  } as const,
-                  500,
-                  { 'Content-Type': 'application/problem+json' },
-                ),
               ),
             ),
           ),
@@ -760,13 +639,13 @@ export const postMigrateDeployRouteHandler: RouteHandler<typeof postMigrateDeplo
  *   H->>U: readMigrationDecisions()
  *   U-->>H: MigrationDecisions
  *   H-->>C: 200 MigrationDecisions
- *   Note over H: on failure, Match.tag: MigrateConfigError -> 503 / DatabaseUnavailableError -> 503 / MigrateEngineError -> 503 / ContractViolationError -> 500
+ *   Note over H: on failure, Match.tag: MigrateConfigError -> 503 / DatabaseUnavailableError -> 503 / MigrateEngineError -> 503
  * ```
  */
 export const getMigrateDecisionsRouteHandler: RouteHandler<typeof getMigrateDecisionsRoute> = (c) =>
   Effect.runPromise(
     Effect.matchEffect(MigrateUseCase.readMigrationDecisions(), {
-      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
+      onSuccess: (value) => Effect.succeed(c.json(MigrationDecisionsSchema.parse(value), 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           Match.tag('MigrateConfigError', ({ message }) =>
@@ -811,23 +690,6 @@ export const getMigrateDecisionsRouteHandler: RouteHandler<typeof getMigrateDeci
                 } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
-              ),
-            ),
-          ),
-          Match.tag('ContractViolationError', ({ message }) =>
-            Effect.logError('contract violation', message).pipe(
-              Effect.as(
-                c.json(
-                  {
-                    type: '/problems/internal-server-error',
-                    title: 'Internal Server Error',
-                    status: 500,
-                    detail: 'An unexpected error occurred.',
-                    instance: c.req.path,
-                  } as const,
-                  500,
-                  { 'Content-Type': 'application/problem+json' },
-                ),
               ),
             ),
           ),
@@ -850,13 +712,13 @@ export const getMigrateDecisionsRouteHandler: RouteHandler<typeof getMigrateDeci
  *   H->>U: writeMigrationDecisions()
  *   U-->>H: MigrationDecisions
  *   H-->>C: 200 MigrationDecisions
- *   Note over H: on failure, Match.tag: MigrateConfigError -> 503 / DatabaseUnavailableError -> 503 / MigrateEngineError -> 503 / ContractViolationError -> 500
+ *   Note over H: on failure, Match.tag: MigrateConfigError -> 503 / DatabaseUnavailableError -> 503 / MigrateEngineError -> 503
  * ```
  */
 export const putMigrateDecisionsRouteHandler: RouteHandler<typeof putMigrateDecisionsRoute> = (c) =>
   Effect.runPromise(
     Effect.matchEffect(MigrateUseCase.writeMigrationDecisions(c.req.valid('json')), {
-      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
+      onSuccess: (value) => Effect.succeed(c.json(MigrationDecisionsSchema.parse(value), 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           Match.tag('MigrateConfigError', ({ message }) =>
@@ -901,23 +763,6 @@ export const putMigrateDecisionsRouteHandler: RouteHandler<typeof putMigrateDeci
                 } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
-              ),
-            ),
-          ),
-          Match.tag('ContractViolationError', ({ message }) =>
-            Effect.logError('contract violation', message).pipe(
-              Effect.as(
-                c.json(
-                  {
-                    type: '/problems/internal-server-error',
-                    title: 'Internal Server Error',
-                    status: 500,
-                    detail: 'An unexpected error occurred.',
-                    instance: c.req.path,
-                  } as const,
-                  500,
-                  { 'Content-Type': 'application/problem+json' },
-                ),
               ),
             ),
           ),
@@ -955,13 +800,13 @@ export const putMigrateDecisionsRouteHandler: RouteHandler<typeof putMigrateDeci
  *   H->>U: readMigrateBaseline()
  *   U-->>H: MigrateBaseline
  *   H-->>C: 200 MigrateBaseline
- *   Note over H: on failure, Match.tag: MigrateConfigError -> 503 / DatabaseUnavailableError -> 503 / MigrateEngineError -> 503 / ContractViolationError -> 500
+ *   Note over H: on failure, Match.tag: MigrateConfigError -> 503 / DatabaseUnavailableError -> 503 / MigrateEngineError -> 503
  * ```
  */
 export const getMigrateBaselineRouteHandler: RouteHandler<typeof getMigrateBaselineRoute> = (c) =>
   Effect.runPromise(
     Effect.matchEffect(MigrateUseCase.readMigrateBaseline(), {
-      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
+      onSuccess: (value) => Effect.succeed(c.json(MigrateBaselineSchema.parse(value), 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           Match.tag('MigrateConfigError', ({ message }) =>
@@ -1009,23 +854,6 @@ export const getMigrateBaselineRouteHandler: RouteHandler<typeof getMigrateBasel
               ),
             ),
           ),
-          Match.tag('ContractViolationError', ({ message }) =>
-            Effect.logError('contract violation', message).pipe(
-              Effect.as(
-                c.json(
-                  {
-                    type: '/problems/internal-server-error',
-                    title: 'Internal Server Error',
-                    status: 500,
-                    detail: 'An unexpected error occurred.',
-                    instance: c.req.path,
-                  } as const,
-                  500,
-                  { 'Content-Type': 'application/problem+json' },
-                ),
-              ),
-            ),
-          ),
           Match.exhaustive,
         ),
     }),
@@ -1044,7 +872,7 @@ export const getMigrateBaselineRouteHandler: RouteHandler<typeof getMigrateBasel
  *   H->>U: baselineDatabase()
  *   U-->>H: MigrateStatus
  *   H-->>C: 200 MigrateStatus
- *   Note over H: on failure, Match.tag: MigrateConfigError -> 422 / DatabaseUnavailableError -> 503 / MigrateEngineError -> 503 / ContractViolationError -> 500
+ *   Note over H: on failure, Match.tag: MigrateConfigError -> 422 / DatabaseUnavailableError -> 503 / MigrateEngineError -> 503
  * ```
  */
 export const postMigrateBaselineRouteHandler: RouteHandler<typeof postMigrateBaselineRoute> = (c) =>
@@ -1101,23 +929,6 @@ export const postMigrateBaselineRouteHandler: RouteHandler<typeof postMigrateBas
               ),
             ),
           ),
-          Match.tag('ContractViolationError', ({ message }) =>
-            Effect.logError('contract violation', message).pipe(
-              Effect.as(
-                c.json(
-                  {
-                    type: '/problems/internal-server-error',
-                    title: 'Internal Server Error',
-                    status: 500,
-                    detail: 'An unexpected error occurred.',
-                    instance: c.req.path,
-                  } as const,
-                  500,
-                  { 'Content-Type': 'application/problem+json' },
-                ),
-              ),
-            ),
-          ),
           Match.exhaustive,
         ),
     }),
@@ -1136,7 +947,7 @@ export const postMigrateBaselineRouteHandler: RouteHandler<typeof postMigrateBas
  *   H->>U: readMigrationFile()
  *   U-->>H: MigrationFile
  *   H-->>C: 200 MigrationFile
- *   Note over H: on failure, Match.tag: MigrationNotFoundError -> 404 / MigrateConfigError -> 503 / DatabaseUnavailableError -> 503 / MigrateEngineError -> 503 / ContractViolationError -> 500
+ *   Note over H: on failure, Match.tag: MigrationNotFoundError -> 404 / MigrateConfigError -> 503 / DatabaseUnavailableError -> 503 / MigrateEngineError -> 503
  * ```
  */
 export const getMigrateMigrationsMigrationNameRouteHandler: RouteHandler<
@@ -1144,7 +955,7 @@ export const getMigrateMigrationsMigrationNameRouteHandler: RouteHandler<
 > = (c) =>
   Effect.runPromise(
     Effect.matchEffect(MigrateUseCase.readMigrationFile(c.req.valid('param')), {
-      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
+      onSuccess: (value) => Effect.succeed(c.json(MigrationFileSchema.parse(value), 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           Match.tag('MigrationNotFoundError', ({ name, baseDir }) =>
@@ -1207,23 +1018,6 @@ export const getMigrateMigrationsMigrationNameRouteHandler: RouteHandler<
               ),
             ),
           ),
-          Match.tag('ContractViolationError', ({ message }) =>
-            Effect.logError('contract violation', message).pipe(
-              Effect.as(
-                c.json(
-                  {
-                    type: '/problems/internal-server-error',
-                    title: 'Internal Server Error',
-                    status: 500,
-                    detail: 'An unexpected error occurred.',
-                    instance: c.req.path,
-                  } as const,
-                  500,
-                  { 'Content-Type': 'application/problem+json' },
-                ),
-              ),
-            ),
-          ),
           Match.exhaustive,
         ),
     }),
@@ -1243,32 +1037,14 @@ export const getMigrateMigrationsMigrationNameRouteHandler: RouteHandler<
  *   H->>U: rehearse()
  *   U-->>H: Rehearsal
  *   H-->>C: 200 Rehearsal
- *   Note over H: on failure, Match.tag: ContractViolationError -> 500
  * ```
  */
 export const postMigrateRehearseRouteHandler: RouteHandler<typeof postMigrateRehearseRoute> = (c) =>
   Effect.runPromise(
     Effect.matchEffect(MigrateUseCase.rehearse(c.req.valid('json')), {
-      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
+      onSuccess: (value) => Effect.succeed(c.json(RehearsalSchema.parse(value), 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
-          Match.tag('ContractViolationError', ({ message }) =>
-            Effect.logError('contract violation', message).pipe(
-              Effect.as(
-                c.json(
-                  {
-                    type: '/problems/internal-server-error',
-                    title: 'Internal Server Error',
-                    status: 500,
-                    detail: 'An unexpected error occurred.',
-                    instance: c.req.path,
-                  } as const,
-                  500,
-                  { 'Content-Type': 'application/problem+json' },
-                ),
-              ),
-            ),
-          ),
           // The database or the schema engine refused: what it said reaches the page.
           Match.orElse((failure) =>
             Effect.succeed(
@@ -1305,32 +1081,14 @@ export const postMigrateRehearseRouteHandler: RouteHandler<typeof postMigrateReh
  *   H->>U: readTableCounts()
  *   U-->>H: TableCounts
  *   H-->>C: 200 TableCounts
- *   Note over H: on failure, Match.tag: ContractViolationError -> 500
  * ```
  */
 export const getMigrateTablesRouteHandler: RouteHandler<typeof getMigrateTablesRoute> = (c) =>
   Effect.runPromise(
     Effect.matchEffect(MigrateUseCase.readTableCounts(), {
-      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
+      onSuccess: (value) => Effect.succeed(c.json(TableCountsSchema.parse(value), 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
-          Match.tag('ContractViolationError', ({ message }) =>
-            Effect.logError('contract violation', message).pipe(
-              Effect.as(
-                c.json(
-                  {
-                    type: '/problems/internal-server-error',
-                    title: 'Internal Server Error',
-                    status: 500,
-                    detail: 'An unexpected error occurred.',
-                    instance: c.req.path,
-                  } as const,
-                  500,
-                  { 'Content-Type': 'application/problem+json' },
-                ),
-              ),
-            ),
-          ),
           // The database or the schema engine refused: what it said reaches the page.
           Match.orElse((failure) =>
             Effect.succeed(
@@ -1366,32 +1124,14 @@ export const getMigrateTablesRouteHandler: RouteHandler<typeof getMigrateTablesR
  *   H->>U: readBackups()
  *   U-->>H: Backups
  *   H-->>C: 200 Backups
- *   Note over H: on failure, Match.tag: ContractViolationError -> 500
  * ```
  */
 export const getMigrateBackupsRouteHandler: RouteHandler<typeof getMigrateBackupsRoute> = (c) =>
   Effect.runPromise(
     Effect.matchEffect(MigrateUseCase.readBackups(), {
-      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
+      onSuccess: (value) => Effect.succeed(c.json(BackupsSchema.parse(value), 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
-          Match.tag('ContractViolationError', ({ message }) =>
-            Effect.logError('contract violation', message).pipe(
-              Effect.as(
-                c.json(
-                  {
-                    type: '/problems/internal-server-error',
-                    title: 'Internal Server Error',
-                    status: 500,
-                    detail: 'An unexpected error occurred.',
-                    instance: c.req.path,
-                  } as const,
-                  500,
-                  { 'Content-Type': 'application/problem+json' },
-                ),
-              ),
-            ),
-          ),
           // The database or the schema engine refused: what it said reaches the page.
           Match.orElse((failure) =>
             Effect.succeed(
@@ -1427,13 +1167,13 @@ export const getMigrateBackupsRouteHandler: RouteHandler<typeof getMigrateBackup
  *   H->>U: takeBackup()
  *   U-->>H: Backup
  *   H-->>C: 200 Backup
- *   Note over H: on failure, Match.tag: MigrateConfigError -> 422 / ContractViolationError -> 500
+ *   Note over H: on failure, Match.tag: MigrateConfigError -> 422
  * ```
  */
 export const postMigrateBackupsRouteHandler: RouteHandler<typeof postMigrateBackupsRoute> = (c) =>
   Effect.runPromise(
     Effect.matchEffect(MigrateUseCase.takeBackup(), {
-      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
+      onSuccess: (value) => Effect.succeed(c.json(BackupSchema.parse(value), 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           Match.tag('MigrateConfigError', ({ message }) =>
@@ -1449,23 +1189,6 @@ export const postMigrateBackupsRouteHandler: RouteHandler<typeof postMigrateBack
                 } as const,
                 422,
                 { 'Content-Type': 'application/problem+json' },
-              ),
-            ),
-          ),
-          Match.tag('ContractViolationError', ({ message }) =>
-            Effect.logError('contract violation', message).pipe(
-              Effect.as(
-                c.json(
-                  {
-                    type: '/problems/internal-server-error',
-                    title: 'Internal Server Error',
-                    status: 500,
-                    detail: 'An unexpected error occurred.',
-                    instance: c.req.path,
-                  } as const,
-                  500,
-                  { 'Content-Type': 'application/problem+json' },
-                ),
               ),
             ),
           ),
@@ -1505,7 +1228,7 @@ export const postMigrateBackupsRouteHandler: RouteHandler<typeof postMigrateBack
  *   H->>U: restoreFromBackup()
  *   U-->>H: MigrateStatus
  *   H-->>C: 200 MigrateStatus
- *   Note over H: on failure, Match.tag: MigrateConfigError -> 422 / ContractViolationError -> 500
+ *   Note over H: on failure, Match.tag: MigrateConfigError -> 422
  * ```
  */
 export const postMigrateBackupsRestoreRouteHandler: RouteHandler<
@@ -1529,23 +1252,6 @@ export const postMigrateBackupsRestoreRouteHandler: RouteHandler<
                 } as const,
                 422,
                 { 'Content-Type': 'application/problem+json' },
-              ),
-            ),
-          ),
-          Match.tag('ContractViolationError', ({ message }) =>
-            Effect.logError('contract violation', message).pipe(
-              Effect.as(
-                c.json(
-                  {
-                    type: '/problems/internal-server-error',
-                    title: 'Internal Server Error',
-                    status: 500,
-                    detail: 'An unexpected error occurred.',
-                    instance: c.req.path,
-                  } as const,
-                  500,
-                  { 'Content-Type': 'application/problem+json' },
-                ),
               ),
             ),
           ),

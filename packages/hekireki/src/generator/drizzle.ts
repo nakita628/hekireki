@@ -5,7 +5,6 @@ import {
   generateImports,
   makeColumnHelpers,
   makeEnumDeclarations,
-  makeM2MJoinRelations,
   makeM2MJoinTables,
   makeRelations,
   makeTable,
@@ -27,19 +26,13 @@ export function drizzleSchema(
     ),
     ...makeM2MJoinTables(datamodel.models, db, imports),
   ]
-  const relationsLines = [
-    ...makeRelations(datamodel.models, imports),
-    ...makeM2MJoinRelations(datamodel.models, imports),
-  ]
+  const relationsLines = makeRelations(datamodel.models, imports)
 
   const enumLinesWithGap = enumLines.flatMap((line, i) =>
     i < enumLines.length - 1 ? [line, ''] : [line],
   )
   const tableLinesWithGap = tableLines.flatMap((line, i) =>
     i < tableLines.length - 1 ? [line, ''] : [line],
-  )
-  const relationsLinesWithGap = relationsLines.flatMap((line, i) =>
-    i < relationsLines.length - 1 ? [line, ''] : [line],
   )
 
   const columnHelpers = makeColumnHelpers(imports)
@@ -50,7 +43,7 @@ export function drizzleSchema(
     ...columnHelpers.flatMap((helper) => [helper, '']),
     ...(enumLinesWithGap.length > 0 ? [...enumLinesWithGap, ''] : []),
     ...tableLinesWithGap,
-    ...(relationsLinesWithGap.length > 0 ? ['', ...relationsLinesWithGap] : []),
+    ...(relationsLines.length > 0 ? ['', ...relationsLines] : []),
   ].join('\n')
 }
 

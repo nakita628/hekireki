@@ -31,22 +31,6 @@ import {
   MigrateDatabaseError,
   MigrationNotFoundError,
 } from '../../../migrate/errors.js'
-import { ContractViolationError } from '../errors/index.js'
-import {
-  ApplyResultSchema,
-  CreatedMigrationSchema,
-  DeployedSchema,
-  BackupSchema,
-  BackupsSchema,
-  MigrateBaselineSchema,
-  RehearsalSchema,
-  TableCountsSchema,
-  MigrateDiffSchema,
-  MigrateStatusSchema,
-  MigrationFileSchema,
-  MigrationDecisionsSchema,
-  MigratePlanSchema,
-} from '../routes/index.js'
 import * as StudioService from '../services/index.js'
 import * as MigrateService from '../services/index.js'
 
@@ -84,14 +68,10 @@ export function readMigrateStatus() {
       files: opened.files,
       configDir: opened.schemaDir,
     })
-    const result = MigrateStatusSchema.safeParse({
+    return {
       ...status,
       migrationsDir: opened.migrationsDir,
-    })
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
     }
-    return result.data
   }).pipe(Effect.provide(nodeFileSystemLayer))
 }
 
@@ -108,11 +88,7 @@ export function readMigrateDiff() {
       files: opened.files,
       configDir: opened.schemaDir,
     })
-    const result = MigrateDiffSchema.safeParse(diff)
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
+    return diff
   }).pipe(Effect.provide(nodeFileSystemLayer))
 }
 
@@ -181,7 +157,7 @@ export function planMigration(input: z.infer<typeof PlanMigrationInput>) {
       readOnly: false,
     })
     const plan = makePlan(report, diff.sql, input.batch ?? null)
-    const result = MigratePlanSchema.safeParse({
+    return {
       name: migrationName({ at: new Date(), name: input.name ?? 'migration' }),
       ...plan,
       // Each fixed model as the fixes will leave it, read from the database as it is now.
@@ -192,11 +168,7 @@ export function planMigration(input: z.infer<typeof PlanMigrationInput>) {
       notes: diff.drift
         ? plan.notes
         : ['The database already matches the schema: there is nothing to migrate.'],
-    })
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
     }
-    return result.data
   }).pipe(Effect.provide(nodeFileSystemLayer))
 }
 
@@ -224,11 +196,7 @@ export function applyMigrationStatements(input: z.infer<typeof ApplyStatementsIn
     const db = StudioService.studio().db
     const driver = yield* db.driver
     const applied = yield* applyStatements({ driver, statements: input.statements })
-    const result = ApplyResultSchema.safeParse(applied)
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
+    return applied
   })
 }
 
@@ -259,11 +227,7 @@ export function createMigration(input: z.infer<typeof CreateMigrationInput>) {
       sql: input.sql,
       provider: opened.driver.dialect,
     })
-    const result = CreatedMigrationSchema.safeParse({ name, file: written.file })
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
+    return { name, file: written.file }
   }).pipe(Effect.provide(nodeFileSystemLayer))
 }
 
@@ -308,11 +272,7 @@ export function deployMigrations() {
       engine: opened.engine,
       migrations: opened.migrations,
     })
-    const result = DeployedSchema.safeParse(deployed)
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
+    return deployed
   }).pipe(Effect.provide(nodeFileSystemLayer))
 }
 
@@ -340,7 +300,7 @@ export function readMigrationDecisions() {
     const opened = yield* session()
     const decisions = yield* readDecisions(path.join(opened.schemaDir, DECISIONS_FILE))
     // The file keeps a value a choice does not need as null; the wire leaves it out.
-    const result = MigrationDecisionsSchema.safeParse({
+    return {
       file: path.join(opened.schemaDir, DECISIONS_FILE),
       decisions: decisions.map((decision) =>
         decision.value === null
@@ -358,11 +318,7 @@ export function readMigrationDecisions() {
               value: decision.value,
             },
       ),
-    })
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
     }
-    return result.data
   }).pipe(Effect.provide(nodeFileSystemLayer))
 }
 
@@ -401,11 +357,7 @@ export function writeMigrationDecisions(input: z.infer<typeof WriteDecisionsInpu
       file: path.join(opened.schemaDir, DECISIONS_FILE),
       decisions: input.decisions,
     })
-    const result = MigrationDecisionsSchema.safeParse({ file, decisions: input.decisions })
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
+    return { file, decisions: input.decisions }
   }).pipe(Effect.provide(nodeFileSystemLayer))
 }
 
@@ -424,11 +376,7 @@ export function readMigrateBaseline() {
       files: opened.files,
       configDir: opened.schemaDir,
     })
-    const result = MigrateBaselineSchema.safeParse({ candidates })
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
+    return { candidates }
   }).pipe(Effect.provide(nodeFileSystemLayer))
 }
 
@@ -482,15 +430,11 @@ export function readMigrationFile(input: z.infer<typeof ReadMigrationFileInput>)
         baseDir: opened.migrationsDir,
       })
     }
-    const result = MigrationFileSchema.safeParse({
+    return {
       name: directory.path,
       file: path.join(opened.migrationsDir, directory.path, directory.migrationFile.path),
       sql: directory.migrationFile.content.value,
-    })
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
     }
-    return result.data
   }).pipe(Effect.provide(nodeFileSystemLayer))
 }
 
@@ -534,11 +478,7 @@ export function rehearse(input: z.infer<typeof RehearseInput>) {
         Effect.fail(new MigrateDatabaseError({ message: error.cause })),
       ),
     )
-    const result = RehearsalSchema.safeParse(rehearsal)
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
+    return rehearsal
   }).pipe(Effect.provide(nodeFileSystemLayer))
 }
 
@@ -556,13 +496,9 @@ export function readTableCounts() {
         Effect.fail(new MigrateDatabaseError({ message: error.cause })),
       ),
     )
-    const result = TableCountsSchema.safeParse({
+    return {
       tables: counted.map((one) => ({ table: one.table, before: null, after: one.rows })),
-    })
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
     }
-    return result.data
   })
 }
 
@@ -575,11 +511,7 @@ export function readBackups() {
   return Effect.gen(function* () {
     const opened = yield* session()
     const backups = yield* listBackups({ driver: opened.driver, schemaDir: opened.schemaDir })
-    const result = BackupsSchema.safeParse({ backups })
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
+    return { backups }
   }).pipe(Effect.provide(nodeFileSystemLayer))
 }
 
@@ -593,17 +525,9 @@ export function takeBackup() {
     const opened = yield* session()
     const taken = yield* createBackup({ driver: opened.driver, schemaDir: opened.schemaDir })
     const backups = yield* listBackups({ driver: opened.driver, schemaDir: opened.schemaDir })
-    const result = BackupSchema.safeParse(
-      backups.find((one) => one.name === taken.name) ?? {
-        ...taken,
-        size: null,
-        restorable: false,
-      },
+    return (
+      backups.find((one) => one.name === taken.name) ?? { ...taken, size: null, restorable: false }
     )
-    if (!result.success) {
-      return yield* new ContractViolationError({ message: result.error.message })
-    }
-    return result.data
   }).pipe(
     Effect.catchTags({
       DatabaseError: (error) => Effect.fail(new MigrateDatabaseError({ message: error.cause })),

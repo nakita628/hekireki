@@ -91,7 +91,7 @@ describe('drizzleSchema', () => {
       const result = drizzleSchema(datamodel, 'postgresql', [])
 
       expect(result).toBe(
-        "import { foreignKey, integer, pgTable, serial, text } from 'drizzle-orm/pg-core'\nimport { relations } from 'drizzle-orm'\n\nexport const user = pgTable('User', { id: serial('id').primaryKey(), name: text('name').notNull(), email: text('email').notNull() })\n\nexport const post = pgTable('Post', { id: serial('id').primaryKey(), title: text('title').notNull(), userId: integer('userId').notNull() }, (table) => [foreignKey({ name: 'Post_userId_fkey', columns: [table.userId], foreignColumns: [user.id] }).onDelete('restrict').onUpdate('cascade')])\n\nexport const userRelations = relations(user, ({ many }) => ({ posts: many(post) }))\n\nexport const postRelations = relations(post, ({ one }) => ({ author: one(user, { fields: [post.userId], references: [user.id] }) }))",
+        "import { foreignKey, integer, pgTable, serial, text } from 'drizzle-orm/pg-core'\nimport { defineRelations } from 'drizzle-orm'\n\nexport const user = pgTable('User', { id: serial('id').primaryKey(), name: text('name').notNull(), email: text('email').notNull() })\n\nexport const post = pgTable('Post', { id: serial('id').primaryKey(), title: text('title').notNull(), userId: integer('userId').notNull() }, (table) => [foreignKey({ name: 'Post_userId_fkey', columns: [table.userId], foreignColumns: [user.id] }).onDelete('restrict').onUpdate('cascade')])\n\nexport const relations = defineRelations({ user, post }, (r) => ({ user: { posts: r.many.post() }, post: { author: r.one.user({ from: r.post.userId, to: r.user.id, optional: false }) } }))",
       )
     })
   })
@@ -759,7 +759,7 @@ describe('torture corners', () => {
 
     expect(drizzleSchema(datamodel, 'postgresql', [])).toBe(
       `import { foreignKey, index, integer, pgTable, primaryKey, serial } from 'drizzle-orm/pg-core'
-import { relations } from 'drizzle-orm'
+import { defineRelations } from 'drizzle-orm'
 
 export const actor = pgTable('Actor', { id: serial('id').primaryKey() })
 
@@ -767,11 +767,7 @@ export const film = pgTable('Film', { id: serial('id').primaryKey() })
 
 export const cast = pgTable('_cast', { A: integer('A').notNull(), B: integer('B').notNull() }, (table) => [primaryKey({ name: '_cast_AB_pkey', columns: [table.A, table.B] }), index('_cast_B_index').on(table.B), foreignKey({ name: '_cast_A_fkey', columns: [table.A], foreignColumns: [actor.id] }).onDelete('cascade').onUpdate('cascade'), foreignKey({ name: '_cast_B_fkey', columns: [table.B], foreignColumns: [film.id] }).onDelete('cascade').onUpdate('cascade')])
 
-export const actorRelations = relations(actor, ({ many }) => ({ films: many(cast) }))
-
-export const filmRelations = relations(film, ({ many }) => ({ actors: many(cast) }))
-
-export const castRelations = relations(cast, ({ one }) => ({ actor: one(actor, { fields: [cast.A], references: [actor.id] }), film: one(film, { fields: [cast.B], references: [film.id] }) }))`,
+export const relations = defineRelations({ actor, film, cast }, (r) => ({ actor: { films: r.many.film({ from: r.actor.id.through(r.cast.A), to: r.film.id.through(r.cast.B) }) }, film: { actors: r.many.actor({ from: r.film.id.through(r.cast.B), to: r.actor.id.through(r.cast.A) }) }, cast: { actor: r.one.actor({ from: r.cast.A, to: r.actor.id, optional: false }), film: r.one.film({ from: r.cast.B, to: r.film.id, optional: false }) } }))`,
     )
   })
 
@@ -876,15 +872,98 @@ export const castRelations = relations(cast, ({ one }) => ({ actor: one(actor, {
       ]),
     ).toBe(
       `import { foreignKey, pgTable, serial, text, unique } from 'drizzle-orm/pg-core'
-import { relations } from 'drizzle-orm'
+import { defineRelations } from 'drizzle-orm'
 
 export const warehouse = pgTable('Warehouse', { id: serial('id').primaryKey(), country: text('country').notNull(), code: text('code').notNull() }, (table) => [unique('Warehouse_country_code_key').on(table.country, table.code)])
 
 export const stock = pgTable('Stock', { id: serial('id').primaryKey(), country: text('country').notNull(), code: text('code').notNull() }, (table) => [foreignKey({ name: 'Stock_country_code_fkey', columns: [table.country, table.code], foreignColumns: [warehouse.country, warehouse.code] }).onDelete('cascade').onUpdate('cascade')])
 
-export const warehouseRelations = relations(warehouse, ({ many }) => ({ stocks: many(stock) }))
+export const relations = defineRelations({ warehouse, stock }, (r) => ({ warehouse: { stocks: r.many.stock() }, stock: { warehouse: r.one.warehouse({ from: [r.stock.country, r.stock.code], to: [r.warehouse.country, r.warehouse.code], optional: false }) } }))`,
+    )
+  })
 
-export const stockRelations = relations(stock, ({ one }) => ({ warehouse: one(warehouse, { fields: [stock.country, stock.code], references: [warehouse.country, warehouse.code] }) }))`,
+  // The other end of a one-to-one names the columns the other way round; an optional key has no
+  // `optional: false`; a model with two relations to one table names each, and the `many()` end
+  // carries the same name for drizzle to pair them.
+  it('writes a one-to-one from both ends, an optional key, and aliases for a pair of relations', () => {
+    const datamodel = makeDatamodel([
+      makeModel({
+        name: 'User',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({
+            name: 'profile',
+            kind: 'object',
+            type: 'Profile',
+            isRequired: false,
+            relationName: 'ProfileToUser',
+            relationFromFields: [],
+            relationToFields: [],
+          }),
+          makeField({
+            name: 'sent',
+            kind: 'object',
+            type: 'Message',
+            isList: true,
+            relationName: 'Sent',
+            relationFromFields: [],
+            relationToFields: [],
+          }),
+          makeField({
+            name: 'received',
+            kind: 'object',
+            type: 'Message',
+            isList: true,
+            relationName: 'Received',
+            relationFromFields: [],
+            relationToFields: [],
+          }),
+        ],
+      }),
+      makeModel({
+        name: 'Profile',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({ name: 'userId', type: 'Int', isUnique: true }),
+          makeField({
+            name: 'user',
+            kind: 'object',
+            type: 'User',
+            relationName: 'ProfileToUser',
+            relationFromFields: ['userId'],
+            relationToFields: ['id'],
+          }),
+        ],
+      }),
+      makeModel({
+        name: 'Message',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({ name: 'senderId', type: 'Int' }),
+          makeField({ name: 'receiverId', type: 'Int', isRequired: false }),
+          makeField({
+            name: 'sender',
+            kind: 'object',
+            type: 'User',
+            relationName: 'Sent',
+            relationFromFields: ['senderId'],
+            relationToFields: ['id'],
+          }),
+          makeField({
+            name: 'receiver',
+            kind: 'object',
+            type: 'User',
+            isRequired: false,
+            relationName: 'Received',
+            relationFromFields: ['receiverId'],
+            relationToFields: ['id'],
+          }),
+        ],
+      }),
+    ])
+
+    expect(drizzleSchema(datamodel, 'postgresql', []).split('\n').at(-1)).toBe(
+      "export const relations = defineRelations({ user, profile, message }, (r) => ({ user: { profile: r.one.profile({ from: r.user.id, to: r.profile.userId }), sent: r.many.message({ alias: 'Sent' }), received: r.many.message({ alias: 'Received' }) }, profile: { user: r.one.user({ from: r.profile.userId, to: r.user.id, optional: false }) }, message: { sender: r.one.user({ from: r.message.senderId, to: r.user.id, optional: false, alias: 'Sent' }), receiver: r.one.user({ from: r.message.receiverId, to: r.user.id, alias: 'Received' }) } }))",
     )
   })
 
@@ -1383,6 +1462,29 @@ describe('dates', () => {
     ).toStrictEqual(Array.from({ length: 3 }, () => '2024-01-15T10:30:00.000Z'))
   })
 
+  // drizzle-kit takes the default of the `utcDateTime` text only as SQL: the text the column writes.
+  it('writes a literal default on SQLite as the text the column writes', () => {
+    const datamodel = makeDatamodel([
+      makeModel({
+        name: 'Row',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({
+            name: 'born',
+            type: 'DateTime',
+            hasDefaultValue: true,
+            default: '2020-02-29T23:59:59.999+00:00',
+          }),
+        ],
+      }),
+    ])
+    const code = drizzleSchema(datamodel, 'sqlite', [])
+    expect(code).toContain("import { sql } from 'drizzle-orm'")
+    expect(code.split('\n').at(-1)).toBe(
+      "export const row = sqliteTable('Row', { id: integer('id').primaryKey(), born: utcDateTime('born').notNull().default(sql`'2020-02-29T23:59:59.999+00:00'`) })",
+    )
+  })
+
   it("gives MySQL's bare @db.DateTime and @db.Timestamp fsp 0, and now() the column's precision", () => {
     const datamodel = makeDatamodel([
       makeModel({
@@ -1534,6 +1636,21 @@ describe('keys, indexes and foreign keys as Prisma Migrate makes them', () => {
       "(table) => [unique('accounts_email_key').on(table.email), index('accounts_bio_parent_id_idx').on(table.bio, table.parentId), foreignKey({ name: 'accounts_parent_id_fkey', columns: [table.parentId], foreignColumns: [table.id] }).onDelete('set null').onUpdate('cascade')])",
       "(table) => [foreignKey({ name: 'Login_email_fkey', columns: [table.email], foreignColumns: [accounts.email] }).onDelete('restrict').onUpdate('cascade')])",
     ])
+  })
+
+  // MySQL names every primary key PRIMARY, and drizzle's `primaryKey` there takes no name.
+  it('names a composite key after the table, except on MySQL', () => {
+    const cell = makeModel({
+      name: 'GridCell',
+      primaryKey: { name: null, fields: ['x', 'y'] },
+      fields: [makeField({ name: 'x', type: 'Int' }), makeField({ name: 'y', type: 'Int' })],
+    })
+    expect(drizzleSchema(makeDatamodel([cell]), 'postgresql', [])).toContain(
+      "(table) => [primaryKey({ name: 'GridCell_pkey', columns: [table.x, table.y] })]",
+    )
+    expect(drizzleSchema(makeDatamodel([cell]), 'mysql', [])).toContain(
+      '(table) => [primaryKey({ columns: [table.x, table.y] })]',
+    )
   })
 
   it('takes part of a TEXT in an index on MySQL', () => {

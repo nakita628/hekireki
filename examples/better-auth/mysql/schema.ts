@@ -11,7 +11,7 @@ import {
   uniqueIndex,
   varchar,
 } from 'drizzle-orm/mysql-core'
-import { relations, sql } from 'drizzle-orm'
+import { defineRelations, sql } from 'drizzle-orm'
 
 const utcNow = (() => {
   let now: Date | undefined
@@ -1021,192 +1021,220 @@ export const rateLimit = mysqlTable(
   (table) => [uniqueIndex('rateLimit_key_key').on(table.key)],
 )
 
-export const userRelations = relations(user, ({ one, many }) => ({
-  sessions: many(session),
-  accounts: many(account),
-  twofactors: many(twoFactor),
-  passkeys: many(passkey),
-  teammembers: many(teamMember),
-  members: many(member),
-  invitations: many(invitation),
-  oauthclients: many(oauthClient),
-  oauthrefreshtokens: many(oauthRefreshToken),
-  oauthaccesstokens: many(oauthAccessToken),
-  oauthconsents: many(oauthConsent),
-  ssoproviders: many(ssoProvider),
-  scimidentitytombstones: many(scimIdentityTombstone),
-  scimsubject: one(scimSubject),
-  scimusers: many(scimUser),
-  scimprojectiongrants: many(scimProjectionGrant),
-  walletaddresss: many(walletAddress),
-}))
-
-export const sessionRelations = relations(session, ({ one, many }) => ({
-  user: one(user, { fields: [session.userId], references: [user.id] }),
-  oauthrefreshtokens: many(oauthRefreshToken),
-  oauthaccesstokens: many(oauthAccessToken),
-}))
-
-export const accountRelations = relations(account, ({ one }) => ({
-  user: one(user, { fields: [account.userId], references: [user.id] }),
-}))
-
-export const twoFactorRelations = relations(twoFactor, ({ one }) => ({
-  user: one(user, { fields: [twoFactor.userId], references: [user.id] }),
-}))
-
-export const passkeyRelations = relations(passkey, ({ one }) => ({
-  user: one(user, { fields: [passkey.userId], references: [user.id] }),
-}))
-
-export const organizationRelations = relations(organization, ({ many }) => ({
-  organizationroles: many(organizationRole),
-  teams: many(team),
-  members: many(member),
-  invitations: many(invitation),
-}))
-
-export const organizationRoleRelations = relations(organizationRole, ({ one }) => ({
-  organization: one(organization, {
-    fields: [organizationRole.organizationId],
-    references: [organization.id],
-  }),
-}))
-
-export const teamRelations = relations(team, ({ one, many }) => ({
-  organization: one(organization, { fields: [team.organizationId], references: [organization.id] }),
-  teammembers: many(teamMember),
-}))
-
-export const teamMemberRelations = relations(teamMember, ({ one }) => ({
-  team: one(team, { fields: [teamMember.teamId], references: [team.id] }),
-  user: one(user, { fields: [teamMember.userId], references: [user.id] }),
-}))
-
-export const memberRelations = relations(member, ({ one }) => ({
-  organization: one(organization, {
-    fields: [member.organizationId],
-    references: [organization.id],
-  }),
-  user: one(user, { fields: [member.userId], references: [user.id] }),
-}))
-
-export const invitationRelations = relations(invitation, ({ one }) => ({
-  organization: one(organization, {
-    fields: [invitation.organizationId],
-    references: [organization.id],
-  }),
-  user: one(user, { fields: [invitation.inviterId], references: [user.id] }),
-}))
-
-export const oauthClientRelations = relations(oauthClient, ({ one, many }) => ({
-  user: one(user, { fields: [oauthClient.userId], references: [user.id] }),
-  oauthclientresources: many(oauthClientResource),
-  oauthrefreshtokens: many(oauthRefreshToken),
-  oauthaccesstokens: many(oauthAccessToken),
-  oauthconsents: many(oauthConsent),
-}))
-
-export const oauthResourceRelations = relations(oauthResource, ({ many }) => ({
-  oauthclientresources: many(oauthClientResource),
-}))
-
-export const oauthClientResourceRelations = relations(oauthClientResource, ({ one }) => ({
-  oauthclient: one(oauthClient, {
-    fields: [oauthClientResource.clientId],
-    references: [oauthClient.clientId],
-  }),
-  oauthresource: one(oauthResource, {
-    fields: [oauthClientResource.resourceId],
-    references: [oauthResource.identifier],
-  }),
-}))
-
-export const oauthRefreshTokenRelations = relations(oauthRefreshToken, ({ one, many }) => ({
-  oauthclient: one(oauthClient, {
-    fields: [oauthRefreshToken.clientId],
-    references: [oauthClient.clientId],
-  }),
-  session: one(session, { fields: [oauthRefreshToken.sessionId], references: [session.id] }),
-  user: one(user, { fields: [oauthRefreshToken.userId], references: [user.id] }),
-  oauthaccesstokens: many(oauthAccessToken),
-}))
-
-export const oauthAccessTokenRelations = relations(oauthAccessToken, ({ one }) => ({
-  oauthclient: one(oauthClient, {
-    fields: [oauthAccessToken.clientId],
-    references: [oauthClient.clientId],
-  }),
-  session: one(session, { fields: [oauthAccessToken.sessionId], references: [session.id] }),
-  user: one(user, { fields: [oauthAccessToken.userId], references: [user.id] }),
-  oauthrefreshtoken: one(oauthRefreshToken, {
-    fields: [oauthAccessToken.refreshId],
-    references: [oauthRefreshToken.id],
-  }),
-}))
-
-export const oauthConsentRelations = relations(oauthConsent, ({ one }) => ({
-  oauthclient: one(oauthClient, {
-    fields: [oauthConsent.clientId],
-    references: [oauthClient.clientId],
-  }),
-  user: one(user, { fields: [oauthConsent.userId], references: [user.id] }),
-}))
-
-export const ssoProviderRelations = relations(ssoProvider, ({ one }) => ({
-  user: one(user, { fields: [ssoProvider.userId], references: [user.id] }),
-}))
-
-export const scimManagedConnectionRelations = relations(scimManagedConnection, ({ many }) => ({
-  scimmanagedcredentials: many(scimManagedCredential),
-  scimmanagedconnectionevents: many(scimManagedConnectionEvent),
-}))
-
-export const scimManagedCredentialRelations = relations(scimManagedCredential, ({ one }) => ({
-  scimmanagedconnection: one(scimManagedConnection, {
-    fields: [scimManagedCredential.connectionRecordId],
-    references: [scimManagedConnection.id],
-  }),
-}))
-
-export const scimManagedConnectionEventRelations = relations(
-  scimManagedConnectionEvent,
-  ({ one }) => ({
-    scimmanagedconnection: one(scimManagedConnection, {
-      fields: [scimManagedConnectionEvent.connectionRecordId],
-      references: [scimManagedConnection.id],
-    }),
+export const relations = defineRelations(
+  {
+    user,
+    session,
+    account,
+    verification,
+    twoFactor,
+    passkey,
+    apikey,
+    organization,
+    organizationRole,
+    team,
+    teamMember,
+    member,
+    invitation,
+    jwks,
+    oauthClient,
+    oauthResource,
+    oauthClientResource,
+    oauthRefreshToken,
+    oauthAccessToken,
+    oauthConsent,
+    oauthClientAssertion,
+    deviceCode,
+    ssoProvider,
+    scimManagedConnection,
+    scimManagedCredential,
+    scimManagedConnectionEvent,
+    scimConnectionBinding,
+    scimIdentityTombstone,
+    scimSubject,
+    scimUser,
+    scimProjectionGrant,
+    scimGroup,
+    scimGroupMember,
+    walletAddress,
+    subscription,
+    rateLimit,
+  },
+  (r) => ({
+    user: {
+      sessions: r.many.session(),
+      accounts: r.many.account(),
+      twofactors: r.many.twoFactor(),
+      passkeys: r.many.passkey(),
+      teammembers: r.many.teamMember(),
+      members: r.many.member(),
+      invitations: r.many.invitation(),
+      oauthclients: r.many.oauthClient(),
+      oauthrefreshtokens: r.many.oauthRefreshToken(),
+      oauthaccesstokens: r.many.oauthAccessToken(),
+      oauthconsents: r.many.oauthConsent(),
+      ssoproviders: r.many.ssoProvider(),
+      scimidentitytombstones: r.many.scimIdentityTombstone(),
+      scimsubject: r.one.scimSubject({ from: r.user.id, to: r.scimSubject.userId }),
+      scimusers: r.many.scimUser(),
+      scimprojectiongrants: r.many.scimProjectionGrant(),
+      walletaddresss: r.many.walletAddress(),
+    },
+    session: {
+      user: r.one.user({ from: r.session.userId, to: r.user.id, optional: false }),
+      oauthrefreshtokens: r.many.oauthRefreshToken(),
+      oauthaccesstokens: r.many.oauthAccessToken(),
+    },
+    account: { user: r.one.user({ from: r.account.userId, to: r.user.id, optional: false }) },
+    twoFactor: { user: r.one.user({ from: r.twoFactor.userId, to: r.user.id, optional: false }) },
+    passkey: { user: r.one.user({ from: r.passkey.userId, to: r.user.id, optional: false }) },
+    organization: {
+      organizationroles: r.many.organizationRole(),
+      teams: r.many.team(),
+      members: r.many.member(),
+      invitations: r.many.invitation(),
+    },
+    organizationRole: {
+      organization: r.one.organization({
+        from: r.organizationRole.organizationId,
+        to: r.organization.id,
+        optional: false,
+      }),
+    },
+    team: {
+      organization: r.one.organization({
+        from: r.team.organizationId,
+        to: r.organization.id,
+        optional: false,
+      }),
+      teammembers: r.many.teamMember(),
+    },
+    teamMember: {
+      team: r.one.team({ from: r.teamMember.teamId, to: r.team.id, optional: false }),
+      user: r.one.user({ from: r.teamMember.userId, to: r.user.id, optional: false }),
+    },
+    member: {
+      organization: r.one.organization({
+        from: r.member.organizationId,
+        to: r.organization.id,
+        optional: false,
+      }),
+      user: r.one.user({ from: r.member.userId, to: r.user.id, optional: false }),
+    },
+    invitation: {
+      organization: r.one.organization({
+        from: r.invitation.organizationId,
+        to: r.organization.id,
+        optional: false,
+      }),
+      user: r.one.user({ from: r.invitation.inviterId, to: r.user.id, optional: false }),
+    },
+    oauthClient: {
+      user: r.one.user({ from: r.oauthClient.userId, to: r.user.id }),
+      oauthclientresources: r.many.oauthClientResource(),
+      oauthrefreshtokens: r.many.oauthRefreshToken(),
+      oauthaccesstokens: r.many.oauthAccessToken(),
+      oauthconsents: r.many.oauthConsent(),
+    },
+    oauthResource: { oauthclientresources: r.many.oauthClientResource() },
+    oauthClientResource: {
+      oauthclient: r.one.oauthClient({
+        from: r.oauthClientResource.clientId,
+        to: r.oauthClient.clientId,
+        optional: false,
+      }),
+      oauthresource: r.one.oauthResource({
+        from: r.oauthClientResource.resourceId,
+        to: r.oauthResource.identifier,
+        optional: false,
+      }),
+    },
+    oauthRefreshToken: {
+      oauthclient: r.one.oauthClient({
+        from: r.oauthRefreshToken.clientId,
+        to: r.oauthClient.clientId,
+        optional: false,
+      }),
+      session: r.one.session({ from: r.oauthRefreshToken.sessionId, to: r.session.id }),
+      user: r.one.user({ from: r.oauthRefreshToken.userId, to: r.user.id, optional: false }),
+      oauthaccesstokens: r.many.oauthAccessToken(),
+    },
+    oauthAccessToken: {
+      oauthclient: r.one.oauthClient({
+        from: r.oauthAccessToken.clientId,
+        to: r.oauthClient.clientId,
+        optional: false,
+      }),
+      session: r.one.session({ from: r.oauthAccessToken.sessionId, to: r.session.id }),
+      user: r.one.user({ from: r.oauthAccessToken.userId, to: r.user.id }),
+      oauthrefreshtoken: r.one.oauthRefreshToken({
+        from: r.oauthAccessToken.refreshId,
+        to: r.oauthRefreshToken.id,
+      }),
+    },
+    oauthConsent: {
+      oauthclient: r.one.oauthClient({
+        from: r.oauthConsent.clientId,
+        to: r.oauthClient.clientId,
+        optional: false,
+      }),
+      user: r.one.user({ from: r.oauthConsent.userId, to: r.user.id }),
+    },
+    ssoProvider: {
+      user: r.one.user({ from: r.ssoProvider.userId, to: r.user.id, optional: false }),
+    },
+    scimManagedConnection: {
+      scimmanagedcredentials: r.many.scimManagedCredential(),
+      scimmanagedconnectionevents: r.many.scimManagedConnectionEvent(),
+    },
+    scimManagedCredential: {
+      scimmanagedconnection: r.one.scimManagedConnection({
+        from: r.scimManagedCredential.connectionRecordId,
+        to: r.scimManagedConnection.id,
+        optional: false,
+      }),
+    },
+    scimManagedConnectionEvent: {
+      scimmanagedconnection: r.one.scimManagedConnection({
+        from: r.scimManagedConnectionEvent.connectionRecordId,
+        to: r.scimManagedConnection.id,
+        optional: false,
+      }),
+    },
+    scimIdentityTombstone: {
+      user: r.one.user({ from: r.scimIdentityTombstone.userId, to: r.user.id, optional: false }),
+    },
+    scimSubject: {
+      user: r.one.user({ from: r.scimSubject.userId, to: r.user.id, optional: false }),
+    },
+    scimUser: {
+      user: r.one.user({ from: r.scimUser.userId, to: r.user.id, optional: false }),
+      scimprojectiongrants: r.many.scimProjectionGrant(),
+      scimgroupmembers: r.many.scimGroupMember(),
+    },
+    scimProjectionGrant: {
+      scimuser: r.one.scimUser({
+        from: r.scimProjectionGrant.scimUserId,
+        to: r.scimUser.id,
+        optional: false,
+      }),
+      user: r.one.user({ from: r.scimProjectionGrant.userId, to: r.user.id, optional: false }),
+    },
+    scimGroup: { scimgroupmembers: r.many.scimGroupMember() },
+    scimGroupMember: {
+      scimgroup: r.one.scimGroup({
+        from: r.scimGroupMember.groupId,
+        to: r.scimGroup.id,
+        optional: false,
+      }),
+      scimuser: r.one.scimUser({
+        from: r.scimGroupMember.scimUserId,
+        to: r.scimUser.id,
+        optional: false,
+      }),
+    },
+    walletAddress: {
+      user: r.one.user({ from: r.walletAddress.userId, to: r.user.id, optional: false }),
+    },
   }),
 )
-
-export const scimIdentityTombstoneRelations = relations(scimIdentityTombstone, ({ one }) => ({
-  user: one(user, { fields: [scimIdentityTombstone.userId], references: [user.id] }),
-}))
-
-export const scimSubjectRelations = relations(scimSubject, ({ one }) => ({
-  user: one(user, { fields: [scimSubject.userId], references: [user.id] }),
-}))
-
-export const scimUserRelations = relations(scimUser, ({ one, many }) => ({
-  user: one(user, { fields: [scimUser.userId], references: [user.id] }),
-  scimprojectiongrants: many(scimProjectionGrant),
-  scimgroupmembers: many(scimGroupMember),
-}))
-
-export const scimProjectionGrantRelations = relations(scimProjectionGrant, ({ one }) => ({
-  scimuser: one(scimUser, { fields: [scimProjectionGrant.scimUserId], references: [scimUser.id] }),
-  user: one(user, { fields: [scimProjectionGrant.userId], references: [user.id] }),
-}))
-
-export const scimGroupRelations = relations(scimGroup, ({ many }) => ({
-  scimgroupmembers: many(scimGroupMember),
-}))
-
-export const scimGroupMemberRelations = relations(scimGroupMember, ({ one }) => ({
-  scimgroup: one(scimGroup, { fields: [scimGroupMember.groupId], references: [scimGroup.id] }),
-  scimuser: one(scimUser, { fields: [scimGroupMember.scimUserId], references: [scimUser.id] }),
-}))
-
-export const walletAddressRelations = relations(walletAddress, ({ one }) => ({
-  user: one(user, { fields: [walletAddress.userId], references: [user.id] }),
-}))
