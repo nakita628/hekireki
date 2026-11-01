@@ -135,9 +135,9 @@ export function seedWithClient(input: {
           message: error instanceof Error ? error.message : String(error),
         }),
     }).pipe(
-      Effect.ensuring(
-        Effect.promise(() => client.$disconnect()).pipe(Effect.orElseSucceed(() => undefined)),
-      ),
+      // A disconnect that rejects is a failure to drop, not a defect: as a defect it would stand
+      // in front of the transaction's own error.
+      Effect.ensuring(Effect.tryPromise(() => client.$disconnect()).pipe(Effect.ignore)),
     )
     return { models: models.length, operations: resets.length + creates.length + connects.length }
   })

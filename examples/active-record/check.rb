@@ -202,7 +202,10 @@ check "Prisma-named timestamps are filled, bumped and ordered by through their a
   first.touch
   reasons << "touch did not bump" unless first.reload.updatedAt > was
   Post.where(id: first.id).update_all(createdAt: 1.day.ago)
-  reasons << "recent scope order" unless Post.recent.first == second && Post.recent.last == first
+  # Among these two rows only: a post an earlier check made in the same millisecond as `second`
+  # would tie with it, and the order of a tie is the database's to choose.
+  recent = Post.recent.where(id: [first.id, second.id]).to_a
+  reasons << "recent scope order, got #{recent.map(&:title).inspect}" unless recent == [second, first]
   reasons.empty? ? nil : reasons.join(", ")
 end
 

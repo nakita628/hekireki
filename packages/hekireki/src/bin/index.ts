@@ -16,6 +16,7 @@ import { er } from '../core/er.js'
 import { exposed } from '../core/exposed.js'
 import { gorm } from '../core/gorm.js'
 import { kysely } from '../core/kysely.js'
+import { openapi } from '../core/openapi.js'
 import { pydantic } from '../core/pydantic.js'
 import { seaOrm } from '../core/sea-orm.js'
 import { seed } from '../core/seed.js'
@@ -40,6 +41,7 @@ const GENERATORS = {
   exposed: { prettyName: 'Hekireki-Exposed', handler: exposed },
   gorm: { prettyName: 'Hekireki-GORM', handler: gorm },
   kysely: { prettyName: 'Hekireki-Kysely', handler: kysely },
+  openapi: { prettyName: 'Hekireki-OpenAPI', handler: openapi },
   pydantic: { prettyName: 'Hekireki-Pydantic', handler: pydantic },
   'sea-orm': { prettyName: 'Hekireki-SeaORM', handler: seaOrm },
   // Not a code target: the schema module hekireki.config.ts types its seed rules against.

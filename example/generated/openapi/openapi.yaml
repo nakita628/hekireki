@@ -1,0 +1,1710 @@
+openapi: 3.1.0
+info:
+  title: Generated from schema.prisma
+  version: 1.0.0
+paths:
+  "/users":
+    get:
+      tags:
+        - User
+      summary: List users
+      operationId: listUsers
+      responses:
+        "200":
+          description: The users.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/users"
+    post:
+      tags:
+        - User
+      summary: Create an user
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/users_create"
+      responses:
+        "201":
+          description: The user made.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/users"
+  "/users/{id}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - User
+      summary: Get an user
+      operationId: getUser
+      responses:
+        "200":
+          description: The user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/users"
+        "404":
+          description: No user has this key.
+    patch:
+      tags:
+        - User
+      summary: Update an user
+      operationId: updateUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/users_update"
+      responses:
+        "200":
+          description: The user changed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/users"
+        "404":
+          description: No user has this key.
+    delete:
+      tags:
+        - User
+      summary: Delete an user
+      operationId: deleteUser
+      responses:
+        "204":
+          description: The user is deleted.
+        "404":
+          description: No user has this key.
+  "/profiles":
+    get:
+      tags:
+        - Profile
+      summary: List profiles
+      operationId: listProfiles
+      responses:
+        "200":
+          description: The profiles.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Profile"
+    post:
+      tags:
+        - Profile
+      summary: Create a profile
+      operationId: createProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Profile_create"
+      responses:
+        "201":
+          description: The profile made.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"
+  "/profiles/{id}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - Profile
+      summary: Get a profile
+      operationId: getProfile
+      responses:
+        "200":
+          description: The profile.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"
+        "404":
+          description: No profile has this key.
+    patch:
+      tags:
+        - Profile
+      summary: Update a profile
+      operationId: updateProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Profile_update"
+      responses:
+        "200":
+          description: The profile changed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"
+        "404":
+          description: No profile has this key.
+    delete:
+      tags:
+        - Profile
+      summary: Delete a profile
+      operationId: deleteProfile
+      responses:
+        "204":
+          description: The profile is deleted.
+        "404":
+          description: No profile has this key.
+  "/posts":
+    get:
+      tags:
+        - Post
+      summary: List posts
+      operationId: listPosts
+      responses:
+        "200":
+          description: The posts.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/posts"
+    post:
+      tags:
+        - Post
+      summary: Create a post
+      operationId: createPost
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/posts_create"
+      responses:
+        "201":
+          description: The post made.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/posts"
+  "/posts/{id}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - Post
+      summary: Get a post
+      operationId: getPost
+      responses:
+        "200":
+          description: The post.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/posts"
+        "404":
+          description: No post has this key.
+    patch:
+      tags:
+        - Post
+      summary: Update a post
+      operationId: updatePost
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/posts_update"
+      responses:
+        "200":
+          description: The post changed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/posts"
+        "404":
+          description: No post has this key.
+    delete:
+      tags:
+        - Post
+      summary: Delete a post
+      operationId: deletePost
+      responses:
+        "204":
+          description: The post is deleted.
+        "404":
+          description: No post has this key.
+  "/tags":
+    get:
+      tags:
+        - Tag
+      summary: List tags
+      operationId: listTags
+      responses:
+        "200":
+          description: The tags.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Tag"
+    post:
+      tags:
+        - Tag
+      summary: Create a tag
+      operationId: createTag
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Tag_create"
+      responses:
+        "201":
+          description: The tag made.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tag"
+  "/tags/{id}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      tags:
+        - Tag
+      summary: Get a tag
+      operationId: getTag
+      responses:
+        "200":
+          description: The tag.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tag"
+        "404":
+          description: No tag has this key.
+    patch:
+      tags:
+        - Tag
+      summary: Update a tag
+      operationId: updateTag
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Tag_update"
+      responses:
+        "200":
+          description: The tag changed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tag"
+        "404":
+          description: No tag has this key.
+    delete:
+      tags:
+        - Tag
+      summary: Delete a tag
+      operationId: deleteTag
+      responses:
+        "204":
+          description: The tag is deleted.
+        "404":
+          description: No tag has this key.
+  "/comments":
+    get:
+      tags:
+        - Comment
+      summary: List comments
+      operationId: listComments
+      responses:
+        "200":
+          description: The comments.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/comments"
+    post:
+      tags:
+        - Comment
+      summary: Create a comment
+      operationId: createComment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/comments_create"
+      responses:
+        "201":
+          description: The comment made.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/comments"
+  "/comments/{id}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      tags:
+        - Comment
+      summary: Get a comment
+      operationId: getComment
+      responses:
+        "200":
+          description: The comment.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/comments"
+        "404":
+          description: No comment has this key.
+    patch:
+      tags:
+        - Comment
+      summary: Update a comment
+      operationId: updateComment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/comments_update"
+      responses:
+        "200":
+          description: The comment changed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/comments"
+        "404":
+          description: No comment has this key.
+    delete:
+      tags:
+        - Comment
+      summary: Delete a comment
+      operationId: deleteComment
+      responses:
+        "204":
+          description: The comment is deleted.
+        "404":
+          description: No comment has this key.
+  "/follows":
+    get:
+      tags:
+        - Follow
+      summary: List follows
+      operationId: listFollows
+      responses:
+        "200":
+          description: The follows.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/follows"
+    post:
+      tags:
+        - Follow
+      summary: Create a follow
+      operationId: createFollow
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/follows_create"
+      responses:
+        "201":
+          description: The follow made.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/follows"
+  "/follows/{followerId}/{followingId}":
+    parameters:
+      - name: followerId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: followingId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - Follow
+      summary: Get a follow
+      operationId: getFollow
+      responses:
+        "200":
+          description: The follow.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/follows"
+        "404":
+          description: No follow has this key.
+    patch:
+      tags:
+        - Follow
+      summary: Update a follow
+      operationId: updateFollow
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/follows_update"
+      responses:
+        "200":
+          description: The follow changed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/follows"
+        "404":
+          description: No follow has this key.
+    delete:
+      tags:
+        - Follow
+      summary: Delete a follow
+      operationId: deleteFollow
+      responses:
+        "204":
+          description: The follow is deleted.
+        "404":
+          description: No follow has this key.
+  "/categories":
+    get:
+      tags:
+        - Category
+      summary: List categories
+      operationId: listCategories
+      responses:
+        "200":
+          description: The categories.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Category"
+    post:
+      tags:
+        - Category
+      summary: Create a category
+      operationId: createCategory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Category_create"
+      responses:
+        "201":
+          description: The category made.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+  "/categories/{id}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      tags:
+        - Category
+      summary: Get a category
+      operationId: getCategory
+      responses:
+        "200":
+          description: The category.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+        "404":
+          description: No category has this key.
+    patch:
+      tags:
+        - Category
+      summary: Update a category
+      operationId: updateCategory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Category_update"
+      responses:
+        "200":
+          description: The category changed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+        "404":
+          description: No category has this key.
+    delete:
+      tags:
+        - Category
+      summary: Delete a category
+      operationId: deleteCategory
+      responses:
+        "204":
+          description: The category is deleted.
+        "404":
+          description: No category has this key.
+  "/orders":
+    get:
+      tags:
+        - Order
+      summary: List orders
+      operationId: listOrders
+      responses:
+        "200":
+          description: The orders.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/orders"
+    post:
+      tags:
+        - Order
+      summary: Create an order
+      operationId: createOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/orders_create"
+      responses:
+        "201":
+          description: The order made.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/orders"
+  "/orders/{id}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      tags:
+        - Order
+      summary: Get an order
+      operationId: getOrder
+      responses:
+        "200":
+          description: The order.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/orders"
+        "404":
+          description: No order has this key.
+    patch:
+      tags:
+        - Order
+      summary: Update an order
+      operationId: updateOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/orders_update"
+      responses:
+        "200":
+          description: The order changed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/orders"
+        "404":
+          description: No order has this key.
+    delete:
+      tags:
+        - Order
+      summary: Delete an order
+      operationId: deleteOrder
+      responses:
+        "204":
+          description: The order is deleted.
+        "404":
+          description: No order has this key.
+  "/order-items":
+    get:
+      tags:
+        - OrderItem
+      summary: List order items
+      operationId: listOrderItems
+      responses:
+        "200":
+          description: The order items.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/order_items"
+    post:
+      tags:
+        - OrderItem
+      summary: Create an order item
+      operationId: createOrderItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/order_items_create"
+      responses:
+        "201":
+          description: The order item made.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/order_items"
+  "/order-items/{id}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      tags:
+        - OrderItem
+      summary: Get an order item
+      operationId: getOrderItem
+      responses:
+        "200":
+          description: The order item.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/order_items"
+        "404":
+          description: No order item has this key.
+    patch:
+      tags:
+        - OrderItem
+      summary: Update an order item
+      operationId: updateOrderItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/order_items_update"
+      responses:
+        "200":
+          description: The order item changed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/order_items"
+        "404":
+          description: No order item has this key.
+    delete:
+      tags:
+        - OrderItem
+      summary: Delete an order item
+      operationId: deleteOrderItem
+      responses:
+        "204":
+          description: The order item is deleted.
+        "404":
+          description: No order item has this key.
+  "/audit-logs":
+    get:
+      tags:
+        - AuditLog
+      summary: List audit logs
+      operationId: listAuditLogs
+      responses:
+        "200":
+          description: The audit logs.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/audit_logs"
+    post:
+      tags:
+        - AuditLog
+      summary: Create an audit log
+      operationId: createAuditLog
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/audit_logs_create"
+      responses:
+        "201":
+          description: The audit log made.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/audit_logs"
+  "/audit-logs/{id}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - AuditLog
+      summary: Get an audit log
+      operationId: getAuditLog
+      responses:
+        "200":
+          description: The audit log.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/audit_logs"
+        "404":
+          description: No audit log has this key.
+    patch:
+      tags:
+        - AuditLog
+      summary: Update an audit log
+      operationId: updateAuditLog
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/audit_logs_update"
+      responses:
+        "200":
+          description: The audit log changed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/audit_logs"
+        "404":
+          description: No audit log has this key.
+    delete:
+      tags:
+        - AuditLog
+      summary: Delete an audit log
+      operationId: deleteAuditLog
+      responses:
+        "204":
+          description: The audit log is deleted.
+        "404":
+          description: No audit log has this key.
+  "/actors":
+    get:
+      tags:
+        - Actor
+      summary: List actors
+      operationId: listActors
+      responses:
+        "200":
+          description: The actors.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Actor"
+    post:
+      tags:
+        - Actor
+      summary: Create an actor
+      operationId: createActor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Actor_create"
+      responses:
+        "201":
+          description: The actor made.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Actor"
+  "/actors/{id}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      tags:
+        - Actor
+      summary: Get an actor
+      operationId: getActor
+      responses:
+        "200":
+          description: The actor.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Actor"
+        "404":
+          description: No actor has this key.
+    patch:
+      tags:
+        - Actor
+      summary: Update an actor
+      operationId: updateActor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Actor_update"
+      responses:
+        "200":
+          description: The actor changed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Actor"
+        "404":
+          description: No actor has this key.
+    delete:
+      tags:
+        - Actor
+      summary: Delete an actor
+      operationId: deleteActor
+      responses:
+        "204":
+          description: The actor is deleted.
+        "404":
+          description: No actor has this key.
+  "/films":
+    get:
+      tags:
+        - Film
+      summary: List films
+      operationId: listFilms
+      responses:
+        "200":
+          description: The films.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Film"
+    post:
+      tags:
+        - Film
+      summary: Create a film
+      operationId: createFilm
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Film_create"
+      responses:
+        "201":
+          description: The film made.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Film"
+  "/films/{id}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      tags:
+        - Film
+      summary: Get a film
+      operationId: getFilm
+      responses:
+        "200":
+          description: The film.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Film"
+        "404":
+          description: No film has this key.
+    patch:
+      tags:
+        - Film
+      summary: Update a film
+      operationId: updateFilm
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Film_update"
+      responses:
+        "200":
+          description: The film changed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Film"
+        "404":
+          description: No film has this key.
+    delete:
+      tags:
+        - Film
+      summary: Delete a film
+      operationId: deleteFilm
+      responses:
+        "204":
+          description: The film is deleted.
+        "404":
+          description: No film has this key.
+components:
+  schemas:
+    users:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Primary key (UUIDv7)
+        email:
+          type: string
+          description: Unique login email
+        name:
+          type: string
+          description: Display name
+        role:
+          type: string
+          enum:
+            - ADMIN
+            - EDITOR
+            - VIEWER
+          default: "VIEWER"
+        interests:
+          type: [array, "null"]
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - email
+        - name
+        - role
+        - created_at
+        - updated_at
+      description: |
+        Application user. Fully annotated for every validator generator,
+        with a UUIDv7 primary key, enum default, scalar list, @map columns,
+        @updatedAt, and relations of every cardinality.
+    users_create:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Primary key (UUIDv7)
+        email:
+          type: string
+          description: Unique login email
+        name:
+          type: string
+          description: Display name
+        role:
+          type: string
+          enum:
+            - ADMIN
+            - EDITOR
+            - VIEWER
+          default: "VIEWER"
+        interests:
+          type: [array, "null"]
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - email
+        - name
+    users_update:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Primary key (UUIDv7)
+        email:
+          type: string
+          description: Unique login email
+        name:
+          type: string
+          description: Display name
+        role:
+          type: string
+          enum:
+            - ADMIN
+            - EDITOR
+            - VIEWER
+          default: "VIEWER"
+        interests:
+          type: [array, "null"]
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    Profile:
+      type: object
+      properties:
+        id:
+          type: string
+        user_id:
+          type: string
+        bio:
+          type: [string, "null"]
+        nickname:
+          type: string
+          default: "anonymous"
+        age:
+          type: [integer, "null"]
+        balance:
+          type: string
+          default: 0
+        verified:
+          type: boolean
+          default: false
+        meta:
+          type: [string, "null"]
+        avatar:
+          type: [string, "null"]
+        last_seen:
+          type: [string, "null"]
+          format: date-time
+      required:
+        - id
+        - user_id
+        - nickname
+        - balance
+        - verified
+      description: |
+        One-to-one relation with native @db.* types, literal defaults,
+        and optional scalars of every flavour. ConfigDict passthrough: the
+        Pydantic model rejects unknown keys (extra='forbid').
+        FK Profile_user_id_fkey: (user_id) -> users
+    Profile_create:
+      type: object
+      properties:
+        id:
+          type: string
+        user_id:
+          type: string
+        bio:
+          type: [string, "null"]
+        nickname:
+          type: string
+          default: "anonymous"
+        age:
+          type: [integer, "null"]
+        balance:
+          type: string
+          default: 0
+        verified:
+          type: boolean
+          default: false
+        meta:
+          type: [string, "null"]
+        avatar:
+          type: [string, "null"]
+        last_seen:
+          type: [string, "null"]
+          format: date-time
+      required:
+        - user_id
+    Profile_update:
+      type: object
+      properties:
+        id:
+          type: string
+        user_id:
+          type: string
+        bio:
+          type: [string, "null"]
+        nickname:
+          type: string
+          default: "anonymous"
+        age:
+          type: [integer, "null"]
+        balance:
+          type: string
+          default: 0
+        verified:
+          type: boolean
+          default: false
+        meta:
+          type: [string, "null"]
+        avatar:
+          type: [string, "null"]
+        last_seen:
+          type: [string, "null"]
+          format: date-time
+    posts:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Primary key
+        title:
+          type: string
+          description: Article title
+        content:
+          type: [string, "null"]
+        visibility:
+          type: string
+          enum:
+            - public
+            - private
+            - link_only
+          default: "link_only"
+        published:
+          type: boolean
+          default: false
+        view_count:
+          type: integer
+          default: 0
+        author_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - title
+        - visibility
+        - published
+        - view_count
+        - author_id
+        - created_at
+      description: |
+        @@map + @map column names, FK with a referential action,
+        mapped-enum default, and an implicit many-to-many to Tag.
+        FK posts_author_id_fkey: (author_id) -> users
+    posts_create:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Primary key
+        title:
+          type: string
+          description: Article title
+        content:
+          type: [string, "null"]
+        visibility:
+          type: string
+          enum:
+            - public
+            - private
+            - link_only
+          default: "link_only"
+        published:
+          type: boolean
+          default: false
+        view_count:
+          type: integer
+          default: 0
+        author_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - title
+        - author_id
+    posts_update:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Primary key
+        title:
+          type: string
+          description: Article title
+        content:
+          type: [string, "null"]
+        visibility:
+          type: string
+          enum:
+            - public
+            - private
+            - link_only
+          default: "link_only"
+        published:
+          type: boolean
+          default: false
+        view_count:
+          type: integer
+          default: 0
+        author_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    Tag:
+      type: object
+      properties:
+        id:
+          type: integer
+        label:
+          type: string
+      required:
+        - id
+        - label
+      description: |
+        Implicit many-to-many partner of Post (join table `_PostToTag`).
+    Tag_create:
+      type: object
+      properties:
+        id:
+          type: integer
+        label:
+          type: string
+      required:
+        - label
+    Tag_update:
+      type: object
+      properties:
+        id:
+          type: integer
+        label:
+          type: string
+    comments:
+      type: object
+      properties:
+        id:
+          type: integer
+        body:
+          type: string
+        post_id:
+          type: string
+        author_id:
+          type: [string, "null"]
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - body
+        - post_id
+        - created_at
+      description: |
+        Two foreign keys with different referential actions
+        (Cascade vs SetNull) and a composite index.
+        FK comments_post_id_fkey: (post_id) -> posts
+        FK comments_author_id_fkey: (author_id) -> users
+    comments_create:
+      type: object
+      properties:
+        id:
+          type: integer
+        body:
+          type: string
+        post_id:
+          type: string
+        author_id:
+          type: [string, "null"]
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - body
+        - post_id
+    comments_update:
+      type: object
+      properties:
+        id:
+          type: integer
+        body:
+          type: string
+        post_id:
+          type: string
+        author_id:
+          type: [string, "null"]
+        created_at:
+          type: string
+          format: date-time
+    follows:
+      type: object
+      properties:
+        follower_id:
+          type: string
+        following_id:
+          type: string
+        since:
+          type: string
+          format: date-time
+      required:
+        - follower_id
+        - following_id
+        - since
+      description: |
+        Composite primary key + two named relations to the same model.
+        FK follows_follower_id_fkey: (follower_id) -> users
+        FK follows_following_id_fkey: (following_id) -> users
+    follows_create:
+      type: object
+      properties:
+        follower_id:
+          type: string
+        following_id:
+          type: string
+        since:
+          type: string
+          format: date-time
+      required:
+        - follower_id
+        - following_id
+    follows_update:
+      type: object
+      properties:
+        follower_id:
+          type: string
+        following_id:
+          type: string
+        since:
+          type: string
+          format: date-time
+    Category:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        parent_id:
+          type: [integer, "null"]
+      required:
+        - id
+        - name
+      description: |
+        Self-relation (adjacency-list tree) with a composite unique.
+        FK Category_parent_id_fkey: (parent_id) -> Category
+    Category_create:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        parent_id:
+          type: [integer, "null"]
+      required:
+        - name
+    Category_update:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        parent_id:
+          type: [integer, "null"]
+    orders:
+      type: object
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: string
+        total:
+          type: string
+        placed_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - user_id
+        - total
+        - placed_at
+      description: |
+        BigInt autoincrement primary key (bigserial) and money as Decimal.
+        FK orders_user_id_fkey: (user_id) -> users
+    orders_create:
+      type: object
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: string
+        total:
+          type: string
+        placed_at:
+          type: string
+          format: date-time
+      required:
+        - user_id
+        - total
+    orders_update:
+      type: object
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: string
+        total:
+          type: string
+        placed_at:
+          type: string
+          format: date-time
+    order_items:
+      type: object
+      properties:
+        id:
+          type: integer
+        order_id:
+          type: integer
+        sku:
+          type: string
+        qty:
+          type: integer
+          default: 1
+        price:
+          type: string
+      required:
+        - id
+        - order_id
+        - sku
+        - qty
+        - price
+      description: |
+        Child of Order with a composite unique constraint.
+        FK order_items_order_id_fkey: (order_id) -> orders
+    order_items_create:
+      type: object
+      properties:
+        id:
+          type: integer
+        order_id:
+          type: integer
+        sku:
+          type: string
+        qty:
+          type: integer
+          default: 1
+        price:
+          type: string
+      required:
+        - order_id
+        - sku
+        - price
+    order_items_update:
+      type: object
+      properties:
+        id:
+          type: integer
+        order_id:
+          type: integer
+        sku:
+          type: string
+        qty:
+          type: integer
+          default: 1
+        price:
+          type: string
+    audit_logs:
+      type: object
+      properties:
+        id:
+          type: string
+        action:
+          type: string
+        payload:
+          type: string
+        signature:
+          type: [string, "null"]
+        logged_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - action
+        - payload
+        - logged_at
+      description: |
+        DB-side generated defaults (dbgenerated) plus Json / Bytes payloads.
+    audit_logs_create:
+      type: object
+      properties:
+        id:
+          type: string
+        action:
+          type: string
+        payload:
+          type: string
+        signature:
+          type: [string, "null"]
+        logged_at:
+          type: string
+          format: date-time
+      required:
+        - action
+    audit_logs_update:
+      type: object
+      properties:
+        id:
+          type: string
+        action:
+          type: string
+        payload:
+          type: string
+        signature:
+          type: [string, "null"]
+        logged_at:
+          type: string
+          format: date-time
+    Actor:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+      required:
+        - id
+        - name
+      description: |
+        Named implicit many-to-many: the join table is `_cast`,
+        not `_ActorToFilm`.
+    Actor_create:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+      required:
+        - name
+    Actor_update:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+    Film:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+      required:
+        - id
+        - title
+    Film_create:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+      required:
+        - title
+    Film_update:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+    _PostToTag:
+      type: object
+      properties:
+        A:
+          type: string
+        B:
+          type: integer
+      required:
+        - A
+        - B
+      description: |
+        FK _PostToTag_A_fkey: (A) -> posts
+        FK _PostToTag_B_fkey: (B) -> Tag
+    _cast:
+      type: object
+      properties:
+        A:
+          type: integer
+        B:
+          type: integer
+      required:
+        - A
+        - B
+      description: |
+        FK _cast_A_fkey: (A) -> Actor
+        FK _cast_B_fkey: (B) -> Film

@@ -3,8 +3,8 @@
 # Hekireki
 
 **[Hekireki](https://www.npmjs.com/package/hekireki)** reads a [Prisma](https://www.prisma.io/)
-schema and writes what the rest of the project needs from it: validation schemas, ORM models for
-nine languages, an ER diagram, and seed data. It also comes with a Studio for the schema and its
+schema and writes what the rest of the project needs from it: validation schemas, ORM models, an
+OpenAPI document, an ER diagram and seed data. It also comes with a Studio for the schema and its
 database.
 
 ## Installation
@@ -25,13 +25,9 @@ generator Hekireki-Zod {
 }
 ```
 
-Every generator reads the tables and columns Prisma creates: a model or field without `@map`
-keeps the name it has in the schema (`"Todo"`, `"authorId"`), and each ORM is told so where its
-own convention would say otherwise.
-
-A `///` comment on a field can carry a line for one of the validation generators, which uses it
-as it is. The prefix says which: `@z.` for Zod, `@v.` Valibot, `@a.` ArkType, `@e.` Effect
-Schema, `@t.` TypeBox, `@j.` AJV, `@p.` Pydantic, `@ar.` Active Record and `@ecto.` Ecto.
+A `///` comment on a field can carry a line for a validation generator, which uses it as it is.
+The prefix says which: `@z.` Zod, `@v.` Valibot, `@a.` ArkType, `@e.` Effect Schema, `@t.`
+TypeBox, `@j.` AJV, `@p.` Pydantic, `@ar.` Active Record, `@ecto.` Ecto.
 
 ```prisma
 model User {
@@ -43,100 +39,60 @@ model User {
 
 ## Generators
 
-The `provider` of the generator block picks the output. The options are optional unless a
-section below says otherwise.
+The `provider` of the generator block picks the output. Every option is optional.
 
 ### Validation schemas
 
-- **`hekireki-zod`** writes [Zod](https://zod.dev/) schemas. `type` also exports the TypeScript
-  type of each schema, `relation` adds a schema for each relation, and `zod` picks the flavour:
-  `"v4"` (the default), `"mini"` or `"@hono/zod-openapi"`.
-- **`hekireki-valibot`**, **`hekireki-arktype`**, **`hekireki-effect`**, **`hekireki-typebox`**
-  and **`hekireki-ajv`** write Valibot, ArkType, Effect Schema, TypeBox and AJV schemas, with the
-  same `type` and `relation` options.
-- **`hekireki-pydantic`** writes Pydantic models, with `relation`.
+| Provider            | Writes        | Options                                                             |
+| ------------------- | ------------- | ------------------------------------------------------------------- |
+| `hekireki-zod`      | Zod           | `type`, `relation`, `zod` (`"v4"`, `"mini"`, `"@hono/zod-openapi"`) |
+| `hekireki-valibot`  | Valibot       | `type`, `relation`                                                  |
+| `hekireki-arktype`  | ArkType       | `type`, `relation`                                                  |
+| `hekireki-effect`   | Effect Schema | `type`, `relation`                                                  |
+| `hekireki-typebox`  | TypeBox       | `type`, `relation`                                                  |
+| `hekireki-ajv`      | AJV           | `type`, `relation`                                                  |
+| `hekireki-pydantic` | Pydantic      | `relation`                                                          |
+
+`type` also exports the TypeScript type of each schema; `relation` adds a schema per relation.
 
 ### ORM models
 
-Every ORM generator stores a `DateTime` as Prisma Client stores it, so that the ORM and Prisma
-read each other's rows alike. What that takes differs per ORM, and the sections further down say
-what each one does and what is left to the caller.
+| Provider                | Writes                        | Options                                            |
+| ----------------------- | ----------------------------- | -------------------------------------------------- |
+| `hekireki-drizzle`      | Drizzle tables                |                                                    |
+| `hekireki-kysely`       | Kysely `DB` interface         |                                                    |
+| `hekireki-sqlalchemy`   | SQLAlchemy models             |                                                    |
+| `hekireki-django`       | Django models                 |                                                    |
+| `hekireki-activerecord` | Rails models                  | `locales`: directory of the translated messages    |
+| `hekireki-gorm`         | GORM structs                  | `package` (`model`)                                |
+| `hekireki-sea-orm`      | SeaORM entities               | `renameAll`: serde's `rename_all`                  |
+| `hekireki-ecto`         | Ecto schemas                  | `app` (`MyApp`)                                    |
+| `hekireki-eloquent`     | Eloquent models               | `namespace` (`App\Models`)                         |
+| `hekireki-efcore`       | EF Core entities, `DbContext` | `namespace` (`Models`), `context` (`AppDbContext`) |
+| `hekireki-exposed`      | Exposed tables                | `package` (`models`), `dao` (`true`)               |
 
-- **`hekireki-drizzle`** writes Drizzle tables. See [Drizzle](#drizzle).
-- **`hekireki-kysely`** writes the `DB` interface for Kysely. See [Kysely](#kysely).
-- **`hekireki-sqlalchemy`** writes SQLAlchemy models.
-- **`hekireki-django`** writes Django models. See [Django](#django).
-- **`hekireki-activerecord`** writes Rails models. `locales` names the directory for translated
-  messages. See [Active Record](#active-record).
-- **`hekireki-gorm`** writes GORM structs. `package` is the Go package name, `model` by default.
-- **`hekireki-sea-orm`** writes SeaORM entities. `renameAll` is serde's `rename_all` for the
-  entities and enums (`"camelCase"`, for one). See [SeaORM](#seaorm).
-- **`hekireki-ecto`** writes Ecto schemas. `app` is the application module the schemas live
-  under, `MyApp` by default. See [Ecto](#ecto).
-- **`hekireki-eloquent`** writes Eloquent models. `namespace` is the PHP namespace, `App\Models`
-  by default.
-- **`hekireki-efcore`** writes EF Core entities and a `DbContext`, on PostgreSQL, MySQL and SQLite.
-  `namespace` is the C# namespace, `Models` by default, and `context` the name of the context,
-  `AppDbContext` by default. See [EF Core](#ef-core).
-- **`hekireki-exposed`** writes Exposed tables, on PostgreSQL. `package` is the Kotlin package,
-  `models` by default, and `dao` writes the DAO classes beside the tables unless set to `false`.
-  See [Exposed](#exposed).
+Every ORM generator stores a `DateTime` as Prisma Client stores it, so the ORM and Prisma read
+each other's rows alike.
 
-### Database and diagrams
+### Database and documents
 
-- **`hekireki-atlas`** writes the schema as Atlas HCL. `schemaName` is the schema the tables go
-  in. See [Atlas](#atlas).
-- **`hekireki-er`** draws the ER diagram. `outputs` lists the files to write, one rendering per
-  extension (`.md`, `.dbml`, `.png`, `.svg`), and `theme` is `light` or `dark`.
-- **`hekireki-seed`** writes the schema module that `hekireki.config.ts` is typed against. See
-  [Seed](#seed).
+| Provider           | Writes                            | Options                                                                                         |
+| ------------------ | --------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `hekireki-atlas`   | Atlas HCL                         | `schemaName` (`public`, `main` on SQLite)                                                       |
+| `hekireki-openapi` | OpenAPI 3.1 (`.yaml`, `.json`)    | `title`, `version`, `paths`: the CRUD of each model                                             |
+| `hekireki-er`      | ER diagram                        | `outputs`: files, one per extension (`.md`, `.dbml`, `.png`, `.svg`); `theme` (`light`, `dark`) |
+| `hekireki-seed`    | Schema module for `hekireki seed` |                                                                                                 |
 
-### Drizzle
+`hekireki-atlas` writes the tables as Prisma Migrate makes them, so `atlas schema diff` against a
+database Prisma made has nothing to change. `hekireki-openapi` writes them as the
+`components.schemas` Atlas's template writes, `///` comments as descriptions; with `paths`, each
+model gets `GET` and `POST /users` and `GET`, `PATCH` and `DELETE /users/{id}`.
 
-On MySQL, `hekireki-drizzle` reads and writes a `@db.Timestamp` column as UTC, and MySQL converts
-a `TIMESTAMP` through the connection's `time_zone`. Set it to `'+00:00'` on drizzle's connection,
-as Prisma's adapter does on its own, or the two see times that differ by the offset.
-
-On CockroachDB it writes the PostgreSQL schema, for node-postgres, and an `Int` key with
-`@default(sequence())` is an identity column, as Prisma makes it. Keep the session's `TimeZone` at
-UTC there, as on PostgreSQL, for a `dbgenerated("CURRENT_TIMESTAMP")` default to be UTC.
-
-### Kysely
-
-`hekireki-kysely` writes one `DB` interface, each column typed as the driver of the datasource
-reads and binds it: better-sqlite3 on SQLite, pg on PostgreSQL, mysql2 on MySQL. Kysely converts
-nothing and runs no hook, so what the types cannot say is the caller's:
-
-- On SQLite a `DateTime` is text, compared as text: write it as Prisma does,
-  `date.toISOString().replace('Z', '+00:00')`, or `=`, `@unique` and `@@id` do not meet Prisma's
-  rows. A `DateTime` with `now()` or a literal default is asked for on insert there, as Prisma
-  Client writes it itself: SQLite's own default is other text (`CURRENT_TIMESTAMP` sorts before
-  Prisma's rows, and Prisma reads the literal as an Invalid Date).
-- pg and mysql2 read a column without a zone in the process's zone, Prisma in UTC: set pg's type
-  parsers 1114, 1082, 1115 and 1182 to UTC with `pg.defaults.parseInputDatesAsUTC = true`, and
-  give mysql2 `timezone: 'Z'`. MySQL refuses ISO text with a `Z`; write a `Date` or MySQL's
-  `2030-01-02 03:04:05.678901`.
-- `@db.Time` and `@db.Timetz` are `string`, the time of day the drivers read.
-- `@updatedAt` is asked for on insert, optional or not, and must be set on every update.
-
-`examples/kysely` in the repository runs a schema against Kysely on SQLite.
-
-### Django
-
-`hekireki-django` keeps a `DateTime` as Prisma Client keeps it:
-
-- A column without a zone is declared with the `UtcDateTimeField` written into `models.py`. It
-  stores the UTC instant (on SQLite Prisma's text, `2030-01-02T03:04:05.678+00:00`) and reads it
-  back as UTC, aware under `USE_TZ = True` and in `TIME_ZONE` under `False`. A `@db.Timestamptz`
-  is Django's own field.
-- `now()` is filled in by the model, in UTC (the UTC date or time on `@db.Date` and `@db.Time`),
-  and a literal default on a date or time column is its UTC date or time.
-- An `@updatedAt` on a date or time column stamps the UTC date or time (`UtcDateField`,
-  `UtcTimeField`) where Django's `auto_now` would take the local one. A model with `@updatedAt`
-  is managed by `AutoNowQuerySet`, so `QuerySet.update()` bumps it as `updateMany` does.
-
-Keep `USE_TZ = True`, Django's default: with `False`, Django sets a PostgreSQL session to
-`TIME_ZONE`, and a `dbgenerated()` default such as `CURRENT_TIMESTAMP` is evaluated in that zone.
+Every generator keeps Prisma's names: a model or field without `@map` keeps the name it has in the
+schema, and each ORM is told so where its own convention would say otherwise. What each generator
+does beyond that, and what it leaves to the caller, is in
+[docs/generators.md](https://github.com/nakita628/hekireki/blob/main/packages/hekireki/docs/generators.md).
+Active Record and Ecto take `///` lines of their own, so they are here.
 
 ### Active Record
 
@@ -297,57 +253,6 @@ the module's documentation names the session time zone a `@db.Timestamptz`, `@db
 `TIMESTAMP` column needs.
 
 `examples/ecto` in the repository runs a schema against Ecto on SQLite.
-
-### Exposed
-
-`hekireki-exposed` keeps a `DateTime` as Prisma Client keeps it, with no conversion through the
-JVM's zone: an `Instant` bound and read as the UTC instant, to the millisecond (a finer value is
-truncated, as a JavaScript Date holds it, in every native type), the UTC date of a `@db.Date`, the
-UTC time of a `@db.Time`, and a `@db.Timetz` at offset zero.
-
-`now()`, literal defaults and every `@updatedAt` are filled in by the client on a DAO or DSL
-insert, and the DAO bumps `@updatedAt` on update. A DSL `Table.update` has no such hook, so set it
-there yourself: `it[updatedAt] = Instant.now()`.
-
-pgjdbc sets the session to the JVM's zone, so open the connection in UTC, as Prisma's is, for a
-`dbgenerated("CURRENT_TIMESTAMP")` default or `now()` in SQL:
-
-```kotlin
-Database.connect(url, setupConnection = { it.createStatement().use { s -> s.execute("SET TIME ZONE 'UTC'") } })
-```
-
-### EF Core
-
-`hekireki-efcore` stores a `DateTime` as Prisma Client does, whatever its `DateTimeKind`: the UTC
-instant (a `Local` value converted), read back as `Utc`, in Prisma's text form on SQLite, and
-`now()` filled in by EF Core rather than by the database's clock. It takes Npgsql's legacy
-timestamp behaviour to be off.
-
-On MySQL, compare a `@db.Time` column with a parameter rather than a constant:
-MySql.EntityFrameworkCore writes a constant `TimeSpan` as `TIME '03:04:05'`, without its fraction.
-
-### SeaORM
-
-`hekireki-sea-orm` writes one entity per model into a directory, with a `mod.rs` and a
-`prelude.rs`. A `DateTime` is kept as Prisma Client keeps it:
-
-- `now()`, `@updatedAt` and a literal default are filled by `ActiveModelBehavior::before_save`, in
-  UTC with milliseconds, so the crate needs `chrono` and `async-trait` beside `sea-orm`.
-- On SQLite every `DateTime` is a `PrismaDateTime` (written into `prisma_date_time.rs`), which
-  binds Prisma's text, `2030-01-02T03:04:05.000+00:00`: filter with
-  `Column::At.eq(PrismaDateTime(instant))`, not a bare `DateTimeUtc`, which sqlx writes without
-  the `.000` of a whole second.
-- On PostgreSQL and MySQL a `DateTime` is a `NaiveDateTime` in UTC, `@db.Timestamptz` a
-  `DateTimeWithTimeZone`, a MySQL `@db.Timestamp` a `DateTimeUtc`. `@db.Timetz` is refused: sqlx
-  has no type to read it into.
-
-`examples/sea-orm` in the repository runs a schema against SeaORM on SQLite, PostgreSQL and MySQL.
-
-### Atlas
-
-`hekireki-atlas` writes the tables as Prisma Migrate makes them, so that `atlas schema diff`
-against a database Prisma made has nothing to change. Its `schemaName` is `public` unless given
-(`main` on SQLite): on MySQL, where the schema is the database, give the database's name.
 
 ## Studio
 
