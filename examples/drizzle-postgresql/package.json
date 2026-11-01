@@ -14,7 +14,7 @@
     "@prisma/client": "8.1.0-dev.9",
     "@types/node": "^26.6.5",
     "@types/pg": "^8.23.1",
-    "drizzle-orm": "^0.45.4",
+    "drizzle-orm": "1.0.0-rc.5",
     "hekireki": "workspace:*",
     "pg": "^8.23.1",
     "prisma": "8.1.0-dev.9",

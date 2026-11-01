@@ -99,8 +99,9 @@ Two things stay apart from Prisma's tables, in form and not in what they hold:
   what it points at is not unique yet. The name is Prisma's.
 - **A list's default** is written `'{}'` by drizzle-kit and `ARRAY[]::text[]` by Prisma Migrate.
 - **On SQLite** drizzle-kit leaves out a foreign key's name, a `Boolean` column is declared
-  `integer` where Prisma Migrate declares `BOOLEAN`, and `@default(now())` has no default in the
-  table, as drizzle fills it (see Dates).
+  `integer` where Prisma Migrate declares `BOOLEAN`, `@default(now())` has no default in the
+  table, as drizzle fills it (see Dates), and a literal `DateTime` default is the text the column
+  writes, `'2020-02-29T23:59:59.999+00:00'`.
 
 On MySQL the tables are Prisma's where the database's collation is: Prisma Migrate makes every
 table `utf8mb4_unicode_ci`, and a table drizzle-kit makes takes the database's. A `String` with no

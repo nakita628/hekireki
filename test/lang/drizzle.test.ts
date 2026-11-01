@@ -24,6 +24,10 @@ describe('drizzle', () => {
     expect(result.status).toBe(0)
   })
 
+  // drizzle-kit 1.0 writes each migration into its own `<stamp>_<name>/migration.sql`.
+  const sqlFiles = (dir: string) =>
+    readdirSync(dir, { recursive: true }).filter((f) => String(f).endsWith('.sql'))
+
   // An inline pgEnum type-checks but emits a migration referencing a type it
   // never creates, so the schema also has to survive migration generation.
   // drizzle-kit exits 0 even when snapshot serialization crashes (a bigint
@@ -40,7 +44,7 @@ describe('drizzle', () => {
       { cwd: root, stdio: ['ignore', 'ignore', 'inherit'] },
     )
     expect(result.status).toBe(0)
-    expect(readdirSync(out).filter((f) => f.endsWith('.sql')).length).toBeGreaterThan(0)
+    expect(sqlFiles(out).length).toBeGreaterThan(0)
   })
 
   // The same schema on SQLite and MySQL (test/lang/setup.ts): the column functions of each
@@ -67,6 +71,6 @@ describe('drizzle', () => {
       { cwd: root, stdio: ['ignore', 'ignore', 'inherit'] },
     )
     expect(result.status).toBe(0)
-    expect(readdirSync(variantOut).filter((f) => f.endsWith('.sql')).length).toBeGreaterThan(0)
+    expect(sqlFiles(variantOut).length).toBeGreaterThan(0)
   })
 })

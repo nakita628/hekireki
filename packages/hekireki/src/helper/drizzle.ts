@@ -507,6 +507,12 @@ function resolveDefaultValue(
     // bigint, so emit it as a raw SQL DDL literal instead of `${dflt}n`.
     if (fieldType === 'BigInt') return { chain: `.default(sql\`${dflt}\`)`, imports: [SQL_IMPORT] }
     if (fieldType === 'DateTime') {
+      // SQLite's column is the `utcDateTime` text, whose default drizzle-kit takes only as SQL:
+      // the text the column writes, so the default and the rows compare alike.
+      if (provider === 'sqlite') {
+        const text = new Date(dflt).toISOString().replace('Z', '+00:00')
+        return { chain: `.default(sql\`'${text}'\`)`, imports: [SQL_IMPORT] }
+      }
       return { chain: `.default(new Date(${tsString(dflt)}))`, imports: [] }
     }
     if (fieldType === 'Json') return { chain: `.default(${dflt})`, imports: [] }
@@ -617,7 +623,11 @@ function makeTableConstraints(
   const pkLine = model.primaryKey
     ? (() => {
         imports.core.add('primaryKey')
-        return `primaryKey({ name: '${tableName}_pkey', columns: [${model.primaryKey.fields.map((f) => `table.${f}`).join(', ')}] })`
+        const columns = model.primaryKey.fields.map((f) => `table.${f}`).join(', ')
+        // MySQL's primary key is always named PRIMARY, and drizzle's `primaryKey` there takes no name.
+        return provider === 'mysql'
+          ? `primaryKey({ columns: [${columns}] })`
+          : `primaryKey({ name: '${tableName}_pkey', columns: [${columns}] })`
       })()
     : null
 
@@ -780,31 +790,33 @@ export function makeM2MJoinTables(
   })
 }
 
-export function makeM2MJoinRelations(models: readonly DMMF.Model[], imports: DrizzleImports) {
-  const pairs = implicitJoinTables(models)
-  if (pairs.length > 0) imports.orm.add('relations')
-  return pairs.map((pair) => {
-    const varName = joinVarName(pair.relationName)
-    const leftVar = resolveVarNameByType(pair.left, models)
-    const rightVar = resolveVarNameByType(pair.right, models)
-    const leftPk = models.find((m) => m.name === pair.left)?.fields.find((f) => f.isId)
-    const rightPk = models.find((m) => m.name === pair.right)?.fields.find((f) => f.isId)
-    const leftKey = uncapitalizeName(pair.left)
-    const isSelf = pair.left === pair.right
-    const rightKey = isSelf ? `${uncapitalizeName(pair.right)}_` : uncapitalizeName(pair.right)
-    // In a self-relation both columns point at the one model, and drizzle pairs each end's
-    // `many()` with its column only through a relation name.
-    const aName = isSelf ? `, relationName: '${pair.relationName}_A'` : ''
-    const bName = isSelf ? `, relationName: '${pair.relationName}_B'` : ''
-    return `export const ${varName}Relations = relations(${varName}, ({ one }) => ({ ${leftKey}: one(${leftVar}, { fields: [${varName}.A], references: [${leftVar}.${leftPk?.name ?? 'id'}]${aName} }), ${rightKey}: one(${rightVar}, { fields: [${varName}.B], references: [${rightVar}.${rightPk?.name ?? 'id'}]${bName} }) }))`
-  })
-}
-
 function uncapitalizeName(name: string) {
   const camel = snakeToCamel(makeSnakeCase(name))
   return camel.charAt(0).toLowerCase() + camel.slice(1)
 }
 
+// `r.posts.authorId` for one column, `[r.stock.country, r.stock.code]` for a composite key.
+function columnRefs(tableVar: string, columns: readonly string[]) {
+  const refs = columns.map((column) => `r.${tableVar}.${column}`)
+  return refs.length > 1 ? `[${refs.join(', ')}]` : refs.join(', ')
+}
+
+function keyName(modelName: string, models: readonly DMMF.Model[]) {
+  return models.find((m) => m.name === modelName)?.fields.find((f) => f.isId)?.name ?? 'id'
+}
+
+// `r.many.posts()` with nothing to say, `r.one.users({ from: ..., to: ... })` otherwise.
+function call(options: readonly string[]) {
+  return options.length > 0 ? `({ ${options.join(', ')} })` : '()'
+}
+
+/**
+ * One relation. The end that holds the foreign key names its columns and, where Prisma requires
+ * the relation, `optional: false`; the other end of a one-to-one names them the other way round,
+ * and the list end is `r.many.<table>()`, which drizzle pairs with the `one` through the alias
+ * where a model has two relations to one table. An implicit many-to-many reads the join table
+ * with `through` from both ends, so neither is inferred.
+ */
 function makeRelationField(
   field: DMMF.Field,
   model: DMMF.Model,
@@ -813,62 +825,96 @@ function makeRelationField(
 ) {
   const targetVar = resolveVarNameByType(field.type, models)
   const modelVar = resolveVarName(model)
-  const needsAlias = relFields.filter((f) => f.type === field.type).length > 1 && field.relationName
+  const alias =
+    relFields.filter((f) => f.type === field.type).length > 1 && field.relationName
+      ? [`alias: '${field.relationName}'`]
+      : []
 
   if (field.relationFromFields && field.relationFromFields.length > 0) {
-    const fromCols = field.relationFromFields.map((c) => `${modelVar}.${c}`).join(', ')
-    const toCols = (
+    const toFields =
       field.relationToFields && field.relationToFields.length > 0 ? field.relationToFields : ['id']
-    )
-      .map((c) => `${targetVar}.${c}`)
-      .join(', ')
-    const configParts = [
-      `fields: [${fromCols}]`,
-      `references: [${toCols}]`,
-      needsAlias ? `relationName: '${field.relationName}'` : '',
-    ].filter(Boolean)
-    return `${field.name}: one(${targetVar}, { ${configParts.join(', ')} })`
+    return `${field.name}: r.one.${targetVar}${call([
+      `from: ${columnRefs(modelVar, field.relationFromFields)}`,
+      `to: ${columnRefs(targetVar, toFields)}`,
+      ...(field.isRequired ? ['optional: false'] : []),
+      ...alias,
+    ])}`
   }
 
   if (field.isList) {
-    // An implicit m2m side goes through the junction table: drizzle's
-    // relational API has no direct many-to-many, so `many(target)` here
-    // would fail to resolve at query time.
     if (isImplicitManyToMany(field, model, models)) {
       const [left, right] =
         model.name < field.type ? [model.name, field.type] : [field.type, model.name]
-      const relationName = field.relationName ?? `${left}To${right}`
+      const joinVar = joinVarName(field.relationName ?? `${left}To${right}`)
       const inverse = backRelation(field, model, models)
       // A self-relation's end reads the rows that hold its own key: column A for the end on side A.
-      if (model.name === field.type && inverse) {
-        const column = isJoinSideA(field, model, inverse) ? 'A' : 'B'
-        return `${field.name}: many(${joinVarName(relationName)}, { relationName: '${relationName}_${column}' })`
-      }
-      return `${field.name}: many(${joinVarName(relationName)})`
+      const [own, other] = inverse && isJoinSideA(field, model, inverse) ? ['A', 'B'] : ['B', 'A']
+      return `${field.name}: r.many.${targetVar}${call([
+        `from: r.${modelVar}.${keyName(model.name, models)}.through(r.${joinVar}.${own})`,
+        `to: r.${targetVar}.${keyName(field.type, models)}.through(r.${joinVar}.${other})`,
+      ])}`
     }
-    return needsAlias
-      ? `${field.name}: many(${targetVar}, { relationName: '${field.relationName}' })`
-      : `${field.name}: many(${targetVar})`
+    return `${field.name}: r.many.${targetVar}${call(alias)}`
   }
 
-  return `${field.name}: one(${targetVar})`
+  const inverse = backRelation(field, model, models)
+  if (inverse?.relationFromFields && inverse.relationFromFields.length > 0) {
+    const fromFields =
+      inverse.relationToFields && inverse.relationToFields.length > 0
+        ? inverse.relationToFields
+        : ['id']
+    return `${field.name}: r.one.${targetVar}${call([
+      `from: ${columnRefs(modelVar, fromFields)}`,
+      `to: ${columnRefs(targetVar, inverse.relationFromFields)}`,
+      ...alias,
+    ])}`
+  }
+  return `${field.name}: r.one.${targetVar}${call(alias)}`
 }
 
+/**
+ * The relations as drizzle 1.0 reads them: one `defineRelations` over every table, the
+ * join tables of the implicit many-to-many relations included, keyed by the table's variable.
+ *
+ * @example
+ * ```ts
+ * export const relations = defineRelations({ user, post }, (r) => ({
+ *   user: { posts: r.many.post() },
+ *   post: { author: r.one.user({ from: r.post.userId, to: r.user.id, optional: false }) },
+ * }))
+ * ```
+ */
 export function makeRelations(models: readonly DMMF.Model[], imports: DrizzleImports) {
   const modelsWithRels = models.filter((model) => model.fields.some((f) => f.kind === 'object'))
   if (modelsWithRels.length === 0) return []
 
-  imports.orm.add('relations')
+  imports.orm.add('defineRelations')
 
-  return modelsWithRels.map((model) => {
-    const relFields = model.fields.filter((f) => f.kind === 'object')
-    const fieldLines = relFields
-      .map((field) => makeRelationField(field, model, models, relFields))
-      .join(', ')
-    const modelVar = resolveVarName(model)
-    const needsOne = relFields.some((f) => (f.relationFromFields?.length ?? 0) > 0 || !f.isList)
-    const needsMany = relFields.some((f) => f.isList && (f.relationFromFields?.length ?? 0) === 0)
-    const destructured = [needsOne ? 'one' : '', needsMany ? 'many' : ''].filter(Boolean).join(', ')
-    return `export const ${modelVar}Relations = relations(${modelVar}, ({ ${destructured} }) => ({ ${fieldLines} }))`
-  })
+  const pairs = implicitJoinTables(models)
+  const tables = [
+    ...models.map((model) => resolveVarName(model)),
+    ...pairs.map((pair) => joinVarName(pair.relationName)),
+  ]
+  const entries = [
+    ...modelsWithRels.map((model) => {
+      const relFields = model.fields.filter((f) => f.kind === 'object')
+      const fieldLines = relFields
+        .map((field) => makeRelationField(field, model, models, relFields))
+        .join(', ')
+      return `${resolveVarName(model)}: { ${fieldLines} }`
+    }),
+    ...pairs.map((pair) => {
+      const joinVar = joinVarName(pair.relationName)
+      const isSelf = pair.left === pair.right
+      const sides = (['A', 'B'] as const).map((column) => {
+        const modelName = column === 'A' ? pair.left : pair.right
+        const key = uncapitalizeName(modelName)
+        return `${isSelf && column === 'B' ? `${key}_` : key}: r.one.${resolveVarNameByType(modelName, models)}({ from: r.${joinVar}.${column}, to: r.${resolveVarNameByType(modelName, models)}.${keyName(modelName, models)}, optional: false })`
+      })
+      return `${joinVar}: { ${sides.join(', ')} }`
+    }),
+  ]
+  return [
+    `export const relations = defineRelations({ ${tables.join(', ')} }, (r) => ({ ${entries.join(', ')} }))`,
+  ]
 }

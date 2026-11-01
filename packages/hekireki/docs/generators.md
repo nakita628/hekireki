@@ -9,6 +9,12 @@ read each other's rows alike. What that takes differs per ORM, and each section 
 
 ## Drizzle
 
+`hekireki-drizzle` writes the relations as drizzle 1.0 reads them: one `defineRelations` over
+every table, passed to `drizzle()` as `relations`. The end that holds the foreign key names its
+columns (`from`, `to`) and, where Prisma requires the relation, `optional: false`; the list end is
+`r.many.<table>()`, with an `alias` where a model has two relations to one table; an implicit
+many-to-many reads its join table with `through` from both ends.
+
 On MySQL, `hekireki-drizzle` reads and writes a `@db.Timestamp` column as UTC, and MySQL converts
 a `TIMESTAMP` through the connection's `time_zone`. Set it to `'+00:00'` on drizzle's connection,
 as Prisma's adapter does on its own, or the two see times that differ by the offset.

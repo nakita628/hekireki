@@ -3,10 +3,10 @@
 // `postgresql`, `mysql`). Each of the two signs a user up and in and the other reads what it
 // wrote, the plugins' tables among them. Each check prints `ok: <name>`, or throws with what it
 // saw instead.
-import { drizzleAdapter } from '@better-auth/drizzle-adapter'
+import { drizzleAdapter } from '@better-auth/drizzle-adapter/relations-v2'
 import { prismaAdapter } from '@better-auth/prisma-adapter'
 import { betterAuth } from 'better-auth'
-import { getTableColumns, getTableName, is, Table } from 'drizzle-orm'
+import { type AnyRelations, getTableColumns, getTableName, is, Table } from 'drizzle-orm'
 
 import { plugins } from './plugins.ts'
 
@@ -28,6 +28,9 @@ function check(name: string, problem: string | undefined) {
 }
 
 const schema: Record<string, unknown> = await import(`./${provider}/schema.ts`)
+// The schema's `defineRelations`, which drizzle 1.0 takes in place of the schema and Better Auth's
+// adapter for it queries through.
+const relations = schema.relations as AnyRelations
 const { PrismaClient } = await import(`./${provider}/generated/client/client.ts`)
 
 // The two clients on one database, the columns the database has, and how to let go of it.
@@ -43,7 +46,7 @@ const connect = async () => {
       )
       .pluck()
       .all() as string[]
-    const db = drizzle(connection, { schema })
+    const db = drizzle({ client: connection, relations })
     return {
       db,
       // The schema is read at run time, so a table is whichever provider's it is.
@@ -80,7 +83,7 @@ const connect = async () => {
       `SELECT table_name AS "table", column_name AS "column", is_nullable = 'NO' AS required
        FROM information_schema.columns WHERE table_schema = 'public'`,
     )
-    const db = drizzle(pool, { schema })
+    const db = drizzle({ client: pool, relations })
     return {
       db,
       first: async (table: Table) =>
@@ -102,7 +105,7 @@ const connect = async () => {
     `SELECT table_name AS \`table\`, column_name AS \`column\`, is_nullable = 'NO' AS required
      FROM information_schema.columns WHERE table_schema = DATABASE()`,
   )
-  const db = drizzle(pool, { schema, mode: 'default' })
+  const db = drizzle({ client: pool, relations })
   return {
     db,
     first: async (table: Table) =>

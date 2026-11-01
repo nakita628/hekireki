@@ -13,7 +13,7 @@
     "@prisma/adapter-mariadb": "8.1.0-dev.9",
     "@prisma/client": "8.1.0-dev.9",
     "@types/node": "^26.6.5",
-    "drizzle-orm": "^0.45.4",
+    "drizzle-orm": "1.0.0-rc.5",
     "hekireki": "workspace:*",
     "mysql2": "^3.24.6",
     "prisma": "8.1.0-dev.9",

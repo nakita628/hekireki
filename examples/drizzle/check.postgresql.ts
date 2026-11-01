@@ -14,7 +14,7 @@ import { events, slots } from './.provider/postgresql/src/db/schema.ts'
 const url = process.env.DRIZZLE_DATABASE ?? 'postgresql://postgres:postgres@localhost:5432/drizzle'
 // A `CURRENT_TIMESTAMP` in a column without a zone is the session's wall clock: the session is UTC.
 const pool = new pg.Pool({ connectionString: url, options: '-c TimeZone=UTC' })
-const db = drizzle(pool)
+const db = drizzle({ client: pool })
 const prisma = new PrismaClient({ adapter: new PrismaPg(url) })
 
 function check(name: string, problem: string | undefined) {
