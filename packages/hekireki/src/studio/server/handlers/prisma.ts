@@ -22,6 +22,7 @@ import {
   ReferencesSchema,
   RenameSchema,
   SymbolsSchema,
+  ValidationProblemSchema,
 } from '../routes/index.js'
 import * as PrismaUseCase from '../usecases/index.js'
 
@@ -50,14 +51,14 @@ export const postPrismaFormatRouteHandler: RouteHandler<typeof postPrismaFormatR
           Match.tag('FormatError', ({ cause }) =>
             Effect.succeed(
               c.json(
-                {
+                ValidationProblemSchema.parse({
                   type: '/problems/validation-failed',
                   title: 'Validation Failed',
                   status: 422,
                   detail: cause,
                   instance: c.req.path,
                   errors: [{ field: 'text', message: cause }],
-                } as const,
+                }),
                 422,
                 { 'Content-Type': 'application/problem+json' },
               ),

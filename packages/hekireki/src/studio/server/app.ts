@@ -10,6 +10,7 @@ import { readFile } from '../../file/index.js'
 import { isLoopbackHostname } from '../../utils/index.js'
 import { FORBIDDEN_HOST_MESSAGE } from './constants/index.js'
 import api from './index.js'
+import { InternalServerProblemSchema, ValidationProblemSchema } from './routes/index.js'
 import * as ClientService from './services/index.js'
 import type * as DatabaseService from './services/index.js'
 import type * as StateService from './services/index.js'
@@ -34,7 +35,7 @@ export function createStudioApi(
     defaultHook: (result, c) => {
       if (!result.success) {
         return c.json(
-          {
+          ValidationProblemSchema.parse({
             type: '/problems/validation-failed',
             title: 'Validation Failed',
             status: 422,
@@ -44,7 +45,7 @@ export function createStudioApi(
               field: issue.path.map(String).join('.'),
               message: issue.message,
             })),
-          } as const,
+          }),
           422,
           { 'Content-Type': 'application/problem+json' },
         )
@@ -56,13 +57,13 @@ export function createStudioApi(
   app.onError((error, c) => {
     Effect.runSync(Effect.logError('unhandled error', error))
     return c.json(
-      {
+      InternalServerProblemSchema.parse({
         type: '/problems/internal-server-error',
         title: 'Internal Server Error',
         status: 500,
         detail: 'An unexpected error occurred.',
         instance: c.req.path,
-      } as const,
+      }),
       500,
       { 'Content-Type': 'application/problem+json' },
     )

@@ -9,7 +9,7 @@ import type {
   postSchemaReloadRoute,
   putSchemaFilesRoute,
 } from '../routes'
-import { SnapshotSchema } from '../routes/index.js'
+import { NotFoundProblemSchema, SnapshotSchema, ValidationProblemSchema } from '../routes/index.js'
 import * as SchemaUseCase from '../usecases/index.js'
 
 // The snapshot as last checked, by the object the state holds: a reload replaces that object,
@@ -91,13 +91,13 @@ export const putSchemaFilesRouteHandler: RouteHandler<typeof putSchemaFilesRoute
           Match.tag('UnknownFileError', ({ path }) =>
             Effect.succeed(
               c.json(
-                {
+                NotFoundProblemSchema.parse({
                   type: '/problems/not-found',
                   title: 'Not Found',
                   status: 404,
                   detail: `Unknown schema file "${path}". Only the files Studio loaded can be written.`,
                   instance: c.req.path,
-                } as const,
+                }),
                 404,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -107,14 +107,14 @@ export const putSchemaFilesRouteHandler: RouteHandler<typeof putSchemaFilesRoute
             Effect.logError('schema file write failed', cause).pipe(
               Effect.as(
                 c.json(
-                  {
+                  ValidationProblemSchema.parse({
                     type: '/problems/validation-failed',
                     title: 'Validation Failed',
                     status: 422,
                     detail: `Could not write ${path}: ${cause}`,
                     instance: c.req.path,
                     errors: [{ field: 'path', message: cause }],
-                  } as const,
+                  }),
                   422,
                   { 'Content-Type': 'application/problem+json' },
                 ),
