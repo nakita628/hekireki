@@ -286,7 +286,7 @@ function modelAttrNames(
     return ['models', ...defaults.filter((name) => name !== undefined)]
   })
 
-  model.fields.forEach((field, i) => {
+  for (const [i, field] of model.fields.entries()) {
     const readLater = new Set(reads.slice(i + 1).flat())
     const attrFor = (prismaName: string) => {
       const attr = djangoAttrName(makeSnakeCase(prismaName))
@@ -296,7 +296,7 @@ function modelAttrNames(
       if (field.isList && isDeclaringM2MSide(model, field, m2mTables)) {
         names.set(field.name, claimName(attrFor(field.name), taken))
       }
-      return
+      continue
     }
     const owner = fkByScalarName.get(field.name)
     if (owner) {
@@ -305,10 +305,10 @@ function modelAttrNames(
       const attr = claimName(attrFor(owner.name), taken)
       names.set(owner.name, attr)
       names.set(field.name, attr)
-      return
+      continue
     }
     names.set(field.name, claimName(attrFor(field.name), taken))
-  })
+  }
 
   return names
 }

@@ -9,6 +9,7 @@ import {
   isJoinSideA,
   isNowDefault,
   isUlidDefault,
+  primaryKeyFields,
   relationEnds,
   uuidDefaultVersion,
 } from './prisma-model.js'

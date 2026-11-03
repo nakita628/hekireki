@@ -1166,7 +1166,7 @@ export function generateModelBody(
   const tableName = model.dbName ?? model.name
   const scalarFields = model.fields.filter((f) => f.kind !== 'object')
 
-  const isKeyless = !(idField || model.primaryKey)
+  const isKeyless = !idField && !model.primaryKey
   const columnLines = scalarFields.map((field) => {
     const isPk = field.isId || compositePkFieldNames.has(field.name)
     const isFk = belongsToFkFields.has(field.name)
