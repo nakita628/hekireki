@@ -1646,8 +1646,7 @@ end`)
 
   describe('a model with no @id', () => {
     // Session and VerificationToken are as Auth.js writes them: User still has the sessions, so
-    // the module has to be there, keyed by its first @unique or @@unique. User's `@primary_key
-    // false` leaves Ecto no key for has_many to reference, so it is named.
+    // the module has to be there, keyed by its first @unique or @@unique.
     it('is keyed by its first @unique or @@unique', () => {
       const result = getDMMF({
         datamodel: [
@@ -1682,7 +1681,7 @@ model VerificationToken {
       const { models, enums, indexes } = result.datamodel
 
       expect(ectoSchemas(models, 'App', models, enums, { provider: 'postgresql', indexes })).toBe(
-        'defmodule App.User do\n  use Ecto.Schema\n\n  @primary_key false\n\n  @type t :: %__MODULE__{\n          id: String.t(),\n          sessions: [App.Session.t()]\n        }\n\n  schema "User" do\n    field(:id, :string, primary_key: true)\n    has_many(:sessions, App.Session, foreign_key: :user_id, references: :id)\n  end\nend\n\ndefmodule App.Session do\n  use Ecto.Schema\n\n  @primary_key false\n\n  @type t :: %__MODULE__{\n          session_token: String.t(),\n          user: App.User.t() | nil\n        }\n\n  schema "Session" do\n    field(:session_token, :string, primary_key: true, source: :sessionToken)\n    field(:user_id, :string, source: :userId)\n    belongs_to(:user, App.User, foreign_key: :user_id, define_field: false, type: :string)\n  end\nend\n\ndefmodule App.VerificationToken do\n  use Ecto.Schema\n\n  @primary_key false\n\n  @type t :: %__MODULE__{\n          identifier: String.t(),\n          token: String.t()\n        }\n\n  schema "VerificationToken" do\n    field(:identifier, :string, primary_key: true)\n    field(:token, :string, primary_key: true)\n  end\nend',
+        'defmodule App.User do\n  use Ecto.Schema\n\n  @primary_key false\n\n  @type t :: %__MODULE__{\n          id: String.t(),\n          sessions: [App.Session.t()]\n        }\n\n  schema "User" do\n    field(:id, :string, primary_key: true)\n    has_many(:sessions, App.Session, foreign_key: :user_id)\n  end\nend\n\ndefmodule App.Session do\n  use Ecto.Schema\n\n  @primary_key false\n\n  @type t :: %__MODULE__{\n          session_token: String.t(),\n          user: App.User.t() | nil\n        }\n\n  schema "Session" do\n    field(:session_token, :string, primary_key: true, source: :sessionToken)\n    field(:user_id, :string, source: :userId)\n    belongs_to(:user, App.User, foreign_key: :user_id, define_field: false, type: :string)\n  end\nend\n\ndefmodule App.VerificationToken do\n  use Ecto.Schema\n\n  @primary_key false\n\n  @type t :: %__MODULE__{\n          identifier: String.t(),\n          token: String.t()\n        }\n\n  schema "VerificationToken" do\n    field(:identifier, :string, primary_key: true)\n    field(:token, :string, primary_key: true)\n  end\nend',
       )
     })
   })

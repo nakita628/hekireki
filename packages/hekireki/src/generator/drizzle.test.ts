@@ -1758,7 +1758,9 @@ describe('an index over an @ignore field', () => {
       },
     ]
     expect(drizzleSchema(makeDatamodel([roleAssignment]), 'postgresql', indexes)).toBe(
-      `PLACEHOLDER`,
+      `import { index, pgTable, text } from 'drizzle-orm/pg-core'
+
+export const roleAssignments = pgTable('role_assignments', { id: text('id').primaryKey(), userId: text('user_id').notNull(), systemRole: text('system_role').notNull() }, (table) => [index('role_assignments_user_id_idx').on(table.userId)])`,
     )
   })
 })
@@ -1837,14 +1839,41 @@ describe('tables whose foreign keys form a cycle', () => {
     drizzleSchema(makeDatamodel([user, subscription, invoice]), provider, indexes)
 
   it('states what the callbacks on the cycle return, on PostgreSQL', () => {
-    expect(schema('postgresql')).toBe(`PLACEHOLDER`)
+    expect(schema('postgresql')).toBe(`import { type PgTableExtraConfigValue, foreignKey, integer, pgTable, text, uniqueIndex } from 'drizzle-orm/pg-core'
+import { defineRelations } from 'drizzle-orm'
+
+export const user = pgTable('User', { id: text('id').primaryKey(), parentSubscriptionId: integer('parentSubscriptionId') }, (table): PgTableExtraConfigValue[] => [foreignKey({ name: 'User_parentSubscriptionId_fkey', columns: [table.parentSubscriptionId], foreignColumns: [subscription.id] }).onDelete('set null').onUpdate('cascade')])
+
+export const subscription = pgTable('Subscription', { id: integer('id').primaryKey(), userId: text('userId').notNull() }, (table): PgTableExtraConfigValue[] => [uniqueIndex('Subscription_userId_key').on(table.userId), foreignKey({ name: 'Subscription_userId_fkey', columns: [table.userId], foreignColumns: [user.id] }).onDelete('restrict').onUpdate('cascade')])
+
+export const invoice = pgTable('Invoice', { id: integer('id').primaryKey(), subscriptionId: integer('subscriptionId').notNull() }, (table) => [foreignKey({ name: 'Invoice_subscriptionId_fkey', columns: [table.subscriptionId], foreignColumns: [subscription.id] }).onDelete('restrict').onUpdate('cascade')])
+
+export const relations = defineRelations({ user, subscription, invoice }, (r) => ({ user: { parentSubscription: r.one.subscription({ from: r.user.parentSubscriptionId, to: r.subscription.id, alias: 'ChildUsers' }), subscriptions: r.one.subscription({ from: r.user.id, to: r.subscription.userId, alias: 'SubscriptionToUser' }) }, subscription: { user: r.one.user({ from: r.subscription.userId, to: r.user.id, optional: false, alias: 'SubscriptionToUser' }), childUsers: r.many.user({ alias: 'ChildUsers' }) }, invoice: { subscription: r.one.subscription({ from: r.invoice.subscriptionId, to: r.subscription.id, optional: false }) } }))`)
   })
 
   it('states what the callbacks on the cycle return, on MySQL', () => {
-    expect(schema('mysql')).toBe(`PLACEHOLDER`)
+    expect(schema('mysql')).toBe(`import { type MySqlTableExtraConfigValue, foreignKey, int, mysqlTable, uniqueIndex, varchar } from 'drizzle-orm/mysql-core'
+import { defineRelations } from 'drizzle-orm'
+
+export const user = mysqlTable('User', { id: varchar('id', { length: 191 }).primaryKey(), parentSubscriptionId: int('parentSubscriptionId') }, (table): MySqlTableExtraConfigValue[] => [foreignKey({ name: 'User_parentSubscriptionId_fkey', columns: [table.parentSubscriptionId], foreignColumns: [subscription.id] }).onDelete('set null').onUpdate('cascade')])
+
+export const subscription = mysqlTable('Subscription', { id: int('id').primaryKey(), userId: varchar('userId', { length: 191 }).notNull() }, (table): MySqlTableExtraConfigValue[] => [uniqueIndex('Subscription_userId_key').on(table.userId), foreignKey({ name: 'Subscription_userId_fkey', columns: [table.userId], foreignColumns: [user.id] }).onDelete('restrict').onUpdate('cascade')])
+
+export const invoice = mysqlTable('Invoice', { id: int('id').primaryKey(), subscriptionId: int('subscriptionId').notNull() }, (table) => [foreignKey({ name: 'Invoice_subscriptionId_fkey', columns: [table.subscriptionId], foreignColumns: [subscription.id] }).onDelete('restrict').onUpdate('cascade')])
+
+export const relations = defineRelations({ user, subscription, invoice }, (r) => ({ user: { parentSubscription: r.one.subscription({ from: r.user.parentSubscriptionId, to: r.subscription.id, alias: 'ChildUsers' }), subscriptions: r.one.subscription({ from: r.user.id, to: r.subscription.userId, alias: 'SubscriptionToUser' }) }, subscription: { user: r.one.user({ from: r.subscription.userId, to: r.user.id, optional: false, alias: 'SubscriptionToUser' }), childUsers: r.many.user({ alias: 'ChildUsers' }) }, invoice: { subscription: r.one.subscription({ from: r.invoice.subscriptionId, to: r.subscription.id, optional: false }) } }))`)
   })
 
   it('states what the callbacks on the cycle return, on SQLite', () => {
-    expect(schema('sqlite')).toBe(`PLACEHOLDER`)
+    expect(schema('sqlite')).toBe(`import { type SQLiteTableExtraConfigValue, foreignKey, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import { defineRelations } from 'drizzle-orm'
+
+export const user = sqliteTable('User', { id: text('id').primaryKey(), parentSubscriptionId: integer('parentSubscriptionId') }, (table): SQLiteTableExtraConfigValue[] => [foreignKey({ name: 'User_parentSubscriptionId_fkey', columns: [table.parentSubscriptionId], foreignColumns: [subscription.id] }).onDelete('set null').onUpdate('cascade')])
+
+export const subscription = sqliteTable('Subscription', { id: integer('id').primaryKey(), userId: text('userId').notNull() }, (table): SQLiteTableExtraConfigValue[] => [uniqueIndex('Subscription_userId_key').on(table.userId), foreignKey({ name: 'Subscription_userId_fkey', columns: [table.userId], foreignColumns: [user.id] }).onDelete('restrict').onUpdate('cascade')])
+
+export const invoice = sqliteTable('Invoice', { id: integer('id').primaryKey(), subscriptionId: integer('subscriptionId').notNull() }, (table) => [foreignKey({ name: 'Invoice_subscriptionId_fkey', columns: [table.subscriptionId], foreignColumns: [subscription.id] }).onDelete('restrict').onUpdate('cascade')])
+
+export const relations = defineRelations({ user, subscription, invoice }, (r) => ({ user: { parentSubscription: r.one.subscription({ from: r.user.parentSubscriptionId, to: r.subscription.id, alias: 'ChildUsers' }), subscriptions: r.one.subscription({ from: r.user.id, to: r.subscription.userId, alias: 'SubscriptionToUser' }) }, subscription: { user: r.one.user({ from: r.subscription.userId, to: r.user.id, optional: false, alias: 'SubscriptionToUser' }), childUsers: r.many.user({ alias: 'ChildUsers' }) }, invoice: { subscription: r.one.subscription({ from: r.invoice.subscriptionId, to: r.subscription.id, optional: false }) } }))`)
   })
 })

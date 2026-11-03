@@ -103,7 +103,7 @@ describe('ectoSchemaFiles', () => {
     field(:id, :integer, primary_key: true)
     field(:name, :string)
     field(:role, Ecto.Enum, values: [:USER, :ADMIN])
-    has_many(:posts, MyApp.BlogPost, foreign_key: :author_id, references: :id)
+    has_many(:posts, MyApp.BlogPost, foreign_key: :author_id)
   end
 end`,
       },
@@ -151,7 +151,7 @@ end`,
     field(:id, :integer, primary_key: true)
     field(:name, :string)
     field(:role, Ecto.Enum, values: [:USER, :ADMIN])
-    has_many(:posts, My.App.BlogPost, foreign_key: :author_id, references: :id)
+    has_many(:posts, My.App.BlogPost, foreign_key: :author_id)
   end
 end`,
       },

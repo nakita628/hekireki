@@ -24,21 +24,21 @@ export function scalarFields(model: DMMF.Model) {
 
 /**
  * The fields that tell a row apart: the `@id` or `@@id`, or, for a model with neither, the first
- * `@unique` or `@@unique` whose fields are all required (the first of any if none is), as Prisma
- * Client takes any of them to find a row. Prisma refuses a model with none of these.
+ * `@unique` or `@@unique` whose fields are all required, as Prisma Client takes any of them to find
+ * a row. Prisma refuses a model with none of these.
  */
 export function primaryKeyFields(model: DMMF.Model) {
   const id = model.fields.find((f) => f.isId)
   if (id) return [id.name]
   if (model.primaryKey) return [...model.primaryKey.fields]
-  const uniques = [
-    ...model.fields.filter((f) => f.isUnique).map((f) => [f.name]),
-    ...model.uniqueFields.map((fields) => [...fields]),
-  ]
-  const required = uniques.find((fields) =>
-    fields.every((name) => model.fields.find((f) => f.name === name)?.isRequired),
+  return (
+    [
+      ...model.fields.filter((f) => f.isUnique).map((f) => [f.name]),
+      ...model.uniqueFields.map((fields) => [...fields]),
+    ].find((fields) =>
+      fields.every((name) => model.fields.find((f) => f.name === name)?.isRequired),
+    ) ?? []
   )
-  return required ?? uniques[0] ?? []
 }
 
 /** The length a native type's first argument gives (`@db.VarChar(255)`), or null. */

@@ -126,9 +126,6 @@ model WithCompoundUnique {
   token      String
   @@unique([identifier, token])
 }
-model OnlyOptional {
-  handle String? @unique
-}
 `,
       ],
     ],
@@ -141,7 +138,6 @@ model OnlyOptional {
     ['WithCompositeId', ['a', 'b']],
     ['WithUnique', ['token']],
     ['WithCompoundUnique', ['identifier', 'token']],
-    ['OnlyOptional', ['handle']],
   ])('%s: %j', (name, expected) => {
     const model = models.find((m) => m.name === name)
     expect(model && primaryKeyFields(model)).toStrictEqual(expected)

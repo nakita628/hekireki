@@ -3186,7 +3186,61 @@ model RoleAssignment {
   @@map("role_assignments")
 }
 `)
-    expect(contextFile(plan).code).toBe(`PLACEHOLDER`)
+    expect(contextFile(plan).code).toBe(`#nullable enable
+
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Conventions;
+using Npgsql;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
+
+namespace Models;
+
+public partial class AppDbContext : DbContext
+{
+    public AppDbContext(DbContextOptions<AppDbContext> options)
+        : base(options)
+    {
+    }
+
+    public virtual DbSet<RoleAssignment> RoleAssignments { get; set; }
+
+    public static void MapEnums(NpgsqlDbContextOptionsBuilder npgsql)
+    {
+    }
+
+    public static void MapEnums(NpgsqlDataSourceBuilder dataSource)
+    {
+    }
+
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        configurationBuilder.Conventions.Remove<ForeignKeyIndexConvention>();
+        ConfigureConventionsPartial(configurationBuilder);
+    }
+
+    partial void ConfigureConventionsPartial(ModelConfigurationBuilder configurationBuilder);
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<RoleAssignment>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("role_assignments_pkey");
+
+            entity.ToTable("role_assignments");
+
+            entity.HasIndex(e => e.UserId, "role_assignments_user_id_idx");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.SystemRole).HasColumnName("system_role");
+        });
+
+        OnModelCreatingPartial(modelBuilder);
+    }
+
+    partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
+}
+`)
   })
 })
 

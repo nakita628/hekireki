@@ -68,7 +68,7 @@ type Profile struct {
 	Meta     datatypes.JSON `gorm:"column:meta" json:"meta"`
 	Avatar   []byte         `gorm:"column:avatar" json:"avatar"`
 	LastSeen *DateTime      `gorm:"column:last_seen;type:timestamptz(6)" json:"last_seen"`
-	User     User
+	User     *User
 }
 
 func (Profile) TableName() string {
@@ -91,7 +91,7 @@ type Post struct {
 	ViewCount  int       `gorm:"column:view_count;default:0;not null" json:"view_count"`
 	AuthorID   string    `gorm:"column:author_id;index:posts_author_id_idx;not null" json:"author_id"`
 	CreatedAt  DateTime  `gorm:"column:created_at;autoCreateTime:false;not null" json:"created_at"`
-	Author     User      `gorm:"foreignKey:AuthorID"`
+	Author     *User     `gorm:"foreignKey:AuthorID"`
 	Comments   []Comment `gorm:"foreignKey:PostID;constraint:OnDelete:CASCADE"`
 	Tags       []Tag     `gorm:"many2many:_PostToTag;joinForeignKey:A;joinReferences:B"`
 }
@@ -127,8 +127,8 @@ type Comment struct {
 	PostID    string   `gorm:"column:post_id;index:comments_post_id_created_at_idx;not null" json:"post_id"`
 	AuthorID  *string  `gorm:"column:author_id" json:"author_id"`
 	CreatedAt DateTime `gorm:"column:created_at;index:comments_post_id_created_at_idx;autoCreateTime:false;not null" json:"created_at"`
-	Post      Post
-	Author    User `gorm:"foreignKey:AuthorID"`
+	Post      *Post
+	Author    *User `gorm:"foreignKey:AuthorID"`
 }
 
 func (Comment) TableName() string {
@@ -147,8 +147,8 @@ type Follow struct {
 	FollowerID  string   `gorm:"column:follower_id;primaryKey" json:"follower_id"`
 	FollowingID string   `gorm:"column:following_id;primaryKey" json:"following_id"`
 	Since       DateTime `gorm:"column:since;not null" json:"since"`
-	Follower    User     `gorm:"foreignKey:FollowerID"`
-	Following   User     `gorm:"foreignKey:FollowingID"`
+	Follower    *User    `gorm:"foreignKey:FollowerID"`
+	Following   *User    `gorm:"foreignKey:FollowingID"`
 }
 
 func (Follow) TableName() string {
@@ -180,7 +180,7 @@ type Order struct {
 	UserID   string   `gorm:"column:user_id;not null" json:"user_id"`
 	Total    float64  `gorm:"column:total;type:decimal(12,2);not null" json:"total"`
 	PlacedAt DateTime `gorm:"column:placed_at;not null" json:"placed_at"`
-	User     User
+	User     *User
 	Items    []OrderItem `gorm:"foreignKey:OrderID;constraint:OnDelete:CASCADE"`
 }
 
@@ -202,7 +202,7 @@ type OrderItem struct {
 	Sku     string  `gorm:"column:sku;uniqueIndex:order_items_order_id_sku_key;type:varchar(32);not null" json:"sku"`
 	Qty     *int    `gorm:"column:qty;default:1;not null" json:"qty"`
 	Price   float64 `gorm:"column:price;type:decimal(12,2);not null" json:"price"`
-	Order   Order
+	Order   *Order
 }
 
 func (OrderItem) TableName() string {

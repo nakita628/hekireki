@@ -2662,7 +2662,31 @@ end`)
       ],
     })
     const models = [attribute, option, organization, errors]
-    expect(activeRecordModels(models, models)).toBe(`TODO`)
+    expect(activeRecordModels(models, models)).toBe(`class Attribute < ApplicationRecord
+  self.table_name = "Attribute"
+
+  has_many :options, class_name: "AttributeOption", foreign_key: "attributeId", inverse_of: :attribute_option_attribute,
+                     dependent: :destroy
+end
+
+class AttributeOption < ApplicationRecord
+  self.table_name = "AttributeOption"
+
+  belongs_to :attribute_option_attribute, class_name: "Attribute", foreign_key: "attributeId", inverse_of: :options
+end
+
+class Organization < ApplicationRecord
+  self.table_name = "Organization"
+
+  has_many :organization_errors, class_name: "Errors", foreign_key: "organizationId", inverse_of: :organization,
+                                 dependent: :destroy
+end
+
+class Errors < ApplicationRecord
+  self.table_name = "Errors"
+
+  belongs_to :organization, foreign_key: "organizationId", inverse_of: :organization_errors
+end`)
   })
 
   // Rails singularizes a has_many's name before it camelizes it: event_data
@@ -2724,7 +2748,25 @@ end`)
       ],
     })
     const models = [event, data, settings]
-    expect(activeRecordModels(models, models)).toBe(`TODO`)
+    expect(activeRecordModels(models, models)).toBe(`class WebsiteEvent < ApplicationRecord
+  self.table_name = "website_event"
+  self.primary_key = "event_id"
+
+  has_many :event_data, class_name: "EventData", inverse_of: :website_event, dependent: :destroy
+  has_many :site_settings, class_name: "SiteSettings", inverse_of: :website_event, dependent: :destroy
+end
+
+class EventData < ApplicationRecord
+  self.primary_key = "event_data_id"
+
+  belongs_to :website_event, inverse_of: :event_data
+end
+
+class SiteSettings < ApplicationRecord
+  self.table_name = "SiteSettings"
+
+  belongs_to :website_event, inverse_of: :site_settings
+end`)
   })
 
   // Ruby has loaded Monitor (the stdlib's) before any model, so `class
@@ -2787,7 +2829,22 @@ end`)
       ],
     })
     const models = [project, monitor, check]
-    expect(activeRecordModels(models, models)).toBe(`TODO`)
+    expect(activeRecordModels(models, models)).toBe(`class Project < ApplicationRecord
+  self.table_name = "Project"
+
+  has_many :monitors, class_name: "MonitorRecord", inverse_of: :project, dependent: :destroy
+end
+
+class MonitorRecord < ApplicationRecord
+  self.table_name = "Monitor"
+
+  belongs_to :project, inverse_of: :monitors
+  has_many :checks, foreign_key: "monitor_id", inverse_of: :monitor, dependent: :destroy
+end
+
+class Check < ApplicationRecord
+  belongs_to :monitor, class_name: "MonitorRecord", inverse_of: :checks
+end`)
   })
 
   // A model of the schema may already be called what the renamed class would

@@ -1058,22 +1058,17 @@ export function ectoSchemas(
         return `    belongs_to(:${snakeAssocName}, ${appName}.${makePascalCase(a.targetModel)}, ${opts.join(', ')})`
       })
 
-      // Ecto takes the key a has_one or has_many references from @primary_key, which a module
-      // with `@primary_key false` does not have: there the key is named.
-      const referencesOptOf = (references: string) =>
-        references === 'id' && pk.omitIdFieldInSchema ? '' : `, references: :${references}`
-
       const hasOneLines = associations.hasOne.map((a) => {
         const snakeFk = makeSnakeCase(a.foreignKey)
         const snakeAssocName = makeSnakeCase(a.name)
-        const referencesOpt = referencesOptOf(a.references)
+        const referencesOpt = a.references === 'id' ? '' : `, references: :${a.references}`
         return `    has_one(:${snakeAssocName}, ${appName}.${makePascalCase(a.targetModel)}, foreign_key: :${snakeFk}${referencesOpt})`
       })
 
       const hasManyLines = associations.hasMany.map((a) => {
         const snakeFk = makeSnakeCase(a.foreignKey)
         const snakeAssocName = makeSnakeCase(a.name)
-        const referencesOpt = referencesOptOf(a.references)
+        const referencesOpt = a.references === 'id' ? '' : `, references: :${a.references}`
         return `    has_many(:${snakeAssocName}, ${appName}.${makePascalCase(a.targetModel)}, foreign_key: :${snakeFk}${referencesOpt})`
       })
 
