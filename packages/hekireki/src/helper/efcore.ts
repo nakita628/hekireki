@@ -1051,7 +1051,12 @@ export function planEfCore(
   },
   options: { readonly namespace: string; readonly context: string; readonly provider: Provider },
 ): EfCorePlan {
-  const indexesOf = (model: DMMF.Model) => modelIndexes(model, datamodel.indexes ?? [])
+  // DMMF leaves an `@ignore` field out of the model, but not out of an index that lists it: the
+  // entity has no property for such an index to name, so it is left out with the field.
+  const indexesOf = (model: DMMF.Model) =>
+    modelIndexes(model, datamodel.indexes ?? []).filter((index) =>
+      index.fields.every((f) => model.fields.some((field) => field.name === f.name)),
+    )
   const schema = {
     provider: options.provider,
     models: datamodel.models,

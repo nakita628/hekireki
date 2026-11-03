@@ -4,6 +4,7 @@ import { isAnnotationLine, makePascalCase, makeSnakeCase } from '../utils/index.
 import {
   backRelation,
   fieldColumn,
+  primaryKeyFields,
   referentialActions,
   relationEnds,
 } from '../utils/prisma-model.js'
@@ -900,11 +901,11 @@ export function ectoSchemas(
   const contextModels = allModels ?? models
   return models
     .map((model) => {
+      // A model with no @id or @@id is keyed by its first unique fields, as a composite key is,
+      // so the associations of the other models that name it have a schema to load.
       const idField = model.fields.find((f) => f.isId)
-      const compositePkFieldNames = new Set(model.primaryKey?.fields)
+      const compositePkFieldNames = new Set(idField ? [] : primaryKeyFields(model))
       const isCompositePk = !idField && compositePkFieldNames.size > 0
-
-      if (!(idField || isCompositePk)) return ''
 
       const pk = idField
         ? getPrimaryKeyConfig(idField)

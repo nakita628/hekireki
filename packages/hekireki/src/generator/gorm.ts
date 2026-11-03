@@ -17,9 +17,9 @@ export function generateGormModels(
 ) {
   const idx = indexes ?? []
 
-  const modelBodies = models
-    .map((model) => generateModelStruct(model, models, enums, idx, provider))
-    .filter((body) => body !== null)
+  const modelBodies = models.map((model) =>
+    generateModelStruct(model, models, enums, idx, provider),
+  )
 
   return [
     `package ${packageName}`,

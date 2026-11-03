@@ -1,7 +1,13 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { makePascalCase, makeSnakeCase } from '../utils/index.js'
-import { isAutoincrement, isFunctionDefault, relationEnds } from '../utils/prisma-model.js'
+import { allocate } from '../utils/naming.js'
+import {
+  isAutoincrement,
+  isFunctionDefault,
+  primaryKeyFields,
+  relationEnds,
+} from '../utils/prisma-model.js'
 
 const PRISMA_TO_RUST: { [k: string]: string } = {
   String: 'String',
@@ -121,6 +127,101 @@ function rustFieldIdent(snake: string) {
   if (!RUST_KEYWORDS.has(snake)) return { ident: snake, derivedColumn: snake }
   if (RUST_NON_RAW.has(snake)) return { ident: `${snake}_`, derivedColumn: `${snake}_` }
   return { ident: `r#${snake}`, derivedColumn: snake }
+}
+
+/**
+ * The module a model, an enum or a join table is written as: its name in snake_case, a raw
+ * identifier where that is a Rust keyword, in a file named without the `r#`.
+ *
+ * @example
+ * ```rust
+ * pub mod r#type; // type.rs
+ * use super::r#type::Type;
+ * ```
+ */
+export function rustModule(name: string) {
+  const { ident } = rustFieldIdent(makeSnakeCase(name))
+  return { ident, file: `${ident.startsWith('r#') ? ident.slice(2) : ident}.rs` }
+}
+
+/**
+ * The Rust name of each scalar field of a model, the column sea-orm derives from it and the
+ * `Column` variant DeriveEntityModel makes of it. Two fields can become one name in snake_case
+ * (`createdAt` beside the `created_at` an OAuth provider returns): the one already written that
+ * way keeps it, and the other is numbered (`created_at1`, variant `CreatedAt1`), which
+ * `column_name` maps back to its own column.
+ */
+export function seaOrmFieldNames(model: DMMF.Model) {
+  const candidates = model.fields
+    .filter((f) => f.kind !== 'object')
+    .map((f) => ({ key: f.name, candidate: makeSnakeCase(f.name) }))
+  const names = allocate(
+    [
+      ...candidates.filter((c) => c.candidate === c.key),
+      ...candidates.filter((c) => c.candidate !== c.key),
+    ],
+    [],
+    (name) => name,
+  )
+  return new Map(
+    candidates.map(({ key, candidate }) => {
+      const name = names.get(key) ?? candidate
+      return [key, { ...rustFieldIdent(name), variant: makePascalCase(name) }]
+    }),
+  )
+}
+
+// The `Column` variant of a field of the named model.
+function columnVariant(models: readonly DMMF.Model[], modelName: string, fieldName: string) {
+  const model = models.find((m) => m.name === modelName)
+  return (
+    (model ? seaOrmFieldNames(model).get(fieldName)?.variant : undefined) ??
+    makePascalCase(fieldName)
+  )
+}
+
+/**
+ * A method chain on a relation followed by `suffix`, laid out as rustfmt lays it out: on one
+ * line while it fits in 100 columns and, with more than one call, the chain takes no more than
+ * 60 (`chain_width`); otherwise one call per line under the path. Where the path alone does not
+ * fit, rustfmt leaves the line as it is.
+ *
+ * @example
+ * ```rust
+ *         Relation::Author.def()
+ *             super::block_version_to_resource::Relation::BlockVersion
+ *                 .def()
+ *                 .rev(),
+ * ```
+ */
+function relationChain(indent: string, path: string, calls: readonly string[], suffix: string) {
+  const line = `${indent}${path}${calls.join('')}${suffix}`
+  const fits = line.length <= 100 && (calls.length === 1 || `${path}${calls.join('')}`.length <= 60)
+  const broken = [
+    `${indent}${path}`,
+    ...calls.map((call, i) => `${indent}    ${call}${i === calls.length - 1 ? suffix : ''}`),
+  ]
+  return fits || broken.some((part) => part.length > 100) ? line : broken.join('\n')
+}
+
+/**
+ * The body of `via()`: the relation from the join table back to this model, in `Some`, which
+ * rustfmt opens onto lines of its own when the chain inside is broken.
+ *
+ * @example
+ * ```rust
+ *         Some(super::post_to_tag::Relation::Post.def().rev())
+ *         Some(
+ *             super::block_version_to_resource::Relation::BlockVersion
+ *                 .def()
+ *                 .rev(),
+ *         )
+ * ```
+ */
+function viaBody(path: string) {
+  const line = `        Some(${path}.def().rev())`
+  const inner = relationChain('            ', path, ['.def()', '.rev()'], ',')
+  return inner.includes('\n') ? `        Some(\n${inner}\n        )` : line
 }
 
 export function resolveSeaOrmColumnType(field: DMMF.Field) {
@@ -448,8 +549,9 @@ export function generateEnum(e: DMMF.DatamodelEnum, serde: { readonly renameAll?
 }
 
 function generateRelationEnum(
-  _model: DMMF.Model,
+  model: DMMF.Model,
   associations: ReturnType<typeof getAssociations>,
+  allModels: readonly DMMF.Model[],
 ) {
   const hasAny =
     associations.belongsTo.length > 0 ||
@@ -480,18 +582,19 @@ function generateRelationEnum(
 
   for (const assoc of associations.belongsTo) {
     const variantName = makePascalCase(assoc.name)
-    const targetModule = makeSnakeCase(assoc.targetModel)
+    const targetModule = rustModule(assoc.targetModel).ident
+    const own = (c: string) => `Column::${columnVariant(allModels, model.name, c)}`
+    const target = (c: string) =>
+      `super::${targetModule}::Column::${columnVariant(allModels, assoc.targetModel, c)}`
     // Composite FKs use sea-orm's tuple syntax: from = "(Column::A, Column::B)".
     const fromCol =
       assoc.foreignKeys.length > 1
-        ? `(${assoc.foreignKeys.map((c) => `Column::${makePascalCase(c)}`).join(', ')})`
-        : `Column::${makePascalCase(assoc.foreignKey)}`
+        ? `(${assoc.foreignKeys.map(own).join(', ')})`
+        : own(assoc.foreignKey)
     const toCol =
       assoc.referencesList.length > 1
-        ? `(${assoc.referencesList
-            .map((c) => `super::${targetModule}::Column::${makePascalCase(c)}`)
-            .join(', ')})`
-        : `super::${targetModule}::Column::${makePascalCase(assoc.references)}`
+        ? `(${assoc.referencesList.map(target).join(', ')})`
+        : target(assoc.references)
     // Prisma action names match sea-orm's ForeignKeyAction variants verbatim.
     const actions = [
       assoc.onUpdate ? `on_update = "${assoc.onUpdate}"` : null,
@@ -508,13 +611,13 @@ function generateRelationEnum(
 
   for (const assoc of associations.hasMany) {
     const variantName = makePascalCase(assoc.name)
-    const targetModule = makeSnakeCase(assoc.targetModel)
+    const targetModule = rustModule(assoc.targetModel).ident
     const attribute = seaOrmAttribute('    ', [
       `has_many = "super::${targetModule}::Entity"`,
       ...(isAmbiguous(assoc.targetModel)
         ? [
-            `from = "Column::${makePascalCase(assoc.references)}"`,
-            `to = "super::${targetModule}::Column::${makePascalCase(assoc.foreignKey)}"`,
+            `from = "Column::${columnVariant(allModels, model.name, assoc.references)}"`,
+            `to = "super::${targetModule}::Column::${columnVariant(allModels, assoc.targetModel, assoc.foreignKey)}"`,
           ]
         : []),
     ])
@@ -523,13 +626,13 @@ function generateRelationEnum(
 
   for (const assoc of associations.hasOne) {
     const variantName = makePascalCase(assoc.name)
-    const targetModule = makeSnakeCase(assoc.targetModel)
+    const targetModule = rustModule(assoc.targetModel).ident
     const attribute = seaOrmAttribute('    ', [
       `has_one = "super::${targetModule}::Entity"`,
       ...(isAmbiguous(assoc.targetModel)
         ? [
-            `from = "Column::${makePascalCase(assoc.references)}"`,
-            `to = "super::${targetModule}::Column::${makePascalCase(assoc.foreignKey)}"`,
+            `from = "Column::${columnVariant(allModels, model.name, assoc.references)}"`,
+            `to = "super::${targetModule}::Column::${columnVariant(allModels, assoc.targetModel, assoc.foreignKey)}"`,
           ]
         : []),
     ])
@@ -555,12 +658,11 @@ function generateRelatedImpls(model: DMMF.Model, associations: ReturnType<typeof
   for (const assoc of associations.belongsTo) {
     if (emittedTargets.has(assoc.targetModel)) continue
     emittedTargets.add(assoc.targetModel)
-    const targetModule = makeSnakeCase(assoc.targetModel)
     impls.push(
       [
-        relatedImplHeader(targetModule),
+        relatedImplHeader(rustModule(assoc.targetModel).ident),
         '    fn to() -> RelationDef {',
-        `        Relation::${makePascalCase(assoc.name)}.def()`,
+        relationChain('        ', `Relation::${makePascalCase(assoc.name)}`, ['.def()'], ''),
         '    }',
         '}',
       ].join('\n'),
@@ -570,12 +672,11 @@ function generateRelatedImpls(model: DMMF.Model, associations: ReturnType<typeof
   for (const assoc of associations.hasMany) {
     if (emittedTargets.has(assoc.targetModel)) continue
     emittedTargets.add(assoc.targetModel)
-    const targetModule = makeSnakeCase(assoc.targetModel)
     impls.push(
       [
-        relatedImplHeader(targetModule),
+        relatedImplHeader(rustModule(assoc.targetModel).ident),
         '    fn to() -> RelationDef {',
-        `        Relation::${makePascalCase(assoc.name)}.def()`,
+        relationChain('        ', `Relation::${makePascalCase(assoc.name)}`, ['.def()'], ''),
         '    }',
         '}',
       ].join('\n'),
@@ -585,12 +686,11 @@ function generateRelatedImpls(model: DMMF.Model, associations: ReturnType<typeof
   for (const assoc of associations.hasOne) {
     if (emittedTargets.has(assoc.targetModel)) continue
     emittedTargets.add(assoc.targetModel)
-    const targetModule = makeSnakeCase(assoc.targetModel)
     impls.push(
       [
-        relatedImplHeader(targetModule),
+        relatedImplHeader(rustModule(assoc.targetModel).ident),
         '    fn to() -> RelationDef {',
-        `        Relation::${makePascalCase(assoc.name)}.def()`,
+        relationChain('        ', `Relation::${makePascalCase(assoc.name)}`, ['.def()'], ''),
         '    }',
         '}',
       ].join('\n'),
@@ -602,7 +702,7 @@ function generateRelatedImpls(model: DMMF.Model, associations: ReturnType<typeof
     // one of them: each end is a `Linked` instead, from the rows that hold its own key (`A` on
     // side A) to the model the other column points at.
     if (assoc.targetModel === model.name) {
-      const junctionModule = makeSnakeCase(assoc.relationName)
+      const junctionModule = rustModule(assoc.relationName).ident
       const [own, other] = assoc.isSideA ? ['A', 'B'] : ['B', 'A']
       impls.push(
         [
@@ -614,8 +714,18 @@ function generateRelatedImpls(model: DMMF.Model, associations: ReturnType<typeof
           '',
           '    fn link(&self) -> Vec<RelationDef> {',
           '        vec![',
-          `            super::${junctionModule}::Relation::${own}.def().rev(),`,
-          `            super::${junctionModule}::Relation::${other}.def(),`,
+          relationChain(
+            '            ',
+            `super::${junctionModule}::Relation::${own}`,
+            ['.def()', '.rev()'],
+            ',',
+          ),
+          relationChain(
+            '            ',
+            `super::${junctionModule}::Relation::${other}`,
+            ['.def()'],
+            ',',
+          ),
           '        ]',
           '    }',
           '}',
@@ -625,8 +735,8 @@ function generateRelatedImpls(model: DMMF.Model, associations: ReturnType<typeof
     }
     if (emittedTargets.has(assoc.targetModel)) continue
     emittedTargets.add(assoc.targetModel)
-    const targetModule = makeSnakeCase(assoc.targetModel)
-    const junctionModule = makeSnakeCase(assoc.relationName)
+    const targetModule = rustModule(assoc.targetModel).ident
+    const junctionModule = rustModule(assoc.relationName).ident
     const junctionRelToTarget = makePascalCase(assoc.targetModel)
     const junctionRelToSelf = makePascalCase(model.name)
 
@@ -634,10 +744,15 @@ function generateRelatedImpls(model: DMMF.Model, associations: ReturnType<typeof
       [
         relatedImplHeader(targetModule),
         '    fn to() -> RelationDef {',
-        `        super::${junctionModule}::Relation::${junctionRelToTarget}.def()`,
+        relationChain(
+          '        ',
+          `super::${junctionModule}::Relation::${junctionRelToTarget}`,
+          ['.def()'],
+          '',
+        ),
         '    }',
         '    fn via() -> Option<RelationDef> {',
-        `        Some(super::${junctionModule}::Relation::${junctionRelToSelf}.def().rev())`,
+        viaBody(`super::${junctionModule}::Relation::${junctionRelToSelf}`),
         '    }',
         '}',
       ].join('\n'),
@@ -654,15 +769,15 @@ export function generateEntityFile(
   serde: { readonly renameAll?: string } = {},
   provider?: string,
 ) {
-  const idField = model.fields.find((f) => f.isId)
-  const compositePkFieldNames = new Set(model.primaryKey?.fields)
-  const isCompositePk = !idField && compositePkFieldNames.size > 0
+  const primaryKey = new Set(primaryKeyFields(model))
+  const isCompositePk = primaryKey.size > 1
 
-  if (!(idField || isCompositePk)) return ''
+  if (primaryKey.size === 0) return ''
 
   const tableName = model.dbName ?? model.name
   const associations = getAssociations(model, allModels)
   const enumNames = new Set(enums.map((e) => e.name))
+  const fieldNames = seaOrmFieldNames(model)
 
   const scalarFields = model.fields.filter((f) => f.kind !== 'object')
   const fieldLines: string[] = []
@@ -673,8 +788,9 @@ export function generateEntityFile(
   let stampsOnInsert = false
 
   for (const field of scalarFields) {
-    const isPk = field.isId || compositePkFieldNames.has(field.name)
-    const { ident: fieldName, derivedColumn } = rustFieldIdent(makeSnakeCase(field.name))
+    const isPk = primaryKey.has(field.name)
+    const { ident: fieldName, derivedColumn } =
+      fieldNames.get(field.name) ?? rustFieldIdent(makeSnakeCase(field.name))
     const attrs = buildSeaOrmAttributes(field, isPk, isCompositePk, derivedColumn, enums)
 
     const nativeOverride = rustTypeForNative(field, provider)
@@ -734,7 +850,7 @@ export function generateEntityFile(
     )
   }
 
-  const relationEnum = generateRelationEnum(model, associations)
+  const relationEnum = generateRelationEnum(model, associations, allModels)
   const relatedImpls = generateRelatedImpls(model, associations)
 
   const superImports = [
@@ -748,8 +864,10 @@ export function generateEntityFile(
       ),
     ),
   ]
-    .map((name) => `use super::${makeSnakeCase(name)}::${name};`)
-    .toSorted()
+    .map((name) => ({ module: rustModule(name).ident, name }))
+    // rustfmt orders a path segment by segment: `status` before `status2`.
+    .toSorted((a, b) => (a.module < b.module ? -1 : a.module > b.module ? 1 : 0))
+    .map(({ module, name }) => `use super::${module}::${name};`)
 
   const generatedIdFields = scalarFields.filter(
     (f) => f.type === 'String' && !f.isList && generatedIdExpr(f) !== null,
@@ -771,7 +889,8 @@ export function generateEntityFile(
           '    fn new() -> Self {',
           '        Self {',
           ...generatedIdFields.map((field) => {
-            const { ident } = rustFieldIdent(makeSnakeCase(field.name))
+            const { ident } =
+              fieldNames.get(field.name) ?? rustFieldIdent(makeSnakeCase(field.name))
             const generate = generatedIdExpr(field) ?? ''
             const value = field.isRequired ? generate : `Some(${generate})`
             // rustfmt's layout of the field, as it writes it for each length of the name (n) and
@@ -872,8 +991,8 @@ export function generateM2MEntity(
     leftModel < rightModel ? [leftModel, rightModel] : [rightModel, leftModel]
 
   const tableName = `_${relationName}`
-  const leftModule = makeSnakeCase(sortedLeft)
-  const rightModule = makeSnakeCase(sortedRight)
+  const leftModule = rustModule(sortedLeft).ident
+  const rightModule = rustModule(sortedRight).ident
   // In a self-relation both columns hold the one model's key, so `<model>_id` and the relation
   // named after the model would each be declared twice: the fields and relations take the
   // columns' own names, which the model's `Linked` ends refer to.
@@ -1027,8 +1146,11 @@ export function generateModRs(moduleNames: readonly string[]) {
 
 export function generatePreludeRs(models: readonly DMMF.Model[]) {
   return `${models
-    .map((m) => `pub use super::${makeSnakeCase(m.name)}::Entity as ${m.name};`)
-    .toSorted()
+    .map((m) => ({ module: rustModule(m.name).ident, name: m.name }))
+    // rustfmt orders a path segment by segment: `profile_builder_state` before
+    // `profile_builder_state2`, where the lines as text would put `2` before `:`.
+    .toSorted((a, b) => (a.module < b.module ? -1 : a.module > b.module ? 1 : 0))
+    .map(({ module, name }) => `pub use super::${module}::Entity as ${name};`)
     .join('\n')}\n`
 }
 

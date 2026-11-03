@@ -3166,6 +3166,84 @@ file sealed class UtcClockConverter : ValueConverter<DateTime, DateTime>
   })
 })
 
+// DMMF leaves an `@ignore` field out of the model and keeps it in the indexes that list it.
+describe('an index over an @ignore field', () => {
+  it('is left out with the field', () => {
+    const { plan } = fixture(`
+datasource db {
+  provider = "postgresql"
+}
+
+model RoleAssignment {
+  id                   String  @id
+  userId               String  @map("user_id")
+  systemRole           String  @map("system_role")
+  deprecatedOwnerOrgId String? @map("owner_org_id") @ignore
+
+  @@unique([userId, deprecatedOwnerOrgId, systemRole], map: "role_assignments_user_org_role_key")
+  @@index([deprecatedOwnerOrgId], map: "role_assignments_owner_org_id_idx")
+  @@index([userId])
+  @@map("role_assignments")
+}
+`)
+    expect(contextFile(plan).code).toBe(`#nullable enable
+
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Conventions;
+using Npgsql;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
+
+namespace Models;
+
+public partial class AppDbContext : DbContext
+{
+    public AppDbContext(DbContextOptions<AppDbContext> options)
+        : base(options)
+    {
+    }
+
+    public virtual DbSet<RoleAssignment> RoleAssignments { get; set; }
+
+    public static void MapEnums(NpgsqlDbContextOptionsBuilder npgsql)
+    {
+    }
+
+    public static void MapEnums(NpgsqlDataSourceBuilder dataSource)
+    {
+    }
+
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        configurationBuilder.Conventions.Remove<ForeignKeyIndexConvention>();
+        ConfigureConventionsPartial(configurationBuilder);
+    }
+
+    partial void ConfigureConventionsPartial(ModelConfigurationBuilder configurationBuilder);
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<RoleAssignment>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("role_assignments_pkey");
+
+            entity.ToTable("role_assignments");
+
+            entity.HasIndex(e => e.UserId, "role_assignments_user_id_idx");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.SystemRole).HasColumnName("system_role");
+        });
+
+        OnModelCreatingPartial(modelBuilder);
+    }
+
+    partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
+}
+`)
+  })
+})
+
 describe('MySQL and SQLite', () => {
   const enumAndDates = `
 enum Role {

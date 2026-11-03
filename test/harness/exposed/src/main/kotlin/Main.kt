@@ -161,11 +161,14 @@ fun mainSchema() =
         tables = models.PrismaSchema.tables,
         schemas = models.PrismaSchema.schemas,
         enumTypes = models.PrismaSchema.enumTypes,
-        // @ignore and @@ignore take a column and a table out of DMMF, not out of the database.
+        // @ignore and @@ignore take a column and a table out of DMMF, not out of the database, and
+        // an index over the column is left out with it.
         expected =
             listOf(
                 "- column public.Ghost.hidden ",
                 "- column public.Phantom.id ",
+                "- index public.Ghost.Ghost_hidden_idx ",
+                "- index public.Ghost.Ghost_seen_hidden_key ",
                 "- constraint public.Phantom.Phantom_pkey ",
                 "- index public.Phantom.Phantom_pkey ",
                 "- sequence public.Phantom_id_seq ",

@@ -2,6 +2,7 @@ import type { DMMF } from '@prisma/generator-helper'
 import { describe, expect, it } from 'vite-plus/test'
 
 import {
+  activeRecordClassNames,
   activeRecordLocaleFiles,
   activeRecordModels,
   activeRecordProblems,
@@ -2547,5 +2548,367 @@ end`)
   attribute :list, default: -> { [] }
   alias_attribute :created_at, :createdAt
 end`)
+  })
+})
+
+describe('names Rails would refuse or misread', () => {
+  // has_many :attributes raises ArgumentError: Active Record defines
+  // `attributes` on every record. The association takes the name Rails gives
+  // one of its class, and the other side names it as its inverse.
+  it('renames an association named after a method Active Record defines', () => {
+    const contact = makeModel({
+      name: 'Contact',
+      fields: [
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({
+          name: 'attributes',
+          type: 'ContactAttribute',
+          kind: 'object',
+          isList: true,
+          relationName: 'ContactToContactAttribute',
+        }),
+      ],
+    })
+    const contactAttribute = makeModel({
+      name: 'ContactAttribute',
+      fields: [
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({ name: 'contactId', type: 'String' }),
+        makeField({
+          name: 'contact',
+          type: 'Contact',
+          kind: 'object',
+          relationName: 'ContactToContactAttribute',
+          relationFromFields: ['contactId'],
+          relationToFields: ['id'],
+          relationOnDelete: 'Cascade',
+        }),
+      ],
+    })
+    const models = [contact, contactAttribute]
+    expect(activeRecordModels(models, models)).toBe(`class Contact < ApplicationRecord
+  self.table_name = "Contact"
+
+  has_many :contact_attributes, foreign_key: "contactId", inverse_of: :contact, dependent: :destroy
+end
+
+class ContactAttribute < ApplicationRecord
+  self.table_name = "ContactAttribute"
+
+  belongs_to :contact, foreign_key: "contactId", inverse_of: :contact_attributes
+end`)
+  })
+
+  // The name Rails would give is the method again (`belongs_to :attribute` of
+  // Attribute, `has_many :errors` of Errors): the model's own name goes before
+  // it, and class_name says what Rails cannot infer.
+  it("puts the model's name before one whose class gives the same name", () => {
+    const attribute = makeModel({
+      name: 'Attribute',
+      fields: [
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({
+          name: 'options',
+          type: 'AttributeOption',
+          kind: 'object',
+          isList: true,
+          relationName: 'AttributeToAttributeOption',
+        }),
+      ],
+    })
+    const option = makeModel({
+      name: 'AttributeOption',
+      fields: [
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({ name: 'attributeId', type: 'String' }),
+        makeField({
+          name: 'attribute',
+          type: 'Attribute',
+          kind: 'object',
+          relationName: 'AttributeToAttributeOption',
+          relationFromFields: ['attributeId'],
+          relationToFields: ['id'],
+          relationOnDelete: 'Cascade',
+        }),
+      ],
+    })
+    const organization = makeModel({
+      name: 'Organization',
+      fields: [
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({
+          name: 'errors',
+          type: 'Errors',
+          kind: 'object',
+          isList: true,
+          relationName: 'ErrorsToOrganization',
+        }),
+      ],
+    })
+    const errors = makeModel({
+      name: 'Errors',
+      fields: [
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({ name: 'organizationId', type: 'String' }),
+        makeField({
+          name: 'organization',
+          type: 'Organization',
+          kind: 'object',
+          relationName: 'ErrorsToOrganization',
+          relationFromFields: ['organizationId'],
+          relationToFields: ['id'],
+          relationOnDelete: 'Cascade',
+        }),
+      ],
+    })
+    const models = [attribute, option, organization, errors]
+    expect(activeRecordModels(models, models)).toBe(`class Attribute < ApplicationRecord
+  self.table_name = "Attribute"
+
+  has_many :options, class_name: "AttributeOption", foreign_key: "attributeId", inverse_of: :attribute_option_attribute,
+                     dependent: :destroy
+end
+
+class AttributeOption < ApplicationRecord
+  self.table_name = "AttributeOption"
+
+  belongs_to :attribute_option_attribute, class_name: "Attribute", foreign_key: "attributeId", inverse_of: :options
+end
+
+class Organization < ApplicationRecord
+  self.table_name = "Organization"
+
+  has_many :organization_errors, class_name: "Errors", foreign_key: "organizationId", inverse_of: :organization,
+                                 dependent: :destroy
+end
+
+class Errors < ApplicationRecord
+  self.table_name = "Errors"
+
+  belongs_to :organization, foreign_key: "organizationId", inverse_of: :organization_errors
+end`)
+  })
+
+  // Rails singularizes a has_many's name before it camelizes it: event_data
+  // is EventDatum and site_settings SiteSetting, neither of them the class.
+  // The table is read the same way: event_data is the plural of EventData.
+  it('names the class where Rails would singularize the association to another', () => {
+    const event = makeModel({
+      name: 'WebsiteEvent',
+      dbName: 'website_event',
+      fields: [
+        makeField({ name: 'event_id', type: 'String', isId: true }),
+        makeField({
+          name: 'event_data',
+          type: 'EventData',
+          kind: 'object',
+          isList: true,
+          relationName: 'EventDataToWebsiteEvent',
+        }),
+        makeField({
+          name: 'site_settings',
+          type: 'SiteSettings',
+          kind: 'object',
+          isList: true,
+          relationName: 'SiteSettingsToWebsiteEvent',
+        }),
+      ],
+    })
+    const data = makeModel({
+      name: 'EventData',
+      dbName: 'event_data',
+      fields: [
+        makeField({ name: 'event_data_id', type: 'String', isId: true }),
+        makeField({ name: 'website_event_id', type: 'String' }),
+        makeField({
+          name: 'website_event',
+          type: 'WebsiteEvent',
+          kind: 'object',
+          relationName: 'EventDataToWebsiteEvent',
+          relationFromFields: ['website_event_id'],
+          relationToFields: ['event_id'],
+          relationOnDelete: 'Cascade',
+        }),
+      ],
+    })
+    const settings = makeModel({
+      name: 'SiteSettings',
+      fields: [
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({ name: 'website_event_id', type: 'String' }),
+        makeField({
+          name: 'website_event',
+          type: 'WebsiteEvent',
+          kind: 'object',
+          relationName: 'SiteSettingsToWebsiteEvent',
+          relationFromFields: ['website_event_id'],
+          relationToFields: ['event_id'],
+          relationOnDelete: 'Cascade',
+        }),
+      ],
+    })
+    const models = [event, data, settings]
+    expect(activeRecordModels(models, models)).toBe(`class WebsiteEvent < ApplicationRecord
+  self.table_name = "website_event"
+  self.primary_key = "event_id"
+
+  has_many :event_data, class_name: "EventData", inverse_of: :website_event, dependent: :destroy
+  has_many :site_settings, class_name: "SiteSettings", inverse_of: :website_event, dependent: :destroy
+end
+
+class EventData < ApplicationRecord
+  self.primary_key = "event_data_id"
+
+  belongs_to :website_event, inverse_of: :event_data
+end
+
+class SiteSettings < ApplicationRecord
+  self.table_name = "SiteSettings"
+
+  belongs_to :website_event, inverse_of: :site_settings
+end`)
+  })
+
+  // Ruby has loaded Monitor (the stdlib's) before any model, so `class
+  // Monitor < ApplicationRecord` is a superclass mismatch. The model is
+  // MonitorRecord, which Rails would give another table, other foreign keys
+  // and other inverses than the schema's: those are written out, and every
+  // association to it names the class.
+  it('writes a model named after a Ruby constant as another class', () => {
+    const project = makeModel({
+      name: 'Project',
+      fields: [
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({
+          name: 'monitors',
+          type: 'Monitor',
+          kind: 'object',
+          isList: true,
+          relationName: 'MonitorToProject',
+        }),
+      ],
+    })
+    const monitor = makeModel({
+      name: 'Monitor',
+      fields: [
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({ name: 'project_id', type: 'String' }),
+        makeField({
+          name: 'project',
+          type: 'Project',
+          kind: 'object',
+          relationName: 'MonitorToProject',
+          relationFromFields: ['project_id'],
+          relationToFields: ['id'],
+          relationOnDelete: 'Cascade',
+        }),
+        makeField({
+          name: 'checks',
+          type: 'Check',
+          kind: 'object',
+          isList: true,
+          relationName: 'CheckToMonitor',
+        }),
+      ],
+    })
+    const check = makeModel({
+      name: 'Check',
+      dbName: 'checks',
+      fields: [
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({ name: 'monitor_id', type: 'String' }),
+        makeField({
+          name: 'monitor',
+          type: 'Monitor',
+          kind: 'object',
+          relationName: 'CheckToMonitor',
+          relationFromFields: ['monitor_id'],
+          relationToFields: ['id'],
+          relationOnDelete: 'Cascade',
+        }),
+      ],
+    })
+    const models = [project, monitor, check]
+    expect(activeRecordModels(models, models)).toBe(`class Project < ApplicationRecord
+  self.table_name = "Project"
+
+  has_many :monitors, class_name: "MonitorRecord", inverse_of: :project, dependent: :destroy
+end
+
+class MonitorRecord < ApplicationRecord
+  self.table_name = "Monitor"
+
+  belongs_to :project, inverse_of: :monitors
+  has_many :checks, foreign_key: "monitor_id", inverse_of: :monitor, dependent: :destroy
+end
+
+class Check < ApplicationRecord
+  belongs_to :monitor, class_name: "MonitorRecord", inverse_of: :checks
+end`)
+  })
+
+  // A model of the schema may already be called what the renamed class would
+  // be: the renamed one is numbered on, as the file names would collide.
+  it('numbers the class on where another model has the name already', () => {
+    expect([
+      ...activeRecordClassNames([
+        makeModel({ name: 'Set' }),
+        makeModel({ name: 'SetRecord' }),
+        makeModel({ name: 'Comparable' }),
+        makeModel({ name: 'Post' }),
+      ]),
+    ]).toStrictEqual([
+      ['Set', 'SetRecord1'],
+      ['SetRecord', 'SetRecord'],
+      ['Comparable', 'ComparableRecord'],
+      ['Post', 'Post'],
+    ])
+  })
+
+  // The locale keys are Rails': the class's i18n_key and the association's name.
+  it('writes the locale keys under the class and the association as written', () => {
+    const monitor = makeModel({
+      name: 'Monitor',
+      documentation: '@ar.name(en: "Monitor")',
+      fields: [
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({
+          name: 'errors',
+          type: 'MonitorError',
+          kind: 'object',
+          isList: true,
+          relationName: 'MonitorToMonitorError',
+          documentation: '@ar.name(en: "Errors")',
+        }),
+      ],
+    })
+    const error = makeModel({
+      name: 'MonitorError',
+      fields: [
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({ name: 'monitorId', type: 'String' }),
+        makeField({
+          name: 'monitor',
+          type: 'Monitor',
+          kind: 'object',
+          relationName: 'MonitorToMonitorError',
+          relationFromFields: ['monitorId'],
+          relationToFields: ['id'],
+        }),
+      ],
+    })
+    expect(activeRecordLocaleFiles([monitor, error])).toStrictEqual([
+      {
+        fileName: 'models/monitor_record/en.yml',
+        code: `en:
+  activerecord:
+    models:
+      monitor_record: "Monitor"
+    attributes:
+      monitor_record:
+        monitor_errors: "Errors"
+`,
+      },
+    ])
   })
 })

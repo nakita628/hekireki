@@ -237,6 +237,8 @@ type ImportReq = { readonly pkg: string; readonly kind: 'named' | 'default'; rea
 export function createImports() {
   return {
     core: new Set<string>(),
+    // Written `type X` in the core import, so a schema compiled with `verbatimModuleSyntax` holds.
+    coreTypes: new Set<string>(),
     orm: new Set<string>(),
     ext: new Map<string, { named: Set<string>; default?: string }>(),
     helpers: new Set<string>(),
@@ -286,9 +288,13 @@ export function generateImports(imports: DrizzleImports, provider: DbProvider) {
       : provider === 'mysql'
         ? 'drizzle-orm/mysql-core'
         : 'drizzle-orm/sqlite-core'
+  const coreNames = [
+    ...[...imports.core].map((name) => ({ name, text: name })),
+    ...[...imports.coreTypes].map((name) => ({ name, text: `type ${name}` })),
+  ].toSorted((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
   const coreImport =
-    imports.core.size > 0
-      ? `import { ${[...imports.core].toSorted().join(', ')} } from '${mod}'`
+    coreNames.length > 0
+      ? `import { ${coreNames.map((entry) => entry.text).join(', ')} } from '${mod}'`
       : ''
   const ormImport =
     imports.orm.size > 0
@@ -631,11 +637,14 @@ function makeTableConstraints(
       })()
     : null
 
+  // DMMF leaves an `@ignore` field out of the model, but not out of an index that lists it: the
+  // table has no column for such an index to name, so it is left out with the field.
   const indexLines = indexes
     .filter(
       (idx) =>
         idx.model === model.name &&
-        (idx.type === 'unique' || idx.type === 'normal' || idx.type === 'fulltext'),
+        (idx.type === 'unique' || idx.type === 'normal' || idx.type === 'fulltext') &&
+        idx.fields.every((f) => model.fields.some((field) => field.name === f.name)),
     )
     .map((idx) => {
       const name =
@@ -670,31 +679,50 @@ function makeTableConstraints(
       return `${make}('${name}').on(${on.join(', ')})`
     })
 
-  const fkLines = model.fields
-    .filter(
-      (f) =>
-        f.kind === 'object' &&
-        f.relationFromFields !== undefined &&
-        f.relationFromFields.length > 0 &&
-        f.relationToFields !== undefined,
+  const fkLines = model.fields.filter(isForeignKey).map((f) => {
+    imports.core.add('foreignKey')
+    // A relation of a model to itself reads its own columns from the table it is given.
+    const target = f.type === model.name ? 'table' : resolveVarNameByType(f.type, models)
+    const from = f.relationFromFields ?? []
+    const name = constraintName(
+      tableName,
+      from.map((c) => fieldColumn(model, c)),
+      'fkey',
+      provider,
     )
-    .map((f) => {
-      imports.core.add('foreignKey')
-      // A relation of a model to itself reads its own columns from the table it is given.
-      const target = f.type === model.name ? 'table' : resolveVarNameByType(f.type, models)
-      const from = f.relationFromFields ?? []
-      const name = constraintName(
-        tableName,
-        from.map((c) => fieldColumn(model, c)),
-        'fkey',
-        provider,
-      )
-      const { onDelete, onUpdate } = referentialActions(f)
-      return `foreignKey({ name: '${name}', columns: [${from.map((c) => `table.${c}`).join(', ')}], foreignColumns: [${(f.relationToFields ?? []).map((c) => `${target}.${c}`).join(', ')}] }).onDelete('${PRISMA_ACTION_MAP[onDelete] ?? 'no action'}').onUpdate('${PRISMA_ACTION_MAP[onUpdate] ?? 'no action'}')`
-    })
+    const { onDelete, onUpdate } = referentialActions(f)
+    return `foreignKey({ name: '${name}', columns: [${from.map((c) => `table.${c}`).join(', ')}], foreignColumns: [${(f.relationToFields ?? []).map((c) => `${target}.${c}`).join(', ')}] }).onDelete('${PRISMA_ACTION_MAP[onDelete] ?? 'no action'}').onUpdate('${PRISMA_ACTION_MAP[onUpdate] ?? 'no action'}')`
+  })
 
   const all = [pkLine, ...indexLines, ...fkLines].filter((l) => l !== null)
   return all.length > 0 ? all.join(', ') : null
+}
+
+function isForeignKey(field: DMMF.Field) {
+  return (
+    field.kind === 'object' &&
+    field.relationFromFields !== undefined &&
+    field.relationFromFields.length > 0 &&
+    field.relationToFields !== undefined
+  )
+}
+
+// Whether the model's foreign keys lead, through other tables', back to it. A table's callback that
+// names another table makes the table's type wait on that table's, so on such a cycle TypeScript
+// cannot infer any of them (TS7022) unless the callback states what it returns.
+function isOnForeignKeyCycle(model: DMMF.Model, models: readonly DMMF.Model[]) {
+  const targets = (name: string) =>
+    models
+      .find((m) => m.name === name)
+      ?.fields.filter((f) => isForeignKey(f) && f.type !== name)
+      .map((f) => f.type) ?? []
+  const reaches = (from: readonly string[], seen: ReadonlySet<string>): boolean => {
+    if (from.includes(model.name)) return true
+    const next = [...new Set(from.flatMap(targets))].filter((name) => !seen.has(name))
+    return next.length > 0 && reaches(next, new Set([...seen, ...next]))
+  }
+  const first = targets(model.name)
+  return reaches(first, new Set(first))
 }
 
 export function makeTable(
@@ -716,10 +744,18 @@ export function makeTable(
     .filter((c) => c !== null)
     .join(', ')
   const constraints = makeTableConstraints(model, models, provider, imports, indexes, tableName)
+  if (!constraints) return `export const ${varName} = ${tableFunc}('${tableName}', { ${columns} })`
 
-  return constraints
-    ? `export const ${varName} = ${tableFunc}('${tableName}', { ${columns} }, (table) => [${constraints}])`
-    : `export const ${varName} = ${tableFunc}('${tableName}', { ${columns} })`
+  const configType = isOnForeignKeyCycle(model, models)
+    ? provider === 'postgresql'
+      ? 'PgTableExtraConfigValue'
+      : provider === 'mysql'
+        ? 'MySqlTableExtraConfigValue'
+        : 'SQLiteTableExtraConfigValue'
+    : undefined
+  if (configType) imports.coreTypes.add(configType)
+  const params = configType ? `(table): ${configType}[]` : '(table)'
+  return `export const ${varName} = ${tableFunc}('${tableName}', { ${columns} }, ${params} => [${constraints}])`
 }
 
 function joinVarName(relationName: string) {

@@ -28,11 +28,17 @@ var schema = args[1] switch
     "main" => new Schema(
         "main",
         connection => new Models.AppDbContext(Options<Models.AppDbContext>(connection, Models.AppDbContext.MapEnums)),
-        // @ignore and @@ignore take a column and a table out of DMMF, not out of the database.
+        // @ignore and @@ignore take a column and a table out of DMMF, not out of the database, and
+        // an index over the column is left out with it. A model without @id is keyed by its first
+        // unique criterion, which EF Core can only make a primary key.
         [
+            "+ constraint public.Session.Session_sessionToken_key p ",
+            "+ constraint public.VerificationToken.VerificationToken_token_key p ",
             "- column public.Ghost.hidden ",
             "- column public.Phantom.id ",
             "- constraint public.Phantom.Phantom_pkey ",
+            "- index public.Ghost.Ghost_hidden_idx ",
+            "- index public.Ghost.Ghost_seen_hidden_key ",
             "- index public.Phantom.Phantom_pkey ",
         ]),
     "edge" => new Schema(

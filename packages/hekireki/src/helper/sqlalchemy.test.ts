@@ -2451,3 +2451,387 @@ class Row(Base):
 `)
   })
 })
+
+describe('schemas from the wild', () => {
+  it('maps a model with no key by its first unique, and keeps the relations to it', () => {
+    const models = [
+      makeModel('User', [
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({
+          name: 'sessions',
+          type: 'Session',
+          kind: 'object',
+          isList: true,
+          relationName: 'SessionToUser',
+        }),
+      ]),
+      makeModel('Session', [
+        makeField({ name: 'sessionToken', type: 'String', isUnique: true }),
+        makeField({ name: 'userId', type: 'String' }),
+        makeField({
+          name: 'user',
+          type: 'User',
+          kind: 'object',
+          relationName: 'SessionToUser',
+          relationFromFields: ['userId'],
+          relationToFields: ['id'],
+          relationOnDelete: 'Cascade',
+        }),
+      ]),
+    ]
+    const indexes: DMMF.Index[] = [
+      {
+        model: 'Session',
+        type: 'unique',
+        isDefinedOnField: true,
+        fields: [{ name: 'sessionToken' }],
+      },
+    ]
+
+    expect(generateSingleFile(models, [], indexes))
+      .toBe(`from sqlalchemy import ForeignKey, Index, MetaData, Text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+
+class Base(DeclarativeBase):
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
+    type_annotation_map = {str: Text}
+
+
+class User(Base):
+    __tablename__ = "User"
+
+    id: Mapped[str] = mapped_column(primary_key=True)
+
+    sessions: Mapped[list["Session"]] = relationship(cascade="all, delete", passive_deletes=True, back_populates="user")
+
+class Session(Base):
+    __tablename__ = "Session"
+
+    session_token: Mapped[str] = mapped_column("sessionToken")
+    user_id: Mapped[str] = mapped_column("userId", ForeignKey("User.id", ondelete="CASCADE", onupdate="CASCADE", name="Session_userId_fkey"))
+
+    __table_args__ = (
+        Index("Session_sessionToken_key", "sessionToken", unique=True),
+    )
+
+    __mapper_args__ = {"primary_key": [session_token]}
+
+    user: Mapped["User"] = relationship(back_populates="sessions")
+`)
+  })
+
+  it('maps a model with no key and no single unique by its first compound unique', () => {
+    const models = [
+      makeModel(
+        'VerificationToken',
+        [
+          makeField({ name: 'identifier', type: 'String' }),
+          makeField({ name: 'token', type: 'String' }),
+        ],
+        { uniqueFields: [['identifier', 'token']] },
+      ),
+    ]
+    const indexes: DMMF.Index[] = [
+      {
+        model: 'VerificationToken',
+        type: 'unique',
+        isDefinedOnField: false,
+        fields: [{ name: 'identifier' }, { name: 'token' }],
+      },
+    ]
+
+    expect(generateSingleFile(models, [], indexes))
+      .toBe(`from sqlalchemy import Index, MetaData, Text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+
+class Base(DeclarativeBase):
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
+    type_annotation_map = {str: Text}
+
+
+class VerificationToken(Base):
+    __tablename__ = "VerificationToken"
+
+    identifier: Mapped[str] = mapped_column()
+    token: Mapped[str] = mapped_column()
+
+    __table_args__ = (
+        Index("VerificationToken_identifier_token_key", "identifier", "token", unique=True),
+    )
+
+    __mapper_args__ = {"primary_key": [identifier, token]}
+`)
+  })
+
+  it('leaves out an index or a unique that lists an @ignore field', () => {
+    // Prisma leaves the @ignore field out of the model's fields, and keeps it in the indexes.
+    const models = [
+      makeModel(
+        'RoleAssignment',
+        [
+          makeField({ name: 'id', type: 'String', isId: true }),
+          makeField({ name: 'systemRole', type: 'String', dbName: 'system_role' }),
+        ],
+        { dbName: 'role_assignments' },
+      ),
+    ]
+    const indexes: DMMF.Index[] = [
+      {
+        model: 'RoleAssignment',
+        type: 'unique',
+        isDefinedOnField: false,
+        dbName: 'role_assignments_user_org_role_key',
+        fields: [{ name: 'deprecatedOwnerOrgId' }, { name: 'systemRole' }],
+      },
+      {
+        model: 'RoleAssignment',
+        type: 'normal',
+        isDefinedOnField: false,
+        dbName: 'role_assignments_owner_org_id_idx',
+        fields: [{ name: 'deprecatedOwnerOrgId' }],
+      },
+      {
+        model: 'RoleAssignment',
+        type: 'normal',
+        isDefinedOnField: false,
+        fields: [{ name: 'systemRole' }],
+      },
+    ]
+
+    expect(generateSingleFile(models, [], indexes))
+      .toBe(`from sqlalchemy import Index, MetaData, Text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+
+class Base(DeclarativeBase):
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
+    type_annotation_map = {str: Text}
+
+
+class RoleAssignment(Base):
+    __tablename__ = "role_assignments"
+
+    id: Mapped[str] = mapped_column(primary_key=True)
+    system_role: Mapped[str]
+
+    __table_args__ = (
+        Index("role_assignments_system_role_idx", "system_role"),
+    )
+`)
+  })
+
+  it('names the foreign keys where two tables reference each other', () => {
+    const models = [
+      makeModel(
+        'User',
+        [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({ name: 'movedToProfileId', type: 'Int', isRequired: false }),
+          makeField({
+            name: 'movedToProfile',
+            type: 'Profile',
+            kind: 'object',
+            isRequired: false,
+            relationName: 'moved_to_profile',
+            relationFromFields: ['movedToProfileId'],
+            relationToFields: ['id'],
+            relationOnDelete: 'SetNull',
+          }),
+          makeField({
+            name: 'profiles',
+            type: 'Profile',
+            kind: 'object',
+            isList: true,
+            relationName: 'ProfileToUser',
+          }),
+        ],
+        { dbName: 'users' },
+      ),
+      makeModel('Profile', [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'userId', type: 'Int' }),
+        makeField({
+          name: 'user',
+          type: 'User',
+          kind: 'object',
+          relationName: 'ProfileToUser',
+          relationFromFields: ['userId'],
+          relationToFields: ['id'],
+          relationOnDelete: 'Cascade',
+        }),
+        makeField({
+          name: 'movedFromUser',
+          type: 'User',
+          kind: 'object',
+          isRequired: false,
+          relationName: 'moved_to_profile',
+        }),
+      ]),
+    ]
+
+    expect(generateSingleFile(models)).toBe(`from sqlalchemy import ForeignKey, MetaData
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from typing import Optional
+
+
+class Base(DeclarativeBase):
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    moved_to_profile_id: Mapped[Optional[int]] = mapped_column("movedToProfileId", ForeignKey("Profile.id", ondelete="SET NULL", onupdate="CASCADE", name="users_movedToProfileId_fkey"))
+
+    moved_to_profile: Mapped[Optional["Profile"]] = relationship(foreign_keys=[moved_to_profile_id], back_populates="moved_from_user")
+    profiles: Mapped[list["Profile"]] = relationship(foreign_keys="Profile.user_id", cascade="all, delete", passive_deletes=True, back_populates="user")
+
+class Profile(Base):
+    __tablename__ = "Profile"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    user_id: Mapped[int] = mapped_column("userId", ForeignKey("users.id", ondelete="CASCADE", onupdate="CASCADE", name="Profile_userId_fkey"))
+
+    user: Mapped["User"] = relationship(foreign_keys=[user_id], back_populates="profiles")
+    moved_from_user: Mapped[Optional["User"]] = relationship(foreign_keys="User.moved_to_profile_id", back_populates="moved_to_profile")
+`)
+  })
+
+  it('numbers a field whose snake_case name another field already has', () => {
+    const models = [
+      makeModel('Account', [
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({ name: 'createdAt', type: 'Int' }),
+        makeField({ name: 'created_at', type: 'Int', isRequired: false }),
+      ]),
+    ]
+
+    expect(generateSingleFile(models)).toBe(`from sqlalchemy import MetaData, Text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from typing import Optional
+
+
+class Base(DeclarativeBase):
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
+    type_annotation_map = {str: Text}
+
+
+class Account(Base):
+    __tablename__ = "Account"
+
+    id: Mapped[str] = mapped_column(primary_key=True)
+    created_at1: Mapped[int] = mapped_column("createdAt")
+    created_at: Mapped[Optional[int]]
+`)
+  })
+
+  it('gives a field named after a name of the module a trailing underscore', () => {
+    const models = [
+      makeModel('Record', [
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({ name: 'text', type: 'String' }),
+        makeField({
+          name: 'capturedAt',
+          type: 'DateTime',
+          isRequired: false,
+          hasDefaultValue: true,
+          default: { name: 'now', args: [] },
+        }),
+      ]),
+    ]
+
+    expect(generateSingleFile(models))
+      .toBe(`from sqlalchemy import Dialect, MetaData, Text, TypeDecorator, text
+from sqlalchemy.dialects.postgresql import TIMESTAMP
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from typing import Optional
+from datetime import datetime, timezone
+
+
+class UtcDateTime(TypeDecorator[datetime]):
+    impl = TIMESTAMP
+    cache_ok = True
+
+    def process_bind_param(self, value: Optional[datetime], dialect: Dialect) -> Optional[datetime]:
+        if value is None or value.tzinfo is None:
+            return value
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+    def process_result_value(self, value: Optional[datetime], dialect: Dialect) -> Optional[datetime]:
+        return None if value is None else value.replace(tzinfo=timezone.utc)
+
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+class Base(DeclarativeBase):
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
+    type_annotation_map = {datetime: UtcDateTime(precision=3), str: Text}
+
+
+class Record(Base):
+    __tablename__ = "Record"
+
+    id: Mapped[str] = mapped_column(primary_key=True)
+    text_: Mapped[str] = mapped_column("text")
+    captured_at: Mapped[Optional[datetime]] = mapped_column("capturedAt", default=utc_now, server_default=text("CURRENT_TIMESTAMP"))
+`)
+  })
+
+  it('renames a model named after a class of the module, keeping its table', () => {
+    const models = [
+      makeModel('Base', [
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({
+          name: 'tables',
+          type: 'Table',
+          kind: 'object',
+          isList: true,
+          relationName: 'BaseToTable',
+        }),
+      ]),
+      makeModel('Table', [
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({ name: 'baseId', type: 'String' }),
+        makeField({
+          name: 'base',
+          type: 'Base',
+          kind: 'object',
+          relationName: 'BaseToTable',
+          relationFromFields: ['baseId'],
+          relationToFields: ['id'],
+          relationOnDelete: 'Cascade',
+        }),
+      ]),
+    ]
+
+    expect(generateSingleFile(models)).toBe(`from sqlalchemy import ForeignKey, MetaData, Text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+
+class Base(DeclarativeBase):
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
+    type_annotation_map = {str: Text}
+
+
+class Base_(Base):
+    __tablename__ = "Base"
+
+    id: Mapped[str] = mapped_column(primary_key=True)
+
+    tables: Mapped[list["Table_"]] = relationship(cascade="all, delete", passive_deletes=True, back_populates="base")
+
+class Table_(Base):
+    __tablename__ = "Table"
+
+    id: Mapped[str] = mapped_column(primary_key=True)
+    base_id: Mapped[str] = mapped_column("baseId", ForeignKey("Base.id", ondelete="CASCADE", onupdate="CASCADE", name="Table_baseId_fkey"))
+
+    base: Mapped["Base_"] = relationship(back_populates="tables")
+`)
+  })
+})

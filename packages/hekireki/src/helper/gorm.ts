@@ -4,6 +4,7 @@ import {
   implicitJoinTables,
   isAutoincrement,
   isFunctionDefault,
+  primaryKeyFields,
   relationEnds,
 } from '../utils/prisma-model.js'
 
@@ -579,10 +580,7 @@ function buildRelationTag(parts: string[]) {
   return `\`gorm:"${parts.join(';')}"\``
 }
 
-function generateRelationFields(
-  model: DMMF.Model,
-  associations: ReturnType<typeof getAssociations>,
-) {
+function generateRelationFields(associations: ReturnType<typeof getAssociations>) {
   const belongsToLines = associations.belongsTo.map((assoc) => {
     const fieldName = goFieldName(assoc.name)
     const fkFieldName = assoc.foreignKeys.map(goFieldName).join(',')
@@ -598,12 +596,11 @@ function generateRelationFields(
       isAmbiguous || isComposite || !isGuessed ? `foreignKey:${fkFieldName}` : null,
       isComposite || needsReferencesTag(assoc.references) ? `references:${refsFieldName}` : null,
     ].filter((p) => p !== null)
-    // A relation back to the owning model must be a pointer: a struct that
-    // embeds itself by value is an illegal recursive type in Go.
-    const targetType =
-      assoc.targetModel === model.name
-        ? `*${goModelName(assoc.targetModel)}`
-        : goModelName(assoc.targetModel)
+    // A belongs-to is a pointer, as GORM writes a self-reference (`Manager *User`): by value,
+    // two models that point at each other (or one at itself) embed each other, an illegal
+    // recursive type in Go, and a relation that is not loaded or not set would read as a row of
+    // zero values.
+    const targetType = `*${goModelName(assoc.targetModel)}`
     return tagParts.length > 0
       ? [fieldName, targetType, buildRelationTag(tagParts)]
       : [fieldName, targetType]
@@ -632,9 +629,8 @@ function generateRelationFields(
         : []),
       ...[constraintTag(assoc.onDelete, assoc.onUpdate)].filter((c) => c !== null),
     ]
-    // A has-one is always a pointer: the paired belongs_to embeds this model
-    // by value, so a value here is an illegal mutually recursive type in Go,
-    // and Prisma requires the 1:1 back side to be optional anyway.
+    // A has-one is a pointer for the same reason, and Prisma requires the 1:1 back side to be
+    // optional anyway.
     return [
       goFieldName(assoc.name),
       `*${goModelName(assoc.targetModel)}`,
@@ -703,11 +699,11 @@ export function generateModelStruct(
   indexes: readonly DMMF.Index[],
   provider?: string,
 ) {
+  // A model with no @id or @@id is keyed by its first unique fields, as a composite key is: GORM
+  // needs a primary key to load an association, and the other models name this one.
   const idField = model.fields.find((f) => f.isId)
-  const compositePkFieldNames = new Set(model.primaryKey?.fields)
+  const compositePkFieldNames = new Set(idField ? [] : primaryKeyFields(model))
   const isCompositePk = !idField && compositePkFieldNames.size > 0
-
-  if (!(idField || isCompositePk)) return null
 
   const associations = getAssociations(model, allModels)
 
@@ -722,7 +718,7 @@ export function generateModelStruct(
     return generateStructField(field, isPk, isCompositePk, fieldIndexTags, enums, provider)
   })
 
-  const relationLines = generateRelationFields(model, associations)
+  const relationLines = generateRelationFields(associations)
 
   // GORM would pluralise the snake_cased struct name (Warehouse -> warehouses);
   // the table is Prisma's, so every model says which.
