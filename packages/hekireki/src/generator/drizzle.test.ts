@@ -1839,7 +1839,8 @@ describe('tables whose foreign keys form a cycle', () => {
     drizzleSchema(makeDatamodel([user, subscription, invoice]), provider, indexes)
 
   it('states what the callbacks on the cycle return, on PostgreSQL', () => {
-    expect(schema('postgresql')).toBe(`import { type PgTableExtraConfigValue, foreignKey, integer, pgTable, text, uniqueIndex } from 'drizzle-orm/pg-core'
+    expect(schema('postgresql'))
+      .toBe(`import { type PgTableExtraConfigValue, foreignKey, integer, pgTable, text, uniqueIndex } from 'drizzle-orm/pg-core'
 import { defineRelations } from 'drizzle-orm'
 
 export const user = pgTable('User', { id: text('id').primaryKey(), parentSubscriptionId: integer('parentSubscriptionId') }, (table): PgTableExtraConfigValue[] => [foreignKey({ name: 'User_parentSubscriptionId_fkey', columns: [table.parentSubscriptionId], foreignColumns: [subscription.id] }).onDelete('set null').onUpdate('cascade')])
@@ -1852,7 +1853,8 @@ export const relations = defineRelations({ user, subscription, invoice }, (r) =>
   })
 
   it('states what the callbacks on the cycle return, on MySQL', () => {
-    expect(schema('mysql')).toBe(`import { type MySqlTableExtraConfigValue, foreignKey, int, mysqlTable, uniqueIndex, varchar } from 'drizzle-orm/mysql-core'
+    expect(schema('mysql'))
+      .toBe(`import { type MySqlTableExtraConfigValue, foreignKey, int, mysqlTable, uniqueIndex, varchar } from 'drizzle-orm/mysql-core'
 import { defineRelations } from 'drizzle-orm'
 
 export const user = mysqlTable('User', { id: varchar('id', { length: 191 }).primaryKey(), parentSubscriptionId: int('parentSubscriptionId') }, (table): MySqlTableExtraConfigValue[] => [foreignKey({ name: 'User_parentSubscriptionId_fkey', columns: [table.parentSubscriptionId], foreignColumns: [subscription.id] }).onDelete('set null').onUpdate('cascade')])
@@ -1865,7 +1867,8 @@ export const relations = defineRelations({ user, subscription, invoice }, (r) =>
   })
 
   it('states what the callbacks on the cycle return, on SQLite', () => {
-    expect(schema('sqlite')).toBe(`import { type SQLiteTableExtraConfigValue, foreignKey, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
+    expect(schema('sqlite'))
+      .toBe(`import { type SQLiteTableExtraConfigValue, foreignKey, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 import { defineRelations } from 'drizzle-orm'
 
 export const user = sqliteTable('User', { id: text('id').primaryKey(), parentSubscriptionId: integer('parentSubscriptionId') }, (table): SQLiteTableExtraConfigValue[] => [foreignKey({ name: 'User_parentSubscriptionId_fkey', columns: [table.parentSubscriptionId], foreignColumns: [subscription.id] }).onDelete('set null').onUpdate('cascade')])

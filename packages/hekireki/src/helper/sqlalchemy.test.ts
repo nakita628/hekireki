@@ -2488,7 +2488,8 @@ describe('schemas from the wild', () => {
       },
     ]
 
-    expect(generateSingleFile(models, [], indexes)).toBe(`from sqlalchemy import ForeignKey, Index, MetaData, Text
+    expect(generateSingleFile(models, [], indexes))
+      .toBe(`from sqlalchemy import ForeignKey, Index, MetaData, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -2540,7 +2541,8 @@ class Session(Base):
       },
     ]
 
-    expect(generateSingleFile(models, [], indexes)).toBe(`from sqlalchemy import Index, MetaData, Text
+    expect(generateSingleFile(models, [], indexes))
+      .toBe(`from sqlalchemy import Index, MetaData, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -2598,7 +2600,8 @@ class VerificationToken(Base):
       },
     ]
 
-    expect(generateSingleFile(models, [], indexes)).toBe(`from sqlalchemy import Index, MetaData, Text
+    expect(generateSingleFile(models, [], indexes))
+      .toBe(`from sqlalchemy import Index, MetaData, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -2740,7 +2743,8 @@ class Account(Base):
       ]),
     ]
 
-    expect(generateSingleFile(models)).toBe(`from sqlalchemy import Dialect, MetaData, Text, TypeDecorator, text
+    expect(generateSingleFile(models))
+      .toBe(`from sqlalchemy import Dialect, MetaData, Text, TypeDecorator, text
 from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from typing import Optional
