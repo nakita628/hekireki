@@ -937,13 +937,12 @@ function generateTableArgs(
   // Prisma Migrate makes every unique a unique index, named `<table>_<columns>_key`, and every
   // index `<table>_<columns>_idx`.
   const indexConstraints = modelIndexes(model, indexes).map((idx) => {
-      const columns = idx.fields.map((f) => fieldColumn(model, f.name))
-      const unique = idx.type === 'unique'
-      const name =
-        idx.dbName ?? constraintName(tableName, columns, unique ? 'key' : 'idx', provider)
-      const cols = columns.map((c) => `"${c}"`).join(', ')
-      return unique ? `Index("${name}", ${cols}, unique=True)` : `Index("${name}", ${cols})`
-    })
+    const columns = idx.fields.map((f) => fieldColumn(model, f.name))
+    const unique = idx.type === 'unique'
+    const name = idx.dbName ?? constraintName(tableName, columns, unique ? 'key' : 'idx', provider)
+    const cols = columns.map((c) => `"${c}"`).join(', ')
+    return unique ? `Index("${name}", ${cols}, unique=True)` : `Index("${name}", ${cols})`
+  })
 
   const fkConstraints = model.fields
     .filter(

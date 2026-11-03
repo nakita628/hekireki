@@ -928,14 +928,14 @@ function generateMetaLines(model: DMMF.Model, indexes: readonly DMMF.Index[], na
   const constraints = model.uniqueFields
     .filter((fields) => coversWrittenFields(model, fields))
     .map((fields) => {
-    const fieldNames = fields.map((f) => toPythonString(fieldRef(f))).join(', ')
-    const declared = uniqueIndexes.find(
-      (idx) =>
-        idx.fields.length === fields.length && idx.fields.every((f, i) => f.name === fields[i]),
-    )?.dbName
-    const name = declared ?? `${tableName}_${fields.map((f) => columnRef(f)).join('_')}_key`
-    return `models.UniqueConstraint(fields=[${fieldNames}], name=${toPythonString(name)})`
-  })
+      const fieldNames = fields.map((f) => toPythonString(fieldRef(f))).join(', ')
+      const declared = uniqueIndexes.find(
+        (idx) =>
+          idx.fields.length === fields.length && idx.fields.every((f, i) => f.name === fields[i]),
+      )?.dbName
+      const name = declared ?? `${tableName}_${fields.map((f) => columnRef(f)).join('_')}_key`
+      return `models.UniqueConstraint(fields=[${fieldNames}], name=${toPythonString(name)})`
+    })
 
   const indexEntries = indexes
     .filter(

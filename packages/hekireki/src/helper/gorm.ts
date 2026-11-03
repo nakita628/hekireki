@@ -580,9 +580,7 @@ function buildRelationTag(parts: string[]) {
   return `\`gorm:"${parts.join(';')}"\``
 }
 
-function generateRelationFields(
-  associations: ReturnType<typeof getAssociations>,
-) {
+function generateRelationFields(associations: ReturnType<typeof getAssociations>) {
   const belongsToLines = associations.belongsTo.map((assoc) => {
     const fieldName = goFieldName(assoc.name)
     const fkFieldName = assoc.foreignKeys.map(goFieldName).join(',')

@@ -196,8 +196,7 @@ function columnVariant(models: readonly DMMF.Model[], modelName: string, fieldNa
  */
 function relationChain(indent: string, path: string, calls: readonly string[], suffix: string) {
   const line = `${indent}${path}${calls.join('')}${suffix}`
-  const fits =
-    line.length <= 100 && (calls.length === 1 || `${path}${calls.join('')}`.length <= 60)
+  const fits = line.length <= 100 && (calls.length === 1 || `${path}${calls.join('')}`.length <= 60)
   const broken = [
     `${indent}${path}`,
     ...calls.map((call, i) => `${indent}    ${call}${i === calls.length - 1 ? suffix : ''}`),
@@ -721,7 +720,12 @@ function generateRelatedImpls(model: DMMF.Model, associations: ReturnType<typeof
             ['.def()', '.rev()'],
             ',',
           ),
-          relationChain('            ', `super::${junctionModule}::Relation::${other}`, ['.def()'], ','),
+          relationChain(
+            '            ',
+            `super::${junctionModule}::Relation::${other}`,
+            ['.def()'],
+            ',',
+          ),
           '        ]',
           '    }',
           '}',
@@ -885,7 +889,8 @@ export function generateEntityFile(
           '    fn new() -> Self {',
           '        Self {',
           ...generatedIdFields.map((field) => {
-            const { ident } = fieldNames.get(field.name) ?? rustFieldIdent(makeSnakeCase(field.name))
+            const { ident } =
+              fieldNames.get(field.name) ?? rustFieldIdent(makeSnakeCase(field.name))
             const generate = generatedIdExpr(field) ?? ''
             const value = field.isRequired ? generate : `Some(${generate})`
             // rustfmt's layout of the field, as it writes it for each length of the name (n) and

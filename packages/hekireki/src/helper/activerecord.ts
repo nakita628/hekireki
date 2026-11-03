@@ -1210,7 +1210,9 @@ export function activeRecordLocaleFiles(models: readonly DMMF.Model[]) {
     // goes under `user`, the foreign key's under the column, `user_id`.
     for (const field of model.fields) {
       const attribute =
-        field.kind === 'object' ? associationOf(model.name, field.name) : (field.dbName ?? field.name)
+        field.kind === 'object'
+          ? associationOf(model.name, field.name)
+          : (field.dbName ?? field.name)
       for (const call of arCalls(field.documentation, 'field').calls) {
         const { validator, messages } = validatorCall(call)
         if (field.kind === 'object' && validator !== 'name') continue
@@ -1420,9 +1422,7 @@ export function activeRecordModels(
       // (todos), so only a table named that way goes unsaid.
       const tableName = model.dbName ?? model.name
       const tableNameLines =
-        tableName === pluralize(modelSnake)
-          ? []
-          : [`self.table_name = "${tableName}"`]
+        tableName === pluralize(modelSnake) ? [] : [`self.table_name = "${tableName}"`]
       const idField = model.fields.find((f) => f.isId)
       const compositePkColumns = (model.primaryKey?.fields ?? []).map((name) =>
         fieldColumn(model, name),

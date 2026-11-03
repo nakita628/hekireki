@@ -679,22 +679,20 @@ function makeTableConstraints(
       return `${make}('${name}').on(${on.join(', ')})`
     })
 
-  const fkLines = model.fields
-    .filter(isForeignKey)
-    .map((f) => {
-      imports.core.add('foreignKey')
-      // A relation of a model to itself reads its own columns from the table it is given.
-      const target = f.type === model.name ? 'table' : resolveVarNameByType(f.type, models)
-      const from = f.relationFromFields ?? []
-      const name = constraintName(
-        tableName,
-        from.map((c) => fieldColumn(model, c)),
-        'fkey',
-        provider,
-      )
-      const { onDelete, onUpdate } = referentialActions(f)
-      return `foreignKey({ name: '${name}', columns: [${from.map((c) => `table.${c}`).join(', ')}], foreignColumns: [${(f.relationToFields ?? []).map((c) => `${target}.${c}`).join(', ')}] }).onDelete('${PRISMA_ACTION_MAP[onDelete] ?? 'no action'}').onUpdate('${PRISMA_ACTION_MAP[onUpdate] ?? 'no action'}')`
-    })
+  const fkLines = model.fields.filter(isForeignKey).map((f) => {
+    imports.core.add('foreignKey')
+    // A relation of a model to itself reads its own columns from the table it is given.
+    const target = f.type === model.name ? 'table' : resolveVarNameByType(f.type, models)
+    const from = f.relationFromFields ?? []
+    const name = constraintName(
+      tableName,
+      from.map((c) => fieldColumn(model, c)),
+      'fkey',
+      provider,
+    )
+    const { onDelete, onUpdate } = referentialActions(f)
+    return `foreignKey({ name: '${name}', columns: [${from.map((c) => `table.${c}`).join(', ')}], foreignColumns: [${(f.relationToFields ?? []).map((c) => `${target}.${c}`).join(', ')}] }).onDelete('${PRISMA_ACTION_MAP[onDelete] ?? 'no action'}').onUpdate('${PRISMA_ACTION_MAP[onUpdate] ?? 'no action'}')`
+  })
 
   const all = [pkLine, ...indexLines, ...fkLines].filter((l) => l !== null)
   return all.length > 0 ? all.join(', ') : null
