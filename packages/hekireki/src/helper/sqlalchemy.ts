@@ -782,6 +782,7 @@ function generateColumn(
   enumMap: ReadonlyMap<string, DMMF.DatamodelEnum>,
   provider: string,
   model: DMMF.Model,
+  isMapperKey: boolean,
 ) {
   // The attribute is the field in Python's case; the column is Prisma's, named
   // positionally whenever the two differ.
@@ -916,7 +917,9 @@ function generateColumn(
     colArgs.push(`onupdate=${utcNow}`)
   }
 
-  if (colArgs.length === 0) {
+  // A bare annotation binds no name in the class body, and `__mapper_args__` names a key column
+  // by its attribute: that one is assigned, as SQLAlchemy's docs write it.
+  if (colArgs.length === 0 && !isMapperKey) {
     return `    ${attrName}: Mapped[${typeHint}]`
   }
 
@@ -1164,21 +1167,32 @@ export function generateModelBody(
   const tableName = model.dbName ?? model.name
   const scalarFields = model.fields.filter((f) => f.kind !== 'object')
 
+  const isKeyless = !(idField || model.primaryKey)
   const columnLines = scalarFields.map((field) => {
     const isPk = field.isId || compositePkFieldNames.has(field.name)
     const isFk = belongsToFkFields.has(field.name)
-    return generateColumn(field, isPk, isFk, associations, allModels, enumMap, provider, model)
+    const isMapperKey = isKeyless && identity.includes(field.name)
+    return generateColumn(
+      field,
+      isPk,
+      isFk,
+      associations,
+      allModels,
+      enumMap,
+      provider,
+      model,
+      isMapperKey,
+    )
   })
 
   const tableArgsLines = generateTableArgs(model, allModels, indexes, provider)
   // A table with no key is mapped by its first unique: the mapper is told, the table is not.
-  const mapperArgsLines =
-    idField || model.primaryKey
-      ? []
-      : [
-          '',
-          `    __mapper_args__ = {"primary_key": [${identity.map((name) => attributeName(model, name)).join(', ')}]}`,
-        ]
+  const mapperArgsLines = isKeyless
+    ? [
+        '',
+        `    __mapper_args__ = {"primary_key": [${identity.map((name) => attributeName(model, name)).join(', ')}]}`,
+      ]
+    : []
 
   const relationLines = [
     ...generateBelongsToRelationships(associations, model, allModels),

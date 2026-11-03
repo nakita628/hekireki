@@ -449,8 +449,15 @@ export function makeAtlasIndexes(
   dialect: AtlasDialect,
 ) {
   const table = tableNameOf(model)
+  // DMMF leaves an `@ignore` field out of the model, but not out of an index that lists it: the
+  // table has no column for such an index to name, so it is left out with the field.
   return indexes
-    .filter((idx) => idx.model === model.name && idx.type !== 'id')
+    .filter(
+      (idx) =>
+        idx.model === model.name &&
+        idx.type !== 'id' &&
+        idx.fields.every((f) => model.fields.some((field) => field.name === f.name)),
+    )
     .map((idx) => {
       const colsDb = idx.fields.map((f) => columnDbName(model, f.name))
       const suffix = idx.type === 'unique' ? 'key' : 'idx'

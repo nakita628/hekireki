@@ -1763,7 +1763,7 @@ describe('an index over an @ignore field', () => {
   })
 })
 
-// linkwarden's User and Subscription: each holds a foreign key to the other.
+// A User and a Subscription that each hold a foreign key to the other.
 describe('tables whose foreign keys form a cycle', () => {
   const user = makeModel({
     name: 'User',
