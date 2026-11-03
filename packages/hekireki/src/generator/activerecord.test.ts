@@ -128,6 +128,24 @@ end
     ])
   })
 
+  // Ruby has loaded Monitor before any model: the class is MonitorRecord, and
+  // Zeitwerk looks for it in monitor_record.rb.
+  it('names the file after the class a model of a Ruby constant is written as', () => {
+    const monitor = makeModel({
+      name: 'Monitor',
+      fields: [makeField({ name: 'id', type: 'String', isId: true })],
+    })
+    expect(activeRecordModelFiles([monitor])).toStrictEqual([
+      {
+        fileName: 'monitor_record.rb',
+        code: `class MonitorRecord < ApplicationRecord
+  self.table_name = "Monitor"
+end
+`,
+      },
+    ])
+  })
+
   it('carries the ApplicationRecord Rails itself would write', () => {
     expect(applicationRecordFile()).toStrictEqual({
       fileName: 'application_record.rb',

@@ -7,6 +7,7 @@ import {
   isFunctionDefault,
   isNowDefault,
   isUlidDefault,
+  primaryKeyFields,
   uuidDefaultVersion,
 } from '../utils/prisma-model.js'
 import { jsonToPythonLiteral, PYTHON_KEYWORDS, toPythonString } from '../utils/python.js'
@@ -228,10 +229,38 @@ function claimName(preferred: string, taken: Set<string>) {
   return name
 }
 
+// The module-level names a model's class body reads while Python executes it:
+// `models` on every field line, and what a default names (`timezone.now`,
+// `uuid.uuid4`, `date(...)`, `list`, a helper function). An attribute is
+// always lower snake_case, so the capitalised ones (`UtcDateTimeField`,
+// `ArrayField`, `Decimal`, an enum class) cannot be hidden by a field.
+const MODULE_NAMES = new Set([
+  'models',
+  'timezone',
+  'uuid',
+  'uuid6',
+  'datetime',
+  'date',
+  'time',
+  'utc_today',
+  'utc_time',
+  'uuid4_str',
+  'uuid7_str',
+  'ulid_str',
+  'list',
+  'dict',
+])
+
 // The attribute a field is emitted under, resolved once per model so that the
 // columns, the Meta options and the composite primary key all name the same
 // thing. Walked in field order, which is the order the class body is written in,
 // and claiming a name only for the fields that are actually emitted.
+//
+// A class attribute hides a module-level name of the same spelling from every
+// line after it in the class body: a field `timezone` followed by a column
+// whose default is `timezone.now` would read the field. Such a field takes
+// inspectdb's `<name>_field`, as a reserved name does, and keeps its column
+// through db_column.
 function modelAttrNames(
   model: DMMF.Model,
   m2mTables: readonly { relationName: string; leftModel: string; rightModel: string }[],
@@ -241,25 +270,45 @@ function modelAttrNames(
   // `pk` belongs to Django, whether or not this model declares a composite one.
   const taken = new Set(['pk'])
   const names = new Map<string, string>()
+  // What each field's line reads, at the field's place in the body. A foreign
+  // key is written where its scalar column sits, so its defaults are read
+  // there; a relation field writes a line only on the declaring side of a
+  // many-to-many. A default helper's name is read too, but helpers step aside
+  // from every attribute in resolveNames.
+  const unresolved = { attr: new Map<string, string>(), helper: new Map<string, string>() }
+  const reads = model.fields.map((field) => {
+    if (field.kind === 'object') {
+      return field.isList && isDeclaringM2MSide(model, field, m2mTables) ? ['models'] : []
+    }
+    const defaults = formatDefaultArgs(model, field, false, unresolved).map(
+      (arg) => /^\w+=([a-z_]\w*)/u.exec(arg)?.[1],
+    )
+    return ['models', ...defaults.filter((name) => name !== undefined)]
+  })
 
-  for (const field of model.fields) {
+  model.fields.forEach((field, i) => {
+    const readLater = new Set(reads.slice(i + 1).flat())
+    const attrFor = (prismaName: string) => {
+      const attr = djangoAttrName(makeSnakeCase(prismaName))
+      return MODULE_NAMES.has(attr) && readLater.has(attr) ? `${attr}_field` : attr
+    }
     if (field.kind === 'object') {
       if (field.isList && isDeclaringM2MSide(model, field, m2mTables)) {
-        names.set(field.name, claimName(djangoAttrName(makeSnakeCase(field.name)), taken))
+        names.set(field.name, claimName(attrFor(field.name), taken))
       }
-      continue
+      return
     }
     const owner = fkByScalarName.get(field.name)
     if (owner) {
       // A foreign key is reachable by the relation field's name and by the
       // scalar column it collapsed, and both must answer with one attribute.
-      const attr = claimName(djangoAttrName(makeSnakeCase(owner.name)), taken)
+      const attr = claimName(attrFor(owner.name), taken)
       names.set(owner.name, attr)
       names.set(field.name, attr)
-      continue
+      return
     }
-    names.set(field.name, claimName(djangoAttrName(makeSnakeCase(field.name)), taken))
-  }
+    names.set(field.name, claimName(attrFor(field.name), taken))
+  })
 
   return names
 }
@@ -277,7 +326,9 @@ export function resolveNames(
     }
   }
 
-  const takenHelpers = new Set(['uuid4_str', 'uuid7_str', 'ulid_str'])
+  // A helper is read in the class body by its name, so it steps aside from
+  // every attribute a field took as well.
+  const takenHelpers = new Set(['uuid4_str', 'uuid7_str', 'ulid_str', ...attr.values()])
   const helper = new Map<string, string>()
   for (const model of models) {
     for (const field of model.fields) {
@@ -604,7 +655,9 @@ function generateScalarField(
     isPk ? 'primary_key=True' : null,
     // A Prisma scalar list is never optional (an empty array, not NULL).
     !field.isList && !field.isRequired ? 'null=True' : null,
-    field.isUnique ? 'unique=True' : null,
+    // A primary key is unique already; a @unique standing in for a missing @id
+    // would only say it twice.
+    field.isUnique && !isPk ? 'unique=True' : null,
     attrName !== columnName ? `db_column=${toPythonString(columnName)}` : null,
     ...defaultArgs,
     emptyStringPk ? 'default=None' : null,
@@ -643,6 +696,7 @@ function generateForeignKeyField(
   scalarField: DMMF.Field,
   allModels: readonly DMMF.Model[],
   names: Names,
+  isPk: boolean,
 ) {
   const attrName = attrNameOf(names, model, relationField)
   const columnName = fieldColumnName(scalarField)
@@ -660,9 +714,11 @@ function generateForeignKeyField(
   const referencedName = relationField.relationToFields?.[0]
   const referencedField = targetModel?.fields.find((f) => f.name === referencedName)
   // to_field names a Django field on the target, so it uses the attribute that
-  // model resolved for it.
+  // model resolved for it. The target's primary key is what a ForeignKey
+  // points at without one.
+  const targetPk = targetModel ? primaryKeyFields(targetModel) : []
   const toField =
-    referencedField && !referencedField.isId && targetModel
+    referencedField && targetModel && !(targetPk.length === 1 && targetPk[0] === referencedName)
       ? `to_field=${toPythonString(attrNameOf(names, targetModel, referencedField))}`
       : null
 
@@ -671,6 +727,7 @@ function generateForeignKeyField(
     `on_delete=${onDeleteFor(relationField)}`,
     `related_name=${relatedName}`,
     toField,
+    isPk ? 'primary_key=True' : null,
     columnName !== `${attrName}_id` ? `db_column=${toPythonString(columnName)}` : null,
     !relationField.isRequired ? 'null=True' : null,
     // Django indexes every ForeignKey by default (plus a text_pattern_ops
@@ -678,7 +735,7 @@ function generateForeignKeyField(
     // schema actually declares arrives through Meta.indexes instead, so leaving
     // this on would add one or two indexes the database does not have.
     ctor === 'ForeignKey' ? 'db_index=False' : null,
-    ...formatDefaultArgs(model, scalarField, false, names),
+    ...formatDefaultArgs(model, scalarField, isPk, names),
   ].filter((a) => a !== null)
 
   return `    ${attrName} = models.${ctor}(${args.join(', ')})`
@@ -868,7 +925,9 @@ function generateMetaLines(model: DMMF.Model, indexes: readonly DMMF.Index[], na
   const uniqueIndexes = indexes.filter(
     (idx) => idx.model === model.name && idx.type === 'unique' && !idx.isDefinedOnField,
   )
-  const constraints = model.uniqueFields.map((fields) => {
+  const constraints = model.uniqueFields
+    .filter((fields) => coversWrittenFields(model, fields))
+    .map((fields) => {
     const fieldNames = fields.map((f) => toPythonString(fieldRef(f))).join(', ')
     const declared = uniqueIndexes.find(
       (idx) =>
@@ -879,7 +938,15 @@ function generateMetaLines(model: DMMF.Model, indexes: readonly DMMF.Index[], na
   })
 
   const indexEntries = indexes
-    .filter((idx) => idx.model === model.name && (idx.type === 'normal' || idx.type === 'fulltext'))
+    .filter(
+      (idx) =>
+        idx.model === model.name &&
+        (idx.type === 'normal' || idx.type === 'fulltext') &&
+        coversWrittenFields(
+          model,
+          idx.fields.map((f) => f.name),
+        ),
+    )
     .map((idx) => {
       // Prisma records a descending index column as a sort order; Django spells
       // the same thing as a "-" prefix on the field name.
@@ -923,9 +990,11 @@ function generateMetaLines(model: DMMF.Model, indexes: readonly DMMF.Index[], na
   ]
 }
 
+// A one-column key is the field's own primary_key=True: Django refuses a
+// CompositePrimaryKey of fewer than two fields.
 function compositePkLine(model: DMMF.Model, names: Names) {
-  const pkFields = model.primaryKey?.fields ?? []
-  if (pkFields.length === 0) return null
+  const pkFields = primaryKeyFields(model)
+  if (pkFields.length < 2) return null
   const belongsTo = singleColumnBelongsTo(model)
   const attnames = pkFields.map((prismaFieldName) => {
     const attr = names.attr.get(nameKey(model.name, prismaFieldName)) ?? prismaFieldName
@@ -963,10 +1032,10 @@ export function findNameConflicts(
   return enumConflicts
 }
 
-// Every Django model needs a primary key, so a Prisma model without one is not
-// representable and is left out entirely.
-export function hasPrimaryKey(model: DMMF.Model) {
-  return model.fields.some((f) => f.isId) || (model.primaryKey?.fields.length ?? 0) > 0
+// An @@index or @@unique that lists an @ignore field is left out: the field is
+// not in the DMMF model, so there is no attribute for the entry to name.
+function coversWrittenFields(model: DMMF.Model, fieldNames: readonly string[]) {
+  return fieldNames.every((name) => model.fields.some((f) => f.name === name))
 }
 
 export function generateModelBody(
@@ -983,8 +1052,10 @@ export function generateModelBody(
   names: Names,
   provider: string,
 ) {
-  if (!hasPrimaryKey(model)) return null
+  const pkFields = primaryKeyFields(model)
+  if (pkFields.length === 0) return null
   const compositePk = compositePkLine(model, names)
+  const singlePk = pkFields.length === 1 ? pkFields[0] : undefined
 
   const belongsTo = singleColumnBelongsTo(model)
   const fkByScalarName = new Map(belongsTo.map((f) => [f.relationFromFields?.[0], f]))
@@ -1000,9 +1071,9 @@ export function generateModelBody(
       }
       return []
     }
+    const isPk = field.name === singlePk
     const owner = fkByScalarName.get(field.name)
-    if (owner) return [generateForeignKeyField(model, owner, field, allModels, names)]
-    const isPk = field.isId
+    if (owner) return [generateForeignKeyField(model, owner, field, allModels, names, isPk)]
     return [generateScalarField(model, field, isPk, names, provider)]
   })
 
@@ -1034,11 +1105,19 @@ export function collectGlobalImports(
   provider: string,
 ) {
   const scalarFields = models.flatMap((m) => m.fields.filter((f) => f.kind !== 'object'))
-  const modelNames = new Set(models.map((m) => m.name))
+  const modelsByName = new Map(models.map((m) => [m.name, m]))
   const indexClasses = indexes
-    .filter(
-      (idx) => modelNames.has(idx.model) && (idx.type === 'normal' || idx.type === 'fulltext'),
-    )
+    .filter((idx) => {
+      const model = modelsByName.get(idx.model)
+      return (
+        model !== undefined &&
+        (idx.type === 'normal' || idx.type === 'fulltext') &&
+        coversWrittenFields(
+          model,
+          idx.fields.map((f) => f.name),
+        )
+      )
+    })
     .map((idx) => postgresIndexClass(idx.algorithm))
     .filter((ctor) => ctor !== null)
 

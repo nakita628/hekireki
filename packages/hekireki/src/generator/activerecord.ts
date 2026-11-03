@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { activeRecordModels } from '../helper/activerecord.js'
+import { activeRecordClassNames, activeRecordModels } from '../helper/activerecord.js'
 import { makeSnakeCase } from '../utils/index.js'
 
 /**
@@ -79,9 +79,11 @@ export function activeRecordModelFiles(
   enums?: readonly DMMF.DatamodelEnum[],
   provider?: string,
 ) {
+  // Named for the class it defines, as Zeitwerk looks it up.
+  const classNames = activeRecordClassNames(models)
   return models
     .map((model) => ({
-      fileName: `${makeSnakeCase(model.name)}.rb`,
+      fileName: `${makeSnakeCase(classNames.get(model.name) ?? model.name)}.rb`,
       code: `${activeRecordModels([model], models, enums, provider)}\n`,
     }))
     .filter((entry) => entry.code.trim().length > 0)

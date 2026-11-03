@@ -3166,6 +3166,30 @@ file sealed class UtcClockConverter : ValueConverter<DateTime, DateTime>
   })
 })
 
+// DMMF leaves an `@ignore` field out of the model and keeps it in the indexes that list it.
+describe('an index over an @ignore field', () => {
+  it('is left out with the field', () => {
+    const { plan } = fixture(`
+datasource db {
+  provider = "postgresql"
+}
+
+model RoleAssignment {
+  id                   String  @id
+  userId               String  @map("user_id")
+  systemRole           String  @map("system_role")
+  deprecatedOwnerOrgId String? @map("owner_org_id") @ignore
+
+  @@unique([userId, deprecatedOwnerOrgId, systemRole], map: "role_assignments_user_org_role_key")
+  @@index([deprecatedOwnerOrgId], map: "role_assignments_owner_org_id_idx")
+  @@index([userId])
+  @@map("role_assignments")
+}
+`)
+    expect(contextFile(plan).code).toBe(`PLACEHOLDER`)
+  })
+})
+
 describe('MySQL and SQLite', () => {
   const enumAndDates = `
 enum Role {

@@ -1997,7 +1997,7 @@ class WithPk(models.Model):
   it('emits no imports or default helpers for a model it skips', () => {
     const models = [
       makeModel('NoPk', [
-        makeField({ name: 'email', type: 'String', isUnique: true }),
+        makeField({ name: 'email', type: 'String', isUnique: true, isRequired: false }),
         makeField({ name: 'bag', type: 'String', isList: true, default: ['z'] }),
       ]),
       makeModel('WithPk', [
@@ -2019,6 +2019,304 @@ class WithPk(models.Model):
 
     class Meta:
         db_table = "WithPk"
+`,
+    )
+  })
+
+  it('keys a model with no @id by its first required @unique', () => {
+    const models = [
+      makeModel('User', [
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({
+          name: 'sessions',
+          type: 'Session',
+          kind: 'object',
+          isList: true,
+          relationName: 'SessionToUser',
+        }),
+      ]),
+      makeModel('Session', [
+        makeField({ name: 'nickname', type: 'String', isUnique: true, isRequired: false }),
+        makeField({ name: 'sessionToken', type: 'String', isUnique: true }),
+        makeField({ name: 'userId', type: 'String' }),
+        makeField({
+          name: 'user',
+          type: 'User',
+          kind: 'object',
+          relationName: 'SessionToUser',
+          relationFromFields: ['userId'],
+          relationToFields: ['id'],
+          relationOnDelete: 'Cascade',
+        }),
+      ]),
+    ]
+
+    expect(djangoCode(models)).toBe(
+      `from django.db import models
+
+
+class User(models.Model):
+    id = models.TextField(primary_key=True, default=None)
+
+    class Meta:
+        db_table = "User"
+
+
+class Session(models.Model):
+    nickname = models.TextField(null=True, unique=True)
+    session_token = models.TextField(primary_key=True, db_column="sessionToken", default=None)
+    user = models.ForeignKey("User", on_delete=models.CASCADE, related_name="sessions", db_column="userId", db_index=False)
+
+    class Meta:
+        db_table = "Session"
+`,
+    )
+  })
+
+  it('keys a model with no @id and no @unique by its first @@unique', () => {
+    const models = [
+      makeModel(
+        'VerificationToken',
+        [
+          makeField({ name: 'identifier', type: 'String' }),
+          makeField({ name: 'token', type: 'String' }),
+          makeField({ name: 'expires', type: 'Int' }),
+        ],
+        { uniqueFields: [['identifier', 'token']] },
+      ),
+    ]
+
+    expect(djangoCode(models)).toBe(
+      `from django.db import models
+
+
+class VerificationToken(models.Model):
+    pk = models.CompositePrimaryKey("identifier", "token")
+    identifier = models.TextField()
+    token = models.TextField()
+    expires = models.IntegerField()
+
+    class Meta:
+        db_table = "VerificationToken"
+        constraints = [
+            models.UniqueConstraint(fields=["identifier", "token"], name="VerificationToken_identifier_token_key"),
+        ]
+`,
+    )
+  })
+
+  it('keys a model by a @unique foreign key column', () => {
+    const models = [
+      makeModel('User', [
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({
+          name: 'profile',
+          type: 'Profile',
+          kind: 'object',
+          isRequired: false,
+          relationName: 'ProfileToUser',
+        }),
+      ]),
+      makeModel('Profile', [
+        makeField({ name: 'userId', type: 'String', isUnique: true }),
+        makeField({
+          name: 'user',
+          type: 'User',
+          kind: 'object',
+          relationName: 'ProfileToUser',
+          relationFromFields: ['userId'],
+          relationToFields: ['id'],
+          relationOnDelete: 'Cascade',
+        }),
+      ]),
+      makeModel('Avatar', [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'profileUserId', type: 'String' }),
+        makeField({
+          name: 'profile',
+          type: 'Profile',
+          kind: 'object',
+          relationName: 'AvatarToProfile',
+          relationFromFields: ['profileUserId'],
+          relationToFields: ['userId'],
+          relationOnDelete: 'Cascade',
+        }),
+      ]),
+    ]
+
+    expect(djangoCode(models)).toBe(
+      `from django.db import models
+
+
+class User(models.Model):
+    id = models.TextField(primary_key=True, default=None)
+
+    class Meta:
+        db_table = "User"
+
+
+class Profile(models.Model):
+    user = models.OneToOneField("User", on_delete=models.CASCADE, related_name="profile", primary_key=True, db_column="userId")
+
+    class Meta:
+        db_table = "Profile"
+
+
+class Avatar(models.Model):
+    id = models.IntegerField(primary_key=True)
+    profile = models.ForeignKey("Profile", on_delete=models.CASCADE, related_name="+", db_column="profileUserId", db_index=False)
+
+    class Meta:
+        db_table = "Avatar"
+`,
+    )
+  })
+
+  it('writes a one-column @@id as the field primary key', () => {
+    const models = [
+      makeModel(
+        'ProfileBuilderState2',
+        [
+          makeField({ name: 'profileBuilderId', type: 'String' }),
+          makeField({ name: 'updatedAt', type: 'Int' }),
+        ],
+        { primaryKey: { name: null, fields: ['profileBuilderId'] } },
+      ),
+    ]
+
+    expect(djangoCode(models)).toBe(
+      `from django.db import models
+
+
+class ProfileBuilderState2(models.Model):
+    profile_builder_id = models.TextField(primary_key=True, db_column="profileBuilderId", default=None)
+    updated_at = models.IntegerField(db_column="updatedAt")
+
+    class Meta:
+        db_table = "ProfileBuilderState2"
+`,
+    )
+  })
+
+  it('leaves out an @@index or @@unique that lists an @ignore field', () => {
+    // An @ignore field is absent from the DMMF model but still named by the
+    // model's uniqueFields and by the indexes.
+    const models = [
+      makeModel(
+        'RoleAssignment',
+        [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({ name: 'userId', type: 'String' }),
+          makeField({ name: 'systemRole', type: 'String', dbName: 'system_role' }),
+        ],
+        {
+          dbName: 'role_assignments',
+          uniqueFields: [
+            ['userId', 'deprecatedOwnerOrgId', 'systemRole'],
+            ['userId', 'systemRole'],
+          ],
+        },
+      ),
+    ]
+    const indexes: DMMF.Index[] = [
+      {
+        model: 'RoleAssignment',
+        type: 'unique',
+        isDefinedOnField: false,
+        dbName: 'role_assignments_user_org_role_key',
+        fields: [{ name: 'userId' }, { name: 'deprecatedOwnerOrgId' }, { name: 'systemRole' }],
+      },
+      {
+        model: 'RoleAssignment',
+        type: 'normal',
+        isDefinedOnField: false,
+        dbName: 'role_assignments_owner_org_id_idx',
+        algorithm: 'Gin',
+        fields: [{ name: 'deprecatedOwnerOrgId' }],
+      },
+      {
+        model: 'RoleAssignment',
+        type: 'normal',
+        isDefinedOnField: false,
+        dbName: 'role_assignments_user_idx',
+        fields: [{ name: 'userId' }],
+      },
+    ]
+
+    expect(djangoCode(models, [], indexes)).toBe(
+      `from django.db import models
+
+
+class RoleAssignment(models.Model):
+    id = models.IntegerField(primary_key=True)
+    user_id = models.TextField(db_column="userId")
+    system_role = models.TextField()
+
+    class Meta:
+        db_table = "role_assignments"
+        constraints = [
+            models.UniqueConstraint(fields=["user_id", "system_role"], name="role_assignments_userId_system_role_key"),
+        ]
+        indexes = [
+            models.Index(fields=["user_id"], name="role_assignments_user_idx"),
+        ]
+`,
+    )
+  })
+
+  it('renames a field that would hide a module-level name a later line reads', () => {
+    const models = [
+      makeModel('Organization', [
+        makeField({ name: 'id', type: 'String', isId: true, default: { name: 'uuid', args: [] } }),
+        makeField({ name: 'models', type: 'String', isList: true }),
+        makeField({ name: 'timezone', type: 'String', isRequired: false }),
+        makeField({ name: 'uuid', type: 'String', default: { name: 'uuid', args: [] } }),
+        makeField({ name: 'list', type: 'String', isList: true, default: [] }),
+        makeField({ name: 'tags', type: 'String', isList: true, default: [] }),
+        makeField({
+          name: 'externalId',
+          type: 'String',
+          nativeType: ['Uuid', []],
+          default: { name: 'uuid', args: [] },
+        }),
+        makeField({ name: 'createdAt', type: 'DateTime', default: { name: 'now', args: [] } }),
+        makeField({ name: 'date', type: 'String' }),
+      ]),
+    ]
+
+    expect(djangoCode(models)).toBe(
+      `import uuid
+from datetime import datetime
+from datetime import timezone as dt_timezone
+from typing import Any
+
+from django.conf import settings
+from django.contrib.postgres.fields import ArrayField
+from django.db import models
+from django.db.backends.base.base import BaseDatabaseWrapper
+from django.utils import timezone
+
+
+${UTC_DATETIME_FIELD}
+
+
+def uuid4_str() -> str:
+    return str(uuid.uuid4())
+
+
+class Organization(models.Model):
+    id = models.TextField(primary_key=True, default=uuid4_str)
+    models_field = ArrayField(models.TextField(), db_column="models")
+    timezone_field = models.TextField(null=True, db_column="timezone")
+    uuid_field = models.TextField(db_column="uuid", default=uuid4_str)
+    list_field = ArrayField(models.TextField(), db_column="list", default=list)
+    tags = ArrayField(models.TextField(), default=list)
+    external_id = models.UUIDField(db_column="externalId", default=uuid.uuid4)
+    created_at = UtcDateTimeField(db_column="createdAt", default=timezone.now)
+    date = models.TextField()
+
+    class Meta:
+        db_table = "Organization"
 `,
     )
   })

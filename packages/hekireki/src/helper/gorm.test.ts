@@ -579,7 +579,7 @@ type Post struct {
 	ID        int      \`gorm:"column:id;primaryKey;autoIncrement" json:"id"\`
 	UserID    *string  \`gorm:"column:userId" json:"userId"\`
 	CreatedAt DateTime \`gorm:"column:createdAt;autoCreateTime:false;not null" json:"createdAt"\`
-	User      User
+	User      *User
 	Comments  []Comment \`gorm:"foreignKey:PostID"\`
 }
 
@@ -614,7 +614,7 @@ func (m *User) BeforeCreate(_ *gorm.DB) error {
 type Comment struct {
 	ID     int \`gorm:"column:id;primaryKey" json:"id"\`
 	PostID int \`gorm:"column:postId;not null" json:"postId"\`
-	Post   Post
+	Post   *Post
 }
 
 func (Comment) TableName() string {
@@ -700,9 +700,9 @@ func (User) TableName() string {
 }
 
 type Profile struct {
-	ID      int  \`gorm:"column:id;primaryKey;autoIncrement" json:"id"\`
-	OwnerID int  \`gorm:"column:ownerId;uniqueIndex;not null" json:"ownerId"\`
-	User    User \`gorm:"foreignKey:OwnerID"\`
+	ID      int   \`gorm:"column:id;primaryKey;autoIncrement" json:"id"\`
+	OwnerID int   \`gorm:"column:ownerId;uniqueIndex;not null" json:"ownerId"\`
+	User    *User \`gorm:"foreignKey:OwnerID"\`
 }
 
 func (Profile) TableName() string {
@@ -950,5 +950,106 @@ model Stamp {
     expect(code).toContain('\t\ttx.Statement.SetColumn("UpdatedAt", DateTime{Time: now})')
     expect(code).toContain('\treturn dateTime.UTC().Truncate(time.Millisecond), nil')
     expect(code).not.toContain('arrayText')
+  })
+})
+
+describe('generateGormModels keys and singular relations', () => {
+  // Session and VerificationToken are as Auth.js writes them: neither has an @id, and User still
+  // has the sessions, so the struct has to be there and GORM needs a key to load it by.
+  it('keys a model with no @id by its first @unique or @@unique', () => {
+    expect(
+      gormFor(`
+model User {
+  id       String    @id
+  sessions Session[]
+}
+
+model Session {
+  sessionToken String @unique
+  userId       String
+  user         User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+
+  @@unique([identifier, token])
+}
+`),
+    ).toBe(`package model
+
+type User struct {
+	ID       string    \`gorm:"column:id;primaryKey" json:"id"\`
+	Sessions []Session \`gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE"\`
+}
+
+func (User) TableName() string {
+	return "User"
+}
+
+type Session struct {
+	SessionToken string \`gorm:"column:sessionToken;primaryKey;uniqueIndex" json:"sessionToken"\`
+	UserID       string \`gorm:"column:userId;not null" json:"userId"\`
+	User         *User
+}
+
+func (Session) TableName() string {
+	return "Session"
+}
+
+type VerificationToken struct {
+	Identifier string \`gorm:"column:identifier;primaryKey;uniqueIndex:VerificationToken_identifier_token_key" json:"identifier"\`
+	Token      string \`gorm:"column:token;primaryKey;uniqueIndex:VerificationToken_identifier_token_key" json:"token"\`
+}
+
+func (VerificationToken) TableName() string {
+	return "VerificationToken"
+}
+`)
+  })
+
+  // By value, Account would hold a User that holds an Account: an invalid recursive type in Go.
+  it('writes a belongs-to as a pointer, so two models can point at each other', () => {
+    expect(
+      gormFor(`
+model User {
+  id        String   @id
+  accountId String?
+  account   Account? @relation("AccountOnUser", fields: [accountId], references: [id])
+  current   Account? @relation("CurrentUser")
+}
+
+model Account {
+  id            String  @id
+  currentUserId String? @unique
+  currentUser   User?   @relation("CurrentUser", fields: [currentUserId], references: [id])
+  users         User[]  @relation("AccountOnUser")
+}
+`),
+    ).toBe(`package model
+
+type User struct {
+	ID        string  \`gorm:"column:id;primaryKey" json:"id"\`
+	AccountID *string \`gorm:"column:accountId" json:"accountId"\`
+	Account   *Account
+	Current   *Account \`gorm:"foreignKey:CurrentUserID"\`
+}
+
+func (User) TableName() string {
+	return "User"
+}
+
+type Account struct {
+	ID            string  \`gorm:"column:id;primaryKey" json:"id"\`
+	CurrentUserID *string \`gorm:"column:currentUserId;uniqueIndex" json:"currentUserId"\`
+	CurrentUser   *User   \`gorm:"foreignKey:CurrentUserID"\`
+	Users         []User  \`gorm:"foreignKey:AccountID"\`
+}
+
+func (Account) TableName() string {
+	return "Account"
+}
+`)
   })
 })

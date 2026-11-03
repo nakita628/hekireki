@@ -1722,3 +1722,129 @@ describe('keys, indexes and foreign keys as Prisma Migrate makes them', () => {
     )
   })
 })
+
+// DMMF leaves an `@ignore` field out of the model and keeps it in the indexes that list it.
+describe('an index over an @ignore field', () => {
+  it('is left out with the field', () => {
+    const roleAssignment = makeModel({
+      name: 'RoleAssignment',
+      dbName: 'role_assignments',
+      fields: [
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({ name: 'userId', type: 'String', dbName: 'user_id' }),
+        makeField({ name: 'systemRole', type: 'String', dbName: 'system_role' }),
+      ],
+    })
+    const indexes: DMMF.Index[] = [
+      {
+        model: 'RoleAssignment',
+        type: 'unique',
+        isDefinedOnField: false,
+        dbName: 'role_assignments_user_org_role_key',
+        fields: [{ name: 'userId' }, { name: 'deprecatedOwnerOrgId' }, { name: 'systemRole' }],
+      },
+      {
+        model: 'RoleAssignment',
+        type: 'normal',
+        isDefinedOnField: false,
+        dbName: 'role_assignments_owner_org_id_idx',
+        fields: [{ name: 'deprecatedOwnerOrgId' }],
+      },
+      {
+        model: 'RoleAssignment',
+        type: 'normal',
+        isDefinedOnField: false,
+        fields: [{ name: 'userId' }],
+      },
+    ]
+    expect(drizzleSchema(makeDatamodel([roleAssignment]), 'postgresql', indexes)).toBe(
+      `PLACEHOLDER`,
+    )
+  })
+})
+
+// linkwarden's User and Subscription: each holds a foreign key to the other.
+describe('tables whose foreign keys form a cycle', () => {
+  const user = makeModel({
+    name: 'User',
+    fields: [
+      makeField({ name: 'id', type: 'String', isId: true }),
+      makeField({ name: 'parentSubscriptionId', type: 'Int', isRequired: false }),
+      makeField({
+        name: 'parentSubscription',
+        kind: 'object',
+        type: 'Subscription',
+        isRequired: false,
+        relationName: 'ChildUsers',
+        relationFromFields: ['parentSubscriptionId'],
+        relationToFields: ['id'],
+      }),
+      makeField({
+        name: 'subscriptions',
+        kind: 'object',
+        type: 'Subscription',
+        isRequired: false,
+        relationName: 'SubscriptionToUser',
+        relationFromFields: [],
+        relationToFields: [],
+      }),
+    ],
+  })
+  const subscription = makeModel({
+    name: 'Subscription',
+    fields: [
+      makeField({ name: 'id', type: 'Int', isId: true }),
+      makeField({ name: 'userId', type: 'String', isUnique: true }),
+      makeField({
+        name: 'user',
+        kind: 'object',
+        type: 'User',
+        relationName: 'SubscriptionToUser',
+        relationFromFields: ['userId'],
+        relationToFields: ['id'],
+      }),
+      makeField({
+        name: 'childUsers',
+        kind: 'object',
+        type: 'User',
+        isList: true,
+        relationName: 'ChildUsers',
+        relationFromFields: [],
+        relationToFields: [],
+      }),
+    ],
+  })
+  // A table off the cycle that points into it needs no annotation.
+  const invoice = makeModel({
+    name: 'Invoice',
+    fields: [
+      makeField({ name: 'id', type: 'Int', isId: true }),
+      makeField({ name: 'subscriptionId', type: 'Int' }),
+      makeField({
+        name: 'subscription',
+        kind: 'object',
+        type: 'Subscription',
+        relationName: 'InvoiceToSubscription',
+        relationFromFields: ['subscriptionId'],
+        relationToFields: ['id'],
+      }),
+    ],
+  })
+  const indexes: DMMF.Index[] = [
+    { model: 'Subscription', type: 'unique', isDefinedOnField: true, fields: [{ name: 'userId' }] },
+  ]
+  const schema = (provider: 'postgresql' | 'mysql' | 'sqlite') =>
+    drizzleSchema(makeDatamodel([user, subscription, invoice]), provider, indexes)
+
+  it('states what the callbacks on the cycle return, on PostgreSQL', () => {
+    expect(schema('postgresql')).toBe(`PLACEHOLDER`)
+  })
+
+  it('states what the callbacks on the cycle return, on MySQL', () => {
+    expect(schema('mysql')).toBe(`PLACEHOLDER`)
+  })
+
+  it('states what the callbacks on the cycle return, on SQLite', () => {
+    expect(schema('sqlite')).toBe(`PLACEHOLDER`)
+  })
+})

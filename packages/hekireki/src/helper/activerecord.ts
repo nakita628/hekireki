@@ -1,8 +1,10 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { pluralize } from '../utils/humanizer.js'
+import { camelize, pluralize, singularize, underscore } from '../utils/active-support.js'
 import { isAnnotationLine, isSameList, makePascalCase, makeSnakeCase } from '../utils/index.js'
+import { allocate } from '../utils/naming.js'
 import { fieldColumn, referentialActions, relationEnds } from '../utils/prisma-model.js'
+import { ACTIVE_RECORD_INSTANCE_METHODS, RUBY_TOP_LEVEL_CONSTANTS } from './activerecord-names.js'
 
 // cspell:disable
 // Names an enum key on an Active Record model may not take. Rails defines a
@@ -758,6 +760,76 @@ yield_self`.split('\n'),
 )
 // cspell:enable
 
+/**
+ * The class each model is written as: its name in PascalCase, or where Ruby or Rails already has
+ * a constant of that name at the top level, that name with `Record` after it (`Monitor` is
+ * `MonitorRecord`), numbered on where another model has that one too. Names are compared as the
+ * files Zeitwerk loads them from, so two never share one.
+ *
+ * @param models - Every model of the schema.
+ * @returns The class name of each model, by the model's name.
+ */
+export function activeRecordClassNames(models: readonly DMMF.Model[]) {
+  const own = models.map((model) => ({ key: model.name, candidate: makePascalCase(model.name) }))
+  const renamed = allocate(
+    own
+      .filter(({ candidate }) => RUBY_TOP_LEVEL_CONSTANTS.has(candidate))
+      .map(({ key, candidate }) => ({ key, candidate: `${candidate}Record` })),
+    [...RUBY_TOP_LEVEL_CONSTANTS, ...own.map(({ candidate }) => candidate)],
+    makeSnakeCase,
+  )
+  return new Map(own.map(({ key, candidate }) => [key, renamed.get(key) ?? candidate]))
+}
+
+// The names the models are written under: each model's class, and the association each relation
+// field stands for. An association is the field's name in snake_case, unless Active Record
+// already defines a method of that name on a record (`attributes`, `errors`), which Rails refuses
+// an association: then the name Rails would give an association of its class
+// (`has_many :contact_attributes`), or where that is no better or is taken by another association
+// or a column of the model, the model's own name before it (`organization_errors`).
+function railsNames(models: readonly DMMF.Model[]) {
+  const classNames = activeRecordClassNames(models)
+  const classOf = (modelName: string) => classNames.get(modelName) ?? makePascalCase(modelName)
+  const associations = new Map(
+    models.map((model): [string, Map<string, string>] => {
+      const named = relationEnds(model, models).map(({ field }) => ({
+        field,
+        name: makeSnakeCase(field.name),
+      }))
+      const taken = new Set([
+        ...ACTIVE_RECORD_INSTANCE_METHODS,
+        ...named.map(({ name }) => name),
+        ...model.fields.filter((f) => f.kind !== 'object').map((f) => f.dbName ?? f.name),
+      ])
+      const renamed = allocate(
+        named
+          .filter(({ name }) => ACTIVE_RECORD_INSTANCE_METHODS.has(name))
+          .map(({ field, name }) => {
+            const target = underscore(classOf(field.type))
+            const conventional = field.isList ? pluralize(target) : target
+            return {
+              key: field.name,
+              candidate: taken.has(conventional)
+                ? `${underscore(classOf(model.name))}_${name}`
+                : conventional,
+            }
+          }),
+        [...taken],
+        makeSnakeCase,
+      )
+      return [
+        model.name,
+        new Map(named.map(({ field, name }) => [field.name, renamed.get(field.name) ?? name])),
+      ]
+    }),
+  )
+  return {
+    classOf,
+    associationOf: (modelName: string, fieldName: string) =>
+      associations.get(modelName)?.get(fieldName) ?? makeSnakeCase(fieldName),
+  }
+}
+
 function primaryKeyFields(model: DMMF.Model) {
   const idField = model.fields.find((f) => f.isId)
   return idField ? [idField.name] : (model.primaryKey?.fields ?? [])
@@ -1116,8 +1188,10 @@ function yamlLines(tree: LocaleTree, depth: number): string[] {
  * (`activerecord.errors.models.todo.attributes.title.blank`).
  */
 export function activeRecordLocaleFiles(models: readonly DMMF.Model[]) {
+  const { classOf, associationOf } = railsNames(models)
   return models.flatMap((model) => {
-    const modelKey = makeSnakeCase(model.name)
+    // The model's `i18n_key`, its class name underscored.
+    const modelKey = underscore(classOf(model.name))
     const trees = new Map<string, LocaleTree>()
     const tree = (locale: string) => {
       const found = trees.get(locale) ?? {}
@@ -1136,7 +1210,7 @@ export function activeRecordLocaleFiles(models: readonly DMMF.Model[]) {
     // goes under `user`, the foreign key's under the column, `user_id`.
     for (const field of model.fields) {
       const attribute =
-        field.kind === 'object' ? makeSnakeCase(field.name) : (field.dbName ?? field.name)
+        field.kind === 'object' ? associationOf(model.name, field.name) : (field.dbName ?? field.name)
       for (const call of arCalls(field.documentation, 'field').calls) {
         const { validator, messages } = validatorCall(call)
         if (field.kind === 'object' && validator !== 'name') continue
@@ -1332,16 +1406,21 @@ export function activeRecordModels(
 ) {
   const contextModels = allModels ?? models
   const enumMap = new Map((enums ?? []).map((e) => [e.name, e.values]))
+  const { classOf, associationOf } = railsNames(contextModels)
   return models
     .map((model) => {
       const associations = getAssociations(model, contextModels)
-      const className = makePascalCase(model.name)
+      const className = classOf(model.name)
+      // What Rails takes the class to be called by: its foreign key on the
+      // other side (user_id) and its inverse there (:user) are this, as its
+      // table is this pluralized.
+      const modelSnake = underscore(className)
       // Prisma names the table after the model as written (Todo -> "Todo")
       // unless @@map says otherwise; Rails infers the plural of the class
       // (todos), so only a table named that way goes unsaid.
       const tableName = model.dbName ?? model.name
       const tableNameLines =
-        tableName === pluralize(makeSnakeCase(model.name))
+        tableName === pluralize(modelSnake)
           ? []
           : [`self.table_name = "${tableName}"`]
       const idField = model.fields.find((f) => f.isId)
@@ -1716,43 +1795,42 @@ export function activeRecordModels(
         ]
       })
 
-      // Rails derives class_name from the association name (author -> Author,
-      // posts -> Post), foreign_key from the name on the belongs_to side
-      // (user_id) and from the owner's class on the has side (User -> user_id),
-      // and the inverse from the owner's class name (Post -> :post, or :posts)
-      // as long as no foreign_key is given on either side. What matches is
-      // left unsaid, as a Rails developer would; anything else is written out.
-      const modelSnake = makeSnakeCase(model.name)
+      // Rails derives class_name from the association name, camelized, and
+      // singularized first for a collection (author -> Author, posts -> Post,
+      // but event_data -> EventDatum), foreign_key from the name on the
+      // belongs_to side (user_id) and from the owner's class on the has side
+      // (User -> user_id), and the inverse from the owner's class name (Post
+      // -> :post, or :posts) as long as no foreign_key is given on either
+      // side. What matches is left unsaid, as a Rails developer would;
+      // anything else is written out.
       const belongsToLines = associations.belongsTo.map((a) => {
-        const name = makeSnakeCase(a.name)
+        const name = associationOf(model.name, a.name)
+        const targetClass = classOf(a.targetModel)
         // Rails finds the inverse only when the has side needs no
         // foreign_key either, which takes this side to be named after its
         // class, and only a has_one: the plural form is behind
         // automatically_invert_plural_associations, off unless the
         // application turns it on.
+        const inverse = a.inverse === null ? null : associationOf(a.targetModel, a.inverse)
         const conventional =
-          name === makeSnakeCase(a.targetModel) &&
+          name === underscore(targetClass) &&
           a.foreignKeyColumns.length === 1 &&
           a.foreignKeyColumns[0] === `${name}_id` &&
           a.referencesPrimaryKey &&
-          a.inverse !== null &&
+          inverse !== null &&
           !a.inverseIsList &&
-          makeSnakeCase(a.inverse) === modelSnake
+          inverse === modelSnake
         return rubyCall(
           'belongs_to',
           [`:${name}`],
           [
-            ...(makePascalCase(a.targetModel) === makePascalCase(name)
-              ? []
-              : [`class_name: "${makePascalCase(a.targetModel)}"`]),
+            ...(camelize(name) === targetClass ? [] : [`class_name: "${targetClass}"`]),
             ...(a.foreignKeyColumns.length === 1 && a.foreignKeyColumns[0] === `${name}_id`
               ? []
               : [foreignKeyOpt(a.foreignKeyColumns)]),
             ...primaryKeyOpt(a.primaryKeyColumns, a.referencesPrimaryKey),
             ...(a.optional ? ['optional: true'] : []),
-            ...(a.inverse === null || conventional
-              ? []
-              : [`inverse_of: :${makeSnakeCase(a.inverse)}`]),
+            ...(inverse === null || conventional ? [] : [`inverse_of: :${inverse}`]),
           ],
         )
       })
@@ -1762,27 +1840,23 @@ export function activeRecordModels(
         list: typeof associations.hasOne | typeof associations.hasMany,
       ) =>
         list.map((a) => {
-          const name = makeSnakeCase(a.name)
-          const inverse = makeSnakeCase(a.inverse)
+          const name = associationOf(model.name, a.name)
+          const inverse = associationOf(a.targetModel, a.inverse)
+          const targetClass = classOf(a.targetModel)
+          const derivedClass =
+            camelize(macro === 'has_many' ? singularize(name) : name) === targetClass
           const conventional =
             a.foreignKeyColumns.length === 1 &&
             a.foreignKeyColumns[0] === `${modelSnake}_id` &&
             a.referencesPrimaryKey &&
             inverse === modelSnake &&
-            name ===
-              (macro === 'has_many'
-                ? pluralize(makeSnakeCase(a.targetModel))
-                : makeSnakeCase(a.targetModel))
-          const derivedClass =
-            macro === 'has_many'
-              ? name === pluralize(makeSnakeCase(a.targetModel))
-              : makePascalCase(name) === makePascalCase(a.targetModel)
+            derivedClass
           const dependent = DEPENDENT[a.onDelete]
           return rubyCall(
             macro,
             [`:${name}`],
             [
-              ...(derivedClass ? [] : [`class_name: "${makePascalCase(a.targetModel)}"`]),
+              ...(derivedClass ? [] : [`class_name: "${targetClass}"`]),
               ...(a.foreignKeyColumns.length === 1 && a.foreignKeyColumns[0] === `${modelSnake}_id`
                 ? []
                 : [foreignKeyOpt(a.foreignKeyColumns)]),
@@ -1799,14 +1873,15 @@ export function activeRecordModels(
       // Prisma's implicit join table is _AToB with columns A and B, never
       // what Rails would derive, so those three options always stay.
       const habtmLines = associations.habtm.map((a) => {
-        const name = makeSnakeCase(a.name)
+        const name = associationOf(model.name, a.name)
+        const targetClass = classOf(a.targetModel)
         return rubyCall(
           'has_and_belongs_to_many',
           [`:${name}`],
           [
-            ...(name === pluralize(makeSnakeCase(a.targetModel))
+            ...(camelize(singularize(name)) === targetClass
               ? []
-              : [`class_name: "${makePascalCase(a.targetModel)}"`]),
+              : [`class_name: "${targetClass}"`]),
             `join_table: "${a.joinTable}"`,
             `foreign_key: "${a.foreignKey}"`,
             `association_foreign_key: "${a.associationForeignKey}"`,

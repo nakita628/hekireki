@@ -8,9 +8,9 @@ import {
   generateEnumClass,
   generateModelBody,
   generateThroughModel,
-  hasPrimaryKey,
   resolveNames,
 } from '../helper/django.js'
+import { primaryKeyFields } from '../utils/prisma-model.js'
 
 export function djangoCode(
   models: readonly DMMF.Model[],
@@ -20,9 +20,10 @@ export function djangoCode(
 ) {
   const idx = indexes ?? []
   // Imports and default helpers are collected from the models that are actually
-  // emitted; a model without a primary key contributes neither. Relations still
-  // resolve against every model.
-  const emitted = models.filter((model) => hasPrimaryKey(model))
+  // emitted; a model with nothing to key it by (neither an id nor a required
+  // unique, which Prisma refuses) contributes neither. Relations still resolve
+  // against every model.
+  const emitted = models.filter((model) => primaryKeyFields(model).length > 0)
   const m2mTables = collectManyToManyTables(emitted, enums)
   // Attribute and helper-function names are resolved once so that the columns,
   // the Meta options, the composite primary key and the default helpers all

@@ -98,6 +98,55 @@ describe('what a default asks for', () => {
   })
 })
 
+describe('primaryKeyFields', () => {
+  const result = getDMMF({
+    datamodel: [
+      [
+        'schema.prisma',
+        `datasource db {
+  provider = "postgresql"
+}
+model WithId {
+  code String @unique
+  id   Int    @id
+}
+model WithCompositeId {
+  a Int
+  b Int
+  @@id([a, b])
+}
+model WithUnique {
+  nickname String? @unique
+  token    String  @unique
+  email    String  @unique
+}
+model WithCompoundUnique {
+  identifier String
+  token      String
+  @@unique([identifier, token])
+}
+model OnlyOptional {
+  handle String? @unique
+}
+`,
+      ],
+    ],
+  })
+  if ('type' in result) throw new Error(result.error.message)
+  const models = result.datamodel.models
+
+  it.each([
+    ['WithId', ['id']],
+    ['WithCompositeId', ['a', 'b']],
+    ['WithUnique', ['token']],
+    ['WithCompoundUnique', ['identifier', 'token']],
+    ['OnlyOptional', ['handle']],
+  ])('%s: %j', (name, expected) => {
+    const model = models.find((m) => m.name === name)
+    expect(model && primaryKeyFields(model)).toStrictEqual(expected)
+  })
+})
+
 describe('isImplicitManyToMany', () => {
   const result = getDMMF({
     datamodel: [

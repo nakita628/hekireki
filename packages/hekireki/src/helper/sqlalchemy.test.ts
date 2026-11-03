@@ -2451,3 +2451,216 @@ class Row(Base):
 `)
   })
 })
+
+describe('schemas from the wild', () => {
+  it('maps a model with no key by its first unique, and keeps the relations to it', () => {
+    const models = [
+      makeModel('User', [
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({
+          name: 'sessions',
+          type: 'Session',
+          kind: 'object',
+          isList: true,
+          relationName: 'SessionToUser',
+        }),
+      ]),
+      makeModel('Session', [
+        makeField({ name: 'sessionToken', type: 'String', isUnique: true }),
+        makeField({ name: 'userId', type: 'String' }),
+        makeField({
+          name: 'user',
+          type: 'User',
+          kind: 'object',
+          relationName: 'SessionToUser',
+          relationFromFields: ['userId'],
+          relationToFields: ['id'],
+          relationOnDelete: 'Cascade',
+        }),
+      ]),
+    ]
+    const indexes: DMMF.Index[] = [
+      {
+        model: 'Session',
+        type: 'unique',
+        isDefinedOnField: true,
+        fields: [{ name: 'sessionToken' }],
+      },
+    ]
+
+    expect(generateSingleFile(models, [], indexes)).toBe(``)
+  })
+
+  it('maps a model with no key and no single unique by its first compound unique', () => {
+    const models = [
+      makeModel(
+        'VerificationToken',
+        [
+          makeField({ name: 'identifier', type: 'String' }),
+          makeField({ name: 'token', type: 'String' }),
+        ],
+        { uniqueFields: [['identifier', 'token']] },
+      ),
+    ]
+    const indexes: DMMF.Index[] = [
+      {
+        model: 'VerificationToken',
+        type: 'unique',
+        isDefinedOnField: false,
+        fields: [{ name: 'identifier' }, { name: 'token' }],
+      },
+    ]
+
+    expect(generateSingleFile(models, [], indexes)).toBe(``)
+  })
+
+  it('leaves out an index or a unique that lists an @ignore field', () => {
+    // Prisma leaves the @ignore field out of the model's fields, and keeps it in the indexes.
+    const models = [
+      makeModel(
+        'RoleAssignment',
+        [
+          makeField({ name: 'id', type: 'String', isId: true }),
+          makeField({ name: 'systemRole', type: 'String', dbName: 'system_role' }),
+        ],
+        { dbName: 'role_assignments' },
+      ),
+    ]
+    const indexes: DMMF.Index[] = [
+      {
+        model: 'RoleAssignment',
+        type: 'unique',
+        isDefinedOnField: false,
+        dbName: 'role_assignments_user_org_role_key',
+        fields: [{ name: 'deprecatedOwnerOrgId' }, { name: 'systemRole' }],
+      },
+      {
+        model: 'RoleAssignment',
+        type: 'normal',
+        isDefinedOnField: false,
+        dbName: 'role_assignments_owner_org_id_idx',
+        fields: [{ name: 'deprecatedOwnerOrgId' }],
+      },
+      {
+        model: 'RoleAssignment',
+        type: 'normal',
+        isDefinedOnField: false,
+        fields: [{ name: 'systemRole' }],
+      },
+    ]
+
+    expect(generateSingleFile(models, [], indexes)).toBe(``)
+  })
+
+  it('names the foreign keys where two tables reference each other', () => {
+    const models = [
+      makeModel(
+        'User',
+        [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({ name: 'movedToProfileId', type: 'Int', isRequired: false }),
+          makeField({
+            name: 'movedToProfile',
+            type: 'Profile',
+            kind: 'object',
+            isRequired: false,
+            relationName: 'moved_to_profile',
+            relationFromFields: ['movedToProfileId'],
+            relationToFields: ['id'],
+            relationOnDelete: 'SetNull',
+          }),
+          makeField({
+            name: 'profiles',
+            type: 'Profile',
+            kind: 'object',
+            isList: true,
+            relationName: 'ProfileToUser',
+          }),
+        ],
+        { dbName: 'users' },
+      ),
+      makeModel('Profile', [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'userId', type: 'Int' }),
+        makeField({
+          name: 'user',
+          type: 'User',
+          kind: 'object',
+          relationName: 'ProfileToUser',
+          relationFromFields: ['userId'],
+          relationToFields: ['id'],
+          relationOnDelete: 'Cascade',
+        }),
+        makeField({
+          name: 'movedFromUser',
+          type: 'User',
+          kind: 'object',
+          isRequired: false,
+          relationName: 'moved_to_profile',
+        }),
+      ]),
+    ]
+
+    expect(generateSingleFile(models)).toBe(``)
+  })
+
+  it('numbers a field whose snake_case name another field already has', () => {
+    const models = [
+      makeModel('Account', [
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({ name: 'createdAt', type: 'Int' }),
+        makeField({ name: 'created_at', type: 'Int', isRequired: false }),
+      ]),
+    ]
+
+    expect(generateSingleFile(models)).toBe(``)
+  })
+
+  it('gives a field named after a name of the module a trailing underscore', () => {
+    const models = [
+      makeModel('Record', [
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({ name: 'text', type: 'String' }),
+        makeField({
+          name: 'capturedAt',
+          type: 'DateTime',
+          isRequired: false,
+          hasDefaultValue: true,
+          default: { name: 'now', args: [] },
+        }),
+      ]),
+    ]
+
+    expect(generateSingleFile(models)).toBe(``)
+  })
+
+  it('renames a model named after a class of the module, keeping its table', () => {
+    const models = [
+      makeModel('Base', [
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({
+          name: 'tables',
+          type: 'Table',
+          kind: 'object',
+          isList: true,
+          relationName: 'BaseToTable',
+        }),
+      ]),
+      makeModel('Table', [
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({ name: 'baseId', type: 'String' }),
+        makeField({
+          name: 'base',
+          type: 'Base',
+          kind: 'object',
+          relationName: 'BaseToTable',
+          relationFromFields: ['baseId'],
+          relationToFields: ['id'],
+          relationOnDelete: 'Cascade',
+        }),
+      ]),
+    ]
+
+    expect(generateSingleFile(models)).toBe(``)
+  })
+})

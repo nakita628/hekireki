@@ -103,6 +103,14 @@ needs it). What Rails works out on its own (`table_name`, `class_name`, `foreign
 written: `attribute` defaults, `enum`, timestamps, associations with `dependent:` from `onDelete`,
 and validations from the columns (`presence`, `uniqueness`, `length`).
 
+Rails' own inflections decide what is left unsaid: `has_many :event_data` of `EventData` names
+the class, as Rails would look for `EventDatum`. A name Rails refuses is given another: a model
+named after a constant Ruby or Rails has already loaded (`Monitor`, `Set`, `Data`) is written as
+`MonitorRecord`, with its table named, and a relation named after a method Active Record defines
+on a record (`attributes`, `errors`) becomes the association Rails would name after its class
+(`contact_attributes`), or where that is the same name, one with the model's name before it
+(`organization_errors`).
+
 A `/// @ar.` line on a field is a validator (`presence`, `length(maximum: 255)`) added to that
 field's `validates`; on a model it is a Ruby line written into the class as it is
 (`has_secure_password`, `has_many :tags, through: :post_tags`, `scope ...`). A message or name

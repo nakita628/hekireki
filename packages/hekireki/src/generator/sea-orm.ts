@@ -8,8 +8,8 @@ import {
   generateModRs,
   generatePreludeRs,
   PRISMA_DATE_TIME_RS,
+  rustModule,
 } from '../helper/sea-orm.js'
-import { makeSnakeCase } from '../utils/index.js'
 
 export function seaOrmFiles(
   models: readonly DMMF.Model[],
@@ -20,32 +20,36 @@ export function seaOrmFiles(
   const useLines = ['use sea_orm::entity::prelude::*;', 'use serde::{Deserialize, Serialize};']
 
   const enumFiles = enums.map((e) => ({
-    fileName: `${makeSnakeCase(e.name)}.rs`,
-    moduleName: makeSnakeCase(e.name),
+    fileName: rustModule(e.name).file,
+    moduleName: rustModule(e.name).ident,
     code: [...useLines, '', generateEnum(e, serde), ''].join('\n'),
   }))
 
-  const entityFiles = models
+  const entities = models
     .map((model) => ({
-      fileName: `${makeSnakeCase(model.name)}.rs`,
-      moduleName: makeSnakeCase(model.name),
+      model,
+      fileName: rustModule(model.name).file,
+      moduleName: rustModule(model.name).ident,
       code: generateEntityFile(model, models, enums, serde, provider),
     }))
     .filter((entry) => entry.code.trim().length > 0)
+  const entityFiles = entities.map(({ fileName, moduleName, code }) => ({
+    fileName,
+    moduleName,
+    code,
+  }))
 
-  const m2mFiles = collectM2MPairs(models).map((pair) => {
-    const moduleName = makeSnakeCase(pair.relationName)
-    return {
-      fileName: `${moduleName}.rs`,
-      moduleName,
-      code: generateM2MEntity(pair.left, pair.right, pair.relationName, models, serde),
-    }
-  })
+  const m2mFiles = collectM2MPairs(models).map((pair) => ({
+    fileName: rustModule(pair.relationName).file,
+    moduleName: rustModule(pair.relationName).ident,
+    code: generateM2MEntity(pair.left, pair.right, pair.relationName, models, serde),
+  }))
 
+  // Only the models written above: a prelude naming a module there is no file for does not build.
   const preludeEntry = {
     fileName: 'prelude.rs',
     moduleName: 'prelude',
-    code: generatePreludeRs(models),
+    code: generatePreludeRs(entities.map(({ model }) => model)),
   }
 
   const prismaDateTimeFiles =
@@ -66,7 +70,13 @@ export function seaOrmFiles(
     ...prismaDateTimeFiles,
     preludeEntry,
   ]
-  const moduleNames = allEntries.map((e) => e.moduleName).toSorted()
+  // rustfmt orders `mod` items by name without the `r#` of a raw identifier.
+  const moduleNames = allEntries
+    .map((e) => e.moduleName)
+    .toSorted((a, b) => {
+      const [x, y] = [a.replace(/^r#/u, ''), b.replace(/^r#/u, '')]
+      return x < y ? -1 : x > y ? 1 : 0
+    })
   const modEntry = { fileName: 'mod.rs', code: generateModRs(moduleNames) }
 
   return [...allEntries.map(({ fileName, code }) => ({ fileName, code })), modEntry]

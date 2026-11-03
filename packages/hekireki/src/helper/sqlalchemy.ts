@@ -1,6 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { constraintName, makePascalCase, makeSnakeCase } from '../utils/index.js'
+import { allocate } from '../utils/naming.js'
 import {
   backRelation,
   fieldColumn,
@@ -8,6 +9,7 @@ import {
   isFunctionDefault,
   isNowDefault,
   isUlidDefault,
+  primaryKeyFields,
   referentialActions,
   relationEnds,
   uuidDefaultVersion,
@@ -54,13 +56,120 @@ export function prismaTypeToPythonType(type: string) {
 // reserved by DeclarativeBase.
 const DECLARATIVE_RESERVED = new Set(['self', 'cls', 'metadata', 'registry'])
 
-// A keyword or reserved column name is mapped to a `<name>_` attribute; the
-// real column is then preserved via the first positional argument to
-// mapped_column.
+// The names of the module a class body reads while it runs: the builtins its annotations name,
+// `text` of a server_default, the defaults' clocks and the ORM's own calls. An attribute of the
+// same name, assigned earlier in the body, would be read in their place.
+const MODULE_NAMES = new Set([
+  'bool',
+  'bytes',
+  'compiles',
+  'date',
+  'datetime',
+  'dict',
+  'float',
+  'func',
+  'int',
+  'list',
+  'mapped_column',
+  'relationship',
+  'str',
+  'text',
+  'time_type',
+  'timezone',
+  'utc_now',
+  'uuid6',
+  'uuid_mod',
+])
+
+// The classes and types the module imports or defines, which a model class of the same name would
+// replace for every model after it.
+const MODULE_CLASSES = new Set([
+  'Any',
+  'Base',
+  'BigInteger',
+  'BindParameter',
+  'Boolean',
+  'Column',
+  'ColumnElement',
+  'Date',
+  'DateTime',
+  'DecimalType',
+  'DeclarativeBase',
+  'Dialect',
+  'Double',
+  'Enum',
+  'Float',
+  'ForeignKey',
+  'ForeignKeyConstraint',
+  'Index',
+  'Integer',
+  'Jsonb',
+  'LargeBinary',
+  'Mapped',
+  'MetaData',
+  'Numeric',
+  'Optional',
+  'PrimaryKeyConstraint',
+  'SmallInteger',
+  'String',
+  'Table',
+  'Text',
+  'Time',
+  'TypeDecorator',
+  'UtcDateTime',
+  'UtcDateTimeTz',
+  'UtcTimestamp',
+  'Uuid',
+  'Xml',
+])
+
+// A keyword, a reserved name or a name of the module is mapped to a `<name>_` attribute; the
+// real column is then preserved via the first positional argument to mapped_column.
 export function pythonAttrName(columnName: string) {
-  return PYTHON_KEYWORDS.has(columnName) || DECLARATIVE_RESERVED.has(columnName)
+  return PYTHON_KEYWORDS.has(columnName) ||
+    DECLARATIVE_RESERVED.has(columnName) ||
+    MODULE_NAMES.has(columnName)
     ? `${columnName}_`
     : columnName
+}
+
+/**
+ * The attribute a field of `model` is mapped to: its name in snake_case, made safe by
+ * `pythonAttrName`. Where two fields come to one name (`createdAt` and `created_at`), the one
+ * already written in snake_case keeps it and the other is numbered, its column named apart.
+ */
+function attributeName(model: DMMF.Model | undefined, fieldName: string) {
+  const candidates = (model?.fields ?? []).map((f) => ({
+    key: f.name,
+    candidate: pythonAttrName(makeSnakeCase(f.name)),
+  }))
+  const names = allocate(
+    [
+      ...candidates.filter((c) => c.candidate === c.key),
+      ...candidates.filter((c) => c.candidate !== c.key),
+    ],
+    [],
+    (name) => name,
+  )
+  return names.get(fieldName) ?? pythonAttrName(makeSnakeCase(fieldName))
+}
+
+// The Python class of a model: its name in PascalCase, with a trailing underscore where the module
+// already has the name (`Base`, `Index`), its table kept by `__tablename__`.
+function className(modelName: string) {
+  const name = makePascalCase(modelName)
+  return MODULE_CLASSES.has(name) ? `${name}_` : name
+}
+
+// The indexes and uniques of a model whose fields are all on it: one that lists an `@ignore`d
+// field, which has no column, is left out.
+function modelIndexes(model: DMMF.Model, indexes: readonly DMMF.Index[]) {
+  return indexes.filter(
+    (idx) =>
+      idx.model === model.name &&
+      (idx.type === 'unique' || idx.type === 'normal' || idx.type === 'fulltext') &&
+      idx.fields.every((f) => model.fields.some((mf) => mf.name === f.name)),
+  )
 }
 
 // The column type Prisma Migrate gives a field with no native type, as SQLAlchemy writes it. A
@@ -290,6 +399,7 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
     name: string
     targetModel: string
     foreignKey: string
+    foreignKeys: readonly string[]
     isList: boolean
     onDelete: string
   }[] = []
@@ -297,6 +407,7 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
     name: string
     targetModel: string
     foreignKey: string
+    foreignKeys: readonly string[]
     isList: boolean
     optional: boolean
     onDelete: string
@@ -330,13 +441,15 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
       continue
     }
     const fkField = end.inverse
-    const foreignKey = fkField.relationFromFields?.[0] ?? ''
+    const foreignKeys = fkField.relationFromFields ?? []
+    const foreignKey = foreignKeys[0] ?? ''
     const { onDelete } = referentialActions(fkField)
     if (end.kind === 'hasMany') {
       hasMany.push({
         name: field.name,
         targetModel: field.type,
         foreignKey,
+        foreignKeys,
         isList: true,
         onDelete,
       })
@@ -345,6 +458,7 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
         name: field.name,
         targetModel: field.type,
         foreignKey,
+        foreignKeys,
         isList: false,
         optional: !field.isRequired,
         onDelete,
@@ -583,19 +697,20 @@ function usesUtcDateTime(models: readonly DMMF.Model[]) {
   )
 }
 
+// Whether more than one foreign key links the two models, in either direction: SQLAlchemy then
+// cannot tell which one a relationship joins on, and each names its own with `foreign_keys=`.
+// A self-relation's keys are counted once.
 function needsForeignKeysParam(
-  targetModel: string,
-  assocs: readonly { readonly targetModel: string }[],
+  modelName: string,
+  targetModelName: string,
+  allModels: readonly DMMF.Model[],
 ) {
-  return assocs.filter((a) => a.targetModel === targetModel).length > 1
-}
-
-// The relations a model holds the foreign key of, each with the model it points at: what the
-// `belongsTo` of `getAssociations` lists, read off the fields alone when only the targets matter.
-function foreignKeyEnds(model: DMMF.Model) {
-  return model.fields
-    .filter((f) => f.kind === 'object' && (f.relationFromFields ?? []).length > 0)
-    .map((f) => ({ targetModel: f.type }))
+  const keysTo = (from: string, to: string) =>
+    (allModels.find((m) => m.name === from)?.fields ?? []).filter(
+      (f) => f.kind === 'object' && f.type === to && (f.relationFromFields ?? []).length > 0,
+    ).length
+  const back = modelName === targetModelName ? 0 : keysTo(targetModelName, modelName)
+  return keysTo(modelName, targetModelName) + back > 1
 }
 
 function findBackPopulates(
@@ -631,7 +746,9 @@ function findBackPopulates(
       : false
   })
 
-  return pythonAttrName(makeSnakeCase(backField ? backField.name : sourceModelName))
+  return backField
+    ? attributeName(targetModel, backField.name)
+    : pythonAttrName(makeSnakeCase(sourceModelName))
 }
 
 function findM2MBackPopulates(
@@ -651,7 +768,9 @@ function findM2MBackPopulates(
       f.relationName === relationName &&
       !(targetModelName === sourceModelName && f.name === sourceFieldName),
   )
-  return pythonAttrName(makeSnakeCase(backField ? backField.name : sourceModelName))
+  return backField
+    ? attributeName(targetModel, backField.name)
+    : pythonAttrName(makeSnakeCase(sourceModelName))
 }
 
 function generateColumn(
@@ -662,12 +781,13 @@ function generateColumn(
   allModels: readonly DMMF.Model[],
   enumMap: ReadonlyMap<string, DMMF.DatamodelEnum>,
   provider: string,
-  tableName: string,
+  model: DMMF.Model,
 ) {
   // The attribute is the field in Python's case; the column is Prisma's, named
   // positionally whenever the two differ.
+  const tableName = model.dbName ?? model.name
   const columnName = field.dbName ?? field.name
-  const attrName = pythonAttrName(makeSnakeCase(field.name))
+  const attrName = attributeName(model, field.name)
   const elemPythonType = field.kind === 'enum' ? 'str' : pythonTypeForNative(field)
   // A scalar list is a collection; collapsing it to its element type silently
   // drops the array. Lists are non-Optional (an empty array, not None).
@@ -676,7 +796,7 @@ function generateColumn(
 
   const colArgs: string[] = []
 
-  // Keyword column renamed to `<name>_`: pin the real column name positionally.
+  // An attribute renamed (`<name>_`, a numbered twin): pin the real column name positionally.
   if (attrName !== columnName) {
     colArgs.push(`"${columnName}"`)
   }
@@ -813,13 +933,7 @@ function generateTableArgs(
 
   // Prisma Migrate makes every unique a unique index, named `<table>_<columns>_key`, and every
   // index `<table>_<columns>_idx`.
-  const indexConstraints = indexes
-    .filter(
-      (idx) =>
-        idx.model === model.name &&
-        (idx.type === 'unique' || idx.type === 'normal' || idx.type === 'fulltext'),
-    )
-    .map((idx) => {
+  const indexConstraints = modelIndexes(model, indexes).map((idx) => {
       const columns = idx.fields.map((f) => fieldColumn(model, f.name))
       const unique = idx.type === 'unique'
       const name =
@@ -889,8 +1003,7 @@ function generateBelongsToRelationships(
   allModels: readonly DMMF.Model[],
 ) {
   return associations.belongsTo.map((assoc) => {
-    const snakeName = pythonAttrName(makeSnakeCase(assoc.name))
-    const snakeFk = pythonAttrName(makeSnakeCase(assoc.foreignKey))
+    const snakeName = attributeName(model, assoc.name)
     const backPop = findBackPopulates(
       assoc.targetModel,
       model.name,
@@ -898,20 +1011,34 @@ function generateBelongsToRelationships(
       allModels,
       assoc.name,
     )
-    const needsFkParam = needsForeignKeysParam(assoc.targetModel, associations.belongsTo)
-    const fkClause = needsFkParam ? `foreign_keys=[${snakeFk}], ` : ''
+    const fkClause = needsForeignKeysParam(model.name, assoc.targetModel, allModels)
+      ? `foreign_keys=[${assoc.foreignKeys.map((fk) => attributeName(model, fk)).join(', ')}], `
+      : ''
     // A self-referential many-to-one needs remote_side (the PK side) so the ORM
     // can tell which end is "one"; without it mapper configuration fails.
-    const pkField = model.fields.find((f) => f.isId)
+    const identity = primaryKeyFields(model)
     const remoteClause =
-      assoc.targetModel === model.name && pkField
-        ? `remote_side=[${pythonAttrName(makeSnakeCase(pkField.name))}], `
+      assoc.targetModel === model.name && identity.length > 0
+        ? `remote_side=[${identity.map((name) => attributeName(model, name)).join(', ')}], `
         : ''
-    const mappedType = assoc.optional
-      ? `Optional["${makePascalCase(assoc.targetModel)}"]`
-      : `"${makePascalCase(assoc.targetModel)}"`
+    const target = className(assoc.targetModel)
+    const mappedType = assoc.optional ? `Optional["${target}"]` : `"${target}"`
     return `    ${snakeName}: Mapped[${mappedType}] = relationship(${remoteClause}${fkClause}back_populates="${backPop}")`
   })
+}
+
+// The foreign key a has-many or has-one joins on, as the string SQLAlchemy evaluates once every
+// class is defined: one column, or the list of a composite key.
+function inverseForeignKeys(
+  targetModelName: string,
+  foreignKeys: readonly string[],
+  allModels: readonly DMMF.Model[],
+) {
+  const targetModel = allModels.find((m) => m.name === targetModelName)
+  const columns = foreignKeys.map(
+    (fk) => `${className(targetModelName)}.${attributeName(targetModel, fk)}`,
+  )
+  return columns.length === 1 ? `"${columns.join('')}"` : `"[${columns.join(', ')}]"`
 }
 
 function generateHasManyRelationships(
@@ -920,7 +1047,7 @@ function generateHasManyRelationships(
   allModels: readonly DMMF.Model[],
 ) {
   return associations.hasMany.map((assoc) => {
-    const snakeName = pythonAttrName(makeSnakeCase(assoc.name))
+    const snakeName = attributeName(model, assoc.name)
     const backPop = findBackPopulates(
       assoc.targetModel,
       model.name,
@@ -928,15 +1055,10 @@ function generateHasManyRelationships(
       allModels,
       assoc.name,
     )
-    const targetModel = allModels.find((m) => m.name === assoc.targetModel)
-    const needsFkParam = targetModel
-      ? needsForeignKeysParam(model.name, foreignKeyEnds(targetModel))
-      : false
-    const targetFkSnake = pythonAttrName(makeSnakeCase(assoc.foreignKey))
-    const fkClause = needsFkParam
-      ? `foreign_keys="${makePascalCase(assoc.targetModel)}.${targetFkSnake}", `
+    const fkClause = needsForeignKeysParam(model.name, assoc.targetModel, allModels)
+      ? `foreign_keys=${inverseForeignKeys(assoc.targetModel, assoc.foreignKeys, allModels)}, `
       : ''
-    return `    ${snakeName}: Mapped[list["${makePascalCase(assoc.targetModel)}"]] = relationship(${fkClause}${deleteClause(assoc.onDelete)}back_populates="${backPop}")`
+    return `    ${snakeName}: Mapped[list["${className(assoc.targetModel)}"]] = relationship(${fkClause}${deleteClause(assoc.onDelete)}back_populates="${backPop}")`
   })
 }
 
@@ -946,7 +1068,7 @@ function generateHasOneRelationships(
   allModels: readonly DMMF.Model[],
 ) {
   return associations.hasOne.map((assoc) => {
-    const snakeName = pythonAttrName(makeSnakeCase(assoc.name))
+    const snakeName = attributeName(model, assoc.name)
     const backPop = findBackPopulates(
       assoc.targetModel,
       model.name,
@@ -954,17 +1076,11 @@ function generateHasOneRelationships(
       allModels,
       assoc.name,
     )
-    const targetModel = allModels.find((m) => m.name === assoc.targetModel)
-    const needsFkParam = targetModel
-      ? needsForeignKeysParam(model.name, foreignKeyEnds(targetModel))
-      : false
-    const targetFkSnake = pythonAttrName(makeSnakeCase(assoc.foreignKey))
-    const fkClause = needsFkParam
-      ? `foreign_keys="${makePascalCase(assoc.targetModel)}.${targetFkSnake}", `
+    const fkClause = needsForeignKeysParam(model.name, assoc.targetModel, allModels)
+      ? `foreign_keys=${inverseForeignKeys(assoc.targetModel, assoc.foreignKeys, allModels)}, `
       : ''
-    const mappedType = assoc.optional
-      ? `Optional["${makePascalCase(assoc.targetModel)}"]`
-      : `"${makePascalCase(assoc.targetModel)}"`
+    const target = className(assoc.targetModel)
+    const mappedType = assoc.optional ? `Optional["${target}"]` : `"${target}"`
     return `    ${snakeName}: Mapped[${mappedType}] = relationship(${fkClause}${deleteClause(assoc.onDelete)}back_populates="${backPop}")`
   })
 }
@@ -986,7 +1102,7 @@ function generateManyToManyRelationships(
   }[],
 ) {
   return associations.manyToMany.map((assoc) => {
-    const snakeName = pythonAttrName(makeSnakeCase(assoc.name))
+    const snakeName = attributeName(model, assoc.name)
     const backPop = findM2MBackPopulates(
       assoc.targetModel,
       model.name,
@@ -1006,13 +1122,13 @@ function generateManyToManyRelationships(
       (f) => f.kind === 'object' && f.relationName === assoc.relationName && f.name !== assoc.name,
     )
     const [own, far] = other && other.name < assoc.name ? ['B', 'A'] : ['A', 'B']
-    const pk = `${makePascalCase(model.name)}.${pythonAttrName(makeSnakeCase(pkField?.name ?? 'id'))}`
+    const pk = `${className(model.name)}.${attributeName(model, pkField?.name ?? 'id')}`
     const joinClause =
       assoc.targetModel === model.name && other
         ? `primaryjoin=lambda: ${pk} == ${secondaryVar}.c.${own}, secondaryjoin=lambda: ${pk} == ${secondaryVar}.c.${far}, `
         : ''
 
-    return `    ${snakeName}: Mapped[list["${makePascalCase(assoc.targetModel)}"]] = relationship(secondary=${secondaryVar}, ${joinClause}back_populates="${backPop}")`
+    return `    ${snakeName}: Mapped[list["${className(assoc.targetModel)}"]] = relationship(secondary=${secondaryVar}, ${joinClause}back_populates="${backPop}")`
   })
 }
 
@@ -1036,9 +1152,9 @@ export function generateModelBody(
 ) {
   const idField = model.fields.find((f) => f.isId)
   const compositePkFieldNames = new Set(model.primaryKey?.fields)
-  const isCompositePk = !idField && compositePkFieldNames.size > 0
+  const identity = primaryKeyFields(model)
 
-  if (!(idField || isCompositePk)) return null
+  if (identity.length === 0) return null
 
   const associations = getAssociations(model, allModels)
   const belongsToFkFields = new Set(associations.belongsTo.map((a) => a.foreignKey))
@@ -1051,10 +1167,18 @@ export function generateModelBody(
   const columnLines = scalarFields.map((field) => {
     const isPk = field.isId || compositePkFieldNames.has(field.name)
     const isFk = belongsToFkFields.has(field.name)
-    return generateColumn(field, isPk, isFk, associations, allModels, enumMap, provider, tableName)
+    return generateColumn(field, isPk, isFk, associations, allModels, enumMap, provider, model)
   })
 
   const tableArgsLines = generateTableArgs(model, allModels, indexes, provider)
+  // A table with no key is mapped by its first unique: the mapper is told, the table is not.
+  const mapperArgsLines =
+    idField || model.primaryKey
+      ? []
+      : [
+          '',
+          `    __mapper_args__ = {"primary_key": [${identity.map((name) => attributeName(model, name)).join(', ')}]}`,
+        ]
 
   const relationLines = [
     ...generateBelongsToRelationships(associations, model, allModels),
@@ -1066,11 +1190,12 @@ export function generateModelBody(
   const hasRelations = relationLines.length > 0
 
   return [
-    `class ${makePascalCase(model.name)}(Base):`,
+    `class ${className(model.name)}(Base):`,
     `    __tablename__ = "${tableName}"`,
     '',
     ...columnLines,
     ...tableArgsLines,
+    ...mapperArgsLines,
     ...(hasRelations ? [''] : []),
     ...relationLines,
   ].join('\n')
@@ -1167,15 +1292,7 @@ export function collectGlobalImports(
       saImports.add('ForeignKeyConstraint')
     }
 
-    if (
-      indexes.some(
-        (idx) =>
-          idx.model === model.name &&
-          (idx.type === 'unique' || idx.type === 'normal' || idx.type === 'fulltext'),
-      )
-    ) {
-      saImports.add('Index')
-    }
+    if (modelIndexes(model, indexes).length > 0) saImports.add('Index')
   }
 
   if (m2mTables.length > 0) {

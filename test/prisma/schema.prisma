@@ -463,6 +463,10 @@ model Ghost {
   id     Int    @id @default(autoincrement())
   seen   String
   hidden String @ignore
+
+  // An index or unique over an @ignore field names a column that is not there.
+  @@unique([seen, hidden])
+  @@index([hidden])
 }
 
 model Phantom {
@@ -527,4 +531,126 @@ model MachineWord {
   tableName String
 
   @@map("machine_words")
+}
+
+// A model with neither @id nor @@id is keyed by its first unique (Auth.js's
+// Session and VerificationToken), and the relations of the other models that
+// name it must still load.
+model Session {
+  sessionToken String   @unique
+  memberId     Int
+  expires      DateTime
+  member       Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// Two tables joined by a foreign key in each direction (Cal.com's User and
+// Profile): SQLAlchemy needs foreign_keys= on every relationship between them,
+// Go a pointer for each belongs-to, and drizzle a stated return type for the
+// callbacks on the cycle.
+model Member {
+  id          Int          @id @default(autoincrement())
+  movedToId   Int?
+  movedTo     Membership?  @relation("moved_to", fields: [movedToId], references: [id])
+  memberships Membership[]
+  sessions    Session[]
+}
+
+model Membership {
+  id        Int      @id @default(autoincrement())
+  memberId  Int
+  member    Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  movedFrom Member[] @relation("moved_to")
+}
+
+// Names a module of the generated code already uses: `text` (SQLAlchemy's
+// text()), `models` and `timezone` (Django's modules) read later in the class
+// body, a model named Base (SQLAlchemy's declarative base) or Monitor (Ruby's
+// stdlib class), and an enum named Type (a Rust keyword as a module).
+enum Type {
+  BUY
+  SELL
+}
+
+model Note {
+  id        Int       @id @default(autoincrement())
+  text      String
+  timezone  String?
+  models    String
+  type      Type
+  createdAt DateTime? @default(now())
+}
+
+model Base {
+  id   String @id @default(cuid())
+  name String
+}
+
+model Monitor {
+  id   String @id @default(cuid())
+  name String
+}
+
+// A one-column @@id is a primary key of one field, and two models whose
+// snake_case names differ only by a trailing digit are ordered as rustfmt
+// orders them.
+model BuilderState {
+  builderId String
+  updatedAt DateTime
+
+  @@id([builderId])
+}
+
+model BuilderState2 {
+  builderId String
+  updatedAt DateTime
+
+  @@id([builderId])
+}
+
+// An implicit many-to-many whose join-table relation chains are wider than
+// rustfmt's line.
+model BlockVersionSnapshot {
+  id        Int                       @id @default(autoincrement())
+  resources ResourceVersionSnapshot[]
+}
+
+model ResourceVersionSnapshot {
+  id     Int                    @id @default(autoincrement())
+  blocks BlockVersionSnapshot[]
+}
+
+// Associations Active Record already has a method of that name for
+// (attributes, errors), and a has_many whose name Rails singularizes to a
+// class that does not exist (event_data -> EventDatum, not EventData).
+model Contact {
+  id         Int                @id @default(autoincrement())
+  attributes ContactAttribute[]
+  errors     ContactError[]
+  event_data EventData[]
+}
+
+model ContactAttribute {
+  id        Int     @id @default(autoincrement())
+  contactId Int
+  contact   Contact @relation(fields: [contactId], references: [id])
+}
+
+model ContactError {
+  id        Int     @id @default(autoincrement())
+  contactId Int
+  contact   Contact @relation(fields: [contactId], references: [id])
+}
+
+model EventData {
+  id        Int     @id @default(autoincrement())
+  contactId Int
+  contact   Contact @relation(fields: [contactId], references: [id])
 }
