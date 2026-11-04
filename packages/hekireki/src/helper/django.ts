@@ -66,10 +66,66 @@ export function djangoAttrName(columnName: string) {
 // names cannot be defined at all.
 const CHOICES_RESERVED = new Set(['choices', 'labels', 'values', 'names', 'mro'])
 
+// TextChoices is a str, so a member named after one of str's methods
+// (`replace`, `center`, `count`) overrides it with a string, which mypy
+// --strict refuses as an incompatible assignment.
+const STR_METHODS = new Set([
+  'capitalize',
+  'casefold',
+  'center',
+  'count',
+  'encode',
+  'endswith',
+  'expandtabs',
+  'find',
+  'format',
+  'format_map',
+  'index',
+  'isalnum',
+  'isalpha',
+  'isascii',
+  'isdecimal',
+  'isdigit',
+  'isidentifier',
+  'islower',
+  'isnumeric',
+  'isprintable',
+  'isspace',
+  'istitle',
+  'isupper',
+  'join',
+  'ljust',
+  'lower',
+  'lstrip',
+  'maketrans',
+  'partition',
+  'removeprefix',
+  'removesuffix',
+  'replace',
+  'rfind',
+  'rindex',
+  'rjust',
+  'rpartition',
+  'rsplit',
+  'rstrip',
+  'split',
+  'splitlines',
+  'startswith',
+  'strip',
+  'swapcase',
+  'title',
+  'translate',
+  'upper',
+  'zfill',
+])
+
 // TextChoices members are class attributes, not model fields, so a trailing
-// underscore is enough to dodge a keyword (fields.E001 does not apply).
+// underscore is enough to dodge a keyword (fields.E001 does not apply); the
+// value stored is still the schema's.
 function enumMemberName(valueName: string) {
-  return PYTHON_KEYWORDS.has(valueName) || CHOICES_RESERVED.has(valueName)
+  return PYTHON_KEYWORDS.has(valueName) ||
+    CHOICES_RESERVED.has(valueName) ||
+    STR_METHODS.has(valueName)
     ? `${valueName}_`
     : valueName
 }
@@ -681,13 +737,14 @@ const ON_DELETE: { [k: string]: string } = {
   SetDefault: 'models.SET_DEFAULT',
 }
 
-function onDeleteFor(field: DMMF.Field) {
-  if (field.relationOnDelete && ON_DELETE[field.relationOnDelete]) {
-    return ON_DELETE[field.relationOnDelete]
+function onDeleteFor(relationField: DMMF.Field, scalarField: DMMF.Field) {
+  if (relationField.relationOnDelete && ON_DELETE[relationField.relationOnDelete]) {
+    return ON_DELETE[relationField.relationOnDelete]
   }
-  // Prisma's implicit referential actions: SetNull for an optional relation,
-  // Restrict for a required one.
-  return field.isRequired ? 'models.RESTRICT' : 'models.SET_NULL'
+  // Prisma's implicit referential actions: SetNull where the key can be null,
+  // Restrict where it cannot. Prisma reads that from the key, not from the `?`
+  // on the relation, which can be optional over a required column.
+  return scalarField.isRequired ? 'models.RESTRICT' : 'models.SET_NULL'
 }
 
 function generateForeignKeyField(
@@ -724,12 +781,15 @@ function generateForeignKeyField(
 
   const args = [
     target,
-    `on_delete=${onDeleteFor(relationField)}`,
+    `on_delete=${onDeleteFor(relationField, scalarField)}`,
     `related_name=${relatedName}`,
     toField,
     isPk ? 'primary_key=True' : null,
     columnName !== `${attrName}_id` ? `db_column=${toPythonString(columnName)}` : null,
-    !relationField.isRequired ? 'null=True' : null,
+    // The column is nullable as its scalar field is: a relation can be optional
+    // (`PublicTypebot?`) over a required key, which a CompositePrimaryKey then
+    // takes (models.E042 refuses a null=True field there).
+    !scalarField.isRequired ? 'null=True' : null,
     // Django indexes every ForeignKey by default (plus a text_pattern_ops
     // companion on a text column); Prisma indexes none of them. Whatever the
     // schema actually declares arrives through Meta.indexes instead, so leaving
@@ -984,8 +1044,15 @@ function generateMetaLines(model: DMMF.Model, indexes: readonly DMMF.Index[], na
     ...(constraints.length > 0
       ? ['        constraints = [', ...constraints.map((c) => `            ${c},`), '        ]']
       : []),
+    // Two @@index over the same columns differ only in map:, which an index too
+    // long for Django leaves out: Django would derive one name for both
+    // (models.E029), so the index is written once.
     ...(indexEntries.length > 0
-      ? ['        indexes = [', ...indexEntries.map((i) => `            ${i},`), '        ]']
+      ? [
+          '        indexes = [',
+          ...[...new Set(indexEntries)].map((i) => `            ${i},`),
+          '        ]',
+        ]
       : []),
   ]
 }

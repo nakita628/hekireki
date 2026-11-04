@@ -1,5 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
+import { allocate } from '../utils/naming.js'
 import {
   implicitJoinTables,
   isAutoincrement,
@@ -223,6 +224,7 @@ export function buildGormTags(
   compositeIndexTags: readonly string[],
   enums?: readonly DMMF.DatamodelEnum[],
   provider?: string,
+  fieldName = goFieldName(field.name),
 ) {
   const columnName = field.dbName ?? field.name
   const isUuidDefault = isFunctionDefault(field.default) && field.default.name === 'uuid'
@@ -267,10 +269,10 @@ export function buildGormTags(
     ((!isPk || isCompositePk) && !isNowDefault && !field.isUpdatedAt
       ? (enumMappedDefault ?? formatGoDefault(field.default, field.type, field.kind))
       : null)
-  // GORM fills a time field named CreatedAt or UpdatedAt on its own, with the application's
-  // clock bound as a time.Time the driver formats; the hooks fill what the schema asks for.
-  const fieldName = goFieldName(field.name)
-  const isDateTime = isDateTimeScalar(field)
+  // GORM fills a field named CreatedAt or UpdatedAt on its own, a time with the application's
+  // clock bound as a time.Time the driver formats and a number with the Unix seconds; the hooks
+  // fill what the schema asks for, and a number is the caller's.
+  const isTracked = isDateTimeScalar(field) || ['Int', 'BigInt'].includes(field.type)
 
   const parts = [
     `column:${columnName}`,
@@ -291,8 +293,8 @@ export function buildGormTags(
     // json serializer works on every dialect without extra deps.
     field.isList && field.kind !== 'object' && !isDateTimeList(field) ? 'serializer:json' : null,
     defaultVal !== null ? `default:${defaultVal}` : null,
-    isDateTime && fieldName === 'CreatedAt' ? 'autoCreateTime:false' : null,
-    isDateTime && fieldName === 'UpdatedAt' ? 'autoUpdateTime:false' : null,
+    isTracked && fieldName === 'CreatedAt' ? 'autoCreateTime:false' : null,
+    isTracked && fieldName === 'UpdatedAt' ? 'autoUpdateTime:false' : null,
     field.isRequired && !isPk ? 'not null' : null,
   ].filter((p) => p !== null)
 
@@ -398,6 +400,29 @@ export function goFieldName(name: string) {
   return GENERATED_METHOD_NAMES.has(pascal) ? `${pascal}_` : pascal
 }
 
+/**
+ * The Go name of each field of a model. Two fields can become one name (`createdAt` beside the
+ * `created_at` an OAuth provider returns, both `CreatedAt`): the first declared keeps it and the
+ * other is numbered (`CreatedAt1`), its `column:` tag still naming its own column. Scalars are
+ * named before relations, so a relation never moves a column's field.
+ */
+export function goFieldNames(model: DMMF.Model) {
+  return allocate(
+    [
+      ...model.fields.filter((f) => f.kind !== 'object'),
+      ...model.fields.filter((f) => f.kind === 'object'),
+    ].map((f) => ({ key: f.name, candidate: goFieldName(f.name) })),
+    [],
+    (name) => name,
+  )
+}
+
+// The Go name of a field of the named model.
+function goFieldNameIn(models: readonly DMMF.Model[], modelName: string, fieldName: string) {
+  const model = models.find((m) => m.name === modelName)
+  return (model ? goFieldNames(model).get(fieldName) : undefined) ?? goFieldName(fieldName)
+}
+
 function goModelName(name: string) {
   return splitGoWords(name).join('')
 }
@@ -453,9 +478,9 @@ function createdTimeExpr(field: DMMF.Field) {
 // uuid(), cuid(), ulid() or nanoid(), and a DateTime from now(), @updatedAt or a literal, in UTC
 // to the millisecond (SQLite's CURRENT_TIMESTAMP writes other text). A value the caller set is
 // kept.
-function generateBeforeCreateHook(model: DMMF.Model) {
+function generateBeforeCreateHook(model: DMMF.Model, names: ReadonlyMap<string, string>) {
   const assignments = model.fields.flatMap((field) => {
-    const fieldName = goFieldName(field.name)
+    const fieldName = names.get(field.name) ?? goFieldName(field.name)
     const idExpr =
       field.kind === 'scalar' && field.type === 'String' && !field.isList
         ? generatedIdExpr(field)
@@ -492,7 +517,7 @@ function generateBeforeCreateHook(model: DMMF.Model) {
 // Prisma Client stamps every @updatedAt on each update; GORM's own autoUpdateTime binds the
 // application's clock as a time.Time, past the generated type, and GORM calls this hook on
 // Update, Updates and Save alike. A value the update sets itself is kept.
-function generateBeforeUpdateHook(model: DMMF.Model) {
+function generateBeforeUpdateHook(model: DMMF.Model, names: ReadonlyMap<string, string>) {
   const stamped = model.fields.filter((field) => isDateTimeScalar(field) && field.isUpdatedAt)
   if (stamped.length === 0) return []
   return [
@@ -500,7 +525,7 @@ function generateBeforeUpdateHook(model: DMMF.Model) {
     `func (*${goModelName(model.name)}) BeforeUpdate(tx *gorm.DB) error {`,
     '\tnow := tx.NowFunc().UTC().Truncate(time.Millisecond)',
     ...stamped.flatMap((field) => {
-      const fieldName = goFieldName(field.name)
+      const fieldName = names.get(field.name) ?? goFieldName(field.name)
       return [
         `\tif !tx.Statement.Changed("${fieldName}") {`,
         `\t\ttx.Statement.SetColumn("${fieldName}", ${field.isRequired ? '' : '&'}${dateTimeGoType(field)}{Time: now})`,
@@ -514,13 +539,13 @@ function generateBeforeUpdateHook(model: DMMF.Model) {
 
 function generateStructField(
   field: DMMF.Field,
+  fieldName: string,
   isPk: boolean,
   isCompositePk: boolean,
   compositeIndexTags: readonly string[],
   enums?: readonly DMMF.DatamodelEnum[],
   provider?: string,
 ) {
-  const fieldName = goFieldName(field.name)
   // GORM skips a zero value in a column with a default and lets the default
   // in: `false` under `@default(true)` would be stored as true. A pointer
   // tells the two apart, as GORM's documentation advises: nil takes the
@@ -552,7 +577,7 @@ function generateStructField(
   return [
     fieldName,
     goType,
-    buildGormTags(field, isPk, isCompositePk, compositeIndexTags, enums, provider),
+    buildGormTags(field, isPk, isCompositePk, compositeIndexTags, enums, provider, fieldName),
   ]
 }
 
@@ -580,11 +605,18 @@ function buildRelationTag(parts: string[]) {
   return `\`gorm:"${parts.join(';')}"\``
 }
 
-function generateRelationFields(associations: ReturnType<typeof getAssociations>) {
+function generateRelationFields(
+  model: DMMF.Model,
+  allModels: readonly DMMF.Model[],
+  associations: ReturnType<typeof getAssociations>,
+) {
+  // A relation and the keys it names are written as the struct that holds each field names it.
+  const of = (modelName: string) => (name: string) => goFieldNameIn(allModels, modelName, name)
+  const own = of(model.name)
   const belongsToLines = associations.belongsTo.map((assoc) => {
-    const fieldName = goFieldName(assoc.name)
-    const fkFieldName = assoc.foreignKeys.map(goFieldName).join(',')
-    const refsFieldName = assoc.referencesList.map(goFieldName).join(',')
+    const fieldName = own(assoc.name)
+    const fkFieldName = assoc.foreignKeys.map(own).join(',')
+    const refsFieldName = assoc.referencesList.map(of(assoc.targetModel)).join(',')
     const isComposite = assoc.foreignKeys.length > 1
     const isAmbiguous =
       fieldName !== goModelName(assoc.targetModel) ||
@@ -608,34 +640,26 @@ function generateRelationFields(associations: ReturnType<typeof getAssociations>
 
   const hasManyLines = associations.hasMany.map((assoc) => {
     const tagParts = [
-      `foreignKey:${assoc.foreignKeys.map(goFieldName).join(',')}`,
+      `foreignKey:${assoc.foreignKeys.map(of(assoc.targetModel)).join(',')}`,
       ...(assoc.foreignKeys.length > 1 || needsReferencesTag(assoc.references)
-        ? [`references:${assoc.referencesList.map(goFieldName).join(',')}`]
+        ? [`references:${assoc.referencesList.map(own).join(',')}`]
         : []),
       ...[constraintTag(assoc.onDelete, assoc.onUpdate)].filter((c) => c !== null),
     ]
-    return [
-      goFieldName(assoc.name),
-      `[]${goModelName(assoc.targetModel)}`,
-      buildRelationTag(tagParts),
-    ]
+    return [own(assoc.name), `[]${goModelName(assoc.targetModel)}`, buildRelationTag(tagParts)]
   })
 
   const hasOneLines = associations.hasOne.map((assoc) => {
     const tagParts = [
-      `foreignKey:${assoc.foreignKeys.map(goFieldName).join(',')}`,
+      `foreignKey:${assoc.foreignKeys.map(of(assoc.targetModel)).join(',')}`,
       ...(assoc.foreignKeys.length > 1 || needsReferencesTag(assoc.references)
-        ? [`references:${assoc.referencesList.map(goFieldName).join(',')}`]
+        ? [`references:${assoc.referencesList.map(own).join(',')}`]
         : []),
       ...[constraintTag(assoc.onDelete, assoc.onUpdate)].filter((c) => c !== null),
     ]
     // A has-one is a pointer for the same reason, and Prisma requires the 1:1 back side to be
     // optional anyway.
-    return [
-      goFieldName(assoc.name),
-      `*${goModelName(assoc.targetModel)}`,
-      buildRelationTag(tagParts),
-    ]
+    return [own(assoc.name), `*${goModelName(assoc.targetModel)}`, buildRelationTag(tagParts)]
   })
 
   // Prisma's join table has two columns, A for the model whose name sorts
@@ -643,11 +667,11 @@ function generateRelationFields(associations: ReturnType<typeof getAssociations>
   // In a self-relation the field whose name sorts first holds its own key in A.
   const manyToManyLines = associations.manyToMany.map((assoc) => {
     const joinTable = `_${assoc.relationName}`
-    const [own, related] = assoc.isSideA ? ['A', 'B'] : ['B', 'A']
+    const [ownColumn, related] = assoc.isSideA ? ['A', 'B'] : ['B', 'A']
     return [
-      goFieldName(assoc.name),
+      own(assoc.name),
       `[]${goModelName(assoc.targetModel)}`,
-      `\`gorm:"many2many:${joinTable};joinForeignKey:${own};joinReferences:${related}"\``,
+      `\`gorm:"many2many:${joinTable};joinForeignKey:${ownColumn};joinReferences:${related}"\``,
     ]
   })
 
@@ -712,13 +736,22 @@ export function generateModelStruct(
   const tableName = model.dbName ?? model.name
   const scalarFields = model.fields.filter((f) => f.kind !== 'object')
 
+  const names = goFieldNames(model)
   const fieldLines = scalarFields.map((field) => {
     const isPk = field.isId || compositePkFieldNames.has(field.name)
     const fieldIndexTags = compositeTagMap.get(field.name) ?? []
-    return generateStructField(field, isPk, isCompositePk, fieldIndexTags, enums, provider)
+    return generateStructField(
+      field,
+      names.get(field.name) ?? goFieldName(field.name),
+      isPk,
+      isCompositePk,
+      fieldIndexTags,
+      enums,
+      provider,
+    )
   })
 
-  const relationLines = generateRelationFields(associations)
+  const relationLines = generateRelationFields(model, allModels, associations)
 
   // GORM would pluralise the snake_cased struct name (Warehouse -> warehouses);
   // the table is Prisma's, so every model says which.
@@ -734,8 +767,8 @@ export function generateModelStruct(
     ...alignFields([...fieldLines, ...relationLines]),
     '}',
     ...tableNameMethod,
-    ...generateBeforeCreateHook(model),
-    ...generateBeforeUpdateHook(model),
+    ...generateBeforeCreateHook(model, names),
+    ...generateBeforeUpdateHook(model, names),
   ].join('\n')
 }
 

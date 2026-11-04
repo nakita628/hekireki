@@ -1,4 +1,5 @@
 import type { DMMF } from '@prisma/generator-helper'
+import { getDMMF } from '@prisma/get-dmmf'
 import { describe, expect, it } from 'vite-plus/test'
 
 import { djangoCode } from '../generator/django.js'
@@ -2987,6 +2988,107 @@ class B(models.Model):
     class Meta:
         db_table = "B"
 `,
+    )
+  })
+})
+
+describe('djangoCode on what Django refuses', () => {
+  const djangoFor = (schema: string) => {
+    const result = getDMMF({
+      datamodel: [['schema.prisma', `datasource db {\n  provider = "postgresql"\n}\n${schema}`]],
+    })
+    if ('type' in result) throw new Error(result.error.message)
+    const { models, enums, indexes } = result.datamodel
+    return djangoCode(models, enums, indexes)
+  }
+
+  // typebot's RuntimeMediaIdCache: the relation is optional, its key is not, and the key is part
+  // of the composite primary key, which models.E042 refuses to hold a null=True field.
+  it('makes a ForeignKey nullable as its key is, not as the relation is', () => {
+    const code = djangoFor(`
+model PublicTypebot {
+  id     String                @id
+  caches RuntimeMediaIdCache[]
+}
+
+model RuntimeMediaIdCache {
+  provider        String
+  url             String
+  publicTypebot   PublicTypebot? @relation(fields: [publicTypebotId], references: [id], onDelete: Cascade)
+  publicTypebotId String
+
+  @@unique([publicTypebotId, provider, url])
+}
+
+model Credential {
+  id     Int             @id
+  caches CalendarCache[]
+}
+
+model CalendarCache {
+  credentialId Int
+  key          String
+  credential   Credential? @relation(fields: [credentialId], references: [id])
+
+  @@id([credentialId, key])
+}
+`)
+    expect(code).toContain(
+      '    public_typebot = models.ForeignKey("PublicTypebot", on_delete=models.CASCADE, related_name="caches", db_column="publicTypebotId", db_index=False)',
+    )
+    // Prisma's implicit action follows the key too: Restrict, not SetNull, over a required column.
+    expect(code).toContain(
+      '    credential = models.ForeignKey("Credential", on_delete=models.RESTRICT, related_name="caches", db_column="credentialId", db_index=False)',
+    )
+  })
+
+  // TextChoices is a str: a member named `replace` assigns a string over str.replace, which mypy
+  // --strict refuses.
+  it('steps an enum member aside from a method of str, keeping the value stored', () => {
+    const code = djangoFor(`
+enum Mode {
+  replace
+  center
+  plain
+}
+
+model Script {
+  id   Int  @id
+  mode Mode @default(replace)
+}
+`)
+    expect(code).toContain(
+      [
+        'class Mode(models.TextChoices):',
+        '    replace_ = "replace"',
+        '    center_ = "center"',
+        '    plain = "plain"',
+      ].join('\n'),
+    )
+    expect(code).toContain(
+      '    mode = models.TextField(choices=Mode.choices, default=Mode.replace_)',
+    )
+  })
+
+  // postiz's mastra_messages: the map: names are too long for Django, so both indexes would be
+  // given one derived name (models.E029).
+  it('writes once two indexes that differ only in a name Django cannot take', () => {
+    const code = djangoFor(`
+model mastra_messages {
+  id        String   @id
+  thread_id String
+  createdAt DateTime
+
+  @@index([thread_id, createdAt(sort: Desc)], map: "public_mastra_messages_thread_id_createdat_idx")
+  @@index([thread_id, createdAt(sort: Desc)], map: "mastra_messages_thread_id_createdat_idx")
+}
+`)
+    expect(code).toContain(
+      [
+        '        indexes = [',
+        '            models.Index(fields=["thread_id", "-created_at"]),',
+        '        ]',
+      ].join('\n'),
     )
   })
 })

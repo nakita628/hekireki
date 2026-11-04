@@ -1053,3 +1053,63 @@ func (Account) TableName() string {
 `)
   })
 })
+
+describe('generateGormModels fields that become one Go name', () => {
+  // documenso's Account holds `createdAt` beside the `created_at` an OAuth provider returns; both
+  // would be `CreatedAt`, which Go refuses as a redeclared field.
+  it('numbers the second, its column tag naming its own column', () => {
+    const code = gormFor(`
+model Account {
+  id         String   @id
+  createdAt  DateTime @default(now())
+  created_at Int?
+}
+`)
+    expect(code).toContain(
+      [
+        'type Account struct {',
+        '\tID         string   `gorm:"column:id;primaryKey" json:"id"`',
+        '\tCreatedAt  DateTime `gorm:"column:createdAt;autoCreateTime:false;not null" json:"createdAt"`',
+        '\tCreatedAt1 *int     `gorm:"column:created_at" json:"created_at"`',
+        '}',
+      ].join('\n'),
+    )
+  })
+
+  // GORM fills a number named CreatedAt with the Unix seconds; the column is the caller's.
+  it('keeps GORM from filling a number that keeps the name', () => {
+    const code = gormFor(`
+model Account {
+  id         String    @id
+  created_at Int?
+  createdAt  DateTime?
+}
+`)
+    expect(code).toContain(
+      [
+        '\tCreatedAt  *int      `gorm:"column:created_at;autoCreateTime:false" json:"created_at"`',
+        '\tCreatedAt1 *DateTime `gorm:"column:createdAt" json:"createdAt"`',
+      ].join('\n'),
+    )
+  })
+
+  it('names a renamed key as the struct that holds it does', () => {
+    const code = gormFor(`
+model User {
+  id      String @id
+  userId  String @unique
+  user_id String
+  posts   Post[]
+}
+
+model Post {
+  id      String @id
+  user_id String
+  userId  String
+  user    User   @relation(fields: [userId], references: [userId])
+}
+`)
+    expect(code).toContain('\tPosts   []Post `gorm:"foreignKey:UserID1;references:UserID"`')
+    expect(code).toContain('\tUser    *User  `gorm:"foreignKey:UserID1;references:UserID"`')
+  })
+})

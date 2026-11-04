@@ -654,3 +654,57 @@ model EventData {
   contactId Int
   contact   Contact @relation(fields: [contactId], references: [id])
 }
+
+// Two fields that become one name in PascalCase (documenso's Account:
+// `createdAt` beside the `created_at` an OAuth provider returns), enum members
+// named after a method of str, and an optional relation over a required key
+// that the composite primary key holds (typebot's RuntimeMediaIdCache). Two
+// indexes over the same columns are left to the unit tests: Exposed's
+// MigrationUtils cannot tell them apart in the catalogue.
+enum ScriptMode {
+  replace
+  center
+  count
+  add
+}
+
+model Script {
+  id         Int           @id @default(autoincrement())
+  createdAt  DateTime      @default(now())
+  created_at Int?
+  mode       ScriptMode    @default(replace)
+  caches     ScriptCache[]
+}
+
+model ScriptCache {
+  scriptId Int
+  key      String
+  script   Script? @relation(fields: [scriptId], references: [id], onDelete: Cascade)
+
+  @@id([scriptId, key])
+}
+
+// A composite foreign key that shares a column with another relation
+// (OpenLIT's DatabaseConfig): two relationships copy `projectId`.
+model Project {
+  id           String               @id @default(cuid())
+  environments ProjectEnvironment[]
+  configs      ProjectConfig[]
+}
+
+model ProjectEnvironment {
+  projectId String
+  name      String
+  project   Project         @relation(fields: [projectId], references: [id])
+  configs   ProjectConfig[] @relation("EnvironmentConfigs")
+
+  @@id([projectId, name])
+}
+
+model ProjectConfig {
+  id             String              @id @default(cuid())
+  projectId      String?
+  project        Project?            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  environment    String              @default("production")
+  environmentRef ProjectEnvironment? @relation("EnvironmentConfigs", fields: [projectId, environment], references: [projectId, name], onDelete: Restrict)
+}
