@@ -398,6 +398,7 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
   const hasMany: {
     name: string
     targetModel: string
+    inverse: DMMF.Field
     foreignKey: string
     foreignKeys: readonly string[]
     isList: boolean
@@ -406,6 +407,7 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
   const hasOne: {
     name: string
     targetModel: string
+    inverse: DMMF.Field
     foreignKey: string
     foreignKeys: readonly string[]
     isList: boolean
@@ -448,6 +450,7 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
       hasMany.push({
         name: field.name,
         targetModel: field.type,
+        inverse: fkField,
         foreignKey,
         foreignKeys,
         isList: true,
@@ -457,6 +460,7 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
       hasOne.push({
         name: field.name,
         targetModel: field.type,
+        inverse: fkField,
         foreignKey,
         foreignKeys,
         isList: false,
@@ -773,6 +777,46 @@ function findM2MBackPopulates(
     : pythonAttrName(makeSnakeCase(sourceModelName))
 }
 
+/**
+ * The `overlaps=` of a relationship that writes the foreign key `relation` holds (the many-to-one
+ * itself or the collection on the other side): every other relationship that writes one of the
+ * same columns. A composite key that shares a column with another relation
+ * (`[projectId, environment]` beside `projectId`) has two relationships copying the column, which
+ * SQLAlchemy warns of unless each names the others. The pair of a back_populates is left out, as
+ * SQLAlchemy leaves it.
+ *
+ * @example
+ * ```python
+ * environment_ref: Mapped[Optional["ProjectEnvironment"]] = relationship(overlaps="database_configs,project", back_populates="database_configs")
+ * ```
+ */
+function overlapsClause(
+  holdingModelName: string,
+  relation: DMMF.Field,
+  allModels: readonly DMMF.Model[],
+) {
+  const holding = allModels.find((m) => m.name === holdingModelName)
+  const keys = relation.relationFromFields ?? []
+  const names = (holding?.fields ?? []).flatMap((f) =>
+    f.kind === 'object' &&
+    f.name !== relation.name &&
+    (f.relationFromFields ?? []).some((key) => keys.includes(key))
+      ? [
+          attributeName(holding, f.name),
+          findBackPopulates(
+            f.type,
+            holdingModelName,
+            f.relationFromFields?.[0] ?? '',
+            allModels,
+            f.name,
+          ),
+        ]
+      : [],
+  )
+  const sorted = [...new Set(names)].toSorted()
+  return sorted.length > 0 ? `overlaps="${sorted.join(',')}", ` : ''
+}
+
 function generateColumn(
   field: DMMF.Field,
   isPk: boolean,
@@ -1025,7 +1069,9 @@ function generateBelongsToRelationships(
         : ''
     const target = className(assoc.targetModel)
     const mappedType = assoc.optional ? `Optional["${target}"]` : `"${target}"`
-    return `    ${snakeName}: Mapped[${mappedType}] = relationship(${remoteClause}${fkClause}back_populates="${backPop}")`
+    const relation = model.fields.find((f) => f.name === assoc.name)
+    const overlaps = relation ? overlapsClause(model.name, relation, allModels) : ''
+    return `    ${snakeName}: Mapped[${mappedType}] = relationship(${remoteClause}${fkClause}${overlaps}back_populates="${backPop}")`
   })
 }
 
@@ -1060,7 +1106,8 @@ function generateHasManyRelationships(
     const fkClause = needsForeignKeysParam(model.name, assoc.targetModel, allModels)
       ? `foreign_keys=${inverseForeignKeys(assoc.targetModel, assoc.foreignKeys, allModels)}, `
       : ''
-    return `    ${snakeName}: Mapped[list["${className(assoc.targetModel)}"]] = relationship(${fkClause}${deleteClause(assoc.onDelete)}back_populates="${backPop}")`
+    const overlaps = overlapsClause(assoc.targetModel, assoc.inverse, allModels)
+    return `    ${snakeName}: Mapped[list["${className(assoc.targetModel)}"]] = relationship(${fkClause}${deleteClause(assoc.onDelete)}${overlaps}back_populates="${backPop}")`
   })
 }
 
@@ -1083,7 +1130,8 @@ function generateHasOneRelationships(
       : ''
     const target = className(assoc.targetModel)
     const mappedType = assoc.optional ? `Optional["${target}"]` : `"${target}"`
-    return `    ${snakeName}: Mapped[${mappedType}] = relationship(${fkClause}${deleteClause(assoc.onDelete)}back_populates="${backPop}")`
+    const overlaps = overlapsClause(assoc.targetModel, assoc.inverse, allModels)
+    return `    ${snakeName}: Mapped[${mappedType}] = relationship(${fkClause}${deleteClause(assoc.onDelete)}${overlaps}back_populates="${backPop}")`
   })
 }
 

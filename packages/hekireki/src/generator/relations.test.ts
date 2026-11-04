@@ -186,8 +186,12 @@ model Post {
 
   it('ecto joins each model on its own key', () => {
     const files = ectoSchemaFiles(models, 'App', enums)
-    expect(codeOf(files, 'user.ex')).toContain('has_many(:posts, App.Post, foreign_key: :user_id)')
-    expect(codeOf(files, 'team.ex')).toContain('has_many(:posts, App.Post, foreign_key: :team_id)')
+    expect(codeOf(files, 'user.ex')).toContain(
+      'has_many(:posts, App.Post, foreign_key: :user_id, references: :id)',
+    )
+    expect(codeOf(files, 'team.ex')).toContain(
+      'has_many(:posts, App.Post, foreign_key: :team_id, references: :id)',
+    )
   })
 
   it('eloquent joins each model on its own key', () => {

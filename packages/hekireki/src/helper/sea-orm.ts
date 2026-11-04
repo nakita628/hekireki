@@ -1150,7 +1150,12 @@ export function generatePreludeRs(models: readonly DMMF.Model[]) {
     // rustfmt orders a path segment by segment: `profile_builder_state` before
     // `profile_builder_state2`, where the lines as text would put `2` before `:`.
     .toSorted((a, b) => (a.module < b.module ? -1 : a.module > b.module ? 1 : 0))
-    .map(({ module, name }) => `pub use super::${module}::Entity as ${name};`)
+    // A model named Entity needs no alias, and rustfmt drops `as Entity`.
+    .map(({ module, name }) =>
+      name === 'Entity'
+        ? `pub use super::${module}::Entity;`
+        : `pub use super::${module}::Entity as ${name};`,
+    )
     .join('\n')}\n`
 }
 

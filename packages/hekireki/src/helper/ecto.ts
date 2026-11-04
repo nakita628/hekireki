@@ -1058,17 +1058,23 @@ export function ectoSchemas(
         return `    belongs_to(:${snakeAssocName}, ${appName}.${makePascalCase(a.targetModel)}, ${opts.join(', ')})`
       })
 
+      // A has_one or has_many reads the key it references from @primary_key unless it is named,
+      // and Ecto raises where that is false, as it is for a key declared with
+      // `field(..., primary_key: true)`: there `references:` is always written.
+      const namesReferences = (references: string) =>
+        references !== 'id' || pk.line === '@primary_key false'
+
       const hasOneLines = associations.hasOne.map((a) => {
         const snakeFk = makeSnakeCase(a.foreignKey)
         const snakeAssocName = makeSnakeCase(a.name)
-        const referencesOpt = a.references === 'id' ? '' : `, references: :${a.references}`
+        const referencesOpt = namesReferences(a.references) ? `, references: :${a.references}` : ''
         return `    has_one(:${snakeAssocName}, ${appName}.${makePascalCase(a.targetModel)}, foreign_key: :${snakeFk}${referencesOpt})`
       })
 
       const hasManyLines = associations.hasMany.map((a) => {
         const snakeFk = makeSnakeCase(a.foreignKey)
         const snakeAssocName = makeSnakeCase(a.name)
-        const referencesOpt = a.references === 'id' ? '' : `, references: :${a.references}`
+        const referencesOpt = namesReferences(a.references) ? `, references: :${a.references}` : ''
         return `    has_many(:${snakeAssocName}, ${appName}.${makePascalCase(a.targetModel)}, foreign_key: :${snakeFk}${referencesOpt})`
       })
 

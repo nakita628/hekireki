@@ -1,4 +1,5 @@
 import type { DMMF } from '@prisma/generator-helper'
+import { getDMMF } from '@prisma/get-dmmf'
 import { describe, expect, it } from 'vite-plus/test'
 
 import { generateSingleFile } from '../generator/sqlalchemy.js'
@@ -2833,5 +2834,56 @@ class Table_(Base):
 
     base: Mapped["Base_"] = relationship(back_populates="tables")
 `)
+  })
+})
+
+describe('relationships that share a foreign-key column', () => {
+  // OpenLIT's DatabaseConfig: `project_id` is the key of `project` and the first column of the
+  // composite key of `environmentRef`, so two relationships copy it. Each names the others with
+  // overlaps=, or configure_mappers() warns.
+  it('names the relationships it overlaps on either side', () => {
+    const result = getDMMF({
+      datamodel: [
+        [
+          'schema.prisma',
+          `datasource db {
+  provider = "postgresql"
+}
+model Project {
+  id              String               @id
+  environments    ProjectEnvironment[]
+  databaseConfigs DatabaseConfig[]
+}
+model ProjectEnvironment {
+  projectId       String
+  name            String
+  project         Project          @relation(fields: [projectId], references: [id])
+  databaseConfigs DatabaseConfig[] @relation("ProjectEnvironmentDatabaseConfigs")
+  @@id([projectId, name])
+}
+model DatabaseConfig {
+  id             String              @id
+  projectId      String?             @map("project_id")
+  project        Project?            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  environment    String              @default("production")
+  environmentRef ProjectEnvironment? @relation("ProjectEnvironmentDatabaseConfigs", fields: [projectId, environment], references: [projectId, name], onDelete: Restrict)
+}
+`,
+        ],
+      ],
+    })
+    if ('type' in result) throw new Error(result.error.message)
+    const { models, enums, indexes } = result.datamodel
+    const lines = generateSingleFile(models, enums, indexes)
+      .split('\n')
+      .filter((line) => line.includes('relationship('))
+    expect(lines).toStrictEqual([
+      '    environments: Mapped[list["ProjectEnvironment"]] = relationship(passive_deletes="all", back_populates="project")',
+      '    database_configs: Mapped[list["DatabaseConfig"]] = relationship(cascade="all, delete", passive_deletes=True, overlaps="database_configs,environment_ref", back_populates="project")',
+      '    project: Mapped["Project"] = relationship(back_populates="environments")',
+      '    database_configs: Mapped[list["DatabaseConfig"]] = relationship(passive_deletes="all", overlaps="database_configs,project", back_populates="environment_ref")',
+      '    project: Mapped[Optional["Project"]] = relationship(overlaps="database_configs,environment_ref", back_populates="database_configs")',
+      '    environment_ref: Mapped[Optional["ProjectEnvironment"]] = relationship(overlaps="database_configs,project", back_populates="database_configs")',
+    ])
   })
 })

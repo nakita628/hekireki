@@ -7,6 +7,7 @@ import {
   generateEntityFile,
   generateEnum,
   generateM2MEntity,
+  generatePreludeRs,
   prismaTypeToRustType,
   resolveSeaOrmColumnType,
   seaOrmAttribute,
@@ -1203,4 +1204,23 @@ describe('prismaTypeToRustType', () => {
       expect(prismaTypeToRustType(type, isRequired)).toBe(rust)
     },
   )
+})
+
+describe('generatePreludeRs', () => {
+  // Amplication has a model named Entity: rustfmt drops the alias that names it as it is.
+  it('writes no alias for a model named Entity', () => {
+    const model = (name: string): DMMF.Model => ({
+      name,
+      dbName: null,
+      schema: null,
+      fields: [],
+      uniqueFields: [],
+      uniqueIndexes: [],
+      primaryKey: null,
+      isGenerated: false,
+    })
+    expect(generatePreludeRs([model('Resource'), model('Entity')])).toBe(
+      'pub use super::entity::Entity;\npub use super::resource::Entity as Resource;\n',
+    )
+  })
 })
