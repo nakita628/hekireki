@@ -657,9 +657,10 @@ model EventData {
 
 // Two fields that become one name in PascalCase (documenso's Account:
 // `createdAt` beside the `created_at` an OAuth provider returns), enum members
-// named after a method of str, two indexes over the same columns whose names
-// are too long for Django, and an optional relation over a required key that
-// the composite primary key holds (typebot's RuntimeMediaIdCache).
+// named after a method of str, and an optional relation over a required key
+// that the composite primary key holds (typebot's RuntimeMediaIdCache). Two
+// indexes over the same columns are left to the unit tests: Exposed's
+// MigrationUtils cannot tell them apart in the catalogue.
 enum ScriptMode {
   replace
   center
@@ -671,12 +672,8 @@ model Script {
   id         Int           @id @default(autoincrement())
   createdAt  DateTime      @default(now())
   created_at Int?
-  threadId   String
   mode       ScriptMode    @default(replace)
   caches     ScriptCache[]
-
-  @@index([threadId, createdAt(sort: Desc)], map: "public_script_thread_id_created_at_idx")
-  @@index([threadId, createdAt(sort: Desc)], map: "script_thread_id_created_at_idx")
 }
 
 model ScriptCache {
