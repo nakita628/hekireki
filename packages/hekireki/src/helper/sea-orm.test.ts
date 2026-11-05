@@ -582,6 +582,8 @@ impl ActiveModelBehavior for ActiveModel {}
   })
 
   it('names the Relation variants in PascalCase when the models are lowercase', () => {
+    // Prisma names the relation of `files` and `tags` filesTotags.
+    // cspell:ignore Totags
     expect(generateM2MEntity('files', 'tags', 'filesTotags', []))
       .toBe(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
