@@ -1001,8 +1001,8 @@ export function generateM2MEntity(
   const rightFk = isSelf ? 'b' : `${makeSnakeCase(sortedRight)}_id`
   const leftCol = isSelf ? 'A' : makePascalCase(`${makeSnakeCase(sortedLeft)}Id`)
   const rightCol = isSelf ? 'B' : makePascalCase(`${makeSnakeCase(sortedRight)}Id`)
-  const leftVariant = isSelf ? 'A' : sortedLeft
-  const rightVariant = isSelf ? 'B' : sortedRight
+  const leftVariant = isSelf ? 'A' : makePascalCase(sortedLeft)
+  const rightVariant = isSelf ? 'B' : makePascalCase(sortedRight)
   const leftType = pkRustType(sortedLeft, allModels)
   const rightType = pkRustType(sortedRight, allModels)
   // The column each side's key is, as its entity names it: `Column::Id` only when the key is `id`.

@@ -1311,6 +1311,33 @@ end`)
                                                                 validate: { allow_nil: true }
 end`)
   })
+
+  it('prefixes a key ActiveRecord::Relation already defines', () => {
+    const enums: DMMF.DatamodelEnum[] = [
+      {
+        name: 'ChartType',
+        values: [
+          { name: 'linear', dbName: null },
+          { name: 'bar', dbName: null },
+          { name: 'map', dbName: null },
+        ],
+        dbName: null,
+      },
+    ]
+    const report = makeModel({
+      name: 'Report',
+      fields: [
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({ name: 'chartType', type: 'ChartType', kind: 'enum' }),
+      ],
+    })
+
+    expect(activeRecordModels([report], [report], enums)).toBe(`class Report < ApplicationRecord
+  self.table_name = "Report"
+
+  enum :chartType, { linear: "linear", bar: "bar", map: "map" }, prefix: true, validate: true
+end`)
+  })
 })
 
 describe('validations', () => {
