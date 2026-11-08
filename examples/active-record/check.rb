@@ -22,7 +22,7 @@ loader.eager_load
 
 # The checks below make rows; from empty tables each time, so the check can be run again.
 ActiveRecord::Base.connection.execute('DELETE FROM "_CategoryToPost"')
-[Session, PostTag, Comment, Post, Tag, Category, Profile, User].each(&:delete_all)
+[Step, Session, PostTag, Comment, Post, Tag, Category, Profile, User].each(&:delete_all)
 
 I18n.load_path += Dir[File.expand_path("config/locales/**/*.yml", __dir__)]
 I18n.available_locales = %i[en ja]
@@ -180,6 +180,20 @@ check "an enum validates instead of raising, stores the @map value and takes a p
   reasons.empty? ? nil : reasons.join(", ")
 rescue ArgumentError => e
   "ArgumentError on assignment: #{e.message}"
+end
+
+check "an enum Rails cannot prefix takes the suffix, and one it cannot define at all is validated" do
+  step = Step.new(value: "MEDIUM")
+  next "expected an error on value, got #{step.errors.details.inspect}" if step.valid? || !step.errors.key?(:value)
+
+  step = Step.create!(type: :condition, value: "HIGH")
+  reasons = []
+  reasons << "condition_type? false" unless step.condition_type?
+  reasons << "Step.condition_type missed it" unless Step.condition_type.exists?(step.id)
+  reasons << "defaults #{[Step.new.type, Step.new.value].inspect}" unless [Step.new.type, Step.new.value] == %w[trigger LOW]
+  stored = Step.connection.select_rows("SELECT type, value FROM steps WHERE id = #{step.id}").first
+  reasons << "stored #{stored.inspect}" unless stored == %w[CONDITION HIGH]
+  reasons.empty? ? nil : reasons.join(", ")
 end
 
 check "a column named type is a plain column" do
