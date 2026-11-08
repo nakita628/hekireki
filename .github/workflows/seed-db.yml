@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:17
+        image: postgres:17@sha256:ff87138949ad9a46f32ff23bd6852b52ce024a13dffe9b4087be98292cdd3b4f
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: seed
@@ -37,7 +37,7 @@ jobs:
           --health-timeout 5s
           --health-retries 20
       mysql:
-        image: mysql:8.4
+        image: mysql:8.4@sha256:a81d043930e51745522bd5c430961cf8286f0a23f0a9a2a6e0108f7ea71b0902
         env:
           MYSQL_ROOT_PASSWORD: root
           MYSQL_DATABASE: seed
@@ -50,7 +50,7 @@ jobs:
           --health-retries 30
       # MariaDB converts text to numbers otherwise than MySQL, which the check tells apart.
       mariadb:
-        image: mariadb:10.11
+        image: mariadb:10.11@sha256:d769e37960821dfdcf096954f6e7ac89f747e116c1bba98e48edd265dfc7deae
         env:
           MARIADB_ROOT_PASSWORD: root
           MARIADB_DATABASE: seed
