@@ -1338,6 +1338,112 @@ end`)
   enum :chartType, { linear: "linear", bar: "bar", map: "map" }, prefix: true, validate: true
 end`)
   })
+
+  // #157: `type_condition` is Active Record's own (single-table inheritance).
+  it('puts the keys behind the suffix where the prefix makes a name Active Record defines', () => {
+    const enums: DMMF.DatamodelEnum[] = [
+      {
+        name: 'WorkflowStepType',
+        values: [
+          { name: 'TRIGGER', dbName: null },
+          { name: 'CONDITION', dbName: null },
+          { name: 'EXIT', dbName: null },
+        ],
+        dbName: null,
+      },
+    ]
+    const step = makeModel({
+      name: 'WorkflowStep',
+      fields: [
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({ name: 'type', type: 'WorkflowStepType', kind: 'enum' }),
+      ],
+    })
+
+    expect(activeRecordModels([step], [step], enums)).toBe(`class WorkflowStep < ApplicationRecord
+  self.table_name = "WorkflowStep"
+  self.inheritance_column = nil
+
+  enum :type, { trigger: "TRIGGER", condition: "CONDITION", exit: "EXIT" }, suffix: true, validate: true
+end`)
+  })
+
+  it('leaves out the scopes and predicates where every affix makes a name that is taken', () => {
+    const enums: DMMF.DatamodelEnum[] = [
+      {
+        name: 'Kind',
+        values: [
+          { name: 'NEW', dbName: null },
+          { name: 'CONDITION', dbName: null },
+        ],
+        dbName: null,
+      },
+      {
+        name: 'Other',
+        values: [{ name: 'NEW_TYPE', dbName: null }],
+        dbName: null,
+      },
+    ]
+    const step = makeModel({
+      name: 'Step',
+      fields: [
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({ name: 'other', type: 'Other', kind: 'enum' }),
+        makeField({ name: 'type', type: 'Kind', kind: 'enum' }),
+      ],
+    })
+
+    expect(activeRecordModels([step], [step], enums)).toBe(`class Step < ApplicationRecord
+  self.table_name = "Step"
+  self.inheritance_column = nil
+
+  enum :other, { new_type: "NEW_TYPE" }, validate: true
+  enum :type, { new: "NEW", condition: "CONDITION" }, scopes: false, instance_methods: false, validate: true
+end`)
+  })
+
+  // #156: Rails defines `values` for the enum, and ActiveRecord::Relation already has it.
+  it('validates the stored values instead of an enum whose plural Active Record defines', () => {
+    const enums: DMMF.DatamodelEnum[] = [
+      {
+        name: 'ExerciseAttributeValueEnum',
+        values: [
+          { name: 'BODYWEIGHT', dbName: null },
+          { name: 'STRENGTH', dbName: null },
+        ],
+        dbName: null,
+      },
+    ]
+    const attribute = makeModel({
+      name: 'ExerciseAttributeValue',
+      fields: [
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({
+          name: 'value',
+          type: 'ExerciseAttributeValueEnum',
+          kind: 'enum',
+          hasDefaultValue: true,
+          default: 'STRENGTH',
+        }),
+        makeField({
+          name: 'other',
+          type: 'ExerciseAttributeValueEnum',
+          kind: 'enum',
+          isRequired: false,
+          dbName: 'values',
+        }),
+      ],
+    })
+
+    expect(activeRecordModels([attribute], [attribute], enums))
+      .toBe(`class ExerciseAttributeValue < ApplicationRecord
+  self.table_name = "ExerciseAttributeValue"
+
+  attribute :value, default: "STRENGTH"
+  validates :value, inclusion: { in: %w[BODYWEIGHT STRENGTH] }
+  validates :values, inclusion: { in: %w[BODYWEIGHT STRENGTH], allow_nil: true }
+end`)
+  })
 })
 
 describe('validations', () => {

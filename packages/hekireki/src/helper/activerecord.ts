@@ -7,7 +7,8 @@ import { fieldColumn, referentialActions, relationEnds } from '../utils/prisma-m
 import { ACTIVE_RECORD_INSTANCE_METHODS, RUBY_TOP_LEVEL_CONSTANTS } from './activerecord-names.js'
 
 // cspell:disable
-// Names an enum key on an Active Record model may not take. Rails defines a
+// Names an enum key on an Active Record model may not take, nor the plural of
+// an enum's name, which Rails makes a class method (`statuses`). Rails defines a
 // scope `key` and `not_key` and the predicates `key?` and `key!` for each key:
 // it raises for a name Active Record itself defines, and for a scope that
 // ActiveRecord::Relation defines other than as Object does (`map`, `each`,
@@ -1846,46 +1847,81 @@ export function activeRecordModels(
       // Array enum columns get no `enum` DSL (it casts a scalar column). Keys
       // are the Rails-cased value names (PENDING_REVIEW -> pending_review, so
       // `record.pending_review?` and the `pending_review` scope), the stored
-      // value stays the database's. A key that Active Record or Ruby already
-      // defines a method for, or that an earlier enum on the model took, goes
-      // behind prefix: true — Rails raises on the first and would define the
-      // same `VALUE?` twice for the second. A literal default names its key.
+      // value stays the database's. Rails names a class method after the
+      // plural of the enum (`statuses`) and, for each key, the scopes `m` and
+      // `not_m` and the predicates `m?` and `m!`, where `m` is the key, or
+      // `column_key` with prefix: true, or `key_column` with suffix: true. It
+      // raises for a name Active Record or ActiveRecord::Relation defines,
+      // and for a predicate an earlier enum on the model took: the keys go
+      // bare where none of their names is taken, else behind the prefix, else
+      // the suffix (`type_condition` is Active Record's, `condition_type` is
+      // free), else without scopes and predicates. A plural Active Record
+      // defines (`values` for a column `value`) cannot be helped by any
+      // option, so that column is no `enum` at all: it holds the stored
+      // values, checked by an inclusion validation, with its default written
+      // as an attribute. A literal default names its key.
       // validate: true makes a value outside the enum, or nil where the
       // column is NOT NULL, a validation error like the other constraints,
       // instead of an ArgumentError on assignment.
       const enumLines = model.fields
         .filter((f) => f.kind === 'enum' && !f.isList)
-        .reduce<{ lines: string[]; seenKeys: Set<string> }>(
+        .reduce<{ lines: string[]; taken: Set<string> }>(
           (acc, f) => {
+            const column = f.dbName ?? f.name
             const values = (enumMap.get(f.type) ?? []).map((v) => ({
               key: makeSnakeCase(v.name),
               name: v.name,
               stored: v.dbName ?? v.name,
             }))
-            const pairs = values.map((v) => `${symbolKey(v.key)}: "${v.stored}"`).join(', ')
-            const conflicts = values.some(
-              (v) => acc.seenKeys.has(v.key) || RAILS_RESERVED_NAMES.has(v.key),
-            )
             const defaultValue = values.find((v) => v.name === f.default)
+            if (RAILS_RESERVED_NAMES.has(pluralize(column))) {
+              return {
+                lines: [
+                  ...acc.lines,
+                  ...(typeof f.default === 'string' && defaultValue !== undefined
+                    ? [rubyCall('attribute', [`:${column}`], [`default: "${defaultValue.stored}"`])]
+                    : []),
+                  rubyCall(
+                    'validates',
+                    [`:${column}`],
+                    [
+                      `inclusion: { in: ${rubyArray(values.map((v) => `"${v.stored}"`))}${f.isRequired ? '' : ', allow_nil: true'} }`,
+                    ],
+                  ),
+                ],
+                taken: acc.taken,
+              }
+            }
+            const pairs = values.map((v) => `${symbolKey(v.key)}: "${v.stored}"`).join(', ')
+            const affix = [
+              { option: [], name: (key: string) => key },
+              { option: ['prefix: true'], name: (key: string) => `${column}_${key}` },
+              { option: ['suffix: true'], name: (key: string) => `${key}_${column}` },
+            ].find(({ name }) =>
+              values.every(
+                (v) => !acc.taken.has(name(v.key)) && !RAILS_RESERVED_NAMES.has(name(v.key)),
+              ),
+            )
             const opts = [
               ...(typeof f.default === 'string' && defaultValue !== undefined
                 ? [`default: :${symbolKey(defaultValue.key)}`]
                 : []),
-              ...(conflicts ? ['prefix: true'] : []),
+              ...(affix === undefined
+                ? ['scopes: false', 'instance_methods: false']
+                : affix.option),
               f.isRequired ? 'validate: true' : 'validate: { allow_nil: true }',
             ]
-            for (const v of values) {
-              acc.seenKeys.add(v.key)
+            if (affix !== undefined) {
+              for (const v of values) {
+                acc.taken.add(affix.name(v.key))
+              }
             }
             return {
-              lines: [
-                ...acc.lines,
-                rubyCall('enum', [`:${f.dbName ?? f.name}`, `{ ${pairs} }`], opts),
-              ],
-              seenKeys: acc.seenKeys,
+              lines: [...acc.lines, rubyCall('enum', [`:${column}`, `{ ${pairs} }`], opts)],
+              taken: acc.taken,
             }
           },
-          { lines: [], seenKeys: new Set() },
+          { lines: [], taken: new Set() },
         ).lines
 
       // What the schema promises of a column, as a validation, so a bad value

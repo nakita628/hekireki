@@ -37,7 +37,9 @@ Then each thing the schema promises, as Rails keeps it:
   after `normalizes` has lowercased the address.
 - **Attributes.** Literal defaults are on a new record before it is saved; an enum validates a
   value outside it instead of raising, stores the `@map` value, and takes `visibility_public?` where
-  Ruby already has `public`; a column named `type` is a plain column; `createdAt` and `updatedAt`
+  Ruby already has `public`, `condition_type?` where Active Record already has `type_condition`,
+  and is no enum but its validated values where Rails would define `values`; a column named `type`
+  is a plain column; `createdAt` and `updatedAt`
   are filled, bumped by `update` and `touch`, and ordered by through their aliases; a `DateTime`
   is stored as the text Prisma writes on SQLite (`2030-01-02T03:04:05.678+00:00`, through the
   `PrismaDateTime` type in `prisma_date_time.rb`), not Active Record's
