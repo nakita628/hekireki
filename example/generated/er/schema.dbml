@@ -143,6 +143,26 @@ Table Film {
   title String [not null]
 }
 
+Table _PostToTag {
+  A String [not null]
+  B Int [not null]
+
+  indexes {
+    (A, B) [unique]
+    B
+  }
+}
+
+Table _cast {
+  A Int [not null]
+  B Int [not null]
+
+  indexes {
+    (A, B) [unique]
+    B
+  }
+}
+
 Ref Profile_user_id_fk: Profile.user_id - users.id [delete: cascade]
 
 Ref posts_author_id_fk: posts.author_id > users.id [delete: cascade]
@@ -160,3 +180,11 @@ Ref Category_parent_id_fk: Category.parent_id > Category.id
 Ref orders_user_id_fk: orders.user_id > users.id
 
 Ref order_items_order_id_fk: order_items.order_id > orders.id [delete: cascade]
+
+Ref _PostToTag_A_fk: _PostToTag.A > posts.id [delete: cascade, update: cascade]
+
+Ref _PostToTag_B_fk: _PostToTag.B > Tag.id [delete: cascade, update: cascade]
+
+Ref _cast_A_fk: _cast.A > Actor.id [delete: cascade, update: cascade]
+
+Ref _cast_B_fk: _cast.B > Film.id [delete: cascade, update: cascade]

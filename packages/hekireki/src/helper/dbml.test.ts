@@ -1,4 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
+import { getDMMF } from '@prisma/get-dmmf'
+import type { GetDMMFError } from '@prisma/get-dmmf'
 import { describe, expect, it } from 'vite-plus/test'
 
 import { dbmlContent } from '../generator/dbml.js'
@@ -26,6 +28,14 @@ function makeModel(overrides: Partial<DMMF.Model> & { name: string }): DMMF.Mode
     isGenerated: false,
     ...overrides,
   }
+}
+
+function modelsOf(schema: string) {
+  const result: DMMF.Document | GetDMMFError = getDMMF({
+    datamodel: [['schema.prisma', `datasource db {\n  provider = "mysql"\n}\n${schema}`]],
+  })
+  if ('type' in result) throw new Error(result.error.message)
+  return result.datamodel.models
 }
 
 function makeField(overrides: Partial<DMMF.Field> & { name: string; type: string }): DMMF.Field {
@@ -1760,6 +1770,77 @@ describe('helper/dbml', () => {
       ]
       expect(makeRelations(models)).toStrictEqual([
         'Ref Employee_managerId_fk: Employee.managerId > Employee.id [delete: set null]',
+      ])
+    })
+  })
+
+  describe('implicit many-to-many', () => {
+    it('writes the join table and a ref from each of its columns (#159)', () => {
+      const models = modelsOf(`
+          model Post {
+            id   Int   @id @default(autoincrement())
+            tags Tag[]
+
+            @@map("posts")
+          }
+
+          model Tag {
+            id    Int    @id @default(autoincrement())
+            posts Post[]
+
+            @@map("tags")
+          }
+        `)
+      expect(makeTables(models).at(-1)).toBe(
+        [
+          'Table _PostToTag {',
+          '  A Int [not null]',
+          '  B Int [not null]',
+          '',
+          '  indexes {',
+          '    (A, B) [unique]',
+          '    B',
+          '  }',
+          '}',
+        ].join('\n'),
+      )
+      expect(makeRelations(models)).toStrictEqual([
+        'Ref _PostToTag_A_fk: _PostToTag.A > posts.id [delete: cascade, update: cascade]',
+        'Ref _PostToTag_B_fk: _PostToTag.B > tags.id [delete: cascade, update: cascade]',
+      ])
+    })
+
+    it('names the table after the relation, sides by model name, ids by their column', () => {
+      const models = modelsOf(`
+          model Tag {
+            id    String @id @map("tag_id")
+            posts Post[] @relation("tagging")
+          }
+
+          model Post {
+            id   Int   @id
+            tags Tag[] @relation("tagging")
+          }
+        `)
+      expect(makeRelations(models)).toStrictEqual([
+        'Ref _tagging_A_fk: _tagging.A > Post.id [delete: cascade, update: cascade]',
+        'Ref _tagging_B_fk: _tagging.B > Tag.tag_id [delete: cascade, update: cascade]',
+      ])
+      expect(makeTables(models).at(-1)).toContain('  A Int [not null]\n  B String')
+    })
+
+    it('points both columns of a self-relation at the same table, once', () => {
+      const models = modelsOf(`
+          model User {
+            id         Int    @id
+            followers  User[] @relation("follows")
+            following  User[] @relation("follows")
+          }
+        `)
+      expect(makeTables(models)).toHaveLength(2)
+      expect(makeRelations(models)).toStrictEqual([
+        'Ref _follows_A_fk: _follows.A > User.id [delete: cascade, update: cascade]',
+        'Ref _follows_B_fk: _follows.B > User.id [delete: cascade, update: cascade]',
       ])
     })
   })

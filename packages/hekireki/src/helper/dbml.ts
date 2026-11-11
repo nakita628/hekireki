@@ -2,7 +2,12 @@ import type { DMMF } from '@prisma/generator-helper'
 
 import type { Cardinality } from '../types/index.js'
 import { stripAnnotations } from '../utils/index.js'
-import { backRelation, fieldColumn, isFunctionDefault } from '../utils/prisma-model.js'
+import {
+  backRelation,
+  fieldColumn,
+  implicitJoinTables,
+  isFunctionDefault,
+} from '../utils/prisma-model.js'
 import { annotatedERRelations, erKey, inferredERRelations } from '../utils/relation.js'
 
 export function escapeNote(str: string) {
@@ -153,11 +158,49 @@ function toDBMLColumn(field: DMMF.Field, enums: readonly DMMF.DatamodelEnum[]) {
   }
 }
 
+/**
+ * Prisma's join table for each implicit many-to-many relation: `_<relation>`, column `A` holding
+ * the id of the model whose name sorts first and `B` the other's (both the same model's in a
+ * self-relation). The schema has no model for it, so the relation would otherwise have no table
+ * and no `Ref` in the DBML.
+ */
+function joinTables(models: readonly DMMF.Model[]) {
+  return implicitJoinTables(models).flatMap((pair) => {
+    const left = models.find((m) => m.name === pair.left)
+    const right = models.find((m) => m.name === pair.right)
+    const leftId = left?.fields.find((f) => f.isId)
+    const rightId = right?.fields.find((f) => f.isId)
+    if (!(left && right && leftId && rightId)) return []
+    return [
+      {
+        name: `_${pair.relationName}`,
+        a: { table: dbNameOf(left), id: leftId },
+        b: { table: dbNameOf(right), id: rightId },
+      },
+    ]
+  })
+}
+
 export function makeTables(
   models: readonly DMMF.Model[],
   enums: readonly DMMF.DatamodelEnum[] = [],
 ) {
-  return models.map((model) => {
+  // The pair is unique (the key on PostgreSQL, a unique index elsewhere) and `B` is indexed, as
+  // Prisma Migrate makes the table.
+  const joins = joinTables(models).map((join) =>
+    [
+      `Table ${join.name} {`,
+      makePrismaColumn({ name: 'A', type: join.a.id.type, isNotNull: true }),
+      makePrismaColumn({ name: 'B', type: join.b.id.type, isNotNull: true }),
+      '',
+      '  indexes {',
+      makeIndex({ columns: ['A', 'B'], isUnique: true }),
+      makeIndex({ columns: ['B'] }),
+      '  }',
+      '}',
+    ].join('\n'),
+  )
+  const tables = models.map((model) => {
     const modelName = dbNameOf(model)
 
     const columns = model.fields
@@ -182,6 +225,7 @@ export function makeTables(
 
     return `Table ${modelName} {\n${columnLines}${indexBlock}${noteBlock}\n}`
   })
+  return [...tables, ...joins]
 }
 
 export function makeEnums(enums: readonly DMMF.DatamodelEnum[]) {
@@ -194,7 +238,22 @@ export function makeEnums(enums: readonly DMMF.DatamodelEnum[]) {
 }
 
 export function makeRelations(models: readonly DMMF.Model[]) {
-  return models.flatMap((model) =>
+  // Each join column references its side's id, and Prisma cascades both delete and update.
+  const joinRefs = joinTables(models).flatMap((join) =>
+    (['A', 'B'] as const).map((column) => {
+      const side = column === 'A' ? join.a : join.b
+      return makeRef({
+        name: `${join.name}_${column}_fk`,
+        fromTable: join.name,
+        fromColumn: column,
+        toTable: side.table,
+        toColumn: dbNameOf(side.id),
+        onDelete: 'Cascade',
+        onUpdate: 'Cascade',
+      })
+    }),
+  )
+  const refs = models.flatMap((model) =>
     model.fields
       .filter(
         (field) =>
@@ -231,6 +290,7 @@ export function makeRelations(models: readonly DMMF.Model[]) {
         })
       }),
   )
+  return [...refs, ...joinRefs]
 }
 
 function isMany(cardinality: Cardinality) {
