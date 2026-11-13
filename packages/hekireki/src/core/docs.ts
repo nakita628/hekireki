@@ -53,7 +53,7 @@ export function docs(options: GeneratorOptions) {
     // Each query beside the SQL it sends, compiled by the project's own Prisma Client; where
     // there is none to compile with (no `@prisma/client`, or one older than Prisma 7), the calls
     // are shown alone.
-    const examples = queryExamples(options.dmmf.datamodel)
+    const examples = queryExamples(options.dmmf)
     const compiled =
       dialect === null
         ? null

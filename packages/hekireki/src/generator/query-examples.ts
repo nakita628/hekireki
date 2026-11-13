@@ -80,8 +80,9 @@ function entriesOf(fields: readonly DMMF.Field[], enums: readonly DMMF.Datamodel
  */
 function uniqueWhere(model: DMMF.Model, enums: readonly DMMF.DatamodelEnum[]) {
   const single = model.fields.find((f) => f.isId) ?? model.fields.find((f) => f.isUnique)
-  const compound =
-    model.primaryKey ?? (single === undefined ? (model.uniqueIndexes[0] ?? null) : null)
+  const key = model.primaryKey ?? (single === undefined ? (model.uniqueIndexes[0] ?? null) : null)
+  // `@@id([a])` and `@@unique([a])` mark the field itself, and Prisma Client finds it by `a`.
+  const compound = key !== null && key.fields.length > 1 ? key : null
   if (compound === null) {
     const entries = single === undefined ? null : entriesOf([single], enums)
     return single === undefined || entries === null
@@ -104,13 +105,25 @@ function uniqueWhere(model: DMMF.Model, enums: readonly DMMF.DatamodelEnum[]) {
  * Each model's queries as the docs show them: every row, how many, the rows with their relations
  * (for a model with one), one row by what is unique to it, and a create, update and delete, with a
  * value of each field's type. A query the model cannot take (no unique field to find one row by,
- * a required field of a type with no value to write) is left out.
+ * a required field of a type with no value to write) is left out, and so is one Prisma Client
+ * does not give it: a view is read and not written.
  *
- * @param datamodel - the models and enums Prisma parsed
+ * @param document.datamodel - the models and enums Prisma parsed
+ * @param document.mappings - the operations Prisma Client gives each model
  * @returns the queries, model by model
  */
-export function queryExamples(datamodel: DMMF.Datamodel): readonly QueryExample[] {
+export function queryExamples(
+  document: Pick<DMMF.Document, 'datamodel' | 'mappings'>,
+): readonly QueryExample[] {
+  const { datamodel } = document
   return datamodel.models.flatMap((model) => {
+    // The actions the client has for the model, by the name the JSON protocol gives each.
+    const mapping = document.mappings.modelOperations.find((m) => m.model === model.name)
+    const actions = new Set(
+      Object.entries(mapping ?? {}).flatMap(([action, name]) =>
+        typeof name === 'string' && action !== 'model' && action !== 'plural' ? [action] : [],
+      ),
+    )
     const client = `prisma.${lowerFirst(model.name)}`
     const example = (
       name: string,
@@ -225,7 +238,7 @@ export function queryExamples(datamodel: DMMF.Datamodel): readonly QueryExample[
               { arguments: { where: where.json }, selection: SCALARS },
             ),
           ]),
-    ]
+    ].filter((query) => actions.has(query.request.action))
   })
 }
 
