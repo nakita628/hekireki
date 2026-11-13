@@ -260,6 +260,296 @@ CREATE TABLE "users" (
 CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
 ```
 
+<details>
+<summary>Queries and their SQL</summary>
+
+**findMany**: Every row
+
+```ts
+await prisma.user.findMany();
+```
+
+```sql
+SELECT
+  "public"."users"."id",
+  "public"."users"."email",
+  "public"."users"."name",
+  "public"."users"."role"::text,
+  "public"."users"."interests",
+  "public"."users"."created_at",
+  "public"."users"."updated_at"
+FROM
+  "public"."users"
+WHERE
+  1 = 1
+OFFSET
+  $1
+-- params: ["0"]
+```
+
+**count**: How many rows there are
+
+```ts
+await prisma.user.count();
+```
+
+```sql
+SELECT
+  COUNT(*) AS "_count$_all"
+FROM
+  (
+    SELECT
+      "public"."users"."id"
+    FROM
+      "public"."users"
+    WHERE
+      1 = 1
+    OFFSET
+      $1
+  ) AS "sub"
+-- params: ["0"]
+```
+
+**findMany**: Every row with its relations
+
+```ts
+await prisma.user.findMany({
+  include: {
+    profile: true,
+    posts: true,
+    comments: true,
+    orders: true,
+    followers: true,
+    following: true,
+  },
+});
+```
+
+```sql
+SELECT
+  "public"."users"."id",
+  "public"."users"."email",
+  "public"."users"."name",
+  "public"."users"."role"::text,
+  "public"."users"."interests",
+  "public"."users"."created_at",
+  "public"."users"."updated_at"
+FROM
+  "public"."users"
+WHERE
+  1 = 1
+OFFSET
+  $1
+-- params: ["0"]
+
+SELECT
+  "public"."Profile"."id",
+  "public"."Profile"."user_id",
+  "public"."Profile"."bio",
+  "public"."Profile"."nickname",
+  "public"."Profile"."age",
+  "public"."Profile"."balance",
+  "public"."Profile"."verified",
+  "public"."Profile"."meta",
+  "public"."Profile"."avatar",
+  "public"."Profile"."last_seen"
+FROM
+  "public"."Profile"
+WHERE
+  "public"."Profile"."user_id" IN ($1)
+OFFSET
+  $2
+-- params: ["<id of the rows above>","0"]
+
+SELECT
+  "public"."posts"."id",
+  "public"."posts"."title",
+  "public"."posts"."content",
+  "public"."posts"."visibility"::text,
+  "public"."posts"."published",
+  "public"."posts"."view_count",
+  "public"."posts"."author_id",
+  "public"."posts"."created_at"
+FROM
+  "public"."posts"
+WHERE
+  "public"."posts"."author_id" IN ($1)
+OFFSET
+  $2
+-- params: ["<id of the rows above>","0"]
+
+SELECT
+  "public"."comments"."id",
+  "public"."comments"."body",
+  "public"."comments"."post_id",
+  "public"."comments"."author_id",
+  "public"."comments"."created_at"
+FROM
+  "public"."comments"
+WHERE
+  "public"."comments"."author_id" IN ($1)
+OFFSET
+  $2
+-- params: ["<id of the rows above>","0"]
+
+SELECT
+  "public"."orders"."id",
+  "public"."orders"."user_id",
+  "public"."orders"."total",
+  "public"."orders"."placed_at"
+FROM
+  "public"."orders"
+WHERE
+  "public"."orders"."user_id" IN ($1)
+OFFSET
+  $2
+-- params: ["<id of the rows above>","0"]
+
+SELECT
+  "public"."follows"."follower_id",
+  "public"."follows"."following_id",
+  "public"."follows"."since"
+FROM
+  "public"."follows"
+WHERE
+  "public"."follows"."following_id" IN ($1)
+OFFSET
+  $2
+-- params: ["<id of the rows above>","0"]
+
+SELECT
+  "public"."follows"."follower_id",
+  "public"."follows"."following_id",
+  "public"."follows"."since"
+FROM
+  "public"."follows"
+WHERE
+  "public"."follows"."follower_id" IN ($1)
+OFFSET
+  $2
+-- params: ["<id of the rows above>","0"]
+```
+
+**findUnique**: One row by what is unique to it
+
+```ts
+await prisma.user.findUnique({ where: { id: "example" } });
+```
+
+```sql
+SELECT
+  "public"."users"."id",
+  "public"."users"."email",
+  "public"."users"."name",
+  "public"."users"."role"::text,
+  "public"."users"."interests",
+  "public"."users"."created_at",
+  "public"."users"."updated_at"
+FROM
+  "public"."users"
+WHERE
+  (
+    "public"."users"."id" = $1
+    AND 1 = 1
+  )
+LIMIT
+  $2
+OFFSET
+  $3
+-- params: ["example","1","0"]
+```
+
+**create**: Create a row
+
+```ts
+await prisma.user.create({ data: { email: "example", name: "example" } });
+```
+
+```sql
+INSERT INTO
+  "public"."users" (
+    "id",
+    "email",
+    "name",
+    "role",
+    "interests",
+    "created_at",
+    "updated_at"
+  )
+VALUES
+  (
+    $1,
+    $2,
+    $3,
+    CAST($4::text AS "public"."Role"),
+    $5,
+    $6,
+    $7
+  )
+RETURNING
+  "public"."users"."id",
+  "public"."users"."email",
+  "public"."users"."name",
+  "public"."users"."role"::text,
+  "public"."users"."interests",
+  "public"."users"."created_at",
+  "public"."users"."updated_at"
+-- params: ["<uuid(7)>","example","example","VIEWER",[],"<now()>","<now()>"]
+```
+
+**update**: Update a row
+
+```ts
+await prisma.user.update({ where: { id: "example" }, data: { email: "example" } });
+```
+
+```sql
+UPDATE "public"."users"
+SET
+  "email" = $1,
+  "updated_at" = $2
+WHERE
+  (
+    "public"."users"."id" = $3
+    AND 1 = 1
+  )
+RETURNING
+  "public"."users"."id",
+  "public"."users"."email",
+  "public"."users"."name",
+  "public"."users"."role"::text,
+  "public"."users"."interests",
+  "public"."users"."created_at",
+  "public"."users"."updated_at"
+-- params: ["example",{"prisma__type":"generatorCall","prisma__value":{"name":"now","args":[],"returnType":{"type":"DateTime"}}},"example"]
+```
+
+**delete**: Delete a row
+
+```ts
+await prisma.user.delete({ where: { id: "example" } });
+```
+
+```sql
+DELETE FROM "public"."users"
+WHERE
+  (
+    "public"."users"."id" = $1
+    AND 1 = 1
+  )
+RETURNING
+  "public"."users"."id",
+  "public"."users"."email",
+  "public"."users"."name",
+  "public"."users"."role"::text,
+  "public"."users"."interests",
+  "public"."users"."created_at",
+  "public"."users"."updated_at"
+-- params: ["example"]
+```
+
+</details>
+
 <a id="model-Profile"></a>
 
 ### Profile
@@ -309,6 +599,223 @@ CREATE UNIQUE INDEX "Profile_user_id_key" ON "Profile"("user_id");
 
 ALTER TABLE "Profile" ADD CONSTRAINT "Profile_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ```
+
+<details>
+<summary>Queries and their SQL</summary>
+
+**findMany**: Every row
+
+```ts
+await prisma.profile.findMany();
+```
+
+```sql
+SELECT
+  "public"."Profile"."id",
+  "public"."Profile"."user_id",
+  "public"."Profile"."bio",
+  "public"."Profile"."nickname",
+  "public"."Profile"."age",
+  "public"."Profile"."balance",
+  "public"."Profile"."verified",
+  "public"."Profile"."meta",
+  "public"."Profile"."avatar",
+  "public"."Profile"."last_seen"
+FROM
+  "public"."Profile"
+WHERE
+  1 = 1
+OFFSET
+  $1
+-- params: ["0"]
+```
+
+**count**: How many rows there are
+
+```ts
+await prisma.profile.count();
+```
+
+```sql
+SELECT
+  COUNT(*) AS "_count$_all"
+FROM
+  (
+    SELECT
+      "public"."Profile"."id"
+    FROM
+      "public"."Profile"
+    WHERE
+      1 = 1
+    OFFSET
+      $1
+  ) AS "sub"
+-- params: ["0"]
+```
+
+**findMany**: Every row with its relations
+
+```ts
+await prisma.profile.findMany({ include: { user: true } });
+```
+
+```sql
+SELECT
+  "public"."Profile"."id",
+  "public"."Profile"."user_id",
+  "public"."Profile"."bio",
+  "public"."Profile"."nickname",
+  "public"."Profile"."age",
+  "public"."Profile"."balance",
+  "public"."Profile"."verified",
+  "public"."Profile"."meta",
+  "public"."Profile"."avatar",
+  "public"."Profile"."last_seen"
+FROM
+  "public"."Profile"
+WHERE
+  1 = 1
+OFFSET
+  $1
+-- params: ["0"]
+
+SELECT
+  "public"."users"."id",
+  "public"."users"."email",
+  "public"."users"."name",
+  "public"."users"."role"::text,
+  "public"."users"."interests",
+  "public"."users"."created_at",
+  "public"."users"."updated_at"
+FROM
+  "public"."users"
+WHERE
+  "public"."users"."id" IN ($1)
+OFFSET
+  $2
+-- params: ["<userId of the rows above>","0"]
+```
+
+**findUnique**: One row by what is unique to it
+
+```ts
+await prisma.profile.findUnique({ where: { id: "example" } });
+```
+
+```sql
+SELECT
+  "public"."Profile"."id",
+  "public"."Profile"."user_id",
+  "public"."Profile"."bio",
+  "public"."Profile"."nickname",
+  "public"."Profile"."age",
+  "public"."Profile"."balance",
+  "public"."Profile"."verified",
+  "public"."Profile"."meta",
+  "public"."Profile"."avatar",
+  "public"."Profile"."last_seen"
+FROM
+  "public"."Profile"
+WHERE
+  (
+    "public"."Profile"."id" = $1
+    AND 1 = 1
+  )
+LIMIT
+  $2
+OFFSET
+  $3
+-- params: ["example","1","0"]
+```
+
+**create**: Create a row
+
+```ts
+await prisma.profile.create({ data: { userId: "example" } });
+```
+
+```sql
+INSERT INTO
+  "public"."Profile" (
+    "id",
+    "user_id",
+    "nickname",
+    "balance",
+    "verified"
+  )
+VALUES
+  ($1, $2, $3, $4, $5)
+RETURNING
+  "public"."Profile"."id",
+  "public"."Profile"."user_id",
+  "public"."Profile"."bio",
+  "public"."Profile"."nickname",
+  "public"."Profile"."age",
+  "public"."Profile"."balance",
+  "public"."Profile"."verified",
+  "public"."Profile"."meta",
+  "public"."Profile"."avatar",
+  "public"."Profile"."last_seen"
+-- params: ["<cuid(2)>","example","anonymous","0",false]
+```
+
+**update**: Update a row
+
+```ts
+await prisma.profile.update({ where: { id: "example" }, data: { bio: "example" } });
+```
+
+```sql
+UPDATE "public"."Profile"
+SET
+  "bio" = $1
+WHERE
+  (
+    "public"."Profile"."id" = $2
+    AND 1 = 1
+  )
+RETURNING
+  "public"."Profile"."id",
+  "public"."Profile"."user_id",
+  "public"."Profile"."bio",
+  "public"."Profile"."nickname",
+  "public"."Profile"."age",
+  "public"."Profile"."balance",
+  "public"."Profile"."verified",
+  "public"."Profile"."meta",
+  "public"."Profile"."avatar",
+  "public"."Profile"."last_seen"
+-- params: ["example","example"]
+```
+
+**delete**: Delete a row
+
+```ts
+await prisma.profile.delete({ where: { id: "example" } });
+```
+
+```sql
+DELETE FROM "public"."Profile"
+WHERE
+  (
+    "public"."Profile"."id" = $1
+    AND 1 = 1
+  )
+RETURNING
+  "public"."Profile"."id",
+  "public"."Profile"."user_id",
+  "public"."Profile"."bio",
+  "public"."Profile"."nickname",
+  "public"."Profile"."age",
+  "public"."Profile"."balance",
+  "public"."Profile"."verified",
+  "public"."Profile"."meta",
+  "public"."Profile"."avatar",
+  "public"."Profile"."last_seen"
+-- params: ["example"]
+```
+
+</details>
 
 <a id="model-Post"></a>
 
@@ -367,6 +874,251 @@ CREATE INDEX "posts_author_id_idx" ON "posts"("author_id");
 ALTER TABLE "posts" ADD CONSTRAINT "posts_author_id_fkey" FOREIGN KEY ("author_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ```
 
+<details>
+<summary>Queries and their SQL</summary>
+
+**findMany**: Every row
+
+```ts
+await prisma.post.findMany();
+```
+
+```sql
+SELECT
+  "public"."posts"."id",
+  "public"."posts"."title",
+  "public"."posts"."content",
+  "public"."posts"."visibility"::text,
+  "public"."posts"."published",
+  "public"."posts"."view_count",
+  "public"."posts"."author_id",
+  "public"."posts"."created_at"
+FROM
+  "public"."posts"
+WHERE
+  1 = 1
+OFFSET
+  $1
+-- params: ["0"]
+```
+
+**count**: How many rows there are
+
+```ts
+await prisma.post.count();
+```
+
+```sql
+SELECT
+  COUNT(*) AS "_count$_all"
+FROM
+  (
+    SELECT
+      "public"."posts"."id"
+    FROM
+      "public"."posts"
+    WHERE
+      1 = 1
+    OFFSET
+      $1
+  ) AS "sub"
+-- params: ["0"]
+```
+
+**findMany**: Every row with its relations
+
+```ts
+await prisma.post.findMany({ include: { author: true, tags: true, comments: true } });
+```
+
+```sql
+SELECT
+  "public"."posts"."id",
+  "public"."posts"."title",
+  "public"."posts"."content",
+  "public"."posts"."visibility"::text,
+  "public"."posts"."published",
+  "public"."posts"."view_count",
+  "public"."posts"."author_id",
+  "public"."posts"."created_at"
+FROM
+  "public"."posts"
+WHERE
+  1 = 1
+OFFSET
+  $1
+-- params: ["0"]
+
+SELECT
+  "public"."users"."id",
+  "public"."users"."email",
+  "public"."users"."name",
+  "public"."users"."role"::text,
+  "public"."users"."interests",
+  "public"."users"."created_at",
+  "public"."users"."updated_at"
+FROM
+  "public"."users"
+WHERE
+  "public"."users"."id" IN ($1)
+OFFSET
+  $2
+-- params: ["<authorId of the rows above>","0"]
+
+SELECT
+  "public"."Tag"."id",
+  "public"."Tag"."label",
+  "t0"."A" AS "PostToTag@Post"
+FROM
+  "public"."Tag"
+  INNER JOIN "public"."_PostToTag" AS "t0" ON "t0"."B" = "public"."Tag"."id"
+WHERE
+  (
+    1 = 1
+    AND "t0"."A" IN ($1)
+  )
+OFFSET
+  $2
+-- params: ["<id of the rows above>","0"]
+
+SELECT
+  "public"."comments"."id",
+  "public"."comments"."body",
+  "public"."comments"."post_id",
+  "public"."comments"."author_id",
+  "public"."comments"."created_at"
+FROM
+  "public"."comments"
+WHERE
+  "public"."comments"."post_id" IN ($1)
+OFFSET
+  $2
+-- params: ["<id of the rows above>","0"]
+```
+
+**findUnique**: One row by what is unique to it
+
+```ts
+await prisma.post.findUnique({ where: { id: "example" } });
+```
+
+```sql
+SELECT
+  "public"."posts"."id",
+  "public"."posts"."title",
+  "public"."posts"."content",
+  "public"."posts"."visibility"::text,
+  "public"."posts"."published",
+  "public"."posts"."view_count",
+  "public"."posts"."author_id",
+  "public"."posts"."created_at"
+FROM
+  "public"."posts"
+WHERE
+  (
+    "public"."posts"."id" = $1
+    AND 1 = 1
+  )
+LIMIT
+  $2
+OFFSET
+  $3
+-- params: ["example","1","0"]
+```
+
+**create**: Create a row
+
+```ts
+await prisma.post.create({ data: { title: "example", authorId: "example" } });
+```
+
+```sql
+INSERT INTO
+  "public"."posts" (
+    "id",
+    "title",
+    "visibility",
+    "published",
+    "view_count",
+    "author_id",
+    "created_at"
+  )
+VALUES
+  (
+    $1,
+    $2,
+    CAST($3::text AS "public"."visibility_level"),
+    $4,
+    $5,
+    $6,
+    $7
+  )
+RETURNING
+  "public"."posts"."id",
+  "public"."posts"."title",
+  "public"."posts"."content",
+  "public"."posts"."visibility"::text,
+  "public"."posts"."published",
+  "public"."posts"."view_count",
+  "public"."posts"."author_id",
+  "public"."posts"."created_at"
+-- params: ["<uuid(4)>","example","link_only",false,"0","example","<now()>"]
+```
+
+**update**: Update a row
+
+```ts
+await prisma.post.update({ where: { id: "example" }, data: { title: "example" } });
+```
+
+```sql
+UPDATE "public"."posts"
+SET
+  "title" = $1
+WHERE
+  (
+    "public"."posts"."id" = $2
+    AND 1 = 1
+  )
+RETURNING
+  "public"."posts"."id",
+  "public"."posts"."title",
+  "public"."posts"."content",
+  "public"."posts"."visibility"::text,
+  "public"."posts"."published",
+  "public"."posts"."view_count",
+  "public"."posts"."author_id",
+  "public"."posts"."created_at"
+-- params: ["example","example"]
+```
+
+**delete**: Delete a row
+
+```ts
+await prisma.post.delete({ where: { id: "example" } });
+```
+
+```sql
+DELETE FROM "public"."posts"
+WHERE
+  (
+    "public"."posts"."id" = $1
+    AND 1 = 1
+  )
+RETURNING
+  "public"."posts"."id",
+  "public"."posts"."title",
+  "public"."posts"."content",
+  "public"."posts"."visibility"::text,
+  "public"."posts"."published",
+  "public"."posts"."view_count",
+  "public"."posts"."author_id",
+  "public"."posts"."created_at"
+-- params: ["example"]
+```
+
+</details>
+
 <a id="model-Tag"></a>
 
 ### Tag
@@ -396,6 +1148,175 @@ CREATE TABLE "Tag" (
 
 CREATE UNIQUE INDEX "Tag_label_key" ON "Tag"("label");
 ```
+
+<details>
+<summary>Queries and their SQL</summary>
+
+**findMany**: Every row
+
+```ts
+await prisma.tag.findMany();
+```
+
+```sql
+SELECT
+  "public"."Tag"."id",
+  "public"."Tag"."label"
+FROM
+  "public"."Tag"
+WHERE
+  1 = 1
+OFFSET
+  $1
+-- params: ["0"]
+```
+
+**count**: How many rows there are
+
+```ts
+await prisma.tag.count();
+```
+
+```sql
+SELECT
+  COUNT(*) AS "_count$_all"
+FROM
+  (
+    SELECT
+      "public"."Tag"."id"
+    FROM
+      "public"."Tag"
+    WHERE
+      1 = 1
+    OFFSET
+      $1
+  ) AS "sub"
+-- params: ["0"]
+```
+
+**findMany**: Every row with its relations
+
+```ts
+await prisma.tag.findMany({ include: { posts: true } });
+```
+
+```sql
+SELECT
+  "public"."Tag"."id",
+  "public"."Tag"."label"
+FROM
+  "public"."Tag"
+WHERE
+  1 = 1
+OFFSET
+  $1
+-- params: ["0"]
+
+SELECT
+  "public"."posts"."id",
+  "public"."posts"."title",
+  "public"."posts"."content",
+  "public"."posts"."visibility"::text,
+  "public"."posts"."published",
+  "public"."posts"."view_count",
+  "public"."posts"."author_id",
+  "public"."posts"."created_at",
+  "t0"."B" AS "PostToTag@Tag"
+FROM
+  "public"."posts"
+  INNER JOIN "public"."_PostToTag" AS "t0" ON "t0"."A" = "public"."posts"."id"
+WHERE
+  (
+    1 = 1
+    AND "t0"."B" IN ($1)
+  )
+OFFSET
+  $2
+-- params: ["<id of the rows above>","0"]
+```
+
+**findUnique**: One row by what is unique to it
+
+```ts
+await prisma.tag.findUnique({ where: { id: 1 } });
+```
+
+```sql
+SELECT
+  "public"."Tag"."id",
+  "public"."Tag"."label"
+FROM
+  "public"."Tag"
+WHERE
+  (
+    "public"."Tag"."id" = $1
+    AND 1 = 1
+  )
+LIMIT
+  $2
+OFFSET
+  $3
+-- params: ["1","1","0"]
+```
+
+**create**: Create a row
+
+```ts
+await prisma.tag.create({ data: { label: "example" } });
+```
+
+```sql
+INSERT INTO
+  "public"."Tag" ("label")
+VALUES
+  ($1)
+RETURNING
+  "public"."Tag"."id",
+  "public"."Tag"."label"
+-- params: ["example"]
+```
+
+**update**: Update a row
+
+```ts
+await prisma.tag.update({ where: { id: 1 }, data: { label: "example" } });
+```
+
+```sql
+UPDATE "public"."Tag"
+SET
+  "label" = $1
+WHERE
+  (
+    "public"."Tag"."id" = $2
+    AND 1 = 1
+  )
+RETURNING
+  "public"."Tag"."id",
+  "public"."Tag"."label"
+-- params: ["example","1"]
+```
+
+**delete**: Delete a row
+
+```ts
+await prisma.tag.delete({ where: { id: 1 } });
+```
+
+```sql
+DELETE FROM "public"."Tag"
+WHERE
+  (
+    "public"."Tag"."id" = $1
+    AND 1 = 1
+  )
+RETURNING
+  "public"."Tag"."id",
+  "public"."Tag"."label"
+-- params: ["1"]
+```
+
+</details>
 
 <a id="model-Comment"></a>
 
@@ -443,6 +1364,204 @@ ALTER TABLE "comments" ADD CONSTRAINT "comments_post_id_fkey" FOREIGN KEY ("post
 ALTER TABLE "comments" ADD CONSTRAINT "comments_author_id_fkey" FOREIGN KEY ("author_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 ```
 
+<details>
+<summary>Queries and their SQL</summary>
+
+**findMany**: Every row
+
+```ts
+await prisma.comment.findMany();
+```
+
+```sql
+SELECT
+  "public"."comments"."id",
+  "public"."comments"."body",
+  "public"."comments"."post_id",
+  "public"."comments"."author_id",
+  "public"."comments"."created_at"
+FROM
+  "public"."comments"
+WHERE
+  1 = 1
+OFFSET
+  $1
+-- params: ["0"]
+```
+
+**count**: How many rows there are
+
+```ts
+await prisma.comment.count();
+```
+
+```sql
+SELECT
+  COUNT(*) AS "_count$_all"
+FROM
+  (
+    SELECT
+      "public"."comments"."id"
+    FROM
+      "public"."comments"
+    WHERE
+      1 = 1
+    OFFSET
+      $1
+  ) AS "sub"
+-- params: ["0"]
+```
+
+**findMany**: Every row with its relations
+
+```ts
+await prisma.comment.findMany({ include: { post: true, author: true } });
+```
+
+```sql
+SELECT
+  "public"."comments"."id",
+  "public"."comments"."body",
+  "public"."comments"."post_id",
+  "public"."comments"."author_id",
+  "public"."comments"."created_at"
+FROM
+  "public"."comments"
+WHERE
+  1 = 1
+OFFSET
+  $1
+-- params: ["0"]
+
+SELECT
+  "public"."posts"."id",
+  "public"."posts"."title",
+  "public"."posts"."content",
+  "public"."posts"."visibility"::text,
+  "public"."posts"."published",
+  "public"."posts"."view_count",
+  "public"."posts"."author_id",
+  "public"."posts"."created_at"
+FROM
+  "public"."posts"
+WHERE
+  "public"."posts"."id" IN ($1)
+OFFSET
+  $2
+-- params: ["<postId of the rows above>","0"]
+
+SELECT
+  "public"."users"."id",
+  "public"."users"."email",
+  "public"."users"."name",
+  "public"."users"."role"::text,
+  "public"."users"."interests",
+  "public"."users"."created_at",
+  "public"."users"."updated_at"
+FROM
+  "public"."users"
+WHERE
+  "public"."users"."id" IN ($1)
+OFFSET
+  $2
+-- params: ["<authorId of the rows above>","0"]
+```
+
+**findUnique**: One row by what is unique to it
+
+```ts
+await prisma.comment.findUnique({ where: { id: 1 } });
+```
+
+```sql
+SELECT
+  "public"."comments"."id",
+  "public"."comments"."body",
+  "public"."comments"."post_id",
+  "public"."comments"."author_id",
+  "public"."comments"."created_at"
+FROM
+  "public"."comments"
+WHERE
+  (
+    "public"."comments"."id" = $1
+    AND 1 = 1
+  )
+LIMIT
+  $2
+OFFSET
+  $3
+-- params: ["1","1","0"]
+```
+
+**create**: Create a row
+
+```ts
+await prisma.comment.create({ data: { body: "example", postId: "example" } });
+```
+
+```sql
+INSERT INTO
+  "public"."comments" ("body", "post_id", "created_at")
+VALUES
+  ($1, $2, $3)
+RETURNING
+  "public"."comments"."id",
+  "public"."comments"."body",
+  "public"."comments"."post_id",
+  "public"."comments"."author_id",
+  "public"."comments"."created_at"
+-- params: ["example","example","<now()>"]
+```
+
+**update**: Update a row
+
+```ts
+await prisma.comment.update({ where: { id: 1 }, data: { body: "example" } });
+```
+
+```sql
+UPDATE "public"."comments"
+SET
+  "body" = $1
+WHERE
+  (
+    "public"."comments"."id" = $2
+    AND 1 = 1
+  )
+RETURNING
+  "public"."comments"."id",
+  "public"."comments"."body",
+  "public"."comments"."post_id",
+  "public"."comments"."author_id",
+  "public"."comments"."created_at"
+-- params: ["example","1"]
+```
+
+**delete**: Delete a row
+
+```ts
+await prisma.comment.delete({ where: { id: 1 } });
+```
+
+```sql
+DELETE FROM "public"."comments"
+WHERE
+  (
+    "public"."comments"."id" = $1
+    AND 1 = 1
+  )
+RETURNING
+  "public"."comments"."id",
+  "public"."comments"."body",
+  "public"."comments"."post_id",
+  "public"."comments"."author_id",
+  "public"."comments"."created_at"
+-- params: ["1"]
+```
+
+</details>
+
 <a id="model-Follow"></a>
 
 ### Follow
@@ -481,6 +1600,208 @@ ALTER TABLE "follows" ADD CONSTRAINT "follows_follower_id_fkey" FOREIGN KEY ("fo
 
 ALTER TABLE "follows" ADD CONSTRAINT "follows_following_id_fkey" FOREIGN KEY ("following_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ```
+
+<details>
+<summary>Queries and their SQL</summary>
+
+**findMany**: Every row
+
+```ts
+await prisma.follow.findMany();
+```
+
+```sql
+SELECT
+  "public"."follows"."follower_id",
+  "public"."follows"."following_id",
+  "public"."follows"."since"
+FROM
+  "public"."follows"
+WHERE
+  1 = 1
+OFFSET
+  $1
+-- params: ["0"]
+```
+
+**count**: How many rows there are
+
+```ts
+await prisma.follow.count();
+```
+
+```sql
+SELECT
+  COUNT(*) AS "_count$_all"
+FROM
+  (
+    SELECT
+      "public"."follows"."follower_id",
+      "public"."follows"."following_id"
+    FROM
+      "public"."follows"
+    WHERE
+      1 = 1
+    OFFSET
+      $1
+  ) AS "sub"
+-- params: ["0"]
+```
+
+**findMany**: Every row with its relations
+
+```ts
+await prisma.follow.findMany({ include: { follower: true, following: true } });
+```
+
+```sql
+SELECT
+  "public"."follows"."follower_id",
+  "public"."follows"."following_id",
+  "public"."follows"."since"
+FROM
+  "public"."follows"
+WHERE
+  1 = 1
+OFFSET
+  $1
+-- params: ["0"]
+
+SELECT
+  "public"."users"."id",
+  "public"."users"."email",
+  "public"."users"."name",
+  "public"."users"."role"::text,
+  "public"."users"."interests",
+  "public"."users"."created_at",
+  "public"."users"."updated_at"
+FROM
+  "public"."users"
+WHERE
+  "public"."users"."id" IN ($1)
+OFFSET
+  $2
+-- params: ["<followerId of the rows above>","0"]
+
+SELECT
+  "public"."users"."id",
+  "public"."users"."email",
+  "public"."users"."name",
+  "public"."users"."role"::text,
+  "public"."users"."interests",
+  "public"."users"."created_at",
+  "public"."users"."updated_at"
+FROM
+  "public"."users"
+WHERE
+  "public"."users"."id" IN ($1)
+OFFSET
+  $2
+-- params: ["<followingId of the rows above>","0"]
+```
+
+**findUnique**: One row by what is unique to it
+
+```ts
+await prisma.follow.findUnique({
+  where: { followerId_followingId: { followerId: "example", followingId: "example" } },
+});
+```
+
+```sql
+SELECT
+  "public"."follows"."follower_id",
+  "public"."follows"."following_id",
+  "public"."follows"."since"
+FROM
+  "public"."follows"
+WHERE
+  (
+    (
+      "public"."follows"."follower_id" = $1
+      AND "public"."follows"."following_id" = $2
+    )
+    AND 1 = 1
+  )
+LIMIT
+  $3
+OFFSET
+  $4
+-- params: ["example","example","1","0"]
+```
+
+**create**: Create a row
+
+```ts
+await prisma.follow.create({ data: { followerId: "example", followingId: "example" } });
+```
+
+```sql
+INSERT INTO
+  "public"."follows" ("follower_id", "following_id", "since")
+VALUES
+  ($1, $2, $3)
+RETURNING
+  "public"."follows"."follower_id",
+  "public"."follows"."following_id",
+  "public"."follows"."since"
+-- params: ["example","example","<now()>"]
+```
+
+**update**: Update a row
+
+```ts
+await prisma.follow.update({
+  where: { followerId_followingId: { followerId: "example", followingId: "example" } },
+  data: { since: new Date("2026-01-01T00:00:00.000Z") },
+});
+```
+
+```sql
+UPDATE "public"."follows"
+SET
+  "since" = $1
+WHERE
+  (
+    (
+      "public"."follows"."follower_id" = $2
+      AND "public"."follows"."following_id" = $3
+    )
+    AND 1 = 1
+  )
+RETURNING
+  "public"."follows"."follower_id",
+  "public"."follows"."following_id",
+  "public"."follows"."since"
+-- params: ["2026-01-01T00:00:00.000Z","example","example"]
+```
+
+**delete**: Delete a row
+
+```ts
+await prisma.follow.delete({
+  where: { followerId_followingId: { followerId: "example", followingId: "example" } },
+});
+```
+
+```sql
+DELETE FROM "public"."follows"
+WHERE
+  (
+    (
+      "public"."follows"."follower_id" = $1
+      AND "public"."follows"."following_id" = $2
+    )
+    AND 1 = 1
+  )
+RETURNING
+  "public"."follows"."follower_id",
+  "public"."follows"."following_id",
+  "public"."follows"."since"
+-- params: ["example","example"]
+```
+
+</details>
 
 <a id="model-Category"></a>
 
@@ -524,6 +1845,183 @@ CREATE UNIQUE INDEX "Category_parent_id_name_key" ON "Category"("parent_id", "na
 ALTER TABLE "Category" ADD CONSTRAINT "Category_parent_id_fkey" FOREIGN KEY ("parent_id") REFERENCES "Category"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 ```
 
+<details>
+<summary>Queries and their SQL</summary>
+
+**findMany**: Every row
+
+```ts
+await prisma.category.findMany();
+```
+
+```sql
+SELECT
+  "public"."Category"."id",
+  "public"."Category"."name",
+  "public"."Category"."parent_id"
+FROM
+  "public"."Category"
+WHERE
+  1 = 1
+OFFSET
+  $1
+-- params: ["0"]
+```
+
+**count**: How many rows there are
+
+```ts
+await prisma.category.count();
+```
+
+```sql
+SELECT
+  COUNT(*) AS "_count$_all"
+FROM
+  (
+    SELECT
+      "public"."Category"."id"
+    FROM
+      "public"."Category"
+    WHERE
+      1 = 1
+    OFFSET
+      $1
+  ) AS "sub"
+-- params: ["0"]
+```
+
+**findMany**: Every row with its relations
+
+```ts
+await prisma.category.findMany({ include: { parent: true, children: true } });
+```
+
+```sql
+SELECT
+  "public"."Category"."id",
+  "public"."Category"."name",
+  "public"."Category"."parent_id"
+FROM
+  "public"."Category"
+WHERE
+  1 = 1
+OFFSET
+  $1
+-- params: ["0"]
+
+SELECT
+  "public"."Category"."id",
+  "public"."Category"."name",
+  "public"."Category"."parent_id"
+FROM
+  "public"."Category"
+WHERE
+  "public"."Category"."id" IN ($1)
+OFFSET
+  $2
+-- params: ["<parentId of the rows above>","0"]
+
+SELECT
+  "public"."Category"."id",
+  "public"."Category"."name",
+  "public"."Category"."parent_id"
+FROM
+  "public"."Category"
+WHERE
+  "public"."Category"."parent_id" IN ($1)
+OFFSET
+  $2
+-- params: ["<id of the rows above>","0"]
+```
+
+**findUnique**: One row by what is unique to it
+
+```ts
+await prisma.category.findUnique({ where: { id: 1 } });
+```
+
+```sql
+SELECT
+  "public"."Category"."id",
+  "public"."Category"."name",
+  "public"."Category"."parent_id"
+FROM
+  "public"."Category"
+WHERE
+  (
+    "public"."Category"."id" = $1
+    AND 1 = 1
+  )
+LIMIT
+  $2
+OFFSET
+  $3
+-- params: ["1","1","0"]
+```
+
+**create**: Create a row
+
+```ts
+await prisma.category.create({ data: { name: "example" } });
+```
+
+```sql
+INSERT INTO
+  "public"."Category" ("name")
+VALUES
+  ($1)
+RETURNING
+  "public"."Category"."id",
+  "public"."Category"."name",
+  "public"."Category"."parent_id"
+-- params: ["example"]
+```
+
+**update**: Update a row
+
+```ts
+await prisma.category.update({ where: { id: 1 }, data: { name: "example" } });
+```
+
+```sql
+UPDATE "public"."Category"
+SET
+  "name" = $1
+WHERE
+  (
+    "public"."Category"."id" = $2
+    AND 1 = 1
+  )
+RETURNING
+  "public"."Category"."id",
+  "public"."Category"."name",
+  "public"."Category"."parent_id"
+-- params: ["example","1"]
+```
+
+**delete**: Delete a row
+
+```ts
+await prisma.category.delete({ where: { id: 1 } });
+```
+
+```sql
+DELETE FROM "public"."Category"
+WHERE
+  (
+    "public"."Category"."id" = $1
+    AND 1 = 1
+  )
+RETURNING
+  "public"."Category"."id",
+  "public"."Category"."name",
+  "public"."Category"."parent_id"
+-- params: ["1"]
+```
+
+</details>
+
 <a id="model-Order"></a>
 
 ### Order
@@ -561,6 +2059,195 @@ CREATE TABLE "orders" (
 
 ALTER TABLE "orders" ADD CONSTRAINT "orders_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 ```
+
+<details>
+<summary>Queries and their SQL</summary>
+
+**findMany**: Every row
+
+```ts
+await prisma.order.findMany();
+```
+
+```sql
+SELECT
+  "public"."orders"."id",
+  "public"."orders"."user_id",
+  "public"."orders"."total",
+  "public"."orders"."placed_at"
+FROM
+  "public"."orders"
+WHERE
+  1 = 1
+OFFSET
+  $1
+-- params: ["0"]
+```
+
+**count**: How many rows there are
+
+```ts
+await prisma.order.count();
+```
+
+```sql
+SELECT
+  COUNT(*) AS "_count$_all"
+FROM
+  (
+    SELECT
+      "public"."orders"."id"
+    FROM
+      "public"."orders"
+    WHERE
+      1 = 1
+    OFFSET
+      $1
+  ) AS "sub"
+-- params: ["0"]
+```
+
+**findMany**: Every row with its relations
+
+```ts
+await prisma.order.findMany({ include: { user: true, items: true } });
+```
+
+```sql
+SELECT
+  "public"."orders"."id",
+  "public"."orders"."user_id",
+  "public"."orders"."total",
+  "public"."orders"."placed_at"
+FROM
+  "public"."orders"
+WHERE
+  1 = 1
+OFFSET
+  $1
+-- params: ["0"]
+
+SELECT
+  "public"."users"."id",
+  "public"."users"."email",
+  "public"."users"."name",
+  "public"."users"."role"::text,
+  "public"."users"."interests",
+  "public"."users"."created_at",
+  "public"."users"."updated_at"
+FROM
+  "public"."users"
+WHERE
+  "public"."users"."id" IN ($1)
+OFFSET
+  $2
+-- params: ["<userId of the rows above>","0"]
+
+SELECT
+  "public"."order_items"."id",
+  "public"."order_items"."order_id",
+  "public"."order_items"."sku",
+  "public"."order_items"."qty",
+  "public"."order_items"."price"
+FROM
+  "public"."order_items"
+WHERE
+  "public"."order_items"."order_id" IN ($1)
+OFFSET
+  $2
+-- params: ["<id of the rows above>","0"]
+```
+
+**findUnique**: One row by what is unique to it
+
+```ts
+await prisma.order.findUnique({ where: { id: 1n } });
+```
+
+```sql
+SELECT
+  "public"."orders"."id",
+  "public"."orders"."user_id",
+  "public"."orders"."total",
+  "public"."orders"."placed_at"
+FROM
+  "public"."orders"
+WHERE
+  (
+    "public"."orders"."id" = $1
+    AND 1 = 1
+  )
+LIMIT
+  $2
+OFFSET
+  $3
+-- params: ["1","1","0"]
+```
+
+**create**: Create a row
+
+```ts
+await prisma.order.create({ data: { userId: "example", total: "9.99" } });
+```
+
+```sql
+INSERT INTO
+  "public"."orders" ("user_id", "total", "placed_at")
+VALUES
+  ($1, $2, $3)
+RETURNING
+  "public"."orders"."id",
+  "public"."orders"."user_id",
+  "public"."orders"."total",
+  "public"."orders"."placed_at"
+-- params: ["example","9.99","<now()>"]
+```
+
+**update**: Update a row
+
+```ts
+await prisma.order.update({ where: { id: 1n }, data: { total: "9.99" } });
+```
+
+```sql
+UPDATE "public"."orders"
+SET
+  "total" = $1
+WHERE
+  (
+    "public"."orders"."id" = $2
+    AND 1 = 1
+  )
+RETURNING
+  "public"."orders"."id",
+  "public"."orders"."user_id",
+  "public"."orders"."total",
+  "public"."orders"."placed_at"
+-- params: ["9.99","1"]
+```
+
+**delete**: Delete a row
+
+```ts
+await prisma.order.delete({ where: { id: 1n } });
+```
+
+```sql
+DELETE FROM "public"."orders"
+WHERE
+  (
+    "public"."orders"."id" = $1
+    AND 1 = 1
+  )
+RETURNING
+  "public"."orders"."id",
+  "public"."orders"."user_id",
+  "public"."orders"."total",
+  "public"."orders"."placed_at"
+-- params: ["1"]
+```
+
+</details>
 
 <a id="model-OrderItem"></a>
 
@@ -604,6 +2291,184 @@ CREATE UNIQUE INDEX "order_items_order_id_sku_key" ON "order_items"("order_id", 
 ALTER TABLE "order_items" ADD CONSTRAINT "order_items_order_id_fkey" FOREIGN KEY ("order_id") REFERENCES "orders"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ```
 
+<details>
+<summary>Queries and their SQL</summary>
+
+**findMany**: Every row
+
+```ts
+await prisma.orderItem.findMany();
+```
+
+```sql
+SELECT
+  "public"."order_items"."id",
+  "public"."order_items"."order_id",
+  "public"."order_items"."sku",
+  "public"."order_items"."qty",
+  "public"."order_items"."price"
+FROM
+  "public"."order_items"
+WHERE
+  1 = 1
+OFFSET
+  $1
+-- params: ["0"]
+```
+
+**count**: How many rows there are
+
+```ts
+await prisma.orderItem.count();
+```
+
+```sql
+SELECT
+  COUNT(*) AS "_count$_all"
+FROM
+  (
+    SELECT
+      "public"."order_items"."id"
+    FROM
+      "public"."order_items"
+    WHERE
+      1 = 1
+    OFFSET
+      $1
+  ) AS "sub"
+-- params: ["0"]
+```
+
+**findMany**: Every row with its relations
+
+```ts
+await prisma.orderItem.findMany({ include: { order: true } });
+```
+
+```sql
+SELECT
+  "public"."order_items"."id",
+  "public"."order_items"."order_id",
+  "public"."order_items"."sku",
+  "public"."order_items"."qty",
+  "public"."order_items"."price"
+FROM
+  "public"."order_items"
+WHERE
+  1 = 1
+OFFSET
+  $1
+-- params: ["0"]
+
+SELECT
+  "public"."orders"."id",
+  "public"."orders"."user_id",
+  "public"."orders"."total",
+  "public"."orders"."placed_at"
+FROM
+  "public"."orders"
+WHERE
+  "public"."orders"."id" IN ($1)
+OFFSET
+  $2
+-- params: ["<orderId of the rows above>","0"]
+```
+
+**findUnique**: One row by what is unique to it
+
+```ts
+await prisma.orderItem.findUnique({ where: { id: 1n } });
+```
+
+```sql
+SELECT
+  "public"."order_items"."id",
+  "public"."order_items"."order_id",
+  "public"."order_items"."sku",
+  "public"."order_items"."qty",
+  "public"."order_items"."price"
+FROM
+  "public"."order_items"
+WHERE
+  (
+    "public"."order_items"."id" = $1
+    AND 1 = 1
+  )
+LIMIT
+  $2
+OFFSET
+  $3
+-- params: ["1","1","0"]
+```
+
+**create**: Create a row
+
+```ts
+await prisma.orderItem.create({ data: { orderId: 1n, sku: "example", price: "9.99" } });
+```
+
+```sql
+INSERT INTO
+  "public"."order_items" ("order_id", "sku", "qty", "price")
+VALUES
+  ($1, $2, $3, $4)
+RETURNING
+  "public"."order_items"."id",
+  "public"."order_items"."order_id",
+  "public"."order_items"."sku",
+  "public"."order_items"."qty",
+  "public"."order_items"."price"
+-- params: ["1","example","1","9.99"]
+```
+
+**update**: Update a row
+
+```ts
+await prisma.orderItem.update({ where: { id: 1n }, data: { sku: "example" } });
+```
+
+```sql
+UPDATE "public"."order_items"
+SET
+  "sku" = $1
+WHERE
+  (
+    "public"."order_items"."id" = $2
+    AND 1 = 1
+  )
+RETURNING
+  "public"."order_items"."id",
+  "public"."order_items"."order_id",
+  "public"."order_items"."sku",
+  "public"."order_items"."qty",
+  "public"."order_items"."price"
+-- params: ["example","1"]
+```
+
+**delete**: Delete a row
+
+```ts
+await prisma.orderItem.delete({ where: { id: 1n } });
+```
+
+```sql
+DELETE FROM "public"."order_items"
+WHERE
+  (
+    "public"."order_items"."id" = $1
+    AND 1 = 1
+  )
+RETURNING
+  "public"."order_items"."id",
+  "public"."order_items"."order_id",
+  "public"."order_items"."sku",
+  "public"."order_items"."qty",
+  "public"."order_items"."price"
+-- params: ["1"]
+```
+
+</details>
+
 <a id="model-AuditLog"></a>
 
 ### AuditLog
@@ -631,6 +2496,149 @@ CREATE TABLE "audit_logs" (
     CONSTRAINT "audit_logs_pkey" PRIMARY KEY ("id")
 );
 ```
+
+<details>
+<summary>Queries and their SQL</summary>
+
+**findMany**: Every row
+
+```ts
+await prisma.auditLog.findMany();
+```
+
+```sql
+SELECT
+  "public"."audit_logs"."id",
+  "public"."audit_logs"."action",
+  "public"."audit_logs"."payload",
+  "public"."audit_logs"."signature",
+  "public"."audit_logs"."logged_at"
+FROM
+  "public"."audit_logs"
+WHERE
+  1 = 1
+OFFSET
+  $1
+-- params: ["0"]
+```
+
+**count**: How many rows there are
+
+```ts
+await prisma.auditLog.count();
+```
+
+```sql
+SELECT
+  COUNT(*) AS "_count$_all"
+FROM
+  (
+    SELECT
+      "public"."audit_logs"."id"
+    FROM
+      "public"."audit_logs"
+    WHERE
+      1 = 1
+    OFFSET
+      $1
+  ) AS "sub"
+-- params: ["0"]
+```
+
+**findUnique**: One row by what is unique to it
+
+```ts
+await prisma.auditLog.findUnique({ where: { id: "example" } });
+```
+
+```sql
+SELECT
+  "public"."audit_logs"."id",
+  "public"."audit_logs"."action",
+  "public"."audit_logs"."payload",
+  "public"."audit_logs"."signature",
+  "public"."audit_logs"."logged_at"
+FROM
+  "public"."audit_logs"
+WHERE
+  (
+    "public"."audit_logs"."id" = $1
+    AND 1 = 1
+  )
+LIMIT
+  $2
+OFFSET
+  $3
+-- params: ["example","1","0"]
+```
+
+**create**: Create a row
+
+```ts
+await prisma.auditLog.create({ data: { action: "example" } });
+```
+
+```sql
+INSERT INTO
+  "public"."audit_logs" ("action", "payload")
+VALUES
+  ($1, $2)
+RETURNING
+  "public"."audit_logs"."id",
+  "public"."audit_logs"."action",
+  "public"."audit_logs"."payload",
+  "public"."audit_logs"."signature",
+  "public"."audit_logs"."logged_at"
+-- params: ["example","{}"]
+```
+
+**update**: Update a row
+
+```ts
+await prisma.auditLog.update({ where: { id: "example" }, data: { action: "example" } });
+```
+
+```sql
+UPDATE "public"."audit_logs"
+SET
+  "action" = $1
+WHERE
+  (
+    "public"."audit_logs"."id" = $2
+    AND 1 = 1
+  )
+RETURNING
+  "public"."audit_logs"."id",
+  "public"."audit_logs"."action",
+  "public"."audit_logs"."payload",
+  "public"."audit_logs"."signature",
+  "public"."audit_logs"."logged_at"
+-- params: ["example","example"]
+```
+
+**delete**: Delete a row
+
+```ts
+await prisma.auditLog.delete({ where: { id: "example" } });
+```
+
+```sql
+DELETE FROM "public"."audit_logs"
+WHERE
+  (
+    "public"."audit_logs"."id" = $1
+    AND 1 = 1
+  )
+RETURNING
+  "public"."audit_logs"."id",
+  "public"."audit_logs"."action",
+  "public"."audit_logs"."payload",
+  "public"."audit_logs"."signature",
+  "public"."audit_logs"."logged_at"
+-- params: ["example"]
+```
+
+</details>
 
 <a id="model-Actor"></a>
 
@@ -661,6 +2669,169 @@ CREATE TABLE "Actor" (
 );
 ```
 
+<details>
+<summary>Queries and their SQL</summary>
+
+**findMany**: Every row
+
+```ts
+await prisma.actor.findMany();
+```
+
+```sql
+SELECT
+  "public"."Actor"."id",
+  "public"."Actor"."name"
+FROM
+  "public"."Actor"
+WHERE
+  1 = 1
+OFFSET
+  $1
+-- params: ["0"]
+```
+
+**count**: How many rows there are
+
+```ts
+await prisma.actor.count();
+```
+
+```sql
+SELECT
+  COUNT(*) AS "_count$_all"
+FROM
+  (
+    SELECT
+      "public"."Actor"."id"
+    FROM
+      "public"."Actor"
+    WHERE
+      1 = 1
+    OFFSET
+      $1
+  ) AS "sub"
+-- params: ["0"]
+```
+
+**findMany**: Every row with its relations
+
+```ts
+await prisma.actor.findMany({ include: { films: true } });
+```
+
+```sql
+SELECT
+  "public"."Actor"."id",
+  "public"."Actor"."name"
+FROM
+  "public"."Actor"
+WHERE
+  1 = 1
+OFFSET
+  $1
+-- params: ["0"]
+
+SELECT
+  "public"."Film"."id",
+  "public"."Film"."title",
+  "t0"."A" AS "cast@Actor"
+FROM
+  "public"."Film"
+  INNER JOIN "public"."_cast" AS "t0" ON "t0"."B" = "public"."Film"."id"
+WHERE
+  (
+    1 = 1
+    AND "t0"."A" IN ($1)
+  )
+OFFSET
+  $2
+-- params: ["<id of the rows above>","0"]
+```
+
+**findUnique**: One row by what is unique to it
+
+```ts
+await prisma.actor.findUnique({ where: { id: 1 } });
+```
+
+```sql
+SELECT
+  "public"."Actor"."id",
+  "public"."Actor"."name"
+FROM
+  "public"."Actor"
+WHERE
+  (
+    "public"."Actor"."id" = $1
+    AND 1 = 1
+  )
+LIMIT
+  $2
+OFFSET
+  $3
+-- params: ["1","1","0"]
+```
+
+**create**: Create a row
+
+```ts
+await prisma.actor.create({ data: { name: "example" } });
+```
+
+```sql
+INSERT INTO
+  "public"."Actor" ("name")
+VALUES
+  ($1)
+RETURNING
+  "public"."Actor"."id",
+  "public"."Actor"."name"
+-- params: ["example"]
+```
+
+**update**: Update a row
+
+```ts
+await prisma.actor.update({ where: { id: 1 }, data: { name: "example" } });
+```
+
+```sql
+UPDATE "public"."Actor"
+SET
+  "name" = $1
+WHERE
+  (
+    "public"."Actor"."id" = $2
+    AND 1 = 1
+  )
+RETURNING
+  "public"."Actor"."id",
+  "public"."Actor"."name"
+-- params: ["example","1"]
+```
+
+**delete**: Delete a row
+
+```ts
+await prisma.actor.delete({ where: { id: 1 } });
+```
+
+```sql
+DELETE FROM "public"."Actor"
+WHERE
+  (
+    "public"."Actor"."id" = $1
+    AND 1 = 1
+  )
+RETURNING
+  "public"."Actor"."id",
+  "public"."Actor"."name"
+-- params: ["1"]
+```
+
+</details>
+
 <a id="model-Film"></a>
 
 ### Film
@@ -686,6 +2857,169 @@ CREATE TABLE "Film" (
     CONSTRAINT "Film_pkey" PRIMARY KEY ("id")
 );
 ```
+
+<details>
+<summary>Queries and their SQL</summary>
+
+**findMany**: Every row
+
+```ts
+await prisma.film.findMany();
+```
+
+```sql
+SELECT
+  "public"."Film"."id",
+  "public"."Film"."title"
+FROM
+  "public"."Film"
+WHERE
+  1 = 1
+OFFSET
+  $1
+-- params: ["0"]
+```
+
+**count**: How many rows there are
+
+```ts
+await prisma.film.count();
+```
+
+```sql
+SELECT
+  COUNT(*) AS "_count$_all"
+FROM
+  (
+    SELECT
+      "public"."Film"."id"
+    FROM
+      "public"."Film"
+    WHERE
+      1 = 1
+    OFFSET
+      $1
+  ) AS "sub"
+-- params: ["0"]
+```
+
+**findMany**: Every row with its relations
+
+```ts
+await prisma.film.findMany({ include: { actors: true } });
+```
+
+```sql
+SELECT
+  "public"."Film"."id",
+  "public"."Film"."title"
+FROM
+  "public"."Film"
+WHERE
+  1 = 1
+OFFSET
+  $1
+-- params: ["0"]
+
+SELECT
+  "public"."Actor"."id",
+  "public"."Actor"."name",
+  "t0"."B" AS "cast@Film"
+FROM
+  "public"."Actor"
+  INNER JOIN "public"."_cast" AS "t0" ON "t0"."A" = "public"."Actor"."id"
+WHERE
+  (
+    1 = 1
+    AND "t0"."B" IN ($1)
+  )
+OFFSET
+  $2
+-- params: ["<id of the rows above>","0"]
+```
+
+**findUnique**: One row by what is unique to it
+
+```ts
+await prisma.film.findUnique({ where: { id: 1 } });
+```
+
+```sql
+SELECT
+  "public"."Film"."id",
+  "public"."Film"."title"
+FROM
+  "public"."Film"
+WHERE
+  (
+    "public"."Film"."id" = $1
+    AND 1 = 1
+  )
+LIMIT
+  $2
+OFFSET
+  $3
+-- params: ["1","1","0"]
+```
+
+**create**: Create a row
+
+```ts
+await prisma.film.create({ data: { title: "example" } });
+```
+
+```sql
+INSERT INTO
+  "public"."Film" ("title")
+VALUES
+  ($1)
+RETURNING
+  "public"."Film"."id",
+  "public"."Film"."title"
+-- params: ["example"]
+```
+
+**update**: Update a row
+
+```ts
+await prisma.film.update({ where: { id: 1 }, data: { title: "example" } });
+```
+
+```sql
+UPDATE "public"."Film"
+SET
+  "title" = $1
+WHERE
+  (
+    "public"."Film"."id" = $2
+    AND 1 = 1
+  )
+RETURNING
+  "public"."Film"."id",
+  "public"."Film"."title"
+-- params: ["example","1"]
+```
+
+**delete**: Delete a row
+
+```ts
+await prisma.film.delete({ where: { id: 1 } });
+```
+
+```sql
+DELETE FROM "public"."Film"
+WHERE
+  (
+    "public"."Film"."id" = $1
+    AND 1 = 1
+  )
+RETURNING
+  "public"."Film"."id",
+  "public"."Film"."title"
+-- params: ["1"]
+```
+
+</details>
 
 ## Enums
 

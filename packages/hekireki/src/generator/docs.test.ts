@@ -54,7 +54,7 @@ enum Role {
 `
 
 describe('docsMarkdown', () => {
-  const markdown = docsMarkdown({ datamodel: datamodel(SCHEMA), statements: [] })
+  const markdown = docsMarkdown({ datamodel: datamodel(SCHEMA), statements: [], queries: [] })
 
   it('lists every model and enum with the name the database has for it', () => {
     expect(markdown).toContain('| [User](#model-User) | `users` | Who writes. |')
@@ -109,7 +109,7 @@ describe('docsMarkdown', () => {
       'CREATE TABLE "users" (\n    "id" SERIAL NOT NULL\n);',
       'CREATE UNIQUE INDEX "users_email_key" ON "users"("email");',
     ]
-    const withSql = docsMarkdown({ datamodel: datamodel(SCHEMA), statements })
+    const withSql = docsMarkdown({ datamodel: datamodel(SCHEMA), statements, queries: [] })
     expect(withSql).toContain(
       `<summary>The whole schema as SQL</summary>\n\n\`\`\`sql\n${statements.join('\n\n')}\n\`\`\``,
     )
@@ -118,6 +118,57 @@ describe('docsMarkdown', () => {
     )
     expect(withSql).toContain(
       `- \`ADMIN\` (\`admin\`)\n\n#### Definition\n\n\`\`\`sql\n${statements[0]}`,
+    )
+  })
+})
+
+describe('docsMarkdown queries', () => {
+  const example = (name: string, code: string) => ({
+    model: 'Note',
+    name,
+    description: `The ${name}`,
+    code,
+  })
+
+  it('shows each query beside the SQL it sends, with the values bound', () => {
+    const markdown = docsMarkdown({
+      datamodel: datamodel(SCHEMA),
+      statements: [],
+      queries: [
+        {
+          example: example('findMany', 'await prisma.note.findMany()'),
+          statements: [{ sql: 'SELECT "id" FROM "Note" OFFSET $1', params: ['0'] }],
+          error: null,
+        },
+        {
+          example: example('count', 'await prisma.note.count()'),
+          statements: null,
+          error: 'unsupported',
+        },
+      ],
+    })
+    expect(markdown).toContain(
+      '<summary>Queries and their SQL</summary>\n\n**findMany**: The findMany\n\n```ts\nawait prisma.note.findMany()\n```\n\n```sql\nSELECT "id" FROM "Note" OFFSET $1\n-- params: ["0"]\n```',
+    )
+    expect(markdown).toContain(
+      '```ts\nawait prisma.note.count()\n```\n\n> The query compiler refused it: unsupported',
+    )
+  })
+
+  it('shows the calls alone where there is no SQL to show', () => {
+    const markdown = docsMarkdown({
+      datamodel: datamodel(SCHEMA),
+      statements: [],
+      queries: [
+        {
+          example: example('findMany', 'await prisma.note.findMany()'),
+          statements: null,
+          error: null,
+        },
+      ],
+    })
+    expect(markdown).toContain(
+      '<summary>Queries</summary>\n\n**findMany**: The findMany\n\n```ts\nawait prisma.note.findMany()\n```\n\n</details>',
     )
   })
 })

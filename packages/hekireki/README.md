@@ -89,11 +89,14 @@ database Prisma made has nothing to change. `hekireki-openapi` writes them as th
 model gets `GET` and `POST /users` and `GET`, `PATCH` and `DELETE /users/{id}`.
 
 Given a directory (a trailing `/`, or no extension), `hekireki-er` writes the schema's docs into
-it: `README.md`, every model with its fields, constraints, defaults, indexes, relations both ways
-and `CREATE TABLE`, and every enum, each described by its `///` comment; `er.svg`, the ER diagram
-it opens with; and `tables/<Model>.svg`, one diagram per model with a relation, of the model and
-the models it joins. The SQL is what `prisma migrate diff --from-empty` writes for PostgreSQL,
-MySQL and SQLite, and nothing connects to a database for it.
+it: `README.md`, every model with its fields, constraints, defaults, indexes, relations both ways,
+`CREATE TABLE` and queries, and every enum, each described by its `///` comment; `er.svg`, the ER
+diagram it opens with; and `tables/<Model>.svg`, one diagram per model with a relation, of the
+model and the models it joins. The definitions are what `prisma migrate diff --from-empty` writes
+for PostgreSQL, MySQL and SQLite. The queries (every row, how many, with the relations, one by its
+key, a create, update and delete) are shown in Prisma Client beside the SQL they send, compiled by
+the query compiler of the project's own `@prisma/client` (Prisma 7 or newer); without one, they
+are shown as code. Nothing connects to a database for either.
 [example/generated/er/docs](https://github.com/nakita628/hekireki/tree/main/example/generated/er/docs)
 is such a directory.
 

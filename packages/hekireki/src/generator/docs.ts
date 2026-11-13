@@ -1,11 +1,22 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { makeSchema } from '../studio/server/domain/schema.js'
+import type { PlannedStatement, QueryExample } from './query-examples.js'
 
 type Schema = ReturnType<typeof makeSchema>
 type Model = Schema['models'][number]
 type Field = Model['fields'][number]
 type Relation = Schema['relations'][number]
+
+/**
+ * A query as the README shows it: the call, and the statements it sends. `statements` is null
+ * where there is no SQL to show, with `error` saying why when the compiler refused that query.
+ */
+export type DocsQuery = {
+  readonly example: Pick<QueryExample, 'model' | 'name' | 'description' | 'code'>
+  readonly statements: readonly PlannedStatement[] | null
+  readonly error: string | null
+}
 
 /** The files a docs directory holds besides its README, as the README links them. */
 export const DOCS_FILES = {
@@ -183,10 +194,40 @@ function relationsOf(model: Model, relations: readonly Relation[]) {
   )
 }
 
+// Each query in Prisma Client beside the SQL it sends, folded; the calls alone where no query
+// has SQL to show.
+function queriesOf(queries: readonly DocsQuery[]) {
+  if (queries.length === 0) return []
+  const withSql = queries.some((query) => query.statements !== null)
+  const blocks = queries.map(({ example, statements, error }) => {
+    const sql =
+      statements === null
+        ? error === null
+          ? []
+          : [`> The query compiler refused it: ${error}`]
+        : [
+            `\`\`\`sql\n${statements
+              .map(({ sql: text, params }) =>
+                params.length === 0 ? text : `${text}\n-- params: ${JSON.stringify(params)}`,
+              )
+              .join('\n\n')}\n\`\`\``,
+          ]
+    return [
+      `**${example.name}**: ${example.description}`,
+      `\`\`\`ts\n${example.code}\n\`\`\``,
+      ...sql,
+    ].join('\n\n')
+  })
+  return [
+    `<details>\n<summary>${withSql ? 'Queries and their SQL' : 'Queries'}</summary>\n\n${blocks.join('\n\n')}\n\n</details>`,
+  ]
+}
+
 function modelSection(
   model: Model,
   relations: readonly Relation[],
   ddl: ReadonlyMap<string, readonly string[]>,
+  queries: readonly DocsQuery[],
 ) {
   const table = model.dbName ?? model.name
   const intro = [
@@ -205,6 +246,7 @@ function modelSection(
     ...(indexes.length === 0 ? [] : [`#### Indexes\n\n${indexes.join('\n')}`]),
     ...relationsOf(model, relations),
     ...sqlBlock('Definition', ddl.get(`table:${table}`)),
+    ...queriesOf(queries),
   ].join('\n\n')
 }
 
@@ -227,17 +269,19 @@ function enumSection(value: Schema['enums'][number], ddl: ReadonlyMap<string, re
 /**
  * The schema's documentation as Markdown: the ER diagram of the same directory and the whole
  * schema as SQL (folded) at the top, then every model with its own diagram, its fields,
- * constraints, defaults, indexes, relations both ways and `CREATE TABLE`, and every enum, each
- * described by the `///` comment above it.
+ * constraints, defaults, indexes, relations both ways, `CREATE TABLE` and Prisma Client queries
+ * beside the SQL they send, and every enum, each described by the `///` comment above it.
  *
  * @param input.datamodel - the models and enums Prisma parsed
  * @param input.statements - the statements that make the schema in an empty database; each table
  *   and enum shows its own. Empty for a database hekireki writes no SQL for
+ * @param input.queries - each model's queries, with the statements they send where there are any
  * @returns the README.md of a docs directory
  */
 export function docsMarkdown(input: {
   readonly datamodel: DMMF.Datamodel
   readonly statements: readonly string[]
+  readonly queries: readonly DocsQuery[]
 }) {
   const schema = makeSchema({
     dmmf: { datamodel: input.datamodel },
@@ -272,7 +316,14 @@ export function docsMarkdown(input: {
           ),
         ]),
     '## Models',
-    ...schema.models.map((model) => modelSection(model, schema.relations, ddl)),
+    ...schema.models.map((model) =>
+      modelSection(
+        model,
+        schema.relations,
+        ddl,
+        input.queries.filter((query) => query.example.model === model.name),
+      ),
+    ),
     ...(schema.enums.length === 0
       ? []
       : ['## Enums', ...schema.enums.map((value) => enumSection(value, ddl))]),

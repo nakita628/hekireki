@@ -15,11 +15,14 @@ import {
 } from '../generator/dbml.js'
 import { DOCS_FILES, docsMarkdown, modelDiagramPath } from '../generator/docs.js'
 import { erContent } from '../generator/mermaid-er.js'
+import { queryExamples } from '../generator/query-examples.js'
 import { schemaSql } from '../migrate/adapter/schema-sql.js'
-import { dialectOf, readSchemaFiles } from '../schema/index.js'
+import { dialectOf, readSchemaFiles, schemaText } from '../schema/index.js'
+import { formatSql } from '../sql/index.js'
 import { makeSchema } from '../studio/server/domain/schema.js'
 import { getString, getStrings } from '../utils/index.js'
 import { GeneratorConfigError } from './errors.js'
+import { compileQueries } from './query-compiler.js'
 
 function themeOf(options: GeneratorOptions) {
   return getString(options.generator.config?.theme) === 'dark' ? 'dark' : 'light'
@@ -139,7 +142,8 @@ function filesOf(options: GeneratorOptions, outputs: readonly string[] | undefin
 }
 
 /**
- * Writes the schema's docs into the directory `dir`: README.md, beside the ER diagram it links
+ * Writes the schema's docs into the directory `dir`: README.md (with each model's queries beside
+ * the SQL they send), beside the ER diagram it links
  * (er.svg) and one diagram per model with a relation (tables/<Model>.svg: the model and the models
  * it joins). The diagram of a model that is gone is removed, so a directory written again holds
  * none that is stale.
@@ -153,8 +157,34 @@ function writeDocs(options: GeneratorOptions, dir: string) {
     const files = dialect === null ? [] : yield* readSchemaFiles(options.schemaPath)
     const statements =
       dialect === null ? [] : yield* schemaSql({ files, dialect, cwd: process.cwd() })
+    // Each query beside the SQL it sends, compiled by the project's own Prisma Client; where
+    // there is none to compile with (no `@prisma/client`, or one older than Prisma 7), the calls
+    // are shown alone.
+    const examples = queryExamples(options.dmmf.datamodel)
+    const compiled =
+      dialect === null
+        ? null
+        : yield* compileQueries({
+            schemaPath: options.schemaPath,
+            datamodel: schemaText(files),
+            dialect,
+            examples,
+          }).pipe(Effect.orElseSucceed(() => null))
+    const queries = yield* Effect.forEach(
+      compiled ?? examples.map((example) => ({ example, statements: null, error: null })),
+      ({ example, statements: planned, error }) =>
+        Effect.forEach(planned ?? [], ({ sql, params }) =>
+          formatSql(sql, dialect).pipe(Effect.map((text) => ({ sql: text, params }))),
+        ).pipe(
+          Effect.map((formatted) => ({
+            example,
+            statements: planned === null ? null : formatted,
+            error,
+          })),
+        ),
+    )
     const readme = yield* fmtMarkdown(
-      docsMarkdown({ datamodel: options.dmmf.datamodel, statements }),
+      docsMarkdown({ datamodel: options.dmmf.datamodel, statements, queries }),
     )
     const schema = makeSchema({
       dmmf: { datamodel: options.dmmf.datamodel },

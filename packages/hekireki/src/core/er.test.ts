@@ -128,6 +128,9 @@ describe('er', () => {
     const readme = readFileSync(path.join(dir, 'README.md'), 'utf8')
     expect(readme).toContain('![ER diagram](er.svg)')
     expect(readme).toContain('| `id`  | `Int` | PK NOT NULL |')
+    // No datasource, so no SQL: the queries are the calls alone.
+    expect(readme).toContain('<summary>Queries</summary>')
+    expect(readme).toContain('await prisma.user.findMany();')
     expect(readFileSync(path.join(dir, 'er.svg'), 'utf8')).toContain('<svg')
   })
 
