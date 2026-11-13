@@ -28,7 +28,6 @@
 //   custom/logic-camel-case         everything else in application logic is camelCase
 //                                   (UPPER_SNAKE constants allowed)
 //   custom/layer-suffix-pascal-case names ending in *UseCase / *Service / *Domain start uppercase
-//   custom/no-usecase-to-usecase    a usecase never imports another usecase
 //   custom/no-null-coercion-map     services return the driver's own absence value - no
 //                                   `.pipe(Effect.map((v) => v ?? null))` on a lookup result
 //   custom/no-dual-absence          a `Create*` schema property is optional or nullable, never both
@@ -55,14 +54,29 @@
 //                                   is imported directly (`./load.js`), the barrel would be a
 //                                   cycle; the client imports lib through lib/index.js; every
 //                                   other namespace import stays banned (zod/valibot aside)
+// layers.js (the Studio server's layers), failures.js, docs.js and performance.js hold the rest.
+//
 // Tests are exempt from the structural rules (effect-gen-return, function-declaration, no-let,
 // no-mutation, no-pass-through): a test arranges and asserts imperatively when that is the clearest way to spell
 // the fixture out.
+import { docRules } from './docs.js'
+import { failureRules } from './failures.js'
+import {
+  TEST_FILE,
+  filenameOf,
+  isLayerModule,
+  leadingTsdoc,
+  memberOf,
+  rangeOf,
+  sourceTextOf,
+} from './helpers.js'
+import { layerRules } from './layers.js'
+import { performanceRules } from './performance.js'
+
 const PASCAL_CASE = /^[A-Z][A-Za-z0-9]*$/u
 const CAMEL_CASE = /^[a-z][A-Za-z0-9]*$/u
 const UPPER_SNAKE = /^[A-Z][A-Z0-9_]*$/u
 const LAYER_SUFFIX = /(UseCase|Service|Domain)$/u
-const TEST_FILE = /\.test\.tsx?$/u
 
 const STUDIO_SERVER = /(^|[\\/])studio[\\/]server[\\/]/u
 const HANDLER_MODULE = /(^|[\\/])handlers[\\/](?!index\.)[^\\/]+\.tsx?$/u
@@ -76,61 +90,6 @@ const SIBLING_IMPORT = /^\.\/([\w-]+)\.js$/u
 const ROOT_LAYER_IMPORT = /^\.\/(usecases|services|domain)\/([\w-]+)\.js$/u
 const LAYER_SUFFIXES = { usecases: 'UseCase', services: 'Service', domain: 'Domain' }
 const NAMESPACE_ALLOWED = new Set(['zod', 'valibot'])
-
-const USECASE_MODULE = /(^|[\\/])usecases[\\/][^\\/]+\.tsx?$/u
-const USECASE_BARREL = /(^|[\\/])usecases[\\/]index\.tsx?$/u
-const SERVICE_MODULE = /(^|[\\/])services[\\/][^\\/]+\.tsx?$/u
-const SERVICE_BARREL = /(^|[\\/])services[\\/]index\.tsx?$/u
-
-/**
- * File-scope check for `custom/no-usecase-to-usecase` and `custom/usecase-gen-straight-line`.
- *
- * @param filename - path of the file under lint (either `/` or `\` separators)
- * @returns true for a module body directly under usecases/ (false for index.ts and tests)
- */
-export function isUseCaseModulePath(filename) {
-  return (
-    USECASE_MODULE.test(filename) && !USECASE_BARREL.test(filename) && !TEST_FILE.test(filename)
-  )
-}
-
-/**
- * File-scope check for `custom/no-null-coercion-map`.
- *
- * @param filename - path of the file under lint (either `/` or `\` separators)
- * @returns true for a module body directly under services/ (false for index.ts and tests)
- */
-export function isServiceModulePath(filename) {
-  return (
-    SERVICE_MODULE.test(filename) && !SERVICE_BARREL.test(filename) && !TEST_FILE.test(filename)
-  )
-}
-
-/**
- * Whether an import target points at the same usecases layer.
- *
- * @param source - the module specifier of the import statement
- * @returns true for a sibling usecase (`./x`) or a usecases path (`.../usecases/x`)
- */
-export function isUseCaseSpecifier(source) {
-  return source.startsWith('./') ? true : /(^|\/)usecases(\/|$)/u.test(source)
-}
-
-function filenameOf(context) {
-  return context.filename ?? context.getFilename?.() ?? ''
-}
-
-/**
- * The TSDoc block right above a statement, or null when there is none.
- *
- * @param text - the whole source
- * @param start - the offset the statement begins at
- * @returns the comment's inner text (between the markers)
- */
-export function docCommentBefore(text, start) {
-  const match = /\/\*\*([\s\S]*?)\*\/\s*$/u.exec(text.slice(0, start))
-  return match ? match[1] : null
-}
 
 /**
  * What a handler's doc has to name: the use cases it calls and the error tags it answers.
@@ -194,16 +153,6 @@ const MUTATING_ARRAY_METHODS = new Set([
   'fill',
   'copyWithin',
 ])
-
-// `Effect.<name>` member accesses, the shape every combinator ban below keys on.
-function effectMember(node) {
-  return node.type === 'MemberExpression' &&
-    node.object.type === 'Identifier' &&
-    node.object.name === 'Effect' &&
-    node.property.type === 'Identifier'
-    ? node.property.name
-    : null
-}
 
 // Walk a chain such as `z.object({...})` / `z.string().min(1)` / `v.pipe(...)` down to its
 // root and return the root identifier name (`z.coerce.number().int()` still reaches 'z').
@@ -449,8 +398,8 @@ function isTypeAliasStatement(statement) {
 // Whether there is a blank line between two statements. `node.loc` excludes comments, so read
 // the actual source span and look for a line whose content is empty.
 function hasBlankLineBetween(text, previous, current) {
-  const from = previous.range?.[1] ?? previous.end
-  const to = current.range?.[0] ?? current.start
+  const [, from] = rangeOf(previous)
+  const [to] = rangeOf(current)
   if (typeof from !== 'number' || typeof to !== 'number' || to <= from) return true
   const between = text.slice(from, to).split('\n')
   return between.slice(1, -1).some((line) => line.trim() === '')
@@ -652,6 +601,10 @@ function isAnonymousFunctionInit(init) {
 const plugin = {
   meta: { name: 'custom' },
   rules: {
+    ...layerRules,
+    ...failureRules,
+    ...docRules,
+    ...performanceRules,
     'effect-gen-return': {
       meta: {
         docs: {
@@ -663,7 +616,7 @@ const plugin = {
         if (TEST_FILE.test(filenameOf(context))) return {}
         return {
           CallExpression(node) {
-            if (effectMember(node.callee) !== 'gen') return
+            if (memberOf(node.callee, 'Effect') !== 'gen') return
             const body = node.arguments[0]
             if (body?.type !== 'FunctionExpression' || !body.generator || body.id) {
               context.report({
@@ -696,7 +649,7 @@ const plugin = {
       create(context) {
         return {
           MemberExpression(node) {
-            const name = effectMember(node)
+            const name = memberOf(node, 'Effect')
             if (name === 'fn' || name === 'fnUntraced') {
               context.report({
                 node,
@@ -716,7 +669,7 @@ const plugin = {
       create(context) {
         return {
           MemberExpression(node) {
-            const name = effectMember(node)
+            const name = memberOf(node, 'Effect')
             if (name === 'flatMap' || name === 'andThen') {
               context.report({
                 node,
@@ -732,10 +685,10 @@ const plugin = {
         docs: { description: 'in usecases/, happy-path combinators are folded into the gen block' },
       },
       create(context) {
-        if (!isUseCaseModulePath(filenameOf(context))) return {}
+        if (!isLayerModule(filenameOf(context), 'usecases')) return {}
         return {
           MemberExpression(node) {
-            const name = effectMember(node)
+            const name = memberOf(node, 'Effect')
             if (name === 'map' || name === 'tap') {
               context.report({
                 node,
@@ -835,7 +788,7 @@ const plugin = {
       create(context) {
         return {
           Program(node) {
-            const text = context.sourceCode?.text ?? context.getSourceCode?.().text ?? ''
+            const text = sourceTextOf(context)
             const body = node.body ?? []
             for (const [index, current] of body.entries()) {
               if (index === 0) continue
@@ -1085,34 +1038,15 @@ const plugin = {
         }
       },
     },
-    'no-usecase-to-usecase': {
-      meta: { docs: { description: 'a usecase may not depend on another usecase' } },
-      create(context) {
-        if (!isUseCaseModulePath(filenameOf(context))) return {}
-        function check(node) {
-          const source = node.source?.value
-          if (typeof source !== 'string' || !isUseCaseSpecifier(source)) return
-          context.report({
-            node: node.source,
-            message: `A usecase may not import another usecase (\`${source}\`). Usecases sit side by side, each one owning a request end to end. Inline the few lines you need, or push the shared part down into a service (I/O) or domain (a pure decision).`,
-          })
-        }
-        return {
-          ImportDeclaration: check,
-          ExportNamedDeclaration: check,
-          ExportAllDeclaration: check,
-        }
-      },
-    },
     'no-null-coercion-map': {
       meta: {
         docs: { description: 'services return the driver absence value, no `?? null` coercion' },
       },
       create(context) {
-        if (!isServiceModulePath(filenameOf(context))) return {}
+        if (!isLayerModule(filenameOf(context), 'services')) return {}
         return {
           CallExpression(node) {
-            if (effectMember(node.callee) !== 'map') return
+            if (memberOf(node.callee, 'Effect') !== 'map') return
             const fn = node.arguments[0]
             if (
               fn?.type !== 'ArrowFunctionExpression' ||
@@ -1306,7 +1240,7 @@ const plugin = {
         const filename = filenameOf(context)
         if (!STUDIO_SERVER.test(filename) || !HANDLER_MODULE.test(filename)) return {}
         if (TEST_FILE.test(filename)) return {}
-        const text = context.sourceCode?.text ?? context.getSourceCode?.().text ?? ''
+        const text = sourceTextOf(context)
         return {
           ExportNamedDeclaration(node) {
             const declaration = node.declaration
@@ -1319,9 +1253,8 @@ const plugin = {
                 continue
               }
               const name = declarator.id.name
-              const start = node.range?.[0] ?? node.start
-              const end = node.range?.[1] ?? node.end
-              const doc = docCommentBefore(text, start)
+              const [start, end] = rangeOf(node)
+              const doc = leadingTsdoc(text, node)
               if (doc === null) {
                 context.report({
                   node: declarator.id,

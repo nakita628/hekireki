@@ -127,7 +127,7 @@ declarations that are erased at build time, which lands thousands of files in `n
 
 ## Coding rules
 
-These are enforced in review, so following them up front saves a round-trip:
+Most of these are enforced by `pnpm exec vp lint` (the oxlint plugin in `packages/hekireki/lint/`); the rest in review, so following them up front saves a round-trip:
 
 - **Pure functions by default.** Side effects (file writes) belong in `emit/`; a function that writes must say so in its name (`write*`, `emit*`).
 - **No `as` casts** (tests are exempt), **no `any`**, **no `let` / reassignment** — use `const` with `map` / `reduce` / ternaries.
@@ -137,6 +137,14 @@ These are enforced in review, so following them up front saves a round-trip:
 - **`utils/` stays single-responsibility.** Don't add functions that merely compose or alias other exported utils — composition belongs in `helper/` or the call site. `utils/index.ts` must not import project-internal modules.
 - **Descriptive names in generated code.** No new one-letter variables in emitted templates (`result`, not `r`).
 - **Comments are rare.** Write one only when the _why_ is not obvious from the code; never restate the _what_, and never reference PR numbers, dates, or discussions.
+- **Commands go through pnpm** (`pnpm <script>`, `pnpm exec <tool>`), never `npx` or a bare `vp`: a tool resolved outside the workspace can be another version of it. Lint the directories you touched (`pnpm exec vp lint src/<directory>`); the client has its own type check, `pnpm exec tsgo -p src/studio/client/tsconfig.json --noEmit`.
+- **What `safeParse` returns is `result`** (`result.success`, `result.data`), and the value handed in is named for where it came from (`json`). The package validates with zod only: valibot is a generator target, not a dependency.
+- **A helper earns its place by holding logic** used in several places. Don't lift a value into a function to save repeating it (a handler's problem response, an options object), and don't name a few lines used once; write them where they are used.
+- **A function that builds SQL shows the SQL**: its TSDoc carries an `@example` with a fenced `sql` block for a small named case, per dialect where they differ, taken from running the function or from a test's expectation.
+- **Generated SQL carries no comment of ours.** `hekireki migrate plan` writes statements and one marker line, `-- hekireki migrate plan`; what a person needs to know goes to the CLI's notes.
+- **In `src/migrate`, what crosses a boundary is read through a zod schema** and the function says so in its type (`z.infer<typeof WriteDecisionsInput>`); what has been read is branded, and a brand stays out of what other packages are returned (a declaration cannot name zod's `$brand`).
+- **The Studio server is layered**: handlers → usecases → services, and usecases → domain. `lint/layers.js`, `lint/failures.js`, `lint/docs.js` and `lint/performance.js` say each rule's why, and `pnpm exec vp lint` holds the code to them.
+- **A change to how the ER diagram is drawn shows in the committed drawings**: regenerate `example/generated/er` (`pnpm example`) and `examples/better-auth/*/er.png` (`pnpm generate` there). A change meant to leave the drawing alone leaves them byte for byte as they were.
 - **Doc comments are TSDoc.** `/** … */` blocks are linted by oxlint's `jsdoc` plugin: a `@param` carries a name and a description, `@returns` carries a description, and no tag carries a `{type}` — the type is the signature's job. TSDoc tags (`@remarks`, `@typeParam`, `@defaultValue`, …) are allowed; JSDoc-only ones are not.
 
 ### Codegen principles

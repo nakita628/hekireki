@@ -3,13 +3,12 @@ import * as z from 'zod'
 
 import { watch } from '../../../file/index.js'
 import { migrationsStamp } from '../../../migrate/adapter/migrations-dir.js'
-import type * as StateService from './state.js'
 
 const WatchSchemaInput = z
   .object({
-    state: z
-      .custom<ReturnType<typeof StateService.createStudioState>>()
-      .meta({ description: 'The snapshot store to reload.' }),
+    onChange: z
+      .custom<() => Effect.Effect<unknown>>((value) => typeof value === 'function')
+      .meta({ description: 'What runs after a burst of changes: the reload.' }),
     dir: z.string().meta({ description: 'The directory to watch.', example: 'prisma' }),
     recursive: z.boolean().meta({
       description:
@@ -23,14 +22,28 @@ const WatchSchemaInput = z
       .meta({ description: 'Quiet time after the last event.', example: 80 }),
   })
   .readonly()
-  .meta({ description: 'The state to reload, the directory to watch and the debounce window' })
+  .meta({ description: 'What to run, the directory to watch and the debounce window' })
 
-/** Reloads the state after a burst of `.prisma` changes; the watcher lives as long as the surrounding scope. */
+/**
+ * Runs `onChange` after a burst of `.prisma` changes; the watcher lives as long as the surrounding
+ * scope.
+ *
+ * ```mermaid
+ * flowchart LR
+ *   fs[(schema directory)] -->|.prisma events| debounce[debounce] --> onChange
+ * ```
+ *
+ * @param input.onChange - what runs once the burst is over
+ * @param input.dir - the directory to watch
+ * @param input.recursive - whether its subdirectories are watched too
+ * @param input.debounceMs - the quiet time after the last event
+ * @returns the forked watcher, released with the scope
+ */
 export function watchSchema(input: z.infer<typeof WatchSchemaInput>) {
   return watch(input.dir, { recursive: input.recursive }).pipe(
     Stream.filter((event) => event.path.endsWith('.prisma')),
     Stream.debounce(Duration.millis(input.debounceMs)),
-    Stream.runForEach(() => input.state.reload()),
+    Stream.runForEach(input.onChange),
     Effect.forkScoped,
     Effect.asVoid,
   )
@@ -38,9 +51,9 @@ export function watchSchema(input: z.infer<typeof WatchSchemaInput>) {
 
 const WatchMigrationsInput = z
   .object({
-    state: z
-      .custom<ReturnType<typeof StateService.createStudioState>>()
-      .meta({ description: 'The state whose migrations stamp is moved on.' }),
+    onChange: z
+      .custom<() => void>((value) => typeof value === 'function')
+      .meta({ description: 'What runs when the directory changed: the state is told.' }),
     dir: z
       .string()
       .meta({ description: 'The migrations directory.', example: 'prisma/migrations' }),
@@ -51,13 +64,23 @@ const WatchMigrationsInput = z
       .meta({ description: 'How often the directory is read.', example: 1000 }),
   })
   .readonly()
-  .meta({ description: 'The state to tell, the migrations directory and how often to read it' })
+  .meta({ description: 'What to run, the migrations directory and how often to read it' })
 
 /**
- * Tells the state whenever the migrations directory changes: a migration added by `prisma migrate
+ * Runs `onChange` whenever the migrations directory changes: a migration added by `prisma migrate
  * dev`, one edited by hand, a `git pull` that brings others. The directory is read on an interval
  * rather than watched, because it may not exist until the first migration is written, and
  * watching the directory above it would mean watching everything beside it.
+ *
+ * ```mermaid
+ * flowchart LR
+ *   fs[(migrations directory)] -->|stamp every intervalMs| changes[changed?] --> onChange
+ * ```
+ *
+ * @param input.onChange - what runs when the directory changed
+ * @param input.dir - the migrations directory
+ * @param input.intervalMs - how often it is read
+ * @returns the forked poller, released with the scope
  */
 export function watchMigrations(input: z.infer<typeof WatchMigrationsInput>) {
   return Stream.fromEffectSchedule(
@@ -67,7 +90,7 @@ export function watchMigrations(input: z.infer<typeof WatchMigrationsInput>) {
     Stream.changes,
     // The first reading is how the directory was when Studio started, not a change to it.
     Stream.drop(1),
-    Stream.runForEach(() => Effect.sync(input.state.touchMigrations)),
+    Stream.runForEach(() => Effect.sync(input.onChange)),
     Effect.forkScoped,
     Effect.asVoid,
   )

@@ -107,7 +107,7 @@ export default defineConfig({
       {
         // Tests build DMMF fixtures by hand; asserting them into the real
         // ReadonlyDeep<DMMF.*> shapes is the sanctioned `as` exception
-        // (CLAUDE.md 型安全 #1). Only the rules that police those casts are
+        // (CONTRIBUTING.md: tests are exempt from `no as`). Only the rules that police those casts are
         // scoped off here, nothing else is.
         files: ['**/*.test.ts'],
         plugins: ['vitest'],
@@ -120,8 +120,8 @@ export default defineConfig({
           'typescript/no-unsafe-member-access': 'off',
           'typescript/no-unsafe-call': 'off',
           'typescript/no-unsafe-return': 'off',
-          // Fixtures and stubs are defined per test on purpose (CLAUDE.md テスト
-          // #5: no shared logic helpers), which is exactly what this rule flags.
+          // Fixtures and stubs are defined per test on purpose (CONTRIBUTING.md:
+          // no shared logic helpers between tests), which is exactly what this rule flags.
           'unicorn/consistent-function-scoping': 'off',
           // The other vitest rules this suite relies on (no-focused-tests, expect-expect, ...)
           // sit in the correctness / suspicious categories, so enabling the plugin is enough.

@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { createStudioApp } from '../app.js'
 import { connectDatabase, createStudioState } from '../services/index.js'
 import type { disconnectedDatabase } from '../services/index.js'
+import { loadSnapshot } from '../usecases/index.js'
 
 const dirs: string[] = []
 const states: ReturnType<typeof disconnectedDatabase>[] = []
@@ -53,7 +54,9 @@ async function setup() {
   writeFileSync(path.join(dir, 'migrations', '20260101000000_init', 'migration.sql'), INIT_SQL)
   writeFileSync(path.join(dir, 'migrations', 'migration_lock.toml'), 'provider = "sqlite"\n')
   const state = createStudioState({ schemaPath })
-  const snapshot = await Effect.runPromise(Effect.provide(state.reload(), NodeFileSystem.layer))
+  const snapshot = await Effect.runPromise(
+    Effect.provide(loadSnapshot({ state }), NodeFileSystem.layer),
+  )
   const db = await Effect.runPromise(
     Effect.provide(
       connectDatabase({
@@ -69,7 +72,7 @@ async function setup() {
     ),
   )
   states.push(db)
-  const app = createStudioApp(state, dir, db)
+  const app = createStudioApp({ state, staticDir: dir, db })
   const call = async (url: string, method: string, body?: unknown) => {
     const response = await app.request(
       url,

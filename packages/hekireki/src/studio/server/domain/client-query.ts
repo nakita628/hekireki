@@ -325,8 +325,15 @@ const MakeClientQueryInput = z
  * model of the schema and an operation Prisma Client has, their literal arguments, and what keeps
  * it from being run (a problem of the text stops the reading; unknown names are all reported).
  *
- * @param input - the text, the model names and the time of the reading
+ * @param input.text - the query as it was typed
+ * @param input.models - the model names of the schema, as declared
+ * @param input.now - the time of the reading, in Unix milliseconds: what `new Date()` without an
+ *   argument stands for
  * @returns the calls, whether they form a `$transaction`, its options, and the diagnostics
+ * @example
+ * makeClientQuery({ text: 'prisma.user.findMany({ take: 10 })', models: ['User'], now: 0 }).calls
+ * // [{ model: 'User', delegate: 'user', operation: 'findMany', write: false, args: { take: 10 },
+ * //    range: { start: 0, end: 34 } }]
  */
 export function makeClientQuery(input: z.infer<typeof MakeClientQueryInput>) {
   const result = programOf(input.text, input.now)
@@ -339,18 +346,18 @@ export function makeClientQuery(input: z.infer<typeof MakeClientQueryInput>) {
       diagnostics: [{ message, range: { start, end } }],
     }
   }
-  const known = input.models.map((model) => ({ model, delegate: lowerFirst(model) }))
+  const byDelegate = new Map(input.models.map((model) => [lowerFirst(model), model]))
   const resolved = result.value.calls.map((call) => {
-    const model = known.find((entry) => entry.delegate === call.delegate.name)?.model ?? null
+    const model = byDelegate.get(call.delegate.name) ?? null
     const operation = isOperation(call.operation.name) ? call.operation.name : null
     const diagnostics = [
       ...(model === null
         ? [
             {
               message:
-                known.length === 0
+                byDelegate.size === 0
                   ? `Unknown model delegate "${call.delegate.name}": the schema has no models`
-                  : `Unknown model delegate "${call.delegate.name}". The client has ${known.map((entry) => entry.delegate).join(', ')}`,
+                  : `Unknown model delegate "${call.delegate.name}". The client has ${[...byDelegate.keys()].join(', ')}`,
               range: { start: call.delegate.start, end: call.delegate.end },
             },
           ]
@@ -394,7 +401,15 @@ const IsWriteOperationInput = z
   .readonly()
   .meta({ description: 'A model operation to classify', example: { operation: 'create' } })
 
-/** Whether the model operation writes: create, update, upsert and delete in all their forms. */
+/**
+ * Whether the model operation writes: create, update, upsert and delete in all their forms.
+ *
+ * @param input.operation - a model operation name
+ * @returns true for an operation that writes
+ * @example
+ * isWriteOperation({ operation: 'upsert' })
+ * // true
+ */
 export function isWriteOperation(input: z.infer<typeof IsWriteOperationInput>) {
   return WRITE_OPERATIONS.some((operation) => operation === input.operation)
 }

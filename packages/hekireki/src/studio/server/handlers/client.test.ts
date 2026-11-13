@@ -17,7 +17,13 @@ import { Effect } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
 import { createStudioApp } from '../app.js'
-import { createProjectClient, createStudioState, disconnectedDatabase } from '../services/index.js'
+import {
+  createProjectClient,
+  createStudioState,
+  createTypeChecker,
+  disconnectedDatabase,
+} from '../services/index.js'
+import { loadSnapshot } from '../usecases/index.js'
 
 const dirs: string[] = []
 const clients: ReturnType<typeof createProjectClient>[] = []
@@ -179,6 +185,8 @@ function setupProject(schema = SCHEMA) {
 
 async function setup(input: {
   readonly client: (dir: string) => ReturnType<typeof createProjectClient>
+  /** The type checker over the client's types; over the project directory unless said otherwise. */
+  readonly typescript?: (dir: string) => ReturnType<typeof createTypeChecker>
   readonly schema?: string
   /** Changes the project before Studio reads it: a file taken away, another written. */
   readonly arrange?: (dir: string) => void
@@ -186,10 +194,16 @@ async function setup(input: {
   const { dir, schemaPath } = setupProject(input.schema)
   input.arrange?.(dir)
   const state = createStudioState({ schemaPath })
-  await Effect.runPromise(Effect.provide(state.reload(), NodeFileSystem.layer))
+  await Effect.runPromise(Effect.provide(loadSnapshot({ state }), NodeFileSystem.layer))
   const client = input.client(dir)
   clients.push(client)
-  const app = createStudioApp(state, dir, disconnectedDatabase(), client)
+  const app = createStudioApp({
+    state,
+    staticDir: dir,
+    db: disconnectedDatabase(),
+    client,
+    typescript: (input.typescript ?? ((at) => createTypeChecker({ schemaDir: at, cwd: at })))(dir),
+  })
   const call = async (url: string, body?: unknown) => {
     const response = await app.request(
       url,
@@ -631,6 +645,7 @@ describe('client routes', () => {
           schemaDir: '.',
           cwd: '.',
         }),
+      typescript: () => createTypeChecker({ schemaDir: '.', cwd: '.' }),
     })
     expect(await call('/api/client/complete', { query: 'prisma.', offset: 7 })).toStrictEqual({
       status: 503,
@@ -654,6 +669,7 @@ describe('client routes', () => {
           schemaDir: '.',
           cwd: '.',
         }),
+      typescript: () => createTypeChecker({ schemaDir: '.', cwd: '.' }),
     })
     expect(
       await call('/api/client/analyze', {
@@ -694,6 +710,7 @@ describe('client routes', () => {
     const offline = await setup({
       client: () =>
         createProjectClient({ target: null, reason: 'No DATABASE_URL.', schemaDir: '.', cwd: '.' }),
+      typescript: () => createTypeChecker({ schemaDir: '.', cwd: '.' }),
     })
     expect(await offline.call('/api/client')).toStrictEqual({
       status: 200,
@@ -891,6 +908,7 @@ describe('client routes', () => {
           schemaDir: '.',
           cwd: '.',
         }),
+      typescript: () => createTypeChecker({ schemaDir: '.', cwd: '.' }),
     })
     expect(await call(url, body)).toStrictEqual({
       status: 503,
@@ -914,6 +932,7 @@ describe('client routes', () => {
           schemaDir: '.',
           cwd: '.',
         }),
+      typescript: () => createTypeChecker({ schemaDir: '.', cwd: '.' }),
     })
     expect(
       await call('/api/client/format', {

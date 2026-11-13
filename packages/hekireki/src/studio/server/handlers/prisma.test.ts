@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from 'vite-plus/test'
 
 import { createStudioApp } from '../app.js'
 import { disconnectedDatabase, createStudioState } from '../services/index.js'
+import { loadSnapshot } from '../usecases/index.js'
 
 const dirs: string[] = []
 
@@ -35,8 +36,8 @@ async function setup() {
   const schemaPath = path.join(dir, 'schema.prisma')
   writeFileSync(schemaPath, SCHEMA)
   const state = createStudioState({ schemaPath })
-  await Effect.runPromise(Effect.provide(state.reload(), NodeFileSystem.layer))
-  const app = createStudioApp(state, dir, disconnectedDatabase())
+  await Effect.runPromise(Effect.provide(loadSnapshot({ state }), NodeFileSystem.layer))
+  const app = createStudioApp({ state, staticDir: dir, db: disconnectedDatabase() })
   const post = async (url: string, body: unknown) => {
     const response = await app.request(url, {
       method: 'POST',

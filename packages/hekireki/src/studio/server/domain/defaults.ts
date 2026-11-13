@@ -49,6 +49,22 @@ const MakeGeneratedFieldsInput = z
  * empty list for a required list field. The database supplies `autoincrement()`,
  * `dbgenerated()`, `sequence()` and literals on its own, so those are left to it. An id or a time
  * needs randomness and a clock, which the services hold: `generateDefaults` makes the values.
+ *
+ * @param input.model - the Prisma model of the row: each field's name, kind, list and required
+ *   flags, `@updatedAt` and `@default` as written
+ * @param input.row - the values the user gave, by field name
+ * @returns each field left out that the client fills in, with the generator that makes its value
+ * @example
+ * makeGeneratedFields({
+ *   model: {
+ *     fields: [
+ *       { name: 'id', kind: 'scalar', isList: false, isRequired: true, isUpdatedAt: false, default: 'uuid(7)' },
+ *       { name: 'title', kind: 'scalar', isList: false, isRequired: true, isUpdatedAt: false, default: null },
+ *     ],
+ *   },
+ *   row: { title: 'Hello' },
+ * })
+ * // [{ name: 'id', generator: { kind: 'uuid', version: 7 } }]
  */
 export function makeGeneratedFields(input: z.infer<typeof MakeGeneratedFieldsInput>) {
   return input.model.fields.flatMap((field) => {

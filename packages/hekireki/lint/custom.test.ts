@@ -1,15 +1,8 @@
 import { RuleTester } from 'oxlint/plugins-dev'
 import { describe, expect, it, test } from 'vite-plus/test'
 
-import plugin, {
-  docCommentBefore,
-  handlerDocNames,
-  isServiceModulePath,
-  isUseCaseModulePath,
-  isUseCaseSpecifier,
-  layerModuleOf,
-  layerNamespaceOf,
-} from './custom.js'
+import plugin, { handlerDocNames, layerModuleOf, layerNamespaceOf } from './custom.js'
+import { isLayerModule, layerOf, leadingTsdoc, resolveRelative } from './helpers.js'
 
 RuleTester.describe = (name, fn) => {
   describe(name, fn)
@@ -38,19 +31,12 @@ function testCase(code: string) {
 }
 
 describe('path helpers', () => {
-  it('recognises usecase and service module bodies', () => {
-    expect(isUseCaseModulePath('src/studio/server/usecases/schema.ts')).toBe(true)
-    expect(isUseCaseModulePath('src/studio/server/usecases/index.ts')).toBe(false)
-    expect(isUseCaseModulePath('src/studio/server/usecases/schema.test.ts')).toBe(false)
-    expect(isUseCaseModulePath('src\\studio\\server\\usecases\\schema.ts')).toBe(true)
-    expect(isServiceModulePath('src/studio/server/services/query.ts')).toBe(true)
-    expect(isServiceModulePath('src/studio/server/services/index.ts')).toBe(false)
-  })
-
-  it('recognises usecase import targets', () => {
-    expect(isUseCaseSpecifier('./schema.js')).toBe(true)
-    expect(isUseCaseSpecifier('../usecases/index.js')).toBe(true)
-    expect(isUseCaseSpecifier('../services/index.js')).toBe(false)
+  it('recognises the modules of a layer', () => {
+    expect(isLayerModule('src/studio/server/usecases/schema.ts', 'usecases')).toBe(true)
+    expect(isLayerModule('src/studio/server/usecases/index.ts', 'usecases')).toBe(false)
+    expect(isLayerModule('src/studio/server/usecases/schema.test.ts', 'usecases')).toBe(false)
+    expect(isLayerModule('src\\studio\\server\\usecases\\schema.ts', 'usecases')).toBe(true)
+    expect(isLayerModule('src/studio/server/services/query.ts', 'usecases')).toBe(false)
   })
 })
 
@@ -256,17 +242,6 @@ tester.run('layer-suffix-pascal-case', rule('layer-suffix-pascal-case'), {
   invalid: [
     { ...tsCase(`const todoService = 1`), errors: 1 },
     { ...tsCase(`function readUseCase() {}`), errors: 1 },
-  ],
-})
-
-tester.run('no-usecase-to-usecase', rule('no-usecase-to-usecase'), {
-  valid: [
-    tsCase(`import { x } from '../services/index.js'`),
-    tsCase(`import { x } from './schema.js'`, 'src/studio/server/usecases/index.ts'),
-  ],
-  invalid: [
-    { ...tsCase(`import { x } from './schema.js'`), errors: 1 },
-    { ...tsCase(`export * from '../usecases/schema.js'`), errors: 1 },
   ],
 })
 
@@ -478,10 +453,14 @@ export const getDocsRouteHandler: RouteHandler<typeof getDocsRoute> = (c) =>
 `
 
 describe('handler doc helpers', () => {
-  it('reads the TSDoc block right above a statement', () => {
-    expect(docCommentBefore('/** a */\nexport const x = 1', 9)).toBe(' a ')
-    expect(docCommentBefore('// a\nexport const x = 1', 5)).toBeNull()
-    expect(docCommentBefore('/** a */\nconst y = 1\nexport const x = 1', 21)).toBeNull()
+  it('reads the TSDoc block right above a statement, and only that one', () => {
+    const at = (start: number) => ({ start, end: start })
+    expect(leadingTsdoc('/** a */\nexport const x = 1', at(9))).toBe('/** a */')
+    expect(leadingTsdoc('// a\nexport const x = 1', at(5))).toBeNull()
+    expect(leadingTsdoc('/** a */\nconst y = 1\nexport const x = 1', at(21))).toBeNull()
+    expect(leadingTsdoc('/** a */\nconst y = 1\n/** b */\nexport const x = 1', at(30))).toBe(
+      '/** b */',
+    )
   })
 
   it('lists the use cases a handler calls and the tags it answers, once each', () => {
@@ -533,5 +512,354 @@ tester.run('handler-doc', rule('handler-doc'), {
       ...tsCase(DOCUMENTED_HANDLER.replace('H->>U: readDocs()', 'H->>U: read'), HANDLER_FILE),
       errors: 1,
     },
+  ],
+})
+
+// layers.js, failures.js and docs.js
+
+const SERVICE_FILE = 'src/studio/server/services/load.ts'
+const DOMAIN_FILE = 'src/studio/server/domain/values.ts'
+
+describe('shared helpers', () => {
+  it('resolves a relative specifier against the importing file', () => {
+    expect(resolveRelative('src/studio/server/services/load.ts', '../domain/index.js')).toBe(
+      'src/studio/server/domain/index.js',
+    )
+    expect(resolveRelative('src/studio/server/app.ts', './services/index.js')).toBe(
+      'src/studio/server/services/index.js',
+    )
+    expect(resolveRelative('src/studio/server/domain/sql.ts', '../../../sql/index.js')).toBe(
+      'src/sql/index.js',
+    )
+    expect(resolveRelative('src/studio/server/app.ts', 'effect')).toBeNull()
+  })
+
+  it('names the layer a file belongs to', () => {
+    expect(layerOf('src/studio/server/usecases/schema.ts')).toBe('usecases')
+    expect(layerOf('src\\studio\\server\\domain\\sql.ts')).toBe('domain')
+    expect(layerOf('src/studio/server/app.ts')).toBeNull()
+  })
+})
+
+tester.run('layer-imports', rule('layer-imports'), {
+  valid: [
+    tsCase(`import type * as StateService from './state.js'`, SERVICE_FILE),
+    tsCase(`import { SchemaLoadError } from '../errors/index.js'`, SERVICE_FILE),
+    tsCase(`export * from './load.js'`, 'src/studio/server/services/index.ts'),
+    tsCase(`import * as LoadService from './load.js'`, 'src/studio/server/services/load.test.ts'),
+    tsCase(`import * as StudioService from '../services/index.js'`),
+    tsCase(`import * as SchemaUseCase from '../usecases/index.js'`, HANDLER_FILE),
+  ],
+  invalid: [
+    { ...tsCase(`import * as LanguageService from './language.js'`, SERVICE_FILE), errors: 1 },
+    { ...tsCase(`import * as X from '../usecases/index.js'`, SERVICE_FILE), errors: 1 },
+    { ...tsCase(`import { x } from './schema.js'`), errors: 1 },
+    { ...tsCase(`export * from '../usecases/schema.js'`), errors: 1 },
+    { ...tsCase(`import { h } from '../handlers/index.js'`), errors: 1 },
+    { ...tsCase(`import * as StudioService from '../services/index.js'`, HANDLER_FILE), errors: 1 },
+  ],
+})
+
+tester.run('domain-only-from-usecases', rule('domain-only-from-usecases'), {
+  valid: [
+    tsCase(`import * as SqlDomain from '../domain/index.js'`),
+    tsCase(`import { makeCell } from './values.js'`, DOMAIN_FILE),
+    tsCase(`import type { Dialect } from '../domain/index.js'`, SERVICE_FILE),
+  ],
+  invalid: [
+    { ...tsCase(`import * as SqlDomain from '../domain/index.js'`, SERVICE_FILE), errors: 1 },
+    {
+      ...tsCase(`import * as SqlDomain from './domain/index.js'`, 'src/studio/server/app.ts'),
+      errors: 1,
+    },
+  ],
+})
+
+tester.run('domain-import-allowlist', rule('domain-import-allowlist'), {
+  valid: [
+    tsCase(`import * as z from 'zod'`, DOMAIN_FILE),
+    tsCase(`import { parse } from 'acorn'`, DOMAIN_FILE),
+    tsCase(`import { makeCell } from './values.js'`, DOMAIN_FILE),
+    tsCase(`import { quoteIdentifier } from '../../../sql/index.js'`, DOMAIN_FILE),
+    tsCase(`import { erKey } from '../../../utils/relation.js'`, DOMAIN_FILE),
+    tsCase(`import type { DMMF } from '@prisma/generator-helper'`, DOMAIN_FILE),
+  ],
+  invalid: [
+    { ...tsCase(`import { Effect } from 'effect'`, DOMAIN_FILE), errors: 1 },
+    { ...tsCase(`import fs from 'node:fs'`, DOMAIN_FILE), errors: 1 },
+    { ...tsCase(`import * as LoadService from '../services/index.js'`, DOMAIN_FILE), errors: 1 },
+    { ...tsCase(`const m = import('./values.js')`, DOMAIN_FILE), errors: 1 },
+  ],
+})
+
+tester.run('domain-no-nondeterminism', rule('domain-no-nondeterminism'), {
+  valid: [tsCase(`const at = new Date(input.at)`, DOMAIN_FILE)],
+  invalid: [
+    { ...tsCase(`const at = Date.now()`, DOMAIN_FILE), errors: 1 },
+    { ...tsCase(`const at = new Date()`, DOMAIN_FILE), errors: 1 },
+    { ...tsCase(`const id = crypto.randomUUID()`, DOMAIN_FILE), errors: 1 },
+    { ...tsCase(`const n = Math.random()`, DOMAIN_FILE), errors: 1 },
+  ],
+})
+
+tester.run('domain-no-side-effects', rule('domain-no-side-effects'), {
+  valid: [tsCase(`export function makeCell(input: { a: number }) { return input.a }`, DOMAIN_FILE)],
+  invalid: [
+    { ...tsCase(`console.log(1)`, DOMAIN_FILE), errors: 1 },
+    { ...tsCase(`const cwd = process.cwd()`, DOMAIN_FILE), errors: 1 },
+    { ...tsCase(`export async function read() { return 1 }`, DOMAIN_FILE), errors: 1 },
+    { ...tsCase(`let cache = 1`, DOMAIN_FILE), errors: 1 },
+    { ...tsCase(`setTimeout(() => 1, 10)`, DOMAIN_FILE), errors: 1 },
+  ],
+})
+
+tester.run('handler-one-usecase', rule('handler-one-usecase'), {
+  valid: [tsCase(`export const h = (c) => DocsUseCase.readDocs()`, HANDLER_FILE)],
+  invalid: [
+    {
+      ...tsCase(
+        `export const h = (c) => [DocsUseCase.readDocs(), DatabaseUseCase.readDbStatus()]`,
+        HANDLER_FILE,
+      ),
+      errors: 1,
+    },
+  ],
+})
+
+tester.run('handler-request-valid', rule('handler-request-valid'), {
+  valid: [
+    tsCase(`const data = c.req.valid('json')`, HANDLER_FILE),
+    tsCase(`const data = { ...c.req.valid('param'), ...c.req.valid('json') }`, HANDLER_FILE),
+    // `c.req.path` is no read of the input.
+    tsCase(`const at = c.req.path`, HANDLER_FILE),
+  ],
+  invalid: [
+    { ...tsCase(`const body = await c.req.json()`, HANDLER_FILE), errors: 1 },
+    { ...tsCase(`const { model } = c.req.valid('param')`, HANDLER_FILE), errors: 1 },
+    { ...tsCase(`MigrateUseCase.rehearse(c.req.valid('json'))`, HANDLER_FILE), errors: 1 },
+  ],
+})
+
+tester.run('handler-response-shape', rule('handler-response-shape'), {
+  valid: [
+    tsCase(`c.json(DocsSchema.parse(docs), 200)`, HANDLER_FILE),
+    tsCase(`c.json({ type: '/problems/not-found', status: 404 } as const, 404)`, HANDLER_FILE),
+  ],
+  invalid: [
+    { ...tsCase(`c.json(docs, 200)`, HANDLER_FILE), errors: 1 },
+    {
+      ...tsCase(`c.json(NotFoundProblemSchema.parse({ status: 404 }), 404)`, HANDLER_FILE),
+      errors: 1,
+    },
+    { ...tsCase(`c.json({ status: 404 }, 404)`, HANDLER_FILE), errors: 1 },
+  ],
+})
+
+tester.run('effect-run-at-edge', rule('effect-run-at-edge'), {
+  valid: [
+    tsCase(`Effect.runPromise(program)`, HANDLER_FILE),
+    tsCase(`Effect.runPromise(program)`, 'src/studio/server/index.ts'),
+    testCase(`Effect.runPromise(program)`),
+  ],
+  invalid: [
+    { ...tsCase(`Effect.runPromise(program)`), errors: 1 },
+    { ...tsCase(`Effect.runPromise(program)`, 'src/studio/server/app.ts'), errors: 1 },
+    { ...tsCase(`Effect.runPromise(program)`, 'src/studio/server/start.ts'), errors: 1 },
+    { ...tsCase(`Effect.runSync(program)`, SERVICE_FILE), errors: 1 },
+  ],
+})
+
+tester.run('no-throw', rule('no-throw'), {
+  valid: [testCase(`throw new Error('x')`)],
+  invalid: [{ ...tsCase(`throw new Error('x')`), errors: 1 }],
+})
+
+tester.run('no-try-catch', rule('no-try-catch'), {
+  valid: [testCase(`try { f() } catch { g() }`), tsCase(`try { f() } finally { g() }`)],
+  invalid: [{ ...tsCase(`try { f() } catch { g() }`), errors: 1 }],
+})
+
+tester.run('no-class', rule('no-class'), {
+  valid: [
+    tsCase(
+      `export class UnknownModelError extends Data.TaggedError('UnknownModelError')<{}> {}`,
+      'src/studio/server/errors/index.ts',
+    ),
+  ],
+  invalid: [
+    { ...tsCase(`class State {}`), errors: 1 },
+    {
+      ...tsCase(`class NotFound extends Error {}`, 'src/studio/server/errors/index.ts'),
+      errors: 1,
+    },
+  ],
+})
+
+tester.run('layer-function-shape', rule('layer-function-shape'), {
+  valid: [
+    tsCase(`export function readDbStatus() { return 1 }`),
+    tsCase(`export function runSql(input: { sql: string }) { return input.sql }`),
+    tsCase(`export const runSql = (input: { sql: string }) => input.sql`),
+    tsCase(`function local(a: number, b: number) { return a + b }`),
+  ],
+  invalid: [
+    {
+      ...tsCase(`export function runSql(sql: string, params: unknown[]) { return sql }`),
+      errors: 1,
+    },
+    { ...tsCase(`export function runSql(sql: string) { return sql }`), errors: 1 },
+  ],
+})
+
+tester.run('no-type-assertion', rule('no-type-assertion'), {
+  valid: [tsCase(`const KINDS = ['sqlite'] as const`), testCase(`const x = value as Config`)],
+  invalid: [
+    { ...tsCase(`const x = value as Config`), errors: 1 },
+    { ...tsCase(`const x = <Config>value`), errors: 1 },
+  ],
+})
+
+tester.run('match-exhaustive', rule('match-exhaustive'), {
+  valid: [tsCase(`Match.value(error).pipe(Match.tag('A', a), Match.exhaustive)`)],
+  invalid: [
+    { ...tsCase(`Match.value(error).pipe(Match.tag('A', a))`), errors: 1 },
+    { ...tsCase(`Match.value(error).pipe(Match.tag('A', a), Match.orElse(b))`), errors: 2 },
+  ],
+})
+
+tester.run('catch-must-log', rule('catch-must-log'), {
+  valid: [
+    tsCase(`read.pipe(Effect.catch((error) => Effect.logDebug('read failed', error)))`),
+    tsCase(`read.pipe(Effect.catch(() => Effect.fail(new UnknownModelError({ model }))))`),
+    testCase(`read.pipe(Effect.ignore)`),
+  ],
+  invalid: [
+    { ...tsCase(`read.pipe(Effect.catch(() => Effect.void))`), errors: 1 },
+    { ...tsCase(`read.pipe(Effect.orElseSucceed(() => null))`), errors: 1 },
+    { ...tsCase(`read.pipe(Effect.ignore)`), errors: 1 },
+  ],
+})
+
+tester.run('require-tsdoc', rule('require-tsdoc'), {
+  valid: [
+    tsCase(`/** Reads. */\nexport function read() { return 1 }`, 'src/studio/server/app.ts'),
+    tsCase(
+      `/**\n * Reads.\n * @param input.sql - the statement\n * @returns the rows\n */\nexport function read(input: { sql: string }) { return input.sql }`,
+      SERVICE_FILE,
+    ),
+    tsCase(
+      `/**\n * Reads.\n * @param input.sql - the statement\n * @returns the rows\n * @example read({ sql: 'x' }) // 'x'\n */\nexport function read(input: { sql: string }) { return input.sql }`,
+      DOMAIN_FILE,
+    ),
+    // A constant is not a function.
+    tsCase(`export const LIMIT = 1`, SERVICE_FILE),
+    // An input typed by name may be documented field by field.
+    tsCase(
+      `/**\n * Reads.\n * @param input.sql - the statement\n * @returns the rows\n */\nexport function read(input: Input) { return input.sql }`,
+      SERVICE_FILE,
+    ),
+  ],
+  invalid: [
+    { ...tsCase(`export function read() { return 1 }`, 'src/studio/server/app.ts'), errors: 1 },
+    {
+      ...tsCase(
+        `/** Reads. */\nexport function read(input: { sql: string }) { return 1 }`,
+        SERVICE_FILE,
+      ),
+      errors: 1,
+    },
+    {
+      ...tsCase(
+        `/**\n * Reads.\n * @param input.sql - the statement\n * @returns the rows\n */\nexport function read(input: { sql: string }) { return input.sql }`,
+        DOMAIN_FILE,
+      ),
+      errors: 1,
+    },
+  ],
+})
+
+tester.run('require-sequence-diagram', rule('require-sequence-diagram'), {
+  valid: [
+    tsCase(
+      '/**\n * Reads.\n * ```mermaid\n * sequenceDiagram\n * ```\n */\nexport function read() {}',
+    ),
+    tsCase('export * from "./read.js"', 'src/studio/server/usecases/index.ts'),
+  ],
+  invalid: [{ ...tsCase('/** Reads. */\nexport function read() {}'), errors: 1 }],
+})
+
+tester.run('require-diagram', rule('require-diagram'), {
+  valid: [
+    tsCase(
+      '/**\n * Reads.\n * ```mermaid\n * flowchart LR\n * ```\n */\nexport function read() {}',
+      SERVICE_FILE,
+    ),
+  ],
+  invalid: [{ ...tsCase('/** Reads. */\nexport function read() {}', SERVICE_FILE), errors: 1 }],
+})
+
+// performance.js
+
+tester.run('effect-explicit-concurrency', rule('effect-explicit-concurrency'), {
+  valid: [
+    tsCase(`Effect.all([a, b], { concurrency: 2 })`),
+    tsCase(`Effect.forEach(xs, run, { concurrency: 1, discard: true })`),
+    tsCase(`Effect.all([a, b], { concurrency: 'unbounded' })`),
+    testCase(`Effect.all([a, b])`),
+  ],
+  invalid: [
+    { ...tsCase(`Effect.all([a, b])`), errors: 1 },
+    { ...tsCase(`Effect.all([a, b], { discard: true })`), errors: 1 },
+    { ...tsCase(`Effect.forEach(xs, run)`), errors: 1 },
+  ],
+})
+
+tester.run('no-lookup-in-loop', rule('no-lookup-in-loop'), {
+  valid: [
+    tsCase(
+      `const byName = new Map(fields.map((f) => [f.name, f])); rows.map((row) => byName.get(row.name))`,
+    ),
+    // What the loop hands in, or declares for each turn, is not repeated work.
+    tsCase(`rows.map((row) => row.cells.find((c) => c.ok))`),
+    tsCase(`rows.map((row) => { const child = pick(row); return child.fields.find((f) => f.ok) })`),
+    tsCase(`for (const row of rows) row.cells.includes(1)`),
+    tsCase(`const field = fields.find((f) => f.name === name)`),
+  ],
+  invalid: [
+    { ...tsCase(`rows.map((row) => fields.find((f) => f.name === row.name))`), errors: 1 },
+    { ...tsCase(`for (const row of rows) names.includes(row.name)`), errors: 1 },
+    { ...tsCase(`rows.filter((row) => model.fields.some((f) => f.name === row.name))`), errors: 1 },
+  ],
+})
+
+tester.run('one-studio-read', rule('one-studio-read'), {
+  valid: [
+    tsCase(`function read() { const { state, db } = StudioService.studio(); return [state, db] }`),
+    tsCase(
+      `function a() { return StudioService.studio().state }\nfunction b() { return StudioService.studio().db }`,
+    ),
+  ],
+  invalid: [
+    {
+      ...tsCase(
+        `function read() { const state = StudioService.studio().state; const db = StudioService.studio().db; return [state, db] }`,
+      ),
+      errors: 1,
+    },
+  ],
+})
+
+tester.run('hoist-constant', rule('hoist-constant'), {
+  valid: [
+    tsCase(`const READ = new RegExp('^select', 'iu')`),
+    tsCase(`function f(name: string) { return new RegExp(name) }`),
+    tsCase(`function f(xs: string[]) { return new Set(xs) }`),
+  ],
+  invalid: [
+    {
+      ...tsCase(`function f(sql: string) { return new RegExp('^select', 'iu').test(sql) }`),
+      errors: 1,
+    },
+    { ...tsCase(`function f(w: string) { return new Set(['select', 'with']).has(w) }`), errors: 1 },
   ],
 })

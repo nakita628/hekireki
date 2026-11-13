@@ -17,12 +17,9 @@ import {
   AnalysisSchema,
   CountsSchema,
   DbStatusSchema,
-  NotFoundProblemSchema,
   PlanSchema,
   RowsSchema,
-  ServiceUnavailableProblemSchema,
   SqlResultSchema,
-  ValidationProblemSchema,
 } from '../routes/index.js'
 import * as DatabaseUseCase from '../usecases/index.js'
 
@@ -70,13 +67,13 @@ export const getDbCountsRouteHandler: RouteHandler<typeof getDbCountsRoute> = (c
           Match.tag('DatabaseUnavailableError', ({ reason }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: reason,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -113,13 +110,13 @@ export const getDbRowsModelNameRouteHandler: RouteHandler<typeof getDbRowsModelN
           Match.tag('UnknownModelError', ({ model }) =>
             Effect.succeed(
               c.json(
-                NotFoundProblemSchema.parse({
+                {
                   type: '/problems/not-found',
                   title: 'Not Found',
                   status: 404,
                   detail: `Unknown model "${model}".`,
                   instance: c.req.path,
-                }),
+                } as const,
                 404,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -128,13 +125,13 @@ export const getDbRowsModelNameRouteHandler: RouteHandler<typeof getDbRowsModelN
           Match.tag('DatabaseUnavailableError', ({ reason }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: reason,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -144,13 +141,13 @@ export const getDbRowsModelNameRouteHandler: RouteHandler<typeof getDbRowsModelN
             Effect.logError('database error', cause).pipe(
               Effect.as(
                 c.json(
-                  ServiceUnavailableProblemSchema.parse({
+                  {
                     type: '/problems/service-unavailable',
                     title: 'Service Unavailable',
                     status: 503,
                     detail: cause,
                     instance: c.req.path,
-                  }),
+                  } as const,
                   503,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -193,13 +190,13 @@ export const postDbRowsModelNameRouteHandler: RouteHandler<typeof postDbRowsMode
             Match.tag('UnknownModelError', ({ model }) =>
               Effect.succeed(
                 c.json(
-                  NotFoundProblemSchema.parse({
+                  {
                     type: '/problems/not-found',
                     title: 'Not Found',
                     status: 404,
                     detail: `Unknown model "${model}".`,
                     instance: c.req.path,
-                  }),
+                  } as const,
                   404,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -208,13 +205,13 @@ export const postDbRowsModelNameRouteHandler: RouteHandler<typeof postDbRowsMode
             Match.tag('DatabaseUnavailableError', ({ reason }) =>
               Effect.succeed(
                 c.json(
-                  ServiceUnavailableProblemSchema.parse({
+                  {
                     type: '/problems/service-unavailable',
                     title: 'Service Unavailable',
                     status: 503,
                     detail: reason,
                     instance: c.req.path,
-                  }),
+                  } as const,
                   503,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -224,13 +221,13 @@ export const postDbRowsModelNameRouteHandler: RouteHandler<typeof postDbRowsMode
               Effect.logError('database error', cause).pipe(
                 Effect.as(
                   c.json(
-                    ServiceUnavailableProblemSchema.parse({
+                    {
                       type: '/problems/service-unavailable',
                       title: 'Service Unavailable',
                       status: 503,
                       detail: cause,
                       instance: c.req.path,
-                    }),
+                    } as const,
                     503,
                     { 'Content-Type': 'application/problem+json' },
                   ),
@@ -278,13 +275,13 @@ export const patchDbRowsModelNameRouteHandler: RouteHandler<typeof patchDbRowsMo
             Match.tag('UnknownModelError', ({ model }) =>
               Effect.succeed(
                 c.json(
-                  NotFoundProblemSchema.parse({
+                  {
                     type: '/problems/not-found',
                     title: 'Not Found',
                     status: 404,
                     detail: `Unknown model "${model}".`,
                     instance: c.req.path,
-                  }),
+                  } as const,
                   404,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -293,14 +290,14 @@ export const patchDbRowsModelNameRouteHandler: RouteHandler<typeof patchDbRowsMo
             Match.tag('InvalidInputError', ({ field, message }) =>
               Effect.succeed(
                 c.json(
-                  ValidationProblemSchema.parse({
+                  {
                     type: '/problems/validation-failed',
                     title: 'Validation Failed',
                     status: 422,
                     detail: `${field} ${message}.`,
                     instance: c.req.path,
                     errors: [{ field, message }],
-                  }),
+                  } as const,
                   422,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -309,13 +306,13 @@ export const patchDbRowsModelNameRouteHandler: RouteHandler<typeof patchDbRowsMo
             Match.tag('DatabaseUnavailableError', ({ reason }) =>
               Effect.succeed(
                 c.json(
-                  ServiceUnavailableProblemSchema.parse({
+                  {
                     type: '/problems/service-unavailable',
                     title: 'Service Unavailable',
                     status: 503,
                     detail: reason,
                     instance: c.req.path,
-                  }),
+                  } as const,
                   503,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -325,13 +322,13 @@ export const patchDbRowsModelNameRouteHandler: RouteHandler<typeof patchDbRowsMo
               Effect.logError('database error', cause).pipe(
                 Effect.as(
                   c.json(
-                    ServiceUnavailableProblemSchema.parse({
+                    {
                       type: '/problems/service-unavailable',
                       title: 'Service Unavailable',
                       status: 503,
                       detail: cause,
                       instance: c.req.path,
-                    }),
+                    } as const,
                     503,
                     { 'Content-Type': 'application/problem+json' },
                   ),
@@ -374,13 +371,13 @@ export const deleteDbRowsModelNameRouteHandler: RouteHandler<typeof deleteDbRows
             Match.tag('UnknownModelError', ({ model }) =>
               Effect.succeed(
                 c.json(
-                  NotFoundProblemSchema.parse({
+                  {
                     type: '/problems/not-found',
                     title: 'Not Found',
                     status: 404,
                     detail: `Unknown model "${model}".`,
                     instance: c.req.path,
-                  }),
+                  } as const,
                   404,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -389,14 +386,14 @@ export const deleteDbRowsModelNameRouteHandler: RouteHandler<typeof deleteDbRows
             Match.tag('InvalidInputError', ({ field, message }) =>
               Effect.succeed(
                 c.json(
-                  ValidationProblemSchema.parse({
+                  {
                     type: '/problems/validation-failed',
                     title: 'Validation Failed',
                     status: 422,
                     detail: `${field} ${message}.`,
                     instance: c.req.path,
                     errors: [{ field, message }],
-                  }),
+                  } as const,
                   422,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -405,13 +402,13 @@ export const deleteDbRowsModelNameRouteHandler: RouteHandler<typeof deleteDbRows
             Match.tag('DatabaseUnavailableError', ({ reason }) =>
               Effect.succeed(
                 c.json(
-                  ServiceUnavailableProblemSchema.parse({
+                  {
                     type: '/problems/service-unavailable',
                     title: 'Service Unavailable',
                     status: 503,
                     detail: reason,
                     instance: c.req.path,
-                  }),
+                  } as const,
                   503,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -421,13 +418,13 @@ export const deleteDbRowsModelNameRouteHandler: RouteHandler<typeof deleteDbRows
               Effect.logError('database error', cause).pipe(
                 Effect.as(
                   c.json(
-                    ServiceUnavailableProblemSchema.parse({
+                    {
                       type: '/problems/service-unavailable',
                       title: 'Service Unavailable',
                       status: 503,
                       detail: cause,
                       instance: c.req.path,
-                    }),
+                    } as const,
                     503,
                     { 'Content-Type': 'application/problem+json' },
                   ),
@@ -467,14 +464,14 @@ export const postDbSqlRouteHandler: RouteHandler<typeof postDbSqlRoute> = (c) =>
           Match.tag('InvalidInputError', ({ field, message }) =>
             Effect.succeed(
               c.json(
-                ValidationProblemSchema.parse({
+                {
                   type: '/problems/validation-failed',
                   title: 'Validation Failed',
                   status: 422,
                   detail: `${field} ${message}.`,
                   instance: c.req.path,
                   errors: [{ field, message }],
-                }),
+                } as const,
                 422,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -483,13 +480,13 @@ export const postDbSqlRouteHandler: RouteHandler<typeof postDbSqlRoute> = (c) =>
           Match.tag('DatabaseUnavailableError', ({ reason }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: reason,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -498,14 +495,14 @@ export const postDbSqlRouteHandler: RouteHandler<typeof postDbSqlRoute> = (c) =>
           Match.tag('DatabaseError', ({ cause }) =>
             Effect.succeed(
               c.json(
-                ValidationProblemSchema.parse({
+                {
                   type: '/problems/validation-failed',
                   title: 'Validation Failed',
                   status: 422,
                   detail: cause,
                   instance: c.req.path,
                   errors: [{ field: 'sql', message: cause }],
-                }),
+                } as const,
                 422,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -567,14 +564,14 @@ export const postDbExplainRouteHandler: RouteHandler<typeof postDbExplainRoute> 
           Match.tag('InvalidInputError', ({ field, message }) =>
             Effect.succeed(
               c.json(
-                ValidationProblemSchema.parse({
+                {
                   type: '/problems/validation-failed',
                   title: 'Validation Failed',
                   status: 422,
                   detail: `${field} ${message}.`,
                   instance: c.req.path,
                   errors: [{ field, message }],
-                }),
+                } as const,
                 422,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -583,13 +580,13 @@ export const postDbExplainRouteHandler: RouteHandler<typeof postDbExplainRoute> 
           Match.tag('DatabaseUnavailableError', ({ reason }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: reason,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -598,14 +595,14 @@ export const postDbExplainRouteHandler: RouteHandler<typeof postDbExplainRoute> 
           Match.tag('DatabaseError', ({ cause }) =>
             Effect.succeed(
               c.json(
-                ValidationProblemSchema.parse({
+                {
                   type: '/problems/validation-failed',
                   title: 'Validation Failed',
                   status: 422,
                   detail: cause,
                   instance: c.req.path,
                   errors: [{ field: 'sql', message: cause }],
-                }),
+                } as const,
                 422,
                 { 'Content-Type': 'application/problem+json' },
               ),

@@ -5,16 +5,11 @@ import { getRequestListener } from '@hono/node-server'
 import tailwindcss from '@tailwindcss/vite'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import react from '@vitejs/plugin-react'
-import { Effect } from 'effect'
+import { Effect, Exit, Scope } from 'effect'
 import { defineConfig } from 'vite-plus'
 import type { Plugin } from 'vite-plus'
 
-import { createStudioApi } from './src/studio/server/app.js'
-import {
-  connectDatabase,
-  createProjectClient,
-  createStudioState,
-} from './src/studio/server/services/index.js'
+import { openStudioApp } from './src/studio/server/app.js'
 
 const CLIENT_ROOT = path.resolve(import.meta.dirname, 'src/studio/client')
 const OUT_DIR = path.resolve(import.meta.dirname, 'dist/studio')
@@ -30,35 +25,21 @@ function studioApi(): Plugin {
         process.env.HEKIREKI_SCHEMA ??
           path.resolve(import.meta.dirname, '../../example/schema.prisma'),
       )
-      const state = createStudioState({ schemaPath })
-      const reload = Effect.provide(state.reload(), NodeFileSystem.layer)
-      const snapshot = await Effect.runPromise(reload)
-      const db = await Effect.runPromise(
-        Effect.provide(
-          connectDatabase({
-            explicitUrl: process.env.HEKIREKI_DATABASE_URL ?? null,
-            configUrl: null,
-            configError: null,
-            schemaText: snapshot.files.map((file) => file.content).join('\n'),
-            schemaProvider: snapshot.schema?.provider ?? null,
-            cwd: process.cwd(),
-            schemaDir: path.dirname(schemaPath),
-          }),
-          NodeFileSystem.layer,
-        ),
+      // A scope that lives as long as the dev server: the schema is reloaded on change, and the
+      // database, client and type checker stay open.
+      const scope = await Effect.runPromise(Scope.make())
+      const opened = await Effect.runPromise(
+        // Only /api/ reaches the app: Vite serves the client itself.
+        openStudioApp({
+          schemaPath,
+          staticDir: CLIENT_ROOT,
+          databaseUrl: process.env.HEKIREKI_DATABASE_URL ?? null,
+        }).pipe(Scope.provide(scope), Effect.provide(NodeFileSystem.layer)),
       )
-      const client = createProjectClient({
-        target: db.target,
-        reason: db.status.error,
-        schemaDir: path.dirname(schemaPath),
-        cwd: process.cwd(),
+      server.httpServer?.once('close', () => {
+        void Effect.runPromise(Scope.close(scope, Exit.void))
       })
-      const api = createStudioApi(state, db, client)
-      const listener = getRequestListener((request) => api.fetch(request))
-      server.watcher.add(schemaPath)
-      server.watcher.on('change', (file) => {
-        if (file.endsWith('.prisma')) void Effect.runPromise(reload)
-      })
+      const listener = getRequestListener((request) => opened.app.fetch(request))
       // Mounting on '/api' would strip the prefix the Hono app routes on, so the path is checked here.
       server.middlewares.use((req, res, next) => {
         if (req.url?.startsWith('/api/')) {

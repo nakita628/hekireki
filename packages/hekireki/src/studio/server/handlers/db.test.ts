@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { createStudioApp } from '../app.js'
 import { connectDatabase, createStudioState } from '../services/index.js'
 import type { disconnectedDatabase } from '../services/index.js'
+import { loadSnapshot } from '../usecases/index.js'
 
 const dirs: string[] = []
 const states: ReturnType<typeof disconnectedDatabase>[] = []
@@ -73,7 +74,9 @@ async function setup() {
   writeFileSync(schemaPath, SCHEMA)
   writeFileSync(path.join(dir, '.env'), 'DATABASE_URL="file:./dev.db"\n')
   const state = createStudioState({ schemaPath })
-  const snapshot = await Effect.runPromise(Effect.provide(state.reload(), NodeFileSystem.layer))
+  const snapshot = await Effect.runPromise(
+    Effect.provide(loadSnapshot({ state }), NodeFileSystem.layer),
+  )
   const db = await Effect.runPromise(
     Effect.provide(
       connectDatabase({
@@ -90,7 +93,7 @@ async function setup() {
     ),
   )
   states.push(db)
-  const app = createStudioApp(state, dir, db)
+  const app = createStudioApp({ state, staticDir: dir, db })
   const call = async (url: string, method: string, body?: unknown) => {
     const response = await app.request(
       url,
@@ -124,7 +127,7 @@ describe('data routes over sqlite', () => {
     const schemaPath = path.join(dir, 'schema.prisma')
     writeFileSync(schemaPath, SCHEMA)
     const state = createStudioState({ schemaPath })
-    await Effect.runPromise(Effect.provide(state.reload(), NodeFileSystem.layer))
+    await Effect.runPromise(Effect.provide(loadSnapshot({ state }), NodeFileSystem.layer))
     const db = await Effect.runPromise(
       Effect.provide(
         connectDatabase({
@@ -140,7 +143,7 @@ describe('data routes over sqlite', () => {
       ),
     )
     states.push(db)
-    const response = await createStudioApp(state, dir, db).request('/api/db')
+    const response = await createStudioApp({ state, staticDir: dir, db }).request('/api/db')
     expect({ status: response.status, json: await response.json() }).toStrictEqual({
       status: 200,
       json: {

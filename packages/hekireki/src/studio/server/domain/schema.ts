@@ -175,7 +175,16 @@ const DefaultList = z
   .array(z.union([z.string(), z.number(), z.boolean()]))
   .meta({ description: 'A `@default([...])` list value as DMMF encodes it' })
 
-/** Renders a field default the way it is written in a Prisma schema: `now()`, `"anonymous"`, `VIEWER`. */
+/**
+ * Renders a field default the way it is written in a Prisma schema: `now()`, `"anonymous"`, `VIEWER`.
+ *
+ * @param input.kind - what the field holds; an enum default is a bare member name
+ * @param input.default - the `@default` value, a literal or a function call
+ * @returns the text inside `@default(...)`, or null when the field has none
+ * @example
+ * makeDefaultText({ kind: 'scalar', default: { name: 'now', args: [] } })
+ * // 'now()'
+ */
 export function makeDefaultText(input: z.infer<typeof MakeDefaultTextInput>) {
   const value = input.default
   if (value === undefined) return null
@@ -195,7 +204,15 @@ const MakeNativeTypeAttributeInput = z
   .readonly()
   .meta({ description: 'The nativeType tuple of a DMMF field' })
 
-/** Renders `@db.VarChar(64)` from a DMMF native type tuple. */
+/**
+ * Renders `@db.VarChar(64)` from a DMMF native type tuple.
+ *
+ * @param input.nativeType - the `@db.*` native type name and its arguments
+ * @returns the attribute, or null when the field has no native type
+ * @example
+ * makeNativeTypeAttribute({ nativeType: ['VarChar', ['64']] })
+ * // '@db.VarChar(64)'
+ */
 export function makeNativeTypeAttribute(input: z.infer<typeof MakeNativeTypeAttributeInput>) {
   if (!input.nativeType) return null
   const [name, args] = input.nativeType
@@ -210,7 +227,16 @@ const MakeRelationNameInput = z
   .readonly()
   .meta({ description: 'The two model names of a relation', example: { a: 'User', b: 'Post' } })
 
-/** Prisma's implicit relation name: both model names sorted and joined with `To`. */
+/**
+ * Prisma's implicit relation name: both model names sorted and joined with `To`.
+ *
+ * @param input.a - one model of the relation
+ * @param input.b - the other model of the relation
+ * @returns the relation name Prisma gives it when none is written
+ * @example
+ * makeRelationName({ a: 'User', b: 'Post' })
+ * // 'PostToUser'
+ */
 export function makeRelationName(input: z.infer<typeof MakeRelationNameInput>) {
   return [input.a, input.b].toSorted().join('To')
 }
@@ -223,7 +249,22 @@ const MakeRelationAttributeInput = z
   .readonly()
   .meta({ description: 'A DMMF field and the model it belongs to' })
 
-/** Renders `@relation(...)` for an object field, or null when the field carries no relation attribute. */
+/**
+ * Renders `@relation(...)` for an object field, or null when the field carries no relation attribute.
+ *
+ * @param input.field - the DMMF field, with its relation name, `fields`, `references` and actions
+ * @param input.modelName - the model the field belongs to, to tell a written name from the implicit one
+ * @returns the attribute, or null
+ * @example
+ * makeRelationAttribute({
+ *   modelName: 'Post',
+ *   field: {
+ *     name: 'author', kind: 'object', type: 'User', isList: false, isRequired: true, isId: false, isUnique: false,
+ *     relationName: 'PostToUser', relationFromFields: ['authorId'], relationToFields: ['id'], relationOnDelete: 'Cascade',
+ *   },
+ * })
+ * // '@relation(fields: [authorId], references: [id], onDelete: Cascade)'
+ */
 export function makeRelationAttribute(input: z.infer<typeof MakeRelationAttributeInput>) {
   const { field, modelName } = input
   if (field.kind !== 'object') return null
@@ -255,7 +296,15 @@ const MakeDocumentationInput = z
   .readonly()
   .meta({ description: 'A DMMF doc comment', example: { documentation: 'Primary key\n@z.uuid()' } })
 
-/** Separates hekireki annotations (`@z.uuid()`, `@relation ...`) from the prose of a doc comment. */
+/**
+ * Separates hekireki annotations (`@z.uuid()`, `@relation ...`) from the prose of a doc comment.
+ *
+ * @param input.documentation - the `///` comment above a field or block
+ * @returns the prose (null when there is none) and the annotation lines
+ * @example
+ * makeDocumentation({ documentation: 'Primary key\n@z.uuid()' })
+ * // { documentation: 'Primary key', annotations: ['@z.uuid()'] }
+ */
 export function makeDocumentation(input: z.infer<typeof MakeDocumentationInput>) {
   const lines = (input.documentation ?? '').split('\n')
   const annotations = lines.map((l) => l.trim()).filter((l) => isAnnotationLine(l))
@@ -271,7 +320,17 @@ const MakeIndexAttributeInput = z
   .readonly()
   .meta({ description: 'A DMMF index' })
 
-/** Renders `@@unique([a, b], name: "x", map: "y")` and friends. */
+/**
+ * Renders `@@unique([a, b], name: "x", map: "y")` and friends.
+ *
+ * @param input.index - the DMMF index: its kind, the fields it covers, and its `name:` and `map:`
+ * @returns the block attribute
+ * @example
+ * makeIndexAttribute({
+ *   index: { model: 'User', type: 'unique', isDefinedOnField: false, name: null, dbName: 'user_email_key', fields: [{ name: 'email' }, { name: 'role' }] },
+ * })
+ * // '@@unique([email, role], map: "user_email_key")'
+ */
 export function makeIndexAttribute(input: z.infer<typeof MakeIndexAttributeInput>) {
   const { index } = input
   const keyword = { id: '@@id', unique: '@@unique', normal: '@@index', fulltext: '@@fulltext' }[
@@ -404,9 +463,24 @@ const MakeLocationInput = z
     example: { blocks: [], types: ['model', 'view'], name: 'User' },
   })
 
-/** The file and 1-based line of the first block of one of the kinds with the name, or null. */
+/**
+ * The file and 1-based line of the first block of one of the kinds with the name, or null.
+ *
+ * @param input.blocks - every block of the loaded files, as the language server lists them
+ * @param input.types - the block kinds that count
+ * @param input.name - the block name
+ * @returns where the block is declared, or null when no block matches
+ * @example
+ * makeLocation({
+ *   blocks: [{ type: 'model', name: 'User', file: 'schema.prisma', line: 7 }],
+ *   types: ['model', 'view'],
+ *   name: 'User',
+ * })
+ * // { file: 'schema.prisma', line: 7 }
+ */
 export function makeLocation(input: z.infer<typeof MakeLocationInput>) {
-  const block = input.blocks.find((b) => input.types.includes(b.type) && b.name === input.name)
+  const types = new Set(input.types)
+  const block = input.blocks.find((b) => types.has(b.type) && b.name === input.name)
   return block === undefined ? null : { file: block.file, line: block.line }
 }
 
@@ -513,11 +587,22 @@ const MakeRelationsInput = z
   .readonly()
   .meta({ description: 'The DMMF models of a datamodel' })
 
-/** Foreign-key, `/// @relation` and implicit many-to-many relations in the studio contract. */
+/**
+ * Foreign-key, `/// @relation` and implicit many-to-many relations in the studio contract.
+ *
+ * @param input.models - every model of the datamodel
+ * @returns each relation with its id, name, origin, both ends and its referential actions
+ * @example
+ * // dmmf parsed from `model User { id Int @id  posts Post[] }` and
+ * // `model Post { id Int @id  authorId Int  author User @relation(fields: [authorId], references: [id], onDelete: Cascade) }`
+ * makeRelations({ models: dmmf.datamodel.models }).map((relation) => [relation.id, relation.name, relation.onDelete])
+ * // [['User.id->Post.authorId', 'PostToUser', 'Cascade']]
+ */
 export function makeRelations(input: z.infer<typeof MakeRelationsInput>) {
   const { models } = input
+  const byName = new Map(models.map((m) => [m.name, m]))
   return erRelations(models).map((relation) => {
-    const child = models.find((m) => m.name === relation.to.model)
+    const child = byName.get(relation.to.model)
     const fkField = child?.fields.find(
       (f) =>
         f.kind === 'object' &&
@@ -601,7 +686,20 @@ const MakeSchemaInput = z
       'A parsed DMMF document, the files it came from, the datasource provider and the outlined blocks',
   })
 
-/** The whole studio schema contract from a DMMF document. */
+/**
+ * The whole studio schema contract from a DMMF document.
+ *
+ * @param input.dmmf - the document Prisma parsed from the files: its models, enums and indexes
+ * @param input.files - the loaded schema files
+ * @param input.provider - the provider of the first datasource, as Prisma read it
+ * @param input.blocks - every block of the loaded files, as the language server lists them
+ * @returns the files, the provider, the models and enums with their attributes rendered, and the relations
+ * @example
+ * // dmmf parsed from `model User { id Int @id  posts Post[] }` and
+ * // `model Post { id Int @id  authorId Int  author User @relation(fields: [authorId], references: [id], onDelete: Cascade) }`
+ * makeSchema({ dmmf, files, provider: 'sqlite', blocks: [] }).models[1].fields[2].attributes
+ * // ['@relation(fields: [authorId], references: [id], onDelete: Cascade)']
+ */
 export function makeSchema(input: z.infer<typeof MakeSchemaInput>) {
   const { dmmf, files, provider, blocks } = input
   const { models, enums, indexes } = dmmf.datamodel
@@ -752,6 +850,21 @@ function columnDataType(
  * The tables the SQL analysis runs against, read off the Prisma models: `@@map` / `@map` give
  * the names the database knows, relation fields are left out (they are not columns), and a
  * scalar's column type is its `@db.*` attribute or the type Prisma migrates it to.
+ *
+ * @param input.dialect - the dialect of the connected database, or null while none is connected
+ * @param input.provider - the datasource provider of the schema, the fallback for the dialect
+ * @param input.models - the models of the schema, relations included
+ * @returns the dialect the analysis reads types for, and the tables with their columns
+ * @example
+ * makeAnalysisSchema({
+ *   dialect: null,
+ *   provider: 'postgresql',
+ *   models: [{ name: 'User', dbName: 'users', fields: [
+ *     { name: 'tags', dbName: null, kind: 'scalar', type: 'String', isList: true, isRequired: true, nativeType: null },
+ *     { name: 'posts', dbName: null, kind: 'object', type: 'Post', isList: true, isRequired: true, nativeType: null },
+ *   ] }],
+ * })
+ * // { dialect: 'postgresql', tables: [{ name: 'users', columns: [{ name: 'tags', dataType: 'text[]', nullable: false }] }] }
  */
 export function makeAnalysisSchema(input: z.infer<typeof MakeAnalysisSchemaInput>) {
   const dialect = analysisDialect(input)

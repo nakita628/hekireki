@@ -1,20 +1,10 @@
-import path from 'node:path'
-
 import { serve } from '@hono/node-server'
 import type { ServerType } from '@hono/node-server'
 import { Effect } from 'effect'
 
-import { isDirectory } from '../../file/index.js'
-import { resolveMigrationsDir } from '../../migrate/adapter/migrations-dir.js'
-import { readConfigUrl } from '../../seed/load-config.js'
-import { withTypeScriptImports } from '../../seed/resolve.js'
-import { createStudioApp } from './app.js'
-import { MIGRATIONS_POLL_MS, RELOAD_DEBOUNCE_MS, STUDIO_HOSTNAME } from './constants/index.js'
-import { SchemaLoadError, ServerListenError } from './errors/index.js'
-import * as ClientService from './services/index.js'
-import * as DatabaseService from './services/index.js'
-import * as StateService from './services/index.js'
-import * as WatchService from './services/index.js'
+import { openStudioApp } from './app.js'
+import { STUDIO_HOSTNAME } from './constants/index.js'
+import { ServerListenError } from './errors/index.js'
 
 /** Listens on loopback until the scope closes; a port already in use fails with ServerListenError. */
 function listen(input: {
@@ -47,7 +37,7 @@ function listen(input: {
   )
 }
 
-/** Listens, then loads the schema, connects the database and watches the schema directory; everything is released with the scope. */
+/** Listens, then opens the schema and what Studio serves beside it; everything is released with the scope. */
 export function startStudioServer(options: {
   readonly schemaPath: string
   readonly port: number
@@ -55,67 +45,16 @@ export function startStudioServer(options: {
   readonly databaseUrl: string | null
 }) {
   return Effect.gen(function* () {
-    const directory = yield* isDirectory(options.schemaPath).pipe(
-      Effect.mapError(
-        (error) =>
-          new SchemaLoadError({
-            message: `Schema not found: ${options.schemaPath}\n   ${error.message}`,
-          }),
-      ),
-    )
     // The port is taken before anything heavy is loaded, so a port in use is said at once rather
     // than after the schema, the language server and the database; a request that arrives in
     // between waits for the app.
-    const app = Promise.withResolvers<ReturnType<typeof createStudioApp>>()
+    const app = Promise.withResolvers<Effect.Success<ReturnType<typeof openStudioApp>>['app']>()
     const server = yield* listen({
       fetch: (request) => app.promise.then((ready) => ready.fetch(request)),
       port: options.port,
     })
-    const state = StateService.createStudioState({ schemaPath: options.schemaPath })
-    const snapshot = yield* state.reload()
-    const watchDir = directory ? options.schemaPath : path.dirname(options.schemaPath)
-    // The `url` of hekireki.config.ts, so the database `hekireki seed` fills is the one Studio
-    // opens. A config that does not load is not fatal to Studio: it shows the schema and says why.
-    const config = yield* withTypeScriptImports(readConfigUrl(process.cwd())).pipe(
-      Effect.match({
-        onFailure: (error) => ({ url: null, error: error.message }),
-        onSuccess: (url) => ({ url, error: null }),
-      }),
-    )
-    const db = yield* DatabaseService.connectDatabase({
-      explicitUrl: options.databaseUrl,
-      configUrl: config.url,
-      configError: config.error,
-      schemaProvider: snapshot.schema?.provider ?? null,
-      schemaText: snapshot.files.map((file) => file.content).join('\n'),
-      cwd: process.cwd(),
-      schemaDir: watchDir,
-    })
-    yield* Effect.addFinalizer(() => db.close)
-    const client = ClientService.createProjectClient({
-      target: db.target,
-      reason: db.status.error,
-      schemaDir: watchDir,
-      cwd: process.cwd(),
-    })
-    yield* Effect.addFinalizer(() => client.close)
-    yield* WatchService.watchSchema({
-      state,
-      dir: watchDir,
-      recursive: directory,
-      debounceMs: RELOAD_DEBOUNCE_MS,
-    })
-    // The migrations Prisma Migrate reads, so the Migrate page follows the files as they change.
-    const migrationsDir = yield* resolveMigrationsDir({
-      cwd: process.cwd(),
-      schemaDir: path.resolve(watchDir),
-    })
-    yield* WatchService.watchMigrations({
-      state,
-      dir: migrationsDir,
-      intervalMs: MIGRATIONS_POLL_MS,
-    })
-    app.resolve(createStudioApp(state, options.staticDir, db, client))
-    return { snapshot, database: db.status, server }
+    const opened = yield* openStudioApp(options)
+    app.resolve(opened.app)
+    return { snapshot: opened.snapshot, database: opened.database, server }
   })
 }

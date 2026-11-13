@@ -1,17 +1,6 @@
 // custom.js is an oxlint JS plugin (the alpha ESLint-compatible API), so it is written in
 // plain JS. Types are only needed for the parts the verification suite touches.
 
-/** File-scope check behind `custom/no-usecase-to-usecase` and `custom/usecase-gen-straight-line`. */
-export declare function isUseCaseModulePath(filename: string): boolean
-
-/** File-scope check behind `custom/no-null-coercion-map`. */
-export declare function isServiceModulePath(filename: string): boolean
-
-/** Import-target check behind `custom/no-usecase-to-usecase`. */
-export declare function isUseCaseSpecifier(source: string): boolean
-
-/** Whether a path is a test file (exempt from the structural rules). */
-
 /** Import-target check behind `custom/layer-namespace-import`: the layer module an import points at. */
 export declare function layerModuleOf(
   filename: string,
@@ -34,9 +23,6 @@ declare const plugin: {
 }
 
 export default plugin
-
-/** Behind `custom/handler-doc`: the TSDoc block right above the statement starting at `start`, or null. */
-export declare function docCommentBefore(text: string, start: number): string | null
 
 /** Behind `custom/handler-doc`: the use cases a handler calls and the `Match.tag` names it answers. */
 export declare function handlerDocNames(body: string): readonly string[]

@@ -36,7 +36,9 @@ enum Role {
 `
 
 function docsOf(content: string) {
-  const { dmmf } = Effect.runSync(parseSchemaFiles({ files: [{ path: 'schema.prisma', content }] }))
+  const { dmmf } = Effect.runSync(
+    parseSchemaFiles({ files: [{ path: 'schema.prisma', content }], diagnostics: [] }),
+  )
   return makeDocs({ dmmf })
 }
 

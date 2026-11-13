@@ -1,14 +1,114 @@
+import { createRequire } from 'node:module'
 import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 import { Effect, Semaphore } from 'effect'
+import type ts from 'typescript-5'
 import * as z from 'zod'
 
-import { parseSchema } from '../../../schema/index.js'
+import { parseSchema, readConfig } from '../../../schema/index.js'
 import type { SchemaFile } from '../../../schema/index.js'
 import { clientSource } from '../../../seed/discover.js'
 import { ClientUnavailableError } from '../errors/index.js'
-import * as TypescriptHostService from './typescript-host.js'
-import * as TypescriptLoadService from './typescript-load.js'
+
+const NO_SERVICE =
+  'Completion against the client types needs TypeScript 5 in the project (typescript@7 ships no language service API).\n   Install it with `npm install -D typescript@5`; the editor still completes model and field names from the schema.'
+
+const TypeScriptModule = z
+  .custom<typeof ts>(
+    (value) =>
+      typeof value === 'object' &&
+      value !== null &&
+      typeof Reflect.get(value, 'createLanguageService') === 'function' &&
+      typeof Reflect.get(value, 'version') === 'string',
+  )
+  .meta({ description: 'The typescript package, with the language service API of the 5.x line.' })
+
+const ModuleNamespace = z
+  .object({
+    default: z.unknown().meta({ description: 'The default export, when the package is CommonJS.' }),
+  })
+  .meta({ description: 'An imported module namespace' })
+
+/** The project's own `typescript`: Studio ships none, and the types are checked the way the project checks them. */
+function loadTypeScript(cwd: string) {
+  return Effect.gen(function* () {
+    const namespace = yield* Effect.tryPromise({
+      try: async (): Promise<unknown> => {
+        const resolved = createRequire(path.resolve(cwd, 'package.json')).resolve('typescript')
+        const loaded: unknown = await import(pathToFileURL(resolved).href)
+        const result = ModuleNamespace.safeParse(loaded)
+        return result.success ? result.data.default : loaded
+      },
+      catch: (error) =>
+        new ClientUnavailableError({
+          reason: `Cannot load "typescript" from ${cwd}: ${error instanceof Error ? error.message : String(error)}\n   Install it with \`npm install -D typescript@5\` so the editor can complete against the client's types.`,
+        }),
+    })
+    const result = TypeScriptModule.safeParse(namespace)
+    if (!result.success) return yield* new ClientUnavailableError({ reason: NO_SERVICE })
+    return result.data
+  })
+}
+
+/** The name the query is checked under, beside the generated client so `./client` resolves. */
+const QUERY_FILE = '__hekireki_studio_query__.ts'
+
+/**
+ * A language service over one query file placed in `dir`, importing `PrismaClient` from
+ * `entry`; every other file is read from disk as the project has it. The query text lives in
+ * the returned `cell`, whose version tells the service when it changed.
+ */
+function makeChecker(input: {
+  readonly ts: typeof ts
+  readonly dir: string
+  readonly entry: string
+  readonly cwd: string
+}) {
+  const { ts: typescript } = input
+  const file = path.join(input.dir, QUERY_FILE)
+  // The lines in front of the query: `prisma` is the client, and the import makes the file a
+  // module, so `await` at the top level is what it is in the application too.
+  const preamble = `import type { PrismaClient } from '${input.entry}'\ndeclare const prisma: PrismaClient\n`
+  // The one document the service edits; everything else is read from disk as the project has it.
+  const cell = { text: '', version: 0 }
+  const options = {
+    target: typescript.ScriptTarget.ESNext,
+    module: typescript.ModuleKind.ESNext,
+    moduleResolution: typescript.ModuleResolutionKind.Bundler,
+    lib: ['lib.esnext.d.ts'],
+    types: [],
+    strict: true,
+    noEmit: true,
+    skipLibCheck: true,
+    allowImportingTsExtensions: true,
+  }
+  const host: ts.LanguageServiceHost = {
+    getScriptFileNames: () => [file],
+    // A file on disk is versioned by its mtime, so a `prisma generate` is seen.
+    getScriptVersion: (name) =>
+      name === file
+        ? String(cell.version)
+        : String(typescript.sys.getModifiedTime?.(name)?.getTime() ?? 0),
+    getScriptSnapshot: (name) => {
+      if (name === file) return typescript.ScriptSnapshot.fromString(`${preamble}${cell.text}`)
+      const text = typescript.sys.readFile(name)
+      return text === undefined ? undefined : typescript.ScriptSnapshot.fromString(text)
+    },
+    getCurrentDirectory: () => input.cwd,
+    getCompilationSettings: () => options,
+    getDefaultLibFileName: (settings) => typescript.getDefaultLibFilePath(settings),
+    fileExists: (name) => typescript.sys.fileExists(name),
+    readFile: (name, encoding) => typescript.sys.readFile(name, encoding),
+    readDirectory: (dir, extensions, exclude, include, depth) =>
+      typescript.sys.readDirectory(dir, extensions, exclude, include, depth),
+    directoryExists: (dir) => typescript.sys.directoryExists(dir),
+    getDirectories: (dir) => typescript.sys.getDirectories(dir),
+    realpath: (name) => typescript.sys.realpath?.(name) ?? name,
+  }
+  const service = typescript.createLanguageService(host, typescript.createDocumentRegistry())
+  return { ts: typescript, service, file, preamble, cell }
+}
 
 const CreateTypeCheckerInput = z
   .object({
@@ -30,44 +130,65 @@ const CreateTypeCheckerInput = z
  * declares `prisma` as its `PrismaClient`. Module resolution, the tsconfig-free compiler
  * options aside, is TypeScript's own over the project's files, so `prisma generate` is picked
  * up by the next request. The query text is swapped in before every question.
+ *
+ * ```mermaid
+ * flowchart LR
+ *   in[schemaDir + cwd + schema files] --> parse[parse the schema, find the client's output]
+ *   parse --> ts[(the project's typescript 5)] --> service[language service over a query file beside client.ts]
+ *   parse -->|no client generator / no client.ts| fail[ClientUnavailableError]
+ *   ts -->|not installed / no language service| fail
+ *   service --> out[status / completions / details / hover / signatures / diagnostics]
+ * ```
+ *
+ * @param input.schemaDir - where the generator output resolves from
+ * @param input.cwd - where typescript and `@prisma/client` are resolved from
+ * @returns `status`, `complete`, `detail`, `hover`, `signature` and `check` over the query text
  */
 export function createTypeChecker(input: z.infer<typeof CreateTypeCheckerInput>) {
   const lock = Semaphore.makeUnsafe(1)
   const holder: {
     loaded: {
       readonly files: readonly SchemaFile[]
-      readonly checker: ReturnType<typeof TypescriptHostService.makeChecker>
+      readonly dir: string
+      readonly entry: string
+      readonly checker: ReturnType<typeof makeChecker>
     } | null
   } = { loaded: null }
 
   function load(files: readonly SchemaFile[]) {
     return Effect.gen(function* () {
       if (holder.loaded?.files === files) return holder.loaded.checker
-      const schema = yield* parseSchema(files).pipe(
-        Effect.mapError((error) => new ClientUnavailableError({ reason: error.message })),
-      )
-      const { source, reason } = clientSource(schema.generators)
+      // The generator block alone says where the client is; the whole schema is parsed only when
+      // a service is built over it.
+      const { generators } = yield* readConfig(files)
+      const { source, reason } = clientSource(generators)
       if (source === null) {
         return yield* new ClientUnavailableError({
           reason: `Prisma Client not found: ${reason ?? 'unknown'}.\n   Add a \`prisma-client\` generator to the schema and run \`prisma generate\`.`,
         })
       }
-      const typescript = yield* TypescriptLoadService.loadTypeScript(input.cwd)
       const legacy = source === '@prisma/client'
       const dir = legacy ? input.cwd : path.resolve(input.schemaDir, source)
+      const entry = legacy ? source : './client'
+      // A reload that leaves the client where it was keeps the service and everything it parsed:
+      // the generated files are versioned by mtime, so `prisma generate` is still seen.
+      if (holder.loaded?.dir === dir && holder.loaded.entry === entry) {
+        // oxlint-disable-next-line custom/no-mutation -- the same service, now for these files
+        holder.loaded = { ...holder.loaded, files }
+        return holder.loaded.checker
+      }
+      yield* parseSchema(files).pipe(
+        Effect.mapError((error) => new ClientUnavailableError({ reason: error.message })),
+      )
+      const typescript = yield* loadTypeScript(input.cwd)
       if (!legacy && !typescript.sys.fileExists(path.join(dir, 'client.ts'))) {
         return yield* new ClientUnavailableError({
           reason: `No client.ts in ${dir}: run \`prisma generate\` so the client is written there.`,
         })
       }
-      const checker = TypescriptHostService.makeChecker({
-        ts: typescript,
-        dir,
-        entry: legacy ? source : './client',
-        cwd: input.cwd,
-      })
-      // oxlint-disable-next-line custom/no-mutation -- the service is built once per schema snapshot and kept
-      holder.loaded = { files, checker }
+      const checker = makeChecker({ ts: typescript, dir, entry, cwd: input.cwd })
+      // oxlint-disable-next-line custom/no-mutation -- the service is built once per client location and kept
+      holder.loaded = { files, dir, entry, checker }
       return checker
     }).pipe(Semaphore.withPermit(lock))
   }
@@ -82,7 +203,7 @@ export function createTypeChecker(input: z.infer<typeof CreateTypeCheckerInput>)
     text: string,
     offset: number,
     question: (
-      context: ReturnType<typeof TypescriptHostService.makeChecker> & {
+      context: ReturnType<typeof makeChecker> & {
         readonly base: number
         readonly position: number
       },

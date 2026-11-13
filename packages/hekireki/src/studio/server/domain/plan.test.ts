@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import { makeMysqlPlan, makePostgresPlan, makeSqlitePlan } from './plan.js'
+import { makeMysqlPlan, makePlan, makePostgresPlan, makeSqlitePlan } from './plan.js'
 
 describe('makeSqlitePlan', () => {
   it('flattens EXPLAIN QUERY PLAN rows with their parents and indents the raw text', () => {
@@ -150,5 +150,27 @@ describe('makeMysqlPlan', () => {
         rows: 4,
       },
     ])
+  })
+})
+
+describe('makePlan', () => {
+  it('reads each dialect where it puts the plan', () => {
+    expect(
+      makePlan({ dialect: 'sqlite', rows: [{ id: 2, parent: 0, detail: 'SCAN users' }] }).nodes,
+    ).toStrictEqual([
+      { id: '2', parent: null, label: 'SCAN users', detail: null, cost: null, rows: null },
+    ])
+    const document = [{ Plan: { 'Node Type': 'Seq Scan', 'Relation Name': 'users' } }]
+    expect(makePlan({ dialect: 'postgresql', rows: [{ 'QUERY PLAN': document }] })).toStrictEqual(
+      makePostgresPlan({ document }),
+    )
+    const text = '{"query_block":{"table":{"table_name":"users","access_type":"ALL"}}}'
+    expect(makePlan({ dialect: 'mysql', rows: [{ EXPLAIN: text }] })).toStrictEqual(
+      makeMysqlPlan({ document: text }),
+    )
+  })
+
+  it('is empty when the statement returned nothing', () => {
+    expect(makePlan({ dialect: 'postgresql', rows: [] }).nodes).toStrictEqual([])
   })
 })

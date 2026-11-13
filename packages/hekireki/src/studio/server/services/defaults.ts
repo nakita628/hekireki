@@ -81,6 +81,22 @@ const GenerateDefaultsInput = z
  * The values Prisma Client would have generated for the fields, by field name: ids from the
  * packages the drizzle generator imports, so the row carries what the generated client code would
  * have produced, and the clock's time as an ISO string for `now()` and `@updatedAt`.
+ *
+ * ```mermaid
+ * flowchart LR
+ *   fields[fields + generator kind] --> clock[Clock] --> pick{kind}
+ *   pick -->|uuid| uuid["node:crypto randomUUID / uuid v7"]
+ *   pick -->|cuid| cuid["cuid / @paralleldrive/cuid2"]
+ *   pick -->|nanoid| nanoid[nanoid]
+ *   pick -->|ulid| ulid[ulidx]
+ *   pick -->|now| iso[ISO string of the clock's time]
+ *   pick -->|literal| literal[the value itself]
+ *   uuid & cuid & nanoid & ulid & iso & literal --> out[value by field name]
+ * ```
+ *
+ * @param input.fields - the fields to fill, as `makeGeneratedFields` lists them: each one's Prisma
+ *   field name and what Prisma Client would generate for it
+ * @returns the generated value of each field, by field name; it does not fail
  */
 export function generateDefaults(input: z.infer<typeof GenerateDefaultsInput>) {
   return Effect.gen(function* () {

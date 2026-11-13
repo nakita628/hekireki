@@ -121,30 +121,20 @@ describe('readSchemaFiles', () => {
 })
 
 describe('parseSchemaFiles', () => {
-  it('parses multiple files as one datamodel', async () => {
+  it('parses multiple files as one datamodel, with the provider', async () => {
     const result = await run(
       parseSchemaFiles({
         files: [
-          { path: 'post.prisma', content: POST },
+          { path: 'post.prisma', content: `datasource db {\n  provider = "mysql"\n}\n\n${POST}` },
           { path: 'user.prisma', content: USER },
         ],
+        diagnostics: [],
       }),
     )
     expect(result.ok).toBe(true)
     if (result.ok) {
-      expect(result.value.schema.models.map((m) => m.name)).toStrictEqual(['Post', 'User'])
       expect(result.value.dmmf.datamodel.models.map((m) => m.name)).toStrictEqual(['Post', 'User'])
-      expect(result.value.schema.relations).toStrictEqual([
-        {
-          id: 'User.id->Post.authorId',
-          name: 'PostToUser',
-          origin: 'inferred',
-          from: { model: 'User', field: 'id', cardinality: 'one' },
-          to: { model: 'Post', field: 'authorId', cardinality: 'zero-many' },
-          onDelete: null,
-          onUpdate: null,
-        },
-      ])
+      expect(result.value.provider).toBe('mysql')
     }
   })
 
@@ -153,6 +143,7 @@ describe('parseSchemaFiles', () => {
       await run(
         parseSchemaFiles({
           files: [{ path: 'prisma/schema.prisma', content: 'model A {\n  id Int @id\n  b B\n}\n' }],
+          diagnostics: [],
         }),
       ),
     ).toStrictEqual({
@@ -161,26 +152,24 @@ describe('parseSchemaFiles', () => {
         'error: Type "B" is neither a built-in type, nor refers to another model, composite type, or enum.\n  -->  prisma/schema.prisma:3\n   | \n 2 |   id Int @id\n 3 |   b B\n   | \n\nValidation Error Count: 1',
     })
   })
-})
 
-describe('parseSchemaFiles across files', () => {
-  it('reads the provider, the block locations and the diagnostics off the engine', async () => {
-    const files = [
-      { path: 'a.prisma', content: `datasource db {\n  provider = "mysql"\n}\n\n${USER}` },
-      { path: 'b.prisma', content: `${POST}\nenum Role {\n  ADMIN\n}\n` },
+  it('hands the diagnostics it was given on with the failure', async () => {
+    const diagnostics = [
+      {
+        path: 'schema.prisma',
+        range: { start: { line: 2, character: 4 }, end: { line: 2, character: 5 } },
+        message: 'Type "B" is neither a built-in type.',
+        severity: 'error' as const,
+      },
     ]
-    const result = await run(parseSchemaFiles({ files }))
-    expect(result.ok).toBe(true)
-    if (result.ok) {
-      expect(result.value.schema.provider).toBe('mysql')
-      expect(result.value.schema.models.map((m) => [m.name, m.location])).toStrictEqual([
-        ['User', { file: 'a.prisma', line: 5 }],
-        ['Post', { file: 'b.prisma', line: 1 }],
-      ])
-      expect(result.value.schema.enums.map((e) => e.location)).toStrictEqual([
-        { file: 'b.prisma', line: 7 },
-      ])
-      expect(result.value.diagnostics).toStrictEqual([])
-    }
+    const failed = await Effect.runPromise(
+      Effect.flip(
+        parseSchemaFiles({
+          files: [{ path: 'schema.prisma', content: 'model A {\n  id Int @id\n  b B\n}\n' }],
+          diagnostics,
+        }),
+      ),
+    )
+    expect(failed.diagnostics).toStrictEqual(diagnostics)
   })
 })

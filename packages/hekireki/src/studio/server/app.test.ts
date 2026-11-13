@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { createStudioApp, missingAssetsMessage } from './app.js'
 import { FORBIDDEN_HOST_MESSAGE } from './constants/index.js'
 import { disconnectedDatabase, createStudioState } from './services/index.js'
+import { loadSnapshot } from './usecases/index.js'
 
 const dirs: string[] = []
 
@@ -25,7 +26,7 @@ const SCHEMA = `model User {
 `
 
 const reloadState = (state: ReturnType<typeof createStudioState>) =>
-  Effect.runPromise(Effect.provide(state.reload(), NodeFileSystem.layer))
+  Effect.runPromise(Effect.provide(loadSnapshot({ state }), NodeFileSystem.layer))
 
 async function setup(options: { readonly schema?: string; readonly withIndex?: boolean } = {}) {
   const dir = mkdtempSync(path.join(tmpdir(), 'hekireki-studio-'))
@@ -38,11 +39,11 @@ async function setup(options: { readonly schema?: string; readonly withIndex?: b
   }
   const state = createStudioState({ schemaPath })
   await reloadState(state)
-  const app = createStudioApp(
+  const app = createStudioApp({
     state,
-    (options.withIndex ?? true) ? dir : staticDir,
-    disconnectedDatabase('No database URL found.'),
-  )
+    staticDir: (options.withIndex ?? true) ? dir : staticDir,
+    db: disconnectedDatabase({ reason: 'No database URL found.' }),
+  })
   return { app, state, schemaPath, staticDir }
 }
 

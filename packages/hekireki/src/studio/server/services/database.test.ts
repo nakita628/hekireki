@@ -75,7 +75,7 @@ describe('disconnectedDatabase', () => {
   })
 
   it('carries the reason it was given into both the status and the driver failure', async () => {
-    const db = disconnectedDatabase('SQLite file is unreadable.')
+    const db = disconnectedDatabase({ reason: 'SQLite file is unreadable.' })
     expect(db.status.error).toBe('SQLite file is unreadable.')
     const failure = await Effect.runPromise(Effect.flip(db.driver))
     expect(failure.reason).toBe('SQLite file is unreadable.')
@@ -119,7 +119,7 @@ describe('connectDatabase', () => {
       schemaDir: dir,
     })
     expect(db.target).toStrictEqual({ url: 'file:./dev.db?connection_limit=1', dialect: 'sqlite' })
-    expect(disconnectedDatabase('none').target).toBeNull()
+    expect(disconnectedDatabase({ reason: 'none' }).target).toBeNull()
     const refused = await connect({ explicitUrl: 'redis://localhost' })
     expect(refused.target).toBeNull()
   })
@@ -310,18 +310,14 @@ describe('the sqlite driver', () => {
     })
   })
 
-  it("passes the database's message on, with what to do when the table is not there", async () => {
+  // What to do about it is the database use case's to say (handlers/db.test.ts reads it).
+  it("passes the database's own message on", async () => {
     const driver = await driverOf(tmp())
     const missing = await Effect.runPromise(
       Effect.flip(driver.query({ sql: 'SELECT * FROM "missing"', params: [] })),
     )
     expect(missing).toBeInstanceOf(DatabaseError)
-    expect(missing.cause).toContain('no such table: missing')
-    expect(missing.cause).toContain('run `prisma db push`')
-    const explained = await Effect.runPromise(
-      Effect.flip(driver.explain({ sql: 'SELECT * FROM "missing"', params: [] })),
-    )
-    expect(explained.cause).toContain('no such table: missing')
+    expect(missing.cause).toBe('no such table: missing')
     const syntax = await Effect.runPromise(
       Effect.flip(driver.query({ sql: 'SELECT FROM "User"', params: [] })),
     )

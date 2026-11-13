@@ -31,7 +31,17 @@ const MakeSqlitePlanInput = z
   .readonly()
   .meta({ description: 'The output of SQLite EXPLAIN QUERY PLAN' })
 
-/** SQLite's `EXPLAIN QUERY PLAN` rows: `id`, `parent` (0 for a root) and `detail`. */
+/**
+ * SQLite's `EXPLAIN QUERY PLAN` rows: `id`, `parent` (0 for a root) and `detail`.
+ *
+ * @param input.rows - the rows EXPLAIN QUERY PLAN returned; a row without the three is skipped
+ * @returns the steps, and the plan as text indented by depth
+ * @example
+ * makeSqlitePlan({
+ *   rows: [{ id: 2, parent: 0, detail: 'SCAN users' }, { id: 5, parent: 2, detail: 'USE TEMP B-TREE' }],
+ * }).raw
+ * // 'SCAN users\n  USE TEMP B-TREE'
+ */
 export function makeSqlitePlan(input: z.infer<typeof MakeSqlitePlanInput>) {
   const rows = input.rows.flatMap((row) => {
     const result = SqliteRow.safeParse(row)
@@ -134,7 +144,17 @@ const MakePostgresPlanInput = z
   .readonly()
   .meta({ description: 'The output of PostgreSQL EXPLAIN (FORMAT JSON)' })
 
-/** PostgreSQL's `EXPLAIN (FORMAT JSON)`: a tree of `Plan` objects, flattened parents-first. */
+/**
+ * PostgreSQL's `EXPLAIN (FORMAT JSON)`: a tree of `Plan` objects, flattened parents-first.
+ *
+ * @param input.document - the JSON document of the QUERY PLAN column, parsed or as text
+ * @returns the steps, parents first, and the document as indented JSON
+ * @example
+ * makePostgresPlan({
+ *   document: [{ Plan: { 'Node Type': 'Seq Scan', 'Relation Name': 'users', 'Total Cost': 1.5, 'Plan Rows': 10 } }],
+ * }).nodes
+ * // [{ id: '1', parent: null, label: 'Seq Scan on users', detail: null, cost: 1.5, rows: 10 }]
+ */
 export function makePostgresPlan(input: z.infer<typeof MakePostgresPlanInput>) {
   const document = typeof input.document === 'string' ? parseJson(input.document) : input.document
   const result = PostgresRoot.safeParse(document)
@@ -302,9 +322,59 @@ const MakeMysqlPlanInput = z
   .readonly()
   .meta({ description: 'The output of MySQL EXPLAIN FORMAT=JSON' })
 
-/** MySQL's `EXPLAIN FORMAT=JSON`: nested operation objects, flattened parents-first. */
+/**
+ * MySQL's `EXPLAIN FORMAT=JSON`: nested operation objects, flattened parents-first.
+ *
+ * @param input.document - the JSON document of the EXPLAIN column, parsed or as text
+ * @returns the steps, parents first, and the document as indented JSON
+ * @example
+ * makeMysqlPlan({
+ *   document: { query_block: { select_id: 1, table: { table_name: 'users', access_type: 'ALL', rows_examined_per_scan: 3 } } },
+ * }).nodes.map((node) => [node.id, node.label, node.rows])
+ * // [['1', 'query block #1', null], ['1.1', 'ALL users', 3]]
+ */
 export function makeMysqlPlan(input: z.infer<typeof MakeMysqlPlanInput>) {
   const document = typeof input.document === 'string' ? parseJson(input.document) : input.document
   const nodes = childrenOfMysql(document, null, '')
   return { nodes, raw: JSON.stringify(document, null, 2) }
+}
+
+const MakePlanInput = z
+  .object({
+    dialect: z
+      .enum(['postgresql', 'mysql', 'sqlite'])
+      .meta({ description: 'The database that printed the plan.', example: 'sqlite' }),
+    rows: z
+      .array(z.record(z.string(), z.unknown()))
+      .readonly()
+      .meta({ description: 'The rows the EXPLAIN statement returned.' }),
+  })
+  .readonly()
+  .meta({
+    description: 'What an EXPLAIN statement returned, and from which database',
+    example: { dialect: 'sqlite', rows: [{ id: 2, parent: 0, detail: 'SCAN users' }] },
+  })
+
+/**
+ * The plan in an EXPLAIN statement's rows, each dialect read where it puts it: SQLite's rows are
+ * the plan, PostgreSQL puts the document in `QUERY PLAN` and MySQL in `EXPLAIN`.
+ *
+ * @param input.dialect - the database that printed the plan
+ * @param input.rows - the rows of `makeExplainStatement`'s statement
+ * @returns the steps, parents first, and the plan as the database printed it
+ * @example
+ * makePlan({ dialect: 'sqlite', rows: [{ id: 2, parent: 0, detail: 'SCAN users' }] }).nodes
+ * // [{ id: '2', parent: null, label: 'SCAN users', detail: null, cost: null, rows: null }]
+ */
+export function makePlan(input: z.infer<typeof MakePlanInput>) {
+  switch (input.dialect) {
+    case 'sqlite':
+      return makeSqlitePlan({ rows: input.rows })
+    case 'postgresql':
+      return makePostgresPlan({ document: input.rows[0]?.['QUERY PLAN'] ?? null })
+    case 'mysql':
+      return makeMysqlPlan({ document: input.rows[0]?.EXPLAIN ?? null })
+    default:
+      return input.dialect satisfies never
+  }
 }

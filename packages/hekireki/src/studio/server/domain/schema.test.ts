@@ -56,7 +56,9 @@ enum Role {
 `
 
 function parse(content: string) {
-  return Effect.runSync(parseSchemaFiles({ files: [{ path: 'schema.prisma', content }] }))
+  return Effect.runSync(
+    parseSchemaFiles({ files: [{ path: 'schema.prisma', content }], diagnostics: [] }),
+  )
 }
 
 const field = (

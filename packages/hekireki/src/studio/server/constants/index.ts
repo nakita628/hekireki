@@ -9,9 +9,6 @@ export const FORBIDDEN_HOST_MESSAGE =
 /** Editors fire several events per save; the schema is re-parsed once, after the burst. */
 export const RELOAD_DEBOUNCE_MS = 80
 
-/** How often the schema event stream compares the snapshot timestamp. */
-export const SSE_POLL_MS = 300
-
 /** Keep-alive interval of the schema event stream. */
 export const SSE_PING_MS = 15_000
 

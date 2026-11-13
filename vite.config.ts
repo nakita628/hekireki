@@ -41,7 +41,6 @@ export default defineConfig({
       'packages/hekireki/src/studio/client/hooks/index.ts',
       'packages/hekireki/src/studio/client/routeTree.gen.ts',
       'packages/hekireki/src/studio/server/handlers/index.ts',
-      'packages/hekireki/src/studio/server/index.ts',
       'packages/hekireki/src/studio/server/routes/index.ts',
     ],
   },

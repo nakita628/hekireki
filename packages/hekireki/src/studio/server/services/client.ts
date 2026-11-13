@@ -3,10 +3,35 @@ import { stripVTControlCharacters } from 'node:util'
 import { Effect, Semaphore } from 'effect'
 import * as z from 'zod'
 
+import { parseSchema } from '../../../schema/index.js'
 import type { SchemaFile } from '../../../schema/index.js'
-import { ClientQueryError } from '../errors/index.js'
-import * as ClientLoadService from './client-load.js'
-import * as TypescriptService from './typescript.js'
+import { ADAPTERS, discoverClient } from '../../../seed/discover.js'
+import { withTypeScriptImports } from '../../../seed/resolve.js'
+import { ClientQueryError, ClientUnavailableError } from '../errors/index.js'
+
+/** What Prisma Client reports for each statement it sends, once `log` asks for query events. */
+const QueryEvent = z
+  .object({
+    query: z.string().meta({ description: 'The statement.', example: 'SELECT 1' }),
+    params: z.string().meta({ description: 'The bound values as JSON text.', example: '[1]' }),
+    duration: z.number().meta({ description: 'Milliseconds the database took.', example: 0.4 }),
+  })
+  .meta({ description: 'A query event of Prisma Client' })
+
+/** Whether the value has the part of a Prisma Client Studio calls, besides the model delegates. */
+function isStudioClient(value: unknown): value is {
+  readonly $on: (event: 'query', listener: (event: unknown) => void) => void
+  readonly $transaction: (operations: readonly unknown[], options?: unknown) => Promise<unknown>
+  readonly $disconnect: () => Promise<void>
+} {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    ['$on', '$transaction', '$disconnect'].every(
+      (name) => typeof Reflect.get(value, name) === 'function',
+    )
+  )
+}
 
 const CreateProjectClientInput = z
   .object({
@@ -36,6 +61,71 @@ const CreateProjectClientInput = z
   .readonly()
   .meta({ description: 'The database and the project the Prisma Client is loaded for' })
 
+const LoadClientInput = z
+  .object({
+    ...CreateProjectClientInput.unwrap().shape,
+    files: z
+      .custom<readonly SchemaFile[]>(Array.isArray)
+      .meta({ description: 'The schema files, whose generator block names the client.' }),
+    onQuery: z
+      .custom<
+        (event: {
+          readonly sql: string
+          readonly params: string
+          readonly durationMs: number
+        }) => void
+      >((value) => typeof value === 'function')
+      .meta({ description: 'Receives every statement the client sends.' }),
+  })
+  .readonly()
+  .meta({ description: 'The client to load, the schema naming it and where its statements go' })
+
+/**
+ * The project's Prisma Client the schema names, opened through the project's driver adapter
+ * with query events on, each reported to `onQuery`; or why it cannot be opened.
+ *
+ * @param input - the database, the project, the schema files and where the statements go
+ * @returns the client and where it was loaded from
+ */
+function loadClient(input: z.infer<typeof LoadClientInput>) {
+  return Effect.gen(function* () {
+    if (input.target === null) {
+      return yield* new ClientUnavailableError({
+        reason: input.reason ?? 'No database is connected.',
+      })
+    }
+    const { url, dialect } = input.target
+    const schema = yield* parseSchema(input.files).pipe(
+      Effect.mapError((error) => new ClientUnavailableError({ reason: error.message })),
+    )
+    const found = yield* discoverClient({
+      generators: schema.generators,
+      schemaDir: input.schemaDir,
+      cwd: input.cwd,
+      url,
+      dialect,
+      options: { log: [{ emit: 'event', level: 'query' }], errorFormat: 'minimal' },
+    })
+    if (found.client === null) {
+      return yield* new ClientUnavailableError({
+        reason: `Prisma Client not found: ${found.reason ?? 'unknown'}.\n   Add a \`prisma-client\` generator to the schema, run \`prisma generate\` and install ${ADAPTERS[dialect].pkg}.`,
+      })
+    }
+    if (!isStudioClient(found.client)) {
+      return yield* new ClientUnavailableError({
+        reason: `${found.source ?? 'The client'} does not export a Prisma Client with $on, $transaction and $disconnect.`,
+      })
+    }
+    found.client.$on('query', (event) => {
+      const result = QueryEvent.safeParse(event)
+      if (!result.success) return
+      const { query, params, duration } = result.data
+      input.onQuery({ sql: query, params, durationMs: duration })
+    })
+    return { client: found.client, source: found.source ?? 'generated' }
+  }).pipe(withTypeScriptImports)
+}
+
 /** What Prisma Client threw, as a message: it colours its messages for a terminal. */
 function clientError(error: unknown) {
   return new ClientQueryError({
@@ -50,22 +140,34 @@ function clientError(error: unknown) {
  * failure, so a `prisma generate` run meanwhile is picked up), with query events on so every
  * statement it sends is reported. One call runs at a time: the events between its start and its
  * end are the statements that call sent.
+ *
+ * ```mermaid
+ * flowchart LR
+ *   in[target + schemaDir + cwd] --> load[parse the schema, find the generated client]
+ *   load --> client[(the project's Prisma Client + driver adapter)]
+ *   load -->|no database / not generated / no adapter| unavailable[ClientUnavailableError]
+ *   client -->|run| out[value + query events + wall time]
+ *   client -->|missing delegate / throws| failed[ClientQueryError]
+ *   client -->|close| disconnect["$disconnect, a failure only logged"]
+ * ```
+ *
+ * @param input.target - the database the client dials; null when none is connected
+ * @param input.reason - why no database is connected, when it is not
+ * @param input.schemaDir - where the generator output and sqlite files resolve from
+ * @param input.cwd - where the driver adapter package is resolved from
+ * @returns `status`, `run` and `close` over the one client, loaded on first use
  */
 export function createProjectClient(input: z.infer<typeof CreateProjectClientInput>) {
   const lock = Semaphore.makeUnsafe(1)
-  const typescript = TypescriptService.createTypeChecker({
-    schemaDir: input.schemaDir,
-    cwd: input.cwd,
-  })
   const holder: {
-    loaded: Effect.Success<ReturnType<typeof ClientLoadService.loadClient>> | null
-    sink: Parameters<typeof ClientLoadService.loadClient>[0]['onQuery'] | null
+    loaded: Effect.Success<ReturnType<typeof loadClient>> | null
+    sink: Parameters<typeof loadClient>[0]['onQuery'] | null
   } = { loaded: null, sink: null }
 
   function load(files: readonly SchemaFile[]) {
     return Effect.gen(function* () {
       if (holder.loaded !== null) return holder.loaded
-      const loaded = yield* ClientLoadService.loadClient({
+      const loaded = yield* loadClient({
         ...input,
         files,
         onQuery: (event) => holder.sink?.(event),
@@ -78,26 +180,20 @@ export function createProjectClient(input: z.infer<typeof CreateProjectClientInp
 
   return {
     /**
-     * Whether the client loads, and from where; and whether its types can be completed against.
+     * Whether the client loads, and from where.
      *
      * @param files - the schema files, whose generator block names the client
-     * @returns available, source and the reason it is not available, with the TypeScript version
+     * @returns available, source and the reason it is not available
      */
     status(files: readonly SchemaFile[]) {
-      return Effect.gen(function* () {
-        const loaded = yield* load(files).pipe(
-          Semaphore.withPermit(lock),
-          Effect.match({
-            onFailure: (error) => ({ source: null, error: error.reason }),
-            onSuccess: ({ source }) => ({ source, error: null }),
-          }),
-        )
-        const types = yield* typescript.status(files)
-        return { available: loaded.error === null, ...loaded, ...types }
-      })
+      return load(files).pipe(
+        Semaphore.withPermit(lock),
+        Effect.match({
+          onFailure: (error) => ({ available: false, source: null, error: error.reason }),
+          onSuccess: ({ source }) => ({ available: true, source, error: null }),
+        }),
+      )
     },
-    /** The TypeScript language service over the project, for completion, hovers, signatures and checks. */
-    typescript,
     /**
      * Runs the calls, one by one or as one batch `$transaction`, and collects the statements
      * the client sends meanwhile.
@@ -121,25 +217,29 @@ export function createProjectClient(input: z.infer<typeof CreateProjectClientInp
       return Effect.gen(function* () {
         const { client } = yield* load(files)
         // The promises of the operations, not yet sent: Prisma Client runs each once it is awaited.
-        const operations = yield* Effect.forEach(query.calls, (call) => {
-          const delegate: unknown = Reflect.get(client, call.delegate)
-          const operation: unknown =
-            typeof delegate === 'object' && delegate !== null
-              ? Reflect.get(delegate, call.operation)
-              : undefined
-          if (typeof operation !== 'function') {
-            return Effect.fail(
-              new ClientQueryError({
-                message: `The loaded Prisma Client has no ${call.delegate}.${call.operation}.\n   Run \`prisma generate\` and restart Studio so the client matches the schema.`,
-              }),
-            )
-          }
-          return Effect.try({
-            try: (): unknown =>
-              Reflect.apply(operation, delegate, call.args === undefined ? [] : [call.args]),
-            catch: clientError,
-          })
-        })
+        const operations = yield* Effect.forEach(
+          query.calls,
+          (call) => {
+            const delegate: unknown = Reflect.get(client, call.delegate)
+            const operation: unknown =
+              typeof delegate === 'object' && delegate !== null
+                ? Reflect.get(delegate, call.operation)
+                : undefined
+            if (typeof operation !== 'function') {
+              return Effect.fail(
+                new ClientQueryError({
+                  message: `The loaded Prisma Client has no ${call.delegate}.${call.operation}.\n   Run \`prisma generate\` and restart Studio so the client matches the schema.`,
+                }),
+              )
+            }
+            return Effect.try({
+              try: (): unknown =>
+                Reflect.apply(operation, delegate, call.args === undefined ? [] : [call.args]),
+              catch: clientError,
+            })
+          },
+          { concurrency: 1 },
+        )
         const events: Parameters<NonNullable<typeof holder.sink>>[0][] = []
         // oxlint-disable-next-line custom/no-mutation -- the query events of this call land here until it settles
         holder.sink = (event) => {
@@ -167,6 +267,10 @@ export function createProjectClient(input: z.infer<typeof CreateProjectClientInp
     /** Disconnects the client, if one was opened. */
     close: Effect.tryPromise(async () => {
       await holder.loaded?.client.$disconnect()
-    }).pipe(Effect.orElseSucceed(() => undefined)),
+    }).pipe(
+      Effect.catchTag('UnknownError', (error) =>
+        Effect.logDebug('the Prisma Client did not disconnect', error),
+      ),
+    ),
   }
 }

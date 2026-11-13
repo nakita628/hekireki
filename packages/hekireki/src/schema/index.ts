@@ -115,7 +115,7 @@ const Datasource = z
   .meta({ description: 'One datasource block', example: { provider: 'postgresql' } })
 
 /** The generator blocks and the first datasource's provider; none of either when Prisma cannot say. */
-function readConfig(files: readonly SchemaFile[]) {
+export function readConfig(files: readonly SchemaFile[]) {
   return Effect.try((): unknown =>
     JSON.parse(
       get_config(
