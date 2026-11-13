@@ -19,6 +19,7 @@ const GENERATORS = [
   'atlas',
   'er',
   'django',
+  'docs',
   'drizzle',
   'ecto',
   'effect',
@@ -66,7 +67,7 @@ const EXPECTED = [
   { name: 'er (dbml)', kind: 'file', path: 'generated/er/schema.dbml' },
   { name: 'er (png)', kind: 'file', path: 'generated/er/er.png' },
   { name: 'er (svg)', kind: 'file', path: 'generated/er/er.svg' },
-  { name: 'er (docs)', kind: 'dir', path: 'generated/er/docs' },
+  { name: 'docs', kind: 'dir', path: 'generated/docs' },
 ]
 
 if (!existsSync(join(dist, 'zod.js'))) {

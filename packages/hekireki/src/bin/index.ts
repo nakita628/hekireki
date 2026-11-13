@@ -1,12 +1,15 @@
 import { layer as nodeFileSystemLayer } from '@effect/platform-node/NodeFileSystem'
 import pkg from '@prisma/generator-helper'
+import type { GeneratorOptions } from '@prisma/generator-helper'
 import { Effect } from 'effect'
+import type { FileSystem } from 'effect'
 
 import { activerecord } from '../core/activerecord.js'
 import { ajv } from '../core/ajv.js'
 import { arktype } from '../core/arktype.js'
 import { atlas } from '../core/atlas.js'
 import { django } from '../core/django.js'
+import { docs } from '../core/docs.js'
 import { drizzle } from '../core/drizzle.js'
 import { ecto } from '../core/ecto.js'
 import { efcore } from '../core/efcore.js'
@@ -33,6 +36,8 @@ const GENERATORS = {
   // One ER model, four renderings, picked by the extension of each file in `output` / `outputs`.
   er: { prettyName: 'Hekireki-ER', handler: er },
   django: { prettyName: 'Hekireki-Django', handler: django },
+  // The schema's docs: a README of every model with its SQL and queries, and the diagrams it shows.
+  docs: { prettyName: 'Hekireki-Docs', handler: docs },
   drizzle: { prettyName: 'Hekireki-Drizzle', handler: drizzle },
   ecto: { prettyName: 'Hekireki-Ecto', handler: ecto },
   effect: { prettyName: 'Hekireki-Effect', handler: effect },
@@ -54,13 +59,17 @@ const GENERATORS = {
 
 export function registerGenerator(name: keyof typeof GENERATORS) {
   const { prettyName, handler } = GENERATORS[name]
+  // Each generator fails in errors of its own; what Prisma is handed is the message of any of them.
+  const generate: (
+    options: GeneratorOptions,
+  ) => Effect.Effect<unknown, { readonly message: string }, FileSystem.FileSystem> = handler
   pkg.generatorHandler({
     onManifest() {
       return { defaultOutput: '.', prettyName }
     },
     onGenerate(options) {
       return Effect.runPromise(
-        handler(options).pipe(
+        generate(options).pipe(
           Effect.mapError((error) => new Error(error.message)),
           Effect.provide(nodeFileSystemLayer),
         ),

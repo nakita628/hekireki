@@ -140,7 +140,13 @@ generator Hekireki-Atlas {
 // and its extension picks which.
 generator Hekireki-ER {
   provider = "hekireki-er"
-  outputs  = ["generated/er/er.md", "generated/er/schema.dbml", "generated/er/er.png", "generated/er/er.svg", "generated/er/docs/"]
+  outputs  = ["generated/er/er.md", "generated/er/schema.dbml", "generated/er/er.png", "generated/er/er.svg"]
+}
+
+// The schema's docs: every model with its SQL and queries, and the diagrams they show.
+generator Hekireki-Docs {
+  provider = "hekireki-docs"
+  output   = "generated/docs"
 }
 
 /// User role. No @map: the value names are stored verbatim.

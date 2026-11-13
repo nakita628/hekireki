@@ -13,6 +13,7 @@ export default defineConfig({
       'bin/effect': './src/bin/effect.ts',
       'bin/efcore': './src/bin/efcore.ts',
       'bin/django': './src/bin/django.ts',
+      'bin/docs': './src/bin/docs.ts',
       'bin/drizzle': './src/bin/drizzle.ts',
       'bin/typebox': './src/bin/typebox.ts',
       'bin/ajv': './src/bin/ajv.ts',
