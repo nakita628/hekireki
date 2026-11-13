@@ -5,12 +5,23 @@ import { describe, expect, it } from 'vite-plus/test'
 
 import { planStatements, queryExamples } from './query-examples.js'
 
-function datamodel(schema: string) {
+// Views are behind a preview feature, which the generator block turns on.
+const HEADER = `datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider        = "prisma-client"
+  previewFeatures = ["views"]
+}
+`
+
+function document(schema: string) {
   const result: DMMF.Document | GetDMMFError = getDMMF({
-    datamodel: [['schema.prisma', `datasource db {\n  provider = "postgresql"\n}\n${schema}`]],
+    datamodel: [['schema.prisma', `${HEADER}${schema}`]],
   })
   if ('type' in result) throw new Error(result.error.message)
-  return result.datamodel
+  return result
 }
 
 const SCHEMA = `
@@ -44,6 +55,18 @@ model Tagging {
   @@unique([postId, tagId])
 }
 
+model State {
+  builderId String
+  updatedAt DateTime
+
+  @@id([builderId])
+}
+
+view Status {
+  id   Int     @unique
+  done Boolean
+}
+
 model Shape {
   id   Int                     @id
   area Unsupported("polygon")
@@ -56,7 +79,7 @@ enum Role {
 `
 
 describe('queryExamples', () => {
-  const examples = queryExamples(datamodel(SCHEMA))
+  const examples = queryExamples(document(SCHEMA))
   const codes = (model: string) => examples.filter((e) => e.model === model).map((e) => e.code)
 
   it('writes every query a model with a key and relations takes', () => {
@@ -81,6 +104,25 @@ describe('queryExamples', () => {
     expect(codes('Tagging')).toContain(
       'await prisma.tagging.findUnique({ where: { postId_tagId: { postId: 1, tagId: 1 } } })',
     )
+  })
+
+  it('finds a row by the one field of a single-field @@id, as Prisma Client takes it', () => {
+    expect(codes('State')).toStrictEqual([
+      'await prisma.state.findMany()',
+      'await prisma.state.count()',
+      "await prisma.state.findUnique({ where: { builderId: 'example' } })",
+      "await prisma.state.create({ data: { builderId: 'example', updatedAt: new Date('2026-01-01T00:00:00.000Z') } })",
+      "await prisma.state.update({ where: { builderId: 'example' }, data: { updatedAt: new Date('2026-01-01T00:00:00.000Z') } })",
+      "await prisma.state.delete({ where: { builderId: 'example' } })",
+    ])
+  })
+
+  it('reads a view and writes nothing to it, as Prisma Client gives it no write', () => {
+    expect(codes('Status')).toStrictEqual([
+      'await prisma.status.findMany()',
+      'await prisma.status.count()',
+      'await prisma.status.findUnique({ where: { id: 1 } })',
+    ])
   })
 
   it('leaves out a create for a model with a required field it has no value for', () => {

@@ -59,7 +59,25 @@ function run(output: string | null, config: Record<string, string> = {}) {
       config,
     },
     datasources: [],
-    dmmf: { datamodel: { models: [MODEL], enums: [], types: [], indexes: [] } },
+    dmmf: {
+      datamodel: { models: [MODEL], enums: [], types: [], indexes: [] },
+      // What Prisma Client gives the model: the queries the docs write for it.
+      mappings: {
+        modelOperations: [
+          {
+            model: 'User',
+            plural: 'users',
+            findMany: 'findManyUser',
+            aggregate: 'aggregateUser',
+            findUnique: 'findUniqueUser',
+            createOne: 'createOneUser',
+            updateOne: 'updateOneUser',
+            deleteOne: 'deleteOneUser',
+          },
+        ],
+        otherOperations: { read: [], write: [] },
+      },
+    },
   } as unknown as GeneratorOptions
   return Effect.runPromiseExit(Effect.provide(docs(options), NodeFileSystem.layer))
 }

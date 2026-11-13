@@ -44,6 +44,15 @@ const WasmStart = z
   .custom<() => void>((value) => typeof value === 'function')
   .meta({ description: 'The start hook wasm-bindgen puts on the instantiated module.' })
 
+const CompilerFailure = z
+  .object({
+    message: z.string().meta({
+      description: 'Why it failed.',
+      example: "Operation 'createOne' for model 'V' does not match any query.",
+    }),
+  })
+  .meta({ description: 'What the compiler throws: an Error, or a plain object with a message' })
+
 /** Where a panic in the compiler writes its message before the WebAssembly trap unwinds. */
 const panics: { message: string | null } = { message: null }
 
@@ -57,8 +66,9 @@ function compilerError(error: unknown) {
   const { message } = panics
   // Reading a panic clears it.
   panics.message = null
+  const result = CompilerFailure.safeParse(error)
   return new QueryCompilerError({
-    message: message ?? (error instanceof Error ? error.message : String(error)),
+    message: message ?? (result.success ? result.data.message : String(error)),
   })
 }
 

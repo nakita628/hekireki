@@ -9,6 +9,7 @@ import { Effect, Exit } from 'effect'
 import { afterAll, describe, expect, it } from 'vite-plus/test'
 
 import { queryExamples } from '../generator/query-examples.js'
+import type { QueryExample } from '../generator/query-examples.js'
 import { compileQueries } from './query-compiler.js'
 
 const MODELS = `
@@ -23,6 +24,18 @@ model Post {
   authorId Int
   author   User @relation(fields: [authorId], references: [id])
 }
+
+model State {
+  builderId String
+  updatedAt DateTime
+
+  @@id([builderId])
+}
+
+view Status {
+  id   Int     @unique
+  done Boolean
+}
 `
 
 // This package resolves `@prisma/client` as a project with it installed would.
@@ -34,8 +47,13 @@ afterAll(() => {
   rmSync(outside, { recursive: true, force: true })
 })
 
-function compile(provider: 'postgresql' | 'mysql' | 'sqlite', schemaPath = HERE) {
-  const text = `datasource db {\n  provider = "${provider}"\n}\n${MODELS}`
+function compile(
+  provider: 'postgresql' | 'mysql' | 'sqlite',
+  schemaPath = HERE,
+  examples?: readonly QueryExample[],
+) {
+  // Views are behind a preview feature, which the generator block turns on.
+  const text = `datasource db {\n  provider = "${provider}"\n}\n\ngenerator client {\n  provider        = "prisma-client"\n  previewFeatures = ["views"]\n}\n${MODELS}`
   const result: DMMF.Document | GetDMMFError = getDMMF({ datamodel: [['schema.prisma', text]] })
   if ('type' in result) throw new Error(result.error.message)
   return Effect.runPromiseExit(
@@ -43,7 +61,7 @@ function compile(provider: 'postgresql' | 'mysql' | 'sqlite', schemaPath = HERE)
       schemaPath,
       datamodel: text,
       dialect: provider,
-      examples: queryExamples(result.datamodel),
+      examples: examples ?? queryExamples(result),
     }),
   )
 }
@@ -70,6 +88,30 @@ describe('compileQueries', () => {
     )
     expect(include?.statements).toHaveLength(2)
     expect(include?.statements?.[1]?.params).toStrictEqual(['<id of the rows above>', '0'])
+  })
+
+  it('reads the message of a query the compiler refuses', async () => {
+    // A write to a view, which Prisma Client does not give it and queryExamples leaves out.
+    const exit = await compile('postgresql', HERE, [
+      {
+        model: 'Status',
+        name: 'delete',
+        description: 'Delete a row',
+        code: 'await prisma.status.delete({ where: { id: 1 } })',
+        request: {
+          modelName: 'Status',
+          action: 'deleteOne',
+          query: {
+            arguments: { where: { id: 1 } },
+            selection: { $scalars: true, $composites: true },
+          },
+        },
+      },
+    ])
+    if (!Exit.isSuccess(exit)) throw new Error(String(exit.cause))
+    expect(exit.value.map((query) => query.error)).toStrictEqual([
+      "Operation 'deleteOne' for model 'Status' does not match any query.",
+    ])
   })
 
   it('fails where the schema has no @prisma/client to compile with', async () => {
