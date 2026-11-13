@@ -212,3 +212,33 @@ export function makeSchemaEngineAdapter(
         }),
   }
 }
+
+/**
+ * An adapter with no database behind it, for the commands that read only the schema: the
+ * migration from an empty database to it. The engine still connects as it starts, and asks
+ * PostgreSQL for its version and to make `public`; every statement is answered with nothing,
+ * which is what an empty database has to say.
+ *
+ * @param dialect - the SQL the engine writes: PostgreSQL's or SQLite's (the wasm engine has no
+ *   MySQL connector)
+ * @returns the adapter factory `openSchemaEngine` is given
+ */
+export function makeOfflineSchemaEngineAdapter(dialect: Exclude<Dialect, 'mysql'>) {
+  const provider = dialect === 'postgresql' ? 'postgres' : dialect
+  const empty = { columnNames: [], columnTypes: [], rows: [] }
+  return {
+    provider,
+    adapterName: 'hekireki',
+    connect: () =>
+      Promise.resolve(
+        engineSuccess({
+          provider,
+          adapterName: 'hekireki',
+          queryRaw: () => Promise.resolve(engineSuccess(empty)),
+          executeRaw: () => Promise.resolve(engineSuccess(0)),
+          executeScript: () => Promise.resolve(engineSuccess(undefined)),
+          dispose: () => Promise.resolve(engineSuccess(undefined)),
+        }),
+      ),
+  }
+}

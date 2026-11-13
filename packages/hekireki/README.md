@@ -76,17 +76,30 @@ each other's rows alike.
 
 ### Database and documents
 
-| Provider           | Writes                            | Options                                                                                         |
-| ------------------ | --------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `hekireki-atlas`   | Atlas HCL                         | `schemaName` (`public`, `main` on SQLite)                                                       |
-| `hekireki-openapi` | OpenAPI 3.1 (`.yaml`, `.json`)    | `title`, `version`, `paths`: the CRUD of each model                                             |
-| `hekireki-er`      | ER diagram                        | `outputs`: files, one per extension (`.md`, `.dbml`, `.png`, `.svg`); `theme` (`light`, `dark`) |
-| `hekireki-seed`    | Schema module for `hekireki seed` |                                                                                                 |
+| Provider           | Writes                              | Options                                                                                         |
+| ------------------ | ----------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `hekireki-atlas`   | Atlas HCL                           | `schemaName` (`public`, `main` on SQLite)                                                       |
+| `hekireki-openapi` | OpenAPI 3.1 (`.yaml`, `.json`)      | `title`, `version`, `paths`: the CRUD of each model                                             |
+| `hekireki-er`      | ER diagram                          | `outputs`: files, one per extension (`.md`, `.dbml`, `.png`, `.svg`); `theme` (`light`, `dark`) |
+| `hekireki-docs`    | Schema docs (`README.md`, diagrams) | `output`: the directory; `theme` (`light`, `dark`)                                              |
+| `hekireki-seed`    | Schema module for `hekireki seed`   |                                                                                                 |
 
 `hekireki-atlas` writes the tables as Prisma Migrate makes them, so `atlas schema diff` against a
 database Prisma made has nothing to change. `hekireki-openapi` writes them as the
 `components.schemas` Atlas's template writes, `///` comments as descriptions; with `paths`, each
 model gets `GET` and `POST /users` and `GET`, `PATCH` and `DELETE /users/{id}`.
+
+`hekireki-docs` writes the schema's docs into the directory `output` names: `README.md`, every
+model with its fields, constraints, defaults, indexes, relations both ways, `CREATE TABLE` and
+queries, and every enum, each described by its `///` comment; `er.svg`, the ER
+diagram it opens with; and `tables/<Model>.svg`, one diagram per model with a relation, of the
+model and the models it joins. The definitions are what `prisma migrate diff --from-empty` writes
+for PostgreSQL, MySQL and SQLite. The queries (every row, how many, with the relations, one by its
+key, a create, update and delete) are shown in Prisma Client beside the SQL they send, compiled by
+the query compiler of the project's own `@prisma/client` (Prisma 7 or newer); without one, they
+are shown as code. Nothing connects to a database for either.
+[example/generated/docs](https://github.com/nakita628/hekireki/tree/main/example/generated/docs)
+is such a directory.
 
 Every generator keeps Prisma's names: a model or field without `@map` keeps the name it has in the
 schema, and each ORM is told so where its own convention would say otherwise. What each generator

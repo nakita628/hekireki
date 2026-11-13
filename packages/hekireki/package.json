@@ -1,6 +1,6 @@
 {
   "name": "hekireki",
-  "version": "0.46.0",
+  "version": "0.47.0",
   "description": "Hekireki is a code generator from Prisma schema to validation schemas, ORM models, OpenAPI and ER diagrams, with a Studio for your schema and its data",
   "keywords": [
     "activerecord",
@@ -55,6 +55,7 @@
     "hekireki-arktype": "dist/bin/arktype.js",
     "hekireki-atlas": "dist/bin/atlas.js",
     "hekireki-django": "dist/bin/django.js",
+    "hekireki-docs": "dist/bin/docs.js",
     "hekireki-drizzle": "dist/bin/drizzle.js",
     "hekireki-ecto": "dist/bin/ecto.js",
     "hekireki-efcore": "dist/bin/efcore.js",

@@ -17,6 +17,7 @@ import { ajv } from './ajv.js'
 import { arktype } from './arktype.js'
 import { atlas } from './atlas.js'
 import { django } from './django.js'
+import { docs } from './docs.js'
 import { drizzle } from './drizzle.js'
 import { ecto } from './ecto.js'
 import { efcore } from './efcore.js'
@@ -55,6 +56,7 @@ const HANDLERS: Record<
   'hekireki-arktype': arktype,
   'hekireki-atlas': atlas,
   'hekireki-django': django,
+  'hekireki-docs': docs,
   'hekireki-drizzle': drizzle,
   'hekireki-ecto': ecto,
   'hekireki-effect': effect,
