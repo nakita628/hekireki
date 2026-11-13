@@ -54,7 +54,7 @@
 //                                   is imported directly (`./load.js`), the barrel would be a
 //                                   cycle; the client imports lib through lib/index.js; every
 //                                   other namespace import stays banned (zod/valibot aside)
-// layers.js (the Studio server's layers), failures.js and docs.js hold the rest.
+// layers.js (the Studio server's layers), failures.js, docs.js and performance.js hold the rest.
 //
 // Tests are exempt from the structural rules (effect-gen-return, function-declaration, no-let,
 // no-mutation, no-pass-through): a test arranges and asserts imperatively when that is the clearest way to spell
@@ -71,6 +71,7 @@ import {
   sourceTextOf,
 } from './helpers.js'
 import { layerRules } from './layers.js'
+import { performanceRules } from './performance.js'
 
 const PASCAL_CASE = /^[A-Z][A-Za-z0-9]*$/u
 const CAMEL_CASE = /^[a-z][A-Za-z0-9]*$/u
@@ -603,6 +604,7 @@ const plugin = {
     ...layerRules,
     ...failureRules,
     ...docRules,
+    ...performanceRules,
     'effect-gen-return': {
       meta: {
         docs: {

@@ -202,28 +202,32 @@ export function readRows(input: z.infer<typeof ReadRowsInput>) {
     const enums = schema?.enums ?? []
     const columnToEnum = ModelDomain.makeEnumReadValues({ model, enums })
     const key = ModelDomain.keyFields({ model })
-    const orderBy = key.map((name) => fields.find((f) => f.name === name)?.dbName ?? name)
+    const fieldByName = new Map(fields.map((field) => [field.name, field]))
+    const orderBy = key.map((name) => fieldByName.get(name)?.dbName ?? name)
     const table = ModelDomain.tableName({ model })
     const [selected, counted] = yield* worded(
-      Effect.all([
-        driver.query(
-          SqlDomain.makeSelectStatement({
-            dialect: driver.dialect,
-            table,
-            columns,
-            orderBy,
-            ...page,
-          }),
-        ),
-        driver.query(
-          SqlDomain.makeCountStatement({
-            dialect: driver.dialect,
-            table,
-            columns,
-            search: page.search,
-          }),
-        ),
-      ]),
+      Effect.all(
+        [
+          driver.query(
+            SqlDomain.makeSelectStatement({
+              dialect: driver.dialect,
+              table,
+              columns,
+              orderBy,
+              ...page,
+            }),
+          ),
+          driver.query(
+            SqlDomain.makeCountStatement({
+              dialect: driver.dialect,
+              table,
+              columns,
+              search: page.search,
+            }),
+          ),
+        ],
+        { concurrency: 1 },
+      ), // one connection: they queue there anyway
     )
     const rows = {
       rows: selected.rows.map((row) => ValuesDomain.makeRow({ row, columnToField, columnToEnum })),
@@ -597,7 +601,8 @@ export function runSql(input: z.infer<typeof RunSqlInput>) {
     )
     const started = performance.now()
     const results = yield* worded(
-      Effect.forEach(statements, (sql) => driver.query({ sql, params })),
+      // In order, on the one connection: a statement may read what the one before it wrote.
+      Effect.forEach(statements, (sql) => driver.query({ sql, params }), { concurrency: 1 }),
     )
     const executed = results.at(-1) ?? { columns: [], rows: [], rowCount: 0 }
     const sqlResult = {

@@ -185,10 +185,11 @@ function typeRef(ref: DMMF.InputTypeRef | DMMF.OutputTypeRef) {
  */
 export function makeDocs(input: z.infer<typeof MakeDocsInput>) {
   const { dmmf } = input
+  const operationsOf = new Map(dmmf.mappings.modelOperations.map((m) => [m.model, m]))
   const models = dmmf.datamodel.models.map((model) => {
     const singular = capitalize(model.name)
     const plural = capitalize(singular)
-    const mapping = dmmf.mappings.modelOperations.find((m) => m.model === model.name)
+    const mapping = operationsOf.get(model.name)
     const result = LegacyMapping.safeParse(mapping ?? {})
     const names: Record<(typeof OPERATIONS)[number], string | null | undefined> = {
       findUnique: result.success

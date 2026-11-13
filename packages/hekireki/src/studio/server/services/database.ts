@@ -602,7 +602,7 @@ export function openSqliteCopy(input: { readonly driver: Driver; readonly cwd: s
         Effect.logDebug(`cannot remove the copy ${file}`, error),
       ),
     )
-    return { ...copy, close: Effect.all([copy.close, remove], { discard: true }) }
+    return { ...copy, close: Effect.all([copy.close, remove], { concurrency: 1, discard: true }) }
   })
 }
 
@@ -661,7 +661,7 @@ export function openMysqlCopy(input: {
       Object.assign(new URL(input.url), { pathname: `/${name}` }).toString(),
       input.cwd,
     ).pipe(Effect.tapError(() => drop))
-    const close = Effect.all([copy.close, drop], { discard: true })
+    const close = Effect.all([copy.close, drop], { concurrency: 1, discard: true })
     yield* fillMysqlCopy({ driver, copy, source: typeof source === 'string' ? source : '' }).pipe(
       Effect.tapError(() => close),
     )
@@ -698,7 +698,7 @@ function fillMysqlCopy(input: {
     yield* Effect.forEach(
       tables.rows.flatMap((row) => (typeof row.table === 'string' ? [row.table] : [])),
       (table) => copyMysqlTable({ ...input, table }),
-      { discard: true },
+      { concurrency: 1, discard: true },
     )
     yield* copy.executeRaw({ sql: 'SET FOREIGN_KEY_CHECKS = 1', params: [] })
     const triggers = yield* driver.query({
@@ -708,7 +708,7 @@ function fillMysqlCopy(input: {
     yield* Effect.forEach(
       triggers.rows.flatMap((row) => (typeof row.name === 'string' ? [row.name] : [])),
       (trigger) => copyMysqlTrigger({ driver, copy, trigger }),
-      { discard: true },
+      { concurrency: 1, discard: true },
     )
   })
 }
@@ -826,7 +826,7 @@ export function openShadowDatabase(input: {
       Effect.tapError(() => drop),
     )
     // In that order: a database cannot be dropped while a connection to it is open.
-    return { ...shadow, close: Effect.all([shadow.close, drop], { discard: true }) }
+    return { ...shadow, close: Effect.all([shadow.close, drop], { concurrency: 1, discard: true }) }
   })
 }
 

@@ -479,7 +479,8 @@ const MakeLocationInput = z
  * // { file: 'schema.prisma', line: 7 }
  */
 export function makeLocation(input: z.infer<typeof MakeLocationInput>) {
-  const block = input.blocks.find((b) => input.types.includes(b.type) && b.name === input.name)
+  const types = new Set(input.types)
+  const block = input.blocks.find((b) => types.has(b.type) && b.name === input.name)
   return block === undefined ? null : { file: block.file, line: block.line }
 }
 
@@ -599,8 +600,9 @@ const MakeRelationsInput = z
  */
 export function makeRelations(input: z.infer<typeof MakeRelationsInput>) {
   const { models } = input
+  const byName = new Map(models.map((m) => [m.name, m]))
   return erRelations(models).map((relation) => {
-    const child = models.find((m) => m.name === relation.to.model)
+    const child = byName.get(relation.to.model)
     const fkField = child?.fields.find(
       (f) =>
         f.kind === 'object' &&

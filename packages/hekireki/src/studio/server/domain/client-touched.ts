@@ -76,11 +76,17 @@ function namedIn(
   }
   // A date, like any other value that is not an object, names nothing.
   if (typeof value !== 'object' || value === null) return []
-  const fields = models.find((entry) => entry.name === model)?.fields ?? []
+  const fields = new Map(
+    (models.find((entry) => entry.name === model)?.fields ?? []).map((entry) => [
+      entry.name,
+      entry,
+    ]),
+  )
+  const modelNames = new Set(models.map((entry) => entry.name))
   const entries = Object.entries(value).map(([key, inner]: [string, unknown]) => ({
     key,
     inner,
-    field: fields.find((entry) => entry.name === key),
+    field: fields.get(key),
   }))
   // The fields named here: a key that is one, or one written as a string under `by` or `distinct`.
   const own = entries.flatMap(({ key, inner, field }) =>
@@ -88,8 +94,7 @@ function namedIn(
       ? [key]
       : FIELD_LISTS.has(key)
         ? (Array.isArray(inner) ? inner : [inner]).filter(
-            (name): name is string =>
-              typeof name === 'string' && fields.some((entry) => entry.name === name),
+            (name): name is string => typeof name === 'string' && fields.has(name),
           )
         : [],
   )
@@ -105,9 +110,7 @@ function namedIn(
         : [],
   )
   const reached = entries.flatMap(({ field }) =>
-    field?.kind === 'object' && models.some((entry) => entry.name === field.type)
-      ? [[field.type, null] as const]
-      : [],
+    field?.kind === 'object' && modelNames.has(field.type) ? [[field.type, null] as const] : [],
   )
   return [...own.map((name) => [model, name] as const), ...reached, ...deeper]
 }

@@ -674,6 +674,10 @@ export default defineConfig({
           'custom/catch-must-log': 'error',
           'custom/effect-run-at-edge': 'error',
           'custom/require-tsdoc': 'error',
+          'custom/effect-explicit-concurrency': 'error',
+          'custom/no-lookup-in-loop': 'error',
+          'custom/one-studio-read': 'error',
+          'custom/hoist-constant': 'error',
         },
       },
       {

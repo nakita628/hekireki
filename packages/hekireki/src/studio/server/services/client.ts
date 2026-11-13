@@ -217,25 +217,29 @@ export function createProjectClient(input: z.infer<typeof CreateProjectClientInp
       return Effect.gen(function* () {
         const { client } = yield* load(files)
         // The promises of the operations, not yet sent: Prisma Client runs each once it is awaited.
-        const operations = yield* Effect.forEach(query.calls, (call) => {
-          const delegate: unknown = Reflect.get(client, call.delegate)
-          const operation: unknown =
-            typeof delegate === 'object' && delegate !== null
-              ? Reflect.get(delegate, call.operation)
-              : undefined
-          if (typeof operation !== 'function') {
-            return Effect.fail(
-              new ClientQueryError({
-                message: `The loaded Prisma Client has no ${call.delegate}.${call.operation}.\n   Run \`prisma generate\` and restart Studio so the client matches the schema.`,
-              }),
-            )
-          }
-          return Effect.try({
-            try: (): unknown =>
-              Reflect.apply(operation, delegate, call.args === undefined ? [] : [call.args]),
-            catch: clientError,
-          })
-        })
+        const operations = yield* Effect.forEach(
+          query.calls,
+          (call) => {
+            const delegate: unknown = Reflect.get(client, call.delegate)
+            const operation: unknown =
+              typeof delegate === 'object' && delegate !== null
+                ? Reflect.get(delegate, call.operation)
+                : undefined
+            if (typeof operation !== 'function') {
+              return Effect.fail(
+                new ClientQueryError({
+                  message: `The loaded Prisma Client has no ${call.delegate}.${call.operation}.\n   Run \`prisma generate\` and restart Studio so the client matches the schema.`,
+                }),
+              )
+            }
+            return Effect.try({
+              try: (): unknown =>
+                Reflect.apply(operation, delegate, call.args === undefined ? [] : [call.args]),
+              catch: clientError,
+            })
+          },
+          { concurrency: 1 },
+        )
         const events: Parameters<NonNullable<typeof holder.sink>>[0][] = []
         // oxlint-disable-next-line custom/no-mutation -- the query events of this call land here until it settles
         holder.sink = (event) => {

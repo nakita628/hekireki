@@ -278,11 +278,11 @@ const MakeColumnValuesInput = z
  * // { id: 1, user_role: 'admin' }
  */
 export function makeColumnValues(input: z.infer<typeof MakeColumnValuesInput>) {
-  const fields = tableColumns({ model: input.model })
+  const fields = new Map(tableColumns({ model: input.model }).map((f) => [f.name, f]))
   const enumValues = makeEnumWriteValues({ model: input.model, enums: input.enums ?? [] })
   return Object.fromEntries(
     Object.entries(input.row).flatMap(([name, value]) => {
-      const field = fields.find((f) => f.name === name)
+      const field = fields.get(name)
       if (!field) return []
       const stored = typeof value === 'string' ? (enumValues.get(name)?.get(value) ?? value) : value
       return [

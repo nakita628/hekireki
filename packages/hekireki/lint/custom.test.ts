@@ -797,3 +797,69 @@ tester.run('require-diagram', rule('require-diagram'), {
   ],
   invalid: [{ ...tsCase('/** Reads. */\nexport function read() {}', SERVICE_FILE), errors: 1 }],
 })
+
+// performance.js
+
+tester.run('effect-explicit-concurrency', rule('effect-explicit-concurrency'), {
+  valid: [
+    tsCase(`Effect.all([a, b], { concurrency: 2 })`),
+    tsCase(`Effect.forEach(xs, run, { concurrency: 1, discard: true })`),
+    tsCase(`Effect.all([a, b], { concurrency: 'unbounded' })`),
+    testCase(`Effect.all([a, b])`),
+  ],
+  invalid: [
+    { ...tsCase(`Effect.all([a, b])`), errors: 1 },
+    { ...tsCase(`Effect.all([a, b], { discard: true })`), errors: 1 },
+    { ...tsCase(`Effect.forEach(xs, run)`), errors: 1 },
+  ],
+})
+
+tester.run('no-lookup-in-loop', rule('no-lookup-in-loop'), {
+  valid: [
+    tsCase(
+      `const byName = new Map(fields.map((f) => [f.name, f])); rows.map((row) => byName.get(row.name))`,
+    ),
+    // What the loop hands in, or declares for each turn, is not repeated work.
+    tsCase(`rows.map((row) => row.cells.find((c) => c.ok))`),
+    tsCase(`rows.map((row) => { const child = pick(row); return child.fields.find((f) => f.ok) })`),
+    tsCase(`for (const row of rows) row.cells.includes(1)`),
+    tsCase(`const field = fields.find((f) => f.name === name)`),
+  ],
+  invalid: [
+    { ...tsCase(`rows.map((row) => fields.find((f) => f.name === row.name))`), errors: 1 },
+    { ...tsCase(`for (const row of rows) names.includes(row.name)`), errors: 1 },
+    { ...tsCase(`rows.filter((row) => model.fields.some((f) => f.name === row.name))`), errors: 1 },
+  ],
+})
+
+tester.run('one-studio-read', rule('one-studio-read'), {
+  valid: [
+    tsCase(`function read() { const { state, db } = StudioService.studio(); return [state, db] }`),
+    tsCase(
+      `function a() { return StudioService.studio().state }\nfunction b() { return StudioService.studio().db }`,
+    ),
+  ],
+  invalid: [
+    {
+      ...tsCase(
+        `function read() { const state = StudioService.studio().state; const db = StudioService.studio().db; return [state, db] }`,
+      ),
+      errors: 1,
+    },
+  ],
+})
+
+tester.run('hoist-constant', rule('hoist-constant'), {
+  valid: [
+    tsCase(`const READ = new RegExp('^select', 'iu')`),
+    tsCase(`function f(name: string) { return new RegExp(name) }`),
+    tsCase(`function f(xs: string[]) { return new Set(xs) }`),
+  ],
+  invalid: [
+    {
+      ...tsCase(`function f(sql: string) { return new RegExp('^select', 'iu').test(sql) }`),
+      errors: 1,
+    },
+    { ...tsCase(`function f(w: string) { return new Set(['select', 'with']).has(w) }`), errors: 1 },
+  ],
+})

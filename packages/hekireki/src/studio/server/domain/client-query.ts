@@ -346,18 +346,18 @@ export function makeClientQuery(input: z.infer<typeof MakeClientQueryInput>) {
       diagnostics: [{ message, range: { start, end } }],
     }
   }
-  const known = input.models.map((model) => ({ model, delegate: lowerFirst(model) }))
+  const byDelegate = new Map(input.models.map((model) => [lowerFirst(model), model]))
   const resolved = result.value.calls.map((call) => {
-    const model = known.find((entry) => entry.delegate === call.delegate.name)?.model ?? null
+    const model = byDelegate.get(call.delegate.name) ?? null
     const operation = isOperation(call.operation.name) ? call.operation.name : null
     const diagnostics = [
       ...(model === null
         ? [
             {
               message:
-                known.length === 0
+                byDelegate.size === 0
                   ? `Unknown model delegate "${call.delegate.name}": the schema has no models`
-                  : `Unknown model delegate "${call.delegate.name}". The client has ${known.map((entry) => entry.delegate).join(', ')}`,
+                  : `Unknown model delegate "${call.delegate.name}". The client has ${[...byDelegate.keys()].join(', ')}`,
               range: { start: call.delegate.start, end: call.delegate.end },
             },
           ]
