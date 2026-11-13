@@ -149,6 +149,8 @@ export function createTypeChecker(input: z.infer<typeof CreateTypeCheckerInput>)
   const holder: {
     loaded: {
       readonly files: readonly SchemaFile[]
+      readonly dir: string
+      readonly entry: string
       readonly checker: ReturnType<typeof makeChecker>
     } | null
   } = { loaded: null }
@@ -165,22 +167,25 @@ export function createTypeChecker(input: z.infer<typeof CreateTypeCheckerInput>)
           reason: `Prisma Client not found: ${reason ?? 'unknown'}.\n   Add a \`prisma-client\` generator to the schema and run \`prisma generate\`.`,
         })
       }
-      const typescript = yield* loadTypeScript(input.cwd)
       const legacy = source === '@prisma/client'
       const dir = legacy ? input.cwd : path.resolve(input.schemaDir, source)
+      const entry = legacy ? source : './client'
+      // A reload that leaves the client where it was keeps the service and everything it parsed:
+      // the generated files are versioned by mtime, so `prisma generate` is still seen.
+      if (holder.loaded?.dir === dir && holder.loaded.entry === entry) {
+        // oxlint-disable-next-line custom/no-mutation -- the same service, now for these files
+        holder.loaded = { ...holder.loaded, files }
+        return holder.loaded.checker
+      }
+      const typescript = yield* loadTypeScript(input.cwd)
       if (!legacy && !typescript.sys.fileExists(path.join(dir, 'client.ts'))) {
         return yield* new ClientUnavailableError({
           reason: `No client.ts in ${dir}: run \`prisma generate\` so the client is written there.`,
         })
       }
-      const checker = makeChecker({
-        ts: typescript,
-        dir,
-        entry: legacy ? source : './client',
-        cwd: input.cwd,
-      })
-      // oxlint-disable-next-line custom/no-mutation -- the service is built once per schema snapshot and kept
-      holder.loaded = { files, checker }
+      const checker = makeChecker({ ts: typescript, dir, entry, cwd: input.cwd })
+      // oxlint-disable-next-line custom/no-mutation -- the service is built once per client location and kept
+      holder.loaded = { files, dir, entry, checker }
       return checker
     }).pipe(Semaphore.withPermit(lock))
   }

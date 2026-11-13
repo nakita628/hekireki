@@ -1,6 +1,3 @@
-// What the rule modules (custom.js, layers.js, failures.js, docs.js) share: how to read the file
-// under lint, where a node sits, and which layer of the Studio server a file belongs to.
-
 /** Test files, which build fixtures freely and are exempt from most rules. */
 export const TEST_FILE = /\.test\.tsx?$/u
 
@@ -54,19 +51,35 @@ export function isWithin(inner, outer) {
 }
 
 /**
- * The `xxx` of an `Effect.xxx` member expression.
+ * The `xxx` of an `Object.xxx` member expression.
  *
  * @param node - a callee or a member expression
- * @returns the member name, or null for anything that is not `Effect.<name>`
+ * @param object - the name the member is read from (`Effect`, `Match`, `c`)
+ * @returns the member name, or null for anything that is not `<object>.<name>`
  */
-export function effectMember(node) {
+export function memberOf(node, object) {
   return node?.type === 'MemberExpression' &&
     !node.computed &&
     node.object.type === 'Identifier' &&
-    node.object.name === 'Effect' &&
+    node.object.name === object &&
     node.property.type === 'Identifier'
     ? node.property.name
     : null
+}
+
+/**
+ * Whether a node is `x as const`, the one assertion that asserts nothing.
+ *
+ * @param node - any node
+ * @returns true for a `TSAsExpression` to `const`
+ */
+export function isAsConst(node) {
+  return (
+    node?.type === 'TSAsExpression' &&
+    node.typeAnnotation.type === 'TSTypeReference' &&
+    node.typeAnnotation.typeName.type === 'Identifier' &&
+    node.typeAnnotation.typeName.name === 'const'
+  )
 }
 
 /**
@@ -77,6 +90,17 @@ export function effectMember(node) {
  */
 export function layerOf(filename) {
   return SERVER_LAYER.exec(filename)?.[2] ?? null
+}
+
+/**
+ * Whether a file is a module of one Studio server layer: not its barrel, not a test.
+ *
+ * @param filename - path of the file under lint (either `/` or `\` separators)
+ * @param layer - handlers, usecases, services, domain or errors
+ * @returns true for `studio/server/<layer>/<module>.ts`
+ */
+export function isLayerModule(filename, layer) {
+  return layerOf(filename) === layer && !INDEX_FILE.test(filename) && !TEST_FILE.test(filename)
 }
 
 /**

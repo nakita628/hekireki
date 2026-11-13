@@ -143,4 +143,11 @@ describe('loadSnapshot', () => {
     ])
     expect(snapshot.diagnostics).toStrictEqual([])
   })
+
+  it('keeps the snapshot it has when the files have not changed', async () => {
+    const state = createStudioState({ schemaPath: schemaFile() })
+    const first = await reload(state)
+    expect(await reload(state)).toBe(first)
+    expect(state.snapshot()).toBe(first)
+  })
 })

@@ -1,11 +1,13 @@
 import path from 'node:path'
 
 import { Effect } from 'effect'
+import type * as z from 'zod'
 
 import { resolveMigrationsDir } from '../../../migrate/adapter/migrations-dir.js'
 import { readConfigUrl } from '../../../seed/load-config.js'
 import { withTypeScriptImports } from '../../../seed/resolve.js'
 import { MIGRATIONS_POLL_MS } from '../constants/index.js'
+import type { SnapshotSchema } from '../routes/index.js'
 import * as ClientService from '../services/index.js'
 import * as DatabaseService from '../services/index.js'
 import type * as StateService from '../services/index.js'
@@ -46,29 +48,34 @@ import * as WatchService from '../services/index.js'
  */
 export function openStudio(input: {
   readonly state: ReturnType<typeof StateService.createStudioState>
-  readonly snapshot: ReturnType<ReturnType<typeof StateService.createStudioState>['snapshot']>
+  readonly snapshot: z.input<typeof SnapshotSchema>
   readonly schemaDir: string
   readonly databaseUrl: string | null
   readonly cwd: string
 }) {
   return Effect.gen(function* () {
-    // The `url` of hekireki.config.ts, so the database `hekireki seed` fills is the one Studio
-    // opens.
     const config = yield* withTypeScriptImports(readConfigUrl(input.cwd)).pipe(
       Effect.match({
         onFailure: (error) => ({ url: null, error: error.message }),
         onSuccess: (url) => ({ url, error: null }),
       }),
     )
-    const db = yield* DatabaseService.connectDatabase({
-      explicitUrl: input.databaseUrl,
-      configUrl: config.url,
-      configError: config.error,
-      schemaProvider: input.snapshot.schema?.provider ?? null,
-      schemaText: input.snapshot.files.map((file) => file.content).join('\n'),
-      cwd: input.cwd,
-      schemaDir: input.schemaDir,
-    })
+    // The connection and the migrations directory do not wait on each other.
+    const [db, migrationsDir] = yield* Effect.all(
+      [
+        DatabaseService.connectDatabase({
+          explicitUrl: input.databaseUrl,
+          configUrl: config.url,
+          configError: config.error,
+          schemaProvider: input.snapshot.schema?.provider ?? null,
+          schemaText: input.snapshot.files.map((file) => file.content).join('\n'),
+          cwd: input.cwd,
+          schemaDir: input.schemaDir,
+        }),
+        resolveMigrationsDir({ cwd: input.cwd, schemaDir: path.resolve(input.schemaDir) }),
+      ],
+      { concurrency: 2 },
+    )
     yield* Effect.addFinalizer(() => db.close)
     const client = ClientService.createProjectClient({
       target: db.target,
@@ -83,10 +90,7 @@ export function openStudio(input: {
     })
     yield* WatchService.watchMigrations({
       onChange: input.state.touchMigrations,
-      dir: yield* resolveMigrationsDir({
-        cwd: input.cwd,
-        schemaDir: path.resolve(input.schemaDir),
-      }),
+      dir: migrationsDir,
       intervalMs: MIGRATIONS_POLL_MS,
     })
     return { db, client, typescript }

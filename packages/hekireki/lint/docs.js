@@ -1,12 +1,5 @@
-// Documentation rules for the Studio's API, after drizzler's: every exported function and class
-// says what it is for, the layers document what goes in and comes out, and the flow and the I/O
-// are drawn as mermaid diagrams. People and AI read the TSDoc before the body. The handlers'
-// TSDoc is custom/handler-doc's, which asks more of it (the route, every usecase and tag).
-//
-//   require-tsdoc             every exported function / class carries TSDoc (usecases and services
-//                             also document each parameter and the return value, domain an example)
-//   require-sequence-diagram  usecases draw their flow as a mermaid sequenceDiagram
-//   require-diagram           services draw what they do as a mermaid diagram
+// Documentation rules for the Studio server. A handler's TSDoc is custom/handler-doc's, which asks
+// more of it (the route, every usecase and tag).
 
 import {
   INDEX_FILE,
@@ -20,7 +13,6 @@ import {
 
 // What each layer's TSDoc has to say besides a summary.
 const LAYER_TAGS = {
-  handlers: { params: false, returns: false, example: false },
   usecases: { params: true, returns: true, example: false },
   services: { params: true, returns: true, example: false },
   domain: { params: true, returns: true, example: true },
@@ -89,9 +81,9 @@ export const docRules = {
     meta: { docs: { description: 'exported functions and classes must carry TSDoc' } },
     create(context) {
       const filename = filenameOf(context)
-      if (TEST_FILE.test(filename)) return {}
       const layer = layerOf(filename)
-      const tags = layer !== null && !INDEX_FILE.test(filename) ? LAYER_TAGS[layer] : null
+      if (TEST_FILE.test(filename) || layer === 'handlers') return {}
+      const tags = INDEX_FILE.test(filename) ? null : (LAYER_TAGS[layer] ?? null)
       const text = sourceTextOf(context)
       return {
         ExportNamedDeclaration(node) {

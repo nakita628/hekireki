@@ -33,7 +33,7 @@ function isStudioClient(value: unknown): value is {
   )
 }
 
-const LoadClientInput = z
+const CreateProjectClientInput = z
   .object({
     target: z
       .object({
@@ -57,6 +57,13 @@ const LoadClientInput = z
       description: 'Where the driver adapter package is resolved from.',
       example: '/app',
     }),
+  })
+  .readonly()
+  .meta({ description: 'The database and the project the Prisma Client is loaded for' })
+
+const LoadClientInput = z
+  .object({
+    ...CreateProjectClientInput.unwrap().shape,
     files: z
       .custom<readonly SchemaFile[]>(Array.isArray)
       .meta({ description: 'The schema files, whose generator block names the client.' }),
@@ -71,7 +78,7 @@ const LoadClientInput = z
       .meta({ description: 'Receives every statement the client sends.' }),
   })
   .readonly()
-  .meta({ description: 'The database and the project the Prisma Client is loaded for' })
+  .meta({ description: 'The client to load, the schema naming it and where its statements go' })
 
 /**
  * The project's Prisma Client the schema names, opened through the project's driver adapter
@@ -118,34 +125,6 @@ function loadClient(input: z.infer<typeof LoadClientInput>) {
     return { client: found.client, source: found.source ?? 'generated' }
   }).pipe(withTypeScriptImports)
 }
-
-const CreateProjectClientInput = z
-  .object({
-    target: z
-      .object({
-        url: z.string().meta({ description: 'The URL as found.', example: 'file:./dev.db' }),
-        dialect: z
-          .enum(['postgresql', 'mysql', 'sqlite'])
-          .meta({ description: 'Which adapter to open.', example: 'sqlite' }),
-      })
-      .readonly()
-      .nullable()
-      .meta({ description: 'The database the client dials; null when none is connected.' }),
-    reason: z.string().nullable().meta({
-      description: 'Why no database is connected, when it is not.',
-      example: 'No database connected.',
-    }),
-    schemaDir: z.string().meta({
-      description: 'Where the generator output and sqlite files resolve from.',
-      example: '/app/prisma',
-    }),
-    cwd: z.string().meta({
-      description: 'Where the driver adapter package is resolved from.',
-      example: '/app',
-    }),
-  })
-  .readonly()
-  .meta({ description: 'The database and the project the Prisma Client is loaded for' })
 
 /** What Prisma Client threw, as a message: it colours its messages for a terminal. */
 function clientError(error: unknown) {

@@ -114,6 +114,18 @@ function quietly<T>(run: () => T): T {
   }
 }
 
+/**
+ * Runs a language server request; what it throws is logged and answered with `fallback`, so an
+ * editor request never fails on the server's account.
+ */
+function askServer<A, B>(what: string, fallback: B, run: () => A) {
+  return Effect.try(run).pipe(
+    Effect.catchTag('UnknownError', (error) =>
+      Effect.logDebug(`the language server could not ${what}`, error).pipe(Effect.as(fallback)),
+    ),
+  )
+}
+
 // ---------------------------------------------------------------------------------------------
 // What the requests below are made of: the loaded files, the text being edited, and where.
 // ---------------------------------------------------------------------------------------------
@@ -338,28 +350,12 @@ export function inspectFiles(input: z.infer<typeof LoadedFilesInput>) {
   return Effect.gen(function* () {
     const first = input.files[0]
     if (first === undefined) return { diagnostics: [], blocks: [] }
-    const workspace = yield* Effect.try(() =>
+    const workspace = yield* askServer('read the schema files', null, () =>
       makeWorkspace({ files: input.files, path: first.path, text: first.content }),
-    ).pipe(
-      Effect.catchTag('UnknownError', (error) =>
-        Effect.logDebug('the language server could not read the schema files', error).pipe(
-          Effect.as(null),
-        ),
-      ),
     )
     if (workspace === null) return { diagnostics: [], blocks: [] }
-    const diagnostics = yield* Effect.try(() => diagnosticsOf(workspace)).pipe(
-      Effect.catchTag('UnknownError', (error) =>
-        Effect.logDebug('the language server could not list the diagnostics', error).pipe(
-          Effect.as([]),
-        ),
-      ),
-    )
-    const blocks = yield* Effect.try(() => blocksOf(workspace)).pipe(
-      Effect.catchTag('UnknownError', (error) =>
-        Effect.logDebug('the language server could not list the blocks', error).pipe(Effect.as([])),
-      ),
-    )
+    const diagnostics = yield* askServer('list the diagnostics', [], () => diagnosticsOf(workspace))
+    const blocks = yield* askServer('list the blocks', [], () => blocksOf(workspace))
     return { diagnostics, blocks }
   })
 }
@@ -384,16 +380,12 @@ export function inspectFiles(input: z.infer<typeof LoadedFilesInput>) {
  *   the server throws
  */
 export function lintSchema(input: z.infer<typeof EditedSchemaInput>) {
-  return Effect.try(() => {
+  return askServer('lint the schema', [], () => {
     const workspace = makeWorkspace(input)
     return diagnosticsOf(workspace)
       .filter((diagnostic) => diagnostic.path === (input.path ?? ''))
       .map(({ range, message, severity }) => ({ range, message, severity }))
-  }).pipe(
-    Effect.catchTag('UnknownError', (error) =>
-      Effect.logDebug('the language server could not lint the schema', error).pipe(Effect.as([])),
-    ),
-  )
+  })
 }
 
 const FORMAT_OPTIONS = { tabSize: 2, insertSpaces: true } as const
@@ -452,7 +444,7 @@ export function formatSchema(input: z.infer<typeof EditedSchemaInput>) {
  * @returns each block's name, kind, range and selection range; empty where the server throws
  */
 export function symbolsOfSchema(input: z.infer<typeof EditedSchemaInput>) {
-  return Effect.try(() => {
+  return askServer('list the symbols', [], () => {
     const workspace = makeWorkspace(input)
     return languageServer()
       .handlers.handleDocumentSymbol(
@@ -468,11 +460,7 @@ export function symbolsOfSchema(input: z.infer<typeof EditedSchemaInput>) {
           selectionRange: rangeOf(symbol.selectionRange),
         }),
       )
-  }).pipe(
-    Effect.catchTag('UnknownError', (error) =>
-      Effect.logDebug('the language server could not list the symbols', error).pipe(Effect.as([])),
-    ),
-  )
+  })
 }
 
 const PositionParamsInput = z
@@ -550,7 +538,7 @@ function markdownOf(
  *   the server throws
  */
 export function completeSchema(input: z.infer<typeof CompleteSchemaInput>) {
-  return Effect.try(() => {
+  return askServer('complete', [], () => {
     const workspace = makeWorkspace(input)
     const list = quietly(() =>
       languageServer().handlers.handleCompletionRequest(workspace.schema, workspace.document, {
@@ -583,11 +571,7 @@ export function completeSchema(input: z.infer<typeof CompleteSchemaInput>) {
         sortText: item.sortText ?? null,
       }),
     )
-  }).pipe(
-    Effect.catchTag('UnknownError', (error) =>
-      Effect.logDebug('the language server could not complete', error).pipe(Effect.as([])),
-    ),
-  )
+  })
 }
 
 /**
@@ -608,7 +592,7 @@ export function completeSchema(input: z.infer<typeof CompleteSchemaInput>) {
  *   to say or the server throws
  */
 export function hoverSchema(input: z.infer<typeof PositionParamsInput>) {
-  return Effect.try(() => {
+  return askServer('hover', { contents: null, range: null }, () => {
     const workspace = makeWorkspace(input)
     const hover = quietly(() =>
       languageServer().handlers.handleHoverRequest(
@@ -620,13 +604,7 @@ export function hoverSchema(input: z.infer<typeof PositionParamsInput>) {
     return hover === undefined
       ? { contents: null, range: null }
       : { contents: markdownOf(hover.contents), range: hover.range ? rangeOf(hover.range) : null }
-  }).pipe(
-    Effect.catchTag('UnknownError', (error) =>
-      Effect.logDebug('the language server could not hover', error).pipe(
-        Effect.as({ contents: null, range: null }),
-      ),
-    ),
-  )
+  })
 }
 
 /**
@@ -646,7 +624,7 @@ export function hoverSchema(input: z.infer<typeof PositionParamsInput>) {
  * @returns the path, range and selection range of each declaration; empty where the server throws
  */
 export function defineSchema(input: z.infer<typeof PositionParamsInput>) {
-  return Effect.try(() => {
+  return askServer('find the definition', [], () => {
     const workspace = makeWorkspace(input)
     const links = quietly(() =>
       languageServer().handlers.handleDefinitionRequest(
@@ -660,13 +638,7 @@ export function defineSchema(input: z.infer<typeof PositionParamsInput>) {
       range: rangeOf(link.targetRange),
       selection: rangeOf(link.targetSelectionRange),
     }))
-  }).pipe(
-    Effect.catchTag('UnknownError', (error) =>
-      Effect.logDebug('the language server could not find the definition', error).pipe(
-        Effect.as([]),
-      ),
-    ),
-  )
+  })
 }
 
 /**
@@ -686,7 +658,7 @@ export function defineSchema(input: z.infer<typeof PositionParamsInput>) {
  * @returns the path and range of each use; empty where the server throws
  */
 export function referencesSchema(input: z.infer<typeof PositionParamsInput>) {
-  return Effect.try(() => {
+  return askServer('find the references', [], () => {
     const workspace = makeWorkspace(input)
     const locations = quietly(() =>
       languageServer().handlers.handleReferencesRequest(workspace.schema, {
@@ -698,13 +670,7 @@ export function referencesSchema(input: z.infer<typeof PositionParamsInput>) {
       path: workspace.pathOf(location.uri),
       range: rangeOf(location.range),
     }))
-  }).pipe(
-    Effect.catchTag('UnknownError', (error) =>
-      Effect.logDebug('the language server could not find the references', error).pipe(
-        Effect.as([]),
-      ),
-    ),
-  )
+  })
 }
 
 function fileEdits(
@@ -752,7 +718,7 @@ const RenameSchemaInput = z
  * @returns the edits of each file the rename touches; empty where the server throws
  */
 export function renameSchema(input: z.infer<typeof RenameSchemaInput>) {
-  return Effect.try(() => {
+  return askServer('rename', [], () => {
     const workspace = makeWorkspace(input)
     const edit = quietly(() =>
       languageServer().handlers.handleRenameRequest(workspace.schema, workspace.document, {
@@ -761,11 +727,7 @@ export function renameSchema(input: z.infer<typeof RenameSchemaInput>) {
       }),
     )
     return fileEdits(workspace, edit?.changes)
-  }).pipe(
-    Effect.catchTag('UnknownError', (error) =>
-      Effect.logDebug('the language server could not rename', error).pipe(Effect.as([])),
-    ),
-  )
+  })
 }
 
 const CodeActionsSchemaInput = z
@@ -842,7 +804,7 @@ function formatFix(input: z.infer<typeof CodeActionsSchemaInput>, workspace: Wor
  *   server throws
  */
 export function codeActionsSchema(input: z.infer<typeof CodeActionsSchemaInput>) {
-  return Effect.try(() => {
+  return askServer('list the code actions', [], () => {
     const workspace = makeWorkspace(input)
     const actions = quietly(() =>
       languageServer().handlers.handleCodeActions(workspace.schema, workspace.document, {
@@ -865,11 +827,5 @@ export function codeActionsSchema(input: z.infer<typeof CodeActionsSchemaInput>)
       })),
       ...formatFix(input, workspace),
     ]
-  }).pipe(
-    Effect.catchTag('UnknownError', (error) =>
-      Effect.logDebug('the language server could not list the code actions', error).pipe(
-        Effect.as([]),
-      ),
-    ),
-  )
+  })
 }

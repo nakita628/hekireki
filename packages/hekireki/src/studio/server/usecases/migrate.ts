@@ -38,24 +38,20 @@ import * as MigrateService from '../services/index.js'
 /** The schema, the database and the engine one command runs against. */
 function session() {
   return Effect.gen(function* () {
-    const state = StudioService.studio().state
-    const db = StudioService.studio().db
+    const { state, db } = StudioService.studio()
     const driver = yield* db.driver
+    // The URL as found, password and all: what the check opens its own read-only connection to,
+    // so it reads the database Studio is on rather than resolving one of its own.
+    const url = db.target?.url ?? null
     const opened = yield* MigrateService.openMigrateSession({
       schemaPath: state.schemaPath,
       files: state.snapshot().files,
       driver,
-      url: db.target?.url ?? null,
+      url,
       openShadow: () =>
-        DatabaseService.openShadowDatabase({
-          url: db.target?.url ?? '',
-          driver,
-          cwd: process.cwd(),
-        }),
+        DatabaseService.openShadowDatabase({ url: url ?? '', driver, cwd: process.cwd() }),
     })
-    // The URL as found, password and all: what the check opens its own read-only connection to,
-    // so it reads the database Studio is on rather than resolving one of its own.
-    return { ...opened, driver, url: db.target?.url ?? null }
+    return { ...opened, driver, url }
   })
 }
 

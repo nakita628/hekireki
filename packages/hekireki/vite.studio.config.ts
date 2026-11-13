@@ -9,27 +9,10 @@ import { Effect, Exit, Scope } from 'effect'
 import { defineConfig } from 'vite-plus'
 import type { Plugin } from 'vite-plus'
 
-import { createStudioApp } from './src/studio/server/app.js'
-import { openSnapshot, openStudio } from './src/studio/server/usecases/index.js'
+import { openStudioApp } from './src/studio/server/app.js'
 
 const CLIENT_ROOT = path.resolve(import.meta.dirname, 'src/studio/client')
 const OUT_DIR = path.resolve(import.meta.dirname, 'dist/studio')
-
-/** The Studio API on the schema, opened as `hekireki studio` opens it. */
-function openApi(schemaPath: string) {
-  return Effect.gen(function* () {
-    const { state, snapshot, schemaDir } = yield* openSnapshot({ schemaPath })
-    const { db, client, typescript } = yield* openStudio({
-      state,
-      snapshot,
-      schemaDir,
-      databaseUrl: process.env.HEKIREKI_DATABASE_URL ?? null,
-      cwd: process.cwd(),
-    })
-    // Only /api/ reaches the app: Vite serves the client itself.
-    return createStudioApp({ state, staticDir: CLIENT_ROOT, db, client, typescript })
-  })
-}
 
 // HEKIREKI_SCHEMA overrides the schema served by `vp dev` (default: the example schema);
 // HEKIREKI_DATABASE_URL connects it to a database.
@@ -45,13 +28,18 @@ function studioApi(): Plugin {
       // A scope that lives as long as the dev server: the schema is reloaded on change, and the
       // database, client and type checker stay open.
       const scope = await Effect.runPromise(Scope.make())
-      const api = await Effect.runPromise(
-        openApi(schemaPath).pipe(Scope.provide(scope), Effect.provide(NodeFileSystem.layer)),
+      const opened = await Effect.runPromise(
+        // Only /api/ reaches the app: Vite serves the client itself.
+        openStudioApp({
+          schemaPath,
+          staticDir: CLIENT_ROOT,
+          databaseUrl: process.env.HEKIREKI_DATABASE_URL ?? null,
+        }).pipe(Scope.provide(scope), Effect.provide(NodeFileSystem.layer)),
       )
       server.httpServer?.once('close', () => {
         void Effect.runPromise(Scope.close(scope, Exit.void))
       })
-      const listener = getRequestListener((request) => api.fetch(request))
+      const listener = getRequestListener((request) => opened.app.fetch(request))
       // Mounting on '/api' would strip the prefix the Hono app routes on, so the path is checked here.
       server.middlewares.use((req, res, next) => {
         if (req.url?.startsWith('/api/')) {

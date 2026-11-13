@@ -1,34 +1,9 @@
-// Rules that keep a failure from disappearing, after drizzler's:
-//
-//   no-type-assertion   no `x as T` / `<T>x` (`as const` is fine): a type is earned, not asserted
-//   match-exhaustive    `Match.value(...).pipe(...)` ends with `Match.exhaustive`; no `Match.orElse`
-//   catch-must-log      recovering from a failure logs it or turns it into another failure
+// Rules that keep a failure from disappearing.
 
-import { TEST_FILE, effectMember, filenameOf, isWithin } from './helpers.js'
+import { TEST_FILE, filenameOf, isAsConst, isWithin, memberOf } from './helpers.js'
 
 const RECOVER =
   /^(catch|catchAll|catchCause|catchAllCause|catchTag|catchTags|catchIf|catchSome|catchSomeCause|orElse|orElseSucceed|orElseFail)$/u
-
-// `x as const`, the one assertion that checks nothing because it asserts nothing.
-function isAsConst(node) {
-  const type = node.typeAnnotation
-  return (
-    type?.type === 'TSTypeReference' &&
-    type.typeName?.type === 'Identifier' &&
-    type.typeName.name === 'const'
-  )
-}
-
-function isMatchMember(node, name) {
-  return (
-    node?.type === 'MemberExpression' &&
-    !node.computed &&
-    node.object.type === 'Identifier' &&
-    node.object.name === 'Match' &&
-    node.property.type === 'Identifier' &&
-    node.property.name === name
-  )
-}
 
 export const failureRules = {
   // Why: an assertion only tells the compiler to trust you; nothing is checked at runtime.
@@ -64,7 +39,7 @@ export const failureRules = {
     create(context) {
       return {
         MemberExpression(node) {
-          if (!isMatchMember(node, 'orElse')) return
+          if (memberOf(node, 'Match') !== 'orElse') return
           context.report({
             node,
             message:
@@ -72,7 +47,6 @@ export const failureRules = {
           })
         },
         CallExpression(node) {
-          // Only the `Match.value(x).pipe(...)` shape.
           const callee = node.callee
           if (
             callee.type !== 'MemberExpression' ||
@@ -82,9 +56,8 @@ export const failureRules = {
           ) {
             return
           }
-          const target = callee.object
-          if (target.type !== 'CallExpression' || !isMatchMember(target.callee, 'value')) return
-          if (isMatchMember(node.arguments.at(-1), 'exhaustive')) return
+          if (memberOf(callee.object.callee, 'Match') !== 'value') return
+          if (memberOf(node.arguments.at(-1), 'Match') === 'exhaustive') return
           context.report({
             node,
             message:
@@ -115,7 +88,7 @@ export const failureRules = {
       return {
         // `Effect.ignore` is passed as a value (`pipe(Effect.ignore)`), so it is found by reference.
         MemberExpression(node) {
-          const method = effectMember(node)
+          const method = memberOf(node, 'Effect')
           if (method === null || !method.startsWith('ignore')) return
           context.report({
             node,
@@ -123,7 +96,7 @@ export const failureRules = {
           })
         },
         CallExpression(node) {
-          const method = effectMember(node.callee)
+          const method = memberOf(node.callee, 'Effect')
           if (method === null) return
           if (RECOVER.test(method)) {
             open.set(node, { method, handled: false })

@@ -1,4 +1,5 @@
 import { serveStatic } from '@hono/node-server/serve-static'
+import { Effect } from 'effect'
 import { Hono } from 'hono'
 
 import api from './index.js'
@@ -7,6 +8,8 @@ import type * as DatabaseService from './services/index.js'
 import type * as StateService from './services/index.js'
 import * as StudioService from './services/index.js'
 import * as TypescriptService from './services/index.js'
+import * as SchemaUseCase from './usecases/index.js'
+import * as StudioUseCase from './usecases/index.js'
 
 /** What a request for the page answers when the built client is not where Studio looks for it. */
 export function missingAssetsMessage(staticDir: string) {
@@ -49,4 +52,29 @@ export function createStudioApp(input: {
       .get('/*', serveStatic({ root: input.staticDir, path: 'index.html' }))
       .get('/*', (c) => c.text(missingAssetsMessage(input.staticDir), 500))
   )
+}
+
+/**
+ * Opens the schema and what Studio serves beside it (the database, the client, the type checker,
+ * the watchers), all held by the surrounding scope, and the app over them.
+ */
+export function openStudioApp(input: {
+  readonly schemaPath: string
+  readonly staticDir: string
+  readonly databaseUrl: string | null
+}) {
+  return Effect.gen(function* () {
+    const { state, snapshot, schemaDir } = yield* SchemaUseCase.openSnapshot({
+      schemaPath: input.schemaPath,
+    })
+    const { db, client, typescript } = yield* StudioUseCase.openStudio({
+      state,
+      snapshot,
+      schemaDir,
+      databaseUrl: input.databaseUrl,
+      cwd: process.cwd(),
+    })
+    const app = createStudioApp({ state, staticDir: input.staticDir, db, client, typescript })
+    return { app, snapshot, database: db.status }
+  })
 }

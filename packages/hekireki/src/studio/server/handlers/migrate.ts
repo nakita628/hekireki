@@ -723,7 +723,7 @@ export const getMigrateDecisionsRouteHandler: RouteHandler<typeof getMigrateDeci
  *   H->>U: writeMigrationDecisions()
  *   U-->>H: MigrationDecisions
  *   H-->>C: 200 MigrationDecisions
- *   Note over H: on failure, Match.tag: MigrateConfigError -> 503 / DatabaseUnavailableError -> 503 / MigrateEngineError -> 503
+ *   Note over H: on failure, Match.tag: MigrateConfigError -> 503 / DatabaseUnavailableError -> 503 / MigrateEngineError -> 503 / PlatformError -> 422
  * ```
  */
 export const putMigrateDecisionsRouteHandler: RouteHandler<typeof putMigrateDecisionsRoute> = (
@@ -1059,6 +1059,7 @@ export const getMigrateMigrationsMigrationNameRouteHandler: RouteHandler<
  *   H->>U: rehearse()
  *   U-->>H: Rehearsal
  *   H-->>C: 200 Rehearsal
+ *   Note over H: on failure, Match.tag: DatabaseUnavailableError -> 503 / MigrateConfigError -> 503 / MigrateDatabaseError -> 503 / MigrateEngineError -> 503
  * ```
  */
 export const postMigrateRehearseRouteHandler: RouteHandler<typeof postMigrateRehearseRoute> = (
@@ -1150,6 +1151,7 @@ export const postMigrateRehearseRouteHandler: RouteHandler<typeof postMigrateReh
  *   H->>U: readTableCounts()
  *   U-->>H: TableCounts
  *   H-->>C: 200 TableCounts
+ *   Note over H: on failure, Match.tag: DatabaseUnavailableError -> 503 / MigrateDatabaseError -> 503
  * ```
  */
 export const getMigrateTablesRouteHandler: RouteHandler<typeof getMigrateTablesRoute> = (c) =>
@@ -1206,6 +1208,7 @@ export const getMigrateTablesRouteHandler: RouteHandler<typeof getMigrateTablesR
  *   H->>U: readBackups()
  *   U-->>H: Backups
  *   H-->>C: 200 Backups
+ *   Note over H: on failure, Match.tag: DatabaseUnavailableError -> 503 / MigrateConfigError -> 503 / MigrateEngineError -> 503
  * ```
  */
 export const getMigrateBackupsRouteHandler: RouteHandler<typeof getMigrateBackupsRoute> = (c) =>
@@ -1277,7 +1280,7 @@ export const getMigrateBackupsRouteHandler: RouteHandler<typeof getMigrateBackup
  *   H->>U: takeBackup()
  *   U-->>H: Backup
  *   H-->>C: 200 Backup
- *   Note over H: on failure, Match.tag: MigrateConfigError -> 422
+ *   Note over H: on failure, Match.tag: MigrateConfigError -> 422 / DatabaseUnavailableError -> 503 / MigrateDatabaseError -> 503 / MigrateEngineError -> 503
  * ```
  */
 export const postMigrateBackupsRouteHandler: RouteHandler<typeof postMigrateBackupsRoute> = (c) =>
@@ -1366,7 +1369,7 @@ export const postMigrateBackupsRouteHandler: RouteHandler<typeof postMigrateBack
  *   H->>U: restoreFromBackup()
  *   U-->>H: MigrateStatus
  *   H-->>C: 200 MigrateStatus
- *   Note over H: on failure, Match.tag: MigrateConfigError -> 422
+ *   Note over H: on failure, Match.tag: MigrateConfigError -> 422 / DatabaseUnavailableError -> 503 / MigrateEngineError -> 503
  * ```
  */
 export const postMigrateBackupsRestoreRouteHandler: RouteHandler<

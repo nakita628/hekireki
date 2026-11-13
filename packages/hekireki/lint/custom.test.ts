@@ -1,16 +1,8 @@
 import { RuleTester } from 'oxlint/plugins-dev'
 import { describe, expect, it, test } from 'vite-plus/test'
 
-import plugin, {
-  docCommentBefore,
-  handlerDocNames,
-  isServiceModulePath,
-  isUseCaseModulePath,
-  isUseCaseSpecifier,
-  layerModuleOf,
-  layerNamespaceOf,
-} from './custom.js'
-import { layerOf, resolveRelative } from './helpers.js'
+import plugin, { handlerDocNames, layerModuleOf, layerNamespaceOf } from './custom.js'
+import { isLayerModule, layerOf, leadingTsdoc, resolveRelative } from './helpers.js'
 
 RuleTester.describe = (name, fn) => {
   describe(name, fn)
@@ -39,19 +31,12 @@ function testCase(code: string) {
 }
 
 describe('path helpers', () => {
-  it('recognises usecase and service module bodies', () => {
-    expect(isUseCaseModulePath('src/studio/server/usecases/schema.ts')).toBe(true)
-    expect(isUseCaseModulePath('src/studio/server/usecases/index.ts')).toBe(false)
-    expect(isUseCaseModulePath('src/studio/server/usecases/schema.test.ts')).toBe(false)
-    expect(isUseCaseModulePath('src\\studio\\server\\usecases\\schema.ts')).toBe(true)
-    expect(isServiceModulePath('src/studio/server/services/query.ts')).toBe(true)
-    expect(isServiceModulePath('src/studio/server/services/index.ts')).toBe(false)
-  })
-
-  it('recognises usecase import targets', () => {
-    expect(isUseCaseSpecifier('./schema.js')).toBe(true)
-    expect(isUseCaseSpecifier('../usecases/index.js')).toBe(true)
-    expect(isUseCaseSpecifier('../services/index.js')).toBe(false)
+  it('recognises the modules of a layer', () => {
+    expect(isLayerModule('src/studio/server/usecases/schema.ts', 'usecases')).toBe(true)
+    expect(isLayerModule('src/studio/server/usecases/index.ts', 'usecases')).toBe(false)
+    expect(isLayerModule('src/studio/server/usecases/schema.test.ts', 'usecases')).toBe(false)
+    expect(isLayerModule('src\\studio\\server\\usecases\\schema.ts', 'usecases')).toBe(true)
+    expect(isLayerModule('src/studio/server/services/query.ts', 'usecases')).toBe(false)
   })
 })
 
@@ -257,17 +242,6 @@ tester.run('layer-suffix-pascal-case', rule('layer-suffix-pascal-case'), {
   invalid: [
     { ...tsCase(`const todoService = 1`), errors: 1 },
     { ...tsCase(`function readUseCase() {}`), errors: 1 },
-  ],
-})
-
-tester.run('no-usecase-to-usecase', rule('no-usecase-to-usecase'), {
-  valid: [
-    tsCase(`import { x } from '../services/index.js'`),
-    tsCase(`import { x } from './schema.js'`, 'src/studio/server/usecases/index.ts'),
-  ],
-  invalid: [
-    { ...tsCase(`import { x } from './schema.js'`), errors: 1 },
-    { ...tsCase(`export * from '../usecases/schema.js'`), errors: 1 },
   ],
 })
 
@@ -479,10 +453,14 @@ export const getDocsRouteHandler: RouteHandler<typeof getDocsRoute> = (c) =>
 `
 
 describe('handler doc helpers', () => {
-  it('reads the TSDoc block right above a statement', () => {
-    expect(docCommentBefore('/** a */\nexport const x = 1', 9)).toBe(' a ')
-    expect(docCommentBefore('// a\nexport const x = 1', 5)).toBeNull()
-    expect(docCommentBefore('/** a */\nconst y = 1\nexport const x = 1', 21)).toBeNull()
+  it('reads the TSDoc block right above a statement, and only that one', () => {
+    const at = (start: number) => ({ start, end: start })
+    expect(leadingTsdoc('/** a */\nexport const x = 1', at(9))).toBe('/** a */')
+    expect(leadingTsdoc('// a\nexport const x = 1', at(5))).toBeNull()
+    expect(leadingTsdoc('/** a */\nconst y = 1\nexport const x = 1', at(21))).toBeNull()
+    expect(leadingTsdoc('/** a */\nconst y = 1\n/** b */\nexport const x = 1', at(30))).toBe(
+      '/** b */',
+    )
   })
 
   it('lists the use cases a handler calls and the tags it answers, once each', () => {
@@ -537,7 +515,7 @@ tester.run('handler-doc', rule('handler-doc'), {
   ],
 })
 
-// The rules of layers.js, failures.js and docs.js (taken from drizzler).
+// layers.js, failures.js and docs.js
 
 const SERVICE_FILE = 'src/studio/server/services/load.ts'
 const DOMAIN_FILE = 'src/studio/server/domain/values.ts'
@@ -563,16 +541,22 @@ describe('shared helpers', () => {
   })
 })
 
-tester.run('no-service-to-service', rule('no-service-to-service'), {
+tester.run('layer-imports', rule('layer-imports'), {
   valid: [
     tsCase(`import type * as StateService from './state.js'`, SERVICE_FILE),
     tsCase(`import { SchemaLoadError } from '../errors/index.js'`, SERVICE_FILE),
     tsCase(`export * from './load.js'`, 'src/studio/server/services/index.ts'),
     tsCase(`import * as LoadService from './load.js'`, 'src/studio/server/services/load.test.ts'),
+    tsCase(`import * as StudioService from '../services/index.js'`),
+    tsCase(`import * as SchemaUseCase from '../usecases/index.js'`, HANDLER_FILE),
   ],
   invalid: [
     { ...tsCase(`import * as LanguageService from './language.js'`, SERVICE_FILE), errors: 1 },
-    { ...tsCase(`import * as X from '../services/index.js'`, SERVICE_FILE), errors: 1 },
+    { ...tsCase(`import * as X from '../usecases/index.js'`, SERVICE_FILE), errors: 1 },
+    { ...tsCase(`import { x } from './schema.js'`), errors: 1 },
+    { ...tsCase(`export * from '../usecases/schema.js'`), errors: 1 },
+    { ...tsCase(`import { h } from '../handlers/index.js'`), errors: 1 },
+    { ...tsCase(`import * as StudioService from '../services/index.js'`, HANDLER_FILE), errors: 1 },
   ],
 })
 
@@ -674,13 +658,13 @@ tester.run('handler-response-shape', rule('handler-response-shape'), {
 tester.run('effect-run-at-edge', rule('effect-run-at-edge'), {
   valid: [
     tsCase(`Effect.runPromise(program)`, HANDLER_FILE),
-    tsCase(`Effect.runPromise(program)`, 'src/studio/server/start.ts'),
     tsCase(`Effect.runPromise(program)`, 'src/studio/server/index.ts'),
     testCase(`Effect.runPromise(program)`),
   ],
   invalid: [
     { ...tsCase(`Effect.runPromise(program)`), errors: 1 },
     { ...tsCase(`Effect.runPromise(program)`, 'src/studio/server/app.ts'), errors: 1 },
+    { ...tsCase(`Effect.runPromise(program)`, 'src/studio/server/start.ts'), errors: 1 },
     { ...tsCase(`Effect.runSync(program)`, SERVICE_FILE), errors: 1 },
   ],
 })

@@ -83,8 +83,7 @@ export function readDbStatus() {
  */
 export function readCounts() {
   return Effect.gen(function* () {
-    const state = StudioService.studio().state
-    const db = StudioService.studio().db
+    const { state, db } = StudioService.studio()
     const driver = yield* db.driver
     const models = state.snapshot().schema?.models ?? []
     const counted = yield* Effect.forEach(
@@ -189,10 +188,10 @@ const ReadRowsInput = z
  */
 export function readRows(input: z.infer<typeof ReadRowsInput>) {
   return Effect.gen(function* () {
-    const state = StudioService.studio().state
-    const model = state.snapshot().schema?.models.find((m) => m.name === input.modelName)
+    const { state, db } = StudioService.studio()
+    const schema = state.snapshot().schema
+    const model = schema?.models.find((m) => m.name === input.modelName)
     if (!model) return yield* new UnknownModelError({ model: input.modelName })
-    const db = StudioService.studio().db
     const driver = yield* db.driver
     const page = { skip: input.skip, take: input.take, search: input.search ?? '' }
     const fields = ModelDomain.tableColumns({ model })
@@ -200,7 +199,7 @@ export function readRows(input: z.infer<typeof ReadRowsInput>) {
     const columnToField = new Map(
       fields.map((field) => [ModelDomain.columnName({ field }), field.name]),
     )
-    const enums = state.snapshot().schema?.enums ?? []
+    const enums = schema?.enums ?? []
     const columnToEnum = ModelDomain.makeEnumReadValues({ model, enums })
     const key = ModelDomain.keyFields({ model })
     const orderBy = key.map((name) => fields.find((f) => f.name === name)?.dbName ?? name)
@@ -300,10 +299,10 @@ const InsertRowInput = z
  */
 export function insertRow(input: z.infer<typeof InsertRowInput>) {
   return Effect.gen(function* () {
-    const state = StudioService.studio().state
-    const model = state.snapshot().schema?.models.find((m) => m.name === input.modelName)
+    const { state, db } = StudioService.studio()
+    const schema = state.snapshot().schema
+    const model = schema?.models.find((m) => m.name === input.modelName)
     if (!model) return yield* new UnknownModelError({ model: input.modelName })
-    const db = StudioService.studio().db
     const driver = yield* db.driver
     // Prisma generates uuid() / cuid() / now() in the client; Studio has to do the same.
     const generated = yield* StudioService.generateDefaults({
@@ -318,7 +317,7 @@ export function insertRow(input: z.infer<typeof InsertRowInput>) {
             model,
             dialect: driver.dialect,
             row: { ...generated, ...input.values },
-            enums: state.snapshot().schema?.enums ?? [],
+            enums: schema?.enums ?? [],
           }),
         }),
       ),
@@ -390,8 +389,9 @@ const UpdateRowInput = z
  */
 export function updateRow(input: z.infer<typeof UpdateRowInput>) {
   return Effect.gen(function* () {
-    const state = StudioService.studio().state
-    const model = state.snapshot().schema?.models.find((m) => m.name === input.modelName)
+    const { state, db } = StudioService.studio()
+    const schema = state.snapshot().schema
+    const model = schema?.models.find((m) => m.name === input.modelName)
     if (!model) return yield* new UnknownModelError({ model: input.modelName })
     if (Object.keys(input.where).length === 0) {
       return yield* new InvalidInputError({
@@ -405,9 +405,8 @@ export function updateRow(input: z.infer<typeof UpdateRowInput>) {
         message: 'must name at least one field',
       })
     }
-    const db = StudioService.studio().db
     const driver = yield* db.driver
-    const enums = state.snapshot().schema?.enums ?? []
+    const enums = schema?.enums ?? []
     const written = yield* worded(
       driver.query(
         SqlDomain.makeUpdateStatement({
@@ -491,8 +490,9 @@ const DeleteRowInput = z
  */
 export function deleteRow(input: z.infer<typeof DeleteRowInput>) {
   return Effect.gen(function* () {
-    const state = StudioService.studio().state
-    const model = state.snapshot().schema?.models.find((m) => m.name === input.modelName)
+    const { state, db } = StudioService.studio()
+    const schema = state.snapshot().schema
+    const model = schema?.models.find((m) => m.name === input.modelName)
     if (!model) return yield* new UnknownModelError({ model: input.modelName })
     if (Object.keys(input.where).length === 0) {
       return yield* new InvalidInputError({
@@ -500,9 +500,8 @@ export function deleteRow(input: z.infer<typeof DeleteRowInput>) {
         message: 'must name at least one key field',
       })
     }
-    const db = StudioService.studio().db
     const driver = yield* db.driver
-    const enums = state.snapshot().schema?.enums ?? []
+    const enums = schema?.enums ?? []
     const written = yield* worded(
       driver.query(
         SqlDomain.makeDeleteStatement({
@@ -715,8 +714,7 @@ const AnalyzeSqlInput = z
  */
 export function analyzeSql(input: z.infer<typeof AnalyzeSqlInput>) {
   return Effect.sync(() => {
-    const state = StudioService.studio().state
-    const db = StudioService.studio().db
+    const { state, db } = StudioService.studio()
     const schema = state.snapshot().schema
     return analyze(
       input.sql,

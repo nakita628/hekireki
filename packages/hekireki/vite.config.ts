@@ -104,7 +104,6 @@ export default defineConfig({
       'custom/logic-camel-case': 'error',
       'custom/layer-suffix-pascal-case': 'error',
       'custom/layer-namespace-import': 'error',
-      'custom/no-usecase-to-usecase': 'error',
       'custom/no-null-coercion-map': 'error',
       'custom/no-dual-absence': 'error',
       'custom/no-let': 'error',
@@ -662,44 +661,11 @@ export default defineConfig({
         },
       },
       {
-        // studio/server/domain holds the pure functions: no I/O, no reaching back into the
-        // handlers, the state store or the database drivers, and nothing of Effect: its shapes
-        // are zod's, and what fails is said in plain TypeScript.
-        files: ['src/studio/server/domain/**'],
-        rules: {
-          'no-restricted-imports': [
-            'error',
-            {
-              paths: [
-                { name: 'node:fs', message: 'file I/O belongs in src/file' },
-                { name: 'node:fs/promises', message: 'file I/O belongs in src/file' },
-                { name: 'effect', message: 'domain depends on zod at most, never on effect' },
-              ],
-              patterns: [
-                {
-                  regex: '^(\\.\\./)+(bin|cli|core|emit|format|file|generator)(/.*)?$',
-                  message: 'domain may only import helper and utils',
-                },
-                {
-                  regex: '^\\.\\./(app|env|errors|handlers|index|routes|services)(\\.js)?(/.*)?$',
-                  message: 'domain must stay pure: no handlers, services or I/O',
-                },
-              ],
-            },
-          ],
-        },
-      },
-      // ---------------------------------------------------------------------
-      // The Studio's API, layered as drizzler's is: handlers -> usecases -> services, and
-      // usecases -> domain. lint/layers.js, lint/failures.js and lint/docs.js hold each rule's
-      // Why / NG / OK. These come after the two blocks above: `no-restricted-imports` is replaced,
-      // not merged, so a layer that names it repeats the server's paths and patterns.
-      // ---------------------------------------------------------------------
-      {
-        // Failures are Effect failures with a name, never exceptions; data is plain objects; an
-        // Effect runs only at the edge; every export says what it is for.
+        // The Studio server's layers (lint/layers.js, lint/failures.js, lint/docs.js).
         files: ['src/studio/server/**'],
         rules: {
+          'custom/layer-imports': 'error',
+          'custom/domain-only-from-usecases': 'error',
           'custom/no-throw': 'error',
           'custom/no-try-catch': 'error',
           'custom/no-class': 'error',
@@ -707,96 +673,30 @@ export default defineConfig({
           'custom/match-exhaustive': 'error',
           'custom/catch-must-log': 'error',
           'custom/effect-run-at-edge': 'error',
-          'custom/domain-only-from-usecases': 'error',
           'custom/require-tsdoc': 'error',
         },
       },
       {
-        // A handler maps HTTP to one usecase: validated input in, a parsed body or a problem out.
         files: ['src/studio/server/handlers/**'],
         rules: {
           'custom/handler-one-usecase': 'error',
           'custom/handler-request-valid': 'error',
           'custom/handler-response-shape': 'error',
-          'no-restricted-imports': [
-            'error',
-            {
-              paths: [
-                { name: 'node:fs', message: 'file I/O belongs in src/file' },
-                { name: 'node:fs/promises', message: 'file I/O belongs in src/file' },
-              ],
-              patterns: [
-                {
-                  regex: '^(\\.\\./)+(bin|cli|core|emit)(/.*)?$',
-                  message: 'studio/server may only import format, file, generator, helper, utils',
-                },
-                {
-                  regex: '^\\.\\./(services|domain)(/.*)?$',
-                  message:
-                    'Handlers depend on usecases only; services and domain sit behind a usecase.',
-                },
-              ],
-            },
-          ],
         },
       },
       {
-        // A usecase owns one request: it composes services and domain, never another usecase.
+        files: ['src/studio/server/{usecases,services,domain}/**'],
+        rules: { 'custom/layer-function-shape': 'error' },
+      },
+      {
         files: ['src/studio/server/usecases/**'],
-        rules: {
-          'custom/require-sequence-diagram': 'error',
-          'custom/layer-function-shape': 'error',
-          'no-restricted-imports': [
-            'error',
-            {
-              paths: [
-                { name: 'node:fs', message: 'file I/O belongs in src/file' },
-                { name: 'node:fs/promises', message: 'file I/O belongs in src/file' },
-              ],
-              patterns: [
-                {
-                  regex: '^(\\.\\./)+(bin|cli|core|emit)(/.*)?$',
-                  message: 'studio/server may only import format, file, generator, helper, utils',
-                },
-                {
-                  regex: '^\\.\\./handlers(/.*)?$',
-                  message: 'Usecases do not know about HTTP handlers.',
-                },
-              ],
-            },
-          ],
-        },
+        rules: { 'custom/require-sequence-diagram': 'error' },
       },
       {
-        // A service touches one piece of I/O and draws it.
         files: ['src/studio/server/services/**'],
-        rules: {
-          'custom/no-service-to-service': 'error',
-          'custom/require-diagram': 'error',
-          'custom/layer-function-shape': 'error',
-          'no-restricted-imports': [
-            'error',
-            {
-              paths: [
-                { name: 'node:fs', message: 'file I/O belongs in src/file' },
-                { name: 'node:fs/promises', message: 'file I/O belongs in src/file' },
-              ],
-              patterns: [
-                {
-                  regex: '^(\\.\\./)+(bin|cli|core|emit)(/.*)?$',
-                  message: 'studio/server may only import format, file, generator, helper, utils',
-                },
-                {
-                  regex: '^\\.\\./(handlers|usecases)(/.*)?$',
-                  message: 'Services sit below usecases; they do not call back up.',
-                },
-              ],
-            },
-          ],
-        },
+        rules: { 'custom/require-diagram': 'error' },
       },
       {
-        // Domain is pure: values in, values out.
         files: ['src/studio/server/domain/**'],
         rules: {
           // Why off: domain is plain TypeScript, never Effect, so `Effect.try` is not there to
@@ -808,7 +708,6 @@ export default defineConfig({
           'custom/domain-import-allowlist': 'error',
           'custom/domain-no-nondeterminism': 'error',
           'custom/domain-no-side-effects': 'error',
-          'custom/layer-function-shape': 'error',
         },
       },
       {

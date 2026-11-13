@@ -34,11 +34,12 @@ import * as StudioService from '../services/index.js'
  */
 export function readClientStatus() {
   return Effect.gen(function* () {
-    const state = StudioService.studio().state
-    const client = StudioService.studio().client
-    const typescript = StudioService.studio().typescript
-    const loaded = yield* client.status(state.snapshot().files)
-    const types = yield* typescript.status(state.snapshot().files)
+    const { state, client, typescript } = StudioService.studio()
+    const { files } = state.snapshot()
+    // The client and its types load on their own, each the first time it is asked for.
+    const [loaded, types] = yield* Effect.all([client.status(files), typescript.status(files)], {
+      concurrency: 2,
+    })
     const status = { ...loaded, ...types }
     return status
   })
@@ -154,9 +155,7 @@ const RunClientQueryInput = z
  */
 export function runClientQuery(input: z.infer<typeof RunClientQueryInput>) {
   return Effect.gen(function* () {
-    const state = StudioService.studio().state
-    const client = StudioService.studio().client
-    const db = StudioService.studio().db
+    const { state, client, db } = StudioService.studio()
     const snapshot = state.snapshot()
     const models = (snapshot.schema?.models ?? []).map((model) => model.name)
     const now = yield* Clock.currentTimeMillis
@@ -278,8 +277,7 @@ const QueryPositionInput = z
  */
 export function completeClientQuery(input: z.infer<typeof QueryPositionInput>) {
   return Effect.gen(function* () {
-    const state = StudioService.studio().state
-    const typescript = StudioService.studio().typescript
+    const { state, typescript } = StudioService.studio()
     const items = yield* typescript.complete(state.snapshot().files, input.query, input.offset)
     return { items }
   })
@@ -332,8 +330,7 @@ const CompletionDetailInput = z
  */
 export function detailClientCompletion(input: z.infer<typeof CompletionDetailInput>) {
   return Effect.gen(function* () {
-    const state = StudioService.studio().state
-    const typescript = StudioService.studio().typescript
+    const { state, typescript } = StudioService.studio()
     const detail = yield* typescript.detail(
       state.snapshot().files,
       input.query,
@@ -371,8 +368,7 @@ export function detailClientCompletion(input: z.infer<typeof CompletionDetailInp
  */
 export function hoverClientQuery(input: z.infer<typeof QueryPositionInput>) {
   return Effect.gen(function* () {
-    const state = StudioService.studio().state
-    const typescript = StudioService.studio().typescript
+    const { state, typescript } = StudioService.studio()
     const hover = yield* typescript.hover(state.snapshot().files, input.query, input.offset)
     return hover
   })
@@ -405,8 +401,7 @@ export function hoverClientQuery(input: z.infer<typeof QueryPositionInput>) {
  */
 export function signatureClientQuery(input: z.infer<typeof QueryPositionInput>) {
   return Effect.gen(function* () {
-    const state = StudioService.studio().state
-    const typescript = StudioService.studio().typescript
+    const { state, typescript } = StudioService.studio()
     const help = yield* typescript.signature(state.snapshot().files, input.query, input.offset)
     return help
   })
@@ -452,8 +447,7 @@ const CheckClientQueryInput = z
  */
 export function checkClientQuery(input: z.infer<typeof CheckClientQueryInput>) {
   return Effect.gen(function* () {
-    const state = StudioService.studio().state
-    const typescript = StudioService.studio().typescript
+    const { state, typescript } = StudioService.studio()
     const diagnostics = yield* typescript.check(state.snapshot().files, input.query)
     return { diagnostics }
   })

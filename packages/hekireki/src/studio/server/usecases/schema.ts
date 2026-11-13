@@ -9,6 +9,7 @@ import { RELOAD_DEBOUNCE_MS } from '../constants/index.js'
 import * as DocsDomain from '../domain/index.js'
 import * as SchemaDomain from '../domain/index.js'
 import { SchemaLoadError, UnknownFileError } from '../errors/index.js'
+import type { DocsSchema, SnapshotSchema } from '../routes/index.js'
 import * as LanguageService from '../services/index.js'
 import * as LoadService from '../services/index.js'
 import * as StateService from '../services/index.js'
@@ -23,8 +24,8 @@ import * as WatchService from '../services/index.js'
  */
 function parseFiles(input: {
   readonly files: readonly { readonly path: string; readonly content: string }[]
-  readonly previous: ReturnType<ReturnType<typeof StateService.createStudioState>['snapshot']>
-  readonly docs: ReturnType<ReturnType<typeof StateService.createStudioState>['docs']>
+  readonly previous: z.input<typeof SnapshotSchema>
+  readonly docs: z.input<typeof DocsSchema>
 }) {
   return Effect.gen(function* () {
     const { files } = input
@@ -73,6 +74,8 @@ function parseFiles(input: {
  *   U->>L: readSchemaFiles({ schemaPath })
  *   alt SchemaLoadError
  *     Note over U: keep the last files and schema, with the error
+ *   else the files of the last schema that parsed
+ *     U-->>C: that snapshot, as it is
  *   else files
  *     U->>G: inspectFiles({ files })
  *     G-->>U: diagnostics, blocks
@@ -109,10 +112,22 @@ export function loadSnapshot(input: {
             },
             docs,
           }),
-        onSuccess: (files) => parseFiles({ files, previous, docs }),
+        onSuccess: (files) =>
+          // The same files as the last schema that parsed (the watcher's echo of a write through
+          // the API, a reload with nothing changed) make the same snapshot: keep the one there.
+          previous.error === null &&
+          previous.schema !== null &&
+          files.length === previous.files.length &&
+          files.every(
+            (file, index) =>
+              file.path === previous.files[index]?.path &&
+              file.content === previous.files[index]?.content,
+          )
+            ? Effect.succeed(null)
+            : parseFiles({ files, previous, docs }),
       }),
     )
-    return state.replace(next)
+    return next === null ? previous : state.replace(next)
   }).pipe(Effect.provide(nodeFileSystemLayer))
 }
 

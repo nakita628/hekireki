@@ -1,42 +1,39 @@
-// Layering rules for the Studio's API (src/studio/server), after drizzler's:
-//
-//   handlers → usecases → services        (and usecases → domain)
-//
-// A handler maps HTTP to one usecase; a usecase composes services (I/O) and domain (pure
-// decisions); a service touches one piece of I/O; domain takes values and returns values.
-// custom.js already holds no-usecase-to-usecase, layer-suffix-pascal-case and the barrels
-// (layer-namespace-import); these are what it did not say.
-//
-//   no-service-to-service      a service does not import another service's values
-//   domain-only-from-usecases  only usecases (and domain) import domain's values
-//   domain-import-allowlist    domain imports only zod, acorn, other domain modules, the pure
-//                              modules of the package (types, utils, sql) and types
-//   domain-no-nondeterminism   domain does not read the clock or make random values
-//   domain-no-side-effects     domain does no I/O, is not async and keeps no module state
-//   handler-one-usecase        a handler calls at most one usecase
-//   handler-request-valid      a handler reads its input only as `const data = c.req.valid(...)`
-//   handler-response-shape     a 2xx body is parsed with its generated schema; a problem body is
-//                              an `as const` literal
-//   effect-run-at-edge         Effects are run only in handlers, index.ts and start.ts
-//   no-throw / no-try-catch    failures are Effect failures, not exceptions
-//   no-class                   the only classes are the Data.TaggedError failures in errors/
-//   layer-function-shape       usecase / service / domain functions take at most one argument,
-//                              `input`
+// The Studio server's layers: handlers → usecases → services, and usecases → domain. A handler
+// maps HTTP to one usecase; a usecase composes services (I/O) and domain (pure decisions); a
+// service touches one piece of I/O; domain takes values and returns values.
 
 import {
   INDEX_FILE,
   TEST_FILE,
-  effectMember,
+  exportedDeclarations,
   filenameOf,
+  isAsConst,
+  isLayerModule,
   isWithin,
   layerOf,
+  memberOf,
   resolveRelative,
 } from './helpers.js'
 
 const DOMAIN_PATH = /(^|[\\/])studio[\\/]server[\\/]domain([\\/]|$)/u
-// Effects may be run here: the handlers (the HTTP edge), index.ts (the API's error handler) and
-// start.ts (the command that serves the Studio).
-const EFFECT_EDGE = /(^|[\\/])studio[\\/]server[\\/](handlers[\\/]|(index|start)\.ts$)/u
+const EFFECT_EDGE = /(^|[\\/])studio[\\/]server[\\/](handlers[\\/]|index\.ts$)/u
+// What each layer may not import the values of, and why.
+const FORBIDDEN_IMPORTS = {
+  handlers: {
+    services: 'Handlers depend on usecases only; a service sits behind a usecase.',
+  },
+  usecases: {
+    usecases:
+      'Usecases sit side by side, each owning a request end to end; move what they share into a service (I/O) or domain (a pure decision).',
+    handlers: 'Usecases do not know about HTTP handlers.',
+  },
+  services: {
+    services:
+      'Each service touches one piece of I/O; call both from the usecase instead, so reading it shows everything that happens.',
+    usecases: 'Services sit below usecases; they do not call back up.',
+    handlers: 'Services sit below usecases; they do not call back up.',
+  },
+}
 const DOMAIN_ALLOWED = [
   /^zod(\/.*)?$/u,
   /^acorn$/u,
@@ -44,13 +41,7 @@ const DOMAIN_ALLOWED = [
   /^(\.\.\/)+(types|utils|sql)(\/[\w-]+)?(\.js)?$/u,
 ]
 
-// The specifier of an import / re-export statement, when it has one.
-function sourceOf(node) {
-  const value = node.source?.value
-  return typeof value === 'string' ? value : null
-}
-
-// Whether a statement imports only types (`import type`, `export type`), which carry no behaviour.
+// `import type` / `export type` carry no behaviour, so no layer rule counts them.
 function isTypeOnly(node) {
   if (node.importKind === 'type' || node.exportKind === 'type') return true
   return (
@@ -59,7 +50,6 @@ function isTypeOnly(node) {
   )
 }
 
-// Visit every import / re-export of a module.
 function onImports(check) {
   return {
     ImportDeclaration: check,
@@ -70,20 +60,7 @@ function onImports(check) {
   }
 }
 
-// `c.<name>(...)`.
-function isContextCall(node, name) {
-  const callee = node.callee
-  return (
-    callee?.type === 'MemberExpression' &&
-    !callee.computed &&
-    callee.object.type === 'Identifier' &&
-    callee.object.name === 'c' &&
-    callee.property.type === 'Identifier' &&
-    callee.property.name === name
-  )
-}
-
-// The `<method>` of `c.req.<method>(...)`, or null.
+// The `<method>` of `c.req.<method>(...)`.
 function requestMethod(node) {
   const callee = node.callee
   if (
@@ -100,15 +77,6 @@ function requestMethod(node) {
     return null
   }
   return callee.property.name
-}
-
-function isAsConst(node) {
-  return (
-    node?.type === 'TSAsExpression' &&
-    node.typeAnnotation.type === 'TSTypeReference' &&
-    node.typeAnnotation.typeName.type === 'Identifier' &&
-    node.typeAnnotation.typeName.name === 'const'
-  )
 }
 
 // The `c.req.valid(...)` call is the whole of `const data = …`, alone or spread with others.
@@ -130,7 +98,6 @@ function isConstData(node) {
   )
 }
 
-// `XxxSchema.parse(…)`.
 function isSchemaParse(node) {
   return (
     node?.type === 'CallExpression' &&
@@ -141,43 +108,32 @@ function isSchemaParse(node) {
   )
 }
 
-// `class … extends Data.TaggedError('…')`.
-function isTaggedError(node) {
-  const parent = node.superClass
-  return (
-    parent?.type === 'CallExpression' &&
-    parent.callee.type === 'MemberExpression' &&
-    parent.callee.object.type === 'Identifier' &&
-    parent.callee.object.name === 'Data' &&
-    parent.callee.property.type === 'Identifier' &&
-    parent.callee.property.name === 'TaggedError'
-  )
-}
-
 export const layerRules = {
-  // Why: a service touches one piece of I/O; combining them is the usecase's job, so reading the
-  //      usecase shows everything that happens. Types may be shared.
-  //   NG: services/state.ts:  import * as LoadService from './load.js'
+  // Why: each layer leans one way. A usecase owns a request and imports no other usecase; a
+  //      service touches one piece of I/O and imports no other service; nothing calls back up.
+  //   NG: services/state.ts:   import * as LoadService from './load.js'
+  //   NG: usecases/client.ts:  import * as SchemaUseCase from './schema.js'
+  //   NG: handlers/db.ts:      import * as StudioService from '../services/index.js'
   //   OK: usecases/schema.ts calls LoadService, then StateService
   //   OK: import type * as StateService from './state.js'
-  'no-service-to-service': {
-    meta: { docs: { description: "a service may not import another service's values" } },
+  'layer-imports': {
+    meta: { docs: { description: 'each server layer imports only the layers below it' } },
     create(context) {
       const filename = filenameOf(context)
-      if (
-        layerOf(filename) !== 'services' ||
-        INDEX_FILE.test(filename) ||
-        TEST_FILE.test(filename)
-      ) {
-        return {}
-      }
+      const forbidden = Object.entries(FORBIDDEN_IMPORTS).find(([layer]) =>
+        isLayerModule(filename, layer),
+      )?.[1]
+      if (forbidden === undefined) return {}
       return onImports((node) => {
-        const source = sourceOf(node)
-        if (source === null || isTypeOnly(node)) return
-        if (!source.startsWith('./') && !/(^|\/)services(\/|$)/u.test(source)) return
+        if (isTypeOnly(node)) return
+        const source = node.source.value
+        const resolved = resolveRelative(filename, source)
+        const target = resolved === null ? null : layerOf(resolved)
+        const why = target === null ? undefined : forbidden[target]
+        if (why === undefined) return
         context.report({
           node: node.source,
-          message: `A service may not import another service (\`${source}\`). Each service touches one piece of I/O; call both from the usecase instead, so reading it shows everything that happens. \`import type\` is fine.`,
+          message: `\`${source}\` reaches ${target} from ${layerOf(filename)}. ${why} \`import type\` is fine.`,
         })
       })
     },
@@ -195,8 +151,8 @@ export const layerRules = {
       const layer = layerOf(filename)
       if (layer === 'usecases' || layer === 'domain' || TEST_FILE.test(filename)) return {}
       return onImports((node) => {
-        const source = sourceOf(node)
-        if (source === null || isTypeOnly(node)) return
+        if (isTypeOnly(node)) return
+        const source = node.source.value
         const resolved = resolveRelative(filename, source)
         if (resolved === null || !DOMAIN_PATH.test(resolved)) return
         context.report({
@@ -224,8 +180,8 @@ export const layerRules = {
       if (TEST_FILE.test(filenameOf(context))) return {}
       return {
         ...onImports((node) => {
-          const source = sourceOf(node)
-          if (source === null || isTypeOnly(node)) return
+          if (isTypeOnly(node)) return
+          const source = node.source.value
           if (DOMAIN_ALLOWED.some((pattern) => pattern.test(source))) return
           context.report({
             node: node.source,
@@ -458,7 +414,7 @@ export const layerRules = {
       if (TEST_FILE.test(filenameOf(context))) return {}
       return {
         CallExpression(node) {
-          if (!isContextCall(node, 'json')) return
+          if (memberOf(node.callee, 'c') !== 'json') return
           const [body, status] = node.arguments
           if (status?.type !== 'Literal' || typeof status.value !== 'number') return
           if (status.value >= 200 && status.value < 300) {
@@ -483,22 +439,22 @@ export const layerRules = {
   },
 
   // Why: running an Effect inside a usecase or service lets its failure leave the type midway.
-  //      Compose with `yield*`; only the edge runs Effects and maps failures to statuses.
+  //      Compose with `yield*`; only the handlers (and index.ts's error handler) run Effects.
   //   NG: usecases/database.ts: await Effect.runPromise(StudioService.readState())
   //   OK: usecases/database.ts: yield* StudioService.readState()
   //   OK: handlers/db.ts:       Effect.runPromise(Effect.matchEffect(...))
   'effect-run-at-edge': {
-    meta: { docs: { description: 'run Effects only at the edge (handlers, index.ts, start.ts)' } },
+    meta: { docs: { description: 'run Effects only at the edge (handlers, index.ts)' } },
     create(context) {
       const filename = filenameOf(context)
       if (TEST_FILE.test(filename) || EFFECT_EDGE.test(filename)) return {}
       return {
         CallExpression(node) {
-          const method = effectMember(node.callee)
+          const method = memberOf(node.callee, 'Effect')
           if (method === null || !method.startsWith('run')) return
           context.report({
             node,
-            message: `\`Effect.${method}\` away from the edge. Return the Effect and compose it with \`yield*\`; only handlers, index.ts and start.ts run Effects, so every failure stays in the type until the edge maps it.`,
+            message: `\`Effect.${method}\` away from the edge. Return the Effect and compose it with \`yield*\`; only handlers and index.ts run Effects, so every failure stays in the type until the edge maps it.`,
           })
         },
       }
@@ -558,7 +514,10 @@ export const layerRules = {
       if (TEST_FILE.test(filename)) return {}
       const inErrors = layerOf(filename) === 'errors'
       function check(node) {
-        if (inErrors && isTaggedError(node)) return
+        const parent = node.superClass
+        const tagged =
+          parent?.type === 'CallExpression' && memberOf(parent.callee, 'Data') === 'TaggedError'
+        if (inErrors && tagged) return
         context.report({
           node,
           message: inErrors
@@ -583,30 +542,17 @@ export const layerRules = {
     create(context) {
       const filename = filenameOf(context)
       if (TEST_FILE.test(filename) || INDEX_FILE.test(filename)) return {}
-      function check(name, fn, node) {
-        const [first, ...rest] = fn.params
-        if (first === undefined) return
-        const target = first.type === 'AssignmentPattern' ? first.left : first
-        if (rest.length === 0 && target.type === 'Identifier' && target.name === 'input') return
-        context.report({
-          node,
-          message: `\`${name}\` must take at most one argument, an object named \`input\` (\`${name}(input: { readonly … })\`). Named fields cannot be passed in the wrong order.`,
-        })
-      }
       return {
         ExportNamedDeclaration(node) {
-          const declaration = node.declaration
-          if (declaration?.type === 'FunctionDeclaration' && declaration.id) {
-            check(declaration.id.name, declaration, declaration.id)
-          }
-          if (declaration?.type !== 'VariableDeclaration') return
-          for (const d of declaration.declarations) {
-            if (
-              d.id.type === 'Identifier' &&
-              (d.init?.type === 'ArrowFunctionExpression' || d.init?.type === 'FunctionExpression')
-            ) {
-              check(d.id.name, d.init, d.id)
-            }
+          for (const { name, fn, node: target } of exportedDeclarations(node)) {
+            const [first, ...rest] = fn?.params ?? []
+            if (first === undefined) continue
+            const param = first.type === 'AssignmentPattern' ? first.left : first
+            if (rest.length === 0 && param.type === 'Identifier' && param.name === 'input') continue
+            context.report({
+              node: target,
+              message: `\`${name}\` must take at most one argument, an object named \`input\` (\`${name}(input: { readonly … })\`). Named fields cannot be passed in the wrong order.`,
+            })
           }
         },
       }
