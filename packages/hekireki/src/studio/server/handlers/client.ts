@@ -24,8 +24,6 @@ import {
   ClientSignatureHelpSchema,
   ClientStatusSchema,
   ClientTypeDiagnosticsSchema,
-  ServiceUnavailableProblemSchema,
-  ValidationProblemSchema,
 } from '../routes/index.js'
 import * as ClientUseCase from '../usecases/index.js'
 
@@ -101,14 +99,14 @@ export const postClientRunRouteHandler: RouteHandler<typeof postClientRunRoute> 
           Match.tag('InvalidInputError', ({ field, message }) =>
             Effect.succeed(
               c.json(
-                ValidationProblemSchema.parse({
+                {
                   type: '/problems/validation-failed',
                   title: 'Validation Failed',
                   status: 422,
                   detail: message,
                   instance: c.req.path,
                   errors: [{ field, message }],
-                }),
+                } as const,
                 422,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -117,14 +115,14 @@ export const postClientRunRouteHandler: RouteHandler<typeof postClientRunRoute> 
           Match.tag('ClientQueryError', ({ message }) =>
             Effect.succeed(
               c.json(
-                ValidationProblemSchema.parse({
+                {
                   type: '/problems/validation-failed',
                   title: 'Validation Failed',
                   status: 422,
                   detail: message,
                   instance: c.req.path,
                   errors: [{ field: 'query', message }],
-                }),
+                } as const,
                 422,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -133,13 +131,13 @@ export const postClientRunRouteHandler: RouteHandler<typeof postClientRunRoute> 
           Match.tag('ClientUnavailableError', ({ reason }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: reason,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -179,13 +177,13 @@ export const postClientCompleteRouteHandler: RouteHandler<typeof postClientCompl
             Match.tag('ClientUnavailableError', ({ reason }) =>
               Effect.succeed(
                 c.json(
-                  ServiceUnavailableProblemSchema.parse({
+                  {
                     type: '/problems/service-unavailable',
                     title: 'Service Unavailable',
                     status: 503,
                     detail: reason,
                     instance: c.req.path,
-                  }),
+                  } as const,
                   503,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -232,13 +230,13 @@ export const postClientCompleteDetailRouteHandler: RouteHandler<
             Match.tag('ClientUnavailableError', ({ reason }) =>
               Effect.succeed(
                 c.json(
-                  ServiceUnavailableProblemSchema.parse({
+                  {
                     type: '/problems/service-unavailable',
                     title: 'Service Unavailable',
                     status: 503,
                     detail: reason,
                     instance: c.req.path,
-                  }),
+                  } as const,
                   503,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -276,13 +274,13 @@ export const postClientHoverRouteHandler: RouteHandler<typeof postClientHoverRou
           Match.tag('ClientUnavailableError', ({ reason }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: reason,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -323,13 +321,13 @@ export const postClientSignatureRouteHandler: RouteHandler<typeof postClientSign
             Match.tag('ClientUnavailableError', ({ reason }) =>
               Effect.succeed(
                 c.json(
-                  ServiceUnavailableProblemSchema.parse({
+                  {
                     type: '/problems/service-unavailable',
                     title: 'Service Unavailable',
                     status: 503,
                     detail: reason,
                     instance: c.req.path,
-                  }),
+                  } as const,
                   503,
                   { 'Content-Type': 'application/problem+json' },
                 ),
@@ -368,13 +366,13 @@ export const postClientCheckRouteHandler: RouteHandler<typeof postClientCheckRou
           Match.tag('ClientUnavailableError', ({ reason }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: reason,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -412,14 +410,14 @@ export const postClientFormatRouteHandler: RouteHandler<typeof postClientFormatR
           Match.tag('FormatError', ({ message }) =>
             Effect.succeed(
               c.json(
-                ValidationProblemSchema.parse({
+                {
                   type: '/problems/validation-failed',
                   title: 'Validation Failed',
                   status: 422,
                   detail: message,
                   instance: c.req.path,
                   errors: [{ field: 'query', message }],
-                }),
+                } as const,
                 422,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -457,14 +455,14 @@ export const postClientPreviewRouteHandler: RouteHandler<typeof postClientPrevie
           Match.tag('InvalidInputError', ({ field, message }) =>
             Effect.succeed(
               c.json(
-                ValidationProblemSchema.parse({
+                {
                   type: '/problems/validation-failed',
                   title: 'Validation Failed',
                   status: 422,
                   detail: message,
                   instance: c.req.path,
                   errors: [{ field, message }],
-                }),
+                } as const,
                 422,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -473,14 +471,14 @@ export const postClientPreviewRouteHandler: RouteHandler<typeof postClientPrevie
           Match.tag('ClientQueryError', ({ message }) =>
             Effect.succeed(
               c.json(
-                ValidationProblemSchema.parse({
+                {
                   type: '/problems/validation-failed',
                   title: 'Validation Failed',
                   status: 422,
                   detail: message,
                   instance: c.req.path,
                   errors: [{ field: 'query', message }],
-                }),
+                } as const,
                 422,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -489,13 +487,13 @@ export const postClientPreviewRouteHandler: RouteHandler<typeof postClientPrevie
           Match.tag('ClientUnavailableError', ({ reason }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: reason,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),

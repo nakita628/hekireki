@@ -55,14 +55,21 @@
 //                                   is imported directly (`./load.js`), the barrel would be a
 //                                   cycle; the client imports lib through lib/index.js; every
 //                                   other namespace import stays banned (zod/valibot aside)
+// layers.js, failures.js and docs.js hold the rules taken from drizzler (layering, failures,
+// documentation); their headers list them. helpers.js is what every module shares.
+//
 // Tests are exempt from the structural rules (effect-gen-return, function-declaration, no-let,
 // no-mutation, no-pass-through): a test arranges and asserts imperatively when that is the clearest way to spell
 // the fixture out.
+import { docRules } from './docs.js'
+import { failureRules } from './failures.js'
+import { TEST_FILE, effectMember, filenameOf, sourceTextOf } from './helpers.js'
+import { layerRules } from './layers.js'
+
 const PASCAL_CASE = /^[A-Z][A-Za-z0-9]*$/u
 const CAMEL_CASE = /^[a-z][A-Za-z0-9]*$/u
 const UPPER_SNAKE = /^[A-Z][A-Z0-9_]*$/u
 const LAYER_SUFFIX = /(UseCase|Service|Domain)$/u
-const TEST_FILE = /\.test\.tsx?$/u
 
 const STUDIO_SERVER = /(^|[\\/])studio[\\/]server[\\/]/u
 const HANDLER_MODULE = /(^|[\\/])handlers[\\/](?!index\.)[^\\/]+\.tsx?$/u
@@ -114,10 +121,6 @@ export function isServiceModulePath(filename) {
  */
 export function isUseCaseSpecifier(source) {
   return source.startsWith('./') ? true : /(^|\/)usecases(\/|$)/u.test(source)
-}
-
-function filenameOf(context) {
-  return context.filename ?? context.getFilename?.() ?? ''
 }
 
 /**
@@ -194,16 +197,6 @@ const MUTATING_ARRAY_METHODS = new Set([
   'fill',
   'copyWithin',
 ])
-
-// `Effect.<name>` member accesses, the shape every combinator ban below keys on.
-function effectMember(node) {
-  return node.type === 'MemberExpression' &&
-    node.object.type === 'Identifier' &&
-    node.object.name === 'Effect' &&
-    node.property.type === 'Identifier'
-    ? node.property.name
-    : null
-}
 
 // Walk a chain such as `z.object({...})` / `z.string().min(1)` / `v.pipe(...)` down to its
 // root and return the root identifier name (`z.coerce.number().int()` still reaches 'z').
@@ -652,6 +645,9 @@ function isAnonymousFunctionInit(init) {
 const plugin = {
   meta: { name: 'custom' },
   rules: {
+    ...layerRules,
+    ...failureRules,
+    ...docRules,
     'effect-gen-return': {
       meta: {
         docs: {
@@ -835,7 +831,7 @@ const plugin = {
       create(context) {
         return {
           Program(node) {
-            const text = context.sourceCode?.text ?? context.getSourceCode?.().text ?? ''
+            const text = sourceTextOf(context)
             const body = node.body ?? []
             for (const [index, current] of body.entries()) {
               if (index === 0) continue
@@ -1306,7 +1302,7 @@ const plugin = {
         const filename = filenameOf(context)
         if (!STUDIO_SERVER.test(filename) || !HANDLER_MODULE.test(filename)) return {}
         if (TEST_FILE.test(filename)) return {}
-        const text = context.sourceCode?.text ?? context.getSourceCode?.().text ?? ''
+        const text = sourceTextOf(context)
         return {
           ExportNamedDeclaration(node) {
             const declaration = node.declaration

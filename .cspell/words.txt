@@ -71,6 +71,7 @@ dmmf
 docstrings
 documenso
 DOUB
+drizzler
 dunder
 efcore
 EFCORE

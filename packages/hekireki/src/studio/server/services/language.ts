@@ -321,6 +321,18 @@ function blocksOf(workspace: Workspace) {
 /**
  * The diagnostics and the blocks of the loaded files, from one workspace: what a reload reads,
  * which would otherwise build the same documents twice. Either is empty where the server throws.
+ *
+ * ```mermaid
+ * flowchart LR
+ *   files[loaded files] --> ws[workspace of documents] --> ls[(Prisma language server)]
+ *   ls -->|handleDiagnosticsRequest| diagnostics[diagnostics with paths]
+ *   ls -->|getBlocks| blocks[blocks with file and line]
+ *   files -->|none| none[both empty]
+ *   ws & diagnostics & blocks -->|"throws (UnknownError), logDebug"| empty[that part empty]
+ * ```
+ *
+ * @param input.files - the loaded schema files
+ * @returns the diagnostics and the blocks of every loaded file; it does not fail
  */
 export function inspectFiles(input: z.infer<typeof LoadedFilesInput>) {
   return Effect.gen(function* () {
@@ -328,12 +340,26 @@ export function inspectFiles(input: z.infer<typeof LoadedFilesInput>) {
     if (first === undefined) return { diagnostics: [], blocks: [] }
     const workspace = yield* Effect.try(() =>
       makeWorkspace({ files: input.files, path: first.path, text: first.content }),
-    ).pipe(Effect.orElseSucceed(() => null))
+    ).pipe(
+      Effect.catchTag('UnknownError', (error) =>
+        Effect.logDebug('the language server could not read the schema files', error).pipe(
+          Effect.as(null),
+        ),
+      ),
+    )
     if (workspace === null) return { diagnostics: [], blocks: [] }
     const diagnostics = yield* Effect.try(() => diagnosticsOf(workspace)).pipe(
-      Effect.orElseSucceed(() => []),
+      Effect.catchTag('UnknownError', (error) =>
+        Effect.logDebug('the language server could not list the diagnostics', error).pipe(
+          Effect.as([]),
+        ),
+      ),
     )
-    const blocks = yield* Effect.try(() => blocksOf(workspace)).pipe(Effect.orElseSucceed(() => []))
+    const blocks = yield* Effect.try(() => blocksOf(workspace)).pipe(
+      Effect.catchTag('UnknownError', (error) =>
+        Effect.logDebug('the language server could not list the blocks', error).pipe(Effect.as([])),
+      ),
+    )
     return { diagnostics, blocks }
   })
 }
@@ -342,14 +368,32 @@ export function inspectFiles(input: z.infer<typeof LoadedFilesInput>) {
 // The text being edited: what the editor asks about it.
 // ---------------------------------------------------------------------------------------------
 
-/** The diagnostics of the edited text, validated together with the other loaded files. */
+/**
+ * The diagnostics of the edited text, validated together with the other loaded files.
+ *
+ * ```mermaid
+ * flowchart LR
+ *   in[files + edited text] --> ls[(Prisma language server)] -->|handleDiagnosticsRequest| out[diagnostics of the edited file]
+ *   ls -->|"throws (UnknownError)"| log["logDebug: could not lint the schema"] --> empty["[]"]
+ * ```
+ *
+ * @param input.files - the loaded schema files
+ * @param input.path - the file the text belongs to, or null for a lone in-memory document
+ * @param input.text - the text as typed
+ * @returns the edited file's diagnostics, each with its range, message and severity; empty where
+ *   the server throws
+ */
 export function lintSchema(input: z.infer<typeof EditedSchemaInput>) {
   return Effect.try(() => {
     const workspace = makeWorkspace(input)
     return diagnosticsOf(workspace)
       .filter((diagnostic) => diagnostic.path === (input.path ?? ''))
       .map(({ range, message, severity }) => ({ range, message, severity }))
-  }).pipe(Effect.orElseSucceed(() => []))
+  }).pipe(
+    Effect.catchTag('UnknownError', (error) =>
+      Effect.logDebug('the language server could not lint the schema', error).pipe(Effect.as([])),
+    ),
+  )
 }
 
 const FORMAT_OPTIONS = { tabSize: 2, insertSpaces: true } as const
@@ -365,7 +409,20 @@ function formatEdits(workspace: Workspace, onError: (message: string) => void) {
   ).filter((edit) => edit.newText !== workspace.document.getText())
 }
 
-/** The edits the Prisma formatter makes to the edited text; empty when it is already formatted. */
+/**
+ * The edits the Prisma formatter makes to the edited text; empty when it is already formatted.
+ *
+ * ```mermaid
+ * flowchart LR
+ *   in[files + edited text] --> ls[(Prisma language server)] -->|handleDocumentFormatting| edits[edits that change the text]
+ *   ls -->|reports an error| fail[FormatError]
+ * ```
+ *
+ * @param input.files - the loaded schema files
+ * @param input.path - the file the text belongs to, or null for a lone in-memory document
+ * @param input.text - the text as typed
+ * @returns the formatting edits, each a range and its new text
+ */
 export function formatSchema(input: z.infer<typeof EditedSchemaInput>) {
   return Effect.suspend(() => {
     const failures: string[] = []
@@ -380,7 +437,20 @@ export function formatSchema(input: z.infer<typeof EditedSchemaInput>) {
   })
 }
 
-/** The blocks of the edited text as the language server's document outline lists them. */
+/**
+ * The blocks of the edited text as the language server's document outline lists them.
+ *
+ * ```mermaid
+ * flowchart LR
+ *   in[files + edited text] --> ls[(Prisma language server)] -->|handleDocumentSymbol| out[symbols: name, kind, ranges]
+ *   ls -->|"throws (UnknownError)"| log["logDebug: could not list the symbols"] --> empty["[]"]
+ * ```
+ *
+ * @param input.files - the loaded schema files
+ * @param input.path - the file the text belongs to, or null for a lone in-memory document
+ * @param input.text - the text as typed
+ * @returns each block's name, kind, range and selection range; empty where the server throws
+ */
 export function symbolsOfSchema(input: z.infer<typeof EditedSchemaInput>) {
   return Effect.try(() => {
     const workspace = makeWorkspace(input)
@@ -398,7 +468,11 @@ export function symbolsOfSchema(input: z.infer<typeof EditedSchemaInput>) {
           selectionRange: rangeOf(symbol.selectionRange),
         }),
       )
-  }).pipe(Effect.orElseSucceed(() => []))
+  }).pipe(
+    Effect.catchTag('UnknownError', (error) =>
+      Effect.logDebug('the language server could not list the symbols', error).pipe(Effect.as([])),
+    ),
+  )
 }
 
 const PositionParamsInput = z
@@ -455,7 +529,26 @@ function markdownOf(
   return contents.map((part) => (typeof part === 'string' ? part : part.value)).join('\n\n')
 }
 
-/** Completions the Prisma language server offers at the position: keywords, types, attributes, arguments, values. */
+/**
+ * Completions the Prisma language server offers at the position: keywords, types, attributes,
+ * arguments, values.
+ *
+ * ```mermaid
+ * flowchart LR
+ *   in[files + edited text + position + trigger character] --> ls[(Prisma language server)] -->|handleCompletionRequest| out[completion items]
+ *   ls -->|"throws (UnknownError)"| log["logDebug: could not complete"] --> empty["[]"]
+ * ```
+ *
+ * @param input.files - the loaded schema files
+ * @param input.path - the file the text belongs to, or null for a lone in-memory document
+ * @param input.text - the text as typed
+ * @param input.line - 0-based line of the cursor
+ * @param input.character - 0-based column of the cursor
+ * @param input.triggerCharacter - the character that opened the list, or null when the user asked
+ *   for it
+ * @returns the completion items, with their insert text and whether it is a snippet; empty where
+ *   the server throws
+ */
 export function completeSchema(input: z.infer<typeof CompleteSchemaInput>) {
   return Effect.try(() => {
     const workspace = makeWorkspace(input)
@@ -490,10 +583,30 @@ export function completeSchema(input: z.infer<typeof CompleteSchemaInput>) {
         sortText: item.sortText ?? null,
       }),
     )
-  }).pipe(Effect.orElseSucceed(() => []))
+  }).pipe(
+    Effect.catchTag('UnknownError', (error) =>
+      Effect.logDebug('the language server could not complete', error).pipe(Effect.as([])),
+    ),
+  )
 }
 
-/** What the Prisma language server says about the symbol at the position, as Markdown. */
+/**
+ * What the Prisma language server says about the symbol at the position, as Markdown.
+ *
+ * ```mermaid
+ * flowchart LR
+ *   in[files + edited text + position] --> ls[(Prisma language server)] -->|handleHoverRequest| out[Markdown + range]
+ *   ls -->|"throws (UnknownError)"| log["logDebug: could not hover"] --> empty[contents and range null]
+ * ```
+ *
+ * @param input.files - the loaded schema files
+ * @param input.path - the file the text belongs to, or null for a lone in-memory document
+ * @param input.text - the text as typed
+ * @param input.line - 0-based line of the cursor
+ * @param input.character - 0-based column of the cursor
+ * @returns the hover text as Markdown and the range it covers; both null where there is nothing
+ *   to say or the server throws
+ */
 export function hoverSchema(input: z.infer<typeof PositionParamsInput>) {
   return Effect.try(() => {
     const workspace = makeWorkspace(input)
@@ -507,10 +620,31 @@ export function hoverSchema(input: z.infer<typeof PositionParamsInput>) {
     return hover === undefined
       ? { contents: null, range: null }
       : { contents: markdownOf(hover.contents), range: hover.range ? rangeOf(hover.range) : null }
-  }).pipe(Effect.orElseSucceed(() => ({ contents: null, range: null })))
+  }).pipe(
+    Effect.catchTag('UnknownError', (error) =>
+      Effect.logDebug('the language server could not hover', error).pipe(
+        Effect.as({ contents: null, range: null }),
+      ),
+    ),
+  )
 }
 
-/** Where the model, enum or type referenced at the position is declared. */
+/**
+ * Where the model, enum or type referenced at the position is declared.
+ *
+ * ```mermaid
+ * flowchart LR
+ *   in[files + edited text + position] --> ls[(Prisma language server)] -->|handleDefinitionRequest| out[path + range of each declaration]
+ *   ls -->|"throws (UnknownError)"| log["logDebug: could not find the definition"] --> empty["[]"]
+ * ```
+ *
+ * @param input.files - the loaded schema files
+ * @param input.path - the file the text belongs to, or null for a lone in-memory document
+ * @param input.text - the text as typed
+ * @param input.line - 0-based line of the cursor
+ * @param input.character - 0-based column of the cursor
+ * @returns the path, range and selection range of each declaration; empty where the server throws
+ */
 export function defineSchema(input: z.infer<typeof PositionParamsInput>) {
   return Effect.try(() => {
     const workspace = makeWorkspace(input)
@@ -526,10 +660,31 @@ export function defineSchema(input: z.infer<typeof PositionParamsInput>) {
       range: rangeOf(link.targetRange),
       selection: rangeOf(link.targetSelectionRange),
     }))
-  }).pipe(Effect.orElseSucceed(() => []))
+  }).pipe(
+    Effect.catchTag('UnknownError', (error) =>
+      Effect.logDebug('the language server could not find the definition', error).pipe(
+        Effect.as([]),
+      ),
+    ),
+  )
 }
 
-/** Every place the symbol at the position is used, across the loaded files, declaration included. */
+/**
+ * Every place the symbol at the position is used, across the loaded files, declaration included.
+ *
+ * ```mermaid
+ * flowchart LR
+ *   in[files + edited text + position] --> ls[(Prisma language server)] -->|handleReferencesRequest| out[path + range of each use]
+ *   ls -->|"throws (UnknownError)"| log["logDebug: could not find the references"] --> empty["[]"]
+ * ```
+ *
+ * @param input.files - the loaded schema files
+ * @param input.path - the file the text belongs to, or null for a lone in-memory document
+ * @param input.text - the text as typed
+ * @param input.line - 0-based line of the cursor
+ * @param input.character - 0-based column of the cursor
+ * @returns the path and range of each use; empty where the server throws
+ */
 export function referencesSchema(input: z.infer<typeof PositionParamsInput>) {
   return Effect.try(() => {
     const workspace = makeWorkspace(input)
@@ -543,7 +698,13 @@ export function referencesSchema(input: z.infer<typeof PositionParamsInput>) {
       path: workspace.pathOf(location.uri),
       range: rangeOf(location.range),
     }))
-  }).pipe(Effect.orElseSucceed(() => []))
+  }).pipe(
+    Effect.catchTag('UnknownError', (error) =>
+      Effect.logDebug('the language server could not find the references', error).pipe(
+        Effect.as([]),
+      ),
+    ),
+  )
 }
 
 function fileEdits(
@@ -573,7 +734,23 @@ const RenameSchemaInput = z
     example: { files: [], path: null, text: '', line: 0, character: 7, newName: 'Account' },
   })
 
-/** The edits that rename the model, enum or field at the position everywhere it is used, per file. */
+/**
+ * The edits that rename the model, enum or field at the position everywhere it is used, per file.
+ *
+ * ```mermaid
+ * flowchart LR
+ *   in[files + edited text + position + new name] --> ls[(Prisma language server)] -->|handleRenameRequest| out[edits per file]
+ *   ls -->|"throws (UnknownError)"| log["logDebug: could not rename"] --> empty["[]"]
+ * ```
+ *
+ * @param input.files - the loaded schema files
+ * @param input.path - the file the text belongs to, or null for a lone in-memory document
+ * @param input.text - the text as typed
+ * @param input.line - 0-based line of the cursor
+ * @param input.character - 0-based column of the cursor
+ * @param input.newName - the new name
+ * @returns the edits of each file the rename touches; empty where the server throws
+ */
 export function renameSchema(input: z.infer<typeof RenameSchemaInput>) {
   return Effect.try(() => {
     const workspace = makeWorkspace(input)
@@ -584,7 +761,11 @@ export function renameSchema(input: z.infer<typeof RenameSchemaInput>) {
       }),
     )
     return fileEdits(workspace, edit?.changes)
-  }).pipe(Effect.orElseSucceed(() => []))
+  }).pipe(
+    Effect.catchTag('UnknownError', (error) =>
+      Effect.logDebug('the language server could not rename', error).pipe(Effect.as([])),
+    ),
+  )
 }
 
 const CodeActionsSchemaInput = z
@@ -639,7 +820,27 @@ function formatFix(input: z.infer<typeof CodeActionsSchemaInput>, workspace: Wor
   ]
 }
 
-/** The quick fixes for the diagnostics in the range: the language server's, then the formatter when it fixes errors. */
+/**
+ * The quick fixes for the diagnostics in the range: the language server's, then the formatter when
+ * it fixes errors.
+ *
+ * ```mermaid
+ * flowchart LR
+ *   in[files + edited text + range + diagnostics] --> ls[(Prisma language server)]
+ *   ls -->|handleCodeActions| actions[the server's quick fixes]
+ *   ls -->|"handleDocumentFormatting, fewer errors after"| format[Format with Prisma]
+ *   actions & format --> out[actions with edits per file]
+ *   ls -->|"throws (UnknownError)"| log["logDebug: could not list the code actions"] --> empty["[]"]
+ * ```
+ *
+ * @param input.files - the loaded schema files
+ * @param input.path - the file the text belongs to, or null for a lone in-memory document
+ * @param input.text - the text as typed
+ * @param input.range - the range the actions are asked for
+ * @param input.diagnostics - the diagnostics the editor shows in the range
+ * @returns each action's title, edits per file and whether it is preferred; empty where the
+ *   server throws
+ */
 export function codeActionsSchema(input: z.infer<typeof CodeActionsSchemaInput>) {
   return Effect.try(() => {
     const workspace = makeWorkspace(input)
@@ -664,5 +865,11 @@ export function codeActionsSchema(input: z.infer<typeof CodeActionsSchemaInput>)
       })),
       ...formatFix(input, workspace),
     ]
-  }).pipe(Effect.orElseSucceed(() => []))
+  }).pipe(
+    Effect.catchTag('UnknownError', (error) =>
+      Effect.logDebug('the language server could not list the code actions', error).pipe(
+        Effect.as([]),
+      ),
+    ),
+  )
 }

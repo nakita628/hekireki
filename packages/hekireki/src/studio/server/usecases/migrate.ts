@@ -31,6 +31,7 @@ import {
   MigrateDatabaseError,
   MigrationNotFoundError,
 } from '../../../migrate/errors.js'
+import * as DatabaseService from '../services/index.js'
 import * as StudioService from '../services/index.js'
 import * as MigrateService from '../services/index.js'
 
@@ -45,6 +46,12 @@ function session() {
       files: state.snapshot().files,
       driver,
       url: db.target?.url ?? null,
+      openShadow: () =>
+        DatabaseService.openShadowDatabase({
+          url: db.target?.url ?? '',
+          driver,
+          cwd: process.cwd(),
+        }),
     })
     // The URL as found, password and all: what the check opens its own read-only connection to,
     // so it reads the database Studio is on rather than resolving one of its own.
@@ -55,6 +62,34 @@ function session() {
 /**
  * The migration history of the database against the migrations directory, and whether the
  * database has drifted from the schema.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant H as Handler
+ *   participant U as MigrateUseCase
+ *   participant S as StudioService
+ *   participant D as DatabaseService
+ *   participant M as MigrateService
+ *   participant A as migrate adapter (commands)
+ *   H->>U: readMigrateStatus()
+ *   U->>S: studio() state, db
+ *   U->>D: db.driver
+ *   alt DatabaseUnavailableError
+ *     U-->>H: the failure
+ *   end
+ *   U->>M: openMigrateSession({ schemaPath, files, driver, url, openShadow })
+ *   alt MigrateConfigError (no native engine for MySQL or a PostgreSQL schema)
+ *     U-->>H: the failure
+ *   end
+ *   M-->>U: engine, migrations, migrationsDir, schemaDir
+ *   U->>A: migrationStatus({ engine, driver, migrations, files, configDir })
+ *   alt MigrateEngineError
+ *     U-->>H: the failure
+ *   else status
+ *     A-->>U: applied, pending, failed, drift
+ *     U-->>H: status, migrationsDir
+ *   end
+ * ```
  *
  * @returns what has been applied, what is pending, what went wrong and whether it has drifted
  */
@@ -77,6 +112,34 @@ export function readMigrateStatus() {
 
 /**
  * The migration that would take the database to the schema, as Prisma Migrate would write it.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant H as Handler
+ *   participant U as MigrateUseCase
+ *   participant S as StudioService
+ *   participant D as DatabaseService
+ *   participant M as MigrateService
+ *   participant A as migrate adapter (commands)
+ *   H->>U: readMigrateDiff()
+ *   U->>S: studio() state, db
+ *   U->>D: db.driver
+ *   alt DatabaseUnavailableError
+ *     U-->>H: the failure
+ *   end
+ *   U->>M: openMigrateSession({ schemaPath, files, driver, url, openShadow })
+ *   alt MigrateConfigError (no native engine for MySQL or a PostgreSQL schema)
+ *     U-->>H: the failure
+ *   end
+ *   M-->>U: engine, migrations, migrationsDir, schemaDir
+ *   U->>A: migrationDiff({ engine, files, configDir })
+ *   alt MigrateEngineError
+ *     U-->>H: the failure
+ *   else diff
+ *     A-->>U: sql, drift
+ *     U-->>H: sql, drift
+ *   end
+ * ```
  *
  * @returns the SQL, and whether there was anything to write
  */
@@ -127,6 +190,50 @@ const PlanMigrationInput = z
 
 /**
  * The migration laid out as steps that can be run one at a time.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant H as Handler
+ *   participant U as MigrateUseCase
+ *   participant S as StudioService
+ *   participant D as DatabaseService
+ *   participant M as MigrateService
+ *   participant A as migrate adapter (commands, decisions-file)
+ *   participant K as checkOpened
+ *   participant P as migrate domain (makePlan, migrationName)
+ *   H->>U: planMigration({ name, decisions, batch })
+ *   U->>S: studio() state, db
+ *   U->>D: db.driver
+ *   alt DatabaseUnavailableError
+ *     U-->>H: the failure
+ *   end
+ *   U->>M: openMigrateSession({ schemaPath, files, driver, url, openShadow })
+ *   alt MigrateConfigError (no native engine for MySQL or a PostgreSQL schema)
+ *     U-->>H: the failure
+ *   end
+ *   M-->>U: engine, migrations, migrationsDir, schemaDir
+ *   U->>A: migrationDiff({ engine, files, configDir })
+ *   alt MigrateEngineError
+ *     U-->>H: the failure
+ *   end
+ *   opt no decisions in the request
+ *     U->>A: readDecisions(decisionsPath)
+ *     alt MigrateConfigError (the file does not read)
+ *       U-->>H: the failure
+ *     end
+ *   end
+ *   U->>K: checkOpened({ driver, url, schemaPath, decisions, setAside, files })
+ *   Note over K: on the connection Studio holds, not a second one
+ *   alt MigrateDatabaseError or MigrateConfigError
+ *     U-->>H: the failure
+ *   else report
+ *     K-->>U: checks, fixes, previews
+ *     U->>P: makePlan(report, diff.sql, batch)
+ *     U->>P: migrationName({ at, name })
+ *     Note over U: no drift: a note that there is nothing to migrate
+ *     U-->>H: name, steps, previews, notes
+ *   end
+ * ```
  *
  * @param input - the name to propose for it
  * @returns the steps, the name and what the person running them needs to know
@@ -188,6 +295,28 @@ const ApplyStatementsInput = z
 /**
  * Runs the statements one at a time, stopping at the first the database refuses.
  *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant H as Handler
+ *   participant U as MigrateUseCase
+ *   participant S as StudioService
+ *   participant D as DatabaseService
+ *   participant M as MigrateService
+ *   participant A as migrate adapter (commands)
+ *   H->>U: applyMigrationStatements({ statements })
+ *   U->>S: studio().db
+ *   U->>D: db.driver
+ *   alt DatabaseUnavailableError
+ *     U-->>H: the failure
+ *   end
+ *   U->>A: applyStatements({ driver, statements })
+ *   loop each statement, until one is refused
+ *     A->>D: executeRaw({ sql, params })
+ *   end
+ *   A-->>U: results, failedAt, ok
+ *   U-->>H: results, failedAt, ok
+ * ```
+ *
  * @param input - the statements, in the order they must run
  * @returns one result per statement attempted, and where it stopped
  */
@@ -213,6 +342,36 @@ const CreateMigrationInput = z
 
 /**
  * Writes a migration.sql to the migrations directory, so Prisma Migrate owns it from now on.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant H as Handler
+ *   participant U as MigrateUseCase
+ *   participant S as StudioService
+ *   participant D as DatabaseService
+ *   participant M as MigrateService
+ *   participant P as migrate domain (migrationName)
+ *   participant A as migrate adapter (migrations-dir)
+ *   H->>U: createMigration({ name, sql })
+ *   U->>S: studio() state, db
+ *   U->>D: db.driver
+ *   alt DatabaseUnavailableError
+ *     U-->>H: the failure
+ *   end
+ *   U->>M: openMigrateSession({ schemaPath, files, driver, url, openShadow })
+ *   alt MigrateConfigError (no native engine for MySQL or a PostgreSQL schema)
+ *     U-->>H: the failure
+ *   end
+ *   M-->>U: engine, migrations, migrationsDir, schemaDir
+ *   U->>P: migrationName({ at, name })
+ *   U->>A: writeMigration({ baseDir, name, sql, provider })
+ *   alt PlatformError (the directory or file cannot be written)
+ *     U-->>H: the failure
+ *   else written
+ *     A-->>U: file
+ *     U-->>H: name, file
+ *   end
+ * ```
  *
  * @param input - what to call it and the statements to write
  * @returns the name it was written under and the file
@@ -244,6 +403,34 @@ const MarkAppliedInput = z
 /**
  * Records a migration as applied without running it, for one run a step at a time.
  *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant H as Handler
+ *   participant U as MigrateUseCase
+ *   participant S as StudioService
+ *   participant D as DatabaseService
+ *   participant M as MigrateService
+ *   participant A as migrate adapter (commands)
+ *   H->>U: recordMigrationApplied({ name })
+ *   U->>S: studio() state, db
+ *   U->>D: db.driver
+ *   alt DatabaseUnavailableError
+ *     U-->>H: the failure
+ *   end
+ *   U->>M: openMigrateSession({ schemaPath, files, driver, url, openShadow })
+ *   alt MigrateConfigError (no native engine for MySQL or a PostgreSQL schema)
+ *     U-->>H: the failure
+ *   end
+ *   M-->>U: engine, migrations, migrationsDir, schemaDir
+ *   U->>A: markMigrationApplied({ engine, driver, migrations, name })
+ *   alt MigrateConfigError or MigrateEngineError
+ *     U-->>H: the failure
+ *   end
+ *   Note over U: readMigrateStatus(), its own session and migrationStatus
+ *   U->>A: migrationStatus({ engine, driver, migrations, files, configDir })
+ *   U-->>H: the history as it is now
+ * ```
+ *
  * @param input - the directory name of the migration
  * @returns the history as it is once it is recorded
  */
@@ -263,6 +450,34 @@ export function recordMigrationApplied(input: z.infer<typeof MarkAppliedInput>) 
 /**
  * Applies every migration the database has not run yet, as `prisma migrate deploy` does.
  *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant H as Handler
+ *   participant U as MigrateUseCase
+ *   participant S as StudioService
+ *   participant D as DatabaseService
+ *   participant M as MigrateService
+ *   participant A as migrate adapter (commands)
+ *   H->>U: deployMigrations()
+ *   U->>S: studio() state, db
+ *   U->>D: db.driver
+ *   alt DatabaseUnavailableError
+ *     U-->>H: the failure
+ *   end
+ *   U->>M: openMigrateSession({ schemaPath, files, driver, url, openShadow })
+ *   alt MigrateConfigError (no native engine for MySQL or a PostgreSQL schema)
+ *     U-->>H: the failure
+ *   end
+ *   M-->>U: engine, migrations, migrationsDir, schemaDir
+ *   U->>A: applyPendingMigrations({ engine, migrations })
+ *   alt MigrateEngineError
+ *     U-->>H: the failure
+ *   else deployed
+ *     A-->>U: the migrations that ran
+ *     U-->>H: the migrations that ran
+ *   end
+ * ```
+ *
  * @returns the migrations that ran
  */
 export function deployMigrations() {
@@ -279,6 +494,34 @@ export function deployMigrations() {
 /**
  * Records a migration as rolled back, for one that failed and left the database as it was.
  *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant H as Handler
+ *   participant U as MigrateUseCase
+ *   participant S as StudioService
+ *   participant D as DatabaseService
+ *   participant M as MigrateService
+ *   participant A as migrate adapter (commands)
+ *   H->>U: recordMigrationRolledBack({ name })
+ *   U->>S: studio() state, db
+ *   U->>D: db.driver
+ *   alt DatabaseUnavailableError
+ *     U-->>H: the failure
+ *   end
+ *   U->>M: openMigrateSession({ schemaPath, files, driver, url, openShadow })
+ *   alt MigrateConfigError (no native engine for MySQL or a PostgreSQL schema)
+ *     U-->>H: the failure
+ *   end
+ *   M-->>U: engine, migrations, migrationsDir, schemaDir
+ *   U->>A: markMigrationRolledBack({ engine, name })
+ *   alt MigrateEngineError
+ *     U-->>H: the failure
+ *   end
+ *   Note over U: readMigrateStatus(), its own session and migrationStatus
+ *   U->>A: migrationStatus({ engine, driver, migrations, files, configDir })
+ *   U-->>H: the history as it is now
+ * ```
+ *
  * @param input - the directory name of the migration that failed
  * @returns the history as it is once it is recorded
  */
@@ -292,6 +535,35 @@ export function recordMigrationRolledBack(input: z.infer<typeof MarkAppliedInput
 
 /**
  * What has been decided on the page about the checks, as Studio kept it.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant H as Handler
+ *   participant U as MigrateUseCase
+ *   participant S as StudioService
+ *   participant D as DatabaseService
+ *   participant M as MigrateService
+ *   participant A as migrate adapter (decisions-file)
+ *   H->>U: readMigrationDecisions()
+ *   U->>S: studio() state, db
+ *   U->>D: db.driver
+ *   alt DatabaseUnavailableError
+ *     U-->>H: the failure
+ *   end
+ *   U->>M: openMigrateSession({ schemaPath, files, driver, url, openShadow })
+ *   alt MigrateConfigError (no native engine for MySQL or a PostgreSQL schema)
+ *     U-->>H: the failure
+ *   end
+ *   M-->>U: engine, migrations, migrationsDir, schemaDir
+ *   U->>A: readDecisions(schemaDir/DECISIONS_FILE)
+ *   alt MigrateConfigError (the file does not read)
+ *     U-->>H: the failure
+ *   else decisions
+ *     A-->>U: decisions, value null where a choice needs none
+ *     Note over U: a null value left out, as the wire has it
+ *     U-->>H: file, decisions
+ *   end
+ * ```
  *
  * @returns the decisions and the file they are kept in
  */
@@ -347,6 +619,35 @@ const WriteDecisionsInput = z
  * Keeps the decisions beside the schema, so the page opens on the same ones and makes the same
  * plan, and `hekireki migrate check` and `plan` read the same ones.
  *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant H as Handler
+ *   participant U as MigrateUseCase
+ *   participant S as StudioService
+ *   participant D as DatabaseService
+ *   participant M as MigrateService
+ *   participant A as migrate adapter (decisions-file)
+ *   H->>U: writeMigrationDecisions({ decisions })
+ *   U->>S: studio() state, db
+ *   U->>D: db.driver
+ *   alt DatabaseUnavailableError
+ *     U-->>H: the failure
+ *   end
+ *   U->>M: openMigrateSession({ schemaPath, files, driver, url, openShadow })
+ *   alt MigrateConfigError (no native engine for MySQL or a PostgreSQL schema)
+ *     U-->>H: the failure
+ *   end
+ *   M-->>U: engine, migrations, migrationsDir, schemaDir
+ *   U->>A: writeDecisions({ file, decisions })
+ *   Note over A: parses each decision before it is written
+ *   alt MigrateConfigError
+ *     U-->>H: the failure
+ *   else file
+ *     A-->>U: file
+ *     U-->>H: file, decisions
+ *   end
+ * ```
+ *
  * @param input - all the decisions to keep
  * @returns the decisions and the file they were written to
  */
@@ -364,6 +665,35 @@ export function writeMigrationDecisions(input: z.infer<typeof WriteDecisionsInpu
 /**
  * Which migrations the database already matches: for a database with tables and no history,
  * each migration and those before it replayed into a shadow database and compared with it.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant H as Handler
+ *   participant U as MigrateUseCase
+ *   participant S as StudioService
+ *   participant D as DatabaseService
+ *   participant M as MigrateService
+ *   participant A as migrate adapter (commands)
+ *   H->>U: readMigrateBaseline()
+ *   U->>S: studio() state, db
+ *   U->>D: db.driver
+ *   alt DatabaseUnavailableError
+ *     U-->>H: the failure
+ *   end
+ *   U->>M: openMigrateSession({ schemaPath, files, driver, url, openShadow })
+ *   alt MigrateConfigError (no native engine for MySQL or a PostgreSQL schema)
+ *     U-->>H: the failure
+ *   end
+ *   M-->>U: engine, migrations, migrationsDir, schemaDir
+ *   U->>A: baselineCandidates({ engine, migrations, files, configDir })
+ *   Note over A: each migration and those before it replayed into a shadow database
+ *   alt MigrateEngineError
+ *     U-->>H: the failure
+ *   else candidates
+ *     A-->>U: every migration, with whether the database matches it
+ *     U-->>H: candidates
+ *   end
+ * ```
  *
  * @returns every migration, oldest first, with whether the database matches it
  */
@@ -383,6 +713,37 @@ export function readMigrateBaseline() {
 /**
  * Baselines the database at a migration: that one and every one before it recorded as applied
  * without running them, once the database is checked to match them.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant H as Handler
+ *   participant U as MigrateUseCase
+ *   participant S as StudioService
+ *   participant D as DatabaseService
+ *   participant M as MigrateService
+ *   participant A as migrate adapter (commands)
+ *   H->>U: baselineDatabase({ name })
+ *   U->>S: studio() state, db
+ *   U->>D: db.driver
+ *   alt DatabaseUnavailableError
+ *     U-->>H: the failure
+ *   end
+ *   U->>M: openMigrateSession({ schemaPath, files, driver, url, openShadow })
+ *   alt MigrateConfigError (no native engine for MySQL or a PostgreSQL schema)
+ *     U-->>H: the failure
+ *   end
+ *   M-->>U: engine, migrations, migrationsDir, schemaDir
+ *   U->>A: baselineMigrations({ engine, driver, migrations, files, configDir, name })
+ *   alt MigrateConfigError (no such migration, or the database does not match)
+ *     U-->>H: the failure
+ *   else MigrateEngineError
+ *     U-->>H: the failure
+ *   end
+ *   Note over A: that migration and every one before it marked applied
+ *   Note over U: readMigrateStatus(), its own session and migrationStatus
+ *   U->>A: migrationStatus({ engine, driver, migrations, files, configDir })
+ *   U-->>H: the history as it is now
+ * ```
  *
  * @param input - the directory name of the last migration the database already has
  * @returns the history as it is once they are recorded
@@ -414,6 +775,32 @@ const ReadMigrationFileInput = z
 
 /**
  * What one migration of the directory runs: its migration.sql, as the migrations list read it.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant H as Handler
+ *   participant U as MigrateUseCase
+ *   participant S as StudioService
+ *   participant D as DatabaseService
+ *   participant M as MigrateService
+ *   H->>U: readMigrationFile({ migrationName })
+ *   U->>S: studio() state, db
+ *   U->>D: db.driver
+ *   alt DatabaseUnavailableError
+ *     U-->>H: the failure
+ *   end
+ *   U->>M: openMigrateSession({ schemaPath, files, driver, url, openShadow })
+ *   alt MigrateConfigError (no native engine for MySQL or a PostgreSQL schema)
+ *     U-->>H: the failure
+ *   end
+ *   M-->>U: engine, migrations, migrationsDir, schemaDir
+ *   Note over U: the directory of that name in migrations
+ *   alt no such directory, or its migration.sql did not read
+ *     U-->>H: MigrationNotFoundError
+ *   else found
+ *     U-->>H: name, file, sql
+ *   end
+ * ```
  *
  * @param input - the directory name of the migration
  * @returns the name, the file and the SQL it holds
@@ -452,6 +839,45 @@ const RehearseInput = z
  * The migration run for real and taken back: on SQLite on a copy of the file, on PostgreSQL in a
  * transaction that is rolled back whatever happens.
  *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant H as Handler
+ *   participant U as MigrateUseCase
+ *   participant S as StudioService
+ *   participant D as DatabaseService
+ *   participant M as MigrateService
+ *   participant R as rehearseMigration
+ *   H->>U: rehearse({ steps })
+ *   U->>S: studio() state, db
+ *   U->>D: db.driver
+ *   alt DatabaseUnavailableError
+ *     U-->>H: the failure
+ *   end
+ *   U->>M: openMigrateSession({ schemaPath, files, driver, url, openShadow })
+ *   alt MigrateConfigError (no native engine for MySQL or a PostgreSQL schema)
+ *     U-->>H: the failure
+ *   end
+ *   M-->>U: engine, migrations, migrationsDir, schemaDir
+ *   U->>R: rehearseMigration({ driver, steps, files, configDir, compareWith, openCopy })
+ *   alt SQLite or MySQL
+ *     R->>D: openSqliteCopy / openMysqlCopy, through openCopy
+ *   else PostgreSQL
+ *     Note over R: a transaction rolled back whatever happens
+ *   end
+ *   loop each step
+ *     R->>D: the step's statements
+ *   end
+ *   alt DatabaseError
+ *     Note over U: as MigrateDatabaseError
+ *     U-->>H: MigrateDatabaseError
+ *   else MigrateEngineError
+ *     U-->>H: the failure
+ *   else rehearsal
+ *     R-->>U: each step, rows before and after, whether it then matches the schema
+ *     U-->>H: rehearsal
+ *   end
+ * ```
+ *
  * @param input - each step's statements, in the order they run
  * @returns how each step went, the rows of each table before and after, and whether the database
  *   then matches the schema
@@ -467,12 +893,12 @@ export function rehearse(input: z.infer<typeof RehearseInput>) {
       compareWith: opened.rehearsalEngine,
       openCopy: () =>
         opened.driver.dialect === 'mysql'
-          ? MigrateService.openMysqlCopy({
+          ? DatabaseService.openMysqlCopy({
               url: opened.url ?? '',
               driver: opened.driver,
               cwd: process.cwd(),
             })
-          : MigrateService.openSqliteCopy({ driver: opened.driver, cwd: process.cwd() }),
+          : DatabaseService.openSqliteCopy({ driver: opened.driver, cwd: process.cwd() }),
     }).pipe(
       Effect.catchTag('DatabaseError', (error) =>
         Effect.fail(new MigrateDatabaseError({ message: error.cause })),
@@ -484,6 +910,29 @@ export function rehearse(input: z.infer<typeof RehearseInput>) {
 
 /**
  * The rows of every table of the database now, to set a run against.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant H as Handler
+ *   participant U as MigrateUseCase
+ *   participant S as StudioService
+ *   participant D as DatabaseService
+ *   participant R as countTables
+ *   H->>U: readTableCounts()
+ *   U->>S: studio().db
+ *   U->>D: db.driver
+ *   alt DatabaseUnavailableError
+ *     U-->>H: the failure
+ *   end
+ *   U->>R: countTables(driver)
+ *   alt DatabaseError
+ *     Note over U: as MigrateDatabaseError
+ *     U-->>H: MigrateDatabaseError
+ *   else counted
+ *     R-->>U: each table and its rows
+ *     U-->>H: tables, before null, after the rows
+ *   end
+ * ```
  *
  * @returns each table with its rows as `after`
  */
@@ -505,6 +954,31 @@ export function readTableCounts() {
 /**
  * The backups taken before migrations, newest first.
  *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant H as Handler
+ *   participant U as MigrateUseCase
+ *   participant S as StudioService
+ *   participant D as DatabaseService
+ *   participant M as MigrateService
+ *   participant B as migrate adapter (backup)
+ *   H->>U: readBackups()
+ *   U->>S: studio() state, db
+ *   U->>D: db.driver
+ *   alt DatabaseUnavailableError
+ *     U-->>H: the failure
+ *   end
+ *   U->>M: openMigrateSession({ schemaPath, files, driver, url, openShadow })
+ *   alt MigrateConfigError (no native engine for MySQL or a PostgreSQL schema)
+ *     U-->>H: the failure
+ *   end
+ *   M-->>U: engine, migrations, migrationsDir, schemaDir
+ *   U->>B: listBackups({ driver, schemaDir })
+ *   Note over B: a directory or catalogue that does not read lists none
+ *   B-->>U: each backup, newest first
+ *   U-->>H: backups
+ * ```
+ *
  * @returns each backup, and whether Studio can restore it
  */
 export function readBackups() {
@@ -517,6 +991,38 @@ export function readBackups() {
 
 /**
  * Takes a backup of the database as it is now.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant H as Handler
+ *   participant U as MigrateUseCase
+ *   participant S as StudioService
+ *   participant D as DatabaseService
+ *   participant M as MigrateService
+ *   participant B as migrate adapter (backup)
+ *   H->>U: takeBackup()
+ *   U->>S: studio() state, db
+ *   U->>D: db.driver
+ *   alt DatabaseUnavailableError
+ *     U-->>H: the failure
+ *   end
+ *   U->>M: openMigrateSession({ schemaPath, files, driver, url, openShadow })
+ *   alt MigrateConfigError (no native engine for MySQL or a PostgreSQL schema)
+ *     U-->>H: the failure
+ *   end
+ *   M-->>U: engine, migrations, migrationsDir, schemaDir
+ *   U->>B: createBackup({ driver, schemaDir })
+ *   alt DatabaseError
+ *     U-->>H: MigrateDatabaseError
+ *   else PlatformError
+ *     U-->>H: MigrateConfigError
+ *   end
+ *   B-->>U: taken
+ *   U->>B: listBackups({ driver, schemaDir })
+ *   B-->>U: backups
+ *   Note over U: the one taken, else it with no size and not restorable
+ *   U-->>H: the backup
+ * ```
  *
  * @returns the backup, and whether Studio can restore it
  */
@@ -553,6 +1059,42 @@ const RestoreInput = z
 /**
  * Puts the database back as a backup has it, and removes the migration the run it undoes wrote,
  * so the directory and the database agree again.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant H as Handler
+ *   participant U as MigrateUseCase
+ *   participant S as StudioService
+ *   participant D as DatabaseService
+ *   participant M as MigrateService
+ *   participant B as migrate adapter (backup)
+ *   participant F as file (removePath)
+ *   participant A as migrate adapter (commands)
+ *   H->>U: restoreFromBackup({ name, migration })
+ *   U->>S: studio() state, db
+ *   U->>D: db.driver
+ *   alt DatabaseUnavailableError
+ *     U-->>H: the failure
+ *   end
+ *   U->>M: openMigrateSession({ schemaPath, files, driver, url, openShadow })
+ *   alt MigrateConfigError (no native engine for MySQL or a PostgreSQL schema)
+ *     U-->>H: the failure
+ *   end
+ *   M-->>U: engine, migrations, migrationsDir, schemaDir
+ *   U->>B: restoreBackup({ driver, schemaDir, name })
+ *   alt MigrateConfigError, or PlatformError as MigrateConfigError
+ *     U-->>H: the failure
+ *   end
+ *   opt migration names a migration's own directory
+ *     U->>F: removePath(migrationsDir/migration)
+ *     alt PlatformError
+ *       U-->>H: MigrateConfigError
+ *     end
+ *   end
+ *   Note over U: readMigrateStatus(), its own session and migrationStatus
+ *   U->>A: migrationStatus({ engine, driver, migrations, files, configDir })
+ *   U-->>H: the history as it is now
+ * ```
  *
  * @param input - the backup, and the migration to remove
  * @returns the history as it is once restored

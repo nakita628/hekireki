@@ -1,8 +1,6 @@
-import { Effect } from 'effect'
 import * as z from 'zod'
 
 import type { DocsSchema, SnapshotSchema } from '../routes/index.js'
-import * as LoadService from './load.js'
 
 const CreateStudioStateInput = z
   .object({
@@ -12,11 +10,26 @@ const CreateStudioStateInput = z
   })
   .readonly()
   .meta({
-    description: 'The schema path the state re-reads on every reload',
+    description: 'The schema path the state is kept for',
     example: { schemaPath: 'prisma/schema.prisma' },
   })
 
-/** The in-memory snapshot store: `reload` re-reads the files and keeps the last valid schema on errors. */
+/**
+ * The in-memory snapshot store: the last snapshot and docs a reload made, and when the migrations
+ * directory last changed. What goes in is decided by the schema use case; the store only keeps it
+ * and stamps it with the time it arrived.
+ *
+ * ```mermaid
+ * flowchart LR
+ *   reload[SchemaUseCase.loadSnapshot] -->|replace| store[(snapshot, docs)]
+ *   watch[migrations poller] -->|touchMigrations| stamp[(migrationsUpdatedAt)]
+ *   store --> reads[snapshot / docs]
+ *   stamp --> reads
+ * ```
+ *
+ * @param input.schemaPath - the schema file or directory the snapshot is read from
+ * @returns the store's readers and the two ways it changes
+ */
 export function createStudioState(input: z.infer<typeof CreateStudioStateInput>) {
   const { schemaPath } = input
   // The store holds the plain shape; the use cases brand it by checking it against the contract.
@@ -36,50 +49,16 @@ export function createStudioState(input: z.infer<typeof CreateStudioStateInput>)
     },
     docs: { models: [], inputTypes: [], outputTypes: [], enumTypes: [] },
   }
-  function load() {
-    return Effect.gen(function* () {
-      const previous = store.snapshot
-      const files = yield* LoadService.readSchemaFiles({ schemaPath })
-      const result = yield* LoadService.parseSchemaFiles({ files }).pipe(
-        Effect.catchTag('SchemaParseError', (error) =>
-          Effect.succeed({
-            schema: previous.schema,
-            docs: store.docs,
-            error: error.message,
-            diagnostics: [...error.diagnostics],
-          }),
-        ),
-      )
-      return {
-        files,
-        schema: result.schema,
-        docs: result.docs,
-        error: 'error' in result ? result.error : null,
-        diagnostics: result.diagnostics,
-      }
-    })
-  }
-  function reload() {
-    return Effect.gen(function* () {
-      const previous = store.snapshot
-      const loaded = yield* load().pipe(
-        Effect.catchTag('SchemaLoadError', (error) =>
-          Effect.succeed({
-            files: previous.files,
-            schema: previous.schema,
-            docs: store.docs,
-            error: error.message,
-            diagnostics: [],
-          }),
-        ),
-      )
-      const { docs, ...snapshot } = loaded
-      // oxlint-disable-next-line custom/no-mutation -- the store is the one mutable cell of Studio
-      store.snapshot = { ...snapshot, updatedAt: new Date().toISOString() }
-      // oxlint-disable-next-line custom/no-mutation -- same cell: the docs of the last schema that result
-      store.docs = docs
-      return store.snapshot
-    })
+  /** Keeps what a reload made, stamped with now; returns the snapshot as stored. */
+  function replace(next: {
+    readonly snapshot: Omit<z.input<typeof SnapshotSchema>, 'updatedAt'>
+    readonly docs: z.input<typeof DocsSchema>
+  }) {
+    // oxlint-disable-next-line custom/no-mutation -- the store is the one mutable cell of Studio
+    store.snapshot = { ...next.snapshot, updatedAt: new Date().toISOString() }
+    // oxlint-disable-next-line custom/no-mutation -- same cell: the docs of the last schema that result
+    store.docs = next.docs
+    return store.snapshot
   }
   /** Notes that the migrations directory changed, for the pages watching it to read it again. */
   function touchMigrations() {
@@ -92,6 +71,6 @@ export function createStudioState(input: z.infer<typeof CreateStudioStateInput>)
     touchMigrations,
     snapshot: () => store.snapshot,
     docs: () => store.docs,
-    reload,
+    replace,
   }
 }

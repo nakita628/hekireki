@@ -1,123 +1,52 @@
-import path from 'node:path'
-
-import { layer as nodeFileSystemLayer } from '@effect/platform-node/NodeFileSystem'
 import { serveStatic } from '@hono/node-server/serve-static'
-import { OpenAPIHono } from '@hono/zod-openapi'
-import { Effect } from 'effect'
-import { createMiddleware } from 'hono/factory'
+import { Hono } from 'hono'
 
-import { readFile } from '../../file/index.js'
-import { isLoopbackHostname } from '../../utils/index.js'
-import { FORBIDDEN_HOST_MESSAGE } from './constants/index.js'
 import api from './index.js'
-import { InternalServerProblemSchema, ValidationProblemSchema } from './routes/index.js'
 import * as ClientService from './services/index.js'
 import type * as DatabaseService from './services/index.js'
 import type * as StateService from './services/index.js'
 import * as StudioService from './services/index.js'
+import * as TypescriptService from './services/index.js'
 
-// The API is unauthenticated, so a page on another origin must not be able to read it even
-// when its DNS name resolves to this machine.
-const loopbackOnly = createMiddleware((c, next) =>
-  isLoopbackHostname(new URL(c.req.url).hostname)
-    ? next()
-    : Promise.resolve(c.text(FORBIDDEN_HOST_MESSAGE, 403)),
-)
-
-/** The generated API (routed under /api) with the problem+json validation hook, error handler, its document at /api/openapi.json. */
-export function createStudioApi(
-  state: ReturnType<typeof StateService.createStudioState>,
-  db: ReturnType<typeof DatabaseService.disconnectedDatabase>,
-  client: ReturnType<typeof ClientService.createProjectClient>,
-) {
-  StudioService.configureStudio({ state, db, client })
-  const app = new OpenAPIHono({
-    defaultHook: (result, c) => {
-      if (!result.success) {
-        return c.json(
-          ValidationProblemSchema.parse({
-            type: '/problems/validation-failed',
-            title: 'Validation Failed',
-            status: 422,
-            detail: 'The request failed validation. See `errors` for the offending fields.',
-            instance: c.req.path,
-            errors: result.error.issues.map((issue) => ({
-              field: issue.path.map(String).join('.'),
-              message: issue.message,
-            })),
-          }),
-          422,
-          { 'Content-Type': 'application/problem+json' },
-        )
-      }
-      return undefined
-    },
-  })
-  app.use('/api/*', loopbackOnly)
-  app.onError((error, c) => {
-    Effect.runSync(Effect.logError('unhandled error', error))
-    return c.json(
-      InternalServerProblemSchema.parse({
-        type: '/problems/internal-server-error',
-        title: 'Internal Server Error',
-        status: 500,
-        detail: 'An unexpected error occurred.',
-        instance: c.req.path,
-      }),
-      500,
-      { 'Content-Type': 'application/problem+json' },
-    )
-  })
-  return app.route('/', api).doc('/api/openapi.json', {
-    openapi: '3.1.0',
-    info: { title: 'Hekireki Studio API', version: '1.0.0' },
-  })
-}
-
+/** What a request for the page answers when the built client is not where Studio looks for it. */
 export function missingAssetsMessage(staticDir: string) {
   return `Hekireki Studio assets were not found in ${staticDir}.\nReinstall hekireki, or run "pnpm build" when working from the repository.`
 }
 
-/** The API plus the built client. The client routes on the path (`/models/User`, `/docs`, ...), so every path that is neither an asset nor an API route gets index.html. */
-export function createStudioApp(
-  state: ReturnType<typeof StateService.createStudioState>,
-  staticDir: string,
-  db: ReturnType<typeof DatabaseService.disconnectedDatabase>,
-  client: ReturnType<typeof ClientService.createProjectClient> = ClientService.createProjectClient({
-    target: null,
-    reason: 'No database is connected.',
-    schemaDir: '.',
-    cwd: '.',
-  }),
-) {
-  const app = createStudioApi(state, db, client)
-  app.use('/*', serveStatic({ root: staticDir }))
-  // The page is read once, the first time it is asked for: every client-side navigation lands
-  // here, and the file does not change while Studio runs. A read that fails (the assets not
-  // built yet) is not kept, so the next request looks again.
-  const page: { html: string | null } = { html: null }
-  app.get('/*', (c) =>
-    c.req.path.startsWith('/api/')
-      ? c.notFound()
-      : Effect.runPromise(
-          Effect.provide(
-            Effect.match(
-              page.html === null
-                ? Effect.tap(readFile(path.join(staticDir, 'index.html')), (html) =>
-                    Effect.sync(() => {
-                      // oxlint-disable-next-line custom/no-mutation -- the one cell the page is kept in
-                      page.html = html
-                    }),
-                  )
-                : Effect.succeed(page.html),
-              {
-                onSuccess: (html) => c.html(html),
-                onFailure: () => c.text(missingAssetsMessage(staticDir), 500),
-              },
-            ),
-            nodeFileSystemLayer,
-          ),
-        ),
+/**
+ * The API (under /api, see index.ts) and the built client beside it, serving the given instances.
+ * The client routes on the path (`/models/User`, `/docs`, ...), so every path that is neither an
+ * asset nor an API route gets index.html. Without a client or a type checker, the use cases get
+ * ones that say no database is connected.
+ */
+export function createStudioApp(input: {
+  readonly state: ReturnType<typeof StateService.createStudioState>
+  readonly staticDir: string
+  readonly db: ReturnType<typeof DatabaseService.disconnectedDatabase>
+  readonly client?: ReturnType<typeof ClientService.createProjectClient>
+  readonly typescript?: ReturnType<typeof TypescriptService.createTypeChecker>
+}) {
+  StudioService.configureStudio({
+    state: input.state,
+    db: input.db,
+    client:
+      input.client ??
+      ClientService.createProjectClient({
+        target: null,
+        reason: 'No database is connected.',
+        schemaDir: '.',
+        cwd: '.',
+      }),
+    typescript:
+      input.typescript ?? TypescriptService.createTypeChecker({ schemaDir: '.', cwd: '.' }),
+  })
+  return (
+    new Hono()
+      .route('/', api)
+      // An API path no route answers is not a page of the client.
+      .all('/api/*', (c) => c.notFound())
+      .use('/*', serveStatic({ root: input.staticDir }))
+      .get('/*', serveStatic({ root: input.staticDir, path: 'index.html' }))
+      .get('/*', (c) => c.text(missingAssetsMessage(input.staticDir), 500))
   )
-  return app
 }

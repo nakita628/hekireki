@@ -9,7 +9,7 @@ import type {
   postSchemaReloadRoute,
   putSchemaFilesRoute,
 } from '../routes'
-import { NotFoundProblemSchema, SnapshotSchema, ValidationProblemSchema } from '../routes/index.js'
+import { SnapshotSchema } from '../routes/index.js'
 import * as SchemaUseCase from '../usecases/index.js'
 
 // The snapshot as last checked, by the object the state holds: a reload replaces that object,
@@ -41,7 +41,10 @@ function checkSnapshot(snapshot: object) {
  */
 export const getSchemaRouteHandler: RouteHandler<typeof getSchemaRoute> = (c) =>
   Effect.runPromise(
-    Effect.map(SchemaUseCase.readSnapshot(), (value) => c.json(checkSnapshot(value), 200)),
+    Effect.map(SchemaUseCase.readSnapshot(), (value) =>
+      // oxlint-disable-next-line custom/handler-response-shape -- checkSnapshot parses it, once per stored object
+      c.json(checkSnapshot(value), 200),
+    ),
   )
 
 /**
@@ -61,7 +64,10 @@ export const getSchemaRouteHandler: RouteHandler<typeof getSchemaRoute> = (c) =>
  */
 export const postSchemaReloadRouteHandler: RouteHandler<typeof postSchemaReloadRoute> = (c) =>
   Effect.runPromise(
-    Effect.map(SchemaUseCase.reloadSnapshot(), (value) => c.json(checkSnapshot(value), 200)),
+    Effect.map(SchemaUseCase.reloadSnapshot(), (value) =>
+      // oxlint-disable-next-line custom/handler-response-shape -- checkSnapshot parses it, once per stored object
+      c.json(checkSnapshot(value), 200),
+    ),
   )
 
 /**
@@ -85,19 +91,21 @@ export const putSchemaFilesRouteHandler: RouteHandler<typeof putSchemaFilesRoute
   const data = c.req.valid('json')
   return Effect.runPromise(
     Effect.matchEffect(SchemaUseCase.writeFile({ path: data.path, content: data.content }), {
-      onSuccess: (value) => Effect.succeed(c.json(checkSnapshot(value), 200)),
+      onSuccess: (value) =>
+        // oxlint-disable-next-line custom/handler-response-shape -- checkSnapshot parses it, once per stored object
+        Effect.succeed(c.json(checkSnapshot(value), 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           Match.tag('UnknownFileError', ({ path }) =>
             Effect.succeed(
               c.json(
-                NotFoundProblemSchema.parse({
+                {
                   type: '/problems/not-found',
                   title: 'Not Found',
                   status: 404,
                   detail: `Unknown schema file "${path}". Only the files Studio loaded can be written.`,
                   instance: c.req.path,
-                }),
+                } as const,
                 404,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -107,14 +115,14 @@ export const putSchemaFilesRouteHandler: RouteHandler<typeof putSchemaFilesRoute
             Effect.logError('schema file write failed', cause).pipe(
               Effect.as(
                 c.json(
-                  ValidationProblemSchema.parse({
+                  {
                     type: '/problems/validation-failed',
                     title: 'Validation Failed',
                     status: 422,
                     detail: `Could not write ${path}: ${cause}`,
                     instance: c.req.path,
                     errors: [{ field: 'path', message: cause }],
-                  }),
+                  } as const,
                   422,
                   { 'Content-Type': 'application/problem+json' },
                 ),

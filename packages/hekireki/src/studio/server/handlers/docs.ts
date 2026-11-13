@@ -33,4 +33,9 @@ function checkDocs(docs: object) {
  * ```
  */
 export const getDocsRouteHandler: RouteHandler<typeof getDocsRoute> = (c) =>
-  Effect.runPromise(Effect.map(DocsUseCase.readDocs(), (value) => c.json(checkDocs(value), 200)))
+  Effect.runPromise(
+    Effect.map(DocsUseCase.readDocs(), (value) =>
+      // oxlint-disable-next-line custom/handler-response-shape -- checkDocs parses it, once per stored object
+      c.json(checkDocs(value), 200),
+    ),
+  )

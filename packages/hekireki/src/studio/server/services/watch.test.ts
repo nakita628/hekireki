@@ -6,6 +6,7 @@ import { NodeFileSystem } from '@effect/platform-node'
 import { Effect } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
+import { loadSnapshot } from '../usecases/index.js'
 import { createStudioState } from './state.js'
 import { watchMigrations, watchSchema } from './watch.js'
 
@@ -40,9 +41,14 @@ describe('watchSchema', () => {
     const result = await Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {
-          yield* state.reload()
+          yield* loadSnapshot({ state })
           const before = state.snapshot().updatedAt
-          yield* watchSchema({ state, dir, recursive: false, debounceMs: 50 })
+          yield* watchSchema({
+            onChange: () => loadSnapshot({ state }),
+            dir,
+            recursive: false,
+            debounceMs: 50,
+          })
           yield* Effect.sleep('100 millis')
           writeFileSync(schemaPath, 'model User {\n  id Int @id\n  name String\n}\n')
           writeFileSync(path.join(dir, 'README.md'), 'ignored')
@@ -64,9 +70,14 @@ describe('watchSchema', () => {
     const reloaded = await Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {
-          yield* state.reload()
+          yield* loadSnapshot({ state })
           const before = state.snapshot().updatedAt
-          yield* watchSchema({ state, dir, recursive: true, debounceMs: 50 })
+          yield* watchSchema({
+            onChange: () => loadSnapshot({ state }),
+            dir,
+            recursive: true,
+            debounceMs: 50,
+          })
           yield* Effect.sleep('100 millis')
           writeFileSync(path.join(dir, 'models', 'post.prisma'), 'model Post {\n  id Int @id\n}\n')
           return yield* until(() => state.snapshot().updatedAt !== before)
@@ -86,7 +97,11 @@ describe('watchMigrations', () => {
       Effect.scoped(
         Effect.gen(function* () {
           const start = state.migrationsUpdatedAt()
-          yield* watchMigrations({ state, dir: migrations, intervalMs: 30 })
+          yield* watchMigrations({
+            onChange: state.touchMigrations,
+            dir: migrations,
+            intervalMs: 30,
+          })
           yield* Effect.sleep('120 millis')
           const quiet = state.migrationsUpdatedAt() === start
 

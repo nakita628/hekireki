@@ -325,8 +325,15 @@ const MakeClientQueryInput = z
  * model of the schema and an operation Prisma Client has, their literal arguments, and what keeps
  * it from being run (a problem of the text stops the reading; unknown names are all reported).
  *
- * @param input - the text, the model names and the time of the reading
+ * @param input.text - the query as it was typed
+ * @param input.models - the model names of the schema, as declared
+ * @param input.now - the time of the reading, in Unix milliseconds: what `new Date()` without an
+ *   argument stands for
  * @returns the calls, whether they form a `$transaction`, its options, and the diagnostics
+ * @example
+ * makeClientQuery({ text: 'prisma.user.findMany({ take: 10 })', models: ['User'], now: 0 }).calls
+ * // [{ model: 'User', delegate: 'user', operation: 'findMany', write: false, args: { take: 10 },
+ * //    range: { start: 0, end: 34 } }]
  */
 export function makeClientQuery(input: z.infer<typeof MakeClientQueryInput>) {
   const result = programOf(input.text, input.now)
@@ -394,7 +401,15 @@ const IsWriteOperationInput = z
   .readonly()
   .meta({ description: 'A model operation to classify', example: { operation: 'create' } })
 
-/** Whether the model operation writes: create, update, upsert and delete in all their forms. */
+/**
+ * Whether the model operation writes: create, update, upsert and delete in all their forms.
+ *
+ * @param input.operation - a model operation name
+ * @returns true for an operation that writes
+ * @example
+ * isWriteOperation({ operation: 'upsert' })
+ * // true
+ */
 export function isWriteOperation(input: z.infer<typeof IsWriteOperationInput>) {
   return WRITE_OPERATIONS.some((operation) => operation === input.operation)
 }

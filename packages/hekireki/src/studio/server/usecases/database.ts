@@ -3,16 +3,44 @@ import * as z from 'zod'
 
 import { analyze, splitStatements } from '../../../sql/index.js'
 import { SQL_ROW_LIMIT } from '../constants/index.js'
+import * as DatabaseErrorDomain from '../domain/index.js'
 import * as DefaultsDomain from '../domain/index.js'
 import * as ModelDomain from '../domain/index.js'
+import * as PlanDomain from '../domain/index.js'
 import * as SchemaDomain from '../domain/index.js'
 import * as SqlDomain from '../domain/index.js'
 import * as ValuesDomain from '../domain/index.js'
-import { InvalidInputError, UnknownModelError } from '../errors/index.js'
+import { DatabaseError, InvalidInputError, UnknownModelError } from '../errors/index.js'
 import * as StudioService from '../services/index.js'
 
 /**
+ * A statement's failure as a person reads it: the driver's message with the way out appended,
+ * for the errors a schema-first workflow runs into (a table not migrated, a required column).
+ */
+function worded<A, R>(statement: Effect.Effect<A, DatabaseError, R>) {
+  return statement.pipe(
+    Effect.mapError(
+      (error) =>
+        new DatabaseError({
+          cause: DatabaseErrorDomain.makeDatabaseErrorMessage({ message: error.cause }),
+        }),
+    ),
+  )
+}
+
+/**
  * The connection status as the sidebar shows it.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant H as Handler
+ *   participant U as DatabaseUseCase
+ *   participant S as StudioService
+ *   H->>U: readDbStatus()
+ *   U->>S: studio().db.status
+ *   S-->>U: connected, dialect, url, source, error
+ *   U-->>H: status
+ * ```
  *
  * @returns whether a database is open, which dialect and where the URL came from
  */
@@ -22,6 +50,34 @@ export function readDbStatus() {
 
 /**
  * Row count of every model that has a table; models without one are left out rather than failing the whole answer.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant H as Handler
+ *   participant U as DatabaseUseCase
+ *   participant S as StudioService
+ *   participant D as DatabaseService
+ *   participant M as ModelDomain
+ *   participant Q as SqlDomain
+ *   H->>U: readCounts()
+ *   U->>S: studio() state, db
+ *   S-->>U: snapshot models, db
+ *   U->>D: db.driver
+ *   alt DatabaseUnavailableError
+ *     U-->>H: the failure
+ *   end
+ *   loop each model, four at a time
+ *     U->>M: tableName({ model })
+ *     U->>Q: makeCountStatement({ dialect, table })
+ *     U->>D: query(count)
+ *     alt the query fails (no table)
+ *       Note over U: the model is left out
+ *     else count
+ *       D-->>U: rows[0].count
+ *     end
+ *   end
+ *   U-->>H: counts keyed by model name
+ * ```
  *
  * @returns counts keyed by model name
  */
@@ -94,19 +150,38 @@ const ReadRowsInput = z
  *
  * ```mermaid
  * sequenceDiagram
- *   participant U as readRows
- *   participant St as StudioState
- *   participant D as Database (driver)
- *   U->>St: model by name
- *   St-->>U: model / UnknownModelError
- *   Note over U: select + count statements (domain)
- *   par
- *     U->>D: SELECT page
- *   and
- *     U->>D: COUNT(*)
+ *   participant H as Handler
+ *   participant U as DatabaseUseCase
+ *   participant S as StudioService
+ *   participant D as DatabaseService
+ *   participant M as ModelDomain
+ *   participant Q as SqlDomain
+ *   participant V as ValuesDomain
+ *   participant E as DatabaseErrorDomain
+ *   H->>U: readRows({ modelName, skip, take, search })
+ *   U->>S: studio().state
+ *   S-->>U: snapshot
+ *   alt no model of that name
+ *     U-->>H: UnknownModelError
  *   end
- *   D-->>U: rows, total
- *   Note over U: ValuesDomain.makeRow → validate against Rows
+ *   U->>D: db.driver
+ *   alt DatabaseUnavailableError
+ *     U-->>H: the failure
+ *   end
+ *   U->>M: tableColumns, columnName, makeEnumReadValues, keyFields, tableName
+ *   U->>Q: makeSelectStatement / makeCountStatement
+ *   par
+ *     U->>D: query(select page)
+ *   and
+ *     U->>D: query(count)
+ *   end
+ *   alt DatabaseError
+ *     U->>E: makeDatabaseErrorMessage({ message })
+ *     U-->>H: DatabaseError, with the way out
+ *   else rows, total
+ *     U->>V: makeRow({ row, columnToField, columnToEnum }) per row
+ *     U-->>H: rows, total, skip, take, key, columns
+ *   end
  * ```
  *
  * @param input - the model and the raw paging parameters
@@ -130,25 +205,27 @@ export function readRows(input: z.infer<typeof ReadRowsInput>) {
     const key = ModelDomain.keyFields({ model })
     const orderBy = key.map((name) => fields.find((f) => f.name === name)?.dbName ?? name)
     const table = ModelDomain.tableName({ model })
-    const [selected, counted] = yield* Effect.all([
-      driver.query(
-        SqlDomain.makeSelectStatement({
-          dialect: driver.dialect,
-          table,
-          columns,
-          orderBy,
-          ...page,
-        }),
-      ),
-      driver.query(
-        SqlDomain.makeCountStatement({
-          dialect: driver.dialect,
-          table,
-          columns,
-          search: page.search,
-        }),
-      ),
-    ])
+    const [selected, counted] = yield* worded(
+      Effect.all([
+        driver.query(
+          SqlDomain.makeSelectStatement({
+            dialect: driver.dialect,
+            table,
+            columns,
+            orderBy,
+            ...page,
+          }),
+        ),
+        driver.query(
+          SqlDomain.makeCountStatement({
+            dialect: driver.dialect,
+            table,
+            columns,
+            search: page.search,
+          }),
+        ),
+      ]),
+    )
     const rows = {
       rows: selected.rows.map((row) => ValuesDomain.makeRow({ row, columnToField, columnToEnum })),
       total: Number(counted.rows[0]?.count ?? 0) || 0,
@@ -184,6 +261,40 @@ const InsertRowInput = z
 /**
  * Inserts one row; field names are translated to columns and values to the driver's representation.
  *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant H as Handler
+ *   participant U as DatabaseUseCase
+ *   participant S as StudioService
+ *   participant D as DatabaseService
+ *   participant F as DefaultsDomain
+ *   participant M as ModelDomain
+ *   participant Q as SqlDomain
+ *   participant E as DatabaseErrorDomain
+ *   H->>U: insertRow({ modelName, values })
+ *   U->>S: studio().state
+ *   S-->>U: snapshot
+ *   alt no model of that name
+ *     U-->>H: UnknownModelError
+ *   end
+ *   U->>D: db.driver
+ *   alt DatabaseUnavailableError
+ *     U-->>H: the failure
+ *   end
+ *   U->>F: makeGeneratedFields({ model, row })
+ *   U->>S: generateDefaults({ fields })
+ *   S-->>U: uuid(), cuid(), now() values
+ *   U->>M: makeColumnValues({ model, dialect, row, enums })
+ *   U->>Q: makeInsertStatement({ dialect, table, values })
+ *   U->>D: query(insert)
+ *   alt DatabaseError
+ *     U->>E: makeDatabaseErrorMessage({ message })
+ *     U-->>H: DatabaseError, with the way out
+ *   else rowCount
+ *     U-->>H: affected
+ *   end
+ * ```
+ *
  * @param input - the model and the field values
  * @returns how many rows were written
  */
@@ -198,17 +309,19 @@ export function insertRow(input: z.infer<typeof InsertRowInput>) {
     const generated = yield* StudioService.generateDefaults({
       fields: DefaultsDomain.makeGeneratedFields({ model, row: input.values }),
     })
-    const written = yield* driver.query(
-      SqlDomain.makeInsertStatement({
-        dialect: driver.dialect,
-        table: ModelDomain.tableName({ model }),
-        values: ModelDomain.makeColumnValues({
-          model,
+    const written = yield* worded(
+      driver.query(
+        SqlDomain.makeInsertStatement({
           dialect: driver.dialect,
-          row: { ...generated, ...input.values },
-          enums: state.snapshot().schema?.enums ?? [],
+          table: ModelDomain.tableName({ model }),
+          values: ModelDomain.makeColumnValues({
+            model,
+            dialect: driver.dialect,
+            row: { ...generated, ...input.values },
+            enums: state.snapshot().schema?.enums ?? [],
+          }),
         }),
-      }),
+      ),
     )
     const affected = { affected: written.rowCount }
     return affected
@@ -240,6 +353,38 @@ const UpdateRowInput = z
 /**
  * Updates the row identified by `where`; both parts must name at least one field.
  *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant H as Handler
+ *   participant U as DatabaseUseCase
+ *   participant S as StudioService
+ *   participant D as DatabaseService
+ *   participant M as ModelDomain
+ *   participant Q as SqlDomain
+ *   participant E as DatabaseErrorDomain
+ *   H->>U: updateRow({ modelName, where, values })
+ *   U->>S: studio().state
+ *   S-->>U: snapshot
+ *   alt no model of that name
+ *     U-->>H: UnknownModelError
+ *   else where or values names no field
+ *     U-->>H: InvalidInputError
+ *   end
+ *   U->>D: db.driver
+ *   alt DatabaseUnavailableError
+ *     U-->>H: the failure
+ *   end
+ *   U->>M: makeColumnValues for where and for values
+ *   U->>Q: makeUpdateStatement({ dialect, table, where, values })
+ *   U->>D: query(update)
+ *   alt DatabaseError
+ *     U->>E: makeDatabaseErrorMessage({ message })
+ *     U-->>H: DatabaseError, with the way out
+ *   else rowCount
+ *     U-->>H: affected
+ *   end
+ * ```
+ *
  * @param input - the model, the key and the new values
  * @returns how many rows were changed
  */
@@ -263,23 +408,25 @@ export function updateRow(input: z.infer<typeof UpdateRowInput>) {
     const db = StudioService.studio().db
     const driver = yield* db.driver
     const enums = state.snapshot().schema?.enums ?? []
-    const written = yield* driver.query(
-      SqlDomain.makeUpdateStatement({
-        dialect: driver.dialect,
-        table: ModelDomain.tableName({ model }),
-        where: ModelDomain.makeColumnValues({
-          model,
+    const written = yield* worded(
+      driver.query(
+        SqlDomain.makeUpdateStatement({
           dialect: driver.dialect,
-          row: input.where,
-          enums,
+          table: ModelDomain.tableName({ model }),
+          where: ModelDomain.makeColumnValues({
+            model,
+            dialect: driver.dialect,
+            row: input.where,
+            enums,
+          }),
+          values: ModelDomain.makeColumnValues({
+            model,
+            dialect: driver.dialect,
+            row: input.values,
+            enums,
+          }),
         }),
-        values: ModelDomain.makeColumnValues({
-          model,
-          dialect: driver.dialect,
-          row: input.values,
-          enums,
-        }),
-      }),
+      ),
     )
     const affected = { affected: written.rowCount }
     return affected
@@ -307,6 +454,38 @@ const DeleteRowInput = z
 /**
  * Deletes the row identified by `where`.
  *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant H as Handler
+ *   participant U as DatabaseUseCase
+ *   participant S as StudioService
+ *   participant D as DatabaseService
+ *   participant M as ModelDomain
+ *   participant Q as SqlDomain
+ *   participant E as DatabaseErrorDomain
+ *   H->>U: deleteRow({ modelName, where })
+ *   U->>S: studio().state
+ *   S-->>U: snapshot
+ *   alt no model of that name
+ *     U-->>H: UnknownModelError
+ *   else where names no field
+ *     U-->>H: InvalidInputError
+ *   end
+ *   U->>D: db.driver
+ *   alt DatabaseUnavailableError
+ *     U-->>H: the failure
+ *   end
+ *   U->>M: makeColumnValues({ model, dialect, row: where, enums })
+ *   U->>Q: makeDeleteStatement({ dialect, table, where })
+ *   U->>D: query(delete)
+ *   alt DatabaseError
+ *     U->>E: makeDatabaseErrorMessage({ message })
+ *     U-->>H: DatabaseError, with the way out
+ *   else rowCount
+ *     U-->>H: affected
+ *   end
+ * ```
+ *
  * @param input - the model and the key
  * @returns how many rows were deleted
  */
@@ -324,17 +503,19 @@ export function deleteRow(input: z.infer<typeof DeleteRowInput>) {
     const db = StudioService.studio().db
     const driver = yield* db.driver
     const enums = state.snapshot().schema?.enums ?? []
-    const written = yield* driver.query(
-      SqlDomain.makeDeleteStatement({
-        dialect: driver.dialect,
-        table: ModelDomain.tableName({ model }),
-        where: ModelDomain.makeColumnValues({
-          model,
+    const written = yield* worded(
+      driver.query(
+        SqlDomain.makeDeleteStatement({
           dialect: driver.dialect,
-          row: input.where,
-          enums,
+          table: ModelDomain.tableName({ model }),
+          where: ModelDomain.makeColumnValues({
+            model,
+            dialect: driver.dialect,
+            row: input.where,
+            enums,
+          }),
         }),
-      }),
+      ),
     )
     const affected = { affected: written.rowCount }
     return affected
@@ -370,17 +551,35 @@ const RunSqlInput = z
  *
  * ```mermaid
  * sequenceDiagram
- *   participant U as runSql
- *   participant Db as Database
- *   participant D as Driver
- *   U->>Db: driver
- *   Db-->>U: driver / DatabaseUnavailableError
- *   Note over U: split the text into statements (domain)
- *   loop each statement
- *     U->>D: query(sql, params)
+ *   participant H as Handler
+ *   participant U as DatabaseUseCase
+ *   participant S as StudioService
+ *   participant D as DatabaseService
+ *   participant X as sql (splitStatements)
+ *   participant V as ValuesDomain
+ *   participant E as DatabaseErrorDomain
+ *   H->>U: runSql({ sql, params })
+ *   U->>S: studio().db
+ *   U->>D: db.driver
+ *   alt DatabaseUnavailableError
+ *     U-->>H: the failure
  *   end
- *   D-->>U: columns, rows, rowCount
- *   Note over U: first SQL_ROW_LIMIT rows → validate against SqlResult
+ *   U->>X: splitStatements(sql)
+ *   alt no statement
+ *     U-->>H: InvalidInputError
+ *   end
+ *   U->>V: makeBindValue({ dialect, value }) per param
+ *   loop each statement, in order
+ *     U->>D: query({ sql, params })
+ *   end
+ *   alt DatabaseError
+ *     U->>E: makeDatabaseErrorMessage({ message })
+ *     U-->>H: DatabaseError, with the way out
+ *   else results
+ *     Note over U: the last result, its first SQL_ROW_LIMIT rows
+ *     U->>V: makeRow({ row, columnToField }) per row
+ *     U-->>H: columns, rows, rowCount, durationMs
+ *   end
  * ```
  *
  * @param input - the text and the parameter values
@@ -398,7 +597,9 @@ export function runSql(input: z.infer<typeof RunSqlInput>) {
       ValuesDomain.makeBindValue({ dialect: driver.dialect, value }),
     )
     const started = performance.now()
-    const results = yield* Effect.forEach(statements, (sql) => driver.query({ sql, params }))
+    const results = yield* worded(
+      Effect.forEach(statements, (sql) => driver.query({ sql, params })),
+    )
     const executed = results.at(-1) ?? { columns: [], rows: [], rowCount: 0 }
     const sqlResult = {
       columns: executed.columns,
@@ -417,6 +618,40 @@ export function runSql(input: z.infer<typeof RunSqlInput>) {
 /**
  * The execution plan the database chooses for the first statement of the text.
  *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant H as Handler
+ *   participant U as DatabaseUseCase
+ *   participant S as StudioService
+ *   participant D as DatabaseService
+ *   participant X as sql (splitStatements)
+ *   participant V as ValuesDomain
+ *   participant Q as SqlDomain
+ *   participant P as PlanDomain
+ *   participant E as DatabaseErrorDomain
+ *   H->>U: explainSql({ sql, params })
+ *   U->>S: studio().db
+ *   U->>D: db.driver
+ *   alt DatabaseUnavailableError
+ *     U-->>H: the failure
+ *   end
+ *   U->>X: splitStatements(sql)
+ *   alt no statement
+ *     U-->>H: InvalidInputError
+ *   end
+ *   U->>V: makeBindValue({ dialect, value }) per param
+ *   U->>Q: makeExplainStatement({ dialect, sql: first })
+ *   U->>D: query({ sql: explain, params })
+ *   alt DatabaseError
+ *     U->>E: makeDatabaseErrorMessage({ message })
+ *     U-->>H: DatabaseError, with the way out
+ *   else rows
+ *     U->>P: makePlan({ dialect, rows })
+ *     P-->>U: nodes, raw
+ *     U-->>H: dialect, nodes, raw
+ *   end
+ * ```
+ *
  * @param input - the text and the parameter values
  * @returns the plan steps, parents first, and the plan as the database printed it
  */
@@ -431,8 +666,14 @@ export function explainSql(input: z.infer<typeof RunSqlInput>) {
     const params = input.params.map((value) =>
       ValuesDomain.makeBindValue({ dialect: driver.dialect, value }),
     )
-    const explained = yield* driver.explain({ sql: first, params })
-    const plan = { dialect: driver.dialect, nodes: explained.nodes, raw: explained.raw }
+    const explained = yield* worded(
+      driver.query({
+        sql: SqlDomain.makeExplainStatement({ dialect: driver.dialect, sql: first }),
+        params,
+      }),
+    )
+    const { nodes, raw } = PlanDomain.makePlan({ dialect: driver.dialect, rows: explained.rows })
+    const plan = { dialect: driver.dialect, nodes, raw }
     return plan
   })
 }
@@ -452,6 +693,22 @@ const AnalyzeSqlInput = z
 /**
  * Analyzes every statement of the text against the tables of the Prisma schema: the dialect is
  * the connected database's, or the datasource provider's while none is connected.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant H as Handler
+ *   participant U as DatabaseUseCase
+ *   participant S as StudioService
+ *   participant C as SchemaDomain
+ *   participant X as sql (analyze)
+ *   H->>U: analyzeSql({ sql })
+ *   U->>S: studio() state, db
+ *   S-->>U: snapshot schema, db.status.dialect
+ *   U->>C: makeAnalysisSchema({ dialect, provider, models })
+ *   U->>X: analyze(sql, schema)
+ *   X-->>U: graph, lineage, row type, parameters, diagnostics
+ *   U-->>H: the analysis of each statement
+ * ```
  *
  * @param input - the text
  * @returns the data-flow graph, lineage, row type, parameters and diagnostics of each statement

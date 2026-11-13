@@ -16,10 +16,7 @@ import {
 } from '../../../database/url.js'
 import type { UrlSource } from '../../../database/url.js'
 import { removePath } from '../../../file/index.js'
-import { stringLiteral } from '../../../sql/index.js'
-import * as DatabaseErrorDomain from '../domain/index.js'
-import * as PlanDomain from '../domain/index.js'
-import * as SqlDomain from '../domain/index.js'
+import { quoteIdentifier, stringLiteral } from '../../../sql/index.js'
 import { DatabaseError, DatabaseUnavailableError } from '../errors/index.js'
 
 /** An open connection: every operation is an Effect that fails with the driver's message. */
@@ -36,10 +33,6 @@ export type Driver = {
     },
     DatabaseError
   >
-  readonly explain: (statement: {
-    readonly sql: string
-    readonly params: readonly unknown[]
-  }) => Effect.Effect<ReturnType<typeof PlanDomain.makeSqlitePlan>, DatabaseError>
   /**
    * One statement, its rows positional and its columns described as the database itself types
    * them: the PostgreSQL type OID, the MySQL type code, the declared type on SQLite. What reads
@@ -133,6 +126,9 @@ const SqliteRunInfo = z
   .object({ changes: z.number().meta({ description: 'Rows the statement changed.', example: 1 }) })
   .meta({ description: 'What node:sqlite returns from statement.run()' })
 
+// A statement node:sqlite answers with rows (`all`) rather than a change count (`run`).
+const READ_STATEMENT = /^\s*(?:select|with|pragma|explain|show|describe|values)\b/iu
+
 const NO_SQLITE =
   'SQLite support needs the built-in node:sqlite module (Node.js 22.13 or newer).\n   Upgrade Node.js or pass --url pointing at a PostgreSQL/MySQL database.'
 
@@ -157,7 +153,7 @@ function openSqlite(url: string, baseDir: string) {
         Effect.try({
           try: () => {
             const prepared = db.prepare(statement.sql)
-            if (SqlDomain.isReadStatement({ sql: statement.sql })) {
+            if (READ_STATEMENT.test(statement.sql)) {
               // oxlint-disable-next-line promise/prefer-await-to-then -- zod's .catch(), not a promise
               const rows = DriverRows.catch([]).parse(prepared.all(...statement.params))
               return { columns: Object.keys(rows[0] ?? {}), rows, rowCount: rows.length }
@@ -168,19 +164,7 @@ function openSqlite(url: string, baseDir: string) {
             )
             return { columns: [], rows: [], rowCount: info.changes }
           },
-          catch: queryError,
-        }),
-      explain: (statement) =>
-        Effect.try({
-          try: () => {
-            const prepared = db.prepare(
-              SqlDomain.makeExplainStatement({ dialect: 'sqlite', sql: statement.sql }),
-            )
-            // oxlint-disable-next-line promise/prefer-await-to-then -- zod's .catch(), not a promise
-            const rows = DriverRows.catch([]).parse(prepared.all(...statement.params))
-            return PlanDomain.makeSqlitePlan({ rows })
-          },
-          catch: queryError,
+          catch: driverError,
         }),
       queryRaw: (statement) =>
         Effect.try({
@@ -195,7 +179,7 @@ function openSqlite(url: string, baseDir: string) {
               rows: rows.map((row) => columns.map((column) => row[column.name] ?? null)),
             }
           },
-          catch: rawError,
+          catch: driverError,
         }),
       executeRaw: (statement) =>
         Effect.try({
@@ -206,14 +190,14 @@ function openSqlite(url: string, baseDir: string) {
             )
             return info.changes
           },
-          catch: rawError,
+          catch: driverError,
         }),
       executeScript: (script) =>
         Effect.try({
           try: () => {
             db.exec(script)
           },
-          catch: rawError,
+          catch: driverError,
         }),
       close: Effect.sync(() => {
         db.close()
@@ -293,7 +277,7 @@ function openPostgres(url: string, cwd: string) {
         // invisible and every query reports a missing relation.
         const schema = makePostgresSchema({ url })
         if (schema !== null) {
-          const name = SqlDomain.makeIdentifier({ dialect: 'postgresql', name: schema })
+          const name = quoteIdentifier('postgresql', schema)
           await opened.query(`SET search_path TO ${name}, public`, [])
         }
         return opened
@@ -319,21 +303,7 @@ function openPostgres(url: string, cwd: string) {
               rowCount: rowCount ?? rows.length,
             }
           },
-          catch: queryError,
-        }),
-      explain: (statement) =>
-        Effect.tryPromise({
-          try: async () => {
-            // oxlint-disable-next-line promise/prefer-await-to-then -- zod's .catch(), not a promise
-            const { rows } = PgResult.catch({ rows: [] }).parse(
-              await client.query(
-                SqlDomain.makeExplainStatement({ dialect: 'postgresql', sql: statement.sql }),
-                statement.params,
-              ),
-            )
-            return PlanDomain.makePostgresPlan({ document: rows[0]?.['QUERY PLAN'] ?? null })
-          },
-          catch: queryError,
+          catch: driverError,
         }),
       queryRaw: (statement) =>
         Effect.tryPromise({
@@ -354,7 +324,7 @@ function openPostgres(url: string, cwd: string) {
               rows,
             }
           },
-          catch: rawError,
+          catch: driverError,
         }),
       executeRaw: (statement) =>
         Effect.tryPromise({
@@ -365,14 +335,14 @@ function openPostgres(url: string, cwd: string) {
             )
             return rowCount ?? 0
           },
-          catch: rawError,
+          catch: driverError,
         }),
       executeScript: (script) =>
         Effect.tryPromise({
           try: async () => {
             await client.query(script, [])
           },
-          catch: rawError,
+          catch: driverError,
         }),
       close: Effect.promise(() => client.end()),
     }
@@ -466,22 +436,7 @@ function openMysql(url: string, cwd: string) {
               rowCount: data.length,
             }
           },
-          catch: queryError,
-        }),
-      explain: (statement) =>
-        Effect.tryPromise({
-          try: async () => {
-            // oxlint-disable-next-line promise/prefer-await-to-then -- zod's .catch(), not a promise
-            const [data] = MysqlResult.catch([[], undefined]).parse(
-              await connection.query(
-                SqlDomain.makeExplainStatement({ dialect: 'mysql', sql: statement.sql }),
-                statement.params,
-              ),
-            )
-            const first = Array.isArray(data) ? data[0] : undefined
-            return PlanDomain.makeMysqlPlan({ document: first?.EXPLAIN ?? null })
-          },
-          catch: queryError,
+          catch: driverError,
         }),
       queryRaw: (statement) =>
         Effect.tryPromise({
@@ -502,7 +457,7 @@ function openMysql(url: string, cwd: string) {
               rows: Array.isArray(data) ? data : [],
             }
           },
-          catch: rawError,
+          catch: driverError,
         }),
       executeRaw: (statement) =>
         Effect.tryPromise({
@@ -513,14 +468,14 @@ function openMysql(url: string, cwd: string) {
             )
             return Array.isArray(data) ? data.length : data.affectedRows
           },
-          catch: rawError,
+          catch: driverError,
         }),
       executeScript: (script) =>
         Effect.tryPromise({
           try: async () => {
             await connection.query(script, [])
           },
-          catch: rawError,
+          catch: driverError,
         }),
       close: Effect.promise(() => connection.end()),
     }
@@ -536,8 +491,19 @@ const DISCONNECTED = {
   error: null,
 } as const
 
-/** The database as the use cases see it: its status, the driver (or why there is none) and how to close it. */
-export function disconnectedDatabase(reason: string | null = null): {
+/**
+ * The database as the use cases see it while none is open: its status, a driver that fails with
+ * why, and nothing to close.
+ *
+ * ```mermaid
+ * flowchart LR
+ *   reason --> status[status: not connected, error] & driver[driver: DatabaseUnavailableError]
+ * ```
+ *
+ * @param input.reason - why no database is open, or null when none was asked for
+ * @returns the status, the failing driver, no target and a close that does nothing
+ */
+export function disconnectedDatabase(input?: { readonly reason: string | null }): {
   readonly status: {
     readonly connected: boolean
     readonly dialect: 'postgresql' | 'mysql' | 'sqlite' | null
@@ -551,9 +517,9 @@ export function disconnectedDatabase(reason: string | null = null): {
   readonly close: Effect.Effect<void>
 } {
   return {
-    status: { ...DISCONNECTED, error: reason },
+    status: { ...DISCONNECTED, error: input?.reason ?? null },
     driver: Effect.fail(
-      new DatabaseUnavailableError({ reason: reason ?? 'No database connected.' }),
+      new DatabaseUnavailableError({ reason: input?.reason ?? 'No database connected.' }),
     ),
     target: null,
     close: Effect.void,
@@ -595,18 +561,9 @@ const ConnectDatabaseInput = z
     description: 'Where to look for the database URL and how to resolve relative sqlite files',
   })
 
-/** What a statement failed with, as Studio shows it: the driver's message, read for its sense. */
-function queryError(error: unknown) {
-  return new DatabaseError({
-    cause: DatabaseErrorDomain.makeDatabaseErrorMessage({
-      message: error instanceof Error ? error.message : String(error),
-    }),
-  })
-}
-
-// The raw path reports the driver's own message: what reads it is the schema engine, which
-// parses the message to tell a missing table from a broken database.
-function rawError(error: unknown) {
+// What a statement failed with: the driver's own message. The schema engine parses it to tell a
+// missing table from a broken database, and the database use case words it for a person.
+function driverError(error: unknown) {
   return new DatabaseError({ cause: error instanceof Error ? error.message : String(error) })
 }
 
@@ -615,7 +572,16 @@ function rawError(error: unknown) {
  * consistent whatever else holds the file) into the temporary directory, for a migration to be
  * rehearsed on. Closing the returned driver removes the copy.
  *
- * @param input - the open connection to copy, and where drivers are found
+ * ```mermaid
+ * flowchart LR
+ *   driver[open SQLite connection] -->|VACUUM INTO| fs[(temporary directory)] --> copy[(node:sqlite on the copy)]
+ *   driver -->|copy fails| fail[DatabaseUnavailableError]
+ *   copy --> out[driver on the copy]
+ *   out -->|close| remove["close + delete the file, a failure to delete only logged"]
+ * ```
+ *
+ * @param input.driver - the open connection to copy
+ * @param input.cwd - where drivers are found
  * @returns a driver on the copy; closing it deletes the file
  */
 export function openSqliteCopy(input: { readonly driver: Driver; readonly cwd: string }) {
@@ -630,7 +596,12 @@ export function openSqliteCopy(input: { readonly driver: Driver; readonly cwd: s
       ),
     )
     const copy = yield* openSqlite(`file:${file}`, input.cwd)
-    const remove = removePath(file).pipe(Effect.provide(nodeFileSystemLayer), Effect.ignore)
+    const remove = removePath(file).pipe(
+      Effect.provide(nodeFileSystemLayer),
+      Effect.catchTag('PlatformError', (error) =>
+        Effect.logDebug(`cannot remove the copy ${file}`, error),
+      ),
+    )
     return { ...copy, close: Effect.all([copy.close, remove], { discard: true }) }
   })
 }
@@ -654,8 +625,18 @@ export function openSqliteCopy(input: { readonly driver: Driver; readonly cwd: s
  * DROP DATABASE IF EXISTS `hk_rehearsal_4f0c…`
  * ```
  *
- * @param input - the database Studio is on: its URL, the open connection, and where drivers are found
- * @returns a driver on the copy; closing it removes the copy
+ * ```mermaid
+ * flowchart LR
+ *   in[url + open connection] -->|CREATE DATABASE| db[(MySQL server)]
+ *   db --> copy[(mysql2 on the copy)] -->|tables, rows, triggers| filled[driver on the copy + its URL]
+ *   db & copy -->|DatabaseError, copy dropped| fail[DatabaseUnavailableError]
+ *   filled -->|close| drop["close + DROP DATABASE, a failure to drop only logged"]
+ * ```
+ *
+ * @param input.url - the URL of the database Studio is on
+ * @param input.driver - the open connection to that database
+ * @param input.cwd - where drivers are found
+ * @returns a driver on the copy and the copy's URL; closing it removes the copy
  */
 export function openMysqlCopy(input: {
   readonly url: string
@@ -667,9 +648,15 @@ export function openMysqlCopy(input: {
     const found = yield* driver.query({ sql: 'SELECT DATABASE() AS `name`', params: [] })
     const source = found.rows[0]?.name
     const name = `hk_rehearsal_${globalThis.crypto.randomUUID().replaceAll('-', '')}`
-    const quoted = SqlDomain.makeIdentifier({ dialect: 'mysql', name })
+    const quoted = quoteIdentifier('mysql', name)
     yield* driver.executeScript(`CREATE DATABASE ${quoted}`)
-    const drop = driver.executeScript(`DROP DATABASE IF EXISTS ${quoted}`).pipe(Effect.ignore)
+    const drop = driver
+      .executeScript(`DROP DATABASE IF EXISTS ${quoted}`)
+      .pipe(
+        Effect.catchTag('DatabaseError', (error) =>
+          Effect.logDebug(`cannot drop the database ${quoted}`, error),
+        ),
+      )
     const copy = yield* openMysql(
       Object.assign(new URL(input.url), { pathname: `/${name}` }).toString(),
       input.cwd,
@@ -734,7 +721,7 @@ function copyMysqlTrigger(input: {
 }) {
   return Effect.gen(function* () {
     const created = yield* input.driver.query({
-      sql: `SHOW CREATE TRIGGER ${SqlDomain.makeIdentifier({ dialect: 'mysql', name: input.trigger })}`,
+      sql: `SHOW CREATE TRIGGER ${quoteIdentifier('mysql', input.trigger)}`,
       params: [],
     })
     const statement = created.rows[0]?.['SQL Original Statement']
@@ -753,7 +740,7 @@ function copyMysqlTable(input: {
   readonly table: string
 }) {
   return Effect.gen(function* () {
-    const table = SqlDomain.makeIdentifier({ dialect: 'mysql', name: input.table })
+    const table = quoteIdentifier('mysql', input.table)
     const created = yield* input.driver.query({
       sql: `SHOW CREATE TABLE ${table}`,
       params: [],
@@ -770,13 +757,11 @@ function copyMysqlTable(input: {
     })
     const names = columns.rows
       .flatMap((row) =>
-        typeof row.column === 'string'
-          ? [SqlDomain.makeIdentifier({ dialect: 'mysql', name: row.column })]
-          : [],
+        typeof row.column === 'string' ? [quoteIdentifier('mysql', row.column)] : [],
       )
       .join(', ')
     yield* input.copy.executeRaw({
-      sql: `INSERT INTO ${table} (${names}) SELECT ${names} FROM ${SqlDomain.makeIdentifier({ dialect: 'mysql', name: input.source })}.${table}`,
+      sql: `INSERT INTO ${table} (${names}) SELECT ${names} FROM ${quoteIdentifier('mysql', input.source)}.${table}`,
       params: [],
     })
   })
@@ -788,7 +773,20 @@ function copyMysqlTable(input: {
  * created on the open connection and dropped again when the returned driver is closed. Creating
  * one takes the CREATEDB privilege, which the database refuses in so many words when it is missing.
  *
- * @param input - the database Studio is on: its URL, the open connection, and where drivers are found
+ * ```mermaid
+ * flowchart LR
+ *   in[url + open connection] --> dialect{dialect}
+ *   dialect -->|sqlite| memory[(node:sqlite in memory)]
+ *   dialect -->|mysql| fail[DatabaseUnavailableError]
+ *   dialect -->|postgresql| create[CREATE DATABASE on the open connection] --> pg[(pg on the new database)]
+ *   create -->|refused, e.g. no CREATEDB| fail
+ *   memory & pg --> out[driver on the empty database]
+ *   out -->|close| drop["close + DROP DATABASE, a failure to drop only logged"]
+ * ```
+ *
+ * @param input.url - the URL of the database Studio is on
+ * @param input.driver - the open connection to that database
+ * @param input.cwd - where drivers are found
  * @returns a driver on the empty database; closing it removes the database
  */
 export function openShadowDatabase(input: {
@@ -804,7 +802,7 @@ export function openShadowDatabase(input: {
       })
     }
     const name = `prisma_migrate_shadow_db_${globalThis.crypto.randomUUID()}`
-    const quoted = SqlDomain.makeIdentifier({ dialect: 'postgresql', name })
+    const quoted = quoteIdentifier('postgresql', name)
     yield* input.driver.executeScript(`CREATE DATABASE ${quoted}`).pipe(
       Effect.mapError(
         (error) =>
@@ -817,7 +815,13 @@ export function openShadowDatabase(input: {
     // The shadow is a database of its own, read from its `public` schema.
     const shadowUrl = Object.assign(url, { pathname: `/${name}` })
     shadowUrl.searchParams.delete('schema')
-    const drop = input.driver.executeScript(`DROP DATABASE IF EXISTS ${quoted}`).pipe(Effect.ignore)
+    const drop = input.driver
+      .executeScript(`DROP DATABASE IF EXISTS ${quoted}`)
+      .pipe(
+        Effect.catchTag('DatabaseError', (error) =>
+          Effect.logDebug(`cannot drop the database ${quoted}`, error),
+        ),
+      )
     const shadow = yield* openPostgres(shadowUrl.toString(), input.cwd).pipe(
       Effect.tapError(() => drop),
     )
@@ -826,16 +830,37 @@ export function openShadowDatabase(input: {
   })
 }
 
-/** Resolves the URL, picks the dialect and opens the driver; a failure is a disconnected database that says why. */
-export function connectDatabase(options: z.infer<typeof ConnectDatabaseInput>) {
+/**
+ * Resolves the URL, picks the dialect and opens the driver. A failure is kept, not raised: the
+ * database comes back disconnected and its status says why, so Studio still edits the schema.
+ *
+ * ```mermaid
+ * flowchart LR
+ *   urls[--url, config, .env, schema] --> resolve[resolveDatabaseUrl] --> dialect{dialect}
+ *   dialect -->|sqlite| sqlite[(node:sqlite)]
+ *   dialect -->|postgresql| pg[(pg)]
+ *   dialect -->|mysql| mysql[(mysql2)]
+ *   resolve & dialect & sqlite & pg & mysql -->|DatabaseUnavailableError| off[disconnected, with the reason]
+ * ```
+ *
+ * @param input.explicitUrl - the --url flag, when given
+ * @param input.configUrl - the `url` of hekireki.config.ts, when set
+ * @param input.configError - why hekireki.config.ts could not be read, when it could not
+ * @param input.schemaText - the schema files' text, for a datasource `url`
+ * @param input.schemaProvider - the datasource provider of the schema
+ * @param input.cwd - where .env, prisma.config.ts and the drivers are looked up
+ * @param input.schemaDir - where relative sqlite files resolve from
+ * @returns the status, the driver, the URL as found and how to close it
+ */
+export function connectDatabase(input: z.infer<typeof ConnectDatabaseInput>) {
   return Effect.gen(function* () {
-    const found = yield* resolveDatabaseUrl(options).pipe(
+    const found = yield* resolveDatabaseUrl(input).pipe(
       Effect.mapError((error) => new DatabaseUnavailableError({ reason: error.reason })),
     )
     const url = makeRedactedUrl({ url: found.url })
     const dialect = makeDialect({
       url: found.url,
-      schemaProvider: options.schemaProvider,
+      schemaProvider: input.schemaProvider,
     })
     if (dialect === null) {
       return yield* new DatabaseUnavailableError({
@@ -844,10 +869,10 @@ export function connectDatabase(options: z.infer<typeof ConnectDatabaseInput>) {
     }
     const driver =
       dialect === 'sqlite'
-        ? yield* openSqlite(found.url, options.schemaDir)
+        ? yield* openSqlite(found.url, input.schemaDir)
         : dialect === 'postgresql'
-          ? yield* openPostgres(found.url, options.cwd)
-          : yield* openMysql(found.url, options.cwd)
+          ? yield* openPostgres(found.url, input.cwd)
+          : yield* openMysql(found.url, input.cwd)
     return {
       status: { connected: true, dialect, url, source: found.source, error: null },
       driver: Effect.succeed(driver),
@@ -855,8 +880,9 @@ export function connectDatabase(options: z.infer<typeof ConnectDatabaseInput>) {
       close: driver.close,
     }
   }).pipe(
-    Effect.catchTag('DatabaseUnavailableError', (error) =>
-      Effect.succeed(disconnectedDatabase(error.reason)),
-    ),
+    Effect.match({
+      onFailure: (error) => disconnectedDatabase({ reason: error.reason }),
+      onSuccess: (connected) => connected,
+    }),
   )
 }

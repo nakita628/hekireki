@@ -5,10 +5,7 @@ import { Effect } from 'effect'
 import * as z from 'zod'
 
 import { parseSchema, readSchemaFiles as readSchemaFilesFrom } from '../../../schema/index.js'
-import * as DocsDomain from '../domain/index.js'
-import * as SchemaDomain from '../domain/index.js'
 import { SchemaLoadError, SchemaParseError } from '../errors/index.js'
-import * as LanguageService from './language.js'
 
 const ReadSchemaFilesInput = z
   .object({
@@ -26,6 +23,15 @@ const ReadSchemaFilesInput = z
  * Reads the schema file, or every `.prisma` file of the directory and those below it, each path
  * as Studio reports it: relative to the working directory when the file lives under it, absolute
  * otherwise.
+ *
+ * ```mermaid
+ * flowchart LR
+ *   schemaPath --> fs[(file system)] --> files[path + content of each .prisma file]
+ *   fs -->|missing / unreadable| fail[SchemaLoadError]
+ * ```
+ *
+ * @param input.schemaPath - the schema file or directory
+ * @returns each file's path and content
  */
 export function readSchemaFiles(input: z.infer<typeof ReadSchemaFilesInput>) {
   return readSchemaFilesFrom(input.schemaPath).pipe(
@@ -61,34 +67,35 @@ const ParseSchemaFilesInput = z
       )
       .readonly()
       .meta({ description: 'The loaded schema files.' }),
+    diagnostics: z
+      .custom<SchemaParseError['diagnostics']>(Array.isArray)
+      .meta({ description: "The language server's diagnostics, reported when the engine fails." }),
   })
   .readonly()
-  .meta({ description: 'The schema files to parse together' })
+  .meta({ description: 'The schema files to parse together, and what the editor already found' })
 
 /**
- * Parses the files with the Prisma engine and maps the DMMF to the studio contract. The
- * language server supplies what the DMMF lacks: where each block is and the diagnostics.
+ * Parses the files together with the Prisma engine. When the engine rejects them, the failure
+ * carries the language server's diagnostics, which say where, as the engine's message does not.
+ *
+ * ```mermaid
+ * flowchart LR
+ *   files --> engine[[Prisma engine: getDMMF]]
+ *   engine -->|ok| dmmf[DMMF + provider]
+ *   engine -->|error| fail[SchemaParseError + diagnostics]
+ * ```
+ *
+ * @param input.files - the schema files, parsed as one schema
+ * @param input.diagnostics - what the language server reported for them
+ * @returns the DMMF and the datasource provider
  */
 export function parseSchemaFiles(input: z.infer<typeof ParseSchemaFilesInput>) {
-  return Effect.gen(function* () {
-    const { files } = input
-    // One workspace of the language server serves both: the diagnostics the error path reports
-    // and the block locations the schema carries.
-    const { diagnostics, blocks } = yield* LanguageService.inspectFiles({ files })
-    const parsed: { readonly dmmf: DMMF.Document; readonly provider: string | null } =
-      yield* parseSchema(files).pipe(
-        Effect.mapError((error) => new SchemaParseError({ message: error.message, diagnostics })),
-      )
-    return {
-      dmmf: parsed.dmmf,
-      schema: SchemaDomain.makeSchema({
-        dmmf: parsed.dmmf,
-        files,
-        provider: parsed.provider,
-        blocks,
-      }),
-      docs: DocsDomain.makeDocs({ dmmf: parsed.dmmf }),
-      diagnostics,
-    }
-  })
+  return parseSchema(input.files).pipe(
+    Effect.map(
+      (parsed): { readonly dmmf: DMMF.Document; readonly provider: string | null } => parsed,
+    ),
+    Effect.mapError(
+      (error) => new SchemaParseError({ message: error.message, diagnostics: input.diagnostics }),
+    ),
+  )
 }

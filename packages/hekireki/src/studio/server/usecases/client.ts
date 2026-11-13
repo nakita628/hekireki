@@ -11,13 +11,35 @@ import * as StudioService from '../services/index.js'
 /**
  * Whether the project's Prisma Client loads; the first request loads it.
  *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant H as Handler
+ *   participant U as ClientUseCase
+ *   participant S as StudioService
+ *   participant P as ClientService
+ *   participant T as TypescriptService
+ *   H->>U: readClientStatus()
+ *   U->>S: studio() state, client, typescript
+ *   S-->>U: snapshot files, client, type checker
+ *   U->>P: client.status(files)
+ *   Note over P: loads the client the first time, a failure reads as not available
+ *   P-->>U: available, source, error
+ *   U->>T: typescript.status(files)
+ *   Note over T: loads the checker the first time, a failure reads as typesError
+ *   T-->>U: typescript, typesError
+ *   U-->>H: both, as one status
+ * ```
+ *
  * @returns available, where it was loaded from, and why it is not available
  */
 export function readClientStatus() {
   return Effect.gen(function* () {
     const state = StudioService.studio().state
     const client = StudioService.studio().client
-    const status = yield* client.status(state.snapshot().files)
+    const typescript = StudioService.studio().typescript
+    const loaded = yield* client.status(state.snapshot().files)
+    const types = yield* typescript.status(state.snapshot().files)
+    const status = { ...loaded, ...types }
     return status
   })
 }
@@ -37,6 +59,22 @@ const AnalyzeClientQueryInput = z
 
 /**
  * Reads the query against the models of the last schema that parsed, without running it.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant H as Handler
+ *   participant U as ClientUseCase
+ *   participant S as StudioService
+ *   participant C as ClientDomain
+ *   H->>U: analyzeClientQuery({ query })
+ *   U->>S: studio().state
+ *   S-->>U: snapshot models
+ *   Note over U: Clock.currentTimeMillis, for now() in the text
+ *   U->>C: makeClientQuery({ text, models, now })
+ *   C-->>U: calls, transaction, diagnostics
+ *   U->>C: makeClientTouched({ calls, models })
+ *   U-->>H: calls, transaction, touched, diagnostics
+ * ```
  *
  * @param input - the query text
  * @returns the calls, whether they are a transaction, and what keeps the query from being run
@@ -85,16 +123,30 @@ const RunClientQueryInput = z
  *
  * ```mermaid
  * sequenceDiagram
- *   participant U as runClientQuery
- *   participant St as StudioState
- *   participant C as Client (Prisma Client)
- *   participant Db as Database
- *   U->>St: models, schema files
- *   U->>Db: dialect, for laying the statements out
- *   Note over U: read the text into calls (domain)
- *   U->>C: run(calls)
- *   C-->>U: value, query events / ClientUnavailableError / ClientQueryError
- *   Note over U: value as JSON, first CLIENT_ROW_LIMIT rows
+ *   participant H as Handler
+ *   participant U as ClientUseCase
+ *   participant S as StudioService
+ *   participant C as ClientDomain
+ *   participant P as ClientService
+ *   participant X as sql (formatSql)
+ *   H->>U: runClientQuery({ query })
+ *   U->>S: studio() state, client, db
+ *   S-->>U: snapshot, client, db.status.dialect
+ *   U->>C: makeClientQuery({ text, models, now })
+ *   alt the text has a diagnostic
+ *     U-->>H: InvalidInputError
+ *   end
+ *   U->>P: client.run(files, query)
+ *   alt ClientUnavailableError or ClientQueryError
+ *     U-->>H: the failure
+ *   else ran
+ *     P-->>U: value, query events, durationMs
+ *     loop each statement the client sent
+ *       U->>X: formatSql(sql, dialect)
+ *     end
+ *     U->>C: makeClientResult({ value, limit }), makeSqlParams({ text })
+ *     U-->>H: result as JSON, rowCount, queries, durationMs
+ *   end
  * ```
  *
  * @param input - the query text
@@ -134,6 +186,26 @@ export function runClientQuery(input: z.infer<typeof RunClientQueryInput>) {
 /**
  * Runs a call that only reads, to show the SQL it sends while it is being typed. A write is
  * refused: its SQL shows when it is run, once the write has been confirmed.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant H as Handler
+ *   participant U as ClientUseCase
+ *   participant S as StudioService
+ *   participant C as ClientDomain
+ *   participant P as ClientService
+ *   H->>U: previewClientQuery({ query })
+ *   U->>S: studio().state
+ *   S-->>U: snapshot models
+ *   U->>C: makeClientQuery({ text, models, now })
+ *   alt a call writes
+ *     U-->>H: InvalidInputError
+ *   end
+ *   Note over U: runClientQuery(input), with its failures
+ *   U->>P: client.run(files, query)
+ *   P-->>U: value, query events, durationMs
+ *   U-->>H: queries, durationMs
+ * ```
  *
  * @param input - the query text
  * @returns the statements the client sent and the wall time
@@ -182,18 +254,33 @@ const QueryPositionInput = z
 /**
  * The completions TypeScript offers at the position, checked against the client's types.
  *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant H as Handler
+ *   participant U as ClientUseCase
+ *   participant S as StudioService
+ *   participant T as TypescriptService
+ *   H->>U: completeClientQuery({ query, offset })
+ *   U->>S: studio() state, typescript
+ *   S-->>U: snapshot files, type checker
+ *   U->>T: typescript.complete(files, query, offset)
+ *   Note over T: loads the checker over the project's client the first time
+ *   alt ClientUnavailableError
+ *     U-->>H: the failure
+ *   else items
+ *     T-->>U: items
+ *     U-->>H: items
+ *   end
+ * ```
+ *
  * @param input - the text and the cursor offset
  * @returns the items
  */
 export function completeClientQuery(input: z.infer<typeof QueryPositionInput>) {
   return Effect.gen(function* () {
     const state = StudioService.studio().state
-    const client = StudioService.studio().client
-    const items = yield* client.typescript.complete(
-      state.snapshot().files,
-      input.query,
-      input.offset,
-    )
+    const typescript = StudioService.studio().typescript
+    const items = yield* typescript.complete(state.snapshot().files, input.query, input.offset)
     return { items }
   })
 }
@@ -221,14 +308,33 @@ const CompletionDetailInput = z
 /**
  * The type and documentation of one completion item.
  *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant H as Handler
+ *   participant U as ClientUseCase
+ *   participant S as StudioService
+ *   participant T as TypescriptService
+ *   H->>U: detailClientCompletion({ query, offset, name })
+ *   U->>S: studio() state, typescript
+ *   S-->>U: snapshot files, type checker
+ *   U->>T: typescript.detail(files, query, offset, name)
+ *   Note over T: loads the checker over the project's client the first time
+ *   alt ClientUnavailableError
+ *     U-->>H: the failure
+ *   else signature, documentation
+ *     T-->>U: signature, documentation
+ *     U-->>H: signature, documentation
+ *   end
+ * ```
+ *
  * @param input - the text, the cursor offset and the item
  * @returns the signature and the doc comment
  */
 export function detailClientCompletion(input: z.infer<typeof CompletionDetailInput>) {
   return Effect.gen(function* () {
     const state = StudioService.studio().state
-    const client = StudioService.studio().client
-    const detail = yield* client.typescript.detail(
+    const typescript = StudioService.studio().typescript
+    const detail = yield* typescript.detail(
       state.snapshot().files,
       input.query,
       input.offset,
@@ -241,14 +347,33 @@ export function detailClientCompletion(input: z.infer<typeof CompletionDetailInp
 /**
  * What TypeScript says about the symbol at the position.
  *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant H as Handler
+ *   participant U as ClientUseCase
+ *   participant S as StudioService
+ *   participant T as TypescriptService
+ *   H->>U: hoverClientQuery({ query, offset })
+ *   U->>S: studio() state, typescript
+ *   S-->>U: snapshot files, type checker
+ *   U->>T: typescript.hover(files, query, offset)
+ *   Note over T: loads the checker over the project's client the first time
+ *   alt ClientUnavailableError
+ *     U-->>H: the failure
+ *   else type, documentation, range
+ *     T-->>U: type, documentation, range
+ *     U-->>H: type, documentation, range
+ *   end
+ * ```
+ *
  * @param input - the text and the pointer offset
  * @returns the type and documentation, and the symbol's range
  */
 export function hoverClientQuery(input: z.infer<typeof QueryPositionInput>) {
   return Effect.gen(function* () {
     const state = StudioService.studio().state
-    const client = StudioService.studio().client
-    const hover = yield* client.typescript.hover(state.snapshot().files, input.query, input.offset)
+    const typescript = StudioService.studio().typescript
+    const hover = yield* typescript.hover(state.snapshot().files, input.query, input.offset)
     return hover
   })
 }
@@ -256,18 +381,33 @@ export function hoverClientQuery(input: z.infer<typeof QueryPositionInput>) {
 /**
  * The signatures of the call the cursor is inside.
  *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant H as Handler
+ *   participant U as ClientUseCase
+ *   participant S as StudioService
+ *   participant T as TypescriptService
+ *   H->>U: signatureClientQuery({ query, offset })
+ *   U->>S: studio() state, typescript
+ *   S-->>U: snapshot files, type checker
+ *   U->>T: typescript.signature(files, query, offset)
+ *   Note over T: loads the checker over the project's client the first time
+ *   alt ClientUnavailableError
+ *     U-->>H: the failure
+ *   else overloads, active signature and parameter
+ *     T-->>U: overloads, active signature and parameter
+ *     U-->>H: overloads, active signature and parameter
+ *   end
+ * ```
+ *
  * @param input - the text and the cursor offset
  * @returns the overloads and which one and which parameter is active
  */
 export function signatureClientQuery(input: z.infer<typeof QueryPositionInput>) {
   return Effect.gen(function* () {
     const state = StudioService.studio().state
-    const client = StudioService.studio().client
-    const help = yield* client.typescript.signature(
-      state.snapshot().files,
-      input.query,
-      input.offset,
-    )
+    const typescript = StudioService.studio().typescript
+    const help = yield* typescript.signature(state.snapshot().files, input.query, input.offset)
     return help
   })
 }
@@ -288,14 +428,33 @@ const CheckClientQueryInput = z
 /**
  * What TypeScript finds wrong with the query, checked against the client's types.
  *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant H as Handler
+ *   participant U as ClientUseCase
+ *   participant S as StudioService
+ *   participant T as TypescriptService
+ *   H->>U: checkClientQuery({ query })
+ *   U->>S: studio() state, typescript
+ *   S-->>U: snapshot files, type checker
+ *   U->>T: typescript.check(files, query)
+ *   Note over T: loads the checker over the project's client the first time
+ *   alt ClientUnavailableError
+ *     U-->>H: the failure
+ *   else diagnostics
+ *     T-->>U: diagnostics
+ *     U-->>H: diagnostics
+ *   end
+ * ```
+ *
  * @param input - the text
  * @returns the problems, in order of position
  */
 export function checkClientQuery(input: z.infer<typeof CheckClientQueryInput>) {
   return Effect.gen(function* () {
     const state = StudioService.studio().state
-    const client = StudioService.studio().client
-    const diagnostics = yield* client.typescript.check(state.snapshot().files, input.query)
+    const typescript = StudioService.studio().typescript
+    const diagnostics = yield* typescript.check(state.snapshot().files, input.query)
     return { diagnostics }
   })
 }
@@ -315,6 +474,21 @@ const FormatClientQueryInput = z
 
 /**
  * The query laid out as the repository's TypeScript formatter writes it.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant H as Handler
+ *   participant U as ClientUseCase
+ *   participant F as format (fmt)
+ *   H->>U: formatClientQuery({ query })
+ *   U->>F: fmt(query)
+ *   alt FormatError
+ *     U-->>H: the failure
+ *   else text
+ *     F-->>U: formatted text
+ *     U-->>H: text, trailing newline trimmed
+ *   end
+ * ```
  *
  * @param input - the text
  * @returns the whole text, formatted

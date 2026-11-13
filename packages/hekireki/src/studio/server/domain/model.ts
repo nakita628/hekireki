@@ -84,7 +84,23 @@ const TableColumnsInput = z
   .readonly()
   .meta({ description: 'A studio model' })
 
-/** The scalar and enum fields, i.e. the table columns. */
+/**
+ * The scalar and enum fields, i.e. the table columns.
+ *
+ * @param input.model - the model whose fields are read
+ * @returns the fields that are not relations
+ * @example
+ * const model = {
+ *   name: 'User', dbName: 'users', primaryKey: null,
+ *   fields: [
+ *     { name: 'id', dbName: null, kind: 'scalar', type: 'Int', isList: false, isId: true, isUnique: false },
+ *     { name: 'role', dbName: 'user_role', kind: 'enum', type: 'Role', isList: false, isId: false, isUnique: false },
+ *     { name: 'posts', dbName: null, kind: 'object', type: 'Post', isList: true, isId: false, isUnique: false },
+ *   ],
+ * }
+ * tableColumns({ model }).map((field) => field.name)
+ * // ['id', 'role']
+ */
 export function tableColumns(input: z.infer<typeof TableColumnsInput>) {
   return input.model.fields.filter((f) => f.kind !== 'object')
 }
@@ -105,14 +121,30 @@ const ColumnNameInput = z
   .readonly()
   .meta({ description: 'A field with its optional @map name' })
 
-/** The database column of a field: `@map` when present, else the field name. */
+/**
+ * The database column of a field: `@map` when present, else the field name.
+ *
+ * @param input.field - the field to name a column for: its Prisma name and its `@map` name, when set
+ * @returns the column name
+ * @example
+ * columnName({ field: { name: 'createdAt', dbName: 'created_at' } })
+ * // 'created_at'
+ */
 export function columnName(input: z.infer<typeof ColumnNameInput>) {
   return input.field.dbName ?? input.field.name
 }
 
 const KeyFieldsInput = z.object({ model: Model }).readonly().meta({ description: 'A studio model' })
 
-/** The fields that identify a row: `@@id`, then `@id`, then the first `@unique`; empty means read-only. */
+/**
+ * The fields that identify a row: `@@id`, then `@id`, then the first `@unique`; empty means read-only.
+ *
+ * @param input.model - the model whose key is read
+ * @returns the names of the key fields
+ * @example
+ * keyFields({ model: { name: 'Member', dbName: null, primaryKey: ['userId', 'teamId'], fields: [] } })
+ * // ['userId', 'teamId']
+ */
 export function keyFields(input: z.infer<typeof KeyFieldsInput>) {
   const { model } = input
   const composite = model.primaryKey ?? []
@@ -125,7 +157,15 @@ export function keyFields(input: z.infer<typeof KeyFieldsInput>) {
 
 const TableNameInput = z.object({ model: Model }).readonly().meta({ description: 'A studio model' })
 
-/** The database table of a model: `@@map` when present, else the model name. */
+/**
+ * The database table of a model: `@@map` when present, else the model name.
+ *
+ * @param input.model - the model to name a table for
+ * @returns the table name
+ * @example
+ * tableName({ model: { name: 'User', dbName: 'users', primaryKey: null, fields: [] } })
+ * // 'users'
+ */
 export function tableName(input: z.infer<typeof TableNameInput>) {
   return input.model.dbName ?? input.model.name
 }
@@ -148,6 +188,22 @@ const MakeEnumWriteValuesInput = z
  * Per column, the stored value of each enum member by its Prisma name, for the enum fields whose
  * members are `@map`ped. Writing `PUBLIC` into a column that holds `public` is a type error in
  * PostgreSQL and a silent truncation in MySQL, so the value is translated on its way in.
+ *
+ * @param input.model - the model whose enum fields are read
+ * @param input.enums - the schema enums, whose members may be `@map`ped to other names
+ * @returns per field name, the stored value by Prisma member name
+ * @example
+ * const model = {
+ *   name: 'User', dbName: 'users', primaryKey: null,
+ *   fields: [
+ *     { name: 'id', dbName: null, kind: 'scalar', type: 'Int', isList: false, isId: true, isUnique: false },
+ *     { name: 'role', dbName: 'user_role', kind: 'enum', type: 'Role', isList: false, isId: false, isUnique: false },
+ *     { name: 'posts', dbName: null, kind: 'object', type: 'Post', isList: true, isId: false, isUnique: false },
+ *   ],
+ * }
+ * const enums = [{ name: 'Role', values: [{ name: 'ADMIN', dbName: 'admin' }] }]
+ * makeEnumWriteValues({ model, enums })
+ * // Map { 'role' => Map { 'ADMIN' => 'admin' } }
  */
 export function makeEnumWriteValues(input: z.infer<typeof MakeEnumWriteValuesInput>) {
   return new Map(
@@ -165,7 +221,25 @@ const MakeEnumReadValuesInput = z
   .readonly()
   .meta({ description: 'A model and the schema enums its fields may refer to' })
 
-/** Per column, the Prisma name of each enum member by its stored value, for reading rows back. */
+/**
+ * Per column, the Prisma name of each enum member by its stored value, for reading rows back.
+ *
+ * @param input.model - the model whose enum fields are read
+ * @param input.enums - the schema enums, whose members may be `@map`ped to other names
+ * @returns per column name, the Prisma member name by stored value
+ * @example
+ * const model = {
+ *   name: 'User', dbName: 'users', primaryKey: null,
+ *   fields: [
+ *     { name: 'id', dbName: null, kind: 'scalar', type: 'Int', isList: false, isId: true, isUnique: false },
+ *     { name: 'role', dbName: 'user_role', kind: 'enum', type: 'Role', isList: false, isId: false, isUnique: false },
+ *     { name: 'posts', dbName: null, kind: 'object', type: 'Post', isList: true, isId: false, isUnique: false },
+ *   ],
+ * }
+ * const enums = [{ name: 'Role', values: [{ name: 'ADMIN', dbName: 'admin' }] }]
+ * makeEnumReadValues({ model, enums })
+ * // Map { 'user_role' => Map { 'admin' => 'ADMIN' } }
+ */
 export function makeEnumReadValues(input: z.infer<typeof MakeEnumReadValuesInput>) {
   return new Map(
     tableColumns({ model: input.model })
@@ -182,7 +256,27 @@ const MakeColumnValuesInput = z
   .readonly()
   .meta({ description: 'A row keyed by field name to translate into column values' })
 
-/** Maps `{ fieldName: cell }` from the UI to `{ columnName: driverValue }` for the database. */
+/**
+ * Maps `{ fieldName: cell }` from the UI to `{ columnName: driverValue }` for the database.
+ *
+ * @param input.model - the model the row belongs to
+ * @param input.dialect - the SQL dialect of the connected database
+ * @param input.row - the row keyed by Prisma field name; names that are not columns are dropped
+ * @param input.enums - the schema enums, to store a `@map`ped member by its stored value
+ * @returns the driver values keyed by column name
+ * @example
+ * const model = {
+ *   name: 'User', dbName: 'users', primaryKey: null,
+ *   fields: [
+ *     { name: 'id', dbName: null, kind: 'scalar', type: 'Int', isList: false, isId: true, isUnique: false },
+ *     { name: 'role', dbName: 'user_role', kind: 'enum', type: 'Role', isList: false, isId: false, isUnique: false },
+ *     { name: 'posts', dbName: null, kind: 'object', type: 'Post', isList: true, isId: false, isUnique: false },
+ *   ],
+ * }
+ * const enums = [{ name: 'Role', values: [{ name: 'ADMIN', dbName: 'admin' }] }]
+ * makeColumnValues({ model, dialect: 'postgresql', row: { id: '1', role: 'ADMIN' }, enums })
+ * // { id: 1, user_role: 'admin' }
+ */
 export function makeColumnValues(input: z.infer<typeof MakeColumnValuesInput>) {
   const fields = tableColumns({ model: input.model })
   const enumValues = makeEnumWriteValues({ model: input.model, enums: input.enums ?? [] })

@@ -10,7 +10,13 @@ import { afterAll, beforeAll, describe, expect, it } from 'vite-plus/test'
 
 import { formatSql } from '../../../sql/index.js'
 import { createStudioApp } from '../app.js'
-import { createProjectClient, createStudioState, disconnectedDatabase } from '../services/index.js'
+import {
+  createProjectClient,
+  createStudioState,
+  createTypeChecker,
+  disconnectedDatabase,
+} from '../services/index.js'
+import { loadSnapshot } from '../usecases/index.js'
 
 // The Prisma Client page against a client `prisma generate` really wrote, on a real SQLite file:
 // what Studio shows is what Prisma Client does, so this is where a Prisma release that changes
@@ -130,7 +136,8 @@ beforeAll(async () => {
   `)
   db.close()
   const state = createStudioState({ schemaPath })
-  const reload = () => Effect.runPromise(Effect.provide(state.reload(), NodeFileSystem.layer))
+  const reload = () =>
+    Effect.runPromise(Effect.provide(loadSnapshot({ state }), NodeFileSystem.layer))
   await reload()
   const client = createProjectClient({
     target: { url: 'file:./dev.db', dialect: 'sqlite' },
@@ -138,7 +145,13 @@ beforeAll(async () => {
     schemaDir: dir,
     cwd: dir,
   })
-  const app = createStudioApp(state, dir, disconnectedDatabase(), client)
+  const app = createStudioApp({
+    state,
+    staticDir: dir,
+    db: disconnectedDatabase(),
+    client,
+    typescript: createTypeChecker({ schemaDir: dir, cwd: dir }),
+  })
   project.reload = reload
   project.close = () => Effect.runPromise(client.close)
   project.call = async (url, body) => {

@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from 'vite-plus/test'
 
 import { createStudioApp } from '../app.js'
 import { createStudioState, disconnectedDatabase } from '../services/index.js'
+import { loadSnapshot } from '../usecases/index.js'
 
 const dirs: string[] = []
 
@@ -59,8 +60,8 @@ async function setup(schema = SCHEMA) {
   const schemaPath = path.join(dir, 'schema.prisma')
   writeFileSync(schemaPath, schema)
   const state = createStudioState({ schemaPath })
-  await Effect.runPromise(Effect.provide(state.reload(), NodeFileSystem.layer))
-  const app = createStudioApp(state, dir, disconnectedDatabase())
+  await Effect.runPromise(Effect.provide(loadSnapshot({ state }), NodeFileSystem.layer))
+  const app = createStudioApp({ state, staticDir: dir, db: disconnectedDatabase() })
   const docs = async () => {
     const response = await app.request('/api/docs')
     return { status: response.status, json: (await response.json()) as Docs }
@@ -126,7 +127,7 @@ describe('GET /api/docs', () => {
     const { docs, state, schemaPath } = await setup()
     const before = await docs()
     writeFileSync(schemaPath, 'model Broken {\n  id Nope\n}\n')
-    await Effect.runPromise(Effect.provide(state.reload(), NodeFileSystem.layer))
+    await Effect.runPromise(Effect.provide(loadSnapshot({ state }), NodeFileSystem.layer))
     expect(state.snapshot().error).not.toBeNull()
     expect(await docs()).toStrictEqual(before)
   })

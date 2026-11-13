@@ -46,8 +46,12 @@ const MakeClientResultInput = z
  * The result as JSON (dates as ISO strings, bigints and decimals as strings, bytes as base64),
  * an array cut to its first rows, with the length it had.
  *
- * @param input - the value and how many rows of an array to keep
+ * @param input.value - what the Prisma Client call resolved to
+ * @param input.limit - the most rows of an array result to keep
  * @returns the JSON value, the array length (null for anything else) and whether it was cut
+ * @example
+ * makeClientResult({ value: [{ id: 1n }, { id: 2n }, { id: 3n }], limit: 2 })
+ * // { result: [{ id: '1' }, { id: '2' }], rowCount: 3, truncated: true }
  */
 export function makeClientResult(input: z.infer<typeof MakeClientResultInput>) {
   const { value, limit } = input
@@ -69,7 +73,15 @@ const MakeSqlParamsInput = z
   .readonly()
   .meta({ description: 'The params Prisma logged for a statement', example: { text: '[1]' } })
 
-/** The logged params as JSON cells; a value that is not a cell is its JSON text, text that is not JSON is dropped. */
+/**
+ * The logged params as JSON cells; a value that is not a cell is its JSON text, text that is not JSON is dropped.
+ *
+ * @param input.text - the params of a Prisma query event, as JSON text
+ * @returns the params as cells, or an empty list when the text is not a JSON array
+ * @example
+ * makeSqlParams({ text: '["ann",10,{"a":1}]' })
+ * // ['ann', 10, '{"a":1}']
+ */
 export function makeSqlParams(input: z.infer<typeof MakeSqlParamsInput>) {
   const result = ((): unknown => {
     try {

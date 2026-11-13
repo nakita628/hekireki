@@ -17,7 +17,7 @@ import {
 } from '../../../migrate/adapter/native-engine.js'
 import { withLockfile } from '../../../migrate/domain/history.js'
 import { MigrateConfigError } from '../../../migrate/errors.js'
-import * as DatabaseService from './database.js'
+import type * as DatabaseService from './database.js'
 
 const OpenMigrateSessionInput = z
   .object({
@@ -44,6 +44,11 @@ const OpenMigrateSessionInput = z
       description: 'The URL as found, for the PostgreSQL schema it names.',
       example: 'postgresql://localhost/app?schema=app',
     }),
+    openShadow: z
+      .custom<() => ReturnType<typeof DatabaseService.openShadowDatabase>>(
+        (value) => typeof value === 'function',
+      )
+      .meta({ description: 'Opens the shadow database a baseline check replays migrations into.' }),
   })
   .readonly()
   .meta({ description: 'The schema and the database one migration command is run against' })
@@ -53,6 +58,17 @@ const OpenMigrateSessionInput = z
  * where it can be given that connection: not for MySQL, nor a PostgreSQL schema other than public.
  * One engine per command: the datamodel is fixed when the engine is made, and Studio reloads the
  * schema whenever the file changes, so an engine kept between commands would go stale.
+ *
+ * ```mermaid
+ * flowchart LR
+ *   in[schema path + files + open connection + url] --> which{MySQL, or a PostgreSQL schema other than public?}
+ *   which -->|yes| native[native schema engine binary on the URL]
+ *   which -->|no| wasm[wasm schema engine on the open connection]
+ *   native -->|binary not found| config[MigrateConfigError]
+ *   in --> fs[(file system)] --> dir[migrations directory + its list, lock file's provider]
+ *   wasm -->|cannot start| engineError[MigrateEngineError]
+ *   native & wasm & dir --> out[engine + rehearsal engine + migrations + directories]
+ * ```
  *
  * @param input - the schema path, the files of the snapshot and the open connection
  * @returns the engine, the migrations directory and what it holds
@@ -73,7 +89,13 @@ export function openMigrateSession(input: z.infer<typeof OpenMigrateSessionInput
         message: `${input.driver.dialect === 'mysql' ? 'MySQL' : `The PostgreSQL schema "${namespace ?? ''}"`} is migrated through Prisma's native schema engine, which was not found: install \`@prisma/engines\` (it comes with \`prisma\`, and has to be allowed to run its install script), or name the binary with PRISMA_SCHEMA_ENGINE_BINARY.`,
       })
     }
-    const directory = yield* isDirectory(input.schemaPath).pipe(Effect.orElseSucceed(() => false))
+    const directory = yield* isDirectory(input.schemaPath).pipe(
+      Effect.catchTag('PlatformError', (error) =>
+        Effect.logDebug('cannot tell whether the schema path is a directory', error).pipe(
+          Effect.as(false),
+        ),
+      ),
+    )
     // Resolved: the schema path comes from the command line and may be relative, and what is
     // shown and written has to be somewhere a person can find.
     const schemaDir = path.resolve(directory ? input.schemaPath : path.dirname(input.schemaPath))
@@ -99,13 +121,7 @@ export function openMigrateSession(input: z.infer<typeof OpenMigrateSessionInput
         : yield* openSchemaEngine({
             files: input.files,
             // Checking a baseline replays the migrations into a shadow database beside this one.
-            adapter: makeSchemaEngineAdapter(input.driver, () =>
-              DatabaseService.openShadowDatabase({
-                url: input.url ?? '',
-                driver: input.driver,
-                cwd: process.cwd(),
-              }),
-            ),
+            adapter: makeSchemaEngineAdapter(input.driver, input.openShadow),
           })
     return {
       engine,

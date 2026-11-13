@@ -33,11 +33,8 @@ import {
   MigrateStatusSchema,
   MigrationDecisionsSchema,
   MigrationFileSchema,
-  NotFoundProblemSchema,
   RehearsalSchema,
-  ServiceUnavailableProblemSchema,
   TableCountsSchema,
-  ValidationProblemSchema,
 } from '../routes/index.js'
 import * as MigrateUseCase from '../usecases/index.js'
 
@@ -66,13 +63,13 @@ export const getMigrateRouteHandler: RouteHandler<typeof getMigrateRoute> = (c) 
           Match.tag('MigrateConfigError', ({ message }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: message,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -81,13 +78,13 @@ export const getMigrateRouteHandler: RouteHandler<typeof getMigrateRoute> = (c) 
           Match.tag('DatabaseUnavailableError', ({ reason }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: reason,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -96,13 +93,13 @@ export const getMigrateRouteHandler: RouteHandler<typeof getMigrateRoute> = (c) 
           Match.tag('MigrateEngineError', ({ message }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: message,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -138,13 +135,13 @@ export const getMigrateDiffRouteHandler: RouteHandler<typeof getMigrateDiffRoute
           Match.tag('MigrateConfigError', ({ message }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: message,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -153,13 +150,13 @@ export const getMigrateDiffRouteHandler: RouteHandler<typeof getMigrateDiffRoute
           Match.tag('DatabaseUnavailableError', ({ reason }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: reason,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -168,13 +165,13 @@ export const getMigrateDiffRouteHandler: RouteHandler<typeof getMigrateDiffRoute
           Match.tag('MigrateEngineError', ({ message }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: message,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -201,9 +198,10 @@ export const getMigrateDiffRouteHandler: RouteHandler<typeof getMigrateDiffRoute
  *   Note over H: on failure, Match.tag: MigrateConfigError -> 422 / MigrateDatabaseError -> 503 / DatabaseUnavailableError -> 503 / MigrateEngineError -> 503
  * ```
  */
-export const postMigratePlanRouteHandler: RouteHandler<typeof postMigratePlanRoute> = (c) =>
-  Effect.runPromise(
-    Effect.matchEffect(MigrateUseCase.planMigration(c.req.valid('json')), {
+export const postMigratePlanRouteHandler: RouteHandler<typeof postMigratePlanRoute> = (c) => {
+  const data = c.req.valid('json')
+  return Effect.runPromise(
+    Effect.matchEffect(MigrateUseCase.planMigration(data), {
       onSuccess: (value) => Effect.succeed(c.json(MigratePlanSchema.parse(value), 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
@@ -212,14 +210,14 @@ export const postMigratePlanRouteHandler: RouteHandler<typeof postMigratePlanRou
           Match.tag('MigrateConfigError', ({ message }) =>
             Effect.succeed(
               c.json(
-                ValidationProblemSchema.parse({
+                {
                   type: '/problems/validation-failed',
                   title: 'Validation Failed',
                   status: 422,
                   detail: 'The migration could not be planned.',
                   instance: c.req.path,
                   errors: [{ field: 'config', message }],
-                }),
+                } as const,
                 422,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -228,13 +226,13 @@ export const postMigratePlanRouteHandler: RouteHandler<typeof postMigratePlanRou
           Match.tag('MigrateDatabaseError', ({ message }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: message,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -243,13 +241,13 @@ export const postMigratePlanRouteHandler: RouteHandler<typeof postMigratePlanRou
           Match.tag('DatabaseUnavailableError', ({ reason }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: reason,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -258,13 +256,13 @@ export const postMigratePlanRouteHandler: RouteHandler<typeof postMigratePlanRou
           Match.tag('MigrateEngineError', ({ message }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: message,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -274,6 +272,7 @@ export const postMigratePlanRouteHandler: RouteHandler<typeof postMigratePlanRou
         ),
     }),
   )
+}
 
 /**
  * `POST /migrate/apply` handler. Runs the statements one at a time and stops at the first the
@@ -292,22 +291,23 @@ export const postMigratePlanRouteHandler: RouteHandler<typeof postMigratePlanRou
  *   Note over H: on failure, Match.tag: DatabaseUnavailableError -> 503
  * ```
  */
-export const postMigrateApplyRouteHandler: RouteHandler<typeof postMigrateApplyRoute> = (c) =>
-  Effect.runPromise(
-    Effect.matchEffect(MigrateUseCase.applyMigrationStatements(c.req.valid('json')), {
+export const postMigrateApplyRouteHandler: RouteHandler<typeof postMigrateApplyRoute> = (c) => {
+  const data = c.req.valid('json')
+  return Effect.runPromise(
+    Effect.matchEffect(MigrateUseCase.applyMigrationStatements(data), {
       onSuccess: (value) => Effect.succeed(c.json(ApplyResultSchema.parse(value), 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           Match.tag('DatabaseUnavailableError', ({ reason }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: reason,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -317,6 +317,7 @@ export const postMigrateApplyRouteHandler: RouteHandler<typeof postMigrateApplyR
         ),
     }),
   )
+}
 
 /**
  * `POST /migrate/migrations` handler. Writes a migration.sql to the migrations directory, so Prisma
@@ -331,27 +332,28 @@ export const postMigrateApplyRouteHandler: RouteHandler<typeof postMigrateApplyR
  *   H->>U: createMigration()
  *   U-->>H: CreatedMigration
  *   H-->>C: 200 CreatedMigration
- *   Note over H: on failure, Match.tag: MigrateConfigError -> 503 / DatabaseUnavailableError -> 503 / MigrateEngineError -> 503
+ *   Note over H: on failure, Match.tag: MigrateConfigError -> 503 / DatabaseUnavailableError -> 503 / MigrateEngineError -> 503 / PlatformError -> 422
  * ```
  */
 export const postMigrateMigrationsRouteHandler: RouteHandler<typeof postMigrateMigrationsRoute> = (
   c,
-) =>
-  Effect.runPromise(
-    Effect.matchEffect(MigrateUseCase.createMigration(c.req.valid('json')), {
+) => {
+  const data = c.req.valid('json')
+  return Effect.runPromise(
+    Effect.matchEffect(MigrateUseCase.createMigration(data), {
       onSuccess: (value) => Effect.succeed(c.json(CreatedMigrationSchema.parse(value), 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           Match.tag('MigrateConfigError', ({ message }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: message,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -360,13 +362,13 @@ export const postMigrateMigrationsRouteHandler: RouteHandler<typeof postMigrateM
           Match.tag('DatabaseUnavailableError', ({ reason }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: reason,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -375,37 +377,39 @@ export const postMigrateMigrationsRouteHandler: RouteHandler<typeof postMigrateM
           Match.tag('MigrateEngineError', ({ message }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: message,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
             ),
           ),
-          Match.orElse((failure) =>
+          Match.tag('PlatformError', (failure) =>
             Effect.succeed(
               c.json(
-                ValidationProblemSchema.parse({
+                {
                   type: '/problems/validation-failed',
                   title: 'Validation Failed',
                   status: 422,
                   detail: 'The migration could not be written.',
                   instance: c.req.path,
                   errors: [{ field: 'name', message: String(failure) }],
-                }),
+                } as const,
                 422,
                 { 'Content-Type': 'application/problem+json' },
               ),
             ),
           ),
+          Match.exhaustive,
         ),
     }),
   )
+}
 
 /**
  * `POST /migrate/migrations/applied` handler. Records a migration as applied without running it,
@@ -426,22 +430,23 @@ export const postMigrateMigrationsRouteHandler: RouteHandler<typeof postMigrateM
  */
 export const postMigrateMigrationsAppliedRouteHandler: RouteHandler<
   typeof postMigrateMigrationsAppliedRoute
-> = (c) =>
-  Effect.runPromise(
-    Effect.matchEffect(MigrateUseCase.recordMigrationApplied(c.req.valid('json')), {
-      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
+> = (c) => {
+  const data = c.req.valid('json')
+  return Effect.runPromise(
+    Effect.matchEffect(MigrateUseCase.recordMigrationApplied(data), {
+      onSuccess: (value) => Effect.succeed(c.json(MigrateStatusSchema.parse(value), 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           Match.tag('MigrateConfigError', ({ message }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: message,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -450,13 +455,13 @@ export const postMigrateMigrationsAppliedRouteHandler: RouteHandler<
           Match.tag('DatabaseUnavailableError', ({ reason }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: reason,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -465,13 +470,13 @@ export const postMigrateMigrationsAppliedRouteHandler: RouteHandler<
           Match.tag('MigrateEngineError', ({ message }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: message,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -481,6 +486,7 @@ export const postMigrateMigrationsAppliedRouteHandler: RouteHandler<
         ),
     }),
   )
+}
 
 /**
  * `POST /migrate/migrations/rolled-back` handler. Records a migration as rolled back, for one that
@@ -501,22 +507,23 @@ export const postMigrateMigrationsAppliedRouteHandler: RouteHandler<
  */
 export const postMigrateMigrationsRolledBackRouteHandler: RouteHandler<
   typeof postMigrateMigrationsRolledBackRoute
-> = (c) =>
-  Effect.runPromise(
-    Effect.matchEffect(MigrateUseCase.recordMigrationRolledBack(c.req.valid('json')), {
-      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
+> = (c) => {
+  const data = c.req.valid('json')
+  return Effect.runPromise(
+    Effect.matchEffect(MigrateUseCase.recordMigrationRolledBack(data), {
+      onSuccess: (value) => Effect.succeed(c.json(MigrateStatusSchema.parse(value), 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           Match.tag('MigrateConfigError', ({ message }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: message,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -525,13 +532,13 @@ export const postMigrateMigrationsRolledBackRouteHandler: RouteHandler<
           Match.tag('DatabaseUnavailableError', ({ reason }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: reason,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -540,13 +547,13 @@ export const postMigrateMigrationsRolledBackRouteHandler: RouteHandler<
           Match.tag('MigrateEngineError', ({ message }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: message,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -556,6 +563,7 @@ export const postMigrateMigrationsRolledBackRouteHandler: RouteHandler<
         ),
     }),
   )
+}
 
 /**
  * `POST /migrate/deploy` handler. Applies every migration the database has not run yet, as `prisma
@@ -582,13 +590,13 @@ export const postMigrateDeployRouteHandler: RouteHandler<typeof postMigrateDeplo
           Match.tag('MigrateConfigError', ({ message }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: message,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -597,13 +605,13 @@ export const postMigrateDeployRouteHandler: RouteHandler<typeof postMigrateDeplo
           Match.tag('DatabaseUnavailableError', ({ reason }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: reason,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -612,13 +620,13 @@ export const postMigrateDeployRouteHandler: RouteHandler<typeof postMigrateDeplo
           Match.tag('MigrateEngineError', ({ message }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: message,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -654,13 +662,13 @@ export const getMigrateDecisionsRouteHandler: RouteHandler<typeof getMigrateDeci
           Match.tag('MigrateConfigError', ({ message }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: message,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -669,13 +677,13 @@ export const getMigrateDecisionsRouteHandler: RouteHandler<typeof getMigrateDeci
           Match.tag('DatabaseUnavailableError', ({ reason }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: reason,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -684,13 +692,13 @@ export const getMigrateDecisionsRouteHandler: RouteHandler<typeof getMigrateDeci
           Match.tag('MigrateEngineError', ({ message }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: message,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -718,22 +726,25 @@ export const getMigrateDecisionsRouteHandler: RouteHandler<typeof getMigrateDeci
  *   Note over H: on failure, Match.tag: MigrateConfigError -> 503 / DatabaseUnavailableError -> 503 / MigrateEngineError -> 503
  * ```
  */
-export const putMigrateDecisionsRouteHandler: RouteHandler<typeof putMigrateDecisionsRoute> = (c) =>
-  Effect.runPromise(
-    Effect.matchEffect(MigrateUseCase.writeMigrationDecisions(c.req.valid('json')), {
+export const putMigrateDecisionsRouteHandler: RouteHandler<typeof putMigrateDecisionsRoute> = (
+  c,
+) => {
+  const data = c.req.valid('json')
+  return Effect.runPromise(
+    Effect.matchEffect(MigrateUseCase.writeMigrationDecisions(data), {
       onSuccess: (value) => Effect.succeed(c.json(MigrationDecisionsSchema.parse(value), 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           Match.tag('MigrateConfigError', ({ message }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: message,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -742,13 +753,13 @@ export const putMigrateDecisionsRouteHandler: RouteHandler<typeof putMigrateDeci
           Match.tag('DatabaseUnavailableError', ({ reason }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: reason,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -757,37 +768,39 @@ export const putMigrateDecisionsRouteHandler: RouteHandler<typeof putMigrateDeci
           Match.tag('MigrateEngineError', ({ message }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: message,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
             ),
           ),
-          Match.orElse((failure) =>
+          Match.tag('PlatformError', (failure) =>
             Effect.succeed(
               c.json(
-                ValidationProblemSchema.parse({
+                {
                   type: '/problems/validation-failed',
                   title: 'Validation Failed',
                   status: 422,
                   detail: 'The decisions could not be kept.',
                   instance: c.req.path,
                   errors: [{ field: 'decisions', message: String(failure) }],
-                }),
+                } as const,
                 422,
                 { 'Content-Type': 'application/problem+json' },
               ),
             ),
           ),
+          Match.exhaustive,
         ),
     }),
   )
+}
 
 /**
  * `GET /migrate/baseline` handler. Which migrations the database already matches, for a database
@@ -815,13 +828,13 @@ export const getMigrateBaselineRouteHandler: RouteHandler<typeof getMigrateBasel
           Match.tag('MigrateConfigError', ({ message }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: message,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -830,13 +843,13 @@ export const getMigrateBaselineRouteHandler: RouteHandler<typeof getMigrateBasel
           Match.tag('DatabaseUnavailableError', ({ reason }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: reason,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -845,13 +858,13 @@ export const getMigrateBaselineRouteHandler: RouteHandler<typeof getMigrateBasel
           Match.tag('MigrateEngineError', ({ message }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: message,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -878,10 +891,13 @@ export const getMigrateBaselineRouteHandler: RouteHandler<typeof getMigrateBasel
  *   Note over H: on failure, Match.tag: MigrateConfigError -> 422 / DatabaseUnavailableError -> 503 / MigrateEngineError -> 503
  * ```
  */
-export const postMigrateBaselineRouteHandler: RouteHandler<typeof postMigrateBaselineRoute> = (c) =>
-  Effect.runPromise(
-    Effect.matchEffect(MigrateUseCase.baselineDatabase(c.req.valid('json')), {
-      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
+export const postMigrateBaselineRouteHandler: RouteHandler<typeof postMigrateBaselineRoute> = (
+  c,
+) => {
+  const data = c.req.valid('json')
+  return Effect.runPromise(
+    Effect.matchEffect(MigrateUseCase.baselineDatabase(data), {
+      onSuccess: (value) => Effect.succeed(c.json(MigrateStatusSchema.parse(value), 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           // The database does not match the migrations, or there is no such migration: the one
@@ -889,14 +905,14 @@ export const postMigrateBaselineRouteHandler: RouteHandler<typeof postMigrateBas
           Match.tag('MigrateConfigError', ({ message }) =>
             Effect.succeed(
               c.json(
-                ValidationProblemSchema.parse({
+                {
                   type: '/problems/validation-failed',
                   title: 'Validation Failed',
                   status: 422,
                   detail: 'The database could not be baselined.',
                   instance: c.req.path,
                   errors: [{ field: 'name', message }],
-                }),
+                } as const,
                 422,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -905,13 +921,13 @@ export const postMigrateBaselineRouteHandler: RouteHandler<typeof postMigrateBas
           Match.tag('DatabaseUnavailableError', ({ reason }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: reason,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -920,13 +936,13 @@ export const postMigrateBaselineRouteHandler: RouteHandler<typeof postMigrateBas
           Match.tag('MigrateEngineError', ({ message }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: message,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -936,6 +952,7 @@ export const postMigrateBaselineRouteHandler: RouteHandler<typeof postMigrateBas
         ),
     }),
   )
+}
 
 /**
  * `GET /migrate/migrations/{migrationName}` handler. The migration.sql of one migration of the
@@ -955,22 +972,23 @@ export const postMigrateBaselineRouteHandler: RouteHandler<typeof postMigrateBas
  */
 export const getMigrateMigrationsMigrationNameRouteHandler: RouteHandler<
   typeof getMigrateMigrationsMigrationNameRoute
-> = (c) =>
-  Effect.runPromise(
-    Effect.matchEffect(MigrateUseCase.readMigrationFile(c.req.valid('param')), {
+> = (c) => {
+  const data = c.req.valid('param')
+  return Effect.runPromise(
+    Effect.matchEffect(MigrateUseCase.readMigrationFile(data), {
       onSuccess: (value) => Effect.succeed(c.json(MigrationFileSchema.parse(value), 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           Match.tag('MigrationNotFoundError', ({ name, baseDir }) =>
             Effect.succeed(
               c.json(
-                NotFoundProblemSchema.parse({
+                {
                   type: '/problems/not-found',
                   title: 'Not Found',
                   status: 404,
                   detail: `There is no migration ${name} in ${baseDir}.`,
                   instance: c.req.path,
-                }),
+                } as const,
                 404,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -979,13 +997,13 @@ export const getMigrateMigrationsMigrationNameRouteHandler: RouteHandler<
           Match.tag('MigrateConfigError', ({ message }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: message,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -994,13 +1012,13 @@ export const getMigrateMigrationsMigrationNameRouteHandler: RouteHandler<
           Match.tag('DatabaseUnavailableError', ({ reason }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: reason,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -1009,13 +1027,13 @@ export const getMigrateMigrationsMigrationNameRouteHandler: RouteHandler<
           Match.tag('MigrateEngineError', ({ message }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
                   detail: message,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
@@ -1025,6 +1043,7 @@ export const getMigrateMigrationsMigrationNameRouteHandler: RouteHandler<
         ),
     }),
   )
+}
 
 /**
  * `POST /migrate/rehearse` handler. The migration run for real and taken back, to see before it
@@ -1042,34 +1061,81 @@ export const getMigrateMigrationsMigrationNameRouteHandler: RouteHandler<
  *   H-->>C: 200 Rehearsal
  * ```
  */
-export const postMigrateRehearseRouteHandler: RouteHandler<typeof postMigrateRehearseRoute> = (c) =>
-  Effect.runPromise(
-    Effect.matchEffect(MigrateUseCase.rehearse(c.req.valid('json')), {
+export const postMigrateRehearseRouteHandler: RouteHandler<typeof postMigrateRehearseRoute> = (
+  c,
+) => {
+  const data = c.req.valid('json')
+  return Effect.runPromise(
+    Effect.matchEffect(MigrateUseCase.rehearse(data), {
       onSuccess: (value) => Effect.succeed(c.json(RehearsalSchema.parse(value), 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           // The database or the schema engine refused: what it said reaches the page.
-          Match.orElse((failure) =>
+          Match.tag('DatabaseUnavailableError', ({ reason }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
-                  detail:
-                    'reason' in failure && typeof failure.reason === 'string'
-                      ? failure.reason
-                      : failure.message,
+                  detail: reason,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
             ),
           ),
+          Match.tag('MigrateConfigError', ({ message }) =>
+            Effect.succeed(
+              c.json(
+                {
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
+                  detail: message,
+                  instance: c.req.path,
+                } as const,
+                503,
+                { 'Content-Type': 'application/problem+json' },
+              ),
+            ),
+          ),
+          Match.tag('MigrateDatabaseError', ({ message }) =>
+            Effect.succeed(
+              c.json(
+                {
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
+                  detail: message,
+                  instance: c.req.path,
+                } as const,
+                503,
+                { 'Content-Type': 'application/problem+json' },
+              ),
+            ),
+          ),
+          Match.tag('MigrateEngineError', ({ message }) =>
+            Effect.succeed(
+              c.json(
+                {
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
+                  detail: message,
+                  instance: c.req.path,
+                } as const,
+                503,
+                { 'Content-Type': 'application/problem+json' },
+              ),
+            ),
+          ),
+          Match.exhaustive,
         ),
     }),
   )
+}
 
 /**
  * `GET /migrate/tables` handler. The rows of every table of the database now, to compare a run
@@ -1093,24 +1159,37 @@ export const getMigrateTablesRouteHandler: RouteHandler<typeof getMigrateTablesR
       onFailure: (error) =>
         Match.value(error).pipe(
           // The database or the schema engine refused: what it said reaches the page.
-          Match.orElse((failure) =>
+          Match.tag('DatabaseUnavailableError', ({ reason }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
-                  detail:
-                    'reason' in failure && typeof failure.reason === 'string'
-                      ? failure.reason
-                      : failure.message,
+                  detail: reason,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
             ),
           ),
+          Match.tag('MigrateDatabaseError', ({ message }) =>
+            Effect.succeed(
+              c.json(
+                {
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
+                  detail: message,
+                  instance: c.req.path,
+                } as const,
+                503,
+                { 'Content-Type': 'application/problem+json' },
+              ),
+            ),
+          ),
+          Match.exhaustive,
         ),
     }),
   )
@@ -1136,24 +1215,52 @@ export const getMigrateBackupsRouteHandler: RouteHandler<typeof getMigrateBackup
       onFailure: (error) =>
         Match.value(error).pipe(
           // The database or the schema engine refused: what it said reaches the page.
-          Match.orElse((failure) =>
+          Match.tag('DatabaseUnavailableError', ({ reason }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
-                  detail:
-                    'reason' in failure && typeof failure.reason === 'string'
-                      ? failure.reason
-                      : failure.message,
+                  detail: reason,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
             ),
           ),
+          Match.tag('MigrateConfigError', ({ message }) =>
+            Effect.succeed(
+              c.json(
+                {
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
+                  detail: message,
+                  instance: c.req.path,
+                } as const,
+                503,
+                { 'Content-Type': 'application/problem+json' },
+              ),
+            ),
+          ),
+          Match.tag('MigrateEngineError', ({ message }) =>
+            Effect.succeed(
+              c.json(
+                {
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
+                  detail: message,
+                  instance: c.req.path,
+                } as const,
+                503,
+                { 'Content-Type': 'application/problem+json' },
+              ),
+            ),
+          ),
+          Match.exhaustive,
         ),
     }),
   )
@@ -1182,38 +1289,66 @@ export const postMigrateBackupsRouteHandler: RouteHandler<typeof postMigrateBack
           Match.tag('MigrateConfigError', ({ message }) =>
             Effect.succeed(
               c.json(
-                ValidationProblemSchema.parse({
+                {
                   type: '/problems/validation-failed',
                   title: 'Validation Failed',
                   status: 422,
                   detail: 'The backup could not be taken.',
                   instance: c.req.path,
                   errors: [{ field: 'backup', message }],
-                }),
+                } as const,
                 422,
                 { 'Content-Type': 'application/problem+json' },
               ),
             ),
           ),
           // The database or the schema engine refused: what it said reaches the page.
-          Match.orElse((failure) =>
+          Match.tag('DatabaseUnavailableError', ({ reason }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
-                  detail:
-                    'reason' in failure && typeof failure.reason === 'string'
-                      ? failure.reason
-                      : failure.message,
+                  detail: reason,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
             ),
           ),
+          Match.tag('MigrateDatabaseError', ({ message }) =>
+            Effect.succeed(
+              c.json(
+                {
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
+                  detail: message,
+                  instance: c.req.path,
+                } as const,
+                503,
+                { 'Content-Type': 'application/problem+json' },
+              ),
+            ),
+          ),
+          Match.tag('MigrateEngineError', ({ message }) =>
+            Effect.succeed(
+              c.json(
+                {
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
+                  detail: message,
+                  instance: c.req.path,
+                } as const,
+                503,
+                { 'Content-Type': 'application/problem+json' },
+              ),
+            ),
+          ),
+          Match.exhaustive,
         ),
     }),
   )
@@ -1236,47 +1371,62 @@ export const postMigrateBackupsRouteHandler: RouteHandler<typeof postMigrateBack
  */
 export const postMigrateBackupsRestoreRouteHandler: RouteHandler<
   typeof postMigrateBackupsRestoreRoute
-> = (c) =>
-  Effect.runPromise(
-    Effect.matchEffect(MigrateUseCase.restoreFromBackup(c.req.valid('json')), {
-      onSuccess: (value) => Effect.succeed(c.json(value, 200)),
+> = (c) => {
+  const data = c.req.valid('json')
+  return Effect.runPromise(
+    Effect.matchEffect(MigrateUseCase.restoreFromBackup(data), {
+      onSuccess: (value) => Effect.succeed(c.json(MigrateStatusSchema.parse(value), 200)),
       onFailure: (error) =>
         Match.value(error).pipe(
           Match.tag('MigrateConfigError', ({ message }) =>
             Effect.succeed(
               c.json(
-                ValidationProblemSchema.parse({
+                {
                   type: '/problems/validation-failed',
                   title: 'Validation Failed',
                   status: 422,
                   detail: 'The backup could not be restored.',
                   instance: c.req.path,
                   errors: [{ field: 'name', message }],
-                }),
+                } as const,
                 422,
                 { 'Content-Type': 'application/problem+json' },
               ),
             ),
           ),
           // The database or the schema engine refused: what it said reaches the page.
-          Match.orElse((failure) =>
+          Match.tag('DatabaseUnavailableError', ({ reason }) =>
             Effect.succeed(
               c.json(
-                ServiceUnavailableProblemSchema.parse({
+                {
                   type: '/problems/service-unavailable',
                   title: 'Service Unavailable',
                   status: 503,
-                  detail:
-                    'reason' in failure && typeof failure.reason === 'string'
-                      ? failure.reason
-                      : failure.message,
+                  detail: reason,
                   instance: c.req.path,
-                }),
+                } as const,
                 503,
                 { 'Content-Type': 'application/problem+json' },
               ),
             ),
           ),
+          Match.tag('MigrateEngineError', ({ message }) =>
+            Effect.succeed(
+              c.json(
+                {
+                  type: '/problems/service-unavailable',
+                  title: 'Service Unavailable',
+                  status: 503,
+                  detail: message,
+                  instance: c.req.path,
+                } as const,
+                503,
+                { 'Content-Type': 'application/problem+json' },
+              ),
+            ),
+          ),
+          Match.exhaustive,
         ),
     }),
   )
+}

@@ -171,7 +171,18 @@ function typeRef(ref: DMMF.InputTypeRef | DMMF.OutputTypeRef) {
   return { type: ref.type, isList: ref.isList, location: ref.location }
 }
 
-/** The documentation data of a parsed schema: models with their client operations, and the client API types. */
+/**
+ * The documentation data of a parsed schema: models with their client operations, and the client API types.
+ *
+ * @param input.dmmf - the document Prisma parsed: datamodel, client schema and mappings
+ * @returns the models (directives, fields, and each operation with its usage, inputs and output),
+ *   and the client's input, output and enum types
+ * @example
+ * // dmmf parsed from `model User { id Int @id  posts Post[] }` and
+ * // `model Post { id Int @id  authorId Int  author User @relation(fields: [authorId], references: [id]) }`
+ * makeDocs({ dmmf }).models[0].operations.map((operation) => operation.name)
+ * // ['findUnique', 'findFirst', 'findMany', 'create', 'update', 'updateMany', 'upsert', 'delete', 'deleteMany']
+ */
 export function makeDocs(input: z.infer<typeof MakeDocsInput>) {
   const { dmmf } = input
   const models = dmmf.datamodel.models.map((model) => {
