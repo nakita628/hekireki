@@ -200,26 +200,39 @@ export function readSnapshot() {
 }
 
 /**
- * When the snapshot and the migrations directory last changed: what the event stream polls.
+ * When the snapshot and the migrations directory last changed, once either has changed since the
+ * version the caller saw, or the wait is over: what the event stream follows. With no version
+ * seen, at once.
  *
  * ```mermaid
  * sequenceDiagram
  *   participant H as Handler
  *   participant U as SchemaUseCase
  *   participant S as StudioService
- *   H->>U: readUpdatedAt()
+ *   H->>U: awaitUpdate({ after, timeoutMs })
  *   U->>S: studio().state
- *   U-->>H: updatedAt, migrationsUpdatedAt
+ *   alt after is null
+ *     Note over U: answer at once
+ *   else
+ *     Note over U: the next change past `after`, or timeoutMs, whichever comes first
+ *   end
+ *   U-->>H: updatedAt, migrationsUpdatedAt, version
  * ```
  *
- * @returns both timestamps as ISO strings
+ * @param input.after - the version the caller last saw, or null to answer at once
+ * @param input.timeoutMs - how long to wait for a change
+ * @returns both timestamps as ISO strings, and the version they are at
  */
-export function readUpdatedAt() {
-  return Effect.sync(() => {
-    const state = StudioService.studio().state
+export function awaitUpdate(input: { readonly after: number | null; readonly timeoutMs: number }) {
+  return Effect.gen(function* () {
+    const { state } = StudioService.studio()
+    if (input.after !== null) {
+      yield* Effect.race(state.nextChange(input.after), Effect.sleep(input.timeoutMs))
+    }
     return {
       updatedAt: state.snapshot().updatedAt,
       migrationsUpdatedAt: state.migrationsUpdatedAt(),
+      version: state.version(),
     }
   })
 }

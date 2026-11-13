@@ -4,6 +4,7 @@ import { Hono } from 'hono'
 
 import api from './index.js'
 import * as ClientService from './services/index.js'
+import * as MigrateService from './services/index.js'
 import type * as DatabaseService from './services/index.js'
 import type * as StateService from './services/index.js'
 import * as StudioService from './services/index.js'
@@ -28,8 +29,13 @@ export function createStudioApp(input: {
   readonly db: ReturnType<typeof DatabaseService.disconnectedDatabase>
   readonly client?: ReturnType<typeof ClientService.createProjectClient>
   readonly typescript?: ReturnType<typeof TypescriptService.createTypeChecker>
+  /** The directory Studio was started in; the process's when not given. */
+  readonly cwd?: string
 }) {
+  const cwd = input.cwd ?? process.cwd()
   StudioService.configureStudio({
+    cwd,
+    migratePaths: MigrateService.createMigratePaths({ schemaPath: input.state.schemaPath, cwd }),
     state: input.state,
     db: input.db,
     client:
@@ -64,17 +70,25 @@ export function openStudioApp(input: {
   readonly databaseUrl: string | null
 }) {
   return Effect.gen(function* () {
-    const { state, snapshot, schemaDir } = yield* SchemaUseCase.openSnapshot({
-      schemaPath: input.schemaPath,
-    })
+    // Read once, here at the edge: everything below is handed it.
+    const cwd = process.cwd()
+    // The config is imported while the schema is read and parsed: neither waits on the other.
+    const [{ state, snapshot, schemaDir }, config] = yield* Effect.all(
+      [
+        SchemaUseCase.openSnapshot({ schemaPath: input.schemaPath }),
+        StudioUseCase.readStudioConfig({ cwd }),
+      ],
+      { concurrency: 2 },
+    )
     const { db, client, typescript } = yield* StudioUseCase.openStudio({
       state,
       snapshot,
       schemaDir,
       databaseUrl: input.databaseUrl,
-      cwd: process.cwd(),
+      config,
+      cwd,
     })
-    const app = createStudioApp({ state, staticDir: input.staticDir, db, client, typescript })
+    const app = createStudioApp({ state, staticDir: input.staticDir, db, client, typescript, cwd })
     return { app, snapshot, database: db.status }
   })
 }

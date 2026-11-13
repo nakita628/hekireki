@@ -15,10 +15,40 @@ import * as TypescriptService from '../services/index.js'
 import * as WatchService from '../services/index.js'
 
 /**
+ * The `url` of hekireki.config.ts, so the database `hekireki seed` fills is the one Studio opens.
+ * A config that does not load is not fatal: Studio shows the schema and says why.
+ *
+ * ```mermaid
+ * sequenceDiagram
+ *   participant C as start
+ *   participant U as StudioUseCase
+ *   participant L as seed/load-config
+ *   C->>U: readStudioConfig({ cwd })
+ *   U->>L: readConfigUrl(cwd), TypeScript imports on
+ *   alt loaded
+ *     U-->>C: url, no error
+ *   else does not load
+ *     U-->>C: no url, why
+ *   end
+ * ```
+ *
+ * @param input.cwd - where hekireki.config.ts is looked up
+ * @returns the url it names (or null) and why it did not load (or null)
+ */
+export function readStudioConfig(input: { readonly cwd: string }) {
+  return withTypeScriptImports(readConfigUrl(input.cwd)).pipe(
+    Effect.match({
+      onFailure: (error) => ({ url: null, error: error.message }),
+      onSuccess: (url) => ({ url, error: null }),
+    }),
+  )
+}
+
+/**
  * Opens what Studio serves besides the schema: the database, the project's Prisma Client and the
  * type checker over its types, each closed with the surrounding scope, and tells the state
- * whenever the migrations Prisma Migrate reads change. Neither a config that does not load nor a
- * database that does not open is fatal: Studio shows the schema and says why.
+ * whenever the migrations Prisma Migrate reads change. A database that does not open is not fatal:
+ * Studio shows the schema and says why.
  *
  * ```mermaid
  * sequenceDiagram
@@ -28,8 +58,7 @@ import * as WatchService from '../services/index.js'
  *   participant P as ClientService
  *   participant T as TypescriptService
  *   participant W as WatchService
- *   C->>U: openStudio({ state, snapshot, schemaDir, databaseUrl, cwd })
- *   Note over U: the url of hekireki.config.ts, or why it did not load
+ *   C->>U: openStudio({ state, snapshot, schemaDir, databaseUrl, config, cwd })
  *   U->>D: connectDatabase({ explicitUrl, configUrl, schemaProvider, ... })
  *   D-->>U: db (connected, or disconnected with the reason)
  *   U->>P: createProjectClient({ target, reason, schemaDir, cwd })
@@ -43,6 +72,7 @@ import * as WatchService from '../services/index.js'
  * @param input.snapshot - the first snapshot, for the datasource provider and url
  * @param input.schemaDir - the directory of the schema, where relative files resolve from
  * @param input.databaseUrl - the --url flag, when given
+ * @param input.config - what readStudioConfig found in hekireki.config.ts
  * @param input.cwd - where .env, the configs and the drivers are looked up
  * @returns the database, the client and the type checker
  */
@@ -51,15 +81,11 @@ export function openStudio(input: {
   readonly snapshot: z.input<typeof SnapshotSchema>
   readonly schemaDir: string
   readonly databaseUrl: string | null
+  readonly config: { readonly url: string | null; readonly error: string | null }
   readonly cwd: string
 }) {
   return Effect.gen(function* () {
-    const config = yield* withTypeScriptImports(readConfigUrl(input.cwd)).pipe(
-      Effect.match({
-        onFailure: (error) => ({ url: null, error: error.message }),
-        onSuccess: (url) => ({ url, error: null }),
-      }),
-    )
+    const { config } = input
     // The connection and the migrations directory do not wait on each other.
     const [db, migrationsDir] = yield* Effect.all(
       [

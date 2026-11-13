@@ -2,6 +2,7 @@ import * as z from 'zod'
 
 import type * as ClientService from './client.js'
 import type * as DatabaseService from './database.js'
+import type * as MigrateService from './migrate.js'
 import type * as StateService from './state.js'
 import type * as TypescriptService from './typescript.js'
 
@@ -19,6 +20,12 @@ const StudioInstances = z
     typescript: z
       .custom<ReturnType<typeof TypescriptService.createTypeChecker>>()
       .meta({ description: "The TypeScript language service over the client's types." }),
+    cwd: z
+      .string()
+      .meta({ description: 'The directory Studio was started in, read once.', example: '/app' }),
+    migratePaths: z
+      .custom<ReturnType<typeof MigrateService.createMigratePaths>>()
+      .meta({ description: "Where the schema's directory and its migrations are." }),
   })
   .readonly()
   .meta({
@@ -35,13 +42,15 @@ const holder: { current: z.infer<typeof StudioInstances> | null } = { current: n
  *
  * ```mermaid
  * flowchart LR
- *   instances[state, db, client, typescript] --> holder[(the one Studio of the process)]
+ *   instances[state, db, client, typescript, cwd, paths] --> holder[(the one Studio of the process)]
  * ```
  *
  * @param input.state - the snapshot store
  * @param input.db - the database connection
  * @param input.client - the project's Prisma Client
  * @param input.typescript - the type checker over the client's types
+ * @param input.cwd - the directory Studio was started in
+ * @param input.migratePaths - where the schema's directory and its migrations are
  * @returns nothing; every later use case reads them through studio()
  */
 export function configureStudio(input: z.infer<typeof StudioInstances>) {

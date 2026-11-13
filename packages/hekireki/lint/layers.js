@@ -199,7 +199,7 @@ export const layerRules = {
   },
 
   // Why: a domain function returns the same answer for the same arguments. The clock and random
-  //      values change on every call; read them in a service and pass them in.
+  //      values change on every call; read them in the usecase and pass them in.
   //   NG: Date.now() / new Date() / Math.random() / crypto.randomUUID()
   //   OK: new Date(input.at)      // a Date with an argument is a fixed value
   'domain-no-nondeterminism': {
@@ -207,7 +207,7 @@ export const layerRules = {
     create(context) {
       if (TEST_FILE.test(filenameOf(context))) return {}
       const fix =
-        'Domain functions must return the same answer for the same arguments. Read the clock / make the value in a service and pass it in.'
+        'Domain functions must return the same answer for the same arguments. Read the clock / make the value in the usecase and pass it in.'
       const banned = {
         Date: ['now'],
         Math: ['random'],

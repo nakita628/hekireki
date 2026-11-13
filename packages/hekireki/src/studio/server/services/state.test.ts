@@ -1,3 +1,4 @@
+import { Effect } from 'effect'
 import { describe, expect, it } from 'vite-plus/test'
 
 import { createStudioState } from './state.js'
@@ -32,5 +33,17 @@ describe('createStudioState', () => {
     const state = createStudioState({ schemaPath: 'schema.prisma' })
     state.touchMigrations()
     expect(state.migrationsUpdatedAt()).not.toBe('1970-01-01T00:00:00.000Z')
+  })
+
+  it('wakes a waiter on the next change, and at once when the change came first', async () => {
+    const state = createStudioState({ schemaPath: 'schema.prisma' })
+    const seen = state.version()
+    const waiting = Effect.runPromise(state.nextChange(seen))
+    state.touchMigrations()
+    await waiting
+    expect(state.version()).toBe(seen + 1)
+    await Effect.runPromise(state.nextChange(seen))
+    state.replace({ snapshot: SNAPSHOT, docs: DOCS })
+    expect(state.version()).toBe(seen + 2)
   })
 })

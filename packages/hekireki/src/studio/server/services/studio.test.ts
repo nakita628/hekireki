@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vite-plus/test'
 
 import { createProjectClient } from './client.js'
 import { disconnectedDatabase } from './database.js'
+import { createMigratePaths } from './migrate.js'
 import { createStudioState } from './state.js'
 import { configureStudio, studio } from './studio.js'
 import { createTypeChecker } from './typescript.js'
@@ -12,6 +13,8 @@ function instances() {
     db: disconnectedDatabase({ reason: 'none' }),
     client: createProjectClient({ target: null, reason: 'none', schemaDir: '.', cwd: '.' }),
     typescript: createTypeChecker({ schemaDir: '.', cwd: '.' }),
+    cwd: '.',
+    migratePaths: createMigratePaths({ schemaPath: 'schema.prisma', cwd: '.' }),
   }
 }
 

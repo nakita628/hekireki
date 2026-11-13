@@ -6,7 +6,7 @@ import { Effect, Semaphore } from 'effect'
 import type ts from 'typescript-5'
 import * as z from 'zod'
 
-import { parseSchema } from '../../../schema/index.js'
+import { parseSchema, readConfig } from '../../../schema/index.js'
 import type { SchemaFile } from '../../../schema/index.js'
 import { clientSource } from '../../../seed/discover.js'
 import { ClientUnavailableError } from '../errors/index.js'
@@ -158,10 +158,10 @@ export function createTypeChecker(input: z.infer<typeof CreateTypeCheckerInput>)
   function load(files: readonly SchemaFile[]) {
     return Effect.gen(function* () {
       if (holder.loaded?.files === files) return holder.loaded.checker
-      const schema = yield* parseSchema(files).pipe(
-        Effect.mapError((error) => new ClientUnavailableError({ reason: error.message })),
-      )
-      const { source, reason } = clientSource(schema.generators)
+      // The generator block alone says where the client is; the whole schema is parsed only when
+      // a service is built over it.
+      const { generators } = yield* readConfig(files)
+      const { source, reason } = clientSource(generators)
       if (source === null) {
         return yield* new ClientUnavailableError({
           reason: `Prisma Client not found: ${reason ?? 'unknown'}.\n   Add a \`prisma-client\` generator to the schema and run \`prisma generate\`.`,
@@ -177,6 +177,9 @@ export function createTypeChecker(input: z.infer<typeof CreateTypeCheckerInput>)
         holder.loaded = { ...holder.loaded, files }
         return holder.loaded.checker
       }
+      yield* parseSchema(files).pipe(
+        Effect.mapError((error) => new ClientUnavailableError({ reason: error.message })),
+      )
       const typescript = yield* loadTypeScript(input.cwd)
       if (!legacy && !typescript.sys.fileExists(path.join(dir, 'client.ts'))) {
         return yield* new ClientUnavailableError({

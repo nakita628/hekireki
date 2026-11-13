@@ -256,25 +256,34 @@ function uriOf(filePath: string) {
 }
 
 /** The loaded files as documents, with the edited one (when it is one of them) replaced by the text. */
+// The loaded files as the server reads them, by the snapshot's files array: a request is made of
+// those and one edited text, and only the text changes from one keystroke to the next.
+const loadedDocuments = new WeakMap<
+  z.infer<typeof EditedSchemaInput>['files'],
+  ReadonlyMap<string, SchemaDocument>
+>()
+
 function makeWorkspace(input: z.infer<typeof EditedSchemaInput>) {
   const edited = input.path
   const editedUri = edited === null ? PRISMA_FILE_URI : uriOf(edited)
   const document = TextDocument.create(editedUri, 'prisma', 1, input.text)
-  const others = input.files
-    .filter((f) => f.path !== edited)
-    .map((f) => ({
-      path: f.path,
-      document: TextDocument.create(uriOf(f.path), 'prisma', 1, f.content),
-    }))
+  const { PrismaSchema, SchemaDocument: Document } = languageServer().schema
+  const loaded =
+    loadedDocuments.get(input.files) ??
+    new Map(
+      input.files.map((f) => [
+        f.path,
+        new Document(TextDocument.create(uriOf(f.path), 'prisma', 1, f.content)),
+      ]),
+    )
+  loadedDocuments.set(input.files, loaded)
+  const others = [...loaded].filter(([file]) => file !== edited)
   const paths = new Map([
     [editedUri, edited ?? ''],
-    ...others.map((f): readonly [string, string] => [f.document.uri, f.path]),
+    ...others.map(([file, other]): readonly [string, string] => [other.textDocument.uri, file]),
   ])
-  const { PrismaSchema, SchemaDocument } = languageServer().schema
   return {
-    schema: new PrismaSchema(
-      [document, ...others.map((f) => f.document)].map((loaded) => new SchemaDocument(loaded)),
-    ),
+    schema: new PrismaSchema([new Document(document), ...others.map(([, other]) => other)]),
     document,
     pathOf: (uri: string) => paths.get(uri) ?? uri,
   }

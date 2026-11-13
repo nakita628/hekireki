@@ -21,10 +21,10 @@ import {
   readDecisions,
   writeDecisions,
 } from '../../../migrate/adapter/decisions-file.js'
-import { writeMigration } from '../../../migrate/adapter/migrations-dir.js'
+import { readMigrationsList, writeMigration } from '../../../migrate/adapter/migrations-dir.js'
 import { countTables, rehearseMigration } from '../../../migrate/adapter/rehearse.js'
 import { checkOpened } from '../../../migrate/check.js'
-import { migrationName } from '../../../migrate/domain/history.js'
+import { migrationName, withLockfile } from '../../../migrate/domain/history.js'
 import { makePlan } from '../../../migrate/domain/plan.js'
 import {
   MigrateConfigError,
@@ -35,23 +35,72 @@ import * as DatabaseService from '../services/index.js'
 import * as StudioService from '../services/index.js'
 import * as MigrateService from '../services/index.js'
 
-/** The schema, the database and the engine one command runs against. */
+/** Where the migrations are, the schema they are for and the connection they run on. */
+function place() {
+  return Effect.gen(function* () {
+    const { state, db, cwd, migratePaths } = StudioService.studio()
+    const driver = yield* db.driver
+    const { schemaDir, migrationsDir } = yield* migratePaths.resolve()
+    const snapshot = state.snapshot()
+    return {
+      driver,
+      // The URL as found, password and all: what the check opens its own read-only connection
+      // to, so it reads the database Studio is on rather than resolving one of its own.
+      url: db.target?.url ?? null,
+      cwd,
+      schemaDir,
+      migrationsDir,
+      schemaPath: state.schemaPath,
+      files: snapshot.files,
+      // For a migrations directory with no lock file to say it.
+      provider: snapshot.schema?.provider ?? driver.dialect,
+    }
+  })
+}
+
+/** The migrations directory as Prisma Migrate reads it. */
+function migrationsOf(at: { readonly migrationsDir: string; readonly provider: string }) {
+  return Effect.gen(function* () {
+    return withLockfile(yield* readMigrationsList(at.migrationsDir), at.provider)
+  })
+}
+
+/** Which schema engine the place runs on, not started yet. */
+function engineOf(at: Effect.Success<ReturnType<typeof place>>) {
+  return MigrateService.findMigrateEngine({
+    files: at.files,
+    driver: at.driver,
+    url: at.url,
+    schemaDir: at.schemaDir,
+    cwd: at.cwd,
+    openShadow: () =>
+      DatabaseService.openShadowDatabase({ url: at.url ?? '', driver: at.driver, cwd: at.cwd }),
+  })
+}
+
+/** The place, its migrations and the engine started on it: what a command to the engine needs. */
 function session() {
   return Effect.gen(function* () {
-    const { state, db } = StudioService.studio()
-    const driver = yield* db.driver
-    // The URL as found, password and all: what the check opens its own read-only connection to,
-    // so it reads the database Studio is on rather than resolving one of its own.
-    const url = db.target?.url ?? null
-    const opened = yield* MigrateService.openMigrateSession({
-      schemaPath: state.schemaPath,
-      files: state.snapshot().files,
-      driver,
-      url,
-      openShadow: () =>
-        DatabaseService.openShadowDatabase({ url: url ?? '', driver, cwd: process.cwd() }),
+    const at = yield* place()
+    const found = yield* engineOf(at)
+    const [migrations, engine] = yield* Effect.all([migrationsOf(at), found.open()], {
+      concurrency: 2,
     })
-    return { ...opened, driver, url }
+    return { ...at, migrations, engine }
+  })
+}
+
+/** The migration history of a session's database against its migrations directory. */
+function statusOf(opened: Effect.Success<ReturnType<typeof session>>) {
+  return Effect.gen(function* () {
+    const status = yield* migrationStatus({
+      engine: opened.engine,
+      driver: opened.driver,
+      migrations: opened.migrations,
+      files: opened.files,
+      configDir: opened.schemaDir,
+    })
+    return { ...status, migrationsDir: opened.migrationsDir }
   })
 }
 
@@ -92,17 +141,7 @@ function session() {
 export function readMigrateStatus() {
   return Effect.gen(function* () {
     const opened = yield* session()
-    const status = yield* migrationStatus({
-      engine: opened.engine,
-      driver: opened.driver,
-      migrations: opened.migrations,
-      files: opened.files,
-      configDir: opened.schemaDir,
-    })
-    return {
-      ...status,
-      migrationsDir: opened.migrationsDir,
-    }
+    return yield* statusOf(opened)
   }).pipe(Effect.provide(nodeFileSystemLayer))
 }
 
@@ -141,12 +180,9 @@ export function readMigrateStatus() {
  */
 export function readMigrateDiff() {
   return Effect.gen(function* () {
-    const opened = yield* session()
-    const diff = yield* migrationDiff({
-      engine: opened.engine,
-      files: opened.files,
-      configDir: opened.schemaDir,
-    })
+    const at = yield* place()
+    const engine = yield* (yield* engineOf(at)).open()
+    const diff = yield* migrationDiff({ engine, files: at.files, configDir: at.schemaDir })
     return diff
   }).pipe(Effect.provide(nodeFileSystemLayer))
 }
@@ -236,12 +272,9 @@ const PlanMigrationInput = z
  */
 export function planMigration(input: z.infer<typeof PlanMigrationInput>) {
   return Effect.gen(function* () {
-    const opened = yield* session()
-    const diff = yield* migrationDiff({
-      engine: opened.engine,
-      files: opened.files,
-      configDir: opened.schemaDir,
-    })
+    const opened = yield* place()
+    const engine = yield* (yield* engineOf(opened)).open()
+    const diff = yield* migrationDiff({ engine, files: opened.files, configDir: opened.schemaDir })
     // What the rows of the database say about the migration, and the fixes the decisions give
     // for them. It runs on the connection Studio already holds: a second one would read a
     // database of its own, and SQLite would refuse it while this one is open.
@@ -374,7 +407,7 @@ const CreateMigrationInput = z
  */
 export function createMigration(input: z.infer<typeof CreateMigrationInput>) {
   return Effect.gen(function* () {
-    const opened = yield* session()
+    const opened = yield* place()
     const name = migrationName({ at: new Date(), name: input.name })
     const written = yield* writeMigration({
       baseDir: opened.migrationsDir,
@@ -439,7 +472,8 @@ export function recordMigrationApplied(input: z.infer<typeof MarkAppliedInput>) 
       migrations: opened.migrations,
       name: input.name,
     })
-    return yield* readMigrateStatus()
+    // The migrations directory is as it was: only the database moved.
+    return yield* statusOf(opened)
   }).pipe(Effect.provide(nodeFileSystemLayer))
 }
 
@@ -525,7 +559,8 @@ export function recordMigrationRolledBack(input: z.infer<typeof MarkAppliedInput
   return Effect.gen(function* () {
     const opened = yield* session()
     yield* markMigrationRolledBack({ engine: opened.engine, name: input.name })
-    return yield* readMigrateStatus()
+    // The migrations directory is as it was: only the database moved.
+    return yield* statusOf(opened)
   }).pipe(Effect.provide(nodeFileSystemLayer))
 }
 
@@ -565,7 +600,7 @@ export function recordMigrationRolledBack(input: z.infer<typeof MarkAppliedInput
  */
 export function readMigrationDecisions() {
   return Effect.gen(function* () {
-    const opened = yield* session()
+    const opened = yield* place()
     const decisions = yield* readDecisions(path.join(opened.schemaDir, DECISIONS_FILE))
     // The file keeps a value a choice does not need as null; the wire leaves it out.
     return {
@@ -649,7 +684,7 @@ const WriteDecisionsInput = z
  */
 export function writeMigrationDecisions(input: z.infer<typeof WriteDecisionsInput>) {
   return Effect.gen(function* () {
-    const opened = yield* session()
+    const opened = yield* place()
     const file = yield* writeDecisions({
       file: path.join(opened.schemaDir, DECISIONS_FILE),
       decisions: input.decisions,
@@ -755,7 +790,8 @@ export function baselineDatabase(input: z.infer<typeof MarkAppliedInput>) {
       configDir: opened.schemaDir,
       name: input.name,
     })
-    return yield* readMigrateStatus()
+    // The migrations directory is as it was: only the database moved.
+    return yield* statusOf(opened)
   }).pipe(Effect.provide(nodeFileSystemLayer))
 }
 
@@ -803,8 +839,9 @@ const ReadMigrationFileInput = z
  */
 export function readMigrationFile(input: z.infer<typeof ReadMigrationFileInput>) {
   return Effect.gen(function* () {
-    const opened = yield* session()
-    const directory = opened.migrations.migrationDirectories.find(
+    const opened = yield* place()
+    const migrations = yield* migrationsOf(opened)
+    const directory = migrations.migrationDirectories.find(
       (one) => one.path === input.migrationName,
     )
     if (directory?.migrationFile.content.tag !== 'ok') {
@@ -880,21 +917,22 @@ const RehearseInput = z
  */
 export function rehearse(input: z.infer<typeof RehearseInput>) {
   return Effect.gen(function* () {
-    const opened = yield* session()
+    const opened = yield* place()
+    const { rehearsalEngine } = yield* engineOf(opened)
     const rehearsal = yield* rehearseMigration({
       driver: opened.driver,
       steps: input.steps,
       files: opened.files,
       configDir: opened.schemaDir,
-      compareWith: opened.rehearsalEngine,
+      compareWith: rehearsalEngine,
       openCopy: () =>
         opened.driver.dialect === 'mysql'
           ? DatabaseService.openMysqlCopy({
               url: opened.url ?? '',
               driver: opened.driver,
-              cwd: process.cwd(),
+              cwd: opened.cwd,
             })
-          : DatabaseService.openSqliteCopy({ driver: opened.driver, cwd: process.cwd() }),
+          : DatabaseService.openSqliteCopy({ driver: opened.driver, cwd: opened.cwd }),
     }).pipe(
       Effect.catchTag('DatabaseError', (error) =>
         Effect.fail(new MigrateDatabaseError({ message: error.cause })),
@@ -979,7 +1017,7 @@ export function readTableCounts() {
  */
 export function readBackups() {
   return Effect.gen(function* () {
-    const opened = yield* session()
+    const opened = yield* place()
     const backups = yield* listBackups({ driver: opened.driver, schemaDir: opened.schemaDir })
     return { backups }
   }).pipe(Effect.provide(nodeFileSystemLayer))
@@ -1024,7 +1062,7 @@ export function readBackups() {
  */
 export function takeBackup() {
   return Effect.gen(function* () {
-    const opened = yield* session()
+    const opened = yield* place()
     const taken = yield* createBackup({ driver: opened.driver, schemaDir: opened.schemaDir })
     const backups = yield* listBackups({ driver: opened.driver, schemaDir: opened.schemaDir })
     return (
@@ -1097,7 +1135,7 @@ const RestoreInput = z
  */
 export function restoreFromBackup(input: z.infer<typeof RestoreInput>) {
   return Effect.gen(function* () {
-    const opened = yield* session()
+    const opened = yield* place()
     yield* restoreBackup({ driver: opened.driver, schemaDir: opened.schemaDir, name: input.name })
     // Only a migration's own directory name: nothing else of the directory is ever removed.
     if (input.migration !== undefined && /^\d{14}_[\w-]+$/u.test(input.migration)) {
