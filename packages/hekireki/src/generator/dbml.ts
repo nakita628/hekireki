@@ -18,22 +18,54 @@ export function dbmlContent(datamodel: DMMF.Datamodel) {
   return [...enums, ...tables, ...refs, ...logicalRefs].join('\n\n')
 }
 
+type DiagramSchema = ReturnType<typeof makeSchema>
+
 /** The ER diagram as Studio draws it, laid out automatically, as an SVG document. */
 export function erDiagramSvg(datamodel: DMMF.Datamodel, theme: DiagramTheme = 'light') {
-  const schema = makeSchema({
-    dmmf: { datamodel },
-    files: [],
-    provider: null,
-    blocks: [],
-  })
-  const positions = autoLayout(schema)
+  return schemaSvg(
+    makeSchema({ dmmf: { datamodel }, files: [], provider: null, blocks: [] }),
+    theme,
+  )
+}
+
+/**
+ * Draws a schema as Studio holds it, laid out automatically, as an SVG document.
+ *
+ * @param schema - the models, relations and enums to draw
+ * @param theme - the colour scheme, light by default
+ * @returns the SVG document
+ */
+export function schemaSvg(
+  schema: Pick<DiagramSchema, 'models' | 'relations' | 'enums'>,
+  theme: DiagramTheme = 'light',
+) {
   return renderDiagramSvg({
     models: schema.models,
     relations: schema.relations,
     enums: schema.enums,
-    positions,
+    positions: autoLayout(schema),
     theme,
   })
+}
+
+/**
+ * The part of a schema around one model: the model, the models a relation joins it to, the
+ * relations that touch it, and the enums those models hold. What the model's own diagram draws.
+ *
+ * @param schema - the whole schema, as Studio holds it
+ * @param model - the model's name
+ * @returns the same shape, cut down to the model's neighbourhood
+ */
+export function neighborhood(schema: DiagramSchema, model: string) {
+  const relations = schema.relations.filter(
+    (relation) => relation.from.model === model || relation.to.model === model,
+  )
+  const names = new Set([model, ...relations.flatMap((r) => [r.from.model, r.to.model])])
+  const models = schema.models.filter((m) => names.has(m.name))
+  const held = new Set(
+    models.flatMap((m) => m.fields.filter((f) => f.kind === 'enum').map((f) => f.type)),
+  )
+  return { models, relations, enums: schema.enums.filter((e) => held.has(e.name)) }
 }
 
 /**

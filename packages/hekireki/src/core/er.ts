@@ -4,8 +4,20 @@ import type { GeneratorOptions } from '@prisma/generator-helper'
 import { Effect } from 'effect'
 
 import { emitRaw } from '../emit/index.js'
-import { dbmlContent, erDiagramPng, erDiagramSvg } from '../generator/dbml.js'
+import { exists, readDirectory, removePath } from '../file/index.js'
+import { fmtMarkdown } from '../format/index.js'
+import {
+  dbmlContent,
+  erDiagramPng,
+  erDiagramSvg,
+  neighborhood,
+  schemaSvg,
+} from '../generator/dbml.js'
+import { DOCS_FILES, docsMarkdown, modelDiagramPath } from '../generator/docs.js'
 import { erContent } from '../generator/mermaid-er.js'
+import { schemaSql } from '../migrate/adapter/schema-sql.js'
+import { dialectOf, readSchemaFiles } from '../schema/index.js'
+import { makeSchema } from '../studio/server/domain/schema.js'
 import { getString, getStrings } from '../utils/index.js'
 import { GeneratorConfigError } from './errors.js'
 
@@ -46,12 +58,29 @@ const FORMATS = {
   }
 >
 
-type Format = keyof typeof FORMATS
+/** What a directory is given: the docs, which read the theme of the diagrams they hold. */
+const DOCS_OPTIONS = ['theme'] as const
 
-const EXTENSIONS = Object.keys(FORMATS).join(', ')
+type Format = keyof typeof FORMATS | 'docs'
 
-function isFormat(extension: string): extension is Format {
+function isFileFormat(extension: string): extension is keyof typeof FORMATS {
   return extension in FORMATS
+}
+
+const EXTENSIONS = `${Object.keys(FORMATS).join(', ')}, or a directory for the docs`
+
+/**
+ * What a path asks for: the format its extension names, the docs for a directory (a trailing
+ * `/`, or no extension at all), and null for an extension with no format behind it.
+ */
+function formatOf(name: string): Format | null {
+  if (name.endsWith('/') || path.extname(name) === '') return 'docs'
+  const extension = path.extname(name).toLowerCase()
+  return isFileFormat(extension) ? extension : null
+}
+
+function optionsOf(format: Format) {
+  return format === 'docs' ? DOCS_OPTIONS : FORMATS[format].options
 }
 
 /** What the chosen format accepts, as the sentence the error ends with. */
@@ -59,17 +88,12 @@ function accepts(options: readonly string[]) {
   return options.length === 0 ? 'takes no options' : `takes ${options.join(', ')}`
 }
 
-/** How a path ends, as the error says it: an extension in quotes, or nothing at all. */
-function endsIn(name: string) {
-  const extension = path.extname(name)
-  return extension === '' ? 'nothing' : `"${extension}"`
-}
-
 /**
  * The files to write: the one `output` names, or every one `outputs` lists.
  *
- * Neither ever names a directory — each entry is a whole path, extension included — so the file
- * the caller writes is the file they get. A schema that wants the ER model in several formats
+ * Each entry is a whole path: a file, its extension included, so the file the caller writes is
+ * the file they get, or a directory, which the docs are written into. A schema that wants the ER
+ * model in several formats
  * declares `Hekireki-ER` once and lists them in `outputs`, each resolved the way Prisma resolves
  * `output`: against the directory of the schema file that declares the block.
  */
@@ -83,13 +107,13 @@ function filesOf(options: GeneratorOptions, outputs: readonly string[] | undefin
       })
     }
     if (output) {
-      const extension = path.extname(output).toLowerCase()
-      if (!isFormat(extension)) {
+      const format = formatOf(output)
+      if (format === null) {
         return yield* new GeneratorConfigError({
-          message: `output for Hekireki-ER has to name a file ending in ${EXTENSIONS}, not a directory; "${output}" ends in ${endsIn(output)}.`,
+          message: `output for Hekireki-ER has to name a file ending in ${EXTENSIONS}; "${output}" ends in "${path.extname(output)}".`,
         })
       }
-      return [{ file: output, extension }]
+      return [{ file: output, format }]
     }
     if (outputs === undefined) {
       return yield* new GeneratorConfigError({
@@ -103,14 +127,69 @@ function filesOf(options: GeneratorOptions, outputs: readonly string[] | undefin
     }
     const base = path.dirname(options.generator.sourceFilePath)
     return yield* Effect.forEach(outputs, (name) => {
-      const extension = path.extname(name).toLowerCase()
-      if (!isFormat(extension)) {
+      const format = formatOf(name)
+      if (format === null) {
         return new GeneratorConfigError({
-          message: `outputs for Hekireki-ER has to name files ending in ${EXTENSIONS}; "${name}" ends in ${endsIn(name)}.`,
+          message: `outputs for Hekireki-ER has to name files ending in ${EXTENSIONS}; "${name}" ends in "${path.extname(name)}".`,
         })
       }
-      return Effect.succeed({ file: path.resolve(base, name), extension })
+      return Effect.succeed({ file: path.resolve(base, name), format })
     })
+  })
+}
+
+/**
+ * Writes the schema's docs into the directory `dir`: README.md, beside the ER diagram it links
+ * (er.svg) and one diagram per model with a relation (tables/<Model>.svg: the model and the models
+ * it joins). The diagram of a model that is gone is removed, so a directory written again holds
+ * none that is stale.
+ */
+function writeDocs(options: GeneratorOptions, dir: string) {
+  return Effect.gen(function* () {
+    const theme = themeOf(options)
+    // CockroachDB reads as PostgreSQL elsewhere, but its tables are not PostgreSQL's to write.
+    const provider = options.datasources[0]?.activeProvider ?? null
+    const dialect = provider === 'cockroachdb' ? null : dialectOf(provider)
+    const files = dialect === null ? [] : yield* readSchemaFiles(options.schemaPath)
+    const statements =
+      dialect === null ? [] : yield* schemaSql({ files, dialect, cwd: process.cwd() })
+    const readme = yield* fmtMarkdown(
+      docsMarkdown({ datamodel: options.dmmf.datamodel, statements }),
+    )
+    const schema = makeSchema({
+      dmmf: { datamodel: options.dmmf.datamodel },
+      files: [],
+      provider: null,
+      blocks: [],
+    })
+    const diagrams = schema.models
+      .filter((model) =>
+        schema.relations.some((r) => r.from.model === model.name || r.to.model === model.name),
+      )
+      .map((model) => ({
+        name: modelDiagramPath(model.name),
+        data: schemaSvg(neighborhood(schema, model.name), theme),
+      }))
+    const modelsDir = path.join(dir, DOCS_FILES.models)
+    const kept = new Set(diagrams.map(({ name }) => path.basename(name)))
+    const present = (yield* exists(modelsDir)) ? yield* readDirectory(modelsDir) : []
+    yield* Effect.forEach(
+      present.filter((name) => name.endsWith('.svg') && !kept.has(name)),
+      (name) => removePath(path.join(modelsDir, name)),
+      { discard: true },
+    )
+    yield* Effect.forEach(
+      [
+        { name: 'README.md', data: readme },
+        { name: DOCS_FILES.diagram, data: erDiagramSvg(options.dmmf.datamodel, theme) },
+        ...diagrams,
+      ],
+      ({ name, data }) => {
+        const file = path.join(dir, name)
+        return emitRaw(data, path.dirname(file), file)
+      },
+      { discard: true },
+    )
   })
 }
 
@@ -122,24 +201,25 @@ export function er(options: GeneratorOptions) {
     // Every option belongs to a format, so the options a block may carry are the ones the
     // formats it writes read between them — and `outputs`, which picks those formats.
     const read = new Set<string>(outputs === undefined ? [] : ['outputs'])
-    for (const { extension } of files) {
-      for (const option of FORMATS[extension].options) read.add(option)
+    for (const { format } of files) {
+      for (const option of optionsOf(format)) read.add(option)
     }
     const unread = Object.keys(config).filter((name) => !read.has(name))
     if (unread.length > 0) {
-      const extensions = [...new Set(files.map(({ extension }) => extension))]
+      const formats = [...new Set(files.map(({ format }) => format))]
+      const named = formats.map((format) => (format === 'docs' ? 'docs directory' : format))
       return yield* new GeneratorConfigError({
         message: `Hekireki-ER does not read ${unread.map((name) => `"${name}"`).join(', ')} for ${
-          extensions.length === 1
-            ? `a ${extensions[0]} output`
-            : `the ${extensions.join(', ')} outputs`
-        }; ${extensions.map((extension) => `${extension} ${accepts(FORMATS[extension].options)}`).join(', ')}.`,
+          named.length === 1 ? `a ${named[0]} output` : `the ${named.join(', ')} outputs`
+        }; ${formats.map((format, i) => `${named[i]} ${accepts(optionsOf(format))}`).join(', ')}.`,
       })
     }
     return yield* Effect.forEach(
       files,
-      ({ file, extension }) =>
-        emitRaw(FORMATS[extension].render(options), path.dirname(file), file),
+      ({ file, format }) =>
+        format === 'docs'
+          ? writeDocs(options, file)
+          : emitRaw(FORMATS[format].render(options), path.dirname(file), file),
       { discard: true },
     )
   })

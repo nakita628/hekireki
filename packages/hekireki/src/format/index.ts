@@ -17,3 +17,17 @@ export function fmt(input: string) {
     return code
   })
 }
+
+/**
+ * Formats Markdown as oxfmt does with its defaults (tables padded to their widest cell), so a
+ * written file needs no formatting after it and stays the same on every run.
+ */
+export function fmtMarkdown(input: string) {
+  return Effect.gen(function* () {
+    const { code, errors } = yield* Effect.promise(() => format('README.md', input, {}))
+    if (errors.length > 0) {
+      return yield* new FormatError({ message: errors.map((error) => error.message).join('\n') })
+    }
+    return code
+  })
+}

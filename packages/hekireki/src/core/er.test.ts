@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
@@ -63,6 +63,8 @@ function options(
       config,
       sourceFilePath: path.join(schemaDir, 'schema.prisma'),
     },
+    // No datasource: the docs are written without SQL, and nothing reads the schema file.
+    datasources: [],
     dmmf: { datamodel: { models: [MODEL], enums: [], types: [], indexes: [] } },
   } as unknown as GeneratorOptions
 }
@@ -114,14 +116,38 @@ describe('er', () => {
   // to DBML, so `er.jpeg` was a text file with a picture's name.
   it('refuses an extension it has no format for, rather than guessing', async () => {
     const message = failure(await run(path.join(tmp(), 'er.jpeg')))
-    expect(message).toContain('has to name a file ending in .md, .dbml, .png, .svg')
+    expect(message).toContain(
+      'has to name a file ending in .md, .dbml, .png, .svg, or a directory for the docs',
+    )
     expect(message).toContain('ends in ".jpeg"')
   })
 
-  it('refuses a path with no extension, which used to mean a directory', async () => {
-    const message = failure(await run(path.join(tmp(), 'diagram')))
-    expect(message).toContain('not a directory')
-    expect(message).toContain('ends in nothing')
+  it('writes the docs into a path with no extension, as a directory', async () => {
+    const dir = path.join(tmp(), 'docs')
+    expect(Exit.isSuccess(await run(dir))).toBe(true)
+    const readme = readFileSync(path.join(dir, 'README.md'), 'utf8')
+    expect(readme).toContain('![ER diagram](er.svg)')
+    expect(readme).toContain('| `id`  | `Int` | PK NOT NULL |')
+    expect(readFileSync(path.join(dir, 'er.svg'), 'utf8')).toContain('<svg')
+  })
+
+  // A model with no relation has no diagram of its own, so one left from a run before is stale.
+  it('removes the diagram of a model the docs no longer draw', async () => {
+    const dir = path.join(tmp(), 'docs')
+    mkdirSync(path.join(dir, 'tables'), { recursive: true })
+    writeFileSync(path.join(dir, 'tables/Gone.svg'), '<svg/>')
+    writeFileSync(path.join(dir, 'tables/notes.txt'), 'kept')
+    expect(Exit.isSuccess(await run(dir))).toBe(true)
+    expect(existsSync(path.join(dir, 'tables/Gone.svg'))).toBe(false)
+    expect(existsSync(path.join(dir, 'tables/notes.txt'))).toBe(true)
+  })
+
+  it('writes the docs into a directory outputs names with a trailing slash', async () => {
+    const dir = tmp()
+    expect(
+      Exit.isSuccess(await run(null, { outputs: ['er.md', 'docs/'], theme: 'dark' }, dir)),
+    ).toBe(true)
+    expect(readFileSync(path.join(dir, 'docs/README.md'), 'utf8')).toContain('# Schema docs')
   })
 
   it('says that output or outputs is required when there is neither', async () => {
@@ -211,13 +237,10 @@ describe('er', () => {
     expect(message).toContain('.md takes no options, .svg takes theme')
   })
 
-  it.each([
-    ['er.jpeg', '".jpeg"'],
-    ['docs', 'nothing'],
-  ])('refuses %s in outputs, which names no format', async (name, ending) => {
-    const message = failure(await run(null, { outputs: ['er.md', name] }, tmp()))
+  it('refuses an extension in outputs that names no format', async () => {
+    const message = failure(await run(null, { outputs: ['er.md', 'er.jpeg'] }, tmp()))
     expect(message).toContain('outputs for Hekireki-ER has to name files ending in')
-    expect(message).toContain(`"${name}" ends in ${ending}`)
+    expect(message).toContain('"er.jpeg" ends in ".jpeg"')
   })
 
   it('refuses an empty outputs, which would write nothing', async () => {
