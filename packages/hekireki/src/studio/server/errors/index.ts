@@ -16,15 +16,7 @@ export class FileWriteError extends Data.TaggedError('FileWriteError')<{
   readonly cause: string
 }> {}
 
-/** No database to talk to (no URL, no driver installed, or the connection refused); raised by the database services when they open one. */
-export class DatabaseUnavailableError extends Data.TaggedError('DatabaseUnavailableError')<{
-  readonly reason: string
-}> {}
-
-/** A statement the database driver rejected; raised by the database services and worded by the database usecases. */
-export class DatabaseError extends Data.TaggedError('DatabaseError')<{
-  readonly cause: string
-}> {}
+export { DatabaseError, DatabaseUnavailableError } from '../../../database/errors.js'
 
 /** The project's Prisma Client (or TypeScript, to check a query) could not be found or loaded; raised by the client and TypeScript services. */
 export class ClientUnavailableError extends Data.TaggedError('ClientUnavailableError')<{

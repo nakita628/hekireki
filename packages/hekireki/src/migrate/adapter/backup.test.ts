@@ -8,8 +8,8 @@ import { Effect } from 'effect'
 import type { FileSystem } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
-import { connectDatabase } from '../../studio/server/services/database.js'
-import type { Driver } from '../../studio/server/services/database.js'
+import { connectDatabase } from '../../database/driver.js'
+import type { Driver } from '../../database/driver.js'
 import { backupsDirectory, createBackup, listBackups, restoreBackup } from './backup.js'
 
 const dirs: string[] = []

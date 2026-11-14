@@ -6,8 +6,8 @@ import { NodeFileSystem } from '@effect/platform-node'
 import { ConfigProvider, Effect, Layer } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
-import { DatabaseError } from '../errors/index.js'
-import { connectDatabase, disconnectedDatabase } from './database.js'
+import { connectDatabase, disconnectedDatabase } from './driver.js'
+import { DatabaseError } from './errors.js'
 
 const dirs: string[] = []
 const opened: { readonly close: Effect.Effect<void> }[] = []

@@ -1,9 +1,9 @@
 import { Effect, Ref } from 'effect'
 import type { FileSystem } from 'effect'
 
+import type { Driver } from '../../database/driver.js'
 import { qualifiedName, quoteIdentifier } from '../../sql/index.js'
 import type { DatabaseUnavailableError } from '../../studio/server/errors/index.js'
-import type { Driver } from '../../studio/server/services/database.js'
 import type { MigrateEngineError } from '../errors.js'
 import { applyStatements, migrationDiff } from './commands.js'
 import type { Engine } from './engine.js'

@@ -7,7 +7,7 @@ import { NodeFileSystem } from '@effect/platform-node'
 import { Effect } from 'effect'
 import { afterAll, describe, expect, it } from 'vite-plus/test'
 
-import { connectDatabase } from '../../studio/server/services/database.js'
+import { connectDatabase } from '../../database/driver.js'
 import { makeSchemaEngineAdapter } from './engine-adapter.js'
 import { engineCommand, openSchemaEngine } from './engine.js'
 

@@ -7,17 +7,12 @@ import { layer as nodeFileSystemLayer } from '@effect/platform-node/NodeFileSyst
 import { Effect } from 'effect'
 import * as z from 'zod'
 
-import { resolveDatabaseUrl } from '../../../database/resolve.js'
-import {
-  makeDialect,
-  makePostgresSchema,
-  makeRedactedUrl,
-  makeSqliteFilePath,
-} from '../../../database/url.js'
-import type { UrlSource } from '../../../database/url.js'
-import { removePath } from '../../../file/index.js'
-import { quoteIdentifier, stringLiteral } from '../../../sql/index.js'
-import { DatabaseError, DatabaseUnavailableError } from '../errors/index.js'
+import { removePath } from '../file/index.js'
+import { quoteIdentifier, stringLiteral } from '../sql/index.js'
+import { DatabaseError, DatabaseUnavailableError } from './errors.js'
+import { resolveDatabaseUrl } from './resolve.js'
+import { makeDialect, makePostgresSchema, makeRedactedUrl, makeSqliteFilePath } from './url.js'
+import type { UrlSource } from './url.js'
 
 /** An open connection: every operation is an Effect that fails with the driver's message. */
 export type Driver = {

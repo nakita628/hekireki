@@ -2,9 +2,9 @@ import path from 'node:path'
 
 import { Effect } from 'effect'
 
+import type { Driver } from '../../database/driver.js'
 import { exists, fileStamp, makeDirectory, readDirectory, writeFile } from '../../file/index.js'
 import { quoteIdentifier, stringLiteral } from '../../sql/index.js'
-import type { Driver } from '../../studio/server/services/database.js'
 import { MigrateConfigError } from '../errors.js'
 import { createPostgresBackup, restorePostgresBackup } from './backup-postgres.js'
 

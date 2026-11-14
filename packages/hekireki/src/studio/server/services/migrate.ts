@@ -3,6 +3,7 @@ import path from 'node:path'
 import { Effect } from 'effect'
 import * as z from 'zod'
 
+import type { Driver, openShadowDatabase } from '../../../database/driver.js'
 import { makePostgresSchema } from '../../../database/url.js'
 import { isDirectory } from '../../../file/index.js'
 import { makeSchemaEngineAdapter } from '../../../migrate/adapter/engine-adapter.js'
@@ -13,7 +14,6 @@ import {
   openNativeSchemaEngine,
 } from '../../../migrate/adapter/native-engine.js'
 import { MigrateConfigError } from '../../../migrate/errors.js'
-import type * as DatabaseService from './database.js'
 
 const CreateMigratePathsInput = z
   .object({
@@ -85,7 +85,7 @@ const FindMigrateEngineInput = z
       .readonly()
       .meta({ description: 'The schema files of the last snapshot that parsed.' }),
     driver: z
-      .custom<DatabaseService.Driver>((value) => typeof value === 'object' && value !== null)
+      .custom<Driver>((value) => typeof value === 'object' && value !== null)
       .meta({ description: 'The open connection the engine reads and writes through.' }),
     url: z.string().nullable().meta({
       description: 'The URL as found, for the PostgreSQL schema it names.',
@@ -98,9 +98,7 @@ const FindMigrateEngineInput = z
       .string()
       .meta({ description: 'Where the native engine binary is looked up.', example: '/app' }),
     openShadow: z
-      .custom<() => ReturnType<typeof DatabaseService.openShadowDatabase>>(
-        (value) => typeof value === 'function',
-      )
+      .custom<() => ReturnType<typeof openShadowDatabase>>((value) => typeof value === 'function')
       .meta({ description: 'Opens the shadow database a baseline check replays migrations into.' }),
   })
   .readonly()
@@ -172,7 +170,7 @@ export function findMigrateEngine(input: z.infer<typeof FindMigrateEngineInput>)
         binary !== null && input.driver.dialect !== 'mysql'
           ? null
           : binary !== null
-            ? (target: DatabaseService.Driver & { readonly url?: string }) =>
+            ? (target: Driver & { readonly url?: string }) =>
                 Effect.succeed(
                   openNativeSchemaEngine({
                     binary,
@@ -181,7 +179,7 @@ export function findMigrateEngine(input: z.infer<typeof FindMigrateEngineInput>)
                     cwd: input.schemaDir,
                   }),
                 )
-            : (target: DatabaseService.Driver & { readonly url?: string }) =>
+            : (target: Driver & { readonly url?: string }) =>
                 openSchemaEngine({ files: input.files, adapter: makeSchemaEngineAdapter(target) }),
     }
   })
