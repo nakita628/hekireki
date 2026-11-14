@@ -13,6 +13,15 @@ import {
   LibsqlResultSet,
   makeLibsqlQueryResult,
   makeLibsqlRawResult,
+  makeMysqlChanges,
+  makeMysqlQueryResult,
+  makeMysqlRawResult,
+  makePgChanges,
+  makePgQueryResult,
+  makePgRawResult,
+  makeSqliteChanges,
+  makeSqliteRawResult,
+  makeSqliteReadResult,
   READ_STATEMENT,
 } from './domain/results.js'
 import {
@@ -73,15 +82,6 @@ export type Driver = {
   readonly remote?: boolean
 }
 
-// Driver results as the packages return them, read through zod rather than hand-written guards.
-const DriverRows = z
-  .array(z.record(z.string(), z.unknown()))
-  .meta({ description: 'Rows keyed by column name, as a driver returns them' })
-
-const DriverFields = z
-  .array(z.object({ name: z.string().meta({ description: 'The column name.', example: 'id' }) }))
-  .meta({ description: 'The column descriptors of a result set' })
-
 const ModuleNamespace = z
   .object({
     default: z.unknown().meta({ description: 'The default export, when the package is CommonJS.' }),
@@ -122,22 +122,6 @@ const SqliteModule = z
   })
   .meta({ description: 'The node:sqlite module' })
 
-const SqliteColumns = z
-  .array(
-    z.object({
-      name: z.string().meta({ description: 'The column name in the result.', example: 'id' }),
-      type: z
-        .string()
-        .nullable()
-        .meta({ description: 'The declared type, null for an expression.', example: 'TEXT' }),
-    }),
-  )
-  .meta({ description: 'What node:sqlite returns from statement.columns()' })
-
-const SqliteRunInfo = z
-  .object({ changes: z.number().meta({ description: 'Rows the statement changed.', example: 1 }) })
-  .meta({ description: 'What node:sqlite returns from statement.run()' })
-
 const NO_SQLITE =
   'SQLite support needs the built-in node:sqlite module (Node.js 22.13 or newer).\n   Upgrade Node.js or pass --url pointing at a PostgreSQL/MySQL database.'
 
@@ -162,16 +146,13 @@ function openSqlite(url: string, baseDir: string) {
         Effect.try({
           try: () => {
             const prepared = db.prepare(statement.sql)
-            if (READ_STATEMENT.test(statement.sql)) {
-              // oxlint-disable-next-line promise/prefer-await-to-then -- zod's .catch(), not a promise
-              const rows = DriverRows.catch([]).parse(prepared.all(...statement.params))
-              return { columns: Object.keys(rows[0] ?? {}), rows, rowCount: rows.length }
-            }
-            // oxlint-disable-next-line promise/prefer-await-to-then -- zod's .catch(), not a promise
-            const info = SqliteRunInfo.catch({ changes: 0 }).parse(
-              prepared.run(...statement.params),
-            )
-            return { columns: [], rows: [], rowCount: info.changes }
+            return READ_STATEMENT.test(statement.sql)
+              ? makeSqliteReadResult({ rows: prepared.all(...statement.params) })
+              : {
+                  columns: [],
+                  rows: [],
+                  rowCount: makeSqliteChanges({ info: prepared.run(...statement.params) }),
+                }
           },
           catch: driverError,
         }),
@@ -179,26 +160,17 @@ function openSqlite(url: string, baseDir: string) {
         Effect.try({
           try: () => {
             const prepared = db.prepare(statement.sql)
-            // oxlint-disable-next-line promise/prefer-await-to-then -- zod's .catch(), not a promise
-            const rows = DriverRows.catch([]).parse(prepared.all(...statement.params))
-            // oxlint-disable-next-line promise/prefer-await-to-then -- zod's .catch(), not a promise
-            const columns = SqliteColumns.catch([]).parse(prepared.columns())
-            return {
-              columns: columns.map((column) => ({ name: column.name, nativeType: column.type })),
-              rows: rows.map((row) => columns.map((column) => row[column.name] ?? null)),
-            }
+            return makeSqliteRawResult({
+              rows: prepared.all(...statement.params),
+              columns: prepared.columns(),
+            })
           },
           catch: driverError,
         }),
       executeRaw: (statement) =>
         Effect.try({
-          try: () => {
-            // oxlint-disable-next-line promise/prefer-await-to-then -- zod's .catch(), not a promise
-            const info = SqliteRunInfo.catch({ changes: 0 }).parse(
-              db.prepare(statement.sql).run(...statement.params),
-            )
-            return info.changes
-          },
+          try: () =>
+            makeSqliteChanges({ info: db.prepare(statement.sql).run(...statement.params) }),
           catch: driverError,
         }),
       executeScript: (script) =>
@@ -314,37 +286,6 @@ const PgModule = z
   })
   .meta({ description: 'The pg module' })
 
-const PgResult = z
-  .object({
-    rows: DriverRows,
-    fields: DriverFields.optional(),
-    rowCount: z
-      .number()
-      .nullable()
-      .optional()
-      .meta({ description: 'Rows affected or returned.', example: 1 }),
-  })
-  .meta({ description: 'What pg returns from client.query()' })
-
-const PgRawResult = z
-  .object({
-    rows: z
-      .array(z.array(z.unknown()))
-      .meta({ description: 'Rows as arrays, in the order of `fields`.' }),
-    fields: z
-      .array(
-        z.object({
-          name: z.string().meta({ description: 'The column name.', example: 'id' }),
-          dataTypeID: z
-            .number()
-            .meta({ description: 'The OID of the column type in pg_type.', example: 23 }),
-        }),
-      )
-      .optional()
-      .meta({ description: 'The column descriptors, when the statement returned rows.' }),
-  })
-  .meta({ description: 'What pg returns from client.query() with rowMode: array' })
-
 function openPostgres(url: string, cwd: string) {
   return Effect.gen(function* () {
     const result = PgModule.safeParse(yield* importFromProject('pg', cwd))
@@ -375,50 +316,26 @@ function openPostgres(url: string, cwd: string) {
       dialect: 'postgresql',
       query: (statement) =>
         Effect.tryPromise({
-          try: async () => {
-            // oxlint-disable-next-line promise/prefer-await-to-then -- zod's .catch(), not a promise
-            const { rows, fields, rowCount } = PgResult.catch({ rows: [] }).parse(
-              await client.query(statement.sql, statement.params),
-            )
-            const columns = (fields ?? []).map((field) => field.name)
-            return {
-              columns: columns.length > 0 ? columns : Object.keys(rows[0] ?? {}),
-              rows,
-              rowCount: rowCount ?? rows.length,
-            }
-          },
+          try: async () =>
+            makePgQueryResult({ result: await client.query(statement.sql, statement.params) }),
           catch: driverError,
         }),
       queryRaw: (statement) =>
         Effect.tryPromise({
-          try: async () => {
-            // oxlint-disable-next-line promise/prefer-await-to-then -- zod's .catch(), not a promise
-            const { rows, fields } = PgRawResult.catch({ rows: [] }).parse(
-              await client.query({
+          try: async () =>
+            makePgRawResult({
+              result: await client.query({
                 text: statement.sql,
                 values: statement.params,
                 rowMode: 'array',
               }),
-            )
-            return {
-              columns: (fields ?? []).map((field) => ({
-                name: field.name,
-                nativeType: field.dataTypeID,
-              })),
-              rows,
-            }
-          },
+            }),
           catch: driverError,
         }),
       executeRaw: (statement) =>
         Effect.tryPromise({
-          try: async () => {
-            // oxlint-disable-next-line promise/prefer-await-to-then -- zod's .catch(), not a promise
-            const { rowCount } = PgResult.catch({ rows: [] }).parse(
-              await client.query(statement.sql, statement.params),
-            )
-            return rowCount ?? 0
-          },
+          try: async () =>
+            makePgChanges({ result: await client.query(statement.sql, statement.params) }),
           catch: driverError,
         }),
       executeScript: (script) =>
@@ -456,38 +373,6 @@ const MysqlModule = z
   })
   .meta({ description: 'The mysql2/promise module' })
 
-const MysqlResult = z
-  .tuple([
-    z.union([
-      DriverRows,
-      z.object({
-        affectedRows: z.number().meta({ description: 'Rows a write changed.', example: 1 }),
-      }),
-    ]),
-    DriverFields.optional(),
-  ])
-  .meta({ description: 'What mysql2 returns from connection.query(): [rows or header, fields]' })
-
-const MysqlRawResult = z
-  .tuple([
-    z.union([
-      z.array(z.array(z.unknown())),
-      z.object({
-        affectedRows: z.number().meta({ description: 'Rows a write changed.', example: 1 }),
-      }),
-    ]),
-    z
-      .array(
-        z.object({
-          name: z.string().meta({ description: 'The column name.', example: 'id' }),
-          type: z.number().meta({ description: 'The MySQL type code of the column.', example: 3 }),
-        }),
-      )
-      .optional()
-      .meta({ description: 'The column descriptors, when the statement returned rows.' }),
-  ])
-  .meta({ description: 'What mysql2 returns with rowsAsArray: [rows or header, fields]' })
-
 function openMysql(url: string, cwd: string) {
   return Effect.gen(function* () {
     const result = MysqlModule.safeParse(yield* importFromProject('mysql2/promise', cwd))
@@ -507,51 +392,28 @@ function openMysql(url: string, cwd: string) {
       dialect: 'mysql',
       query: (statement) =>
         Effect.tryPromise({
-          try: async () => {
-            // oxlint-disable-next-line promise/prefer-await-to-then -- zod's .catch(), not a promise
-            const [data, fields] = MysqlResult.catch([[], undefined]).parse(
-              await connection.query(statement.sql, statement.params),
-            )
-            if (!Array.isArray(data)) return { columns: [], rows: [], rowCount: data.affectedRows }
-            const columns = (fields ?? []).map((field) => field.name)
-            return {
-              columns: columns.length > 0 ? columns : Object.keys(data[0] ?? {}),
-              rows: data,
-              rowCount: data.length,
-            }
-          },
+          try: async () =>
+            makeMysqlQueryResult({
+              result: await connection.query(statement.sql, statement.params),
+            }),
           catch: driverError,
         }),
       queryRaw: (statement) =>
         Effect.tryPromise({
-          try: async () => {
-            // oxlint-disable-next-line promise/prefer-await-to-then -- zod's .catch(), not a promise
-            const [data, fields] = MysqlRawResult.catch([[], undefined]).parse(
-              await connection.query({
+          try: async () =>
+            makeMysqlRawResult({
+              result: await connection.query({
                 sql: statement.sql,
                 values: statement.params,
                 rowsAsArray: true,
               }),
-            )
-            return {
-              columns: (fields ?? []).map((field) => ({
-                name: field.name,
-                nativeType: field.type,
-              })),
-              rows: Array.isArray(data) ? data : [],
-            }
-          },
+            }),
           catch: driverError,
         }),
       executeRaw: (statement) =>
         Effect.tryPromise({
-          try: async () => {
-            // oxlint-disable-next-line promise/prefer-await-to-then -- zod's .catch(), not a promise
-            const [data] = MysqlResult.catch([[], undefined]).parse(
-              await connection.query(statement.sql, statement.params),
-            )
-            return Array.isArray(data) ? data.length : data.affectedRows
-          },
+          try: async () =>
+            makeMysqlChanges({ result: await connection.query(statement.sql, statement.params) }),
           catch: driverError,
         }),
       executeScript: (script) =>

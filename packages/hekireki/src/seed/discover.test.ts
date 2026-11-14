@@ -6,7 +6,7 @@ import { Effect } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
 import { parseSchema } from '../schema/index.js'
-import { ADAPTERS, adapterOf, discoverClient, LIBSQL_ADAPTER } from './discover.js'
+import { discoverClient } from './discover.js'
 import { withTypeScriptImports } from './resolve.js'
 
 const dirs: string[] = []
@@ -347,14 +347,5 @@ describe('discoverClient', () => {
         'su',
       ),
     )
-  })
-})
-
-describe('adapterOf', () => {
-  it("opens a libSQL server through its own adapter, and a SQLite file through SQLite's", () => {
-    expect(adapterOf('sqlite', 'libsql://app-org.turso.io')).toBe(LIBSQL_ADAPTER)
-    expect(adapterOf('sqlite', 'http://127.0.0.1:8080')).toBe(LIBSQL_ADAPTER)
-    expect(adapterOf('sqlite', 'file:./dev.db')).toBe(ADAPTERS.sqlite)
-    expect(adapterOf('postgresql', 'postgresql://x')).toBe(ADAPTERS.postgresql)
   })
 })

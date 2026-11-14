@@ -3,9 +3,10 @@ import { stripVTControlCharacters } from 'node:util'
 import { Effect, Semaphore } from 'effect'
 import * as z from 'zod'
 
+import { adapterOf } from '../../../database/domain/adapter.js'
 import { parseSchema } from '../../../schema/index.js'
 import type { SchemaFile } from '../../../schema/index.js'
-import { adapterOf, discoverClient } from '../../../seed/discover.js'
+import { discoverClient } from '../../../seed/discover.js'
 import { withTypeScriptImports } from '../../../seed/resolve.js'
 import { ClientQueryError, ClientUnavailableError } from '../errors/index.js'
 
