@@ -88,7 +88,7 @@ const DATAMODEL: DMMF.Datamodel = {
   indexes: [],
 }
 
-const document = zodOpenapiHonoDocument(DATAMODEL, { title: 'API', version: '1.0.0', auth: false })
+const document = zodOpenapiHonoDocument(DATAMODEL, { title: 'API', version: '1.0.0' })
 
 describe('zodOpenapiHonoDocument', () => {
   it('writes a row as Prisma Client reads it: Prisma names, enum names, every field present', () => {
@@ -180,7 +180,7 @@ describe('zodOpenapiHonoDocument', () => {
 })
 
 describe('zodOpenapiHonoDocument with auth', () => {
-  const guarded = zodOpenapiHonoDocument(DATAMODEL, { title: 'API', version: '1.0.0', auth: true })
+  const guarded = zodOpenapiHonoDocument(DATAMODEL, { title: 'API', version: '1.0.0', auth: 'jwt' })
 
   it('asks every operation for a bearer JWT and says it answers 401 without one', () => {
     expect(guarded.components.securitySchemes).toStrictEqual({
@@ -198,6 +198,21 @@ describe('zodOpenapiHonoDocument with auth', () => {
         },
       })
     }
+  })
+
+  it('names the header Cloudflare Access puts its token in, for auth = "cloudflare-access"', () => {
+    const access = zodOpenapiHonoDocument(DATAMODEL, {
+      title: 'API',
+      version: '1.0.0',
+      auth: 'cloudflare-access',
+    })
+    expect(access.components.securitySchemes).toStrictEqual({
+      cloudflareAccess: { type: 'apiKey', in: 'header', name: 'Cf-Access-Jwt-Assertion' },
+    })
+    expect(access.paths['/users/{id}']?.get).toMatchObject({
+      security: [{ cloudflareAccess: [] }],
+      responses: { '401': { description: 'No valid Cloudflare Access token.' } },
+    })
   })
 
   it('guards every model under its resource', () => {
@@ -439,7 +454,7 @@ describe('@api.hidden and @api.readonly', () => {
     ],
   })
   const datamodel = { ...DATAMODEL, models: [ACCOUNT] }
-  const doc = zodOpenapiHonoDocument(datamodel, { title: 'API', version: '1.0.0', auth: false })
+  const doc = zodOpenapiHonoDocument(datamodel, { title: 'API', version: '1.0.0' })
   const bodies = handlerBodies(datamodel)
 
   it('reads what a field comment keeps from the API', () => {

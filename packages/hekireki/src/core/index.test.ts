@@ -739,9 +739,17 @@ describe('ZodOpenAPIHono', () => {
     expect(readFileSync(path.join(dir, 'openapi.yaml'), 'utf8')).toContain('bearerAuth:')
   })
 
+  it('guards every model with the Cloudflare Access auth.ts, naming its header in the document', async () => {
+    const dir = tmp()
+    expect(failure(await run(zodOpenapiHono, dir, { auth: 'cloudflare-access' }))).toBe('')
+    expect(readFileSync(path.join(dir, 'auth.ts'), 'utf8')).toContain("'Cf-Access-Jwt-Assertion'")
+    expect(readFileSync(path.join(dir, 'index.ts'), 'utf8')).toContain("app.use('/users/*', auth)")
+    expect(readFileSync(path.join(dir, 'openapi.yaml'), 'utf8')).toContain('cloudflareAccess:')
+  })
+
   it('refuses an auth it does not know', async () => {
     expect(failure(await run(zodOpenapiHono, tmp(), { auth: 'session' }))).toContain(
-      'auth for Hekireki-ZodOpenAPIHono must be one of "jwt", "jwks": session',
+      'auth for Hekireki-ZodOpenAPIHono must be one of "jwt", "jwks", "cloudflare-access": session',
     )
   })
 

@@ -16,7 +16,7 @@ function numberClaim(payload: unknown, name: string) {
   return typeof value === 'number' ? value : undefined
 }
 
-/** The 401 a token is refused with when it lacks a claim it must have. */
+/** The 401 a token is refused with when it is missing or lacks a claim it must have. */
 function unauthorized(description: string) {
   return new HTTPException(401, {
     res: new Response('Unauthorized', {
@@ -61,10 +61,10 @@ function forbidden() {
  * Lets a request through with a JWT in `Authorization: Bearer <token>`, signed with HS256 by the
  * secret `JWT_SECRET`, issued by `JWT_ISSUER` for `JWT_AUDIENCE`, with an `exp` at most
  * MAX_TOKEN_LIFETIME_SECONDS after its `iat`, and answers 401 otherwise; a token without one of
- * REQUIRED_ROLES is answered 403. The variables are read
- * from the environment of the runtime (`process.env` on Node, the bindings on Workers). Without
- * one of them, or with a secret shorter than MIN_SECRET_BYTES, every request fails with 500: the
- * app never runs unguarded. A handler reads the token's payload with `c.get('jwtPayload')`.
+ * REQUIRED_ROLES is answered 403. The variables are read from the environment of the runtime
+ * (`process.env` on Node, the bindings on Workers). Without one of them, or with a secret shorter
+ * than MIN_SECRET_BYTES, every request fails with 500: the app never runs unguarded. A handler
+ * reads the token's payload with `c.get('jwtPayload')`.
  */
 export const auth = createMiddleware(async (c, next) => {
   const { JWT_SECRET, JWT_ISSUER, JWT_AUDIENCE } = env<{

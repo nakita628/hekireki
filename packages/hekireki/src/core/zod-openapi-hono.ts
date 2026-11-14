@@ -101,7 +101,7 @@ export function zodOpenapiHono(options: GeneratorOptions) {
       zodOpenapiHonoYaml(datamodel, {
         title: getString(config.title) ?? 'Generated from schema.prisma',
         version: getString(config.version) ?? '1.0.0',
-        auth: auth !== undefined,
+        ...(auth === undefined ? {} : { auth }),
       }),
       output,
       document,

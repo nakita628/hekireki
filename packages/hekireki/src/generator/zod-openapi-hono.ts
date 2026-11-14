@@ -47,33 +47,60 @@ function resourcesOf(models: readonly DMMF.Model[]) {
   return (model: DMMF.Model) => resources.get(model.name) ?? model.name
 }
 
-/** The security scheme of `auth: jwt`: a bearer JWT. */
-const BEARER_AUTH = { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }
+/**
+ * The security scheme the document names for each kind of `auth`: a bearer JWT for `jwt` and
+ * `jwks`, and for `cloudflare-access` the header Cloudflare Access puts its token in.
+ */
+function securityScheme(kind: AuthKind): {
+  readonly name: string
+  readonly scheme: OpenApiSchema
+  readonly missing: string
+} {
+  return kind === 'cloudflare-access'
+    ? {
+        name: 'cloudflareAccess',
+        scheme: { type: 'apiKey', in: 'header', name: 'Cf-Access-Jwt-Assertion' },
+        missing: 'No valid Cloudflare Access token.',
+      }
+    : {
+        name: 'bearerAuth',
+        scheme: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+        missing: 'No valid bearer token.',
+      }
+}
 
 /** Whether a YAML value is a map, as an operation or a set of responses is. */
 function isMap(value: YamlValue | undefined): value is OpenApiSchema {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-/** An operation that asks for the bearer JWT, and says it answers 401 without one, 403 without a role. */
-function guardedOperation(operation: OpenApiSchema): OpenApiSchema {
+/** An operation that asks for the token, and says it answers 401 without one, 403 without a role. */
+function guardedOperation(
+  operation: OpenApiSchema,
+  security: ReturnType<typeof securityScheme>,
+): OpenApiSchema {
   const responses = operation.responses
   return {
     ...operation,
-    security: [{ bearerAuth: [] }],
+    security: [{ [security.name]: [] }],
     responses: {
       ...(isMap(responses) ? responses : {}),
-      '401': { description: 'No valid bearer token.' },
+      '401': { description: security.missing },
       '403': { description: 'The token holds none of the roles the API asks for.' },
     },
   }
 }
 
 /** A path item with every operation guarded, its `parameters` as they are. */
-function guardedItem(item: OpenApiSchema): OpenApiSchema {
+function guardedItem(
+  item: OpenApiSchema,
+  security: ReturnType<typeof securityScheme>,
+): OpenApiSchema {
   return Object.fromEntries(
     Object.entries(item).map(([key, value]) =>
-      key !== 'parameters' && isMap(value) ? [key, guardedOperation(value)] : [key, value],
+      key !== 'parameters' && isMap(value)
+        ? [key, guardedOperation(value, security)]
+        : [key, value],
     ),
   )
 }
@@ -82,23 +109,24 @@ function guardedItem(item: OpenApiSchema): OpenApiSchema {
  * The OpenAPI 3.1 document of the CRUD of every model, shaped as Prisma Client reads and writes
  * the rows: fields under their Prisma names, enums by their members' names, a list never null.
  * Each model's paths are under its name in plural kebab-case (`/order-items`), and its schemas are
- * the row and what a `POST` and a `PATCH` take. With `auth`, every operation asks for a bearer JWT
- * (`bearerAuth`). Hono Takibi turns it into the routes.
+ * the row and what a `POST` and a `PATCH` take. With `auth`, every operation asks for the token
+ * its kind takes (`bearerAuth`, or `cloudflareAccess`). Hono Takibi turns it into the routes.
  */
 export function zodOpenapiHonoDocument(
   datamodel: DMMF.Datamodel,
-  config: { readonly title: string; readonly version: string; readonly auth: boolean },
+  config: { readonly title: string; readonly version: string; readonly auth?: AuthKind },
 ) {
   const { models, enums } = datamodel
   const names = schemaNames(models)
   const resource = resourcesOf(models)
+  const security = config.auth === undefined ? undefined : securityScheme(config.auth)
   return {
     openapi: '3.1.0',
     info: { title: config.title, version: config.version },
     paths: Object.fromEntries(
       models
         .flatMap((model) => makePaths(model, enums, resource(model), names(model)))
-        .map(([path, item]) => [path, config.auth ? guardedItem(item) : item] as const),
+        .map(([path, item]) => [path, security ? guardedItem(item, security) : item] as const),
     ),
     components: {
       schemas: Object.fromEntries(
@@ -111,7 +139,7 @@ export function zodOpenapiHonoDocument(
           ] as const
         }),
       ),
-      ...(config.auth ? { securitySchemes: { bearerAuth: BEARER_AUTH } } : {}),
+      ...(security ? { securitySchemes: { [security.name]: security.scheme } } : {}),
     },
   }
 }
@@ -119,7 +147,7 @@ export function zodOpenapiHonoDocument(
 /** The document as YAML. */
 export function zodOpenapiHonoYaml(
   datamodel: DMMF.Datamodel,
-  config: { readonly title: string; readonly version: string; readonly auth: boolean },
+  config: { readonly title: string; readonly version: string; readonly auth?: AuthKind },
 ) {
   return toYaml(zodOpenapiHonoDocument(datamodel, config), { flow: ['type'] })
 }
@@ -294,18 +322,20 @@ export function guardPaths(code: string, paths: readonly string[]) {
 }
 
 /**
- * The claims both modules check after the signature, read from `c.get('jwtPayload')` (unknown
- * until read): `exp` and `iat`, which hono/jwt checks only when a token has them, and the roles
- * the token must hold one of (`REQUIRED_ROLES`, `['admin']` until the user says otherwise).
+ * The claims every module checks after the signature, read from `c.get('jwtPayload')` (unknown
+ * until read): `exp` and `iat`, which hono/jwt checks only when a token has them, and the roles a
+ * token must hold one of. `roles` is what `REQUIRED_ROLES` starts as, with the comment that says
+ * why.
  */
-const CLAIM_CHECKS = `/** A claim of the token's payload when it is a number, and undefined otherwise. */
+function claimChecks(roles: { readonly comment: string; readonly value: string }) {
+  return `/** A claim of the token's payload when it is a number, and undefined otherwise. */
 function numberClaim(payload: unknown, name: string) {
   if (typeof payload !== 'object' || payload === null) return undefined
   const value: unknown = Reflect.get(payload, name)
   return typeof value === 'number' ? value : undefined
 }
 
-/** The 401 a token is refused with when it lacks a claim it must have. */
+/** The 401 a token is refused with when it is missing or lacks a claim it must have. */
 function unauthorized(description: string) {
   return new HTTPException(401, {
     res: new Response('Unauthorized', {
@@ -320,12 +350,8 @@ function unauthorized(description: string) {
 /** The claim of the token that holds the roles of its user: a string, or an array of strings. */
 const ROLE_CLAIM = 'role'
 
-/**
- * The roles of which a token must hold one to reach the API, answered 403 otherwise. The API
- * writes every model, so only an admin reaches it until this says who else may; an empty list
- * lets any valid token through.
- */
-const REQUIRED_ROLES: readonly string[] = ['admin']
+${roles.comment}
+const REQUIRED_ROLES: readonly string[] = ${roles.value}
 
 /** The roles the token's payload holds under ROLE_CLAIM. */
 function rolesOf(payload: unknown): readonly string[] {
@@ -345,12 +371,58 @@ function hasRequiredRole(payload: unknown) {
 function forbidden() {
   return new HTTPException(403, { res: new Response('Forbidden', { status: 403 }) })
 }`
+}
+
+/** `REQUIRED_ROLES` of a token any issuer signs: only an admin reaches the API until it says more. */
+const ADMIN_ONLY = {
+  comment: `/**
+ * The roles of which a token must hold one to reach the API, answered 403 otherwise. The API
+ * writes every model, so only an admin reaches it until this says who else may; an empty list
+ * lets any valid token through.
+ */`,
+  value: "['admin']",
+}
+
+/**
+ * The keys an issuer publishes as a JWKS, fetched and cached: `keysFor(uri, token)` answers the
+ * cached keys, fetched again after ten minutes, or for a `kid` they lack at most once a minute.
+ */
+const JWKS_KEYS = `/** How long the keys fetched from the issuer are used before they are fetched again. */
+const JWKS_CACHE_SECONDS = 10 * 60
+
+/** The least time between two fetches for a \`kid\` the cache lacks: no token hammers the issuer. */
+const JWKS_REFETCH_SECONDS = 60
+
+let cache: { uri: string; keys: HonoJsonWebKey[]; fetchedAt: number } | undefined
+
+/** The keys the issuer publishes, fetched and cached. */
+async function fetchKeys(uri: string) {
+  const response = await fetch(uri)
+  if (!response.ok) throw new Error('The issuer answered ' + response.status + ' for its keys')
+  const body: unknown = await response.json()
+  const keys: unknown =
+    typeof body === 'object' && body !== null ? Reflect.get(body, 'keys') : undefined
+  if (!Array.isArray(keys)) throw new Error('The issuer answered no keys')
+  cache = { uri, keys, fetchedAt: Date.now() }
+  return cache.keys
+}
+
+/** The keys for a token: the cached ones, fetched again when they are old or lack its \`kid\`. */
+async function keysFor(uri: string, token: string | undefined) {
+  if (cache === undefined || cache.uri !== uri) return fetchKeys(uri)
+  const age = (Date.now() - cache.fetchedAt) / 1000
+  if (age > JWKS_CACHE_SECONDS) return fetchKeys(uri)
+  const kid = token === undefined ? undefined : decode(token).header.kid
+  const known = cache.keys.some((key) => key.kid === kid)
+  return known || age < JWKS_REFETCH_SECONDS ? cache.keys : fetchKeys(uri)
+}`
 
 /**
  * `auth = "jwt"`: a JWT signed with HS256 by `JWT_SECRET`, from the issuer `JWT_ISSUER` for the
- * audience `JWT_AUDIENCE`, that has an `exp` at most an hour after its `iat`. hono/jwt checks
- * `exp` and `iat` only when a token has them, so a token without them, which would never expire,
- * is refused here. A missing variable or a secret shorter than 32 bytes fails every request.
+ * audience `JWT_AUDIENCE`, that has an `exp` at most an hour after its `iat` and the `admin`
+ * role. hono/jwt checks `exp` and `iat` only when a token has them, so a token without them,
+ * which would never expire, is refused here. A missing variable or a secret shorter than 32 bytes
+ * fails every request.
  */
 function jwtAuthModule() {
   return `import { env } from 'hono/adapter'
@@ -364,16 +436,16 @@ const MAX_TOKEN_LIFETIME_SECONDS = 60 * 60
 /** The fewest bytes \`JWT_SECRET\` may have: HS256 takes a key no shorter than its 32-byte hash. */
 const MIN_SECRET_BYTES = 32
 
-${CLAIM_CHECKS}
+${claimChecks(ADMIN_ONLY)}
 
 /**
  * Lets a request through with a JWT in \`Authorization: Bearer <token>\`, signed with HS256 by the
  * secret \`JWT_SECRET\`, issued by \`JWT_ISSUER\` for \`JWT_AUDIENCE\`, with an \`exp\` at most
  * MAX_TOKEN_LIFETIME_SECONDS after its \`iat\`, and answers 401 otherwise; a token without one of
- * REQUIRED_ROLES is answered 403. The variables are read
- * from the environment of the runtime (\`process.env\` on Node, the bindings on Workers). Without
- * one of them, or with a secret shorter than MIN_SECRET_BYTES, every request fails with 500: the
- * app never runs unguarded. A handler reads the token's payload with \`c.get('jwtPayload')\`.
+ * REQUIRED_ROLES is answered 403. The variables are read from the environment of the runtime
+ * (\`process.env\` on Node, the bindings on Workers). Without one of them, or with a secret shorter
+ * than MIN_SECRET_BYTES, every request fails with 500: the app never runs unguarded. A handler
+ * reads the token's payload with \`c.get('jwtPayload')\`.
  */
 export const auth = createMiddleware(async (c, next) => {
   const { JWT_SECRET, JWT_ISSUER, JWT_AUDIENCE } = env<{
@@ -406,9 +478,8 @@ export const auth = createMiddleware(async (c, next) => {
 
 /**
  * `auth = "jwks"`: a JWT signed with an asymmetric key that the issuer publishes at `JWKS_URI`
- * (an identity provider: Auth0, Clerk, Okta), from `JWT_ISSUER` for `JWT_AUDIENCE`,
- * that has an `exp`. The app holds no secret that signs a token. The keys are cached for ten
- * minutes and fetched again for a `kid` they lack, at most once a minute.
+ * (an identity provider: Auth0, Clerk, Okta), from `JWT_ISSUER` for `JWT_AUDIENCE`, that has an
+ * `exp` and the `admin` role. The app holds no secret that signs a token.
  */
 function jwksAuthModule() {
   return `import { env } from 'hono/adapter'
@@ -418,18 +489,12 @@ import { jwk } from 'hono/jwk'
 import { decode } from 'hono/jwt'
 import type { HonoJsonWebKey } from 'hono/utils/jwt/jws'
 
-/** How long the keys fetched from \`JWKS_URI\` are used before they are fetched again. */
-const JWKS_CACHE_SECONDS = 10 * 60
-
-/** The least time between two fetches for a \`kid\` the cache lacks: no token hammers the issuer. */
-const JWKS_REFETCH_SECONDS = 60
-
 /** The algorithms a token may be signed with: asymmetric only, so no key here signs one. */
 const ALGORITHMS = ['RS256', 'PS256', 'ES256', 'EdDSA'] as const
 
-let cache: { uri: string; keys: HonoJsonWebKey[]; fetchedAt: number } | undefined
+${claimChecks(ADMIN_ONLY)}
 
-${CLAIM_CHECKS}
+${JWKS_KEYS}
 
 /** \`JWKS_URI\` when it is https, or http on this machine (an issuer run for development). */
 function jwksUri(uri: string) {
@@ -437,28 +502,6 @@ function jwksUri(uri: string) {
   const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1'
   if (url.protocol === 'https:' || (url.protocol === 'http:' && local)) return url.href
   throw new Error('JWKS_URI must be an https URL')
-}
-
-/** The keys the issuer publishes, fetched and cached. */
-async function fetchKeys(uri: string) {
-  const response = await fetch(uri)
-  if (!response.ok) throw new Error('JWKS_URI answered ' + response.status)
-  const body: unknown = await response.json()
-  const keys: unknown =
-    typeof body === 'object' && body !== null ? Reflect.get(body, 'keys') : undefined
-  if (!Array.isArray(keys)) throw new Error('JWKS_URI answered no keys')
-  cache = { uri, keys, fetchedAt: Date.now() }
-  return cache.keys
-}
-
-/** The keys for a token: the cached ones, fetched again when they are old or lack its \`kid\`. */
-async function keysFor(uri: string, token: string | undefined) {
-  if (cache === undefined || cache.uri !== uri) return fetchKeys(uri)
-  const age = (Date.now() - cache.fetchedAt) / 1000
-  if (age > JWKS_CACHE_SECONDS) return fetchKeys(uri)
-  const kid = token === undefined ? undefined : decode(token).header.kid
-  const known = cache.keys.some((key) => key.kid === kid)
-  return known || age < JWKS_REFETCH_SECONDS ? cache.keys : fetchKeys(uri)
 }
 
 /**
@@ -496,11 +539,94 @@ export const auth = createMiddleware(async (c, next) => {
 }
 
 /**
- * The module the app guards its paths with, written once and the user's to change after. Both
- * kinds take a JWT in `Authorization: Bearer <token>` and read their settings from the
- * environment of the runtime: `jwt` checks an HS256 signature with `JWT_SECRET`, `jwks` an
- * asymmetric one with the keys published at `JWKS_URI`.
+ * `auth = "cloudflare-access"`: the JWT Cloudflare Access puts in `Cf-Access-Jwt-Assertion` on a
+ * request its policy let through, signed with RS256 by a key the team publishes at
+ * `<team domain>/cdn-cgi/access/certs`, issued by the team domain for the application's AUD tag.
+ * Access's token carries no role: its policy decides who passes, so `REQUIRED_ROLES` starts empty.
+ * The signature is checked all the same, so a request that reaches the app around Access (its
+ * `workers.dev` URL, the origin's own address) is refused.
+ */
+function cloudflareAccessAuthModule() {
+  return `import { env } from 'hono/adapter'
+import { createMiddleware } from 'hono/factory'
+import { HTTPException } from 'hono/http-exception'
+import { decode, verifyWithJwks } from 'hono/jwt'
+import type { HonoJsonWebKey } from 'hono/utils/jwt/jws'
+
+/** The header Cloudflare Access puts its token in, as it is, without \`Bearer\`. */
+const ACCESS_HEADER = 'Cf-Access-Jwt-Assertion'
+
+/** The path under the team domain where Access publishes its keys. */
+const ACCESS_CERTS_PATH = '/cdn-cgi/access/certs'
+
+${claimChecks({
+  comment: `/**
+ * The roles of which a token must hold one, answered 403 otherwise. Cloudflare Access's token
+ * carries no role: its policy decides who reaches the app, so none is asked for here. Name roles
+ * (and ROLE_CLAIM) when the identity provider's groups are passed into the token.
+ */`,
+  value: '[]',
+})}
+
+${JWKS_KEYS}
+
+/** The team domain, \`https://<team>.cloudflareaccess.com\`, as the token's \`iss\` names it. */
+function teamDomain(domain: string) {
+  const url = new URL(domain)
+  if (url.protocol !== 'https:') throw new Error('CF_ACCESS_TEAM_DOMAIN must be an https URL')
+  return url.origin
+}
+
+/**
+ * Lets a request through with the token Cloudflare Access puts in \`Cf-Access-Jwt-Assertion\`,
+ * signed with a key the team publishes, issued by \`CF_ACCESS_TEAM_DOMAIN\` for the application
+ * \`CF_ACCESS_AUD\` (its Application Audience tag), with an \`exp\`, and answers 401 otherwise. The
+ * variables are read from the environment of the runtime (\`process.env\` on Node, the bindings
+ * on Workers). Without one of them every request fails with 500: the app never runs unguarded. A
+ * handler reads the token's payload (\`email\`, \`sub\`) with \`c.get('jwtPayload')\`.
+ */
+export const auth = createMiddleware(async (c, next) => {
+  const { CF_ACCESS_TEAM_DOMAIN, CF_ACCESS_AUD } = env<{
+    CF_ACCESS_TEAM_DOMAIN?: string
+    CF_ACCESS_AUD?: string
+  }>(c)
+  if (!CF_ACCESS_TEAM_DOMAIN || !CF_ACCESS_AUD) {
+    throw new Error('CF_ACCESS_TEAM_DOMAIN and CF_ACCESS_AUD must be set')
+  }
+  const issuer = teamDomain(CF_ACCESS_TEAM_DOMAIN)
+  const token = c.req.header(ACCESS_HEADER)
+  if (!token) throw unauthorized('no ' + ACCESS_HEADER)
+  const payload = await keysFor(issuer + ACCESS_CERTS_PATH, token)
+    .then((keys) =>
+      verifyWithJwks(token, {
+        keys,
+        allowedAlgorithms: ['RS256'],
+        verification: { iss: issuer, aud: CF_ACCESS_AUD },
+      }),
+    )
+    .catch((error: unknown) => {
+      // The keys not fetched is the app's failure (500); anything else is the token's (401).
+      if (error instanceof Error && error.constructor === Error) throw error
+      throw unauthorized('token verification failure')
+    })
+  // hono/jwt checks exp only when the token has it: one without it never expires.
+  if (numberClaim(payload, 'exp') === undefined) throw unauthorized('token without exp')
+  if (!hasRequiredRole(payload)) throw forbidden()
+  c.set('jwtPayload', payload)
+  await next()
+})
+`
+}
+
+/**
+ * The module the app guards its paths with, written once and the user's to change after, its
+ * settings read from the environment of the runtime: `jwt` checks an HS256 signature with
+ * `JWT_SECRET`, `jwks` an asymmetric one with the keys published at `JWKS_URI`, both on a JWT in
+ * `Authorization: Bearer <token>`; `cloudflare-access` checks the token Cloudflare Access puts in
+ * `Cf-Access-Jwt-Assertion` with the keys of the team.
  */
 export function authModule(kind: AuthKind) {
-  return kind === 'jwt' ? jwtAuthModule() : jwksAuthModule()
+  if (kind === 'jwt') return jwtAuthModule()
+  if (kind === 'jwks') return jwksAuthModule()
+  return cloudflareAccessAuthModule()
 }
