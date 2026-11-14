@@ -54,21 +54,36 @@ def uuid7_str() -> str:
 
 
 class Role(models.TextChoices):
+    """User role. No @map: the value names are stored verbatim."""
+
     ADMIN = "ADMIN"
     EDITOR = "EDITOR"
     VIEWER = "VIEWER"
 
 
 class Visibility(models.TextChoices):
+    """Enum with @map on every value and @@map on the enum itself:
+    the database stores the mapped values ("link_only"), while
+    generators receive the Prisma-level names ("LINK_ONLY").
+    """
+
     PUBLIC = "public"
     PRIVATE = "private"
     LINK_ONLY = "link_only"
 
 
 class User(models.Model):
+    """Application user. Fully annotated for every validator generator,
+    with a UUIDv7 primary key, enum default, scalar list, @map columns,
+    @updatedAt, and relations of every cardinality.
+    """
+
     id = models.TextField(primary_key=True, default=uuid7_str)
+    """Primary key (UUIDv7)"""
     email = models.TextField(unique=True)
+    """Unique login email"""
     name = models.TextField()
+    """Display name"""
     role = models.TextField(choices=Role.choices, default=Role.VIEWER)
     interests = ArrayField(models.TextField(), default=list)
     created_at = UtcDateTimeField(default=timezone.now)
@@ -80,6 +95,11 @@ class User(models.Model):
 
 
 class Profile(models.Model):
+    """One-to-one relation with native @db.* types, literal defaults,
+    and optional scalars of every flavour. ConfigDict passthrough: the
+    Pydantic model rejects unknown keys (extra='forbid').
+    """
+
     id = models.TextField(primary_key=True, default=None)
     user = models.OneToOneField("User", on_delete=models.CASCADE, related_name="profile")
     bio = models.TextField(null=True)
@@ -96,8 +116,14 @@ class Profile(models.Model):
 
 
 class Post(models.Model):
+    """@@map + @map column names, FK with a referential action,
+    mapped-enum default, and an implicit many-to-many to Tag.
+    """
+
     id = models.TextField(primary_key=True, default=uuid4_str)
+    """Primary key"""
     title = models.TextField()
+    """Article title"""
     content = models.TextField(null=True)
     visibility = models.TextField(choices=Visibility.choices, default=Visibility.LINK_ONLY)
     published = models.BooleanField(default=False)
@@ -114,6 +140,8 @@ class Post(models.Model):
 
 
 class Tag(models.Model):
+    """Implicit many-to-many partner of Post (join table `_PostToTag`)."""
+
     id = models.AutoField(primary_key=True)
     label = models.TextField(unique=True)
 
@@ -122,6 +150,10 @@ class Tag(models.Model):
 
 
 class Comment(models.Model):
+    """Two foreign keys with different referential actions
+    (Cascade vs SetNull) and a composite index.
+    """
+
     id = models.AutoField(primary_key=True)
     body = models.TextField()
     post = models.ForeignKey("Post", on_delete=models.CASCADE, related_name="comments", db_index=False)
@@ -136,6 +168,8 @@ class Comment(models.Model):
 
 
 class Follow(models.Model):
+    """Composite primary key + two named relations to the same model."""
+
     pk = models.CompositePrimaryKey("follower_id", "following_id")
     follower = models.ForeignKey("User", on_delete=models.CASCADE, related_name="following", db_index=False)
     following = models.ForeignKey("User", on_delete=models.CASCADE, related_name="followers", db_index=False)
@@ -146,6 +180,8 @@ class Follow(models.Model):
 
 
 class Category(models.Model):
+    """Self-relation (adjacency-list tree) with a composite unique."""
+
     id = models.AutoField(primary_key=True)
     name = models.TextField()
     parent = models.ForeignKey("self", on_delete=models.SET_NULL, related_name="children", null=True, db_index=False)
@@ -158,6 +194,8 @@ class Category(models.Model):
 
 
 class Order(models.Model):
+    """BigInt autoincrement primary key (bigserial) and money as Decimal."""
+
     id = models.BigAutoField(primary_key=True)
     user = models.ForeignKey("User", on_delete=models.RESTRICT, related_name="orders", db_index=False)
     total = models.DecimalField(max_digits=12, decimal_places=2)
@@ -168,6 +206,8 @@ class Order(models.Model):
 
 
 class OrderItem(models.Model):
+    """Child of Order with a composite unique constraint."""
+
     id = models.BigAutoField(primary_key=True)
     order = models.ForeignKey("Order", on_delete=models.CASCADE, related_name="items", db_index=False)
     sku = models.CharField(max_length=32)
@@ -182,6 +222,8 @@ class OrderItem(models.Model):
 
 
 class AuditLog(models.Model):
+    """DB-side generated defaults (dbgenerated) plus Json / Bytes payloads."""
+
     id = models.UUIDField(primary_key=True, db_default=RawSQL("gen_random_uuid()", []))
     action = models.TextField()
     payload = models.JSONField(default=dict)
@@ -193,6 +235,10 @@ class AuditLog(models.Model):
 
 
 class Actor(models.Model):
+    """Named implicit many-to-many: the join table is `_cast`,
+    not `_ActorToFilm`.
+    """
+
     id = models.AutoField(primary_key=True)
     name = models.TextField()
     films: "models.ManyToManyField[Film, Cast]" = models.ManyToManyField("Film", through="Cast", related_name="actors")

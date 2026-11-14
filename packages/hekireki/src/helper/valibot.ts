@@ -38,6 +38,7 @@ export function makeValibotSchemas(
     readonly fieldName: string
     readonly validation: string | null
     readonly isRequired: boolean
+    readonly comment?: string
   }[],
   objectType?: 'strict' | 'loose',
 ) {

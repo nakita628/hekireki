@@ -1,6 +1,7 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
+/// User role. No @map: the value names are stored verbatim.
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "Role")]

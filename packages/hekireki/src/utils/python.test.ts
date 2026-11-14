@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import { jsonToPythonLiteral, toPythonString } from './python.js'
+import { jsonToPythonLiteral, pythonDocstringLines, toPythonString } from './python.js'
 
 describe('toPythonString', () => {
   it('escapes what would end or break the literal', () => {
@@ -19,5 +19,27 @@ describe('jsonToPythonLiteral', () => {
     [{ a: [true], 'b"': { c: 2 } }, '{"a": [True], "b\\"": {"c": 2}}'],
   ])('%j: %s', (value, expected) => {
     expect(jsonToPythonLiteral(value)).toBe(expected)
+  })
+})
+
+describe('pythonDocstringLines', () => {
+  it('is no lines without prose', () => {
+    expect(pythonDocstringLines(undefined, '    ')).toStrictEqual([])
+  })
+  it('keeps one line on one line', () => {
+    expect(pythonDocstringLines('The key.', '    ')).toStrictEqual(['    """The key."""'])
+  })
+  it('closes several lines on a line of its own and leaves a blank line empty', () => {
+    expect(pythonDocstringLines('First.\n\nSecond.', '    ')).toStrictEqual([
+      '    """First.',
+      '',
+      '    Second.',
+      '    """',
+    ])
+  })
+  it('cannot be closed early or read as an escape sequence', () => {
+    expect(pythonDocstringLines(String.raw`a """ b \n c"`, '')).toStrictEqual([
+      String.raw`"""a \"\"" b \\n c\""""`,
+    ])
   })
 })

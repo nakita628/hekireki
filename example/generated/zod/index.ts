@@ -1,8 +1,16 @@
 import * as z from 'zod'
 
+/**
+ * Application user. Fully annotated for every validator generator,
+ * with a UUIDv7 primary key, enum default, scalar list, @map columns,
+ * @updatedAt, and relations of every cardinality.
+ */
 export const UserSchema = z.object({
+  /** Primary key (UUIDv7) */
   id: z.uuid(),
+  /** Unique login email */
   email: z.email(),
+  /** Display name */
   name: z.string().min(1).max(50),
   role: z.enum(['ADMIN', 'EDITOR', 'VIEWER']),
   interests: z.string(),
@@ -12,6 +20,11 @@ export const UserSchema = z.object({
 
 export type User = z.infer<typeof UserSchema>
 
+/**
+ * One-to-one relation with native @db.* types, literal defaults,
+ * and optional scalars of every flavour. ConfigDict passthrough: the
+ * Pydantic model rejects unknown keys (extra='forbid').
+ */
 export const ProfileSchema = z.object({
   id: z.string(),
   userId: z.string(),
@@ -27,8 +40,14 @@ export const ProfileSchema = z.object({
 
 export type Profile = z.infer<typeof ProfileSchema>
 
+/**
+ * @@map + @map column names, FK with a referential action,
+ * mapped-enum default, and an implicit many-to-many to Tag.
+ */
 export const PostSchema = z.object({
+  /** Primary key */
   id: z.uuid(),
+  /** Article title */
   title: z.string().min(1).max(100),
   content: z.string().exactOptional(),
   visibility: z.enum(['PUBLIC', 'PRIVATE', 'LINK_ONLY']),
@@ -40,6 +59,7 @@ export const PostSchema = z.object({
 
 export type Post = z.infer<typeof PostSchema>
 
+/** Implicit many-to-many partner of Post (join table `_PostToTag`). */
 export const TagSchema = z.object({
   id: z.number(),
   label: z.string(),
@@ -47,6 +67,10 @@ export const TagSchema = z.object({
 
 export type Tag = z.infer<typeof TagSchema>
 
+/**
+ * Two foreign keys with different referential actions
+ * (Cascade vs SetNull) and a composite index.
+ */
 export const CommentSchema = z.object({
   id: z.number(),
   body: z.string(),
@@ -57,6 +81,7 @@ export const CommentSchema = z.object({
 
 export type Comment = z.infer<typeof CommentSchema>
 
+/** Composite primary key + two named relations to the same model. */
 export const FollowSchema = z.object({
   followerId: z.string(),
   followingId: z.string(),
@@ -65,6 +90,7 @@ export const FollowSchema = z.object({
 
 export type Follow = z.infer<typeof FollowSchema>
 
+/** Self-relation (adjacency-list tree) with a composite unique. */
 export const CategorySchema = z.object({
   id: z.number(),
   name: z.string(),
@@ -73,6 +99,7 @@ export const CategorySchema = z.object({
 
 export type Category = z.infer<typeof CategorySchema>
 
+/** BigInt autoincrement primary key (bigserial) and money as Decimal. */
 export const OrderSchema = z.object({
   id: z.bigint(),
   userId: z.string(),
@@ -82,6 +109,7 @@ export const OrderSchema = z.object({
 
 export type Order = z.infer<typeof OrderSchema>
 
+/** Child of Order with a composite unique constraint. */
 export const OrderItemSchema = z.object({
   id: z.bigint(),
   orderId: z.bigint(),
@@ -92,6 +120,7 @@ export const OrderItemSchema = z.object({
 
 export type OrderItem = z.infer<typeof OrderItemSchema>
 
+/** DB-side generated defaults (dbgenerated) plus Json / Bytes payloads. */
 export const AuditLogSchema = z.object({
   id: z.string(),
   action: z.string(),
@@ -102,6 +131,10 @@ export const AuditLogSchema = z.object({
 
 export type AuditLog = z.infer<typeof AuditLogSchema>
 
+/**
+ * Named implicit many-to-many: the join table is `_cast`,
+ * not `_ActorToFilm`.
+ */
 export const ActorSchema = z.object({
   id: z.number(),
   name: z.string(),

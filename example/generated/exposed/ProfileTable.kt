@@ -6,6 +6,11 @@ import org.jetbrains.exposed.v1.core.dao.id.IdTable
 import org.jetbrains.exposed.v1.json.jsonb
 import java.math.BigDecimal
 
+/**
+ * One-to-one relation with native @db.* types, literal defaults,
+ * and optional scalars of every flavour. ConfigDict passthrough: the
+ * Pydantic model rejects unknown keys (extra='forbid').
+ */
 object ProfileTable : IdTable<String>("\"Profile\"") {
     override val id = text("id").clientDefault { CUID.randomCUID2().toString() }.entityId()
     val userId =

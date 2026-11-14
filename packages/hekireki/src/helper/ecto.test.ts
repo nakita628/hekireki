@@ -373,7 +373,7 @@ end`)
       const result = ectoSchemas([model], 'App')
 
       expect(result).toBe(
-        'defmodule App.User do\n  use Ecto.Schema\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t()\n        }\n\n  schema "User" do\n  end\nend',
+        'defmodule App.User do\n  @moduledoc """\n  A person.\n  """\n\n  use Ecto.Schema\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t()\n        }\n\n  schema "User" do\n  end\nend',
       )
     })
 
@@ -1620,27 +1620,59 @@ end`)
     })
   })
 
-  describe('no @moduledoc', () => {
-    it("writes no @moduledoc, of the schema's documentation or of its own", () => {
+  describe('doc comments', () => {
+    it("writes a model's prose as @moduledoc and a field's as # lines", () => {
       const model = makeModel({
         name: 'User',
-        documentation: 'A person.',
+        documentation: 'A person.\n\nSays """ and #{x} and \\ here.\n@ecto',
         fields: [
           makeField({
             name: 'id',
-            type: 'String',
+            type: 'Int',
             isId: true,
-            hasDefaultValue: true,
-            default: { name: 'uuid', args: [4] },
+            documentation: 'The key.\n\nIts value.',
+          }),
+          makeField({
+            name: 'name',
+            type: 'String',
+            documentation: '@ecto.validate_length(max: 9)',
           }),
         ],
       })
 
-      const result = ectoSchemas([model], 'App')
+      expect(ectoSchemas([model], 'App')).toBe(`defmodule App.User do
+  @moduledoc """
+  A person.
 
-      expect(result).toBe(
-        'defmodule App.User do\n  use Ecto.Schema\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t()\n        }\n\n  schema "User" do\n  end\nend',
-      )
+  Says \\""" and \\#{x} and \\\\ here.
+  """
+
+  use Ecto.Schema
+  import Ecto.Changeset
+
+  @primary_key false
+
+  @type t :: %__MODULE__{
+          id: integer(),
+          name: String.t()
+        }
+
+  schema "User" do
+    # The key.
+    #
+    # Its value.
+    field(:id, :integer, primary_key: true)
+    field(:name, :string)
+  end
+
+  @spec changeset(t(), map()) :: Ecto.Changeset.t()
+  def changeset(user, attrs) do
+    user
+    |> cast(attrs, [:id, :name])
+    |> validate_required([:id, :name])
+    |> validate_length(:name, max: 9)
+  end
+end`)
     })
   })
 
@@ -2557,6 +2589,10 @@ end`)
     const result = ectoSchemas([model], 'App', undefined, undefined, { provider: 'sqlite' })
 
     expect(result).toContain(`defmodule App.Account do
+  @moduledoc """
+  Someone who signs in.
+  """
+
   use Ecto.Schema
   import Ecto.Changeset
 

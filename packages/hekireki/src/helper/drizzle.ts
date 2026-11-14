@@ -1,6 +1,12 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { constraintName, indexPrefix, makeSnakeCase } from '../utils/index.js'
+import {
+  constraintName,
+  docBlockLines,
+  indexPrefix,
+  makeSnakeCase,
+  stripAnnotations,
+} from '../utils/index.js'
 import {
   backRelation,
   fieldColumn,
@@ -355,7 +361,10 @@ export function makeEnumDeclarations(
     .map((e) => {
       imports.core.add('pgEnum')
       const values = e.values.map((v) => `'${v.dbName ?? v.name}'`).join(', ')
-      return `export const ${enumIdentifier(e.name)} = pgEnum('${e.dbName ?? e.name}', [${values}])`
+      return [
+        ...docBlockLines(stripAnnotations(e.documentation), ''),
+        `export const ${enumIdentifier(e.name)} = pgEnum('${e.dbName ?? e.name}', [${values}])`,
+      ].join('\n')
     })
 }
 
@@ -739,12 +748,21 @@ export function makeTable(
 
   const varName = resolveVarName(model)
   const tableName = resolveTableName(model)
-  const columns = model.fields
-    .map((field) => makeColumn(field, model, models, provider, imports, enums))
-    .filter((c) => c !== null)
-    .join(', ')
+  const entries = model.fields.flatMap((field) => {
+    const code = makeColumn(field, model, models, provider, imports, enums)
+    return code === null ? [] : [{ code, doc: stripAnnotations(field.documentation) }]
+  })
+  // A JSDoc block needs lines of its own, so a table with one lays its columns out one per line.
+  const columns = entries.some((entry) => entry.doc !== undefined)
+    ? `{\n${entries.map((entry) => [...docBlockLines(entry.doc, '  '), `  ${entry.code},`].join('\n')).join('\n')}\n}`
+    : `{ ${entries.map((entry) => entry.code).join(', ')} }`
+  const modelDoc = docBlockLines(stripAnnotations(model.documentation), '')
   const constraints = makeTableConstraints(model, models, provider, imports, indexes, tableName)
-  if (!constraints) return `export const ${varName} = ${tableFunc}('${tableName}', { ${columns} })`
+  if (!constraints) {
+    return [...modelDoc, `export const ${varName} = ${tableFunc}('${tableName}', ${columns})`].join(
+      '\n',
+    )
+  }
 
   const configType = isOnForeignKeyCycle(model, models)
     ? provider === 'postgresql'
@@ -755,7 +773,10 @@ export function makeTable(
     : undefined
   if (configType) imports.coreTypes.add(configType)
   const params = configType ? `(table): ${configType}[]` : '(table)'
-  return `export const ${varName} = ${tableFunc}('${tableName}', { ${columns} }, ${params} => [${constraints}])`
+  return [
+    ...modelDoc,
+    `export const ${varName} = ${tableFunc}('${tableName}', ${columns}, ${params} => [${constraints}])`,
+  ].join('\n')
 }
 
 function joinVarName(relationName: string) {

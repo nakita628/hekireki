@@ -1,4 +1,5 @@
 import type { DMMF } from '@prisma/generator-helper'
+import { getDMMF } from '@prisma/get-dmmf'
 import { describe, expect, it } from 'vite-plus/test'
 
 import {
@@ -510,7 +511,7 @@ end`)
 end`)
   })
 
-  it('leaves the documentation in the schema', () => {
+  it('writes the documentation above the class', () => {
     const user = makeModel({
       name: 'User',
       documentation: 'Application user account.',
@@ -525,7 +526,8 @@ end`)
       ],
     })
 
-    expect(activeRecordModels([user])).toBe(`class User < ApplicationRecord
+    expect(activeRecordModels([user])).toBe(`# Application user account.
+class User < ApplicationRecord
   self.table_name = "User"
 
   attribute :id, default: -> { SecureRandom.uuid }
@@ -1943,7 +1945,10 @@ describe('@ar. annotations', () => {
       ],
     })
 
-    expect(activeRecordModels([todo], [todo], enums)).toBe(`class Todo < ApplicationRecord
+    expect(activeRecordModels([todo], [todo], enums)).toBe(`# A thing to do.
+#
+# age:: In years.
+class Todo < ApplicationRecord
   self.table_name = "Todo"
 
   enum :role, { admin: "ADMIN" }, validate: true
@@ -1957,7 +1962,6 @@ describe('@ar. annotations', () => {
 
   validates :title, :note, presence: true, on: :create
 end`)
-    expect(activeRecordModels([todo], [todo], enums)).not.toContain('A thing to do.')
   })
 
   it('writes the model lines after the associations, so a has_many :through finds its through', () => {
@@ -2100,7 +2104,8 @@ describe('translated messages', () => {
   })
 
   it('keeps only the Ruby options in the model', () => {
-    expect(activeRecordModels([todo])).toBe(`class Todo < ApplicationRecord
+    expect(activeRecordModels([todo])).toBe(`# A thing to do.
+class Todo < ApplicationRecord
   self.table_name = "Todo"
 
   validates :title, presence: true, length: { maximum: 255 }
@@ -2390,7 +2395,8 @@ describe('@ar. problems', () => {
       fields: [makeField({ name: 'id', type: 'Int', isId: true })],
     })
     expect(activeRecordProblems([model])).toStrictEqual([])
-    expect(activeRecordModels([model])).toBe(`class Todo < ApplicationRecord
+    expect(activeRecordModels([model])).toBe(`# A thing to do.
+class Todo < ApplicationRecord
   self.table_name = "Todo"
 end`)
     expect(activeRecordLocaleFiles([model])[0]?.code).toContain('todo: "Todo"')
@@ -3043,5 +3049,76 @@ end`)
 `,
       },
     ])
+  })
+})
+
+describe('doc comments', () => {
+  it('writes the prose of a model, its attributes and its associations above the class', () => {
+    const dmmf = getDMMF({
+      datamodel: [
+        [
+          'schema.prisma',
+          `datasource db {
+  provider = "postgresql"
+}
+/// A person.
+///
+/// Second paragraph */ with \\\\ backslash.
+model User {
+  /// The key.
+  id        Int      @id
+  /// @z.string()
+  name      String
+  /// When they joined.
+  /// Two lines.
+  createdAt DateTime @default(now())
+  /// Their posts.
+  posts     Post[]
+  tone      Tone
+}
+model Post {
+  id       Int  @id
+  /// Who wrote it.
+  authorId Int
+  /// The author.
+  author   User @relation(fields: [authorId], references: [id])
+}
+/// How loud.
+enum Tone {
+  CALM
+}
+`,
+        ],
+      ],
+    })
+    if ('type' in dmmf) throw new Error(dmmf.error.message)
+    const { models, enums } = dmmf.datamodel
+    expect(activeRecordModels(models, models, enums)).toBe(`# A person.
+#
+# Second paragraph */ with \\\\ backslash.
+#
+# id:: The key.
+# createdAt:: When they joined.
+#   Two lines.
+# posts:: Their posts.
+class User < ApplicationRecord
+  self.table_name = "User"
+
+  alias_attribute :created_at, :createdAt
+
+  enum :tone, { calm: "CALM" }, validate: true
+
+  validates :name, presence: true
+
+  has_many :posts, foreign_key: "authorId", inverse_of: :author, dependent: :restrict_with_error
+end
+
+# authorId:: Who wrote it.
+# author:: The author.
+class Post < ApplicationRecord
+  self.table_name = "Post"
+
+  belongs_to :author, class_name: "User", foreign_key: "authorId", inverse_of: :posts
+end`)
   })
 })

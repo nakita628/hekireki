@@ -2500,7 +2500,7 @@ file sealed class UtcClockConverter : ValueConverter<DateTime, DateTime>
     })
   })
 
-  it('leaves /// comments out, and writes into the namespace and DbContext it is given', () => {
+  it('writes /// comments as XML doc comments, into the namespace and DbContext it is given', () => {
     const { datamodel, plan } = fixture(COMMENTS, {
       namespace: 'Shop.Data',
       context: 'ShopContext',
@@ -2512,8 +2512,15 @@ file sealed class UtcClockConverter : ValueConverter<DateTime, DateTime>
 
 namespace Shop.Data;
 
+/// <summary>
+/// A user.
+/// Second line with "quotes".
+/// </summary>
 public partial class User
 {
+    /// <summary>
+    /// Primary key
+    /// </summary>
     public string Id { get; set; } = null!;
 
     public string Email { get; set; } = null!;
@@ -2530,6 +2537,9 @@ using NpgsqlTypes;
 
 namespace Shop.Data;
 
+/// <summary>
+/// Mood of a &lt;b&gt;user&lt;/b&gt; &amp; friends.
+/// </summary>
 public enum Mood
 {
     [PgName("HAPPY")]

@@ -3,6 +3,8 @@ use sea_orm::entity::prelude::*;
 use sea_orm::Set;
 use serde::{Deserialize, Serialize};
 
+/// Two foreign keys with different referential actions
+/// (Cascade vs SetNull) and a composite index.
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[sea_orm(table_name = "comments")]

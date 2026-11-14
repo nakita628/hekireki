@@ -4,14 +4,20 @@ use sea_orm::entity::prelude::*;
 use sea_orm::Set;
 use serde::{Deserialize, Serialize};
 
+/// Application user. Fully annotated for every validator generator,
+/// with a UUIDv7 primary key, enum default, scalar list, @map columns,
+/// @updatedAt, and relations of every cardinality.
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[sea_orm(table_name = "users")]
 pub struct Model {
+    /// Primary key (UUIDv7)
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: String,
+    /// Unique login email
     #[sea_orm(unique)]
     pub email: String,
+    /// Display name
     pub name: String,
     #[sea_orm(default_value = "VIEWER")]
     pub role: Role,

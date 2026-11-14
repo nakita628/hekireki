@@ -4145,3 +4145,86 @@ class OrphanEntity(
     })
   })
 })
+
+describe('doc comments', () => {
+  const schema = `/// What a user may do.
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+/// A person who signs in.
+///
+/// Kept after they leave.
+/// @z.strict
+model User {
+  /// @z.int()
+  id   Int    @id @default(autoincrement())
+  /// Shown as is: /* not a comment */ and a lone */ too.
+  name String
+  /// What they may do.
+  role Role
+}
+`
+
+  it('writes the prose of model, field and enum comments as KDoc', () => {
+    const { datamodel, plan } = fixture(schema)
+    expect(tableFile(plan, model(datamodel, 'User'))).toStrictEqual({
+      fileName: 'UserTable.kt',
+      code: `package models
+
+import org.jetbrains.exposed.v1.core.dao.id.IdTable
+
+/**
+ * A person who signs in.
+ *
+ * Kept after they leave.
+ */
+object UserTable : IdTable<Int>("\\"User\\"") {
+    override val id = integer("id").autoIncrement().entityId()
+    /** Shown as is: /\\* not a comment *\\/ and a lone *\\/ too. */
+    val name = text("name")
+    /** What they may do. */
+    val role = pgEnum("role", "\\"Role\\"", Role.entries, Role::dbName)
+    override val primaryKey = PrimaryKey(id, name = "\\"User_pkey\\"")
+}
+`,
+    })
+    expect(entityFile(plan, model(datamodel, 'User'))).toStrictEqual({
+      fileName: 'UserEntity.kt',
+      code: `package models
+
+import org.jetbrains.exposed.v1.core.dao.id.EntityID
+import org.jetbrains.exposed.v1.dao.Entity
+import org.jetbrains.exposed.v1.dao.EntityClass
+
+/**
+ * A person who signs in.
+ *
+ * Kept after they leave.
+ */
+class UserEntity(
+    id: EntityID<Int>,
+) : Entity<Int>(id) {
+    companion object : EntityClass<Int, UserEntity>(UserTable)
+
+    var name by UserTable.name
+    var role by UserTable.role
+}
+`,
+    })
+    expect(enumFile(plan, enumOf(datamodel, 'Role'))).toStrictEqual({
+      fileName: 'Role.kt',
+      code: `package models
+
+/** What a user may do. */
+enum class Role(
+    val dbName: String,
+) {
+    ADMIN("ADMIN"),
+    MEMBER("MEMBER"),
+}
+`,
+    })
+  })
+})

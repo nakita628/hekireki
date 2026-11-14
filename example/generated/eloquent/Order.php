@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/** BigInt autoincrement primary key (bigserial) and money as Decimal. */
 class Order extends Model
 {
     use PrismaDates;

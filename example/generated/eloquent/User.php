@@ -7,6 +7,15 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
+/**
+ * Application user. Fully annotated for every validator generator,
+ * with a UUIDv7 primary key, enum default, scalar list, @map columns,
+ * @updatedAt, and relations of every cardinality.
+ *
+ * @property string $id Primary key (UUIDv7)
+ * @property string $email Unique login email
+ * @property string $name Display name
+ */
 class User extends Model
 {
     use HasUuids;

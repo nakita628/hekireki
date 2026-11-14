@@ -4,6 +4,9 @@ using System;
 
 namespace Example.Models;
 
+/// <summary>
+/// Composite primary key + two named relations to the same model.
+/// </summary>
 public partial class Follow
 {
     public string FollowerId { get; set; } = null!;

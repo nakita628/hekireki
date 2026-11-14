@@ -4,6 +4,11 @@ using System;
 
 namespace Example.Models;
 
+/// <summary>
+/// One-to-one relation with native @db.* types, literal defaults,
+/// and optional scalars of every flavour. ConfigDict passthrough: the
+/// Pydantic model rejects unknown keys (extra='forbid').
+/// </summary>
 public partial class Profile
 {
     public string Id { get; set; } = null!;

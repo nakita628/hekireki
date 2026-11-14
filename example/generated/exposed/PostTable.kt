@@ -6,8 +6,14 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.UUID
 
+/**
+ * @@map + @map column names, FK with a referential action,
+ * mapped-enum default, and an implicit many-to-many to Tag.
+ */
 object PostTable : IdTable<String>("posts") {
+    /** Primary key */
     override val id = text("id").clientDefault { UUID.randomUUID().toString() }.entityId()
+    /** Article title */
     val title = text("title")
     val content = text("content").nullable()
     val visibility = pgEnum("visibility", "\"visibility_level\"", Visibility.entries, Visibility::dbName).default(Visibility.LINK_ONLY)

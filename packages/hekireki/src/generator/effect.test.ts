@@ -90,7 +90,9 @@ describe('effectCode', () => {
   it('emits every model schema, without the relation schemas', () => {
     expect(effectCode(dmmf, true, false)).toBe(`import { Schema } from 'effect'
 
+/** A person. */
 export const UserSchema = Schema.Struct({
+  /** Primary key. */
   id: Schema.Number,
   name: Schema.String,
   role: Schema.Literal('USER', 'ADMIN'),
@@ -110,7 +112,9 @@ export type BlogPost = typeof BlogPostSchema.Type`)
   it('appends the relation schemas after a blank line', () => {
     expect(effectCode(dmmf, true, true)).toBe(`import { Schema } from 'effect'
 
+/** A person. */
 export const UserSchema = Schema.Struct({
+  /** Primary key. */
   id: Schema.Number,
   name: Schema.String,
   role: Schema.Literal('USER', 'ADMIN'),

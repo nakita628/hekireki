@@ -1880,3 +1880,57 @@ export const invoice = sqliteTable('Invoice', { id: integer('id').primaryKey(), 
 export const relations = defineRelations({ user, subscription, invoice }, (r) => ({ user: { parentSubscription: r.one.subscription({ from: r.user.parentSubscriptionId, to: r.subscription.id, alias: 'ChildUsers' }), subscriptions: r.one.subscription({ from: r.user.id, to: r.subscription.userId, alias: 'SubscriptionToUser' }) }, subscription: { user: r.one.user({ from: r.subscription.userId, to: r.user.id, optional: false, alias: 'SubscriptionToUser' }), childUsers: r.many.user({ alias: 'ChildUsers' }) }, invoice: { subscription: r.one.subscription({ from: r.invoice.subscriptionId, to: r.subscription.id, optional: false }) } }))`)
   })
 })
+
+describe('drizzleSchema doc comments', () => {
+  const datamodel = makeDatamodel(
+    [
+      makeModel({
+        name: 'User',
+        documentation: 'A person who signs in.\n\nKept after they leave.\n@z.strict()',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true, documentation: 'The key.' }),
+          makeField({ name: 'email', type: 'String', documentation: '@z.email()' }),
+          makeField({ name: 'note', type: 'String', documentation: 'Ends a block: */ here.' }),
+          makeField({ name: 'role', kind: 'enum', type: 'Role' }),
+        ],
+      }),
+      makeModel({
+        name: 'Tag',
+        documentation: '@z.strict()',
+        fields: [makeField({ name: 'id', type: 'Int', isId: true, documentation: '@z.int()' })],
+      }),
+    ],
+    [
+      {
+        name: 'Role',
+        values: [{ name: 'ADMIN', dbName: null }],
+        dbName: null,
+        documentation: 'What a user may do.',
+      },
+    ],
+  )
+
+  it('should write the prose of model, field and enum docs as JSDoc', () => {
+    expect(drizzleSchema(datamodel, 'postgresql', []))
+      .toBe(`import { integer, pgEnum, pgTable, text } from 'drizzle-orm/pg-core'
+
+/** What a user may do. */
+export const roleEnum = pgEnum('Role', ['ADMIN'])
+
+/**
+ * A person who signs in.
+ *
+ * Kept after they leave.
+ */
+export const user = pgTable('User', {
+  /** The key. */
+  id: integer('id').primaryKey(),
+  email: text('email').notNull(),
+  /** Ends a block: *\\/ here. */
+  note: text('note').notNull(),
+  role: roleEnum('role').notNull(),
+})
+
+export const tag = pgTable('Tag', { id: integer('id').primaryKey() })`)
+  })
+})

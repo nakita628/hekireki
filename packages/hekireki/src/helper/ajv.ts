@@ -1,4 +1,4 @@
-import { makeValidationExtractor } from '../utils/index.js'
+import { docBlockLines, makeValidationExtractor } from '../utils/index.js'
 import { validationSchemas } from '../utils/validation-schema.js'
 
 export function makeAjvInfer(modelName: string) {
@@ -28,13 +28,17 @@ export function makeAjvSchemas(
     readonly fieldName: string
     readonly validation: string | null
     readonly isRequired: boolean
+    readonly comment?: string
   }[],
   objectType?: 'strict' | 'loose',
 ) {
   const modelName = modelFields[0]?.modelName ?? ''
   const properties = modelFields
-    .map(
-      (field) => `    ${field.fieldName}: ${field.validation ?? "{ type: 'unknown' as const }"},`,
+    .map((field) =>
+      [
+        ...docBlockLines(field.comment, '    '),
+        `    ${field.fieldName}: ${field.validation ?? "{ type: 'unknown' as const }"},`,
+      ].join('\n'),
     )
     .join('\n')
   const requiredFields = modelFields.filter((f) => f.isRequired).map((f) => f.fieldName)

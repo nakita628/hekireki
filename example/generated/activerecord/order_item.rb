@@ -1,3 +1,4 @@
+# Child of Order with a composite unique constraint.
 class OrderItem < ApplicationRecord
   attribute :qty, default: 1
 

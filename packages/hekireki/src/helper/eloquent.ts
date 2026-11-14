@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { makePascalCase } from '../utils/index.js'
+import { docBlockLines, makePascalCase, stripAnnotations } from '../utils/index.js'
 import { fieldColumn, relationEnds } from '../utils/prisma-model.js'
 import { ELOQUENT_MODEL_METHODS } from './eloquent-model-methods.js'
 
@@ -24,8 +24,29 @@ function phpString(value: string) {
   return `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`
 }
 
-// A doc comment as a PHPDoc block, or nothing. A `*/` in the text would end the block: it is
-// written `*\/`.
+// The type an attribute reads as through its cast, for the `@property` tag that carries a field's
+// prose. A list other than DateTime[] has no cast and reads as the driver hands it over.
+function phpPropertyType(field: DMMF.Field, enumNames: ReadonlySet<string>) {
+  const type = field.isList
+    ? field.type === 'DateTime'
+      ? 'list<\\Carbon\\CarbonInterface>'
+      : 'mixed'
+    : field.kind === 'enum' && enumNames.has(field.type)
+      ? field.type
+      : field.type === 'Int' || field.type === 'BigInt'
+        ? 'int'
+        : field.type === 'Float'
+          ? 'float'
+          : field.type === 'Boolean'
+            ? 'bool'
+            : field.type === 'DateTime'
+              ? '\\Carbon\\CarbonInterface'
+              : field.type === 'Json'
+                ? 'mixed'
+                : 'string'
+  return type === 'mixed' || field.isRequired ? type : `${type}|null`
+}
+
 /**
  * What Eloquent keys a model by: its `@id`, or its `@@id`, or where it has neither, the first
  * unique of required fields (Prisma requires a model without an id to have one). One field is
@@ -933,6 +954,7 @@ export function eloquentEnum(enumDef: DMMF.DatamodelEnum, namespace: string) {
     '',
     `namespace ${namespace};`,
     '',
+    ...docBlockLines(stripAnnotations(enumDef.documentation), ''),
     `enum ${enumDef.name}: string`,
     '{',
     // `class` is the one name PHP keeps from a case (`Role::class` is the enum's name): the
@@ -987,6 +1009,11 @@ export function eloquentModelCodes(
   }
   return models.map((model) => {
     const associations = getAssociations(model, contextModels)
+    const relationDoc = (name: string) =>
+      docBlockLines(
+        stripAnnotations(model.fields.find((f) => f.name === name)?.documentation),
+        '    ',
+      )
     const tableName = model.dbName ?? model.name
     const key = modelKey(model)
     const idField = key.field
@@ -1218,6 +1245,7 @@ export function eloquentModelCodes(
     const belongsToMethods = associations.belongsTo.map((a) => {
       const ownerKeyArg = a.ownerKeyColumn === null ? '' : `, ${phpString(a.ownerKeyColumn)}`
       return [
+        ...relationDoc(a.name),
         `    public function ${a.name}(): ${ref(`${RELATIONS}BelongsTo`)}`,
         '    {',
         `        return $this->belongsTo(${makePascalCase(a.targetModel)}::class, ${phpString(a.foreignKeyColumn)}${ownerKeyArg});`,
@@ -1228,6 +1256,7 @@ export function eloquentModelCodes(
     const hasOneMethods = associations.hasOne.map((a) => {
       const localKeyArg = a.localKeyColumn === null ? '' : `, ${phpString(a.localKeyColumn)}`
       return [
+        ...relationDoc(a.name),
         `    public function ${a.name}(): ${ref(`${RELATIONS}HasOne`)}`,
         '    {',
         `        return $this->hasOne(${makePascalCase(a.targetModel)}::class, ${phpString(a.foreignKeyColumn)}${localKeyArg});`,
@@ -1238,6 +1267,7 @@ export function eloquentModelCodes(
     const hasManyMethods = associations.hasMany.map((a) => {
       const localKeyArg = a.localKeyColumn === null ? '' : `, ${phpString(a.localKeyColumn)}`
       return [
+        ...relationDoc(a.name),
         `    public function ${a.name}(): ${ref(`${RELATIONS}HasMany`)}`,
         '    {',
         `        return $this->hasMany(${makePascalCase(a.targetModel)}::class, ${phpString(a.foreignKeyColumn)}${localKeyArg});`,
@@ -1246,6 +1276,7 @@ export function eloquentModelCodes(
     })
 
     const belongsToManyMethods = associations.belongsToMany.map((a) => [
+      ...relationDoc(a.name),
       `    public function ${a.name}(): ${ref(`${RELATIONS}BelongsToMany`)}`,
       '    {',
       `        return $this->belongsToMany(${makePascalCase(a.targetModel)}::class, ${phpString(a.joinTable)}, '${a.foreignPivotKey}', '${a.relatedPivotKey}');`,
@@ -1348,6 +1379,19 @@ export function eloquentModelCodes(
 
     const bodyBlocks = [...propertyBlocks, ...methodBlocks]
 
+    // Eloquent reads a column through `__get`, so a field's prose is the description of its
+    // `@property` tag, the form IDEs and Larastan read.
+    const propertyTags = model.fields.flatMap((f) => {
+      const text =
+        f.kind === 'scalar' || f.kind === 'enum' ? stripAnnotations(f.documentation) : undefined
+      return text === undefined
+        ? []
+        : [`@property ${phpPropertyType(f, enumNames)} $${f.dbName ?? f.name} ${text}`]
+    })
+    const classDoc = [stripAnnotations(model.documentation), propertyTags.join('\n')]
+      .filter((part) => part !== undefined && part !== '')
+      .join('\n\n')
+
     const lines = [
       '<?php',
       '',
@@ -1355,6 +1399,7 @@ export function eloquentModelCodes(
       '',
       ...imports.map((fqcn) => `use ${fqcn};`),
       '',
+      ...docBlockLines(classDoc === '' ? undefined : classDoc, ''),
       `class ${makePascalCase(model.name)} extends ${ref(MODEL)}`,
       '{',
       // oxlint-disable-next-line oxc/no-map-spread -- one blank separator per block, not an accumulator

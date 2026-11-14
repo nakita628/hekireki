@@ -1,4 +1,5 @@
 import type { DMMF } from '@prisma/generator-helper'
+import { getDMMF } from '@prisma/get-dmmf'
 import { describe, expect, it } from 'vite-plus/test'
 
 import { PRISMA_DATE_TIME_RS } from '../helper/sea-orm.js'
@@ -108,10 +109,12 @@ pub enum Role {
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
+/// A person.
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[sea_orm(table_name = "User")]
 pub struct Model {
+    /// Primary key.
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: i32,
     pub name: String,
@@ -263,5 +266,111 @@ pub mod prisma_date_time;
 `,
       },
     ])
+  })
+})
+
+describe('doc comments', () => {
+  it('writes the prose of /// comments as Rust doc comments on the enum, the model and its fields', () => {
+    const dmmf = getDMMF({
+      datamodel: [
+        [
+          'schema.prisma',
+          `datasource db {
+  provider = "postgresql"
+}
+/// A person.
+///
+/// Second paragraph */ with \\\\ backslash.
+model User {
+  /// The key.
+  id        Int      @id
+  /// @z.string()
+  name      String
+  /// When they joined.
+  /// Two lines.
+  createdAt DateTime @default(now())
+  /// Their posts.
+  posts     Post[]
+  tone      Tone
+}
+model Post {
+  id       Int  @id
+  /// Who wrote it.
+  authorId Int
+  /// The author.
+  author   User @relation(fields: [authorId], references: [id])
+}
+/// How loud.
+enum Tone {
+  CALM
+}
+`,
+        ],
+      ],
+    })
+    if ('type' in dmmf) throw new Error(dmmf.error.message)
+    const { models: documented, enums: documentedEnums } = dmmf.datamodel
+    const files = seaOrmFiles(documented, documentedEnums)
+    expect(files.find((file) => file.fileName === 'tone.rs')?.code)
+      .toBe(`use sea_orm::entity::prelude::*;
+use serde::{Deserialize, Serialize};
+
+/// How loud.
+#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
+#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "Tone")]
+pub enum Tone {
+    #[sea_orm(string_value = "CALM")]
+    Calm,
+}
+`)
+    expect(files.find((file) => file.fileName === 'user.rs')?.code).toBe(`use super::tone::Tone;
+use chrono::SubsecRound;
+use sea_orm::entity::prelude::*;
+use sea_orm::Set;
+use serde::{Deserialize, Serialize};
+
+/// A person.
+///
+/// Second paragraph */ with \\\\ backslash.
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
+#[sea_orm(table_name = "User")]
+pub struct Model {
+    /// The key.
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub id: i32,
+    pub name: String,
+    /// When they joined.
+    /// Two lines.
+    #[sea_orm(column_name = "createdAt")]
+    pub created_at: DateTime,
+    pub tone: Tone,
+}
+
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(has_many = "super::post::Entity")]
+    Posts,
+}
+
+impl Related<super::post::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Posts.def()
+    }
+}
+
+#[async_trait::async_trait]
+impl ActiveModelBehavior for ActiveModel {
+    async fn before_save<C>(mut self, _db: &C, insert: bool) -> Result<Self, DbErr>
+    where
+        C: ConnectionTrait,
+    {
+        let now = chrono::Utc::now().trunc_subsecs(3);
+        if insert && self.created_at.is_not_set() {
+            self.created_at = Set(now.naive_utc());
+        }
+        Ok(self)
+    }
+}
+`)
   })
 })

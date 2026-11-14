@@ -90,7 +90,9 @@ describe('zodCode', () => {
   it('emits every model schema, without the relation schemas', () => {
     expect(zodCode(dmmf, true, false, '4')).toBe(`import * as z from 'zod'
 
+/** A person. */
 export const UserSchema = z.object({
+  /** Primary key. */
   id: z.number(),
   name: z.string(),
   role: z.enum(['USER', 'ADMIN'])
@@ -110,7 +112,9 @@ export type BlogPost = z.infer<typeof BlogPostSchema>`)
   it('appends the relation schemas after a blank line', () => {
     expect(zodCode(dmmf, true, true, '4')).toBe(`import * as z from 'zod'
 
+/** A person. */
 export const UserSchema = z.object({
+  /** Primary key. */
   id: z.number(),
   name: z.string(),
   role: z.enum(['USER', 'ADMIN'])

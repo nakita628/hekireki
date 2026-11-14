@@ -1,3 +1,10 @@
+# Application user. Fully annotated for every validator generator,
+# with a UUIDv7 primary key, enum default, scalar list, @map columns,
+# @updatedAt, and relations of every cardinality.
+#
+# id:: Primary key (UUIDv7)
+# email:: Unique login email
+# name:: Display name
 class User < ApplicationRecord
   attribute :id, default: -> { SecureRandom.uuid_v7 }
   attribute :interests, default: -> { [] }

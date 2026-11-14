@@ -1,4 +1,4 @@
-import { makeValidationExtractor, schemaFromFields } from '../utils/index.js'
+import { docBlockLines, makeValidationExtractor, schemaFromFields } from '../utils/index.js'
 import { validationSchemas } from '../utils/validation-schema.js'
 
 export function makeEffectInfer(modelName: string) {
@@ -16,10 +16,16 @@ export function makeEffectProperties(
     readonly fieldName: string
     readonly validation: string | null
     readonly isRequired: boolean
+    readonly comment?: string
   }[],
 ) {
   return fields
-    .map((field) => `  ${field.fieldName}: ${field.validation ?? 'Schema.Unknown'},`)
+    .map((field) =>
+      [
+        ...docBlockLines(field.comment, '  '),
+        `  ${field.fieldName}: ${field.validation ?? 'Schema.Unknown'},`,
+      ].join('\n'),
+    )
     .join('\n')
 }
 
@@ -46,6 +52,7 @@ export function makeEffectSchemas(
     readonly fieldName: string
     readonly validation: string | null
     readonly isRequired: boolean
+    readonly comment?: string
   }[],
 ) {
   return schemaFromFields(modelFields, makeEffectSchema, makeEffectProperties)

@@ -1113,3 +1113,146 @@ model Post {
     expect(code).toContain('\tUser    *User  `gorm:"foreignKey:UserID1;references:UserID"`')
   })
 })
+
+describe('doc comments', () => {
+  it('writes the prose of /// comments as Go comments, keeping the struct gofmt-clean', () => {
+    const dmmf = getDMMF({
+      datamodel: [
+        [
+          'schema.prisma',
+          `datasource db {
+  provider = "postgresql"
+}
+/// A person.
+///
+/// Second paragraph */ with \\\\ backslash.
+model User {
+  /// The key.
+  id        Int      @id
+  /// @z.string()
+  name      String
+  /// When they joined.
+  /// Two lines.
+  createdAt DateTime @default(now())
+  /// Their posts.
+  posts     Post[]
+  tone      Tone
+}
+model Post {
+  id       Int  @id
+  /// Who wrote it.
+  authorId Int
+  /// The author.
+  author   User @relation(fields: [authorId], references: [id])
+}
+/// How loud.
+enum Tone {
+  CALM
+}
+`,
+        ],
+      ],
+    })
+    if ('type' in dmmf) throw new Error(dmmf.error.message)
+    const { models, enums, indexes } = dmmf.datamodel
+    expect(generateGormModels(models, enums, indexes)).toBe(`package model
+
+import (
+	"database/sql/driver"
+	"fmt"
+	"strconv"
+	"time"
+
+	"gorm.io/gorm"
+)
+
+// A person.
+//
+// Second paragraph */ with \\\\ backslash.
+type User struct {
+	// The key.
+	ID   int    \`gorm:"column:id;primaryKey" json:"id"\`
+	Name string \`gorm:"column:name;not null" json:"name"\`
+	// When they joined.
+	// Two lines.
+	CreatedAt DateTime \`gorm:"column:createdAt;autoCreateTime:false;not null" json:"createdAt"\`
+	Tone      string   \`gorm:"column:tone;not null" json:"tone"\`
+	// Their posts.
+	Posts []Post \`gorm:"foreignKey:AuthorID"\`
+}
+
+func (User) TableName() string {
+	return "User"
+}
+
+func (m *User) BeforeCreate(tx *gorm.DB) error {
+	now := tx.NowFunc().UTC().Truncate(time.Millisecond)
+	if m.CreatedAt.IsZero() {
+		m.CreatedAt = DateTime{Time: now}
+	}
+	return nil
+}
+
+type Post struct {
+	ID int \`gorm:"column:id;primaryKey" json:"id"\`
+	// Who wrote it.
+	AuthorID int \`gorm:"column:authorId;not null" json:"authorId"\`
+	// The author.
+	Author *User \`gorm:"foreignKey:AuthorID"\`
+}
+
+func (Post) TableName() string {
+	return "Post"
+}
+
+type DateTime struct{ time.Time }
+
+func (DateTime) GormDataType() string {
+	return "time"
+}
+
+func (dateTime DateTime) Value() (driver.Value, error) {
+	return dateTime.UTC().Truncate(time.Millisecond), nil
+}
+
+func (dateTime *DateTime) Scan(src any) error {
+	read, err := readPrismaTime(src)
+	dateTime.Time = read
+	return err
+}
+
+var prismaTimeLayouts = []string{
+	"2006-01-02T15:04:05.999999999Z07:00",
+	"2006-01-02 15:04:05.999999999Z07:00",
+	"2006-01-02 15:04:05.999999999Z07",
+	"2006-01-02T15:04:05.999999999",
+	"2006-01-02 15:04:05.999999999",
+	"2006-01-02",
+}
+
+func readPrismaTime(src any) (time.Time, error) {
+	switch value := src.(type) {
+	case nil:
+		return time.Time{}, nil
+	case time.Time:
+		return value.UTC().Truncate(time.Millisecond), nil
+	case int64:
+		return time.UnixMilli(value).UTC(), nil
+	case []byte:
+		return readPrismaTime(string(value))
+	case string:
+		if millis, err := strconv.ParseInt(value, 10, 64); err == nil {
+			return time.UnixMilli(millis).UTC(), nil
+		}
+		for _, layout := range prismaTimeLayouts {
+			if read, err := time.Parse(layout, value); err == nil {
+				return read.UTC().Truncate(time.Millisecond), nil
+			}
+		}
+		return time.Time{}, fmt.Errorf("a DateTime column held %q", value)
+	}
+	return time.Time{}, fmt.Errorf("a DateTime column held %T", src)
+}
+`)
+  })
+})

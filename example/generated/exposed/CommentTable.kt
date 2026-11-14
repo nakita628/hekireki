@@ -5,6 +5,10 @@ import org.jetbrains.exposed.v1.core.dao.id.IdTable
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
+/**
+ * Two foreign keys with different referential actions
+ * (Cascade vs SetNull) and a composite index.
+ */
 object CommentTable : IdTable<Int>("comments") {
     override val id = integer("id").autoIncrement().entityId()
     val body = text("body")

@@ -124,6 +124,7 @@ ksuid
 ktlint
 kysely
 kysely's
+larastan
 lezer
 librt
 lucsky

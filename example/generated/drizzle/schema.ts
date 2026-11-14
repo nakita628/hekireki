@@ -40,17 +40,31 @@ const utcNow = (() => {
   }
 })()
 
+/** User role. No @map: the value names are stored verbatim. */
 export const roleEnum = pgEnum('Role', ['ADMIN', 'EDITOR', 'VIEWER'])
 
+/**
+ * Enum with @map on every value and @@map on the enum itself:
+ * the database stores the mapped values ("link_only"), while
+ * generators receive the Prisma-level names ("LINK_ONLY").
+ */
 export const visibilityEnum = pgEnum('visibility_level', ['public', 'private', 'link_only'])
 
+/**
+ * Application user. Fully annotated for every validator generator,
+ * with a UUIDv7 primary key, enum default, scalar list, @map columns,
+ * @updatedAt, and relations of every cardinality.
+ */
 export const users = pgTable(
   'users',
   {
+    /** Primary key (UUIDv7) */
     id: text('id')
       .primaryKey()
       .$defaultFn(() => uuidv7()),
+    /** Unique login email */
     email: text('email').notNull(),
+    /** Display name */
     name: text('name').notNull(),
     role: roleEnum('role').notNull().default('VIEWER'),
     interests: text('interests').array().default([]),
@@ -63,6 +77,11 @@ export const users = pgTable(
   (table) => [uniqueIndex('users_email_key').on(table.email)],
 )
 
+/**
+ * One-to-one relation with native @db.* types, literal defaults,
+ * and optional scalars of every flavour. ConfigDict passthrough: the
+ * Pydantic model rejects unknown keys (extra='forbid').
+ */
 export const profile = pgTable(
   'Profile',
   {
@@ -91,12 +110,18 @@ export const profile = pgTable(
   ],
 )
 
+/**
+ * @@map + @map column names, FK with a referential action,
+ * mapped-enum default, and an implicit many-to-many to Tag.
+ */
 export const posts = pgTable(
   'posts',
   {
+    /** Primary key */
     id: text('id')
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
+    /** Article title */
     title: text('title').notNull(),
     content: text('content'),
     visibility: visibilityEnum('visibility').notNull().default('link_only'),
@@ -120,12 +145,17 @@ export const posts = pgTable(
   ],
 )
 
+/** Implicit many-to-many partner of Post (join table `_PostToTag`). */
 export const tag = pgTable(
   'Tag',
   { id: serial('id').primaryKey(), label: text('label').notNull() },
   (table) => [uniqueIndex('Tag_label_key').on(table.label)],
 )
 
+/**
+ * Two foreign keys with different referential actions
+ * (Cascade vs SetNull) and a composite index.
+ */
 export const comments = pgTable(
   'comments',
   {
@@ -157,6 +187,7 @@ export const comments = pgTable(
   ],
 )
 
+/** Composite primary key + two named relations to the same model. */
 export const follows = pgTable(
   'follows',
   {
@@ -186,6 +217,7 @@ export const follows = pgTable(
   ],
 )
 
+/** Self-relation (adjacency-list tree) with a composite unique. */
 export const category = pgTable(
   'Category',
   { id: serial('id').primaryKey(), name: text('name').notNull(), parentId: integer('parent_id') },
@@ -201,6 +233,7 @@ export const category = pgTable(
   ],
 )
 
+/** BigInt autoincrement primary key (bigserial) and money as Decimal. */
 export const orders = pgTable(
   'orders',
   {
@@ -219,6 +252,7 @@ export const orders = pgTable(
   ],
 )
 
+/** Child of Order with a composite unique constraint. */
 export const orderItems = pgTable(
   'order_items',
   {
@@ -240,6 +274,7 @@ export const orderItems = pgTable(
   ],
 )
 
+/** DB-side generated defaults (dbgenerated) plus Json / Bytes payloads. */
 export const auditLogs = pgTable('audit_logs', {
   id: uuid('id')
     .primaryKey()
@@ -252,6 +287,10 @@ export const auditLogs = pgTable('audit_logs', {
     .default(sql`now()`),
 })
 
+/**
+ * Named implicit many-to-many: the join table is `_cast`,
+ * not `_ActorToFilm`.
+ */
 export const actor = pgTable('Actor', {
   id: serial('id').primaryKey(),
   name: text('name').notNull(),

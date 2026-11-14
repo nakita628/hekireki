@@ -37,6 +37,12 @@ model User {
 }
 ```
 
+The rest of a `///` comment, the prose without those lines, is written into the code each
+generator emits, above the model, the field or the enum it documents, as a comment of that
+language: JSDoc in TypeScript, docstrings in Python, `//` in Go, `///` in Rust, `<summary>` in C#,
+KDoc in Kotlin, PHPDoc in PHP (a column's as its `@property` tag), `@moduledoc` and `#` in Elixir,
+and `#` in Ruby (a column's as an entry `name:: prose` above the class) and in Atlas HCL.
+
 ## Generators
 
 The `provider` of the generator block picks the output. Every option is optional.

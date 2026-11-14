@@ -1,6 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { pluralize } from '../utils/humanizer.js'
+import { stripAnnotations } from '../utils/index.js'
 import { allocate, pascalCase } from '../utils/naming.js'
 import { exprRef, typeRef } from '../utils/placeholder.js'
 import {
@@ -997,6 +998,20 @@ type EfCorePlan = {
   readonly manyToMany: readonly ManyToMany[]
 }
 
+// The `///` prose of the schema as an XML doc comment. The text is XML, so `&`, `<` and `>` are
+// escaped; a blank line stays a bare `///`.
+function summaryLines(documentation: string | undefined, indent: string) {
+  const text = stripAnnotations(documentation)
+  if (text === undefined) return []
+  const body = text
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .split('\n')
+    .map((line) => (line === '' ? `${indent}///` : `${indent}/// ${line}`))
+  return [`${indent}/// <summary>`, ...body, `${indent}/// </summary>`]
+}
+
 function fieldPlan(plan: EfCorePlan, field: DMMF.Field) {
   const clr = fieldMapping(field, plan.names, plan.provider)
   return { clr, def: defaultPlan(field, clr, plan.names, plan.enums) }
@@ -1049,7 +1064,11 @@ export function planEfCore(
     readonly enums: readonly DMMF.DatamodelEnum[]
     readonly indexes?: readonly DMMF.Index[]
   },
-  options: { readonly namespace: string; readonly context: string; readonly provider: Provider },
+  options: {
+    readonly namespace: string
+    readonly context: string
+    readonly provider: Provider
+  },
 ): EfCorePlan {
   // DMMF leaves an `@ignore` field out of the model, but not out of an index that lists it: the
   // entity has no property for such an index to name, so it is left out with the field.
@@ -1109,6 +1128,7 @@ function memberType(plan: EfCorePlan, field: DMMF.Field) {
 
 function entityProperty(plan: EfCorePlan, model: DMMF.Model, field: DMMF.Field) {
   const name = propertyName(plan.names, model, field.name)
+  const summary = summaryLines(field.documentation, '    ')
   if (field.kind === 'object') {
     const target = plan.models.find((m) => m.name === field.type)
     const targetType = target
@@ -1116,12 +1136,16 @@ function entityProperty(plan: EfCorePlan, model: DMMF.Model, field: DMMF.Field) 
       : typeRef(generatedRef(plan.names, field.type))
     if (field.isList) {
       return [
+        ...summary,
         `    public virtual ${typeRef(CS.ICollection)}<${targetType}> ${name} { get; set; } = new ${typeRef(CS.List)}<${targetType}>();`,
       ]
     }
-    return field.isRequired
-      ? [`    public virtual ${targetType} ${name} { get; set; } = null!;`]
-      : [`    public virtual ${targetType}? ${name} { get; set; }`]
+    return [
+      ...summary,
+      field.isRequired
+        ? `    public virtual ${targetType} ${name} { get; set; } = null!;`
+        : `    public virtual ${targetType}? ${name} { get; set; }`,
+    ]
   }
   const { clr, def } = fieldPlan(plan, field)
   const type = field.isList
@@ -1137,8 +1161,8 @@ function entityProperty(plan: EfCorePlan, model: DMMF.Model, field: DMMF.Field) 
         : !field.isList && field.isRequired && !clr.isValueType
           ? ' = null!;'
           : ''
-  const line = `    public ${type} ${name} { get; set; }${initializer}`
-  return def?.kind === 'initializer' ? withCuidV1(def.generator, [line]) : [line]
+  const lines = [...summary, `    public ${type} ${name} { get; set; }${initializer}`]
+  return def?.kind === 'initializer' ? withCuidV1(def.generator, lines) : lines
 }
 
 /**
@@ -1152,6 +1176,7 @@ export function entityFile(plan: EfCorePlan, model: DMMF.Model) {
   const name = className(plan.names, model)
   const fields = model.fields.filter((f) => f.kind !== 'unsupported')
   const body = [
+    ...summaryLines(model.documentation, ''),
     `public partial class ${name}`,
     '{',
     ...joinBlocks(fields.map((f) => entityProperty(plan, model, f))),
@@ -1188,7 +1213,14 @@ export function enumFile(plan: EfCorePlan, e: DMMF.DatamodelEnum) {
       : []),
     `    ${plan.names.enumMembers.get(e.name)?.get(value.name) ?? value.name},`,
   ])
-  const body = [`public enum ${name}`, '{', ...joinBlocks(members), '}', ''].join('\n')
+  const body = [
+    ...summaryLines(e.documentation, ''),
+    `public enum ${name}`,
+    '{',
+    ...joinBlocks(members),
+    '}',
+    '',
+  ].join('\n')
   return {
     fileName: `${name}.cs`,
     code: renderFile(body, {

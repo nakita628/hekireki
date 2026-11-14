@@ -1,4 +1,4 @@
-import { makeValidationExtractor, schemaFromFields } from '../utils/index.js'
+import { docBlockLines, makeValidationExtractor, schemaFromFields } from '../utils/index.js'
 import { validationSchemas } from '../utils/validation-schema.js'
 
 export function makeArktypeInfer(modelName: string) {
@@ -26,10 +26,16 @@ export function makeArktypeProperties(
     readonly fieldName: string
     readonly validation: string | null
     readonly isRequired: boolean
+    readonly comment?: string
   }[],
 ) {
   return fields
-    .map((field) => `  ${field.fieldName}: ${field.validation ?? '"unknown"'},`)
+    .map((field) =>
+      [
+        ...docBlockLines(field.comment, '  '),
+        `  ${field.fieldName}: ${field.validation ?? '"unknown"'},`,
+      ].join('\n'),
+    )
     .join('\n')
 }
 
@@ -56,6 +62,7 @@ export function makeArktypeSchemas(
     readonly fieldName: string
     readonly validation: string | null
     readonly isRequired: boolean
+    readonly comment?: string
   }[],
   objectType?: 'strict' | 'loose',
 ) {

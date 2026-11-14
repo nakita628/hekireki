@@ -5,6 +5,7 @@ import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.dao.CompositeEntity
 import org.jetbrains.exposed.v1.dao.CompositeEntityClass
 
+/** Composite primary key + two named relations to the same model. */
 class FollowEntity(
     id: EntityID<CompositeID>,
 ) : CompositeEntity(id) {

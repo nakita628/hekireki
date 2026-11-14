@@ -4,6 +4,9 @@ using System.Collections.Generic;
 
 namespace Example.Models;
 
+/// <summary>
+/// Implicit many-to-many partner of Post (join table `_PostToTag`).
+/// </summary>
 public partial class Tag
 {
     public int Id { get; set; }

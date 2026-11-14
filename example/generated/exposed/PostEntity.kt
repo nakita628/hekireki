@@ -4,6 +4,10 @@ import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.dao.Entity
 import org.jetbrains.exposed.v1.dao.EntityClass
 
+/**
+ * @@map + @map column names, FK with a referential action,
+ * mapped-enum default, and an implicit many-to-many to Tag.
+ */
 class PostEntity(
     id: EntityID<String>,
 ) : Entity<String>(id) {

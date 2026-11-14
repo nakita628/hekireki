@@ -1,3 +1,5 @@
+# Named implicit many-to-many: the join table is `_cast`,
+# not `_ActorToFilm`.
 class Actor < ApplicationRecord
   self.table_name = "Actor"
 

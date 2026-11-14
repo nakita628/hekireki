@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { makePascalCase, makeSnakeCase } from '../utils/index.js'
+import { makePascalCase, makeSnakeCase, stripAnnotations } from '../utils/index.js'
 import {
   backRelation,
   isAutoincrement,
@@ -10,7 +10,12 @@ import {
   primaryKeyFields,
   uuidDefaultVersion,
 } from '../utils/prisma-model.js'
-import { jsonToPythonLiteral, PYTHON_KEYWORDS, toPythonString } from '../utils/python.js'
+import {
+  jsonToPythonLiteral,
+  PYTHON_KEYWORDS,
+  pythonDocstringLines,
+  toPythonString,
+} from '../utils/python.js'
 
 const PRISMA_TO_DJANGO: { [k: string]: string } = {
   String: 'TextField',
@@ -1105,6 +1110,16 @@ function coversWrittenFields(model: DMMF.Model, fieldNames: readonly string[]) {
   return fieldNames.every((name) => model.fields.some((f) => f.name === name))
 }
 
+function attributeDocstring(documentation: string | undefined) {
+  return pythonDocstringLines(stripAnnotations(documentation), '    ')
+}
+
+/** A class's docstring, with the blank line that parts it from the body. */
+function classDocstring(documentation: string | undefined) {
+  const lines = pythonDocstringLines(stripAnnotations(documentation), '    ')
+  return lines.length > 0 ? [...lines, ''] : []
+}
+
 export function generateModelBody(
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
@@ -1134,18 +1149,27 @@ export function generateModelBody(
     if (field.kind === 'object') {
       if (field.isList && isDeclaringM2MSide(model, field, m2mTables)) {
         const line = generateManyToManyField(model, field, allModels, m2mTables, names)
-        return line === null ? [] : [line]
+        return line === null ? [] : [line, ...attributeDocstring(field.documentation)]
       }
       return []
     }
     const isPk = field.name === singlePk
     const owner = fkByScalarName.get(field.name)
-    if (owner) return [generateForeignKeyField(model, owner, field, allModels, names, isPk)]
-    return [generateScalarField(model, field, isPk, names, provider)]
+    if (owner) {
+      return [
+        generateForeignKeyField(model, owner, field, allModels, names, isPk),
+        ...attributeDocstring(field.documentation ?? owner.documentation),
+      ]
+    }
+    return [
+      generateScalarField(model, field, isPk, names, provider),
+      ...attributeDocstring(field.documentation),
+    ]
   })
 
   return [
     `class ${makePascalCase(model.name)}(models.Model):`,
+    ...classDocstring(model.documentation),
     ...(compositePk === null ? [] : [compositePk]),
     ...fieldLines,
     ...(model.fields.some((f) => f.isUpdatedAt)
@@ -1160,6 +1184,7 @@ export function generateModelBody(
 export function generateEnumClass(enumDef: DMMF.DatamodelEnum) {
   return [
     `class ${makePascalCase(enumDef.name)}(models.TextChoices):`,
+    ...classDocstring(enumDef.documentation),
     ...enumDef.values.map(
       (v) => `    ${enumMemberName(v.name)} = ${toPythonString(v.dbName ?? v.name)}`,
     ),

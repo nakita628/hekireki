@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { makePascalCase, makeSnakeCase } from '../utils/index.js'
+import { docBlockLines, makePascalCase, makeSnakeCase, stripAnnotations } from '../utils/index.js'
 import { implicitJoinTables, isFunctionDefault } from '../utils/prisma-model.js'
 import { tsString } from '../utils/typescript.js'
 
@@ -91,15 +91,19 @@ export function makeTableInterface(
   scalarTypes: { readonly [k: string]: string },
   provider = 'postgresql',
 ) {
-  const columns = model.fields
-    .filter((field) => field.kind === 'scalar' || field.kind === 'enum')
-    .map(
-      (field) =>
-        `  ${makePropertyKey(field.dbName ?? field.name)}: ${makeColumnType(field, scalarTypes, provider)}`,
+  const columns = model.fields.flatMap((field) => {
+    if (field.kind !== 'scalar' && field.kind !== 'enum') return []
+    const lines = docBlockLines(stripAnnotations(field.documentation), '  ')
+    lines.push(
+      `  ${makePropertyKey(field.dbName ?? field.name)}: ${makeColumnType(field, scalarTypes, provider)}`,
     )
-  return columns.length > 0
-    ? `export interface ${model.name} {\n${columns.join('\n')}\n}`
-    : `export interface ${model.name} {}`
+    return lines
+  })
+  const declaration =
+    columns.length > 0
+      ? `export interface ${model.name} {\n${columns.join('\n')}\n}`
+      : `export interface ${model.name} {}`
+  return [...docBlockLines(stripAnnotations(model.documentation), ''), declaration].join('\n')
 }
 
 export function makeEnumDeclarations(
@@ -111,9 +115,11 @@ export function makeEnumDeclarations(
   )
   return enums
     .filter((e) => usedEnumNames.has(e.name))
-    .map(
-      (e) =>
+    .map((e) =>
+      [
+        ...docBlockLines(stripAnnotations(e.documentation), ''),
         `export type ${e.name} = ${e.values.map((v) => tsString(v.dbName ?? v.name)).join(' | ')}`,
+      ].join('\n'),
     )
 }
 

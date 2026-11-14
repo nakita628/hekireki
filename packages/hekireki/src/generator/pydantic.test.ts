@@ -32,7 +32,7 @@ function makeField(overrides: Partial<DMMF.Field> & { name: string; type: string
 }
 
 describe('pydanticCode', () => {
-  it('writes none of the documentation the schema has', () => {
+  it('writes the documentation the schema has as docstrings', () => {
     const code = pydanticCode(
       [
         {
@@ -64,9 +64,15 @@ describe('pydanticCode', () => {
       ],
       [],
     )
-    expect(code).not.toContain('A note.')
-    expect(code).not.toContain('Its key.')
-    expect(code).not.toContain('"""')
+    expect(code).toBe(`from pydantic import BaseModel
+
+
+class Note(BaseModel):
+    """A note."""
+
+    id: int
+    """Its key."""
+`)
   })
 
   it('should generate a basic model with required, optional, and relation fields', () => {
@@ -373,22 +379,6 @@ class Defaulted(BaseModel):
     id: int
     nickname: str
     verified: bool
-`)
-  })
-
-  it('should not emit docstrings when comment is false', () => {
-    const models = [
-      makeModel({
-        name: 'Note',
-        documentation: 'First line.',
-        fields: [makeField({ name: 'id', type: 'Int', isId: true, documentation: 'Primary key' })],
-      }),
-    ]
-    expect(pydanticCode(models, undefined)).toBe(`from pydantic import BaseModel
-
-
-class Note(BaseModel):
-    id: int
 `)
   })
 

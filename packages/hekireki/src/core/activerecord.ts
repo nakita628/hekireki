@@ -24,8 +24,6 @@ export function activerecord(options: GeneratorOptions) {
       })
     }
     const enums = options.dmmf.datamodel.enums
-    // The `///` documentation stays in the schema: a model carries no
-    // comment, so there is no `comment` option to read.
     const provider = options.datasources[0]?.activeProvider
     const files = [
       ...prismaDateTimeFiles(options.dmmf.datamodel.models, provider),

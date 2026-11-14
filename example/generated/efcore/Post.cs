@@ -5,10 +5,20 @@ using System.Collections.Generic;
 
 namespace Example.Models;
 
+/// <summary>
+/// @@map + @map column names, FK with a referential action,
+/// mapped-enum default, and an implicit many-to-many to Tag.
+/// </summary>
 public partial class Post
 {
+    /// <summary>
+    /// Primary key
+    /// </summary>
     public string Id { get; set; } = null!;
 
+    /// <summary>
+    /// Article title
+    /// </summary>
     public string Title { get; set; } = null!;
 
     public string? Content { get; set; }

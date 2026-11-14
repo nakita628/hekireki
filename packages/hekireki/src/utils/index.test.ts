@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vite-plus/test'
 
 import {
   chunks,
+  docBlockLines,
   isSameList,
   extractObjectType,
   getBool,
@@ -129,6 +130,27 @@ describe('utils', () => {
     it.concurrent('returns null when no matching prefix', () => {
       const isZod = makeValidationExtractor('@z.')
       expect(isZod('Just a comment')).toBeNull()
+    })
+  })
+
+  describe('docBlockLines', () => {
+    it('is no lines without prose', () => {
+      expect(docBlockLines(undefined, '  ')).toStrictEqual([])
+    })
+    it('indents every line and leaves a blank line bare', () => {
+      expect(docBlockLines('First.\n\nSecond.', '  ')).toStrictEqual([
+        '  /**',
+        '   * First.',
+        '   *',
+        '   * Second.',
+        '   */',
+      ])
+    })
+    it('keeps one line of prose on one line', () => {
+      expect(docBlockLines('The key.', '  ')).toStrictEqual(['  /** The key. */'])
+    })
+    it('cannot be closed early by the prose', () => {
+      expect(docBlockLines('a */ b', '')).toStrictEqual(['/** a *\\/ b */'])
     })
   })
 

@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { isSameList } from '../utils/index.js'
+import { docBlockLines, isSameList, stripAnnotations } from '../utils/index.js'
 import { allocate, pascalCase } from '../utils/naming.js'
 import { exprRef, REF, typeRef } from '../utils/placeholder.js'
 import type { ManyToMany } from '../utils/prisma-model.js'
@@ -1987,6 +1987,13 @@ function headerLines(indent: string, head: string, args: readonly string[], tail
   }
 }
 
+// Kotlin block comments nest, so a `/*` in the prose would open one that swallows the code after
+// it; a NUL would read as a placeholder.
+function kotlinDocLines(documentation: string | undefined, indent: string) {
+  const prose = stripAnnotations(documentation)
+  return textLines(docBlockLines(prose?.replaceAll('\0', '').replaceAll('/*', '/\\*'), indent))
+}
+
 function joinLines(...parts: readonly Lines[]): Lines {
   return (resolve) => parts.flatMap((part) => part(resolve))
 }
@@ -2187,6 +2194,7 @@ export function enumFile(plan: ExposedPlan, e: DMMF.DatamodelEnum) {
     ),
   )
   const content = joinLines(
+    kotlinDocLines(e.documentation, ''),
     textLines([`enum class ${name}(`, `    val dbName: ${typeRef(KT.String)},`, ') {']),
     ...entries,
     textLines(['}']),
@@ -2353,7 +2361,10 @@ function tableBlocks(plan: ExposedPlan, model: DMMF.Model) {
     const head = isKey
       ? 'override val id'
       : `val ${kotlinName(columnProperty(plan, model, field.name))}`
-    return property('    ', head, keyPartCalls(plan, model, field))
+    return joinLines(
+      kotlinDocLines(field.documentation, '    '),
+      property('    ', head, keyPartCalls(plan, model, field)),
+    )
   })
   const primaryKey =
     key.kind !== 'none' && key.index.type === 'id'
@@ -2394,7 +2405,10 @@ function tableBlocks(plan: ExposedPlan, model: DMMF.Model) {
   }
   return [
     fileBlock(
-      headerLines('', `object ${name} : ${base}`, [kotlinString(exposedTableName(model))], ' {'),
+      joinLines(
+        kotlinDocLines(model.documentation, ''),
+        headerLines('', `object ${name} : ${base}`, [kotlinString(exposedTableName(model))], ' {'),
+      ),
     ),
     fileBlock(body, scope),
     fileBlock(textLines(['}'])),
@@ -2568,7 +2582,7 @@ function entityBlocks(plan: ExposedPlan, model: DMMF.Model) {
     nestedTypes: new Set(),
   }
   return [
-    fileBlock(heading),
+    fileBlock(joinLines(kotlinDocLines(model.documentation, ''), heading)),
     fileBlock(companion),
     fileBlock(
       joinLines(

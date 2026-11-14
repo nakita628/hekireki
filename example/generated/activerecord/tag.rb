@@ -1,3 +1,4 @@
+# Implicit many-to-many partner of Post (join table `_PostToTag`).
 class Tag < ApplicationRecord
   self.table_name = "Tag"
 

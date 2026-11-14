@@ -1,6 +1,9 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
+/// One-to-one relation with native @db.* types, literal defaults,
+/// and optional scalars of every flavour. ConfigDict passthrough: the
+/// Pydantic model rejects unknown keys (extra='forbid').
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[sea_orm(table_name = "Profile")]

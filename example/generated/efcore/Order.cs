@@ -5,6 +5,9 @@ using System.Collections.Generic;
 
 namespace Example.Models;
 
+/// <summary>
+/// BigInt autoincrement primary key (bigserial) and money as Decimal.
+/// </summary>
 public partial class Order
 {
     public long Id { get; set; }

@@ -7,6 +7,11 @@ import org.jetbrains.exposed.v1.dao.EntityClass
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
+/**
+ * Application user. Fully annotated for every validator generator,
+ * with a UUIDv7 primary key, enum default, scalar list, @map columns,
+ * @updatedAt, and relations of every cardinality.
+ */
 class UserEntity(
     id: EntityID<String>,
 ) : Entity<String>(id) {

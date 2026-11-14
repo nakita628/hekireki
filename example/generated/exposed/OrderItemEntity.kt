@@ -4,6 +4,7 @@ import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.dao.Entity
 import org.jetbrains.exposed.v1.dao.EntityClass
 
+/** Child of Order with a composite unique constraint. */
 class OrderItemEntity(
     id: EntityID<Long>,
 ) : Entity<Long>(id) {

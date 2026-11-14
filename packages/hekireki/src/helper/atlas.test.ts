@@ -910,7 +910,8 @@ describe('makeAtlasTable', () => {
         schemaName: 'public',
       }),
     ).toBe(
-      `table "accounts" {
+      `# Account table
+table "accounts" {
   schema = schema.auth
   column "id" {
     null = false
@@ -946,9 +947,39 @@ describe('makeAtlasTable', () => {
 }`,
     )
   })
-})
 
-describe('makeAtlasM2MJoinTables', () => {
+  it('should put the prose of model and field doc comments above their blocks as # lines', () => {
+    const model = makeModel({
+      name: 'User',
+      documentation: 'A person who signs in.\n\nKept after they leave.\n@z.strict',
+      fields: [
+        makeField({ name: 'id', type: 'String', isId: true, documentation: '@z.uuid()' }),
+        makeField({
+          name: 'email',
+          type: 'String',
+          documentation: 'Where "mail" goes: */ ${host} %{x} # not a key\n@v.email()',
+        }),
+      ],
+    })
+    expect(makeAtlasTable(model, [model], [], 'postgresql', [], { schemaName: 'public' })).toBe(
+      `# A person who signs in.
+#
+# Kept after they leave.
+table "User" {
+  schema = schema.public
+  column "id" {
+    null = false
+    type = text
+  }
+  # Where "mail" goes: */ \${host} %{x} # not a key
+  column "email" {
+    null = false
+    type = text
+  }
+}`,
+    )
+  })
+
   it('should build the implicit join table with the pair as its key, B index, and cascade FKs', () => {
     const post = makeModel({
       name: 'Post',
@@ -1088,6 +1119,35 @@ describe('makeAtlasEnums', () => {
   values = ["public_v", "private_v"]
 }`,
       `enum "Unused" {
+  schema = schema.public
+  values = ["X"]
+}`,
+    ])
+  })
+
+  it('should put the prose of an enum doc comment above its block', () => {
+    const enums: DMMF.DatamodelEnum[] = [
+      {
+        name: 'Role',
+        dbName: null,
+        documentation: 'What a user may do.\nAdmins see everything.',
+        values: [{ name: 'ADMIN', dbName: null }],
+      },
+      {
+        name: 'Plain',
+        dbName: null,
+        documentation: '@z.enum',
+        values: [{ name: 'X', dbName: null }],
+      },
+    ]
+    expect(makeAtlasEnums(enums, 'postgresql', 'public')).toStrictEqual([
+      `# What a user may do.
+# Admins see everything.
+enum "Role" {
+  schema = schema.public
+  values = ["ADMIN"]
+}`,
+      `enum "Plain" {
   schema = schema.public
   values = ["X"]
 }`,

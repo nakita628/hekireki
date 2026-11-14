@@ -63,11 +63,19 @@ cast = Table(
 
 
 class User(Base):
+    """Application user. Fully annotated for every validator generator,
+    with a UUIDv7 primary key, enum default, scalar list, @map columns,
+    @updatedAt, and relations of every cardinality.
+    """
+
     __tablename__ = "users"
 
     id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid6.uuid7()))
+    """Primary key (UUIDv7)"""
     email: Mapped[str]
+    """Unique login email"""
     name: Mapped[str]
+    """Display name"""
     role: Mapped[str] = mapped_column(Enum("ADMIN", "EDITOR", "VIEWER", name="Role"), default="VIEWER", server_default=text("'VIEWER'"))
     interests: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=True, default=lambda: [], server_default=text("ARRAY[]::text[]"))
     created_at: Mapped[datetime] = mapped_column(default=utc_now, server_default=text("CURRENT_TIMESTAMP"))
@@ -85,6 +93,11 @@ class User(Base):
     profile: Mapped[Optional["Profile"]] = relationship(cascade="all, delete", passive_deletes=True, back_populates="user")
 
 class Profile(Base):
+    """One-to-one relation with native @db.* types, literal defaults,
+    and optional scalars of every flavour. ConfigDict passthrough: the
+    Pydantic model rejects unknown keys (extra='forbid').
+    """
+
     __tablename__ = "Profile"
 
     id: Mapped[str] = mapped_column(primary_key=True)
@@ -105,10 +118,16 @@ class Profile(Base):
     user: Mapped["User"] = relationship(back_populates="profile")
 
 class Post(Base):
+    """@@map + @map column names, FK with a referential action,
+    mapped-enum default, and an implicit many-to-many to Tag.
+    """
+
     __tablename__ = "posts"
 
     id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid_mod.uuid4()))
+    """Primary key"""
     title: Mapped[str]
+    """Article title"""
     content: Mapped[Optional[str]]
     visibility: Mapped[str] = mapped_column(Enum("public", "private", "link_only", name="visibility_level"), default="link_only", server_default=text("'link_only'"))
     published: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
@@ -125,6 +144,8 @@ class Post(Base):
     tags: Mapped[list["Tag"]] = relationship(secondary=post_to_tag, back_populates="posts")
 
 class Tag(Base):
+    """Implicit many-to-many partner of Post (join table `_PostToTag`)."""
+
     __tablename__ = "Tag"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -137,6 +158,10 @@ class Tag(Base):
     posts: Mapped[list["Post"]] = relationship(secondary=post_to_tag, back_populates="tags")
 
 class Comment(Base):
+    """Two foreign keys with different referential actions
+    (Cascade vs SetNull) and a composite index.
+    """
+
     __tablename__ = "comments"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -153,6 +178,8 @@ class Comment(Base):
     author: Mapped[Optional["User"]] = relationship(back_populates="comments")
 
 class Follow(Base):
+    """Composite primary key + two named relations to the same model."""
+
     __tablename__ = "follows"
 
     follower_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE", onupdate="CASCADE", name="follows_follower_id_fkey"), primary_key=True)
@@ -163,6 +190,8 @@ class Follow(Base):
     following: Mapped["User"] = relationship(foreign_keys=[following_id], back_populates="followers")
 
 class Category(Base):
+    """Self-relation (adjacency-list tree) with a composite unique."""
+
     __tablename__ = "Category"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -177,6 +206,8 @@ class Category(Base):
     children: Mapped[list["Category"]] = relationship(back_populates="parent")
 
 class Order(Base):
+    """BigInt autoincrement primary key (bigserial) and money as Decimal."""
+
     __tablename__ = "orders"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -188,6 +219,8 @@ class Order(Base):
     items: Mapped[list["OrderItem"]] = relationship(cascade="all, delete", passive_deletes=True, back_populates="order")
 
 class OrderItem(Base):
+    """Child of Order with a composite unique constraint."""
+
     __tablename__ = "order_items"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -203,6 +236,8 @@ class OrderItem(Base):
     order: Mapped["Order"] = relationship(back_populates="items")
 
 class AuditLog(Base):
+    """DB-side generated defaults (dbgenerated) plus Json / Bytes payloads."""
+
     __tablename__ = "audit_logs"
 
     id: Mapped[uuid_mod.UUID] = mapped_column(Uuid, primary_key=True, server_default=text("gen_random_uuid()"))
@@ -212,6 +247,10 @@ class AuditLog(Base):
     logged_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
 
 class Actor(Base):
+    """Named implicit many-to-many: the join table is `_cast`,
+    not `_ActorToFilm`.
+    """
+
     __tablename__ = "Actor"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)

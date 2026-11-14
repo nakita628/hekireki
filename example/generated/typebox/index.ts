@@ -1,8 +1,16 @@
 import { type Static, Type } from '@sinclair/typebox'
 
+/**
+ * Application user. Fully annotated for every validator generator,
+ * with a UUIDv7 primary key, enum default, scalar list, @map columns,
+ * @updatedAt, and relations of every cardinality.
+ */
 export const UserSchema = Type.Object({
+  /** Primary key (UUIDv7) */
   id: Type.String({ format: 'uuid' }),
+  /** Unique login email */
   email: Type.String({ format: 'email' }),
+  /** Display name */
   name: Type.String({ minLength: 1, maxLength: 50 }),
   role: Type.Union([Type.Literal('ADMIN'), Type.Literal('EDITOR'), Type.Literal('VIEWER')]),
   interests: Type.String(),
@@ -12,6 +20,11 @@ export const UserSchema = Type.Object({
 
 export type User = Static<typeof UserSchema>
 
+/**
+ * One-to-one relation with native @db.* types, literal defaults,
+ * and optional scalars of every flavour. ConfigDict passthrough: the
+ * Pydantic model rejects unknown keys (extra='forbid').
+ */
 export const ProfileSchema = Type.Object({
   id: Type.String(),
   userId: Type.String(),
@@ -27,8 +40,14 @@ export const ProfileSchema = Type.Object({
 
 export type Profile = Static<typeof ProfileSchema>
 
+/**
+ * @@map + @map column names, FK with a referential action,
+ * mapped-enum default, and an implicit many-to-many to Tag.
+ */
 export const PostSchema = Type.Object({
+  /** Primary key */
   id: Type.String({ format: 'uuid' }),
+  /** Article title */
   title: Type.String({ minLength: 1, maxLength: 100 }),
   content: Type.Optional(Type.String()),
   visibility: Type.Union([
@@ -44,6 +63,7 @@ export const PostSchema = Type.Object({
 
 export type Post = Static<typeof PostSchema>
 
+/** Implicit many-to-many partner of Post (join table `_PostToTag`). */
 export const TagSchema = Type.Object({
   id: Type.Integer(),
   label: Type.String(),
@@ -51,6 +71,10 @@ export const TagSchema = Type.Object({
 
 export type Tag = Static<typeof TagSchema>
 
+/**
+ * Two foreign keys with different referential actions
+ * (Cascade vs SetNull) and a composite index.
+ */
 export const CommentSchema = Type.Object({
   id: Type.Integer(),
   body: Type.String(),
@@ -61,6 +85,7 @@ export const CommentSchema = Type.Object({
 
 export type Comment = Static<typeof CommentSchema>
 
+/** Composite primary key + two named relations to the same model. */
 export const FollowSchema = Type.Object({
   followerId: Type.String(),
   followingId: Type.String(),
@@ -69,6 +94,7 @@ export const FollowSchema = Type.Object({
 
 export type Follow = Static<typeof FollowSchema>
 
+/** Self-relation (adjacency-list tree) with a composite unique. */
 export const CategorySchema = Type.Object({
   id: Type.Integer(),
   name: Type.String(),
@@ -77,6 +103,7 @@ export const CategorySchema = Type.Object({
 
 export type Category = Static<typeof CategorySchema>
 
+/** BigInt autoincrement primary key (bigserial) and money as Decimal. */
 export const OrderSchema = Type.Object({
   id: Type.BigInt(),
   userId: Type.String(),
@@ -86,6 +113,7 @@ export const OrderSchema = Type.Object({
 
 export type Order = Static<typeof OrderSchema>
 
+/** Child of Order with a composite unique constraint. */
 export const OrderItemSchema = Type.Object({
   id: Type.BigInt(),
   orderId: Type.BigInt(),
@@ -96,6 +124,7 @@ export const OrderItemSchema = Type.Object({
 
 export type OrderItem = Static<typeof OrderItemSchema>
 
+/** DB-side generated defaults (dbgenerated) plus Json / Bytes payloads. */
 export const AuditLogSchema = Type.Object({
   id: Type.String(),
   action: Type.String(),
@@ -106,6 +135,10 @@ export const AuditLogSchema = Type.Object({
 
 export type AuditLog = Static<typeof AuditLogSchema>
 
+/**
+ * Named implicit many-to-many: the join table is `_cast`,
+ * not `_ActorToFilm`.
+ */
 export const ActorSchema = Type.Object({
   id: Type.Integer(),
   name: Type.String(),

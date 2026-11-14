@@ -1,3 +1,4 @@
+# BigInt autoincrement primary key (bigserial) and money as Decimal.
 class Order < ApplicationRecord
   validates :total, presence: true
 

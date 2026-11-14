@@ -66,3 +66,25 @@ export function jsonToPythonLiteral(value: unknown): string {
   }
   return 'None'
 }
+
+/**
+ * The prose of a `///` comment as a Python docstring at `indent`: no lines when there is none, a
+ * one-line `"""text"""` for a single line, and otherwise a closing `"""` on its own line. A
+ * backslash, and a quote that another quote or the end follows, are escaped so the text can
+ * neither close the docstring early nor read as an escape sequence.
+ *
+ * @param text - the prose, as `stripAnnotations` returns it
+ * @param indent - the indentation of the docstring
+ * @returns the lines of the docstring
+ */
+export function pythonDocstringLines(text: string | undefined, indent: string) {
+  if (text === undefined) return []
+  const escaped = text.replaceAll('\\', '\\\\').replaceAll(/"(?="|$)/gu, '\\"')
+  const [first, ...rest] = escaped.split('\n')
+  if (rest.length === 0) return [`${indent}"""${escaped}"""`]
+  return [
+    `${indent}"""${first}`,
+    ...rest.map((line) => (line === '' ? '' : `${indent}${line}`)),
+    `${indent}"""`,
+  ]
+}

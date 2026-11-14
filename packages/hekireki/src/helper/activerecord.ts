@@ -1,7 +1,13 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { camelize, pluralize, singularize, underscore } from '../utils/active-support.js'
-import { isAnnotationLine, isSameList, makePascalCase, makeSnakeCase } from '../utils/index.js'
+import {
+  isAnnotationLine,
+  isSameList,
+  makePascalCase,
+  makeSnakeCase,
+  stripAnnotations,
+} from '../utils/index.js'
 import { allocate } from '../utils/naming.js'
 import { fieldColumn, referentialActions, relationEnds } from '../utils/prisma-model.js'
 import { ACTIVE_RECORD_INSTANCE_METHODS, RUBY_TOP_LEVEL_CONSTANTS } from './activerecord-names.js'
@@ -2164,7 +2170,22 @@ export function activeRecordModels(
         .join('\n\n')
         .split('\n')
 
+      // The model's prose, then each attribute's or association's as an RDoc labelled list.
+      const modelProse = stripAnnotations(model.documentation)?.split('\n') ?? []
+      const fieldProse = model.fields.flatMap((f) => {
+        const [first = '', ...rest] = stripAnnotations(f.documentation)?.split('\n') ?? []
+        if (first === '') return []
+        const name = f.kind === 'object' ? associationOf(model.name, f.name) : (f.dbName ?? f.name)
+        return [`${name}:: ${first}`, ...rest.map((line) => (line === '' ? '' : `  ${line}`))]
+      })
+      const commentLines = [
+        ...modelProse,
+        ...(modelProse.length > 0 && fieldProse.length > 0 ? [''] : []),
+        ...fieldProse,
+      ].map((line) => (line === '' ? '#' : `# ${line}`))
+
       return [
+        ...commentLines,
         `class ${className} < ApplicationRecord`,
         ...body.map((line) => (line === '' ? '' : `  ${line}`)),
         'end',

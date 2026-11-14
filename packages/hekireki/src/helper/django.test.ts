@@ -3092,3 +3092,75 @@ model mastra_messages {
     )
   })
 })
+
+describe('doc comments', () => {
+  it('writes the prose of /// comments as class and attribute docstrings', () => {
+    const dmmf = getDMMF({
+      datamodel: [
+        [
+          'schema.prisma',
+          `datasource db {
+  provider = "postgresql"
+}
+/// A person.
+///
+/// Says """ and \\ and ends with a quote"
+model User {
+  /// The key.
+  id    Int    @id
+  /// @z.string()
+  name  String
+  /// Their posts.
+  posts Post[]
+  tone  Tone
+}
+model Post {
+  id       Int  @id
+  /// Who wrote it.
+  authorId Int
+  author   User @relation(fields: [authorId], references: [id])
+}
+/// How loud.
+enum Tone {
+  CALM
+}
+`,
+        ],
+      ],
+    })
+    if ('type' in dmmf) throw new Error(dmmf.error.message)
+    const { models, enums, indexes } = dmmf.datamodel
+    expect(djangoCode(models, enums, indexes)).toBe(`from django.db import models
+
+
+class Tone(models.TextChoices):
+    """How loud."""
+
+    CALM = "CALM"
+
+
+class User(models.Model):
+    """A person.
+
+    Says \\"\\"" and \\\\ and ends with a quote\\"
+    """
+
+    id = models.IntegerField(primary_key=True)
+    """The key."""
+    name = models.TextField()
+    tone = models.TextField(choices=Tone.choices)
+
+    class Meta:
+        db_table = "User"
+
+
+class Post(models.Model):
+    id = models.IntegerField(primary_key=True)
+    author = models.ForeignKey("User", on_delete=models.RESTRICT, related_name="posts", db_column="authorId", db_index=False)
+    """Who wrote it."""
+
+    class Meta:
+        db_table = "Post"
+`)
+  })
+})

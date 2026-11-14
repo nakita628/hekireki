@@ -2887,3 +2887,78 @@ model DatabaseConfig {
     ])
   })
 })
+
+describe('doc comments', () => {
+  it('writes the prose of /// comments as class and attribute docstrings', () => {
+    const dmmf = getDMMF({
+      datamodel: [
+        [
+          'schema.prisma',
+          `datasource db {
+  provider = "postgresql"
+}
+/// A person.
+///
+/// Says """ and \\ and ends with a quote"
+model User {
+  /// The key.
+  id    Int    @id
+  /// @z.string()
+  name  String
+  /// Their posts.
+  posts Post[]
+  tone  Tone
+}
+model Post {
+  id       Int  @id
+  /// Who wrote it.
+  authorId Int
+  author   User @relation(fields: [authorId], references: [id])
+}
+/// How loud.
+enum Tone {
+  CALM
+}
+`,
+        ],
+      ],
+    })
+    if ('type' in dmmf) throw new Error(dmmf.error.message)
+    const { models, enums, indexes } = dmmf.datamodel
+    expect(generateSingleFile(models, enums, indexes))
+      .toBe(`from sqlalchemy import Enum, ForeignKey, MetaData, Text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+
+class Base(DeclarativeBase):
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
+    type_annotation_map = {str: Text}
+
+
+class User(Base):
+    """A person.
+
+    Says \\"\\"" and \\\\ and ends with a quote\\"
+    """
+
+    __tablename__ = "User"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    """The key."""
+    name: Mapped[str]
+    tone: Mapped[str] = mapped_column(Enum("CALM", name="Tone"))
+
+    posts: Mapped[list["Post"]] = relationship(passive_deletes="all", back_populates="author")
+    """Their posts."""
+
+class Post(Base):
+    __tablename__ = "Post"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    author_id: Mapped[int] = mapped_column("authorId", ForeignKey("User.id", ondelete="RESTRICT", onupdate="CASCADE", name="Post_authorId_fkey"))
+    """Who wrote it."""
+
+    author: Mapped["User"] = relationship(back_populates="posts")
+`)
+  })
+})

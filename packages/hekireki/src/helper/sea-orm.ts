@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { makePascalCase, makeSnakeCase } from '../utils/index.js'
+import { makePascalCase, makeSnakeCase, stripAnnotations } from '../utils/index.js'
 import { allocate } from '../utils/naming.js'
 import {
   isAutoincrement,
@@ -516,6 +516,22 @@ function buildSerdeAttributes(opts: { readonly renameAll?: string }) {
   return [`#[serde(${parts.join(', ')})]`]
 }
 
+/**
+ * The prose of a `///` comment as Rust `///` doc lines at `indent`, a blank line as a bare `///`.
+ *
+ * @param doc - the Prisma documentation
+ * @param indent - the indentation of the documented item
+ * @returns the doc lines, none when there is no prose
+ */
+function rustDocLines(doc: string | undefined, indent: string) {
+  const text = stripAnnotations(doc)
+  return text === undefined
+    ? []
+    : text
+        .split('\n')
+        .map((line) => `${indent}///${line.trimEnd() === '' ? '' : ` ${line.trimEnd()}`}`)
+}
+
 export function generateEnum(e: DMMF.DatamodelEnum, serde: { readonly renameAll?: string } = {}) {
   const variants = e.values.map((value) => {
     // SCREAMING_SNAKE values must become UpperCamelCase variants, or
@@ -535,6 +551,7 @@ export function generateEnum(e: DMMF.DatamodelEnum, serde: { readonly renameAll?
   const serdeAttrs = buildSerdeAttributes(serde)
 
   return [
+    ...rustDocLines(e.documentation, ''),
     derives,
     ...serdeAttrs,
     seaOrmAttribute('', [
@@ -805,7 +822,11 @@ export function generateEntityFile(
           : `Option<${elemType}>`
         : prismaTypeToRustType(field.type, field.isRequired)
 
-    fieldLines.push(...attrs, rustField(fieldName, rustType))
+    fieldLines.push(
+      ...rustDocLines(field.documentation, '    '),
+      ...attrs,
+      rustField(fieldName, rustType),
+    )
 
     if (field.type !== 'DateTime' || field.isList) continue
     // `now` is a DateTimeUtc at Prisma's millisecond precision; a literal is parsed as the
@@ -958,6 +979,7 @@ export function generateEntityFile(
   const lines = [
     ...useLines,
     '',
+    ...rustDocLines(model.documentation, ''),
     deriveModel,
     ...serdeAttrs,
     seaOrmAttribute('', [`table_name = "${tableName}"`]),

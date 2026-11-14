@@ -15,9 +15,15 @@ import (
 
 var NamingStrategy = schema.NamingStrategy{SingularTable: true, NoLowerCase: true}
 
+// Application user. Fully annotated for every validator generator,
+// with a UUIDv7 primary key, enum default, scalar list, @map columns,
+// @updatedAt, and relations of every cardinality.
 type User struct {
-	ID        string    `gorm:"column:id;primaryKey;type:char(36)" json:"id"`
-	Email     string    `gorm:"column:email;uniqueIndex;not null" json:"email"`
+	// Primary key (UUIDv7)
+	ID string `gorm:"column:id;primaryKey;type:char(36)" json:"id"`
+	// Unique login email
+	Email string `gorm:"column:email;uniqueIndex;not null" json:"email"`
+	// Display name
 	Name      string    `gorm:"column:name;not null" json:"name"`
 	Role      string    `gorm:"column:role;default:'VIEWER';not null" json:"role"`
 	Interests []string  `gorm:"column:interests;serializer:json;not null" json:"interests"`
@@ -57,6 +63,9 @@ func (*User) BeforeUpdate(tx *gorm.DB) error {
 	return nil
 }
 
+// One-to-one relation with native @db.* types, literal defaults,
+// and optional scalars of every flavour. ConfigDict passthrough: the
+// Pydantic model rejects unknown keys (extra='forbid').
 type Profile struct {
 	ID       string         `gorm:"column:id;primaryKey" json:"id"`
 	UserID   string         `gorm:"column:user_id;uniqueIndex;not null" json:"user_id"`
@@ -82,8 +91,12 @@ func (m *Profile) BeforeCreate(_ *gorm.DB) error {
 	return nil
 }
 
+// @@map + @map column names, FK with a referential action,
+// mapped-enum default, and an implicit many-to-many to Tag.
 type Post struct {
-	ID         string    `gorm:"column:id;primaryKey;type:char(36)" json:"id"`
+	// Primary key
+	ID string `gorm:"column:id;primaryKey;type:char(36)" json:"id"`
+	// Article title
 	Title      string    `gorm:"column:title;not null" json:"title"`
 	Content    *string   `gorm:"column:content" json:"content"`
 	Visibility string    `gorm:"column:visibility;default:'link_only';not null" json:"visibility"`
@@ -111,6 +124,7 @@ func (m *Post) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
+// Implicit many-to-many partner of Post (join table `_PostToTag`).
 type Tag struct {
 	ID    int    `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
 	Label string `gorm:"column:label;uniqueIndex;not null" json:"label"`
@@ -121,6 +135,8 @@ func (Tag) TableName() string {
 	return "Tag"
 }
 
+// Two foreign keys with different referential actions
+// (Cascade vs SetNull) and a composite index.
 type Comment struct {
 	ID        int      `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
 	Body      string   `gorm:"column:body;not null" json:"body"`
@@ -143,6 +159,7 @@ func (m *Comment) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
+// Composite primary key + two named relations to the same model.
 type Follow struct {
 	FollowerID  string   `gorm:"column:follower_id;primaryKey" json:"follower_id"`
 	FollowingID string   `gorm:"column:following_id;primaryKey" json:"following_id"`
@@ -163,6 +180,7 @@ func (m *Follow) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
+// Self-relation (adjacency-list tree) with a composite unique.
 type Category struct {
 	ID       int        `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
 	Name     string     `gorm:"column:name;uniqueIndex:Category_parent_id_name_key;not null" json:"name"`
@@ -175,6 +193,7 @@ func (Category) TableName() string {
 	return "Category"
 }
 
+// BigInt autoincrement primary key (bigserial) and money as Decimal.
 type Order struct {
 	ID       int64    `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
 	UserID   string   `gorm:"column:user_id;not null" json:"user_id"`
@@ -196,6 +215,7 @@ func (m *Order) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
+// Child of Order with a composite unique constraint.
 type OrderItem struct {
 	ID      int64   `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
 	OrderID int64   `gorm:"column:order_id;uniqueIndex:order_items_order_id_sku_key;not null" json:"order_id"`
@@ -209,6 +229,7 @@ func (OrderItem) TableName() string {
 	return "order_items"
 }
 
+// DB-side generated defaults (dbgenerated) plus Json / Bytes payloads.
 type AuditLog struct {
 	ID        string         `gorm:"column:id;primaryKey;type:char(36);default:gen_random_uuid()" json:"id"`
 	Action    string         `gorm:"column:action;not null" json:"action"`
@@ -221,6 +242,8 @@ func (AuditLog) TableName() string {
 	return "audit_logs"
 }
 
+// Named implicit many-to-many: the join table is `_cast`,
+// not `_ActorToFilm`.
 type Actor struct {
 	ID    int    `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
 	Name  string `gorm:"column:name;not null" json:"name"`

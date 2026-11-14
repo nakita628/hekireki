@@ -428,3 +428,31 @@ export type Session = Static<typeof SessionSchema>`)
     })
   })
 })
+
+describe('typeboxSchemaCode doc comments', () => {
+  it('writes the prose of /// comments as JSDoc above the schema and its properties', () => {
+    const model = {
+      name: 'User',
+      documentation: 'Application user.',
+      fields: [
+        {
+          name: 'id',
+          type: 'String',
+          kind: 'scalar',
+          isRequired: true,
+          isList: false,
+          documentation: 'Primary key',
+        },
+        { name: 'name', type: 'String', kind: 'scalar', isRequired: true, isList: false },
+      ],
+    }
+    expect(typeboxSchemaCode([model], false)).toBe(`import { Type } from '@sinclair/typebox'
+
+/** Application user. */
+export const UserSchema = Type.Object({
+  /** Primary key */
+  id: Type.String(),
+  name: Type.String(),
+})`)
+  })
+})
