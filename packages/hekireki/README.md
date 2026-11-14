@@ -329,6 +329,19 @@ Your schema and database in the browser, on SQLite, PostgreSQL and MySQL. Withou
 reads the `schema` of `prisma.config.ts`, else `./prisma/schema.prisma` or `./schema.prisma`, and
 listens on port 5555.
 
+The database driver is your project's own: `pg` for PostgreSQL (Neon, Supabase, PlanetScale
+Postgres), `mysql2` for MySQL (PlanetScale), the built-in `node:sqlite` for a SQLite file, and
+`@libsql/client` for a libSQL server (Turso, or `sqld`). A token in the URL is shown as `***`.
+
+```bash
+npx hekireki studio --url "postgresql://user:pass@ep-x.neon.tech/app?sslmode=require"
+npx hekireki studio --url 'mysql://user:pass@aws.connect.psdb.cloud/app?ssl={"rejectUnauthorized":true}'
+npx hekireki studio --url "libsql://app-org.turso.io?authToken=$TURSO_AUTH_TOKEN"
+```
+
+On a libSQL server, the Migrate page takes no backup and runs no rehearsal: both copy the database
+file, which is not here. The service's own point-in-time restore takes the backup's place.
+
 **Browse the rows** of each model: search, add, edit and export them.
 
 ![The rows of the User model](https://raw.githubusercontent.com/nakita628/hekireki/refs/heads/main/assets/img/studio-data.png)

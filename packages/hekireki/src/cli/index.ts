@@ -14,11 +14,13 @@ const COMMAND_NAME = 'hekireki'
 const STATIC_DIR = path.resolve(import.meta.dirname, '../studio')
 
 // Checked while the command line is read, so a URL Studio has no driver for is answered by this
-// sentence rather than by whatever the driver says. The schemes are the four `makeDialect` reads.
+// sentence rather than by whatever the driver says. The schemes are the ones `makeDialect` reads,
+// and those a libSQL server (Turso, sqld) answers on, which `isLibsqlUrl` opens with @libsql/client.
 const DatabaseUrl = Schema.String.pipe(
   Schema.check(
-    Schema.isPattern(/^(?:postgres|postgresql|mysql|file):/u, {
-      message: 'a postgres://, postgresql://, mysql:// or file: connection string',
+    Schema.isPattern(/^(?:postgres|postgresql|mysql|file|libsql|https?|wss?):/u, {
+      message:
+        'a postgres://, postgresql://, mysql://, file: or libsql:// connection string (http(s):// or ws(s):// for a libSQL server)',
     }),
   ),
 )

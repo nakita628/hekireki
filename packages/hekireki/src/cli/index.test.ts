@@ -156,10 +156,17 @@ describe('hekireki studio', () => {
     expect(printed).toContain('--port')
   })
 
+  it('takes the URL of a libSQL server (Turso, sqld)', async () => {
+    const { printed } = await cli(['studio', '--url', 'libsql://app-org.turso.io', '--help'])
+    expect(printed).not.toContain('Invalid value for flag --url')
+  })
+
   it('rejects a database URL Studio has no driver for', async () => {
     const { exit, printed } = await cli(['studio', '--url', 'redis://localhost'])
     expect(Exit.isFailure(exit)).toBe(true)
-    expect(printed).toContain('a postgres://, postgresql://, mysql:// or file: connection string')
+    expect(printed).toContain(
+      'a postgres://, postgresql://, mysql://, file: or libsql:// connection string (http(s):// or ws(s):// for a libSQL server)',
+    )
   })
 
   it('lists the examples in its help', async () => {
@@ -245,7 +252,7 @@ describe('hekireki seed', () => {
     const bad = await cli(['seed', '--url', 'mongodb://localhost/app'])
     expect(Exit.isFailure(bad.exit)).toBe(true)
     expect(bad.printed).toContain(
-      'a postgres://, postgresql://, mysql:// or file: connection string',
+      'a postgres://, postgresql://, mysql://, file: or libsql:// connection string (http(s):// or ws(s):// for a libSQL server)',
     )
     const seed = await cli(['seed', '--seed', 'many'])
     expect(Exit.isFailure(seed.exit)).toBe(true)
@@ -475,7 +482,9 @@ model User {
   it('rejects a database URL it has no driver for', async () => {
     const { exit, printed } = await cli(['migrate', 'check', '--url', 'mongodb://localhost/app'])
     expect(Exit.isFailure(exit)).toBe(true)
-    expect(printed).toContain('a postgres://, postgresql://, mysql:// or file: connection string')
+    expect(printed).toContain(
+      'a postgres://, postgresql://, mysql://, file: or libsql:// connection string (http(s):// or ws(s):// for a libSQL server)',
+    )
   })
 
   it('prints the report and fails when rows block the migration', async () => {

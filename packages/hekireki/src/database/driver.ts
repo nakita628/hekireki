@@ -11,7 +11,13 @@ import { removePath } from '../file/index.js'
 import { quoteIdentifier, stringLiteral } from '../sql/index.js'
 import { DatabaseError, DatabaseUnavailableError } from './errors.js'
 import { resolveDatabaseUrl } from './resolve.js'
-import { makeDialect, makePostgresSchema, makeRedactedUrl, makeSqliteFilePath } from './url.js'
+import {
+  isLibsqlUrl,
+  makeDialect,
+  makePostgresSchema,
+  makeRedactedUrl,
+  makeSqliteFilePath,
+} from './url.js'
 import type { UrlSource } from './url.js'
 
 /** An open connection: every operation is an Effect that fails with the driver's message. */
@@ -54,6 +60,11 @@ export type Driver = {
   /** Several statements separated by semicolons, run as one script. */
   readonly executeScript: (script: string) => Effect.Effect<void, DatabaseError>
   readonly close: Effect.Effect<void>
+  /**
+   * A SQLite database reached over the network (Turso, a libSQL server) rather than a file: there
+   * is no file to copy for a backup or a rehearsal, and `VACUUM INTO` would write on the server.
+   */
+  readonly remote?: boolean
 }
 
 // Driver results as the packages return them, read through zod rather than hand-written guards.
@@ -196,6 +207,117 @@ function openSqlite(url: string, baseDir: string) {
         }),
       close: Effect.sync(() => {
         db.close()
+      }),
+    }
+    return driver
+  })
+}
+
+const LibsqlResultSet = z
+  .object({
+    columns: z
+      .array(z.string())
+      .meta({ description: 'The column names, in order.', example: ['id', 'email'] }),
+    columnTypes: z.array(z.string()).meta({
+      description: 'The declared type of each column, empty for an expression.',
+      example: ['INTEGER', 'TEXT'],
+    }),
+    rows: z
+      .array(z.custom<ArrayLike<unknown>>((value) => typeof value === 'object' && value !== null))
+      .meta({ description: 'The rows, each positional (and keyed by name too).' }),
+    rowsAffected: z.number().meta({ description: 'Rows the statement changed.', example: 1 }),
+  })
+  .meta({ description: 'What @libsql/client returns from execute()' })
+
+/** The rows of a libSQL result keyed by column name, as `Driver.query` answers them. */
+function keyedRows(set: z.infer<typeof LibsqlResultSet>) {
+  return set.rows.map((row) =>
+    Object.fromEntries(set.columns.map((column, index) => [column, row[index] ?? null])),
+  )
+}
+
+const LibsqlModule = z
+  .object({
+    createClient: z
+      .custom<
+        (config: { readonly url: string }) => {
+          readonly execute: (statement: {
+            readonly sql: string
+            readonly args: readonly unknown[]
+          }) => Promise<unknown>
+          readonly executeMultiple: (sql: string) => Promise<void>
+          readonly close: () => void
+        }
+      >((value) => typeof value === 'function')
+      .meta({ description: 'The client factory of @libsql/client.' }),
+  })
+  .meta({ description: 'The @libsql/client module' })
+
+/**
+ * A libSQL server (Turso, or `sqld`) through the project's `@libsql/client`: SQLite's SQL over
+ * the network, the `?authToken=` of the URL read by the client itself.
+ */
+function openLibsql(url: string, cwd: string) {
+  return Effect.gen(function* () {
+    const module = yield* importFromProject('@libsql/client', cwd)
+    const result = LibsqlModule.safeParse(module)
+    if (!result.success) {
+      return yield* new DatabaseUnavailableError({
+        reason: 'The "@libsql/client" package does not export createClient.',
+      })
+    }
+    const client = yield* Effect.try({
+      try: () => result.data.createClient({ url }),
+      catch: (error) =>
+        new DatabaseUnavailableError({
+          reason: error instanceof Error ? error.message : String(error),
+        }),
+    })
+    const execute = (statement: { readonly sql: string; readonly params: readonly unknown[] }) =>
+      Effect.tryPromise({
+        try: async () =>
+          LibsqlResultSet.parse(
+            await client.execute({ sql: statement.sql, args: statement.params }),
+          ),
+        catch: driverError,
+      })
+    // A remote database refuses no connection until it is asked something: ask now, so a wrong
+    // URL or token is said when Studio starts rather than at the first page.
+    yield* execute({ sql: 'SELECT 1', params: [] }).pipe(
+      Effect.mapError((error) => new DatabaseUnavailableError({ reason: error.cause })),
+      Effect.tapError(() =>
+        Effect.sync(() => {
+          client.close()
+        }),
+      ),
+    )
+    const driver: Driver = {
+      dialect: 'sqlite',
+      remote: true,
+      query: (statement) =>
+        execute(statement).pipe(
+          Effect.map((set) => ({
+            columns: set.columns,
+            rows: keyedRows(set),
+            rowCount: READ_STATEMENT.test(statement.sql) ? set.rows.length : set.rowsAffected,
+          })),
+        ),
+      queryRaw: (statement) =>
+        execute(statement).pipe(
+          Effect.map((set) => ({
+            columns: set.columns.map((name, index) => ({
+              name,
+              // An expression has no declared type: libSQL gives it as the empty string.
+              nativeType: set.columnTypes[index] === '' ? null : (set.columnTypes[index] ?? null),
+            })),
+            rows: set.rows.map((row) => set.columns.map((_, index) => row[index] ?? null)),
+          })),
+        ),
+      executeRaw: (statement) => execute(statement).pipe(Effect.map((set) => set.rowsAffected)),
+      executeScript: (script) =>
+        Effect.tryPromise({ try: () => client.executeMultiple(script), catch: driverError }),
+      close: Effect.sync(() => {
+        client.close()
       }),
     }
     return driver
@@ -581,6 +703,12 @@ function driverError(error: unknown) {
  */
 export function openSqliteCopy(input: { readonly driver: Driver; readonly cwd: string }) {
   return Effect.gen(function* () {
+    if (input.driver.remote === true) {
+      return yield* new DatabaseUnavailableError({
+        reason:
+          'A rehearsal runs on a copy of the database file, and a remote SQLite database (Turso, a libSQL server) has none here to copy.',
+      })
+    }
     const file = path.join(tmpdir(), `hekireki-rehearsal-${globalThis.crypto.randomUUID()}.db`)
     yield* input.driver.executeScript(`VACUUM INTO ${stringLiteral('sqlite', file)}`).pipe(
       Effect.mapError(
@@ -864,7 +992,9 @@ export function connectDatabase(input: z.infer<typeof ConnectDatabaseInput>) {
     }
     const driver =
       dialect === 'sqlite'
-        ? yield* openSqlite(found.url, input.schemaDir)
+        ? isLibsqlUrl({ url: found.url })
+          ? yield* openLibsql(found.url, input.cwd)
+          : yield* openSqlite(found.url, input.schemaDir)
         : dialect === 'postgresql'
           ? yield* openPostgres(found.url, input.cwd)
           : yield* openMysql(found.url, input.cwd)

@@ -127,6 +127,7 @@ kysely's
 larastan
 lezer
 librt
+libsql
 lucsky
 marginx
 marginy
@@ -214,12 +215,14 @@ setval
 siwe
 spawnable
 spgist
+sqld
 sqlx
 sslmode
 Stampeds
 stringbool
 subplan
 subsecs
+supabase
 Tabler
 takibi
 textbg
@@ -233,6 +236,8 @@ timespec
 tinys
 treeify
 triggerdef
+turso
+tursodatabase
 typcategory
 typcollation
 typebot

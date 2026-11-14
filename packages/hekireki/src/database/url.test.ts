@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vite-plus/test'
 
 import {
   DatabaseUrlNotFoundError,
+  isLibsqlUrl,
   makeDatabaseUrl,
   makeDialect,
   makePostgresSchema,
@@ -230,10 +231,23 @@ describe('makeDialect', () => {
     expect(makeDialect({ url: 'postgres://x', schemaProvider: null })).toBe('postgresql')
     expect(makeDialect({ url: 'mysql://x', schemaProvider: null })).toBe('mysql')
     expect(makeDialect({ url: 'file:./dev.db', schemaProvider: null })).toBe('sqlite')
+    expect(makeDialect({ url: 'libsql://app-org.turso.io', schemaProvider: null })).toBe('sqlite')
+    expect(makeDialect({ url: 'http://127.0.0.1:8080', schemaProvider: 'sqlite' })).toBe('sqlite')
     expect(makeDialect({ url: 'anything', schemaProvider: 'cockroachdb' })).toBe('postgresql')
     expect(makeDialect({ url: 'anything', schemaProvider: 'mysql' })).toBe('mysql')
     expect(makeDialect({ url: 'anything', schemaProvider: 'sqlite' })).toBe('sqlite')
     expect(makeDialect({ url: 'mongodb://x', schemaProvider: 'mongodb' })).toBeNull()
+  })
+})
+
+describe('isLibsqlUrl', () => {
+  it("is Turso's libsql:// and a libSQL server's http(s):// or ws(s)://, never a file", () => {
+    expect(isLibsqlUrl({ url: 'libsql://app-org.turso.io?authToken=t' })).toBe(true)
+    expect(isLibsqlUrl({ url: 'http://127.0.0.1:8080' })).toBe(true)
+    expect(isLibsqlUrl({ url: 'https://app-org.turso.io' })).toBe(true)
+    expect(isLibsqlUrl({ url: 'wss://app-org.turso.io' })).toBe(true)
+    expect(isLibsqlUrl({ url: 'file:./dev.db' })).toBe(false)
+    expect(isLibsqlUrl({ url: 'postgresql://x' })).toBe(false)
   })
 })
 
@@ -249,6 +263,18 @@ describe('makeSqliteFilePath', () => {
 })
 
 describe('makeRedactedUrl', () => {
+  it("hides a token passed as a query parameter, as Turso's authToken is", () => {
+    expect(makeRedactedUrl({ url: 'libsql://app-org.turso.io?authToken=eyJhbGci.x.y' })).toBe(
+      'libsql://app-org.turso.io?authToken=***',
+    )
+    expect(makeRedactedUrl({ url: 'http://127.0.0.1:8080?tls=0&authToken=abc&x=1' })).toBe(
+      'http://127.0.0.1:8080?tls=0&authToken=***&x=1',
+    )
+    expect(makeRedactedUrl({ url: 'mysql://u:p@host/db?password=abc' })).toBe(
+      'mysql://u:***@host/db?password=***',
+    )
+  })
+
   it('hides the password only', () => {
     expect(makeRedactedUrl({ url: 'postgresql://user:secret@localhost:5432/app' })).toBe(
       'postgresql://user:***@localhost:5432/app',

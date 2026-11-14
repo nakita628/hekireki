@@ -5,7 +5,7 @@ import * as z from 'zod'
 
 import { parseSchema } from '../../../schema/index.js'
 import type { SchemaFile } from '../../../schema/index.js'
-import { ADAPTERS, discoverClient } from '../../../seed/discover.js'
+import { adapterOf, discoverClient } from '../../../seed/discover.js'
 import { withTypeScriptImports } from '../../../seed/resolve.js'
 import { ClientQueryError, ClientUnavailableError } from '../errors/index.js'
 
@@ -108,7 +108,7 @@ function loadClient(input: z.infer<typeof LoadClientInput>) {
     })
     if (found.client === null) {
       return yield* new ClientUnavailableError({
-        reason: `Prisma Client not found: ${found.reason ?? 'unknown'}.\n   Add a \`prisma-client\` generator to the schema, run \`prisma generate\` and install ${ADAPTERS[dialect].pkg}.`,
+        reason: `Prisma Client not found: ${found.reason ?? 'unknown'}.\n   Add a \`prisma-client\` generator to the schema, run \`prisma generate\` and install ${adapterOf(dialect, url).pkg}.`,
       })
     }
     if (!isStudioClient(found.client)) {

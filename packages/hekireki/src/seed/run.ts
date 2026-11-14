@@ -13,7 +13,7 @@ import type { GeneratorBlock, SchemaFile } from '../schema/index.js'
 import { DEFAULT_SCHEMA_PATHS, prismaSchemaPath } from '../schema/path.js'
 import { seedWithClient } from './client.js'
 import type { SeedConfig } from './config.js'
-import { ADAPTERS, discoverClient } from './discover.js'
+import { adapterOf, discoverClient } from './discover.js'
 import { SeedConfigError, SeedDatabaseError } from './errors.js'
 import { generateSeedRows } from './generate/index.js'
 import { loadSeedConfig, resolveConfigPath } from './load-config.js'
@@ -184,7 +184,7 @@ function findClient(input: {
       dialect: input.dialect,
     })
     if (found.client === null) {
-      const adapter = ADAPTERS[input.dialect]
+      const adapter = adapterOf(input.dialect, url)
       return yield* new SeedDatabaseError({
         message: `Prisma Client not found: ${found.reason ?? 'unknown'}.\n   Add a \`prisma-client\` generator to the schema and run \`prisma generate\`, install ${adapter.pkg}, set \`client\` in hekireki.config.ts, or pass --sql <file> to write the rows as a script instead.`,
       })

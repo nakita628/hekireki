@@ -112,12 +112,27 @@ export function makeDialect(input: {
   const scheme = input.url.split(':')[0]?.toLowerCase() ?? ''
   if (scheme === 'postgres' || scheme === 'postgresql') return 'postgresql'
   if (scheme === 'mysql') return 'mysql'
-  if (scheme === 'file') return 'sqlite'
+  if (scheme === 'file' || scheme === 'libsql') return 'sqlite'
   const provider = input.schemaProvider
   if (provider === 'postgresql' || provider === 'cockroachdb') return 'postgresql'
   if (provider === 'mysql') return 'mysql'
   if (provider === 'sqlite') return 'sqlite'
   return null
+}
+
+/** The schemes a libSQL server answers on: Turso's `libsql://`, and `http(s)://` / `ws(s)://` for `sqld`. */
+const LIBSQL_SCHEMES = new Set(['libsql', 'http', 'https', 'ws', 'wss'])
+
+/**
+ * Whether a SQLite URL names a libSQL server (Turso, `sqld`) rather than a file. An `http(s)://`
+ * or `ws(s)://` URL is one only for a SQLite schema: that is what `makeDialect` reads it as.
+ *
+ * @example
+ * isLibsqlUrl({ url: 'libsql://app-org.turso.io?authToken=…' }) // true
+ * isLibsqlUrl({ url: 'file:./dev.db' }) // false
+ */
+export function isLibsqlUrl(input: { readonly url: string }) {
+  return LIBSQL_SCHEMES.has(input.url.split(':')[0]?.toLowerCase() ?? '')
 }
 
 /** The database file for a `file:` URL, relative to the schema directory; `:memory:` stays as is. */
@@ -131,9 +146,11 @@ export function makeSqliteFilePath(input: {
   return path.isAbsolute(target) ? target : path.resolve(input.baseDir, target)
 }
 
-/** Hides the password of a connection URL. */
+/** Hides the password of a connection URL, and a token or password passed as a query parameter (Turso's `?authToken=`). */
 export function makeRedactedUrl(input: { readonly url: string }) {
-  return input.url.replace(/(\/\/[^:/@]+:)[^@/]+@/u, '$1***@')
+  return input.url
+    .replaceAll(/(\/\/[^:/@]+:)[^@/]+@/gu, '$1***@')
+    .replaceAll(/([?&](?:authToken|auth_token|token|password)=)[^&#]*/giu, '$1***')
 }
 
 /**

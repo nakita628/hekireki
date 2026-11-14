@@ -7,7 +7,7 @@ import { Effect } from 'effect'
 import type * as z from 'zod'
 
 import type { Dialect } from '../database/url.js'
-import { makePostgresSchema, makeSqliteFilePath } from '../database/url.js'
+import { isLibsqlUrl, makePostgresSchema, makeSqliteFilePath } from '../database/url.js'
 import type { GeneratorBlock } from '../schema/index.js'
 import { SeedDatabaseError } from './errors.js'
 
@@ -63,10 +63,18 @@ export const ADAPTERS: Readonly<Record<Dialect, { readonly pkg: string; readonly
     sqlite: { pkg: '@prisma/adapter-better-sqlite3', name: 'PrismaBetterSqlite3' },
   }
 
+/** The adapter of a libSQL server (Turso, `sqld`), which SQLite's own adapter cannot reach. */
+export const LIBSQL_ADAPTER = { pkg: '@prisma/adapter-libsql', name: 'PrismaLibSql' } as const
+
+/** The driver adapter a database is opened through: by its dialect, and libSQL by its URL. */
+export function adapterOf(dialect: Dialect, url: string) {
+  return dialect === 'sqlite' && isLibsqlUrl({ url }) ? LIBSQL_ADAPTER : ADAPTERS[dialect]
+}
+
 /** The driver adapter for the dialect, built from the project's package, or the reason there is none. */
 function makeAdapter(dialect: Dialect, url: string, cwd: string, schemaDir: string) {
   return Effect.gen(function* () {
-    const { pkg, name } = ADAPTERS[dialect]
+    const { pkg, name } = adapterOf(dialect, url)
     const loaded = yield* importFromProject(pkg, cwd).pipe(
       Effect.match({
         onFailure: (error) => ({
@@ -84,9 +92,10 @@ function makeAdapter(dialect: Dialect, url: string, cwd: string, schemaDir: stri
     // The SQLite file, or the URL — and for PostgreSQL the schema of its `?schema=`, which the pg
     // driver does not read and PrismaPg takes as an option.
     const schema = dialect === 'postgresql' ? makePostgresSchema({ url }) : null
+    // libSQL takes the URL as it is: the client reads the server and `?authToken=` from it.
     const args: readonly unknown[] =
       dialect === 'sqlite'
-        ? [{ url: makeSqliteFilePath({ url, baseDir: schemaDir }) }]
+        ? [{ url: isLibsqlUrl({ url }) ? url : makeSqliteFilePath({ url, baseDir: schemaDir }) }]
         : schema === null
           ? [url]
           : [url, { schema }]
