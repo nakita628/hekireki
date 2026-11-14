@@ -84,8 +84,8 @@ describe('auth = "jwt"', () => {
 
   it('answers 403 to a valid token without the admin role, and lets one holding it through', async () => {
     const app = await loadAuth('jwt')
-    const { role: _role, ...roleless } = claims()
-    expect(await statusOf(app, await sign(roleless, SECRET))).toBe(403)
+    const { role: _role, ...withoutRole } = claims()
+    expect(await statusOf(app, await sign(withoutRole, SECRET))).toBe(403)
     expect(await statusOf(app, await sign({ ...claims(), role: 'user' }, SECRET))).toBe(403)
     expect(await statusOf(app, await sign({ ...claims(), role: ['user'] }, SECRET))).toBe(403)
     expect(
