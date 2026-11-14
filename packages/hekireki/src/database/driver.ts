@@ -1,15 +1,14 @@
-import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { pathToFileURL } from 'node:url'
 
 import { layer as nodeFileSystemLayer } from '@effect/platform-node/NodeFileSystem'
 import { Effect } from 'effect'
 import * as z from 'zod'
 
 import { DISCONNECTED, NO_SQLITE, READ_STATEMENT } from '../constants/index.js'
-import { removePath } from '../file/index.js'
+import { importFromProject, removePath } from '../file/index.js'
 import { quoteIdentifier, stringLiteral } from '../sql/index.js'
+import type { Dialect, UrlSource } from '../types/index.js'
 import {
   LibsqlResultSet,
   makeLibsqlQueryResult,
@@ -31,13 +30,12 @@ import {
   makeRedactedUrl,
   makeSqliteFilePath,
 } from './domain/url.js'
-import type { UrlSource } from './domain/url.js'
 import { DatabaseError, DatabaseUnavailableError } from './errors.js'
 import { resolveDatabaseUrl } from './resolve.js'
 
 /** An open connection: every operation is an Effect that fails with the driver's message. */
 export type Driver = {
-  readonly dialect: 'postgresql' | 'mysql' | 'sqlite'
+  readonly dialect: Dialect
   readonly query: (statement: {
     readonly sql: string
     readonly params: readonly unknown[]
@@ -88,20 +86,24 @@ const ModuleNamespace = z
   })
   .meta({ description: 'An imported module namespace' })
 
-/** The package as the user's project resolves it: Studio ships no database drivers of its own. */
-function importFromProject(specifier: string, cwd: string) {
-  return Effect.tryPromise({
-    try: async (): Promise<unknown> => {
-      const resolved = createRequire(path.join(cwd, 'package.json')).resolve(specifier)
-      const namespace: unknown = await import(pathToFileURL(resolved).href)
+/**
+ * A database driver as the user's project resolves it (Studio ships none of its own), the default
+ * export of a CommonJS package taken for the module, and a package that is not there said with
+ * the way out.
+ */
+function importDriver(specifier: string, cwd: string) {
+  return importFromProject(specifier, cwd).pipe(
+    Effect.map((namespace) => {
       const result = ModuleNamespace.safeParse(namespace)
       return result.success ? result.data.default : namespace
-    },
-    catch: (error) =>
-      new DatabaseUnavailableError({
-        reason: `Cannot load "${specifier}" from ${cwd}: ${error instanceof Error ? error.message : String(error)}\n   Install it in your project (npm install ${specifier}) so Hekireki can connect to the database.`,
-      }),
-  })
+    }),
+    Effect.mapError(
+      (error) =>
+        new DatabaseUnavailableError({
+          reason: `Cannot load "${specifier}" from ${cwd}: ${error.message}\n   Install it in your project (npm install ${specifier}) so Hekireki can connect to the database.`,
+        }),
+    ),
+  )
 }
 
 const SqliteModule = z
@@ -208,7 +210,7 @@ const LibsqlModule = z
  */
 function openLibsql(url: string, cwd: string) {
   return Effect.gen(function* () {
-    const module = yield* importFromProject('@libsql/client', cwd)
+    const module = yield* importDriver('@libsql/client', cwd)
     const result = LibsqlModule.safeParse(module)
     if (!result.success) {
       return yield* new DatabaseUnavailableError({
@@ -285,7 +287,7 @@ const PgModule = z
 
 function openPostgres(url: string, cwd: string) {
   return Effect.gen(function* () {
-    const result = PgModule.safeParse(yield* importFromProject('pg', cwd))
+    const result = PgModule.safeParse(yield* importDriver('pg', cwd))
     if (!result.success) {
       return yield* new DatabaseUnavailableError({
         reason: 'The "pg" package does not export Client.',
@@ -372,7 +374,7 @@ const MysqlModule = z
 
 function openMysql(url: string, cwd: string) {
   return Effect.gen(function* () {
-    const result = MysqlModule.safeParse(yield* importFromProject('mysql2/promise', cwd))
+    const result = MysqlModule.safeParse(yield* importDriver('mysql2/promise', cwd))
     if (!result.success) {
       return yield* new DatabaseUnavailableError({
         reason: 'The "mysql2/promise" module does not export createConnection.',
@@ -441,7 +443,7 @@ function openMysql(url: string, cwd: string) {
 export function disconnectedDatabase(input?: { readonly reason: string | null }): {
   readonly status: {
     readonly connected: boolean
-    readonly dialect: 'postgresql' | 'mysql' | 'sqlite' | null
+    readonly dialect: Dialect | null
     readonly url: string | null
     readonly source: UrlSource | null
     readonly error: string | null

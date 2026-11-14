@@ -1087,6 +1087,7 @@ export default defineConfig({
           'src/seed/load-config.ts',
           'src/database/url.ts',
           'src/database/errors.ts',
+          'src/file/project.ts',
           'src/core/errors.ts',
           'src/migrate/errors.ts',
           'src/format/index.ts',

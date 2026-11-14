@@ -3,7 +3,7 @@ import path from 'node:path'
 // wins, its dialect, and how it is shown. Pure: no environment, no file, no Effect (url.ts reads
 // the environment, resolve.ts the files, and driver.ts opens what this names).
 
-import { LIBSQL_SCHEMES, SECRET_QUERY_PARAMETER } from '../../constants/index.js'
+import { DIALECT_SCHEMES, LIBSQL_SCHEMES, SECRET_QUERY_PARAMETER } from '../../constants/index.js'
 import type { Dialect, UrlSource } from '../../types/index.js'
 
 export type { Dialect, UrlSource } from '../../types/index.js'
@@ -89,6 +89,9 @@ export function makeDatabaseUrlChoice(input: {
   }
 }
 
+// In the order a scheme is looked up in, which no two dialects share.
+const DIALECTS = ['postgresql', 'mysql', 'sqlite'] as const satisfies readonly Dialect[]
+
 /** The dialect from the URL scheme, falling back to the schema provider. */
 export function makeDialect(input: {
   readonly url: string
@@ -96,9 +99,8 @@ export function makeDialect(input: {
   readonly schemaProvider: string | null
 }): Dialect | null {
   const scheme = input.url.split(':')[0]?.toLowerCase() ?? ''
-  if (scheme === 'postgres' || scheme === 'postgresql') return 'postgresql'
-  if (scheme === 'mysql') return 'mysql'
-  if (scheme === 'file' || scheme === 'libsql') return 'sqlite'
+  const named = DIALECTS.find((dialect) => DIALECT_SCHEMES[dialect].includes(scheme))
+  if (named !== undefined) return named
   const provider = input.schemaProvider
   if (provider === 'postgresql' || provider === 'cockroachdb') return 'postgresql'
   if (provider === 'mysql') return 'mysql'

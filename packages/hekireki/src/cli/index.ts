@@ -4,6 +4,7 @@ import { Console, Effect, Schema } from 'effect'
 import { CliError, Command, Flag } from 'effect/cli'
 
 import { version } from '../../package.json' with { type: 'json' }
+import { DIALECT_SCHEMES, LIBSQL_SCHEMES } from '../constants/index.js'
 import { exists } from '../file/index.js'
 import { DEFAULT_SCHEMA_PATHS, prismaSchemaPath } from '../schema/path.js'
 import { DEFAULT_PORT } from '../studio/server/constants/index.js'
@@ -14,11 +15,12 @@ const COMMAND_NAME = 'hekireki'
 const STATIC_DIR = path.resolve(import.meta.dirname, '../studio')
 
 // Checked while the command line is read, so a URL Studio has no driver for is answered by this
-// sentence rather than by whatever the driver says. The schemes are the ones `makeDialect` reads,
-// and those a libSQL server (Turso, sqld) answers on, which `isLibsqlUrl` opens with @libsql/client.
+// sentence rather than by whatever the driver says. The schemes are the ones that name a dialect
+// and those a libSQL server (Turso, sqld) answers on, as src/constants/database.ts lists them.
+const URL_SCHEMES = [...Object.values(DIALECT_SCHEMES).flat(), ...LIBSQL_SCHEMES]
 const DatabaseUrl = Schema.String.pipe(
   Schema.check(
-    Schema.isPattern(/^(?:postgres|postgresql|mysql|file|libsql|https?|wss?):/u, {
+    Schema.isPattern(new RegExp(`^(?:${URL_SCHEMES.join('|')}):`, 'u'), {
       message:
         'a postgres://, postgresql://, mysql://, file: or libsql:// connection string (http(s):// or ws(s):// for a libSQL server)',
     }),
@@ -172,6 +174,11 @@ function studio() {
         command: `${COMMAND_NAME} studio --url file:./dev.db`,
         description:
           'Browse a SQLite file, resolved from the schema directory as Prisma resolves it',
+      },
+      {
+        command: `${COMMAND_NAME} studio --url "libsql://app-org.turso.io?authToken=$TURSO_AUTH_TOKEN"`,
+        description:
+          'Browse a Turso database (or a libSQL server), through the project @libsql/client',
       },
       { command: `${COMMAND_NAME} studio -p 3000`, description: 'Listen on another port' },
     ]),

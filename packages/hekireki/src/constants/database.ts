@@ -34,12 +34,25 @@ export const ADAPTERS: Readonly<Record<Dialect, { readonly pkg: string; readonly
 export const LIBSQL_ADAPTER = { pkg: '@prisma/adapter-libsql', name: 'PrismaLibSql' } as const
 
 /**
+ * The URL schemes that name their dialect themselves. A URL of another scheme is read by the
+ * schema's provider (`makeDialect`), and the CLI's `--url` check takes these with `LIBSQL_SCHEMES`.
+ *
+ * May change with a driver or a service: `pg` and Prisma take `postgres://` and `postgresql://`,
+ * `mysql2` takes `mysql://` (MariaDB too), and libSQL `libsql://`. A driver that comes to take
+ * another scheme (as `mariadb://`) is added here and opened in driver.ts.
+ */
+export const DIALECT_SCHEMES: Readonly<Record<Dialect, readonly string[]>> = {
+  postgresql: ['postgres', 'postgresql'],
+  mysql: ['mysql'],
+  sqlite: ['file', 'libsql'],
+}
+
+/**
  * The schemes a libSQL server answers on: Turso's `libsql://`, and `http(s)://` / `ws(s)://` for
  * `sqld`. (`file:` is a libSQL scheme as well, but stays with node:sqlite here.)
  *
  * May change with `@libsql/client` (the schemes its `createClient` accepts) or with Turso (the URL
- * its dashboard and CLI hand out). The CLI's `--url` check (src/cli/index.ts) lists the same
- * schemes and has to follow.
+ * its dashboard and CLI hand out). The CLI's `--url` check (src/cli/index.ts) is built from these.
  */
 export const LIBSQL_SCHEMES: ReadonlySet<string> = new Set(['libsql', 'http', 'https', 'ws', 'wss'])
 
