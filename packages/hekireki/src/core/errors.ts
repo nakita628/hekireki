@@ -9,3 +9,8 @@ export class GeneratorConfigError extends Data.TaggedError('GeneratorConfigError
 export class QueryCompilerError extends Data.TaggedError('QueryCompilerError')<{
   readonly message: string
 }> {}
+
+/** Hono Takibi is not installed, or refused the document or the files it was to write. */
+export class HonoTakibiError extends Data.TaggedError('HonoTakibiError')<{
+  readonly message: string
+}> {}

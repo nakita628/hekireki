@@ -96,7 +96,7 @@ packages/hekireki/src/
 ├── bin/         # CLI shims registered as prisma generator providers
 ├── emit/        # file-writing boundary (the only place with I/O side effects)
 ├── format/      # oxfmt formatting for TypeScript output
-├── database/    # where a database URL comes from (--url, hekireki.config.ts, prisma.config.ts, .env), shared by studio, seed and migrate
+├── database/    # where a database URL comes from (--url, hekireki.config.ts, prisma.config.ts, .env) and the driver that opens it (PostgreSQL, MySQL, SQLite), shared by studio, seed and migrate
 ├── schema/      # the Prisma schema as studio, seed and migrate read it: the files (down through a schema directory), getDMMF, the datasource and generator blocks; path.ts finds it and the Prisma config as Prisma does, apart from the engine so `--help` stays light
 ├── migrate/     # `hekireki migrate check` and `plan`: DMMF and the database's catalogue → count queries (read through the CTEs of the fixes the Studio decisions make, `.hekireki/migrate.json`) → report, or the fixes as SQL, written into Prisma's migration.sql with `--migration`
 │   ├── domain/    # pure: expected tables, the catalogue's rows as tables, conversions, checks, fixes (`fixes/`), advice, the rewritten migration, the plan; no Effect, no I/O
