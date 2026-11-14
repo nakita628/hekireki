@@ -186,5 +186,8 @@
     "hono-takibi": {
       "optional": true
     }
+  },
+  "engines": {
+    "node": "^20.19 || ^22.12 || >=24.0"
   }
 }
