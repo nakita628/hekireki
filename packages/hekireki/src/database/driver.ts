@@ -9,16 +9,22 @@ import * as z from 'zod'
 
 import { removePath } from '../file/index.js'
 import { quoteIdentifier, stringLiteral } from '../sql/index.js'
-import { DatabaseError, DatabaseUnavailableError } from './errors.js'
-import { resolveDatabaseUrl } from './resolve.js'
+import {
+  LibsqlResultSet,
+  makeLibsqlQueryResult,
+  makeLibsqlRawResult,
+  READ_STATEMENT,
+} from './domain/results.js'
 import {
   isLibsqlUrl,
   makeDialect,
   makePostgresSchema,
   makeRedactedUrl,
   makeSqliteFilePath,
-} from './url.js'
-import type { UrlSource } from './url.js'
+} from './domain/url.js'
+import type { UrlSource } from './domain/url.js'
+import { DatabaseError, DatabaseUnavailableError } from './errors.js'
+import { resolveDatabaseUrl } from './resolve.js'
 
 /** An open connection: every operation is an Effect that fails with the driver's message. */
 export type Driver = {
@@ -132,9 +138,6 @@ const SqliteRunInfo = z
   .object({ changes: z.number().meta({ description: 'Rows the statement changed.', example: 1 }) })
   .meta({ description: 'What node:sqlite returns from statement.run()' })
 
-// A statement node:sqlite answers with rows (`all`) rather than a change count (`run`).
-const READ_STATEMENT = /^\s*(?:select|with|pragma|explain|show|describe|values)\b/iu
-
 const NO_SQLITE =
   'SQLite support needs the built-in node:sqlite module (Node.js 22.13 or newer).\n   Upgrade Node.js or pass --url pointing at a PostgreSQL/MySQL database.'
 
@@ -213,29 +216,6 @@ function openSqlite(url: string, baseDir: string) {
   })
 }
 
-const LibsqlResultSet = z
-  .object({
-    columns: z
-      .array(z.string())
-      .meta({ description: 'The column names, in order.', example: ['id', 'email'] }),
-    columnTypes: z.array(z.string()).meta({
-      description: 'The declared type of each column, empty for an expression.',
-      example: ['INTEGER', 'TEXT'],
-    }),
-    rows: z
-      .array(z.custom<ArrayLike<unknown>>((value) => typeof value === 'object' && value !== null))
-      .meta({ description: 'The rows, each positional (and keyed by name too).' }),
-    rowsAffected: z.number().meta({ description: 'Rows the statement changed.', example: 1 }),
-  })
-  .meta({ description: 'What @libsql/client returns from execute()' })
-
-/** The rows of a libSQL result keyed by column name, as `Driver.query` answers them. */
-function keyedRows(set: z.infer<typeof LibsqlResultSet>) {
-  return set.rows.map((row) =>
-    Object.fromEntries(set.columns.map((column, index) => [column, row[index] ?? null])),
-  )
-}
-
 const LibsqlModule = z
   .object({
     createClient: z
@@ -296,23 +276,10 @@ function openLibsql(url: string, cwd: string) {
       remote: true,
       query: (statement) =>
         execute(statement).pipe(
-          Effect.map((set) => ({
-            columns: set.columns,
-            rows: keyedRows(set),
-            rowCount: READ_STATEMENT.test(statement.sql) ? set.rows.length : set.rowsAffected,
-          })),
+          Effect.map((set) => makeLibsqlQueryResult({ sql: statement.sql, set })),
         ),
       queryRaw: (statement) =>
-        execute(statement).pipe(
-          Effect.map((set) => ({
-            columns: set.columns.map((name, index) => ({
-              name,
-              // An expression has no declared type: libSQL gives it as the empty string.
-              nativeType: set.columnTypes[index] === '' ? null : (set.columnTypes[index] ?? null),
-            })),
-            rows: set.rows.map((row) => set.columns.map((_, index) => row[index] ?? null)),
-          })),
-        ),
+        execute(statement).pipe(Effect.map((set) => makeLibsqlRawResult({ set }))),
       executeRaw: (statement) => execute(statement).pipe(Effect.map((set) => set.rowsAffected)),
       executeScript: (script) =>
         Effect.tryPromise({ try: () => client.executeMultiple(script), catch: driverError }),

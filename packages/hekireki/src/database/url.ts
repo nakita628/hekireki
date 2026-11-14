@@ -1,45 +1,16 @@
-import path from 'node:path'
-
 import { Config, Data, Effect, Option } from 'effect'
 
-/** Where a database URL was found, in precedence order. */
-export type UrlSource = 'flag' | 'hekireki' | 'prisma' | 'env'
+import { makeDatabaseUrlChoice, makeDatasourceUrl, makeSchemaDatasourceUrl } from './domain/url.js'
 
-/** The SQL dialects a URL can point at. */
-export type Dialect = 'postgresql' | 'mysql' | 'sqlite'
+// The database URL as the environment gives it: the one place that reads a variable. What the
+// URL text says, and which place wins, is domain/url.ts.
+
+export type { Dialect, UrlSource } from './domain/url.js'
 
 /** No place named a database URL; `reason` says where one would be looked for. */
 export class DatabaseUrlNotFoundError extends Data.TaggedError('DatabaseUrlNotFoundError')<{
   readonly reason: string
 }> {}
-
-/**
- * The `datasource.url` of the Prisma config: a variable, as `env("NAME")`, `process.env.NAME` or
- * `process.env["NAME"]`, or a literal; other shapes are not recognised.
- */
-function makeDatasourceUrl(input: { readonly configText: string }) {
-  const block = /datasource\s*:\s*\{([^}]*)\}/u.exec(input.configText)?.[1]
-  if (!block) return null
-  const env =
-    /url\s*:\s*env\(\s*["'`]([^"'`]+)["'`]\s*\)/u.exec(block)?.[1] ??
-    /url\s*:\s*process\.env(?:\.([A-Za-z_$][\w$]*)|\[\s*["'`]([^"'`]+)["'`]\s*\])/u
-      .exec(block)
-      ?.slice(1)
-      .find((name) => name !== undefined)
-  if (env) return { kind: 'env', name: env } as const
-  const literal = /url\s*:\s*["'`]([^"'`]+)["'`]/u.exec(block)?.[1]
-  return literal ? ({ kind: 'literal', value: literal } as const) : null
-}
-
-/** The `url` of the schema's `datasource` block (Prisma 6 and earlier), as `env("NAME")` or a literal. */
-function makeSchemaDatasourceUrl(input: { readonly schemaText: string }) {
-  const block = /datasource\s+\w+\s*\{([^}]*)\}/u.exec(input.schemaText)?.[1]
-  if (!block) return null
-  const env = /^\s*url\s*=\s*env\(\s*"([^"]+)"\s*\)/mu.exec(block)?.[1]
-  if (env) return { kind: 'env', name: env } as const
-  const literal = /^\s*url\s*=\s*"([^"]+)"/mu.exec(block)?.[1]
-  return literal ? ({ kind: 'literal', value: literal } as const) : null
-}
 
 /**
  * A variable of the environment, as the `ConfigProvider` this runs with reads it: the process
@@ -80,85 +51,15 @@ export function makeDatabaseUrl(input: {
     const named = datasource?.kind === 'env' ? yield* environmentVariable(datasource.name) : null
     // DATABASE_URL, Prisma's default name, is read only when Prisma names nothing.
     const fallback = datasource === null ? yield* environmentVariable('DATABASE_URL') : null
-    const found: { readonly url: string; readonly source: UrlSource } | null =
-      input.explicit !== null
-        ? { url: input.explicit, source: 'flag' }
-        : input.configUrl !== null && input.configUrl !== ''
-          ? { url: input.configUrl, source: 'hekireki' }
-          : datasource?.kind === 'literal'
-            ? { url: datasource.value, source: 'prisma' }
-            : named !== null
-              ? { url: named, source: 'prisma' }
-              : fallback !== null
-                ? { url: fallback, source: 'env' }
-                : null
-    if (found !== null) return found
-    const where = fromConfig === null ? 'the schema' : (input.configName ?? 'prisma.config.ts')
-    return yield* new DatabaseUrlNotFoundError({
-      reason:
-        datasource?.kind === 'env'
-          ? `${where} reads the database URL from env("${datasource.name}"), but ${datasource.name} is not set.\n   Set it in .env or the environment, or pass --url <connection string>.`
-          : 'No database URL found.\n   Set `url` in hekireki.config.ts, name the variable in prisma.config.ts (`datasource: { url: env("DATABASE_URL") }`) and set it in .env or the environment, or pass --url <connection string>.',
+    const choice = makeDatabaseUrlChoice({
+      explicit: input.explicit,
+      configUrl: input.configUrl,
+      datasource,
+      named,
+      fallback,
+      where: fromConfig === null ? 'the schema' : (input.configName ?? 'prisma.config.ts'),
     })
+    if (choice.found !== null) return choice.found
+    return yield* new DatabaseUrlNotFoundError({ reason: choice.reason })
   })
-}
-
-/** The dialect from the URL scheme, falling back to the schema provider. */
-export function makeDialect(input: {
-  readonly url: string
-  /** The datasource provider of the schema, when the scheme says nothing. */
-  readonly schemaProvider: string | null
-}): Dialect | null {
-  const scheme = input.url.split(':')[0]?.toLowerCase() ?? ''
-  if (scheme === 'postgres' || scheme === 'postgresql') return 'postgresql'
-  if (scheme === 'mysql') return 'mysql'
-  if (scheme === 'file' || scheme === 'libsql') return 'sqlite'
-  const provider = input.schemaProvider
-  if (provider === 'postgresql' || provider === 'cockroachdb') return 'postgresql'
-  if (provider === 'mysql') return 'mysql'
-  if (provider === 'sqlite') return 'sqlite'
-  return null
-}
-
-/** The schemes a libSQL server answers on: Turso's `libsql://`, and `http(s)://` / `ws(s)://` for `sqld`. */
-const LIBSQL_SCHEMES = new Set(['libsql', 'http', 'https', 'ws', 'wss'])
-
-/**
- * Whether a SQLite URL names a libSQL server (Turso, `sqld`) rather than a file. An `http(s)://`
- * or `ws(s)://` URL is one only for a SQLite schema: that is what `makeDialect` reads it as.
- *
- * @example
- * isLibsqlUrl({ url: 'libsql://app-org.turso.io?authToken=…' }) // true
- * isLibsqlUrl({ url: 'file:./dev.db' }) // false
- */
-export function isLibsqlUrl(input: { readonly url: string }) {
-  return LIBSQL_SCHEMES.has(input.url.split(':')[0]?.toLowerCase() ?? '')
-}
-
-/** The database file for a `file:` URL, relative to the schema directory; `:memory:` stays as is. */
-export function makeSqliteFilePath(input: {
-  readonly url: string
-  /** The directory relative paths resolve against. */
-  readonly baseDir: string
-}) {
-  const target = input.url.replace(/^file:/u, '').split('?')[0] ?? ''
-  if (target === ':memory:' || target === '') return ':memory:'
-  return path.isAbsolute(target) ? target : path.resolve(input.baseDir, target)
-}
-
-/** Hides the password of a connection URL, and a token or password passed as a query parameter (Turso's `?authToken=`). */
-export function makeRedactedUrl(input: { readonly url: string }) {
-  return input.url
-    .replaceAll(/(\/\/[^:/@]+:)[^@/]+@/gu, '$1***@')
-    .replaceAll(/([?&](?:authToken|auth_token|token|password)=)[^&#]*/giu, '$1***')
-}
-
-/**
- * The `?schema=` of a PostgreSQL URL, as Prisma spells the namespace to use. `pg` ignores the
- * parameter, so Studio sets the search path itself; `public` needs no setting.
- */
-export function makePostgresSchema(input: { readonly url: string }) {
-  // `URL.parse` answers null for text that is not a URL rather than throwing.
-  const name = URL.parse(input.url)?.searchParams.get('schema') ?? null
-  return name === null || name === '' || name === 'public' ? null : name
 }

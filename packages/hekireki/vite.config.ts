@@ -809,6 +809,33 @@ export default defineConfig({
         },
       },
       {
+        // database/domain is the pure half of src/database: a URL's text and a driver's result
+        // in, what they say out (the dialect, the URL that wins, the rows as Driver answers them).
+        // It reads no environment, opens no connection and imports nothing of Effect: url.ts reads
+        // the environment, resolve.ts the files, driver.ts the database.
+        files: ['src/database/domain/**'],
+        rules: {
+          'custom/generator-pure': 'error',
+          'no-restricted-imports': [
+            'error',
+            {
+              paths: [
+                { name: 'node:fs', message: 'file I/O belongs in src/file' },
+                { name: 'node:fs/promises', message: 'file I/O belongs in src/file' },
+                { name: 'effect', message: 'domain depends on zod at most, never on effect' },
+              ],
+              patterns: [
+                {
+                  regex: '^\\.\\./',
+                  message:
+                    'database/domain must stay pure: it imports nothing of src/database or the rest of hekireki',
+                },
+              ],
+            },
+          ],
+        },
+      },
+      {
         // The studio client is browser code bundled by Vite: it only takes the contract types
         // from the server side.
         files: ['src/studio/client/**'],

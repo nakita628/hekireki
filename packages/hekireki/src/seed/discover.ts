@@ -6,8 +6,8 @@ import { pathToFileURL } from 'node:url'
 import { Effect } from 'effect'
 import type * as z from 'zod'
 
+import { isLibsqlUrl, makePostgresSchema, makeSqliteFilePath } from '../database/domain/url.js'
 import type { Dialect } from '../database/url.js'
-import { isLibsqlUrl, makePostgresSchema, makeSqliteFilePath } from '../database/url.js'
 import type { GeneratorBlock } from '../schema/index.js'
 import { SeedDatabaseError } from './errors.js'
 
