@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import { ADAPTERS, adapterOf, LIBSQL_ADAPTER, makeAdapterArgs } from './adapter.js'
+import { ADAPTERS, LIBSQL_ADAPTER } from '../../constants/index.js'
+import { adapterOf, makeAdapterArgs } from './adapter.js'
 
 describe('adapterOf', () => {
   it("opens a libSQL server through its own adapter, and a SQLite file through SQLite's", () => {

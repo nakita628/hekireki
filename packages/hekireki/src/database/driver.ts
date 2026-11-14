@@ -7,6 +7,7 @@ import { layer as nodeFileSystemLayer } from '@effect/platform-node/NodeFileSyst
 import { Effect } from 'effect'
 import * as z from 'zod'
 
+import { DISCONNECTED, NO_SQLITE, READ_STATEMENT } from '../constants/index.js'
 import { removePath } from '../file/index.js'
 import { quoteIdentifier, stringLiteral } from '../sql/index.js'
 import {
@@ -22,7 +23,6 @@ import {
   makeSqliteChanges,
   makeSqliteRawResult,
   makeSqliteReadResult,
-  READ_STATEMENT,
 } from './domain/results.js'
 import {
   isLibsqlUrl,
@@ -121,9 +121,6 @@ const SqliteModule = z
       .meta({ description: 'The synchronous database class of node:sqlite.' }),
   })
   .meta({ description: 'The node:sqlite module' })
-
-const NO_SQLITE =
-  'SQLite support needs the built-in node:sqlite module (Node.js 22.13 or newer).\n   Upgrade Node.js or pass --url pointing at a PostgreSQL/MySQL database.'
 
 function openSqlite(url: string, baseDir: string) {
   return Effect.gen(function* () {
@@ -428,14 +425,6 @@ function openMysql(url: string, cwd: string) {
     return driver
   })
 }
-
-const DISCONNECTED = {
-  connected: false,
-  dialect: null,
-  url: null,
-  source: null,
-  error: null,
-} as const
 
 /**
  * The database as the use cases see it while none is open: its status, a driver that fails with

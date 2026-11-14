@@ -1,20 +1,10 @@
-import type { Dialect } from './url.js'
+import { ADAPTERS, LIBSQL_ADAPTER } from '../../constants/index.js'
+import type { Dialect } from '../../types/index.js'
 import { isLibsqlUrl, makePostgresSchema, makeSqliteFilePath } from './url.js'
 
 // The Prisma driver adapter a database is opened through, and what it is constructed with.
 // Pure: a dialect and a URL in, a package, a class name and the arguments out. seed/discover.ts
 // loads the package from the project and constructs the class.
-
-/** The driver adapter package and class Prisma publishes for each dialect. */
-export const ADAPTERS: Readonly<Record<Dialect, { readonly pkg: string; readonly name: string }>> =
-  {
-    postgresql: { pkg: '@prisma/adapter-pg', name: 'PrismaPg' },
-    mysql: { pkg: '@prisma/adapter-mariadb', name: 'PrismaMariaDb' },
-    sqlite: { pkg: '@prisma/adapter-better-sqlite3', name: 'PrismaBetterSqlite3' },
-  }
-
-/** The adapter of a libSQL server (Turso, `sqld`), which SQLite's own adapter cannot reach. */
-export const LIBSQL_ADAPTER = { pkg: '@prisma/adapter-libsql', name: 'PrismaLibSql' } as const
 
 /**
  * The driver adapter a database is opened through: by its dialect, and libSQL by its URL.

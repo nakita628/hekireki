@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test'
 
+import { READ_STATEMENT } from '../../constants/index.js'
 import {
   makeLibsqlQueryResult,
   makeLibsqlRawResult,
@@ -12,7 +13,6 @@ import {
   makeSqliteChanges,
   makeSqliteRawResult,
   makeSqliteReadResult,
-  READ_STATEMENT,
 } from './results.js'
 
 describe('READ_STATEMENT', () => {

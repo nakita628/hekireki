@@ -1,14 +1,12 @@
 import path from 'node:path'
-
 // The database URL as text: where a schema or a Prisma config names it, which of the places
 // wins, its dialect, and how it is shown. Pure: no environment, no file, no Effect (url.ts reads
 // the environment, resolve.ts the files, and driver.ts opens what this names).
 
-/** Where a database URL was found, in precedence order. */
-export type UrlSource = 'flag' | 'hekireki' | 'prisma' | 'env'
+import { LIBSQL_SCHEMES, SECRET_QUERY_PARAMETER } from '../../constants/index.js'
+import type { Dialect, UrlSource } from '../../types/index.js'
 
-/** The SQL dialects a URL can point at. */
-export type Dialect = 'postgresql' | 'mysql' | 'sqlite'
+export type { Dialect, UrlSource } from '../../types/index.js'
 
 /** A `url` as a Prisma config or schema writes it: the variable it names, or the URL itself. */
 export type DatasourceUrl =
@@ -108,9 +106,6 @@ export function makeDialect(input: {
   return null
 }
 
-/** The schemes a libSQL server answers on: Turso's `libsql://`, and `http(s)://` / `ws(s)://` for `sqld`. */
-const LIBSQL_SCHEMES = new Set(['libsql', 'http', 'https', 'ws', 'wss'])
-
 /**
  * Whether a SQLite URL names a libSQL server (Turso, `sqld`) rather than a file. An `http(s)://`
  * or `ws(s)://` URL is one only for a SQLite schema: that is what `makeDialect` reads it as.
@@ -138,7 +133,7 @@ export function makeSqliteFilePath(input: {
 export function makeRedactedUrl(input: { readonly url: string }) {
   return input.url
     .replaceAll(/(\/\/[^:/@]+:)[^@/]+@/gu, '$1***@')
-    .replaceAll(/([?&](?:authToken|auth_token|token|password)=)[^&#]*/giu, '$1***')
+    .replaceAll(SECRET_QUERY_PARAMETER, '$1***')
 }
 
 /**

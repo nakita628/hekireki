@@ -1,19 +1,11 @@
 import * as z from 'zod'
 
+import { READ_STATEMENT } from '../../constants/index.js'
+
 // What a driver package hands back, turned into the shapes `Driver` answers with. Pure: the
 // result of a statement in, rows out. driver.ts runs the statement; this only reads its result,
 // so every shape can be tested without a database. A result that does not read as the package
 // documents it is taken as empty, as the driver took it before: zod's `.catch()`, not a promise.
-
-/**
- * A statement SQLite answers with rows rather than a change count: what node:sqlite needs to
- * know to call `all` rather than `run`, and what the count of a libSQL result is.
- *
- * @example
- * READ_STATEMENT.test('  with t as (select 1) select * from t') // true
- * READ_STATEMENT.test('UPDATE users SET name = ?') // false
- */
-export const READ_STATEMENT = /^\s*(?:select|with|pragma|explain|show|describe|values)\b/iu
 
 const DriverRows = z
   .array(z.record(z.string(), z.unknown()))

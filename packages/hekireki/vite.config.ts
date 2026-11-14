@@ -812,7 +812,8 @@ export default defineConfig({
         // database/domain is the pure half of src/database: a URL's text and a driver's result
         // in, what they say out (the dialect, the URL that wins, the rows as Driver answers them).
         // It reads no environment, opens no connection and imports nothing of Effect: url.ts reads
-        // the environment, resolve.ts the files, driver.ts the database.
+        // the environment, resolve.ts the files, driver.ts the database. Its fixed values live in
+        // src/constants and its words in src/types, the two shared leaves.
         files: ['src/database/domain/**'],
         rules: {
           'custom/generator-pure': 'error',
@@ -826,9 +827,9 @@ export default defineConfig({
               ],
               patterns: [
                 {
-                  regex: '^\\.\\./',
+                  group: ['../**', '!../../constants/**', '!../../types/**'],
                   message:
-                    'database/domain must stay pure: it imports nothing of src/database or the rest of hekireki',
+                    'database/domain must stay pure: it imports nothing of src/database or the rest of hekireki but the shared constants and types',
                 },
               ],
             },
