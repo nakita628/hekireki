@@ -447,6 +447,9 @@ importers:
       nanoid:
         specifier: ^6.0.2
         version: 6.0.2
+      oxc-parser:
+        specifier: ^0.155.0
+        version: 0.155.0
       oxfmt:
         specifier: ^0.75.0
         version: 0.75.0(vite-plus@1.4.0(@types/node@26.6.6)(@typescript/native-preview@7.0.0-dev.20260707.2)(@vitest/ui@5.0.5)(esbuild@0.28.2)(jiti@2.7.0)(playwright@1.64.1)(tsx@4.23.15)(typescript@7.0.2)(yaml@2.9.1))
@@ -572,8 +575,8 @@ importers:
         specifier: 1.0.0-rc.5
         version: 1.0.0-rc.5(@electric-sql/pglite@0.4.3)(@sinclair/typebox@0.34.52)(@types/better-sqlite3@9.6.0)(@types/pg@8.23.1)(arktype@2.2.9)(better-sqlite3@13.0.3)(effect@4.1.2)(mysql2@3.24.6(@types/node@26.6.6))(pg@8.23.1)(postgres@3.4.7)(valibot@1.4.2(typescript@7.0.2))(zod@4.6.7)
       hono-takibi:
-        specifier: ^0.28.0
-        version: 0.28.0(@types/node@26.6.6)(@typespec/http@1.17.0(@typespec/compiler@1.17.0(@types/node@26.6.6)))(@typespec/openapi@1.17.0(@typespec/compiler@1.17.0(@types/node@26.6.6))(@typespec/http@1.17.0(@typespec/compiler@1.17.0(@types/node@26.6.6))))(openapi-types@12.1.3)(redis@6.2.1)(vite-plus@1.4.0(@types/node@26.6.6)(@typescript/native-preview@7.0.0-dev.20260707.2)(@vitest/ui@5.0.5)(esbuild@0.28.2)(jiti@2.7.0)(playwright@1.64.1)(tsx@4.23.15)(typescript@7.0.2)(yaml@2.9.1))
+        specifier: link:../../../hono-takibi/packages/hono-takibi
+        version: link:../../../hono-takibi/packages/hono-takibi
       json-schema-to-ts:
         specifier: ^3.1.1
         version: 3.1.1
@@ -630,25 +633,6 @@ importers:
         version: 8.1.0-dev.9(@types/node@26.6.6)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(better-sqlite3@13.0.3)(magicast@0.5.3)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2)
 
 packages:
-
-  '@apidevtools/json-schema-ref-parser@16.0.5':
-    resolution: {integrity: sha512-z3LiEMqTP2FNu6u8bdUgBYErVuwMSZReOJy1MCEIB0BDHMoNgBtkciby32HOlcrfWwrOSzRU8YIsZ0CogYRuYQ==}
-    engines: {node: '>=22.19.0'}
-    peerDependencies:
-      '@types/json-schema': ^7.0.15
-
-  '@apidevtools/openapi-schemas@2.1.0':
-    resolution: {integrity: sha512-Zc1AlqrJlX3SlpupFGpiLi2EbteyP7fXmUOGup6/DnkRgjP9bgMM/ag+n91rsv0U1Gpz0H3VILA/o3bW7Ua6BQ==}
-    engines: {node: '>=10'}
-
-  '@apidevtools/swagger-methods@3.0.2':
-    resolution: {integrity: sha512-QAkD5kK2b1WfjDS/UQn/qQkbwF31uqRjPTrsCs5ZG9BQGAkjwvqGFjjPqAuzac/IYzpPtRzjCP1WrTuAIjMrXg==}
-
-  '@apidevtools/swagger-parser@13.1.0':
-    resolution: {integrity: sha512-dkCuqCWh5U7u0aurmmc/qvel2KeKDxHTwVtUdYonndIpD7mXV6AVaWNdvaja2HAy628z7FT/Qdz8sCgzwhgwKg==}
-    engines: {node: '>=22.19.0'}
-    peerDependencies:
-      openapi-types: '>=7'
 
   '@ark/schema@0.56.8':
     resolution: {integrity: sha512-R05TOe85oQBGFFw2zKMuZpqkXibLKuC/aJt6VwFn5Cjc4x3NkWfhvGRpRDycNkj3ddcHnOPtIsmjVowJO9Yxdw==}
@@ -1276,24 +1260,11 @@ packages:
   '@dagrejs/graphlib@4.0.6':
     resolution: {integrity: sha512-Hjv7hbfmSBMP4nVXMFt4gusqWWHghQF0qNT4V5KHo4Jatvd+2L5VHKFnnIjXVuDnaHIRz7ZuHSnlf0RuZkOwWA==}
 
-  '@effect/platform-node-shared@4.0.6':
-    resolution: {integrity: sha512-0PhyC4uG30xGtsajnxjkcBWfTjNRzUh4ZKl1Kvo/MNyCTb+W2O+fBzf7wCRCoqt+nLudiq4V7vX40Q8XIBuMaQ==}
-    engines: {node: '>=18.0.0'}
-    peerDependencies:
-      effect: ^4.0.6
-
   '@effect/platform-node-shared@4.1.2':
     resolution: {integrity: sha512-wSwl9A/G1hcVvF8nLI+YfB3EyOIDvWS6+lsTZBkmgDnPBL7m8YWZF+1HD+mdEsb52SUGfukip46Q3gRwSdk3QA==}
     engines: {node: '>=22.19.0'}
     peerDependencies:
       effect: ^4.1.2
-
-  '@effect/platform-node@4.0.6':
-    resolution: {integrity: sha512-gXvGHAy0/8PZbWvMMguloDUyeSP+rzYEo3FSEqUuGduxo9ORcGioDxPI+GOLCIFfam7VuNkmSUxBOiRMIrMrBw==}
-    engines: {node: '>=18.0.0'}
-    peerDependencies:
-      effect: ^4.0.6
-      redis: '>=5.0.0 <7.0.0'
 
   '@effect/platform-node@4.1.2':
     resolution: {integrity: sha512-ye0UjxORdd5Qu3paZ1LljgGOALWHt7muP9VTpjUSCNfcesiB/Hm7wPJIvZeu4gnwpTe5BtEnO1VHngWqjJp8mA==}
@@ -3300,9 +3271,6 @@ packages:
   '@types/js-levenshtein@1.1.3':
     resolution: {integrity: sha512-jd+Q+sD20Qfu9e2aEXogiO3vpOC1PYJOUdyN9gvs4Qrvkg4wF43L5OhqrPeokdv8TL0/mXoYfpkcoGZMNN2pkQ==}
 
-  '@types/json-schema@7.0.15':
-    resolution: {integrity: sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==}
-
   '@types/katex@0.16.8':
     resolution: {integrity: sha512-trgaNyfU+Xh2Tc+ABIb44a5AYUpicB3uwirOioeOkNPPbmgRNtcWyDeeFRzjPZENO9Vq8gvVqfhaaXWLlevVwg==}
 
@@ -4124,9 +4092,6 @@ packages:
   cacheable@2.5.0:
     resolution: {integrity: sha512-60cyAOytib/OzBw1JNSoSV/boK1AtHryDIjvVBk7XbN4ugfkM3+Sry7fEjNgPMGgOjuaZPAp8ruZ0Cxafwyq9g==}
 
-  call-me-maybe@1.0.2:
-    resolution: {integrity: sha512-HpX65o1Hnr9HH25ojC1YGs7HCQLq0GCOibSaWER0eNpgJ/Z1MZv2mTc7+xh6WOPxbRVcmgbv4hGU+uSQ/2xFZQ==}
-
   caniuse-lite@1.0.30001810:
     resolution: {integrity: sha512-TITQPUkaz+aVk5GL6NhOdwk1aEaNTSDPsGFWrTuhKGtjTF70jL/Oht2W4c6rXUe5fu7Ie19VIahAXHIIiWWNeg==}
 
@@ -4649,9 +4614,6 @@ packages:
   effect@3.20.0:
     resolution: {integrity: sha512-qMLfDJscrNG8p/aw+IkT9W7fgj50Z4wG5bLBy0Txsxz8iUHjDIkOgO3SV0WZfnQbNG2VJYb0b+rDLMrhM4+Krw==}
 
-  effect@4.0.6:
-    resolution: {integrity: sha512-Tc3mkzuLR6t6P9dhLt0D2GrxYtmU5td4XEJEiXCmILz53IRIfJyHsKZWjTA3xEjiwpNTtXBgI4iqYPxMztBDrw==}
-
   effect@4.1.2:
     resolution: {integrity: sha512-d3Oah1WyKxFLFh19yWheS5IXIVaITzxZ71JkE1rkUozq/6EcJSU5nPk5bF2QrSygZ3SQoiNQB8TsxFriyMeMaQ==}
 
@@ -4908,10 +4870,6 @@ packages:
     resolution: {integrity: sha512-iZyKG96/JwPz1N55vj2Ie2vXbhu440zfUfJvSwEqEbeLluk7NnapfGqa7LH0mOsnDxTF85Mx8/dyR6HfqcbmbQ==}
     engines: {node: '>=20'}
 
-  hono-takibi@0.28.0:
-    resolution: {integrity: sha512-tqbtitEAD5fK/ncoWJpGxN4rzqbUXV09krdnmn6qHkxeyA8kekOo5dEIAZzhPJcFrS88IwNxYtmyCvY9rFq9EA==}
-    hasBin: true
-
   hono@4.13.16:
     resolution: {integrity: sha512-AOLOEhvrV+iH92xXCnFr/5+3KjPKcI3xP63XJtX5spAnkznPdHijlIsUTpi7/9EhWqrTCekw5c5zh1K+YsVw7A==}
     engines: {node: '>=16.9.0'}
@@ -5088,10 +5046,6 @@ packages:
 
   js-yaml@5.4.3:
     resolution: {integrity: sha512-yzzNtgczwgoVHNigCyKTXcQJU4Y8t/ikU4UxXW0BvrLfHTGWZhsNcOT2s/a7vn81/4KqVnNmHjaUEPlvWnNwVw==}
-    hasBin: true
-
-  js-yaml@5.5.0:
-    resolution: {integrity: sha512-paNr4LFIFPjeeSmwNYdrb8FafLLG/Cr2Af3GjbsHJ5CxIjH4r0c2emlmRdAtpPAieP1gRVzk6buBbVP5gBMGAg==}
     hasBin: true
 
   jsesc@3.1.0:
@@ -5641,9 +5595,6 @@ packages:
   open@11.0.4:
     resolution: {integrity: sha512-++Zlftm0kVLPmzC06t6epuWmcRMDbI4z5P3NNX979WA/k23+NtSOynEGzsVfZwguKw2mi5umVgnBlJQMwRz4Pg==}
     engines: {node: '>=20'}
-
-  openapi-types@12.1.3:
-    resolution: {integrity: sha512-N4YtSYJqghVu4iek2ZUvcN/0aqH1kRDuNqzcycDxhOUpg7GdvLa2F3DgS6yBNhInhv2r/6I0Flkn7CqL8+nIcw==}
 
   openapi3-ts@4.6.2:
     resolution: {integrity: sha512-gyyil3DweqhXiEhTqtAs9wwRLfWHmetwhI4kmM5Rn0d6gtmK863Ki7qqbQnp9+Wwlqoe3B1LFWj7kMp5ctE4rQ==}
@@ -6758,26 +6709,6 @@ packages:
 
 snapshots:
 
-  '@apidevtools/json-schema-ref-parser@16.0.5(@types/json-schema@7.0.15)':
-    dependencies:
-      '@types/json-schema': 7.0.15
-      js-yaml: 5.5.0
-
-  '@apidevtools/openapi-schemas@2.1.0': {}
-
-  '@apidevtools/swagger-methods@3.0.2': {}
-
-  '@apidevtools/swagger-parser@13.1.0(openapi-types@12.1.3)':
-    dependencies:
-      '@apidevtools/json-schema-ref-parser': 16.0.5(@types/json-schema@7.0.15)
-      '@apidevtools/openapi-schemas': 2.1.0
-      '@apidevtools/swagger-methods': 3.0.2
-      '@types/json-schema': 7.0.15
-      ajv: 8.20.0
-      ajv-draft-04: 1.0.0(ajv@8.20.0)
-      call-me-maybe: 1.0.2
-      openapi-types: 12.1.3
-
   '@ark/schema@0.56.8':
     dependencies:
       '@ark/util': 0.56.8
@@ -7495,30 +7426,11 @@ snapshots:
 
   '@dagrejs/graphlib@4.0.6': {}
 
-  '@effect/platform-node-shared@4.0.6(effect@4.0.6)':
-    dependencies:
-      '@types/ws': 8.18.2
-      effect: 4.0.6
-      ws: 8.22.1
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
-
   '@effect/platform-node-shared@4.1.2(effect@4.1.2)':
     dependencies:
       '@types/ws': 8.18.2
       effect: 4.1.2
       ws: 8.22.1
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
-
-  '@effect/platform-node@4.0.6(effect@4.0.6)(redis@6.2.1)':
-    dependencies:
-      '@effect/platform-node-shared': 4.0.6(effect@4.0.6)
-      effect: 4.0.6
-      redis: 6.2.1
-      undici: 8.12.3
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -9305,8 +9217,6 @@ snapshots:
 
   '@types/js-levenshtein@1.1.3': {}
 
-  '@types/json-schema@7.0.15': {}
-
   '@types/katex@0.16.8': {}
 
   '@types/lodash@4.17.27': {}
@@ -10057,8 +9967,6 @@ snapshots:
       keyv: 5.6.0
       qified: 0.10.1
 
-  call-me-maybe@1.0.2: {}
-
   caniuse-lite@1.0.30001810: {}
 
   ccount@1.1.0: {}
@@ -10418,8 +10326,6 @@ snapshots:
       '@standard-schema/spec': 1.1.0
       fast-check: 3.23.2
 
-  effect@4.0.6: {}
-
   effect@4.1.2: {}
 
   electron-to-chromium@1.5.433: {}
@@ -10673,33 +10579,6 @@ snapshots:
     dependencies:
       hookified: 1.15.1
 
-  hono-takibi@0.28.0(@types/node@26.6.6)(@typespec/http@1.17.0(@typespec/compiler@1.17.0(@types/node@26.6.6)))(@typespec/openapi@1.17.0(@typespec/compiler@1.17.0(@types/node@26.6.6))(@typespec/http@1.17.0(@typespec/compiler@1.17.0(@types/node@26.6.6))))(openapi-types@12.1.3)(redis@6.2.1)(vite-plus@1.4.0(@types/node@26.6.6)(@typescript/native-preview@7.0.0-dev.20260707.2)(@vitest/ui@5.0.5)(esbuild@0.28.2)(jiti@2.7.0)(playwright@1.64.1)(tsx@4.23.15)(typescript@7.0.2)(yaml@2.9.1)):
-    dependencies:
-      '@apidevtools/swagger-parser': 13.1.0(openapi-types@12.1.3)
-      '@effect/platform-node': 4.0.6(effect@4.0.6)(redis@6.2.1)
-      '@typespec/compiler': 1.17.0(@types/node@26.6.6)
-      '@typespec/openapi3': 1.17.0(@typespec/compiler@1.17.0(@types/node@26.6.6))(@typespec/http@1.17.0(@typespec/compiler@1.17.0(@types/node@26.6.6)))(@typespec/openapi@1.17.0(@typespec/compiler@1.17.0(@types/node@26.6.6))(@typespec/http@1.17.0(@typespec/compiler@1.17.0(@types/node@26.6.6))))
-      effect: 4.0.6
-      oxc-parser: 0.155.0
-      oxfmt: 0.74.0(vite-plus@1.4.0(@types/node@26.6.6)(@typescript/native-preview@7.0.0-dev.20260707.2)(@vitest/ui@5.0.5)(esbuild@0.28.2)(jiti@2.7.0)(playwright@1.64.1)(tsx@4.23.15)(typescript@7.0.2)(yaml@2.9.1))
-    transitivePeerDependencies:
-      - '@astrojs/compiler-rs'
-      - '@types/node'
-      - '@typespec/events'
-      - '@typespec/http'
-      - '@typespec/json-schema'
-      - '@typespec/openapi'
-      - '@typespec/sse'
-      - '@typespec/streams'
-      - '@typespec/versioning'
-      - '@typespec/xml'
-      - bufferutil
-      - openapi-types
-      - redis
-      - svelte
-      - utf-8-validate
-      - vite-plus
-
   hono@4.13.16: {}
 
   hookified@1.15.1: {}
@@ -10825,10 +10704,6 @@ snapshots:
   js-yaml@5.4.3:
     dependencies:
       argparse: 2.0.1
-
-  js-yaml@5.5.0:
-    dependencies:
-      argparse: 3.0.4
 
   jsesc@3.1.0: {}
 
@@ -11490,8 +11365,6 @@ snapshots:
       powershell-utils: 0.2.1
       wsl-utils: 1.0.1
 
-  openapi-types@12.1.3: {}
-
   openapi3-ts@4.6.2:
     dependencies:
       yaml: 2.9.1
@@ -11553,6 +11426,7 @@ snapshots:
       '@oxfmt/binding-win32-ia32-msvc': 0.74.0
       '@oxfmt/binding-win32-x64-msvc': 0.74.0
       vite-plus: 1.4.0(@types/node@26.6.6)(@typescript/native-preview@7.0.0-dev.20260707.2)(@vitest/ui@5.0.5)(esbuild@0.28.2)(jiti@2.7.0)(playwright@1.64.1)(tsx@4.23.15)(typescript@7.0.2)(yaml@2.9.1)
+    optional: true
 
   oxfmt@0.74.0(vite-plus@1.4.0(@types/node@26.6.6)(@vitest/ui@5.0.5(vitest@5.0.5))(esbuild@0.28.2)(jiti@2.7.0)(playwright@1.64.1)(tsx@4.23.15)(typescript@7.0.2)(yaml@2.9.1)):
     dependencies:

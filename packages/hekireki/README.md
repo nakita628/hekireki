@@ -111,6 +111,45 @@ Every generator keeps Prisma's names: a model or field without `@map` keeps the 
 schema, and each ORM is told so where its own convention would say otherwise. Active Record and Ecto
 take `///` lines of their own, described below.
 
+### API
+
+| Provider                    | Writes                                     | Options                                                   |
+| --------------------------- | ------------------------------------------ | --------------------------------------------------------- |
+| `hekireki-zod-openapi-hono` | Hono app of the CRUD (`@hono/zod-openapi`) | `prisma` (`./prisma`), `auth` (`jwt`), `title`, `version` |
+
+`hekireki-zod-openapi-hono` writes, in the directory `output` names, `openapi.yaml`: the CRUD of
+each model, `GET` and `POST /users` and `GET`, `PATCH` and `DELETE /users/{id}`, with the rows as
+Prisma Client reads them, fields under their Prisma names. It then runs the template of
+[Hono Takibi](https://github.com/nakita628/hono-takibi) on it, `routeHandler`, which writes the
+routes and their Zod schemas in one file (`routes.ts`), a file of `RouteHandler`s per model
+(`handlers/`) and the app that registers each route with its handler (`index.ts`), and fills each
+handler with the call to Prisma Client: `prisma.user.findMany()`, `create`, and `findFirst`,
+`updateMany` and `deleteMany` by the key, answering 404 for a key no row has. The handlers import
+`prisma` from the module `prisma` names, as the app entry sees it; that module exports the client:
+
+```ts
+// src/prisma.ts
+import { PrismaPg } from '@prisma/adapter-pg'
+
+import { PrismaClient } from './generated/prisma/client'
+
+export const prisma = new PrismaClient({
+  adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
+})
+```
+
+With `auth = "jwt"`, every operation asks for a bearer JWT (`bearerAuth` in the document, and a
+401 among its answers), and the app entry runs `auth` on every model's paths,
+`app.use('/users/*', auth)`. `auth.ts`, written when it is not there and left as it is after, lets
+a request through with a JWT signed with HS256 by the secret `JWT_SECRET`, read from the runtime's
+environment; a handler reads the token's payload with `c.get('jwtPayload')`. A guard of a model's
+paths that is not in the app entry is added again when the generator runs.
+
+A handler that has a body is kept when the generator runs again, as Hono Takibi keeps it, so a
+handler changed by hand stays as it is; only an empty one is filled. A `BigInt` is answered as a
+number and `Bytes` as base64, which the handler encodes and decodes with `Buffer`. `hono-takibi`
+is a peer dependency: `npm install -D hono-takibi`.
+
 ### Active Record
 
 `hekireki-activerecord` writes `app/models` from the schema: `application_record.rb` and one model

@@ -72,7 +72,8 @@
     "hekireki-sqlalchemy": "dist/bin/sqlalchemy.js",
     "hekireki-typebox": "dist/bin/typebox.js",
     "hekireki-valibot": "dist/bin/valibot.js",
-    "hekireki-zod": "dist/bin/zod.js"
+    "hekireki-zod": "dist/bin/zod.js",
+    "hekireki-zod-openapi-hono": "dist/bin/zod-openapi-hono.js"
   },
   "files": [
     "dist"
@@ -117,6 +118,7 @@
     "effect": "^4.1.2",
     "hono": "^4.13.16",
     "nanoid": "^6.0.2",
+    "oxc-parser": "^0.155.0",
     "oxfmt": "^0.75.0",
     "sql-formatter": "^15.9.0",
     "ulidx": "^2.4.1",
@@ -160,7 +162,7 @@
     "arktype": "^2.2.9",
     "drizzle-kit": "1.0.0-rc.5",
     "drizzle-orm": "1.0.0-rc.5",
-    "hono-takibi": "^0.28.0",
+    "hono-takibi": "link:../../../hono-takibi/packages/hono-takibi",
     "json-schema-to-ts": "^3.1.1",
     "kysely": "^0.29.8",
     "monaco-editor": "^0.57.0",
@@ -176,5 +178,13 @@
     "typescript-5": "npm:typescript@^5.9.3",
     "yaml": "^2.9.1",
     "zustand": "^5.0.16"
+  },
+  "peerDependencies": {
+    "hono-takibi": ">=0.31.0"
+  },
+  "peerDependenciesMeta": {
+    "hono-takibi": {
+      "optional": true
+    }
   }
 }

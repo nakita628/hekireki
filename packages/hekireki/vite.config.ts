@@ -7,6 +7,7 @@ export default defineConfig({
       'bin/hekireki': './src/bin/hekireki.ts',
       'bin/atlas': './src/bin/atlas.ts',
       'bin/zod': './src/bin/zod.ts',
+      'bin/zod-openapi-hono': './src/bin/zod-openapi-hono.ts',
       'bin/valibot': './src/bin/valibot.ts',
       'bin/ecto': './src/bin/ecto.ts',
       'bin/arktype': './src/bin/arktype.ts',
