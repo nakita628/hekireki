@@ -111,7 +111,7 @@ describe('utils', () => {
       const result = isValibot(`Unique identifier for the user
 @z.uuid()
 @v.pipe(v.string(), v.uuid())`)
-      expect(result).toStrictEqual('pipe(v.string(), v.uuid())')
+      expect(result).toBe('pipe(v.string(), v.uuid())')
     })
     it.concurrent('extracts TypeBox validation', () => {
       const isTypeBox = makeValidationExtractor('@t.')
@@ -381,11 +381,11 @@ describe('extractObjectType', () => {
   })
 
   it('returns undefined for no annotation', () => {
-    expect(extractObjectType('Some description', '@z.')).toBe(undefined)
+    expect(extractObjectType('Some description', '@z.')).toBeUndefined()
   })
 
   it('returns undefined for undefined documentation', () => {
-    expect(extractObjectType(undefined, '@z.')).toBe(undefined)
+    expect(extractObjectType(undefined, '@z.')).toBeUndefined()
   })
 
   it('returns strict for @v.strictObject', () => {
@@ -409,7 +409,7 @@ describe('extractObjectType', () => {
   })
 
   it('ignores other prefixes', () => {
-    expect(extractObjectType('@v.strictObject', '@z.')).toBe(undefined)
+    expect(extractObjectType('@v.strictObject', '@z.')).toBeUndefined()
   })
 })
 

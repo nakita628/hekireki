@@ -150,7 +150,7 @@ describe('buildSeaOrmAttributes', () => {
 describe('seaOrmAttribute', () => {
   it('keeps two or more arguments on one line while they take at most 70 columns', () => {
     const args = ['column_name = "jsonObj"', `default_value = "${'a'.repeat(27)}"`] as const
-    expect(args.join(', ').length).toBe(70)
+    expect(args.join(', ')).toHaveLength(70)
     expect(seaOrmAttribute('    ', args)).toBe(`    #[sea_orm(${args.join(', ')})]`)
     expect(seaOrmAttribute('    ', [args[0], `default_value = "${'a'.repeat(28)}"`])).toBe(
       [
@@ -174,11 +174,11 @@ describe('seaOrmAttribute', () => {
 
   it('keeps one argument on one line while the line fits, one column less on a field', () => {
     const top = `table_name = "${'t'.repeat(73)}"`
-    expect(`#[sea_orm(${top})]`.length).toBe(100)
+    expect(`#[sea_orm(${top})]`).toHaveLength(100)
     expect(seaOrmAttribute('', [top])).toBe(`#[sea_orm(${top})]`)
     expect(seaOrmAttribute('', [`${top}t`])).toBe(`#[sea_orm(\n    ${top}t\n)]`)
     const field = `default_value = "${'a'.repeat(65)}"`
-    expect(`    #[sea_orm(${field})]`.length).toBe(99)
+    expect(`    #[sea_orm(${field})]`).toHaveLength(99)
     expect(seaOrmAttribute('    ', [field])).toBe(`    #[sea_orm(${field})]`)
     expect(seaOrmAttribute('    ', [`${field}a`])).toBe(`    #[sea_orm(\n        ${field}a\n    )]`)
   })

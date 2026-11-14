@@ -555,7 +555,7 @@ describe('makeAtlasPrimaryKey', () => {
 
   it('should return null when the model has no id index', () => {
     const model = makeModel({ name: 'Log' })
-    expect(makeAtlasPrimaryKey(model, [])).toBe(null)
+    expect(makeAtlasPrimaryKey(model, [])).toBeNull()
   })
 
   it('should fall back to index syntax for non-identifier column names', () => {

@@ -48,85 +48,85 @@ const UTC_BASE = `class Base(DeclarativeBase):
 
 describe('prismaTypeToSQLAlchemyType', () => {
   it('maps String to String', () => {
-    expect(prismaTypeToSQLAlchemyType('String')).toStrictEqual('String')
+    expect(prismaTypeToSQLAlchemyType('String')).toBe('String')
   })
 
   it('maps Int to Integer', () => {
-    expect(prismaTypeToSQLAlchemyType('Int')).toStrictEqual('Integer')
+    expect(prismaTypeToSQLAlchemyType('Int')).toBe('Integer')
   })
 
   it('maps BigInt to BigInteger', () => {
-    expect(prismaTypeToSQLAlchemyType('BigInt')).toStrictEqual('BigInteger')
+    expect(prismaTypeToSQLAlchemyType('BigInt')).toBe('BigInteger')
   })
 
   it('maps Float to Float', () => {
-    expect(prismaTypeToSQLAlchemyType('Float')).toStrictEqual('Float')
+    expect(prismaTypeToSQLAlchemyType('Float')).toBe('Float')
   })
 
   it('maps Decimal to Numeric', () => {
-    expect(prismaTypeToSQLAlchemyType('Decimal')).toStrictEqual('Numeric')
+    expect(prismaTypeToSQLAlchemyType('Decimal')).toBe('Numeric')
   })
 
   it('maps Boolean to Boolean', () => {
-    expect(prismaTypeToSQLAlchemyType('Boolean')).toStrictEqual('Boolean')
+    expect(prismaTypeToSQLAlchemyType('Boolean')).toBe('Boolean')
   })
 
   it('maps DateTime to DateTime', () => {
-    expect(prismaTypeToSQLAlchemyType('DateTime')).toStrictEqual('DateTime')
+    expect(prismaTypeToSQLAlchemyType('DateTime')).toBe('DateTime')
   })
 
   it('maps Json to JSON', () => {
-    expect(prismaTypeToSQLAlchemyType('Json')).toStrictEqual('JSON')
+    expect(prismaTypeToSQLAlchemyType('Json')).toBe('JSON')
   })
 
   it('maps Bytes to LargeBinary', () => {
-    expect(prismaTypeToSQLAlchemyType('Bytes')).toStrictEqual('LargeBinary')
+    expect(prismaTypeToSQLAlchemyType('Bytes')).toBe('LargeBinary')
   })
 
   it('maps unknown type to String', () => {
-    expect(prismaTypeToSQLAlchemyType('Unknown')).toStrictEqual('String')
+    expect(prismaTypeToSQLAlchemyType('Unknown')).toBe('String')
   })
 })
 
 describe('prismaTypeToPythonType', () => {
   it('maps String to str', () => {
-    expect(prismaTypeToPythonType('String')).toStrictEqual('str')
+    expect(prismaTypeToPythonType('String')).toBe('str')
   })
 
   it('maps Int to int', () => {
-    expect(prismaTypeToPythonType('Int')).toStrictEqual('int')
+    expect(prismaTypeToPythonType('Int')).toBe('int')
   })
 
   it('maps BigInt to int', () => {
-    expect(prismaTypeToPythonType('BigInt')).toStrictEqual('int')
+    expect(prismaTypeToPythonType('BigInt')).toBe('int')
   })
 
   it('maps Float to float', () => {
-    expect(prismaTypeToPythonType('Float')).toStrictEqual('float')
+    expect(prismaTypeToPythonType('Float')).toBe('float')
   })
 
   it('maps Decimal to Decimal', () => {
-    expect(prismaTypeToPythonType('Decimal')).toStrictEqual('Decimal')
+    expect(prismaTypeToPythonType('Decimal')).toBe('Decimal')
   })
 
   it('maps Boolean to bool', () => {
-    expect(prismaTypeToPythonType('Boolean')).toStrictEqual('bool')
+    expect(prismaTypeToPythonType('Boolean')).toBe('bool')
   })
 
   it('maps DateTime to datetime', () => {
-    expect(prismaTypeToPythonType('DateTime')).toStrictEqual('datetime')
+    expect(prismaTypeToPythonType('DateTime')).toBe('datetime')
   })
 
   it('maps Json to dict[str, Any]', () => {
-    expect(prismaTypeToPythonType('Json')).toStrictEqual('dict[str, Any]')
+    expect(prismaTypeToPythonType('Json')).toBe('dict[str, Any]')
   })
 
   it('maps Bytes to bytes', () => {
-    expect(prismaTypeToPythonType('Bytes')).toStrictEqual('bytes')
+    expect(prismaTypeToPythonType('Bytes')).toBe('bytes')
   })
 
   it('maps unknown type to str', () => {
-    expect(prismaTypeToPythonType('Unknown')).toStrictEqual('str')
+    expect(prismaTypeToPythonType('Unknown')).toBe('str')
   })
 })
 

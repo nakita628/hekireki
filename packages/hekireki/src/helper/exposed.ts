@@ -1513,8 +1513,8 @@ function hexOfBase64(value: string) {
   return Buffer.from(value, 'base64').toString('hex')
 }
 
-// A default as the SQL Prisma Migrate means by it: an enum's label, a timestamp as Prisma writes
-// it (which PostgreSQL reads, for a column without a time zone, with the offset dropped).
+// A default as the SQL Prisma Migrate means by it: an enum's label, a timestamp as Prisma
+// writes it (which PostgreSQL reads, for a column without a time zone, with the offset dropped).
 function sqlValue(
   plan: ExposedPlan,
   value: string | number | boolean,

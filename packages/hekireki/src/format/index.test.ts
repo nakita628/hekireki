@@ -13,6 +13,6 @@ describe('fmt', () => {
   it.concurrent('fails with FormatError on invalid syntax', async () => {
     const error = await Effect.runPromise(Effect.flip(fmt('const x = {')))
     expect(error).toBeInstanceOf(FormatError)
-    expect(error.message.length > 0).toBe(true)
+    expect(error.message.length).toBeGreaterThan(0)
   })
 })

@@ -65,7 +65,7 @@ describe('parseDateTimeDefault', () => {
     '2020-01-01T00:00:00',
     'now',
   ])('rejects %j', (value) => {
-    expect(parseDateTimeDefault(value)).toBe(null)
+    expect(parseDateTimeDefault(value)).toBeNull()
   })
 })
 

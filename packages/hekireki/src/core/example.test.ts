@@ -241,20 +241,21 @@ describe('example/schema.prisma', () => {
         expect(expected.length).toBeGreaterThan(0)
         expect(listFiles(actualDir)).toStrictEqual(expected)
 
-        for (const file of expected) {
+        // A raster depends on the fonts of the machine that drew it, so the PNG is checked for shape only.
+        for (const file of expected.filter((name) => name.endsWith('.png'))) {
           const actual = path.join(actualDir, file)
-          // A raster depends on the fonts of the machine that drew it, so the PNG is checked for shape only.
-          if (file.endsWith('.png')) {
-            const bytes = readFileSync(actual)
-            expect(bytes.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)).toBe(true)
-            expect(statSync(actual).size).toBeGreaterThan(1024)
-            continue
-          }
-          // The whole text is compared so a mismatch prints a unified diff, named by its file.
-          expect({ file, content: readFileSync(actual, 'utf8') }).toStrictEqual({
-            file,
-            content: readFileSync(path.join(goldenDir, file), 'utf8'),
-          })
+          const bytes = readFileSync(actual)
+          expect(bytes.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)).toBe(true)
+          expect(statSync(actual).size).toBeGreaterThan(1024)
+        }
+        // The whole text is compared so a mismatch prints a unified diff, named by its file.
+        for (const file of expected.filter((name) => !name.endsWith('.png'))) {
+          expect({ file, content: readFileSync(path.join(actualDir, file), 'utf8') }).toStrictEqual(
+            {
+              file,
+              content: readFileSync(path.join(goldenDir, file), 'utf8'),
+            },
+          )
         }
       })
     },

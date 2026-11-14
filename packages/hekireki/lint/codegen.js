@@ -1,5 +1,6 @@
 // Rules for the code generators: what they read from a `///` comment and how they write it back
-// out (src/helper, src/generator), and the options each reads against the README (src/core).
+// out (src/helper, src/generator), that they return the same text for the same schema, that a
+// helper does not import a generator, and the options each reads against the README (src/core).
 
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
@@ -208,6 +209,102 @@ export const codegenRules = {
               message: `The README lists \`${name}\` for ${provider}, which ${path.basename(filename)} does not read. Take it out of the row, or read it.`,
             })
           }
+        },
+      }
+    },
+  },
+
+  // Why: what a generator writes is compared byte for byte with the committed golden files, and a
+  //      user regenerates and diffs it. Output that reads the clock, draws a random value or the
+  //      environment changes on its own; a generator that logs, waits or is async does what
+  //      src/core and src/emit are there for. The generators take the schema and return text.
+  //   NG: `// generated at ${new Date().toISOString()}`
+  //   NG: crypto.randomUUID()          // OK inside the text of generated code: '...randomUUID()'
+  //   NG: process.env.TZ, console.log(...), async function emit()
+  'generator-pure': {
+    meta: { docs: { description: 'the generators return the same text for the same schema' } },
+    create(context) {
+      if (TEST_FILE.test(filenameOf(context))) return {}
+      const tail =
+        'A generator takes the schema and returns text: read it in src/core and pass it in.'
+      const nondeterministic = {
+        Date: ['now'],
+        Math: ['random'],
+        crypto: ['randomUUID', 'getRandomValues', 'randomBytes'],
+        performance: ['now'],
+      }
+      const effects = new Set([
+        'fetch',
+        'setTimeout',
+        'setInterval',
+        'setImmediate',
+        'queueMicrotask',
+      ])
+      const ambient = new Set(['console', 'process'])
+      function reportAsync(node) {
+        if (!node.async) return
+        context.report({ node, message: `An async function in a generator. ${tail}` })
+      }
+      return {
+        CallExpression(node) {
+          const callee = node.callee
+          if (
+            callee.type === 'MemberExpression' &&
+            !callee.computed &&
+            callee.object.type === 'Identifier' &&
+            callee.property.type === 'Identifier' &&
+            nondeterministic[callee.object.name]?.includes(callee.property.name)
+          ) {
+            context.report({
+              node,
+              message: `\`${callee.object.name}.${callee.property.name}()\` makes the output differ from run to run. ${tail}`,
+            })
+          }
+          if (
+            callee.type === 'Identifier' &&
+            (callee.name === 'Date' || effects.has(callee.name))
+          ) {
+            context.report({ node, message: `\`${callee.name}()\` in a generator. ${tail}` })
+          }
+        },
+        NewExpression(node) {
+          if (
+            node.callee.type === 'Identifier' &&
+            node.callee.name === 'Date' &&
+            node.arguments.length === 0
+          ) {
+            context.report({ node, message: `\`new Date()\` reads the clock. ${tail}` })
+          }
+        },
+        MemberExpression(node) {
+          if (node.object.type === 'Identifier' && ambient.has(node.object.name)) {
+            context.report({ node, message: `\`${node.object.name}\` in a generator. ${tail}` })
+          }
+        },
+        FunctionDeclaration: reportAsync,
+        FunctionExpression: reportAsync,
+        ArrowFunctionExpression: reportAsync,
+      }
+    },
+  },
+
+  // Why: the generators are built in one direction, utils -> helper -> generator -> core: helper
+  //      holds the per-target logic, and generator assembles helper's output into files. A helper
+  //      that imports a generator turns that around and ties the pieces into a cycle. A test may
+  //      run a generator to check a helper through it.
+  //   NG: import { djangoCode } from '../generator/django.js'   // in src/helper/django.ts
+  'helper-no-generator-import': {
+    meta: { docs: { description: 'src/helper does not import src/generator' } },
+    create(context) {
+      if (TEST_FILE.test(filenameOf(context))) return {}
+      return {
+        ImportDeclaration(node) {
+          if (!node.source.value.startsWith('../generator/')) return
+          context.report({
+            node,
+            message:
+              'A helper imports nothing of src/generator: the generators are built from the helpers (utils -> helper -> generator -> core). Move what both need into the helper, or into src/utils.',
+          })
         },
       }
     },

@@ -91,7 +91,7 @@ describe('loadSnapshot', () => {
       updatedAt: broken.updatedAt,
       files: [{ path: schemaPath, content: 'model User {\n  id Nope @id\n}\n' }],
     })
-    expect(broken.updatedAt >= good.updatedAt).toBe(true)
+    expect(Date.parse(broken.updatedAt)).toBeGreaterThanOrEqual(Date.parse(good.updatedAt))
     expect(state.snapshot()).toBe(broken)
   })
 

@@ -510,7 +510,7 @@ describe('makeFieldValue, decimals and dates', () => {
     const instance = faker()
     const reference = new Date(instance.defaultRefDate())
     const none = dateBetween(instance, {}, { nullRate: null, dates: null })
-    expect(none <= reference).toBe(true)
+    expect(none.getTime()).toBeLessThanOrEqual(reference.getTime())
     expect(none.getTime()).toBeGreaterThanOrEqual(reference.getTime() - 366 * 24 * 60 * 60 * 1000)
   })
 

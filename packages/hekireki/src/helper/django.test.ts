@@ -7,64 +7,64 @@ import { djangoAttrName, findNameConflicts, prismaTypeToDjangoField } from './dj
 
 describe('prismaTypeToDjangoField', () => {
   it('maps String to TextField', () => {
-    expect(prismaTypeToDjangoField('String')).toStrictEqual('TextField')
+    expect(prismaTypeToDjangoField('String')).toBe('TextField')
   })
 
   it('maps Int to IntegerField', () => {
-    expect(prismaTypeToDjangoField('Int')).toStrictEqual('IntegerField')
+    expect(prismaTypeToDjangoField('Int')).toBe('IntegerField')
   })
 
   it('maps BigInt to BigIntegerField', () => {
-    expect(prismaTypeToDjangoField('BigInt')).toStrictEqual('BigIntegerField')
+    expect(prismaTypeToDjangoField('BigInt')).toBe('BigIntegerField')
   })
 
   it('maps Float to FloatField', () => {
-    expect(prismaTypeToDjangoField('Float')).toStrictEqual('FloatField')
+    expect(prismaTypeToDjangoField('Float')).toBe('FloatField')
   })
 
   it('maps Decimal to DecimalField', () => {
-    expect(prismaTypeToDjangoField('Decimal')).toStrictEqual('DecimalField')
+    expect(prismaTypeToDjangoField('Decimal')).toBe('DecimalField')
   })
 
   it('maps Boolean to BooleanField', () => {
-    expect(prismaTypeToDjangoField('Boolean')).toStrictEqual('BooleanField')
+    expect(prismaTypeToDjangoField('Boolean')).toBe('BooleanField')
   })
 
   it('maps DateTime to DateTimeField', () => {
-    expect(prismaTypeToDjangoField('DateTime')).toStrictEqual('DateTimeField')
+    expect(prismaTypeToDjangoField('DateTime')).toBe('DateTimeField')
   })
 
   it('maps Json to JSONField', () => {
-    expect(prismaTypeToDjangoField('Json')).toStrictEqual('JSONField')
+    expect(prismaTypeToDjangoField('Json')).toBe('JSONField')
   })
 
   it('maps Bytes to BinaryField', () => {
-    expect(prismaTypeToDjangoField('Bytes')).toStrictEqual('BinaryField')
+    expect(prismaTypeToDjangoField('Bytes')).toBe('BinaryField')
   })
 
   it('maps unknown type to TextField', () => {
-    expect(prismaTypeToDjangoField('Unknown')).toStrictEqual('TextField')
+    expect(prismaTypeToDjangoField('Unknown')).toBe('TextField')
   })
 })
 
 describe('djangoAttrName', () => {
   it('keeps a plain name', () => {
-    expect(djangoAttrName('title')).toStrictEqual('title')
+    expect(djangoAttrName('title')).toBe('title')
   })
 
   it('renames a Python keyword with the inspectdb _field suffix', () => {
-    expect(djangoAttrName('async')).toStrictEqual('async_field')
+    expect(djangoAttrName('async')).toBe('async_field')
   })
 
   it('renames Django reserved names', () => {
-    expect(djangoAttrName('pk')).toStrictEqual('pk_field')
-    expect(djangoAttrName('objects')).toStrictEqual('objects_field')
-    expect(djangoAttrName('self')).toStrictEqual('self_field')
+    expect(djangoAttrName('pk')).toBe('pk_field')
+    expect(djangoAttrName('objects')).toBe('objects_field')
+    expect(djangoAttrName('self')).toBe('self_field')
   })
 
   it('keeps Python soft keywords', () => {
-    expect(djangoAttrName('type')).toStrictEqual('type')
-    expect(djangoAttrName('match')).toStrictEqual('match')
+    expect(djangoAttrName('type')).toBe('type')
+    expect(djangoAttrName('match')).toBe('match')
   })
 })
 

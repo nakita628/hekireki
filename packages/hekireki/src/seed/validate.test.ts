@@ -370,7 +370,7 @@ describe('validateRows', () => {
       '   Sample[19].count: Invalid input: expected number, received string (got "19")',
     )
     expect(lines[21]).toBe('   ... and 5 more')
-    expect(lines.length).toBe(22)
+    expect(lines).toHaveLength(22)
   })
 
   it('names one failed value in the singular', () => {

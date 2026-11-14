@@ -5,6 +5,9 @@ import { documentedOptions } from './codegen.js'
 import plugin, { handlerDocNames, layerModuleOf, layerNamespaceOf } from './custom.js'
 import { isLayerModule, layerOf, leadingTsdoc, resolveRelative } from './helpers.js'
 
+// RuleTester's own describe / it, run as vitest's: the titles and callbacks are the ones RuleTester
+// builds, and `itOnly` is what a case marked `only: true` asks for.
+/* oxlint-disable jest/valid-title, jest/valid-describe-callback, jest/expect-expect, jest/no-focused-tests */
 RuleTester.describe = (name, fn) => {
   describe(name, fn)
 }
@@ -14,6 +17,7 @@ RuleTester.it = (name, fn) => {
 RuleTester.itOnly = (name, fn) => {
   test.only(name, fn)
 }
+/* oxlint-enable jest/valid-title, jest/valid-describe-callback, jest/expect-expect, jest/no-focused-tests */
 
 const tester = new RuleTester({ languageOptions: { sourceType: 'module' } })
 
@@ -944,4 +948,38 @@ describe('documentedOptions', () => {
   it('is null for a provider no row names', () => {
     expect(documentedOptions(readme, 'hekireki-gorm')).toBeNull()
   })
+})
+
+tester.run('generator-pure', rule('generator-pure'), {
+  valid: [
+    generatorCase(`const line = '.$defaultFn(() => crypto.randomUUID())'`),
+    generatorCase(`const at = new Date(value)`),
+    generatorCase(`function code(document) { return document.datamodel }`),
+    { code: `const now = Date.now()`, filename: 'src/helper/x.test.ts' },
+  ],
+  invalid: [
+    { ...generatorCase(`const at = new Date()`), errors: [{ message: /reads the clock/u }] },
+    { ...generatorCase(`const id = crypto.randomUUID()`), errors: [{ message: /run to run/u }] },
+    { ...generatorCase(`const n = Math.random()`), errors: [{ message: /run to run/u }] },
+    { ...generatorCase(`const zone = process.env.TZ`), errors: [{ message: /`process`/u }] },
+    { ...generatorCase(`console.log('x')`), errors: [{ message: /`console`/u }] },
+    { ...generatorCase(`async function emit() {}`), errors: [{ message: /async/u }] },
+  ],
+})
+
+tester.run('helper-no-generator-import', rule('helper-no-generator-import'), {
+  valid: [
+    generatorCase(`import { stripAnnotations } from '../utils/index.js'`),
+    generatorCase(`import { makeZodSchema } from './zod.js'`),
+    {
+      code: `import { djangoCode } from '../generator/django.js'`,
+      filename: 'src/helper/x.test.ts',
+    },
+  ],
+  invalid: [
+    {
+      ...generatorCase(`import { djangoCode } from '../generator/django.js'`),
+      errors: [{ message: /utils -> helper -> generator/u }],
+    },
+  ],
 })

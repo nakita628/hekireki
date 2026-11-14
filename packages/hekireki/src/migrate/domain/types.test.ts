@@ -19,9 +19,9 @@ describe('databaseFamily', () => {
     expect(
       databaseFamily({ dialect: 'postgresql', dataType: 'USER-DEFINED', columnType: null }),
     ).toBe('enum')
-    expect(databaseFamily({ dialect: 'postgresql', dataType: 'tsvector', columnType: null })).toBe(
-      null,
-    )
+    expect(
+      databaseFamily({ dialect: 'postgresql', dataType: 'tsvector', columnType: null }),
+    ).toBeNull()
   })
 
   it('reads the tinyint(1) Prisma writes a Boolean as on MySQL as a boolean, any other tinyint as an int', () => {
@@ -46,6 +46,6 @@ describe('databaseFamily', () => {
     expect(databaseFamily({ dialect: 'sqlite', dataType: 'MEDIUMINT', columnType: null })).toBe(
       'int',
     )
-    expect(databaseFamily({ dialect: 'sqlite', dataType: 'WHATEVER', columnType: null })).toBe(null)
+    expect(databaseFamily({ dialect: 'sqlite', dataType: 'WHATEVER', columnType: null })).toBeNull()
   })
 })
