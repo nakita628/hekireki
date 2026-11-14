@@ -519,12 +519,11 @@ function buildSerdeAttributes(opts: { readonly renameAll?: string }) {
 /**
  * The prose of a `///` comment as Rust `///` doc lines at `indent`, a blank line as a bare `///`.
  *
- * @param doc - the Prisma documentation
+ * @param text - the prose, as `stripAnnotations` returns it
  * @param indent - the indentation of the documented item
  * @returns the doc lines, none when there is no prose
  */
-function rustDocLines(doc: string | undefined, indent: string) {
-  const text = stripAnnotations(doc)
+function rustDocLines(text: string | undefined, indent: string) {
   return text === undefined
     ? []
     : text
@@ -551,7 +550,7 @@ export function generateEnum(e: DMMF.DatamodelEnum, serde: { readonly renameAll?
   const serdeAttrs = buildSerdeAttributes(serde)
 
   return [
-    ...rustDocLines(e.documentation, ''),
+    ...rustDocLines(stripAnnotations(e.documentation), ''),
     derives,
     ...serdeAttrs,
     seaOrmAttribute('', [
@@ -823,7 +822,7 @@ export function generateEntityFile(
         : prismaTypeToRustType(field.type, field.isRequired)
 
     fieldLines.push(
-      ...rustDocLines(field.documentation, '    '),
+      ...rustDocLines(stripAnnotations(field.documentation), '    '),
       ...attrs,
       rustField(fieldName, rustType),
     )
@@ -979,7 +978,7 @@ export function generateEntityFile(
   const lines = [
     ...useLines,
     '',
-    ...rustDocLines(model.documentation, ''),
+    ...rustDocLines(stripAnnotations(model.documentation), ''),
     deriveModel,
     ...serdeAttrs,
     seaOrmAttribute('', [`table_name = "${tableName}"`]),

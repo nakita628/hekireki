@@ -1000,8 +1000,7 @@ type EfCorePlan = {
 
 // The `///` prose of the schema as an XML doc comment. The text is XML, so `&`, `<` and `>` are
 // escaped; a blank line stays a bare `///`.
-function summaryLines(documentation: string | undefined, indent: string) {
-  const text = stripAnnotations(documentation)
+function summaryLines(text: string | undefined, indent: string) {
   if (text === undefined) return []
   const body = text
     .replaceAll('&', '&amp;')
@@ -1128,7 +1127,7 @@ function memberType(plan: EfCorePlan, field: DMMF.Field) {
 
 function entityProperty(plan: EfCorePlan, model: DMMF.Model, field: DMMF.Field) {
   const name = propertyName(plan.names, model, field.name)
-  const summary = summaryLines(field.documentation, '    ')
+  const summary = summaryLines(stripAnnotations(field.documentation), '    ')
   if (field.kind === 'object') {
     const target = plan.models.find((m) => m.name === field.type)
     const targetType = target
@@ -1176,7 +1175,7 @@ export function entityFile(plan: EfCorePlan, model: DMMF.Model) {
   const name = className(plan.names, model)
   const fields = model.fields.filter((f) => f.kind !== 'unsupported')
   const body = [
-    ...summaryLines(model.documentation, ''),
+    ...summaryLines(stripAnnotations(model.documentation), ''),
     `public partial class ${name}`,
     '{',
     ...joinBlocks(fields.map((f) => entityProperty(plan, model, f))),
@@ -1214,7 +1213,7 @@ export function enumFile(plan: EfCorePlan, e: DMMF.DatamodelEnum) {
     `    ${plan.names.enumMembers.get(e.name)?.get(value.name) ?? value.name},`,
   ])
   const body = [
-    ...summaryLines(e.documentation, ''),
+    ...summaryLines(stripAnnotations(e.documentation), ''),
     `public enum ${name}`,
     '{',
     ...joinBlocks(members),

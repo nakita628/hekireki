@@ -661,6 +661,20 @@ export default defineConfig({
         },
       },
       {
+        // What the generators read from a `///` comment and how they write it (lint/codegen.js).
+        files: ['src/helper/**', 'src/generator/**'],
+        rules: {
+          'custom/documentation-read': 'error',
+          'custom/doc-block-helper': 'error',
+        },
+      },
+      {
+        // hekireki-docs reads the schema as Studio does, where `documentation` is already the prose
+        // (studio/server/domain/schema.ts parts it from the annotations), so it is written as is.
+        files: ['src/generator/docs.ts'],
+        rules: { 'custom/documentation-read': 'off' },
+      },
+      {
         // The Studio server's layers (lint/layers.js, lint/failures.js, lint/docs.js).
         files: ['src/studio/server/**'],
         rules: {

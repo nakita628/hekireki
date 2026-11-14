@@ -863,3 +863,64 @@ tester.run('hoist-constant', rule('hoist-constant'), {
     { ...tsCase(`function f(w: string) { return new Set(['select', 'with']).has(w) }`), errors: 1 },
   ],
 })
+
+function generatorCase(code: string) {
+  return { code, filename: 'src/helper/x.ts' }
+}
+
+tester.run('documentation-read', rule('documentation-read'), {
+  valid: [
+    generatorCase(`const prose = stripAnnotations(model.documentation)`),
+    generatorCase(
+      `const doc = stripAnnotations(model.fields.find((f) => f.name === name)?.documentation)`,
+    ),
+    generatorCase(`const calls = arCalls(field.documentation, 'field')`),
+    generatorCase(`const config = extractConfigDict(model.documentation)`),
+    { code: `const doc = field.documentation`, filename: 'src/helper/x.test.ts' },
+  ],
+  invalid: [
+    {
+      ...generatorCase(`const lines = goCommentLines(field.documentation)`),
+      errors: [{ message: /stripAnnotations/u }],
+    },
+    {
+      ...generatorCase(`const doc = field.documentation ?? ''`),
+      errors: [{ message: /stripAnnotations/u }],
+    },
+    {
+      ...generatorCase(
+        `const prose = stripAnnotations(field.documentation ?? owner.documentation)`,
+      ),
+      errors: [{ message: /stripAnnotations/u }, { message: /stripAnnotations/u }],
+    },
+    {
+      ...generatorCase(`const lines = rustDocLines(model.fields[0]?.documentation, '')`),
+      errors: [{ message: /stripAnnotations/u }],
+    },
+  ],
+})
+
+tester.run('doc-block-helper', rule('doc-block-helper'), {
+  valid: [
+    generatorCase(`const lines = docBlockLines(stripAnnotations(model.documentation), '')`),
+    generatorCase(`const line = '    /** @var list<string> */'`),
+    generatorCase(
+      'const code = `class X\\n{\\n    /** @var list<string> */\\n    public array $a = [];\\n}`',
+    ),
+    { code: 'const line = `/** ${prose} */`', filename: 'src/helper/x.test.ts' },
+  ],
+  invalid: [
+    {
+      ...generatorCase('const line = `/** ${prose} */`'),
+      errors: [{ message: /docBlockLines/u }],
+    },
+    {
+      ...generatorCase(`const lines = ['/**', ...body.map((line) => \` * \${line}\`), ' */']`),
+      errors: [{ message: /docBlockLines/u }],
+    },
+    {
+      ...generatorCase('const line = `${indent}/**\\n${indent} * ${prose}\\n${indent} */`'),
+      errors: [{ message: /docBlockLines/u }],
+    },
+  ],
+})

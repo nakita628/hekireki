@@ -1989,8 +1989,7 @@ function headerLines(indent: string, head: string, args: readonly string[], tail
 
 // Kotlin block comments nest, so a `/*` in the prose would open one that swallows the code after
 // it; a NUL would read as a placeholder.
-function kotlinDocLines(documentation: string | undefined, indent: string) {
-  const prose = stripAnnotations(documentation)
+function kotlinDocLines(prose: string | undefined, indent: string) {
   return textLines(docBlockLines(prose?.replaceAll('\0', '').replaceAll('/*', '/\\*'), indent))
 }
 
@@ -2194,7 +2193,7 @@ export function enumFile(plan: ExposedPlan, e: DMMF.DatamodelEnum) {
     ),
   )
   const content = joinLines(
-    kotlinDocLines(e.documentation, ''),
+    kotlinDocLines(stripAnnotations(e.documentation), ''),
     textLines([`enum class ${name}(`, `    val dbName: ${typeRef(KT.String)},`, ') {']),
     ...entries,
     textLines(['}']),
@@ -2362,7 +2361,7 @@ function tableBlocks(plan: ExposedPlan, model: DMMF.Model) {
       ? 'override val id'
       : `val ${kotlinName(columnProperty(plan, model, field.name))}`
     return joinLines(
-      kotlinDocLines(field.documentation, '    '),
+      kotlinDocLines(stripAnnotations(field.documentation), '    '),
       property('    ', head, keyPartCalls(plan, model, field)),
     )
   })
@@ -2406,7 +2405,7 @@ function tableBlocks(plan: ExposedPlan, model: DMMF.Model) {
   return [
     fileBlock(
       joinLines(
-        kotlinDocLines(model.documentation, ''),
+        kotlinDocLines(stripAnnotations(model.documentation), ''),
         headerLines('', `object ${name} : ${base}`, [kotlinString(exposedTableName(model))], ' {'),
       ),
     ),
@@ -2582,7 +2581,7 @@ function entityBlocks(plan: ExposedPlan, model: DMMF.Model) {
     nestedTypes: new Set(),
   }
   return [
-    fileBlock(joinLines(kotlinDocLines(model.documentation, ''), heading)),
+    fileBlock(joinLines(kotlinDocLines(stripAnnotations(model.documentation), ''), heading)),
     fileBlock(companion),
     fileBlock(
       joinLines(

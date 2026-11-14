@@ -609,11 +609,10 @@ function buildRelationTag(parts: string[]) {
 /**
  * The prose of a `///` comment as Go `//` lines, a blank line as a bare `//`.
  *
- * @param doc - the Prisma documentation
+ * @param text - the prose, as `stripAnnotations` returns it
  * @returns the comment lines, none when there is no prose
  */
-function goCommentLines(doc: string | undefined) {
-  const text = stripAnnotations(doc)
+function goCommentLines(text: string | undefined) {
   return text === undefined
     ? []
     : text.split('\n').map((line) => `//${line.trimEnd() === '' ? '' : ` ${line.trimEnd()}`}`)
@@ -628,9 +627,9 @@ function generateRelationFields(
   const of = (modelName: string) => (name: string) => goFieldNameIn(allModels, modelName, name)
   const own = of(model.name)
   const withDoc = (name: string, row: readonly string[]) => [
-    ...goCommentLines(model.fields.find((f) => f.name === name)?.documentation).map((line) => [
-      line,
-    ]),
+    ...goCommentLines(
+      stripAnnotations(model.fields.find((f) => f.name === name)?.documentation),
+    ).map((line) => [line]),
     row,
   ]
   const belongsToLines = associations.belongsTo.flatMap((assoc) => {
@@ -772,7 +771,7 @@ export function generateModelStruct(
   const fieldLines = scalarFields.flatMap((field) => {
     const isPk = field.isId || compositePkFieldNames.has(field.name)
     const fieldIndexTags = compositeTagMap.get(field.name) ?? []
-    const rows = goCommentLines(field.documentation).map((line) => [line])
+    const rows = goCommentLines(stripAnnotations(field.documentation)).map((line) => [line])
     rows.push(
       generateStructField(
         field,
@@ -799,7 +798,7 @@ export function generateModelStruct(
   ]
 
   return [
-    ...goCommentLines(model.documentation),
+    ...goCommentLines(stripAnnotations(model.documentation)),
     `type ${goModelName(model.name)} struct {`,
     ...alignFields([...fieldLines, ...relationLines]),
     '}',
