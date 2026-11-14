@@ -60,6 +60,7 @@ describe('auth = "jwt"', () => {
     aud: 'api',
     iat: now(),
     exp: now() + 600,
+    role: 'admin',
   })
 
   beforeEach(() => {
@@ -79,6 +80,22 @@ describe('auth = "jwt"', () => {
 
   it('refuses a request without a token', async () => {
     expect(await statusOf(await loadAuth('jwt'))).toBe(401)
+  })
+
+  it('answers 403 to a valid token without the admin role, and lets one holding it through', async () => {
+    const app = await loadAuth('jwt')
+    const { role: _role, ...roleless } = claims()
+    expect(await statusOf(app, await sign(roleless, SECRET))).toBe(403)
+    expect(await statusOf(app, await sign({ ...claims(), role: 'user' }, SECRET))).toBe(403)
+    expect(await statusOf(app, await sign({ ...claims(), role: ['user'] }, SECRET))).toBe(403)
+    expect(
+      await statusOf(app, await sign({ ...claims(), role: ['editor', 'admin'] }, SECRET)),
+    ).toBe(200)
+  })
+
+  it('checks the signature before the role: a forged admin token is 401, not 403', async () => {
+    const app = await loadAuth('jwt')
+    expect(await statusOf(app, await sign(claims(), 'b'.repeat(32)))).toBe(401)
   })
 
   it('refuses a token that would never expire, or has no iat', async () => {
@@ -126,6 +143,7 @@ describe('auth = "jwks"', () => {
     aud: 'api',
     iat: now(),
     exp: now() + 600,
+    role: 'admin',
   })
 
   /** An ES256 key pair as JWKs, the private one to sign with and the public one to publish. */
@@ -184,6 +202,14 @@ describe('auth = "jwks"', () => {
       await statusOf(app, await sign({ ...claims(), iss: 'https://other.test' }, privateJwk)),
     ).toBe(401)
     expect(await statusOf(app, await sign(claims(), stranger.privateJwk))).toBe(401)
+  })
+
+  it('answers 403 to a valid token without the admin role', async () => {
+    const { privateJwk, publicJwk } = await keyPair('k1')
+    publish({ keys: [publicJwk] })
+    const app = await loadAuth('jwks')
+    expect(await statusOf(app, await sign({ ...claims(), role: 'user' }, privateJwk))).toBe(403)
+    expect(await statusOf(app, await sign({ ...claims(), role: ['admin'] }, privateJwk))).toBe(200)
   })
 
   it('refuses a token signed with a shared secret', async () => {

@@ -179,6 +179,11 @@ Either way a token passes only with the `iss` and `aud` named, and with an `exp`
 only when a token has it, so `auth.ts` refuses one without it, which would never expire. A missing
 variable fails every request with 500 rather than let one through.
 
+The API writes every model, so a valid token also has to hold the `admin` role, in its `role` claim
+(a string or an array of strings), or it is answered 403. `REQUIRED_ROLES` and `ROLE_CLAIM` in
+`auth.ts` say which roles and which claim (an identity provider may put roles under a claim of its
+own, such as `https://example.com/roles`); an empty `REQUIRED_ROLES` lets any valid token through.
+
 `jwks` is the safer one: the app holds no key that signs a token, and the issuer (an identity
 provider such as Auth0, Clerk or Okta) rotates and revokes them. `JWKS_URI` is https
 (http only on `localhost`); the keys are cached for ten minutes and fetched again for a `kid` the
@@ -188,8 +193,8 @@ With `jwt`, `JWT_SECRET` is at least 32 bytes (`openssl rand -base64 48`), share
 the issuer, and a token lives at most an hour from its `iat` (`MAX_TOKEN_LIFETIME_SECONDS` in
 `auth.ts`). A token cannot be taken back before its `exp`; only a new secret ends every token.
 
-An `auth.ts` written by a release before 0.52.0 lets through a token without `exp` and does not
-check `iss` or `aud`. Delete it and run the generator to have the current one, then set the
+An `auth.ts` written by a release before 0.52.0 lets through a token without `exp`, and does not
+check `iss`, `aud` or a role. Delete it and run the generator to have the current one, then set the
 variables above.
 
 A handler that has a body is kept when the generator runs again, as Hono Takibi keeps it, so a

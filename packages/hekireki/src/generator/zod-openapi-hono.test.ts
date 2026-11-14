@@ -192,7 +192,10 @@ describe('zodOpenapiHonoDocument with auth', () => {
       const operation = item?.[method]
       expect(operation).toMatchObject({
         security: [{ bearerAuth: [] }],
-        responses: { '401': { description: 'No valid bearer token.' } },
+        responses: {
+          '401': { description: 'No valid bearer token.' },
+          '403': { description: 'The token holds none of the roles the API asks for.' },
+        },
       })
     }
   })

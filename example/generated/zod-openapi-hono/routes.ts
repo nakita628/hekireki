@@ -411,6 +411,7 @@ export const getUsersRoute = createRoute({
       }),
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
   },
   security: [{ bearerAuth: [] }],
 })
@@ -427,6 +428,7 @@ export const postUsersRoute = createRoute({
   responses: {
     201: { description: 'The user made.', content: { 'application/json': { schema: UserSchema } } },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
   },
   security: [{ bearerAuth: [] }],
 })
@@ -447,6 +449,7 @@ export const getUsersIdRoute = createRoute({
   responses: {
     200: { description: 'The user.', content: { 'application/json': { schema: UserSchema } } },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
     404: { description: 'No user has this key.' },
   },
   security: [{ bearerAuth: [] }],
@@ -468,6 +471,7 @@ export const deleteUsersIdRoute = createRoute({
   responses: {
     204: { description: 'The user is deleted.' },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
     404: { description: 'No user has this key.' },
   },
   security: [{ bearerAuth: [] }],
@@ -493,6 +497,7 @@ export const patchUsersIdRoute = createRoute({
       content: { 'application/json': { schema: UserSchema } },
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
     404: { description: 'No user has this key.' },
   },
   security: [{ bearerAuth: [] }],
@@ -566,6 +571,7 @@ export const getProfilesRoute = createRoute({
       }),
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
   },
   security: [{ bearerAuth: [] }],
 })
@@ -585,6 +591,7 @@ export const postProfilesRoute = createRoute({
       content: { 'application/json': { schema: ProfileSchema } },
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
   },
   security: [{ bearerAuth: [] }],
 })
@@ -608,6 +615,7 @@ export const getProfilesIdRoute = createRoute({
       content: { 'application/json': { schema: ProfileSchema } },
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
     404: { description: 'No profile has this key.' },
   },
   security: [{ bearerAuth: [] }],
@@ -629,6 +637,7 @@ export const deleteProfilesIdRoute = createRoute({
   responses: {
     204: { description: 'The profile is deleted.' },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
     404: { description: 'No profile has this key.' },
   },
   security: [{ bearerAuth: [] }],
@@ -654,6 +663,7 @@ export const patchProfilesIdRoute = createRoute({
       content: { 'application/json': { schema: ProfileSchema } },
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
     404: { description: 'No profile has this key.' },
   },
   security: [{ bearerAuth: [] }],
@@ -724,6 +734,7 @@ export const getPostsRoute = createRoute({
       }),
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
   },
   security: [{ bearerAuth: [] }],
 })
@@ -740,6 +751,7 @@ export const postPostsRoute = createRoute({
   responses: {
     201: { description: 'The post made.', content: { 'application/json': { schema: PostSchema } } },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
   },
   security: [{ bearerAuth: [] }],
 })
@@ -760,6 +772,7 @@ export const getPostsIdRoute = createRoute({
   responses: {
     200: { description: 'The post.', content: { 'application/json': { schema: PostSchema } } },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
     404: { description: 'No post has this key.' },
   },
   security: [{ bearerAuth: [] }],
@@ -781,6 +794,7 @@ export const deletePostsIdRoute = createRoute({
   responses: {
     204: { description: 'The post is deleted.' },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
     404: { description: 'No post has this key.' },
   },
   security: [{ bearerAuth: [] }],
@@ -806,6 +820,7 @@ export const patchPostsIdRoute = createRoute({
       content: { 'application/json': { schema: PostSchema } },
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
     404: { description: 'No post has this key.' },
   },
   security: [{ bearerAuth: [] }],
@@ -876,6 +891,7 @@ export const getTagsRoute = createRoute({
       }),
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
   },
   security: [{ bearerAuth: [] }],
 })
@@ -892,6 +908,7 @@ export const postTagsRoute = createRoute({
   responses: {
     201: { description: 'The tag made.', content: { 'application/json': { schema: TagSchema } } },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
   },
   security: [{ bearerAuth: [] }],
 })
@@ -922,6 +939,7 @@ export const getTagsIdRoute = createRoute({
   responses: {
     200: { description: 'The tag.', content: { 'application/json': { schema: TagSchema } } },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
     404: { description: 'No tag has this key.' },
   },
   security: [{ bearerAuth: [] }],
@@ -953,6 +971,7 @@ export const deleteTagsIdRoute = createRoute({
   responses: {
     204: { description: 'The tag is deleted.' },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
     404: { description: 'No tag has this key.' },
   },
   security: [{ bearerAuth: [] }],
@@ -988,6 +1007,7 @@ export const patchTagsIdRoute = createRoute({
       content: { 'application/json': { schema: TagSchema } },
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
     404: { description: 'No tag has this key.' },
   },
   security: [{ bearerAuth: [] }],
@@ -1061,6 +1081,7 @@ export const getCommentsRoute = createRoute({
       }),
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
   },
   security: [{ bearerAuth: [] }],
 })
@@ -1080,6 +1101,7 @@ export const postCommentsRoute = createRoute({
       content: { 'application/json': { schema: CommentSchema } },
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
   },
   security: [{ bearerAuth: [] }],
 })
@@ -1113,6 +1135,7 @@ export const getCommentsIdRoute = createRoute({
       content: { 'application/json': { schema: CommentSchema } },
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
     404: { description: 'No comment has this key.' },
   },
   security: [{ bearerAuth: [] }],
@@ -1144,6 +1167,7 @@ export const deleteCommentsIdRoute = createRoute({
   responses: {
     204: { description: 'The comment is deleted.' },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
     404: { description: 'No comment has this key.' },
   },
   security: [{ bearerAuth: [] }],
@@ -1179,6 +1203,7 @@ export const patchCommentsIdRoute = createRoute({
       content: { 'application/json': { schema: CommentSchema } },
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
     404: { description: 'No comment has this key.' },
   },
   security: [{ bearerAuth: [] }],
@@ -1252,6 +1277,7 @@ export const getFollowsRoute = createRoute({
       }),
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
   },
   security: [{ bearerAuth: [] }],
 })
@@ -1271,6 +1297,7 @@ export const postFollowsRoute = createRoute({
       content: { 'application/json': { schema: FollowSchema } },
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
   },
   security: [{ bearerAuth: [] }],
 })
@@ -1298,6 +1325,7 @@ export const getFollowsFollowerIdFollowingIdRoute = createRoute({
   responses: {
     200: { description: 'The follow.', content: { 'application/json': { schema: FollowSchema } } },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
     404: { description: 'No follow has this key.' },
   },
   security: [{ bearerAuth: [] }],
@@ -1326,6 +1354,7 @@ export const deleteFollowsFollowerIdFollowingIdRoute = createRoute({
   responses: {
     204: { description: 'The follow is deleted.' },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
     404: { description: 'No follow has this key.' },
   },
   security: [{ bearerAuth: [] }],
@@ -1358,6 +1387,7 @@ export const patchFollowsFollowerIdFollowingIdRoute = createRoute({
       content: { 'application/json': { schema: FollowSchema } },
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
     404: { description: 'No follow has this key.' },
   },
   security: [{ bearerAuth: [] }],
@@ -1431,6 +1461,7 @@ export const getCategoriesRoute = createRoute({
       }),
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
   },
   security: [{ bearerAuth: [] }],
 })
@@ -1450,6 +1481,7 @@ export const postCategoriesRoute = createRoute({
       content: { 'application/json': { schema: CategorySchema } },
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
   },
   security: [{ bearerAuth: [] }],
 })
@@ -1483,6 +1515,7 @@ export const getCategoriesIdRoute = createRoute({
       content: { 'application/json': { schema: CategorySchema } },
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
     404: { description: 'No category has this key.' },
   },
   security: [{ bearerAuth: [] }],
@@ -1514,6 +1547,7 @@ export const deleteCategoriesIdRoute = createRoute({
   responses: {
     204: { description: 'The category is deleted.' },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
     404: { description: 'No category has this key.' },
   },
   security: [{ bearerAuth: [] }],
@@ -1549,6 +1583,7 @@ export const patchCategoriesIdRoute = createRoute({
       content: { 'application/json': { schema: CategorySchema } },
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
     404: { description: 'No category has this key.' },
   },
   security: [{ bearerAuth: [] }],
@@ -1622,6 +1657,7 @@ export const getOrdersRoute = createRoute({
       }),
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
   },
   security: [{ bearerAuth: [] }],
 })
@@ -1641,6 +1677,7 @@ export const postOrdersRoute = createRoute({
       content: { 'application/json': { schema: OrderSchema } },
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
   },
   security: [{ bearerAuth: [] }],
 })
@@ -1671,6 +1708,7 @@ export const getOrdersIdRoute = createRoute({
   responses: {
     200: { description: 'The order.', content: { 'application/json': { schema: OrderSchema } } },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
     404: { description: 'No order has this key.' },
   },
   security: [{ bearerAuth: [] }],
@@ -1702,6 +1740,7 @@ export const deleteOrdersIdRoute = createRoute({
   responses: {
     204: { description: 'The order is deleted.' },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
     404: { description: 'No order has this key.' },
   },
   security: [{ bearerAuth: [] }],
@@ -1737,6 +1776,7 @@ export const patchOrdersIdRoute = createRoute({
       content: { 'application/json': { schema: OrderSchema } },
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
     404: { description: 'No order has this key.' },
   },
   security: [{ bearerAuth: [] }],
@@ -1810,6 +1850,7 @@ export const getOrderItemsRoute = createRoute({
       }),
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
   },
   security: [{ bearerAuth: [] }],
 })
@@ -1829,6 +1870,7 @@ export const postOrderItemsRoute = createRoute({
       content: { 'application/json': { schema: OrderItemSchema } },
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
   },
   security: [{ bearerAuth: [] }],
 })
@@ -1862,6 +1904,7 @@ export const getOrderItemsIdRoute = createRoute({
       content: { 'application/json': { schema: OrderItemSchema } },
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
     404: { description: 'No order item has this key.' },
   },
   security: [{ bearerAuth: [] }],
@@ -1893,6 +1936,7 @@ export const deleteOrderItemsIdRoute = createRoute({
   responses: {
     204: { description: 'The order item is deleted.' },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
     404: { description: 'No order item has this key.' },
   },
   security: [{ bearerAuth: [] }],
@@ -1928,6 +1972,7 @@ export const patchOrderItemsIdRoute = createRoute({
       content: { 'application/json': { schema: OrderItemSchema } },
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
     404: { description: 'No order item has this key.' },
   },
   security: [{ bearerAuth: [] }],
@@ -2001,6 +2046,7 @@ export const getAuditLogsRoute = createRoute({
       }),
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
   },
   security: [{ bearerAuth: [] }],
 })
@@ -2020,6 +2066,7 @@ export const postAuditLogsRoute = createRoute({
       content: { 'application/json': { schema: AuditLogSchema } },
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
   },
   security: [{ bearerAuth: [] }],
 })
@@ -2043,6 +2090,7 @@ export const getAuditLogsIdRoute = createRoute({
       content: { 'application/json': { schema: AuditLogSchema } },
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
     404: { description: 'No audit log has this key.' },
   },
   security: [{ bearerAuth: [] }],
@@ -2064,6 +2112,7 @@ export const deleteAuditLogsIdRoute = createRoute({
   responses: {
     204: { description: 'The audit log is deleted.' },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
     404: { description: 'No audit log has this key.' },
   },
   security: [{ bearerAuth: [] }],
@@ -2089,6 +2138,7 @@ export const patchAuditLogsIdRoute = createRoute({
       content: { 'application/json': { schema: AuditLogSchema } },
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
     404: { description: 'No audit log has this key.' },
   },
   security: [{ bearerAuth: [] }],
@@ -2162,6 +2212,7 @@ export const getActorsRoute = createRoute({
       }),
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
   },
   security: [{ bearerAuth: [] }],
 })
@@ -2181,6 +2232,7 @@ export const postActorsRoute = createRoute({
       content: { 'application/json': { schema: ActorSchema } },
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
   },
   security: [{ bearerAuth: [] }],
 })
@@ -2211,6 +2263,7 @@ export const getActorsIdRoute = createRoute({
   responses: {
     200: { description: 'The actor.', content: { 'application/json': { schema: ActorSchema } } },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
     404: { description: 'No actor has this key.' },
   },
   security: [{ bearerAuth: [] }],
@@ -2242,6 +2295,7 @@ export const deleteActorsIdRoute = createRoute({
   responses: {
     204: { description: 'The actor is deleted.' },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
     404: { description: 'No actor has this key.' },
   },
   security: [{ bearerAuth: [] }],
@@ -2277,6 +2331,7 @@ export const patchActorsIdRoute = createRoute({
       content: { 'application/json': { schema: ActorSchema } },
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
     404: { description: 'No actor has this key.' },
   },
   security: [{ bearerAuth: [] }],
@@ -2347,6 +2402,7 @@ export const getFilmsRoute = createRoute({
       }),
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
   },
   security: [{ bearerAuth: [] }],
 })
@@ -2363,6 +2419,7 @@ export const postFilmsRoute = createRoute({
   responses: {
     201: { description: 'The film made.', content: { 'application/json': { schema: FilmSchema } } },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
   },
   security: [{ bearerAuth: [] }],
 })
@@ -2393,6 +2450,7 @@ export const getFilmsIdRoute = createRoute({
   responses: {
     200: { description: 'The film.', content: { 'application/json': { schema: FilmSchema } } },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
     404: { description: 'No film has this key.' },
   },
   security: [{ bearerAuth: [] }],
@@ -2424,6 +2482,7 @@ export const deleteFilmsIdRoute = createRoute({
   responses: {
     204: { description: 'The film is deleted.' },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
     404: { description: 'No film has this key.' },
   },
   security: [{ bearerAuth: [] }],
@@ -2459,6 +2518,7 @@ export const patchFilmsIdRoute = createRoute({
       content: { 'application/json': { schema: FilmSchema } },
     },
     401: { description: 'No valid bearer token.' },
+    403: { description: 'The token holds none of the roles the API asks for.' },
     404: { description: 'No film has this key.' },
   },
   security: [{ bearerAuth: [] }],

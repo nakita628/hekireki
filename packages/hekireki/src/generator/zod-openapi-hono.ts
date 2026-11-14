@@ -55,7 +55,7 @@ function isMap(value: YamlValue | undefined): value is OpenApiSchema {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-/** An operation that asks for the bearer JWT, and says it answers 401 without one. */
+/** An operation that asks for the bearer JWT, and says it answers 401 without one, 403 without a role. */
 function guardedOperation(operation: OpenApiSchema): OpenApiSchema {
   const responses = operation.responses
   return {
@@ -64,6 +64,7 @@ function guardedOperation(operation: OpenApiSchema): OpenApiSchema {
     responses: {
       ...(isMap(responses) ? responses : {}),
       '401': { description: 'No valid bearer token.' },
+      '403': { description: 'The token holds none of the roles the API asks for.' },
     },
   }
 }
@@ -293,10 +294,11 @@ export function guardPaths(code: string, paths: readonly string[]) {
 }
 
 /**
- * The `exp` or `iat` of a token's payload when it is a number, as `c.get('jwtPayload')` has it
- * (unknown until read): the module reads the claims hono/jwt checks only when a token has them.
+ * The claims both modules check after the signature, read from `c.get('jwtPayload')` (unknown
+ * until read): `exp` and `iat`, which hono/jwt checks only when a token has them, and the roles
+ * the token must hold one of (`REQUIRED_ROLES`, `['admin']` until the user says otherwise).
  */
-const NUMBER_CLAIM = `/** A claim of the token's payload when it is a number, and undefined otherwise. */
+const CLAIM_CHECKS = `/** A claim of the token's payload when it is a number, and undefined otherwise. */
 function numberClaim(payload: unknown, name: string) {
   if (typeof payload !== 'object' || payload === null) return undefined
   const value: unknown = Reflect.get(payload, name)
@@ -313,6 +315,35 @@ function unauthorized(description: string) {
       },
     }),
   })
+}
+
+/** The claim of the token that holds the roles of its user: a string, or an array of strings. */
+const ROLE_CLAIM = 'role'
+
+/**
+ * The roles of which a token must hold one to reach the API, answered 403 otherwise. The API
+ * writes every model, so only an admin reaches it until this says who else may; an empty list
+ * lets any valid token through.
+ */
+const REQUIRED_ROLES: readonly string[] = ['admin']
+
+/** The roles the token's payload holds under ROLE_CLAIM. */
+function rolesOf(payload: unknown): readonly string[] {
+  if (typeof payload !== 'object' || payload === null) return []
+  const value: unknown = Reflect.get(payload, ROLE_CLAIM)
+  if (typeof value === 'string') return [value]
+  return Array.isArray(value) ? value.filter((role) => typeof role === 'string') : []
+}
+
+/** Whether the token holds one of REQUIRED_ROLES, or none is asked for. */
+function hasRequiredRole(payload: unknown) {
+  if (REQUIRED_ROLES.length === 0) return true
+  return rolesOf(payload).some((role) => REQUIRED_ROLES.includes(role))
+}
+
+/** The 403 a valid token is refused with when it lacks every role REQUIRED_ROLES names. */
+function forbidden() {
+  return new HTTPException(403, { res: new Response('Forbidden', { status: 403 }) })
 }`
 
 /**
@@ -333,12 +364,13 @@ const MAX_TOKEN_LIFETIME_SECONDS = 60 * 60
 /** The fewest bytes \`JWT_SECRET\` may have: HS256 takes a key no shorter than its 32-byte hash. */
 const MIN_SECRET_BYTES = 32
 
-${NUMBER_CLAIM}
+${CLAIM_CHECKS}
 
 /**
  * Lets a request through with a JWT in \`Authorization: Bearer <token>\`, signed with HS256 by the
  * secret \`JWT_SECRET\`, issued by \`JWT_ISSUER\` for \`JWT_AUDIENCE\`, with an \`exp\` at most
- * MAX_TOKEN_LIFETIME_SECONDS after its \`iat\`, and answers 401 otherwise. The variables are read
+ * MAX_TOKEN_LIFETIME_SECONDS after its \`iat\`, and answers 401 otherwise; a token without one of
+ * REQUIRED_ROLES is answered 403. The variables are read
  * from the environment of the runtime (\`process.env\` on Node, the bindings on Workers). Without
  * one of them, or with a secret shorter than MIN_SECRET_BYTES, every request fails with 500: the
  * app never runs unguarded. A handler reads the token's payload with \`c.get('jwtPayload')\`.
@@ -365,6 +397,7 @@ export const auth = createMiddleware(async (c, next) => {
     const iat = numberClaim(payload, 'iat')
     if (exp === undefined || iat === undefined) throw unauthorized('token without exp or iat')
     if (exp - iat > MAX_TOKEN_LIFETIME_SECONDS) throw unauthorized('token lives too long')
+    if (!hasRequiredRole(payload)) throw forbidden()
     await next()
   })
 })
@@ -396,7 +429,7 @@ const ALGORITHMS = ['RS256', 'PS256', 'ES256', 'EdDSA'] as const
 
 let cache: { uri: string; keys: HonoJsonWebKey[]; fetchedAt: number } | undefined
 
-${NUMBER_CLAIM}
+${CLAIM_CHECKS}
 
 /** \`JWKS_URI\` when it is https, or http on this machine (an issuer run for development). */
 function jwksUri(uri: string) {
@@ -431,10 +464,10 @@ async function keysFor(uri: string, token: string | undefined) {
 /**
  * Lets a request through with a JWT in \`Authorization: Bearer <token>\`, signed with a key the
  * issuer publishes at \`JWKS_URI\`, issued by \`JWT_ISSUER\` for \`JWT_AUDIENCE\`, with an \`exp\`, and
- * answers 401 otherwise. The variables are read from the environment of the runtime
- * (\`process.env\` on Node, the bindings on Workers). Without one of them every request fails with
- * 500: the app never runs unguarded. A handler reads the token's payload with
- * \`c.get('jwtPayload')\`.
+ * answers 401 otherwise; a token without one of REQUIRED_ROLES is answered 403. The variables are
+ * read from the environment of the runtime (\`process.env\` on Node, the bindings on Workers).
+ * Without one of them every request fails with 500: the app never runs unguarded. A handler reads
+ * the token's payload with \`c.get('jwtPayload')\`.
  */
 export const auth = createMiddleware(async (c, next) => {
   const { JWKS_URI, JWT_ISSUER, JWT_AUDIENCE } = env<{
@@ -453,9 +486,9 @@ export const auth = createMiddleware(async (c, next) => {
   })
   return verify(c, async () => {
     // hono/jwt checks exp only when the token has it: one without it never expires.
-    if (numberClaim(c.get('jwtPayload'), 'exp') === undefined) {
-      throw unauthorized('token without exp')
-    }
+    const payload = c.get('jwtPayload')
+    if (numberClaim(payload, 'exp') === undefined) throw unauthorized('token without exp')
+    if (!hasRequiredRole(payload)) throw forbidden()
     await next()
   })
 })

@@ -44,6 +44,8 @@ paths:
                   $ref: "#/components/schemas/User"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
     post:
@@ -66,6 +68,8 @@ paths:
                 $ref: "#/components/schemas/User"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
   "/users/{id}":
@@ -89,6 +93,8 @@ paths:
                 $ref: "#/components/schemas/User"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No user has this key.
       security:
@@ -113,6 +119,8 @@ paths:
                 $ref: "#/components/schemas/User"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No user has this key.
       security:
@@ -127,6 +135,8 @@ paths:
           description: The user is deleted.
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No user has this key.
       security:
@@ -172,6 +182,8 @@ paths:
                   $ref: "#/components/schemas/Profile"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
     post:
@@ -194,6 +206,8 @@ paths:
                 $ref: "#/components/schemas/Profile"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
   "/profiles/{id}":
@@ -217,6 +231,8 @@ paths:
                 $ref: "#/components/schemas/Profile"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No profile has this key.
       security:
@@ -241,6 +257,8 @@ paths:
                 $ref: "#/components/schemas/Profile"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No profile has this key.
       security:
@@ -255,6 +273,8 @@ paths:
           description: The profile is deleted.
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No profile has this key.
       security:
@@ -300,6 +320,8 @@ paths:
                   $ref: "#/components/schemas/Post"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
     post:
@@ -322,6 +344,8 @@ paths:
                 $ref: "#/components/schemas/Post"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
   "/posts/{id}":
@@ -345,6 +369,8 @@ paths:
                 $ref: "#/components/schemas/Post"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No post has this key.
       security:
@@ -369,6 +395,8 @@ paths:
                 $ref: "#/components/schemas/Post"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No post has this key.
       security:
@@ -383,6 +411,8 @@ paths:
           description: The post is deleted.
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No post has this key.
       security:
@@ -428,6 +458,8 @@ paths:
                   $ref: "#/components/schemas/Tag"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
     post:
@@ -450,6 +482,8 @@ paths:
                 $ref: "#/components/schemas/Tag"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
   "/tags/{id}":
@@ -473,6 +507,8 @@ paths:
                 $ref: "#/components/schemas/Tag"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No tag has this key.
       security:
@@ -497,6 +533,8 @@ paths:
                 $ref: "#/components/schemas/Tag"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No tag has this key.
       security:
@@ -511,6 +549,8 @@ paths:
           description: The tag is deleted.
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No tag has this key.
       security:
@@ -556,6 +596,8 @@ paths:
                   $ref: "#/components/schemas/Comment"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
     post:
@@ -578,6 +620,8 @@ paths:
                 $ref: "#/components/schemas/Comment"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
   "/comments/{id}":
@@ -601,6 +645,8 @@ paths:
                 $ref: "#/components/schemas/Comment"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No comment has this key.
       security:
@@ -625,6 +671,8 @@ paths:
                 $ref: "#/components/schemas/Comment"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No comment has this key.
       security:
@@ -639,6 +687,8 @@ paths:
           description: The comment is deleted.
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No comment has this key.
       security:
@@ -684,6 +734,8 @@ paths:
                   $ref: "#/components/schemas/Follow"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
     post:
@@ -706,6 +758,8 @@ paths:
                 $ref: "#/components/schemas/Follow"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
   "/follows/{followerId}/{followingId}":
@@ -734,6 +788,8 @@ paths:
                 $ref: "#/components/schemas/Follow"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No follow has this key.
       security:
@@ -758,6 +814,8 @@ paths:
                 $ref: "#/components/schemas/Follow"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No follow has this key.
       security:
@@ -772,6 +830,8 @@ paths:
           description: The follow is deleted.
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No follow has this key.
       security:
@@ -817,6 +877,8 @@ paths:
                   $ref: "#/components/schemas/Category"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
     post:
@@ -839,6 +901,8 @@ paths:
                 $ref: "#/components/schemas/Category"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
   "/categories/{id}":
@@ -862,6 +926,8 @@ paths:
                 $ref: "#/components/schemas/Category"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No category has this key.
       security:
@@ -886,6 +952,8 @@ paths:
                 $ref: "#/components/schemas/Category"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No category has this key.
       security:
@@ -900,6 +968,8 @@ paths:
           description: The category is deleted.
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No category has this key.
       security:
@@ -945,6 +1015,8 @@ paths:
                   $ref: "#/components/schemas/Order"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
     post:
@@ -967,6 +1039,8 @@ paths:
                 $ref: "#/components/schemas/Order"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
   "/orders/{id}":
@@ -990,6 +1064,8 @@ paths:
                 $ref: "#/components/schemas/Order"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No order has this key.
       security:
@@ -1014,6 +1090,8 @@ paths:
                 $ref: "#/components/schemas/Order"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No order has this key.
       security:
@@ -1028,6 +1106,8 @@ paths:
           description: The order is deleted.
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No order has this key.
       security:
@@ -1073,6 +1153,8 @@ paths:
                   $ref: "#/components/schemas/OrderItem"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
     post:
@@ -1095,6 +1177,8 @@ paths:
                 $ref: "#/components/schemas/OrderItem"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
   "/order-items/{id}":
@@ -1118,6 +1202,8 @@ paths:
                 $ref: "#/components/schemas/OrderItem"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No order item has this key.
       security:
@@ -1142,6 +1228,8 @@ paths:
                 $ref: "#/components/schemas/OrderItem"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No order item has this key.
       security:
@@ -1156,6 +1244,8 @@ paths:
           description: The order item is deleted.
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No order item has this key.
       security:
@@ -1201,6 +1291,8 @@ paths:
                   $ref: "#/components/schemas/AuditLog"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
     post:
@@ -1223,6 +1315,8 @@ paths:
                 $ref: "#/components/schemas/AuditLog"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
   "/audit-logs/{id}":
@@ -1246,6 +1340,8 @@ paths:
                 $ref: "#/components/schemas/AuditLog"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No audit log has this key.
       security:
@@ -1270,6 +1366,8 @@ paths:
                 $ref: "#/components/schemas/AuditLog"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No audit log has this key.
       security:
@@ -1284,6 +1382,8 @@ paths:
           description: The audit log is deleted.
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No audit log has this key.
       security:
@@ -1329,6 +1429,8 @@ paths:
                   $ref: "#/components/schemas/Actor"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
     post:
@@ -1351,6 +1453,8 @@ paths:
                 $ref: "#/components/schemas/Actor"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
   "/actors/{id}":
@@ -1374,6 +1478,8 @@ paths:
                 $ref: "#/components/schemas/Actor"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No actor has this key.
       security:
@@ -1398,6 +1504,8 @@ paths:
                 $ref: "#/components/schemas/Actor"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No actor has this key.
       security:
@@ -1412,6 +1520,8 @@ paths:
           description: The actor is deleted.
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No actor has this key.
       security:
@@ -1457,6 +1567,8 @@ paths:
                   $ref: "#/components/schemas/Film"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
     post:
@@ -1479,6 +1591,8 @@ paths:
                 $ref: "#/components/schemas/Film"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
   "/films/{id}":
@@ -1502,6 +1616,8 @@ paths:
                 $ref: "#/components/schemas/Film"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No film has this key.
       security:
@@ -1526,6 +1642,8 @@ paths:
                 $ref: "#/components/schemas/Film"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No film has this key.
       security:
@@ -1540,6 +1658,8 @@ paths:
           description: The film is deleted.
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No film has this key.
       security:
