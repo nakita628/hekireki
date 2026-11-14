@@ -113,9 +113,9 @@ take `///` lines of their own, described below.
 
 ### API
 
-| Provider                    | Writes                                     | Options                                                   |
-| --------------------------- | ------------------------------------------ | --------------------------------------------------------- |
-| `hekireki-zod-openapi-hono` | Hono app of the CRUD (`@hono/zod-openapi`) | `prisma` (`./prisma`), `auth` (`jwt`), `title`, `version` |
+| Provider                    | Writes                                     | Options                                                           |
+| --------------------------- | ------------------------------------------ | ----------------------------------------------------------------- |
+| `hekireki-zod-openapi-hono` | Hono app of the CRUD (`@hono/zod-openapi`) | `prisma` (`./prisma`), `auth` (`jwt`, `jwks`), `title`, `version` |
 
 `hekireki-zod-openapi-hono` writes, in the directory `output` names, `openapi.yaml`: the CRUD of
 each model, `GET` and `POST /users` and `GET`, `PATCH` and `DELETE /users/{id}`, with the rows as
@@ -138,12 +138,33 @@ export const prisma = new PrismaClient({
 })
 ```
 
-With `auth = "jwt"`, every operation asks for a bearer JWT (`bearerAuth` in the document, and a
-401 among its answers), and the app entry runs `auth` on every model's paths,
-`app.use('/users/*', auth)`. `auth.ts`, written when it is not there and left as it is after, lets
-a request through with a JWT signed with HS256 by the secret `JWT_SECRET`, read from the runtime's
-environment; a handler reads the token's payload with `c.get('jwtPayload')`. A guard of a model's
-paths that is not in the app entry is added again when the generator runs.
+With `auth`, every operation asks for a bearer JWT (`bearerAuth` in the document, and a 401 among
+its answers), and the app entry runs `auth` on every model's paths, `app.use('/users/*', auth)`.
+`auth.ts`, written when it is not there and left as it is after, checks the token; a handler reads
+its payload with `c.get('jwtPayload')`. A guard of a model's paths that is not in the app entry is
+added again when the generator runs.
+
+| `auth` | The token                                                                | Environment                                |
+| ------ | ------------------------------------------------------------------------ | ------------------------------------------ |
+| `jwks` | Signed by an issuer with a key it publishes (RS256, PS256, ES256, EdDSA) | `JWKS_URI`, `JWT_ISSUER`, `JWT_AUDIENCE`   |
+| `jwt`  | Signed with HS256 by a secret the app shares with the issuer             | `JWT_SECRET`, `JWT_ISSUER`, `JWT_AUDIENCE` |
+
+Either way a token passes only with the `iss` and `aud` named, and with an `exp`: Hono checks `exp`
+only when a token has it, so `auth.ts` refuses one without it, which would never expire. A missing
+variable fails every request with 500 rather than let one through.
+
+`jwks` is the safer one: the app holds no key that signs a token, and the issuer (an identity
+provider such as Auth0, Clerk or Okta) rotates and revokes them. `JWKS_URI` is https
+(http only on `localhost`); the keys are cached for ten minutes and fetched again for a `kid` the
+cache lacks, at most once a minute.
+
+With `jwt`, `JWT_SECRET` is at least 32 bytes (`openssl rand -base64 48`), shared with nothing but
+the issuer, and a token lives at most an hour from its `iat` (`MAX_TOKEN_LIFETIME_SECONDS` in
+`auth.ts`). A token cannot be taken back before its `exp`; only a new secret ends every token.
+
+An `auth.ts` written by a release before 0.52.0 lets through a token without `exp` and does not
+check `iss` or `aud`. Delete it and run the generator to have the current one, then set the
+variables above.
 
 A handler that has a body is kept when the generator runs again, as Hono Takibi keeps it, so a
 handler changed by hand stays as it is; only an empty one is filled. A `BigInt` is answered as a

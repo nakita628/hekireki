@@ -714,9 +714,7 @@ describe('ZodOpenAPIHono', () => {
   it('guards every model with the JWT auth.ts, keeping an auth.ts that is there', async () => {
     const dir = tmp()
     expect(failure(await run(zodOpenapiHono, dir, { auth: 'jwt' }))).toBe('')
-    expect(readFileSync(path.join(dir, 'auth.ts'), 'utf8')).toContain(
-      "jwt({ secret: JWT_SECRET, alg: 'HS256' })",
-    )
+    expect(readFileSync(path.join(dir, 'auth.ts'), 'utf8')).toContain("alg: 'HS256'")
     const entry = readFileSync(path.join(dir, 'index.ts'), 'utf8')
     expect(entry).toContain("import { auth } from './auth'")
     expect(entry).toContain("app.use('/users/*', auth)")
@@ -731,9 +729,17 @@ describe('ZodOpenAPIHono', () => {
     expect(again.match(/import \{ auth \} from '\.\/auth'/gu)).toHaveLength(1)
   })
 
+  it('guards every model with the JWKS auth.ts', async () => {
+    const dir = tmp()
+    expect(failure(await run(zodOpenapiHono, dir, { auth: 'jwks' }))).toBe('')
+    expect(readFileSync(path.join(dir, 'auth.ts'), 'utf8')).toContain("from 'hono/jwk'")
+    expect(readFileSync(path.join(dir, 'index.ts'), 'utf8')).toContain("app.use('/users/*', auth)")
+    expect(readFileSync(path.join(dir, 'openapi.yaml'), 'utf8')).toContain('bearerAuth:')
+  })
+
   it('refuses an auth it does not know', async () => {
     expect(failure(await run(zodOpenapiHono, tmp(), { auth: 'session' }))).toContain(
-      'auth for Hekireki-ZodOpenAPIHono must be "jwt": session',
+      'auth for Hekireki-ZodOpenAPIHono must be one of "jwt", "jwks": session',
     )
   })
 

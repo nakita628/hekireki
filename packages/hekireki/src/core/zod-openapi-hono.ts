@@ -3,6 +3,7 @@ import path from 'node:path'
 import type { GeneratorOptions } from '@prisma/generator-helper'
 import { Effect } from 'effect'
 
+import { AUTH_KINDS } from '../constants/index.js'
 import { emitRaw } from '../emit/index.js'
 import { exists, readDirectory, readFile, writeFile } from '../file/index.js'
 import { fmt } from '../format/index.js'
@@ -15,6 +16,7 @@ import {
   routeOperations,
   zodOpenapiHonoYaml,
 } from '../generator/zod-openapi-hono.js'
+import type { AuthKind } from '../types/index.js'
 import { getString } from '../utils/index.js'
 import { GeneratorConfigError, HonoTakibiError } from './errors.js'
 import { requireOutput } from './output.js'
@@ -55,13 +57,13 @@ function fillHandlerFile(
 }
 
 /**
- * `auth.ts`, written when it is not there and the user's after, and the app entry with `auth` on
- * every model's paths.
+ * `auth.ts` of the kind `auth` names, written when it is not there and the user's after, and the
+ * app entry with `auth` on every model's paths.
  */
-function guardApp(output: string, paths: readonly string[]) {
+function guardApp(output: string, kind: AuthKind, paths: readonly string[]) {
   return Effect.gen(function* () {
     const module = path.join(output, 'auth.ts')
-    if (!(yield* exists(module))) yield* writeFile(module, authModule())
+    if (!(yield* exists(module))) yield* writeFile(module, authModule(kind))
     const entry = path.join(output, 'index.ts')
     const code = yield* readFile(entry)
     const guarded = guardPaths(code, paths)
@@ -73,8 +75,8 @@ function guardApp(output: string, paths: readonly string[]) {
  * The Hono app of the CRUD of every model, in the directory `output` names: `openapi.yaml`, the
  * document of the CRUD as Prisma Client has the rows, and what Hono Takibi's template makes of it
  * (`routes.ts`, `handlers/`, `index.ts`), each handler calling Prisma Client as `prisma`, which
- * the module `prisma` names exports. With `auth = "jwt"`, every operation asks for a bearer JWT,
- * which `auth.ts` checks on every model's paths.
+ * the module `prisma` names exports. With `auth` (`jwt` or `jwks`), every operation asks for a
+ * bearer JWT, which `auth.ts` checks on every model's paths.
  */
 export function zodOpenapiHono(options: GeneratorOptions) {
   return Effect.gen(function* () {
@@ -86,10 +88,11 @@ export function zodOpenapiHono(options: GeneratorOptions) {
     }
     const config = options.generator.config ?? {}
     const prismaImport = getString(config.prisma) ?? './prisma'
-    const auth = getString(config.auth)
-    if (auth !== undefined && auth !== 'jwt') {
+    const authOption = getString(config.auth)
+    const auth = AUTH_KINDS.find((kind) => kind === authOption)
+    if (authOption !== undefined && auth === undefined) {
       return yield* new GeneratorConfigError({
-        message: `auth for Hekireki-ZodOpenAPIHono must be "jwt": ${auth}`,
+        message: `auth for Hekireki-ZodOpenAPIHono must be one of ${AUTH_KINDS.map((kind) => `"${kind}"`).join(', ')}: ${authOption}`,
       })
     }
     const datamodel = options.dmmf.datamodel
@@ -115,7 +118,7 @@ export function zodOpenapiHono(options: GeneratorOptions) {
         fillHandlerFile(path.join(handlers, name), operations, bodies, fromHandlers(prismaImport)),
       { discard: true },
     )
-    if (auth !== undefined) yield* guardApp(output, guardedPaths(datamodel))
+    if (auth !== undefined) yield* guardApp(output, auth, guardedPaths(datamodel))
     return undefined
   })
 }

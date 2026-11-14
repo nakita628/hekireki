@@ -9,6 +9,7 @@ import {
   makePaths,
   makeRowSchema,
 } from '../helper/zod-openapi-hono.js'
+import type { AuthKind } from '../types/index.js'
 import { pluralize } from '../utils/humanizer.js'
 import { makeSnakeCase } from '../utils/index.js'
 import { allocate } from '../utils/naming.js'
@@ -292,23 +293,181 @@ export function guardPaths(code: string, paths: readonly string[]) {
 }
 
 /**
- * The module the app guards its paths with, written once and the user's to change after: a JWT
- * in `Authorization: Bearer <token>`, signed with HS256 by the secret `JWT_SECRET`, read from the
- * environment of the runtime (`process.env` on Node, the bindings on Workers).
+ * The `exp` or `iat` of a token's payload when it is a number, as `c.get('jwtPayload')` has it
+ * (unknown until read): the module reads the claims hono/jwt checks only when a token has them.
  */
-export function authModule() {
+const NUMBER_CLAIM = `/** A claim of the token's payload when it is a number, and undefined otherwise. */
+function numberClaim(payload: unknown, name: string) {
+  if (typeof payload !== 'object' || payload === null) return undefined
+  const value: unknown = Reflect.get(payload, name)
+  return typeof value === 'number' ? value : undefined
+}
+
+/** The 401 a token is refused with when it lacks a claim it must have. */
+function unauthorized(description: string) {
+  return new HTTPException(401, {
+    res: new Response('Unauthorized', {
+      status: 401,
+      headers: {
+        'WWW-Authenticate': 'Bearer error="invalid_token",error_description="' + description + '"',
+      },
+    }),
+  })
+}`
+
+/**
+ * `auth = "jwt"`: a JWT signed with HS256 by `JWT_SECRET`, from the issuer `JWT_ISSUER` for the
+ * audience `JWT_AUDIENCE`, that has an `exp` at most an hour after its `iat`. hono/jwt checks
+ * `exp` and `iat` only when a token has them, so a token without them, which would never expire,
+ * is refused here. A missing variable or a secret shorter than 32 bytes fails every request.
+ */
+function jwtAuthModule() {
   return `import { env } from 'hono/adapter'
 import { createMiddleware } from 'hono/factory'
+import { HTTPException } from 'hono/http-exception'
 import { jwt } from 'hono/jwt'
+
+/** The longest a token may live, from its \`iat\` to its \`exp\`: one issued for longer is refused. */
+const MAX_TOKEN_LIFETIME_SECONDS = 60 * 60
+
+/** The fewest bytes \`JWT_SECRET\` may have: HS256 takes a key no shorter than its 32-byte hash. */
+const MIN_SECRET_BYTES = 32
+
+${NUMBER_CLAIM}
 
 /**
  * Lets a request through with a JWT in \`Authorization: Bearer <token>\`, signed with HS256 by the
- * secret \`JWT_SECRET\`, and answers 401 otherwise. A handler reads the token's payload with
+ * secret \`JWT_SECRET\`, issued by \`JWT_ISSUER\` for \`JWT_AUDIENCE\`, with an \`exp\` at most
+ * MAX_TOKEN_LIFETIME_SECONDS after its \`iat\`, and answers 401 otherwise. The variables are read
+ * from the environment of the runtime (\`process.env\` on Node, the bindings on Workers). Without
+ * one of them, or with a secret shorter than MIN_SECRET_BYTES, every request fails with 500: the
+ * app never runs unguarded. A handler reads the token's payload with \`c.get('jwtPayload')\`.
+ */
+export const auth = createMiddleware(async (c, next) => {
+  const { JWT_SECRET, JWT_ISSUER, JWT_AUDIENCE } = env<{
+    JWT_SECRET?: string
+    JWT_ISSUER?: string
+    JWT_AUDIENCE?: string
+  }>(c)
+  if (!JWT_SECRET || new TextEncoder().encode(JWT_SECRET).length < MIN_SECRET_BYTES) {
+    throw new Error('JWT_SECRET must be a random secret of at least 32 bytes')
+  }
+  if (!JWT_ISSUER || !JWT_AUDIENCE) throw new Error('JWT_ISSUER and JWT_AUDIENCE must be set')
+  const verify = jwt({
+    secret: JWT_SECRET,
+    alg: 'HS256',
+    verification: { iss: JWT_ISSUER, aud: JWT_AUDIENCE },
+  })
+  return verify(c, async () => {
+    // hono/jwt checks exp and iat only when the token has them: one without either never expires.
+    const payload = c.get('jwtPayload')
+    const exp = numberClaim(payload, 'exp')
+    const iat = numberClaim(payload, 'iat')
+    if (exp === undefined || iat === undefined) throw unauthorized('token without exp or iat')
+    if (exp - iat > MAX_TOKEN_LIFETIME_SECONDS) throw unauthorized('token lives too long')
+    await next()
+  })
+})
+`
+}
+
+/**
+ * `auth = "jwks"`: a JWT signed with an asymmetric key that the issuer publishes at `JWKS_URI`
+ * (an identity provider: Auth0, Clerk, Okta), from `JWT_ISSUER` for `JWT_AUDIENCE`,
+ * that has an `exp`. The app holds no secret that signs a token. The keys are cached for ten
+ * minutes and fetched again for a `kid` they lack, at most once a minute.
+ */
+function jwksAuthModule() {
+  return `import { env } from 'hono/adapter'
+import { createMiddleware } from 'hono/factory'
+import { HTTPException } from 'hono/http-exception'
+import { jwk } from 'hono/jwk'
+import { decode } from 'hono/jwt'
+import type { HonoJsonWebKey } from 'hono/utils/jwt/jws'
+
+/** How long the keys fetched from \`JWKS_URI\` are used before they are fetched again. */
+const JWKS_CACHE_SECONDS = 10 * 60
+
+/** The least time between two fetches for a \`kid\` the cache lacks: no token hammers the issuer. */
+const JWKS_REFETCH_SECONDS = 60
+
+/** The algorithms a token may be signed with: asymmetric only, so no key here signs one. */
+const ALGORITHMS = ['RS256', 'PS256', 'ES256', 'EdDSA'] as const
+
+let cache: { uri: string; keys: HonoJsonWebKey[]; fetchedAt: number } | undefined
+
+${NUMBER_CLAIM}
+
+/** \`JWKS_URI\` when it is https, or http on this machine (an issuer run for development). */
+function jwksUri(uri: string) {
+  const url = new URL(uri)
+  const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1'
+  if (url.protocol === 'https:' || (url.protocol === 'http:' && local)) return url.href
+  throw new Error('JWKS_URI must be an https URL')
+}
+
+/** The keys the issuer publishes, fetched and cached. */
+async function fetchKeys(uri: string) {
+  const response = await fetch(uri)
+  if (!response.ok) throw new Error('JWKS_URI answered ' + response.status)
+  const body: unknown = await response.json()
+  const keys: unknown =
+    typeof body === 'object' && body !== null ? Reflect.get(body, 'keys') : undefined
+  if (!Array.isArray(keys)) throw new Error('JWKS_URI answered no keys')
+  cache = { uri, keys, fetchedAt: Date.now() }
+  return cache.keys
+}
+
+/** The keys for a token: the cached ones, fetched again when they are old or lack its \`kid\`. */
+async function keysFor(uri: string, token: string | undefined) {
+  if (cache === undefined || cache.uri !== uri) return fetchKeys(uri)
+  const age = (Date.now() - cache.fetchedAt) / 1000
+  if (age > JWKS_CACHE_SECONDS) return fetchKeys(uri)
+  const kid = token === undefined ? undefined : decode(token).header.kid
+  const known = cache.keys.some((key) => key.kid === kid)
+  return known || age < JWKS_REFETCH_SECONDS ? cache.keys : fetchKeys(uri)
+}
+
+/**
+ * Lets a request through with a JWT in \`Authorization: Bearer <token>\`, signed with a key the
+ * issuer publishes at \`JWKS_URI\`, issued by \`JWT_ISSUER\` for \`JWT_AUDIENCE\`, with an \`exp\`, and
+ * answers 401 otherwise. The variables are read from the environment of the runtime
+ * (\`process.env\` on Node, the bindings on Workers). Without one of them every request fails with
+ * 500: the app never runs unguarded. A handler reads the token's payload with
  * \`c.get('jwtPayload')\`.
  */
 export const auth = createMiddleware(async (c, next) => {
-  const { JWT_SECRET } = env<{ JWT_SECRET: string }>(c)
-  return jwt({ secret: JWT_SECRET, alg: 'HS256' })(c, next)
+  const { JWKS_URI, JWT_ISSUER, JWT_AUDIENCE } = env<{
+    JWKS_URI?: string
+    JWT_ISSUER?: string
+    JWT_AUDIENCE?: string
+  }>(c)
+  if (!JWKS_URI || !JWT_ISSUER || !JWT_AUDIENCE) {
+    throw new Error('JWKS_URI, JWT_ISSUER and JWT_AUDIENCE must be set')
+  }
+  const uri = jwksUri(JWKS_URI)
+  const verify = jwk({
+    keys: (ctx) => keysFor(uri, ctx.req.header('Authorization')?.split(/\\s+/)[1]),
+    alg: [...ALGORITHMS],
+    verification: { iss: JWT_ISSUER, aud: JWT_AUDIENCE },
+  })
+  return verify(c, async () => {
+    // hono/jwt checks exp only when the token has it: one without it never expires.
+    if (numberClaim(c.get('jwtPayload'), 'exp') === undefined) {
+      throw unauthorized('token without exp')
+    }
+    await next()
+  })
 })
 `
+}
+
+/**
+ * The module the app guards its paths with, written once and the user's to change after. Both
+ * kinds take a JWT in `Authorization: Bearer <token>` and read their settings from the
+ * environment of the runtime: `jwt` checks an HS256 signature with `JWT_SECRET`, `jwks` an
+ * asymmetric one with the keys published at `JWKS_URI`.
+ */
+export function authModule(kind: AuthKind) {
+  return kind === 'jwt' ? jwtAuthModule() : jwksAuthModule()
 }
