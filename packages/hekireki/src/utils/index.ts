@@ -49,6 +49,7 @@ const ANNOTATION_PREFIXES = [
   '@p.',
   '@ar.',
   '@ecto.',
+  '@api.',
   '@relation',
 ] as const
 const ANNOTATION_EXACT = new Set(['@z', '@v', '@a', '@e', '@t', '@j', '@p', '@ar', '@ecto'])

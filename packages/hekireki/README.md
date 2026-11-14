@@ -138,6 +138,32 @@ export const prisma = new PrismaClient({
 })
 ```
 
+`GET /users` answers a page: `limit` rows (20 by default, at most 100) after `offset`, in the
+order of the key, and the number of rows in all in the `X-Total-Count` header. No request reads a
+whole table.
+
+A `POST` or a `PATCH` takes only the fields a client may write. A field the server fills is left
+out: `@updatedAt`, and a `@default` the database or Prisma makes (`autoincrement()`, `now()`,
+`uuid()`, `cuid()`, `ulid()`, `nanoid()`, `dbgenerated()`); a plain `@default("user")` is not. A
+`///` line keeps any other field from the API: `@api.readonly` answers it and never takes it,
+`@api.hidden` neither answers nor takes it, and every query omits it. Zod drops a field its schema
+does not have, so a request that sends one changes nothing.
+
+```prisma
+model User {
+  id           Int      @id @default(autoincrement()) // answered, never taken
+  email        String   @unique
+  /// @api.readonly
+  role         String   @default("user")              // answered, never taken
+  /// @api.hidden
+  passwordHash String                                  // neither answered nor taken
+  createdAt    DateTime @default(now())                // answered, never taken
+}
+```
+
+A required field the API never takes and that has no `@default` (`passwordHash` above) leaves
+`POST /users` unable to make a row: such a model is created by a handler of your own.
+
 With `auth`, every operation asks for a bearer JWT (`bearerAuth` in the document, and a 401 among
 its answers), and the app entry runs `auth` on every model's paths, `app.use('/users/*', auth)`.
 `auth.ts`, written when it is not there and left as it is after, checks the token; a handler reads

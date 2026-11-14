@@ -1,5 +1,11 @@
 import type { DMMF } from '@prisma/generator-helper'
 
+import {
+  API_ACCESS_ANNOTATIONS,
+  GENERATED_DEFAULTS,
+  LIST_LIMIT,
+  TOTAL_COUNT_HEADER,
+} from '../constants/index.js'
 import { pluralize } from '../utils/humanizer.js'
 import { makeSnakeCase, stripAnnotations } from '../utils/index.js'
 import type { OpenApiSchema } from './openapi.js'
@@ -24,6 +30,46 @@ const SCALAR: { readonly [type: string]: OpenApiSchema & { readonly type?: strin
 /** The fields Prisma Client reads and writes as values: scalars and enums, not relations. */
 export function valueFields(model: DMMF.Model) {
   return model.fields.filter((f) => f.kind === 'scalar' || f.kind === 'enum')
+}
+
+/**
+ * What a field's `///` comment keeps from the API: `hidden` for an `@api.hidden` line, `readonly`
+ * for an `@api.readonly` one, undefined for a field the API answers and takes.
+ */
+export function apiAccess(documentation: string | undefined): 'hidden' | 'readonly' | undefined {
+  const lines = new Set((documentation ?? '').split('\n').map((line) => line.trim()))
+  if (lines.has(API_ACCESS_ANNOTATIONS.hidden)) return 'hidden'
+  if (lines.has(API_ACCESS_ANNOTATIONS.readonly)) return 'readonly'
+  return undefined
+}
+
+/** Whether the server fills the field: `@updatedAt`, or a `@default` the database or Prisma makes. */
+function isGenerated(field: DMMF.Field) {
+  if (field.isUpdatedAt) return true
+  const value: unknown = field.default
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'name' in value &&
+    typeof value.name === 'string' &&
+    GENERATED_DEFAULTS.has(value.name)
+  )
+}
+
+/** The value fields an answer carries: all but `@api.hidden`. */
+export function answeredFields(model: DMMF.Model) {
+  return valueFields(model).filter((f) => apiAccess(f.documentation) !== 'hidden')
+}
+
+/**
+ * The value fields a `POST` or a `PATCH` takes: all but `@api.hidden`, `@api.readonly` and those
+ * the server fills (`@updatedAt`, `@default(autoincrement())`, `now()`, `uuid()`, …). Zod drops a
+ * field the schema does not have, so a request cannot set one of them.
+ */
+export function writableFields(model: DMMF.Model) {
+  return valueFields(model).filter(
+    (f) => apiAccess(f.documentation) === undefined && !isGenerated(f),
+  )
 }
 
 /** The schema of one value of the field: its scalar's, or the enum's members by Prisma's names. */
@@ -66,11 +112,11 @@ export function keyFields(model: DMMF.Model): readonly DMMF.Field[] {
 }
 
 /**
- * A row as Prisma Client reads it: every value field under its Prisma name, all of them present.
- * The model's `///` comment is its `description`.
+ * A row as Prisma Client reads it: every value field under its Prisma name, all of them present,
+ * but those `@api.hidden` keeps from the answer. The model's `///` comment is its `description`.
  */
 export function makeRowSchema(model: DMMF.Model, enums: readonly DMMF.DatamodelEnum[]) {
-  const fields = valueFields(model)
+  const fields = answeredFields(model)
   const description = stripAnnotations(model.documentation)
   return {
     type: 'object',
@@ -81,10 +127,10 @@ export function makeRowSchema(model: DMMF.Model, enums: readonly DMMF.DatamodelE
 }
 
 /**
- * What a `POST` or a `PATCH` takes, the `data` of Prisma's unchecked input: the value fields,
- * foreign keys among them. A create requires the fields a row cannot do without (required, not
- * a list, no `@default`, not `@updatedAt`); an update requires nothing and leaves out the key the
- * path names.
+ * What a `POST` or a `PATCH` takes, the `data` of Prisma's unchecked input: the value fields the
+ * client may write ({@link writableFields}), foreign keys among them. A create requires the fields
+ * a row cannot do without (required, not a list, no `@default`, not `@updatedAt`); an update
+ * requires nothing and leaves out the key the path names.
  */
 export function makeInputSchema(
   model: DMMF.Model,
@@ -92,7 +138,7 @@ export function makeInputSchema(
   kind: 'create' | 'update',
 ) {
   const keys = new Set(keyFields(model).map((f) => f.name))
-  const fields = valueFields(model).filter((f) => kind === 'create' || !keys.has(f.name))
+  const fields = writableFields(model).filter((f) => kind === 'create' || !keys.has(f.name))
   const required =
     kind === 'create'
       ? fields
@@ -148,9 +194,36 @@ export function makePaths(
       tags: [model.name],
       summary: `List ${many}`,
       operationId: ids.list,
+      parameters: [
+        {
+          name: 'limit',
+          in: 'query',
+          required: false,
+          description: `How many ${many} to answer, at most ${LIST_LIMIT.max}.`,
+          schema: {
+            type: 'integer',
+            minimum: 1,
+            maximum: LIST_LIMIT.max,
+            default: LIST_LIMIT.default,
+          },
+        },
+        {
+          name: 'offset',
+          in: 'query',
+          required: false,
+          description: `How many ${many} to skip, in the order of the key.`,
+          schema: { type: 'integer', minimum: 0, default: 0 },
+        },
+      ],
       responses: {
         '200': {
-          description: `The ${many}.`,
+          description: `The ${many}, at most \`limit\` of them after \`offset\`.`,
+          headers: {
+            [TOTAL_COUNT_HEADER]: {
+              description: `How many ${many} there are in all.`,
+              schema: { type: 'integer', minimum: 0 },
+            },
+          },
           ...json({ type: 'array', items: ref(schemas.row) }),
         },
       },
@@ -213,7 +286,7 @@ function encoder(field: DMMF.Field) {
 
 /** The row as the answer carries it: a bigint as a number, bytes as base64, the rest as it is. */
 function encodeRow(model: DMMF.Model, row: string) {
-  const entries = valueFields(model).flatMap((field) => {
+  const entries = answeredFields(model).flatMap((field) => {
     const encode = encoder(field)
     if (encode === undefined) return []
     const value = `${row}.${field.name}`
@@ -250,7 +323,7 @@ function bytes(value: string) {
  * ```
  */
 function prismaData(model: DMMF.Model, kind: 'create' | 'update') {
-  const fields = valueFields(model).filter((field) => field.type === 'Bytes')
+  const fields = writableFields(model).filter((field) => field.type === 'Bytes')
   if (fields.length === 0) return 'data'
   const entries = fields.map((field) => {
     const value = `data.${field.name}`
@@ -281,6 +354,27 @@ function keyWhere(keys: readonly DMMF.Field[]) {
   return `{ ${keys.map((key) => `${key.name}: data.${key.name}`).join(', ')} }`
 }
 
+/**
+ * The `orderBy` of a list, by the key fields, so that `offset` pages through the rows in one order:
+ * `, orderBy: [{ orderId: 'asc' }, { sku: 'asc' }]`, nothing for a model without a key.
+ */
+function keyOrder(keys: readonly DMMF.Field[]) {
+  return keys.length === 0
+    ? ''
+    : `, orderBy: [${keys.map((key) => `{ ${key.name}: 'asc' }`).join(', ')}]`
+}
+
+/**
+ * The `omit` of every query, so the row Prisma answers lacks the `@api.hidden` fields:
+ * `, omit: { passwordHash: true }`, nothing for a model without one.
+ */
+function hiddenOmit(model: DMMF.Model) {
+  const hidden = valueFields(model).filter((f) => apiAccess(f.documentation) === 'hidden')
+  return hidden.length === 0
+    ? ''
+    : `, omit: { ${hidden.map((field) => `${field.name}: true`).join(', ')} }`
+}
+
 /** The model's delegate on the client: `prisma.orderItem`. */
 function delegate(model: DMMF.Model) {
   return `prisma.${model.name.charAt(0).toLowerCase()}${model.name.slice(1)}`
@@ -296,16 +390,24 @@ export function makeHandlerBodies(model: DMMF.Model): readonly (readonly [string
   const db = delegate(model)
   const create = prismaData(model, 'create')
   const update = prismaData(model, 'update')
+  const omit = hiddenOmit(model)
   const collection = [
     [
       ids.list,
-      [`const rows = await ${db}.findMany()`, `return c.json(${encodeRows(model, 'rows')}, 200)`],
+      [
+        "const { limit, offset } = c.req.valid('query')",
+        'const [rows, total] = await Promise.all([',
+        `${db}.findMany({ take: limit, skip: offset${keyOrder(keyFields(model))}${omit} }),`,
+        `${db}.count(),`,
+        '])',
+        `return c.json(${encodeRows(model, 'rows')}, 200, { '${TOTAL_COUNT_HEADER}': String(total) })`,
+      ],
     ],
     [
       ids.create,
       [
         readData(['json']),
-        `const row = await ${db}.create({ ${create} })`,
+        `const row = await ${db}.create({ ${create}${omit} })`,
         `return c.json(${encodeRow(model, 'row')}, 201)`,
       ],
     ],
@@ -318,7 +420,7 @@ export function makeHandlerBodies(model: DMMF.Model): readonly (readonly [string
       ids.get,
       [
         readData(['param']),
-        `const row = await ${db}.findFirst({ where: ${where} })`,
+        `const row = await ${db}.findFirst({ where: ${where}${omit} })`,
         'if (row === null) return c.body(null, 404)',
         `return c.json(${encodeRow(model, 'row')}, 200)`,
       ],
@@ -329,7 +431,7 @@ export function makeHandlerBodies(model: DMMF.Model): readonly (readonly [string
         readData(['param', 'json']),
         `const { count } = await ${db}.updateMany({ where: ${where}, ${update} })`,
         'if (count === 0) return c.body(null, 404)',
-        `const row = await ${db}.findFirstOrThrow({ where: ${where} })`,
+        `const row = await ${db}.findFirstOrThrow({ where: ${where}${omit} })`,
         `return c.json(${encodeRow(model, 'row')}, 200)`,
       ],
     ],

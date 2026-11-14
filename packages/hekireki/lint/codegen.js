@@ -15,6 +15,7 @@ const DOCUMENTATION_READERS = new Set([
   'ectoCalls',
   'extractPydanticAnnotation',
   'extractConfigDict',
+  'apiAccess',
 ])
 
 // The node that stands for an expression as an argument: `x?.documentation` is wrapped in a

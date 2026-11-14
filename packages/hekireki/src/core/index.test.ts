@@ -679,7 +679,8 @@ describe('ZodOpenAPIHono', () => {
     ])
     const user = readFileSync(path.join(dir, 'handlers', 'user.ts'), 'utf8')
     expect(user).toContain("import { prisma } from '../prisma'")
-    expect(user).toContain('const rows = await prisma.user.findMany()')
+    expect(user).toContain("const { limit, offset } = c.req.valid('query')")
+    expect(user).toContain("'X-Total-Count': String(total)")
     expect(user).toContain("const data = c.req.valid('param')")
     expect(user).toContain('const row = await prisma.user.findFirst({ where: { id: data.id } })')
     expect(user).not.toContain('async (c) => {}')
@@ -690,12 +691,13 @@ describe('ZodOpenAPIHono', () => {
     expect(Exit.isSuccess(await run(zodOpenapiHono, dir))).toBe(true)
     const file = path.join(dir, 'handlers', 'user.ts')
     const edited = readFileSync(file, 'utf8').replace(
-      'await prisma.user.findMany()',
-      "await prisma.user.findMany({ orderBy: { name: 'asc' } })",
+      'prisma.user.count()',
+      "prisma.user.count({ where: { name: 'kept' } })",
     )
+    expect(edited).not.toBe(readFileSync(file, 'utf8'))
     writeFileSync(file, edited)
     expect(Exit.isSuccess(await run(zodOpenapiHono, dir))).toBe(true)
-    expect(readFileSync(file, 'utf8')).toContain("findMany({ orderBy: { name: 'asc' } })")
+    expect(readFileSync(file, 'utf8')).toContain("count({ where: { name: 'kept' } })")
   })
 
   it('imports prisma from the module prisma names, as the handlers see it', async () => {

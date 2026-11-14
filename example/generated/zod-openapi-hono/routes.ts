@@ -19,13 +19,10 @@ const UserSchema = z
 
 const UserCreateSchema = z
   .object({
-    id: z.string().exactOptional().openapi({ description: 'Primary key (UUIDv7)' }),
     email: z.string().openapi({ description: 'Unique login email' }),
     name: z.string().openapi({ description: 'Display name' }),
     role: z.enum(['ADMIN', 'EDITOR', 'VIEWER']).exactOptional(),
     interests: z.array(z.string()).exactOptional(),
-    createdAt: z.iso.datetime({ offset: true }).exactOptional(),
-    updatedAt: z.iso.datetime({ offset: true }).exactOptional(),
   })
   .openapi({ required: ['email', 'name'] })
   .openapi('UserCreate')
@@ -36,8 +33,6 @@ const UserUpdateSchema = z
     name: z.string().exactOptional().openapi({ description: 'Display name' }),
     role: z.enum(['ADMIN', 'EDITOR', 'VIEWER']).exactOptional(),
     interests: z.array(z.string()).exactOptional(),
-    createdAt: z.iso.datetime({ offset: true }).exactOptional(),
-    updatedAt: z.iso.datetime({ offset: true }).exactOptional(),
   })
   .openapi({ required: [] })
   .openapi('UserUpdate')
@@ -75,7 +70,6 @@ const ProfileSchema = z
 
 const ProfileCreateSchema = z
   .object({
-    id: z.string().exactOptional(),
     userId: z.string(),
     bio: z.string().nullable().exactOptional(),
     nickname: z.string().exactOptional(),
@@ -133,14 +127,12 @@ const PostSchema = z
 
 const PostCreateSchema = z
   .object({
-    id: z.string().exactOptional().openapi({ description: 'Primary key' }),
     title: z.string().openapi({ description: 'Article title' }),
     content: z.string().nullable().exactOptional(),
     visibility: z.enum(['PUBLIC', 'PRIVATE', 'LINK_ONLY']).exactOptional(),
     published: z.boolean().exactOptional(),
     viewCount: z.int().exactOptional(),
     authorId: z.string(),
-    createdAt: z.iso.datetime({ offset: true }).exactOptional(),
   })
   .openapi({ required: ['title', 'authorId'] })
   .openapi('PostCreate')
@@ -153,7 +145,6 @@ const PostUpdateSchema = z
     published: z.boolean().exactOptional(),
     viewCount: z.int().exactOptional(),
     authorId: z.string().exactOptional(),
-    createdAt: z.iso.datetime({ offset: true }).exactOptional(),
   })
   .openapi({ required: [] })
   .openapi('PostUpdate')
@@ -167,7 +158,7 @@ const TagSchema = z
   .openapi('Tag')
 
 const TagCreateSchema = z
-  .object({ id: z.int().exactOptional(), label: z.string() })
+  .object({ label: z.string() })
   .openapi({ required: ['label'] })
   .openapi('TagCreate')
 
@@ -192,13 +183,7 @@ const CommentSchema = z
   .openapi('Comment')
 
 const CommentCreateSchema = z
-  .object({
-    id: z.int().exactOptional(),
-    body: z.string(),
-    postId: z.string(),
-    authorId: z.string().nullable().exactOptional(),
-    createdAt: z.iso.datetime({ offset: true }).exactOptional(),
-  })
+  .object({ body: z.string(), postId: z.string(), authorId: z.string().nullable().exactOptional() })
   .openapi({ required: ['body', 'postId'] })
   .openapi('CommentCreate')
 
@@ -207,7 +192,6 @@ const CommentUpdateSchema = z
     body: z.string().exactOptional(),
     postId: z.string().exactOptional(),
     authorId: z.string().nullable().exactOptional(),
-    createdAt: z.iso.datetime({ offset: true }).exactOptional(),
   })
   .openapi({ required: [] })
   .openapi('CommentUpdate')
@@ -225,18 +209,11 @@ const FollowSchema = z
   .openapi('Follow')
 
 const FollowCreateSchema = z
-  .object({
-    followerId: z.string(),
-    followingId: z.string(),
-    since: z.iso.datetime({ offset: true }).exactOptional(),
-  })
+  .object({ followerId: z.string(), followingId: z.string() })
   .openapi({ required: ['followerId', 'followingId'] })
   .openapi('FollowCreate')
 
-const FollowUpdateSchema = z
-  .object({ since: z.iso.datetime({ offset: true }).exactOptional() })
-  .openapi({ required: [] })
-  .openapi('FollowUpdate')
+const FollowUpdateSchema = z.looseObject({}).openapi('FollowUpdate')
 
 const CategorySchema = z
   .object({ id: z.int(), name: z.string(), parentId: z.int().nullable() })
@@ -247,11 +224,7 @@ const CategorySchema = z
   .openapi('Category')
 
 const CategoryCreateSchema = z
-  .object({
-    id: z.int().exactOptional(),
-    name: z.string(),
-    parentId: z.int().nullable().exactOptional(),
-  })
+  .object({ name: z.string(), parentId: z.int().nullable().exactOptional() })
   .openapi({ required: ['name'] })
   .openapi('CategoryCreate')
 
@@ -274,21 +247,12 @@ const OrderSchema = z
   .openapi('Order')
 
 const OrderCreateSchema = z
-  .object({
-    id: z.int().exactOptional(),
-    userId: z.string(),
-    total: z.string(),
-    placedAt: z.iso.datetime({ offset: true }).exactOptional(),
-  })
+  .object({ userId: z.string(), total: z.string() })
   .openapi({ required: ['userId', 'total'] })
   .openapi('OrderCreate')
 
 const OrderUpdateSchema = z
-  .object({
-    userId: z.string().exactOptional(),
-    total: z.string().exactOptional(),
-    placedAt: z.iso.datetime({ offset: true }).exactOptional(),
-  })
+  .object({ userId: z.string().exactOptional(), total: z.string().exactOptional() })
   .openapi({ required: [] })
   .openapi('OrderUpdate')
 
@@ -301,13 +265,7 @@ const OrderItemSchema = z
   .openapi('OrderItem')
 
 const OrderItemCreateSchema = z
-  .object({
-    id: z.int().exactOptional(),
-    orderId: z.int(),
-    sku: z.string(),
-    qty: z.int().exactOptional(),
-    price: z.string(),
-  })
+  .object({ orderId: z.int(), sku: z.string(), qty: z.int().exactOptional(), price: z.string() })
   .openapi({ required: ['orderId', 'sku', 'price'] })
   .openapi('OrderItemCreate')
 
@@ -337,11 +295,9 @@ const AuditLogSchema = z
 
 const AuditLogCreateSchema = z
   .object({
-    id: z.string().exactOptional(),
     action: z.string(),
     payload: z.any().exactOptional(),
     signature: z.string().nullable().exactOptional(),
-    loggedAt: z.iso.datetime({ offset: true }).exactOptional(),
   })
   .openapi({ required: ['action'] })
   .openapi('AuditLogCreate')
@@ -351,7 +307,6 @@ const AuditLogUpdateSchema = z
     action: z.string().exactOptional(),
     payload: z.any().exactOptional(),
     signature: z.string().nullable().exactOptional(),
-    loggedAt: z.iso.datetime({ offset: true }).exactOptional(),
   })
   .openapi({ required: [] })
   .openapi('AuditLogUpdate')
@@ -365,7 +320,7 @@ const ActorSchema = z
   .openapi('Actor')
 
 const ActorCreateSchema = z
-  .object({ id: z.int().exactOptional(), name: z.string() })
+  .object({ name: z.string() })
   .openapi({ required: ['name'] })
   .openapi('ActorCreate')
 
@@ -380,7 +335,7 @@ const FilmSchema = z
   .openapi('Film')
 
 const FilmCreateSchema = z
-  .object({ id: z.int().exactOptional(), title: z.string() })
+  .object({ title: z.string() })
   .openapi({ required: ['title'] })
   .openapi('FilmCreate')
 
@@ -397,10 +352,63 @@ export const getUsersRoute = createRoute({
   tags: ['User'],
   summary: 'List users',
   operationId: 'listUsers',
+  request: {
+    query: z.object({
+      limit: z
+        .preprocess(
+          (val) =>
+            typeof val === 'string' &&
+            /^-?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(val) &&
+            (!/^-?\d+$/.test(val) || Number.isSafeInteger(Number(val)))
+              ? Number(val)
+              : val,
+          z.int().min(1).max(100),
+        )
+        .default(20)
+        .exactOptional()
+        .openapi({
+          param: {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            description: 'How many users to answer, at most 100.',
+            schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+          },
+        }),
+      offset: z
+        .preprocess(
+          (val) =>
+            typeof val === 'string' &&
+            /^-?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(val) &&
+            (!/^-?\d+$/.test(val) || Number.isSafeInteger(Number(val)))
+              ? Number(val)
+              : val,
+          z.int().min(0),
+        )
+        .default(0)
+        .exactOptional()
+        .openapi({
+          param: {
+            name: 'offset',
+            in: 'query',
+            required: false,
+            description: 'How many users to skip, in the order of the key.',
+            schema: { type: 'integer', minimum: 0, default: 0 },
+          },
+        }),
+    }),
+  },
   responses: {
     200: {
-      description: 'The users.',
+      description: 'The users, at most `limit` of them after `offset`.',
       content: { 'application/json': { schema: z.array(UserSchema) } },
+      headers: z.object({
+        'X-Total-Count': z
+          .int()
+          .min(0)
+          .exactOptional()
+          .openapi({ description: 'How many users there are in all.', param: { required: false } }),
+      }),
     },
     401: { description: 'No valid bearer token.' },
   },
@@ -496,10 +504,66 @@ export const getProfilesRoute = createRoute({
   tags: ['Profile'],
   summary: 'List profiles',
   operationId: 'listProfiles',
+  request: {
+    query: z.object({
+      limit: z
+        .preprocess(
+          (val) =>
+            typeof val === 'string' &&
+            /^-?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(val) &&
+            (!/^-?\d+$/.test(val) || Number.isSafeInteger(Number(val)))
+              ? Number(val)
+              : val,
+          z.int().min(1).max(100),
+        )
+        .default(20)
+        .exactOptional()
+        .openapi({
+          param: {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            description: 'How many profiles to answer, at most 100.',
+            schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+          },
+        }),
+      offset: z
+        .preprocess(
+          (val) =>
+            typeof val === 'string' &&
+            /^-?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(val) &&
+            (!/^-?\d+$/.test(val) || Number.isSafeInteger(Number(val)))
+              ? Number(val)
+              : val,
+          z.int().min(0),
+        )
+        .default(0)
+        .exactOptional()
+        .openapi({
+          param: {
+            name: 'offset',
+            in: 'query',
+            required: false,
+            description: 'How many profiles to skip, in the order of the key.',
+            schema: { type: 'integer', minimum: 0, default: 0 },
+          },
+        }),
+    }),
+  },
   responses: {
     200: {
-      description: 'The profiles.',
+      description: 'The profiles, at most `limit` of them after `offset`.',
       content: { 'application/json': { schema: z.array(ProfileSchema) } },
+      headers: z.object({
+        'X-Total-Count': z
+          .int()
+          .min(0)
+          .exactOptional()
+          .openapi({
+            description: 'How many profiles there are in all.',
+            param: { required: false },
+          }),
+      }),
     },
     401: { description: 'No valid bearer token.' },
   },
@@ -601,10 +665,63 @@ export const getPostsRoute = createRoute({
   tags: ['Post'],
   summary: 'List posts',
   operationId: 'listPosts',
+  request: {
+    query: z.object({
+      limit: z
+        .preprocess(
+          (val) =>
+            typeof val === 'string' &&
+            /^-?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(val) &&
+            (!/^-?\d+$/.test(val) || Number.isSafeInteger(Number(val)))
+              ? Number(val)
+              : val,
+          z.int().min(1).max(100),
+        )
+        .default(20)
+        .exactOptional()
+        .openapi({
+          param: {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            description: 'How many posts to answer, at most 100.',
+            schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+          },
+        }),
+      offset: z
+        .preprocess(
+          (val) =>
+            typeof val === 'string' &&
+            /^-?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(val) &&
+            (!/^-?\d+$/.test(val) || Number.isSafeInteger(Number(val)))
+              ? Number(val)
+              : val,
+          z.int().min(0),
+        )
+        .default(0)
+        .exactOptional()
+        .openapi({
+          param: {
+            name: 'offset',
+            in: 'query',
+            required: false,
+            description: 'How many posts to skip, in the order of the key.',
+            schema: { type: 'integer', minimum: 0, default: 0 },
+          },
+        }),
+    }),
+  },
   responses: {
     200: {
-      description: 'The posts.',
+      description: 'The posts, at most `limit` of them after `offset`.',
       content: { 'application/json': { schema: z.array(PostSchema) } },
+      headers: z.object({
+        'X-Total-Count': z
+          .int()
+          .min(0)
+          .exactOptional()
+          .openapi({ description: 'How many posts there are in all.', param: { required: false } }),
+      }),
     },
     401: { description: 'No valid bearer token.' },
   },
@@ -700,10 +817,63 @@ export const getTagsRoute = createRoute({
   tags: ['Tag'],
   summary: 'List tags',
   operationId: 'listTags',
+  request: {
+    query: z.object({
+      limit: z
+        .preprocess(
+          (val) =>
+            typeof val === 'string' &&
+            /^-?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(val) &&
+            (!/^-?\d+$/.test(val) || Number.isSafeInteger(Number(val)))
+              ? Number(val)
+              : val,
+          z.int().min(1).max(100),
+        )
+        .default(20)
+        .exactOptional()
+        .openapi({
+          param: {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            description: 'How many tags to answer, at most 100.',
+            schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+          },
+        }),
+      offset: z
+        .preprocess(
+          (val) =>
+            typeof val === 'string' &&
+            /^-?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(val) &&
+            (!/^-?\d+$/.test(val) || Number.isSafeInteger(Number(val)))
+              ? Number(val)
+              : val,
+          z.int().min(0),
+        )
+        .default(0)
+        .exactOptional()
+        .openapi({
+          param: {
+            name: 'offset',
+            in: 'query',
+            required: false,
+            description: 'How many tags to skip, in the order of the key.',
+            schema: { type: 'integer', minimum: 0, default: 0 },
+          },
+        }),
+    }),
+  },
   responses: {
     200: {
-      description: 'The tags.',
+      description: 'The tags, at most `limit` of them after `offset`.',
       content: { 'application/json': { schema: z.array(TagSchema) } },
+      headers: z.object({
+        'X-Total-Count': z
+          .int()
+          .min(0)
+          .exactOptional()
+          .openapi({ description: 'How many tags there are in all.', param: { required: false } }),
+      }),
     },
     401: { description: 'No valid bearer token.' },
   },
@@ -829,10 +999,66 @@ export const getCommentsRoute = createRoute({
   tags: ['Comment'],
   summary: 'List comments',
   operationId: 'listComments',
+  request: {
+    query: z.object({
+      limit: z
+        .preprocess(
+          (val) =>
+            typeof val === 'string' &&
+            /^-?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(val) &&
+            (!/^-?\d+$/.test(val) || Number.isSafeInteger(Number(val)))
+              ? Number(val)
+              : val,
+          z.int().min(1).max(100),
+        )
+        .default(20)
+        .exactOptional()
+        .openapi({
+          param: {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            description: 'How many comments to answer, at most 100.',
+            schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+          },
+        }),
+      offset: z
+        .preprocess(
+          (val) =>
+            typeof val === 'string' &&
+            /^-?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(val) &&
+            (!/^-?\d+$/.test(val) || Number.isSafeInteger(Number(val)))
+              ? Number(val)
+              : val,
+          z.int().min(0),
+        )
+        .default(0)
+        .exactOptional()
+        .openapi({
+          param: {
+            name: 'offset',
+            in: 'query',
+            required: false,
+            description: 'How many comments to skip, in the order of the key.',
+            schema: { type: 'integer', minimum: 0, default: 0 },
+          },
+        }),
+    }),
+  },
   responses: {
     200: {
-      description: 'The comments.',
+      description: 'The comments, at most `limit` of them after `offset`.',
       content: { 'application/json': { schema: z.array(CommentSchema) } },
+      headers: z.object({
+        'X-Total-Count': z
+          .int()
+          .min(0)
+          .exactOptional()
+          .openapi({
+            description: 'How many comments there are in all.',
+            param: { required: false },
+          }),
+      }),
     },
     401: { description: 'No valid bearer token.' },
   },
@@ -964,10 +1190,66 @@ export const getFollowsRoute = createRoute({
   tags: ['Follow'],
   summary: 'List follows',
   operationId: 'listFollows',
+  request: {
+    query: z.object({
+      limit: z
+        .preprocess(
+          (val) =>
+            typeof val === 'string' &&
+            /^-?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(val) &&
+            (!/^-?\d+$/.test(val) || Number.isSafeInteger(Number(val)))
+              ? Number(val)
+              : val,
+          z.int().min(1).max(100),
+        )
+        .default(20)
+        .exactOptional()
+        .openapi({
+          param: {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            description: 'How many follows to answer, at most 100.',
+            schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+          },
+        }),
+      offset: z
+        .preprocess(
+          (val) =>
+            typeof val === 'string' &&
+            /^-?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(val) &&
+            (!/^-?\d+$/.test(val) || Number.isSafeInteger(Number(val)))
+              ? Number(val)
+              : val,
+          z.int().min(0),
+        )
+        .default(0)
+        .exactOptional()
+        .openapi({
+          param: {
+            name: 'offset',
+            in: 'query',
+            required: false,
+            description: 'How many follows to skip, in the order of the key.',
+            schema: { type: 'integer', minimum: 0, default: 0 },
+          },
+        }),
+    }),
+  },
   responses: {
     200: {
-      description: 'The follows.',
+      description: 'The follows, at most `limit` of them after `offset`.',
       content: { 'application/json': { schema: z.array(FollowSchema) } },
+      headers: z.object({
+        'X-Total-Count': z
+          .int()
+          .min(0)
+          .exactOptional()
+          .openapi({
+            description: 'How many follows there are in all.',
+            param: { required: false },
+          }),
+      }),
     },
     401: { description: 'No valid bearer token.' },
   },
@@ -1087,10 +1369,66 @@ export const getCategoriesRoute = createRoute({
   tags: ['Category'],
   summary: 'List categories',
   operationId: 'listCategories',
+  request: {
+    query: z.object({
+      limit: z
+        .preprocess(
+          (val) =>
+            typeof val === 'string' &&
+            /^-?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(val) &&
+            (!/^-?\d+$/.test(val) || Number.isSafeInteger(Number(val)))
+              ? Number(val)
+              : val,
+          z.int().min(1).max(100),
+        )
+        .default(20)
+        .exactOptional()
+        .openapi({
+          param: {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            description: 'How many categories to answer, at most 100.',
+            schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+          },
+        }),
+      offset: z
+        .preprocess(
+          (val) =>
+            typeof val === 'string' &&
+            /^-?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(val) &&
+            (!/^-?\d+$/.test(val) || Number.isSafeInteger(Number(val)))
+              ? Number(val)
+              : val,
+          z.int().min(0),
+        )
+        .default(0)
+        .exactOptional()
+        .openapi({
+          param: {
+            name: 'offset',
+            in: 'query',
+            required: false,
+            description: 'How many categories to skip, in the order of the key.',
+            schema: { type: 'integer', minimum: 0, default: 0 },
+          },
+        }),
+    }),
+  },
   responses: {
     200: {
-      description: 'The categories.',
+      description: 'The categories, at most `limit` of them after `offset`.',
       content: { 'application/json': { schema: z.array(CategorySchema) } },
+      headers: z.object({
+        'X-Total-Count': z
+          .int()
+          .min(0)
+          .exactOptional()
+          .openapi({
+            description: 'How many categories there are in all.',
+            param: { required: false },
+          }),
+      }),
     },
     401: { description: 'No valid bearer token.' },
   },
@@ -1222,10 +1560,66 @@ export const getOrdersRoute = createRoute({
   tags: ['Order'],
   summary: 'List orders',
   operationId: 'listOrders',
+  request: {
+    query: z.object({
+      limit: z
+        .preprocess(
+          (val) =>
+            typeof val === 'string' &&
+            /^-?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(val) &&
+            (!/^-?\d+$/.test(val) || Number.isSafeInteger(Number(val)))
+              ? Number(val)
+              : val,
+          z.int().min(1).max(100),
+        )
+        .default(20)
+        .exactOptional()
+        .openapi({
+          param: {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            description: 'How many orders to answer, at most 100.',
+            schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+          },
+        }),
+      offset: z
+        .preprocess(
+          (val) =>
+            typeof val === 'string' &&
+            /^-?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(val) &&
+            (!/^-?\d+$/.test(val) || Number.isSafeInteger(Number(val)))
+              ? Number(val)
+              : val,
+          z.int().min(0),
+        )
+        .default(0)
+        .exactOptional()
+        .openapi({
+          param: {
+            name: 'offset',
+            in: 'query',
+            required: false,
+            description: 'How many orders to skip, in the order of the key.',
+            schema: { type: 'integer', minimum: 0, default: 0 },
+          },
+        }),
+    }),
+  },
   responses: {
     200: {
-      description: 'The orders.',
+      description: 'The orders, at most `limit` of them after `offset`.',
       content: { 'application/json': { schema: z.array(OrderSchema) } },
+      headers: z.object({
+        'X-Total-Count': z
+          .int()
+          .min(0)
+          .exactOptional()
+          .openapi({
+            description: 'How many orders there are in all.',
+            param: { required: false },
+          }),
+      }),
     },
     401: { description: 'No valid bearer token.' },
   },
@@ -1354,10 +1748,66 @@ export const getOrderItemsRoute = createRoute({
   tags: ['OrderItem'],
   summary: 'List order items',
   operationId: 'listOrderItems',
+  request: {
+    query: z.object({
+      limit: z
+        .preprocess(
+          (val) =>
+            typeof val === 'string' &&
+            /^-?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(val) &&
+            (!/^-?\d+$/.test(val) || Number.isSafeInteger(Number(val)))
+              ? Number(val)
+              : val,
+          z.int().min(1).max(100),
+        )
+        .default(20)
+        .exactOptional()
+        .openapi({
+          param: {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            description: 'How many order items to answer, at most 100.',
+            schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+          },
+        }),
+      offset: z
+        .preprocess(
+          (val) =>
+            typeof val === 'string' &&
+            /^-?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(val) &&
+            (!/^-?\d+$/.test(val) || Number.isSafeInteger(Number(val)))
+              ? Number(val)
+              : val,
+          z.int().min(0),
+        )
+        .default(0)
+        .exactOptional()
+        .openapi({
+          param: {
+            name: 'offset',
+            in: 'query',
+            required: false,
+            description: 'How many order items to skip, in the order of the key.',
+            schema: { type: 'integer', minimum: 0, default: 0 },
+          },
+        }),
+    }),
+  },
   responses: {
     200: {
-      description: 'The order items.',
+      description: 'The order items, at most `limit` of them after `offset`.',
       content: { 'application/json': { schema: z.array(OrderItemSchema) } },
+      headers: z.object({
+        'X-Total-Count': z
+          .int()
+          .min(0)
+          .exactOptional()
+          .openapi({
+            description: 'How many order items there are in all.',
+            param: { required: false },
+          }),
+      }),
     },
     401: { description: 'No valid bearer token.' },
   },
@@ -1489,10 +1939,66 @@ export const getAuditLogsRoute = createRoute({
   tags: ['AuditLog'],
   summary: 'List audit logs',
   operationId: 'listAuditLogs',
+  request: {
+    query: z.object({
+      limit: z
+        .preprocess(
+          (val) =>
+            typeof val === 'string' &&
+            /^-?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(val) &&
+            (!/^-?\d+$/.test(val) || Number.isSafeInteger(Number(val)))
+              ? Number(val)
+              : val,
+          z.int().min(1).max(100),
+        )
+        .default(20)
+        .exactOptional()
+        .openapi({
+          param: {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            description: 'How many audit logs to answer, at most 100.',
+            schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+          },
+        }),
+      offset: z
+        .preprocess(
+          (val) =>
+            typeof val === 'string' &&
+            /^-?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(val) &&
+            (!/^-?\d+$/.test(val) || Number.isSafeInteger(Number(val)))
+              ? Number(val)
+              : val,
+          z.int().min(0),
+        )
+        .default(0)
+        .exactOptional()
+        .openapi({
+          param: {
+            name: 'offset',
+            in: 'query',
+            required: false,
+            description: 'How many audit logs to skip, in the order of the key.',
+            schema: { type: 'integer', minimum: 0, default: 0 },
+          },
+        }),
+    }),
+  },
   responses: {
     200: {
-      description: 'The audit logs.',
+      description: 'The audit logs, at most `limit` of them after `offset`.',
       content: { 'application/json': { schema: z.array(AuditLogSchema) } },
+      headers: z.object({
+        'X-Total-Count': z
+          .int()
+          .min(0)
+          .exactOptional()
+          .openapi({
+            description: 'How many audit logs there are in all.',
+            param: { required: false },
+          }),
+      }),
     },
     401: { description: 'No valid bearer token.' },
   },
@@ -1594,10 +2100,66 @@ export const getActorsRoute = createRoute({
   tags: ['Actor'],
   summary: 'List actors',
   operationId: 'listActors',
+  request: {
+    query: z.object({
+      limit: z
+        .preprocess(
+          (val) =>
+            typeof val === 'string' &&
+            /^-?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(val) &&
+            (!/^-?\d+$/.test(val) || Number.isSafeInteger(Number(val)))
+              ? Number(val)
+              : val,
+          z.int().min(1).max(100),
+        )
+        .default(20)
+        .exactOptional()
+        .openapi({
+          param: {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            description: 'How many actors to answer, at most 100.',
+            schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+          },
+        }),
+      offset: z
+        .preprocess(
+          (val) =>
+            typeof val === 'string' &&
+            /^-?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(val) &&
+            (!/^-?\d+$/.test(val) || Number.isSafeInteger(Number(val)))
+              ? Number(val)
+              : val,
+          z.int().min(0),
+        )
+        .default(0)
+        .exactOptional()
+        .openapi({
+          param: {
+            name: 'offset',
+            in: 'query',
+            required: false,
+            description: 'How many actors to skip, in the order of the key.',
+            schema: { type: 'integer', minimum: 0, default: 0 },
+          },
+        }),
+    }),
+  },
   responses: {
     200: {
-      description: 'The actors.',
+      description: 'The actors, at most `limit` of them after `offset`.',
       content: { 'application/json': { schema: z.array(ActorSchema) } },
+      headers: z.object({
+        'X-Total-Count': z
+          .int()
+          .min(0)
+          .exactOptional()
+          .openapi({
+            description: 'How many actors there are in all.',
+            param: { required: false },
+          }),
+      }),
     },
     401: { description: 'No valid bearer token.' },
   },
@@ -1726,10 +2288,63 @@ export const getFilmsRoute = createRoute({
   tags: ['Film'],
   summary: 'List films',
   operationId: 'listFilms',
+  request: {
+    query: z.object({
+      limit: z
+        .preprocess(
+          (val) =>
+            typeof val === 'string' &&
+            /^-?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(val) &&
+            (!/^-?\d+$/.test(val) || Number.isSafeInteger(Number(val)))
+              ? Number(val)
+              : val,
+          z.int().min(1).max(100),
+        )
+        .default(20)
+        .exactOptional()
+        .openapi({
+          param: {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            description: 'How many films to answer, at most 100.',
+            schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+          },
+        }),
+      offset: z
+        .preprocess(
+          (val) =>
+            typeof val === 'string' &&
+            /^-?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(val) &&
+            (!/^-?\d+$/.test(val) || Number.isSafeInteger(Number(val)))
+              ? Number(val)
+              : val,
+          z.int().min(0),
+        )
+        .default(0)
+        .exactOptional()
+        .openapi({
+          param: {
+            name: 'offset',
+            in: 'query',
+            required: false,
+            description: 'How many films to skip, in the order of the key.',
+            schema: { type: 'integer', minimum: 0, default: 0 },
+          },
+        }),
+    }),
+  },
   responses: {
     200: {
-      description: 'The films.',
+      description: 'The films, at most `limit` of them after `offset`.',
       content: { 'application/json': { schema: z.array(FilmSchema) } },
+      headers: z.object({
+        'X-Total-Count': z
+          .int()
+          .min(0)
+          .exactOptional()
+          .openapi({ description: 'How many films there are in all.', param: { required: false } }),
+      }),
     },
     401: { description: 'No valid bearer token.' },
   },
